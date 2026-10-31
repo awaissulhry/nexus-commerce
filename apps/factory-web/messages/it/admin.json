@@ -1538,7 +1538,8 @@
     "accounting": "Contabilità",
     "security": "Sicurezza e stato del sistema",
     "receivables": "Crediti e solleciti",
-    "payables": "Fatture fornitori"
+    "payables": "Fatture fornitori",
+    "people": "Persone"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1784,6 +1785,21 @@
     "quality_complaints_log": "Registrare un reclamo del cliente",
     "quality_complaints_manage": "Smistare, seguire e chiudere i reclami dei clienti",
     "quality_complaints_acknowledge": "Prendere atto dell'allerta di un reclamo di sicurezza (il titolare)",
-    "numbering_override": "Digitare il numero di un documento migrato (mai una serie fiscale; doppioni rifiutati, motivo conservato)"
+    "numbering_override": "Digitare il numero di un documento migrato (mai una serie fiscale; doppioni rifiutati, motivo conservato)",
+    "people_view": "Vedere dipendenti, squadre, prestiti ad altre linee e passi di uscita (mai paghe, presenze o salute)",
+    "people_team_view": "Vedere le squadre che guidi o di cui fai parte (La mia squadra)",
+    "people_employees_manage": "Aggiungere, modificare, collegare e importare i dipendenti",
+    "people_teams_manage": "Aggiungere, modificare e archiviare le squadre, nominare il capo squadra e spostare le persone",
+    "people_loans_manage": "Prestare persone a un'altra linea per ore o giorni",
+    "people_leavers_manage": "Avviare, spuntare e annullare i passi di uscita di una persona",
+    "people_privacy_view": "Vedere il presupposto legale dei dati del personale per sede e finalità, e la valutazione d'impatto",
+    "people_privacy_manage": "Attivare o disattivare una finalità dei dati del personale, fissare il gruppo minimo e i ruoli che vedono i dati di una persona",
+    "people_figures_view": "Vedere i dati di lavoro di una persona (solo per un ruolo indicato nelle impostazioni privacy dell'azienda, a presupposto attivo)",
+    "production_offstandard_view": "Vedere i blocchi di tempo fuori standard e indiretto e i loro conteggi (nessuna persona negli elenchi)",
+    "production_offstandard_codes": "Aggiungere e cambiare i codici di tempo fuori standard e indiretto e le loro regole di paga",
+    "production_offstandard_approve": "Approvare, respingere, riaprire e correggere i blocchi di tempo fuori standard (mai i propri)",
+    "production_calls_view": "Vedere le chiamate di aiuto, i loro tempi per chiamata e linea e chi viene chiamato per ogni tipo (mai per persona)",
+    "production_calls_answer": "Rispondere alle chiamate di aiuto: vista, in arrivo, risolta o annullata, e a cosa hanno portato",
+    "production_calls_manage": "Gestire i tipi di chiamata di aiuto di un sito e chi risponde"
   }
 }

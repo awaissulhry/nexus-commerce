@@ -608,4 +608,43 @@ describe('B-W2b-19: a carrier-returned shipment back into finished goods (the B-
     const events = await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.carrier_return_received' AND subject = $1`, [S.sc])
     expect(events.map((row) => row.payload)).toEqual([{ shipmentId: S.sc, number: expect.stringMatching(/^SH-/), garments: 1, locationId: scheduleA.finishedLocationId }])
   })
+
+  it('B-W2b-F1: received back, the shipment no longer holds its garment: the same cell ships it again, from finished goods', async () => {
+    expect(await admin(`SELECT "carrierReturnReceivedAt" IS NOT NULL AS received FROM "Shipment" WHERE id = $1`, [S.sc])).toEqual([{ received: true }])
+    // A batch-tracked jacket: no serial went back to RELEASED.
+    expect((await admin(`SELECT after FROM "AuditLog" WHERE action = 'shipping.carrierReturnReceived' AND "recordId" = $1`, [S.sc]))[0]!.after.serialIds).toEqual([])
+    const ready = await ok('warehouse', 'GET', `/shipping/ready?salesOrderId=${so2()}`)
+    expect(ready.orders[0].cells.find((cell: Json) => cell.workOrderSizeId === blk52())).toMatchObject({ shippable: 1, inStock: 1 })
+    const sd = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: so2(), lines: [{ workOrderSizeId: blk52(), quantity: 1 }] }, 201)).shipment
+    const parcelId = (await ok('warehouse', 'POST', `/shipping/packing/${sd.id}/parcels`, { grossWeightKg: '2.4' }, 201)).parcelId
+    const line = (await ok('warehouse', 'GET', `/shipping/shipments/${sd.id}`)).shipment.lines[0]
+    await ok('warehouse', 'PUT', `/shipping/packing/${sd.id}/lines/${line.id}/parcel`, { parcelId })
+    expect((await ok('warehouse', 'POST', `/shipping/packing/${sd.id}/pack`, {})).shipment.status).toBe('PACKED')
+    expect((await ok('warehouse', 'POST', `/shipping/shipments/${sd.id}/ddt`, { ship: true }, 201)).shipment.status).toBe('SHIPPED')
+    // It left out of finished goods (the garment the carrier brought back), and nothing counts twice.
+    expect(await admin(`SELECT reason::text AS reason, "shipmentLineId", "baseQuantity"::text AS quantity FROM "StockMove" WHERE "idempotencyKey" LIKE $1`, [`shipping.fromStock:${sd.id}:%`])).toEqual([
+      { reason: 'SHIPMENT', shipmentLineId: line.id, quantity: '1.0000' },
+    ])
+    const stock = await ok('production', 'GET', `/inventory/finished?workOrderId=${wo1()}`)
+    expect((stock.items as Json[]).find((entry) => entry.id === scheduleA.finishedItemId || entry.itemId === scheduleA.finishedItemId)?.onHand ?? 0).toBe(0)
+    const finished = await ok('production', 'GET', `/production/work-orders/${wo1()}/finished`)
+    expect(finished.finished.cells.find((entry: Json) => entry.cellId === blk52())).toMatchObject({ canReport: 0 })
+  })
+
+  it('B-W2b-F1: a serial-tracked shipment received back puts its serials back to RELEASED, unpacked, to be packed again', async () => {
+    const serials = await admin<{ id: string; status: string }>(`SELECT g.id, g.status::text AS status FROM "GarmentSerial" g JOIN "ShipmentLine" l ON l.id = g."shipmentLineId" WHERE l."shipmentId" = $1 ORDER BY g.id`, [sh2()])
+    expect(serials.length).toBeGreaterThan(0)
+    expect(serials.every((serial) => serial.status === 'SHIPPED')).toBe(true)
+    const ids = serials.map((serial) => serial.id)
+    // SH-0002 came back with the carrier (its tracking, as a webhook records it); the jacket's SKU (made up: the seed gives
+    // the serial-tracked style no SKU matrix).
+    await admin(`UPDATE "Shipment" SET status = 'RETURNED', "returnedAt" = now() WHERE id = $1`, [sh2()])
+    await admin(
+      `INSERT INTO "Variant" (id, "tenantId", "styleId", "colourwayId", size, sku) SELECT $1, w."tenantId", w."styleId", c."colourwayId", c.size, 'SEED-JKT-03-F1-' || c.size FROM "WorkOrderSize" c JOIN "WorkOrder" w ON w.id = c."workOrderId" WHERE c.id = $2`,
+      [newId(), qa().serialCellId],
+    )
+    expect((await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/carrier-return`, {}, 201)).carrierReturn.state).toBe('RECEIVED')
+    expect(await admin(`SELECT status::text AS status, "shipmentLineId" FROM "GarmentSerial" WHERE id = ANY($1::uuid[])`, [ids])).toEqual(ids.map(() => ({ status: 'RELEASED', shipmentLineId: null })))
+    expect((await admin(`SELECT after FROM "AuditLog" WHERE action = 'shipping.carrierReturnReceived' AND "recordId" = $1`, [sh2()]))[0]!.after.serialIds).toEqual(ids)
+  })
 })

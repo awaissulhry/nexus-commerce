@@ -181,6 +181,36 @@ const SUBCONTRACT_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = 
 const PAYABLES_SETTINGS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   finance: ['payables.settings'],
 })
+/**
+ * B-W2b-27 (privacy of people data; PLT-209, ANA-075, MES-249; design people.settings "Privacy of people data", admin.privacy
+ * "People data rules"): the administrator (who keeps the privacy pack) and the production manager read the legal gate of
+ * each site and purpose and the privacy settings. Switching a purpose on or off (people.privacy.manage) and opening one
+ * person's figures (people.figures.view) are in no template: the Owner holds them through every office permission and
+ * records the basis per site and purpose (GATE-LABOUR); an HR role gets people.figures.view (Owner answer H3).
+ */
+const PEOPLE_PRIVACY_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.privacy.view'],
+  production_manager: ['people.privacy.view'],
+})
+/**
+ * B-W2b-35 (help calls, MES-142 … MES-145, MES-147, MES-137; design production.calls, floor.supervisor, floor.help): the
+ * office reads the calls and answers them where its people respond (production, the floor supervisor, maintenance, the
+ * warehouse for material, quality); the production manager keeps the types and who answers them (Floor rules & codes).
+ * On the floor the team leader (the line view), the technician and the floor inspector read their line's calls and
+ * answer them; every floor role SENDS a call with floor.work and needs nothing here. Owner and read-only from every().
+ */
+const CALLS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.calls.view', 'production.calls.answer', 'production.calls.manage'],
+  floor_supervisor: ['production.calls.view', 'production.calls.answer'],
+  maintenance: ['production.calls.view', 'production.calls.answer'],
+  warehouse: ['production.calls.view', 'production.calls.answer'],
+  quality_inspector: ['production.calls.view', 'production.calls.answer'],
+})
+const CALLS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.calls.view', 'production.calls.answer'],
+  technician: ['production.calls.view', 'production.calls.answer'],
+  floor_inspector: ['production.calls.view', 'production.calls.answer'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -195,7 +225,11 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2a-F4
   ...(audience === 'office' ? (RECEIPT_DOCUMENTS_ADDS[key] ?? []) : []),
   // B-W2b-21
-  ...(audience === 'office' ? (PAYABLES_SETTINGS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PAYABLES_SETTINGS_ADDS[key] ?? []) : []),
+  // B-W2b-27
+  ...(audience === 'office' ? (PEOPLE_PRIVACY_ADDS[key] ?? []) : []),
+  // B-W2b-35
+  ...((audience === 'office' ? CALLS_ADDS : CALLS_FLOOR_ADDS)[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -234,6 +268,23 @@ const REPORT_LIBRARY_TEMPLATES: ReadonlySet<string> = new Set(['finance', 'sales
 const reportLibraryAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' && REPORT_LIBRARY_TEMPLATES.has(key) ? ['home.reports.view' as Permission] : [])
 
 /**
+ * B-W2b-26 (people: employees, teams and loans, leaver steps; MES-208 … MES-214, PLT-020; design people.employees, the
+ * People area of the HR and payroll office): the administrator keeps the HR register (there is no HR template yet; when
+ * one comes, these move to it); the production manager reads it, keeps the teams and their leads and lends people to
+ * another line; the floor supervisor reads it and lends people at their sites. My team (people.team.view: the teams you
+ * lead or belong to) for the office templates whose people lead or work in a crew (PEOPLE_TEAM_TEMPLATES). Office only:
+ * the floor reads its crews with its own routes. Owner and read-only take theirs from every().
+ */
+const PEOPLE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.view', 'people.employees.manage', 'people.teams.manage', 'people.loans.manage', 'people.leavers.manage'],
+  production_manager: ['people.view', 'people.teams.manage', 'people.loans.manage'],
+  floor_supervisor: ['people.view', 'people.loans.manage'],
+})
+const PEOPLE_TEAM_TEMPLATES: ReadonlySet<string> = new Set(['production_manager', 'floor_supervisor', 'quality_inspector', 'warehouse', 'maintenance'])
+const peopleAddedFor = (key: string, audience: RoleAudience): readonly Permission[] =>
+  audience === 'office' ? [...(PEOPLE_ADDS[key] ?? []), ...(PEOPLE_TEAM_TEMPLATES.has(key) ? ['people.team.view' as Permission] : [])] : []
+
+/**
  * B-W2b-24 (PLT-125, design admin.documents popup `override`): type the number a migrated document had in the old system —
  * the administrator (who runs the go-live's first load) and finance (who keeps the number series). The owner and nobody
  * else through every(); never read_only, never a floor role. One line.
@@ -242,7 +293,7 @@ const NUMBERING_OVERRIDE_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'fin
 const numberingOverrideAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' && NUMBERING_OVERRIDE_TEMPLATES.has(key) ? ['numbering.override' as Permission] : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience), ...numberingOverrideAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience), ...numberingOverrideAddedFor(key, audience), ...peopleAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 
@@ -573,6 +624,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'quality.holds.view',
       'quality.holds.place',
       'quality.defects.view',
+      // B-W2b-29: off-standard and indirect time (MES-155 … MES-158): the codes of Floor rules & codes, the labour inbox's blocks.
+      'production.offstandard.view', 'production.offstandard.codes', 'production.offstandard.approve',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export',
     ],
@@ -598,6 +651,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'reasons.view',
       // B-W2a-26 (MES-008): puts work orders and bundles on hold; reads the defect library.
       'quality.holds.view', 'quality.holds.place', 'quality.defects.view',
+      // B-W2b-29: decides the floor's off-standard blocks (MES-157), as it decides scan corrections; never one's own.
+      'production.offstandard.view', 'production.offstandard.approve',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export'],
     grains: [],

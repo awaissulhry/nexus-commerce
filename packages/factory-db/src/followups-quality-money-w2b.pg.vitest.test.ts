@@ -272,12 +272,21 @@ describe('holds and NCRs are numbered at the bench', () => {
   })
 
   it('a hold’s number is given once (null before), never changes and is never blank', async () => {
+    // B-W2b-F1: a new hold comes numbered (the seeded one too), so a hold placed before numbering is written past the
+    // guards: a copy of the seeded hold without its number.
+    const older = randomUUID()
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(`INSERT INTO "QualityHold" SELECT * FROM jsonb_populate_record(NULL::"QualityHold", (SELECT to_jsonb(h) || jsonb_build_object('id', $1::uuid, 'number', NULL) FROM "QualityHold" h WHERE id = $2::uuid))`, [older, holds.holdId])
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
     const number = `HLD-2026-${tag()}`
-    await expect(run(office(), `UPDATE "QualityHold" SET number = '  ' WHERE id = $1::uuid`, holds.holdId)).rejects.toThrow(/never blank/)
-    expect(await run(office(), `UPDATE "QualityHold" SET number = $2 WHERE id = $1::uuid`, holds.holdId, number)).toBe(1)
-    await expect(run(office(), `UPDATE "QualityHold" SET number = $2 WHERE id = $1::uuid`, holds.holdId, `${number}-2`)).rejects.toThrow(/never changes/)
-    await expect(run(floor(), `UPDATE "QualityHold" SET number = NULL WHERE id = $1::uuid`, holds.holdId)).rejects.toThrow(/floor confirms the quarantine move|never changes/)
-    expect(await run(office(), `UPDATE "QualityHold" SET number = number WHERE id = $1::uuid`, holds.holdId)).toBe(1)
+    await expect(run(office(), `UPDATE "QualityHold" SET number = '  ' WHERE id = $1::uuid`, older)).rejects.toThrow(/never blank/)
+    expect(await run(office(), `UPDATE "QualityHold" SET number = $2 WHERE id = $1::uuid`, older, number)).toBe(1)
+    await expect(run(office(), `UPDATE "QualityHold" SET number = $2 WHERE id = $1::uuid`, older, `${number}-2`)).rejects.toThrow(/never changes/)
+    await expect(run(floor(), `UPDATE "QualityHold" SET number = NULL WHERE id = $1::uuid`, older)).rejects.toThrow(/floor confirms the quarantine move|never changes/)
+    expect(await run(office(), `UPDATE "QualityHold" SET number = number WHERE id = $1::uuid`, older)).toBe(1)
   })
 })
 
