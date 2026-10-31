@@ -11,7 +11,7 @@ import { fieldsOf, type ReasonList } from './lists'
  *     by an ISO 639 code (2-3 lower-case letters), never blank;
  *   - an icon is one of the design system's tag icons, a colour one of its swatches (the same closed sets the IconPicker
  *     and ColorSwatchPicker offer, so a stored value always draws), or none;
- *   - a list keeps what its source keeps (lists.ts fieldsOf): a scan list has no icon, colour, other language or note;
+ *   - a list keeps what its source keeps (lists.ts fieldsOf; since W2b every list keeps every field);
  *   - a reason is set inactive, never deleted; its order is the list's tile order.
  */
 
@@ -62,7 +62,7 @@ export function reasonDraftProblems(list: ReasonList, draft: ReasonDraft): Issue
     else if (value !== undefined && value.trim().length > REASON_LIMITS.label) problems.push({ path: field, message: `At most ${REASON_LIMITS.label} characters.` })
   }
   if (draft.labelI18n !== undefined) {
-    if (!fields.languages) problems.push({ path: 'labelI18n', message: 'Scrap and rework reasons keep words in Italian and English only.' })
+    if (!fields.languages) problems.push({ path: 'labelI18n', message: 'This list keeps words in Italian and English only.' })
     else {
       const entries = Object.entries(draft.labelI18n)
       if (entries.length > REASON_LIMITS.languages) problems.push({ path: 'labelI18n', message: `At most ${REASON_LIMITS.languages} other languages.` })
@@ -74,14 +74,14 @@ export function reasonDraftProblems(list: ReasonList, draft: ReasonDraft): Issue
     }
   }
   if (draft.icon !== undefined && draft.icon !== null) {
-    if (!fields.icon) problems.push({ path: 'icon', message: 'Scrap and rework reasons have no icon yet.' })
+    if (!fields.icon) problems.push({ path: 'icon', message: 'This list has no icon.' })
     else if (!(REASON_ICONS as readonly string[]).includes(draft.icon)) problems.push({ path: 'icon', message: 'Pick one of the icons offered.' })
   }
   if (draft.colour !== undefined && draft.colour !== null) {
-    if (!fields.colour) problems.push({ path: 'colour', message: 'Scrap and rework reasons have no colour yet.' })
+    if (!fields.colour) problems.push({ path: 'colour', message: 'This list has no colour.' })
     else if (!(REASON_COLOURS as readonly string[]).includes(draft.colour.toLowerCase())) problems.push({ path: 'colour', message: 'Pick one of the colours offered.' })
   }
-  if (draft.needsDetail === true && !fields.needsDetail) problems.push({ path: 'needsDetail', message: 'Scrap and rework reasons cannot ask for a note yet.' })
+  if (draft.needsDetail === true && !fields.needsDetail) problems.push({ path: 'needsDetail', message: 'This list cannot ask for a note.' })
   return problems
 }
 

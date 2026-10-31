@@ -67,7 +67,16 @@ describe('the look of a tile', () => {
     expect(lookOf(listReason('X', 1, { icon: 'star', colour: '#123456' })).tone).toBe('neutral')
   })
 
-  it('the scan lists keep no icon yet: every standard scrap and rework code has a look of its own, an added code its kind\'s', () => {
+  it('W2b (MES-125): a scan reason with the office\'s icon, colour and words draws them; its other language is the worker\'s word', () => {
+    const stain = fromScanReason({ kind: 'SCRAP', code: 'STAIN', label: { it: 'Macchia', en: 'Stain' }, sortOrder: 40, icon: 'alert', colour: '#e5484d', labelI18n: { ro: 'Pată' }, needsDetail: false })
+    expect(lookOf(stain)).toEqual({ icon: 'tag:alert', tone: 'danger' })
+    expect(tilesOf([stain], 'ro')[0]).toMatchObject({ label: 'Pată', icon: 'tag:alert', tone: 'danger' })
+    const other = fromScanReason({ kind: 'SCRAP', code: 'OTHER', label: { it: 'Altro', en: 'Other' }, sortOrder: 90, icon: null, colour: null, labelI18n: {}, needsDetail: true })
+    expect(tilesOf([other], 'en', { withPhotos: true })[0]).toMatchObject({ icon: 'std:help', photoNeeded: true, heldReason: null })
+    expect(tilesOf([other], 'en')[0]).toMatchObject({ photoNeeded: false, heldReason: null })
+  })
+
+  it('a scan reason without the office\'s icon: every standard scrap and rework code has a look of its own, an added code its kind\'s', () => {
     for (const reason of W1_SCAN_REASONS) {
       const look = lookOf(fromScanReason({ kind: reason.kind, code: reason.code, label: reason.label, sortOrder: reason.sortOrder }))
       expect(look.icon.startsWith('std:'), reason.code).toBe(true)

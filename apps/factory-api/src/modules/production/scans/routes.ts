@@ -12,6 +12,7 @@ import {
   discardContract,
   mineContract,
   reasonsContract,
+  receiptLineReportContract,
   refusalContract,
   refusalsContract,
   refuseContract,
@@ -23,6 +24,7 @@ import {
 } from './contract'
 import { approveCorrection, correctionOf, listCorrections, refuseCorrection } from './corrections'
 import { manifest } from './manifest'
+import { reportReceiptLine } from './outside'
 import { siteWip, workOrderWip } from './progress'
 import { askCorrection, reportScan, sendBatch, undoScan } from './scans'
 import { bundleCard, discard, listRefusals, mine, reasons, refusalOf, workOrderScans } from './views'
@@ -94,4 +96,10 @@ export default defineRoutes('production.scans', manifest, async (app) => {
   app.get('/production/scans/work-orders/:workOrderId/wip', { schema: workOrderWipContract }, async (request) => workOrderWip(request, request.params.workOrderId))
 
   app.get('/production/scans/work-orders/:workOrderId/scans', { schema: workOrderScansContract }, async (request) => workOrderScans(request, request.params.workOrderId, request.query))
+
+  // B-W2b-10: "Report at the operation" for a subcontract receipt line that could not be reported when it came back.
+  app.post('/production/scans/receipt-lines/:lineId/report', { schema: receiptLineReportContract }, async (request, reply) => {
+    const result = await reportReceiptLine(request, request.params.lineId, idempotencyKeyFrom(request))
+    return reply.code(result.replayed ? 200 : 201).send({ report: result.report })
+  })
 })
