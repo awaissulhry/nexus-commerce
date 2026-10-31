@@ -150,6 +150,7 @@ async function listFor(db: Reader, target: Target, now: Date) {
         slotId: slot.id,
         workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status, priority: workOrder.priority, rush: workOrder.priority > 0, dueDate, style: workOrder.style, holdReason: workOrder.holdReason },
         operation: { id: operation.id, seq: operation.seq, code: operation.code, name: operation.name },
+        previous: previous ? { seq: previous.seq, code: previous.code, name: previous.name } : null,
         startAt: toUtcIso(slot.startAt),
         endAt: toUtcIso(slot.endAt),
         garments,

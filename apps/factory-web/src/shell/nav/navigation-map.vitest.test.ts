@@ -319,6 +319,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
 
   it('each tile asks the permission its page\'s API needs, declared in the catalogue', () => {
     expect(Object.fromEntries(TILE_RULES.map((rule) => [rule.key, rule.permission]))).toEqual({
+      mywork: 'floor.work', // GET /production/dispatch/station (B-W2a-74)
       operation: 'production.scan',
       cut: 'production.cut',
       bundles: 'production.bundles',
@@ -335,10 +336,10 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
   it('a station shows its mode\'s tiles in order, at most six, each with its word in both languages', () => {
     const keys = (mode: FloorMode) => homeTiles(mode, everything, false).map((tile) => tile.key)
     expect(Object.fromEntries(FLOOR_MODES.map((mode) => [mode, keys(mode)]))).toEqual({
-      cutting: ['operation', 'cut', 'bundles', 'scan'],
-      sewing: ['operation', 'scan'],
-      packing: ['operation', 'labels', 'pack', 'scan'],
-      inspection: ['operation', 'final', 'scan'],
+      cutting: ['mywork', 'operation', 'cut', 'bundles', 'scan'],
+      sewing: ['mywork', 'operation', 'scan'],
+      packing: ['mywork', 'operation', 'labels', 'pack', 'scan'],
+      inspection: ['mywork', 'operation', 'final', 'scan'],
       warehouse: ['receive', 'pick', 'scan'],
     })
     for (const mode of FLOOR_MODES) expect(keys(mode).length).toBeLessThanOrEqual(MAX_TILES)

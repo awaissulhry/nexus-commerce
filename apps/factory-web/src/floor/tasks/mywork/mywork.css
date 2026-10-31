@@ -1,0 +1,52 @@
+/*
+ * SCR-089 My work: layout only, inside the DS FloorFrame and the floor tasks' shared parts (../shared/view/tasks.css).
+ * Sizes read the floor tier's `--nds-density-*` tokens; colours are semantic `--nds-*` roles. No raw colour. The one-job
+ * screen stays centred on the tablet (the frame's), as the Owner's width rule allows for the floor.
+ */
+
+/* ── the next task's card: style and operation big ───────────────────────────────────────────────────────────────── */
+.fw-mywork-style,
+.fw-mywork-op {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: calc(var(--nds-density-font-body) * 1.35);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.25;
+}
+.fw-mywork-op {
+  color: var(--nds-primary);
+}
+
+/* ── the station, the plan's number and the as-of time ───────────────────────────────────────────────────────────── */
+.fw-mywork-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+}
+.fw-mywork-asof {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+/* ── "List changed · Show": a big button above the list (stand-in for the DS FloorList updates slot) ───────────── */
+.fw-mywork-changed {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* ── a rush row's flag before its number ─────────────────────────────────────────────────────────────────────────── */
+.fw-mywork-rush {
+  margin-inline-end: var(--nds-space-8);
+  vertical-align: middle;
+}
+
+/* ── "Can't find it?": three big choices, one under the other ────────────────────────────────────────────────────── */
+.fw-mywork-cantfind {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-target-gap);
+}

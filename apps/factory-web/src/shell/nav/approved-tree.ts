@@ -484,6 +484,10 @@ export const FLOOR: ReadonlyArray<{
     tile: 'scan',
     modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor', 'maintenance', 'phone'],
   },
+  // W2a: B-W2a-74 My work (SCR-089), the station's queue. The design's modes are sewing, cutting, warehouse, inspection,
+  // phone: the warehouse's task inbox (SCM-274) and the phone's personal list are W2b, so W2a gives it every station with
+  // a queue — the packing bench too (the dispatch list is per station, whatever its work centre).
+  { id: 'floor.mywork', title: 'My work', titleIt: 'Il mio lavoro', tile: 'mywork', modes: ['sewing', 'cutting', 'packing', 'inspection', 'phone'] },
   { id: 'floor.operation', title: 'Operation', titleIt: 'Operazione', tile: 'operation', modes: ['sewing', 'cutting', 'packing'] },
   { id: 'floor.hidecut', title: 'Hide check & cut log', titleIt: 'Controllo pelle e taglio', tile: 'cut', modes: ['cutting'] },
   { id: 'floor.bundles', title: 'Bundles & tickets', titleIt: 'Fasci e cartellini', tile: 'bundles', modes: ['cutting'] },

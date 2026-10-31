@@ -1,0 +1,47 @@
+{
+  "title": "Choose the reason",
+  "what": {
+    "scrap": "Scrap",
+    "rework": "Rework",
+    "pause": "Pause",
+    "putLast": "Put it last",
+    "defect": "Defects"
+  },
+  "question": {
+    "scrap": "Why is it scrap? Each tap adds one piece",
+    "rework": "Why rework? Each tap adds one piece",
+    "pause": "Why are you stopping?",
+    "putLast": "Why put it last?",
+    "defect": "Which defect? Each tap adds one"
+  },
+  "counted": {
+    "of": "of {of} counted",
+    "all_one": "piece counted",
+    "all_other": "pieces counted"
+  },
+  "chosen": "Chosen: {reason}",
+  "none": "No reason chosen yet",
+  "asOf": "From this tablet, as of {time}",
+  "atMost": "At most {count}: every piece has a reason",
+  "loading": "Loading the reasons…",
+  "error": {
+    "title": "Could not load the reasons",
+    "body": "The office did not answer. Try again.",
+    "retry": "Try again"
+  },
+  "offline": {
+    "title": "Not on this tablet",
+    "body": "The reasons come from the office the first time. Try again when the network is back."
+  },
+  "empty": {
+    "title": "No reasons set up for this station",
+    "body": "Ask the office (Production › Floor rules & codes)."
+  },
+  "photoNext": "{reason} needs a photo: the camera opens after Done.",
+  "done": "Done",
+  "back": "Back",
+  "doneHeld": {
+    "choose": "Choose a reason first",
+    "notReady": "The reasons are not on screen yet"
+  }
+}
