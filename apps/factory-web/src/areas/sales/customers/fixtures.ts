@@ -4,6 +4,8 @@ import { CUSTOMERS, inShell, listModel, rowOf, SUPPLIERS, useDesignList } from '
 import { blankNewParty, failed, loaded, loading, SIDES, type PartiesListModel } from '../../parties/_shared/model'
 import { demoCustomersImport, importButton } from './_demo/fixtures'
 import type { CustomersImportModel } from './import/view/CustomersImportView'
+import type { OverdueListModel } from './money/columns'
+import { MONEY_CAN, overdueList } from './money/_demo/fixtures'
 import { CustomersView } from './view/CustomersView'
 
 /**
@@ -17,12 +19,12 @@ const rows = CUSTOMERS.map(rowOf)
 const list = (over: Partial<PartiesListModel> = {}) => listModel('customers', over)
 const pick = (...codes: string[]) => rows.filter((row) => codes.includes(row.code)).map((row) => row.id)
 
-/** A case: the list, and (B-W2a-49) the band's Import with its wizard when open. */
-type CustomersCase = PartiesListModel & { importer?: CustomersImportModel }
+/** A case: the list, (B-W2a-49) the band's Import with its wizard when open, and (B-W2a-81) the Overdue column's read. */
+type CustomersCase = PartiesListModel & { importer?: CustomersImportModel; overdue?: OverdueListModel }
 
 function CustomersDesign({ model }: { model: CustomersCase }) {
-  const { importer, ...list } = model
-  return inShell('/sales/customers', createElement(CustomersView, { ...useDesignList(list), headActions: importButton(importer ?? { held: null, sheet: null }) }))
+  const { importer, overdue, ...list } = model
+  return inShell('/sales/customers', createElement(CustomersView, { ...useDesignList(list), headActions: importButton(importer ?? { held: null, sheet: null }), overdue }))
 }
 
 const importCase = (importer: CustomersImportModel): CustomersCase => ({ ...list(), importer })
@@ -43,6 +45,11 @@ export const designScreen = defineDesignScreen<CustomersCase>({
   view: CustomersDesign,
   cases: [
     { id: 'list', label: 'The list: tiles, roles, VIES and SDI columns', model: list(), note: 'Press a VIES mark for the result; a tile is a saved filter (its chip shows in the filter row).' },
+    // B-W2a-81: the Overdue column (price grain, receivables.view; sales reads it too).
+    { id: 'w2a-overdue', label: 'Overdue (W2a): what each customer owes late, per currency, with how late', model: { ...list(), overdue: overdueList(MONEY_CAN.sales) }, note: 'Moda Demo 4,270.00 (38 days late); Beispiel 1,220.00 · CHF 300.00; the others "none".' },
+    { id: 'w2a-overdue-reading', label: 'Overdue (W2a) still reading: "—", never 0', model: { ...list(), overdue: overdueList(MONEY_CAN.finance, { byParty: null }) } },
+    { id: 'w2a-overdue-failed', label: "Overdue (W2a) couldn't be read: \"—\" with the reason on hover", model: { ...list(), overdue: overdueList(MONEY_CAN.finance, { byParty: null, problem: 'problem.unavailable' }) } },
+    { id: 'w2a-overdue-no-price', label: 'Overdue (W2a) without the price grain: the column is not drawn', model: { ...list(), overdue: overdueList(MONEY_CAN.noPrice) } },
     {
       id: 'tile-vies',
       label: 'Tile pressed: EU businesses without a valid VIES check',

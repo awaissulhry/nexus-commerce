@@ -123,10 +123,12 @@ const NCR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
  * B-W2a-55 (receivables, FIN-109 … FIN-111; design finance.receivables, the Finance area's people): finance reads the
  * ageing and statements, prepares, edits, approves and sends the reminders, e-mails statements and keeps the ladder.
  * The Owner's switch (receivables.reminders.switch, step-up) is the owner's alone, through every(); read-only gets
- * receivables.view through the registry.
+ * receivables.view through the registry. B-W2a-81: sales reads it too (design sales.customers "Overdue (price, W2a)" on
+ * the customer list and record, and Finance › Receivables from the customer), never a reminder move.
  */
 const RECEIVABLES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   finance: ['receivables.view', 'receivables.reminders.manage', 'receivables.reminders.approve', 'receivables.statements.send', 'receivables.settings.manage'],
+  sales: ['receivables.view'],
 })
 /**
  * B-W2a-65 (customer complaints; SAL-416, QHS-113, QHS-115; design quality.complaints): sales logs what the customer said

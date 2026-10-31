@@ -199,6 +199,12 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/finance/costing',
   '/finance/costing/print',
   '/finance/margins',
+  // B-W2a-81: Receivables & credit (SCR-151) with the statement PDF tab; Supplier invoices (SCR-153), the record and the XML tab.
+  '/finance/receivables',
+  '/finance/receivables/statement',
+  '/finance/payables',
+  '/finance/payables/[id]',
+  '/finance/payables/[id]/xml',
   // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
   '/admin',
   '/admin/companies',

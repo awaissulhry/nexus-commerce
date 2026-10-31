@@ -71,6 +71,8 @@ export interface ListQuery {
   readonly source?: InvoiceSource | undefined
   readonly kind?: 'INVOICE' | 'CREDIT_NOTE' | undefined
   readonly tile?: Tile | undefined
+  /** B-W2a-81 (the PO's Invoices tab): only invoices with a line mapped to this purchase order. */
+  readonly purchaseOrderId?: string | undefined
   readonly q?: string | undefined
   readonly cursor?: string | undefined
   readonly limit: number
@@ -112,6 +114,7 @@ export async function listInvoices(caller: CommandCaller, query: ListQuery): Pro
     query.source ? { source: query.source } : {},
     query.kind ? { kind: query.kind } : {},
     query.tile ? tileWhere(query.tile, now()) : {},
+    query.purchaseOrderId ? { lines: { some: { purchaseOrderLine: { purchaseOrderId: query.purchaseOrderId } } } } : {},
     q
       ? {
           OR: [

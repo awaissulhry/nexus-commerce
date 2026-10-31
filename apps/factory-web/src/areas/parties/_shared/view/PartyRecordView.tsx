@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { MapPin, MoreHorizontal, Plus, Users } from 'lucide-react'
-import { Banner, Card, KeyValue, Menu, MetricStrip, RecordLayout, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
+import { Banner, Card, KeyValue, Menu, MetricStrip, RecordLayout, SummaryTable, type MenuItemDef, type Metric } from '@nexus/ui/components'
 import { EditModeBar } from '@nexus/ui/patterns'
 import { Button, Checkbox, SegmentedControl, Tag, Toggle } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
@@ -77,6 +77,15 @@ export interface PartyRecordActions {
 }
 
 /**
+ * B-W2a-81: what a side adds to the customer's Overview — tiles after Open quotes, Backlog and Ordered this year
+ * (Customers: Overdue, Returns this year) and a part under Now (open returns and claims). The container reads them.
+ */
+export interface OverviewSlot {
+  readonly numbers?: readonly Metric[]
+  readonly now?: ReactNode
+}
+
+/**
  * SCR-033 Customer record and SCR-057 Supplier record (design sales.customers / purchasing.suppliers "records", 00
  * §2.2): one party record, two sides. The head (‹ list · name · identity · status, role and VIES pills · at most two
  * actions · ⋯), the tabs always in view (Owner L1), then the tab: a customer's Overview, Addresses & contacts, Tax &
@@ -84,15 +93,15 @@ export interface PartyRecordActions {
  * Activity. Later-wave tabs are not drawn. Fetches nothing: PartyRecord.tsx reads and writes; the record panels
  * (thread, files, history) come in as `panels` and `documents`.
  */
-export function PartyRecordView({ model, actions, panels, documents, terms, items }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode }) {
+export function PartyRecordView({ model, actions, panels, documents, terms, items, overview }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot }) {
   return (
     <PartiesMessages>
-      <PartyRecord model={model} actions={actions} panels={panels} documents={documents} terms={terms} items={items} />
+      <PartyRecord model={model} actions={actions} panels={panels} documents={documents} terms={terms} items={items} overview={overview} />
     </PartiesMessages>
   )
 }
 
-function PartyRecord({ model, actions, panels, documents, terms, items }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode }) {
+function PartyRecord({ model, actions, panels, documents, terms, items, overview }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot }) {
   const t = useT('parties')
   const locale = useLocale()
   const side = model.side
@@ -234,7 +243,7 @@ function PartyRecord({ model, actions, panels, documents, terms, items }: { mode
         {party.status === 'ARCHIVED' && <Banner tone="info" title={t('record.archivedBanner')} />}
         {!can.manage && party.status !== 'ARCHIVED' && <Banner tone="info" title={t('record.readOnly')} />}
 
-        {tab === 'overview' && side === 'customers' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} />}
+        {tab === 'overview' && side === 'customers' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} />}
         {tab === 'overview' && side === 'suppliers' && <SupplierOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} />}
         {tab === 'addresses' && (
           <div className="fw-pty-stack">
@@ -471,7 +480,7 @@ function SidePanel({ model, party, actions, editable, viesHeld, children }: TabP
   )
 }
 
-function CustomerOverview({ model, party, actions, editable, viesHeld }: TabProps & { viesHeld: string | null }) {
+function CustomerOverview({ model, party, actions, editable, viesHeld, overview }: TabProps & { viesHeld: string | null; overview?: OverviewSlot }) {
   const t = useT('parties')
   const locale = useLocale()
   const can = model.can
@@ -506,6 +515,8 @@ function CustomerOverview({ model, party, actions, editable, viesHeld }: TabProp
           },
         ]
       : []),
+    // B-W2a-81: the side's own key numbers (Customers: Overdue, Returns this year), after the design's first three.
+    ...(overview?.numbers ?? []),
   ]
   const openQuotes = (model.quotes.items ?? []).filter((quote) => ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT'].includes(quote.status))
   const openOrders = (model.orders.items ?? []).filter((order) => ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'].includes(order.status))
@@ -587,6 +598,8 @@ function CustomerOverview({ model, party, actions, editable, viesHeld }: TabProp
           </div>
         </Card>
       )}
+      {/* B-W2a-81: the side's own part of Now (Customers: open returns and claims, Finance › Receivables). */}
+      {overview?.now}
     </div>
   )
   return <RecordLayout main={main} aside={<SidePanel model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} />} asideLabel={t('side.label')} />

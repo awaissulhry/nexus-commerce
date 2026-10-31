@@ -352,7 +352,16 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'finance.invoices', title: 'Invoices', titleIt: 'Fatture', wave: 'W1', href: '/finance/invoices' },
           { id: 'finance.payments', title: 'Payments', titleIt: 'Incassi', wave: 'W1', href: '/finance/payments' },
+          // W2a: B-W2a-81 Receivables & credit (SCR-151).
+          { id: 'finance.receivables', title: 'Receivables & credit', titleIt: 'Crediti e fidi', wave: 'W2a', href: '/finance/receivables' },
         ],
+      },
+      // W2a: B-W2a-81 Payables & bank › Supplier invoices (SCR-153); Bank is W2b.
+      {
+        label: 'Payables & bank',
+        labelIt: 'Fornitori e banca',
+        hideLabel: false,
+        pages: [{ id: 'finance.payables', title: 'Supplier invoices', titleIt: 'Fatture fornitori', wave: 'W2a', href: '/finance/payables' }],
       },
       // W2a: B-W2a-72 Costing: Standard vs actual (SCR-154) and Margins (SCR-155).
       {
