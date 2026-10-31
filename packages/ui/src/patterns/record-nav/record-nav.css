@@ -1,0 +1,23 @@
+/*
+ * DS — RecordNav (B-W2b-09, D13). ▲ 53 of 56 ▼ in a record page's band, the same look as `DetailModal`'s nav.
+ */
+.nds-recnav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  flex: none;
+}
+.nds-recnav-pos {
+  min-width: 0;
+  padding: 0 var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+.nds-recnav-pos:empty {
+  display: none;
+}
+.nds-recnav-icon {
+  display: inline-flex;
+}

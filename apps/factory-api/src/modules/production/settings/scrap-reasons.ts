@@ -100,6 +100,15 @@ export const scrapReasonStore: ReasonStore = {
   async usage(client: Client, list) {
     const used = new Map<string, number>()
     const kind = list as ScanReasonList
+    // B-W2b-15: material scrapped while in stock (production.scrapStock) keeps its code on its SCRAP moves: one per posting.
+    if (kind === 'SCRAP') {
+      const rows = await client.$queryRaw<{ code: string; n: bigint }[]>`
+        SELECT m."reasonCode" AS code, count(DISTINCT regexp_replace(m."idempotencyKey", ':[0-9]+$', '')) AS n
+          FROM "StockMove" m
+         WHERE m."reason" = 'SCRAP' AND m."reasonCode" IS NOT NULL AND m."idempotencyKey" LIKE 'production.scrap:%'
+         GROUP BY 1`
+      for (const row of rows) count(used, row.code, Number(row.n))
+    }
     for (const row of await client.operationScanDefect.groupBy({ by: ['reasonCode'], where: { kind }, _count: { _all: true } })) count(used, row.reasonCode, row._count._all)
     if (kind === 'REWORK') for (const row of await client.reworkOrder.groupBy({ by: ['reasonCode'], _count: { _all: true } })) count(used, row.reasonCode, row._count._all)
     // W2b (B-W2b-10): the subcontract receipt lines that kept a REWORK code (pieces rejected or scrapped at the workshop).

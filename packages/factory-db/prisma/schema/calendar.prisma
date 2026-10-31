@@ -134,6 +134,8 @@ model ShiftPattern {
   calendarDays CalendarDay[]
   // W2b people.prisma (wave 4/7): the people who normally work it.
   employees    Employee[]
+  // W2b time.prisma (wave 5/7): the roster shifts taken from it.
+  rosterEntries RosterEntry[]
 
   @@unique([tenantId, code])
   // The target of the calendars', days' and segments' tenant-safe references.

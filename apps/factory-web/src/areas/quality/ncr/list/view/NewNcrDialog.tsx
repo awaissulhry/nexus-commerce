@@ -1,12 +1,13 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { GARMENT_ZONES } from '@nexus/factory-domain/quality/defects/rules'
 import { Banner, Field, FileDropzone, Modal } from '@nexus/ui/components'
 import { Button, Input, Select, Spinner, Textarea } from '@nexus/ui/primitives'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { DEFECT_CLASSES, NCR_SOURCES, QUALITY_STAGES, UOMS, type Person, type SiteChoice } from '../../api'
-import { recordLabel, type NcrCan } from '../../model'
+import { containmentSpan, recordLabel, titleWords, type NcrCan } from '../../model'
 import { NoticeLine, StagePill, useNcrWords } from '../../parts'
 import type { ListDialog, NcrListActions, NewNcrDraft } from '../view-model'
 
@@ -30,9 +31,12 @@ export function newHeldKey(dialog: Extract<ListDialog, { kind: 'new' }>, can: Pi
  * quantity affected and suspect, severity, defect code (the library), where on the garment (the design's GarmentZoneMap,
  * composed here as a zone picker in words — a named stand-in), where found, owner, photos. The number is the factory's,
  * given at Create. Esc closes; focus returns to the opener (the DS Modal).
+ * B-W2b-17: raised from picked defect lines of an inspection ("From 2 defect lines of INS-…"); the prefilled title in the
+ * reader's language from the prefill's parts (once per prefill, only into an empty field: what the person typed stays);
+ * the containment due time the NCR gets (the company's containment time) said before Create.
  */
 export function NewNcrDialog({ prefix, dialog, sites, people, can, actions }: { prefix: string; dialog: Extract<ListDialog, { kind: 'new' }>; sites: readonly SiteChoice[] | null; people: readonly Person[] | null; can: NcrCan; actions?: NcrListActions }) {
-  const { t } = useNcrWords()
+  const { t, say } = useNcrWords()
   const lang = useLocale()
   const { draft, from } = dialog
   const prefill = from?.prefill ?? null
@@ -41,6 +45,26 @@ export function NewNcrDialog({ prefix, dialog, sites, people, can, actions }: { 
   const defects = Array.isArray(dialog.defects) ? dialog.defects : []
   const categories = [...new Map(defects.map((defect) => [defect.category.id, defect.category])).values()]
   const siteKnown = prefill?.siteId ? (sites?.find((site) => site.id === prefill.siteId) ?? null) : null
+  // The title in the reader's words from the prefill's parts: once per prefill, only into an empty field.
+  const worded = useRef<string | null>(null)
+  useEffect(() => {
+    const parts = prefill?.titleParts
+    if (!prefill || !parts) return
+    // A library defect is named in the reader's words: wait for the library (or its failure) first.
+    if (parts.key === 'INSPECTION_DEFECT' && parts.values.defectCodeId && dialog.defects === null) return
+    const key = `${prefill.fromType}:${prefill.fromId}:${prefill.defectIds.join(',')}`
+    if (worded.current === key) return
+    worded.current = key
+    if (draft.title.trim() !== '') return
+    const library = Array.isArray(dialog.defects) ? dialog.defects : []
+    const words = titleWords(t, parts, (id) => {
+      const found = library.find((defect) => defect.id === id)
+      return found ? (lang === 'it' ? found.labelIt : found.labelEn) : null
+    })
+    if (words) actions?.onNewDraft?.({ title: words })
+  }, [prefill, dialog.defects, draft.title, t, lang, actions])
+  const picked = prefill?.fromType === 'Inspection' ? prefill.defectIds.length : 0
+  const containment = dialog.containment
   return (
     <Modal
       open
@@ -66,7 +90,8 @@ export function NewNcrDialog({ prefix, dialog, sites, people, can, actions }: { 
             <Spinner size={14} /> {t('new.reading')}
           </p>
         )}
-        {from?.problem && <Banner tone="warning" title={t('new.readFailed')} />}
+        {from?.problem && <Banner tone="warning" title={from.problem.startsWith('new.') ? t(from.problem) : t('new.readFailed')} />}
+        {picked > 0 && prefill && <Banner tone="info" title={t('new.fromDefects', { count: picked, inspection: recordLabel(t, 'Inspection', prefill.label) })} />}
         {prefill && prefill.existing.length > 0 && (
           <Banner tone="info" title={t('new.existing', { count: prefill.existing.length })}>
             <ul className="fw-ncr-existing">
@@ -194,6 +219,11 @@ export function NewNcrDialog({ prefix, dialog, sites, people, can, actions }: { 
               ))}
             </Select>
           </Field>
+          <div className="is-wide">
+            <p className="fw-q-hint" role="status">
+              {containment === null ? t('new.containmentReading') : containment === 'failed' ? t('new.containmentFailed') : t('new.containmentDue', { span: say(containmentSpan(containment.hours)) ?? '' })}
+            </p>
+          </div>
           <div className="is-wide">
             <Field label={t('new.photos')} hint={prefill && prefill.files.length > 0 ? t('new.photosFrom', { count: prefill.files.length }) : undefined}>
               {can.filesUpload ? (

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ClipboardList, MoreHorizontal, Plus, Printer, Search } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Input, Select } from '@nexus/ui/primitives'
+import { Button, Input, Select, Tag } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatDateTime, formatTime } from '../../../../../lib/i18n/format'
@@ -23,8 +23,8 @@ export type { PickingListActions, PickingListModel } from '../../view-model'
  * SCR-237 — Picking & kits (Warehouse › In the warehouse; design warehouse.picking, pk-metrics + pk-grid): what the floor
  * must pick and whether the material is there (PLN-086). The tiles are saved rows (to pick today, waiting for material,
  * kits complete); one row per work order on the shared list frame: work order, style, cut date, the plan's readiness word
- * (its popover says why, with Open PO and Buy), lines picked ("6 of 9"), the kit's place (not recorded yet: a later step),
- * the kit's state, the teams that picked it (never a person), started and finished. A row opens its pick list (J / K walk
+ * (its popover says why, with Open PO and Buy), lines picked ("6 of 9"), the kit's place (B-W2b-15: chosen in the pick
+ * list), the kit's state and its check by hand, the teams that picked it (never a person), started and finished. A row opens its pick list (J / K walk
  * the rows); the selection prints one paper for all of them (sorted by bin path); Create pick lists (`c`) reserves what
  * the released work orders still need. Quantities only; no money.
  */
@@ -124,16 +124,29 @@ function PickingList({ model, actions }: { model: PickingListModel; actions?: Pi
           {data.lines.all === 0 ? '—' : t('list.lines', { picked: data.lines.picked, all: data.lines.all })}
         </span>
       ) : null
-    const PlaceCell = () => (
-      <span className="fw-st-sub" title={t('kit.placeLater')}>
-        {t('kit.placeNone')}
-      </span>
-    )
+    // B-W2b-15: the kit's place (its code; the name on hover) and, once a person checked it, "Checked" with when.
+    const PlaceCell = ({ data }: ICellRendererParams<PickRow>) =>
+      data?.kit.location ? (
+        <span className="fw-st-cell" title={`${data.kit.location.code} · ${data.kit.location.name}`}>
+          <span>{data.kit.location.code}</span>
+          <span className="fw-st-sub">{data.kit.location.name}</span>
+        </span>
+      ) : (
+        <span className="fw-st-sub">{t('kit.placeNone')}</span>
+      )
     const KitCell = ({ data }: ICellRendererParams<PickRow>) =>
       data ? (
         <span className="fw-st-cell">
           <span>
             <KitPill status={data.kit.status} />
+            {data.kit.checkedAt && (
+              <>
+                {' '}
+                <Tag tone="success" title={t('kit.checkedAt', { at: formatDateTime(data.kit.checkedAt, { locale, timeZone: model.timeZone }) })}>
+                  {t('kit.checked')}
+                </Tag>
+              </>
+            )}
           </span>
           {data.workOrder.onHold ? (
             <span className="fw-st-sub fw-pk-held">{data.workOrder.onHold.reason ? t('list.onHoldWhy', { reason: data.workOrder.onHold.reason }) : t('list.onHold')}</span>

@@ -299,7 +299,8 @@ describe('the owner: everything that waits, from every area and company, ranked'
     expect(approvals + alerts).toBe(all)
     expect(tiles.every((tile) => tile.complete === true)).toBe(true)
     // Approvals are the decisions a person reviews; everything else is an alert.
-    for (const item of answer.items as Json[]) expect(item.category, item.kind).toBe(item.decide === 'REVIEW' ? 'APPROVAL' : 'ALERT')
+    // (B-W2b-17: an NCR decision waiting for an approval is an approval decided on the NCR's own record.)
+    for (const item of answer.items as Json[]) expect(item.category, item.kind).toBe(item.decide === 'REVIEW' || item.kind === 'NCR_DECISION' ? 'APPROVAL' : 'ALERT')
     expect(answer.counts.now).toBe((answer.items as Json[]).filter((item) => item.group === 'NOW').length)
     for (const [category, count] of [['APPROVAL', approvals], ['ALERT', alerts]] as const) {
       const pressed = await ok('owner', `/home/today?limit=200&category=${category}`)
@@ -308,7 +309,8 @@ describe('the owner: everything that waits, from every area and company, ranked'
       expect(pressed.counts.tiles).toEqual(tiles)
     }
     // A deep link by kind still works, and its count is the kind's.
-    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(14)
+    // B-W2b-17: + NCR_DECISION.
+    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(15)
     for (const entry of answer.counts.byKind as Json[]) {
       const pressed = await ok('owner', `/home/today?limit=200&kind=${entry.kind}`)
       expect(pressed.total, entry.kind).toBe(entry.count)

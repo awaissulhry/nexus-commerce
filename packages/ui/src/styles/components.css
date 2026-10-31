@@ -3404,6 +3404,11 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-filerow-actions { flex: none; display: inline-flex; align-items: center; gap: var(--nds-space-4); }
 .nds-filerow.danger { border-color: var(--nds-danger); }
 .nds-filerow.danger .nds-filerow-icon, .nds-filerow.danger .nds-filerow-status { color: var(--nds-danger-text); }
+/* FileRow with the app's own actions (B-W2b-09): the cluster wraps under the name when the row is too narrow (a phone),
+   its buttons wrap too, right-aligned. Only rows that use the `actions` slot carry `has-actions`. */
+.nds-filerow.has-actions { flex-wrap: wrap; }
+.nds-filerow.has-actions .nds-filerow-body { flex: 1 1 12rem; }
+.nds-filerow.has-actions .nds-filerow-actions { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; margin-inline-start: auto; }
 /* JobProgress (PSIE, 2026-09-26) — label + elapsed, ProgressBar, a polite count line (always mounted; collapses while
    empty), a muted note. Tabular numerals so a changing count or clock does not move the line. */
 .nds-jobprogress { display: block; min-width: 0; color: var(--nds-text); }

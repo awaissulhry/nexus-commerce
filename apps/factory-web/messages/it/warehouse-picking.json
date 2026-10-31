@@ -84,12 +84,10 @@
       "COMPLETE": "Completo"
     },
     "place": "Posto del kit:",
-    "placeNone": "Non registrato",
-    "placeLater": "Non ancora registrato: il posto in cui si prepara il kit arriva con un passo successivo.",
+    "placeNone": "Non assegnato",
     "mark": "Segna il kit completo",
     "markShort_one": "Manca ancora {count} riga: il kit è completo quando è prelevata.",
     "markShort_other": "Mancano ancora {count} righe: il kit è completo quando sono prelevate.",
-    "markRecordLater": "Ogni riga è prelevata: il kit risulta già Completo. Segnare un kit a mano richiede una scheda del kit, che arriva con un passo successivo.",
     "check": "Verifica kit completo",
     "checkList_one": "Lista di prelievo fatta: {count} impegno",
     "checkList_other": "Lista di prelievo fatta: {count} impegni",
@@ -98,7 +96,31 @@
     "lineShort": "{material}: {short} ancora da prelevare",
     "allDone": "Ogni riga è prelevata: il kit è completo",
     "notAllDone_one": "{count} riga ancora mancante",
-    "notAllDone_other": "{count} righe ancora mancanti"
+    "notAllDone_other": "{count} righe ancora mancanti",
+    "placeAt": "{code} · {name}",
+    "placeLabel": "Posto del kit",
+    "placeHint": "Dove il materiale prelevato attende il taglio. Si salva appena scegli.",
+    "heldNoRight": "Per preparare e controllare un kit serve il permesso di prelievo per gli ordini di produzione (inventory.issue).",
+    "heldNoPlaces": "Per scegliere il posto serve il permesso di vedere le ubicazioni (inventory.locations.view).",
+    "heldNotOpen": "L'ordine di produzione non è più in prelievo: il suo kit resta com'è.",
+    "heldNothing": "L'ordine di produzione non prevede materiale: non c'è un kit da controllare.",
+    "heldChecked": "Il kit è già segnato come completo.",
+    "heldNotChecked": "Il kit non è segnato come completo.",
+    "busy": "Salvataggio…",
+    "checked": "Controllato",
+    "checkedAt": "Segnato completo il {at}",
+    "reopen": "Riapri",
+    "reopenReason": "Perché si riapre?",
+    "reopenWhy": "Indica perché il kit si riapre.",
+    "refused": {
+      "LINES_SHORT": "Non segnato: una riga del kit è ancora mancante. La lista di prelievo è stata riletta.",
+      "WORK_ORDER_NOT_OPEN": "Non salvato: l'ordine di produzione non è più in prelievo.",
+      "NOTHING_PLANNED": "Non segnato: l'ordine di produzione non prevede materiale.",
+      "ALREADY_CHECKED": "Qualcuno ha segnato il kit completo nel frattempo. La lista di prelievo è stata riletta.",
+      "NOT_CHECKED": "Il kit è stato riaperto nel frattempo. La lista di prelievo è stata riletta.",
+      "PLACE": "Quel posto non può ospitare un kit (archiviato, di un altro stabilimento o di un terzista): scegline un altro.",
+      "OTHER": "Il kit non è stato salvato. La lista di prelievo è stata riletta."
+    }
   },
   "ready": {
     "word": {

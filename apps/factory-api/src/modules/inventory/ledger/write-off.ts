@@ -38,9 +38,9 @@ import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contra
  *   the reason code (active; one that needs detail needs the note) → the lines (a hide whole from every location holding
  *   it; a lot or untracked material by quantity from one location) → a lot or hide under an ACTIVE quality hold is refused
  *   in words (409 `body/lines/<i>/refusal/QUALITY_HOLD`, B-W2a-64) → the reserve lock of each item and colour (a hide an
- *   ACTIVE reservation holds is refused in words: release it first) → postMoves: SCRAP moves, note `<CODE>: <note>`,
+ *   ACTIVE reservation holds is refused in words: release it first) → postMoves: SCRAP moves, reasonCode `<CODE>` and note `<CODE>: <note>` (B-W2b-15),
  *   keys `inventory.writeOff:<Idempotency-Key>:<n>`, valued in the command (the lot's cost, else the standard cost) →
- *   each hide SCRAPPED (final: the …_production_leftovers_guards trigger) → the write-off's audit row (record
+ *   each hide SCRAPPED (the database keeps the state it had: reversing its scrap opens it again, B-W2b-15) → the write-off's audit row (record
  *   `StockWriteOff`, id = its first move's) and `inventory.written_off`.
  *
  * The answer says which keys it leaves over-reserved (a quantity a reservation held: the reservation stays, the stock
@@ -104,7 +104,7 @@ export async function writeOff(caller: CommandCaller, body: WriteOffInput, idemp
         const held = await readSiteStock(tx, site.id, { itemIds: [hide.itemId], hideId: hide.id })
         if (held.length === 0) throw new ConflictError(`Hide ${hide.code} is not in stock at this site (${hide.state}): only stock in a location is written off.`)
         for (const balance of held) {
-          drafts.push({ siteId: site.id, reason: 'SCRAP', itemId: hide.itemId, lotId: hide.lotId, hideId: hide.id, fromLocationId: balance.locationId, quantity: quantityText(balance.onHand), note, reference: body.reference ?? null })
+          drafts.push({ siteId: site.id, reason: 'SCRAP', itemId: hide.itemId, lotId: hide.lotId, hideId: hide.id, fromLocationId: balance.locationId, quantity: quantityText(balance.onHand), note, reasonCode: reason.code, reference: body.reference ?? null })
           lineOf.push(index)
         }
       } else {
@@ -122,6 +122,8 @@ export async function writeOff(caller: CommandCaller, body: WriteOffInput, idemp
           ...(line.uom ? { uom: line.uom } : {}),
           ...(line.baseQuantity ? { baseQuantity: line.baseQuantity } : {}),
           note,
+          // B-W2b-15: the code is the move's own column (usage counts read it); the note keeps it in front for the screens.
+          reasonCode: reason.code,
           reference: body.reference ?? null,
         })
         lineOf.push(index)

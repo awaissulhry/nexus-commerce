@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ClipboardCheck, Download, Hand, MoreHorizontal, Settings2, UserCheck, X } from 'lucide-react'
+import { CalendarClock, ClipboardCheck, Download, Hand, MoreHorizontal, Settings2, UserCheck, X } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/components'
 import { CellSaveMark, SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, FilterChip, Pill, Select, Skeleton, Tag } from '@nexus/ui/primitives'
+import { Button, FilterChip, Input, Pill, Select, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
@@ -16,11 +16,16 @@ import { dash, Freshness, NoAccess, NoticeBanner, PageHead, QualityMessages, Ste
 import type { StepUpState } from '../../_shared/hooks'
 import type { InspectionRow, Release } from '../api'
 import { AssignDialog } from './AssignDialog'
+import { DueDialog } from './DueDialog'
 import {
   assignedWords,
   assignHeld,
   assigneeValue,
   assignRowHeld,
+  dueBulkHeld,
+  dueRowHeld,
+  dueState,
+  fromLocalInput,
   holdOf,
   lastReversal,
   kindHeld,
@@ -32,6 +37,8 @@ import {
   reversedOf,
   statusOf,
   TILES,
+  toLocalInput,
+  VIEWS,
   viewKind,
   whoKey,
   type InspectionsListModel,
@@ -82,6 +89,12 @@ export interface InspectionsListActions {
   onPickReturn?: (returnId: string) => void
   onReturnDraft?: (draft: ReturnDraft) => void
   onGradeReturn?: () => void
+  // B-W2b-17: by when inspections are due — Set due date for the selection (its dialog), the inline Due cell.
+  onDue?: (rows: readonly InspectionRow[]) => void
+  onDueValue?: (value: string) => void
+  onDueSave?: () => void
+  onDueClose?: () => void
+  onDueCell?: (row: InspectionRow, dueAt: string | null) => void
 }
 
 /** The inline cell's mark: the DS CellSaveMark while saving or unknown, "!" with the refusal's words; nothing once saved. */
@@ -201,6 +214,41 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
         </span>
       )
     }
+    // B-W2b-17 (design qi-grid inline "Due"): by when it is due, autosaved (one call with the row's version); overdue said in
+    // words; a decided inspection, or a reader without quality.inspections.record, sees it read only.
+    const DueCell = ({ data }: ICellRendererParams<InspectionRow>) => {
+      if (!data) return null
+      const state = dueState(data)
+      const words = data.dueAt ? formatDateTime(data.dueAt, { locale }) : t('due.none')
+      const held = dueRowHeld(data, can)
+      const overdue = state.tone === 'danger' ? <Tag tone="danger">{t('due.overdueTag')}</Tag> : null
+      if (held)
+        return (
+          <span className="fw-q-cell">
+            <span className={data.dueAt ? 'fw-q-num' : 'fw-q-hint'}>{data.status === 'OPEN' || data.dueAt ? words : '—'}</span>
+            {overdue}
+          </span>
+        )
+      return (
+        <span className="fw-q-cell">
+          <span className="fw-q-cell-row">
+            <Input
+              size="sm"
+              type="datetime-local"
+              aria-label={t('due.cellFor', { label: data.label })}
+              defaultValue={toLocalInput(data.dueAt)}
+              key={`${data.id}:${data.version}`}
+              onBlur={(event) => {
+                const next = fromLocalInput(event.target.value)
+                if (next !== data.dueAt && !(next && data.dueAt && new Date(next).getTime() === new Date(data.dueAt).getTime())) live.current.actions?.onDueCell?.(data, next)
+              }}
+            />
+            <Mark mark={live.current.marks[`due:${data.id}`]} />
+          </span>
+          {overdue}
+        </span>
+      )
+    }
     const LotCell = ({ data }: ICellRendererParams<InspectionRow>) =>
       data ? (
         <span className="fw-q-cell">
@@ -254,6 +302,7 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
       { colId: 'workOrder', headerName: t('col.workOrder'), sortable: false, flex: 1, minWidth: 130, valueGetter: (params) => params.data?.number ?? '' },
       column('status', t('col.status'), StatusCell, { flex: 2, minWidth: 220 }),
       column('assigned', t('col.assigned'), AssignedCell, { flex: 1.3, minWidth: can.inspectionsRecord ? 190 : 140 }),
+      column('due', t('col.due'), DueCell, { flex: 1.2, minWidth: can.inspectionsRecord ? 200 : 150 }),
       column('lot', t('col.lot'), LotCell, { flex: 1, minWidth: 130 }),
       column('released', t('col.released'), ReleasedCell, { flex: 1.2, minWidth: 150 }),
       column('inspector', t('col.signedBy'), InspectorCell, { flex: 1, minWidth: 120 }),
@@ -387,7 +436,7 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
   // ---- the toolbar: the view menu and its chip ----
   const viewItems: MenuItemDef[] = [
     { id: 'heading', heading: true, label: t('list.rowsHeading') },
-    ...(['all', 'open', 'mine', 'waiting', 'failed', 'reversed', 'lots'] as const).map((view) => ({
+    ...VIEWS.map((view) => ({
       id: view,
       label: t(`view.${view}`),
       checked: model.view === view,
@@ -420,11 +469,17 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
   const selectedCount = model.selected.length
   const pickedRows = kind === 'inspections' ? (model.rows.value ?? []).filter((row) => model.selected.includes(row.id)) : []
   const bulkAssignHeld = kind === 'inspections' ? assignHeld(pickedRows, can) : null
+  const bulkDueHeld = kind === 'inspections' ? dueBulkHeld(pickedRows, can) : null
   const bulk = (
     <>
       {kind === 'inspections' && (
         <Button size="sm" onClick={() => actions?.onAssign?.(pickedRows)} heldReason={bulkAssignHeld ? t(bulkAssignHeld) : null} aria-label={t('assign.bulk', { count: selectedCount })}>
           <UserCheck size={13} aria-hidden /> <SelectionLabel>{t('assign.bulk', { count: selectedCount })}</SelectionLabel>
+        </Button>
+      )}
+      {kind === 'inspections' && (
+        <Button size="sm" onClick={() => actions?.onDue?.(pickedRows)} heldReason={bulkDueHeld ? t(bulkDueHeld) : null} aria-label={t('due.bulk', { count: selectedCount })}>
+          <CalendarClock size={13} aria-hidden /> <SelectionLabel>{t('due.bulk', { count: selectedCount })}</SelectionLabel>
         </Button>
       )}
       <Button size="sm" onClick={() => actions?.onExport?.(kind, model.selected)} aria-label={t('list.bulkExport', { count: selectedCount })}>
@@ -629,6 +684,7 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
         onReverse={() => actions?.onReverse?.()}
         onClose={() => open(null)}
       />
+      <DueDialog state={model.due ?? null} onValue={(value) => actions?.onDueValue?.(value)} onSave={() => actions?.onDueSave?.()} onClose={() => actions?.onDueClose?.()} />
       <AssignDialog state={model.assign ?? null} onValue={(value) => actions?.onAssignValue?.(value)} onSave={() => actions?.onAssignSave?.()} onClose={() => actions?.onAssignClose?.()} />
       <ShortcutsModal open={dialog?.kind === 'shortcuts'} onClose={() => open(null)} keys={listKeys(ownKeys, true).map((entry) => ({ keys: entry.keys, does: lists(entry.does) === entry.does ? entry.does : lists(entry.does) }))} />
       {stepUp && <StepUpDialog state={stepUp} onSubmit={(code) => actions?.onStepUpSubmit?.(code)} onCancel={() => actions?.onStepUpCancel?.()} />}

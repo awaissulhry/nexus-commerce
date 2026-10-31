@@ -7,12 +7,20 @@
  * a short status line, then the sm (28px) actions — "Replace file" and a named × to remove it.
  * `tone="danger"` marks a file that was refused; the status line says why (colour is never the
  * only signal). Requires `styles/components.css`.
+ *
+ * `actions` (B-W2b-09, the FileRow actions slot): the app's own sm buttons or links for a file that
+ * is already stored — Download, Open in the viewer, Print, a ⋯ menu — drawn first in the same
+ * cluster, before Replace and Remove. Give each a name that says which file it acts on (or
+ * `aria-describedby` the row's name). With them the row may wrap: the cluster moves under the name when the row is too
+ * narrow (`has-actions`; a row without app actions keeps its one line). `labels` translates the row's own two actions.
  */
 import { useId, type ReactNode } from 'react'
 import { File as FileIcon, FileArchive, FileSpreadsheet, FileText, X } from 'lucide-react'
 import { Button } from '../primitives/Button'
 import { ToolbarButton } from '../primitives/ToolbarButton'
 import { formatBytes } from '../lib/format'
+import { mergeLabels } from '../lib/labels'
+import { FILE_ROW_LABELS, type FileRowLabels } from './FileRowLabels'
 
 export interface FileRowProps {
   /** The file's name as picked. Truncated in the row; the whole name is the `title`. */
@@ -30,6 +38,13 @@ export interface FileRowProps {
   /** Locks both actions (e.g. while the file is being read). */
   disabled?: boolean
   className?: string
+  /**
+   * The app's own actions for this file (Download, Open, Print, a ⋯ menu), drawn before Replace and Remove. sm (28px)
+   * controls; `disabled` does not lock them (the app holds its own with `heldReason`).
+   */
+  actions?: ReactNode
+  /** The row's own words ("Replace file", "Remove file"); English by default. */
+  labels?: Partial<FileRowLabels>
 }
 
 const SPREADSHEET = /\.(xlsx|xlsm|xls|ods|csv|tsv)$/i
@@ -41,9 +56,11 @@ function TypeIcon({ name }: { name: string }) {
   return <Icon size={16} aria-hidden />
 }
 
-export function FileRow({ name, size, status, tone = 'neutral', onReplace, onRemove, disabled = false, className }: FileRowProps) {
+export function FileRow({ name, size, status, tone = 'neutral', onReplace, onRemove, disabled = false, className, actions, labels }: FileRowProps) {
+  const words = mergeLabels(FILE_ROW_LABELS, labels)
+  const hasActions = actions != null && actions !== false && actions !== ''
   const nameId = useId()
-  const cls = ['nds-filerow', tone === 'danger' ? 'danger' : '', className ?? ''].filter(Boolean).join(' ')
+  const cls = ['nds-filerow', tone === 'danger' ? 'danger' : '', hasActions ? 'has-actions' : '', className ?? ''].filter(Boolean).join(' ')
   return (
     <div className={cls}>
       <span className="nds-filerow-icon"><TypeIcon name={name} /></span>
@@ -54,15 +71,16 @@ export function FileRow({ name, size, status, tone = 'neutral', onReplace, onRem
         </div>
         {status != null && status !== '' && <div className="nds-filerow-status">{status}</div>}
       </div>
-      {(onReplace || onRemove) && (
+      {(hasActions || onReplace || onRemove) && (
         <div className="nds-filerow-actions">
+          {hasActions && actions}
           {onReplace && (
             <Button variant="ghost" size="sm" onClick={onReplace} disabled={disabled} aria-describedby={nameId}>
-              Replace file
+              {words.replace}
             </Button>
           )}
           {onRemove && (
-            <ToolbarButton icon={<X size={15} aria-hidden />} label="Remove file" tooltip={false} onClick={onRemove}
+            <ToolbarButton icon={<X size={15} aria-hidden />} label={words.remove} tooltip={false} onClick={onRemove}
               disabled={disabled} aria-describedby={nameId} />
           )}
         </div>

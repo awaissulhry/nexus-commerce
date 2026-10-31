@@ -136,7 +136,7 @@ async function partyOf(db: CommandTx, type: DdtSourceType, partyId: string, toda
   return { recipient, destination, language }
 }
 
-/** The language of a source DDT's documents: its party's (it or en, else it). No column keeps it on the DDT. */
+/** The language of a source DDT's documents: its party's (it or en, else it); the DDT keeps it (B-W2b-19: Ddt.language). */
 export async function sourceLanguageOf(db: CommandTx, partyId: string): Promise<DocumentLanguage> {
   const party = await db.party.findUnique({ where: { id: partyId }, select: { language: true } })
   return isDocumentLanguage(party?.language) ? party.language : 'it'
@@ -190,8 +190,8 @@ async function sourceGoodsOf(db: CommandTx, header: SourceHeader, language: Docu
       return {
         source: base,
         goods: lines.map((line) => materialGoods(line, language, held(line.status, line.seq))),
-        // The order placed with the workshop (no reference kind of its own yet: the documents' PURCHASE_ORDER).
-        references: order ? [{ kind: 'PURCHASE_ORDER', number: order.number, date: dayOf(order.orderDate) }] : [],
+        // The order placed with the workshop: its processing order (B-W2b-19: a reference kind of its own).
+        references: order ? [{ kind: 'SUBCONTRACT_ORDER', number: order.number, date: dayOf(order.orderDate) }] : [],
       }
     }
     case 'SupplierClaim': {
@@ -201,6 +201,8 @@ async function sourceGoodsOf(db: CommandTx, header: SourceHeader, language: Docu
       })
       const lines = await db.supplierClaimLine.findMany({ where: { claimId: header.id }, select: MATERIAL, orderBy: [{ seq: 'asc' }, { id: 'asc' }] })
       const references: DocumentReference[] = [
+        // B-W2b-19: the claim itself, then what it is about.
+        { kind: 'SUPPLIER_CLAIM', number: header.number },
         ...(claim?.purchaseOrder ? [{ kind: 'PURCHASE_ORDER' as const, number: claim.purchaseOrder.number, date: dayOf(claim.purchaseOrder.orderDate) }] : []),
         // The supplier's DDT the goods came with.
         ...(claim?.goodsReceipt?.supplierDdtNumber ? [{ kind: 'DDT' as const, number: claim.goodsReceipt.supplierDdtNumber, date: dayOf(claim.goodsReceipt.supplierDdtDate) }] : []),
@@ -253,8 +255,8 @@ async function sourceGoodsOf(db: CommandTx, header: SourceHeader, language: Docu
       return {
         source: { ...base, repairedUnchecked, shippedAt: repair?.shippedAt ?? null },
         goods: [goods],
-        // The customer's DDT the garment came with.
-        references: repair?.inboundDdtNumber ? [{ kind: 'DDT', number: repair.inboundDdtNumber, date: dayOf(repair.inboundDdtDate) }] : [],
+        // B-W2b-19: the repair itself, then the customer's DDT the garment came with.
+        references: [{ kind: 'REPAIR_ORDER', number: header.number }, ...(repair?.inboundDdtNumber ? [{ kind: 'DDT' as const, number: repair.inboundDdtNumber, date: dayOf(repair.inboundDdtDate) }] : [])],
       }
     }
     case 'ReturnAuthorisation': {
@@ -288,7 +290,12 @@ async function sourceGoodsOf(db: CommandTx, header: SourceHeader, language: Docu
           serials: line.serial ? [line.serial] : [],
           held: held(line),
         })),
-        references: [...(rma?.salesOrder ? [{ kind: 'SALES_ORDER' as const, number: rma.salesOrder.number, date: dayOf(rma.salesOrder.orderDate) }] : []), ...customerDdts.values()],
+        // B-W2b-19: the return authorisation itself, then its order and the customer's DDTs.
+        references: [
+          { kind: 'RETURN_AUTHORISATION', number: header.number },
+          ...(rma?.salesOrder ? [{ kind: 'SALES_ORDER' as const, number: rma.salesOrder.number, date: dayOf(rma.salesOrder.orderDate) }] : []),
+          ...customerDdts.values(),
+        ],
       }
     }
   }
@@ -404,6 +411,9 @@ export function sourceDdtView(row: SourceDdtRow, fileId: string | null, sourceNu
     createdById: row.createdById,
     cancellation: cancellation ? { id: cancellation.id, reason: cancellation.reason, cancelledAt: toUtcIso(cancellation.cancelledAt), createdById: cancellation.createdById } : null,
     fileId,
+    // B-W2b-19: the language it was issued in (null: issued before W2b) and its mode of transport (Intrastat).
+    language: row.language,
+    transportMode: row.transportMode,
   }
 }
 

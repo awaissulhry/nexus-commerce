@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
-import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { Drawer } from '../components/Drawer'
 import { Menu, type MenuItemDef } from '../components/Menu'
 import { ToolbarButton } from '../primitives/ToolbarButton'
@@ -31,6 +31,14 @@ export interface WorkspaceNavItem {
   children?: readonly WorkspaceNavItem[]
   /** What the rows under it are, for the chevron and the list's names ("Show Amazon markets"). Default "items". */
   childrenLabel?: string
+  /**
+   * `_blank`: the row opens its page in a new tab on a plain click (a window page such as the planning board; B-W2b-09).
+   * The row shows a new-tab mark and says `targetLabel`; the host's `onNavigate` is not called for it (the browser opens
+   * the tab). Absent: the row is drawn exactly as before.
+   */
+  target?: '_blank'
+  /** Said after the label of a `target` row, in the person's language: "opens in a new tab". */
+  targetLabel?: string
 }
 
 export interface WorkspaceNavGroup {
@@ -94,11 +102,17 @@ function SecondaryNavLink({ item, onNavigate, children }: Pick<SecondaryNavRowPr
       className="nds-secondary-nav-link"
       aria-current={item.active ? 'page' : undefined}
       aria-label={item.ariaLabel}
+      target={item.target}
+      rel={item.target ? 'noopener noreferrer' : undefined}
       onClick={event => onNavigate(event, item)}
     >
       {item.icon && <span className="nds-secondary-nav-icon" aria-hidden>{item.icon}</span>}
       <span className="nds-secondary-nav-label">{item.label}</span>
       {item.badge != null && <Tag>{item.badge}</Tag>}
+      {item.target && <>
+        <ExternalLink size={12} aria-hidden className="nds-secondary-nav-newtab" />
+        {item.targetLabel && <span className="nds-vh">{` (${item.targetLabel})`}</span>}
+      </>}
       {children}
     </a>
   )
@@ -241,7 +255,8 @@ export function WorkspaceSubheader({
   }
 
   const navigate = (event: MouseEvent<HTMLAnchorElement>, item: WorkspaceNavItem) => {
-    onNavigate?.(event, item)
+    // A new-tab row: the browser opens the tab; the host's client navigation must not take this tab elsewhere.
+    if (!item.target) onNavigate?.(event, item)
     close()
   }
   const menuItems: MenuItemDef[] = (views?.items ?? []).map(item => ({

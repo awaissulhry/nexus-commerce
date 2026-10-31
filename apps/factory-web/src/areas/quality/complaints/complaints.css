@@ -179,3 +179,27 @@
   min-width: 0;
   overflow: hidden;
 }
+
+/* B-W2b-17: Link… / Unlink on Linked records (design cmp-links). */
+.fw-cmp-links-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  margin-bottom: var(--nds-space-12);
+}
+
+.fw-cmp-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cmp-link-types {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}

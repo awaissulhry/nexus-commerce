@@ -10,6 +10,7 @@ import {
   benchWorkOrdersContract,
   cancelInspectionContract,
   decideInspectionContract,
+  dueContract,
   evidenceContract,
   getInspectionContract,
   getReleaseContract,
@@ -27,6 +28,7 @@ import {
 } from './contract'
 import { assignInspections, listInspectors } from './assign'
 import { benchWorkOrders } from './bench'
+import { setInspectionsDue } from './due'
 import { holdAtBench } from './bench-hold'
 import { evidenceTrail } from './evidence'
 import { cancelInspection, decideInspection, getInspection, openInspection, putDefects, updateInspection } from './inspections'
@@ -56,12 +58,15 @@ export default defineRoutes('quality.final', manifest, async (app) => {
   )
 
   app.get('/quality/inspections', { schema: listInspectionsContract }, async (request) =>
-    listInspections(request, { ...request.query, onHold: flag(request.query.onHold), waitingRelease: flag(request.query.waitingRelease), failedUndecided: flag(request.query.failedUndecided) }),
+    listInspections(request, { ...request.query, onHold: flag(request.query.onHold), waitingRelease: flag(request.query.waitingRelease), failedUndecided: flag(request.query.failedUndecided), overdue: flag(request.query.overdue) }),
   )
 
   app.get('/quality/inspections/inspectors', { schema: inspectorsContract }, async (request) => listInspectors(request, request.query))
 
   app.post('/quality/inspections/assign', { schema: assignContract }, async (request) => assignInspections(request, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-17: by when open inspections are due (the list's inline Due and its bulk action), one command.
+  app.post('/quality/inspections/due', { schema: dueContract }, async (request) => setInspectionsDue(request, request.body, idempotencyKeyFrom(request)))
 
   app.post('/quality/inspections', { schema: openInspectionContract }, async (request, reply) => reply.code(201).send(await openInspection(request, request.body, idempotencyKeyFrom(request))))
 

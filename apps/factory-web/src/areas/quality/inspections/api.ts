@@ -48,6 +48,9 @@ export const inspectionRowSchema = z.object({
   holds: z.number(),
   ncrs: z.number(),
   undecided: z.boolean(),
+  // B-W2b-17: by when it is due (the office sets it while OPEN) and whether it is past it.
+  dueAt: z.string().nullable().optional().default(null),
+  overdue: z.boolean().optional().default(false),
   version: z.number(),
   decidedAt: z.string().nullable(),
   createdAt: z.string(),
@@ -62,6 +65,8 @@ export interface InspectionQuery {
   readonly failedUndecided?: boolean
   /** W2a: assigned to the caller. */
   readonly mine?: boolean
+  /** B-W2b-17: open and past its due time. */
+  readonly overdue?: boolean
   readonly workOrderId?: string | null
   readonly limit?: number
 }
@@ -75,6 +80,7 @@ export async function listInspections(api: ApiClient, query: InspectionQuery, si
       ...(query.waitingRelease ? { waitingRelease: 'true' } : {}),
       ...(query.failedUndecided ? { failedUndecided: 'true' } : {}),
       ...(query.mine ? { assigned: 'me' } : {}),
+      ...(query.overdue ? { overdue: 'true' } : {}),
       ...(query.workOrderId ? { workOrderId: query.workOrderId } : {}),
       limit: query.limit ?? 50,
     },
@@ -274,6 +280,9 @@ export const inspectionSchema = z.object({
   overrideReason: z.string().nullable(),
   inspector: who,
   assigned: assigned.nullable(),
+  // B-W2b-17: by when it is due and whether it is past it.
+  dueAt: z.string().nullable().optional().default(null),
+  overdue: z.boolean().optional().default(false),
   notMakerStatement: z.boolean(),
   decidedAt: z.string().nullable(),
   signatureSha256: z.string().nullable(),
@@ -317,7 +326,7 @@ export interface ChecklistAnswerBody {
 }
 
 /** `POST /quality/inspections`: opens one on a work order's finished garments (it takes its INSPECTION number); W2a: assigned at once. */
-export async function openInspection(api: ApiClient, body: PlanBody & { workOrderId: string; note?: string | null; assigneeId?: string | null; assigneeWorkerId?: string | null }, key: string): Promise<Inspection> {
+export async function openInspection(api: ApiClient, body: PlanBody & { workOrderId: string; note?: string | null; assigneeId?: string | null; assigneeWorkerId?: string | null; /** B-W2b-17: by when it is due (office). */ dueAt?: string | null }, key: string): Promise<Inspection> {
   return (await api.post('/quality/inspections', { body, schema: inspectionAnswer, idempotencyKey: key })).inspection
 }
 
@@ -590,4 +599,24 @@ export async function uploadDefectPhoto(api: ApiClient, inspection: { id: string
 export async function photoAddress(api: ApiClient, fileId: string): Promise<string> {
   const { download } = await downloadLink(api, fileId)
   return download.url.startsWith('/') && !download.url.startsWith('//') ? `/api${download.url}` : download.url
+}
+
+// ---- B-W2b-17: by when an inspection is due (design qi-grid inline "Due") ----------------------------------------------------
+
+export interface DueBody {
+  readonly inspections: readonly { readonly id: string; readonly version: number }[]
+  /** An ISO instant, or null to clear it. */
+  readonly dueAt: string | null
+}
+
+export interface DueAnswer {
+  readonly id: string
+  readonly version: number
+  readonly dueAt: string | null
+  readonly overdue: boolean
+}
+
+/** `POST /quality/inspections/due`: every open inspection named or none (400 `body/dueAt`, 409 `inspections/<i>` in words). */
+export async function setInspectionsDue(api: ApiClient, body: DueBody, key: string = newIdempotencyKey()): Promise<DueAnswer[]> {
+  return (await api.post('/quality/inspections/due', { body, schema: z.object({ inspections: z.array(z.object({ id: z.string(), version: z.number(), dueAt: z.string().nullable(), overdue: z.boolean() })) }), idempotencyKey: key })).inspections
 }

@@ -41,6 +41,8 @@ const row = (n: number, over: Partial<InspectionRow>): InspectionRow => ({
   holds: 0,
   ncrs: 0,
   undecided: false,
+  dueAt: null,
+  overdue: false,
   version: 3,
   decidedAt: at(27, 10, 42),
   createdAt: at(27, 9, 15),
@@ -48,8 +50,8 @@ const row = (n: number, over: Partial<InspectionRow>): InspectionRow => ({
 })
 
 export const ROWS: InspectionRow[] = [
-  row(12, { status: 'OPEN', computedResult: null, decidedAt: null, inspector: office(ME), assigned: { kind: 'USER', userId: ME, workerId: null, name: 'Demo Person' }, createdAt: at(29, 8, 40), number: 'DEMO-WO-0151', workOrderId: WO.d, lotSize: 24, sampleSize: 5 }),
-  row(11, { status: 'OPEN', computedResult: null, decidedAt: null, assigned: { kind: 'WORKER', userId: null, workerId: WORKER, name: null }, createdAt: at(29, 8, 5), number: 'DEMO-WO-0149', workOrderId: WO.c, lotSize: 12, sampleSize: 3 }),
+  row(12, { status: 'OPEN', computedResult: null, decidedAt: null, inspector: office(ME), assigned: { kind: 'USER', userId: ME, workerId: null, name: 'Demo Person' }, dueAt: at(30, 16, 0), createdAt: at(29, 8, 40), number: 'DEMO-WO-0151', workOrderId: WO.d, lotSize: 24, sampleSize: 5 }),
+  row(11, { status: 'OPEN', computedResult: null, decidedAt: null, assigned: { kind: 'WORKER', userId: null, workerId: WORKER, name: null }, dueAt: at(29, 12, 0), overdue: true, createdAt: at(29, 8, 5), number: 'DEMO-WO-0149', workOrderId: WO.c, lotSize: 12, sampleSize: 3 }),
   row(13, { status: 'OPEN', computedResult: null, decidedAt: null, inspector: office(OTHER_USER), createdAt: at(29, 7, 50), number: 'DEMO-WO-0152', workOrderId: WO.d, lotSize: 10, sampleSize: 3 }),
   row(10, { released: 30, toRelease: 18, decidedAt: at(28, 16, 5), createdAt: at(28, 15, 0) }),
   row(9, { number: 'DEMO-WO-0147', workOrderId: WO.b, status: 'FAILED', computedResult: 'FAIL', onHold: true, holdWords: 'x', undecided: true, decidedAt: at(28, 11, 20), createdAt: at(28, 10, 0), lotSize: 20, sampleSize: 5 }),
@@ -228,6 +230,8 @@ export const INSPECTION: Inspection = {
   overrideReason: null,
   inspector: office(ME),
   assigned: null,
+  dueAt: at(30, 16, 0),
+  overdue: false,
   notMakerStatement: false,
   decidedAt: null,
   signatureSha256: null,

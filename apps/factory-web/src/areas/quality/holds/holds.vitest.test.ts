@@ -10,7 +10,7 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { LIST_PAGES, RECORD_PAGES, recordAddress } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { qualityCan } from '../_shared/model'
-import { CLOSED, DETAIL_CR_VI, DETAIL_MAKER, DETAIL_PLACER, DETAIL_READY, DETAIL_RELEASED, DETAIL_STATEMENT, detailOf, HOLDS, PREVIEW, PREVIEW_PROBLEMS, REASONS, REASON_WORDS, RELEASED } from './demo/fixtures'
+import { CLOSED, DETAIL_CR_VI, DETAIL_MAKER, DETAIL_PLACER, DETAIL_PLACER_MAY, DETAIL_READY, DETAIL_RELEASED, DETAIL_STATEMENT, detailOf, HOLDS, PREVIEW, PREVIEW_PROBLEMS, REASONS, REASON_WORDS, RELEASED, SETTINGS_COMPANY, SETTINGS_DEFAULT, SETTINGS_READ_ONLY } from './demo/fixtures'
 import { designScreen as listScreen } from './fixtures'
 import {
   blocksKey,
@@ -19,7 +19,18 @@ import {
   bulkReleaseHeld,
   changeHeld,
   checkLineKey,
+  checkLineKeyFor,
   checkNameKey,
+  CSV_HEAD,
+  csvRow,
+  numberText,
+  settingsChanged,
+  settingsDraftOf,
+  settingsHeld,
+  settingsInForceKey,
+  settingsLoosens,
+  settingsSourceKey,
+  whoRuleKey,
   evidenceOf,
   fieldOf,
   firstOpenCheck,
@@ -259,5 +270,79 @@ describe('every design case draws in both languages with no key left on screen',
     expect(render(listScreen as DesignScreen<unknown>, listScreen.cases[0]!.model, 'it')).toContain('Blocchi aperti')
     expect(html).not.toMatch(/€|EUR\b/)
     expect(html).not.toMatch(/Demo Floor Worker/)
+  })
+})
+
+// ---- B-W2b-17: hold numbers and who releases holds ----------------------------------------------------------------------
+
+describe('B-W2b-17: the hold number', () => {
+  it('says the number, "—" for a hold placed before numbering; the CSV starts with it', () => {
+    const numbered = HOLDS.find((hold) => hold.number !== null)!
+    const older = HOLDS.find((hold) => hold.number === null)!
+    expect(numberText(numbered)).toBe(numbered.number)
+    expect(numberText(older)).toBe('—')
+    const t = (key: string) => key
+    expect(CSV_HEAD[0]).toBe('csv.number')
+    expect(csvRow(numbered, t, 'reason', ME)[0]).toBe(numbered.number)
+    expect(csvRow(older, t, 'reason', ME)[0]).toBe('')
+  })
+
+  it('sends the number search to the API (q) and never an empty one', async () => {
+    const asked: Record<string, string>[] = []
+    const api = { get: async (_path: string, options: { query: Record<string, string> }) => (asked.push(options.query), { holds: [], truncated: false }) }
+    const { listHolds } = await import('./api')
+    await listHolds(api as never, { ...queryOf('open', { subjectType: null, subjectId: null }), q: ' 0093 ' })
+    await listHolds(api as never, { ...queryOf('open', { subjectType: null, subjectId: null }), q: '  ' })
+    expect(asked[0]).toMatchObject({ status: 'ACTIVE', q: '0093' })
+    expect(asked[1]).not.toHaveProperty('q')
+  })
+})
+
+describe('B-W2b-17: who releases a hold', () => {
+  it("words the placer's own release as the company's rule, never as someone else's", () => {
+    const met = DETAIL_PLACER_MAY.release.checks.find((check) => check.key === 'NOT_PLACER')!
+    expect(met.ok).toBe(true)
+    expect(checkLineKeyFor(met, DETAIL_PLACER_MAY.hold, 'nobody-else', true)).toBe('check.NOT_PLACER.ok')
+    const placer = DETAIL_PLACER_MAY.hold.placedBy.userId!
+    expect(checkLineKeyFor(met, DETAIL_PLACER_MAY.hold, placer, true)).toBe('check.NOT_PLACER.placerMay')
+    expect(checkLineKeyFor(met, DETAIL_PLACER_MAY.hold, placer, false)).toBe(checkLineKey('NOT_PLACER', true))
+    expect(checkLineKeyFor({ key: 'NOT_PLACER', ok: false }, DETAIL_PLACER.hold, placer, false)).toBe('check.NOT_PLACER.open')
+    expect(whoRuleKey(DETAIL_PLACER_MAY)).toBe('decision.who.rulePlacerMay')
+    expect(whoRuleKey(DETAIL_READY)).toBe('decision.who.rule')
+  })
+
+  it('asks a reason only for the looser rule; holds Save while reading, without the right, unchanged or without the reason', () => {
+    const fromDefault = settingsDraftOf(SETTINGS_DEFAULT.settings)
+    expect(fromDefault).toEqual({ choice: null, reason: '' })
+    expect(settingsHeld(null, null, false)).toBe('settings.held.reading')
+    expect(settingsHeld(SETTINGS_READ_ONLY, fromDefault, false)).toBe('settings.held.noRight')
+    expect(settingsHeld(SETTINGS_DEFAULT, fromDefault, false)).toBe('settings.held.nothing')
+    expect(settingsHeld(SETTINGS_DEFAULT, fromDefault, true)).toBe('settings.held.busy')
+    const loosen = { choice: true, reason: '' }
+    expect(settingsLoosens(SETTINGS_DEFAULT.settings, loosen)).toBe(true)
+    expect(settingsHeld(SETTINGS_DEFAULT, loosen, false)).toBe('settings.held.reason')
+    expect(settingsHeld(SETTINGS_DEFAULT, { ...loosen, reason: 'Night shift' }, false)).toBeNull()
+    // Someone else releasing again is stricter: no reason. Following the tenant from a company row may loosen: asked.
+    const tighten = { choice: false, reason: '' }
+    expect(settingsChanged(SETTINGS_COMPANY.settings, tighten)).toBe(true)
+    expect(settingsLoosens(SETTINGS_COMPANY.settings, tighten)).toBe(false)
+    expect(settingsHeld(SETTINGS_COMPANY, tighten, false)).toBeNull()
+    const ownFalse = { ...SETTINGS_COMPANY.settings, inForce: { placerMayRelease: false, source: 'COMPANY' as const }, own: { placerMayRelease: false, updatedAt: SETTINGS_COMPANY.settings.own!.updatedAt } }
+    expect(settingsLoosens(ownFalse, { choice: null, reason: '' })).toBe(true)
+    expect(settingsLoosens(SETTINGS_COMPANY.settings, { choice: null, reason: '' })).toBe(false)
+  })
+
+  it('says the rule in force and where it comes from', () => {
+    expect(settingsInForceKey(SETTINGS_DEFAULT.settings)).toBe('settings.inForce.someoneElse')
+    expect(settingsInForceKey(SETTINGS_COMPANY.settings)).toBe('settings.inForce.placerMay')
+    expect(settingsSourceKey(SETTINGS_DEFAULT.settings)).toBe('settings.source.DEFAULT')
+    expect(settingsSourceKey(SETTINGS_COMPANY.settings)).toBe('settings.source.COMPANY')
+  })
+
+  it('reads the release rule from the API answer, and an older answer without it means "someone else releases"', async () => {
+    const { holdDetailSchema } = await import('./api')
+    const answer = holdDetailSchema.parse({ ...DETAIL_READY, release: { checks: DETAIL_READY.release.checks, releasable: true, mayRelease: true } })
+    expect(answer.release.placerMayRelease).toBe(false)
+    expect(holdDetailSchema.parse(DETAIL_PLACER_MAY).release.placerMayRelease).toBe(true)
   })
 })

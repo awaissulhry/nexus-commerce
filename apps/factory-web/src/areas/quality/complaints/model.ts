@@ -1,6 +1,6 @@
 import { answerDueState, COMPLAINT_LIMITS, COMPLAINT_TILES, type ComplaintTile } from '@nexus/factory-domain/quality/complaints/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
-import type { Complaint, ComplaintAction, ComplaintCategory, ComplaintQuery, ComplaintRow, ComplaintSeverity, ComplaintStatus, ComplaintView, HeldCode, LogBody, LogPreview, OfficeChannel } from './api'
+import type { Complaint, ComplaintAction, ComplaintCategory, ComplaintLinkType, ComplaintQuery, ComplaintRow, ComplaintSeverity, ComplaintStatus, ComplaintView, HeldCode, LogBody, LogPreview, OfficeChannel } from './api'
 import { COMPLAINT_CATEGORIES, COMPLAINT_SEVERITIES, COMPLAINT_VIEWS } from './api'
 
 /**
@@ -23,6 +23,8 @@ export const COMPLAINT_PERMISSIONS = {
   registerManage: 'compliance.register.manage',
   ncrView: 'quality.ncr.view',
   ncrRaise: 'quality.ncr.raise',
+  /** B-W2b-17: unlinking an NCR from the complaint. */
+  ncrManage: 'quality.ncr.manage',
   repairsView: 'sales.repairs.view',
   repairsManage: 'sales.repairs.manage',
   partiesView: 'parties.view',
@@ -30,6 +32,9 @@ export const COMPLAINT_PERMISSIONS = {
   shippingView: 'shipping.view',
   returnsView: 'sales.returns.view',
   stylesView: 'product.styles.view',
+  /** B-W2b-17: Link… finds a garment by its serial (the evidence trail's read, else the label scan). */
+  inspectionsView: 'quality.inspections.view',
+  serialsScan: 'production.serials',
   sitesView: 'inventory.locations.view',
   filesRead: 'files.read',
   filesUpload: 'files.upload',
@@ -485,3 +490,86 @@ export function alertGarment(alert: { style: { code: string } | null; batchNumbe
   if (alert.style) return { key: 'banner.style', params: { style: alert.style.code } }
   return garment ?? { key: 'banner.noGarment' }
 }
+
+// ---- B-W2b-17: Link… / Unlink on Linked records (design cmp-links) ----------------------------------------------------------
+
+/** What Link… offers, in the design's order: the complaint's own facts, then an NCR. */
+export const LINK_TYPES: readonly ComplaintLinkType[] = ['SalesOrder', 'Shipment', 'ReturnAuthorisation', 'GarmentSerial', 'Nonconformance']
+
+/** Whether this person may change the complaint's links at all now (a message key of `complaints` when not). */
+export function linksHeld(complaint: Pick<Complaint, 'status'>, can: ComplaintsCan, offline = false): string | null {
+  if (complaint.status === 'CLOSED') return 'held.CLOSED'
+  if (complaint.status === 'NEW' ? !can.log && !can.manage : !can.manage) return complaint.status === 'NEW' ? 'links.held.log' : 'links.held.manage'
+  return offline ? 'held.offline' : null
+}
+
+/** Why a type cannot be linked by this person (a message key), or null: its finder's right, and for an NCR the raise. */
+export function linkTypeHeld(type: ComplaintLinkType, can: ComplaintsCan): string | null {
+  if (type === 'SalesOrder') return can.ordersView ? null : 'links.held.orders'
+  if (type === 'Shipment') return can.shippingView ? null : 'links.held.shipments'
+  if (type === 'ReturnAuthorisation') return can.returnsView ? null : 'links.held.returns'
+  if (type === 'GarmentSerial') return can.inspectionsView || can.serialsScan ? null : 'links.held.garment'
+  if (!can.ncrView) return 'links.held.ncrView'
+  return can.ncrRaise ? null : 'links.held.ncrRaise'
+}
+
+/** The fact a type already names on the complaint (one each: a second is linked only after the first is unlinked). */
+export function linkedFact(complaint: Pick<Complaint, 'order' | 'shipment' | 'return' | 'serial'>, type: Exclude<ComplaintLinkType, 'Nonconformance'>): string | null {
+  if (type === 'SalesOrder') return complaint.order?.number ?? null
+  if (type === 'Shipment') return complaint.shipment?.number ?? null
+  if (type === 'ReturnAuthorisation') return complaint.return?.number ?? null
+  return complaint.serial
+}
+
+/** Link…'s Save held with its reason (a message key and params), or null when it may go. */
+export function linkSaveHeld(complaint: Pick<Complaint, 'order' | 'shipment' | 'return' | 'serial' | 'ncrs'>, draft: { readonly type: ComplaintLinkType | ''; readonly recordId: string; readonly serial: string }, can: ComplaintsCan): Words | null {
+  if (!draft.type) return { key: 'links.problem.type' }
+  const typeHeld = linkTypeHeld(draft.type, can)
+  if (typeHeld) return { key: typeHeld }
+  if (draft.type === 'GarmentSerial') {
+    if (!draft.serial.trim()) return { key: 'links.problem.serial' }
+    // The serial the complaint names already may be linked as our garment; another one waits for an unlink.
+    const named = linkedFact(complaint, draft.type)
+    return named && named.toUpperCase() !== draft.serial.trim().toUpperCase() ? { key: 'links.problem.taken', params: { label: named } } : null
+  }
+  if (draft.type !== 'Nonconformance') {
+    const named = linkedFact(complaint, draft.type)
+    if (named) return { key: 'links.problem.taken', params: { label: named } }
+  }
+  if (!draft.recordId) return { key: draft.type === 'Nonconformance' ? 'links.problem.ncr' : 'links.problem.record' }
+  if (draft.type === 'Nonconformance' && complaint.ncrs.some((ncr) => ncr.id === draft.recordId)) return { key: 'links.problem.ncrLinked' }
+  return null
+}
+
+/** Unlink of one linked record, held with its reason (a message key and params), or null. */
+export function unlinkHeld(complaint: Pick<Complaint, 'status'>, type: ComplaintLinkType, can: ComplaintsCan, options: { readonly raisedFrom?: boolean; readonly offline?: boolean } = {}): string | null {
+  const held = linksHeld(complaint, can, options.offline)
+  if (held) return held
+  if (type === 'Nonconformance') {
+    if (options.raisedFrom) return 'links.held.source'
+    if (!can.ncrManage) return 'links.held.ncrManage'
+  }
+  return null
+}
+
+/**
+ * A refused link or unlink in our words: a stale version (409 with a `version` issue) → `refusal.conflict` (read again);
+ * a closed complaint (409 invalid_state) → `held.CLOSED`; another 409 → the link's own refusal (already linked to
+ * another one / the source NCR stays / the NCR names it already); 404 → not found (link) or not linked any more (unlink);
+ * else the complaint's usual refusal words.
+ */
+export function linkRefusalKey(error: unknown, step: 'link' | 'unlink', type: ComplaintLinkType): string {
+  if (!isApiError(error)) return 'quality:problem.unavailable'
+  if (error.kind === 'conflict') {
+    if (error.issues.some((issue) => issuePath(issue) === 'version')) return 'refusal.conflict'
+    if (error.issues.some((issue) => issuePath(issue).startsWith('held/'))) return refusalKey(error)
+    if (error.code === 'invalid_state') return 'held.CLOSED'
+    if (step === 'unlink') return type === 'Nonconformance' ? 'links.refused.source' : 'links.refused.gone'
+    return type === 'Nonconformance' ? 'links.refused.ncrTaken' : 'links.refused.taken'
+  }
+  if (error.kind === 'not_found') return step === 'unlink' ? 'links.refused.gone' : type === 'GarmentSerial' ? 'links.refused.garment' : 'links.refused.notFound'
+  return refusalKey(error)
+}
+
+/** The words of a link type (Link…'s choice, a receipt). */
+export const linkTypeKey = (type: ComplaintLinkType): string => `links.type.${type}`

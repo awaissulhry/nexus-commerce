@@ -386,5 +386,113 @@
       "max": "Massimo",
       "count": "Conteggio"
     }
+  },
+  "fileRow": {
+    "replace": "Sostituisci file",
+    "remove": "Rimuovi file"
+  },
+  "saveStatus": {
+    "saved": "Tutte le modifiche salvate",
+    "savedAt": "Tutte le modifiche salvate · {time}",
+    "saving": "Salvataggio…",
+    "failed_one": "{count} modifica non salvata",
+    "failed_other": "{count} modifiche non salvate",
+    "retry": "Riprova",
+    "unsaved": "Modifiche non salvate",
+    "unsavedCount_one": "{count} modifica non salvata",
+    "unsavedCount_other": "{count} modifiche non salvate",
+    "offline": "Offline",
+    "offlineCount_one": "Offline — {count} modifica in attesa di invio",
+    "offlineCount_other": "Offline — {count} modifiche in attesa di invio",
+    "region": "Stato del salvataggio"
+  },
+  "checkList": {
+    "state": {
+      "pass": "Fatto",
+      "warning": "Attenzione",
+      "fail": "Aperto",
+      "checking": "In verifica",
+      "skipped": "Non serve",
+      "unknown": "Non noto"
+    },
+    "allPass_one": "Il controllo è superato",
+    "allPass_other": "Tutti i {count} controlli superati",
+    "openOnly": "Il controllo è aperto",
+    "open_one": "{count} controllo aperto su {total}",
+    "open_other": "{count} controlli aperti su {total}",
+    "checking": "Nuova verifica in corso…",
+    "button_one": "{action} · {count} controllo aperto",
+    "button_other": "{action} · {count} controlli aperti",
+    "held_one": "{count} controllo aperto: {names}",
+    "held_other": "{count} controlli aperti: {names}",
+    "join": ", ",
+    "none": "Nessun controllo"
+  },
+  "traceTree": {
+    "possible": "potrebbe contenerlo",
+    "possibleCount_one": "{count} potrebbe contenerlo",
+    "possibleCount_other": "{count} potrebbero contenerlo",
+    "levels": "Livelli",
+    "tick": "Includi {name} e tutto ciò che contiene",
+    "selected_one": "{count} selezionato",
+    "selected_other": "{count} selezionati",
+    "keys": "Tasti: ↑ ↓ spostati · → apri o entra · ← chiudi o esci · Home / Fine primo o ultimo · Invio apre la scheda · Spazio spunta",
+    "empty": "Niente da mostrare"
+  },
+  "printView": {
+    "print": "Stampa",
+    "back": "Indietro",
+    "printedBy": "Stampato da {person} il {when}",
+    "printedOn": "Stampato il {when}",
+    "filters": "Filtri: {list}",
+    "filter": "{label}: {value}",
+    "join": " · ",
+    "noFilters": "Nessun filtro: tutte le righe",
+    "strip": "Stampa"
+  },
+  "marginMeter": {
+    "label": "Margine",
+    "underFloor": "{value} — sotto il minimo del {floor}",
+    "underTarget": "{value} — sotto l’obiettivo del {target}",
+    "onTarget": "{value} — pari o sopra l’obiettivo del {target}",
+    "overFloor": "{value} — sopra il minimo del {floor}",
+    "plain": "{value}",
+    "unknown": "Margine non noto",
+    "floorMark": "Minimo {floor}",
+    "targetMark": "Obiettivo {target}"
+  },
+  "waterfall": {
+    "up": "+ {amount}",
+    "down": "− {amount}",
+    "stepName": "{label}, {amount}, ora {total}",
+    "totalName": "{label}, {amount}",
+    "open": "Mostra come si compone {label}",
+    "empty": "Niente da mostrare"
+  },
+  "barList": {
+    "name": "Nome",
+    "value": "Valore",
+    "unknown": "—",
+    "part": "{label}: {value}",
+    "partsJoin": "; ",
+    "pick": "Mostra {label}: {value}",
+    "empty": "Niente da mostrare"
+  },
+  "selectableCard": {
+    "selected": "Selezionata"
+  },
+  "cardList": {
+    "select": "Seleziona",
+    "done": "Fine",
+    "selectAll": "Seleziona tutto",
+    "selected_one": "{count} selezionata",
+    "selected_other": "{count} selezionate",
+    "selectOne": "Seleziona {name}",
+    "nothingToSelect": "Qui non si può selezionare nulla",
+    "sortBy": "Ordina per",
+    "listOrder": "Ordine della lista",
+    "ascending": "{column} ↑",
+    "descending": "{column} ↓",
+    "reading": "Lettura…"
   }
 }

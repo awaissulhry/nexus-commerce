@@ -9,34 +9,29 @@ import { defineExportSource } from '../source'
  * Warehouse › Counts (SCR-132, `/warehouse/counts`): the export of the list as the screen shows it. The address is the
  * list's own (apps/factory-web areas/warehouse/counts model.ts addressOf / viewQuery): `?view=open|drafts|counting|
  * waiting|toApply|yearEnd|applied|signedOff|cancelled|all` (nothing: the open counts), `?site=`, `?q=`. "Waiting for
- * approval" and "To apply" keep, as the screen does, only the rows whose approval rule answers them. Read through the
- * module's listCounts (inventory.counts.view, its companies and sites), a page at a time. The differences column writes
+ * approval" and "To apply" are the API's own views (B-W2b-15: `view=waitingApproval|toApply`, filtered as the tiles count
+ * them), as the screen asks for them. Read through the module's listCounts (inventory.counts.view, its companies and
+ * sites), a page at a time. The differences column writes
  * how many lines differ; their value (the cost grain) is not part of the file (the screen shows it under the count).
  */
 
 type Row = Awaited<ReturnType<typeof listCounts>>['counts'][number]
 type View = 'open' | 'drafts' | 'counting' | 'waiting' | 'toApply' | 'yearEnd' | 'applied' | 'signedOff' | 'cancelled' | 'all'
-type Query = Omit<ListQuery, 'cursor' | 'limit'> & { readonly view: View }
+type Query = Omit<ListQuery, 'cursor' | 'limit'>
 
 const VIEWS: readonly View[] = ['open', 'drafts', 'counting', 'waiting', 'toApply', 'yearEnd', 'applied', 'signedOff', 'cancelled', 'all']
+/** A saved row → the API's own filter (web model.ts viewQuery). */
 const FILTER: Readonly<Record<View, Omit<ListQuery, 'cursor' | 'limit' | 'q' | 'siteId'>>> = {
   open: { open: 'true' },
   drafts: { status: 'DRAFT' },
   counting: { status: 'COUNTING' },
-  waiting: { status: 'SUBMITTED' },
-  toApply: { open: 'true' },
+  waiting: { view: 'waitingApproval' },
+  toApply: { view: 'toApply' },
   yearEnd: { kind: 'YEAR_END', open: 'true' },
   applied: { status: 'APPLIED' },
   signedOff: { status: 'SIGNED_OFF' },
   cancelled: { status: 'CANCELLED' },
   all: {},
-}
-
-/** The rows a saved row keeps beyond the API's filter (the approval rule's answer). */
-function kept(view: View, row: Row): boolean {
-  if (view === 'waiting') return row.status === 'SUBMITTED' && row.approvalRequired === true
-  if (view === 'toApply') return row.status === 'APPROVED' || (row.status === 'SUBMITTED' && row.approvalRequired === false)
-  return true
 }
 
 const fill = (template: string, values: Readonly<Record<string, string | number>>): string => template.replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? ''))
@@ -61,12 +56,11 @@ export const counts = defineExportSource<Query, Row>({
     const siteId = address.get('site') || undefined
     if (siteId && !isUuid(siteId)) throw new ValidationError('Not a site.', [{ path: 'query/site', message: 'A site id.' }])
     const q = address.get('q')?.trim().slice(0, 80) || undefined
-    return { ...FILTER[view], siteId, q, view }
+    return { ...FILTER[view], siteId, q }
   },
   async read(caller, query, cursor, limit) {
-    const { view, ...filter } = query
-    const page = await listCounts(caller, { ...filter, cursor: cursor ?? undefined, limit })
-    return { rows: page.counts.filter((row) => kept(view, row)), next: page.nextCursor }
+    const page = await listCounts(caller, { ...query, cursor: cursor ?? undefined, limit })
+    return { rows: page.counts, next: page.nextCursor }
   },
   columns: {
     number: { value: (row) => row.number },

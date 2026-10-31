@@ -1,5 +1,5 @@
 import { QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/permissions'
-import { EXPORT_LIMITS } from '@nexus/factory-domain/views/exports'
+import { EXPORT_LIMITS, instantText } from '@nexus/factory-domain/views/exports'
 import type { CommandCaller } from '../../../core/command'
 import { listInspections } from '../../../modules/quality/final/lists'
 import { listReleases } from '../../../modules/quality/final/releases'
@@ -10,12 +10,14 @@ import { defineExportSource } from '../source'
  * Quality › Inspections (SCR-075, `/quality/inspections`): the export of the list as the screen shows it. The page draws
  * ONE list frame at a time (apps/factory-web areas/quality/inspections view/InspectionsView.tsx), chosen by its view, so
  * all three share the page's list key and this source follows the view the same way (model.ts viewFromAddress):
- *   `?view=all|open|mine|waiting|failed`  inspections (listInspections: `status=OPEN`, `assigned=me`, `waitingRelease`,
+ *   `?view=all|open|mine|overdue|waiting|failed`  inspections (listInspections: `status=OPEN`, `assigned=me`,
+ *                                         `overdue` (B-W2b-17: open and past their due time), `waitingRelease`,
  *                                         `failedUndecided`), or a link's own terms `?status=OPEN`, `?assigned=me`,
- *                                         `?waitingRelease=true`, `?failedUndecided=true`
+ *                                         `?overdue=true`, `?waitingRelease=true`, `?failedUndecided=true`
  *   `?view=reversed` (or `?reversed=true`) the releases with garments taken back (listReleases `reversed`)
  *   `?view=lots`                          the material lots on hold (listLots `onHold`; quality.lots.view's scope)
  * Nothing: every inspection. The lists have no cursor: the screen reads up to 200 rows, the file every row (one read).
+ * The Due column (B-W2b-17) writes the due time, "· Overdue" when an open inspection is past it.
  * No money. People: who signed or released is said as "you", "at the bench" or "in the office" (never a name in a list,
  * Owner answer W1); an assignee who is an office user is named as the screen names them.
  */
@@ -30,11 +32,11 @@ type Row =
   | { readonly kind: 'lots'; readonly row: LotRow }
 
 type Query =
-  | { readonly kind: 'inspections'; readonly status?: 'OPEN'; readonly waitingRelease?: boolean; readonly failedUndecided?: boolean; readonly assigned?: 'me' }
+  | { readonly kind: 'inspections'; readonly status?: 'OPEN'; readonly waitingRelease?: boolean; readonly failedUndecided?: boolean; readonly assigned?: 'me'; readonly overdue?: boolean }
   | { readonly kind: 'releases' }
   | { readonly kind: 'lots' }
 
-const VIEWS = ['all', 'open', 'mine', 'waiting', 'failed', 'reversed', 'lots'] as const
+const VIEWS = ['all', 'open', 'mine', 'overdue', 'waiting', 'failed', 'reversed', 'lots'] as const
 type View = (typeof VIEWS)[number]
 
 /** The view of an address, as the screen reads it. */
@@ -43,6 +45,7 @@ function viewOf(address: URLSearchParams): View {
   if (asked && (VIEWS as readonly string[]).includes(asked)) return asked as View
   if (address.get('failedUndecided') === 'true') return 'failed'
   if (address.get('assigned') === 'me') return 'mine'
+  if (address.get('overdue') === 'true') return 'overdue'
   if (address.get('waitingRelease') === 'true') return 'waiting'
   if (address.get('reversed') === 'true') return 'reversed'
   if (address.get('status') === 'OPEN') return 'open'
@@ -77,6 +80,13 @@ function assignedWords(row: InspectionRow, me: string, words: (code: string) => 
   return words('assign.bench')
 }
 
+/** By when it is due (web model.ts dueState): the time, "· Overdue" past it while open; none said only while open. */
+function dueCell(row: InspectionRow, words: (code: string) => string) {
+  if (!row.dueAt) return row.status === 'OPEN' ? words('due.none') : null
+  if (row.status === 'OPEN' && row.overdue) return `${instantText(row.dueAt)} · ${words('due.overdueTag')}`
+  return { at: row.dueAt }
+}
+
 const releasedBack = (row: ReleaseRow): number => row.reversals.reduce((sum, reversal) => sum + reversal.quantity, 0)
 const lastReversal = (row: ReleaseRow) => [...row.reversals].sort((a, b) => b.reversedAt.localeCompare(a.reversedAt))[0] ?? null
 
@@ -89,6 +99,7 @@ export const inspections = defineExportSource<Query, Row>({
     if (view === 'lots') return { kind: 'lots' }
     if (view === 'open') return { kind: 'inspections', status: 'OPEN' }
     if (view === 'mine') return { kind: 'inspections', assigned: 'me' }
+    if (view === 'overdue') return { kind: 'inspections', overdue: true }
     if (view === 'waiting') return { kind: 'inspections', waitingRelease: true }
     if (view === 'failed') return { kind: 'inspections', failedUndecided: true }
     return { kind: 'inspections' }
@@ -108,6 +119,7 @@ export const inspections = defineExportSource<Query, Row>({
       ...(query.waitingRelease ? { waitingRelease: true } : {}),
       ...(query.failedUndecided ? { failedUndecided: true } : {}),
       ...(query.assigned ? { assigned: query.assigned } : {}),
+      ...(query.overdue ? { overdue: true } : {}),
       limit: ALL_ROWS,
     })
     return { rows: page.inspections.map((row) => ({ kind: 'inspections' as const, me, row })), next: null }
@@ -116,6 +128,7 @@ export const inspections = defineExportSource<Query, Row>({
     // Inspections
     inspection: { value: (entry) => (entry.kind === 'inspections' ? entry.row.label : null) },
     assigned: { value: (entry, words) => (entry.kind === 'inspections' ? assignedWords(entry.row, entry.me, words) : null) },
+    due: { value: (entry, words) => (entry.kind === 'inspections' ? dueCell(entry.row, words) : null) },
     released: { value: (entry, words) => (entry.kind === 'inspections' ? fill(words('list.released'), { released: entry.row.released, lot: entry.row.lotSize }) : null) },
     inspector: { value: (entry, words) => (entry.kind === 'inspections' ? whoWords(entry.row.inspector, entry.me, words) : null) },
     decided: { value: (entry) => (entry.kind === 'inspections' && entry.row.decidedAt ? { at: entry.row.decidedAt } : null) },
@@ -157,6 +170,8 @@ export const inspections = defineExportSource<Query, Row>({
       'hold.reversed_other': 'Bloccati: {count} revocati',
       'list.decidedIn': 'Blocchi {holds} · Non conformità {ncrs}',
       'assign.nobody': 'Non assegnata',
+      'due.none': 'Nessuna scadenza',
+      'due.overdueTag': 'In ritardo',
       'assign.you': 'Tu',
       'assign.office': "Un ispettore d'ufficio",
       'assign.bench': 'Un ispettore al banco',
@@ -203,6 +218,8 @@ export const inspections = defineExportSource<Query, Row>({
       'hold.reversed_other': 'On hold: {count} taken back',
       'list.decidedIn': 'Holds {holds} · NCRs {ncrs}',
       'assign.nobody': 'Not assigned',
+      'due.none': 'No due time',
+      'due.overdueTag': 'Overdue',
       'assign.you': 'You',
       'assign.office': 'An office inspector',
       'assign.bench': 'A bench inspector',

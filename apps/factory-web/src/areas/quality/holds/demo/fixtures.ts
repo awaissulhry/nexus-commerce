@@ -1,6 +1,6 @@
 import type { HoldSubjectType } from '@nexus/factory-domain/quality/holds/rules'
 import { COMPANY_ID, ME, SITE_ID, at, day, uid } from '../../_shared/fixtures'
-import type { Hold, HoldCheck, HoldCounts, HoldDetail, HoldPreview, Person } from '../api'
+import type { Hold, HoldCheck, HoldCounts, HoldDetail, HoldPreview, HoldSettingsAnswer, Person } from '../api'
 
 /**
  * Design-only made-up data of Quality › Holds (SCR-078) and its tag (SCR-078-tag): Demo lots (DEMO-LOT-…), hides,
@@ -32,6 +32,8 @@ const subjects = (type: HoldSubjectType, labels: readonly string[], family: stri
 
 const hold = (n: number, over: Partial<Hold> & Pick<Hold, 'subjectType' | 'subjects'>): Hold => ({
   id: uid('7801', n),
+  // B-W2b-17: the hold's number (made up; the HOLD series of a company).
+  number: `DEMO-HLD-${String(90 + n).padStart(4, '0')}`,
   companyId: COMPANY_ID,
   siteId: SITE_ID,
   site: SITE,
@@ -129,6 +131,8 @@ export const HOLDS: Hold[] = [
     ageDays: 0,
   }),
   hold(6, {
+    // B-W2b-17: a hold placed before holds were numbered (its number column says "—").
+    number: null,
     subjectType: 'Shipment',
     subjects: subjects('Shipment', ['DEMO-SHP-0088'], '7826'),
     quantity: '24 garments',
@@ -194,7 +198,7 @@ const NOT_PLACER_OK = check('NOT_PLACER', true, 'Released by someone other than 
 export const detailOf = (value: Hold, checks: HoldCheck[] = [ACTIVE_OK, NOT_PLACER_OK], over: Partial<HoldDetail> = {}): HoldDetail => ({
   hold: value,
   workOrders: value.subjectType === 'WorkOrder' ? [{ id: value.subjects[0]!.id, number: value.subjects[0]!.label ?? '', status: 'ON_HOLD', heldFromStatus: 'IN_PROGRESS', holdReason: 'Quality check', heldByThis: true, batchNumber: 'DEMO-B-0142' }] : [],
-  release: { checks, releasable: checks.every((entry) => entry.ok || entry.key === 'STATEMENT'), mayRelease: true },
+  release: { checks, releasable: checks.every((entry) => entry.ok || entry.key === 'STATEMENT'), mayRelease: true, placerMayRelease: false },
   canChange: value.status === 'ACTIVE',
   ...over,
 })
@@ -204,6 +208,17 @@ export const DETAIL_PLACER = detailOf(HOLDS[4]!, [ACTIVE_OK, check('NOT_PLACER',
 export const DETAIL_MAKER = detailOf(HOLDS[1]!, [ACTIVE_OK, NOT_PLACER_OK, check('NOT_MAKER', false, 'You made garments of work order DEMO-WO-0142: another person, who made none of them, releases the hold.'), check('REINSPECTION', false, 'Re-inspection signed (now: missing for DEMO-WO-0142).')])
 export const DETAIL_STATEMENT = detailOf(HOLDS[3]!, [ACTIVE_OK, NOT_PLACER_OK, check('NOT_MAKER', true, 'You made none of the held garments (the floor records).'), check('STATEMENT', false, 'The floor records name the station only: sign that you made none of the held garments.')])
 export const DETAIL_CR_VI = detailOf(HOLDS[6]!, [ACTIVE_OK, NOT_PLACER_OK, check('CR_VI', false, 'Cr VI result PASS (now: DEMO-LOT-0219 FAIL).')])
+/** B-W2b-17: you placed it, and your company lets the placer release (QualitySettings.placerMayRelease). */
+export const DETAIL_PLACER_MAY: HoldDetail = (() => {
+  const base = detailOf(HOLDS[4]!, [ACTIVE_OK, check('NOT_PLACER', true, "You placed this hold; the company's rule lets the person who placed it release it.")])
+  return { ...base, release: { ...base.release, placerMayRelease: true } }
+})()
+
+/** B-W2b-17: who releases holds — the company follows the standard rule; set for the company; read only. */
+export const SETTINGS_DEFAULT: HoldSettingsAnswer = { settings: { companyId: COMPANY_ID, inForce: { placerMayRelease: false, source: 'DEFAULT' }, own: null, version: 0 }, mayChange: true }
+export const SETTINGS_COMPANY: HoldSettingsAnswer = { settings: { companyId: COMPANY_ID, inForce: { placerMayRelease: true, source: 'COMPANY' }, own: { placerMayRelease: true, updatedAt: at(26, 11, 30) }, version: 3 }, mayChange: true }
+export const SETTINGS_READ_ONLY: HoldSettingsAnswer = { ...SETTINGS_DEFAULT, mayChange: false }
+
 export const DETAIL_RELEASED = detailOf(RELEASED[0]!, [check('ACTIVE', false, 'The hold is released already.'), NOT_PLACER_OK], { canChange: false })
 
 export const PREVIEW: HoldPreview = {

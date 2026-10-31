@@ -713,6 +713,8 @@ export async function applyCount(caller: CommandCaller, countId: string, body: {
           toLocationId: planned.toLocationId,
           quantity: planned.baseQuantity,
           note: countMoveNote(row.number, line.seq, line.reasonCode, line.reasonNote),
+          // B-W2b-15: the difference's ADJUSTMENT code is the move's own column too.
+          reasonCode: line.reasonCode,
           reference: row.number,
           occurredAt: row.snapshotAt!,
           idempotencyKey: `inventory.count:${countId}:${line.seq}`,

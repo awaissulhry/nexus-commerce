@@ -45,6 +45,25 @@ const labelsView = {
       print: output({ jobId: id(), status: z.string(), createdAt: instant() }).nullable(),
     }),
   ),
+  /**
+   * B-W2b-19: the voided labels, newest first (the design's "Voided" rows): the tracking number and label time each
+   * had, when and by whom it was voided, the carrier's answer, the reason, its files. Null for a floor device.
+   */
+  voided: z
+    .array(
+      output({
+        parcelId: id(),
+        seq: z.number().int(),
+        trackingNumber: z.string().nullable(),
+        labelledAt: instant().nullable(),
+        voidedAt: instant(),
+        voidedById: id().nullable(),
+        carrier: z.enum(['CANCELLED', 'QUEUED', 'NOT_SENT']).nullable(),
+        reason: z.string().nullable(),
+        files: z.array(output({ fileId: id(), format: z.enum(['PDF', 'ZPL']), name: z.string() })),
+      }),
+    )
+    .nullable(),
 }
 
 const outcome = output({ parcelId: id(), seq: z.number().int(), ok: z.boolean(), problem: z.string().optional() })
