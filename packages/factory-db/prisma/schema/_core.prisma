@@ -107,6 +107,8 @@ model Company {
   threads             Thread[]
   // imports.prisma: the company's imports.
   importJobs          ImportJob[]
+  // W2b imports.prisma: the steps of its first load marked done.
+  firstLoadSteps      FirstLoadStep[]
   // parties.prisma: the parties of this company only (tenant-wide ones have none), and the VIES checks it requested.
   parties             Party[]
   viesChecks          ViesCheck[]

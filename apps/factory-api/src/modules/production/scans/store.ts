@@ -74,6 +74,8 @@ export const SCAN_COLUMNS = {
   deviceTime: true,
   serverTime: true,
   createdById: true,
+  // B-W2b-10: an outside operation's REPORT names the subcontract receipt line that brought the bundle back.
+  subcontractReceiptLineId: true,
 } as const satisfies Prisma.OperationScanSelect
 export type ScanRow = Prisma.OperationScanGetPayload<{ select: typeof SCAN_COLUMNS }> & ScanFact
 

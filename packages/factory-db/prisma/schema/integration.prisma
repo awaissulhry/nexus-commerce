@@ -94,6 +94,10 @@ enum IntegrationProvider {
   SENDCLOUD
   /// VIES: EU VAT number checks.
   VIES
+  /// W2b (B-W2b-03; B-W2a-42): the virus scanner of uploads (a ClamAV daemon), so its calls are ledgered per tenant.
+  CLAMAV
+  /// W2b (B-W2b-03; B-W2a-42): the error-tracking sink (an EU processor, GATE-SPEND + GATE-PRIVACY; none chosen yet).
+  ERROR_TRACKING
 }
 
 /// Which system an account's calls reach.

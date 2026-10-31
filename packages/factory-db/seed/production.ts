@@ -611,7 +611,8 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     client.$transaction(async (tx) => {
       for (const reason of W1_SCAN_REASONS) {
         const reasonId = id(`production:scrap-reason:${reason.kind}:${reason.code}`)
-        const data = { labelIt: reason.label.it, labelEn: reason.label.en, sortOrder: reason.sortOrder, active: reason.active }
+        // W2b (B-W2b-10; MES-125): OTHER needs detail (a photo on the floor, a note in the office); no icon: the standard look.
+        const data = { labelIt: reason.label.it, labelEn: reason.label.en, sortOrder: reason.sortOrder, active: reason.active, needsDetail: reason.needsDetail ?? false }
         await tx.scrapReason.upsert({
           where: { id: reasonId },
           create: { id: reasonId, kind: reason.kind === 'SCRAP' ? DefectKind.SCRAP : DefectKind.REWORK, code: reason.code, ...data, ...stamp(T.setup) },

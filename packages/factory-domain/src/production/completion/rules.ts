@@ -219,3 +219,83 @@ export function reversalPlan(reportId: string, moves: readonly ReportMoveFacts[]
   if (open.length === 0) return { moveIds: [], problem: 'This report was taken back already: its garments left finished goods.' }
   return { moveIds: open, problem: null }
 }
+
+// ---- a release reversal takes the garments out of finished goods (B-W2b-10; B-W2a-12's follow-up) ---------------------
+
+/**
+ * When quality takes released garments back (quality/final reversals; Reg. (EU) 2016/425 art. 8(8)), garments of the cell
+ * that sit in finished goods beyond what stays released leave stock in the same command: what may stay in stock is the
+ * garments still released less those on shipments that did not take them from stock; the garments taken out are at most
+ * the ones reversed (garments not in stock yet are taken first: nothing moves for them).
+ *
+ *   how      a receipt is taken back whole (its reversal mirrors it: the database's rule), newest first, from a place that
+ *            still holds all of it; when that takes more than is needed, the rest goes back in at once as a new receipt
+ *            into the same place (only while the work order takes receipts: IN_PROGRESS or COMPLETED). Otherwise only
+ *            receipts that fit are taken back and the rest is said in words (the office takes it out by hand).
+ */
+export interface TakeOutReceipt {
+  readonly moveId: string
+  readonly quantity: number
+  readonly placeId: string
+}
+
+export interface TakeOutFacts {
+  /** "BLK 52". */
+  readonly label: string
+  /** The cell's figures once the reversal is written: released less reversed, on shipments not taken from stock, in stock. */
+  readonly netReleased: number
+  readonly onShipments: number
+  readonly received: number
+  /** The garments this reversal took back. */
+  readonly reversed: number
+  /** The cell's receipts still in stock (not taken back), newest first. */
+  readonly receipts: readonly TakeOutReceipt[]
+  /** What each place holds of the cell's item now. */
+  readonly placeHolds: ReadonlyMap<string, number>
+  /** The work order takes a receipt now (IN_PROGRESS or COMPLETED): the rest of a receipt taken back goes in again. */
+  readonly canReceive: boolean
+}
+
+export interface TakeOutPlan {
+  /** Garments that leave finished goods. */
+  readonly takeOut: number
+  /** The receipts taken back whole. */
+  readonly reverse: readonly string[]
+  /** Garments of them that go back in as a new receipt, and where (the last receipt's place). */
+  readonly putBack: number
+  readonly putBackPlaceId: string | null
+  /** Garments that should leave and could not here. */
+  readonly left: number
+  readonly words: string
+}
+
+export function releaseTakeOut(facts: TakeOutFacts): TakeOutPlan {
+  const mayStay = max0(facts.netReleased - facts.onShipments)
+  const need = Math.min(max0(facts.reversed), max0(facts.received - mayStay))
+  const none = { reverse: [], putBack: 0, putBackPlaceId: null } as const
+  if (need === 0) return { ...none, takeOut: 0, left: 0, words: `${facts.label}: no garment in finished goods is beyond what stays released; nothing leaves stock.` }
+  const holds = new Map(facts.placeHolds)
+  const reverse: string[] = []
+  let taken = 0
+  let lastPlace: string | null = null
+  for (const receipt of facts.receipts) {
+    if (taken >= need) break
+    if ((holds.get(receipt.placeId) ?? 0) < receipt.quantity) continue
+    if (!facts.canReceive && taken + receipt.quantity > need) continue
+    reverse.push(receipt.moveId)
+    holds.set(receipt.placeId, (holds.get(receipt.placeId) ?? 0) - receipt.quantity)
+    taken += receipt.quantity
+    lastPlace = receipt.placeId
+  }
+  const takeOut = Math.min(taken, need)
+  const putBack = taken - takeOut
+  const left = need - takeOut
+  if (takeOut === 0) {
+    return { takeOut: 0, reverse: [], putBack: 0, putBackPlaceId: null, left, words: `${facts.label}: ${garments(left)} in finished goods should leave with the reversal; no report could be taken back here: take that report back by hand (Report finished to stock).` }
+  }
+  const words =
+    `${facts.label}: ${garments(takeOut)} left finished goods with the reversal` +
+    (putBack > 0 ? ` (${putBack} went back in at once: a report is taken back whole).` : '.') +
+    (left > 0 ? ` ${garments(left)} more should leave: take that report back by hand (Report finished to stock).` : '')
+  return { takeOut, reverse, putBack, putBackPlaceId: putBack > 0 ? lastPlace : null, left, words }
+}
