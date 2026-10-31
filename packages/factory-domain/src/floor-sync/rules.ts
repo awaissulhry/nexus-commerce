@@ -200,6 +200,11 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       return { code: text(p.codeId, 40) }
     case 'production.offStandard.end':
       return {}
+    // B-W2b-35: the call type's id (the tablet shows its own tile words), the call a step is about.
+    case 'andon.call.send':
+      return { code: text(p.typeId, 40) }
+    case 'andon.call.answer':
+      return { target: text(p.callId, 40) }
   }
 }
 

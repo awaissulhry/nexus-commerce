@@ -79,9 +79,15 @@ export async function readBundleByClientEvent(db: Reader, clientEventId: string)
   return db.bundle.findFirst({ where: { clientEventId }, select: BUNDLE_COLUMNS })
 }
 
-/** The bundle a ticket's code names: its current code, or one of its replaced ones (an old ticket). */
+/**
+ * The bundle a ticket's code names: its current code, or one of its replaced ones (an old ticket), or (W2b B-W2b-41,
+ * MES-067) one of its coupons, ACTIVE or VOID (the coupon's own rules answer then: coupons.ts couponForScan).
+ */
 export async function readBundleByCode(db: Reader, code: string): Promise<BundleRow | null> {
-  return (await db.bundle.findFirst({ where: { code }, select: BUNDLE_COLUMNS })) ?? db.bundle.findFirst({ where: { replacedCodes: { has: code } }, select: BUNDLE_COLUMNS })
+  const bundle = (await db.bundle.findFirst({ where: { code }, select: BUNDLE_COLUMNS })) ?? (await db.bundle.findFirst({ where: { replacedCodes: { has: code } }, select: BUNDLE_COLUMNS }))
+  if (bundle) return bundle
+  const coupon = await db.bundleCoupon.findFirst({ where: { code }, select: { bundleId: true } })
+  return coupon ? db.bundle.findUnique({ where: { id: coupon.bundleId }, select: BUNDLE_COLUMNS }) : null
 }
 
 export interface CellLabel {

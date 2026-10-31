@@ -68,6 +68,8 @@ import { firstLoadCatchUpCron, writeStepsAll } from './platform/imports/guided/c
 import { costCatchUpCron } from './modules/costing/actual/catch-up'
 // B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
 import { loadReports } from './modules/insights/reports/registry'
+// B-W2b-41: stuck bundles told once per wait; the scan-pattern checks (only at sites whose checks are ON).
+import { scanFindingsCron, stuckBundlesCron } from './modules/production/bundles/jobs'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -204,6 +206,8 @@ if (mode === 'worker') {
   // B-W2b-24: the W2b data catch-ups again each night (idle passes write nothing).
   crons.push(twoFactorSinceCron({ database, log }), liftCatchUpCron({ database, log }), firstLoadCatchUpCron({ database, log }))
   crons.push(costCatchUpCron({ database, log }))
+  // B-W2b-41: every 15 minutes the stuck bundles (MES-168); hourly the scan-pattern checks about bundles (MES-075).
+  crons.push(stuckBundlesCron({ database, log }), scanFindingsCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
