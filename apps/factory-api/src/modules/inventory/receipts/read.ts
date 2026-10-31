@@ -261,6 +261,8 @@ export async function receiptDetail(db: Reader, context: RequestContext, receipt
     purchaseOrder: order ? { id: order.id, number: order.number, status: order.status, version: order.version } : null,
     supplierDdtNumber: receipt.supplierDdtNumber,
     supplierDdtDate: day(receipt.supplierDdtDate),
+    /** B-W2b-14: the latest correction of the supplier's DDT number or date (the audit rows keep every one). */
+    supplierDdtCorrection: receipt.supplierDdtCorrectedAt ? { at: toUtcIso(receipt.supplierDdtCorrectedAt), byId: receipt.supplierDdtCorrectedById, reason: receipt.supplierDdtCorrectionReason ?? '' } : null,
     receivedAt: toUtcIso(receipt.receivedAt),
     note: receipt.note,
     location,

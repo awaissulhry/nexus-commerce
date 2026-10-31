@@ -81,6 +81,8 @@ export interface MoveDraft {
   readonly reference?: string | null
   /** Why: required for ADJUSTMENT, COUNT, SCRAP and a reversal. */
   readonly note?: string | null
+  /** B-W2b-14: the code of the reason list the move was made for (a SUPPLIER_RETURN's CLAIM code), no spaces. */
+  readonly reasonCode?: string | null
   readonly reversalOfId?: string | null
   /** When it happened (a floor scan: the device's time). Default the command's time. */
   readonly occurredAt?: Date
@@ -528,6 +530,8 @@ function rowOf(move: KeyedDraft, index: number, facts: Facts, context: StockCont
     workOrderId: move.workOrderId ?? null,
     reference: move.reference?.trim() || null,
     note: move.note?.trim() || null,
+    // B-W2b-14: the reason list's code, when the caller names one.
+    ...(move.reasonCode ? { reasonCode: move.reasonCode } : {}),
     reversalOfId: move.reversalOfId ?? null,
     idempotencyKey: move.idempotencyKey ?? (key ? `${key}:${index + 1}` : `move:${id}`),
     occurredAt: move.occurredAt ?? now,

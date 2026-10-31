@@ -11,6 +11,7 @@ import { PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders
 import { DISCREPANCY_KINDS, DISCREPANCY_LIMITS, DISCREPANCY_STATUSES, SETTLE_STATUSES } from '@nexus/factory-domain/inventory/receipts/discrepancies'
 import { IMPORT_STATUSES } from '@nexus/factory-domain/imports/job'
 import { DOCUMENT_ASKS, DOCUMENT_REQUEST_LIMITS } from '@nexus/factory-domain/inventory/receipts/document-request'
+import { DDT_CORRECTION_LIMITS } from '@nexus/factory-domain/inventory/receipts/ddt-correction'
 import { fileView, presignedView } from '../../../platform/files/contract'
 import { moveView } from '../ledger/contract'
 
@@ -185,6 +186,8 @@ export const receiptView = output({
   purchaseOrder: output({ id: id(), number: z.string(), status: z.enum(PURCHASE_ORDER_STATUSES), version: z.number().int() }).nullable(),
   supplierDdtNumber: z.string().nullable(),
   supplierDdtDate: businessDate().nullable(),
+  /** B-W2b-14: the latest correction of the supplier DDT number or date on the posted receipt (when, who, why). */
+  supplierDdtCorrection: output({ at: instant(), byId: id().nullable(), reason: z.string() }).nullable(),
   receivedAt: instant(),
   note: z.string().nullable(),
   /** Where its moves put the goods. */
@@ -603,4 +606,19 @@ export const requestDocumentsContract = defineContract({
       }),
     }),
   },
+})
+
+// ---- B-W2b-14: the supplier's DDT number and date corrected on a posted receipt ------------------------------------------------
+
+export const correctSupplierDdtContract = defineContract({
+  params: receiptParams,
+  body: input({
+    version,
+    /** The DDT's number as the supplier printed it; null: the delivery came without one. */
+    supplierDdtNumber: code().nullable(),
+    supplierDdtDate: businessDate().nullable(),
+    /** Why it is corrected (kept on the receipt and in its audit row). */
+    reason: z.string().trim().min(3).max(DDT_CORRECTION_LIMITS.reason),
+  }),
+  response: { 200: output({ receipt: receiptView }) },
 })

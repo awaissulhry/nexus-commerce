@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Download, MoreHorizontal, Search, ShieldOff, Undo2, X } from 'lucide-react'
+import { Download, FilePlus2, MoreHorizontal, Search, ShieldOff, Undo2, X } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, MetricStrip, Modal } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, Select } from '@nexus/ui/primitives'
@@ -13,7 +13,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { money, quantity } from '../../../../_shared/buying/model'
 import type { ClaimKind, ClaimRow } from '../../api'
-import { CLAIM_VIEWS, defaultView, KIND_TONE, reasonWords, returnHeld, say, STATUS_TONE, TILES, type ClaimsListActions, type ClaimsListModel, type ClaimView } from '../../model'
+import { CLAIM_VIEWS, defaultView, KIND_TONE, newClaimHeld, reasonWords, returnHeld, say, STATUS_TONE, TILES, type ClaimsListActions, type ClaimsListModel, type ClaimView } from '../../model'
 import { ReturnDialog } from './ReturnDialog'
 import '../../../../_shared/buying/buying.css'
 import '../../claims.css'
@@ -62,6 +62,9 @@ function Page({ model, actions }: { model: ClaimsListModel; actions?: ClaimsList
 
   const returnBlocked = !model.can.manage ? 'purchasing.claims.manage' : !model.can.ret ? 'purchasing.claims.return' : !model.can.ddtIssue ? 'shipping.ddt.issue' : null
   const returnHeldWords = returnBlocked ? t('held.permissionPlain', { permission: returnBlocked }) : null
+  // B-W2b-14: New claim (design page.h#1, primary, W2b) — a draft for credit or replacement from a lot in stock.
+  const newBlocked = !model.can.manage ? 'purchasing.claims.manage' : !model.can.stock ? 'inventory.stock.view' : null
+  const newHeldWords = newBlocked ? t('held.permissionPlain', { permission: newBlocked }) : null
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -71,6 +74,10 @@ function Page({ model, actions }: { model: ClaimsListModel; actions?: ClaimsList
       if (event.key === 'r' && !returnHeldWords) {
         event.preventDefault()
         actions?.onReturn?.(true)
+      }
+      if (event.key === 'c' && !newHeldWords) {
+        event.preventDefault()
+        actions?.onNewClaim?.(true)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -187,7 +194,10 @@ function Page({ model, actions }: { model: ClaimsListModel; actions?: ClaimsList
     )
   }
 
-  const ownKeys: ListKey[] = [{ keys: ['r'], does: t('page.keyReturn') }]
+  const ownKeys: ListKey[] = [
+    { keys: ['c'], does: t('page.keyNewClaim') },
+    { keys: ['r'], does: t('page.keyReturn') },
+  ]
   const tileView = TILES.find((tile) => tile.view === model.view)?.view ?? null
   const filters = model.filters
   const chips = [
@@ -240,6 +250,9 @@ function Page({ model, actions }: { model: ClaimsListModel; actions?: ClaimsList
         <span className="fw-by-actions">
           <Button size="sm" variant="secondary" heldReason={returnHeldWords} onClick={() => actions?.onReturn?.(true)} aria-keyshortcuts="r">
             <Undo2 size={14} aria-hidden /> {t('page.return')}
+          </Button>
+          <Button size="sm" variant="primary" heldReason={newHeldWords} onClick={() => actions?.onNewClaim?.(true)} aria-keyshortcuts="c">
+            <FilePlus2 size={14} aria-hidden /> {t('page.newClaim')}
           </Button>
           <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" triggerProps={{ 'aria-label': t('page.more') }} items={more} />
         </span>
@@ -355,13 +368,13 @@ function Page({ model, actions }: { model: ClaimsListModel; actions?: ClaimsList
           can={model.can}
           prefix={model.prefix}
           actions={{
-            onClose: () => actions?.onReturn?.(false),
+            onClose: () => (model.ret?.mode === 'claim' ? actions?.onNewClaim?.(false) : actions?.onReturn?.(false)),
             onDraft: actions?.onReturnDraft,
             onSearch: actions?.onReturnSearch,
             onPick: actions?.onReturnPick,
             onContacts: actions?.onReturnContacts,
             onCreate: () => {
-              if (model.ret && !model.ret.busy && !returnHeld(model.ret.draft, model.can)) actions?.onReturnCreate?.()
+              if (model.ret && !model.ret.busy && !(model.ret.mode === 'claim' ? newClaimHeld(model.ret.draft, model.can) : returnHeld(model.ret.draft, model.can))) actions?.onReturnCreate?.()
             },
             onOpenDdt: actions?.onOpenDdt,
           }}

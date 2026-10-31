@@ -27,6 +27,10 @@ export const RECEIPT_COLUMNS = {
   purchaseOrderId: true,
   supplierDdtNumber: true,
   supplierDdtDate: true,
+  // B-W2b-14: the latest correction of the supplier DDT number/date on a posted receipt.
+  supplierDdtCorrectedAt: true,
+  supplierDdtCorrectedById: true,
+  supplierDdtCorrectionReason: true,
   receivedAt: true,
   status: true,
   note: true,
@@ -205,10 +209,15 @@ export async function readReceiptMoves(db: Reader, receiptId: string) {
 }
 export type ReceiptMoveRow = Awaited<ReturnType<typeof readReceiptMoves>>[number]
 
-/** B-W2a-31 (SCM-115): the photos of the supplier's delivery note — the receipt's PHOTO files (modules/inventory/receipts/photos.ts). */
+/**
+ * B-W2a-31 (SCM-115): the photos of the supplier's delivery note — the receipt's PHOTO files of category DDT_PHOTO
+ * (B-W2b-14: the category tells them from any other photo of the receipt; modules/inventory/receipts/photos.ts sets it).
+ */
+export const DDT_PHOTO_WHERE = (receiptId: string) => ({ recordType: 'GoodsReceipt', recordId: receiptId, kind: 'PHOTO', category: 'DDT_PHOTO', status: { not: 'DELETED' } }) as const satisfies Prisma.StoredFileWhereInput
+
 export async function ddtPhotosOf(db: Reader, receiptId: string) {
   const rows = await db.storedFile.findMany({
-    where: { recordType: 'GoodsReceipt', recordId: receiptId, kind: 'PHOTO', status: { not: 'DELETED' } },
+    where: DDT_PHOTO_WHERE(receiptId),
     select: { id: true, originalName: true, contentType: true, sizeBytes: true, status: true, createdAt: true },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   })

@@ -9,7 +9,7 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { storeUrl } from '../../../../record-panels/store'
 import { downloadText, useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { csvOf } from '../../../_shared/buying/model'
-import { claimCounts, claimReasons, ddtPdfLink, findLots, listClaims, lotHides, lotStock, receiptNumber, returnToSupplier, supplierContacts, type ClaimCounts, type ClaimKind, type LotRow } from '../api'
+import { claimCounts, claimReasons, createClaim, ddtPdfLink, findLots, listClaims, lotHides, lotStock, receiptNumber, returnToSupplier, supplierContacts, type ClaimCounts, type ClaimKind, type LotRow } from '../api'
 import {
   claimQuery,
   claimsAddress,
@@ -22,6 +22,9 @@ import {
   readWords,
   ready,
   reasonWords,
+  newClaimBody,
+  newClaimHeld,
+  newClaimRefusal,
   returnBody,
   returnHeld,
   returnRefusal,
@@ -68,6 +71,9 @@ function Container() {
   const filters = filtersOf(params)
   const filterKey = `${filters.q}|${filters.kind ?? ''}|${filters.receipt ?? ''}|${filters.lot ?? ''}`
   const returnAsked = params?.get('return') === '1'
+  // B-W2b-14: New claim (`?new=1`): the same dialog without mail or DDT, a draft claim opened on its record.
+  const newAsked = params?.get('new') === '1'
+  const dialogMode: 'return' | 'claim' | null = returnAsked ? 'return' : newAsked ? 'claim' : null
 
   const [rows, setRows] = useState<ClaimsListModel['rows']>({ items: null, more: false, problem: null })
   const [cursor, setCursor] = useState<string | null>(null)
@@ -84,7 +90,7 @@ function Container() {
   const returnKey = useRef(newIdempotencyKey())
   const readId = useRef(0)
 
-  const go = useCallback((nextView: ClaimView, nextFilters: ClaimFilters, returnOpen = false) => router.replace(claimsAddress(pathname, nextView, nextFilters, { returnOpen })), [router, pathname])
+  const go = useCallback((nextView: ClaimView, nextFilters: ClaimFilters, returnOpen = false, newOpen = false) => router.replace(claimsAddress(pathname, nextView, nextFilters, { returnOpen, newOpen })), [router, pathname])
 
   const loadCounts = useCallback(() => {
     claimCounts(api)
@@ -207,13 +213,13 @@ function Container() {
 
   // `?return=1` opens the dialog (once per opening), with its reasons and the lot the address names.
   useEffect(() => {
-    if (!returnAsked) {
+    if (!dialogMode) {
       setRet(null)
       return
     }
     if (retRef.current) return
     returnKey.current = newIdempotencyKey()
-    setRet({ draft: NO_RETURN, busy: false, problem: null, result: null })
+    setRet({ draft: NO_RETURN, busy: false, problem: null, result: null, mode: dialogMode })
     claimReasons(api)
       .then((reasons) => patchRet((draft) => ({ ...draft, reasons: ready(reasons) })))
       .catch((error: unknown) => patchRet((draft) => ({ ...draft, reasons: { value: null, problem: readWords(error) } })))
@@ -232,7 +238,7 @@ function Container() {
     }
     // Opened by the address only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [returnAsked])
+  }, [dialogMode])
 
   const search = useCallback(
     (q: string) => {
@@ -247,7 +253,22 @@ function Container() {
 
   const create = useCallback(async () => {
     const current = retRef.current
-    if (!current || current.busy || returnHeld(current.draft, can)) return
+    if (!current || current.busy) return
+    if (current.mode === 'claim') {
+      // B-W2b-14: New claim — a DRAFT claim for credit or replacement, opened on its record.
+      if (newClaimHeld(current.draft, can)) return
+      setRet({ ...current, busy: true, problem: null })
+      try {
+        const made = await createClaim(api, newClaimBody(current.draft), returnKey.current)
+        setRet(null)
+        router.push(`${prefix}/purchasing/claims/${made.id}`)
+      } catch (error) {
+        returnKey.current = newIdempotencyKey()
+        setRet((latest) => (latest ? { ...latest, busy: false, problem: newClaimRefusal(error) } : latest))
+      }
+      return
+    }
+    if (returnHeld(current.draft, can)) return
     setRet({ ...current, busy: true, problem: null })
     try {
       const result = await returnToSupplier(api, returnBody(current.draft), returnKey.current)
@@ -257,7 +278,7 @@ function Container() {
       returnKey.current = newIdempotencyKey()
       setRet((latest) => (latest ? { ...latest, busy: false, problem: returnRefusal(error) } : latest))
     }
-  }, [api, can, load])
+  }, [api, can, load, router, prefix])
 
   const openDdt = useCallback(
     async (ddtId: string) => {
@@ -328,6 +349,7 @@ function Container() {
         onExport: exportRows,
         onDismissNotice: () => setNotice(null),
         onReturn: (open) => go(view, filters, open),
+        onNewClaim: (open) => go(view, filters, false, open),
         onReturnDraft: (draft) => setRet((current) => (current ? { ...current, draft, problem: null } : current)),
         onReturnSearch: search,
         onReturnPick: pick,

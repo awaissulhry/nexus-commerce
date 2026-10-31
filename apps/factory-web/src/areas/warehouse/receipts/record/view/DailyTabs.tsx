@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Camera, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, FileText, Mail, MoreHorizontal, Plus, Send, Trash2 } from 'lucide-react'
+import { AlertTriangle, Camera, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, FileText, Mail, MoreHorizontal, PencilLine, Plus, Send, Trash2 } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue, Menu, Modal } from '@nexus/ui/components'
 import { PhotoCapture } from '@nexus/ui/components/PhotoCapture/index'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
@@ -16,7 +16,7 @@ import type { LotWithHides, Receipt } from '../../api'
 import type { Discrepancy, StoredPhoto } from '../../daily-api'
 import { changeHeld, claimHeld, ddtPhotoHeld, DISCREPANCY_TONE, NAMESPACE, photoHeld, removeHeld, reportableWhy, reportHeld, reportIds, settleMoves, takesDiscrepancies, wantedDocuments, type Say } from '../../daily-model'
 import type { ReceiptDailyActions, ReceiptDailyModel } from '../../daily-state'
-import { blankDiscrepancy, claimDraft, draftOf, reportDraft, requestDraft, requestOpenHeld } from '../../daily-model'
+import { blankDiscrepancy, claimDraft, ddtFixDraftOf, ddtFixOpenHeld, draftOf, reportDraft, requestDraft, requestOpenHeld } from '../../daily-model'
 import '../../receipts-daily.css'
 
 /**
@@ -404,6 +404,15 @@ export function DocumentsTab({ receipt, lots, daily, actions, prefix, timeZone }
             { label: t('docs.ddtDate'), value: receipt.supplierDdtDate ? formatDate(dayAt(receipt.supplierDdtDate), place) : '—' },
           ]}
         />
+        {/* B-W2b-14 (Z1:02): a posted receipt's DDT is corrected with why; the latest correction is said here. */}
+        <div className="fw-by-card-head">
+          <p className="fw-by-hint">
+            {receipt.supplierDdtCorrection ? t('ddtFix.last', { when: formatDateTime(receipt.supplierDdtCorrection.at, place), reason: receipt.supplierDdtCorrection.reason }) : t('ddtFix.never')}
+          </p>
+          <Button size="sm" heldReason={words(t, ddtFixOpenHeld(receipt, daily.can))} onClick={() => actions?.onDialog?.({ kind: 'ddtFix', draft: ddtFixDraftOf(receipt) })}>
+            <PencilLine size={13} aria-hidden /> {t('ddtFix.open')}
+          </Button>
+        </div>
         {daily.ddtStep ? (
           <PhotoCapture label={t('docs.ddtCapture', { number: receipt.number })} words={photoWords} markup={false} onCapture={async (photo) => void (await actions?.onDdtPhoto?.(photo.photo))} onCancel={() => actions?.onDdtStep?.(false)} />
         ) : (

@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ExternalLink, FileText, Search, Undo2 } from 'lucide-react'
+import { ExternalLink, FilePlus2, FileText, Search, Undo2 } from 'lucide-react'
 import { Banner, EmptyState, Field, KeyValue, Modal } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Pill, Radio, Select, Spinner, Textarea, Toggle } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { money, quantity } from '../../../../_shared/buying/model'
-import type { LotRow } from '../../api'
-import { isHideLot, plain, returnHeld, say, type ClaimsCan, type ReturnDialogModel, type ReturnDraft } from '../../model'
+import { CLAIM_FOUND_AT, type ClaimFoundAt, type LotRow } from '../../api'
+import { isHideLot, newClaimHeld, plain, returnHeld, say, type ClaimsCan, type ReturnDialogModel, type ReturnDraft } from '../../model'
 import { DdtFields } from '../../parts/DdtFields'
 
 const QUALITY_TONE = { QUARANTINE: 'warning', RELEASED: 'success', BLOCKED: 'danger', REJECTED: 'danger' } as const
@@ -98,8 +98,10 @@ export function ReturnDialog({ model, can, prefix, actions }: { model: ReturnDia
     )
   }
 
+  // B-W2b-14: New claim — the lot, its goods and the reason only (no mail, no DDT): a draft that keeps the goods.
+  const claiming = model.mode === 'claim'
   const held = model.busy ? t('held.busy') : (() => {
-    const reason = returnHeld(draft, can)
+    const reason = claiming ? newClaimHeld(draft, can) : returnHeld(draft, can)
     return reason ? say(t, reason) : null
   })()
   const lot = draft.lot
@@ -111,8 +113,8 @@ export function ReturnDialog({ model, can, prefix, actions }: { model: ReturnDia
     <Modal
       open
       onClose={() => actions?.onClose?.()}
-      title={t('ret.title')}
-      subtitle={t('ret.subtitle')}
+      title={claiming ? t('newClaim.title') : t('ret.title')}
+      subtitle={claiming ? t('newClaim.subtitle') : t('ret.subtitle')}
       size="lg"
       busy={model.busy}
       footer={
@@ -122,7 +124,7 @@ export function ReturnDialog({ model, can, prefix, actions }: { model: ReturnDia
             {t('common.cancel')}
           </Button>
           <Button size="sm" variant="primary" heldReason={held} onClick={() => actions?.onCreate?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {model.busy ? <Spinner size={12} /> : <Undo2 size={13} aria-hidden />} {t('ret.create')}
+            {model.busy ? <Spinner size={12} /> : claiming ? <FilePlus2 size={13} aria-hidden /> : <Undo2 size={13} aria-hidden />} {claiming ? t('newClaim.create') : t('ret.create')}
           </Button>
         </>
       }
@@ -131,7 +133,7 @@ export function ReturnDialog({ model, can, prefix, actions }: { model: ReturnDia
         <section className="fw-cl-section" aria-label={t('ret.lotTitle')}>
           <h3 className="fw-by-h3">{t('ret.lotTitle')}</h3>
           {!can.stock ? (
-            <Banner tone="info" title={t('ret.noStockRight')} />
+            <Banner tone="info" title={claiming ? t('newClaim.noStockRight') : t('ret.noStockRight')} />
           ) : lot ? (
             <div className="fw-cl-pick">
               <Pill tone={QUALITY_TONE[lot.qualityStatus]}>{t(`lotQuality.${lot.qualityStatus}`)}</Pill>
@@ -170,7 +172,7 @@ export function ReturnDialog({ model, can, prefix, actions }: { model: ReturnDia
                   <Spinner size={14} /> {t('common.loading')}
                 </p>
               ) : draft.found.value.length === 0 ? (
-                <EmptyState title={t('ret.noLots.title')} description={t('ret.noLots.body')} />
+                <EmptyState title={t('ret.noLots.title')} description={t(claiming ? 'newClaim.noLotsBody' : 'ret.noLots.body')} />
               ) : (
                 <ul className="fw-cl-picks" aria-label={t('ret.results')}>
                   {draft.found.value.map((option) => (
@@ -194,8 +196,8 @@ export function ReturnDialog({ model, can, prefix, actions }: { model: ReturnDia
         </section>
 
         {lot && (
-          <section className="fw-cl-section" aria-label={t('ret.goodsTitle')}>
-            <h3 className="fw-by-h3">{t('ret.goodsTitle')}</h3>
+          <section className="fw-cl-section" aria-label={claiming ? t('newClaim.goodsTitle') : t('ret.goodsTitle')}>
+            <h3 className="fw-by-h3">{claiming ? t('newClaim.goodsTitle') : t('ret.goodsTitle')}</h3>
             {isHideLot(lot) ? (
               draft.hides.problem ? (
                 <Banner tone="danger" title={t(draft.hides.problem)} />
@@ -279,8 +281,28 @@ export function ReturnDialog({ model, can, prefix, actions }: { model: ReturnDia
           <Field label={t('field.reasonNote')} required={!!picked?.needsDetail} hint={picked?.needsDetail ? t('field.reasonNoteNeeded') : t('field.reasonNoteHint')}>
             <Textarea rows={2} maxLength={500} value={draft.reasonNote} onChange={(event) => set({ reasonNote: event.target.value })} />
           </Field>
+          {claiming && (
+            <Field label={t('field.foundAt')} hint={t('newClaim.foundAtHint')}>
+              <Select size="sm" value={draft.foundAt} onChange={(event) => set({ foundAt: event.target.value as ClaimFoundAt | '' })}>
+                <option value="">{t('newClaim.foundAtDefault')}</option>
+                {CLAIM_FOUND_AT.map((at) => (
+                  <option key={at} value={at}>
+                    {t(`foundAt.${at}`)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
         </section>
 
+        {claiming ? (
+          <ul className="fw-by-list">
+            <li>{t('newClaim.does.draft', { supplier: lot?.supplier?.name ?? '—' })}</li>
+            <li>{t('newClaim.does.goods')}</li>
+            <li>{t('newClaim.does.next')}</li>
+          </ul>
+        ) : (
+        <>
         <section className="fw-cl-section" aria-label={t('ret.mailTitle')}>
           <div className="fw-by-card-head">
             <h3 className="fw-by-h3">{t('ret.mailTitle')}</h3>
@@ -343,8 +365,10 @@ export function ReturnDialog({ model, can, prefix, actions }: { model: ReturnDia
           <li>{t('ret.does.ddt')}</li>
           <li>{can.cost ? t('ret.does.credit') : t('ret.does.creditHidden')}</li>
         </ul>
+        </>
+        )}
         {model.problem && <Banner tone="danger" title={say(t, model.problem)} />}
-        {lot && !isHideLot(lot) && draft.stock.value && <p className="fw-by-hint">{t('ret.quantityHint', { unit: t(`uom.${lot.item.baseUom}`), total: plain(lot.onHand) })}</p>}
+        {lot && !isHideLot(lot) && draft.stock.value && <p className="fw-by-hint">{t(claiming ? 'newClaim.quantityHint' : 'ret.quantityHint', { unit: t(`uom.${lot.item.baseUom}`), total: plain(lot.onHand) })}</p>}
       </div>
     </Modal>
   )

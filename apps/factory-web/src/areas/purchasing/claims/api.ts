@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { CLAIM_FOUND_AT, CLAIM_KINDS, CLAIM_OUTCOMES, CLAIM_REMEDIES, CLAIM_STATUSES } from '@nexus/factory-domain/purchasing/claims/rules'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
-import type { ApiClient } from '../../../lib/api/client'
+import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { presignedSchema, type Presigned } from '../../../record-panels/api'
+import { putToStore, sha256Hex, storeUrl } from '../../../record-panels/store'
 import { pickerReasons, type PickerReason } from '../../_shared/reasons/api'
 import { listHides, listLots, lotRecord, type HideRow, type LotRecord, type LotRow } from '../../_shared/stock/api'
 
@@ -68,7 +69,8 @@ const lineSchema = z.object({
   item: z.object({ id: z.string(), code: z.string(), name: z.string(), baseUom: uom, tracking: z.enum(['NONE', 'LOT', 'HIDE', 'SERIAL']) }),
   colour: named.nullable(),
   lot: z.object({ id: z.string(), code: z.string(), qualityStatus: z.string() }).nullable(),
-  hide: ref.nullable(),
+  /** B-W2b-14: its state (RETURNED once it went back to the supplier whole). */
+  hide: z.object({ id: z.string(), code: z.string(), state: z.string().nullable().default(null) }).nullable(),
   discrepancy: z.object({ id: z.string(), seq: z.number(), kind: z.string(), status: z.string(), receiptId: z.string() }).nullable(),
   receiptLineId: z.string().nullable(),
   quantity: z.string(),
@@ -85,6 +87,9 @@ const lineSchema = z.object({
 })
 export type ClaimLine = z.infer<typeof lineSchema>
 
+const claimFileSchema = z.object({ id: z.string(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number(), status: z.string(), version: z.number(), createdAt: z.string(), createdById: z.string().nullable() })
+export type ClaimFile = z.infer<typeof claimFileSchema>
+
 export const claimSchema = rowSchema.extend({
   goodsReceipt: z.object({ id: z.string(), number: z.string(), supplierDdtNumber: z.string().nullable(), supplierDdtDate: z.string().nullable() }).nullable(),
   purchaseOrder: z.object({ id: z.string(), number: z.string() }).nullable(),
@@ -98,6 +103,12 @@ export const claimSchema = rowSchema.extend({
   lines: z.array(lineSchema),
   ddts: z.array(z.object({ id: z.string(), number: z.string(), documentDate: z.string(), reason: z.string(), startAt: z.string(), cancelled: z.boolean(), lineIds: z.array(z.string()) })),
   credit: z.object({ currency: z.string(), remedy: z.enum(CLAIM_REMEDIES).nullable(), expected: costAmount, value: costAmount, matched: z.null(), difference: z.null() }),
+  /** B-W2b-14 (SCM-135): the claim's own photos, the photos of the discrepancies it pursues, its letter's versions (newest first), the supplier's contact, the NCR it came from. */
+  photos: z.array(claimFileSchema).default([]),
+  discrepancyPhotos: z.array(claimFileSchema.extend({ discrepancyId: z.string(), discrepancySeq: z.number().nullable() })).default([]),
+  letters: z.array(z.object({ id: z.string(), version: z.number(), language: z.string(), number: z.string().nullable(), fileId: z.string(), createdAt: z.string(), createdById: z.string().nullable() })).default([]),
+  supplierContact: z.object({ id: z.string(), name: z.string(), email: z.string(), roles: z.array(z.string()) }).nullable().default(null),
+  ncr: z.object({ id: z.string(), number: z.string() }).nullable().default(null),
   people: z.array(z.object({ id: z.string(), name: z.string() })),
 })
 export type Claim = z.infer<typeof claimSchema>
@@ -174,6 +185,8 @@ const sendCheckSchema = z.object({
   language: z.enum(['it', 'en']),
   subject: z.string(),
   message: z.string(),
+  /** B-W2b-14: does the claim letter (PDF) go with the mail (the letterhead complete, the sender may read files). */
+  letter: z.object({ attached: z.boolean(), problems: z.array(z.object({ path: z.string(), message: z.string() })) }).default({ attached: false, problems: [] }),
 })
 export type SendCheck = z.infer<typeof sendCheckSchema>
 
@@ -261,6 +274,22 @@ export interface ReturnToSupplierBody {
   ddt: ReturnDdtRequest
 }
 
+/** B-W2b-14 (New claim): a DRAFT claim for credit or replacement (POST /purchasing/claims); its goods stay. */
+export interface NewClaimBody {
+  kind: 'CLAIM'
+  reasonCode: string
+  reasonNote?: string
+  remedy: ClaimRemedy
+  foundAt?: ClaimFoundAt
+  partyId?: string
+  from?: { lotId: string; hideIds?: string[] }
+  lines?: { lotId: string; quantity: string; uom: Uom }[]
+}
+
+export async function createClaim(api: ApiClient, body: NewClaimBody, idempotencyKey: string): Promise<Claim> {
+  return (await api.post('/purchasing/claims', { body, schema: one, idempotencyKey })).claim
+}
+
 /** "Return to supplier" in ONE command: the claim made and sent, the goods out, the return DDT (POST /purchasing/claims/returns). */
 export function returnToSupplier(api: ApiClient, body: ReturnToSupplierBody, idempotencyKey: string): Promise<ReturnAnswer> {
   return api.post('/purchasing/claims/returns', { body, schema: returnAnswerSchema, idempotencyKey })
@@ -299,4 +328,43 @@ export async function supplierContacts(api: ApiClient, partyId: string, signal?:
   const answer = await api.get(`/parties/${enc(partyId)}`, { schema: z.object({ party: z.object({ contacts: z.array(contactSchema) }) }), signal })
   const rank = (contact: SupplierContact) => (contact.roles.includes('QUALITY') ? 0 : contact.roles.includes('ORDERS') ? 1 : 2)
   return answer.party.contacts.filter((contact) => contact.status === 'ACTIVE' && !!contact.email).sort((a, b) => rank(a) - rank(b))
+}
+
+// ---- B-W2b-14 (SCM-135): the claim's photos and its letter ------------------------------------------------------------------
+
+/** A photo of what is wrong: announced (purchasing.claims.manage + files.upload), its bytes to the store, then confirmed. */
+export async function uploadClaimPhoto(api: ApiClient, id: string, photo: Blob, name: string): Promise<string> {
+  const path = `/purchasing/claims/${enc(id)}/photos`
+  const bytes = await photo.arrayBuffer()
+  const announced = await api.post(path, { body: { originalName: name, contentType: photo.type || 'image/jpeg', sizeBytes: bytes.byteLength, sha256: await sha256Hex(bytes) }, schema: z.object({ file: z.object({ id: z.string() }), upload: presignedSchema }), idempotencyKey: newIdempotencyKey() })
+  await putToStore(announced.upload, bytes)
+  await api.post(`${path}/${enc(announced.file.id)}/complete`, { body: {}, schema: z.object({ file: z.object({ id: z.string() }) }), idempotencyKey: newIdempotencyKey() })
+  return announced.file.id
+}
+
+/** A draft's photo removed (files.delete too). */
+export async function removeClaimPhoto(api: ApiClient, id: string, fileId: string, version: number, idempotencyKey: string): Promise<void> {
+  await api.request('DELETE', `/purchasing/claims/${enc(id)}/photos/${enc(fileId)}`, { query: { version }, schema: z.object({ file: z.object({ id: z.string() }) }), idempotencyKey })
+}
+
+/** A stored file's address for an <img> or a new tab (the presigned GET; a local store goes through this app's /api). */
+export async function fileAddress(api: ApiClient, fileId: string, signal?: AbortSignal): Promise<string> {
+  const answer = await api.get(`/files/${enc(fileId)}/download`, { schema: z.object({ download: presignedSchema }), signal })
+  return storeUrl(answer.download.url)
+}
+
+/** The claim letter's PDF as it would leave (a preview banner, stored nowhere), for the viewer. */
+export function letterPreviewBytes(api: ApiClient, id: string, language?: 'it' | 'en', signal?: AbortSignal): Promise<Uint8Array> {
+  return api.bytes(`/purchasing/claims/${enc(id)}/letter`, { query: language ? { language } : {}, signal })
+}
+
+/** The same preview in a new tab: the browser's own GET through /api. */
+export const letterPreviewHref = (id: string): string => `/api/purchasing/claims/${enc(id)}/letter`
+
+const letterAnswer = z.object({ letter: z.object({ id: z.string(), version: z.number(), language: z.string(), number: z.string().nullable(), fileId: z.string(), createdAt: z.string() }), made: z.boolean() })
+export type LetterAnswer = z.infer<typeof letterAnswer>
+
+/** Keep the current letter as a version (to print or post by hand); the same contents give the newest back. */
+export function makeLetter(api: ApiClient, id: string, idempotencyKey: string): Promise<LetterAnswer> {
+  return api.post(`/purchasing/claims/${enc(id)}/letter`, { body: {}, schema: letterAnswer, idempotencyKey })
 }

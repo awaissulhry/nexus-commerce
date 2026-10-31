@@ -10,14 +10,14 @@ import {
   cancelProblems,
   CLAIM_LIMITS,
   CLAIM_REASON_LIST,
-  claimReasonText,
+  claimReasonColumns,
+  claimReasonOf,
   closeProblems,
   editProblems,
   expectedCredit,
   foundAtFor,
   nextSeq,
   OPEN_CLAIM_STATUSES,
-  readClaimReason,
   reasonProblems,
   type ClaimFoundAt,
   type ClaimKind,
@@ -166,12 +166,12 @@ export interface CreateInput {
 
 export type ClaimSource = 'OFFICE' | 'DISCREPANCIES' | 'LOT' | 'RETURN'
 
-/** The CLAIM reason checked against the tenant's list. */
-async function reasonOf(db: Reader, code: string, note: string | null | undefined, prefix = 'body'): Promise<string> {
+/** The CLAIM reason checked against the tenant's list: the code for its column, the words for `reason` (B-W2b-14). */
+async function reasonOf(db: Reader, code: string, note: string | null | undefined, prefix = 'body'): Promise<{ reasonCode: string; reason: string }> {
   const row = await db.reasonCode.findFirst({ where: { list: CLAIM_REASON_LIST, code }, select: { active: true, needsDetail: true } })
   const problems = reasonProblems(row, code, note, prefix)
   if (problems.length > 0) throw refuse(problems)
-  return claimReasonText(code, note)
+  return claimReasonColumns(code, note)
 }
 
 /** The goods receipt a claim names: of its supplier and site (and of its order, when both). */
@@ -197,7 +197,9 @@ export interface ResolvedClaim {
   readonly goodsReceiptId: string | null
   readonly purchaseOrderId: string | null
   readonly foundAt: ClaimFoundAt
+  /** The person's words (the code when there are none) and the CLAIM code in its own column (B-W2b-14). */
   readonly reason: string
+  readonly reasonCode: string
   readonly remedy: ClaimRemedy | null
   readonly lines: readonly ResolvedLine[]
   readonly source: ClaimSource
@@ -272,7 +274,7 @@ export async function resolveClaim(tools: Pick<CommandTools, 'tx'>, input: Creat
     goodsReceiptId,
     purchaseOrderId,
     foundAt: input.foundAt ?? (input.from?.discrepancyIds?.length ? 'RECEIPT' : foundAtFor(lines.find((line) => line.lotStatus !== null)?.lotStatus ?? null)),
-    reason: await reasonOf(tx, input.reasonCode, input.reasonNote),
+    ...(await reasonOf(tx, input.reasonCode, input.reasonNote)),
     remedy: input.remedy !== undefined ? input.remedy : 'CREDIT',
     lines,
     source,
@@ -286,8 +288,12 @@ export function assertMayAll(context: OfficeContext, permissions: readonly Permi
   if (missing.length > 0) throw new ForbiddenError(`This needs ${missing.join(' and ')} over the supplier at this site.`)
 }
 
-/** Writes the resolved claim (DRAFT) and its lines in the caller's command: its number from the company's CLAIM series. */
-export async function createClaimInCommand(tools: CommandTools, claim: ResolvedClaim, extra: { readonly internalNote?: string | null | undefined } = {}): Promise<{ id: string; number: string; lineIds: string[] }> {
+/**
+ * Writes the resolved claim (DRAFT) and its lines in the caller's command: its number from the company's CLAIM series.
+ * `ncrId` (B-W2b-14, the W2b column): the nonconformance a RETURN_TO_SUPPLIER decision made it from (B-W2a-47's
+ * follow-up passes it; the database checks it is of the claim's company and site).
+ */
+export async function createClaimInCommand(tools: CommandTools, claim: ResolvedClaim, extra: { readonly internalNote?: string | null | undefined; readonly ncrId?: string | null | undefined } = {}): Promise<{ id: string; number: string; lineIds: string[] }> {
   const { tx } = tools
   const id = newId()
   const number = await allocateNumber(tools, { companyId: claim.companyId, kind: 'CLAIM' }, { type: CLAIM_RECORD, id })
@@ -305,6 +311,8 @@ export async function createClaimInCommand(tools: CommandTools, claim: ResolvedC
       purchaseOrderId: claim.purchaseOrderId,
       foundAt: claim.foundAt,
       reason: claim.reason,
+      reasonCode: claim.reasonCode,
+      ...(extra.ncrId ? { ncrId: extra.ncrId } : {}),
       remedy: claim.remedy,
       currency: claim.currency,
       expectedCreditAmount: expected,
@@ -329,6 +337,8 @@ export async function createClaimInCommand(tools: CommandTools, claim: ResolvedC
       purchaseOrderId: claim.purchaseOrderId,
       foundAt: claim.foundAt,
       reason: claim.reason,
+      reasonCode: claim.reasonCode,
+      ncrId: extra.ncrId ?? null,
       remedy: claim.remedy,
       currency: claim.currency,
       expectedCreditAmount: markMoney('cost', expected),
@@ -457,9 +467,12 @@ export async function updateClaim(caller: CommandCaller, claimId: string, input:
       if (input.kind !== undefined) data.kind = input.kind
       if (input.foundAt !== undefined) data.foundAt = input.foundAt
       if (input.reasonCode !== undefined || input.reasonNote !== undefined) {
-        const code = input.reasonCode ?? readClaimReason(claim.reason).code
+        const before = claimReasonOf(claim)
+        const code = input.reasonCode ?? before.code
         if (!code) throw refuse([{ path: 'body/reasonCode', message: 'Choose a reason of the claim list.' }])
-        data.reason = await reasonOf(tools.tx, code, input.reasonNote !== undefined ? input.reasonNote : readClaimReason(claim.reason).note)
+        const columns = await reasonOf(tools.tx, code, input.reasonNote !== undefined ? input.reasonNote : before.note)
+        data.reason = columns.reason
+        data.reasonCode = columns.reasonCode
       }
       const header = { partyId: claim.partyId, siteId: claim.siteId }
       if (input.goodsReceiptId !== undefined) {
@@ -487,7 +500,7 @@ export async function updateClaim(caller: CommandCaller, claimId: string, input:
         recordId: claimId,
         companyId: claim.companyId,
         siteId: claim.siteId,
-        before: { kind: claim.kind, foundAt: claim.foundAt, reason: claim.reason, remedy: claim.remedy, goodsReceiptId: claim.goodsReceiptId, purchaseOrderId: claim.purchaseOrderId, expectedCreditAmount: markMoney('cost', claim.expectedCreditAmount), internalNote: claim.internalNote },
+        before: { kind: claim.kind, foundAt: claim.foundAt, reason: claim.reason, reasonCode: claim.reasonCode, remedy: claim.remedy, goodsReceiptId: claim.goodsReceiptId, purchaseOrderId: claim.purchaseOrderId, expectedCreditAmount: markMoney('cost', claim.expectedCreditAmount), internalNote: claim.internalNote },
         after: { ...data, expectedCreditAmount: markMoney('cost', expected) },
       })
       changed(tools, claim, status, given)

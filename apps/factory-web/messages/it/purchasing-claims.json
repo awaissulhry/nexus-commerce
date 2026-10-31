@@ -281,7 +281,8 @@
     "openPdf": "Apri il PDF del DDT",
     "openPdfOf": "Apri il PDF del DDT {number}",
     "pdfMissing": "Il PDF del DDT non c’è ancora.",
-    "replaced": "prima sul {number} (annullato)"
+    "replaced": "prima sul {number} (annullato)",
+    "hideReturned": "{code} · resa al fornitore"
   },
   "goodsBack": {
     "body": "La merce esce dal magazzino da dove si trova e viaggia con un solo DDT di reso.",
@@ -411,7 +412,8 @@
     "RECEIPT": "Ricevimento",
     "RETURN": "Reso",
     "SCRAP": "Scarto",
-    "TRANSFER": "Trasferimento"
+    "TRANSFER": "Trasferimento",
+    "SUPPLIER_RETURN": "Reso al fornitore"
   },
   "notice": {
     "accepted": "{number}: accettato dal fornitore.",
@@ -422,7 +424,11 @@
     "rejected": "{number}: respinto dal fornitore.",
     "saved": "Salvato.",
     "sent": "{number} segnato come inviato.",
-    "sentMail": "{number} inviato al fornitore per e-mail."
+    "sentMail": "{number} inviato al fornitore per e-mail.",
+    "photoAdded": "Foto aggiunta al reclamo.",
+    "photoRemoved": "Foto tolta.",
+    "letterKept": "Conservata la versione {version} della lettera di reclamo.",
+    "letterSame": "La versione {version} mostra già esattamente questo."
   },
   "page": {
     "export": "Esporta questo elenco (CSV)",
@@ -433,7 +439,9 @@
       "title": "Non puoi vedere resi e reclami"
     },
     "return": "Reso al fornitore",
-    "shortcuts": "Scorciatoie da tastiera"
+    "shortcuts": "Scorciatoie da tastiera",
+    "newClaim": "Nuovo reclamo",
+    "keyNewClaim": "Nuovo reclamo"
   },
   "problem": {
     "changed": "Qualcuno l’ha modificato nel frattempo: è stato riletto. Controlla e riprova.",
@@ -621,7 +629,10 @@
     "subject": "Oggetto",
     "title": "Invia il reclamo {number} a {supplier}",
     "titleAgain": "Invia di nuovo il reclamo {number} a {supplier}",
-    "withMail": "Invialo per e-mail"
+    "withMail": "Invialo per e-mail",
+    "letterAttached": "La lettera di reclamo (PDF, senza prezzi) parte con l’e-mail; indica {photos} foto.",
+    "letterNoFiles": "La lettera di reclamo non parte con questa e-mail: il tuo ruolo non può leggere i file (files.read). L’e-mail parte come testo.",
+    "letterNoLetterhead": "La lettera di reclamo non parte con questa e-mail: l’intestazione della società è incompleta. L’e-mail parte come testo."
   },
   "status": {
     "ACCEPTED": "Accettato",
@@ -685,5 +696,80 @@
     "open": "Aperti",
     "rejected": "Respinti",
     "sent": "In attesa del fornitore"
+  },
+  "newClaim": {
+    "title": "Nuovo reclamo",
+    "subtitle": "Un reclamo per accredito o sostituzione: la merce resta a magazzino. Nasce come bozza da inviare dalla sua scheda.",
+    "create": "Crea reclamo",
+    "goodsTitle": "Di cosa tratta il reclamo",
+    "noStockRight": "Per cercare un lotto serve inventory.stock.view.",
+    "foundAtHint": "Vuoto: dal lotto (in quarantena: al ricevimento; rifiutato o bloccato: al controllo; altrimenti a magazzino).",
+    "foundAtDefault": "Dal lotto",
+    "quantityHint": "Quantità in {unit}; tutto il lotto è {total}. Il reclamo riguarda ciò che scrivi; nulla esce dal magazzino.",
+    "does": {
+      "draft": "Una bozza di reclamo a {supplier}, numerata dalla serie dei reclami.",
+      "goods": "La merce resta a magazzino: solo un reso la rimanda indietro.",
+      "next": "Aggiungi le foto e invialo dalla scheda del reclamo; la lettera parte con l’e-mail."
+    },
+    "refused": {
+      "forbidden": "Il tuo ruolo non può creare reclami (purchasing.claims.manage)."
+    },
+    "noLotsBody": "Qui si può reclamare solo un lotto con giacenza nel sito."
+  },
+  "evidence": {
+    "title": "Prove e lettera",
+    "area": "Superficie interessata",
+    "areaMixed": "{count} righe in unità diverse",
+    "lots": "Lotti",
+    "supplier": "Fornitore",
+    "contact": "Il reclamo va prima a {name} · {email}",
+    "noContact": "Nessun contatto del fornitore ha ancora un’e-mail.",
+    "ncr": "Da non conformità",
+    "photos": "Foto del reclamo ({count})",
+    "addPhoto": "Aggiungi una foto",
+    "capture": "Foto del difetto · {number}",
+    "photosLabel": "Foto del reclamo {number}",
+    "discrepancyPhotos": "Foto delle difformità del ricevimento ({count})",
+    "discrepancyPhotosLabel": "Foto delle difformità del ricevimento",
+    "fromDiscrepancy": "Difformità {seq}",
+    "photosHint": "Le foto restano in ufficio: la lettera dice quante sono; il fornitore le riceve su richiesta.",
+    "noPhotos": "Ancora nessuna foto.",
+    "photoAlt": "{label}, foto {n}",
+    "openPhoto": "Apri la foto {n} a piena grandezza",
+    "photoPending": "Non ancora pronta",
+    "photoFailed": "Impossibile mostrarla",
+    "noFilesRight": "Serve files.read",
+    "removePhoto": "Togli la foto {n}",
+    "removeTitle": "Togliere la foto {n}?",
+    "removeBody": "«{name}» viene tolta dalla bozza di reclamo (scattata per errore). La rimozione resta nell’attività.",
+    "removeConfirm": "Togli la foto"
+  },
+  "letter": {
+    "title": "Lettera di reclamo (PDF)",
+    "preview": "Anteprima",
+    "keep": "Conserva una versione",
+    "none": "Nessuna versione conservata: la prima parte con l’e-mail, oppure conservane una da stampare.",
+    "versions": "Versioni della lettera di reclamo",
+    "version": "Versione {version} · {language}",
+    "current": "Attuale",
+    "open": "Apri",
+    "openVersion": "Apri la versione {version}",
+    "hint": "Sulla lettera non c’è alcun prezzo. Lo stesso contenuto resta la stessa versione.",
+    "refused": {
+      "letterhead": "L’intestazione della società è incompleta (partita IVA, sede legale, REA): completala in Sistema › Società e stabilimenti."
+    }
+  },
+  "photos": {
+    "held": {
+      "settled": "Il reclamo è {status}: non accetta altre foto.",
+      "full": "Un reclamo contiene al massimo {max} foto.",
+      "sent": "Si tolgono solo le foto di una bozza."
+    },
+    "refused": {
+      "forbidden": "Il tuo ruolo non può modificare le foto del reclamo.",
+      "settled": "Nel frattempo il reclamo è stato chiuso: non accetta altre foto.",
+      "type": "Si può aggiungere solo un’immagine (JPEG, PNG, WebP o HEIC).",
+      "store": "La foto non ha raggiunto l’archivio dei file: riprova."
+    }
   }
 }
