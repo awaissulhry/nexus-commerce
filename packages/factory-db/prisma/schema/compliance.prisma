@@ -66,6 +66,9 @@ model Certificate {
   successor           Certificate?          @relation("CertificateRenewal", fields: [tenantId, successorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   renews              Certificate?          @relation("CertificateRenewal")
   typeChangeReviews   TypeChangeReview[]
+  // W2b (schema wave 2/7): its renewals' application log, and the renewals it is the new certificate of.
+  renewalLog          CertificateRenewal[]  @relation("CertificateRenewalOf")
+  renewalLogAsNew     CertificateRenewal[]  @relation("CertificateRenewalNew")
 
   // One row per certificate of a notified body.
   @@unique([tenantId, notifiedBodyNumber, number])
@@ -303,4 +306,70 @@ enum TypeChangeReviewStatus {
   REFUSED
   /// Compliance decided the change does not affect the approved type (with its reason).
   NOT_NEEDED
+}
+
+/// STARTED → APPLIED | RENEWED | CANCELLED; APPLIED → RENEWED | CANCELLED. RENEWED and CANCELLED are final.
+enum CertificateRenewalStatus {
+  /// The renewal is started: the task with its checklist is made.
+  STARTED
+  /// The application reached the notified body.
+  APPLIED
+  /// The new certificate is linked (Certificate.successorId).
+  RENEWED
+  /// Given up (the style is no longer made, another body certifies it …).
+  CANCELLED
+}
+
+/// W2b (schema wave 2/7, B-W2b-02; QHS-105, PRD-283; B-W2a-66's gap "a renewal has no table"; design
+/// compliance.certificates › Renewals "Validity and renewal"): the application log of one renewal of a certificate,
+/// queryable instead of the certificate's audit rows: started (the window it was started in, the task carrying its
+/// checklist), applied (the day the application reached the notified body, its reference, in the window or late), renewed
+/// (the new certificate, which Certificate.successorId names too) or cancelled. Its steps' times are set once; a renewed or
+/// cancelled renewal never changes; never deleted. One open renewal per certificate is the API's rule (the certificate's
+/// version), not a key.
+model CertificateRenewal {
+  id                   String                   @id @db.Uuid
+  tenantId             String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  certificateId        String                   @db.Uuid
+  status               CertificateRenewalStatus @default(STARTED)
+  /// The renewal window when it was started (12 to 6 months before the certificate's end, PRD-283): its first and last
+  /// day (first ≤ last).
+  windowOpensOn        DateTime                 @db.Date
+  windowClosesOn       DateTime                 @db.Date
+  /// The platform task that carries its checklist (collab.prisma Task on the certificate; no reference: a task has no
+  /// tenant-safe target), named once, and the language its steps were written in (two letters).
+  taskId               String?                  @db.Uuid
+  language             String                   @default("it")
+  startedAt            DateTime                 @db.Timestamptz(3)
+  startedById          String?                  @db.Uuid
+  /// Applied: the day the application reached the notified body (never after the day it was recorded), its reference and
+  /// a note, whether that day was inside the window, and when and by whom it was recorded. Set together, once, when it
+  /// becomes APPLIED; kept after.
+  appliedOn            DateTime?                @db.Date
+  applicationReference String?
+  applicationNote      String?
+  appliedInWindow      Boolean?
+  appliedAt            DateTime?                @db.Timestamptz(3)
+  appliedById          String?                  @db.Uuid
+  /// RENEWED: the new certificate (another one of the tenant), when and by whom it was linked.
+  newCertificateId     String?                  @db.Uuid
+  renewedAt            DateTime?                @db.Timestamptz(3)
+  renewedById          String?                  @db.Uuid
+  /// CANCELLED: when, by whom and why.
+  cancelledAt          DateTime?                @db.Timestamptz(3)
+  cancelledById        String?                  @db.Uuid
+  cancelReason         String?
+  note                 String?
+  version              Int                      @default(1)
+  createdAt            DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?                  @db.Uuid
+
+  certificate    Certificate  @relation("CertificateRenewalOf", fields: [tenantId, certificateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  newCertificate Certificate? @relation("CertificateRenewalNew", fields: [tenantId, newCertificateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A certificate's renewals, newest first; the open ones.
+  @@index([tenantId, certificateId, status])
+  @@index([tenantId, newCertificateId])
 }

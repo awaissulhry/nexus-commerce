@@ -21,6 +21,12 @@
 // Who sees what (ownership/payables.json): the office reads and writes (the API keeps the cost grain to finance and
 // buyers); the floor, portal and link sessions read none of it (the supplier portal is W2b). Nothing is deleted but a
 // typed line or a match row before approval.
+//
+// W2b (schema wave 2/7, B-W2b-02; the B-W2a-62 notes' schema needs): the payables settings of a company (the match's
+// tolerances, the billing basis, who approves what SDI delivered); a voided typed invoice frees its number (the live
+// key is a partial unique of …_followups_quality_money_w2b_guards); a file of several invoices (a "lotto",
+// SupplierInvoiceFile) is recorded with its invoices; a supplier's credit note names the claim it settles; the
+// deliveries the pickup could not record wait in an inbox (SdiInboxItem) instead of an audit row.
 
 /// An invoice (or credit note) a supplier or subcontractor sent the company (FIN-136, FIN-137): from SDI, by e-mail, or
 /// typed in from a foreign supplier's PDF; matched, approved by a person, paid.
@@ -41,9 +47,14 @@ model SupplierInvoice {
   /// The day the company received it (SDI's delivery, the e-mail, the post): the date the purchases journal and the
   /// period lock read.
   receivedOn        DateTime                   @db.Date
-  /// SDI only (and required there): IdentificativoSdI, unique, and the file name SDI delivered.
+  /// SDI only (and required there): IdentificativoSdI, unique, and the file name SDI delivered. W2b: the invoices of a
+  /// file of several (a lotto) share the file's IdentificativoSdI, each with its body (below).
   sdiIdentifier     String?
   sdiFileName       String?
+  /// W2b: an invoice of a file of several (SupplierInvoiceFile): the file and which of its bodies it is (1 … the file's
+  /// invoiceCount), both or neither; set when it is recorded, never changed (what SDI delivered).
+  sdiFileId         String?                    @db.Uuid
+  sdiBodyIndex      Int?
   /// ISO 4217 (Divisa).
   currency          String                     @default("EUR")
   /// The document's sums as the supplier wrote them, minor units, 0 or more (a credit note's too): taxable
@@ -96,6 +107,11 @@ model SupplierInvoice {
   /// Set exactly when VOIDED (typed by mistake, or a duplicate of another arrival) and why.
   voidedAt          DateTime?                  @db.Timestamptz(3)
   voidReason        String?
+  /// W2b (B-W2a-62 gap "no claim ↔ credit note link"; claims' `credit.matched`): a CREDIT_NOTE only, the supplier claim
+  /// it settles (claims.prisma SupplierClaim of the same supplier and company) and the claim's site (its reference
+  /// key), both or neither; named once, in any status but VOIDED, never changed after.
+  claimSiteId       String?                    @db.Uuid
+  claimId           String?                    @db.Uuid
   /// For the office only.
   /// @internal
   internalNote      String?
@@ -114,19 +130,30 @@ model SupplierInvoice {
   pdfFile  StoredFile?       @relation("SupplierInvoicePdf", fields: [tenantId, pdfFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   lines    SupplierInvoiceLine[]
   matches  SupplierInvoiceMatch[]
+  // W2b: the file of several invoices it came in, the claim a credit note settles, the inbox items it answered.
+  sdiFile    SupplierInvoiceFile? @relation(fields: [tenantId, companyId, partyId, sdiFileId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  claim      SupplierClaim?       @relation(fields: [tenantId, claimSiteId, partyId, claimId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  inboxItems SdiInboxItem[]
 
-  // An invoice SDI delivered is recorded once.
-  @@unique([tenantId, sdiIdentifier])
-  // The same supplier's number on the same date is recorded once (a number repeats across years: the API also refuses
-  // the same number twice in a year).
-  @@unique([tenantId, companyId, partyId, number, issueDate])
+  // An invoice SDI delivered is recorded once: one invoice per IdentificativoSdI (the partial unique
+  // SupplierInvoice_one_per_sdi_delivery of …_followups_quality_money_w2b_guards, a NULL body) and, for a file of
+  // several (W2b), each body once.
+  @@unique([tenantId, sdiIdentifier, sdiBodyIndex])
+  // The same supplier's number on the same date is recorded once while it is not VOIDED (W2b: a voided typed invoice
+  // frees its number; the partial unique SupplierInvoice_one_live_per_number of …_followups_quality_money_w2b_guards).
+  // This key adds the void's time, so it holds only voided rows apart (a live row's NULL never clashes); a number
+  // repeats across years: the API also refuses the same number twice in a year.
+  @@unique([tenantId, companyId, partyId, number, issueDate, voidedAt], map: "SupplierInvoice_number_voided_key")
   // The targets of the references from its lines and matches (the same supplier) and from its credit notes (the same
-  // company and supplier).
+  // company and supplier); W2b: from the SDI inbox (the tenant's).
   @@unique([tenantId, partyId, id])
   @@unique([tenantId, companyId, partyId, id])
+  @@unique([tenantId, id])
   @@index([tenantId, companyId, status])
   @@index([tenantId, partyId, issueDate])
   @@index([tenantId, dueDate])
+  @@index([tenantId, sdiFileId])
+  @@index([tenantId, claimId])
 }
 
 /// Where a supplier invoice came from.
@@ -287,4 +314,177 @@ model SupplierInvoiceMatch {
   @@index([tenantId, invoiceId])
   @@index([tenantId, invoiceLineId])
   @@index([tenantId, goodsReceiptLineId])
+}
+
+// =====================================================================================================================
+// W2b (schema wave 2/7, B-W2b-02): payables settings, files of several invoices, the SDI inbox
+// =====================================================================================================================
+
+/// What a supplier invoice line is matched against (B-W2a-62's billing basis; the accountant's, GATE-ACCOUNTANT).
+enum PayablesBillingBasis {
+  /// What was received (the goods receipts of the order line): the W2a rule.
+  RECEIVED
+  /// What was ordered (the order line's quantity), e.g. a service or a deposit billed before the goods.
+  ORDERED
+}
+
+/// Who approves an invoice SDI delivered (registered by the system, so "never the person who registered it" says
+/// nothing about it).
+enum PayablesSdiApproval {
+  /// Anyone allowed to approve supplier invoices (the W2a rule).
+  ANY_APPROVER
+  /// Anyone allowed, but not the person who sent a purchase order the invoice bills.
+  NOT_THE_BUYER
+  /// Only the office users listed (sdiApproverIds).
+  LISTED
+}
+
+/// The payables settings of a company, or the tenant-wide ones (B-W2a-62's schema need; design finance.payables, the
+/// accountant's tolerances and billing basis): the three-way match's tolerances, what an invoice is matched against, who
+/// approves what SDI delivered, and the extra separation of duties. The row's id is the company's id, or the tenant's own
+/// id for the tenant-wide row (as ReceivablesSettings); a value set on the company's row wins, a null follows the
+/// tenant-wide row; no value anywhere: the W2a rule (exact match, received, any approver, no extra rule).
+model PayablesSettings {
+  /// The company's id; the tenant's id for the tenant-wide row (companyId null).
+  id                        String                @id @db.Uuid
+  tenantId                  String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: the tenant-wide settings.
+  companyId                 String?               @db.Uuid
+  /// The match's tolerances, percent 0 to 100: on the quantity invoiced against the quantity received, and on the unit
+  /// price invoiced against the order's (each match row copies them).
+  quantityTolerancePct      Decimal?              @db.Decimal(7, 4)
+  /// @not-money a percentage, not an amount
+  priceTolerancePct         Decimal?              @db.Decimal(7, 4)
+  /// A difference below this amount (minor units of the invoice's currency, 0 or more) is within the tolerance whatever
+  /// the percentages say (rounding).
+  /// @grain cost
+  differenceToleranceAmount Int?
+  billingBasis              PayablesBillingBasis?
+  sdiApproval               PayablesSdiApproval?
+  /// LISTED: the office users who may approve what SDI delivered (at least one, each once); empty otherwise.
+  sdiApproverIds            String[]              @default([]) @db.Uuid
+  /// The extra separation of duties: true: whoever accepted a difference of an invoice does not approve it.
+  accepterMayNotApprove     Boolean?
+  version                   Int                   @default(1)
+  createdAt                 DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById               String?               @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}
+
+/// One SDI delivery that holds several invoices of one supplier to the company (B-W2a-62's gap; a "lotto": one
+/// FatturaElettronicaHeader, two or more FatturaElettronicaBody). Recorded with its invoices in one command: each
+/// SupplierInvoice of it names the file and its body (sdiFileId, sdiBodyIndex 1 … invoiceCount) and carries the file's
+/// IdentificativoSdI, received on the file's day. What SDI delivered never changes, its XML is named once, and it is never
+/// deleted (a fiscal document).
+model SupplierInvoiceFile {
+  id            String   @id @db.Uuid
+  tenantId      String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it is addressed to (CessionarioCommittente) and the supplier that sent it (CedentePrestatore).
+  companyId     String   @db.Uuid
+  partyId       String   @db.Uuid
+  /// IdentificativoSdI of the delivery (a delivery is recorded once) and the file name SDI delivered.
+  sdiIdentifier String
+  sdiFileName   String
+  /// The day SDI delivered it: each of its invoices is received on it.
+  receivedOn    DateTime @db.Date
+  /// How many invoices (bodies) the file holds: 2 or more.
+  invoiceCount  Int
+  /// The file as SDI delivered it (a StoredFile of the row, FISCAL_ARCHIVE): named once.
+  xmlFileId     String?  @db.Uuid
+  version       Int      @default(1)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?  @db.Uuid
+
+  company    Company           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party      Party             @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  xmlFile    StoredFile?       @relation("SupplierInvoiceFileXml", fields: [tenantId, xmlFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  invoices   SupplierInvoice[]
+  inboxItems SdiInboxItem[]
+
+  @@unique([tenantId, sdiIdentifier])
+  // The targets of the references from its invoices (the same company and supplier) and from the SDI inbox.
+  @@unique([tenantId, companyId, partyId, id])
+  @@unique([tenantId, id])
+  @@index([tenantId, partyId, receivedOn])
+}
+
+/// Why the pickup could not record an SDI delivery.
+enum SdiInboxProblem {
+  /// The file is not a FatturaPA the reader understands (or a signed envelope it cannot open).
+  UNREADABLE
+  /// The supplier's VAT number or fiscal code is not one of the company's suppliers.
+  SUPPLIER_UNKNOWN
+  /// The file is addressed to another company (CessionarioCommittente).
+  OTHER_ADDRESSEE
+  /// The same supplier's number and date are registered already (typed in, or another delivery).
+  DUPLICATE_NUMBER
+  /// The day it would be registered on is inside a closed (HARD-locked) month.
+  PERIOD_LOCKED
+  /// The intermediary listed it but did not hand the file over.
+  FILE_UNAVAILABLE
+  OTHER
+}
+
+/// OPEN → RECORDED (final) | DISMISSED; DISMISSED → OPEN (dismissed by mistake).
+enum SdiInboxStatus {
+  OPEN
+  RECORDED
+  DISMISSED
+}
+
+/// A delivery SDI handed the company's account that the pickup could not record (B-W2a-62's gap: "an inbox of
+/// undeliverable SDI deliveries" instead of the pickup's audit row; design finance.payables "Last SDI pickup"): why, how
+/// often it was tried, and how it ended: recorded (the invoice, or the file of several, it became) or dismissed by a
+/// person with a reason. One item per delivery; what SDI said of it never changes; never deleted.
+model SdiInboxItem {
+  id                    String          @id @db.Uuid
+  tenantId              String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose SDI account received it, and the account (integration.prisma IntegrationAccount, provider SDI).
+  companyId             String          @db.Uuid
+  accountId             String          @db.Uuid
+  /// The intermediary's id of the delivery, IdentificativoSdI (one item per delivery), the file name, and when SDI
+  /// delivered it.
+  providerRef           String
+  sdiIdentifier         String
+  fileName              String
+  receivedAt            DateTime        @db.Timestamptz(3)
+  /// Why it waits, as the latest pickup found it: a code and the words it wrote.
+  problem               SdiInboxProblem
+  problemText           String
+  /// The file as fetched, when it could be (a StoredFile of the item): named once; null: not fetched.
+  xmlFileId             String?         @db.Uuid
+  /// How many pickups tried it (from 1, only up), when it was first seen and last tried.
+  attempts              Int             @default(1)
+  firstSeenAt           DateTime        @db.Timestamptz(3)
+  lastTriedAt           DateTime        @db.Timestamptz(3)
+  status                SdiInboxStatus  @default(OPEN)
+  /// RECORDED: when, and what it became: the supplier invoice, or the file of several invoices (exactly one).
+  recordedAt            DateTime?       @db.Timestamptz(3)
+  supplierInvoiceId     String?         @db.Uuid
+  supplierInvoiceFileId String?         @db.Uuid
+  /// DISMISSED: when, by whom and why (not ours, a test delivery …); cleared when it is opened again.
+  dismissedAt           DateTime?       @db.Timestamptz(3)
+  dismissedById         String?         @db.Uuid
+  dismissReason         String?
+  version               Int             @default(1)
+  createdAt             DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?         @db.Uuid
+
+  company             Company              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  account             IntegrationAccount   @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  xmlFile             StoredFile?          @relation("SdiInboxItemXml", fields: [tenantId, xmlFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplierInvoice     SupplierInvoice?     @relation(fields: [tenantId, supplierInvoiceId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplierInvoiceFile SupplierInvoiceFile? @relation(fields: [tenantId, supplierInvoiceFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, sdiIdentifier])
+  // What waits, per company.
+  @@index([tenantId, companyId, status])
 }
