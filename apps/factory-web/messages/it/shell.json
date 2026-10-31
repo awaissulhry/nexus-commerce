@@ -45,7 +45,9 @@
       "maintenance": "Manutenzione",
       "requests": "Richieste di intervento",
       "jobs": "Interventi",
-      "machines": "Macchine e attrezzature"
+      "machines": "Macchine e attrezzature",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni stabilimento"
     },
     "admin": {
       "area": "Sistema",

@@ -9,10 +9,13 @@ import { isBadgeCode } from '../model'
  *   hide         GET /production/cutting/hides?code=          production.cut          the hide card
  *   work order   GET /production/cutting/work-orders?number=  production.cut          the work order card
  *   location     GET /inventory/locations?siteId=             inventory.locations.view the location card (by its code)
+ *   machine      GET /plant/floor/machines?code=               plant.report            the machine card (B-W2a-73: its QR
+ *                                                                                      tag holds the asset number)
  *   bundle, lot, batch, serial, carton                                                  named, "not on this tablet yet"
  *
  * A code that is no label code (an office number such as a work order's, a tag printed before label codes, a location
- * code) is looked up in that order by what it is: hide tag, work order number, location code. A badge's code switches
+ * code, a machine's asset number) is looked up in that order by what it is: hide tag, work order number, location code,
+ * machine tag. A badge's code switches
  * the person instead (floor.signin "Switch person on a busy station"). Pure: the screen asks, this decides.
  */
 
@@ -58,6 +61,7 @@ export const LOOKUPS = {
   hide: 'production.cut',
   workOrder: 'production.cut',
   location: 'inventory.locations.view',
+  machine: 'plant.report',
 } as const
 export type Lookup = keyof typeof LOOKUPS
 
@@ -88,7 +92,7 @@ export function planScan(read: ScanRead, permissions: readonly string[]): ScanPl
       return { kind: 'notOnFloor', type: read.type }
     }
     case 'free': {
-      const all: Lookup[] = ['hide', 'workOrder', 'location']
+      const all: Lookup[] = ['hide', 'workOrder', 'location', 'machine']
       return { kind: 'ask', lookups: all.filter(may), denied: all.filter((lookup) => !may(lookup)) }
     }
   }
@@ -136,10 +140,29 @@ export interface LocationCard {
   readonly path: readonly string[]
 }
 
+/** A machine's card (B-W2a-73; design floor.scan "Machine (W2a): status and open job"): never a cost, a supplier or a name. */
+export interface MachineCard {
+  readonly kind: 'machine'
+  readonly id: string
+  readonly code: string
+  /** Its class in both languages (the card speaks the screen's). */
+  readonly type: { readonly labelIt: string; readonly labelEn: string; readonly icon: string | null }
+  readonly makeModel: string | null
+  readonly station: string | null
+  readonly line: string | null
+  readonly status: 'RUNNING' | 'DOWN' | 'UNDER_MAINTENANCE' | 'DO_NOT_USE' | 'RETIRED'
+  readonly statusSince: string
+  /** An unsafe report waits for a technician's sign-safe (Owner answer H1). */
+  readonly locked: boolean
+  readonly openJob: { readonly number: string; readonly status: string } | null
+  readonly openRequests: number
+}
+
 export type ScanResult =
   | HideCard
   | WorkOrderCard
   | LocationCard
+  | MachineCard
   /** A label the floor names but cannot open yet. */
   | { readonly kind: 'notOnFloor'; readonly type: LabelType; readonly code: string }
   | { readonly kind: 'noPermission'; readonly type: LabelType; readonly code: string }
@@ -158,12 +181,16 @@ export function resultCode(result: ScanResult): string {
   }
 }
 
-/** The label type a result stands for (the icon and the word in the recent list); null when nothing was found. */
-export function resultType(result: ScanResult): LabelType | null {
+/** What a card is: a label type, or a machine (its tag is a free code, no label type). */
+export type CardType = LabelType | 'machine'
+
+/** The type a result stands for (the icon and the word in the recent list); null when nothing was found. */
+export function resultType(result: ScanResult): CardType | null {
   switch (result.kind) {
     case 'hide':
     case 'workOrder':
     case 'location':
+    case 'machine':
       return result.kind
     case 'notOnFloor':
     case 'noPermission':

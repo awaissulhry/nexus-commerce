@@ -40,10 +40,13 @@ describe('what is asked, with the person\'s permissions (fail closed)', () => {
     expect(planScan(readScan(formatScanId({ type: 'BUNDLE', tenantTag: TAG, ref: 1 }), TAG), OPERATOR)).toEqual({ kind: 'notOnFloor', type: 'bundle' })
   })
 
-  it('tries a free code as a hide tag, a work order number and a location code, only those allowed', () => {
+  it('tries a free code as a hide tag, a work order number, a location code and a machine tag, only those allowed', () => {
     const free = readScan('SEED-WO-0001', TAG)
-    expect(planScan(free, OPERATOR)).toEqual({ kind: 'ask', lookups: ['hide', 'workOrder', 'location'], denied: [] })
-    expect(planScan(free, ['floor.work', 'inventory.locations.view'])).toEqual({ kind: 'ask', lookups: ['location'], denied: ['hide', 'workOrder'] })
+    expect(planScan(free, [...OPERATOR, 'plant.report'])).toEqual({ kind: 'ask', lookups: ['hide', 'workOrder', 'location', 'machine'], denied: [] })
+    expect(planScan(free, OPERATOR)).toEqual({ kind: 'ask', lookups: ['hide', 'workOrder', 'location'], denied: ['machine'] })
+    expect(planScan(free, ['floor.work', 'inventory.locations.view'])).toEqual({ kind: 'ask', lookups: ['location'], denied: ['hide', 'workOrder', 'machine'] })
+    // B-W2a-73: a sewing operator (plant.report only) finds a machine's tag at once.
+    expect(planScan(readScan('DEMO-SEW-21', TAG), ['floor.work', 'production.scan', 'plant.report'])).toEqual({ kind: 'ask', lookups: ['machine'], denied: ['hide', 'workOrder', 'location'] })
   })
 
   it('refuses another factory\'s label and a misread one without asking; a badge switches person', () => {
@@ -56,5 +59,6 @@ describe('what is asked, with the person\'s permissions (fail closed)', () => {
     expect(resultCode({ kind: 'workOrder', number: 'WO-1', batchNumber: null, status: 'RELEASED', style: 's', dueDate: null, pieces: 1, toCut: 1, sizesLeft: [], colourways: [] })).toBe('WO-1')
     expect(resultType({ kind: 'unknown', code: 'x', reason: 'notFound' })).toBeNull()
     expect(resultType({ kind: 'notOnFloor', type: 'lot', code: 'x' })).toBe('lot')
+    expect(resultType({ kind: 'machine', id: 'm', code: 'DEMO-SEW-21', type: { labelIt: 'Lineare', labelEn: 'Lockstitch', icon: 'needle' }, makeModel: null, station: null, line: null, status: 'DOWN', statusSince: '2026-10-31T08:00:00.000Z', locked: false, openJob: null, openRequests: 1 })).toBe('machine')
   })
 })

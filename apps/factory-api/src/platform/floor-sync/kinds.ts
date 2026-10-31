@@ -8,6 +8,9 @@ import { BundleRefusedError, makeBundles } from '../../modules/production/bundle
 import { makeBundlesContract } from '../../modules/production/bundles/contract'
 import { CutRefusedError, logCut } from '../../modules/production/cutting/cut'
 import { cutContract, remnantContract } from '../../modules/production/cutting/contract'
+import { PlantRefusedError } from '../../modules/plant/access'
+import { reportContract } from '../../modules/plant/contract'
+import { report } from '../../modules/plant/requests/requests'
 import { ScanRefusedError } from '../../modules/production/scans/access'
 import { batchContract } from '../../modules/production/scans/contract'
 import { sendBatch, type BatchItem } from '../../modules/production/scans/scans'
@@ -24,6 +27,9 @@ import { ScanIdsRefusedError } from '../numbering/scan-ids'
  *   production.cut.log / remnant          modules/production/cutting logCut with the client event id
  *   production.bundles.make               modules/production/bundles makeBundles with the client event id (ONE bundle)
  *                                         and the ticket code the tablet numbered from its own block, when it did
+ *   plant.report                          modules/plant/requests report (B-W2a-73: a machine problem from the station;
+ *                                         the tablet's time as the report's time; an unsafe one locks the machine when
+ *                                         it arrives, and the station's queued scans after it are refused, not final)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -54,6 +60,7 @@ function parsed<Schema extends z.ZodType>(schema: Schema, value: unknown): { ok:
 export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof ScanRefusedError) return moduleRefusal(error.refusal)
   if (error instanceof BundleRefusedError || error instanceof CutRefusedError) return moduleRefusal(error.refusal as ModuleRefusal)
+  if (error instanceof PlantRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
     return first ? moduleRefusal({ code: first.code, message: first.message, fix: first.fix }) : moduleRefusal({ code: 'NUMBER_REFUSED', message: error.message })
@@ -108,6 +115,13 @@ async function applyBundle(caller: CommandCaller, event: QueuedEvent, key: strin
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'Bundle', id: bundle.id } }
 }
 
+async function applyPlantReport(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const body = parsed(reportContract.body, { ...event.payload, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const result = await report(caller, body.value, key)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'MaintenanceRequest', id: result.request.id } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -124,6 +138,8 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
         return await applyCut(caller, event, context.key)
       case 'production.bundles.make':
         return await applyBundle(caller, event, context.key)
+      case 'plant.report':
+        return await applyPlantReport(caller, event, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

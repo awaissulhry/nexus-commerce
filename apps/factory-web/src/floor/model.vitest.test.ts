@@ -68,7 +68,18 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('the floor tasks are built: receive (SCR-092) and garment labels (SCR-096) too', () => {
-    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['operation', 'cut', 'bundles', 'receive', 'pick', 'labels', 'pack', 'final', 'scan'])
+    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['operation', 'cut', 'bundles', 'receive', 'pick', 'labels', 'pack', 'final', 'machine', 'scan'])
+  })
+
+  it('B-W2a-73: Machine problem at every station mode for whoever may report (plant.report), never held by the worker notice', () => {
+    const reporter = [...OPERATOR, 'plant.report']
+    expect(homeTiles('sewing', reporter, false).map((tile) => tile.key)).toEqual(['operation', 'machine', 'scan'])
+    expect(homeTiles('warehouse', reporter, false).map((tile) => tile.key)).toEqual(['pick', 'machine', 'scan'])
+    // A safety report never waits for the privacy notice (the station is named instead of the worker).
+    expect(homeTiles('cutting', reporter, true).find((tile) => tile.key === 'machine')).toEqual({ key: 'machine', held: null })
+    // A subcontract station (no floor mode): Scan only; without plant.report: no tile.
+    expect(homeTiles(null, reporter, false).map((tile) => tile.key)).toEqual(['scan'])
+    expect(homeTiles('sewing', OPERATOR, false).map((tile) => tile.key)).not.toContain('machine')
   })
 })
 

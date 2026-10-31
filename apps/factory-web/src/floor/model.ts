@@ -38,7 +38,7 @@ export function modeOf(station: { workCentreKind: WorkCentreKind } | null): Floo
 
 // ---- the home tiles (design floor.home "tiles": the station's mode AND the person's permissions, fail closed) ----
 
-export const TILE_KEYS = ['operation', 'cut', 'bundles', 'receive', 'pick', 'labels', 'pack', 'final', 'scan'] as const
+export const TILE_KEYS = ['operation', 'cut', 'bundles', 'receive', 'pick', 'labels', 'pack', 'final', 'machine', 'scan'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 
 export interface TileRule {
@@ -70,6 +70,9 @@ export const TILE_RULES: readonly TileRule[] = [
   { key: 'labels', permission: 'production.serials', modes: ['packing'], built: true, takesScans: true },
   { key: 'pack', permission: 'shipping.pack', modes: ['packing'], built: true, takesScans: true },
   { key: 'final', permission: 'quality.inspections.view', modes: ['inspection'], built: true, takesScans: true },
+  // SCR-179 (B-W2a-73): a machine problem at every station mode (design floor.machine); its API asks plant.report, which
+  // every floor role holds (Owner answer H1). Never held by the worker notice: a safety report names the station instead.
+  { key: 'machine', permission: 'plant.report', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
   { key: 'scan', permission: 'floor.work', modes: 'all', built: true, takesScans: true },
 ]
 

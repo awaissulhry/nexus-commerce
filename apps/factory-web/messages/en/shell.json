@@ -45,7 +45,9 @@
       "maintenance": "Maintenance",
       "requests": "Machine requests",
       "jobs": "Maintenance jobs",
-      "machines": "Machines & tools"
+      "machines": "Machines & tools",
+      "settingsGroup": "Settings",
+      "settings": "Plant settings"
     },
     "admin": {
       "area": "Admin",
