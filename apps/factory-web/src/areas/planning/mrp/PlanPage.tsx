@@ -8,9 +8,10 @@ import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { WithMessages } from '../../../record-panels/i18n'
 import { findSuppliers, listSites, type SiteOption } from '../../_shared/buying/api'
 import { downloadText, useCoalesced, useLive } from '../../_shared/buying/hooks'
-import { buyingCan, csvOf, phrase, readProblem, writeProblem, type Loaded } from '../../_shared/buying/model'
-import { draftFromPlan, explainLine, getLatestPlan, listRuns, openDrafts, reopen, runPlan, setAside, undoDraft, unusableStock, type Explain, type Plan, type PlanLine, type StockLine } from './api'
-import { draftable, viewOf, type DraftDialog, type PlanDialog, type PlanModel, type PlanNotice, type PlanView as PlanViewName } from './model'
+import { DEFAULT_TIME_ZONE } from '../../../lib/i18n/format'
+import { buyingCan, csvOf, phrase, readProblem, todayIn, writeProblem, type Loaded } from '../../_shared/buying/model'
+import { draftFromPlan, explainLine, firmLine, getLatestPlan, getShortages, listRuns, openDrafts, reopen, runPlan, sendChecks, sendMany, setAside, undoDraft, unusableStock, type Explain, type Plan, type PlanLine, type Shortages, type StockLine } from './api'
+import { draftable, moveFirmProblem, MRP_NAMESPACE, sendable, viewOf, type DraftDialog, type PlanDialog, type PlanModel, type PlanNotice, type PlanView as PlanViewName } from './model'
 import { PlanView } from './view/PlanView'
 
 /**
@@ -22,7 +23,7 @@ import { PlanView } from './view/PlanView'
  */
 export function PlanPage() {
   return (
-    <WithMessages namespaces={['buying', 'lists']}>
+    <WithMessages namespaces={['buying', MRP_NAMESPACE, 'lists']}>
       <PlanContainer />
     </WithMessages>
   )
@@ -51,6 +52,9 @@ function PlanContainer() {
   const [notice, setNotice] = useState<PlanNotice | null>(null)
   const [dialog, setDialog] = useState<PlanDialog | null>(null)
   const [explain, setExplain] = useState<{ lineId: string; explain: Loaded<Explain> } | null>(null)
+  const [shortages, setShortages] = useState<Loaded<Shortages> | null>(null)
+  const today = useMemo(() => todayIn(DEFAULT_TIME_ZONE), [])
+  const canFirm = session.permissions.includes('planning.firm')
   const readId = useRef(0)
   const planRef = useRef<Plan | null>(null)
 
@@ -100,6 +104,10 @@ function PlanContainer() {
       planRef.current = value
       setPlan({ status: 'ready', value })
       setUpdates(0)
+      // B-W2a-70: the work orders short of material, computed now from the live plan (the section and its tile).
+      getShortages(api, siteId)
+        .then((answer) => id === readId.current && setShortages({ status: 'ready', value: answer }))
+        .catch((error: unknown) => id === readId.current && setShortages({ status: 'error', problem: readProblem(error) }))
       if (value.summary.shortWithHeldStock > 0) {
         unusableStock(api, siteId)
           .then((lines) => id === readId.current && setHeld(lines))
@@ -300,6 +308,58 @@ function PlanContainer() {
     void load()
   }, [api, notice, load])
 
+  /** B-W2a-70 (MOVE_FIRM): the firm planned order again with its quantity, on an earlier day. */
+  const moveFirm = useCallback(async () => {
+    if (dialog?.kind !== 'moveFirm' || dialog.busy) return
+    const line = linesById([dialog.requirementId])[0] ?? null
+    const problem = moveFirmProblem(line, dialog.date, today)
+    if (problem || !line?.firm) {
+      setDialog({ ...dialog, problem: problem ?? 'held.notFirm' })
+      return
+    }
+    setDialog({ ...dialog, busy: true, problem: null })
+    try {
+      await firmLine(api, line.id, { version: line.version, quantity: line.firm.quantity, date: dialog.date, ...(line.firm.supplier ? { supplierId: line.firm.supplier.id } : {}) })
+      setDialog(null)
+      setNotice({ tone: 'success', words: phrase('mrp:notice.moved', { material: line.item.code, date: dialog.date }) })
+      void load()
+    } catch (error) {
+      setDialog({ ...dialog, busy: false, problem: isApiError(error) && error.kind === 'conflict' ? 'move.changed' : isApiError(error) && error.kind === 'invalid' ? 'move.refused' : 'move.failed' })
+      void load()
+    }
+  }, [api, dialog, load, today])
+
+  /** B-W2a-70 (Send n): the drafts just made, each with its checks, then each sent on its own. */
+  const sendStep = useCallback(async () => {
+    if (dialog?.kind !== 'draft' || !dialog.draft.result) return
+    const draft = dialog.draft
+    const ids = draft.result!.orders.map((order) => order.id)
+    setDialog({ kind: 'draft', draft: { ...draft, send: { cards: null, problem: null, busy: false, outcomes: null } } })
+    try {
+      const cards = await sendChecks(api, ids)
+      setDialog((current) => (current?.kind === 'draft' ? { kind: 'draft', draft: { ...current.draft, send: { cards, problem: null, busy: false, outcomes: null } } } : current))
+    } catch (error) {
+      setDialog((current) => (current?.kind === 'draft' ? { kind: 'draft', draft: { ...current.draft, send: { cards: [], problem: readProblem(error), busy: false, outcomes: null } } } : current))
+    }
+  }, [api, dialog])
+
+  const sendConfirm = useCallback(async () => {
+    if (dialog?.kind !== 'draft' || !dialog.draft.send || dialog.draft.send.busy) return
+    const draft = dialog.draft
+    const send = draft.send!
+    const orders = sendable(send.cards)
+    if (orders.length === 0) return
+    setDialog({ kind: 'draft', draft: { ...draft, send: { ...send, busy: true, problem: null } } })
+    try {
+      const outcomes = await sendMany(api, orders)
+      setDialog((current) => (current?.kind === 'draft' ? { kind: 'draft', draft: { ...current.draft, send: { ...send, busy: false, outcomes } } } : current))
+      setNotice({ tone: 'success', words: phrase('mrp:notice.sent', { count: outcomes.filter((outcome) => outcome.outcome === 'SENT').length }) })
+      void load()
+    } catch (error) {
+      setDialog((current) => (current?.kind === 'draft' ? { kind: 'draft', draft: { ...current.draft, send: { ...send, busy: false, problem: readProblem(error) } } } : current))
+    }
+  }, [api, dialog, load])
+
   const exportLines = useCallback(
     (ids: string[]) => {
       const picked = linesById(ids)
@@ -345,6 +405,9 @@ function PlanContainer() {
     notice,
     dialog,
     why: explain,
+    shortages,
+    today,
+    canFirm,
   }
 
   return (
@@ -393,6 +456,23 @@ function PlanContainer() {
             }),
           onCreate: () => void createDrafts(),
         },
+        onRetryShortages: () => {
+          if (!siteId) return
+          setShortages({ status: 'loading' })
+          getShortages(api, siteId)
+            .then((answer) => setShortages({ status: 'ready', value: answer }))
+            .catch((error: unknown) => setShortages({ status: 'error', problem: readProblem(error) }))
+        },
+        onMoveFirm: (requirementId) => {
+          const line = linesById([requirementId])[0]
+          setDialog({ kind: 'moveFirm', requirementId, date: line?.firm?.date ?? today, busy: false, problem: null })
+        },
+        moveFirm: {
+          onDate: (date) => setDialog((current) => (current?.kind === 'moveFirm' ? { ...current, date, problem: null } : current)),
+          onConfirm: () => void moveFirm(),
+        },
+        onSendDrafts: () => void sendStep(),
+        onSendConfirm: () => void sendConfirm(),
         setAside: {
           onReason: (reason) => setDialog((current) => (current?.kind === 'setAside' ? { ...current, reason } : current)),
           onNote: (note) => setDialog((current) => (current?.kind === 'setAside' ? { ...current, note } : current)),

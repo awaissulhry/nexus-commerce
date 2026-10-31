@@ -134,6 +134,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-45: Planning board (SCR-122) and Lines & subcontractors (SCR-126).
   '/planning/board',
   '/planning/allocation',
+  // B-W2a-70: Capacity & load (SCR-123) and Exceptions (SCR-125).
+  '/planning/capacity',
+  '/planning/exceptions',
   // B-W2a-59: Planning settings (SCR-124, SCR-127) and its plant calendar print (a new tab).
   '/planning/settings',
   '/planning/settings/calendar-print',

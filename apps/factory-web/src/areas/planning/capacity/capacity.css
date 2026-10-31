@@ -1,0 +1,149 @@
+/*
+ * Planning › Capacity & load (SCR-123) LAYOUT: the band with its scope controls, the tiles, the load table's cells (the
+ * DS LoadBar as the opener of a cell, the "how" toggletip beside it), the cell's detail. The controls are the design
+ * system's; this file only places them, with semantic tokens (no colour of its own). No page max-width (Owner rule
+ * 2026-10-29): the page fills the shell's main area; a long period scrolls inside the table, never the page.
+ */
+.fw-pc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pc-head,
+.fw-pc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pc-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pc-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pc-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-pc-text {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.fw-pc-date {
+  width: 150px;
+}
+
+.fw-pc-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-pc-cell-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-pc-ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.fw-pc-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-pc-link:hover,
+.fw-pc-link:focus-visible {
+  text-decoration: underline;
+}
+
+/* A load cell: the bar is the link that opens its orders; the "how" toggletip sits at its top right. */
+.fw-pc-load {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding-block: var(--nds-space-4);
+  box-sizing: border-box;
+}
+
+.fw-pc-open {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--nds-space-2) var(--nds-space-4);
+  border-radius: var(--nds-radius-sm);
+  color: inherit;
+  text-decoration: none;
+}
+
+.fw-pc-open:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-pc-how {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  max-width: 360px;
+  padding: var(--nds-space-8);
+}
+
+.fw-pc-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.55;
+}
+
+.fw-pc-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pc-print {
+  display: none;
+}
+
+@media print {
+  .fw-pc-head .fw-pc-actions {
+    display: none;
+  }
+  .fw-pc-print {
+    display: block;
+  }
+}

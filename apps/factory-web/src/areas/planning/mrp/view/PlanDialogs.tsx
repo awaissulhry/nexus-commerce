@@ -1,15 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { CheckCircle2, FilePlus2, Search } from 'lucide-react'
-import { Banner, Card, Field, Modal, SummaryTable } from '@nexus/ui/components'
+import { AlertTriangle, CalendarClock, CheckCircle2, FilePlus2, Search, Send, XCircle } from 'lucide-react'
+import { Banner, Card, DateField, Field, Modal, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Pill, RadioCard, Select, Spinner, Textarea } from '@nexus/ui/primitives'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
+import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { dayAt, money, quantity } from '../../../_shared/buying/model'
 import { SET_ASIDE, type SetAsideReason } from '../api'
-import { draftCards, runSeconds, type DraftDialog, type PlanActions, type PlanModel } from '../model'
+import { draftCards, moveFirmProblem, MRP_NAMESPACE, runSeconds, sendable, type DraftDialog, type PlanActions, type PlanModel } from '../model'
+import '../mrp.css'
 
 /**
  * The plan's dialogs: Draft purchase orders (one card per supplier: its lines, its open draft or a new one, the lines
@@ -24,6 +26,7 @@ export function PlanDialogs({ model, actions, ownKeys }: { model: PlanModel; act
   if (dialog.kind === 'draft') return <DraftPurchaseOrders draft={dialog.draft} model={model} actions={actions} />
   if (dialog.kind === 'setAside') return <SetAside model={model} actions={actions} />
   if (dialog.kind === 'history') return <History model={model} actions={actions} />
+  if (dialog.kind === 'moveFirm') return <MoveFirm model={model} actions={actions} />
   if (dialog.kind === 'explainer') {
     return (
       <Modal open onClose={() => actions?.onCloseDialog?.()} title={t('plan.explainer.title')} size="md" footer={<Button size="sm" variant="primary" onClick={() => actions?.onCloseDialog?.()}>{t('common.close')}</Button>}>
@@ -56,6 +59,7 @@ export function PlanDialogs({ model, actions, ownKeys }: { model: PlanModel; act
 
 function DraftPurchaseOrders({ draft, model, actions }: { draft: DraftDialog; model: PlanModel; actions?: PlanActions }) {
   const t = useT('buying')
+  const w = useT(MRP_NAMESPACE)
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const cards = draftCards(draft.lines, draft.drafts ?? [])
@@ -66,9 +70,26 @@ function DraftPurchaseOrders({ draft, model, actions }: { draft: DraftDialog; mo
   const blocked = [...Object.values(draft.suppliers)].filter((supplier) => supplier.status === 'BLOCKED' || supplier.status === 'ARCHIVED')
   const held = draft.busy ? t('held.busy') : draft.drafts === null && !draft.draftsProblem ? t('held.loading') : missing > 0 ? t('plan.draft.pickFirst', { count: missing }) : blocked.length > 0 ? t('plan.draft.blocked', { supplier: blocked[0]!.legalName }) : cards.length === 0 ? t('held.noBuyLine') : null
 
+  if (draft.result && draft.send) return <SendDrafts draft={draft} model={model} actions={actions} />
   if (draft.result) {
     return (
-      <Modal open onClose={() => actions?.onCloseDialog?.()} title={t('plan.draft.doneTitle')} size="md" footer={<Button size="sm" variant="primary" onClick={() => actions?.onCloseDialog?.()}>{t('common.done')}</Button>}>
+      <Modal
+        open
+        onClose={() => actions?.onCloseDialog?.()}
+        title={t('plan.draft.doneTitle')}
+        size="md"
+        footer={
+          <>
+            <span className="grow" />
+            <Button size="sm" onClick={() => actions?.onCloseDialog?.()}>
+              {t('common.done')}
+            </Button>
+            <Button size="sm" variant="primary" heldReason={model.can.poSend ? null : w('held.noSend')} onClick={() => actions?.onSendDrafts?.()}>
+              <Send size={13} aria-hidden /> {w('send.review', { count: draft.result.orders.length })}
+            </Button>
+          </>
+        }
+      >
         <div className="fw-by-dialog" role="status">
           <Banner tone="success" title={t('plan.draft.doneBody', { lines: draft.result.lines.length, count: draft.result.orders.length })} />
           <ul className="fw-by-checks">
@@ -282,6 +303,156 @@ function History({ model, actions }: { model: PlanModel; actions?: PlanActions }
           }))}
         />
       )}
+    </Modal>
+  )
+}
+
+/**
+ * Send n (design pop:draft-result, W2a "review and send them one after another"; B-W2a-52's send-checks and send-many):
+ * one card per draft just made — ready, or what blocks it in words (the PO page fixes it), its warnings, who receives it
+ * and the confirm-by default — then each ready order sent on its own (its mail, its confirm link); a refused one keeps
+ * its reason. Mail goes out through the factory's mail provider; nothing is sent before the click.
+ */
+function SendDrafts({ draft, model, actions }: { draft: DraftDialog; model: PlanModel; actions?: PlanActions }) {
+  const t = useT('buying')
+  const w = useT(MRP_NAMESPACE)
+  const locale = useLocale()
+  const place = { locale, timeZone: model.timeZone }
+  const send = draft.send!
+  const ready = sendable(send.cards)
+  const numberOf = (id: string) => draft.result?.orders.find((order) => order.id === id)?.number ?? '—'
+  const held = !model.can.poSend ? w('held.noSend') : send.busy ? t('held.busy') : send.cards === null ? t('held.loading') : ready.length === 0 ? w('held.noneReady') : null
+  if (send.outcomes) {
+    const sent = send.outcomes.filter((outcome) => outcome.outcome === 'SENT')
+    return (
+      <Modal open onClose={() => actions?.onCloseDialog?.()} title={w('send.doneTitle')} size="md" footer={<Button size="sm" variant="primary" onClick={() => actions?.onCloseDialog?.()}>{t('common.done')}</Button>}>
+        <div className="fw-by-dialog" role="status">
+          <Banner tone={sent.length === send.outcomes.length ? 'success' : 'warning'} title={w('send.doneBody', { sent: sent.length, count: send.outcomes.length })} />
+          <ul className="fw-by-checks">
+            {send.outcomes.map((outcome) => (
+              <li key={outcome.id} className="fw-by-check">
+                {outcome.outcome === 'SENT' ? <CheckCircle2 size={16} className="fw-by-ico is-ok" aria-hidden /> : <XCircle size={16} className="fw-by-ico is-blocked" aria-hidden />}
+                <span className="fw-by-check-body">
+                  <Link className="fw-by-link" href={`${model.prefix}/purchasing/orders/${outcome.id}`}>
+                    {outcome.number ?? numberOf(outcome.id)}
+                  </Link>
+                  <span className="fw-by-hint">{outcome.outcome === 'SENT' ? w('send.sentOne') : w(`send.refused.${outcome.refused?.code === 'conflict' ? 'conflict' : outcome.refused?.code === 'forbidden' ? 'forbidden' : 'other'}`)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Modal>
+    )
+  }
+  return (
+    <Modal
+      open
+      onClose={() => actions?.onCloseDialog?.()}
+      title={w('send.title', { count: send.cards?.length ?? draft.result?.orders.length ?? 0 })}
+      subtitle={w('send.subtitle')}
+      size="xl"
+      footer={
+        <>
+          <span className="fw-by-hint">{w('send.mailNote')}</span>
+          <span className="grow" />
+          <Button size="sm" onClick={() => actions?.onCloseDialog?.()} heldReason={send.busy ? t('held.busy') : null}>
+            {t('common.cancel')}
+          </Button>
+          <Button size="sm" variant="primary" heldReason={held} onClick={() => actions?.onSendConfirm?.()}>
+            {send.busy ? <Spinner size={12} /> : <Send size={13} aria-hidden />} {w('send.confirm', { count: ready.length })}
+          </Button>
+        </>
+      }
+    >
+      <div className="fw-by-dialog">
+        {send.problem && <Banner tone="danger" title={w('send.failed')}>{t(send.problem)}</Banner>}
+        {send.cards === null ? (
+          <p className="fw-by-hint" role="status">
+            <Spinner size={14} /> {t('common.loading')}
+          </p>
+        ) : (
+          <div className="fw-mrp-send">
+            {send.cards.map((card) => {
+              const blocks = card.checks.filter((check) => check.severity === 'BLOCKS')
+              const warnings = card.checks.filter((check) => check.severity === 'WARNING')
+              return (
+                <Card key={card.id} padded>
+                  <div className="fw-by-stack">
+                    <div className="fw-by-card-head">
+                      <h3 className="fw-by-h3">
+                        <Link className="fw-by-link" href={`${model.prefix}/purchasing/orders/${card.id}`}>
+                          {card.number ?? numberOf(card.id)}
+                        </Link>
+                      </h3>
+                      <Pill tone={card.ready ? 'success' : 'danger'}>{card.ready ? w('send.ready') : w('send.notReady')}</Pill>
+                    </div>
+                    {card.recipient ? <p className="fw-by-hint">{w('send.to', { name: card.recipient.name, email: card.recipient.email ?? '—' })}</p> : null}
+                    {card.confirmBy ? <p className="fw-by-hint">{w('send.confirmBy', { time: formatDateTime(card.confirmBy, place) })}</p> : null}
+                    {card.refused && <Banner tone="danger" title={w('send.cardRefused')} />}
+                    {blocks.length + warnings.length > 0 && (
+                      <ul className="fw-by-checks">
+                        {[...blocks, ...warnings].map((check) => (
+                          <li key={`${check.code}-${check.path}`} className="fw-by-check">
+                            {check.severity === 'BLOCKS' ? <XCircle size={16} className="fw-by-ico is-blocked" aria-hidden /> : <AlertTriangle size={16} className="fw-by-ico is-warning" aria-hidden />}
+                            <span className="fw-by-check-body">{t(`po.check.${check.code}`)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {!card.ready && <p className="fw-by-hint">{w('send.fixOnPo')}</p>}
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+/** Move the firm planned order (MOVE_FIRM, from Short on open work orders): the same quantity, an earlier day. */
+function MoveFirm({ model, actions }: { model: PlanModel; actions?: PlanActions }) {
+  const t = useT('buying')
+  const w = useT(MRP_NAMESPACE)
+  const locale = useLocale()
+  const place = { locale, timeZone: model.timeZone }
+  const dialog = model.dialog as Extract<NonNullable<PlanModel['dialog']>, { kind: 'moveFirm' }>
+  const line = model.plan.status === 'ready' ? (model.plan.value.lines.find((entry) => entry.id === dialog.requirementId) ?? null) : null
+  const today = model.today ?? dialog.date
+  const problem = moveFirmProblem(line, dialog.date, today)
+  const held = dialog.busy ? t('held.busy') : !model.canFirm ? w('held.noFirm') : problem ? w(problem) : null
+  return (
+    <Modal
+      open
+      onClose={() => actions?.onCloseDialog?.()}
+      title={w('move.title')}
+      subtitle={line ? `${line.item.code} ${line.item.name}${line.colour ? ` · ${line.colour.name}` : ''}` : undefined}
+      size="md"
+      footer={
+        <>
+          <span className="grow" />
+          <Button size="sm" onClick={() => actions?.onCloseDialog?.()}>
+            {t('common.cancel')}
+          </Button>
+          <Button size="sm" variant="primary" heldReason={held} onClick={() => actions?.moveFirm?.onConfirm?.()}>
+            {dialog.busy ? <Spinner size={12} /> : <CalendarClock size={13} aria-hidden />} {w('move.confirm')}
+          </Button>
+        </>
+      }
+    >
+      <div className="fw-by-dialog">
+        {line?.firm ? (
+          <p className="fw-by-text">{w('move.body', { quantity: quantity(line.firm.quantity, locale), unit: t(`uom.${line.firm.uom}`), date: formatDate(dayAt(line.firm.date), place) })}</p>
+        ) : (
+          <Banner tone="warning" title={w('held.notFirm')} />
+        )}
+        <Field label={w('move.date')} hint={w('move.hint')}>
+          <DateField value={dialog.date} min={today} onChange={(value) => actions?.moveFirm?.onDate?.(value)} locale={INTL_LOCALE[locale]} ariaLabel={w('move.date')} />
+        </Field>
+        {dialog.problem && <Banner tone="danger" title={w(dialog.problem)} />}
+      </div>
     </Modal>
   )
 }

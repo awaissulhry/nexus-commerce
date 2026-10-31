@@ -1,4 +1,4 @@
-import { CalendarRange, ChartGantt, ListChecks, Network, SlidersHorizontal } from 'lucide-react'
+import { CalendarRange, ChartGantt, Gauge, ListChecks, Network, Siren, SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -25,7 +25,11 @@ export const officeArea: OfficeAreaNav = {
           { id: 'planning-mrp', label: 'shell:nav.planning.mrp', href: '/planning/mrp', icon: ListChecks, permission: 'planning.view' },
           // B-W2a-45: Planning board (SCR-122; the design opens it in a window of its own) and Lines & subcontractors (SCR-126).
           { id: 'planning-board', label: 'shell:nav.planning.board', href: '/planning/board', icon: ChartGantt, permission: 'planning.view' },
+          // B-W2a-70: Capacity & load (SCR-123), between the board and the allocation (the approved tree's order).
+          { id: 'planning-capacity', label: 'shell:nav.planning.capacity', href: '/planning/capacity', icon: Gauge, permission: 'planning.view' },
           { id: 'planning-allocation', label: 'shell:nav.planning.allocation', href: '/planning/allocation', icon: Network, permission: 'planning.view' },
+          // B-W2a-70: Exceptions (SCR-125), after the allocation.
+          { id: 'planning-exceptions', label: 'shell:nav.planning.exceptions', href: '/planning/exceptions', icon: Siren, permission: 'planning.view' },
         ],
       },
       // B-W2a-59: Settings › Planning settings (SCR-124 calendars & shifts, SCR-127 item planning settings).

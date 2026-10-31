@@ -115,6 +115,8 @@
       "mrp": "Cosa comprare e produrre",
       "board": "Tabellone di pianificazione",
       "allocation": "Linee e terzisti",
+      "capacity": "Capacità e carico",
+      "exceptions": "Eccezioni",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni pianificazione"
     },

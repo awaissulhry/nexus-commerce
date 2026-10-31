@@ -19,7 +19,8 @@ import { actorOf, type OfficeContext } from '../../core/context'
 import { serverClock } from '../../core/time'
 import { assertMayAt, officeContextOf, seesCost, siteFor } from './access'
 import type { LineView, RunView } from './contract'
-import { readReservations } from './inputs'
+import { stockHoldsOf, standInHideOf, type StockHoldView } from './held'
+import { readReservations, withQualityHolds } from './inputs'
 import { PEG_COLUMNS, pegTreeView, type PegRowRead } from './pegging/read'
 import { dayOf, lotFactsOf, readLots, readPurchases, readStock, unitsOf, type LotRow, type PlanStockRow, type Reader } from './store'
 import { lineViewOf, quantityOf, readLineContext, REQUIREMENT_COLUMNS, RUN_COLUMNS, runCounts, runViewOf, sourcesOf, type RequirementRow, type RunRow } from './views'
@@ -166,9 +167,18 @@ type StockLineView = {
   reason: NotCountedReason | null
   words: string | null
   held: boolean
+  /** B-W2a-70: the hide of a hide held on its own (its lot is not held). */
+  hide: { id: string; code: string } | null
+  /** B-W2a-70: the ACTIVE quality hold that holds this stock, with its reason in words. */
+  hold: StockHoldView | null
 }
 
+/**
+ * The stock lines in the screens' shape. B-W2a-70: the lines come from `withQualityHolds` (the run's rule), so a held
+ * hide's stand-in lot is turned back into its hide and real lot here, and every line a quality hold holds names it.
+ */
 async function stockLinesOf(db: Reader, lines: readonly { entry: PlanStockRow; notCounted: NotCountedReason | null; held: boolean }[], lots: readonly LotRow[]): Promise<StockLineView[]> {
+  const holds = await stockHoldsOf(db, lines.map((line) => line.entry.lotId))
   const itemIds = [...new Set(lines.map((line) => line.entry.itemId))]
   const items = itemIds.length === 0 ? [] : await db.item.findMany({ where: { id: { in: itemIds } }, select: { id: true, code: true, name: true, baseUom: true } })
   const colourIds = [...new Set(lines.flatMap((line) => (line.entry.itemColourId ? [line.entry.itemColourId] : [])))]
@@ -178,7 +188,11 @@ async function stockLinesOf(db: Reader, lines: readonly { entry: PlanStockRow; n
   const lotOf = new Map(lots.map((lot) => [lot.id, lot]))
   return lines
     .map((line) => {
-      const lot = line.entry.lotId ? lotOf.get(line.entry.lotId) : undefined
+      const standIn = standInHideOf(line.entry.lotId)
+      const hide = standIn ? holds.standIns.get(standIn) : undefined
+      const lotId = standIn ? (hide?.lotId ?? null) : line.entry.lotId
+      const lot = lotId ? lotOf.get(lotId) : undefined
+      const hold = standIn ? (holds.hides.get(standIn) ?? null) : lotId ? (holds.lots.get(lotId) ?? null) : null
       return {
         item: itemOf.get(line.entry.itemId)!,
         colour: line.entry.itemColourId ? (colourOf.get(line.entry.itemColourId) ?? null) : null,
@@ -196,8 +210,10 @@ async function stockLinesOf(db: Reader, lines: readonly { entry: PlanStockRow; n
         quantity: quantityOf(line.entry.quantity),
         hides: line.entry.hides,
         reason: line.notCounted,
-        words: line.notCounted ? NOT_COUNTED_WORDS[line.notCounted] : null,
+        words: line.notCounted ? (hold ? `${NOT_COUNTED_WORDS[line.notCounted]} (${hold.reasonEn}, since ${hold.placedAt.slice(0, 10)})` : NOT_COUNTED_WORDS[line.notCounted]) : null,
         held: line.held,
+        hide: hide ? { id: hide.id, code: hide.code } : null,
+        hold,
       }
     })
     .sort((a, b) => (a.item.code !== b.item.code ? (a.item.code < b.item.code ? -1 : 1) : (a.lot?.code ?? '') < (b.lot?.code ?? '') ? -1 : (a.lot?.code ?? '') > (b.lot?.code ?? '') ? 1 : 0))
@@ -207,9 +223,11 @@ async function stockLinesOf(db: Reader, lines: readonly { entry: PlanStockRow; n
 export async function unusableStock(caller: CommandCaller, query: { readonly siteId: string; readonly itemId?: string | undefined }) {
   const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
   return caller.withClient(async (db) => {
-    const stock = await readStock(db, site.id, query.itemId ? [query.itemId] : null)
-    const lots = await readLots(db, stock.flatMap((entry) => (entry.lotId ? [entry.lotId] : [])))
-    const facts = new Map(lots.map((lot) => [lot.id, lotFactsOf(lot)]))
+    const read = await readStock(db, site.id, query.itemId ? [query.itemId] : null)
+    const lots = await readLots(db, read.flatMap((entry) => (entry.lotId ? [entry.lotId] : [])))
+    // B-W2a-70: stock under an ACTIVE quality hold is held here as in the run (the lead's follow-up of #985).
+    const { stock, lots: lotFacts } = await withQualityHolds(db, site.id, read, lots.map(lotFactsOf))
+    const facts = new Map(lotFacts.map((lot) => [lot.id, lot]))
     // Each lot judged on its own colour: only its quality reasons, never "another colour".
     const lines = stock.flatMap((entry) => {
       const netting = netMaterial({ itemColourId: entry.itemColourId, demands: [], stock: [entry], lotOf: (id) => facts.get(id), purchases: [], runDate: todayAt(site.timezone) })
@@ -283,9 +301,11 @@ export async function explainLine(caller: CommandCaller, requirementId: string) 
     const item = lineContext.items.get(row.itemId)!
     const units = unitsOf(item)
 
-    const stock = await readStock(db, row.siteId, [row.itemId])
-    const lots = await readLots(db, stock.flatMap((entry) => (entry.lotId ? [entry.lotId] : [])))
-    const facts = new Map(lots.map((lot) => [lot.id, lotFactsOf(lot)]))
+    const read = await readStock(db, row.siteId, [row.itemId])
+    const lots = await readLots(db, read.flatMap((entry) => (entry.lotId ? [entry.lotId] : [])))
+    // B-W2a-70: today's stock read as the run reads it: a lot or hide under an ACTIVE quality hold is held, not usable.
+    const { stock, lots: lotFacts } = await withQualityHolds(db, row.siteId, read, lots.map(lotFactsOf))
+    const facts = new Map(lotFacts.map((lot) => [lot.id, lot]))
     const purchases = (await readPurchases(db, row.siteId, [row.itemId])).filter((purchase) => purchase.itemColourId === row.itemColourId)
     const sources = sourcesOf(row.sources)
     // B-W2a-22: the line's demand as the run pegged it (per order line, size and work order), netted again with today's

@@ -222,6 +222,10 @@ const stockLine = output({
   words: z.string().nullable(),
   /** Held stock (quarantine, blocked): may still become usable. */
   held: z.boolean(),
+  /** B-W2a-70: a hide held on its own (its lot is not held): the line is that hide's stock. */
+  hide: output({ id: id(), code: z.string() }).nullable(),
+  /** B-W2a-70: the ACTIVE quality hold that holds this stock (B-W2a-26), its reason in both languages and since when. */
+  hold: output({ id: id(), subjectType: z.enum(['Lot', 'Hide']), reasonCode: z.string(), reasonIt: z.string(), reasonEn: z.string(), placedAt: instant() }).nullable(),
 })
 
 /** B-W2a-22 (PLN-071): one demand of a requirement with its supplies (the run's pegging rows). */
