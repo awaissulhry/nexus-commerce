@@ -265,6 +265,8 @@ model Site {
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]
   ddts               Ddt[]
+  // W2b gendocs.prisma (B-W2b-01): the documents generated for its records (packing lists, claim letters, job sheets).
+  generatedDocuments GeneratedDocument[]
   // returns.prisma: the returns coming back to it and the repairs it makes.
   returnAuthorisations ReturnAuthorisation[]
   repairOrders         RepairOrder[]

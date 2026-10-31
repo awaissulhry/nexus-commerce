@@ -1,3 +1,4 @@
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { DomainError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { PRODUCTION_FINISH } from '@nexus/factory-domain/production/completion/permissions'
@@ -40,6 +41,8 @@ export interface ReportInput {
   /** A finished-goods place of the site; left out: its one FINISHED_GOODS location. */
   readonly toLocationId?: string | undefined
   readonly note?: string | null | undefined
+  /** B-W2a-F8: the reason garments reported inside a SOFT-locked month are posted anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 export async function reportFinished(caller: CommandCaller, workOrderId: string, body: ReportInput, idempotencyKey?: string) {
@@ -90,7 +93,7 @@ export async function reportFinished(caller: CommandCaller, workOrderId: string,
       const itemId = await finishedItemFor(tools, sku, { styleName: facts.style.name, colourwayName: cell.colourwayName, garmentTracking: facts.style.garmentTracking, companyId: facts.style.companyId })
       drafts.push({ siteId: current.siteId, companyId: current.companyId, workOrderId: current.id, itemId, quantity: line.quantity, toLocationId: place.id, reference: current.batchNumber, note: body.note?.trim() || null, cellId: cell.id })
     }
-    const moves = await postFinishedReceipts(tools, drafts, key)
+    const moves = await postFinishedReceipts(tools, drafts, key, body.periodLockOverride)
     const reportId = moves[0]!.id
     const cells = drafts.map((draft) => ({ workOrderSizeId: draft.cellId, itemId: draft.itemId, quantity: draft.quantity }))
     const pieces = cells.reduce((sum, cell) => sum + cell.quantity, 0)

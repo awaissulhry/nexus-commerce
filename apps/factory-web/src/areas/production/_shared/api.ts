@@ -19,7 +19,8 @@ export type ReleaseCheckCode = (typeof RELEASE_CHECKS)[number]
 export const CHECK_STATES = ['OK', 'BLOCKED', 'NOT_REQUIRED', 'OVERRIDDEN'] as const
 export type CheckState = (typeof CHECK_STATES)[number]
 export const UNUSABLE_REASONS = ['CR_VI_PENDING', 'CR_VI_FAILED', 'QUALITY_HOLD', 'BLOCKED', 'REJECTED'] as const
-export const HIDE_STATES = ['FULL', 'PARTLY_CUT', 'REMNANT', 'CONSUMED', 'SCRAPPED'] as const
+// W2b (B-W2b-01): RETURNED, a hide sent back to the tannery (factory-domain HIDE_STATES).
+export const HIDE_STATES = ['FULL', 'PARTLY_CUT', 'REMNANT', 'CONSUMED', 'SCRAPPED', 'RETURNED'] as const
 export type HideState = (typeof HIDE_STATES)[number]
 export const WORK_CENTRE_KINDS = ['CUTTING', 'SEWING', 'ASSEMBLY', 'FINISHING', 'INSPECTION', 'PACKING', 'SUBCONTRACT'] as const
 export const INSPECTION_STATUSES = ['OPEN', 'PASSED', 'FAILED', 'CANCELLED'] as const

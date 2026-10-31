@@ -11,7 +11,8 @@ import { command, type CommandCaller, type CommandTools } from '../../core/comma
 import { actorOf } from '../../core/context'
 import { serverClock } from '../../core/time'
 import { ordersOfInvoices, ordersOfRequests, settleOrders } from '../invoicing/from-shipment/settlement'
-import { refuseHardLocked } from '../accounting/period-guard'
+import { honourPeriodLocks } from '../accounting/period-guard'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { markDepositPaid } from '../sales/deposits/deposits'
 import { lockAll, lockMoney } from './locks'
 import { refundedOf } from './refunds'
@@ -157,6 +158,8 @@ export interface RecordPaymentInput {
   readonly externalRef: string
   readonly internalNote?: string | null | undefined
   readonly allocations?: readonly AllocationInput[] | undefined
+  /** B-W2a-F8: the reason a payment dated inside a SOFT-locked month goes in anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 export interface CheckedPayment {
@@ -202,12 +205,12 @@ async function refuseCountedReference(db: Reader, companyId: string, externalRef
 }
 
 /** Inside a command: the Payment row RECEIVED, audited, with its event. */
-export async function insertPayment(tools: CommandTools, payment: CheckedPayment): Promise<PaymentRow> {
-  // B-W2a-F1: a day inside a HARD period lock is refused in words (409) before the database's Payment_period_lock.
-  await refuseHardLocked(tools.tx, tools.context, [
-    { companyId: payment.companyId, day: payment.receivedOn, refused: `the payment received on ${dayWords(payment.receivedOn)} (bank reference ${payment.externalRef}) is not recorded`, path: 'body/receivedOn' },
-  ])
+export async function insertPayment(tools: CommandTools, payment: CheckedPayment, periodLockOverride?: PeriodLockOverride | null): Promise<PaymentRow> {
   const id = newId()
+  // B-W2a-F1/F8: a day inside a HARD period lock is refused in words (409) before the database's Payment_period_lock; inside a SOFT one it needs the override reason.
+  await honourPeriodLocks(tools, [
+    { companyId: payment.companyId, day: payment.receivedOn, refused: `the payment received on ${dayWords(payment.receivedOn)} (bank reference ${payment.externalRef}) is not recorded`, path: 'body/receivedOn', record: { type: 'Payment', id } },
+  ], periodLockOverride)
   await tools.tx.payment.create({
     data: { id, companyId: payment.companyId, partyId: payment.partyId, method: 'BANK_TRANSFER', amount: payment.amount, currency: payment.currency, receivedOn: dateValue(payment.receivedOn), externalRef: payment.externalRef, internalNote: payment.internalNote, createdAt: tools.now, updatedAt: tools.now, createdById: actorIdOf(tools) },
     select: { id: true },
@@ -234,7 +237,7 @@ export async function recordPayment(caller: CommandCaller, body: RecordPaymentIn
   const checked = await checkPayment(caller, body)
   return recordingCommand(async () => {
     const { result } = await command(caller, { name: 'payments.record', idempotencyKey, input: body }, async (tools) => {
-      const payment = await insertPayment(tools, checked)
+      const payment = await insertPayment(tools, checked, body.periodLockOverride)
       await allocateInCommand(tools, payment, body.allocations ?? [])
       return { payment: await paymentDetail(tools.tx, (await readPayment(tools.tx, payment.id))!) }
     })
@@ -358,7 +361,7 @@ export async function reverseAllocation(caller: CommandCaller, paymentId: string
 }
 
 /** payments.void: voids a payment typed by mistake, once its allocations add up to 0 (reverse them first). */
-export async function voidPayment(caller: CommandCaller, paymentId: string, body: { version?: number | undefined; reason: string }, idempotencyKey?: string): Promise<{ payment: PaymentDetail }> {
+export async function voidPayment(caller: CommandCaller, paymentId: string, body: { version?: number | undefined; reason: string; periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string): Promise<{ payment: PaymentDetail }> {
   const payment = await officePayment(caller, paymentId, PAYMENTS_VOID)
   const reason = blankToNull(body.reason)
   if (!reason) throw new ValidationError('Say why the payment is voided.', [{ path: 'body/reason', message: 'Required.' }])
@@ -367,9 +370,9 @@ export async function voidPayment(caller: CommandCaller, paymentId: string, body
     const current = (await readPayment(tools.tx, payment.id))!
     const problems = voidProblems({ status: current.status, allocated: await allocatedOf(tools.tx, current.id), refunded: await refundedOf(tools.tx, current.id) })
     if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
-    // B-W2a-F1: a payment received inside a HARD period lock is not voided: 409 in words before the database's.
+    // B-W2a-F1/F8: a payment received inside a HARD period lock is not voided: 409 in words before the database's; inside a SOFT one it needs the override reason.
     const receivedOn = current.receivedOn.toISOString().slice(0, 10)
-    await refuseHardLocked(tools.tx, tools.context, [{ companyId: current.companyId, day: receivedOn, refused: `the payment received on ${dayWords(receivedOn)} (bank reference ${current.externalRef}) is not voided`, path: 'paymentId' }])
+    await honourPeriodLocks(tools, [{ companyId: current.companyId, day: receivedOn, refused: `the payment received on ${dayWords(receivedOn)} (bank reference ${current.externalRef}) is not voided`, path: 'paymentId', record: { type: 'Payment', id: current.id } }], body.periodLockOverride)
     await tools.tx.payment.update({ where: { id: current.id }, data: { status: 'VOIDED', voidedAt: tools.now, voidReason: reason }, select: { id: true } })
     tools.audit({ recordType: 'Payment', recordId: current.id, companyId: current.companyId, before: { status: 'RECEIVED' }, after: { status: 'VOIDED' }, reason })
     tools.emit({ type: 'payment.voided', subject: current.id, companyId: current.companyId, payload: { paymentId: current.id } })

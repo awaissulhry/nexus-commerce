@@ -119,6 +119,8 @@ model Nonconformance {
   item          Item?                   @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   lot           Lot?                    @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   supplier      Party?                  @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b claims.prisma (B-W2b-01): the supplier claims it led to.
+  supplierClaims SupplierClaim[]
   containment   NcrContainmentAction[]
   dispositions  NcrDispositionLine[]
   links         NcrLink[]

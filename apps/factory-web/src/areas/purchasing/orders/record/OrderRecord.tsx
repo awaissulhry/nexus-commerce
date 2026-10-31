@@ -51,6 +51,8 @@ import {
 import { sendModelOf, tabOf, type LineDraft, type OrderDialog, type OrderRecordModel, type SendCheckState } from '../model'
 import { isDailyDialog, type SendExtra } from '../daily-model'
 import { detailsOf, OrderRecordView } from './view/OrderRecordView'
+// B-W2a-81: the Invoices tab is Finance's (areas/finance/payables/po-tab).
+import { PoInvoices } from '../../../finance/payables/po-tab/PoInvoices'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -600,6 +602,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     <OrderRecordView
       model={model}
       panels={panels}
+      invoices={order.status === 'ready' && session.permissions.includes('payables.view') ? <PoInvoices orderId={order.value.id} prefix={prefix} /> : null}
       actions={{
         onRetry: () => void load(),
         onReload: () => void load(),

@@ -14,7 +14,8 @@ import { Dec, parseDecimal, ZERO, type Decimal, type DecimalInput } from '../../
  */
 
 // W2a wave 5 (factory-db inventory.prisma): PRODUCTION_RECEIPT, finished garments of a work order into finished-goods stock.
-export const STOCK_MOVE_REASONS = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT'] as const
+// W2b (B-W2b-01): goods back from a customer, goods back to a supplier, garments leaving with a shipment (factory-db StockMoveReason).
+export const STOCK_MOVE_REASONS = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT', 'CUSTOMER_RETURN', 'SUPPLIER_RETURN', 'SHIPMENT'] as const
 export type StockMoveReason = (typeof STOCK_MOVE_REASONS)[number]
 
 export const ITEM_TRACKINGS = ['NONE', 'LOT', 'HIDE', 'SERIAL'] as const
@@ -35,6 +36,10 @@ export const REASON_SIDES = Object.freeze({
   ADJUSTMENT: 'ONE_SIDE',
   COUNT: 'ONE_SIDE',
   PRODUCTION_RECEIPT: 'IN',
+  // W2b (B-W2b-01): goods back from a customer enter; goods back to a supplier and garments leaving with a shipment leave.
+  CUSTOMER_RETURN: 'IN',
+  SUPPLIER_RETURN: 'OUT',
+  SHIPMENT: 'OUT',
 } as const satisfies Record<StockMoveReason, 'IN' | 'OUT' | 'INSIDE' | 'ONE_SIDE'>)
 
 /** The reasons that say why (SCM-192: an adjustment, a count difference, a scrap); a reversal says why too. */

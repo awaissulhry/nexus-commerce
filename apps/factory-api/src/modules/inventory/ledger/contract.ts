@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { amountMinor, currency, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { STOCK_MOVE_REASONS } from '@nexus/factory-domain/inventory/ledger/moves'
 import { VALUATION_METHODS } from '@nexus/factory-domain/inventory/ledger/valuation'
@@ -239,6 +240,7 @@ export const writeOffContract = defineContract({
       )
       .min(1)
       .max(MAX_WRITE_OFF_LINES),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: {
     201: output({

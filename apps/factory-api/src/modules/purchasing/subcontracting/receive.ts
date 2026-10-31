@@ -7,6 +7,7 @@ import { backProblems, receiveProblems, statusAfterReceipt, type SubcontractOrde
 import { command, type CommandCaller } from '../../../core/command'
 import { postCostsInCommand } from '../../costing/actual/post'
 import { postMoves, type MoveDraft } from '../../inventory/ledger/post-moves'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { kitGoods, actFacts, detailInCommand } from './orders'
 import { officeOrder, readLocationRow, readOrder, sizesOf } from './store'
 import { RECEIPT_ACTION, receiptViews, storedReceipts, type OrderDetailView } from './views'
@@ -43,6 +44,8 @@ export interface ReceiveInput {
   readonly returns: readonly { readonly itemId: string; readonly itemColourId?: string | null | undefined; readonly lotId?: string | null | undefined; readonly hideId?: string | null | undefined; readonly quantity: string; readonly uom?: Uom | undefined; readonly toLocationId: string }[]
   readonly supplierDdt?: { readonly number: string; readonly date?: string | null | undefined } | null | undefined
   readonly note?: string | null | undefined
+  /** B-W2a-F8: the reason goods back inside a SOFT-locked month are posted anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 export type ReceiveAnswer = { order: OrderDetailView; receipt: OrderDetailView['receipts'][number]; ledger: { posted: number; waiting: string[] } }
@@ -148,7 +151,14 @@ export async function receiveBackAs(caller: CommandCaller, orderId: string, inpu
         reference: order.number,
         note: `Back from the workshop of subcontract order ${order.number}`,
       }))
-      const posted = drafts.length > 0 ? await postMoves(tools, drafts, { key: `purchasing.subcontract.receive:${idempotencyKey ?? newId()}`, issuePath: (index) => `body/returns/${index}` }) : []
+      const posted =
+        drafts.length > 0
+          ? await postMoves(tools, drafts, {
+              key: `purchasing.subcontract.receive:${idempotencyKey ?? newId()}`,
+              issuePath: (index) => `body/returns/${index}`,
+              periodLockOverride: input.periodLockOverride,
+            })
+          : []
 
       const to: SubcontractOrderStatus = piecesBack ? statusAfterReceipt(after) : (order.status as SubcontractOrderStatus)
       if (to !== order.status) await tools.tx.subcontractOrder.update({ where: { id: orderId }, data: { status: to }, select: { id: true } })

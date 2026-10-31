@@ -51,9 +51,10 @@ import { loadCostFacts, STYLE_COLUMNS } from '../store'
  *   update    a DRAFT corrected; discard: a DRAFT deleted
  *   freeze    DRAFT → FROZEN (who, when): the open frozen standard before it is ended on the day before its first day
  *             (refused in words when another frozen one would overlap, or its first day is in a locked period); a
- *             finished item's receipts into finished goods that had no value yet (B-W2a-12 values a receipt at the
- *             standard in force) are valued at it now when their day is in its period and not locked, and their work
- *             orders' COMPLETION entries are posted in the same command.
+ *             finished item's stock moves that had no value yet (B-W2a-12 values a receipt, B-W2a-43 a customer return
+ *             put back into stock, at the standard in force on their day: inventory/finished/post.ts standardCostFor)
+ *             are valued at it now when their day is in its period and not locked, and the receipts' work orders'
+ *             COMPLETION entries are posted in the same command.
  * Freezing does NOT write the W1 Item.standardCost: an item is tenant-wide or of one company while a standard is per
  * company and period; the cost sheet and quotes keep reading Item.standardCost, and the receipts, the ledger and the
  * variance read the frozen standard first.
@@ -295,9 +296,9 @@ export async function discardStandard(caller: CommandCaller, standardId: string,
 }
 
 /**
- * costing.freezeStandard: DRAFT → FROZEN; the open frozen standard before it ends the day before; the item's finished-goods
- * receipts that waited for a value are valued at it (inside its period, outside a locked one) and their COMPLETION entries
- * posted.
+ * costing.freezeStandard: DRAFT → FROZEN; the open frozen standard before it ends the day before; the finished item's stock
+ * moves that waited for a value are valued at it (inside its period, outside a locked one) and the receipts' COMPLETION
+ * entries posted.
  */
 export async function freezeStandard(caller: CommandCaller, standardId: string, version: number, idempotencyKey?: string) {
   const seen = await readStandard(caller, standardId)
@@ -332,7 +333,7 @@ export async function freezeStandard(caller: CommandCaller, standardId: string, 
       tools.audit({ recordType: 'StandardCost', recordId: standardId, companyId: row.companyId, before: { status: 'DRAFT' }, after: { status: 'FROZEN', validFrom: target.validFrom, validTo: target.validTo, unitCost: markMoney('cost', text(row.unitCost)) } })
       const frozen = await tx.standardCost.findUniqueOrThrow({ where: { id: standardId }, select: STANDARD_COLUMNS })
       change(tools, frozen, 'frozen')
-      const valued = await valueWaitingReceipts(tools, frozen)
+      const valued = await valueWaitingMoves(tools, frozen)
       const [view, endedView] = await viewsOf(tx, ended ? [frozen, ended] : [frozen])
       return { standard: view!, ended: endedView ? strip(endedView) : null, valued }
     },
@@ -341,25 +342,38 @@ export async function freezeStandard(caller: CommandCaller, standardId: string, 
 }
 
 /**
- * The finished item's PRODUCTION_RECEIPT moves at the company's sites that have no value yet and fall in the standard's
- * period (B-W2a-12 left them unvalued: no standard on their day), with their reversals: valued now at the standard
- * (STANDARD_COST), then the work orders' COMPLETION entries posted. A receipt of a locked month, or in another currency than
- * the item's, stays as it is (said in words).
+ * The finished item's stock moves at the company's sites that have no value yet and fall in the standard's period, with
+ * their reversals: valued now at the standard (STANDARD_COST), as inventory/finished/post.ts standardCostFor would have
+ * valued them on their day had the standard been frozen then: its production receipts (B-W2a-12), the customer returns put
+ * back into stock (B-W2a-43: RESTOCK, SECOND_QUALITY, QUARANTINE, ADJUSTMENT in) and whatever else moved the garment in or
+ * out of stock meanwhile (a shipment taken from stock, a count, a write-off). Then the receipts' work orders' COMPLETION
+ * entries are posted. A move of a locked month, or an item kept in another currency than the standard's, stays as it is
+ * (said in words). A transfer between two places changes no stock value and is not valued.
  */
-async function valueWaitingReceipts(tools: CommandTools, standard: StandardRow) {
+async function valueWaitingMoves(tools: CommandTools, standard: StandardRow) {
   const { tx } = tools
   const item = await tx.item.findUniqueOrThrow({ where: { id: standard.itemId }, select: { kind: true, currency: true } })
   const out = { moves: 0, workOrders: [] as { id: string; number: string }[], skipped: [] as { moveId: string; reason: string }[] }
   if (item.kind !== 'FINISHED') return out
   const from = dateOf(dayOf(standard.validFrom))
   const sites = (await tx.site.findMany({ where: { companyId: standard.companyId }, select: { id: true } })).map((site) => site.id)
-  const receipts = await tx.stockMove.findMany({
-    where: { itemId: standard.itemId, siteId: { in: sites }, reason: 'PRODUCTION_RECEIPT', reversalOfId: null, valuations: { none: {} }, occurredAt: { gte: new Date(from.getTime() - 2 * 86_400_000) } },
+  const waiting = await tx.stockMove.findMany({
+    where: {
+      itemId: standard.itemId,
+      siteId: { in: sites },
+      reversalOfId: null,
+      valuations: { none: {} },
+      occurredAt: { gte: new Date(from.getTime() - 2 * 86_400_000) },
+      OR: [
+        { fromLocationId: null, NOT: { toLocationId: null } },
+        { toLocationId: null, NOT: { fromLocationId: null } },
+      ],
+    },
     select: LEDGER_SELECT,
     orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
   })
   const validTo = standard.validTo ? dayOf(standard.validTo) : null
-  const inPeriod = receipts.filter((move) => romeDay(move.occurredAt) >= dayOf(standard.validFrom) && (validTo === null || romeDay(move.occurredAt) <= validTo))
+  const inPeriod = waiting.filter((move) => romeDay(move.occurredAt) >= dayOf(standard.validFrom) && (validTo === null || romeDay(move.occurredAt) <= validTo))
   if (inPeriod.length === 0) return out
   const locks = await lockedPeriods(tx, standard.companyId)
   const open = inPeriod.filter((move) => {
@@ -375,7 +389,7 @@ async function valueWaitingReceipts(tools: CommandTools, standard: StandardRow) 
   const moves = [...open, ...reversals].map((move) => ({ ...move, baseQuantity: move.baseQuantity.toString() }))
   const done = await valueMovesInCommand(tools, moves, moves.map((move) => ({ cost: move.reversalOfId ? null : cost })))
   out.moves = done.size
-  const workOrderIds = unique(open.filter((move) => done.has(move.id)).map((move) => move.workOrderId))
+  const workOrderIds = unique(open.filter((move) => done.has(move.id) && move.reason === 'PRODUCTION_RECEIPT').map((move) => move.workOrderId))
   // planCosts reads only the work order's own moves among these.
   for (const workOrderId of workOrderIds) await postCostsInCommand(tools, workOrderId, { moveIds: moves.map((move) => move.id) })
   const numbers = await tx.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true } })

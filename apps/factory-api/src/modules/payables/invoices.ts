@@ -8,7 +8,8 @@ import { PAYABLES_MANAGE, PAYABLES_VIEW } from '@nexus/factory-domain/payables/p
 import { actionProblems, isTyped, OPEN_STATUSES, PAYABLES_LIMITS, TILES, typedSupplierProblem, vatSummaryOf, type InvoiceSource, type InvoiceStatus, type Tile } from '@nexus/factory-domain/payables/rules'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../core/command'
 import { serverClock } from '../../core/time'
-import { refuseHardLocked } from '../accounting/period-guard'
+import { honourPeriodLocks } from '../accounting/period-guard'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { prepareFileCopy, recordGeneratedFile, type PreparedGeneratedFile } from '../../platform/files/files'
 import { processFiles } from '../../platform/files/service'
 import { rematchInCommand } from './matching'
@@ -71,6 +72,8 @@ export interface ListQuery {
   readonly source?: InvoiceSource | undefined
   readonly kind?: 'INVOICE' | 'CREDIT_NOTE' | undefined
   readonly tile?: Tile | undefined
+  /** B-W2a-81 (the PO's Invoices tab): only invoices with a line mapped to this purchase order. */
+  readonly purchaseOrderId?: string | undefined
   readonly q?: string | undefined
   readonly cursor?: string | undefined
   readonly limit: number
@@ -112,6 +115,7 @@ export async function listInvoices(caller: CommandCaller, query: ListQuery): Pro
     query.source ? { source: query.source } : {},
     query.kind ? { kind: query.kind } : {},
     query.tile ? tileWhere(query.tile, now()) : {},
+    query.purchaseOrderId ? { lines: { some: { purchaseOrderLine: { purchaseOrderId: query.purchaseOrderId } } } } : {},
     q
       ? {
           OR: [
@@ -249,6 +253,8 @@ export interface CreateInput {
   readonly inboundEmailId?: string | null | undefined
   readonly internalNote?: string | null | undefined
   readonly lines: readonly LineInput[]
+  /** B-W2a-F8: the reason an invoice received inside a SOFT-locked month is registered anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 const SUPPLYING_ROLES = ['SUPPLIER', 'SUBCONTRACTOR']
@@ -335,7 +341,7 @@ export async function createInvoice(caller: CommandCaller, input: CreateInput, i
     const duplicate = await duplicateProblem(tx, { companyId: input.companyId, partyId: party.id, number: input.number.trim(), issueDate: input.issueDate }, null)
     if (duplicate) throw new RefusedError([{ code: 'DUPLICATE', message: duplicate }])
     const creditOfId = input.creditOfId ? await creditedOf(tx, input.creditOfId, { companyId: input.companyId, partyId: party.id }) : null
-    await refuseHardLocked(tx, tools.context, [{ companyId: input.companyId, day: receivedOn, refused: `supplier invoice ${input.number} received on ${dayWords(receivedOn)} is not registered`, path: 'body/receivedOn' }])
+    await honourPeriodLocks(tools, [{ companyId: input.companyId, day: receivedOn, refused: `supplier invoice ${input.number} received on ${dayWords(receivedOn)} is not registered`, path: 'body/receivedOn', record: { type: RECORD, id: invoiceId } }], input.periodLockOverride)
     const header = { companyId: input.companyId, partyId: party.id, currency }
     const lines: { data: ReturnType<typeof lineData> }[] = []
     for (const [index, line] of input.lines.entries()) {
@@ -413,6 +419,8 @@ export interface PatchInput {
   readonly creditOfId?: string | null | undefined
   readonly fileId?: string | undefined
   readonly internalNote?: string | null | undefined
+  /** B-W2a-F8: the reason a change dated inside a SOFT-locked month goes in anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 const TYPED_FIELDS = ['docType', 'number', 'issueDate', 'receivedOn', 'netTotal', 'vatTotal', 'grossTotal', 'withholdingAmount', 'stampDutyAmount', 'dueDate', 'creditOfId', 'fileId'] as const
@@ -453,7 +461,7 @@ export async function patchInvoice(caller: CommandCaller, invoiceId: string, inp
       const journal = ['number', 'issueDate', 'receivedOn', 'netTotal', 'vatTotal', 'grossTotal', 'withholdingAmount', 'stampDutyAmount', 'docType'].some((field) => input[field as keyof PatchInput] !== undefined)
       if (journal) {
         const days = [...new Set([dayOf(before.receivedOn)!, receivedOn])]
-        await refuseHardLocked(tx, tools.context, days.map((day) => ({ companyId: before.companyId, day, refused: `supplier invoice ${before.number} received on ${dayWords(day)} is not changed`, path: 'body/receivedOn' })))
+        await honourPeriodLocks(tools, days.map((day) => ({ companyId: before.companyId, day, refused: `supplier invoice ${before.number} received on ${dayWords(day)} is not changed`, path: 'body/receivedOn', record: { type: RECORD, id: invoiceId } })), input.periodLockOverride)
       }
       const creditOfId = input.creditOfId === undefined ? undefined : input.creditOfId ? await creditedOf(tx, input.creditOfId, before) : null
       const data: Prisma.SupplierInvoiceUncheckedUpdateInput = {
@@ -535,7 +543,7 @@ async function lineCommand(
     const invoice = await invoiceInCommand(tools.tx, invoiceId)
     if (!OPEN_STATUSES.includes(invoice.status as InvoiceStatus)) throw new RefusedError([{ code: 'NOT_OPEN', message: actionProblems({ number: invoice.number, status: invoice.status as InvoiceStatus, source: invoice.source as InvoiceSource }).map! }])
     const { fields, journal } = await work(tools, invoice)
-    if (journal) await refuseHardLocked(tools.tx, tools.context, [{ companyId: invoice.companyId, day: dayOf(invoice.receivedOn)!, refused: `supplier invoice ${invoice.number} received on ${dayWords(dayOf(invoice.receivedOn)!)} is not changed`, path: 'body' }])
+    if (journal) await honourPeriodLocks(tools, [{ companyId: invoice.companyId, day: dayOf(invoice.receivedOn)!, refused: `supplier invoice ${invoice.number} received on ${dayWords(dayOf(invoice.receivedOn)!)} is not changed`, path: 'body', record: { type: RECORD, id: invoiceId } }], input.periodLockOverride as PeriodLockOverride | undefined)
     if (journal) await refreshTypedSummary(tools.tx, invoice)
     const outcome = await rematchInCommand(tools, invoiceId)
     tools.emit({ type: 'supplier_invoice.changed', subject: invoiceId, companyId: invoice.companyId, payload: { supplierInvoiceId: invoiceId, partyId: invoice.partyId, status: invoice.status, matchStatus: outcome.matchStatus, fields } })

@@ -5,6 +5,8 @@ import { failed, loaded, loading, type PartyRecordModel } from '../../../parties
 import type { Party } from '../../../parties/_shared/api'
 import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsCard, termsModel } from '../_demo/fixtures'
 import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
+import { MONEY_CAN, MONEY_STATES, moneyModel } from '../money/_demo/fixtures'
+import type { CustomerMoneyModel } from '../money/overview'
 import { CustomerRecordView } from './view/CustomerRecordView'
 
 /**
@@ -17,14 +19,14 @@ import { CustomerRecordView } from './view/CustomerRecordView'
 const by = (code: string): Party => [...CUSTOMERS, ARCHIVED_CUSTOMER].find((item) => item.code === code)!
 const record = (code: string, over: Partial<PartyRecordModel> = {}) => recordModel('customers', by(code), over)
 
-/** A case: the record, and (B-W2a-49) the Commercial terms card of its Tax & terms tab. */
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel }
+/** A case: the record, (B-W2a-49) the Commercial terms card of its Tax & terms tab, and (B-W2a-81) its money and after-sales reads. */
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel }
 
 function CustomerDesign({ model }: { model: CustomerCase }) {
-  const { terms, ...record } = model
+  const { terms, money, ...record } = model
   const party = record.party
   const id = party?.id ?? 'x'
-  return inShell(`/sales/customers/${id}`, createElement(CustomerRecordView, { model: record, panels: party ? panels(party) : null, documents: party ? panels(party, 'files') : null, terms: termsCard(terms ?? termsModel()) }))
+  return inShell(`/sales/customers/${id}`, createElement(CustomerRecordView, { model: record, panels: party ? panels(party) : null, documents: party ? panels(party, 'files') : null, terms: termsCard(terms ?? termsModel()), money }))
 }
 
 const termsCase = (code: string, terms: CommercialTermsModel, over: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record(code, { tab: 'tax', ...over }), terms })
@@ -47,6 +49,13 @@ export const designScreen = defineDesignScreen<CustomerCase>({
       note: 'Each next step has the button that fixes it; Activate is the primary action.',
     },
     { id: 'overview-fiscal-drawer', label: 'Overview: a brand without SDI code or PEC', model: record('MARCHIO-ESEMPIO') },
+    // B-W2a-81: Overdue and Returns this year (key numbers), Open returns and claims (Now), Finance › Receivables.
+    { id: 'w2a-numbers', label: 'Overview (W2a): Overdue, Returns this year, open returns and claims', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.sales) }, note: 'Overdue 4,270.00, oldest 38 days late (opens Finance › Receivables for this customer); 3 returns in 2026, 6 units, 2 open; one complaint being investigated.' },
+    { id: 'w2a-numbers-no-price', label: 'Overview (W2a) without the price grain: late invoices counted, no amount', model: { ...record('MODA-DEMO', { can: { ...RECORD_CAN, price: false }, quotes: loaded(withoutMoney(QUOTES)), orders: loaded(withoutMoney(ORDERS)) }), money: moneyModel(MONEY_CAN.noPrice) } },
+    { id: 'w2a-numbers-nothing', label: 'Overview (W2a): nothing late, no return this year, nothing open', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance, { ageing: loaded([]), returns: loaded([]), complaints: loaded([]) }) } },
+    { id: 'w2a-numbers-loading', label: 'Overview (W2a) reading: tiles "—"', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance, MONEY_STATES.loading) } },
+    { id: 'w2a-numbers-failed', label: "Overview (W2a): Overdue and returns couldn't be read", model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance, MONEY_STATES.failed) } },
+    { id: 'w2a-numbers-no-receivables', label: 'Overview (W2a) without receivables.view: no Overdue tile', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.none) } },
     { id: 'overview-eu-valid', label: 'Overview: EU business, VIES valid', model: record('DE-BEISPIEL') },
     { id: 'overview-person', label: 'Overview: a private person (rider)', model: record('PILOTA-DEMO', { quotes: loaded([]), orders: loaded([]) }) },
     { id: 'overview-extra-eu', label: 'Overview: a customer outside the EU (CHF)', model: record('CH-DEMO', { quotes: loaded([]), orders: loaded([]) }) },

@@ -21,6 +21,10 @@
 // discrepancy (cancelled or closed instead); the office deletes an OPEN discrepancy and the lines of a DRAFT claim.
 //
 // Every child row carries its parent's siteId in its reference, so a line can never belong to another site's claim.
+//
+// W2b (schema wave 1/7, B-W2b-01; the B-W2a-31, -44, -47 notes): a discrepancy and a claim keep their reason code as data
+// (the DISCREPANCY and CLAIM lists) instead of a note prefix; a claim may name the nonconformance it came from; a claim
+// line's return DDT may move to the DDT that replaced a cancelled one (the …_followups_stock_w2b_guards triggers).
 
 /// A problem found with a delivery (SCM-118): what was wrong, how much, with its photos, tracked to its resolution.
 model ReceiptDiscrepancy {
@@ -37,6 +41,9 @@ model ReceiptDiscrepancy {
   /// The receipt's supplier.
   supplierId     String                   @db.Uuid
   kind           ReceiptDiscrepancyKind
+  /// W2b (B-W2a-31): the code of the DISCREPANCY reason list it was recorded with, as text (not blank, no spaces; set
+  /// and changed only while OPEN, like what was found).
+  reasonCode     String?
   /// How much is short, over, damaged or wrong, above 0, with its unit (ft² of leather, pieces); both or neither.
   quantity       Decimal?                 @db.Decimal(18, 4)
   uom            Uom?
@@ -109,6 +116,10 @@ model SupplierClaim {
   foundAt              ClaimFoundAt
   /// What is wrong, in words (required).
   reason               String
+  /// W2b (B-W2a-44): the code of the CLAIM reason list, as text (not blank, no spaces); fixed once sent, like the reason.
+  reasonCode           String?
+  /// W2b (B-W2a-47): the nonconformance it came from (a RETURN_TO_SUPPLIER decision), of the claim's company and site.
+  ncrId                String?              @db.Uuid
   /// What we ask for: required from SENT on; may change until CLOSED (the supplier offers the other).
   remedy               ClaimRemedy?
   status               SupplierClaimStatus  @default(DRAFT)
@@ -144,6 +155,8 @@ model SupplierClaim {
   purchaseOrder PurchaseOrder?      @relation(fields: [tenantId, siteId, purchaseOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2b payables.prisma (schema wave 2/7): the supplier's credit notes that settle it.
   creditNotes   SupplierInvoice[]
+  // W2b: the nonconformance it came from (Restrict, not Prisma's SetNull default: that would also clear tenantId and siteId).
+  ncr           Nonconformance?     @relation(fields: [tenantId, siteId, ncrId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   lines         SupplierClaimLine[]
 
   @@unique([tenantId, companyId, number])
@@ -214,7 +227,8 @@ model SupplierClaimLine {
   /// @grain cost
   creditAmount  Int?
   /// A RETURN line, once sent back: the stock move that took the goods out (of the line's item, lot and hide) and the
-  /// return DDT they travelled with; each set once.
+  /// return DDT they travelled with; each set once, but W2b: the DDT moves to the live DDT of the claim that replaced a
+  /// cancelled one (and names this line).
   moveId        String?  @db.Uuid
   ddtId         String?  @db.Uuid
   note          String?

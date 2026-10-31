@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import type { ColDef } from '@nexus/ui/grid'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
 import { useT } from '../../../lib/i18n/provider'
@@ -48,17 +49,17 @@ import { PartiesListView } from './view/PartiesListView'
  * selection at a time, exports the view as CSV, and listens to the live stream: changes wait behind "N updates · Show"
  * (rows never move under the cursor). `?view=` keeps the view in the address; `?new=1` opens New.
  */
-export function PartiesList({ side, headActions }: { side: Side; headActions?: (reload: () => void) => ReactNode }) {
+export function PartiesList({ side, headActions, columns }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[] }) {
   return (
     <WithMessages namespaces={['parties']}>
-      <PartiesListContainer side={side} headActions={headActions} />
+      <PartiesListContainer side={side} headActions={headActions} columns={columns} />
     </WithMessages>
   )
 }
 
 const VIEWS = new Set<string>(['open', 'active', 'prospects', 'brands', 'invoice', 'vies', 'blocked', 'archived', 'all', 'suppliers', 'subcontractors', 'carriers'])
 
-function PartiesListContainer({ side, headActions }: { side: Side; headActions?: (reload: () => void) => ReactNode }) {
+function PartiesListContainer({ side, headActions, columns }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[] }) {
   const config = SIDES[side]
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -351,6 +352,7 @@ function PartiesListContainer({ side, headActions }: { side: Side; headActions?:
 
   return (
     <PartiesListView
+      columns={columns}
       headActions={
         headActions?.(() => {
           void load()

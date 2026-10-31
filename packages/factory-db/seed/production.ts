@@ -56,6 +56,8 @@ import { seedWorkerNotice } from './privacy'
  *                1 scrapped, its line STAIN 1), still PENDING; a scan the cutting tablet's queue sent that was refused
  *                (an unknown ticket), kept open (B-W1-42).
  *   reasons      the tenant's scrap and rework reasons: W1's list (factory-domain production/scans/reasons), it/en.
+ *   kit          W2b (B-W2b-01): WO-0001's material kit, staged at the cutting room's rack and marked complete by the
+ *                office (WorkOrderKit, id = the work order's).
  *
  * The generated isolation tests (src/isolation.pg.vitest.test.ts) copy the FIRST row of each table by id and insert the
  * copy: the parts of a released work order are frozen, a second standing report of a bundle at an operation is refused,
@@ -130,6 +132,8 @@ export interface ProductionSeed {
   /** The operator's PENDING correction request of the standing report (scanIds[2]) and the cutting tablet's refused scan. */
   readonly correctionRequestId: string
   readonly refusalId: string
+  /** W2b (B-W2b-01): WO-0001's kit (its id is the work order's), staged and complete. */
+  readonly kitId: string
 }
 
 export async function seed(context: SeedContext): Promise<ProductionSeed> {
@@ -683,6 +687,28 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
   await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
     client.workOrder.updateMany({ where: { id: workOrderId, status: WorkOrderStatus.RELEASED }, data: { status: WorkOrderStatus.IN_PROGRESS, startedAt: T.cut, updatedAt: T.cut } }),
   )
+  // W2b (B-W2b-01): WO-0001's kit, staged at the cutting room's rack, marked complete after the issue (written once).
+  const kitId = workOrderId
+  await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.workOrderKit.findUnique({ where: { id: kitId }, select: { id: true } })) return
+      await tx.workOrderKit.create({
+        data: {
+          id: kitId,
+          siteId: siteA,
+          workOrderId,
+          stagingLocationId: inventory.locations.cutting,
+          completedAt: T.issued,
+          completedById: actorId,
+          note: 'Leather issued whole; lining and protectors at the line.',
+          createdAt: T.issued,
+          updatedAt: T.issued,
+          createdById: actorId,
+        },
+        select: { id: true },
+      })
+    }),
+  )
 
   return {
     inventory,
@@ -705,5 +731,6 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     deviceId,
     correctionRequestId,
     refusalId,
+    kitId,
   }
 }
