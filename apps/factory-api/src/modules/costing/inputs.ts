@@ -34,7 +34,7 @@ export const RATE_COLUMNS = {
 } as const satisfies Prisma.LabourRateSelect
 export type RateRow = Prisma.LabourRateGetPayload<{ select: typeof RATE_COLUMNS }>
 
-export const SETTINGS_COLUMNS = { id: true, companyId: true, overheadPct: true, version: true, updatedAt: true } as const satisfies Prisma.CostingSettingsSelect
+export const SETTINGS_COLUMNS = { id: true, companyId: true, overheadPct: true, overheadFromTenant: true, version: true, updatedAt: true } as const satisfies Prisma.CostingSettingsSelect
 export type SettingsRow = Prisma.CostingSettingsGetPayload<{ select: typeof SETTINGS_COLUMNS }>
 
 const text = (value: { toString(): string }): string => decimalText(value.toString())
@@ -52,6 +52,12 @@ export const rateOf = (row: RateRow): LabourRate => ({
   status: row.status,
 })
 
+/**
+ * B-W2b-22 (Z9:02): the rows that carry an overhead of their own. A company's row made for its costing method only
+ * (overheadFromTenant, B-W2b-02) follows the tenant-wide overhead: it is left out, so pickOverhead falls to the tenant's.
+ */
+export const ownOverheadRows = <Row extends { readonly overheadFromTenant: boolean }>(rows: readonly Row[]): Row[] => rows.filter((row) => !row.overheadFromTenant)
+
 /** The company's rows and the tenant-wide ones (only the tenant-wide ones without a company). */
 export const companyOrTenant = (companyId: string | null) => ({ OR: [{ companyId: null }, ...(companyId === null ? [] : [{ companyId }])] })
 
@@ -60,7 +66,7 @@ export const TABLE_COSTING_INPUTS: CostingInputSource = Object.freeze({
   labourRates: async (client: FactoryClient | CommandTx, companyId: string | null) =>
     (await client.labourRate.findMany({ where: companyOrTenant(companyId), select: RATE_COLUMNS, orderBy: [{ validFrom: 'asc' }, { id: 'asc' }] })).map(rateOf),
   overheadRules: async (client: FactoryClient | CommandTx, companyId: string | null) =>
-    (await client.costingSettings.findMany({ where: companyOrTenant(companyId), select: SETTINGS_COLUMNS })).map((row) => ({
+    ownOverheadRows(await client.costingSettings.findMany({ where: companyOrTenant(companyId), select: SETTINGS_COLUMNS })).map((row) => ({
       id: row.id,
       companyId: row.companyId,
       overheadPct: text(row.overheadPct),

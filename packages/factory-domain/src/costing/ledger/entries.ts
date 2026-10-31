@@ -195,7 +195,8 @@ export function scrapRecords(
   shares: readonly ScrapShare[],
   base: {
     readonly occurredAt: Date
-    readonly operationScanId: string
+    /** null: a rework opened by hand (B-W2b-22): the entry names its rework order (sourceType ReworkOrder) instead. */
+    readonly operationScanId: string | null
     readonly key: (itemId: string) => string
     readonly sourceType?: string
     readonly sourceId?: string

@@ -11,8 +11,8 @@ import { postWorkOrderCosts, type PostScope } from './post'
  *                              move not valued yet is valued first (the same command as inventory.valueFloorMoves, once)
  *   production.scan_recorded   a report (labour, its scrap) and the scan an undo or a correction voids (their reversal)
  *   production.rework_moved    a rework DONE with scrap
- * Anything that cannot post yet (no value, no labour rate) waits; the next event of the work order, or the catch-up route
- * (POST /costing/work-orders/:id/post), posts it.
+ * Anything that cannot post yet (no value, no labour rate) waits; the next event of the work order, the catch-up route
+ * (POST /costing/work-orders/:id/post) or the nightly catch-up (./catch-up.ts, cron costing.catchUp; B-W2b-22) posts it.
  *
  * Listed in background.ts HANDLERS for the worker: ...costingHandlers().
  */

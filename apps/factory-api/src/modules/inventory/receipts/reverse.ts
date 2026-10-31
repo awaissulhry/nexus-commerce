@@ -1,3 +1,4 @@
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { DomainError, ForbiddenError, InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -32,7 +33,7 @@ const STATE_WORDS = {
   CANCELLED: 'The receipt was cancelled: nothing of it was posted.',
 } as const
 
-export async function reverseReceipt(caller: CommandCaller, receiptId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey?: string): Promise<{ receipt: Awaited<ReturnType<typeof receiptDetail>>; moves: PostedMove[] }> {
+export async function reverseReceipt(caller: CommandCaller, receiptId: string, body: { readonly version: number; readonly reason: string; readonly periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string): Promise<{ receipt: Awaited<ReturnType<typeof receiptDetail>>; moves: PostedMove[] }> {
   const context = officeContextOf(caller)
   const found = isUuid(receiptId) ? await caller.withClient((client) => client.goodsReceipt.findUnique({ where: { id: receiptId }, select: { id: true, companyId: true, siteId: true } })) : null
   if (!found || !(mayAt(context, INVENTORY_STOCK_VIEW, found) || mayAt(context, INVENTORY_REVERSE, found))) throw new NotFoundError('Goods receipt not found.')
@@ -59,7 +60,7 @@ export async function reverseReceipt(caller: CommandCaller, receiptId: string, b
       const posted = await postMoves(
         tools,
         moves.map((move) => ({ ...reversalOf({ ...move, quantity: move.quantity.toString(), baseQuantity: move.baseQuantity.toString() }, note), uom: move.uom })),
-        { key, issuePath: (index) => `moves/${index}` },
+        { key, issuePath: (index) => `moves/${index}`, periodLockOverride: body.periodLockOverride },
       )
       await tx.goodsReceipt.update({ where: { id: receipt.id }, data: { status: 'REVERSED', reversedAt: now, reversedById: by.createdById, reversalReason: reason }, select: { id: true } })
 
