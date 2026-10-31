@@ -181,6 +181,18 @@ const SUBCONTRACT_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = 
 const PAYABLES_SETTINGS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   finance: ['payables.settings'],
 })
+/**
+ * B-W2b-41 (bundles tracked; MES-074, MES-075, MES-168; design production.bundles): who sees where every bundle is, the
+ * stuck ones and the scan-pattern checks as counts (production.bundles.view), and who reviews a finding
+ * (production.bundles.findings: the production manager). Office only. No template opens the names behind a finding
+ * (production.bundles.who): the owner through every(), or a custom role the owner makes (Statuto art. 4).
+ */
+const BUNDLES_TRACKED_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.bundles.view', 'production.bundles.findings'],
+  floor_supervisor: ['production.bundles.view'],
+  planner: ['production.bundles.view'],
+  quality_inspector: ['production.bundles.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -195,7 +207,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2a-F4
   ...(audience === 'office' ? (RECEIPT_DOCUMENTS_ADDS[key] ?? []) : []),
   // B-W2b-21
-  ...(audience === 'office' ? (PAYABLES_SETTINGS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PAYABLES_SETTINGS_ADDS[key] ?? []) : []),
+  // B-W2b-41
+  ...(audience === 'office' ? (BUNDLES_TRACKED_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

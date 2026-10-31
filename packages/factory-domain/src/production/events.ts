@@ -48,6 +48,11 @@ import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
  *   production.report_subscription_changed  B-W2a-38: someone subscribed to the daily production report by e-mail, or a
  *                                           subscription changed or was turned off (the report page's state refreshes)
  *   production.daily_report_sent            B-W2a-38: the scheduler e-mailed one person's daily production report
+ *   production.bundle_coupons_changed       B-W2b-41: a bundle's coupons printed, one reprinted or voided (MES-067)
+ *   production.bundle_stuck                 B-W2b-41: a bundle with no scan past its site's limit, once per wait (MES-168)
+ *   production.scan_findings_found          B-W2b-41: the scan-pattern checks found patterns about bundles (MES-075)
+ *   production.scan_finding_reviewed        B-W2b-41: one finding reviewed or dismissed
+ *   production.bundle_rules_changed         B-W2b-41: a site's bundle code mode or stuck limit changed
  */
 export const MONITORING_CHANGES = ['WIDENED', 'NARROWED', 'BASIS_RECORDED', 'BASIS_REPLACED'] as const
 
@@ -483,5 +488,65 @@ export const events = [
       emailOutboundId: z.uuid(),
       lanes: z.number().int().min(0),
     }),
+  }),
+  // B-W2b-41: bundles tracked (coupons per operation, stuck bundles, scan-pattern findings, the site's bundle codes). Ids,
+  // codes, counts and states only: never a person, never a station (a station can stand for one person), never a reason.
+  defineEvent({
+    type: 'production.bundle_coupons_changed',
+    context: 'production',
+    description: "A bundle's coupons changed (MES-067): coupons printed for its scanned operations, one reprinted with a new code (the old one is refused when scanned), or one voided.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      change: z.enum(['ISSUED', 'REPRINTED', 'VOIDED']),
+      couponIds: z.array(z.uuid()).min(1),
+      postedBy: postedBy(),
+    }),
+    live: bundleLive,
+  }),
+  defineEvent({
+    type: 'production.bundle_stuck',
+    context: 'production',
+    description: "A bundle has had no scan for longer than its site allows (MES-168): the floor-now board and the bundles list show it. Told once per wait: a new scan starts a new one.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      code: z.string(),
+      siteId: z.uuid(),
+      place: z.enum(['CUTTING', 'LINE']),
+      lastScanId: z.uuid().nullable(),
+      workingHours: z.number().min(0),
+      limitHours: z.number().int().min(1),
+    }),
+    live: { permission: 'production.bundles.view', fields: ['workOrderId', 'number', 'bundleId'] },
+  }),
+  defineEvent({
+    type: 'production.scan_findings_found',
+    context: 'production',
+    description: 'The scan-pattern checks found patterns about bundles at a site (MES-075): counts per kind, to talk about, never a score.',
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      findingIds: z.array(z.uuid()).min(1),
+      bunched: z.number().int().min(0),
+      movedNotScanned: z.number().int().min(0),
+      gapBelowStandard: z.number().int().min(0),
+    }),
+    live: { permission: 'production.bundles.view', fields: ['siteId'] },
+  }),
+  defineEvent({
+    type: 'production.scan_finding_reviewed',
+    context: 'production',
+    description: 'A scan-pattern finding about a bundle was reviewed or dismissed by the office.',
+    payload: z.strictObject({ findingId: z.uuid(), siteId: z.uuid(), bundleId: z.uuid(), status: z.enum(['REVIEWED', 'DISMISSED']) }),
+    live: { permission: 'production.bundles.view', fields: ['findingId', 'bundleId'] },
+  }),
+  defineEvent({
+    type: 'production.bundle_rules_changed',
+    context: 'production',
+    description: "A site's bundle rules changed: one bundle code or a coupon per operation (MES-067), and the hours after which a bundle with no scan is stuck (MES-168).",
+    payload: z.strictObject({ siteId: z.uuid(), bundleCodeMode: z.enum(['ONE_CODE', 'COUPON_PER_OPERATION']), stuckBundleHours: z.number().int().min(1) }),
+    live: { permission: 'production.settings.view', fields: ['siteId', 'bundleCodeMode'] },
   }),
 ] as const

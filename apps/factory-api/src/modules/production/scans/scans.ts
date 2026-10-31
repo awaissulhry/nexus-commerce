@@ -29,6 +29,8 @@ import { serverClock } from '../../../core/time'
 import { floorReadinessFor } from '../../../platform/privacy/read'
 import { bundleFlowOf } from '../bundles/flow'
 import { lockBundleForScan, readBundle, readBundleByCode, type BundleRow } from '../bundles/store'
+// W2b B-W2b-41: coupons per operation (MES-067).
+import { couponForScan } from '../bundles/coupons'
 import { floorRecordSubjectFor, hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import { startOnFirstWork } from '../work-orders/moves'
 import { stationBlock } from '../../plant/checks'
@@ -330,7 +332,12 @@ async function reportedBefore(caller: CommandCaller, session: Session, input: Re
     return { scan, bundle, operations: await readOperations(client, scan.workOrderId) }
   })
   if (!found) return null
-  const sameBundle = input.bundleId !== undefined ? input.bundleId === found.scan.bundleId : !!found.bundle && (input.code?.trim().toUpperCase() === found.bundle.code || found.bundle.replacedCodes.includes(input.code?.trim().toUpperCase() ?? ''))
+  // W2b B-W2b-41: a resent coupon's code names its bundle too (bundles/store.ts readBundleByCode reads coupons).
+  const resent = input.code?.trim().toUpperCase() ?? ''
+  const sameBundle =
+    input.bundleId !== undefined
+      ? input.bundleId === found.scan.bundleId
+      : !!found.bundle && (resent === found.bundle.code || found.bundle.replacedCodes.includes(resent) || (await caller.withClient((client) => readBundleByCode(client, resent)))?.id === found.bundle.id)
   if (found.scan.kind !== 'REPORT' || !sameBundle || (input.workOrderOperationId !== undefined && input.workOrderOperationId !== found.scan.workOrderOperationId)) {
     return refused(clientIdReusedRefusal(input.clientScanId))
   }
@@ -420,6 +427,10 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   // W2a B-W2a-13 hook (bundles/flow.ts): a split bundle's live garments, a child's place in the flow, rework back in it.
   const flow = await bundleFlowOf(tx, locked.bundle, operations, standing)
   if (flow.refusal) refuse(flow.refusal)
+  // W2b B-W2b-41 hook (bundles/coupons.ts couponForScan; MES-067): a scanned coupon reports its own operation; an old or
+  // voided coupon, or a coupon of another operation than the one named, is refused.
+  const coupon = await couponForScan(tx, locked.bundle.id, work.scanned, work.input.workOrderOperationId ?? null)
+  if (coupon && !coupon.ok) refuse({ code: coupon.code, message: coupon.message, fix: coupon.fix, final: true })
 
   const decision = reportDecision({
     workOrder,
@@ -427,7 +438,7 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
     bundle: { code: locked.bundle.code, quantity: flow.quantity, status: locked.bundle.status, replacedCodes: locked.bundle.replacedCodes },
     scanned: work.scanned,
     operations,
-    operationId: work.input.workOrderOperationId ?? null,
+    operationId: work.input.workOrderOperationId ?? (coupon?.ok ? coupon.operationId : null),
     station: station ? { code: station.code, kind: station.kind } : null,
     kindReason: work.input.kindReason?.trim() || null,
     standing: flow.standing,
