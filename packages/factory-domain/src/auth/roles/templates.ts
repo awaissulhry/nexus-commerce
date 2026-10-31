@@ -182,6 +182,17 @@ const PAYABLES_SETTINGS_ADDS: Readonly<Record<string, readonly Permission[]>> = 
   finance: ['payables.settings'],
 })
 /**
+ * B-W2b-27 (privacy of people data; PLT-209, ANA-075, MES-249; design people.settings "Privacy of people data", admin.privacy
+ * "People data rules"): the administrator (who keeps the privacy pack) and the production manager read the legal gate of
+ * each site and purpose and the privacy settings. Switching a purpose on or off (people.privacy.manage) and opening one
+ * person's figures (people.figures.view) are in no template: the Owner holds them through every office permission and
+ * records the basis per site and purpose (GATE-LABOUR); an HR role gets people.figures.view (Owner answer H3).
+ */
+const PEOPLE_PRIVACY_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.privacy.view'],
+  production_manager: ['people.privacy.view'],
+})
+/**
  * B-W2b-35 (help calls, MES-142 … MES-145, MES-147, MES-137; design production.calls, floor.supervisor, floor.help): the
  * office reads the calls and answers them where its people respond (production, the floor supervisor, maintenance, the
  * warehouse for material, quality); the production manager keeps the types and who answers them (Floor rules & codes).
@@ -215,6 +226,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (RECEIPT_DOCUMENTS_ADDS[key] ?? []) : []),
   // B-W2b-21
   ...(audience === 'office' ? (PAYABLES_SETTINGS_ADDS[key] ?? []) : []),
+  // B-W2b-27
+  ...(audience === 'office' ? (PEOPLE_PRIVACY_ADDS[key] ?? []) : []),
   // B-W2b-35
   ...((audience === 'office' ? CALLS_ADDS : CALLS_FLOOR_ADDS)[key] ?? [])]
 /**
@@ -611,6 +624,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'quality.holds.view',
       'quality.holds.place',
       'quality.defects.view',
+      // B-W2b-29: off-standard and indirect time (MES-155 … MES-158): the codes of Floor rules & codes, the labour inbox's blocks.
+      'production.offstandard.view', 'production.offstandard.codes', 'production.offstandard.approve',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export',
     ],
@@ -636,6 +651,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'reasons.view',
       // B-W2a-26 (MES-008): puts work orders and bundles on hold; reads the defect library.
       'quality.holds.view', 'quality.holds.place', 'quality.defects.view',
+      // B-W2b-29: decides the floor's off-standard blocks (MES-157), as it decides scan corrections; never one's own.
+      'production.offstandard.view', 'production.offstandard.approve',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export'],
     grains: [],

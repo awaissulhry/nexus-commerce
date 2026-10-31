@@ -15,6 +15,10 @@ import { ScanRefusedError } from '../../modules/production/scans/access'
 import { batchContract } from '../../modules/production/scans/contract'
 import { sendBatch, type BatchItem } from '../../modules/production/scans/scans'
 import { ScanIdsRefusedError } from '../numbering/scan-ids'
+// B-W2b-29: off-standard and indirect time from the floor's queue.
+import { OffStandardRefusedError } from '../../modules/production/offstandard/access'
+import { floorEndContract, floorStartContract } from '../../modules/production/offstandard/contract'
+import { floorEnd, floorStart } from '../../modules/production/offstandard/floor'
 // B-W2b-35: help calls from the floor's queue.
 import { holds } from '@nexus/factory-domain/core/permissions'
 import { PRODUCTION_CALLS_ANSWER } from '@nexus/factory-domain/production/calls/permissions'
@@ -38,6 +42,8 @@ import { closeAtStation, sendCall } from '../../modules/production/calls/station
  *   plant.report                          modules/plant/requests report (B-W2a-73: a machine problem from the station;
  *                                         the tablet's time as the report's time; an unsafe one locks the machine when
  *                                         it arrives, and the station's queued scans after it are refused, not final)
+ *   production.offStandard.start / .end   modules/production/offstandard floorStart / floorEnd (B-W2b-29: a tile tapped
+ *                                         or the running block ended, with the tablet's time when believable)
  *   andon.call.send / .answer             modules/production/calls sendCall (B-W2b-35: a call from the station, the
  *                                         tablet's time when believable; the station's open call of the type answers a
  *                                         second one) and a step of a call (a responder's answerCall, else the station's
@@ -73,6 +79,7 @@ export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof ScanRefusedError) return moduleRefusal(error.refusal)
   if (error instanceof BundleRefusedError || error instanceof CutRefusedError) return moduleRefusal(error.refusal as ModuleRefusal)
   if (error instanceof PlantRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
+  if (error instanceof OffStandardRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof CallRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
@@ -135,6 +142,21 @@ async function applyPlantReport(caller: CommandCaller, event: QueuedEvent, key: 
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'MaintenanceRequest', id: result.request.id } }
 }
 
+/** B-W2b-29: a queued tile tapped or block ended, through the floor's own command (its key: `<device>.<client event id>`). */
+async function applyOffStandard(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const envelope = { clientEventId: event.clientEventId, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) }
+  if (event.kind === 'production.offStandard.start') {
+    const body = parsed(floorStartContract.body, { ...event.payload, ...envelope })
+    if (!body.ok) return refusedBy(body.refusal)
+    const result = await floorStart(caller, body.value, key)
+    return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'OffStandardEntry', id: result.block.id } }
+  }
+  const body = parsed(floorEndContract.body, { ...event.payload, ...envelope })
+  if (!body.ok) return refusedBy(body.refusal)
+  const result = await floorEnd(caller, body.value, key)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'OffStandardEntry', id: result.block.id } }
+}
+
 /** B-W2b-35: a queued call or a step of one, through the calls' own commands (the key: `<device>.<client event id>`). */
 async function applyCall(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
   const occurredAt = event.occurredAt ? { occurredAt: event.occurredAt } : {}
@@ -171,6 +193,9 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
         return await applyBundle(caller, event, context.key)
       case 'plant.report':
         return await applyPlantReport(caller, event, context.key)
+      case 'production.offStandard.start':
+      case 'production.offStandard.end':
+        return await applyOffStandard(caller, event, context.key)
       case 'andon.call.send':
       case 'andon.call.answer':
         return await applyCall(caller, event, context.key)

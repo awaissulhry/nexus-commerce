@@ -102,6 +102,10 @@ import { QUALITY_COMPLAINTS_DEFINITIONS, QUALITY_COMPLAINTS_PERMISSIONS } from '
 import { PEOPLE_EMPLOYEES_DEFINITIONS, PEOPLE_EMPLOYEES_PERMISSIONS } from '../../people/employees/permissions'
 import { PEOPLE_TEAMS_DEFINITIONS, PEOPLE_TEAMS_PERMISSIONS } from '../../people/teams/permissions'
 import { PEOPLE_LEAVERS_DEFINITIONS, PEOPLE_LEAVERS_PERMISSIONS } from '../../people/leavers/permissions'
+// B-W2b-27: privacy of people data (people.privacy.view | manage, people.figures.view).
+import { PEOPLE_PRIVACY_DEFINITIONS, PEOPLE_PRIVACY_PERMISSIONS } from '../../people/privacy/permissions'
+// B-W2b-29: off-standard and indirect time (production.offstandard.view | codes | approve).
+import { PRODUCTION_OFFSTANDARD_DEFINITIONS, PRODUCTION_OFFSTANDARD_PERMISSIONS } from '../../production/offstandard/permissions'
 // B-W2b-35: help calls (production.calls.view | answer | manage).
 import { PRODUCTION_CALLS_DEFINITIONS, PRODUCTION_CALLS_FLOOR_PERMISSIONS, PRODUCTION_CALLS_PERMISSIONS } from '../../production/calls/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
@@ -484,6 +488,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PEOPLE_EMPLOYEES_DEFINITIONS,
   PEOPLE_TEAMS_DEFINITIONS,
   PEOPLE_LEAVERS_DEFINITIONS,
+  // B-W2b-27: privacy of people data.
+  PEOPLE_PRIVACY_DEFINITIONS,
+  // B-W2b-29: off-standard and indirect time.
+  PRODUCTION_OFFSTANDARD_DEFINITIONS,
   // B-W2b-35: help calls (production.calls.view | answer | manage).
   PRODUCTION_CALLS_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -579,6 +587,10 @@ for (const name of PURCHASING_REMINDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.is
 for (const name of NUMBERING_OVERRIDE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-26: people.
 for (const name of [...PEOPLE_EMPLOYEES_PERMISSIONS, ...PEOPLE_TEAMS_PERMISSIONS, ...PEOPLE_LEAVERS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-27: privacy of people data.
+for (const name of PEOPLE_PRIVACY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-29: off-standard and indirect time.
+for (const name of PRODUCTION_OFFSTANDARD_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-35: help calls.
 for (const name of PRODUCTION_CALLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
