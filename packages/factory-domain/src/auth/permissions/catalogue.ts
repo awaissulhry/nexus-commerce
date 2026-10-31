@@ -106,6 +106,8 @@ import { PEOPLE_LEAVERS_DEFINITIONS, PEOPLE_LEAVERS_PERMISSIONS } from '../../pe
 import { PEOPLE_PRIVACY_DEFINITIONS, PEOPLE_PRIVACY_PERMISSIONS } from '../../people/privacy/permissions'
 // B-W2b-29: off-standard and indirect time (production.offstandard.view | codes | approve).
 import { PRODUCTION_OFFSTANDARD_DEFINITIONS, PRODUCTION_OFFSTANDARD_PERMISSIONS } from '../../production/offstandard/permissions'
+// B-W2b-39: skills and machine authorisations (people.skills.view | manage, people.authorisations.manage).
+import { PEOPLE_SKILLS_DEFINITIONS, PEOPLE_SKILLS_PERMISSIONS } from '../../people/skills/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -490,6 +492,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PEOPLE_PRIVACY_DEFINITIONS,
   // B-W2b-29: off-standard and indirect time.
   PRODUCTION_OFFSTANDARD_DEFINITIONS,
+  // B-W2b-39: skills and machine authorisations.
+  PEOPLE_SKILLS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -585,6 +589,8 @@ for (const name of [...PEOPLE_EMPLOYEES_PERMISSIONS, ...PEOPLE_TEAMS_PERMISSIONS
 for (const name of PEOPLE_PRIVACY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-29: off-standard and indirect time.
 for (const name of PRODUCTION_OFFSTANDARD_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-39: skills and machine authorisations.
+for (const name of PEOPLE_SKILLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

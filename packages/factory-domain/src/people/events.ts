@@ -3,6 +3,7 @@ import { defineEvent } from '../events/define'
 import { EMPLOYEE_KINDS } from './employees/rules'
 import { LEAVER_STEP_KINDS, LEAVER_STEP_STATUSES } from './leavers/rules'
 import { GATE_PURPOSES } from './privacy/purposes'
+import { SKILL_KINDS, SKILL_LEVELS } from './skills/rules'
 
 /**
  * The people module's events (B-W2b-26 employees and teams; design people.employees "Live": employee.created / updated
@@ -33,7 +34,24 @@ import { GATE_PURPOSES } from './privacy/purposes'
  *   people_settings.privacy_changed  a company's minimum group size or the roles that see one person's figures changed
  *
  * Both reach the office screens of people.privacy.view holders; the floor receives none (it reads no legal basis).
+ *
+ * B-W2b-39 (skills and machine authorisations), emitted by apps/factory-api modules/people/skills in the command that
+ * makes the change. Ids, codes, kinds, levels and states only: never a name, a reason or a figure about one person's work
+ * (a level is a qualification a person judged, MES-281).
+ *
+ *   skill.changed                   a skill was added, renamed or re-ordered, archived or restored
+ *   employee_skill.changed          a person's level was set or changed, a trainee period given or moved, a trainee
+ *                                   signed off, or a level removed: the matrix cell and the employee's Skills tab re-read
+ *   machine_authorisation.changed   a person was authorised on a class of machine, its end moved, it was revoked, or an
+ *                                   ended one was closed by a new authorisation
+ *
+ * All three reach the office screens of people.skills.view holders; the floor receives none (a tablet checks when work
+ * starts).
  */
+
+export const SKILL_CHANGES = ['CREATED', 'EDITED', 'ARCHIVED', 'RESTORED'] as const
+export const EMPLOYEE_SKILL_CHANGES = ['SET', 'CHANGED', 'TRAINEE_SET', 'SIGNED_OFF', 'REMOVED'] as const
+export const MACHINE_AUTHORISATION_CHANGES = ['AUTHORISED', 'VALIDITY_CHANGED', 'REVOKED', 'ENDED'] as const
 
 export const LEGAL_GATE_CHANGES = ['SWITCHED_ON', 'SWITCHED_OFF', 'LEADS_WIDENED', 'LEADS_NARROWED'] as const
 export const PRIVACY_SETTINGS_CHANGES = ['WIDENED', 'NARROWED'] as const
@@ -123,5 +141,27 @@ export const events = [
       change: z.enum(PRIVACY_SETTINGS_CHANGES),
     }),
     live: { permission: 'people.privacy.view', fields: ['companyId', 'minimumGroupSize', 'change'] },
+  }),
+  // B-W2b-39: skills and machine authorisations.
+  defineEvent({
+    type: 'skill.changed',
+    context: 'people',
+    description: 'A skill (an operation, a class of machine or a general skill) was added, renamed or re-ordered, archived or restored.',
+    payload: z.strictObject({ skillId: z.uuid(), code: z.string(), kind: z.enum(SKILL_KINDS), change: z.enum(SKILL_CHANGES) }),
+    live: { permission: 'people.skills.view', fields: ['skillId', 'code', 'change'] },
+  }),
+  defineEvent({
+    type: 'employee_skill.changed',
+    context: 'people',
+    description: "A person's level in a skill was set or changed, a trainee period given or moved, the trainee signed off, or the level removed.",
+    payload: z.strictObject({ levelId: z.uuid(), employeeId: z.uuid(), skillId: z.uuid(), level: z.enum(SKILL_LEVELS), trainee: z.boolean(), change: z.enum(EMPLOYEE_SKILL_CHANGES) }),
+    live: { permission: 'people.skills.view', fields: ['levelId', 'employeeId', 'skillId', 'change'] },
+  }),
+  defineEvent({
+    type: 'machine_authorisation.changed',
+    context: 'people',
+    description: 'A person was authorised on a class of machine, the last day of an authorisation moved, it was revoked, or an ended one was closed by a new authorisation.',
+    payload: z.strictObject({ authorisationId: z.uuid(), employeeId: z.uuid(), machineClassId: z.uuid(), change: z.enum(MACHINE_AUTHORISATION_CHANGES) }),
+    live: { permission: 'people.skills.view', fields: ['authorisationId', 'employeeId', 'machineClassId', 'change'] },
   }),
 ] as const
