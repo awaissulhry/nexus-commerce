@@ -2,6 +2,7 @@ import type { FactoryClient } from '@nexus/factory-db'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import type { CommandTx } from '../../../core/command'
 import { dateOf, dayOf } from '../employees/access'
+import { legalGateFor } from '../privacy/gate'
 
 /**
  * THE ONE place People › Shifts reads attendance data (B-W2b-32): the absences recorded in Attendance (AbsenceEntry,
@@ -10,13 +11,9 @@ import { dateOf, dayOf } from '../employees/access'
  * record of what a person did (Statuto dei Lavoratori art. 4 c.2 governs the tools that record attendance).
  *
  * Behind the site's ATTENDANCE legal gate (GATE-LABOUR; W2b plan §11: every per-person attendance read goes through one
- * gate): while it is closed no absence is read and the roster says so in words; it opens when the worker notice and the
- * impact assessment are on record and the Owner switches the purpose on (B-W2b-27).
- *
- * LEAD — at B-W2b-27's merge: replace `attendanceGateOpen` below with B-W2b-27's
- *   `(await legalGateFor(client, siteId, 'ATTENDANCE')).open`   (apps/factory-api/src/modules/people/privacy/gate.ts)
- * (the same rule: a PeopleLegalGate row of the site and purpose with no switch-off; none means OFF). Nothing else here
- * changes.
+ * gate, B-W2b-27's `legalGateFor` in modules/people/privacy/gate.ts): while it is closed no absence is read and the roster
+ * says so in words; it opens when the worker notice and the impact assessment are on record and the Owner switches the
+ * purpose on.
  *
  * Data minimisation (GDPR arts. 5(1)(c), 9): a cell shows that the person is absent and for how long; the code only for a
  * holiday or a permit (planning needs it: "Ferie", "ROL"). A sickness, an injury, a law 104 leave or any other reason
@@ -31,10 +28,9 @@ export const ATTENDANCE_CLOSED_WORDS =
 /** The categories whose code a roster may show (planning facts, no health data). */
 const SHOWN_CATEGORIES: ReadonlySet<string> = new Set(['HOLIDAY', 'PERMIT'])
 
-/** The site's ATTENDANCE gate is open. LEAD: swap for B-W2b-27's legalGateFor(client, siteId, 'ATTENDANCE').open (see above). */
+/** The site's ATTENDANCE gate is open (B-W2b-27's one gate). */
 async function attendanceGateOpen(client: Client, siteId: string): Promise<boolean> {
-  const gate = await client.peopleLegalGate.findFirst({ where: { siteId, purpose: 'ATTENDANCE', switchedOffAt: null }, select: { id: true } })
-  return gate !== null
+  return (await legalGateFor(client, siteId, 'ATTENDANCE')).open
 }
 
 export interface AbsenceShown {
