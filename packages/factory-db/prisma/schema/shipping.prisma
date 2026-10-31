@@ -225,6 +225,12 @@ model Shipment {
   freightCostCurrency        String?
   /// W2b (B-W2a-39): the mode of transport (Intrastat); still set after the goods left.
   transportMode              TransportMode?
+  /// W2b (B-W2b-F1, the B-W2b-19 gap): when the warehouse had the garments of a RETURNED shipment back (the carrier
+  /// return of apps/factory-api modules/shipping: they went back into finished goods). Set once, only while RETURNED,
+  /// never changed or cleared (the …_followups_f1_w2b_guards trigger). From then on the shipment holds none of its
+  /// garments: its lines stay (its history) but no longer count against its cells' releases, and its serials may go
+  /// back to RELEASED to ship again.
+  carrierReturnReceivedAt    DateTime?               @db.Timestamptz(3)
   version              Int            @default(1)
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
