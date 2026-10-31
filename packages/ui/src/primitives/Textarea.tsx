@@ -2,6 +2,8 @@
 
 import { forwardRef, useId, useState, type ChangeEvent, type TextareaHTMLAttributes } from 'react'
 import { textareaCount } from './textareaCounter'
+import { mergeLabels } from '../lib/labels'
+import { TEXTAREA_LABELS, type TextareaLabels } from './TextareaLabels'
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   /**
@@ -12,6 +14,13 @@ export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
   limit?: number
   /** The counter's words for the count. Default "312 / 500". */
   counterLabel?: (used: number, limit: number) => string
+  /** The counter's words in the person's language (B-W2b-04). Default English; `counterLabel` wins over `counter`. */
+  labels?: Partial<TextareaLabels>
+  /**
+   * `rows` sets the field's height (B-W2b-04, a note box of 2 or 3 lines). Default false: the field keeps its 168 px
+   * floor whatever `rows` says — what every field had before this prop, so no page changes until it asks.
+   */
+  honourRows?: boolean
 }
 
 /**
@@ -23,17 +32,20 @@ export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
  * from the system and risks colliding with app-level classes).
  */
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
-  { className, limit, counterLabel, ...rest },
+  { className, limit, counterLabel, labels, honourRows = false, ...rest },
   ref,
 ) {
+  const words = mergeLabels(TEXTAREA_LABELS, labels)
   const counterId = `${useId()}-count`
   // An uncontrolled field with a limit still needs its text to count it.
   const [ownText, setOwnText] = useState(() => (rest.defaultValue == null ? '' : String(rest.defaultValue)))
   const cls = ['nds-textarea', className ?? ''].filter(Boolean).join(' ')
-  if (limit == null) return <textarea ref={ref} className={cls} {...rest} />
+  // The 168 px floor (primitives.css) gives way, so the browser sizes the field from `rows`; the caller's style wins.
+  const style = honourRows ? { minHeight: 0, ...rest.style } : rest.style
+  if (limit == null) return <textarea ref={ref} className={cls} {...rest} style={style} />
 
   const controlled = rest.value != null
-  const count = textareaCount(controlled ? String(rest.value) : ownText, limit, counterLabel)
+  const count = textareaCount(controlled ? String(rest.value) : ownText, limit, counterLabel ?? words.counter, words.tooLong)
   const onChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     if (!controlled) setOwnText(event.target.value)
     rest.onChange?.(event)
@@ -44,6 +56,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         ref={ref}
         className={cls}
         {...rest}
+        style={style}
         onChange={onChange}
         aria-describedby={[rest['aria-describedby'], counterId].filter(Boolean).join(' ')}
         aria-invalid={rest['aria-invalid'] ?? (count.over > 0 ? true : undefined)}

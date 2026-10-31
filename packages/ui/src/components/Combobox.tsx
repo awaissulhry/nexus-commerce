@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
+import { mergeLabels } from '../lib/labels'
+import { COMBOBOX_LABELS, type ComboboxLabels } from './ComboboxLabels'
 
 export interface ComboboxOption {
   value: string
@@ -19,10 +21,13 @@ export interface ComboboxProps {
   className?: string
   /** id of the visible label that names the field (a filter field's label, 2026-10-26). The input is otherwise unnamed. */
   labelledBy?: string
+  /** Its words in the person's language (B-W2b-04): empty text, "No matches". Default English; `placeholder` wins. */
+  labels?: Partial<ComboboxLabels>
 }
 
 /** Single-select typeahead (H10 `.h10-combo`): filter-as-you-type + pick. */
-export function Combobox({ options, value, onChange, placeholder = 'Search…', className, labelledBy }: ComboboxProps) {
+export function Combobox({ options, value, onChange, placeholder, className, labelledBy, labels }: ComboboxProps) {
+  const words = mergeLabels(COMBOBOX_LABELS, labels)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -38,7 +43,7 @@ export function Combobox({ options, value, onChange, placeholder = 'Search…', 
         className="nds-combo-in"
         aria-labelledby={labelledBy}
         value={open ? query : selected?.label ?? ''}
-        placeholder={placeholder}
+        placeholder={placeholder === undefined ? words.search : placeholder}
         onFocus={() => setOpen(true)}
         onChange={(e) => {
           setQuery(e.target.value)
@@ -50,7 +55,7 @@ export function Combobox({ options, value, onChange, placeholder = 'Search…', 
         createPortal(
           <div ref={popRef} style={popStyle} className="nds-combo-pop" role="listbox">
             {filtered.length === 0 ? (
-              <div className="nds-combo-empty">No matches</div>
+              <div className="nds-combo-empty">{words.noMatches}</div>
             ) : (
               filtered.map((o) => (
                 <button

@@ -10,6 +10,8 @@
 import { useRef, useState, type ReactNode, type DragEvent, type KeyboardEvent } from 'react'
 import { UploadCloud, AlertCircle } from 'lucide-react'
 import { matchesAccept, parseAccept } from '../lib/accept-match'
+import { mergeLabels } from '../lib/labels'
+import { FILE_DROPZONE_LABELS, type FileDropzoneLabels } from './FileDropzoneLabels'
 
 export interface FileDropzoneProps {
   /** Called with the validated files. */
@@ -24,6 +26,8 @@ export interface FileDropzoneProps {
   /** Secondary line — defaults to the accepted formats + size limit. */
   hint?: ReactNode
   className?: string
+  /** Its words in the person's language (B-W2b-04): prompt, default hint, refusals. Default English; `hint` wins. */
+  labels?: Partial<FileDropzoneLabels>
 }
 
 function fmtBytes(bytes: number): string {
@@ -32,7 +36,8 @@ function fmtBytes(bytes: number): string {
   return `${bytes}B`
 }
 
-export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false, disabled = false, hint, className }: FileDropzoneProps) {
+export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false, disabled = false, hint, className, labels }: FileDropzoneProps) {
+  const words = mergeLabels(FILE_DROPZONE_LABELS, labels)
   const inputRef = useRef<HTMLInputElement>(null)
   const [drag, setDrag] = useState(false)
   const [err, setErr] = useState('')
@@ -47,11 +52,11 @@ export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false,
     const picked = multiple ? files : files.slice(0, 1)
     for (const file of picked) {
       if (!matchesAccept(file, exts)) {
-        setErr(`Unsupported file — accepts ${exts.join(', ') || 'any type'}.`)
+        setErr(words.unsupported(exts.join(', ') || words.anyType))
         return
       }
       if (maxBytes && file.size > maxBytes) {
-        setErr(`"${file.name}" is too large — max ${fmtBytes(maxBytes)}.`)
+        setErr(words.tooLarge(file.name, fmtBytes(maxBytes)))
         return
       }
     }
@@ -72,9 +77,9 @@ export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false,
   }
 
   const defaultHint = exts.length
-    ? `${exts.join(', ')}${maxBytes ? ` · up to ${fmtBytes(maxBytes)}` : ''}`
+    ? (maxBytes ? words.hintWithSize(exts.join(', '), fmtBytes(maxBytes)) : exts.join(', '))
     : maxBytes
-    ? `Up to ${fmtBytes(maxBytes)}`
+    ? words.hintSizeOnly(fmtBytes(maxBytes))
     : ''
 
   return (
@@ -90,7 +95,7 @@ export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false,
         disabled={disabled}
       >
         <UploadCloud size={26} aria-hidden />
-        <span className="nds-dropzone-primary">Drag &amp; drop or click to upload</span>
+        <span className="nds-dropzone-primary">{words.prompt}</span>
         {(hint ?? defaultHint) && <span className="nds-dropzone-hint">{hint ?? defaultHint}</span>}
       </button>
       <input

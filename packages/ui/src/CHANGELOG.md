@@ -1,3 +1,34 @@
+## DS words in the person's language — a `labels` prop on 24 parts, Textarea rows (B-W2b-04) — 2026-10-31
+
+Additive only: every new prop is optional and defaults to today's English, so a page that passes none renders exactly
+what it rendered before (checked by rendering 125 cases of every touched part with default props from main's source and
+from this one: byte-identical HTML). Each part takes `labels?: Partial<XLabels>`; its English words are the exported
+`X_LABELS` in a `*Labels.ts` beside it (one merge, `lib/labels.ts`: a word left out, or `undefined`, stays English). A
+word with a number or a name in it is a function (`unsaved: (count) => …`, `previous: (noun) => …`). The props that
+already carried words (`placeholder`, `clearLabel`, `applyLabel`, `confirmLabel`, `title`, `listLabel`, `ariaLabel`,
+`label`, `doneLabel`, `emptyLabel`, `counterLabel`, `nav.noun`…) still win over `labels`.
+- **Words:** `Modal` (close button), `EditModeBar`, `ReviewChangesModal` + `ReviewChangesPanel` (one `ReviewChangesLabels`:
+  title, buttons, held reasons, columns, the Done line, conflicts), `DetailModal` (Prev / Next, "3 of 12", held
+  reasons, "Reading…", Try again, Sections), `StepUpModal`, `ActionConfirm` (+ `useActionConfirm(labels)`; headings,
+  columns, the reversal sentence, and its `AsOf` / `ConfirmPhraseField` words), `CellSaveMark`, `DateField` (weekday
+  letters, month buttons, empty and clear words), `DateTimeField` (+ the date part's words), `DateRangePicker`
+  (`locale`, weekday letters, month buttons, preset names), `Timeline` (tone words, "not yet", its `AsOf`), `AsOf`
+  (empty words, and the `ago` / `when` writers a host passes for its language), `Countdown` ("in …", "now", unit
+  letters), `PreferencesModal` + `usePreferencesPanes` (every word of the plain, tabbed and grouped layouts),
+  `GridDensityToggle`, `JobProgress`, `IconPicker` and `ColorSwatchPicker` (group, "No icon", each name by id / English
+  name), `FileDropzone` (prompt, default hints, refusals), `MediaStrip`, `Combobox`, `ConfirmPhraseField`, `Textarea`
+  (the counter's words).
+- **Rules that write words** take them as an optional last argument, English by default: `reviewTitle`, `saveWords`,
+  `ackWords`, `saveHeldReason`, `saveButtonWords`, `reviewNote`, `resultWords`, `doneSummary` (reviewChangesModel),
+  `detailPosition`, `detailNavLabel`, `detailNavHeld` (detailModalModel), `reversalSentence` (+ `REVERSAL_WORDS`),
+  `textareaCount` (`tooLong`). `countdownWords` says the ticker's unit letters in the given words.
+- **`Textarea honourRows`** (default false): `rows` sets the height (the 168 px floor gives way). Without it every
+  field keeps the floor whatever `rows` says, as before — Commerce passes `rows` on ~30 fields and none changes.
+- Barrels: each area's barrel exports its parts' `*_LABELS` and `*Labels` types (components, patterns, primitives,
+  grid/renderers, grid/toolbars; `REVERSAL_WORDS` from grid). Not changed: month and day names still come from `Intl`
+  in `locale`, the calendars still start on Sunday, and `SectionLayout`, `FileRow`, `ReplyComposer`, `OptionList` /
+  `MultiSelect` and `GridViewsMenu` still speak English (DS-GAPS).
+
 ## Board view, calendar grid, reason grid, photo capture (factory gaps D19 D20 D21 + CalendarGrid) — 2026-10-30
 
 Four new parts in new files; nothing existing changes (no barrel, component, token, style or grid file is edited), and

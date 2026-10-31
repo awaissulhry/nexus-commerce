@@ -32,6 +32,8 @@ import {
   DETAIL_NAV_KEYS, KEY_TARGET_SELECTORS, detailBodyState, detailNavHeld, detailNavKey, detailNavLabel, detailPosition, nextTallest,
   onlyEmptyState, type DetailDirection, type KeyTargetKind,
 } from './detailModalModel'
+import { mergeLabels } from '../lib/labels'
+import { DETAIL_MODAL_LABELS, type DetailModalLabels } from './DetailModalLabels'
 
 function keyTargetKind(target: EventTarget | null): KeyTargetKind {
   if (!(target instanceof Element)) return 'other'
@@ -84,10 +86,13 @@ export interface DetailModalProps {
   /** See `Modal`: default the element that opened it. */
   returnFocusTo?: ModalProps['returnFocusTo']
   children?: ReactNode
+  /** Its words in the person's language (B-W2b-04): Prev / Next, the counter, held reasons, "Reading…", Try again,
+   *  Close. Default English; `tabsLabel` and `nav.noun` win. */
+  labels?: Partial<DetailModalLabels>
 }
 
-function NavButton({ dir, noun, held, onGo }: { dir: DetailDirection; noun: string; held: string | null; onGo: () => void }) {
-  const label = detailNavLabel(dir, noun)
+function NavButton({ dir, noun, held, onGo, words }: { dir: DetailDirection; noun: string; held: string | null; onGo: () => void; words: DetailModalLabels }) {
+  const label = detailNavLabel(dir, noun, words)
   const key = DETAIL_NAV_KEYS[dir]
   return (
     <Tooltip label={held ?? `${label} (${key})`} portal>
@@ -107,14 +112,15 @@ function NavButton({ dir, noun, held, onGo }: { dir: DetailDirection; noun: stri
 }
 
 export function DetailModal({
-  open, onClose, title, subtitle, meta, actions, tabs, activeTab, onTabChange, linkAs, tabsLabel = 'Sections', nav,
-  loading = false, error, onRetry, footer, returnFocusTo, children,
+  open, onClose, title, subtitle, meta, actions, tabs, activeTab, onTabChange, linkAs, tabsLabel, nav,
+  loading = false, error, onRetry, footer, returnFocusTo, children, labels,
 }: DetailModalProps) {
+  const words = mergeLabels(DETAIL_MODAL_LABELS, labels)
   const bodyRef = useRef<HTMLDivElement>(null)
   const idBase = useId()
-  const noun = nav?.noun ?? 'row'
-  const pos = detailPosition(nav?.ids ?? [], nav?.current, nav)
-  const held = detailNavHeld(pos, noun, nav)
+  const noun = nav?.noun ?? words.noun
+  const pos = detailPosition(nav?.ids ?? [], nav?.current, nav, words)
+  const held = detailNavHeld(pos, noun, nav, words)
   const latest = useRef({ nav, pos })
   latest.current = { nav, pos }
   const go = (dir: DetailDirection) => {
@@ -200,10 +206,10 @@ export function DetailModal({
     <>
       {actions != null && <div className="nds-detail-actions">{actions}</div>}
       {nav && (
-        <div className="nds-detail-nav" role="group" aria-label={`Move between ${noun}s`}>
-          <NavButton dir="prev" noun={noun} held={held.prev} onGo={() => go('prev')} />
+        <div className="nds-detail-nav" role="group" aria-label={words.moveBetween(noun)}>
+          <NavButton dir="prev" noun={noun} held={held.prev} onGo={() => go('prev')} words={words} />
           {pos.words && <span className="nds-detail-pos" aria-live="polite">{pos.words}</span>}
-          <NavButton dir="next" noun={noun} held={held.next} onGo={() => go('next')} />
+          <NavButton dir="next" noun={noun} held={held.next} onGo={() => go('next')} words={words} />
         </div>
       )}
     </>
@@ -211,7 +217,7 @@ export function DetailModal({
 
   const subheader = tabList ? (
     <Tabs
-      ariaLabel={tabsLabel}
+      ariaLabel={tabsLabel === undefined ? words.tabs : tabsLabel}
       tabs={tabList}
       active={active}
       onChange={onTabChange}
@@ -236,13 +242,14 @@ export function DetailModal({
       returnFocusTo={returnFocusTo}
       initialFocus="dialog"
       busy={state === 'loading'}
+      labels={{ close: words.close }}
     >
       <div ref={bodyRef} className="nds-detail-body" {...panelProps} style={tallest ? { minHeight: tallest } : undefined}>
         <div ref={setInnerEl}>
         {state === 'error' ? (
-          <Banner tone="danger" action={onRetry ? <Button size="sm" onClick={onRetry}>Try again</Button> : undefined}>{error}</Banner>
+          <Banner tone="danger" action={onRetry ? <Button size="sm" onClick={onRetry}>{words.tryAgain}</Button> : undefined}>{error}</Banner>
         ) : state === 'loading' ? (
-          <p className="nds-detail-loading"><Spinner size={14} /><span aria-hidden="true">Reading…</span></p>
+          <p className="nds-detail-loading"><Spinner size={14} /><span aria-hidden="true">{words.reading}</span></p>
         ) : children}
         </div>
       </div>

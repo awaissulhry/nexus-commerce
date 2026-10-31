@@ -24,6 +24,8 @@ import { Modal, type ModalProps } from '../components/Modal'
 import { ReviewChangesPanel, type ReviewChangesPanelProps } from './ReviewChangesPanel'
 import { raiseCount, reviewTitle, saveButtonWords, saveHeldReason, type ReviewState } from './reviewChangesModel'
 import type { ReviewGroup, ReviewPanelChange } from './reviewChangesPanelModel'
+import { mergeLabels } from '../lib/labels'
+import { REVIEW_CHANGES_LABELS, type ReviewChangesLabels } from './ReviewChangesModalLabels'
 
 export interface ReviewChangesModalProps {
   open: boolean
@@ -71,13 +73,17 @@ export interface ReviewChangesModalProps {
   lead?: ReactNode
   /** Why Save waits on that form, in the host's words ("Type a bid"): the held Save says it like any other reason. */
   leadHeld?: string | null
+  /** Its words in the person's language (B-W2b-04), the body's too: title, buttons, held reasons, columns, the Done
+   *  line, Close. Default English; `title`, `saveLabel`, `ackLabel`, `doneVerb` and `doneLine` win where they apply. */
+  labels?: Partial<ReviewChangesLabels>
 }
 
 export function ReviewChangesModal({
   open, onClose, changes, state = { phase: 'ready' }, title, summary, metrics, problems = [], ackLabel, saveLabel,
   onSave, onRetry, onUndo, undoing = false, doneActions, onDone, size = 'lg', doneVerb = 'saved', returnFocusTo, groups, doneLine,
-  lead, leadHeld,
+  lead, leadHeld, labels,
 }: ReviewChangesModalProps) {
+  const words = mergeLabels(REVIEW_CHANGES_LABELS, labels)
   const [ack, setAck] = useState(false)
   useEffect(() => { if (open) setAck(false) }, [open])
 
@@ -96,24 +102,24 @@ export function ReviewChangesModal({
   const count = changes.length
   const raises = raiseCount(changes)
   const saving = state.phase === 'saving'
-  const held = saveHeldReason({ state, count, problems: problems.length, raises, ack, lead: leadHeld })
+  const held = saveHeldReason({ state, count, problems: problems.length, raises, ack, lead: leadHeld }, words)
 
   const save = (
     <Button variant="primary" aria-disabled={held ? true : undefined} aria-description={held ?? undefined} onClick={held ? undefined : onSave}>
-      {saveButtonWords(state, count, saveLabel)}
+      {saveButtonWords(state, count, saveLabel, words)}
     </Button>
   )
   const footer = done ? (
     <>
-      {onUndo && <Button ref={undoRef} onClick={undoing ? undefined : onUndo} aria-disabled={undoing || undefined}>{undoing ? 'Undoing…' : 'Undo'}</Button>}
+      {onUndo && <Button ref={undoRef} onClick={undoing ? undefined : onUndo} aria-disabled={undoing || undefined}>{undoing ? words.undoing : words.undo}</Button>}
       {doneActions}
       <span className="grow" />
-      <Button ref={doneRef} variant="primary" onClick={onDone ?? onClose}>Done</Button>
+      <Button ref={doneRef} variant="primary" onClick={onDone ?? onClose}>{words.done}</Button>
     </>
   ) : (
     <>
       <span className="grow" />
-      <Button onClick={saving ? undefined : onClose} aria-disabled={saving || undefined}>Cancel</Button>
+      <Button onClick={saving ? undefined : onClose} aria-disabled={saving || undefined}>{words.cancel}</Button>
       {held && !saving ? <Tooltip label={held} portal>{save}</Tooltip> : save}
     </>
   )
@@ -124,15 +130,16 @@ export function ReviewChangesModal({
       onClose={saving || undoing ? () => {} : done ? (onDone ?? onClose) : onClose}
       size={size}
       returnFocusTo={returnFocusTo}
-      title={done ? 'Done' : title ?? reviewTitle(count)}
+      title={done ? words.done : title ?? reviewTitle(count, words)}
       subtitle={summary}
       footer={footer}
+      labels={{ close: words.close }}
     >
       {/* The body is the shared panel (lane HTO, 2026-10-11): a window whose review is a step renders the same panel. */}
       <ReviewChangesPanel
-        changes={changes} state={state} label={title ?? reviewTitle(count)} metrics={metrics} problems={problems}
+        changes={changes} state={state} label={title ?? reviewTitle(count, words)} metrics={metrics} problems={problems}
         ackLabel={ackLabel} ack={ack} onAckChange={setAck} onRetry={onRetry} doneVerb={doneVerb} groups={groups} doneLine={doneLine}
-        lead={lead}
+        lead={lead} labels={labels}
       />
     </Modal>
   )
