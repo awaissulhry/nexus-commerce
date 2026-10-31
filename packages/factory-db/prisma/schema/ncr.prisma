@@ -172,6 +172,9 @@ model NcrContainmentAction {
   doneAt       DateTime?         @db.Timestamptz(3)
   doneById     String?           @db.Uuid
   evidenceNote String?
+  /// W2b (schema wave 2/7; B-W2a-47's "Cancelled: <reason>" in evidenceNote): why it was CANCELLED, in words; only on a
+  /// CANCELLED action, never blank (the …_followups_quality_money_w2b_guards trigger).
+  cancelReason String?
   /// The record it made or names: its type and id, both or neither (a HOLD_STOCK action names its QualityHold once DONE).
   recordType   String?
   recordId     String?           @db.Uuid

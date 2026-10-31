@@ -444,10 +444,11 @@ describe('a material', () => {
 
 describe('the seeds', () => {
   it('are idempotent: a second run changes nothing', async () => {
-    // W2a wave 3's TypeChangeReview (compliance.prisma) is seeded by seed/sourcing.ts, not by these seeds.
+    // W2a wave 3's TypeChangeReview (compliance.prisma) is seeded by seed/sourcing.ts, and W2b wave 2's CertificateRenewal
+    // by seed/followups-quality-money.ts, not by these seeds.
     const tables = models()
       .map(({ model }) => model.table)
-      .filter((table) => table !== 'TypeChangeReview')
+      .filter((table) => table !== 'TypeChangeReview' && table !== 'CertificateRenewal')
     const count = async () => {
       const out: Record<string, number> = {}
       for (const table of tables) out[table] = Number((await one(`SELECT count(*)::int AS n FROM "${table}" WHERE "tenantId" = $1`, [b.tenantId])).n)

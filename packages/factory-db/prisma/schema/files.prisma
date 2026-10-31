@@ -94,6 +94,9 @@ model StoredFile {
   // export file it is.
   supplierInvoiceXmlOf  SupplierInvoice[]      @relation("SupplierInvoiceXml")
   supplierInvoicePdfOf  SupplierInvoice[]      @relation("SupplierInvoicePdf")
+  // W2b payables.prisma (schema wave 2/7): the XML of a file of several supplier invoices, of an SDI inbox item.
+  supplierInvoiceFileXmlOf SupplierInvoiceFile[] @relation("SupplierInvoiceFileXml")
+  sdiInboxItemXmlOf        SdiInboxItem[]        @relation("SdiInboxItemXml")
   accountingExportFiles AccountingExportFile[] @relation("AccountingExportFile")
   // quality.prisma: the lab results it is the report of, the lot documents it is.
   labResults     LabResult[]
