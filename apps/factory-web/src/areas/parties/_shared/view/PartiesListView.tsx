@@ -67,15 +67,15 @@ export interface PartiesListActions {
  * with the header select-all box and shift-click ranges, and the footer with Show more and the keys icon. Fetches
  * nothing: the container (PartiesList.tsx) reads and writes.
  */
-export function PartiesListView({ model, actions, headActions }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode }) {
+export function PartiesListView({ model, actions, headActions, columns: sideColumns }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode; columns?: readonly ColDef<PartyRow>[] }) {
   return (
     <PartiesMessages>
-      <PartiesList model={model} actions={actions} headActions={headActions} />
+      <PartiesList model={model} actions={actions} headActions={headActions} sideColumns={sideColumns} />
     </PartiesMessages>
   )
 }
 
-function PartiesList({ model, actions, headActions }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode }) {
+function PartiesList({ model, actions, headActions, sideColumns }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode; sideColumns?: readonly ColDef<PartyRow>[] }) {
   const t = useT('parties')
   const locale = useLocale()
   const config = SIDES[model.side]
@@ -198,6 +198,8 @@ function PartiesList({ model, actions, headActions }: { model: PartiesListModel;
         },
         column('vies', t('list.col.vies'), ViesCell, { flex: 1.4, minWidth: 170 }),
         column('sdi', t('list.col.sdi'), SdiCell, { flex: 1, minWidth: 140 }),
+        // B-W2a-81: the side's own columns (Customers: Overdue, by the price grain), before Language as the design orders them.
+        ...(sideColumns ?? []),
         { colId: 'language', headerName: t('list.col.language'), sortable: false, flex: 0.8, minWidth: 100, valueGetter: (params) => (params.data ? languageName(params.data.language, locale) : '') },
         actionsColumn,
       ]
@@ -211,7 +213,7 @@ function PartiesList({ model, actions, headActions }: { model: PartiesListModel;
       actionsColumn,
     ]
     // The cells close over the words, the rights and the actions: a change of language or rights rebuilds them.
-  }, [t, locale, side, config, model.prefix, can.vies, can.block, can.manage, manageHeld])
+  }, [t, locale, side, config, model.prefix, can.vies, can.block, can.manage, manageHeld, sideColumns])
 
   if (!can.view) return <NoAccess title={t(`${side}.noAccess.title`)} body={t(`${side}.noAccess.body`)} />
 

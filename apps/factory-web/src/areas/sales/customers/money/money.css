@@ -1,0 +1,47 @@
+/*
+ * The customer's Overdue and Returns numbers (B-W2a-81) LAYOUT: the list's Overdue cell and the Overview's "Open returns
+ * and claims" card. Semantic tokens only; the record and list frames are the shared parties' ones.
+ */
+.fw-cmo-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-cmo-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-cmo-late {
+  color: var(--nds-danger-text);
+}
+
+.fw-cmo-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cmo-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cmo-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-cmo-link {
+  color: var(--nds-text-link);
+}
+
+.fw-cmo-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

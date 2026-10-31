@@ -28,6 +28,7 @@ import { ReservationRefusedError } from '../reservations/reserve'
 import { demandWords, lockReservations, readDemands, readKeyFacts, reserveKeyOf, type ReserveKey } from '../reservations/store'
 import { mayAt, officeContextOf, seesCost, siteFor } from './access'
 import { completeKeys, LEDGER_SELECT, postMoves, type MoveDraft } from './post-moves'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 
 /**
  * Write-off (B-W2a-11; SCM-193; design warehouse.moves › Write off, warehouse.hides › Scrap N hides): stock that is
@@ -65,6 +66,8 @@ export interface WriteOffInput {
   readonly note?: string | null | undefined
   readonly reference?: string | null | undefined
   readonly lines: readonly WriteOffLineInput[]
+  /** B-W2a-F8: the reason a write-off inside a SOFT-locked month is posted anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 const prefixed = (path: string) => `body/${path}`
@@ -153,7 +156,11 @@ export async function writeOff(caller: CommandCaller, body: WriteOffInput, idemp
     }
 
     const key = `${WRITE_OFF_COMMAND}:${idempotencyKey ?? `g-${newId()}`}`
-    const moves = await postMoves(tools, keyed, { key, issuePath: (index) => prefixed(`lines/${lineOf[index]}`) })
+    const moves = await postMoves(tools, keyed, {
+      key,
+      issuePath: (index) => prefixed(`lines/${lineOf[index]}`),
+      periodLockOverride: body.periodLockOverride,
+    })
     for (const hide of hides.values()) {
       await tx.hide.update({ where: { id: hide.id }, data: { state: 'SCRAPPED', version: { increment: 1 } }, select: { id: true } })
       tools.audit({ action: 'inventory.hideState', recordType: 'Hide', recordId: hide.id, companyId: site.companyId, siteId: site.id, before: { state: hide.state }, after: { state: 'SCRAPPED' }, reason: note })

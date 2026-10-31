@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { MAX_CELL_PIECES, MAX_CELLS } from '@nexus/factory-domain/production/work-orders/cells'
 import { WORK_ORDER_KINDS, WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
@@ -82,6 +83,7 @@ export const reportContract = defineContract({
     cells: z.array(input({ cellId: id(), quantity: z.number().int().min(1).max(MAX_CELL_PIECES) })).min(1).max(MAX_CELLS).optional(),
     toLocationId: id().optional(),
     note: z.string().trim().max(500).nullish(),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: {
     201: output({

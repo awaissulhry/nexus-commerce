@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { amountMinor, businessDate, currency, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { money } from '@nexus/factory-domain/money/marked'
 import { ALLOCATION_TARGETS, MAX_ALLOCATIONS_PER_REQUEST, PAYMENT_METHODS, PAYMENT_STATUSES } from '@nexus/factory-domain/payments/payments'
@@ -118,6 +119,7 @@ export const recordPaymentContract = defineContract({
     externalRef: reference,
     internalNote: z.string().trim().max(2000).nullish(),
     allocations: z.array(allocationInput).max(MAX_ALLOCATIONS_PER_REQUEST).optional(),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: { 201: one },
 })
@@ -126,7 +128,15 @@ export const allocateContract = defineContract({ params: paymentParams, body: in
 
 export const reverseContract = defineContract({ params: input({ paymentId: id(), allocationId: id() }), body: input({ note: z.string().trim().min(1).max(500) }), response: { 200: one } })
 
-export const voidContract = defineContract({ params: paymentParams, body: input({ version, reason: z.string().trim().min(1).max(500) }), response: { 200: one } })
+export const voidContract = defineContract({
+  params: paymentParams,
+  body: input({
+    version,
+    reason: z.string().trim().min(1).max(500),
+    periodLockOverride: periodLockOverride.optional(),
+  }),
+  response: { 200: one },
+})
 
 export const depositReceivedContract = defineContract({
   body: input({
@@ -137,6 +147,7 @@ export const depositReceivedContract = defineContract({
     internalNote: z.string().trim().max(2000).nullish(),
     /** Default true: issue the TD02 now when the rule requires one (needs invoices.issue and a fresh step-up). */
     issueDepositInvoice: z.boolean().optional(),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: {
     201: output({
@@ -331,6 +342,7 @@ export const recordRefundContract = defineContract({
     internalNote: z.string().trim().max(2000).nullish(),
     /** Recorded as made already: the transfer's value date and the bank's reference (CRO / TRN). */
     paid: input({ paidOn: businessDate(), externalRef: reference }).optional(),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: { 201: oneRefund },
 })
@@ -341,11 +353,28 @@ export const changeRefundContract = defineContract({
   response: { 200: oneRefund },
 })
 
-export const payRefundContract = defineContract({ params: refundParams, body: input({ version: requiredVersion, paidOn: businessDate(), externalRef: reference }), response: { 200: oneRefund } })
+export const payRefundContract = defineContract({
+  params: refundParams,
+  body: input({
+    version: requiredVersion,
+    paidOn: businessDate(),
+    externalRef: reference,
+    periodLockOverride: periodLockOverride.optional(),
+  }),
+  response: { 200: oneRefund },
+})
 
 export const cancelRefundContract = defineContract({ params: refundParams, body: input({ version: requiredVersion, reason: z.string().trim().min(1).max(500) }), response: { 200: oneRefund } })
 
-export const voidRefundContract = defineContract({ params: refundParams, body: input({ version: requiredVersion, reason: z.string().trim().min(1).max(500) }), response: { 200: oneRefund } })
+export const voidRefundContract = defineContract({
+  params: refundParams,
+  body: input({
+    version: requiredVersion,
+    reason: z.string().trim().min(1).max(500),
+    periodLockOverride: periodLockOverride.optional(),
+  }),
+  response: { 200: oneRefund },
+})
 
 const balances = z.array(output({ currency: z.string(), amount: money.price(z.number().int()) }))
 

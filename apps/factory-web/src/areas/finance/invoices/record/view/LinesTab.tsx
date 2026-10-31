@@ -11,6 +11,7 @@ import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import type { Invoice, InvoiceLine } from '../../../_shared/api'
 import { checkOf, creditHeld, dayInstant, decimal, dueDateOf, money, unitPrice, vatOf, type CheckFix } from '../../../_shared/model'
 import { Bridge, CheckList, PartState } from '../../../_shared/parts'
+import { carryHeld, chargeHeld, refundHref, termsSourceOf } from '../../daily/model'
 import type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
 
 /**
@@ -152,7 +153,10 @@ function VatCell({ line, invoice }: { line: InvoiceLine; invoice: Invoice }) {
 
 function LinesCard({ invoice, model, actions }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions }) {
   const t = useT('finance')
+  const d = useT('finance-daily')
   const locale = useLocale()
+  const chargeWait = chargeHeld(invoice, model.can)
+  const termsSource = termsSourceOf(invoice)
   const related = model.related.value
   const draft = invoice.status === 'DRAFT'
   const goods = invoice.lines.filter((line) => line.kind !== 'DEPOSIT_DEDUCTION')
@@ -169,7 +173,18 @@ function LinesCard({ invoice, model, actions }: { invoice: Invoice; model: Invoi
         cells: [
           <span key="d" className="fw-fin-cell">
             <span>{line.description}</span>
-            <span className="nds-summary-sub">{[line.itemCode, ddt ? t('lines.ddtRef', { number: ddt.number }) : null].filter(Boolean).join(' · ') || '—'}</span>
+            <span className="nds-summary-sub">
+              {[line.kind === 'CHARGE' ? d('charge.lineSub', { kind: d(`charge.kind.${line.chargeKind ?? 'OTHER'}`) }) : line.itemCode, ddt ? t('lines.ddtRef', { number: ddt.number }) : null].filter(Boolean).join(' · ') || '—'}
+              {/* B-W2a-80: a draft's charge line is removed here (the other lines go back as they are). */}
+              {line.kind === 'CHARGE' && draft && !chargeWait && (
+                <>
+                  {' · '}
+                  <Button size="sm" variant="link" heldReason={model.busy ? t('held.busy') : null} onClick={() => actions?.onRemoveCharge?.(line.id)}>
+                    {d('charge.remove')}
+                  </Button>
+                </>
+              )}
+            </span>
           </span>,
           `${decimal(line.quantity, locale)}${line.uom ? ` ${line.uom}` : ''}`,
           ...(price ? [unitPrice(line.unitPrice, invoice.currency, locale), line.discountPct ? `${decimal(line.discountPct, locale)} %` : '—', money(line.netAmount, invoice.currency, locale)] : []),
@@ -221,6 +236,9 @@ function LinesCard({ invoice, model, actions }: { invoice: Invoice; model: Invoi
             <Button size="sm" variant="quiet" heldReason={model.can.manageInvoices ? null : t('held.noManage')} onClick={() => actions?.onDialog?.({ kind: 'details' })}>
               {t('lines.editDetails')}
             </Button>
+            <Button size="sm" variant="quiet" heldReason={chargeWait ? d(chargeWait.key, chargeWait.params) : model.busy ? t('held.busy') : null} onClick={() => actions?.onDialog?.({ kind: 'charge' })}>
+              {d('charge.add')}
+            </Button>
           </span>
         )}
       </div>
@@ -235,7 +253,7 @@ function LinesCard({ invoice, model, actions }: { invoice: Invoice; model: Invoi
         columns={2}
         items={[
           { label: t('lines.causale'), value: invoice.causale ?? '—' },
-          { label: t('lines.due'), value: dueDateOf(invoice) ? formatDate(dayInstant(dueDateOf(invoice)!), { locale }) : '—', hint: t('lines.method') },
+          { label: t('lines.due'), value: dueDateOf(invoice) ? formatDate(dayInstant(dueDateOf(invoice)!), { locale }) : '—', hint: termsSource ? d(termsSource.key, termsSource.params) : t('lines.method') },
           { label: t('lines.basis'), value: t(`basis.${invoice.priceBasis}`) },
           { label: t('lines.refs'), value: (invoice.documentRefs ?? []).map((ref) => (ref as { number?: string }).number ?? '').filter(Boolean).join(', ') || '—' },
         ]}
@@ -249,8 +267,9 @@ function LinesCard({ invoice, model, actions }: { invoice: Invoice; model: Invoi
   )
 }
 
-function TotalsCard({ invoice, model }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions }) {
+function TotalsCard({ invoice, model, actions }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions }) {
   const t = useT('finance')
+  const d = useT('finance-daily')
   const locale = useLocale()
   if (!model.can.price) {
     return (
@@ -260,12 +279,16 @@ function TotalsCard({ invoice, model }: { invoice: Invoice; model: InvoiceRecord
       </Card>
     )
   }
-  const goods = invoice.lines.filter((line) => line.kind !== 'DEPOSIT_DEDUCTION').reduce((sum, line) => sum + (line.netAmount ?? 0), 0)
+  const goods = invoice.lines.filter((line) => line.kind !== 'DEPOSIT_DEDUCTION' && line.kind !== 'CHARGE').reduce((sum, line) => sum + (line.netAmount ?? 0), 0)
+  // B-W2a-80 (design: "goods 3,000 + charges 120 …"): the charge lines apart from the goods.
+  const charges = invoice.lines.filter((line) => line.kind === 'CHARGE').reduce((sum, line) => sum + (line.netAmount ?? 0), 0)
+  const hasCharges = invoice.lines.some((line) => line.kind === 'CHARGE')
   const deducted = invoice.lines.filter((line) => line.kind === 'DEPOSIT_DEDUCTION').reduce((sum, line) => sum + (line.netAmount ?? 0), 0)
   const m = (value: number | null | undefined) => money(value, invoice.currency, locale)
   const payable = invoice.docType === 'TD01' || invoice.docType === 'TD24'
   const rows = [
     { id: 'goods', label: t('totals.goods'), value: m(goods) },
+    ...(hasCharges ? [{ id: 'charges', label: d('charge.totals'), value: m(charges) }] : []),
     ...(deducted !== 0 ? [{ id: 'deposit', label: t('totals.deposit'), value: m(deducted) }] : []),
     { id: 'taxable', label: t('totals.taxable'), value: m(invoice.netTotal) },
     { id: 'vat', label: t('totals.vat'), value: m(invoice.vatTotal) },
@@ -284,7 +307,7 @@ function TotalsCard({ invoice, model }: { invoice: Invoice; model: InvoiceRecord
     <Card padded className="fw-fin-card">
       <h2 className="fw-fin-h2">{t('totals.title')}</h2>
       <Bridge rows={rows} label={t('totals.title')} />
-      {(invoice.refundDueAmount ?? 0) > 0 && <Banner tone="warning" title={t('totals.refundDue', { amount: m(invoice.refundDueAmount) })} />}
+      {(invoice.refundDueAmount ?? 0) > 0 && <RefundDue invoice={invoice} model={model} actions={actions} />}
       {summary.length > 0 && (
         <SummaryTable
           label={t('totals.summary')}
@@ -297,5 +320,38 @@ function TotalsCard({ invoice, model }: { invoice: Invoice; model: InvoiceRecord
         />
       )}
     </Card>
+  )
+}
+
+/**
+ * B-W2a-80 (design finance.payments rec:Payment match: "Overpayment → customer credit balance"): a credit note gave back
+ * money already paid — refund it (Finance › Payments, the Refund dialog with the credit note) or carry it to the customer's
+ * credit balance (POST /payments/release-overpayment: never both; the API refuses while a refund of its notes is live).
+ */
+function RefundDue({ invoice, model, actions }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions }) {
+  const t = useT('finance')
+  const d = useT('finance-daily')
+  const locale = useLocale()
+  const carryWait = carryHeld(invoice, model.can)
+  const note = model.related.value?.creditNotes.filter((entry) => entry.status !== 'DRAFT' && entry.status !== 'REJECTED').slice(-1)[0] ?? null
+  return (
+    <Banner
+      tone="warning"
+      title={t('totals.refundDue', { amount: money(invoice.refundDueAmount, invoice.currency, locale) })}
+      action={
+        <span className="fw-fin-actions">
+          {note && model.can.viewPayments && (
+            <Button size="sm" asChild>
+              <Link href={refundHref(model.prefix, note.id)}>{d('refundLink.go')}</Link>
+            </Button>
+          )}
+          <Button size="sm" variant="quiet" heldReason={carryWait ? d(carryWait.key, carryWait.params) : model.busy ? t('held.busy') : null} onClick={() => actions?.onDialog?.({ kind: 'carry' })}>
+            {d('carry.open')}
+          </Button>
+        </span>
+      }
+    >
+      {d('carry.explain')}
+    </Banner>
   )
 }

@@ -20,7 +20,8 @@ import { costBasis, lotUnitCost, valuationKey, valueOfMove, type CostBasis, type
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTools, CommandTx } from '../../../core/command'
-import { lockDayOf, refuseHardLocked } from '../../accounting/period-guard'
+import { honourPeriodLocks, lockDayOf } from '../../accounting/period-guard'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { postedBy, stockContextOf, type StockContext } from './access'
 
 /**
@@ -94,6 +95,8 @@ export interface PostOptions {
   readonly key?: string | null
   /** Where a move's issues point: default `moves/<index>`. */
   readonly issuePath?: (index: number) => string
+  /** B-W2a-F8: the body's reason a move dated inside a SOFT-locked month is posted anyway (`periodLockOverride`). */
+  readonly periodLockOverride?: PeriodLockOverride | null | undefined
 }
 
 /** A posted move as postMoves answers it (plain JSON, never a cost). */
@@ -279,12 +282,13 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
   const used = await tx.stockMove.findMany({ where: { idempotencyKey: { in: keys } }, select: { idempotencyKey: true } })
   if (used.length > 0) throw new ConflictError(`This move was posted already (idempotency key ${used[0]!.idempotencyKey}).`)
   // B-W2a-F1: an office or system move dated inside a HARD period lock of its company is refused in words (409) before
-  // the database's StockMove_period_lock. The floor's moves are dated now and the floor reads no lock (the trigger skips them).
+  // the database's StockMove_period_lock; B-W2a-F8: inside a SOFT one it needs the caller's override reason. The floor's
+  // moves are dated now and the floor reads no lock (the trigger skips them).
   if (context.audience !== 'floor') {
-    await refuseHardLocked(
-      tx,
-      tools.context,
-      rows.map((row, index) => ({ companyId: row.companyId, day: lockDayOf(row.occurredAt), refused: `the stock move (${row.reason.toLowerCase().replace(/_/g, ' ')}) dated ${dayWords(lockDayOf(row.occurredAt))} is not posted`, path: `${at(index)}/occurredAt` })),
+    await honourPeriodLocks(
+      tools,
+      rows.map((row, index) => ({ companyId: row.companyId, day: lockDayOf(row.occurredAt), refused: `the stock move (${row.reason.toLowerCase().replace(/_/g, ' ')}) dated ${dayWords(lockDayOf(row.occurredAt))} is not posted`, path: `${at(index)}/occurredAt`, record: { type: 'StockMove', id: row.id } })),
+      options.periodLockOverride,
     )
   }
 

@@ -17,6 +17,9 @@ import type { PaymentRow } from '../../../_shared/api'
 import { allocationsOf, dayInstant, leftToPlace, money, parseAmount, paymentProblems, PLACED_TONE, placedLabel, placedStateOf, placementProblems } from '../../../_shared/model'
 import { DialogFrame } from '../../../_shared/parts'
 import { Placement, planOf } from '../../../_shared/placement'
+import { refundHeld, refundsTile } from '../../refunds/model'
+import { RefundDialog, RefundMoveDialog } from '../../refunds/view/RefundDialogs'
+import { RefundsList } from '../../refunds/view/RefundsList'
 import { PAYMENT_ROWS_VIEWS, type PaymentRowsView, type PaymentsListActions, type PaymentsListModel } from '../list-model'
 import '../../../_shared/finance.css'
 
@@ -32,7 +35,7 @@ export type { PaymentsListActions, PaymentsListModel } from '../list-model'
  */
 export function PaymentsListView({ model, actions }: { model: PaymentsListModel; actions?: PaymentsListActions }) {
   return (
-    <WithMessages namespaces={['finance', 'lists']}>
+    <WithMessages namespaces={['finance', 'finance-daily', 'lists']}>
       <PaymentsList model={model} actions={actions} />
     </WithMessages>
   )
@@ -40,6 +43,7 @@ export function PaymentsListView({ model, actions }: { model: PaymentsListModel;
 
 function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: PaymentsListActions }) {
   const t = useT('finance')
+  const d = useT('finance-daily')
   const lists = useT('lists')
   const locale = useLocale()
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
@@ -160,6 +164,10 @@ function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: 
     </Select>
   )
   const tiles = model.tiles
+  // B-W2a-80: "Refunds to make" (a saved filter: Rows ▾ Refunds) and the band's Refund (design page.h: secondary).
+  const refundTile = refundsTile(model.openRefunds ?? null)
+  const refundCan = model.refundCan ?? { view: model.can.viewPayments, refund: false, void: model.can.voidPayments, price: model.can.price }
+  const refundWait = refundHeld(refundCan, model.live === 'offline')
 
   return (
     <div className="fw-fin">
@@ -170,6 +178,9 @@ function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: 
           {t(`live.${model.live}`)}
         </span>
         <span className="fw-fin-actions">
+          <Button size="sm" heldReason={refundWait ? d(refundWait.key, refundWait.params) : null} onClick={() => actions?.onOpenRefund?.(null)}>
+            {d('refund.open')}
+          </Button>
           <Button size="sm" variant="primary" heldReason={recordHeld} onClick={() => actions?.onDialog?.({ kind: 'record', step: 1, customer: null, invoiceId: null })} aria-keyshortcuts="c">
             <Plus size={14} aria-hidden /> {t('step.recordPayment')}
           </Button>
@@ -194,9 +205,33 @@ function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: 
         metrics={[
           { label: t('payTile.month'), value: tiles ? (model.can.price ? money(tiles.monthAmount, 'EUR', locale) : String(tiles.monthCount)) : '—', hint: tiles ? t('payTile.monthCount', { count: tiles.monthCount }) : undefined },
           { label: t('payTile.notPlaced'), value: tiles ? (model.can.price ? money(tiles.notPlacedAmount, 'EUR', locale) : String(tiles.notPlacedCount)) : '—', hint: tiles ? t(tiles.capped ? 'payTile.notPlacedCapped' : 'payTile.notPlacedCount', { count: tiles.notPlacedCount }) : undefined },
+          {
+            label: d('refunds.tile'),
+            value: refundTile.value,
+            hint: refundTile.hint ? d(refundTile.hint.key, refundTile.hint.params) : undefined,
+            onClick: () => actions?.onRows?.(model.rows === 'refunds' ? 'all' : 'refunds'),
+            active: model.rows === 'refunds',
+          },
         ]}
       />
 
+      {model.rows === 'refunds' && model.refunds && (
+        <RefundsList
+          model={model.refunds}
+          tools={rowsSelect}
+          keys={ownKeys}
+          onHelp={() => setHelp(true)}
+          actions={{
+            onRows: actions?.onRefundRows,
+            onMore: actions?.onRefundMore,
+            onRetry: actions?.onRetryRefunds,
+            onRefund: (note) => actions?.onOpenRefund?.(note),
+            onMove: actions?.onMoveRefund,
+            onExport: actions?.onExportRefunds,
+          }}
+        />
+      )}
+      {model.rows !== 'refunds' && (
       <ListFrame<PaymentRow>
         label={t('payments.title')}
         rows={state ? [] : items}
@@ -220,8 +255,24 @@ function PaymentsList({ model, actions }: { model: PaymentsListModel; actions?: 
         onOpen={(row) => actions?.onOpen?.(row.id)}
         state={state}
       />
+      )}
 
       {model.dialog?.kind === 'record' && <RecordDialog model={model} actions={actions} />}
+      {model.refundDialog && <RefundDialog model={model.refundDialog} onRecord={(target, draft) => actions?.onRecordRefund?.(target, draft)} onRetry={() => actions?.onRetryRefunds?.()} onClose={() => actions?.onCloseRefund?.()} />}
+      {model.refundMove && (
+        <RefundMoveDialog
+          key={`${model.refundMove.refund.id}-${model.refundMove.move}`}
+          refund={model.refundMove.refund}
+          move={model.refundMove.move}
+          can={refundCan}
+          today={model.today}
+          busy={model.refundMove.busy}
+          problem={model.refundMove.problem}
+          start={model.refundMove.start}
+          onMove={(input) => actions?.onDoMove?.(input)}
+          onClose={() => actions?.onCloseMove?.()}
+        />
+      )}
 
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('list.keysTitle')} size="sm">

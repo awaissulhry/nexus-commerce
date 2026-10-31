@@ -11,7 +11,8 @@ import { cleanBody } from '@nexus/factory-domain/threads/rules'
 import { command, type CommandCaller, type CommandTools } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { serverClock } from '../../core/time'
-import { refuseHardLocked } from '../accounting/period-guard'
+import { honourPeriodLocks } from '../accounting/period-guard'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { closeClaimInCommand } from '../purchasing/claims/claims'
 import { followInCommand } from '../../platform/threads/followers'
 import { ensureThread, mentionProblems, writeMessage } from '../../platform/threads/threads'
@@ -106,7 +107,7 @@ export async function withdrawApproval(caller: CommandCaller, invoiceId: string,
 }
 
 /** payables.pay: the payment recorded (the day the transfer left the bank and its reference); the proposal is W2b. */
-export async function payInvoice(caller: CommandCaller, invoiceId: string, input: { readonly version: number; readonly paidOn: string; readonly paymentRef: string }, idempotencyKey?: string): Promise<{ invoice: DetailView }> {
+export async function payInvoice(caller: CommandCaller, invoiceId: string, input: { readonly version: number; readonly paidOn: string; readonly paymentRef: string; readonly periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string): Promise<{ invoice: DetailView }> {
   const { invoice: seen } = await officeInvoice(caller, invoiceId, PAYABLES_PAY)
   const held = actionProblems({ number: seen.number, status: seen.status as InvoiceStatus, source: seen.source as InvoiceSource }).pay
   if (held) throw new RefusedError([{ code: 'NOT_APPROVED', message: held }])
@@ -115,7 +116,7 @@ export async function payInvoice(caller: CommandCaller, invoiceId: string, input
     const invoice = await invoiceInCommand(tools.tx, invoiceId)
     if (invoice.status !== 'APPROVED') throw new RefusedError([{ code: 'NOT_APPROVED', message: `Invoice ${invoice.number} is ${invoice.status.toLowerCase()}: an invoice is paid once approved.` }])
     if (input.paidOn < invoice.issueDate.toISOString().slice(0, 10)) throw new ValidationError('The payment is dated before the invoice.', [{ path: 'body/paidOn', message: 'Paid before it was issued.' }])
-    await refuseHardLocked(tools.tx, tools.context, [{ companyId: invoice.companyId, day: input.paidOn, refused: `the payment of supplier invoice ${invoice.number} on ${dayWords(input.paidOn)} is not recorded`, path: 'body/paidOn' }])
+    await honourPeriodLocks(tools, [{ companyId: invoice.companyId, day: input.paidOn, refused: `the payment of supplier invoice ${invoice.number} on ${dayWords(input.paidOn)} is not recorded`, path: 'body/paidOn', record: { type: RECORD, id: invoiceId } }], input.periodLockOverride)
     await tools.tx.supplierInvoice.update({ where: { id: invoiceId }, data: { status: 'PAID', paidOn: new Date(`${input.paidOn}T00:00:00.000Z`), paymentRef: input.paymentRef.trim() }, select: { id: true } })
     tools.audit({ action: 'payables.pay', recordType: RECORD, recordId: invoiceId, companyId: invoice.companyId, before: { status: 'APPROVED' }, after: { status: 'PAID', paidOn: input.paidOn, paymentRef: input.paymentRef.trim() } })
     tools.emit({ type: 'supplier_invoice.paid', subject: invoiceId, companyId: invoice.companyId, payload: { supplierInvoiceId: invoiceId, partyId: invoice.partyId, status: 'PAID', matchStatus: invoice.matchStatus, paidOn: input.paidOn } })

@@ -1,0 +1,592 @@
+{
+  "noAccess": {
+    "title": "You don't have access to supplier invoices",
+    "body": "Your role does not include reading supplier invoices. Finance, buyers and the owner have it."
+  },
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline — reading again when back"
+  },
+  "band": {
+    "label": "Supplier invoices",
+    "readAt": "Read at {time}",
+    "reading": "Reading…",
+    "sdiReading": "Reading the SDI pickup…",
+    "sdiUnknown": "The last SDI pickup could not be read",
+    "noSdiAccount": "No SDI account for receiving invoices",
+    "noPickupYet": "No SDI pickup yet",
+    "lastPickup": "Last SDI pickup {time}",
+    "lastPickupByPerson": "Last SDI pickup {time} (asked by a person)",
+    "pickUp": "Pick up now",
+    "addForeign": "Add foreign invoice",
+    "proposal": "Payment proposal",
+    "more": "More actions",
+    "selfInvoices": "Self-invoices TD17/18/19"
+  },
+  "held": {
+    "busy": "Wait: the last change is still being saved.",
+    "manage": "Your role cannot register or map supplier invoices.",
+    "upload": "Your role cannot upload files: the invoice's PDF is uploaded first.",
+    "approve": "Your role cannot approve supplier invoices.",
+    "pay": "An invoice is paid once approved.",
+    "accept": "Your role cannot accept a difference: the buyer or finance does.",
+    "noSdiAccount": "The company has no SDI account for receiving invoices: set it up in Admin › Connections & API.",
+    "noIntermediary": "No SDI intermediary is chosen yet: nothing can be picked up.",
+    "noneApprovable": "None of the chosen invoices waits for approval.",
+    "proposalLater": "Payment proposals come later (W2b): mark each invoice paid on its Payment tab for now.",
+    "selfInvoicesLater": "Self-invoices for purchases from abroad come later (W2b).",
+    "lastLine": "An invoice keeps at least one line.",
+    "edit": "Only a typed invoice that is received or disputed is corrected.",
+    "editSdi": "It came through SDI: what it says never changes (the supplier's credit note corrects it).",
+    "map": "Its lines are mapped while it is received or disputed.",
+    "dispute": "Only a received invoice is rejected (disputed with the supplier).",
+    "reopen": "Only a disputed invoice is reopened.",
+    "withdraw": "Only an approved invoice not paid yet has its approval withdrawn.",
+    "void": "Only a typed invoice that is received or disputed is voided.",
+    "voidSdi": "It came through SDI: a fiscal document is never voided (the supplier's credit note answers it).",
+    "row": {
+      "APPROVED": "Approved already",
+      "PAID": "Paid already",
+      "DISPUTED": "Disputed: reopen it first",
+      "VOIDED": "Voided",
+      "RECEIVED": "Waits for approval"
+    }
+  },
+  "tile": {
+    "title": "To handle",
+    "failed": "Couldn't load what there is to handle",
+    "NEW_FROM_SDI": "New from SDI",
+    "DIFFERENCES": "Differences to check",
+    "TO_APPROVE": "To approve",
+    "DUE_THIS_WEEK": "Due this week",
+    "NEW_FROM_SDIHint": "Arrived through SDI, not looked at yet",
+    "DIFFERENCESHint": "Lines outside the tolerance, not accepted yet",
+    "TO_APPROVEHint": "Matched, nothing left to accept",
+    "DUE_THIS_WEEKHint": "Due by Sunday, overdue included",
+    "dueHint": "Due by {date}, overdue included"
+  },
+  "filter": {
+    "clear": "Remove the filter {name}"
+  },
+  "list": {
+    "title": "Supplier invoices",
+    "hint": "Arrived through SDI or typed from a PDF, with the match result. Amounts are costs.",
+    "noCost": "Amounts are not shown: your role does not see purchase costs.",
+    "search": "Search number, supplier, line",
+    "clearFilters": "Clear filters",
+    "failed": "Couldn't load supplier invoices",
+    "slow": "Still loading…",
+    "more": "Show 50 more",
+    "count_one": "{count} of {total} invoice",
+    "count_other": "{count} of {total} invoices",
+    "empty": {
+      "title": "No supplier invoices yet",
+      "body": "Invoices arrive here from SDI; a foreign supplier's is added from its PDF."
+    },
+    "noMatch": {
+      "title": "No invoices match these filters",
+      "body": "Clear a filter or the search."
+    }
+  },
+  "col": {
+    "supplier": "Supplier",
+    "number": "Number",
+    "date": "Date",
+    "amount": "Amount",
+    "source": "Source",
+    "match": "Match",
+    "approval": "Approval",
+    "due": "Due",
+    "paid": "Paid"
+  },
+  "row": {
+    "net": "net {amount}",
+    "toCheck_one": "{count} difference to check",
+    "toCheck_other": "{count} differences to check",
+    "late_one": "{count} day late",
+    "late_other": "{count} days late",
+    "notPaid": "Not paid"
+  },
+  "kind": {
+    "INVOICE": "Invoice",
+    "CREDIT_NOTE": "Credit note",
+    "line": {
+      "GOODS": "Goods",
+      "SUBCONTRACT": "Subcontract work",
+      "SERVICE": "Service (no order)",
+      "CHARGE": "Charge"
+    }
+  },
+  "source": {
+    "SDI": "SDI",
+    "EMAIL": "E-mail",
+    "MANUAL": "Typed"
+  },
+  "status": {
+    "RECEIVED": "To approve",
+    "APPROVED": "Approved",
+    "PAID": "Paid",
+    "DISPUTED": "Disputed",
+    "VOIDED": "Voided"
+  },
+  "match": {
+    "PENDING": "Not mapped yet",
+    "MATCHED": "Matched",
+    "DIFFERENCES": "Differences",
+    "NO_PO": "No PO",
+    "WAITING_GOODS": "Waiting goods",
+    "title": "Ordered, received, invoiced",
+    "line": "Line {seq}",
+    "orderLine": "{number} line {seq}",
+    "noOrder": "No order",
+    "ordered": "Ordered",
+    "received": "Received (not billed yet)",
+    "invoiced": "Invoiced",
+    "times": "{quantity} × {price}",
+    "receipt": "Last receipt {number}",
+    "receiptDdt": "Last receipt {number} · delivery note {ddt} of {date}",
+    "nothingReceived": "Nothing received yet",
+    "difference": "Difference {amount}",
+    "accepted": "Accepted",
+    "acceptedBy": "Accepted by {name} on {date}: {note}",
+    "someone": "someone",
+    "accept": "Accept difference with reason",
+    "again": "Match again",
+    "stale": "The goods, the order or other invoices changed since: match it again.",
+    "tolerance": "The match's tolerance",
+    "explain": "We pay only for what we ordered at the agreed price and what really arrived. Differences go to the buyer before payment.",
+    "outside_one": "{count} line outside the tolerance",
+    "outside_other": "{count} lines outside the tolerance",
+    "allWithin": "Every line matches within the tolerance.",
+    "sendToBuyer": "Send to buyer",
+    "someUnmapped_one": "{count} line has no order yet: map it on Lines.",
+    "someUnmapped_other": "{count} lines have no order yet: map them on Lines.",
+    "areaLater": "The leather area check (invoiced square feet against those measured at receipt) and the area claim come later (W2b).",
+    "empty": {
+      "title": "No PO linked",
+      "body": "Choose the PO on Lines, or mark it as an invoice without PO.",
+      "map": "Choose the PO"
+    },
+    "creditNote": {
+      "title": "A credit note is not matched",
+      "body": "A credit note takes off what its lines' orders were billed; it is never matched against receipts."
+    }
+  },
+  "verdict": {
+    "WITHIN": "Matched",
+    "DIFFERENCE": "Differs",
+    "WAITING": "Waiting goods"
+  },
+  "bulk": {
+    "approve_one": "Approve {count}",
+    "approve_other": "Approve {count}",
+    "answer": "Approved {approved}; not approved {refused}."
+  },
+  "pickup": {
+    "done": "SDI pickup: {listed} listed, {recorded} new recorded.",
+    "waiting_one": "{count} delivery waits at the intermediary: it cannot be recorded (see the pickup's history).",
+    "waiting_other": "{count} deliveries wait at the intermediary: they cannot be recorded (see the pickup's history)."
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "search": "Search",
+    "open": "Open the invoice",
+    "select": "Select the focused invoice"
+  },
+  "foreign": {
+    "title": "Add foreign invoice",
+    "subtitle": "A foreign supplier's invoice, typed from its PDF. An Italian supplier's arrives through SDI.",
+    "supplierSearch": "Find the supplier",
+    "supplierHint": "Code or name of a supplier or workshop",
+    "supplierPlaceholder": "Code or name",
+    "supplier": "Supplier",
+    "supplierFirst": "Type to find the supplier",
+    "supplierNone": "No supplier found",
+    "supplierPick": "Choose the supplier",
+    "kind": "Kind",
+    "number": "Invoice number",
+    "issueDate": "Invoice date",
+    "dueDate": "Due date",
+    "currency": "Currency",
+    "description": "What it bills",
+    "net": "Net amount",
+    "amountHint": "In the invoice's currency, e.g. 1250,50",
+    "vatRate": "VAT rate %",
+    "vatNature": "VAT nature (Natura)",
+    "vatNatureHint": "With VAT 0: the nature, e.g. N2.1 (outside the scope) or N6.x (reverse charge)",
+    "vat": "VAT amount",
+    "file": "The invoice's PDF",
+    "fileHint": "The supplier's PDF: it is kept with the invoice (legal archive).",
+    "filePick": "Choose the PDF",
+    "fileChange": "Choose another PDF",
+    "note": "Internal note",
+    "datePlaceholder": "dd/mm/yyyy",
+    "dateClear": "Clear the date",
+    "submit": "Register invoice",
+    "after": "It is registered as a service without PO: map its lines to an order on its Lines tab if it bills one. Someone else approves it.",
+    "problem": {
+      "supplier": "Choose the supplier.",
+      "number": "Type the invoice's number.",
+      "issueDate": "Give the invoice's date (today or earlier).",
+      "currency": "The currency is three letters, e.g. EUR.",
+      "description": "Say what it bills.",
+      "net": "Type the net amount.",
+      "vatRate": "Type the VAT rate (0 to 100).",
+      "vat": "Type the VAT amount (0 when none).",
+      "vatNature": "With VAT 0, give the nature (N1 … N7, e.g. N2.1).",
+      "file": "Choose the invoice's PDF."
+    }
+  },
+  "record": {
+    "back": "Supplier invoices",
+    "backToList": "Back to supplier invoices",
+    "title": "Supplier invoice",
+    "loading": "Reading the invoice…",
+    "tabsLabel": "The invoice's tabs",
+    "asReceived": "As received",
+    "dock": "Thread",
+    "dockHint": "The invoice's thread beside the tabs (⌘J)",
+    "dockLabel": "The invoice's thread",
+    "more": "More actions",
+    "void": "Void",
+    "downloadPdf": "Download the PDF",
+    "copyNumber": "Copy the number",
+    "dates": "Issued {issued} · received {received}",
+    "creditOf": "Credits {number}",
+    "changed": "Changed by someone else at {time}.",
+    "reload": "Read again",
+    "readOnly": "Read-only: your role sees the invoice and changes nothing.",
+    "noPanels": "The thread is not available here.",
+    "state": {
+      "not_found": {
+        "title": "Supplier invoice not found",
+        "body": "It does not exist, or your role does not reach its company or supplier."
+      },
+      "forbidden": {
+        "title": "You can't open this invoice",
+        "body": "Your role does not reach this company or supplier."
+      },
+      "error": {
+        "title": "Couldn't load the invoice"
+      }
+    }
+  },
+  "tab": {
+    "lines": "Lines",
+    "match": "Match",
+    "approval": "Approval",
+    "payment": "Payment",
+    "activity": "Activity",
+    "differences": "Differences to check",
+    "ready": "Ready for approval"
+  },
+  "lines": {
+    "title": "Lines",
+    "count_one": "{count} line",
+    "count_other": "{count} lines",
+    "typedHint": "Typed from the supplier's PDF: change, add or remove lines while it is received.",
+    "sdiHint": "Read from the XML SDI delivered: what it says never changes; choose the order each line bills (saved at once).",
+    "add": "Add line",
+    "edit": "Change line",
+    "remove": "Remove line",
+    "menu": "Actions of line {seq}",
+    "withoutOrder_one": "Mark it as an invoice without PO ({count} line)",
+    "withoutOrder_other": "Mark it as an invoice without PO ({count} lines)",
+    "candidatesFailed": "Couldn't read the orders the lines may bill.",
+    "col": {
+      "seq": "#",
+      "description": "Description",
+      "quantity": "Quantity",
+      "price": "Unit price",
+      "vat": "VAT",
+      "net": "Net",
+      "map": "What it bills",
+      "menu": "Actions"
+    },
+    "mappedPo": "{order} line {seq}",
+    "mappedSubcontract": "Subcontract order {order}",
+    "notMapped": "No order yet",
+    "mapPlaceholder": "Choose the order line",
+    "optionPo": "{order} · line {seq} · {item} · {quantity}",
+    "optionSubcontract": "Subcontract order {order}",
+    "optionService": "A service (no order)",
+    "optionCharge": "A charge (freight, packing…)",
+    "empty": {
+      "title": "No lines read",
+      "body": "Open the original file (As received)."
+    },
+    "totals": "Totals and VAT",
+    "vatCol": {
+      "rate": "VAT rate",
+      "taxable": "Taxable",
+      "vat": "VAT"
+    },
+    "total": "Total",
+    "gross": "Total to pay {amount}",
+    "withholding": "Withholding tax {amount} (as read, not booked)",
+    "stamp": "Stamp duty {amount} (as read, not booked)",
+    "noCost": "Prices and amounts are not shown: your role does not see purchase costs."
+  },
+  "approval": {
+    "title": "Approval",
+    "state": "State",
+    "approver": "Approved by",
+    "notYet": "Not approved yet",
+    "note": "Note",
+    "registered": "Registered",
+    "registeredBy": "Typed by {name}",
+    "registeredSdi": "Delivered by SDI (nobody of the office typed it)",
+    "ready": "Ready for approval: matched, nothing left to accept.",
+    "empty": "Ready for approval once matched.",
+    "problems": "What waits before approval",
+    "approve": "Approve",
+    "reject": "Reject with reason",
+    "withdraw": "Withdraw approval",
+    "reopen": "Reopen",
+    "disputed": "Disputed with the supplier on {date}",
+    "voided": "Voided on {date}",
+    "rulesTitle": "Separation of duties",
+    "rules": "Whoever typed an invoice does not approve it; an invoice delivered by SDI may be approved by anyone who approves. Approving does not pay it: payment is recorded once the transfer left the bank.",
+    "dualLater": "A second approval above a limit comes later (W2b)."
+  },
+  "payment": {
+    "title": "Payment",
+    "due": "Due",
+    "paidOn": "Paid on",
+    "notPaid": "Not paid yet",
+    "ref": "Bank reference",
+    "amount": "Amount",
+    "batch": "Payment batch",
+    "batchLater": "Not in a payment batch (batches come later, W2b)",
+    "markPaid": "Mark paid",
+    "terms": "Payment terms",
+    "noTerms": "The invoice names no payment terms.",
+    "col": {
+      "due": "Due",
+      "method": "Method",
+      "amount": "Amount",
+      "iban": "IBAN"
+    },
+    "method": "Method {code}",
+    "condition": "Condition {code} as the invoice says.",
+    "ibanLater": "Whether the IBAN can be used is checked later (W2b): compare it with the supplier's bank details before paying."
+  },
+  "dialog": {
+    "note": "Note (optional)",
+    "reason": "Reason",
+    "reasonOptional": "Reason (optional)",
+    "reasonNeeded": "Give a reason first.",
+    "approve": {
+      "title": "Approve {number}?",
+      "body": "{supplier}'s invoice becomes payable. It does not pay it: mark it paid once the transfer left the bank.",
+      "confirm": "Approve"
+    },
+    "accept": {
+      "title": "Accept the difference",
+      "line": "Line {seq}: {words}",
+      "body": "Paying more than ordered (or before the goods arrived) is a decision in words: it is kept with the invoice.",
+      "reason": "Why we accept it",
+      "reasonHint": "E.g. the price agreed by phone with the supplier",
+      "confirm": "Accept difference"
+    },
+    "sendToBuyer": {
+      "title": "Send the differences to the buyer",
+      "body": "An internal note on the invoice's thread names each line outside the tolerance (no price) and tells who sent the order.",
+      "message": "Message (optional)",
+      "confirm": "Send to buyer"
+    },
+    "dispute": {
+      "title": "Reject {number}?",
+      "body": "It is disputed with the supplier: it is not approved or paid until it is reopened or credited.",
+      "confirm": "Reject"
+    },
+    "withdraw": {
+      "title": "Withdraw the approval of {number}?",
+      "body": "It waits for approval again.",
+      "confirm": "Withdraw approval"
+    },
+    "reopen": {
+      "title": "Reopen {number}?",
+      "body": "It is received again: it can be matched and approved.",
+      "confirm": "Reopen"
+    },
+    "void": {
+      "title": "Void {number}?",
+      "body": "A typed invoice registered by mistake is voided; it stays in the history.",
+      "confirm": "Void"
+    },
+    "pay": {
+      "title": "Mark {number} paid",
+      "body": "Record the day the transfer left the bank and its reference.",
+      "paidOn": "Paid on",
+      "ref": "Bank reference",
+      "refHint": "The CRO / TRN of the transfer",
+      "confirm": "Mark paid"
+    },
+    "withoutOrder": {
+      "title": "An invoice without PO",
+      "body_one": "{count} goods line without an order becomes a service: it is approved without a match.",
+      "body_other": "{count} goods lines without an order become services: they are approved without a match.",
+      "confirm": "Mark without PO"
+    },
+    "removeLine": {
+      "title": "Remove line {seq}?",
+      "body": "{description}",
+      "confirm": "Remove line"
+    },
+    "line": {
+      "editTitle": "Change the line",
+      "addTitle": "Add a line",
+      "quantity": "Quantity",
+      "uom": "Unit",
+      "unitPrice": "Unit price",
+      "save": "Save line",
+      "add": "Add line",
+      "problemQuantity": "The quantity is a number above 0 (up to 4 decimals).",
+      "problemPrice": "The unit price is a number above 0 (up to 6 decimals)."
+    }
+  },
+  "pay": {
+    "problem": {
+      "day": "Give the day it was paid.",
+      "future": "The payment cannot be dated after today.",
+      "beforeIssue": "The payment cannot be dated before the invoice.",
+      "ref": "Type the bank's reference."
+    }
+  },
+  "notice": {
+    "approved": "Approved.",
+    "accepted": "Difference accepted in words.",
+    "sentToBuyer_one": "Sent to the buyer: {count} person told.",
+    "sentToBuyer_other": "Sent to the buyer: {count} people told.",
+    "notReached_one": "{count} person who sent the order cannot read the invoice's thread.",
+    "notReached_other": "{count} people who sent the order cannot read the invoice's thread.",
+    "disputed": "Rejected: disputed with the supplier.",
+    "withdrawn": "Approval withdrawn.",
+    "reopened": "Reopened.",
+    "voided": "Voided.",
+    "paid": "Marked paid.",
+    "withoutOrder": "Marked as an invoice without PO.",
+    "lineRemoved": "Line removed.",
+    "lineSaved": "Line saved.",
+    "lineAdded": "Line added.",
+    "matched": "Matched again."
+  },
+  "refusal": {
+    "NOT_RECEIVED": "Only a received invoice is approved.",
+    "OWN_INVOICE": "You entered this invoice, so someone else approves it.",
+    "NO_LINES": "The invoice has no lines: add them from its PDF first.",
+    "NOT_MATCHED": "Map every goods or subcontract line to its order (or mark it as an invoice without PO) first.",
+    "WAITING_GOODS": "The goods invoiced have not all arrived yet: approve it once they are received, or accept each difference in words.",
+    "DIFFERENCES": "A difference outside the tolerance is accepted in words first, or the invoice is disputed with the supplier.",
+    "NO_XML": "The XML SDI delivered is not stored yet: pick up again before approving.",
+    "LINES_DO_NOT_ADD_UP": "The lines' net does not add up to the invoice's taxable amount: correct the lines or the totals first.",
+    "NOT_APPROVED": "Only an approved invoice not paid yet is paid or has its approval withdrawn.",
+    "NOT_OPEN": "Its lines change only while it is received or disputed.",
+    "FROM_SDI": "It came through SDI: what it says never changes (only how its lines are mapped).",
+    "COMES_THROUGH_SDI": "An Italian supplier's invoice arrives through SDI (the XML is the legal invoice): pick it up from SDI instead of typing it.",
+    "DUPLICATE": "This supplier's invoice with this number and date is registered already.",
+    "NOTHING_UNMAPPED": "No goods line is without an order.",
+    "NOT_ALLOWED_NOW": "This change is not allowed in the invoice's state now.",
+    "WITHIN_TOLERANCE": "This line matches within the tolerance: there is nothing to accept.",
+    "ACCEPTED": "This difference was accepted already.",
+    "NO_DIFFERENCES": "Every matched line is within the tolerance: there is nothing to send to the buyer.",
+    "THREAD_CLOSED": "The invoice's thread is closed: reopen it to send the differences.",
+    "NOT_A_CREDIT_NOTE": "A claim is settled by the supplier's credit note: this is an invoice.",
+    "VOIDED": "A voided credit note settles nothing.",
+    "OTHER_SUPPLIER": "The claim is of another supplier or company.",
+    "NOT_ACCEPTED_FOR_CREDIT": "A credit note settles a claim the supplier accepted for a credit.",
+    "NO_INTERMEDIARY": "No SDI intermediary is chosen yet: nothing can be picked up.",
+    "INTERMEDIARY_UNAVAILABLE": "The SDI intermediary did not answer: try again in a few minutes.",
+    "NO_SDI_ACCOUNT": "The company has no active SDI account for receiving invoices.",
+    "other": "The change was refused as it stands."
+  },
+  "problem": {
+    "read": {
+      "signed_out": "You were signed out: sign in again.",
+      "forbidden": "Your role does not reach this.",
+      "not_found": "Not found.",
+      "unavailable": "The factory server did not answer: try again.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "internal": "Something went wrong on our side."
+    },
+    "write": {
+      "moved": "Someone changed the invoice meanwhile: it was read again; check and try once more.",
+      "state": "The invoice's state does not allow this now: it was read again.",
+      "invalid": "Some of what you typed was refused: check the fields.",
+      "paidOn": "The payment day is outside the invoice's date and today.",
+      "mapping": "That order cannot be billed by this line (another supplier, company, currency, or an order not sent).",
+      "lines": "Check the lines: one was refused.",
+      "signed_out": "You were signed out: sign in again.",
+      "forbidden": "Your role cannot do this here.",
+      "not_found": "The invoice is no longer there.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "unavailable": "The factory server did not answer: try again.",
+      "internal": "Something went wrong on our side."
+    }
+  },
+  "xml": {
+    "back": "Back to the invoice",
+    "title": "Supplier invoice as received",
+    "heading": "{number} as received",
+    "fromSdi": "Delivered by SDI as {file} (SDI id {id}).",
+    "typed": "Typed from the supplier's PDF: there is no XML.",
+    "names": "What it names",
+    "noXml": "A typed invoice has no XML: its PDF is the copy we keep.",
+    "failed": "Couldn't read the XML",
+    "missing": "The XML file is not in the file store: pick the invoice up from SDI again, or ask an administrator.",
+    "reading": "Reading the XML…",
+    "supplier": "Supplier",
+    "buyer": "Buyer",
+    "document": "Document",
+    "documentValue": "{type} no. {number} of {date}",
+    "reason": "Reason (causale)",
+    "format": "Format",
+    "refs": "What it refers to",
+    "refCol": {
+      "kind": "Kind",
+      "number": "Number",
+      "lines": "Lines"
+    },
+    "refOrder": "Order",
+    "refDdt": "Delivery note",
+    "allLines": "All lines",
+    "attachments": "Attached: {names}",
+    "pdf": "The PDF",
+    "showPdf": "Show the PDF",
+    "downloadPdf": "Download the PDF",
+    "noPdf": "No PDF came with it.",
+    "pdfLoading": "Reading the PDF…",
+    "pdfFailed": "Couldn't read the PDF.",
+    "pdfTitle": "{number} (PDF)",
+    "text": "The XML as received ({file})",
+    "textLabel": "The XML as SDI delivered it",
+    "downloadXml": "Download the XML",
+    "noCost": "The XML holds the prices: your role does not see purchase costs, so it is not shown."
+  },
+  "po": {
+    "title": "Supplier invoices of this order",
+    "hint": "Invoices with a line on this order, matched in Finance. Amounts are costs.",
+    "noCost": "Amounts are not shown: your role does not see purchase costs.",
+    "count_one": "{count} invoice",
+    "count_other": "{count} invoices",
+    "failed": "Couldn't load supplier invoices",
+    "empty": {
+      "title": "No invoice yet",
+      "body": "When the supplier's invoice arrives and names this order, it shows here."
+    },
+    "noAccess": {
+      "title": "Supplier invoices are Finance's",
+      "body": "Your role does not include reading supplier invoices."
+    },
+    "open": "Open in Finance",
+    "openCol": "Finance",
+    "more": "Only the newest 50 are shown: see all in Finance › Supplier invoices."
+  }
+}

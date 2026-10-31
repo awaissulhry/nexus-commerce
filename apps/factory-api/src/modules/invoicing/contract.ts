@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { businessDate, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { CHARGE_KINDS } from '@nexus/factory-domain/invoicing/charges/charges'
 import { INVOICE_DOC_TYPES, INVOICE_LINE_KINDS, INVOICE_STATUSES, MAX_CAUSALE, MAX_DESCRIPTION, MAX_INVOICE_LINES, PRICE_BASES } from '@nexus/factory-domain/invoicing/invoices'
@@ -223,7 +224,14 @@ export const checksContract = defineContract({
 
 const issued = output({ invoice: invoiceView, filesPending: z.boolean(), filesProblem: z.string().nullable() })
 
-export const issueContract = defineContract({ params: invoiceParams, body: input({ version }), response: { 200: issued } })
+export const issueContract = defineContract({
+  params: invoiceParams,
+  body: input({
+    version,
+    periodLockOverride: periodLockOverride.optional(),
+  }),
+  response: { 200: issued },
+})
 
 export const makeFilesContract = defineContract({ params: invoiceParams, response: { 200: one } })
 

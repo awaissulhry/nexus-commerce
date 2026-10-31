@@ -7,6 +7,7 @@ import { availabilityOf } from '@nexus/factory-domain/inventory/reservations/rul
 import { finishedItemDraft, standardCostOn, type SkuFacts } from '@nexus/factory-domain/production/completion/rules'
 import type { CommandTools, CommandTx } from '../../../core/command'
 import { postMoves, type LedgerRow, type MoveDraft, type PostedMove } from '../ledger/post-moves'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { lockReservations, readKeyFacts } from '../reservations/store'
 
 /**
@@ -153,7 +154,7 @@ export async function standardCostFor(tx: CommandTx, companyId: string, itemId: 
 }
 
 /** One PRODUCTION_RECEIPT per draft, in order, valued at the standard cost; key `<key>:<n>` (postMoves). */
-export async function postFinishedReceipts(tools: CommandTools, drafts: readonly FinishedDraft[], key: string): Promise<PostedMove[]> {
+export async function postFinishedReceipts(tools: CommandTools, drafts: readonly FinishedDraft[], key: string, periodLockOverride?: PeriodLockOverride): Promise<PostedMove[]> {
   const day = businessDate(tools.now)
   const moves: MoveDraft[] = []
   for (const draft of drafts) {
@@ -174,7 +175,11 @@ export async function postFinishedReceipts(tools: CommandTools, drafts: readonly
       ...(cost ? { cost } : {}),
     })
   }
-  return postMoves(tools, moves, { key, issuePath: (index) => `body/cells/${index}` })
+  return postMoves(tools, moves, {
+    key,
+    issuePath: (index) => `body/cells/${index}`,
+    periodLockOverride,
+  })
 }
 
 export interface OverReserved {

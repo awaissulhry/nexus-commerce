@@ -49,6 +49,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Finance › Invoices (SCR-081: invoices, deposit invoices, credit notes) and Payments (SCR-082: a payment's placements).
   Invoice: '/finance/invoices/[id]',
   Payment: '/finance/payments/[id]',
+  // B-W2a-81: Finance › Supplier invoices (SCR-153): a supplier invoice's record; a payment reminder opens on Receivables (SCR-151).
+  SupplierInvoice: '/finance/payables/[id]',
+  PaymentReminder: '/finance/receivables?reminder=[id]',
   // Compliance › Certificates (SCR-051) and Labels & marking (SCR-053).
   Certificate: '/compliance/certificates/[id]',
   LabelTemplate: '/compliance/labels/[id]',
@@ -145,6 +148,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-72: standard vs actual (`?rows=`, `?q=`, `?site=`, `?month=`, `?open=<work order>`) and the order margins (`?from=`, `?to=`, `?party=`, `?style=`, `?q=`, `?open=<order>`).
   '/costing/work-orders': '/finance/costing',
   '/costing/margins': '/finance/margins',
+  // B-W2a-81: what customers owe (`?bucket=`, `?q=`) and the supplier invoices (`?tile=`, `?q=`, the API's own filters).
+  '/receivables/ageing': '/finance/receivables',
+  '/payables/invoices': '/finance/payables',
   // The shipments list (SCR-066) reads `?rows=` and `?q=` from the address.
   '/shipping/shipments': '/warehouse/shipments',
   // The PO list reads `status` (one state, as the API) and `waitingOver48h`; Receipts reads `status`, `view=expected`.
