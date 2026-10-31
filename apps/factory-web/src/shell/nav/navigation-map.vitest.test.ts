@@ -326,6 +326,8 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       bundles: 'production.bundles',
       receive: 'inventory.receive',
       pick: 'inventory.issue',
+      returnsin: 'sales.returns.receive', // GET /sales/returns/dock (B-W2a-76)
+      kits: 'purchasing.subcontract.kit', // GET /purchasing/subcontracting/kits (B-W2a-76)
       labels: 'production.serials',
       pack: 'shipping.pack',
       final: 'quality.inspections.view',
@@ -342,7 +344,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       sewing: ['mywork', 'operation', 'machine', 'scan'],
       packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'scan'],
       inspection: ['mywork', 'operation', 'final', 'machine', 'scan'],
-      warehouse: ['receive', 'pick', 'machine', 'scan'],
+      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'scan'],
     })
     for (const mode of FLOOR_MODES) expect(keys(mode).length).toBeLessThanOrEqual(MAX_TILES)
     for (const locale of LOCALES) {

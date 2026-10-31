@@ -1,0 +1,289 @@
+{
+  "title": "Subcontract kits",
+  "unit": {
+    "PCS": "pcs",
+    "PAIR": "pairs",
+    "SET": "sets",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  },
+  "offline": {
+    "short": "Needs the network",
+    "scan": "No network: opening an order needs the office. Wait for the network.",
+    "send": "No network: Send waits for the network (the DDT takes the office's number).",
+    "receive": "No network: you can scan the bundles; Finish receipt waits for the network."
+  },
+  "pad": {
+    "less": "Less",
+    "more": "More",
+    "clear": "Clear",
+    "back": "Delete",
+    "empty": "Type a number",
+    "separator": "Point",
+    "range": "From {min} to {max}"
+  },
+  "card": {
+    "type": "Subcontract order",
+    "workshop": "Workshop",
+    "workOrder": "Work order",
+    "backBy": "Back by",
+    "late": "late",
+    "place": "Workshop's place"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "ISSUED": "Issued",
+    "AT_WORKSHOP": "At the workshop",
+    "PARTLY_RECEIVED": "Partly back",
+    "RECEIVED": "All back",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "noPermission": {
+    "title": "Subcontract kits are not your job here",
+    "body": "Your role does not send kits to workshops or receive their goods at this site. Ask your team leader."
+  },
+  "action": {
+    "back": "Back",
+    "modes": "Send or receive",
+    "toDdt": "Next: the DDT",
+    "send": "Send · print DDT",
+    "print": "Print",
+    "done": "Done",
+    "receive": "Finish receipt",
+    "next": "Next order"
+  },
+  "mode": {
+    "question": "Send or receive?",
+    "send": "Send a kit",
+    "sendHint": "Material and cut bundles to a workshop, with the DDT",
+    "sendHeld": "Your role does not send kits",
+    "receive": "Receive back",
+    "receiveHint": "Bundles and leftover material back from a workshop",
+    "receiveHeld": "Your role does not receive goods back"
+  },
+  "pick": {
+    "label": "Scan the subcontract order",
+    "hintSend": "Its number on the job sheet, or tap an order below.",
+    "hintReceive": "Its number on the workshop's delivery note, or tap an order below.",
+    "opening": "Opening the order…",
+    "loading": "Reading this site's orders…",
+    "emptySend": {
+      "title": "No kit to send",
+      "body": "No issued order of this site waits for its kit."
+    },
+    "emptyReceive": {
+      "title": "Nothing out at a workshop",
+      "body": "No order of this site has goods at a workshop now."
+    },
+    "toSend": "Kits to send",
+    "toReceive": "Goods at the workshops",
+    "backBy": "back by {date}",
+    "linesToSend_one": "line to send",
+    "linesToSend_other": "lines to send",
+    "piecesOut_one": "piece out",
+    "piecesOut_other": "pieces out",
+    "count_one": "{count} order",
+    "count_other": "{count} orders"
+  },
+  "kit": {
+    "ticked_one": "ticked",
+    "ticked_other": "ticked",
+    "stateHeld": "This order cannot send its kit now: the office checks it.",
+    "stateShort": "The office must check the order first",
+    "scanLabel": "Scan the kit",
+    "scanHint": "Each bundle's ticket, the lot or hide label, or the material's code.",
+    "lines": "Material (from the bill of materials)",
+    "lot": "lot {code}",
+    "from": "from {place}",
+    "noStock": "not in stock at this site",
+    "tickedOne": "Ticked",
+    "toTick": "To tick",
+    "noStockHeld": "Not in stock at this site: the office sends it or changes the kit",
+    "bundles": "Cut bundles",
+    "part": "part {part}",
+    "wholeGarments": "whole garments",
+    "garments_one": "garment",
+    "garments_other": "garments",
+    "sentBefore_one": "{count} bundle went out before on this order.",
+    "sentBefore_other": "{count} bundles went out before on this order.",
+    "count_one": "{count} thing to send",
+    "count_other": "{count} things to send",
+    "nothing": {
+      "title": "Nothing left to send",
+      "body": "Every line and bundle of this kit went out."
+    },
+    "missingBoth": "Kit not complete: {bundles} bundles and {lines} materials missing.",
+    "missingBundles_one": "Kit not complete: {count} bundle missing.",
+    "missingBundles_other": "Kit not complete: {count} bundles missing.",
+    "missingLines_one": "Kit not complete: {count} material missing.",
+    "missingLines_other": "Kit not complete: {count} materials missing.",
+    "noStockLine_one": "{count} material is not in stock at this site: the office sends it or changes the kit.",
+    "noStockLine_other": "{count} materials are not in stock at this site: the office sends them or changes the kit.",
+    "noStockShort": "A material is not in stock here"
+  },
+  "keys": {
+    "tick": "Tick or untick the row",
+    "reject": "Reject garments of the bundle"
+  },
+  "ddt": {
+    "what": "The DDT says the goods travel for work on our behalf (conto lavorazione): they stay ours at the workshop.",
+    "who": "Who carries the goods?",
+    "SENDER": "Our transport",
+    "RECIPIENT": "The workshop collects",
+    "hint": {
+      "SENDER": "Our van or our driver",
+      "RECIPIENT": "The workshop picks it up here"
+    },
+    "packages": "Parcels",
+    "weight": "Gross weight",
+    "appearance": "What do the goods look like?"
+  },
+  "appearance": {
+    "BOXES": "Boxes",
+    "BAGS": "Bags",
+    "PALLET": "Pallet",
+    "LOOSE": "Loose"
+  },
+  "held": {
+    "busy": "Sending…",
+    "transport": "Say who carries the goods first",
+    "weight": "Type the gross weight first",
+    "noPdf": "The DDT is not shown yet",
+    "count": "Type how many first",
+    "reason": "Pick the reason first",
+    "place": "Pick the place first",
+    "reasonLine": "A rejected bundle needs its reason: tap it and pick one.",
+    "back": {
+      "nothing": "Scan a bundle or enter material first",
+      "reason": "A rejected bundle needs its reason"
+    }
+  },
+  "sent": {
+    "done": "Kit sent with DDT {number}: the goods are at {place}, still ours.",
+    "loading": "Opening the DDT…",
+    "missing": {
+      "title": "The DDT is issued; its PDF is not stored yet",
+      "body": "The office prints it again from the order. The goods may go with the DDT number."
+    },
+    "failed": {
+      "title": "The DDT could not be shown",
+      "body": "It is issued and stored: the office prints it from the order."
+    },
+    "title": "DDT {number}"
+  },
+  "reject": {
+    "type": "Bundle back",
+    "kind": "What is wrong?",
+    "defective": "Rejected",
+    "scrapped": "Scrapped there",
+    "hint": {
+      "defective": "Back to us, to be reworked",
+      "scrapped": "The workshop says it is lost"
+    },
+    "count": "How many garments",
+    "of": "of {count}",
+    "reason": "Why?",
+    "reasonsUnread": "The reasons could not be read: the rejection goes without one.",
+    "noReasons": "No rework reasons are set: the rejection goes without one.",
+    "drop": "Take off",
+    "confirm": "Confirm"
+  },
+  "back": {
+    "cell": "Colour and size",
+    "now_one": "piece back now",
+    "now_other": "pieces back now",
+    "scanLabel": "Scan each bundle back",
+    "scanHint": "A bundle's ticket brings its garments back; the workshop's delivery note number is kept.",
+    "ddtKept": "Workshop's delivery note {code} kept for the receipt.",
+    "ddtClear": "Remove the note's number",
+    "noBundles": {
+      "title": "No bundle went out on this order",
+      "body": "Only material went to the workshop: enter what comes back below."
+    },
+    "bundles": "Bundles out",
+    "row": "Out {out} · back {back} · rejected {rejected}",
+    "rejectedNow": "Rejected now",
+    "backNow": "Back now",
+    "allBack": "All back",
+    "out": "Out",
+    "thisReceipt": "this receipt",
+    "stillOut": "still out",
+    "allBackHeld": "Every garment of this bundle is back",
+    "count_one": "{count} bundle out",
+    "count_other": "{count} bundles out",
+    "material": "Unused material and offcuts",
+    "atWorkshop": "at the workshop {quantity}",
+    "to": "to {place}",
+    "returning": "Coming back",
+    "stays": "Stays there",
+    "totals": "This receipt: {good} good, {rejected} rejected, {scrapped} scrapped.",
+    "stateShort": "Nothing is at the workshop"
+  },
+  "material": {
+    "type": "Material back",
+    "name": "Material",
+    "lot": "Lot",
+    "atWorkshop": "At the workshop",
+    "quantity": "Quantity back",
+    "place": "Where it goes",
+    "confirm": "Confirm"
+  },
+  "received": {
+    "title": "Receipt of {number} recorded",
+    "body": "{good} good, {rejected} rejected, {scrapped} scrapped at the workshop.",
+    "material_one": "{count} material line back into our places.",
+    "material_other": "{count} material lines back into our places.",
+    "office": "The office sees the receipt on the order now."
+  },
+  "refusal": {
+    "NOT_FOUND": {
+      "message": "No subcontract order with this number at this site.",
+      "fix": "Check the number on the job sheet or the delivery note, or ask the buyer."
+    },
+    "NOT_SENDING": {
+      "message": "This order does not send a kit now.",
+      "fix": "Its state does not allow it: the buyer issues it first, or it is closed."
+    },
+    "NOT_RECEIVING": {
+      "message": "Nothing of this order is at the workshop.",
+      "fix": "Send its kit first, or check the order number."
+    },
+    "NOT_IN_KIT": {
+      "message": "This label is not in this kit.",
+      "fix": "Scan a bundle ticket, a lot or hide label or a material code of the list."
+    },
+    "SENT_BEFORE": {
+      "message": "This bundle went out before.",
+      "fix": "Scan the next bundle of the kit."
+    },
+    "NOT_OUT": {
+      "message": "This bundle did not go out on this order.",
+      "fix": "Put it aside and tell the buyer."
+    },
+    "ALL_BACK": {
+      "message": "Every garment of this bundle is back already.",
+      "fix": "Scan the next bundle."
+    },
+    "CHANGED": {
+      "message": "The order changed meanwhile.",
+      "fix": "It was read again: check the list and send once more."
+    },
+    "BADGE": {
+      "message": "This badge does not open this tablet.",
+      "fix": "Ask your team leader."
+    }
+  }
+}
