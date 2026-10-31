@@ -1,7 +1,7 @@
 import type { StepUpState } from '../../_shared/hooks'
 import type { LiveState } from '../../_shared/model'
-import type { DefectChoice, FoundAt, NcrCard, NcrCounts, NcrLane, NcrPrefill, NcrSource, NcrSummary, Person, Severity, SiteChoice, Uom } from '../api'
-import type { NcrAddress, NcrCan } from '../model'
+import type { DefectChoice, FoundAt, NcrCard, NcrCounts, NcrLane, NcrPrefill, NcrSettingsAnswer, NcrSource, NcrSummary, Person, Severity, SiteChoice, Uom } from '../api'
+import type { ContainmentTimeDraft, NcrAddress, NcrCan } from '../model'
 import type { NcrNotice } from '../parts'
 import type { CloseDialogActions, CloseDialogModel } from '../view/CloseNcrDialog'
 
@@ -41,13 +41,15 @@ export const EMPTY_DRAFT: NewNcrDraft = {
 /**
  * The draft as the record's prefill says it (what was found, where, how much). The prefill arrives after the dialog
  * opens: what the person typed meanwhile stays; the prefill fills only what is still empty or at its default.
+ * B-W2b-17: the title is the prefill's parts in the reader's words (`title`, made by the caller with model.ts
+ * titleWords); the API's English `title` only when it has no parts. Left out with parts: the dialog words it itself.
  */
-export function draftOf(prefill: NcrPrefill, current: NewNcrDraft): NewNcrDraft {
+export function draftOf(prefill: NcrPrefill, current: NewNcrDraft, title?: string | null): NewNcrDraft {
   const keep = <K extends keyof NewNcrDraft>(key: K, value: NewNcrDraft[K] | null | undefined): NewNcrDraft[K] => (current[key] !== EMPTY_DRAFT[key] || value === null || value === undefined ? current[key] : value)
   return {
     ...current,
     siteId: keep('siteId', prefill.siteId),
-    title: keep('title', prefill.title),
+    title: keep('title', title ?? (prefill.titleParts ? null : prefill.title)),
     description: keep('description', prefill.description),
     quantityAffected: keep('quantityAffected', prefill.quantityAffected),
     uom: keep('uom', prefill.uom),
@@ -67,10 +69,26 @@ export type ListDialog =
       readonly from: { readonly recordType: string; readonly recordId: string; readonly prefill: NcrPrefill | null; readonly problem: string | null } | null
       /** The defect library (null while read; 'failed': the NCR is made without a code). */
       readonly defects: readonly DefectChoice[] | null | 'failed'
+      /**
+       * B-W2b-17: the containment time the NCR gets when nobody says otherwise (hours after it was found): from the
+       * prefill, or the company's setting for an NCR by hand. null: still read; 'failed': the factory sets it at Create.
+       */
+      readonly containment: { readonly hours: number } | null | 'failed'
       readonly busy: boolean
       readonly notice: NcrNotice | null
     }
   | { readonly kind: 'assign'; readonly ids: readonly string[]; readonly ownerId: string; readonly busy: boolean; readonly notice: NcrNotice | null }
+  | {
+      /** B-W2b-17: the company's containment time for new NCRs (page ⋯ "Containment time…"). */
+      readonly kind: 'containmentTime'
+      /** The setting read (null while read). */
+      readonly answer: NcrSettingsAnswer | null
+      /** Why it could not be read (a `quality` problem key). */
+      readonly problem: string | null
+      readonly draft: ContainmentTimeDraft
+      readonly busy: boolean
+      readonly notice: NcrNotice | null
+    }
 
 export interface NcrListModel {
   readonly prefix: string
@@ -117,6 +135,11 @@ export interface NcrListActions {
   onAssign?: (ids: readonly string[]) => void
   onAssignOwner?: (ownerId: string) => void
   onSubmitAssign?: () => void
+  /** B-W2b-17: the containment-time dialog. */
+  onContainmentTime?: () => void
+  onContainmentDraft?: (patch: Partial<ContainmentTimeDraft>) => void
+  onSubmitContainmentTime?: () => void
+  onRetryContainmentTime?: () => void
   onDialogClose?: () => void
   onExport?: (ids: readonly string[]) => void
   onCopy?: (number: string) => void

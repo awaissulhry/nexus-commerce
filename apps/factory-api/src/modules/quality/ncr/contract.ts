@@ -13,6 +13,10 @@ import {
   NCR_LINK_TYPES,
   NCR_SOURCES,
   NCR_STAGES,
+  NCR_BULK_LIMIT,
+  NCR_PICKED_DEFECTS_LIMIT,
+  NCR_TITLE_KEYS,
+  CONTAINMENT_HOURS_LIMITS,
   STAGE_CHECKS,
 } from '@nexus/factory-domain/quality/ncr/rules'
 
@@ -100,6 +104,8 @@ const actionView = output({
   doneAt: instant().nullable(),
   doneById: id().nullable(),
   evidenceNote: z.string().nullable(),
+  /** B-W2b-17: why it was cancelled (null unless CANCELLED). */
+  cancelReason: z.string().nullable(),
   /** Files of the action (StoredFile recordType "NcrContainmentAction"): its photos and documents. */
   files: z.number().int(),
   record: output({ type: z.string(), id: id() }).nullable(),
@@ -211,6 +217,10 @@ const prefillView = output({
   source,
   foundAt,
   title: z.string().nullable(),
+  /** B-W2b-17: the title in parts: the screen words `key` with `values` in the reader's language (title = its English). */
+  titleParts: output({ key: z.enum(NCR_TITLE_KEYS), values: z.record(z.string(), z.string()) }).nullable(),
+  /** B-W2b-17: the inspection's defect lines it takes (empty: all of them). */
+  defectIds: z.array(id()),
   description: z.string().nullable(),
   foundOn: instant().nullable(),
   foundById: id().nullable(),
@@ -235,10 +245,19 @@ const prefillView = output({
   files: z.array(output({ id: id(), kind: z.string(), originalName: z.string() })),
   /** The NCRs already raised from or linked to this record. */
   existing: z.array(output({ id: id(), number: z.string(), stage })),
+  /** B-W2b-17: the company's containment time in hours (null: the record names no company — read GET /quality/ncr/settings). */
+  containmentHours: z.number().int().nullable(),
 })
 
+/** B-W2b-17: picked defect lines as one query value, comma separated. */
+const defectIdList = z
+  .string()
+  .max(40 * NCR_PICKED_DEFECTS_LIMIT)
+  .transform((value) => value.split(',').map((part) => part.trim()).filter(Boolean))
+  .pipe(z.array(id()).max(NCR_PICKED_DEFECTS_LIMIT))
+
 export const prefillContract = defineContract({
-  querystring: input({ recordType: z.enum(NCR_FROM_TYPES), recordId: id() }),
+  querystring: input({ recordType: z.enum(NCR_FROM_TYPES), recordId: id(), defectIds: defectIdList.optional() }),
   response: { 200: output({ prefill: prefillView }) },
 })
 
@@ -277,7 +296,7 @@ export const raiseContract = defineContract({
   body: input({
     ...optional,
     /** The record it is raised from: its content prefills what the body leaves out. */
-    from: input({ recordType: z.enum(NCR_FROM_TYPES), recordId: id() }).optional(),
+    from: input({ recordType: z.enum(NCR_FROM_TYPES), recordId: id(), /** B-W2b-17: an inspection's picked defect lines. */ defectIds: z.array(id()).max(NCR_PICKED_DEFECTS_LIMIT).optional() }).optional(),
     /** The site, when the record names none (a complaint) or it is raised by hand. */
     siteId: id().optional(),
     /** More records to link (beyond the source's). */
@@ -401,4 +420,38 @@ export const reworkContract = defineContract({
     printerId: id().nullable().optional(),
   }),
   response: { 200: output({ record: recordView, reworkId: id(), ticket: z.unknown().nullable() }) },
+})
+
+// ---- B-W2b-17: bulk owner and the containment time -------------------------------------------------------------------
+
+export const assignContract = defineContract({
+  body: input({
+    ncrs: z.array(input({ id: id(), version: version() })).min(1).max(NCR_BULK_LIMIT),
+    /** null: nobody follows them up. */
+    ownerId: id().nullable(),
+  }),
+  response: { 200: output({ ncrs: z.array(summaryView), changed: z.array(id()) }) },
+})
+
+const settingSource = z.enum(['COMPANY', 'TENANT', 'DEFAULT'])
+const ncrSettings = output({
+  companyId: id().nullable(),
+  inForce: output({ hours: z.number().int(), source: settingSource }),
+  own: output({ defaultContainmentHours: z.number().int().nullable(), updatedAt: instant() }).nullable(),
+  version: z.number().int().min(0),
+})
+
+export const getSettingsContract = defineContract({
+  querystring: input({ companyId: id().optional() }),
+  response: { 200: output({ settings: ncrSettings, mayChange: z.boolean() }) },
+})
+
+export const saveSettingsContract = defineContract({
+  body: input({
+    companyId: id().nullable().optional(),
+    /** Hours after the problem was found; null: follow the tenant-wide row (a company) or the default 24. */
+    defaultContainmentHours: z.number().int().min(CONTAINMENT_HOURS_LIMITS.min).max(CONTAINMENT_HOURS_LIMITS.max).nullable(),
+    version: z.number().int().min(0),
+  }),
+  response: { 200: output({ settings: ncrSettings, mayChange: z.boolean() }) },
 })

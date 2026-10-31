@@ -23,6 +23,12 @@ import {
   heldKey,
   isFiltered,
   isStale,
+  LINK_TYPES,
+  linkRefusalKey,
+  linkSaveHeld,
+  linksHeld,
+  linkTypeHeld,
+  linkTypeKey,
   logBody,
   logProblems,
   nextInQueue,
@@ -34,6 +40,7 @@ import {
   stepOf,
   triageDraftOf,
   triageProblems,
+  unlinkHeld,
   withPreview,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
@@ -157,6 +164,83 @@ describe('the API’s refusals in our words', () => {
     expect(refusalKey(new ApiError('invalid', 400, 'validation_failed', 'x', null, [{ path: 'body/whatever', message: 'x' }]))).toBe('refusal.invalid')
     expect(refusalKey(new ApiError('forbidden', 403, 'forbidden', 'x'))).toBe('quality:problem.forbidden')
     expect(refusalKey(new Error('x'))).toBe('quality:problem.unavailable')
+  })
+})
+
+describe('B-W2b-17: Link… / Unlink on Linked records (design cmp-links)', () => {
+  const owner = complaintsCan(['quality.complaints.manage', 'quality.complaints.log', 'orders.view', 'shipping.view', 'sales.returns.view', 'quality.inspections.view', 'quality.ncr.view', 'quality.ncr.raise', 'quality.ncr.manage'])
+  const sales = complaintsCan(['quality.complaints.view', 'quality.complaints.log', 'orders.view', 'quality.ncr.view', 'quality.ncr.raise'])
+  const linked = complaintOf(ROWS.find((row) => row.id === SAFETY_ID)!)
+  const fresh = complaintOf(ROWS.find((row) => row.status === 'NEW')!)
+  const closed = complaintOf(ROWS.find((row) => row.status === 'CLOSED')!)
+
+  it('who may change links: log while new, manage once triaged; a closed complaint never; offline held', () => {
+    expect(linksHeld(fresh, sales)).toBeNull()
+    expect(linksHeld(linked, sales)).toBe('links.held.manage')
+    expect(linksHeld(linked, owner)).toBeNull()
+    expect(linksHeld(closed, owner)).toBe('held.CLOSED')
+    expect(linksHeld(linked, owner, true)).toBe('held.offline')
+    expect(linksHeld(fresh, complaintsCan(['quality.complaints.view']))).toBe('links.held.log')
+  })
+
+  it('each type is held without its finder’s right; a garment needs a serial finder; an NCR needs raise', () => {
+    expect(LINK_TYPES.map((type) => linkTypeHeld(type, owner))).toEqual([null, null, null, null, null])
+    expect(linkTypeHeld('Shipment', sales)).toBe('links.held.shipments')
+    expect(linkTypeHeld('GarmentSerial', sales)).toBe('links.held.garment')
+    expect(linkTypeHeld('GarmentSerial', complaintsCan(['production.serials']))).toBeNull()
+    expect(linkTypeHeld('Nonconformance', complaintsCan(['quality.ncr.view']))).toBe('links.held.ncrRaise')
+    expect(linkTypeHeld('Nonconformance', complaintsCan([]))).toBe('links.held.ncrView')
+  })
+
+  it('Save is held until a type and a record (or a serial) are picked; one order, shipment, return at a time', () => {
+    expect(linkSaveHeld(fresh, { type: '', recordId: '', serial: '' }, owner)).toEqual({ key: 'links.problem.type' })
+    expect(linkSaveHeld(fresh, { type: 'SalesOrder', recordId: '', serial: '' }, owner)).toEqual({ key: 'links.problem.record' })
+    expect(linkSaveHeld(fresh, { type: 'SalesOrder', recordId: 'o1', serial: '' }, owner)).toBeNull()
+    expect(linkSaveHeld(linked, { type: 'SalesOrder', recordId: 'o2', serial: '' }, owner)).toEqual({ key: 'links.problem.taken', params: { label: linked.order!.number } })
+    expect(linkSaveHeld(fresh, { type: 'GarmentSerial', recordId: '', serial: ' ' }, owner)).toEqual({ key: 'links.problem.serial' })
+    // The serial the complaint names already may be linked as our garment (same serial); another one waits for an unlink.
+    expect(linkSaveHeld(fresh, { type: 'GarmentSerial', recordId: '', serial: fresh.serial!.toLowerCase() }, owner)).toBeNull()
+    expect(linkSaveHeld(fresh, { type: 'GarmentSerial', recordId: '', serial: 'S-OTHER' }, owner)?.key).toBe('links.problem.taken')
+    expect(linkSaveHeld(linked, { type: 'Nonconformance', recordId: linked.ncrs[0]!.id, serial: '' }, owner)).toEqual({ key: 'links.problem.ncrLinked' })
+    expect(linkSaveHeld(linked, { type: 'Nonconformance', recordId: '', serial: '' }, owner)).toEqual({ key: 'links.problem.ncr' })
+  })
+
+  it('Unlink: the NCR raised from the complaint stays; an NCR needs manage; a fact follows the complaint’s rule', () => {
+    expect(unlinkHeld(linked, 'Nonconformance', owner, { raisedFrom: true })).toBe('links.held.source')
+    expect(unlinkHeld(linked, 'Nonconformance', owner)).toBeNull()
+    expect(unlinkHeld(fresh, 'Nonconformance', sales)).toBe('links.held.ncrManage')
+    expect(unlinkHeld(fresh, 'Shipment', sales)).toBeNull()
+    expect(unlinkHeld(closed, 'Shipment', owner)).toBe('held.CLOSED')
+  })
+
+  it('refusals in the link’s own words: stale, closed, taken, the source NCR, gone, not found', () => {
+    const conflict = (code: string, issues: { path: string }[] = []) => new ApiError('conflict', 409, code, 'x', null, issues)
+    expect(linkRefusalKey(conflict('conflict', [{ path: 'version' }]), 'link', 'SalesOrder')).toBe('refusal.conflict')
+    expect(linkRefusalKey(conflict('invalid_state'), 'link', 'SalesOrder')).toBe('held.CLOSED')
+    expect(linkRefusalKey(conflict('conflict'), 'link', 'SalesOrder')).toBe('links.refused.taken')
+    expect(linkRefusalKey(conflict('conflict'), 'link', 'Nonconformance')).toBe('links.refused.ncrTaken')
+    expect(linkRefusalKey(conflict('conflict'), 'unlink', 'Nonconformance')).toBe('links.refused.source')
+    expect(linkRefusalKey(new ApiError('not_found', 404, 'not_found', 'x'), 'unlink', 'Shipment')).toBe('links.refused.gone')
+    expect(linkRefusalKey(new ApiError('not_found', 404, 'not_found', 'x'), 'link', 'GarmentSerial')).toBe('links.refused.garment')
+    expect(linkRefusalKey(new ApiError('not_found', 404, 'not_found', 'x'), 'link', 'SalesOrder')).toBe('links.refused.notFound')
+    expect(linkRefusalKey(new ApiError('invalid', 400, 'validation_failed', 'x', null, [{ path: 'body/shipmentId' }]), 'link', 'Shipment')).toBe('refusal.field.shipmentId')
+  })
+
+  it('every link word is in both languages', () => {
+    const keys = [
+      ...LINK_TYPES.flatMap((type) => [linkTypeKey(type), `links.typeHint.${type}`, `links.unlinkBody.${type}`]),
+      ...(['SalesOrder', 'Shipment', 'ReturnAuthorisation', 'Nonconformance'] as const).flatMap((type) => [`links.pick.${type}`, `links.pickHint.${type}`, `links.noneToPick.${type}`]),
+      ...['log', 'manage', 'orders', 'shipments', 'returns', 'garment', 'ncrView', 'ncrRaise', 'ncrManage', 'source'].map((key) => `links.held.${key}`),
+      ...['type', 'taken', 'serial', 'record', 'ncr', 'ncrLinked'].map((key) => `links.problem.${key}`),
+      ...['taken', 'ncrTaken', 'source', 'gone', 'garment', 'notFound'].map((key) => `links.refused.${key}`),
+      'links.done.linked',
+      'links.done.unlinked',
+      'mail.intoThread',
+    ]
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale].complaints ?? {}
+      for (const key of keys) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
   })
 })
 

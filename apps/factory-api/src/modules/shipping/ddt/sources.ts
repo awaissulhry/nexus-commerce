@@ -15,6 +15,7 @@ import {
   type SourceDdtRequest,
 } from '@nexus/factory-domain/shipping/ddt/sources'
 import { SHIPPING_DDT_ISSUE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
+import type { TransportMode } from '@nexus/factory-domain/shipping/shipments/transport'
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { companyLegalOf } from '../../../platform/documents/documents'
@@ -51,6 +52,8 @@ import { expectedDdtNumber, readAnyDdt } from './store'
 export interface SourceIssueBody extends SourceDdtRequest {
   readonly version?: number | undefined
   readonly internalNote?: string | null | undefined
+  /** B-W2b-19 (Intrastat): the mode of transport the DDT keeps (null: not recorded). */
+  readonly transportMode?: TransportMode | null | undefined
 }
 
 const issues = (problems: readonly Issue[]) => new ValidationError(problems.length === 1 ? problems[0]!.message : 'The DDT cannot be issued as it stands.', problems)
@@ -180,6 +183,9 @@ export async function issueSourceDdtInCommand(tools: CommandTools, company: Comp
       partyId: header.partyId,
       sourceType: header.type,
       sourceId: header.id,
+      // B-W2b-19: the language it is printed in and the mode of transport (Intrastat) stay with the DDT.
+      language: facts.language,
+      transportMode: body.transportMode ?? null,
       numberSeriesId: number.seriesId,
       number: number.formatted,
       documentDate: day(number.documentDate),

@@ -384,15 +384,16 @@ describe('write-off with a reason and a photo (SCM-193)', () => {
     expect(keysOf(record).filter((key) => MONEY.test(key))).toEqual([])
   })
 
-  it('shows in the ledger and its tiles; its hide scrap is not reversed; photos need files.upload', async () => {
+  it('shows in the ledger and its tiles; its moves keep the code (B-W2b-15); photos need files.upload', async () => {
     const ledger = await ok('warehouse', 'GET', `/inventory/ledger?siteId=${A.siteA1}&writeOffs=true`)
     expect(ledger.moves.length).toBe(2)
     expect(ledger.moves.every((move: Json) => move.writeOff?.id === writeOffId && move.writeOff.reasonCode === 'DAMAGED')).toBe(true)
     expect(ledger.rowCount).toBe(2)
     expect((await ok('warehouse', 'GET', `/inventory/ledger/counts?siteId=${A.siteA1}`)).writeOffs30d).toBe(2)
+    // B-W2b-15: the code is the moves' own column too (reversing the hide's scrap opens the hide again: follow-ups.pg in
+    // modules/inventory/stock tests it; here the hide stays written off for the stock-as-of tests below).
     const hideMove = ledger.moves.find((move: Json) => move.hide?.id === hides.H1)
-    const reversal = await refused('warehouse', 'POST', `/inventory/moves/${hideMove.id}/reverse`, { note: 'Mistake' }, 409)
-    expect(reversal.message).toMatch(/SCRAPPED for good/)
+    expect((await admin<{ code: string }>(`SELECT "reasonCode" AS code FROM "StockMove" WHERE id = $1`, [hideMove.id]))[0]!.code).toBe('DAMAGED')
     const photo = await call('owner', 'POST', `/inventory/write-offs/${writeOffId}/photos`, { originalName: 'stain.jpg', contentType: 'image/jpeg', sizeBytes: 10, sha256: 'a'.repeat(64) })
     expect(photo.statusCode, photo.body).toBe(403)
     expect((await call('warehouse', 'POST', `/inventory/write-offs/${newId()}/photos`, { originalName: 'x.jpg', contentType: 'image/jpeg', sizeBytes: 10, sha256: 'a'.repeat(64) })).statusCode).toBe(404)

@@ -150,9 +150,9 @@
     "itemKind": "Tipo di materiale",
     "anyKind": "Tutti i tipi",
     "material": "Materiale",
-    "materialHint": "Digita almeno 2 lettere del codice o del nome.",
+    "materialHint": "Digita almeno 2 lettere del codice o del nome: materiali e capi finiti.",
     "noMaterials": "Il tuo ruolo non può cercare materiali: l'inventario copre tutti i materiali.",
-    "materialSearch": "Trova un materiale",
+    "materialSearch": "Trova un materiale o un capo",
     "materialPick": "Materiale trovato",
     "searchFirst": "Cerca prima",
     "noneFound": "Nessun risultato",
@@ -246,12 +246,15 @@
     "movedBody": "Nulla è bloccato fino alla W2b: un movimento dopo la fotografia non è nella quantità attesa. Conta ciò che c'è e indica perché differisce.",
     "draftBanner": "Bozza: nulla è ancora contato",
     "draftCycle": "Avvia il conteggio per fissare le quantità attese e creare le righe.",
-    "draftYearEnd": "Si avvia il {date} o dopo; le quantità attese sono la giacenza alla fine di quel giorno."
+    "draftYearEnd": "Si avvia il {date} o dopo; le quantità attese sono la giacenza alla fine di quel giorno.",
+    "noPanels": "Qui si aprono la discussione, i file e la cronologia di questo inventario.",
+    "noThreads": "La discussione di un inventario richiede il permesso di leggere le discussioni (threads.read)."
   },
   "tab": {
     "lines": "Righe",
     "differences": "Differenze",
-    "approval": "Approvazione"
+    "approval": "Approvazione",
+    "activity": "Attività"
   },
   "lines": {
     "draft": "Ancora nessuna riga",
@@ -276,7 +279,8 @@
     "placeLabel": "Ubicazione",
     "allPlaces": "Tutte le ubicazioni",
     "readOnly": "Sola lettura",
-    "undoHint": "⌘Z annulla il conteggio della riga {seq}."
+    "undoHint": "⌘Z annulla il conteggio della riga {seq}.",
+    "placeOption": "{code} · {name} ({lines} righe, {counted} contate)"
   },
   "line": {
     "col": {

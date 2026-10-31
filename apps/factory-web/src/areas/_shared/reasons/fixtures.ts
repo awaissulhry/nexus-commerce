@@ -11,7 +11,7 @@ import { ReasonListsView, type ReasonListsModel } from './view/ReasonListsView'
  * B-W2a-77) and the other settings pages). Made-up words only (the standard lists every factory starts from), with
  * Romanian words where a plant's tablets also speak it. Each case is one state of the design: the list, saving per cell,
  * rows selected, the new reason dialog (and a code already taken), the icon and colour, an empty list, a role that may
- * only look, a scan list (words only), loading, a failed read, no permission, changed by someone else, offline, one list.
+ * only look, a scan list (W2b: every column, as any list), loading, a failed read, no permission, changed by someone else, offline, one list.
  */
 
 const AT = '2026-10-30T08:00:00.000Z'
@@ -111,7 +111,7 @@ export const designScreen = defineDesignScreen<ReasonListsModel>({
     { id: 'look', label: 'Icon and colour of one reason', model: base({ dialog: { kind: 'look', id: machine.id }, marks: { [markKey(machine.id, 'look')]: { state: 'saved' } } }), note: 'Each pick saves at once; the footer says how it went.' },
     { id: 'empty', label: 'A list with no reason yet', model: base({ list: 'DOWNTIME', view: viewOf('DOWNTIME', []) }), note: 'Add the first reason, or the 5 standard ones.' },
     { id: 'read-only', label: 'A role that may only look', model: base({ canManage: false }), note: 'Words only, no switches; New reason held with the reason; no selection.' },
-    { id: 'scrap', label: 'Scrap reasons (the operation screen): words only', model: base({ list: 'SCRAP', view: viewOf('SCRAP', rowsOf('SCRAP')) }), note: 'ScrapReason keeps Italian and English words only: the banner says so; no icon, colour, other language or note columns.' },
+    { id: 'scrap', label: 'Scrap reasons (the operation screen): icon, colour, other languages, needs detail', model: base({ list: 'SCRAP', view: viewOf('SCRAP', rowsOf('SCRAP')) }), note: 'W2b (B-W2b-10, MES-125): ScrapReason keeps an icon, a colour, the other floor languages and "needs detail" like every list; the floor\'s scrap and rework tiles draw them.' },
     { id: 'standard-missing', label: 'Standard reasons missing', model: base({ list: 'HOLD', view: viewOf('HOLD', rowsOf('HOLD').slice(0, 2)), notice: { tone: 'success', key: 'done.created', params: { code: 'SUPPLIER_CHECK' } } }), note: 'The toolbar offers "Add 3 standard reasons"; a notice after a change.' },
     { id: 'loading', label: 'Loading', model: base({ load: { status: 'loading' }, view: null }) },
     { id: 'error', label: "Couldn't load", model: base({ load: { status: 'error', problem: 'problem.read' }, view: null }), note: 'A failed read is never drawn as an empty list.' },

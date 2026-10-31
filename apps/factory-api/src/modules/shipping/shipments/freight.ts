@@ -1,9 +1,10 @@
 import { ConflictError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import type { Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { SHIPPING_SETTINGS_VIEW } from '@nexus/factory-domain/shipping/permissions'
-import { freightByRule, freightChargeProblems, freightRuleProblems, type FreightByRule, type FreightRule } from '@nexus/factory-domain/shipping/shipments/freight'
+import { chargeBasisOf, freightByRule, freightChargeProblems, freightCostProblems, freightRuleProblems, type FreightByRule, type FreightRule } from '@nexus/factory-domain/shipping/shipments/freight'
 import { SHIPPING_FREIGHT_MANAGE } from '@nexus/factory-domain/shipping/shipments/permissions'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { assertMay, officeContextOf } from '../access'
@@ -24,8 +25,17 @@ import { officeShipment } from './shipments'
  *                                                        when the goods already left)
  *   when the goods leave (`applyFreightInCommand`)      a shipment with no charge typed gets the rule's
  *
- * Whether a charge was typed is the last freight audit row of the shipment (`shipping.setFreight` byHand, or
- * `shipping.freightByRule`): no column says it.
+ * Whether a charge was typed is Shipment.freightBasis (W2b, B-W2b-19: MANUAL typed, RULE the rule's, null while no
+ * charge is decided; W2a read the last freight audit row). A charge set before W2b has no basis: it reads as the rule's.
+ *
+ * W2b (B-W2b-19; the B-W2a-29 and -48 gaps): the freight COST, what the carrier charged us (its invoice), money.cost:
+ *
+ *   PUT /shipping/shipments/:shipmentId/freight-cost    shipping.freight.manage and the cost grain (the grain wall
+ *                                                        refuses the body without it): the amount and its currency, or
+ *                                                        null; until the shipment is cancelled (the invoice comes later)
+ *
+ * The record's `freight.cost` carries it (dropped for a reader without the cost grain; the floor and the portal never
+ * read the columns).
  */
 
 const SET_FREIGHT = 'shipping.setFreight'
@@ -112,27 +122,18 @@ async function byRuleOf(db: CommandTx, shipment: Pick<ShipmentHeader, 'id' | 'si
   })
 }
 
-/** The last freight audit row of the shipment says whether its charge was typed (true) or the rule's (false). */
-async function typedByHand(db: CommandTx, shipmentId: string): Promise<boolean> {
-  const row = await db.auditLog.findFirst({ where: { recordType: 'Shipment', recordId: shipmentId, action: { in: [SET_FREIGHT, FREIGHT_BY_RULE] } }, orderBy: [{ at: 'desc' }, { id: 'desc' }], select: { action: true, after: true } })
-  if (!row || row.action !== SET_FREIGHT) return false
-  const after = row.after as { byHand?: unknown } | null
-  return after?.byHand === true
-}
-
-/**
- * The office's view of a shipment's freight (the record's `freight`): the charge, whose it is, and the rule's now.
- * `byHand`: what a command that just set it knows (its own audit row is written at its end, so it cannot read it).
- */
-export async function freightView(db: CommandTx, shipment: ShipmentHeader, byHand?: boolean) {
-  const row = await db.shipment.findUnique({ where: { id: shipment.id }, select: { freightCharge: true } })
+/** The office's view of a shipment's freight (the record's `freight`): the charge, whose it is, the rule's now, the cost. */
+export async function freightView(db: CommandTx, shipment: ShipmentHeader) {
+  const row = await db.shipment.findUnique({ where: { id: shipment.id }, select: { freightCharge: true, freightBasis: true, freightCost: true, freightCostCurrency: true } })
   const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { currency: true } })
   const byRule = await byRuleOf(db, shipment)
   return {
     charge: asMoney('price', row?.freightCharge ?? null),
     currency: order?.currency ?? 'EUR',
-    byHand: (row?.freightCharge ?? null) !== null && (byHand ?? (await typedByHand(db, shipment.id))),
+    byHand: (row?.freightCharge ?? null) !== null && row?.freightBasis === 'MANUAL',
     byRule: { charge: asMoney('price', byRule.charge), basis: byRule.basis, words: byRule.words },
+    // B-W2b-19: what the carrier charged us (its invoice), a cost; null until recorded.
+    cost: { amount: asMoney('cost', row?.freightCost ?? null), currency: row?.freightCostCurrency ?? null },
   }
 }
 
@@ -143,10 +144,10 @@ export type FreightView = Awaited<ReturnType<typeof freightView>>
  * that leave. Answers the basis, or null when a typed charge stays.
  */
 export async function applyFreightInCommand(tools: CommandTools, shipment: ShipmentHeader): Promise<FreightByRule | null> {
-  const row = await tools.tx.shipment.findUnique({ where: { id: shipment.id }, select: { freightCharge: true } })
-  if (row?.freightCharge !== null && row?.freightCharge !== undefined && (await typedByHand(tools.tx, shipment.id))) return null
+  const row = await tools.tx.shipment.findUnique({ where: { id: shipment.id }, select: { freightCharge: true, freightBasis: true } })
+  if (row?.freightCharge !== null && row?.freightCharge !== undefined && row.freightBasis === 'MANUAL') return null
   const byRule = await byRuleOf(tools.tx, shipment)
-  await tools.tx.shipment.update({ where: { id: shipment.id }, data: { freightCharge: byRule.charge }, select: { id: true } })
+  await tools.tx.shipment.update({ where: { id: shipment.id }, data: { freightCharge: byRule.charge, freightBasis: chargeBasisOf(byRule.charge, false) }, select: { id: true } })
   tools.audit({ action: FREIGHT_BY_RULE, recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, before: { freightCharge: markMoney('price', row?.freightCharge ?? null) }, after: { freightCharge: markMoney('price', byRule.charge), byHand: false, basis: byRule.basis } })
   tools.emit({ type: 'shipment.freight_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, byHand: false, basis: byRule.basis } })
   return byRule
@@ -165,7 +166,7 @@ export async function setFreight(caller: CommandCaller, shipmentId: string, body
     // Back to the rule: applied now when the goods left, else when they leave.
     const byRule = body.freightCharge === null && left ? await byRuleOf(tools.tx, current) : null
     const charge = body.freightCharge ?? byRule?.charge ?? null
-    await tools.tx.shipment.update({ where: { id: current.id }, data: { freightCharge: charge }, select: { id: true } })
+    await tools.tx.shipment.update({ where: { id: current.id }, data: { freightCharge: charge, freightBasis: chargeBasisOf(charge, body.freightCharge !== null) }, select: { id: true } })
     tools.audit({
       action: SET_FREIGHT,
       recordType: 'Shipment',
@@ -176,7 +177,43 @@ export async function setFreight(caller: CommandCaller, shipmentId: string, body
       after: { freightCharge: markMoney('price', charge), byHand: body.freightCharge !== null, basis: byRule?.basis ?? null },
     })
     tools.emit({ type: 'shipment.freight_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, byHand: body.freightCharge !== null, basis: byRule?.basis ?? null } })
-    return { shipmentId: current.id, number: current.number, status: current.status, version: (await readShipment(tools.tx, current.id))!.version, freight: await freightView(tools.tx, (await readShipment(tools.tx, current.id))!, body.freightCharge !== null) }
+    return { shipmentId: current.id, number: current.number, status: current.status, version: (await readShipment(tools.tx, current.id))!.version, freight: await freightView(tools.tx, (await readShipment(tools.tx, current.id))!) }
+  })
+  return result
+}
+
+export interface FreightCostBody {
+  readonly version?: number | undefined
+  /** Minor units of `currency`; null clears it. */
+  readonly freightCost: number | null
+  /** ISO 4217; default the company's currency. */
+  readonly currency?: string | undefined
+}
+
+/** PUT /shipping/shipments/:shipmentId/freight-cost: what the carrier charged us (its invoice), or null. */
+export async function setFreightCost(caller: CommandCaller, shipmentId: string, body: FreightCostBody, idempotencyKey?: string) {
+  const shipment = await officeShipment(caller, shipmentId, SHIPPING_FREIGHT_MANAGE)
+  const { result } = await command(caller, { name: 'shipping.setFreightCost', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } }, async (tools) => {
+    const current = await readShipment(tools.tx, shipment.id)
+    if (!current) throw new NotFoundError('Shipment not found.')
+    const company = await tools.tx.company.findUnique({ where: { id: current.companyId }, select: { currency: true } })
+    const currency = body.freightCost === null ? null : (body.currency ?? company?.currency ?? 'EUR')
+    const problems: Issue[] = freightCostProblems(current.status, body.freightCost, currency)
+    if (problems.length > 0) throw problems[0]!.path === 'state' ? new InvalidStateError(problems[0]!.message) : new ValidationError(problems[0]!.message, problems)
+    const before = await tools.tx.shipment.findUnique({ where: { id: current.id }, select: { freightCost: true, freightCostCurrency: true } })
+    await tools.tx.shipment.update({ where: { id: current.id }, data: { freightCost: body.freightCost, freightCostCurrency: currency }, select: { id: true } })
+    tools.audit({
+      action: 'shipping.setFreightCost',
+      recordType: 'Shipment',
+      recordId: current.id,
+      companyId: current.companyId,
+      siteId: current.siteId,
+      before: { freightCost: markMoney('cost', before?.freightCost ?? null), currency: before?.freightCostCurrency ?? null },
+      after: { freightCost: markMoney('cost', body.freightCost), currency },
+    })
+    tools.emit({ type: 'shipment.freight_cost_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, recorded: body.freightCost !== null } })
+    const after = (await readShipment(tools.tx, current.id))!
+    return { shipmentId: after.id, number: after.number, status: after.status, version: after.version, freight: await freightView(tools.tx, after) }
   })
   return result
 }

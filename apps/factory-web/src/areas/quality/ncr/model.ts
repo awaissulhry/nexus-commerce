@@ -1,6 +1,6 @@
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { csvLine } from '../_shared/hooks'
-import type { BoardLaneId, ContainmentAction, Decision, NcrCard, NcrCounts, NcrQuery, NcrRecord, NcrStage, NcrSummary, Severity, StageCheck, StageCheckKey } from './api'
+import type { BoardLaneId, ContainmentAction, Decision, NcrCard, NcrCounts, NcrPrefill, NcrQuery, NcrRecord, NcrSettings, NcrStage, NcrSummary, Severity, StageCheck, StageCheckKey } from './api'
 
 /**
  * The pure rules of Quality › Nonconformances (B-W2a-68; SCR-144 list and board, SCR-145 the NCR record): what a person
@@ -63,9 +63,23 @@ export interface NcrAddress {
   /** New NCR (`?new=1`), raised from a record when `from` names one (`?from=<Type>&id=<uuid>`: "from anywhere"). */
   isNew: boolean
   from: { recordType: string; recordId: string } | null
+  /**
+   * B-W2b-17 ("Create NCR from N defects", design ins-defects): the inspection's defect lines picked (`&defects=a,b`), only
+   * with `from=Inspection`; empty: the whole inspection.
+   */
+  defects: readonly string[]
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** At most this many picked defect lines (the API's NCR_PICKED_DEFECTS_LIMIT). */
+export const PICKED_DEFECTS_MAX = 50
+
+/** The picked defect lines of an address (`a,b,c`): ids only, each once, at most 50; anything else is left out. */
+export function defectIdsOf(value: string | null | undefined): string[] {
+  if (!value) return []
+  return [...new Set(value.split(',').map((part) => part.trim()).filter((part) => UUID.test(part)))].slice(0, PICKED_DEFECTS_MAX)
+}
 
 export function ncrAddressOf(params: { get(name: string): string | null } | null): NcrAddress {
   const view = params?.get('view') ?? ''
@@ -79,6 +93,7 @@ export function ncrAddressOf(params: { get(name: string): string | null } | null
     mode: params?.get('mode') === 'board' ? 'board' : 'list',
     isNew: params?.get('new') === '1',
     from: /^[A-Z][A-Za-z]{1,40}$/.test(fromType) && UUID.test(fromId) ? { recordType: fromType, recordId: fromId } : null,
+    defects: fromType === 'Inspection' && UUID.test(fromId) ? defectIdsOf(params?.get('defects')) : [],
   }
 }
 
@@ -92,14 +107,15 @@ export function ncrAddressText(address: NcrAddress): string {
   if (address.isNew && address.from) {
     search.set('from', address.from.recordType)
     search.set('id', address.from.recordId)
+    if (address.from.recordType === 'Inspection' && address.defects.length > 0) search.set('defects', address.defects.join(','))
   }
   const text = search.toString()
   return text ? `?${text}` : ''
 }
 
 /** The address of New NCR raised from a record, from any screen ("Create NCR" on an inspection, a bundle, a lot …). */
-export const newNcrAddress = (prefix: string, from?: { recordType: string; recordId: string } | null): string =>
-  `${prefix}/quality/ncr${ncrAddressText({ view: 'open', q: '', siteId: null, mode: 'list', isNew: true, from: from ?? null })}`
+export const newNcrAddress = (prefix: string, from?: { recordType: string; recordId: string } | null, defects: readonly string[] = []): string =>
+  `${prefix}/quality/ncr${ncrAddressText({ view: 'open', q: '', siteId: null, mode: 'list', isNew: true, from: from ?? null, defects })}`
 
 /** A saved row as the API's own filters. */
 export function ncrQueryOf(address: Pick<NcrAddress, 'view' | 'q' | 'siteId'>): NcrQuery {
@@ -512,3 +528,92 @@ export function recordLabel(t: (key: string, params?: Record<string, string | nu
 
 /** The person's name from the people read (null: not known; the screen says "—"). */
 export const nameOf = (people: readonly { id: string; name: string }[] | null, id: string | null): string | null => (id ? (people?.find((person) => person.id === id)?.name ?? null) : null)
+
+// ---- W2b follow-ups (B-W2b-17) ---------------------------------------------------------------------------------------
+
+/** The title words' params that are counts (they pick the plural). */
+const TITLE_COUNT = new Set(['count'])
+
+/**
+ * The NCR's prefilled title in the reader's language (B-W2a-68's gap: the API's English sentence on Italian screens),
+ * from the parts the prefill answers: `title.<KEY>` in the `ncr` words with its values; a library defect in its words in
+ * the reader's language (`defectLabel`; else the line's own words as the inspector wrote them); a receipt discrepancy's
+ * kind in words; a hold's reason as its code. Null when the prefill has no parts (then the API's `title` is kept).
+ */
+export function titleWords(t: (key: string, params?: Record<string, string | number>) => string, parts: NcrPrefill['titleParts'], defectLabel?: (defectCodeId: string) => string | null): string | null {
+  if (!parts) return null
+  const params: Record<string, string | number> = {}
+  for (const [name, value] of Object.entries(parts.values)) params[name] = TITLE_COUNT.has(name) && /^\d+$/.test(value) ? Number(value) : value
+  if (parts.key === 'INSPECTION_DEFECT' && parts.values.defectCodeId) params.defectWords = defectLabel?.(parts.values.defectCodeId) ?? parts.values.defectWords ?? parts.values.defect ?? ''
+  if (parts.key === 'DISCREPANCY' && typeof params.kind === 'string') {
+    const kind = t(`discrepancyKind.${params.kind}`)
+    params.kind = kind === `discrepancyKind.${params.kind}` ? String(params.kind) : kind
+  }
+  const key: string = parts.key === 'SCAN_REJECTED' && !parts.values.operation ? 'title.SCAN_REJECTED_op' : `title.${parts.key}`
+  const text = t(key, params).trim()
+  return text.length > 160 ? `${text.slice(0, 159).trimEnd()}…` : text
+}
+
+/** How long after it was found an NCR's containment is due, in words: whole days when it is a multiple of 24 hours. */
+export function containmentSpan(hours: number): Say {
+  return hours >= 24 && hours % 24 === 0 ? { key: 'containmentTime.days', params: { count: hours / 24 } } : { key: 'containmentTime.hours', params: { count: hours } }
+}
+
+/** The containment-time dialog's draft: follow the tenant / default, or its own hours. */
+export interface ContainmentTimeDraft {
+  readonly follow: boolean
+  readonly hours: string
+}
+
+export const containmentDraftOf = (settings: NcrSettings): ContainmentTimeDraft => {
+  const own = settings.own?.defaultContainmentHours ?? null
+  return { follow: own === null, hours: String(own ?? settings.inForce.hours) }
+}
+
+/** The hours the draft saves (null: follow), or undefined when they are not whole hours from 1 to 720. */
+export function containmentHoursOf(draft: ContainmentTimeDraft): number | null | undefined {
+  if (draft.follow) return null
+  const text = draft.hours.trim()
+  if (!/^\d{1,3}$/.test(text)) return undefined
+  const hours = Number(text)
+  return hours >= 1 && hours <= 720 ? hours : undefined
+}
+
+/** Why Save is held in the containment-time dialog (an `ncr` key), or null. */
+export function containmentSaveHeld(input: { readonly mayChange: boolean; readonly settings: NcrSettings | null; readonly draft: ContainmentTimeDraft; readonly offline?: boolean }): string | null {
+  if (!input.mayChange) return 'containmentTime.heldNoRight'
+  if (!input.settings) return 'containmentTime.heldReading'
+  if (input.offline) return 'containmentTime.heldOffline'
+  const hours = containmentHoursOf(input.draft)
+  if (hours === undefined) return 'containmentTime.heldHours'
+  if (hours === (input.settings.own?.defaultContainmentHours ?? null)) return 'containmentTime.heldSame'
+  return null
+}
+
+/** The API's code of a refused NCR (409 `ncrs/<i>/<CODE>`) → our words' key. */
+const ASSIGN_CODES: Readonly<Record<string, string>> = { STALE: 'assign.refused.stale', NO_RIGHT: 'assign.refused.noRight', CLOSED: 'assign.refused.frozen', NOT_FOUND: 'assign.refused.notFound' }
+
+/** Why a refused NCR of a bulk owner change was refused: its code when the API names one, else from its sentence. */
+export function assignRefusalKey(message: string, code?: string | null): string {
+  if (code && ASSIGN_CODES[code]) return ASSIGN_CODES[code]!
+  if (/changed since it was read/i.test(message)) return 'assign.refused.stale'
+  if (/quality\.ncr\.manage/.test(message)) return 'assign.refused.noRight'
+  if (/never changes/i.test(message)) return 'assign.refused.frozen'
+  if (/not found/i.test(message)) return 'assign.refused.notFound'
+  return 'assign.refused.other'
+}
+
+/**
+ * The refused NCRs of a bulk owner change (409, `ncrs/<i>/<CODE>` per NCR, nothing changed) as lines of our words: the NCR's
+ * number (from the rows the person picked) and why. Empty when the answer names none.
+ */
+export function assignRefusals(issues: readonly { readonly path: string; readonly message?: string }[], picked: readonly { readonly id: string; readonly number: string }[]): { number: string; key: string }[] {
+  const lines: { number: string; key: string }[] = []
+  for (const issue of issues) {
+    const found = /^ncrs\/(\d+)(?:\/([A-Z_]+))?$/.exec(issue.path)
+    if (!found) continue
+    const row = picked[Number(found[1])]
+    lines.push({ number: row?.number ?? '—', key: assignRefusalKey(issue.message ?? '', found[2] ?? null) })
+  }
+  return lines
+}

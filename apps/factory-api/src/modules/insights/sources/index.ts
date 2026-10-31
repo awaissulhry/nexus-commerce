@@ -10,6 +10,7 @@ import { lotHold } from './quality'
 import { orderPromise, quoteApproval } from './sales'
 import { mentioned, taskDue } from './personal'
 import { ruleAlerts } from './alerts'
+import { ncrDecision } from './ncr-decisions'
 
 /** One source per kind of Today (factory-domain insights/attention ATTENTION_KINDS). */
 export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
@@ -32,4 +33,6 @@ export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
   MENTION: mentioned,
   // B-W2a-33: my open alerts of the exception rules (Today asks for them with include=ALERTS).
   RULE_ALERT: ruleAlerts,
+  // B-W2b-17: NCR decisions waiting for an approval (the Approvals tile).
+  NCR_DECISION: ncrDecision,
 })

@@ -5,7 +5,7 @@ import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER } from '../../../../shell/design-da
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
 import { at, COLOURS, ITEMS, LOCATIONS, LOTS, NOW, PREFIX, ROLE_PERMISSIONS, SITE, SITE_SOUTH, TIME_ZONE, uid } from '../../../_shared/stock/fixtures'
-import type { CountLine, CountReason, CountRecord, CountRow, CountTiles, MaterialChoice } from '../api'
+import type { CountLine, CountPlace, CountReason, CountRecord, CountRow, CountTiles, MaterialChoice } from '../api'
 import { countsCan, type CountsCan } from '../model'
 import type { CountRecordModel, CountsListModel, LinesPart, NewCountModel, PlaceChoice } from '../view-model'
 
@@ -288,8 +288,16 @@ export const CANCELLED = countRecord(countRow(1, { status: 'CANCELLED', cancelle
 })
 
 export const MATERIALS: MaterialChoice[] = [
-  { id: ITEMS.zip.id, code: ITEMS.zip.code, name: ITEMS.zip.name, kind: 'HARDWARE', baseUom: 'PCS', tracking: 'NONE' },
-  { id: ITEMS.leather.id, code: ITEMS.leather.code, name: ITEMS.leather.name, kind: 'LEATHER', baseUom: 'FT2', tracking: 'HIDE' },
+  { id: ITEMS.zip.id, code: ITEMS.zip.code, name: ITEMS.zip.name, kind: 'HARDWARE', baseUom: 'PCS', tracking: 'NONE', colours: [] },
+  { id: ITEMS.leather.id, code: ITEMS.leather.code, name: ITEMS.leather.name, kind: 'LEATHER', baseUom: 'FT2', tracking: 'HIDE', colours: [COLOURS.black] },
+  // B-W2b-15 (Z2:06): a finished garment (one item per SKU) is found too.
+  { id: uid('6464', 1), code: 'GIACCA-DEMO-01-NER-50', name: 'Giacca moto Demo · nero · 50', kind: 'FINISHED', baseUom: 'PCS', tracking: 'SERIAL', colours: [] },
+]
+
+/** B-W2b-15: every place of a count with its lines (the API's figures): the Lines tab's place filter. */
+export const COUNT_PLACES: CountPlace[] = [
+  { location: { id: LOCATIONS.binA1.id, code: LOCATIONS.binA1.code, name: LOCATIONS.binA1.name, path: LOCATIONS.binA1.path.join('/') }, lines: 14, counted: 11, differing: 3 },
+  { location: { id: LOCATIONS.binA2.id, code: LOCATIONS.binA2.code, name: LOCATIONS.binA2.name, path: LOCATIONS.binA2.path.join('/') }, lines: 9, counted: 2, differing: 1 },
 ]
 
 // ---- models ------------------------------------------------------------------------------------------------------------------------
@@ -363,6 +371,7 @@ export function recordModel(role: CountRole, record: CountRecord | null, over: P
     problem: null,
     notice: null,
     now: NOW,
+    places: COUNT_PLACES,
     ...over,
     ...(over.lines ? { lines: can.cost ? over.lines : { ...over.lines, items: over.lines.items ? noCost(over.lines.items) : null } } : {}),
     ...(over.diffs ? { diffs: can.cost ? over.diffs : { ...over.diffs, items: over.diffs.items ? noCost(over.diffs.items) : null } } : {}),

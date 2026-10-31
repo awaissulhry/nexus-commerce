@@ -9,7 +9,8 @@ import { READINESS_WORDS } from '@nexus/factory-domain/planning/readiness/readin
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { moveView } from '../ledger/contract'
-import { KIT_STATUSES, MAX_PICK_LISTS, PICK_VIEWS } from './kit-rules'
+import { MAX_PICK_LISTS, PICK_VIEWS } from './kit-rules'
+import { kitView } from '../kits/contract'
 
 /**
  * Picking and issuing to a work order (B-W1-39; SCM-215, SCM-194, SCM-216; A2 SCR-093, SCR-070). Quantities are decimal
@@ -284,7 +285,6 @@ const kitWorkOrder = output({
 const pickedBy = z.array(output({ kind: z.enum(['OFFICE', 'TEAM']), name: z.string().nullable() }))
 /** The work order's pick list = its reservations (ACTIVE or ISSUED). */
 const pickListState = output({ created: z.boolean(), reservations: z.number().int(), createdAt: instant().nullable() })
-const kitStatus = z.enum(KIT_STATUSES)
 
 export const pickListsContract = defineContract({
   querystring: input({
@@ -309,7 +309,8 @@ export const pickListsContract = defineContract({
           /** Lines (material × colour) issued in full of all lines ("6 of 9"). */
           lines: output({ all: z.number().int(), picked: z.number().int(), short: z.number().int() }),
           /** OPEN · PARTLY · COMPLETE from the issues; `location` is not recorded yet (no schema: always null). */
-          kit: output({ status: kitStatus, location: z.null() }),
+          // B-W2b-15: the kit's place, check and version (modules/inventory/kits).
+          kit: kitView,
           pickList: pickListState,
           pickedBy,
           startedAt: instant().nullable(),
@@ -335,7 +336,7 @@ export const pickListSheetsContract = defineContract({
           workOrder: kitWorkOrder.extend({ batchNumber: z.string().nullable(), version: z.number().int(), issuable: z.boolean() }),
           cutDate: businessDate().nullable(),
           readiness,
-          kit: output({ status: kitStatus, location: z.null(), all: z.number().int(), picked: z.number().int(), short: z.number().int() }),
+          kit: kitView.extend({ all: z.number().int(), picked: z.number().int(), short: z.number().int() }),
           pickList: pickListState,
           pickedBy,
           startedAt: instant().nullable(),

@@ -1,0 +1,142 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/people.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the employees, teams and their members, loans to other lines, leaver cases and their steps, the people settings and the legal gate of each site and purpose, through apps/factory-api's modules/people (B-W2b-26 employees and teams, B-W2b-27 privacy), always through command(); the API keeps staff to the companies and sites their grants reach, and a lead to their own team. The floor (factory_floor_runtime) reads its site's employees without their names, employee codes, kind, agency, dates, department, role, contract, default shift or office account (Worker carries the name shown on the floor), its teams and their members, the loans to its lines (never their reason) and the people settings (no site key: every company's; nothing personal in them). It never reads the legal gate (B-W1-36: the floor reads no legal basis; the API asks it in the tenant's system scope), nor a leaver case. Portal and link sessions read nothing here. personal: the person each row is about and the purposes of each personal column (PLT-207, PLT-209); the privacy export and erasure read them. Nothing is deleted but a team membership or a loan that has not begun (a mistake): employees are LEFT, teams archived, memberships and loans ended, cases closed, gates switched off. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Employee": {
+      "about": "Office keeps the people (the record, its links to the floor sign-in and the office account); the floor reads its site's people for the clock, the crews and the qualification check, without what it does not need.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": {
+          "privileges": ["select"],
+          "scopedBy": ["site"],
+          "hiddenColumns": [
+            "employeeCode",
+            "firstName",
+            "lastName",
+            "kind",
+            "agencyPartyId",
+            "startDate",
+            "endDate",
+            "department",
+            "jobRole",
+            "contract",
+            "weeklyMinutes",
+            "defaultShiftPatternId",
+            "userId",
+            "createdById"
+          ]
+        }
+      },
+      "personal": {
+        "subject": "id",
+        "columns": {
+          "employeeCode": ["EMPLOYMENT", "PAY"],
+          "firstName": ["EMPLOYMENT"],
+          "lastName": ["EMPLOYMENT"],
+          "displayName": ["EMPLOYMENT", "PRODUCTION"],
+          "kind": ["EMPLOYMENT", "PAY"],
+          "agencyPartyId": ["EMPLOYMENT", "PAY"],
+          "locale": ["EMPLOYMENT", "PRODUCTION"],
+          "startDate": ["EMPLOYMENT", "PAY"],
+          "endDate": ["EMPLOYMENT", "PAY"],
+          "department": ["EMPLOYMENT"],
+          "jobRole": ["EMPLOYMENT", "SAFETY"],
+          "homeLineId": ["EMPLOYMENT", "PRODUCTION"],
+          "contract": ["EMPLOYMENT", "PAY"],
+          "weeklyMinutes": ["EMPLOYMENT", "ATTENDANCE", "PAY"],
+          "defaultShiftPatternId": ["EMPLOYMENT", "ATTENDANCE"],
+          "userId": ["EMPLOYMENT"],
+          "status": ["EMPLOYMENT", "PRODUCTION", "ATTENDANCE"]
+        }
+      }
+    },
+    "Team": {
+      "about": "Office keeps the teams of a site (a line's crew, a group to assign and mention); the floor reads its site's teams.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "TeamMember": {
+      "about": "Office moves people between teams and sets the lead (the history of who was in which team when); deletes only a membership that has not begun before today (a mistake). The floor reads its site's teams' members (crews, my team).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["createdById"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "teamId": ["EMPLOYMENT", "PRODUCTION"],
+          "isLead": ["EMPLOYMENT", "PRODUCTION"],
+          "since": ["EMPLOYMENT", "PRODUCTION"],
+          "until": ["EMPLOYMENT", "PRODUCTION"]
+        }
+      }
+    },
+    "LineLoan": {
+      "about": "Office lends people to another line of their site for hours or days; deletes only a loan that has not begun. The floor reads the loans to its lines (who works on the line today), never their reason.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": {
+          "privileges": ["select"],
+          "scopedBy": ["site"],
+          "hiddenColumns": ["reason", "createdById"]
+        }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "fromLineId": ["EMPLOYMENT", "PRODUCTION"],
+          "toLineId": ["EMPLOYMENT", "PRODUCTION"],
+          "toTeamId": ["EMPLOYMENT", "PRODUCTION"],
+          "startsAt": ["EMPLOYMENT", "PRODUCTION"],
+          "endsAt": ["EMPLOYMENT", "PRODUCTION"],
+          "reason": ["EMPLOYMENT"]
+        }
+      }
+    },
+    "LeaverCase": {
+      "about": "Office (HR) starts, cancels and closes a person's leaving; office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": { "factory_runtime": { "privileges": ["select", "insert", "update"] } },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "lastWorkingDay": ["EMPLOYMENT", "PAY"],
+          "status": ["EMPLOYMENT"],
+          "cancelReason": ["EMPLOYMENT"]
+        }
+      }
+    },
+    "LeaverStep": {
+      "about": "Office (and the system, for the automatic steps) ticks and skips the steps of an open leaver case; office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": { "factory_runtime": { "privileges": ["select", "insert", "update"] } },
+      "personal": { "subject": "caseId", "via": "LeaverCase", "columns": { "skipReason": ["EMPLOYMENT"] } }
+    },
+    "PeopleSettings": {
+      "about": "Office keeps a company's people settings (rounding, grace, automatic clock-out, breaks, the minimum group size, who sees one person's figures); the floor reads them (the clock), tenant-wide: no site key, nothing personal.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "PeopleLegalGate": {
+      "about": "Office records the legal basis and switches a purpose of people data on or off per site (a step-up); office only: the floor reads no legal basis (the API checks the gate in the tenant's system scope).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": { "factory_runtime": { "privileges": ["select", "insert", "update"] } }
+    }
+  }
+}

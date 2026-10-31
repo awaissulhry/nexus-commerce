@@ -353,6 +353,8 @@ export function reversalProblems(
   if (move.reversalOfId) problems.push('This move is itself a reversal; it is not reversed (post the move again instead).')
   if (reversedBy) problems.push('This move was reversed already; a move has at most one reversal.')
   if (move.reason === 'RECEIPT' && !options.withReceipt) problems.push('A receipt move is reversed with its goods receipt, never on its own.')
+  // W2b (B-W2b-19): the garments left with their shipment; a carrier return brings them back (Shipping), never a reversal.
+  if (move.reason === 'SHIPMENT') problems.push("A shipment's move out of finished goods is not reversed: the garments left with the shipment (a carrier return brings them back into finished goods).")
   return problems
 }
 

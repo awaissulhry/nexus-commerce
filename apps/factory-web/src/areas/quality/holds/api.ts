@@ -19,6 +19,8 @@ const place = z.object({ id: z.string(), code: z.string(), name: z.string() })
 
 export const holdSchema = z.object({
   id: z.string(),
+  /** B-W2b-17: the hold's number from its company's HOLD series ("HLD-2026-0091"); null for a hold placed before. */
+  number: z.string().nullable().optional().default(null),
   companyId: z.string(),
   siteId: z.string(),
   site: place.nullable().optional().default(null),
@@ -65,7 +67,8 @@ export const holdDetailSchema = z.object({
   workOrders: z.array(
     z.object({ id: z.string(), number: z.string(), status: woStatus, heldFromStatus: woStatus.nullable(), holdReason: z.string().nullable(), heldByThis: z.boolean(), batchNumber: z.string().nullable().optional().default(null) }),
   ),
-  release: z.object({ checks: z.array(check), releasable: z.boolean(), mayRelease: z.boolean() }),
+  /** B-W2b-17: `placerMayRelease` — the company's rule lets the person who placed a hold release it too. */
+  release: z.object({ checks: z.array(check), releasable: z.boolean(), mayRelease: z.boolean(), placerMayRelease: z.boolean().optional().default(false) }),
   canChange: z.boolean(),
 })
 export type HoldDetail = z.infer<typeof holdDetailSchema>
@@ -85,6 +88,8 @@ export interface HoldsQuery {
   readonly overdue?: boolean
   readonly system?: boolean
   readonly quarantine?: HoldQuarantine | null
+  /** B-W2b-17: a hold's number, or part of it. */
+  readonly q?: string | null
 }
 
 /** `GET /quality/holds`: newest first, at most 200 (`truncated` beyond; the API has no cursor). */
@@ -98,6 +103,7 @@ export async function listHolds(api: ApiClient, query: HoldsQuery, signal?: Abor
       ...(query.overdue ? { overdue: 'true' } : {}),
       ...(query.system ? { system: 'true' } : {}),
       ...(query.quarantine ? { quarantine: query.quarantine } : {}),
+      ...(query.q?.trim() ? { q: query.q.trim() } : {}),
     },
     schema: z.object({ holds: z.array(holdSchema), truncated: z.boolean() }),
     signal,
@@ -169,3 +175,28 @@ export const editHold = (api: ApiClient, holdId: string, body: EditBody, idempot
 
 export const releaseHold = (api: ApiClient, holdId: string, body: { version: number; note?: string | null; notMakerStatement?: boolean }, idempotencyKey: string) =>
   api.post(`/quality/holds/${seg(holdId)}/release`, { body, schema: z.object({ hold: holdSchema, workOrdersLifted: z.array(moved.extend({ to: woStatus })), checks: z.array(check) }), idempotencyKey })
+
+// ---- B-W2b-17: who releases a hold (design quality.settings qs-sod "A hold is released by someone other than the person
+// who placed it: on / off"; the API's modules/quality/holds settings.ts) ----------------------------------------------
+
+const settingSource = z.enum(['COMPANY', 'TENANT', 'DEFAULT'])
+export const holdSettingsSchema = z.object({
+  companyId: z.string().nullable(),
+  inForce: z.object({ placerMayRelease: z.boolean(), source: settingSource }),
+  own: z.object({ placerMayRelease: z.boolean().nullable(), updatedAt: z.string() }).nullable(),
+  /** The row's version (0: never saved): PUT sends it back. */
+  version: z.number(),
+})
+export type HoldSettings = z.infer<typeof holdSettingsSchema>
+export interface HoldSettingsAnswer {
+  readonly settings: HoldSettings
+  readonly mayChange: boolean
+}
+
+/** `GET /quality/holds/settings?companyId`: the rule in force for the company's holds, its own row, whether the reader may change it. */
+export const getHoldSettings = (api: ApiClient, companyId: string | null, signal?: AbortSignal): Promise<HoldSettingsAnswer> =>
+  api.get('/quality/holds/settings', { query: companyId ? { companyId } : {}, schema: z.object({ settings: holdSettingsSchema, mayChange: z.boolean() }), signal })
+
+/** `PUT /quality/holds/settings` (quality.settings.manage; letting the placer release asks a reason and a fresh code). */
+export const saveHoldSettings = (api: ApiClient, body: { companyId: string | null; placerMayRelease: boolean | null; version: number; reason?: string | null }, idempotencyKey: string) =>
+  api.request('PUT', '/quality/holds/settings', { body, schema: z.object({ settings: holdSettingsSchema, loosened: z.boolean(), mayChange: z.boolean() }), idempotencyKey })

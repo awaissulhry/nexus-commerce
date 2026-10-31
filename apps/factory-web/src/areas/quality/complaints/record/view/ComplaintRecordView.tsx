@@ -2,15 +2,15 @@
 
 import { useId, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ExternalLink, MoreHorizontal, Pencil, ShieldAlert } from 'lucide-react'
-import { Banner, Card, Field, KeyValue, Menu, Modal, RecordLayout, type MenuItemDef } from '@nexus/ui/components'
+import { ExternalLink, Link2, MoreHorizontal, Pencil, ScanLine, ShieldAlert, Unlink } from 'lucide-react'
+import { Banner, Card, Combobox, Field, KeyValue, Menu, Modal, RecordLayout, type MenuItemDef } from '@nexus/ui/components'
 import { EditModeBar } from '@nexus/ui/patterns'
-import { Button, Checkbox, Input, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, RadioCard, Select, Spinner, Textarea } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime, formatNumber } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { Freshness, RecordFrame, Section } from '../../../_shared/parts'
-import { COMPLAINT_SEVERITIES, OFFICE_CHANNELS, type Complaint, type ComplaintAction, type OfficeChannel } from '../../api'
-import { dayAt, evidenceHref, garmentWords, personName, primaryAction, recordHref, stepOf } from '../../model'
+import { COMPLAINT_SEVERITIES, OFFICE_CHANNELS, type Complaint, type ComplaintAction, type ComplaintLinkType, type OfficeChannel } from '../../api'
+import { dayAt, evidenceHref, garmentWords, LINK_TYPES, linkSaveHeld, linksHeld, linkTypeHeld, linkTypeKey, personName, primaryAction, recordHref, stepOf, unlinkHeld } from '../../model'
 import { AcknowledgeDialog, CategoryTag, ComplaintsMessages, DueText, InstantText, say, SeverityTag, StatusPill, useWords } from '../../view/parts'
 import { TriageModal } from '../../view/TriageModal'
 import type { ComplaintRecordActions, ComplaintRecordModel, FactsDraft, RecordDialog, RecordTab } from '../view-model'
@@ -126,7 +126,7 @@ function ComplaintRecord({ model, actions, panels }: { model: ComplaintRecordMod
       >
         <RecordNotices model={model} actions={actions} held={held} run={run} />
         {tab === 'complaint' && <ComplaintTab model={model} actions={actions} held={held} run={run} />}
-        {tab === 'linked' && <LinkedTab model={model} />}
+        {tab === 'linked' && <LinkedTab model={model} actions={actions} />}
         {tab === 'activity' && panels}
       </RecordFrame>
       <RecordDialogs model={model} actions={actions} />
@@ -238,6 +238,7 @@ function ComplaintTab({ model, actions, held, run }: { model: ComplaintRecordMod
               </div>
             )}
             <p className="fw-q-hint">{t('photos.addInActivity')}</p>
+            <p className="fw-q-hint">{t('mail.intoThread', { number: complaint.number })}</p>
           </Section>
           {!edit && (
             <Section id="cmp-about" title={t('record.about')}>
@@ -449,10 +450,29 @@ function FactsForm({ model, actions }: { model: ComplaintRecordModel; actions?: 
 
 // ---- Linked records ---------------------------------------------------------------------------------------------------------
 
-function LinkedTab({ model }: { model: ComplaintRecordModel }) {
+function LinkedTab({ model, actions }: { model: ComplaintRecordModel; actions?: ComplaintRecordActions }) {
   const t = useWords()
   const complaint = model.complaint
   const prefix = model.prefix
+  // B-W2b-17 (design cmp-links "Link… / Unlink"): Link… for the complaint's facts and NCRs; Unlink on each linked one.
+  const linkHeldKey = linksHeld(complaint, model.can, model.offline)
+  const unlink = (type: ComplaintLinkType, recordId: string, label: string) => {
+    const reason = unlinkHeld(complaint, type, model.can, { raisedFrom: type === 'Nonconformance' && (model.raisedFrom ?? []).includes(recordId), offline: model.offline })
+    return (
+      <Button size="xs" variant="ghost" heldReason={reason ? t(reason) : null} onClick={() => actions?.onDialog?.({ kind: 'unlink', type, recordId, label })} aria-label={t('links.unlinkOf', { label })}>
+        <Unlink size={13} aria-hidden /> {t('links.unlink')}
+      </Button>
+    )
+  }
+  const withUnlink = (node: ReactNode, type: ComplaintLinkType, recordId: string, label: string) =>
+    complaint.status === 'CLOSED' ? (
+      node
+    ) : (
+      <span className="fw-cmp-link-row">
+        {node}
+        {unlink(type, recordId, label)}
+      </span>
+    )
   const group = (id: string, title: string, items: readonly { key: string; node: ReactNode }[], empty: string) => (
     <section key={id} className="fw-cmp-link-group" aria-labelledby={`cmp-links-${id}`}>
       <h3 className="fw-cmp-h3" id={`cmp-links-${id}`}>
@@ -481,11 +501,19 @@ function LinkedTab({ model }: { model: ComplaintRecordModel }) {
   const href = (type: string, id: string) => model.hrefs[`${type}:${id}`] ?? `${prefix}/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`
   return (
     <Card padded>
+      <div className="fw-cmp-links-head">
+        <p className="fw-q-hint">{t(complaint.status === 'CLOSED' ? 'links.closed' : 'links.intro')}</p>
+        {complaint.status !== 'CLOSED' && (
+          <Button size="sm" heldReason={linkHeldKey ? t(linkHeldKey) : null} onClick={() => actions?.onDialog?.({ kind: 'link', type: '', recordId: '', serial: '' })}>
+            <Link2 size={14} aria-hidden /> {t('links.link')}
+          </Button>
+        )}
+      </div>
       <div className="fw-cmp-links">
         {group(
           'ncr',
           t('linked.ncr'),
-          complaint.ncrs.map((ncr) => ({ key: ncr.id, node: link(href('Nonconformance', ncr.id), ncr.number, t(`linked.stage.${ncr.stage}`)) })),
+          complaint.ncrs.map((ncr) => ({ key: ncr.id, node: withUnlink(link(href('Nonconformance', ncr.id), ncr.number, (model.raisedFrom ?? []).includes(ncr.id) ? `${t(`linked.stage.${ncr.stage}`)} · ${t('links.raisedFrom')}` : t(`linked.stage.${ncr.stage}`)), 'Nonconformance', ncr.id, ncr.number) })),
           model.can.ncrView ? t('linked.ncrNone') : t('linked.ncrNoRight'),
         )}
         {group('capa', t('linked.capa'), [], t('linked.capaLater'))}
@@ -498,33 +526,40 @@ function LinkedTab({ model }: { model: ComplaintRecordModel }) {
         {group(
           'return',
           t('linked.return'),
-          complaint.return ? [{ key: complaint.return.id, node: link(href('ReturnAuthorisation', complaint.return.id), complaint.return.number) }] : [],
+          complaint.return ? [{ key: complaint.return.id, node: withUnlink(link(href('ReturnAuthorisation', complaint.return.id), complaint.return.number), 'ReturnAuthorisation', complaint.return.id, complaint.return.number) }] : [],
           t('linked.none'),
         )}
         {group(
           'shipment',
           t('linked.shipment'),
-          complaint.shipment ? [{ key: complaint.shipment.id, node: link(href('Shipment', complaint.shipment.id), complaint.shipment.number) }] : [],
+          complaint.shipment ? [{ key: complaint.shipment.id, node: withUnlink(link(href('Shipment', complaint.shipment.id), complaint.shipment.number), 'Shipment', complaint.shipment.id, complaint.shipment.number) }] : [],
           t('linked.none'),
         )}
         {group(
           'order',
           t('linked.order'),
-          complaint.order ? [{ key: complaint.order.id, node: link(href('SalesOrder', complaint.order.id), complaint.order.number) }] : [],
+          complaint.order ? [{ key: complaint.order.id, node: withUnlink(link(href('SalesOrder', complaint.order.id), complaint.order.number), 'SalesOrder', complaint.order.id, complaint.order.number) }] : [],
           t('linked.none'),
         )}
         {group(
           'garment',
           t('linked.garment'),
-          evidence
+          evidence || complaint.serial
             ? [
                 {
                   key: 'evidence',
-                  node: (
-                    <a className="fw-q-link" href={evidence} target="_blank" rel="noreferrer">
-                      <ExternalLink size={13} aria-hidden /> {say(t, garmentWords(complaint))}
-                    </a>
-                  ),
+                  node: (() => {
+                    const words = say(t, garmentWords(complaint))
+                    const node = evidence ? (
+                      <a className="fw-q-link" href={evidence} target="_blank" rel="noreferrer">
+                        <ExternalLink size={13} aria-hidden /> {words}
+                      </a>
+                    ) : (
+                      <span>{words}</span>
+                    )
+                    // The garment's serial is unlinked by name (the facts' serial; its id is not on the complaint).
+                    return complaint.serial ? withUnlink(node, 'GarmentSerial', '', complaint.serial) : node
+                  })(),
                 },
               ]
             : [],
@@ -579,6 +614,16 @@ function RecordDialogs({ model, actions }: { model: ComplaintRecordModel; action
         </Field>
       </>
     )
+  } else if (dialog.kind === 'link') {
+    title = t('links.title', { number: model.complaint.number })
+    confirm = t('links.save')
+    const saveHeld = linkSaveHeld(model.complaint, dialog, model.can)
+    held = held ?? (saveHeld ? t(saveHeld.key, saveHeld.params) : null)
+    body = <LinkBody model={model} actions={actions} dialog={dialog} />
+  } else if (dialog.kind === 'unlink') {
+    title = t('links.unlinkTitle', { label: dialog.label })
+    confirm = t('links.unlink')
+    body = <p className="fw-q-intro">{t(`links.unlinkBody.${dialog.type}`, { label: dialog.label, number: model.complaint.number })}</p>
   } else if (dialog.kind === 'register') {
     title = t('registerDialog.title', { number: model.complaint.number })
     confirm = t('action.register')
@@ -660,5 +705,74 @@ function RecordDialogs({ model, actions }: { model: ComplaintRecordModel; action
         {model.dialogProblem && <Banner tone="danger" title={t(model.dialogProblem)} />}
       </div>
     </Modal>
+  )
+}
+
+// ---- B-W2b-17: Link… (design cmp-links) --------------------------------------------------------------------------------------
+
+function LinkBody({ model, actions, dialog }: { model: ComplaintRecordModel; actions?: ComplaintRecordActions; dialog: Extract<RecordDialog, { kind: 'link' }> }) {
+  const t = useWords()
+  const ids = { type: useId(), record: useId(), serial: useId() }
+  const set = (patch: Partial<Extract<RecordDialog, { kind: 'link' }>>) => actions?.onDialog?.({ ...dialog, ...patch })
+  const options = model.linkOptions && model.linkOptions.type === dialog.type ? model.linkOptions : null
+  const named = (type: ComplaintLinkType): string | null => {
+    const complaint = model.complaint
+    if (type === 'SalesOrder') return complaint.order?.number ?? null
+    if (type === 'Shipment') return complaint.shipment?.number ?? null
+    if (type === 'ReturnAuthorisation') return complaint.return?.number ?? null
+    if (type === 'GarmentSerial') return complaint.serial
+    return null
+  }
+  return (
+    <>
+      <p className="fw-q-intro">{t('links.body')}</p>
+      <Field label={<span id={`${ids.type}-label`}>{t('links.what')}</span>} required>
+        <div role="radiogroup" aria-labelledby={`${ids.type}-label`} className="fw-cmp-link-types">
+          {LINK_TYPES.map((type) => {
+            const reason = linkTypeHeld(type, model.can)
+            const already = named(type)
+            return (
+              <RadioCard
+                key={type}
+                variant="row"
+                name={ids.type}
+                value={type}
+                checked={dialog.type === type}
+                selected={dialog.type === type}
+                disabled={!!reason}
+                onChange={() => set({ type, recordId: '', serial: '' })}
+                title={t(linkTypeKey(type))}
+                description={reason ? t(reason) : already ? t('links.namedAlready', { label: already }) : t(`links.typeHint.${type}`)}
+              />
+            )
+          })}
+        </div>
+      </Field>
+      {dialog.type === 'GarmentSerial' && (
+        <Field label={t('links.serial')} hint={t('links.serialHint')} htmlFor={ids.serial} required>
+          <Input id={ids.serial} value={dialog.serial} leadingIcon={<ScanLine size={14} aria-hidden />} onChange={(event) => set({ serial: event.target.value })} autoComplete="off" />
+        </Field>
+      )}
+      {dialog.type !== '' && dialog.type !== 'GarmentSerial' && (
+        <Field
+          label={<span id={`${ids.record}-label`}>{t(`links.pick.${dialog.type}`)}</span>}
+          required
+          hint={options === null ? t('links.reading') : options.problem ? undefined : options.items && options.items.length === 0 ? t(`links.noneToPick.${dialog.type}`) : t(`links.pickHint.${dialog.type}`)}
+          error={options?.problem ? t(options.problem) : undefined}
+        >
+          {options?.items && options.items.length > 0 ? (
+            <Combobox
+              options={options.items.map((item) => ({ value: item.id, label: item.sub ? `${item.label} · ${item.sub}` : item.label }))}
+              value={dialog.recordId}
+              onChange={(value) => set({ recordId: value })}
+              placeholder={t('links.search')}
+              labelledBy={`${ids.record}-label`}
+            />
+          ) : (
+            <Input disabled value="" readOnly aria-labelledby={`${ids.record}-label`} />
+          )}
+        </Field>
+      )}
+    </>
   )
 }

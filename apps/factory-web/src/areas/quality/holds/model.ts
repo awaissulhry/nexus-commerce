@@ -1,6 +1,6 @@
 import { HOLD_LIMITS, HOLD_SOURCE_TYPES, HOLD_SUBJECT_TYPES, STOCK_SUBJECTS, type HoldSourceType, type HoldSubjectType, type ReleaseCheckKey } from '@nexus/factory-domain/quality/holds/rules'
 import type { LiveState, Notice, QualityCan, Read } from '../_shared/model'
-import type { Hold, HoldCounts, HoldDetail, HoldPreview, HoldsQuery, PlaceBody, Person } from './api'
+import type { Hold, HoldCheck, HoldCounts, HoldDetail, HoldPreview, HoldSettings, HoldSettingsAnswer, HoldsQuery, PlaceBody, Person } from './api'
 
 /**
  * The rules of Quality › Holds (SCR-078) without React and without the API: the saved views and their address (the
@@ -133,6 +133,9 @@ export function ownerWords(hold: Pick<Hold, 'owner' | 'ownerId'>, me: string): {
   return hold.owner?.name ? { key: 'owner.name', params: { name: hold.owner.name } } : { key: 'owner.someone' }
 }
 
+/** B-W2b-17: the hold's number as printed ("HLD-2026-0091"); "—" for a hold placed before holds were numbered. */
+export const numberText = (hold: Pick<Hold, 'number'>): string => hold.number ?? '—'
+
 /** The hold's state: active (overdue said), released, closed in its NCR. */
 export function statusOf(hold: Pick<Hold, 'status' | 'overdue'>): { key: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger' } {
   if (hold.status === 'RELEASED') return { key: 'status.RELEASED', tone: 'success' }
@@ -196,6 +199,21 @@ export function quantityWords(text: string | null, t: (key: string, params?: Rec
 /** A check in our words: its name, and the line for "met" or "open" (the API's sentence goes under it as data). */
 export const checkNameKey = (key: ReleaseCheckKey): string => `check.${key}.name`
 export const checkLineKey = (key: ReleaseCheckKey, ok: boolean): string => `check.${key}.${ok ? 'ok' : 'open'}`
+
+/** True when the reader placed this hold themself (an office user: the floor's worker is never the office reader). */
+export const placedByMe = (hold: Pick<Hold, 'placedBy'>, me: string): boolean => hold.placedBy.kind === 'USER' && hold.placedBy.userId === me
+
+/**
+ * B-W2b-17: a check's line for this reader. "Another person" met although the reader placed the hold means the company's
+ * rule lets the placer release (QualitySettings.placerMayRelease): said as such, never as "someone else placed it".
+ */
+export function checkLineKeyFor(check: Pick<HoldCheck, 'key' | 'ok'>, hold: Pick<Hold, 'placedBy'>, me: string, placerMayRelease: boolean): string {
+  if (check.key === 'NOT_PLACER' && check.ok && placerMayRelease && placedByMe(hold, me)) return 'check.NOT_PLACER.placerMay'
+  return checkLineKey(check.key, check.ok)
+}
+
+/** B-W2b-17: the four-eyes rule line of the Decision tab: the company's rule on who releases. */
+export const whoRuleKey = (detail: Pick<HoldDetail, 'release'>): string => (detail.release.placerMayRelease ? 'decision.who.rulePlacerMay' : 'decision.who.rule')
 
 /** The first check that holds the release (STATEMENT is signed inside the dialog: it never holds the button). */
 export function firstOpenCheck(detail: Pick<HoldDetail, 'release'>): ReleaseCheckKey | null {
@@ -433,11 +451,12 @@ export function bulkNotice(done: number, refused: readonly { code: string; words
   return { key: 'notice.bulkPartly', params: { done, refused: refused.length }, tone: done > 0 ? 'warning' : 'danger', detail: refused.map((entry) => `${entry.code}: ${entry.words}`) }
 }
 
-export const CSV_HEAD = ['csv.kind', 'csv.records', 'csv.quantity', 'csv.reason', 'csv.status', 'csv.placedBy', 'csv.placedAt', 'csv.ageDays', 'csv.owner', 'csv.expected', 'csv.quarantine', 'csv.site'] as const
+export const CSV_HEAD = ['csv.number', 'csv.kind', 'csv.records', 'csv.quantity', 'csv.reason', 'csv.status', 'csv.placedBy', 'csv.placedAt', 'csv.ageDays', 'csv.owner', 'csv.expected', 'csv.quarantine', 'csv.site'] as const
 
 export function csvRow(hold: Hold, t: (key: string, params?: Record<string, string | number>) => string, reason: string, me: string): (string | number)[] {
   const owner = ownerWords(hold, me)
   return [
+    hold.number ?? '',
     t(nounKey(hold.subjectType), { count: hold.subjects.length }),
     hold.subjects.map((subject) => subject.label ?? '—').join(' '),
     quantityWords(hold.quantity, t) ?? '',
@@ -470,6 +489,50 @@ export type HoldsDialog =
   | { kind: 'release'; ids: readonly string[] }
   | { kind: 'assign'; ids: readonly string[] }
   | { kind: 'shortcuts' }
+  // B-W2b-17: who releases holds (the company's rule).
+  | { kind: 'settings' }
+
+// ---- B-W2b-17: who releases holds (design quality.settings qs-sod, qs-loosen) ------------------------------------------------
+
+/** The settings dialog's choice: someone else releases (false), the placer may too (true), follow the tenant rule (null). */
+export interface HoldSettingsDraft {
+  readonly choice: boolean | null
+  readonly reason: string
+}
+
+/** The draft from the company's own row (no own row: it follows the tenant-wide rule). */
+export const settingsDraftOf = (settings: Pick<HoldSettings, 'own'>): HoldSettingsDraft => ({ choice: settings.own?.placerMayRelease ?? null, reason: '' })
+
+export const settingsChanged = (settings: Pick<HoldSettings, 'own'>, draft: HoldSettingsDraft): boolean => (settings.own?.placerMayRelease ?? null) !== draft.choice
+
+/**
+ * Whether the draft lets the placer release where the rule in force does not (the looser rule: a reason and a fresh code).
+ * "Follow the tenant rule" from a company's own row may loosen: the tenant's rule is known only when the company already
+ * follows it (source TENANT or DEFAULT), else the reason is asked to be safe (the API decides).
+ */
+export function settingsLoosens(settings: Pick<HoldSettings, 'inForce' | 'own'>, draft: HoldSettingsDraft): boolean {
+  if (!settingsChanged(settings, draft) || settings.inForce.placerMayRelease) return false
+  if (draft.choice === true) return true
+  if (draft.choice === false) return false
+  return settings.inForce.source === 'COMPANY'
+}
+
+/** The least the reason says (the API's reasonProblem: factory-domain quality/final/rules REASON_MIN). */
+export const SETTINGS_REASON_MIN = 3
+
+/** Why Save is held (a `holds` key), or null. */
+export function settingsHeld(answer: HoldSettingsAnswer | null, draft: HoldSettingsDraft | null, busy: boolean): string | null {
+  if (!answer || !draft) return 'settings.held.reading'
+  if (!answer.mayChange) return 'settings.held.noRight'
+  if (busy) return 'settings.held.busy'
+  if (!settingsChanged(answer.settings, draft)) return 'settings.held.nothing'
+  if (settingsLoosens(answer.settings, draft) && draft.reason.trim().length < SETTINGS_REASON_MIN) return 'settings.held.reason'
+  return null
+}
+
+/** The rule in force in words (a `holds` key) and where it comes from. */
+export const settingsInForceKey = (settings: Pick<HoldSettings, 'inForce'>): string => (settings.inForce.placerMayRelease ? 'settings.inForce.placerMay' : 'settings.inForce.someoneElse')
+export const settingsSourceKey = (settings: Pick<HoldSettings, 'inForce'>): string => `settings.source.${settings.inForce.source}`
 
 export interface ReleaseDraft {
   readonly note: string
@@ -519,6 +582,13 @@ export interface HoldsListModel {
   readonly busy?: boolean
   readonly dialogProblem?: string | null
   readonly dialogLines?: readonly string[]
+  /** B-W2b-17: the number search (GET /quality/holds `q`). */
+  readonly q?: string
+  /** B-W2b-17: who releases holds — the company's rule, read when its dialog opens, and the dialog's draft. */
+  readonly settings?: Read<HoldSettingsAnswer> | null
+  readonly settingsDraft?: HoldSettingsDraft | null
+  /** The company the settings are of (its name, in the dialog's subtitle). */
+  readonly companyName?: string
   /** Design cases: the focused row, the quarantine popover open on a row. */
   readonly focusRow?: number
   readonly moveOpen?: string | null

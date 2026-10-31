@@ -67,7 +67,8 @@
       "fix": "Ask another quality inspector.",
       "name": "Another person",
       "ok": "Released by someone other than who placed it.",
-      "open": "You placed this hold: another person must release it."
+      "open": "You placed this hold: another person must release it.",
+      "placerMay": "You placed this hold; your company lets the person who placed it release it."
     },
     "REINSPECTION": {
       "fix": "Inspect the garments again in Quality › Inspections.",
@@ -96,7 +97,9 @@
     "site": "Site",
     "source": "Source",
     "status": "State",
-    "subject": "What is held"
+    "subject": "What is held",
+    "number": "Hold",
+    "held": "On hold"
   },
   "csv": {
     "ageDays": "Age (days)",
@@ -110,7 +113,8 @@
     "reason": "Reason",
     "records": "Records",
     "site": "Site",
-    "status": "State"
+    "status": "State",
+    "number": "Number"
   },
   "decision": {
     "checks": "What must be true to release it",
@@ -126,7 +130,8 @@
       "placed": "Placed by: {who}.",
       "quality": "Only quality releases a hold: you read it.",
       "rule": "Four eyes: who placed the hold never releases it, and nobody releases garments they made.",
-      "youMay": "You may release holds at this site, when the checks above are met."
+      "youMay": "You may release holds at this site, when the checks above are met.",
+      "rulePlacerMay": "Your company lets the person who placed a hold release it too; nobody releases garments they made."
     },
     "whoTitle": "Who decides"
   },
@@ -173,7 +178,9 @@
       "yes": "This hold"
     },
     "workOrders": "Work orders it holds",
-    "workOrdersHint": "A work order goes back to where it was when no active hold names it any more."
+    "workOrdersHint": "A work order goes back to where it was when no active hold names it any more.",
+    "number": "Number",
+    "numberNone": "Placed before holds were numbered."
   },
   "expected": {
     "none": "Not set",
@@ -255,7 +262,9 @@
     "scope": "one record",
     "scopeRecord": "One record's holds",
     "showMore": "Show more",
-    "table": "Holds"
+    "table": "Holds",
+    "search": "Find a hold number…",
+    "noNumber": "No hold number in this view contains “{q}”."
   },
   "move": {
     "asked": "Asked at",
@@ -432,7 +441,8 @@
     "raiseNcrHint": "Reject, rework and scrap are decided in an NCR",
     "release": "Release…",
     "tag": "Print hold tag",
-    "trace": "Trace in Lots & traceability"
+    "trace": "Trace in Lots & traceability",
+    "copyNumber": "Copy number"
   },
   "source": {
     "Certificate": "Certificate suspended or expired",
@@ -474,7 +484,8 @@
     "since": "Since",
     "title_one": "Hold tag",
     "title_other": "Hold tags ({count})",
-    "tooLong": "Too long for a code"
+    "tooLong": "Too long for a code",
+    "number": "Number"
   },
   "tile": {
     "mine": "Waiting for my decision",
@@ -516,5 +527,53 @@
     "IN_PROGRESS": "In progress",
     "ON_HOLD": "On hold",
     "RELEASED": "Released"
+  },
+  "number": {
+    "none": "Placed before holds were numbered: it has no number."
+  },
+  "settings": {
+    "menu": "Who releases holds…",
+    "title": "Who releases holds",
+    "subtitle": "For {company}",
+    "inForce": {
+      "title": "In force: {rule}",
+      "placerMay": "the person who placed a hold may release it too",
+      "someoneElse": "someone other than the person who placed it releases it"
+    },
+    "source": {
+      "COMPANY": "Set for this company.",
+      "TENANT": "Set for every company.",
+      "DEFAULT": "The standard rule: nothing is set."
+    },
+    "savedAt": "Saved {at}.",
+    "question": "Who may release a hold?",
+    "choice": {
+      "someoneElse": "Someone else releases it",
+      "someoneElseHint": "Four eyes: the person who placed a hold never releases it (the standard rule).",
+      "placerMay": "The person who placed it may release it too",
+      "placerMayHint": "For a small team where one quality person places and releases holds. The other checks stay: the maker, Cr VI, the re-inspection.",
+      "follow": "Follow the rule for every company",
+      "followHint": "This company keeps no rule of its own."
+    },
+    "makerStays": "Whatever the choice, nobody releases garments they made, and a release stays an e-signature with a fresh code.",
+    "reason": "Why",
+    "reasonHint": "Letting the person who placed a hold release it is a looser rule: say why (at least 3 characters). Your code is asked at Save.",
+    "tightens": "A stricter rule: no reason or code is needed.",
+    "save": "Save",
+    "saveLoosen": "Save the looser rule",
+    "held": {
+      "reading": "Reading the rule…",
+      "noRight": "Changing who releases holds needs quality.settings.manage for this company: ask the owner.",
+      "busy": "Saving…",
+      "nothing": "Nothing changed yet.",
+      "reason": "Say why first (at least 3 characters)."
+    },
+    "failed": "The rule could not be read",
+    "stepUpSentence": "Letting the person who placed a hold release it is a looser rule: confirm it with a fresh code.",
+    "saved": "Who releases holds is saved.",
+    "savedLoosened": "Saved: the person who placed a hold may now release it too.",
+    "cancelled": "Nothing was saved: the code was not given.",
+    "conflict": "Someone changed the rule meanwhile: it was read again.",
+    "refused": "The rule was not saved:"
   }
 }

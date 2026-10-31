@@ -51,7 +51,9 @@ import {
 import { putToStore, readFromStore, sha256Hex, storeUrl, StoreError } from './store'
 import { addFollower, createTask, listAssignees, listTasks, readFollowers, setMyFollow, setTaskStatus, taskReadProblem, taskWriteProblem } from './tasks/api'
 import { addTaskHeld, createBody, followersChangeFor, taskChangeFor, type Assignable, type Followers, type TaskDraft, type TaskItem } from './tasks/model'
-import { RecordPanelsView } from './view/RecordPanelsView'
+import { RecordPanelsView, type RecordPanelsActions } from './view/RecordPanelsView'
+import { usePrintMode } from '../shell/print/print-mode'
+import { RecordPrintView } from './print/view/RecordPrintView'
 
 /**
  * The record panels as a record page mounts them: `<RecordPanels record={{ type, id, companyId, siteId }} title party />`.
@@ -152,6 +154,7 @@ function fileOf(file: ApiFile): PanelFile {
 export function RecordPanels({ record, title, party: givenParty = null, tab }: RecordPanelsProps) {
   const api = useOfficeApi()
   const session = useOfficeSession()
+  const printing = usePrintMode()
   const key = useMemo(() => ({ type: record.type, id: record.id }), [record.type, record.id])
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const can = useMemo(
@@ -604,45 +607,42 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     ...(tab ? { tab } : {}),
   }
 
-  return (
-    <RecordPanelsView
-      model={model}
-      actions={{
-        onSend: send,
-        onThreadStatus: (status) => void changeStatus(status),
-        onMoreMessages: () => void loadThread(true, messages.cursor),
-        onUpload: (file, choice) => void upload(file, choice),
-        onDismissUpload: (uploadKey) => setUploads((list) => list.filter((item) => item.key !== uploadKey)),
-        onDownload: (fileId) => void download(fileId),
-        onPreview: (fileId) => void openPreview(fileId),
-        onClosePreview: () => setPreview(null),
-        onTimelineFilter: setFilter,
-        onMoreTimeline: () => void loadTimeline(true, timeline.cursor),
-        onRetry: (part) => {
-          if (part === 'tasks') {
-            setTasks({ items: null, problem: null })
-            void loadTasks()
-          } else if (part === 'followers') void loadFollowers()
-          else if (part === 'thread') {
-            setMessages((current) => ({ ...current, problem: null }))
-            void loadThread()
-          } else if (part === 'files') {
-            setFiles({ ...EMPTY })
-            void loadFiles()
-          } else {
-            setTimeline((current) => ({ ...current, items: null, problem: null }))
-            void loadTimeline()
-          }
-        },
-        onDismissNotice: () => setNotice(null),
-        onCompleteTask: (taskId) => void completeTask(taskId),
-        onUndoTask: () => void undoTask(),
-        onTaskDialog: (open) => (open ? void loadAssignees() : setTaskDialog(null)),
-        onRetryAssignees: () => void loadAssignees(),
-        onCreateTask: makeTask,
-        onFollow: (wanted) => void follow(wanted),
-        onAddFollower: (userId) => void addColleague(userId),
-      }}
-    />
-  )
+  const actions: RecordPanelsActions = {
+    onSend: send,
+    onThreadStatus: (status) => void changeStatus(status),
+    onMoreMessages: () => void loadThread(true, messages.cursor),
+    onUpload: (file, choice) => void upload(file, choice),
+    onDismissUpload: (uploadKey) => setUploads((list) => list.filter((item) => item.key !== uploadKey)),
+    onDownload: (fileId) => void download(fileId),
+    onPreview: (fileId) => void openPreview(fileId),
+    onClosePreview: () => setPreview(null),
+    onTimelineFilter: setFilter,
+    onMoreTimeline: () => void loadTimeline(true, timeline.cursor),
+    onRetry: (part) => {
+      if (part === 'tasks') {
+        setTasks({ items: null, problem: null })
+        void loadTasks()
+      } else if (part === 'followers') void loadFollowers()
+      else if (part === 'thread') {
+        setMessages((current) => ({ ...current, problem: null }))
+        void loadThread()
+      } else if (part === 'files') {
+        setFiles({ ...EMPTY })
+        void loadFiles()
+      } else {
+        setTimeline((current) => ({ ...current, items: null, problem: null }))
+        void loadTimeline()
+      }
+    },
+    onDismissNotice: () => setNotice(null),
+    onCompleteTask: (taskId) => void completeTask(taskId),
+    onUndoTask: () => void undoTask(),
+    onTaskDialog: (open) => (open ? void loadAssignees() : setTaskDialog(null)),
+    onRetryAssignees: () => void loadAssignees(),
+    onCreateTask: makeTask,
+    onFollow: (wanted) => void follow(wanted),
+    onAddFollower: (userId) => void addColleague(userId),
+  }
+  // B-W2b-05 (PLT-171): the record's print view draws every panel at once, read-only.
+  return printing ? <RecordPrintView model={model} actions={actions} /> : <RecordPanelsView model={model} actions={actions} />
 }

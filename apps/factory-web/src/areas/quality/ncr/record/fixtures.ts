@@ -6,7 +6,7 @@ import type { RecordPanelsViewModel } from '../../../../record-panels/view/Recor
 import { STEP_UP_CLOSED, type StepUpState } from '../../_shared/hooks'
 import { at, inShell, ME, NOW, PREFIX, ROLE_PERMISSIONS, uid, type RoleCase } from '../../_shared/fixtures'
 import type { Decision, NcrRecord } from '../api'
-import { DEFECTS, DISPOSITIONS, HOLD_REASONS, OPERATIONS, PEOPLE, RECORD, RECORD_CLOSED, RECORD_OPEN, RECORD_READY, ROWS, SITES, STOCK } from '../demo/fixtures'
+import { CANCELLED_ACTIONS, DEFECTS, DISPOSITIONS, HOLD_REASONS, OPERATIONS, PEOPLE, RECORD, RECORD_CLOSED, RECORD_OPEN, RECORD_READY, ROWS, SITES, STOCK } from '../demo/fixtures'
 import { checksSay, factsOfRecord, ncrCan, type RecordTab } from '../model'
 import type { CloseDialogModel } from '../view/CloseNcrDialog'
 import { choicesOf, draftOf, EMPTY_CARRY, EMPTY_HOLD, NEW_ACTION, NO_CHOICES, stockLinesOf, TIME_ZONE, type Loaded, type NcrRecordModel, type ProblemDraft, type RecordChoices, type RecordDialog } from './view-model'
@@ -231,5 +231,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'error', label: "Couldn't be read (Try again)", model: record('owner', 'problem', null, { loaded: { status: 'error', problem: 'problem.unavailable' } }) },
     { id: 'not-found', label: 'Not found', model: record('owner', 'problem', null, { loaded: { status: 'notFound' } }) },
     { id: 'no-permission', label: 'No permission (quality.ncr.view): which permission, who grants it', model: record('noAccess', 'problem', null, { loaded: { status: 'forbidden' } }) },
+    // ---- B-W2b-17 ------------------------------------------------------------------------------------------------------
+    { id: 'w2b-containment-cancelled', label: 'W2b Containment: two cancelled actions, each with its reason in its own place (never as evidence)', model: record('owner', 'containment', { ...RECORD, containment: [...RECORD.containment, ...CANCELLED_ACTIONS] }), note: 'The second one was cancelled before B-W2b-17: its reason came from "Cancelled: …" in its evidence; the evidence cell shows none.' },
+    { id: 'w2b-containment-cancel-dialog', label: 'W2b Cancel an action: the reason (kept in its own place)', model: record('inspector', 'containment', RECORD_OPEN, { dialog: { kind: 'cancelAction', actionId: RECORD_OPEN.containment[0]!.id, reason: 'The bundles were checked by the line already.', busy: false, notice: null } }) },
   ],
 })

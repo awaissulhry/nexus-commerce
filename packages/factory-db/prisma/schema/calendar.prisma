@@ -33,6 +33,9 @@ model WorkCalendar {
   /// SUPPLIER: the supplier or subcontractor (a Party; the API checks its role).
   partyId         String?       @db.Uuid
   name            String
+  /// W2b (B-W2b-03; B-W2a-08's gap): a supplier's own time zone abroad (IANA: "Asia/Karachi"), only on a SUPPLIER
+  /// calendar; null: the company's (Europe/Rome). Our calendars keep their company's and site's zone.
+  timeZone        String?
   /// The ISO weekdays (1 Monday … 7 Sunday) that work in a normal week, ascending, at least one.
   workingWeekdays Int[]         @default([1, 2, 3, 4, 5])
   /// The pattern of a normal working day (not on a SUPPLIER calendar); null: the one of the calendar above it, else
@@ -129,6 +132,10 @@ model ShiftPattern {
   segments     ShiftSegment[]
   calendars    WorkCalendar[]
   calendarDays CalendarDay[]
+  // W2b people.prisma (wave 4/7): the people who normally work it.
+  employees    Employee[]
+  // W2b time.prisma (wave 5/7): the roster shifts taken from it.
+  rosterEntries RosterEntry[]
 
   @@unique([tenantId, code])
   // The target of the calendars', days' and segments' tenant-safe references.

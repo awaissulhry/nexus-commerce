@@ -32,6 +32,15 @@
         "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
       }
     },
+    "OrgArea": {
+      "about": "W2b (wave 4/7): office keeps the areas of a site (the org tree site > area > line); a floor device reads its site's areas.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
     "Line": {
       "about": "Office keeps the lines; a floor device reads the lines of its site.",
       "kind": "tenant",

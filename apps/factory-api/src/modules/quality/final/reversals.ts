@@ -7,6 +7,7 @@ import { REVERSAL_REASON_WORDS, reversalImpact, reversalProblems, type ReversalR
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { openRegisterEntryFor } from '../../compliance/register/hook'
 import { readCells, readStyle, type LabelHeader } from '../../production/serials/store'
+import { takeOutOnReleaseReversal } from '../../production/completion/release-reversal'
 import { lockCells } from '../../shipping/cells'
 import { finalWorkOrder, mayOn, officeOf } from './access'
 import { cellText } from './facts'
@@ -25,7 +26,9 @@ import { lockRelease, lockSerials, readRelease, readReversals, releasedPerCell, 
  *   trigger checks it at commit) → for a PPE style, the PPE register entry of the garments (B-W1-43's
  *   openRegisterEntryFor, source the reversal, with the shipments the cell's garments left on: "units still here are
  *   held; shipped ones go to the PPE register") → audit → event. Released garments are then releases less reversals per
- *   cell (shipping reads that); the reversed ones are on hold until a new inspection passes (Q3 (a)).
+ *   cell (shipping reads that); the reversed ones are on hold until a new inspection passes (Q3 (a)). W2b (B-W2b-10):
+ *   after the reversal row, the cell's garments in finished goods beyond what stays released leave stock in the same
+ *   command (production/completion release-reversal.ts; the answer's `finishedGoods`).
  */
 
 export interface ReverseBody {
@@ -130,6 +133,8 @@ export async function reverseRelease(caller: CommandCaller, releaseId: string, b
       })
       tools.audit({ recordType: 'GarmentSerial', recordId: serialId, companyId: release.companyId, siteId: release.siteId, before: { status: 'RELEASED' }, after: { status: to, reversalId: id }, reason: body.reason.trim() })
     }
+    // W2b B-W2b-10 hook (production/completion release-reversal.ts): the garments taken back leave finished goods too.
+    const finishedGoods = await takeOutOnReleaseReversal(tools, { workOrderId: header.id, cellId: release.workOrderSizeId, reversed: body.quantity, reversalId: id, reason: body.reason.trim() })
     const cells = await readCells(tx, header.id)
     const cell = cells.find((entry) => entry.id === release.workOrderSizeId)!
     const register = await registerEntryFor(tools, {
@@ -146,7 +151,7 @@ export async function reverseRelease(caller: CommandCaller, releaseId: string, b
       recordId: id,
       companyId: release.companyId,
       siteId: release.siteId,
-      after: { releaseId: release.id, quantity: body.quantity, serialIds, serialsTo: body.serialsTo ?? null, reasonCode: body.reasonCode, impact, registerEntryId: register.entryId },
+      after: { releaseId: release.id, quantity: body.quantity, serialIds, serialsTo: body.serialsTo ?? null, reasonCode: body.reasonCode, impact, registerEntryId: register.entryId, finishedTakenOut: finishedGoods.takenOut },
       reason: body.reason.trim(),
     })
     tools.emit({
@@ -167,7 +172,7 @@ export async function reverseRelease(caller: CommandCaller, releaseId: string, b
         registerEntryId: register.entryId,
       },
     })
-    return { id, impact, register }
+    return { id, impact, register, finishedGoods }
   })
   const fresh = (await caller.withClient((db) => readRelease(db, release.id))) as ReleaseRow
   return {
@@ -175,6 +180,7 @@ export async function reverseRelease(caller: CommandCaller, releaseId: string, b
     impact: result.impact,
     register: result.register,
     release: await caller.withClient((db) => releaseView(db, fresh, header.number)),
-    words: `${body.quantity} garment(s) taken back and on hold until a new inspection passes. ${result.register.words}`,
+    words: `${body.quantity} garment(s) taken back and on hold until a new inspection passes. ${result.finishedGoods.takenOut > 0 || result.finishedGoods.left > 0 ? `${result.finishedGoods.words} ` : ''}${result.register.words}`,
+    finishedGoods: { takenOut: result.finishedGoods.takenOut, putBack: result.finishedGoods.putBack, left: result.finishedGoods.left, moveIds: [...result.finishedGoods.moveIds], words: result.finishedGoods.words },
   }
 }

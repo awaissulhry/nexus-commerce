@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { recallScope, SCOPE_COOKIE } from '../../../../lib/session/scope-memory'
 import { companyPrefix } from '../../../../lib/session/session'
 import { loadOfficeSession, SIGN_IN_PATH } from '../../../../lib/session/server'
 import { OfficeShell } from '../../../../shell/office/OfficeShell'
@@ -24,8 +26,11 @@ export default async function CompanyLayout({ children, params }: { children: Re
   if (load.kind !== 'signed_in') return <OfficeUnavailable code={load.code} />
   // The address may name the company by id or in another case: the API's answer is the company's own code.
   const current = load.session.company?.code ?? code
+  // B-W2b-05: the site this person last chose here (among the sites their roles reach), so the first paint shows it.
+  const person = { tenantId: load.session.tenant.id, userId: load.session.user.id }
+  const site = recallScope((await cookies()).get(SCOPE_COOKIE)?.value, person, { companies: [current], sites: load.session.sites.map((s) => s.id) })?.site ?? null
   return (
-    <OfficeShell session={load.session} company={current}>
+    <OfficeShell session={load.session} company={current} site={site}>
       {children}
     </OfficeShell>
   )

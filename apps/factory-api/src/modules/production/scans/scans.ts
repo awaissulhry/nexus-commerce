@@ -153,6 +153,8 @@ export interface ScanView {
   readonly serverTime: string
   /** A REPORT: the last moment its undo is taken on the floor (or the next scan on the device, whichever first). */
   readonly undoUntil: string | null
+  /** B-W2b-10: an outside operation's REPORT names the subcontract receipt line that brought the bundle back. */
+  readonly subcontractReceiptLineId: string | null
 }
 
 export function scanView(scan: ScanRow, operations: readonly OperationRow[], bundleCode: string, defects: readonly DefectLine[]): ScanView {
@@ -176,6 +178,7 @@ export function scanView(scan: ScanRow, operations: readonly OperationRow[], bun
     deviceTime: at(scan.deviceTime),
     serverTime: toUtcIso(scan.serverTime),
     undoUntil: scan.kind === 'REPORT' && scan.deviceId ? toUtcIso(new Date(scan.serverTime.getTime() + UNDO_WINDOW_MS)) : null,
+    subcontractReceiptLineId: scan.subcontractReceiptLineId ?? null,
   }
 }
 
@@ -472,7 +475,7 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   return scanView(row, operations, locked.bundle.code, work.lines)
 }
 
-export function scanEvent(workOrder: Pick<ScanHeader, 'id' | 'number' | 'companyId' | 'siteId'>, scan: ScanRow, operationSeq: number, postedBy: 'FLOOR' | 'OFFICE') {
+export function scanEvent(workOrder: Pick<ScanHeader, 'id' | 'number' | 'companyId' | 'siteId'>, scan: ScanRow, operationSeq: number, postedBy: 'FLOOR' | 'OFFICE' | 'SYSTEM') {
   return {
     type: 'production.scan_recorded',
     subject: workOrder.id,
@@ -643,9 +646,12 @@ async function ask(caller: CommandCaller, session: Session, input: AskInput): Pr
             targetLines: (await readDefects(tx, [target.id])).get(target.id) ?? [],
             pending: (await readCorrectionRequests(tx, { scanIds: [target.id], status: 'PENDING' })).length > 0,
           }
+          // W2b B-W2b-10 hook (bundles/flow.ts): a split parent's correction is capped at its live garments.
+          const flow = await bundleFlowOf(tx, bundle, operations, standingScans(scans))
           const refusal = correctionAskRefusal({
             workOrder: current,
-            bundle: { code: bundle.code, quantity: bundle.quantity },
+            bundle: { code: bundle.code, quantity: flow.quantity },
+            standing: flow.standing,
             target: scans.find((scan) => scan.id === target.id) ?? null,
             operations,
             scans,

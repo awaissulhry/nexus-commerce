@@ -112,7 +112,8 @@ describe('who a row is for (whyMine: the right to act, four eyes, the grain, the
     // follow the W1 kinds.
     expect(tileKindsFor(roleActor('buyer'))).toEqual(['PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION', 'RULE_ALERT'])
     expect(sourcesFor(roleActor('buyer'))).toContain('LOT_HOLD') // seen, never acted on
-    expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT'])
+    // B-W2b-17: the NCR decisions that wait for an approval (quality.ncr.approve).
+    expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT', 'NCR_DECISION'])
     expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION', 'RULE_ALERT'])
     expect(tileKindsFor(roleActor('finance'))).toEqual(['INVOICE_SDI', 'QUOTE_APPROVAL', 'INVOICE_TO_ISSUE', 'TASK_DUE', 'MENTION', 'RULE_ALERT'])
     // Read-only keeps no task (tasks.manage is a write) and handles no alert; it still reads the notes that mention it.
@@ -342,7 +343,9 @@ describe('the catalogue', () => {
     // The design's tiles: Approvals are exactly the decisions a person reviews; everything else is an alert. W2a's own
     // rows (my tasks, my mentions) have their own categories and words (insights/personal); my alerts (B-W2a-33) are alerts
     // with the alert's own words (alerts/today).
-    for (const kind of recordKinds) expect(KIND_RULES[kind].category, kind).toBe(KIND_RULES[kind].decide === 'REVIEW' ? 'APPROVAL' : 'ALERT')
+    // B-W2b-17: an NCR decision is an approval decided on the NCR's own record (its Disposition tab), so it OPENs.
+    const OPEN_APPROVALS: readonly string[] = ['NCR_DECISION']
+    for (const kind of recordKinds) expect(KIND_RULES[kind].category, kind).toBe(KIND_RULES[kind].decide === 'REVIEW' || OPEN_APPROVALS.includes(kind) ? 'APPROVAL' : 'ALERT')
     expect(PERSONAL_KINDS.map((kind) => KIND_RULES[kind].category)).toEqual(['TASK', 'MENTION', 'ALERT'])
     expect(Object.keys(CODE_WORDS).sort()).toEqual(['checks', 'complianceChecks', 'duties', 'entryKind', 'heldReason', 'privacyDuties', 'reasons', 'steps'])
   })

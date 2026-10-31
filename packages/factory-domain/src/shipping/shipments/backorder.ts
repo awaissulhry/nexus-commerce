@@ -117,3 +117,11 @@ export function closedShortAtShipProblems(lines: readonly { readonly label: stri
   if (closed.length === 0) return []
   return [`${closed.map((line) => `${line.label} (${line.garments} garment${line.garments === 1 ? '' : 's'})`).join(', ')}: the order line was closed short after these were planned, so they do not leave. Unpack and take them off the shipment, or reopen the line on the order.`]
 }
+
+/**
+ * W2b (B-W2b-19; the B-W2a-12 note): a repair work order's garment goes back to its customer with the repair's DDT
+ * (B-W2a-17), never on a shipment of the order. Adding its cell is refused (B-W2a-48); a line of one that is already on
+ * a shipment (made before the rule) neither grows nor leaves.
+ */
+export const repairCellWords = (workOrderNumber: string): string =>
+  `${workOrderNumber} is a repair work order: its garment goes back with the repair's DDT, never on a shipment of the order.`

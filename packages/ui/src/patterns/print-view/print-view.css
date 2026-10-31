@@ -1,0 +1,101 @@
+/*
+ * DS — PrintView (B-W2b-09). On screen: the strip, then the paper as it will print. On paper: no strip, nothing marked
+ * `data-print-hide`, sections kept whole, page numbers in the sheet's margin. Fills the main area (no max width).
+ */
+.nds-printview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+  color: var(--nds-text);
+}
+.nds-printview-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  padding-bottom: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border);
+}
+.nds-printview-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-printview-back:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-xs);
+}
+.nds-printview-tools {
+  display: inline-flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.nds-printview-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding-bottom: var(--nds-space-10);
+  border-bottom: 2px solid var(--nds-border-strong);
+}
+.nds-printview-title {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.25;
+}
+.nds-printview-meta,
+.nds-printview-filters {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-printview-filters {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-medium);
+}
+.nds-printview-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+.nds-printview-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.nds-printview-section-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+@media print {
+  @page {
+    margin: 14mm 12mm 16mm;
+    @bottom-right {
+      content: counter(page) " / " counter(pages);
+      font-size: 9pt;
+    }
+  }
+  [data-print-hide] {
+    display: none !important;
+  }
+  .nds-printview {
+    gap: var(--nds-space-10);
+  }
+  .nds-printview-section {
+    break-inside: avoid-page;
+  }
+  .nds-printview-section-title {
+    break-after: avoid-page;
+  }
+}

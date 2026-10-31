@@ -212,7 +212,7 @@ describe("a repair's way back to its customer (REPAIR; LOG-116)", () => {
       language: 'it',
       source: { type: 'RepairOrder', id: repair(), number: 'SEED-REP-0001', state: 'RECEIVED' },
       reasons: ['REPAIR', 'RETURN_FROM_WORK', 'OTHER'],
-      draft: { reason: 'REPAIR', recipient: { name: expect.any(String), vatNumber: expect.stringMatching(/^IT/) }, documentRefs: [{ kind: 'DDT', number: 'SEED-C1-R-7', date: '2026-11-28' }], replacement: false },
+      draft: { reason: 'REPAIR', recipient: { name: expect.any(String), vatNumber: expect.stringMatching(/^IT/) }, documentRefs: [{ kind: 'REPAIR_ORDER', number: 'SEED-REP-0001', date: null }, { kind: 'DDT', number: 'SEED-C1-R-7', date: '2026-11-28' }], replacement: false },
     })
     expect(preview.draft.destination).not.toBeNull()
     expect(preview.draft.lines).toEqual([expect.objectContaining({ seq: 1, quantity: '1', uom: 'PCS', sourceLineId: repair() })])
@@ -256,8 +256,10 @@ describe("a repair's way back to its customer (REPAIR; LOG-116)", () => {
     expect(issued).toMatchObject({ source: { state: 'RECEIVED' }, pdfProblem: null, file: { id: expect.any(String) } })
     expect((await series()).next).toBe(before.next + 1)
     expect(await allocations(before.id)).toBe(allocated + 1)
-    const [row] = await admin<{ shipmentId: string | null; sourceType: string; sourceId: string }>(`SELECT "shipmentId", "sourceType", "sourceId" FROM "Ddt" WHERE id = $1`, [S.repairDdt])
-    expect(row).toEqual({ shipmentId: null, sourceType: 'RepairOrder', sourceId: repair() })
+    const [row] = await admin<{ shipmentId: string | null; sourceType: string; sourceId: string; language: string; transportMode: string | null }>(`SELECT "shipmentId", "sourceType", "sourceId", language, "transportMode"::text AS "transportMode" FROM "Ddt" WHERE id = $1`, [S.repairDdt])
+    // B-W2b-19: the DDT keeps the language it is printed in (its party's) and the mode of transport (none typed here).
+    expect(row).toEqual({ shipmentId: null, sourceType: 'RepairOrder', sourceId: repair(), language: 'it', transportMode: null })
+    expect(issued.ddt).toMatchObject({ language: 'it', transportMode: null })
 
     const { download } = await ok('warehouse', 'GET', `/shipping/ddts/${S.repairDdt}/pdf`)
     const text = pdfFlatText((await app.inject({ method: 'GET', url: download.url })).rawPayload)
@@ -344,7 +346,7 @@ describe('a subcontract kit on conto lavorazione (WORK_ON_ACCOUNT; SCM-140)', ()
     const [line] = await admin<{ ddtId: string; status: string }>(`SELECT "ddtId", status FROM "SubcontractKitLine" WHERE id = $1`, [subcontractA.kitLineId])
     expect(line).toEqual({ ddtId: S.kitDdt, status: 'SENT' })
     const { ddt } = await ok('warehouse', 'GET', `/shipping/ddts/${S.kitDdt}`)
-    expect(ddt).toMatchObject({ reason: 'WORK_ON_ACCOUNT', transportBy: 'CARRIER', carrier: { name: 'Corriere Esempio' }, partyId: A.P2, documentRefs: [{ kind: 'PURCHASE_ORDER', number: 'SEED-SC-0001' }] })
+    expect(ddt).toMatchObject({ reason: 'WORK_ON_ACCOUNT', transportBy: 'CARRIER', carrier: { name: 'Corriere Esempio' }, partyId: A.P2, documentRefs: [{ kind: 'SUBCONTRACT_ORDER', number: 'SEED-SC-0001' }] })
     expect(ddt.destination).not.toBeNull()
     expect(ddt.lines.map((row: Json) => [row.sourceLineId, row.uom, row.quantity])).toEqual([
       [subcontractA.kitLineId, 'M', '12.6'],
@@ -418,7 +420,7 @@ describe('returned goods sent back unchanged (RETURN; SAL-341)', () => {
     const preview = await ok('warehouse', 'POST', sourceUrl('ReturnAuthorisation', returnsA.inspectedReturnId, 'ddt/preview'), TYPED)
     expect(preview.source).toMatchObject({ number: 'SEED-RMA-0002', state: 'INSPECTED' })
     expect(preview.goods).toEqual([expect.objectContaining({ sourceLineId: returnsA.inspectedLineId, held: 'Line 10 is not sent back as it came (REPAIR).' })])
-    expect(preview.draft.documentRefs).toEqual([expect.objectContaining({ kind: 'SALES_ORDER' }), { kind: 'DDT', number: 'SEED-C1-R-7', date: '2026-11-28' }])
+    expect(preview.draft.documentRefs).toEqual([{ kind: 'RETURN_AUTHORISATION', number: 'SEED-RMA-0002', date: null }, expect.objectContaining({ kind: 'SALES_ORDER' }), { kind: 'DDT', number: 'SEED-C1-R-7', date: '2026-11-28' }])
     expect((await refused('warehouse', 'POST', sourceUrl('ReturnAuthorisation', returnsA.inspectedReturnId), TYPED, 400)).issues).toEqual([
       { path: 'source/lines', message: 'Nothing of return SEED-RMA-0002 may travel now: Line 10 is not sent back as it came (REPAIR).' },
     ])

@@ -81,7 +81,7 @@ export function emitSorted(tools: Pick<CommandTools, 'emit'>, mail: Pick<MailRow
   tools.emit(eventFor(sorted, { subject: mail.id, companyId: mail.companyId, payload: { inboundEmailId: mail.id, status, threadId, messageId } }))
 }
 
-async function apply(tools: CommandTools, mail: MailRow, outcome: SortOutcome, suggestion: Suggestion, senderPartyId: string | null): Promise<{ threadId: string | null; messageId: string | null }> {
+async function apply(tools: CommandTools, mail: MailRow, outcome: SortOutcome, suggestion: Suggestion, senderPartyId: string | null, record: { readonly type: string; readonly id: string } | null = null): Promise<{ threadId: string | null; messageId: string | null }> {
   const { tx, now } = tools
   const attachments = attachmentsOf(mail)
   const parts = keptOf(attachments)
@@ -94,7 +94,7 @@ async function apply(tools: CommandTools, mail: MailRow, outcome: SortOutcome, s
     const thread =
       outcome.threadId !== null
         ? await tx.thread.findUniqueOrThrow({ where: { id: outcome.threadId }, select: THREAD_OFFICE })
-        : (await ensureThread(tools, { type: PARTY_RECORD, id: senderPartyId! }, null)).thread
+        : (await ensureThread(tools, record ?? { type: PARTY_RECORD, id: senderPartyId! }, null)).thread
     const { messageId, fileIds } = await joinThread(tools, thread, mail, parts, suggestion.senderPartyId === thread.partyId ? suggestion.senderContactId : null)
     await tx.inboundEmail.update({
       where: { id: mail.id },
@@ -131,9 +131,10 @@ export async function sortInbound(caller: CommandCaller, inboundEmailId: string,
       tools.audit({ action: 'emailIn.sortSkipped', recordType: 'InboundEmail', recordId: inboundEmailId })
       return 'settled' as const
     }
-    const { facts, suggestion } = await sortFactsOf(tx, mail)
+    const { facts, suggestion, record } = await sortFactsOf(tx, mail)
     const outcome = sortMail(facts)
-    const { threadId, messageId } = await apply(tools, mail, outcome, suggestion, facts.senderParty?.partyId ?? null)
+    // B-W2b-17: a known sender's mail joins the record the match named (a complaint) when not the party's own thread.
+    const { threadId, messageId } = await apply(tools, mail, outcome, suggestion, facts.senderParty?.partyId ?? null, record)
     tools.audit({
       recordType: 'InboundEmail',
       recordId: mail.id,
