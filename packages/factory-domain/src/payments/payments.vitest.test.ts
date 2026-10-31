@@ -46,4 +46,12 @@ describe('the deposit page mail (DEPOSIT_INFO link)', () => {
     expect(sent.body).toContain('https://factory.example.com/l#token=abc')
     expect(sent.body.endsWith('Thank you for your order.')).toBe(true)
   })
+
+  it('B-W2b-16: a request made on an order without a quote names the order', () => {
+    const typed = depositLinkMail({ ...input, quoteDocument: null }, null)
+    expect(typed.subject).toBe("Pagamento anticipato per l'ordine SO-2026-0001: importo e coordinate per il bonifico")
+    expect(typed.body).toContain("richiesto per l'ordine SO-2026-0001: importo")
+    expect(typed.body).not.toContain('offerta')
+    expect(depositLinkMail({ ...input, locale: 'en', quoteDocument: null }, 'https://factory.example.com/l#token=abc').subject).toBe('Advance payment for order SO-2026-0001: amount and bank details')
+  })
 })

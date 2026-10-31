@@ -6,6 +6,7 @@ import { eachDay, isoWeekday, localInstant, plusDays } from './dates'
 import { easterSunday, publicHolidays } from './holidays'
 import { DEFAULT_PATTERN, describePattern, segmentProblems, shiftEndsOf, weekdayMinutes, type Pattern, type Segment } from './patterns'
 import { dayProblems, rangeProblems, weekdaysProblems } from './rules'
+import { copyPairProblems, copyPlan, copyRange, MAX_COPY_DAYS, MAX_TARGETS, targetsProblems, timeZoneProblems } from './copy'
 import { arrivalDate, closedDaysOf, closedSpansOf, orderByDate, weeklyDaysOffOf } from './suppliers'
 import { addWorkingDays, dayOf, nextWorkingDay, OutsideWindowError, workingCalendar, workingMinutesBetween, workingTimeOf, type CalendarLayer, type DayException, type DayKind } from './working-time'
 
@@ -246,6 +247,61 @@ describe('the rules of keeping calendars', () => {
     expect(dayProblems('SITE', { kind: 'CLOSURE', shiftPatternId: 'p' })).toHaveLength(1)
     expect(dayProblems('SUPPLIER', { kind: 'WORKING', shiftPatternId: 'p' })).toHaveLength(1)
     expect(dayProblems('LINE', { kind: 'WORKING', shiftPatternId: 'p' })).toEqual([])
+  })
+})
+
+describe('B-W2b-20: one closure on many calendars, copying days, a supplier calendar\'s time zone', () => {
+  it('names each target once, between one and fifty', () => {
+    expect(targetsProblems([])).toHaveLength(1)
+    expect(targetsProblems([{ calendarId: 'a' }, { scope: 'LINE', ownerId: 'l1' }, { calendarId: 'b' }])).toEqual([])
+    const twice = targetsProblems([{ calendarId: 'a' }, { scope: 'LINE', ownerId: 'l1' }, { calendarId: 'a', version: 3 }, { scope: 'LINE', ownerId: 'l1' }])
+    expect(twice.map((issue) => issue.path)).toEqual(['targets/2', 'targets/3'])
+    expect(twice[0]!.message).toMatch(/also target 1/)
+    expect(targetsProblems(Array.from({ length: MAX_TARGETS + 1 }, (_, index) => ({ calendarId: `c${index}` })))[0]!.message).toMatch(/At most 50/)
+  })
+
+  it('copies from today over two years by default, at most that long', () => {
+    expect(copyRange({}, '2026-11-01')).toEqual({ from: '2026-11-01', to: plusDays('2026-11-01', MAX_COPY_DAYS - 1), problems: [] })
+    expect(copyRange({ from: '2027-01-01', to: '2027-12-31' }, '2026-11-01').problems).toEqual([])
+    expect(copyRange({ from: '2027-01-02', to: '2027-01-01' }, '2026-11-01').problems[0]!.message).toMatch(/ends/)
+    expect(copyRange({ from: '2026-01-01', to: '2028-01-04' }, '2026-11-01').problems[0]!.message).toMatch(/at most 733 days/)
+  })
+
+  it('copies ours into ours and a supplier\'s into a supplier\'s, never a calendar into itself', () => {
+    expect(copyPairProblems({ id: 'a', scope: 'LINE' }, { id: 'b', scope: 'LINE' })).toEqual([])
+    expect(copyPairProblems({ id: 'a', scope: 'SITE' }, { id: 'b', scope: 'LINE' })).toEqual([])
+    expect(copyPairProblems({ id: 'a', scope: 'SUPPLIER' }, { id: 'b', scope: 'SUPPLIER' })).toEqual([])
+    expect(copyPairProblems({ id: 'a', scope: 'LINE' }, { id: 'a', scope: 'LINE' })[0]!.message).toMatch(/its own days/)
+    expect(copyPairProblems({ id: 'a', scope: 'SUPPLIER' }, { id: 'b', scope: 'SITE' })[0]!.message).toMatch(/supplier/)
+  })
+
+  it('keeps each day as it was, and skips the days whose pattern the target may not use, by date', () => {
+    const plan = copyPlan(
+      [
+        { date: '2026-12-26', kind: 'WORKING', name: 'Inventory Saturday', shiftPatternId: 'p-old', note: null, holidaySet: null },
+        { date: '2026-12-08', kind: 'HOLIDAY', name: 'Immacolata', shiftPatternId: null, note: null, holidaySet: 'IT' },
+        { date: '2026-12-12', kind: 'WORKING', name: 'Extra Saturday', shiftPatternId: 'p-sat', note: 'Catch up', holidaySet: null },
+        { date: '2026-12-19', kind: 'WORKING', name: 'Other company', shiftPatternId: 'p-b', note: null, holidaySet: null },
+      ],
+      (id) => (id === 'p-sat' ? 'USABLE' : id === 'p-old' ? 'ARCHIVED' : 'OTHER_COMPANY'),
+    )
+    expect(plan.copy.map((day) => [day.date, day.holidaySet, day.shiftPatternId, day.note])).toEqual([
+      ['2026-12-08', 'IT', null, null],
+      ['2026-12-12', null, 'p-sat', 'Catch up'],
+    ])
+    expect(plan.skipped.map((day) => [day.date, day.reason])).toEqual([
+      ['2026-12-19', 'PATTERN_OTHER_COMPANY'],
+      ['2026-12-26', 'PATTERN_ARCHIVED'],
+    ])
+    expect(plan.skipped[1]!.words).toBe('2026-12-26 (Inventory Saturday) is not copied: its shift pattern is archived.')
+  })
+
+  it("gives a time zone only to a supplier's calendar, and only a zone we know", () => {
+    expect(timeZoneProblems('SUPPLIER', 'Asia/Karachi')).toEqual([])
+    expect(timeZoneProblems('SUPPLIER', null)).toEqual([])
+    expect(timeZoneProblems('SITE', null)).toEqual([])
+    expect(timeZoneProblems('SITE', 'Europe/Rome')[0]!.message).toMatch(/Only a supplier/)
+    expect(timeZoneProblems('SUPPLIER', 'Mars/Olympus')[0]!.message).toMatch(/not a time zone we know/)
   })
 })
 

@@ -4,6 +4,8 @@ import {
   cancelWarning,
   canMoveRepair,
   makeWorkOrderHeld,
+  reworkAllowed,
+  reworkRoundOf,
   moveRefusal,
   noteNeeded,
   receiveHeld,
@@ -183,5 +185,22 @@ describe('the record: stepper, actions, words', () => {
     expect(statusWords({ stage: 'REPAIRED', required: true, result: 'PASS', checkedAt: after, repairedAt })).toBe('Repaired: ready to go back')
     expect(statusWords({ stage: 'SHIPPED', required: false, result: null, checkedAt: null, repairedAt: null })).toBe('Shipped back unrepaired')
     expect(statusWords({ stage: 'AWAITING_GOODS', required: false, result: null, checkedAt: null, repairedAt: null })).toBe('Waiting for the garment')
+  })
+})
+
+describe('a rework round (B-W2b-16: a second repair work order after the first is done)', () => {
+  it('is the repair back IN_REPAIR from REPAIRED', () => {
+    expect(reworkRoundOf('IN_REPAIR', [{ from: null, to: 'RECEIVED' }, { from: 'RECEIVED', to: 'IN_REPAIR' }])).toBe(false)
+    expect(reworkRoundOf('IN_REPAIR', [{ from: 'IN_REPAIR', to: 'REPAIRED' }, { from: 'REPAIRED', to: 'IN_REPAIR' }])).toBe(true)
+    expect(reworkRoundOf('REPAIRED', [{ from: 'REPAIRED', to: 'IN_REPAIR' }, { from: 'IN_REPAIR', to: 'REPAIRED' }])).toBe(false)
+    expect(reworkRoundOf('IN_REPAIR', [])).toBe(false)
+  })
+  it('lets a new work order follow a done one, never a live one', () => {
+    expect(reworkAllowed('IN_REPAIR', { number: 'WO-1', status: 'COMPLETED' }, true)).toBe(true)
+    expect(reworkAllowed('IN_REPAIR', { number: 'WO-1', status: 'CLOSED' }, true)).toBe(true)
+    expect(reworkAllowed('IN_REPAIR', { number: 'WO-1', status: 'IN_PROGRESS' }, true)).toBe(false)
+    expect(reworkAllowed('IN_REPAIR', { number: 'WO-1', status: 'COMPLETED' }, false)).toBe(false)
+    expect(makeWorkOrderHeld('REP-1', 'IN_REPAIR', { number: 'WO-1', status: 'COMPLETED' }, true)).toBeNull()
+    expect(makeWorkOrderHeld('REP-1', 'IN_REPAIR', { number: 'WO-1', status: 'COMPLETED' })).toBe('Repair work order WO-1 is completed: one live work order per repair.')
   })
 })

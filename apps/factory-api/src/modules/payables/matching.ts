@@ -1,8 +1,10 @@
 import type { Prisma } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
-import { matchLine, matchStatusOf, MATCH_SETTINGS, sameFacts, type GoodsFacts, type LineMatch, type MatchStatus, type SubcontractFacts } from '@nexus/factory-domain/payables/match'
+import { matchLine, matchStatusOf, MATCH_SETTINGS, sameFacts, type GoodsFacts, type LineMatch, type MatchSettings, type MatchStatus, type SubcontractFacts } from '@nexus/factory-domain/payables/match'
+import { matchSettingsOf } from '@nexus/factory-domain/payables/settings'
 import type { CommandTools } from '../../core/command'
+import { payablesSettingsFor } from './settings'
 import { actorIdOf, invoiceInCommand, lockOrders, readLines, readMatches, RECORD, type InvoiceRow, type LineRow, type Reader } from './store'
 
 /**
@@ -12,6 +14,9 @@ import { actorIdOf, invoiceInCommand, lockOrders, readLines, readMatches, RECORD
  * one SupplierInvoiceMatch row per such line (the old ones deleted: the match is redone with new rows; an acceptance
  * whose facts did not change is kept), the invoice's matchStatus and matchedAt. A credit note is never matched: its
  * lines take off what their order lines' invoices bill.
+ *
+ * B-W2b-21 (Z8:03): the tolerances, the amount tolerance and the billing basis come from the company's payables settings
+ * (settings.ts; factory-domain payables/settings matchSettingsOf), each match row copying the tolerances it was made with.
  */
 
 const ENDED_ORDERS = ['CLOSED', 'CANCELLED']
@@ -117,17 +122,22 @@ export async function subcontractFacts(db: Reader, invoiceId: string, subcontrac
   }
 }
 
+/** The match settings of an invoice's company (its payables settings, else the W2a rule). */
+export async function matchSettingsFor(db: Reader, companyId: string): Promise<MatchSettings> {
+  return matchSettingsOf(await payablesSettingsFor(db, companyId))
+}
+
 /** A line's match now, from the facts as they stand (null: not a matched line). */
-export async function freshMatch(db: Reader, invoice: Pick<InvoiceRow, 'id' | 'kind' | 'currency'>, line: LineRow): Promise<{ match: LineMatch; goods: GoodsLineFacts | null; subcontract: SubcontractLineFacts | null } | null> {
+export async function freshMatch(db: Reader, invoice: Pick<InvoiceRow, 'id' | 'kind' | 'currency'>, line: LineRow, settings: MatchSettings = MATCH_SETTINGS): Promise<{ match: LineMatch; goods: GoodsLineFacts | null; subcontract: SubcontractLineFacts | null } | null> {
   if (invoice.kind === 'CREDIT_NOTE') return null
   const invoiced = { quantity: line.quantity === null ? null : dec(line.quantity).toFixed(4), uom: line.uom, netAmount: line.netAmount }
   if (line.kind === 'GOODS' && line.purchaseOrderLineId) {
     const goods = await goodsFacts(db, invoice.id, line.purchaseOrderLineId)
-    return goods ? { match: matchLine(invoiced, goods.facts, invoice.currency), goods, subcontract: null } : null
+    return goods ? { match: matchLine(invoiced, goods.facts, invoice.currency, settings), goods, subcontract: null } : null
   }
   if (line.kind === 'SUBCONTRACT' && line.subcontractOrderId) {
     const subcontract = await subcontractFacts(db, invoice.id, line.subcontractOrderId)
-    return subcontract ? { match: matchLine(invoiced, subcontract.facts, invoice.currency), goods: null, subcontract } : null
+    return subcontract ? { match: matchLine(invoiced, subcontract.facts, invoice.currency, settings), goods: null, subcontract } : null
   }
   return null
 }
@@ -155,6 +165,7 @@ export async function rematchInCommand(tools: CommandTools, invoiceId: string, o
   const tenantId = 'tenantId' in tools.context ? tools.context.tenantId : null
   if (tenantId) await lockOrders(tx, tenantId, lines.flatMap((line) => [line.purchaseOrderLineId, line.subcontractOrderId].filter((value): value is string => value !== null)))
   const before = await readMatches(tx, invoiceId)
+  const settings = await matchSettingsFor(tx, invoice.companyId)
   const factsOf = (row: (typeof before)[number]) => ({
     invoicedQuantity: row.invoicedQuantity.toString(),
     receivedQuantity: row.receivedQuantity.toString(),
@@ -167,7 +178,7 @@ export async function rematchInCommand(tools: CommandTools, invoiceId: string, o
   const states: { withinTolerance: boolean; verdict: LineMatch['verdict']; accepted: boolean }[] = []
   let written = 0
   for (const line of lines) {
-    const fresh = await freshMatch(tx, invoice, line)
+    const fresh = await freshMatch(tx, invoice, line, settings)
     if (!fresh) continue
     const siteId = fresh.goods?.siteId ?? fresh.subcontract!.siteId
     const receiptLineId = line.kind === 'GOODS' ? (fresh.goods?.receiptLineId ?? null) : null

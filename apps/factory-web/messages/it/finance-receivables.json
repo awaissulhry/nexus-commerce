@@ -199,7 +199,8 @@
     "CREDIT_NOTE_DRAFT": "Nota di credito in preparazione per una delle sue fatture.",
     "CHANGED": "Pagato o stornato dopo la preparazione: annullalo, la scala lo prepara di nuovo.",
     "NO_CONTACT": "Nessun contatto attivo del cliente riceve le fatture con un indirizzo e-mail.",
-    "SWITCHED_OFF": "I solleciti sono spenti per l'azienda: si può approvare, non inviare."
+    "SWITCHED_OFF": "I solleciti sono spenti per l'azienda: si può approvare, non inviare.",
+    "DEPOSIT_TO_CARRY": "Acconto da riportare: un acconto pagato senza fattura d'acconto non è ancora imputato a una sua fattura. Riportalo prima in Pagamenti; il cliente potrebbe dovere meno di quanto chiede il sollecito."
   },
   "reminder": {
     "byHand": "Preparato a mano",

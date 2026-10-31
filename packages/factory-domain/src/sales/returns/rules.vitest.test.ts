@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   aboveSoldWords,
+  closeWarningsOf,
   canMove,
   decisionProblems,
   defaultCredit,
@@ -159,5 +160,24 @@ describe('status and tracking (SAL-362)', () => {
     expect(byAction('RECEIVED')).toMatchObject({ editLines: 'The goods arrived: what comes back is fixed.', cancel: 'The goods arrived: close it instead.', close: 'Decide the 1 received line(s) first.', decide: null })
     expect(byAction('INSPECTED', [{ ...line, disposition: 'REPLACE', goodsOutcome: 'RESTOCK' }])).toMatchObject({ makeReplacement: null, close: null })
     expect(byAction('CLOSED')).toMatchObject({ receive: 'The return is closed.', close: 'The return is closed.' })
+  })
+})
+
+describe('closeWarningsOf (B-W2b-16: what a close leaves behind)', () => {
+  const line = (over: Partial<Parameters<typeof closeWarningsOf>[0][number]>) => ({ id: 'l10', seq: 10, received: 1, disposition: null, goodsOutcome: null, replaced: false, repairs: 0, ...over })
+  it('names Repair lines without a repair order for every garment received, beside the two W2a warnings', () => {
+    expect(closeWarningsOf([line({ disposition: 'REPAIR', goodsOutcome: 'REPAIR' })], false)).toEqual([
+      { code: 'REPAIR_WITHOUT_ORDER', path: 'repairOrder', lineIds: ['l10'], seqs: [10], message: 'Line 10 is decided Repair and no repair order was made for the garment (make it from the line, or the garment stays here unrepaired).' },
+    ])
+    // Two garments on the line, one repair order: still one garment without its order.
+    expect(closeWarningsOf([line({ disposition: 'REPAIR', received: 2, repairs: 1 })], false)[0]).toMatchObject({ code: 'REPAIR_WITHOUT_ORDER', message: expect.stringContaining('for the garment') })
+    expect(closeWarningsOf([line({ disposition: 'REPAIR', received: 2, repairs: 0 })], false)[0]!.message).toContain('for every garment')
+    expect(closeWarningsOf([line({ disposition: 'REPAIR', repairs: 1 })], false)).toEqual([])
+  })
+  it('keeps the Replace and unchanged-goods warnings, in that order', () => {
+    const lines = [line({ id: 'a', seq: 10, disposition: 'REPLACE' }), line({ id: 'b', seq: 20, disposition: 'RETURN_UNCHANGED' }), line({ id: 'c', seq: 30, disposition: 'REPAIR' })]
+    expect(closeWarningsOf(lines, false).map((warning) => [warning.code, warning.seqs])).toEqual([['REPLACE_WITHOUT_ORDER', [10]], ['BACK_WITHOUT_DDT', [20]], ['REPAIR_WITHOUT_ORDER', [30]]])
+    expect(closeWarningsOf(lines, true).map((warning) => warning.code)).toEqual(['REPLACE_WITHOUT_ORDER', 'REPAIR_WITHOUT_ORDER'])
+    expect(closeWarningsOf([line({ id: 'a', seq: 10, disposition: 'REPLACE' }), line({ id: 'b', seq: 20, disposition: 'REPLACE' })], true)[0]!.message).toBe('Lines 10, 20 are decided Replace and no replacement order was made.')
   })
 })

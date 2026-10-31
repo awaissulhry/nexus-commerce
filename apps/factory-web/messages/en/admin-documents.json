@@ -260,7 +260,8 @@
       "NCR": "Nonconformance",
       "MAINTENANCE_JOB": "Maintenance job",
       "ACCOUNTING_EXPORT": "Accounting export",
-      "HOLD": "Quality hold"
+      "HOLD": "Quality hold",
+      "PAYROLL_EXPORT": "Payroll export"
     },
     "record": {
       "Invoice": "Invoice",

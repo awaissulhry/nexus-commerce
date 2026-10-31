@@ -1,9 +1,10 @@
 import { daysFrom, plusDays } from '@nexus/factory-domain/calendars/dates'
-import { ConflictError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, businessDayStart, parseInstant, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { PLANNING_SCHEDULE_PUBLISH } from '@nexus/factory-domain/planning/schedule/permissions'
+import { ScheduleRefusal, type PublishHoldCode } from '@nexus/factory-domain/planning/schedule/refusals'
 import { diffWords, laneKey, laneOfSlot, planDiff, PUBLISH_LIMITS, type PlanDiff } from '@nexus/factory-domain/planning/schedule/slots'
 import { dayWords, whenWords } from '@nexus/factory-domain/planning/schedule/time'
 import { uniformBuckets } from '@nexus/factory-domain/planning/settings/buckets'
@@ -99,13 +100,33 @@ export async function publishDiff(db: Reader, world: ScheduleWorld, range: Pick<
   return { previous: previous ?? null, set, diff: planDiff(set.map(diffSlotOf), before.map(diffSlotOf)) }
 }
 
+/** B-W2b-20: why publishing is held, with its stable code and the facts a screen says it from. */
+export interface PublishHold {
+  readonly code: PublishHoldCode
+  readonly words: string
+  /** NOTHING_CHANGED: the version nothing changed since. */
+  readonly previousVersion: number | null
+  readonly coversFrom: BusinessDate | null
+  readonly coversTo: BusinessDate | null
+}
+
 /** Why publishing is held (nothing changed, nothing to publish); null: it may be published. */
-export function heldReasonOf(previous: PlanRow | null, set: readonly SlotRow[], diff: PlanDiff, range: Pick<PublishRange, 'coversFrom' | 'coversTo'>): string | null {
+export function publishHoldOf(previous: PlanRow | null, set: readonly SlotRow[], diff: PlanDiff, range: Pick<PublishRange, 'coversFrom' | 'coversTo'>): PublishHold | null {
   if (diff.moved + diff.added + diff.removed > 0) return null
   const days = `${dayWords(range.coversFrom)} to ${dayWords(range.coversTo)}`
-  if (set.length === 0) return `The working plan has nothing on ${days} to publish.`
-  return previous ? `Nothing changed since v${previous.number} was published for ${days}.` : null
+  const facts = { coversFrom: range.coversFrom, coversTo: range.coversTo }
+  if (set.length === 0) return { code: 'NOTHING_ON_DAYS', words: `The working plan has nothing on ${days} to publish.`, previousVersion: previous?.number ?? null, ...facts }
+  return previous ? { code: 'NOTHING_CHANGED', words: `Nothing changed since v${previous.number} was published for ${days}.`, previousVersion: previous.number, ...facts } : null
 }
+
+/** Why publishing is held, in words (null: it may be published). */
+export const heldReasonOf = (previous: PlanRow | null, set: readonly SlotRow[], diff: PlanDiff, range: Pick<PublishRange, 'coversFrom' | 'coversTo'>): string | null => publishHoldOf(previous, set, diff, range)?.words ?? null
+
+/** The hold of a person who may not publish at the site. */
+export const NO_PERMISSION_HOLD: PublishHold = { code: 'NO_PERMISSION', words: 'Publishing needs planning.schedule.publish at this site.', previousVersion: null, coversFrom: null, coversTo: null }
+
+/** A hold as the board's band and the dialog give it (without the words). */
+export const holdViewOf = (hold: PublishHold | null) => (hold ? { code: hold.code, previousVersion: hold.previousVersion, coversFrom: hold.coversFrom, coversTo: hold.coversTo } : null)
 
 /** A published version's header (who published it by name: inside the one record). */
 export async function versionHeaderOf(db: Reader, version: PlanRow) {
@@ -142,7 +163,8 @@ export async function publishPreview(caller: CommandCaller, query: PublishQuery)
     const { previous, set, diff } = await publishDiff(db, world, range)
     const checks = await checksOf(db, world, range, set)
     const may = mayAt(context, PLANNING_SCHEDULE_PUBLISH, { companyId: site.companyId, siteId: site.id })
-    const held = heldReasonOf(previous, set, diff, range)
+    const hold = publishHoldOf(previous, set, diff, range)
+    const held = hold?.words ?? null
     return {
       site: siteViewOf(site),
       asOf: toUtcIso(now),
@@ -163,7 +185,10 @@ export async function publishPreview(caller: CommandCaller, query: PublishQuery)
       },
       checks,
       mayPublish: may && held === null,
-      heldReason: held ?? (may ? null : 'Publishing needs planning.schedule.publish at this site.'),
+      heldReason: held ?? (may ? null : NO_PERMISSION_HOLD.words),
+      // B-W2b-20: the stable code of the hold and its facts (null: it may be published).
+      heldCode: hold?.code ?? (may ? null : NO_PERMISSION_HOLD.code),
+      hold: holdViewOf(hold ?? (may ? null : NO_PERMISSION_HOLD)),
     }
   })
 }
@@ -221,8 +246,8 @@ export async function publish(caller: CommandCaller, body: PublishBody, idempote
     const world = await scheduleWorld(tx, site, { from: today, to: plusDays(today, 70) }, now)
     const range = rangeOf(world, body)
     const { previous, set, diff } = await publishDiff(tx, world, range)
-    const held = heldReasonOf(previous, set, diff, range)
-    if (held) throw new ConflictError(held)
+    const hold = publishHoldOf(previous, set, diff, range)
+    if (hold) throw new ScheduleRefusal(hold.code === 'NOTHING_ON_DAYS' ? 'NOTHING_ON_DAYS' : 'NOTHING_CHANGED', hold.words)
     const number = (previous?.number ?? 0) + 1
     const versionId = newId()
     await tx.planVersion.create({

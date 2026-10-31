@@ -1,21 +1,24 @@
 import type { Prisma } from '@nexus/factory-db'
-import { daysFrom } from '@nexus/factory-domain/calendars/dates'
+import { daysFrom, plusDays } from '@nexus/factory-domain/calendars/dates'
+import { daysOf } from '@nexus/factory-domain/calendars/working-time'
 import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayRange, parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
 import { EXCEPTION_LABELS, type ExceptionKind } from '@nexus/factory-domain/planning/exceptions/detect'
-import { acknowledgeProblem, EXCEPTION_STATUSES, isSnoozed, resolveProblems, snoozeProblems, type ExceptionStatus } from '@nexus/factory-domain/planning/exceptions/lifecycle'
+import { acknowledgeProblem, EXCEPTION_STATUSES, isSnoozed, resolveProblems, snoozeProblems, workingAgeOf, type ExceptionStatus } from '@nexus/factory-domain/planning/exceptions/lifecycle'
 import { PLANNING_EXCEPTIONS_MANAGE } from '@nexus/factory-domain/planning/exceptions/permissions'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { command, StaleVersionError, type CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
+import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
 import { assertMayAt, officeContextOf, siteFor } from '../access'
 import type { Reader } from '../store'
 
 /**
  * The exception list (B-W2a-22; PLN-193; design planning.exceptions "an inbox you clear"): read with planning.view over
- * the site, worked with planning.exceptions.manage. Every write is ONE command on the exception (or, for a bulk
+ * the site, worked with planning.exceptions.manage. B-W2b-20: each view also says its age in the site's working days
+ * (`ageWorkingDays`) beside the calendar days (`ageDays`). Every write is ONE command on the exception (or, for a bulk
  * acknowledgement, on each one in turn under the same command), compare-and-set on its version, audited, event
  * planning.exceptions_changed. The runs raise, refresh and clear them (./refresh); a person never deletes one.
  */
@@ -79,8 +82,36 @@ async function recordLabels(db: Reader, rows: readonly Row[]): Promise<Map<strin
   return out
 }
 
+/** The longest age counted in working days (older exceptions count the working days of this span only). */
+const WORKING_AGE_SPAN_DAYS = 2 * 366
+
+/**
+ * B-W2b-20: each exception's age in the site's working days (the calendars service: the site → company chain), one read
+ * per site of the rows.
+ */
+async function workingAgesOf(db: Reader, rows: readonly Row[], now: Date): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  for (const siteId of [...new Set(rows.map((row) => row.siteId))]) {
+    const own = rows.filter((row) => row.siteId === siteId)
+    const zone = own[0]!.site.timezone
+    const today = businessDate(now, zone)
+    const firsts = own.map((row) => businessDate(row.firstSeenAt, zone))
+    const earliest = firsts.reduce((a, b) => (a < b ? a : b))
+    const from = earliest < plusDays(today, -WORKING_AGE_SPAN_DAYS) ? plusDays(today, -WORKING_AGE_SPAN_DAYS) : earliest
+    if (from >= today) {
+      for (const row of own) out.set(row.id, 0)
+      continue
+    }
+    const loaded = (await workingCalendarsFor(db, [{ scope: 'SITE', id: siteId }], { from, to: today })).get(ownerKey({ scope: 'SITE', id: siteId }))
+    const days = loaded ? daysOf(loaded.calendar, from, today) : []
+    own.forEach((row, index) => out.set(row.id, workingAgeOf(days, firsts[index]! < from ? plusDays(from, -1) : firsts[index]!, today)))
+  }
+  return out
+}
+
 async function viewsOf(db: Reader, rows: readonly Row[], actorId: string, now: Date) {
   const labels = await recordLabels(db, rows)
+  const workingAges = await workingAgesOf(db, rows, now)
   const peopleIds = [...new Set(rows.flatMap((row) => [row.ownerId, row.acknowledgedById, row.resolvedById].filter((value): value is string => value !== null)))]
   const people = new Map((peopleIds.length === 0 ? [] : await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true } })).map((user) => [user.id, { id: user.id, name: user.displayName }]))
   const personOf = (value: string | null) => (value ? (people.get(value) ?? { id: value, name: 'Someone' }) : null)
@@ -108,6 +139,8 @@ async function viewsOf(db: Reader, rows: readonly Row[], actorId: string, now: D
       firstSeenAt: toUtcIso(row.firstSeenAt),
       lastSeenAt: toUtcIso(row.lastSeenAt),
       ageDays: Math.max(0, daysFrom(businessDate(row.firstSeenAt, row.site.timezone), today)),
+      // B-W2b-20: the same age in the site's working days (weekends, holidays and closures not counted).
+      ageWorkingDays: workingAges.get(row.id) ?? 0,
       owner: personOf(row.ownerId),
       mine: row.ownerId === actorId,
       acknowledgedAt: row.acknowledgedAt ? toUtcIso(row.acknowledgedAt) : null,

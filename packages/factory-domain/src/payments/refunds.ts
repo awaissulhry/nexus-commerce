@@ -1,6 +1,7 @@
 import type { MinorUnits } from '../core/money'
 import type { BusinessDate } from '../core/time'
 import { amountText } from '../invoicing/invoices'
+import { CREDIT_REASONS, CREDIT_REASON_WORDS } from '../invoicing/credit-note/credit-note'
 
 /**
  * Refunds and the credit balance (B-W2a-61; FIN-127, FIN-122; factory-db receivables.prisma Refund; design
@@ -99,6 +100,60 @@ export const REFUND_STATUS_WORDS: Readonly<Record<RefundStatus, { readonly it: s
   CANCELLED: { it: 'Annullato', en: 'Cancelled' },
   VOIDED: { it: 'Stornato (errore)', en: 'Voided' },
 })
+
+// ---- B-W2b-21 (Z8:02): why a refund pays money back -----------------------------------------------------------------------
+
+/**
+ * Why the money goes back (receivables.prisma Refund.reasonCode, for the accounting export and the record): set when the
+ * refund is recorded, changed while it is DUE, fixed from PAID on (the …_followups_quality_money_w2b_guards). A refund
+ * recorded without one gets the reason its source says (`defaultRefundReason`); a person may say another.
+ */
+export const REFUND_REASONS = ['RETURN', 'PRICE_ADJUSTMENT', 'DEPOSIT_BACK', 'OVERPAYMENT', 'OTHER'] as const
+export type RefundReason = (typeof REFUND_REASONS)[number]
+
+export const REFUND_REASON_WORDS: Readonly<Record<RefundReason, { readonly it: string; readonly en: string }>> = Object.freeze({
+  RETURN: { it: 'Reso merce', en: 'Goods returned' },
+  PRICE_ADJUSTMENT: { it: 'Rettifica di prezzo', en: 'Price corrected' },
+  DEPOSIT_BACK: { it: 'Restituzione acconto', en: 'Deposit given back' },
+  OVERPAYMENT: { it: 'Pagamento in eccesso', en: 'Paid too much' },
+  OTHER: { it: 'Altro', en: 'Other' },
+})
+
+/** The credit note's own reason (the head of its causale, B-W1-51 creditCausale) as a refund reason. */
+const CREDIT_TO_REFUND: Readonly<Record<string, RefundReason>> = Object.freeze({ RETURN: 'RETURN', PRICE_REDUCTION: 'PRICE_ADJUSTMENT', DEFECT: 'PRICE_ADJUSTMENT', BILLING_ERROR: 'PRICE_ADJUSTMENT', DEPOSIT_REFUND: 'DEPOSIT_BACK', OTHER: 'OTHER' })
+
+export interface RefundSourceFacts {
+  readonly source: RefundSource
+  /** A credit note: the reason its causale was made with (CREDIT_REASONS key), when it can be read. */
+  readonly creditReason?: string | null | undefined
+  /** A credit note: some of its lines credit a customer return (InvoiceLine.returnLineId). */
+  readonly fromReturn?: boolean | undefined
+  /** A credit note: it credits a deposit invoice (TD02). */
+  readonly creditsDeposit?: boolean | undefined
+}
+
+/** The reason a credit note's causale names (B-W1-51: "Nota di credito: <reason> …"), or null when it names none we know. */
+export function creditReasonOfCausale(causale: string | null | undefined): string | null {
+  const head = (causale ?? '').replace(/^Nota di credito:\s*/, '')
+  if (head === (causale ?? '')) return null
+  // The longest words first: one reason's words never start another's.
+  const found = [...CREDIT_REASONS].sort((a, b) => CREDIT_REASON_WORDS[b].it.length - CREDIT_REASON_WORDS[a].it.length).find((reason) => head.startsWith(CREDIT_REASON_WORDS[reason].it))
+  return found ?? null
+}
+
+/**
+ * The reason a refund gets when none is said: a payment's unplaced part is money paid too much (OVERPAYMENT); a credit
+ * note's refund follows the note (a return's lines → RETURN, the reason its causale names, a credited TD02 → DEPOSIT_BACK),
+ * else OTHER.
+ */
+export function defaultRefundReason(facts: RefundSourceFacts): RefundReason {
+  if (facts.source === 'PAYMENT') return 'OVERPAYMENT'
+  if (facts.fromReturn) return 'RETURN'
+  const said = facts.creditReason ? CREDIT_TO_REFUND[facts.creditReason] : undefined
+  if (said && said !== 'OTHER') return said
+  if (facts.creditsDeposit) return 'DEPOSIT_BACK'
+  return said ?? 'OTHER'
+}
 
 // ---- FIN-122: one payment to many invoices -----------------------------------------------------------------------------
 

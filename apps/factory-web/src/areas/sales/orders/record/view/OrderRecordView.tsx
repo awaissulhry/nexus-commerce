@@ -6,6 +6,7 @@ import { FileX, MessageSquare, MoreHorizontal, ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, Tabs, type TabItem } from '@nexus/ui/components'
 import { DetailHeader, StepUpModal } from '@nexus/ui/patterns'
 import { Button, Kbd, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { useDsLabels } from '../../../../../lib/i18n/ds-labels'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
@@ -96,6 +97,8 @@ function OrderRecord({ model, actions, panels }: { model: OrderRecordModel; acti
 
 function ReadyRecord({ order, model, actions, panels }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode }) {
   const t = useT('orders')
+  // B-W2b-16: the step-up (now also the owner's waive) in the person's language (B-W2b-04's DS words).
+  const dsLabels = useDsLabels()
   const locale = useLocale()
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
   const step = nextStep(order, model.can)
@@ -322,6 +325,7 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
         onSubmit={(code) => actions?.onStepUpSubmit?.(code)}
         onClose={() => actions?.onStepUpCancel?.()}
         confirmLabel={t('stepUp.confirm')}
+        labels={dsLabels.stepUp}
       />
     </div>
   )

@@ -12,7 +12,7 @@ import { findCustomers, findStyles, getStyle } from '../../quotes/api'
 import { activateVersion, compareVersions, getPriceList, getVersion, moveList, nextVersion, setCustomers, setPrices, type PriceEntry, type PriceListDetail, type PriceRow, type VersionAnswer } from '../api'
 import { abilitiesOf, parseListPrice, raisePlan, romeToday, tabOf, versionToShow } from '../model'
 import { PriceListsMessages, type Loaded } from '../parts'
-import { readProblem, writeProblem } from '../problems'
+import { customersProblem, readProblem, writeProblem } from '../problems'
 import type { CellState, CompareView, CustomerPick, PriceListRecordModel, RecordDialog, StylePick } from './record-model'
 import { PriceListRecordView } from './view/PriceListRecordView'
 
@@ -216,7 +216,7 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
   }
 
   /** A list write (customers, archive): the record it answers replaces ours. */
-  const listWrite = async (work: () => Promise<PriceListDetail>, done: PriceListRecordModel['notice'], refusedKey: string): Promise<boolean> => {
+  const listWrite = async (work: () => Promise<PriceListDetail>, done: PriceListRecordModel['notice'], refusedKey: string | ((error: unknown) => ReturnType<typeof writeProblem>)): Promise<boolean> => {
     setBusy(true)
     inFlight.current++
     setDialogProblem(null)
@@ -229,7 +229,7 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
       setDialogState(null)
       return true
     } catch (error) {
-      const problem = writeProblem(error, refusedKey)
+      const problem = typeof refusedKey === 'string' ? writeProblem(error, refusedKey) : refusedKey(error)
       if (dialog) setDialogProblem(problem.words)
       else setNotice({ tone: 'danger', words: problem.words })
       if (problem.reload) void loadList()
@@ -368,10 +368,12 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
         },
         onCustomerQuery: searchCustomers,
         onCustomerToggle: (partyId) => setCustomerPick((current) => ({ ...current, picked: current.picked.includes(partyId) ? current.picked.filter((id) => id !== partyId) : [...current.picked, partyId] })),
+        onCustomerFrom: (day) => setCustomerPick((current) => ({ ...current, from: day })),
+        // B-W2b-16: from the day chosen (default today); a second change of a customer's list on one day is refused in words.
         onAddCustomers: () =>
-          void listWrite(() => setCustomers(api, listId, customerPick.picked, 'add'), { tone: 'success', words: { key: 'customers.added', params: { count: customerPick.picked.length } } }, 'customers.refused'),
+          void listWrite(() => setCustomers(api, listId, customerPick.picked, 'add', customerPick.from || undefined), { tone: 'success', words: { key: 'customers.added', params: { count: customerPick.picked.length } } }, customersProblem),
         onRemoveCustomers: () =>
-          void listWrite(() => setCustomers(api, listId, selectedCustomers, 'remove'), { tone: 'success', words: { key: 'customers.removed', params: { count: selectedCustomers.length } } }, 'customers.refused').then((ok) => ok && setSelectedCustomers([])),
+          void listWrite(() => setCustomers(api, listId, selectedCustomers, 'remove'), { tone: 'success', words: { key: 'customers.removed', params: { count: selectedCustomers.length } } }, customersProblem).then((ok) => ok && setSelectedCustomers([])),
         onCompare: runCompare,
         onActivate: (days) => {
           const current = listRef.current

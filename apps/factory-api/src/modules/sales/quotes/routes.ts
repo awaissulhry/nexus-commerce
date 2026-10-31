@@ -1,6 +1,7 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { AUTH_RATE_LIMITS } from '../../../platform/auth/sessions/office-auth'
+import { requireStepUp } from '../../../platform/auth/office/account'
+import { AUTH_RATE_LIMITS, officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { answerQuote, askNewLink, linkQuoteDocument, openQuote } from './accept'
 import { approve, askApproval, reject, reopen } from './approval'
 import {
@@ -123,5 +124,6 @@ export default defineRoutes('sales.quotes', manifest, async (app) => {
 
   app.get('/sales/settings', { schema: getSettingsContract }, async (request) => getSalesSettings(request, request.query))
 
-  app.put('/sales/settings', { schema: saveSettingsContract }, async (request) => saveSalesSettings(request, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-16: raising an approval limit asks for a fresh step-up (checked in saveSalesSettings after the other checks).
+  app.put('/sales/settings', { schema: saveSettingsContract }, async (request) => saveSalesSettings(request, request.body, idempotencyKeyFrom(request), () => requireStepUp(officeAuthOf(app), request)))
 })

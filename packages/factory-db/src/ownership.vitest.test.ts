@@ -35,6 +35,7 @@ describe('model ownership', () => {
       'BomLineColour',
       'BomLineSize',
       'Bundle',
+      'BundleCoupon',
       'BundleReprint',
       'CalendarDay',
       'Certificate',
@@ -47,6 +48,8 @@ describe('model ownership', () => {
       'Complaint',
       'ComplianceDocument',
       'CostingSettings',
+      'CrewMember',
+      'CrewSession',
       'CutLog',
       'CutLogPiece',
       'Ddt',
@@ -55,8 +58,10 @@ describe('model ownership', () => {
       'DepositRequest',
       'Device',
       'DeviceEnrolment',
+      'DispatchAssignment',
       'DispositionCode',
       'DueTimer',
+      'EarningsEntry',
       'EmailIdentity',
       'EmailOutbound',
       'Employee',
@@ -73,12 +78,17 @@ describe('model ownership', () => {
       'GeneratedDocument',
       'GoodsReceipt',
       'GoodsReceiptLine',
+      'HandoverNote',
+      'HeldScan',
+      'HelpCall',
+      'HelpCallType',
       'Hide',
       'IdempotencyReceipt',
       'ImportJob',
       'ImportRow',
       'InboundEmail',
       'InboundWebhook',
+      'IncentiveScheme',
       'Inspection',
       'InspectionDefect',
       'IntegrationAccount',
@@ -92,12 +102,16 @@ describe('model ownership', () => {
       'ItemPlanning',
       'LabResult',
       'LabelTemplate',
+      'LabourDay',
+      'LabourDispute',
+      'LabourEdit',
       'LabourRate',
       'LeaverCase',
       'LeaverStep',
       'Line',
       'LineCapacity',
       'LineLoan',
+      'LineTarget',
       'LinkEvidence',
       'Location',
       'Lot',
@@ -124,10 +138,14 @@ describe('model ownership', () => {
       'NumberBlock',
       'NumberBlockUse',
       'NumberSeries',
+      'OffStandardCode',
+      'OffStandardEntry',
       'OneOffLink',
       'Operation',
+      'OperationChecklistResult',
       'OperationScan',
       'OperationScanDefect',
+      'OperationScanMember',
       'OrgArea',
       'OutboxEvent',
       'OvertimeAgreement',
@@ -140,14 +158,23 @@ describe('model ownership', () => {
       'PartyPriceListAssignment',
       'PartyTaxIdentity',
       'PasswordReset',
+      'PayPeriod',
       'PayablesSettings',
       'Payment',
       'PaymentAllocation',
       'PaymentReminder',
       'PaymentTerms',
+      'PayrollCodeMapping',
+      'PayrollExport',
+      'PayrollExportFile',
+      'PayrollExportLayout',
       'PeopleLegalGate',
       'PeopleSettings',
       'PeriodLock',
+      'PiecePaySwitch',
+      'PieceRateEntry',
+      'PieceRateTable',
+      'PieceRateVersion',
       'PlanVersion',
       'PlanningException',
       'PlanningRun',
@@ -178,6 +205,8 @@ describe('model ownership', () => {
       'QuoteLine',
       'QuoteLineSize',
       'QuoteVersion',
+      'RateAcknowledgement',
+      'RatePublication',
       'ReasonCode',
       'ReceiptDiscrepancy',
       'ReceivablesSettings',
@@ -207,6 +236,7 @@ describe('model ownership', () => {
       'SalesSettings',
       'SavedView',
       'ScanCorrectionRequest',
+      'ScanPatternFinding',
       'ScheduleSlot',
       'ScrapReason',
       'SdiInboxItem',
@@ -272,6 +302,7 @@ describe('model ownership', () => {
       'Worker',
       'WorkerNoticeAck',
       'WorkerRole',
+      'WorkerStatement',
       'WorkingTimeRule',
     ])
     expect(inputs.platformTables).toEqual([{ table: 'Tenant', privileges: ['select', 'insert', 'update'], walled: true }])
@@ -448,6 +479,11 @@ describe('model ownership', () => {
           ...['Employee', 'EmployeeSkill', 'LeaverCase', 'LeaverStep', 'LineLoan', 'MachineAuthorisation', 'TeamMember'],
           // W2b time and attendance (wave 5/7): purpose ATTENDANCE.
           ...['AbsenceEntry', 'AttendanceAnomaly', 'AttendanceCorrection', 'AttendanceDay', 'ClockEvent', 'OvertimeAgreement', 'OvertimeEntry', 'RosterEntry', 'TimesheetApproval'],
+          // W2b piece pay and the payroll export (wave 6/7): purpose PAY.
+          ...['EarningsEntry', 'HeldScan', 'RateAcknowledgement', 'WorkerStatement'],
+          // W2b floor work (wave 7/7): purpose PRODUCTION (what the floor reads), with PAY and PERFORMANCE where pay and
+          // one person's figures (behind the legal gate) read them.
+          ...['CrewMember', 'DispatchAssignment', 'HelpCall', 'LabourDispute', 'LabourEdit', 'OffStandardEntry', 'OperationChecklistResult', 'OperationScanMember'],
         ].sort(),
       )
       const employee = map.find((entry) => entry.model === 'Employee')!
@@ -457,10 +493,11 @@ describe('model ownership', () => {
       expect(map.find((entry) => entry.model === 'LeaverStep')).toMatchObject({ subject: 'caseId', via: 'LeaverCase' })
       // Every other personal model names the person by employeeId.
       for (const entry of map.filter((row) => !['Employee', 'LeaverStep'].includes(row.model))) expect(entry.subject).toBe('employeeId')
-      // The purposes are the fixed list; no figure about one person's work is in this schema (PERFORMANCE unused).
+      // The purposes are the fixed list; one person's work figures (PERFORMANCE, Statuto art. 4 c.1) only from the floor
+      // work records of wave 7/7 (off-standard time, labour edits, disputes), read through the legal gate.
       const used = new Set(map.flatMap((entry) => Object.values(entry.columns).flat()))
       for (const purpose of used) expect(Object.keys(PERSONAL_PURPOSES)).toContain(purpose)
-      expect(used.has('PERFORMANCE')).toBe(false)
+      expect(map.filter((entry) => Object.values(entry.columns).flat().includes('PERFORMANCE')).map((entry) => entry.model).sort()).toEqual(['LabourDispute', 'LabourEdit', 'OffStandardEntry'])
     })
 
     it('fails on an unknown purpose, a column that does not exist, a subject that is not a uuid column, an empty list', () => {

@@ -51,3 +51,12 @@ export function createProblem(error: unknown, kind?: string): Phrase {
   }
   return writeProblem(error).words
 }
+
+/**
+ * B-W2b-16: a refused change of customers: a second change of a customer's list on one day (409 at body/validFrom: its
+ * history keeps one list per day), else the customers' own checks (another company, archived, currency, the role).
+ */
+export function customersProblem(error: unknown): WriteProblem {
+  if (isApiError(error) && error.kind === 'conflict' && error.issues.some((issue) => issuePath(issue).includes('validFrom'))) return { words: { key: 'customers.refusedDay' }, reload: true }
+  return writeProblem(error, 'customers.refused')
+}

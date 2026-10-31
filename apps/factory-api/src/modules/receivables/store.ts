@@ -4,9 +4,10 @@ import { DomainError, ForbiddenError, NotFoundError, UnauthenticatedError } from
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can, grantsFor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayRange, type BusinessDate, type Clock } from '@nexus/factory-domain/core/time'
+import type { ReferenceRate } from '@nexus/factory-domain/receivables/interest'
 import { effectiveSettings, type EffectiveSettings, type LateInterestMode, type SettingsRow } from '@nexus/factory-domain/receivables/ladder'
 import { instalmentsOf, openInstalments } from '@nexus/factory-domain/receivables/ledger'
-import { REMINDER_REFUSALS, type KnownReminder, type OpenInvoice, type ReminderRefusal, type ReminderStatus } from '@nexus/factory-domain/receivables/reminders'
+import { REMINDER_REFUSALS, type InterestRule, type KnownReminder, type OpenInvoice, type ReminderRefusal, type ReminderStatus } from '@nexus/factory-domain/receivables/reminders'
 import { COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandSpec, type CommandTools, type CommandTx } from '../../core/command'
 import { actorOf, type OfficeContext, type RequestContext } from '../../core/context'
 import { serverClock } from '../../core/time'
@@ -111,6 +112,20 @@ export async function settingsFor(db: Reader, companyId: string): Promise<Effect
   return effectiveSettings(rows.company ? settingsRowOf(rows.company) : null, rows.tenant ? settingsRowOf(rows.tenant) : null)
 }
 
+/** A Decimal(7,4) percentage as the domain reads it: a plain decimal string, trailing zeros dropped. */
+export const pctText = (value: { toFixed(places: number): string }): string => value.toFixed(4).replace(/\.?0+$/, '')
+
+/** The half-year reference rates of statutory interest (B-W2b-21; tenant-wide, row-level security keeps them the tenant's). */
+export async function interestRatesOf(db: Reader): Promise<ReferenceRate[]> {
+  const rows = await db.interestReferenceRate.findMany({ select: { halfYearStart: true, referenceRatePct: true, addedPointsPct: true }, orderBy: { halfYearStart: 'asc' } })
+  return rows.map((row) => ({ halfYearStart: businessDate(row.halfYearStart, 'UTC'), referenceRatePct: pctText(row.referenceRatePct), addedPointsPct: pctText(row.addedPointsPct) }))
+}
+
+/** The company's interest rule as the ladder applies it: STATUTORY reads the half-year rates (one query only then). */
+export async function interestRuleFor(db: Reader, settings: Pick<EffectiveSettings, 'lateInterestMode' | 'lateInterestAgreedPct'>): Promise<InterestRule> {
+  return { mode: settings.lateInterestMode, agreedPct: settings.lateInterestAgreedPct, ...(settings.lateInterestMode === 'STATUTORY' ? { rates: await interestRatesOf(db) } : {}) }
+}
+
 // ---- open invoices ---------------------------------------------------------------------------------------------------------
 
 export interface OpenInvoiceRow extends OpenInvoice {
@@ -147,15 +162,21 @@ const ibanOf = (terms: unknown): string | null => {
  * The issued TD01/TD24 invoices that still ask money as of a day (gross − issued credit notes − allocations, the same
  * sums as payments' open items), oldest first, each with its instalments and what is open on them. Row-level security
  * keeps them the tenant's; the caller filters by its grants (can()).
+ *
+ * B-W2b-21 (B-W2a-61's note): `depositToCarry` marks an invoice of an order (its own salesOrderId, or the order of one of
+ * its lines) that has a PAID deposit request issuing no deposit invoice (NONE: an EU business with a VIES proof) whose
+ * allocations still hold money — the deposit is not carried onto an invoice yet (payments' carry reverses the request's
+ * allocation and places the same money on the invoice, netting the request to 0). The ladder holds such an invoice.
  */
 export async function openInvoices(db: Reader, filter: OpenFilter): Promise<OpenInvoiceRow[]> {
   const asOf = filter.asOf ?? today()
   const end = businessDayRange(asOf).end
   const ids = filter.invoiceIds && filter.invoiceIds.length > 0 ? [...filter.invoiceIds] : null
   const rows = await db.$queryRaw<
-    { id: string; companyId: string; partyId: string; number: string | null; docType: string; issueDate: Date; currency: string; grossTotal: number; paymentTerms: unknown; salesOrderId: string | null; credited: bigint | null; allocated: bigint | null }[]
+    { id: string; companyId: string; partyId: string; number: string | null; docType: string; issueDate: Date; currency: string; grossTotal: number; paymentTerms: unknown; salesOrderId: string | null; lineOrderIds: string[] | null; credited: bigint | null; allocated: bigint | null }[]
   >`
     SELECT i.id, i."companyId", i."buyerPartyId" AS "partyId", i.number, i."docType"::text AS "docType", i."issueDate", i.currency, i."grossTotal", i."paymentTerms", i."salesOrderId",
+           ARRAY(SELECT DISTINCT o."orderId" FROM "InvoiceLine" l JOIN "SalesOrderLine" o ON o."tenantId" = l."tenantId" AND o.id = l."salesOrderLineId" WHERE l."invoiceId" = i.id) AS "lineOrderIds",
            c.credited, a.allocated
       FROM "Invoice" i
       LEFT JOIN LATERAL (SELECT sum(cn."grossTotal") AS credited FROM "Invoice" cn
@@ -169,6 +190,7 @@ export async function openInvoices(db: Reader, filter: OpenFilter): Promise<Open
        AND (${ids}::uuid[] IS NULL OR i.id = ANY(${ids}::uuid[]))
        AND i."grossTotal" - coalesce(c.credited, 0) - coalesce(a.allocated, 0) > 0
      ORDER BY i."issueDate", i.number, i.id`
+  const carrying = await ordersWithDepositToCarry(db, rows.flatMap((row) => [...(row.salesOrderId ? [row.salesOrderId] : []), ...(row.lineOrderIds ?? [])]))
   return rows.map((row) => {
     const issueDate = businessDate(row.issueDate, 'UTC')
     const settled = Number(row.credited ?? 0n) + Number(row.allocated ?? 0n)
@@ -187,8 +209,21 @@ export async function openInvoices(db: Reader, filter: OpenFilter): Promise<Open
       instalments: openInstalments(instalments, settled),
       salesOrderId: row.salesOrderId,
       iban: ibanOf(row.paymentTerms),
+      depositToCarry: [row.salesOrderId, ...(row.lineOrderIds ?? [])].some((orderId) => orderId !== null && carrying.has(orderId)),
     }
   })
+}
+
+/** The orders with a PAID NONE deposit request whose allocations still hold money (not carried onto an invoice yet). */
+async function ordersWithDepositToCarry(db: Reader, orderIds: readonly string[]): Promise<Set<string>> {
+  const wanted = [...new Set(orderIds)]
+  if (wanted.length === 0) return new Set()
+  // One query at a time: a transaction client runs one statement at a time.
+  const requests = await db.depositRequest.findMany({ where: { orderId: { in: wanted }, fiscalDocument: 'NONE', status: 'PAID' }, select: { id: true, orderId: true } })
+  if (requests.length === 0) return new Set()
+  const held = await db.paymentAllocation.groupBy({ by: ['depositRequestId'], where: { depositRequestId: { in: requests.map((request) => request.id) } }, _sum: { amount: true } })
+  const holding = new Set(held.filter((entry) => (entry._sum.amount ?? 0) > 0).map((entry) => entry.depositRequestId!))
+  return new Set(requests.filter((request) => holding.has(request.id)).map((request) => request.orderId!))
 }
 
 // ---- reminders -------------------------------------------------------------------------------------------------------------

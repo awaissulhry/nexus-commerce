@@ -459,7 +459,7 @@ export function depositSteps(request: DepositRequest, invoices: readonly ChainIn
 export function linkHeld(request: DepositRequest, can: OrderAbilities): Phrase | null {
   if (!can.recordPayment) return phrase('held.noPayments')
   if (request.status !== 'OPEN') return phrase('held.depositNotOpen')
-  if (!request.quoteVersionId) return phrase('held.noQuote')
+  // B-W2b-16: a typed order's deposit (no quote) has its page too: it goes to the customer's invoices contact.
   return null
 }
 

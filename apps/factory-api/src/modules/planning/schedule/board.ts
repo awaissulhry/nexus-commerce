@@ -13,12 +13,12 @@ import { Dec } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { assertMayAt, mayAt, officeContextOf, siteFor } from '../access'
-import { capacityAnswer } from '../capacity/service'
+import { calendarStateOf, capacityAnswer } from '../capacity/service'
 import { CAPACITY_MAX_DAYS } from '../capacity/contract'
 import { readinessFor } from '../readiness/service'
 import { dayOf, SITE_COLUMNS, type Reader } from '../store'
 import type { BoardQuery, WorkOrderView } from './contract'
-import { heldReasonOf, publishDiff, rangeOf, siteViewOf, storedSlotView, versionHeaderOf } from './publish'
+import { holdViewOf, NO_PERMISSION_HOLD, publishDiff, publishHoldOf, rangeOf, siteViewOf, storedSlotView, versionHeaderOf, type PublishHold } from './publish'
 import { durationOn, scheduleWorld, standardOf, type BoardWorkOrder, type ScheduleWorld } from './service'
 import { diffSlotOf, publishedOf, slotsOf, userNamesOf, type SlotRow } from './store'
 
@@ -53,13 +53,17 @@ export function workOrderViewOf(world: ScheduleWorld, workOrder: BoardWorkOrder,
     version: workOrder.version,
     dueDate: workOrder.dueDate,
     style: workOrder.style,
+    // B-W2b-20: the style's family and the customer (one customer; null when none or several: `customers` says them).
+    family: workOrder.family,
+    customer: workOrder.customers.length === 1 ? workOrder.customers[0]! : null,
+    customers: workOrder.customers.map((customer) => ({ ...customer })),
     garments: workOrder.garments,
     line: line ? { id: line.ref.id, code: line.code, name: line.name } : null,
     holdReason: workOrder.holdReason,
     booksCapacity: workOrder.booksCapacity,
     minutes: remaining.toFixed(1),
     schedule: scheduleViewOf(schedule),
-    readiness: readiness ? { word: readiness.word, label: readiness.label, date: readiness.date, reason: readiness.reason } : null,
+    readiness: readiness ? readinessViewOf(readiness) : null,
     operations: workOrder.operations.map((operation) => {
       const lane = world.operationLanes.get(operation.id)!
       const time = times.get(operation.id)
@@ -87,6 +91,30 @@ export function workOrderViewOf(world: ScheduleWorld, workOrder: BoardWorkOrder,
     }),
   }
 }
+
+/**
+ * B-W2b-20 (design planning.board "material status per component with arrival dates"): the work order's readiness word
+ * and, per material, its word, the day it is needed and what arrives for it (planning/readiness).
+ */
+export const readinessViewOf = (readiness: WorkOrderReadiness) => ({
+  word: readiness.word,
+  label: readiness.label,
+  date: readiness.date,
+  reason: readiness.reason,
+  materials: readiness.materials.map((material) => ({
+    itemId: material.itemId,
+    itemColourId: material.itemColourId,
+    label: material.label,
+    uom: material.uom,
+    word: material.word,
+    date: material.date,
+    neededOn: material.neededOn,
+    needed: material.needed,
+    short: material.short,
+    reason: material.reason,
+    arrivals: material.arrivals.map((arrival) => ({ ...arrival })),
+  })),
+})
 
 export const scheduleViewOf = (schedule: WorkOrderSchedule) => ({
   status: schedule.status,
@@ -129,6 +157,8 @@ function laneViewsOf(world: ScheduleWorld, period: { from: BusinessDate; to: Bus
     efficiencyPct: lane.efficiencyPct,
     does: lane.does ? lane.does.map((centre) => centre.id) : null,
     location: null,
+    // B-W2b-20: a lane without a calendar (the planning default) told apart from a day without working time.
+    calendar: { state: lane.calendarState, calendars: lane.calendars },
     cells: lane.cells.map((cell) => ({
       key: cell.key,
       from: cell.from,
@@ -142,7 +172,7 @@ function laneViewsOf(world: ScheduleWorld, period: { from: BusinessDate; to: Bus
       words: cell.words,
     })),
   }))
-  const workshops = world.workshops.map((workshop) => ({ kind: 'WORKSHOP' as const, id: workshop.id, code: workshop.code, name: workshop.name, workCentreKind: null, people: null, efficiencyPct: null, does: null, location: workshop.location, cells: null }))
+  const workshops = world.workshops.map((workshop) => ({ kind: 'WORKSHOP' as const, id: workshop.id, code: workshop.code, name: workshop.name, workCentreKind: null, people: null, efficiencyPct: null, does: null, location: workshop.location, calendar: null, cells: null }))
   return [...lanes, ...workshops]
 }
 
@@ -245,15 +275,15 @@ async function planHeaderOf(db: Reader, world: ScheduleWorld, context: ReturnTyp
     const diff = planDiff(set.map(diffSlotOf), slots.map(diffSlotOf))
     changes = { moved: diff.moved, added: diff.added, removed: diff.removed, words: diffWords(diff) }
   }
-  let held: string | null = null
+  let hold: PublishHold | null = null
   try {
     const range = rangeOf(world, {})
     const { previous, set, diff } = await publishDiff(db, world, range)
-    held = heldReasonOf(previous, set, diff, range)
+    hold = publishHoldOf(previous, set, diff, range)
   } catch (error) {
-    held = error instanceof Error ? error.message : 'The default days cannot be published.'
+    hold = { code: 'RANGE_NOT_VALID', words: error instanceof Error ? error.message : 'The default days cannot be published.', previousVersion: null, coversFrom: null, coversTo: null }
   }
-  if (!mayPublish) held = 'Publishing needs planning.schedule.publish at this site.'
+  if (!mayPublish) hold = NO_PERMISSION_HOLD
   return {
     id: world.plan?.id ?? null,
     version: world.plan?.version ?? null,
@@ -262,7 +292,9 @@ async function planHeaderOf(db: Reader, world: ScheduleWorld, context: ReturnTyp
     changesSincePublished: changes,
     mayChange,
     mayPublish,
-    publishHeld: held,
+    publishHeld: hold?.words ?? null,
+    // B-W2b-20: why it is held as a stable code and its facts (B-W2a-45 read the sentence's shape).
+    publishHold: holdViewOf(hold),
   }
 }
 
@@ -289,7 +321,18 @@ export async function workOrderSchedule(caller: CommandCaller, workOrderId: stri
       slots: slots.map((slot) => slotViewOf(world, slot, names)),
       lanes: [...world.lanes.values()]
         .filter((lane) => laneKeys.has(laneKey(lane.ref)))
-        .map((lane) => ({ kind: lane.ref.kind, id: lane.ref.id, code: lane.code, name: lane.name, workCentreKind: lane.state?.lane.workCentreKind ?? null, people: lane.rate?.people ?? null, efficiencyPct: lane.rate?.efficiencyPct ?? null, does: lane.does ? [...lane.does] : null, location: lane.workshop?.location ?? null })),
+        .map((lane) => ({
+          kind: lane.ref.kind,
+          id: lane.ref.id,
+          code: lane.code,
+          name: lane.name,
+          workCentreKind: lane.state?.lane.workCentreKind ?? null,
+          people: lane.rate?.people ?? null,
+          efficiencyPct: lane.rate?.efficiencyPct ?? null,
+          does: lane.does ? [...lane.does] : null,
+          location: lane.workshop?.location ?? null,
+          calendar: lane.state ? { state: calendarStateOf(lane.state), calendars: (lane.state.calendar?.layers ?? []).map((layer) => ({ id: layer.id, scope: layer.scope, name: layer.name })) } : null,
+        })),
     }
   })
 }

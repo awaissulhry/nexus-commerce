@@ -102,7 +102,15 @@ export const claimSchema = rowSchema.extend({
   createdById: z.string().nullable(),
   lines: z.array(lineSchema),
   ddts: z.array(z.object({ id: z.string(), number: z.string(), documentDate: z.string(), reason: z.string(), startAt: z.string(), cancelled: z.boolean(), lineIds: z.array(z.string()) })),
-  credit: z.object({ currency: z.string(), remedy: z.enum(CLAIM_REMEDIES).nullable(), expected: costAmount, value: costAmount, matched: z.null(), difference: z.null() }),
+  // B-W2b-21: the supplier's credit notes that settle the claim (Finance › Payables), their taxable total and the difference.
+  credit: z.object({
+    currency: z.string(),
+    remedy: z.enum(CLAIM_REMEDIES).nullable(),
+    expected: costAmount,
+    value: costAmount,
+    matched: z.object({ total: costAmount, creditNotes: z.array(z.object({ id: z.string(), number: z.string(), issueDate: z.string(), status: z.string(), netTotal: costAmount, grossTotal: costAmount })) }).nullable(),
+    difference: costAmount,
+  }),
   /** B-W2b-14 (SCM-135): the claim's own photos, the photos of the discrepancies it pursues, its letter's versions (newest first), the supplier's contact, the NCR it came from. */
   photos: z.array(claimFileSchema).default([]),
   discrepancyPhotos: z.array(claimFileSchema.extend({ discrepancyId: z.string(), discrepancySeq: z.number().nullable() })).default([]),

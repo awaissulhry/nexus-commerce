@@ -8,7 +8,9 @@ import { presignedView } from '../files/contract'
  * The export of a list (B-W2a-23; PLT-179; design shell.lists toolbar Export ▾, pop:export-job): a person asks for the
  * file of the view they are looking at (its address terms and its visible columns, with their headings in their
  * language); the worker reads the list with their live rights and keeps the file for EXPORT_LIMITS.keepDays days. Only
- * the person who asked sees the job and downloads the file.
+ * the person who asked sees the job and downloads the file. W2b (B-W2b-11): every W1/W2a list and every report
+ * exports; XLSX_REIMPORT writes the importer's columns (the request's columns are then not used); a long export's link
+ * is e-mailed.
  */
 
 const column = output({ key: z.string(), label: z.string() })
@@ -26,6 +28,8 @@ export const exportJobView = output({
   /** Left out by the person's rights (a money grain they do not hold), as the file says above its header. */
   omitted: z.array(column),
   rowsDone: z.number().int(),
+  /** How many rows in all: while it runs, the count made before the run (PLT-184 JobProgress "n of m"; null while it is
+   * counted); once DONE, the rows of the file. */
   rowCount: z.number().int().nullable(),
   failureReason: z.string().nullable(),
   file: output({ id: id(), name: z.string(), sizeBytes: z.number().int() }).nullable(),
@@ -33,6 +37,8 @@ export const exportJobView = output({
   startedAt: instant().nullable(),
   finishedAt: instant().nullable(),
   expiresAt: instant().nullable(),
+  /** When the link was e-mailed to the person (a long export, platform/exports/mail.ts); null: not mailed. */
+  emailedAt: instant().nullable(),
   version: z.number().int(),
 })
 export type ExportJobView = z.infer<typeof exportJobView>

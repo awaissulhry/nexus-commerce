@@ -349,7 +349,8 @@
     "col": {
       "customer": "Customer",
       "code": "Code",
-      "status": "Status"
+      "status": "Status",
+      "from": "From"
     },
     "bulk": {
       "remove_one": "Remove {count}",
@@ -372,7 +373,8 @@
     "addGo_one": "Give it to {count} customer",
     "addGo_other": "Give it to {count} customers",
     "held": {
-      "pick": "Pick a customer first"
+      "pick": "Pick a customer first",
+      "fromLater": "From today or an earlier day, not a later one"
     },
     "removeTitle_one": "Take the list from {count} customer",
     "removeTitle_other": "Take the list from {count} customers",
@@ -381,7 +383,12 @@
     "added_other": "List given to {count} customers.",
     "removed_one": "List taken from {count} customer.",
     "removed_other": "List taken from {count} customers.",
-    "refused": "Not changed: a customer of another company, archived, in another currency, or one your role may not change."
+    "refused": "Not changed: a customer of another company, archived, in another currency, or one your role may not change.",
+    "from": "From",
+    "fromHint": "The day the customers get this list: today or an earlier day.",
+    "fromToday": "Today",
+    "fromAudit": "given before its history was kept",
+    "refusedDay": "Not changed: a customer’s list changes at most once a day (its history keeps one list per day). Try again tomorrow."
   },
   "versions": {
     "intro": "Each version has its days; open quotes keep the version they were priced with.",

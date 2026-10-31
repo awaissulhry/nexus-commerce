@@ -280,3 +280,69 @@ export const editWorkCentreCapacityContract = defineContract({
   response: { 200: output({ lane: laneView, changed: z.array(z.string()) }) },
 })
 export type EditWorkCentreCapacityBody = z.infer<typeof editWorkCentreCapacityContract.body>
+
+// ---- B-W2b-20: bulk writes (the grids' "Edit N", "Plan N by defaults", "the same %") -----------------------------------
+
+/** At most this many rows (changes and removals together) or lanes in one bulk write. */
+export const BULK_LIMITS = Object.freeze({ itemRows: 200, lanes: 100 })
+
+const bulkChange = input({
+  /** An existing row of the site, at the version read … */
+  itemPlanningId: id().optional(),
+  version: version.optional(),
+  /** … or a new row for an item (and colour; null or left out: every colour). */
+  itemId: id().optional(),
+  itemColourId: id().nullable().optional(),
+  ...partial(writable),
+})
+export type BulkItemChange = z.infer<typeof bulkChange>
+
+export const bulkItemParametersContract = defineContract({
+  body: input({
+    siteId: id(),
+    changes: z.array(bulkChange).max(BULK_LIMITS.itemRows).optional(),
+    /** Rows removed: the items are planned by their defaults again ("Plan N by defaults"). */
+    remove: z.array(input({ itemPlanningId: id(), version })).max(BULK_LIMITS.itemRows).optional(),
+  }),
+  response: {
+    200: output({
+      site: siteView,
+      /** One per change, in the order sent: CREATED, EDITED or UNCHANGED (the values were already so), with the row. */
+      changes: z.array(output({ index: z.number().int(), kind: z.enum(['CREATED', 'EDITED', 'UNCHANGED']), parameters: itemParametersView, cleared: z.array(z.string()) })),
+      /** The rows removed, in the order sent. */
+      removed: z.array(output({ itemPlanningId: id(), itemId: id(), itemColourId: id().nullable() })),
+      replayed: z.boolean(),
+    }),
+  },
+})
+export type BulkItemParametersBody = z.infer<typeof bulkItemParametersContract.body>
+
+export const bulkLanesContract = defineContract({
+  body: input({
+    siteId: id(),
+    lanes: z
+      .array(
+        input({
+          kind: z.enum(['LINE', 'WORK_CENTRE']),
+          id: id(),
+          /** The capacity row's version as read (left out: a lane with no row yet, or no check). */
+          version: version.optional(),
+          plannedEfficiencyPct: percent().optional(),
+          /** A line's operators or a work centre's units (a headcount, never who); null: its active stations. */
+          people: z.number().int().min(1).max(500).nullable().optional(),
+          note: note().nullable().optional(),
+        }),
+      )
+      .min(1)
+      .max(BULK_LIMITS.lanes),
+  }),
+  response: {
+    200: output({
+      site: siteView,
+      /** Every lane sent, as saved (in the order sent), with what changed (empty: it was already so). */
+      lanes: z.array(output({ lane: laneView, changed: z.array(z.string()) })),
+      replayed: z.boolean(),
+    }),
+  },
+})
+export type BulkLanesBody = z.infer<typeof bulkLanesContract.body>

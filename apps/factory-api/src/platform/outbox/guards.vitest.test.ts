@@ -51,8 +51,7 @@ describe('check-event-contract', () => {
     expect(guard()).toMatchObject({ status: 0 })
     expect(guard(tree()).status).toBe(0)
     const ok = guard(tree({ [MODULE]: quotesEvents(quoteSent), [CATALOGUE]: assembled, [EMITTER]: emitting("{ type: 'quote.faxed', subject: 'q', payload: {} }") }))
-    // B-W2b-24: + 1 literal emit (PATCH /auth/roles: security.two_factor_changed when a role's two-factor rule changes).
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(353 declared event version\(s\), 443 literal emit/) })
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(364 declared event version\(s\), 459 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([
