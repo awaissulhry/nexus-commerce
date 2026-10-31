@@ -1,0 +1,260 @@
+{
+  "noAccess": {
+    "title": "Non hai accesso ai margini",
+    "body": "Margini richiede il permesso {permission}. Chiedi a chi gestisce i ruoli."
+  },
+  "band": {
+    "label": "Ambito e azioni",
+    "readAt": "Letto alle {time}",
+    "reading": "Lettura…",
+    "more": "Altre azioni",
+    "export": "Esporta questa vista (CSV)",
+    "exportHeld": "Niente da esportare in questa vista."
+  },
+  "scope": {
+    "from": "Ordini dal",
+    "fromLabel": "Data ordine dal",
+    "to": "al",
+    "toLabel": "Data ordine al",
+    "every": "Ogni data",
+    "any": "qualsiasi giorno",
+    "clear": "Azzera"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In tempo reale",
+    "offline": "Offline — rileggo al ritorno"
+  },
+  "tiles": {
+    "title": "Margini",
+    "failed": "Impossibile caricare i margini",
+    "noGrain": "I riquadri dei margini richiedono la visibilità sui margini (money.margin).",
+    "average": "Margine medio %",
+    "averageHint": "Come stimato ora, sugli ordini con un costo noto",
+    "unknown_one": "Il costo di {count} ordine non si può ancora dire",
+    "unknown_other": "Il costo di {count} ordini non si può ancora dire",
+    "floor": "Ordini sotto la soglia",
+    "floorLater": "Arriva in una versione successiva (il segnale di soglia minima)",
+    "lost": "Margine perso dal preventivo",
+    "lostHint": "Margine a preventivo meno il margine attuale (i guadagni compensano le perdite)",
+    "orders": "Ordini",
+    "ordersHint": "Nell'ambito (non annullati)",
+    "provisional": "I costi sono provvisori finché il commercialista non sceglie il metodo di costo.",
+    "currencies": "Gli ordini in vista sono in più valute: scegli una società per vedere i totali."
+  },
+  "list": {
+    "title": "Margine per ordine, dal preventivo all'effettivo",
+    "hint": "Il margine di ogni ordine come a preventivo, come stimato ora e come si chiude.",
+    "fileTitle": "Margini",
+    "search": "Cerca un ordine o un riferimento cliente",
+    "count_one": "{count} ordine",
+    "count_other": "{count} ordini",
+    "more": "Mostra altri",
+    "slow": "Ancora in caricamento…",
+    "failed": "Impossibile caricare il margine per ordine, dal preventivo all'effettivo",
+    "clearFilters": "Azzera i filtri",
+    "noMatch": {
+      "title": "Nessuna riga corrisponde a questi filtri",
+      "body": "Cambia le date, il cliente, il modello o la ricerca."
+    },
+    "empty": {
+      "title": "Nessun ordine in questo periodo",
+      "body": "Un ordine compare qui quando è confermato, con il suo margine a preventivo."
+    }
+  },
+  "bulk": {
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)"
+  },
+  "col": {
+    "order": "Ordine",
+    "customer": "Cliente",
+    "value": "Valore",
+    "quotedCost": "Costo a preventivo",
+    "estimateCost": "Costo stimato ora",
+    "actualCost": "Costo effettivo finora",
+    "margin": "Margine % preventivo → ora",
+    "actualPct": "Finora %",
+    "state": "Stato"
+  },
+  "row": {
+    "noRef": "Nessun riferimento cliente",
+    "change": "{amount} dal preventivo",
+    "provisional": "Provvisorio"
+  },
+  "stage": {
+    "final": "Costo definitivo",
+    "started": "Costo finora",
+    "notStarted": "Ancora nessun costo registrato"
+  },
+  "status": {
+    "CONFIRMED": "Confermato",
+    "IN_PRODUCTION": "In produzione",
+    "READY": "Pronto da spedire",
+    "PARTLY_SHIPPED": "Spedito in parte",
+    "SHIPPED": "Spedito",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  },
+  "filter": {
+    "customer": "Cliente",
+    "style": "Modello",
+    "clear": "Togli il filtro {name}"
+  },
+  "by": {
+    "title": "Per cliente e modello",
+    "hint": "Redditività per cliente e per modello, come stimata ora. Una barra filtra gli ordini.",
+    "noGrain": "Per cliente e modello richiede la visibilità sui margini (money.margin).",
+    "failed": "Impossibile caricare per cliente e modello",
+    "loading": "Lettura dei margini per cliente e modello…",
+    "customer": "Per cliente",
+    "style": "Per modello",
+    "empty": "Nessun ordine in questo periodo.",
+    "orders_one": "{count} ordine",
+    "orders_other": "{count} ordini",
+    "pick": "{name}: {pct} su {count} ordini — mostra solo questi"
+  },
+  "detail": {
+    "title": "{number} — redditività",
+    "thisOrder": "Ordine",
+    "noun": "ordine",
+    "open": "Apri l'ordine",
+    "noGrain": "I margini richiedono la visibilità sui margini (money.margin).",
+    "provisional": "Provvisorio: il metodo di costo non è ancora deciso (lo sceglie il commercialista).",
+    "method": "I costi seguono il metodo di costo della società.",
+    "documentsLater": "Fatture, note di credito, incassi e trasporto come collegamenti arrivano in una versione successiva.",
+    "orderLink": "Apri {number} in Vendite › Ordini"
+  },
+  "held": {
+    "noOrders": "Aprire un ordine richiede il permesso {permission}."
+  },
+  "strip": {
+    "quoted": "Margine a preventivo",
+    "quotedHint": "Le righe come vendute, al costo del preventivo",
+    "noQuotedCost": "Una riga non ha un costo a preventivo",
+    "estimate": "Stima attuale",
+    "estimateHint": "Dagli ordini di lavoro che lo producono",
+    "points": "{points} punti dal preventivo",
+    "actual": "Effettivo finora",
+    "actualFinal": "Il costo definitivo",
+    "actualOpen": "Risulta alto finché il lavoro è aperto",
+    "actualNone": "Ancora nessun costo registrato",
+    "difference": "Differenza",
+    "differenceHint": "Margine attuale meno il margine a preventivo"
+  },
+  "meter": {
+    "label": "Margine attuale {now} contro {quoted} a preventivo",
+    "noQuoted": "Margine attuale {now} (nessun margine a preventivo da confrontare)"
+  },
+  "bridge": {
+    "title": "Dal prezzo al margine",
+    "noGrain": "Il ponte richiede la visibilità su prezzi e costi.",
+    "price": "Prezzo (netto)",
+    "freight": "Trasporto",
+    "noFreight": "Non ancora registrato: escluso",
+    "margin": "Margine attuale"
+  },
+  "part": {
+    "MATERIAL": "Materiale",
+    "LABOUR": "Manodopera",
+    "SUBCONTRACT": "Lavorazione esterna",
+    "OVERHEAD": "Costi generali",
+    "ADJUSTMENT": "Rettifica"
+  },
+  "waterfall": {
+    "title": "Dove è andato il margine",
+    "noGrain": "Dove è andato il margine richiede la visibilità su margini e costi: mostra importi di costo.",
+    "none": "Non ancora determinabile: il costo a preventivo o attuale non è noto.",
+    "QUOTED": "Margine a preventivo",
+    "NOW": "Margine attuale",
+    "open": "{part} in Amministrazione › Costi standard ed effettivi",
+    "reason": {
+      "PRICE": "Prezzo",
+      "MATERIAL": "Materiale",
+      "LABOUR": "Manodopera",
+      "SUBCONTRACT": "Lavorazione esterna",
+      "OVERHEAD": "Costi generali",
+      "ADJUSTMENT": "Rettifica"
+    }
+  },
+  "lines": {
+    "title": "Per riga",
+    "none": "L'ordine non ha righe.",
+    "line": "Riga",
+    "net": "Netto",
+    "estimate": "Costo stimato",
+    "actual": "Costo effettivo",
+    "quotedPct": "Preventivo %",
+    "marginPct": "Margine % attuale",
+    "pieces": "{count} pezzi · {closed} chiusi a saldo",
+    "piecesOnly": "{count} pezzi"
+  },
+  "shares": {
+    "title": "Ordini di lavoro dietro il costo",
+    "none": "Nessun ordine di lavoro lo produce ancora: il costo è quello del preventivo.",
+    "workOrder": "Ordine di lavoro",
+    "pieces": "Pezzi per questo ordine",
+    "plan": "La stima si basa su",
+    "estimate": "Stimato",
+    "actual": "Finora",
+    "of": "{pieces} di {of}",
+    "done": "Concluso",
+    "open": "Aperto",
+    "provisional": "Aperto · provvisorio"
+  },
+  "plan": {
+    "STANDARD": "Standard congelati",
+    "ESTIMATE": "Stima al rilascio",
+    "QUOTED": "Il costo del preventivo",
+    "ACTUAL": "Il suo effettivo"
+  },
+  "marginTab": {
+    "title": "Margine",
+    "noView": {
+      "title": "Il margine richiede il permesso sui costi",
+      "body": "La scheda Margine richiede il permesso sui costi. Il resto dell'ordine resta com'è."
+    },
+    "noGrain": {
+      "title": "Il margine richiede la visibilità sui margini",
+      "body": "Il tuo ruolo non vede i margini: chiedi a chi gestisce i ruoli."
+    },
+    "loading": "Lettura del margine…",
+    "failed": "Impossibile caricare il margine",
+    "inFinance": "Vedi tutti gli ordini in Amministrazione › Margini"
+  },
+  "problem": {
+    "signed_out": "Sei uscito. Accedi di nuovo.",
+    "forbidden": "Il tuo ruolo non può vederlo qui.",
+    "not_found": "Non trovato, oppure appartiene a un'altra società o a un altro cliente.",
+    "unavailable": "Il server non è raggiungibile. Riprova tra un momento.",
+    "rate_limited": "Troppe richieste: attendi un momento e riprova.",
+    "invalid": "La richiesta è stata rifiutata perché non valida.",
+    "internal": "Qualcosa è andato storto sul server."
+  },
+  "csv": {
+    "file": "margini-{day}",
+    "order": "Ordine",
+    "customer": "Cliente",
+    "orderDate": "Data ordine",
+    "status": "Stato",
+    "value": "Valore",
+    "quotedCost": "Costo a preventivo",
+    "estimateCost": "Costo stimato ora",
+    "actualCost": "Costo effettivo finora",
+    "quotedMarginPct": "Margine % a preventivo",
+    "estimateMarginPct": "Margine % attuale",
+    "actualMarginPct": "Margine % finora",
+    "marginChange": "Variazione del margine",
+    "currency": "Valuta",
+    "stage": "Costo"
+  },
+  "keys": {
+    "title": "Tasti",
+    "search": "Cerca un ordine",
+    "open": "Apri la redditività dell'ordine"
+  },
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi"
+  }
+}

@@ -6,6 +6,7 @@ import { at, BOARD, canOf, forRole, inShell, LIST_ROWS, OPEN_ROWS, PARTY, PARTY_
 import type { Lane } from '../model'
 import type { NewOrderDialogModel, OrdersListModel } from './list-model'
 import { OrdersListView } from './view/OrdersListView'
+import { LIST_MARGINS } from './margin/fixtures'
 
 /**
  * SCR-038 — Orders (design sales.orders) with made-up data only: every state of the list (loading, error, empty, nothing
@@ -105,5 +106,7 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'new-order-searching', label: 'W2a · Sales · New order: searching customers', model: base('sales', { newOrder: newOrder({ results: null, number: undefined }) }) },
     { id: 'new-order-held', label: 'W2a · Finance · New order held: taking orders is the sales right', model: base('finance') },
     { id: 'board-live', label: 'W2a · Owner · Board by state (follows live; Board in a new tab); a ready order offers Create shipment', model: board('owner'), note: 'Board in a new tab opens ?view=board: left open on a second screen it reads its lanes again on every change.' },
+    // ---- B-W2a-72: Margin % (as estimated now; costing.view + the margin grain) ----
+    { id: 'w2a-margin-column', label: 'W2a · Sales · Margin % as estimated now (a negative one in danger; "—" when its cost cannot be told; "…" while read)', model: base('sales', { margins: LIST_MARGINS }) },
   ],
 })

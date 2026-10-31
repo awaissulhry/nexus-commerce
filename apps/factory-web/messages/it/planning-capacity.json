@@ -1,0 +1,224 @@
+{
+  "page": {
+    "asOf": "Aggiornato alle {time}",
+    "site": "Sito",
+    "siteOne": "Sito {site}",
+    "from": "Dal",
+    "to": "Al",
+    "bucket": "Periodi",
+    "board": "Apri il tabellone",
+    "more": "Altre azioni",
+    "export": "Esporta questa vista (CSV)",
+    "print": "Stampa",
+    "settings": "Impostazioni capacità (Impostazioni pianificazione)",
+    "keys": "Scorciatoie da tastiera",
+    "printHead": "Capacità e carico · {site} · {from} – {to} · per {bucket}",
+    "noSites": "Questa società non ha siti che pianifichi.",
+    "withoutLine_one": "{count} ordine di produzione aperto non è ancora su una linea: i suoi minuti caricano solo i suoi centri di lavoro.",
+    "withoutLine_other": "{count} ordini di produzione aperti non sono ancora su una linea: i loro minuti caricano solo i loro centri di lavoro."
+  },
+  "bucket": {
+    "DAY": "Giorno",
+    "WEEK": "Settimana",
+    "MONTH": "Mese",
+    "week": "Sett. {week} · {range}"
+  },
+  "live": {
+    "connecting": "Connessione agli aggiornamenti in corso…",
+    "live": "In tempo reale",
+    "offline": "Offline: i numeri non si aggiornano da soli"
+  },
+  "noAccess": {
+    "title": "Capacità e carico non è aperta al tuo ruolo",
+    "body": "Il tuo ruolo non può leggere la pianificazione (planning.view). Chiedi a un amministratore se ti serve."
+  },
+  "keys": {
+    "cell": "Apri gli ordini della linea in questa settimana",
+    "walk": "Cella precedente / successiva negli ordini"
+  },
+  "tile": {
+    "title": "La capacità in breve",
+    "over": "Linee oltre il 100% questa settimana",
+    "free": "Minuti liberi nelle prossime 4 settimane",
+    "most": "Linea più carica questa settimana",
+    "minutes": "{minutes} min",
+    "mostValue": "{lane} · {pct}%",
+    "hint": {
+      "over": "linee e centri di lavoro prenotati oltre la loro capacità",
+      "free": "sulle linee; {minutes} min sui centri di lavoro",
+      "most": "il carico più alto da lunedì a domenica"
+    }
+  },
+  "col": {
+    "lane": "Linea",
+    "bucketTip": "Minuti standard prenotati su disponibili in {bucket}",
+    "overall": "Tutto il periodo",
+    "overallOf": "{lane}, tutto il periodo",
+    "end": "Efficienza · persone · turni"
+  },
+  "kind": {
+    "LINE": "Linea",
+    "WORK_CENTRE": "Centro di lavoro"
+  },
+  "lane": {
+    "toBoard": "Apri {lane} sul tabellone (nuova finestra)",
+    "efficiency": "Efficienza {efficiency}% ({source})",
+    "efficiencyShort": "Efficienza {efficiency}%",
+    "peopleShort": {
+      "LINE_one": "{people} persona",
+      "LINE_other": "{people} persone",
+      "WORK_CENTRE_one": "{people} postazione",
+      "WORK_CENTRE_other": "{people} postazioni"
+    },
+    "source": {
+      "LANE": "di questa linea",
+      "SITE": "del sito",
+      "DEFAULT": "predefinita"
+    },
+    "people": {
+      "LINE_one": "{people} persona ({source})",
+      "LINE_other": "{people} persone ({source})",
+      "WORK_CENTRE_one": "{people} postazione ({source})",
+      "WORK_CENTRE_other": "{people} postazioni ({source})"
+    },
+    "peopleSource": {
+      "CAPACITY": "impostate nelle Impostazioni pianificazione",
+      "STATIONS": "le sue postazioni attive"
+    },
+    "pattern": "{name}",
+    "patternDefault": "Turni predefiniti (nessun calendario)",
+    "pastDue": "{minutes} min scaduti, in nessun periodo",
+    "undated": "{minutes} min senza data di consegna",
+    "held_one": "{count} ordine sospeso non prenota nulla",
+    "held_other": "{count} ordini sospesi non prenotano nulla"
+  },
+  "cell": {
+    "title": "{lane} · {bucket}",
+    "open": "{what}: apri gli ordini prenotati qui",
+    "days": "Dal {from} al {to}",
+    "gone": "Questa cella non è nel periodo mostrato",
+    "prev": "Cella precedente",
+    "next": "Cella successiva",
+    "first": "È la prima cella della tabella.",
+    "last": "È l’ultima cella della tabella.",
+    "board": "Apri sul tabellone",
+    "orders": "Ordini prenotati in questi giorni",
+    "noOrders": "Nessun ordine di produzione aperto prenota questa linea in questi giorni.",
+    "col": {
+      "workOrder": "Ordine di produzione",
+      "operation": "Operazione",
+      "pieces": "Capi da fare",
+      "minutes": "Minuti",
+      "share": "Quota",
+      "placed": "Collocato da"
+    },
+    "minutes": "{minutes} min",
+    "placedSlot": "il tabellone, dalle {time}",
+    "placedDue": "la sua data di consegna, {date} (non ancora sul tabellone)",
+    "placedDueNone": "la sua data di consegna (non ancora sul tabellone)",
+    "noPerson": "Minuti per ordine e operazione, mai per persona."
+  },
+  "how": {
+    "trigger": "Come è fatta la capacità di {what}: {how}",
+    "title": "Come è fatta questa capacità — {what}",
+    "titleShort": "Come è fatta questa capacità",
+    "formula": {
+      "people_one": "{people} persona × {minutes} min × efficienza {efficiency}% × {days} giorni = {available} min",
+      "people_other": "{people} persone × {minutes} min × efficienza {efficiency}% × {days} giorni = {available} min",
+      "stations_one": "{people} postazione × {minutes} min × efficienza {efficiency}% × {days} giorni = {available} min",
+      "stations_other": "{people} postazioni × {minutes} min × efficienza {efficiency}% × {days} giorni = {available} min"
+    },
+    "formulaVaried": {
+      "people_one": "{people} persona × {minutes} min lavorativi in {days} giorni × efficienza {efficiency}% = {available} min",
+      "people_other": "{people} persone × {minutes} min lavorativi in {days} giorni × efficienza {efficiency}% = {available} min",
+      "stations_one": "{people} postazione × {minutes} min lavorativi in {days} giorni × efficienza {efficiency}% = {available} min",
+      "stations_other": "{people} postazioni × {minutes} min lavorativi in {days} giorni × efficienza {efficiency}% = {available} min"
+    },
+    "noDays": "Nessun giorno lavorativo in questi giorni: non c’è nulla di disponibile.",
+    "noPeople": "Nessuna persona impostata e nessuna postazione attiva: non c’è nulla di disponibile.",
+    "noStations": "Nessuna unità impostata e nessuna postazione attiva: non c’è nulla di disponibile.",
+    "closed": "Chiuso: {days}.",
+    "closedReason": {
+      "HOLIDAY": "festività",
+      "CLOSURE": "chiusura"
+    },
+    "noShift": "Nessun turno: {days}.",
+    "efficiency": {
+      "LANE": "Efficienza {efficiency}%: impostata per questa linea.",
+      "SITE": "Efficienza {efficiency}%: quella predefinita del sito.",
+      "DEFAULT": "Efficienza {efficiency}%: nulla impostato, quella predefinita."
+    },
+    "people": {
+      "LINE": {
+        "CAPACITY_one": "{people} persona: impostata nelle Impostazioni pianificazione.",
+        "CAPACITY_other": "{people} persone: impostate nelle Impostazioni pianificazione.",
+        "STATIONS_one": "{people} persona: una per postazione attiva (nessuna impostata).",
+        "STATIONS_other": "{people} persone: una per postazione attiva (nessuna impostata)."
+      },
+      "WORK_CENTRE": {
+        "CAPACITY_one": "{people} unità: impostata nelle Impostazioni pianificazione.",
+        "CAPACITY_other": "{people} unità: impostate nelle Impostazioni pianificazione.",
+        "STATIONS_one": "{people} postazione: le sue postazioni attive (nessuna impostata).",
+        "STATIONS_other": "{people} postazioni: le sue postazioni attive (nessuna impostata)."
+      }
+    },
+    "bookedBoard": "Prenotati: {booked} min, tutti collocati sul tabellone.",
+    "bookedDue": "Prenotati: {booked} min — {board} min sul tabellone, {due} min alla data di consegna.",
+    "nothingBooked": "Nulla di prenotato in questi giorni.",
+    "calendar": "Apri il calendario {name}",
+    "noCalendar": "Nessun calendario: giorni e turni predefiniti."
+  },
+  "list": {
+    "label": "Carico rispetto alla capacità",
+    "count_one": "{count} linea",
+    "count_other": "{count} linee",
+    "note": "Minuti standard per linea e centro di lavoro, dai cicli congelati degli ordini rilasciati; mai per persona."
+  },
+  "bulk": {
+    "board_one": "Apri {count} sul tabellone",
+    "board_other": "Apri {count} sul tabellone",
+    "export_one": "Esporta {count}",
+    "export_other": "Esporta {count}"
+  },
+  "empty": {
+    "title": "Nessuna linea in questo sito",
+    "body": "Linee e centri di lavoro con persone ed efficienza si impostano nelle Impostazioni pianificazione.",
+    "settings": "Impostazioni pianificazione",
+    "tileTitle": "Nessuna linea corrisponde al riquadro",
+    "tile": {
+      "over": "Nessuna linea è oltre il 100% questa settimana.",
+      "free": "Nessuna linea ha minuti liberi in questo periodo.",
+      "most": "Nulla è prenotato questa settimana."
+    }
+  },
+  "common": {
+    "retry": "Riprova",
+    "clearFilters": "Mostra tutte le linee"
+  },
+  "error": {
+    "title": "Impossibile leggere il carico rispetto alla capacità",
+    "periodTitle": "Questo periodo non si può mostrare",
+    "failed": "La risposta non è arrivata. Riprova tra poco.",
+    "forbidden": "Il tuo ruolo non può leggere la pianificazione di questo sito.",
+    "offline": "Nessuna connessione al server della fabbrica.",
+    "period": "Il periodo non è stato accettato: scegli al massimo due anni, l’ultimo giorno dopo il primo.",
+    "gone": "Questa linea o questo periodo non è in quello mostrato.",
+    "noSite": "Non c’è alcun sito da pianificare in questa società."
+  },
+  "period": {
+    "backwards": "L’ultimo giorno è prima del primo.",
+    "tooLong": "Al massimo due anni (735 giorni) alla volta."
+  },
+  "csv": {
+    "lane": "Linea",
+    "kind": "Tipo",
+    "bucket": "Periodo",
+    "from": "Dal",
+    "to": "Al",
+    "available": "Disponibili (min)",
+    "booked": "Prenotati (min)",
+    "load": "Carico (%)",
+    "efficiency": "Efficienza (%)",
+    "people": "Persone o postazioni"
+  }
+}

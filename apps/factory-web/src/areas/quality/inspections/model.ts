@@ -2,7 +2,7 @@ import { CHECKLIST_GROUPS, CHECKLIST_ITEMS, computedResult, type ChecklistGroup,
 import { isFourEyesLoosening, type FourEyesRule, type ReleaseCheckCode, type SecondPersonReason } from '@nexus/factory-domain/quality/release/rules'
 import type { Lot } from '../_shared/lots'
 import type { LiveState, Notice, QualityCan, Read } from '../_shared/model'
-import type { FinalCell, FinalState, Inspection, InspectionRead, InspectionRow, Release, ReleaseDetail, ReleaseRule, ReverseImpact, Who, WorkOrderCells, WorkOrderPick, PartyPick } from './api'
+import type { Assigned, DefectBody, FinalCell, FinalState, Inspection, InspectionPhoto, InspectionRead, InspectionRow, Inspectors, InspectorPick, PickedDefect, Release, ReleaseDetail, ReleaseRule, ReturnPick, ReturnRecord, ReverseImpact, Who, WorkOrderCells, WorkOrderPick, PartyPick } from './api'
 
 /**
  * The rules of Inspections (SCR-075) and the inspection record (SCR-076), without React and without the API: the views
@@ -13,7 +13,12 @@ import type { FinalCell, FinalState, Inspection, InspectionRead, InspectionRow, 
 
 // ---- the list's views and tiles ---------------------------------------------------------------------------------------------
 
-export const VIEWS = ['all', 'open', 'waiting', 'onHold', 'reversed', 'lots'] as const
+/**
+ * The list's views. W2a (B-W2a-67; Owner answer Q3): goods on hold left this page for Quality › Holds (SCR-078) — the W1
+ * "On hold" view and tile are gone, an old address is sent there (`holdsAddressFor`); "Failed - not decided" and "Waiting
+ * for me" (assigned to me) joined.
+ */
+export const VIEWS = ['all', 'open', 'mine', 'waiting', 'failed', 'reversed', 'lots'] as const
 export type View = (typeof VIEWS)[number]
 export type ViewKind = 'inspections' | 'releases' | 'lots'
 
@@ -26,15 +31,24 @@ export const viewKind = (view: View): ViewKind => (view === 'reversed' ? 'releas
 export function viewFromAddress(params: { get(name: string): string | null } | null | undefined): View {
   const asked = params?.get('view')
   if (asked && (VIEWS as readonly string[]).includes(asked)) return asked as View
-  if (params?.get('onHold') === 'true') return 'onHold'
+  if (params?.get('failedUndecided') === 'true') return 'failed'
+  if (params?.get('assigned') === 'me') return 'mine'
   if (params?.get('waitingRelease') === 'true') return 'waiting'
   if (params?.get('reversed') === 'true') return 'reversed'
   if (params?.get('status') === 'OPEN') return 'open'
   return 'all'
 }
 
+/**
+ * W1's "On hold" address (`?view=onHold`, `?onHold=true`, Today's links): the held work orders now live on Quality › Holds
+ * (Owner answer Q3: "until the Holds page exists"). The page sends such an address there.
+ */
+export function holdsAddressFor(params: { get(name: string): string | null } | null | undefined): string | null {
+  return params?.get('view') === 'onHold' || params?.get('onHold') === 'true' ? '/quality/holds?subjectType=WorkOrder' : null
+}
+
 /** The tiles: each a named saved filter (pressing one shows its view; the count and the list agree). */
-export const TILES = ['open', 'waiting', 'onHold', 'reversed', 'lots'] as const satisfies readonly View[]
+export const TILES = ['open', 'waiting', 'failed', 'reversed', 'lots'] as const satisfies readonly View[]
 export type TileId = (typeof TILES)[number]
 
 /** A tile's count: the rows its read gave, "at least" when the read was cut at its limit; null = it could not count. */
@@ -76,6 +90,53 @@ export function holdOf(row: Pick<InspectionRow, 'status' | 'onHold' | 'reversed'
   return { key: 'hold.reversed', params: { count: row.reversed } }
 }
 
+/**
+ * Who an inspection is assigned to, in words (W2a): you, an office user by name, "a bench inspector" for a worker in a
+ * list (named only inside one inspection: Owner answer W1), or nobody.
+ */
+export function assignedWords(assigned: Assigned | null, me: string, inside = false): { key: string; params?: Record<string, string> } {
+  if (!assigned) return { key: 'assign.nobody' }
+  if (assigned.kind === 'USER') return assigned.userId === me ? { key: 'assign.you' } : assigned.name ? { key: 'assign.named', params: { name: assigned.name } } : { key: 'assign.office' }
+  return inside && assigned.name ? { key: 'assign.benchNamed', params: { name: assigned.name } } : { key: 'assign.bench' }
+}
+
+/** The picker's value of an assignee (`USER:<id>`, `WORKER:<id>`, '' for nobody). */
+export const assigneeValue = (assigned: Pick<Assigned, 'kind' | 'userId' | 'workerId'> | null): string =>
+  !assigned ? '' : assigned.kind === 'USER' ? `USER:${assigned.userId ?? ''}` : `WORKER:${assigned.workerId ?? ''}`
+
+/** A picker value as the assign body. */
+export function assigneeBody(value: string): { assigneeId: string | null; assigneeWorkerId: string | null } {
+  const [kind, id] = value.split(':')
+  return { assigneeId: kind === 'USER' && id ? id : null, assigneeWorkerId: kind === 'WORKER' && id ? id : null }
+}
+
+/** Why a row cannot be assigned (it is decided or cancelled), or null. */
+export const assignRowHeld = (row: Pick<InspectionRow, 'status'>): string | null => (row.status === 'OPEN' ? null : 'assign.held.notOpen')
+
+/** Why "Assign N inspections" is held for these rows, or null: no right, a decided one, more than one site. */
+export function assignHeld(rows: readonly Pick<InspectionRow, 'status' | 'siteId'>[], can: Pick<QualityCan, 'inspectionsRecord'>): string | null {
+  if (!can.inspectionsRecord) return 'assign.held.noRight'
+  if (rows.length === 0) return 'assign.held.none'
+  if (rows.some((row) => row.status !== 'OPEN')) return 'assign.held.notOpen'
+  if (new Set(rows.map((row) => row.siteId)).size > 1) return 'assign.held.sites'
+  return null
+}
+
+/** The assign dialog's state (qi-assign): which inspections, the people of their site, the pick, what went wrong. */
+export interface AssignState {
+  readonly ids: readonly string[]
+  readonly siteId: string
+  readonly people: Read<Inspectors>
+  readonly value: string
+  readonly busy: boolean
+  readonly problem: string | null
+  readonly lines: readonly string[]
+}
+
+/** A person of the picker in words (a worker's name is shown inside the dialog: a picker, never a list). */
+export const inspectorHeld = (person: Pick<InspectorPick, 'made'>): { key: string; params: Record<string, string> } | null =>
+  person.made.length > 0 ? { key: 'assign.made', params: { orders: person.made.join(', ') } } : null
+
 /** A release's name: its number, or "WO-0003 · release" for one made before the series existed. */
 export const releaseLabel = (release: Pick<Release, 'releaseNumber' | 'number'>): { key: string; params: Record<string, string> } =>
   release.releaseNumber ? { key: 'release.number', params: { number: release.releaseNumber } } : { key: 'release.unnumbered', params: { workOrder: release.number } }
@@ -90,7 +151,7 @@ export function lastReversal(release: Pick<Release, 'reversals'>): Release['reve
 
 // ---- the record: what this person may do, held reasons said before the click ---------------------------------------------------
 
-export const RECORD_TABS = ['checks', 'decision'] as const
+export const RECORD_TABS = ['checks', 'defects', 'decision'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 export interface ChecklistRow {
@@ -146,7 +207,17 @@ export interface RecordAbilities {
 /** What the viewer may do on the record, each with its reason when held (never a silent grey button). */
 export function recordAbilities(read: Pick<InspectionRead, 'inspection' | 'maker' | 'yours'>, can: Pick<QualityCan, 'inspectionsRecord'>): RecordAbilities {
   const inspection = read.inspection
-  const base = !can.inspectionsRecord ? 'held.noRecord' : inspection.status !== 'OPEN' ? (inspection.status === 'CANCELLED' ? 'held.cancelled' : 'held.decided') : !read.yours ? 'held.notYours' : null
+  const base = !can.inspectionsRecord
+    ? 'held.noRecord'
+    : inspection.status !== 'OPEN'
+      ? inspection.status === 'CANCELLED'
+        ? 'held.cancelled'
+        : 'held.decided'
+      : !read.yours
+        ? inspection.assigned
+          ? 'held.assignedOther'
+          : 'held.notYours'
+        : null
   const counts = checklistCounts(checklistRows(inspection))
   const signHeld = base ?? (read.maker.made ? 'held.maker' : counts.answered < counts.total ? 'held.unanswered' : null)
   return { recordHeld: base, signHeld, cancelHeld: base }
@@ -308,7 +379,53 @@ export const partyName = (party: PartyPick): string => party.tradeName ?? party.
 
 // ---- New inspection ---------------------------------------------------------------------------------------------------------------
 
+/** New inspection's kind (design qi-new RadioCard): incoming lot, final, in-line (W2b), return (W2a). */
+export const NEW_KINDS = ['LOT', 'FINAL', 'INLINE', 'RETURN'] as const
+export type NewKind = (typeof NEW_KINDS)[number]
+
+/** Why a kind is held here, or null: in-line inspections come with W2b; a return needs the right to inspect returns. */
+export function kindHeld(kind: NewKind, can: Pick<QualityCan, 'inspectionsRecord' | 'workOrdersView' | 'returnsView' | 'returnsInspect' | 'lotsView'>): string | null {
+  if (kind === 'INLINE') return 'new.kind.held.inline'
+  if (kind === 'RETURN') return !can.returnsView || !can.returnsInspect ? 'new.kind.held.return' : null
+  if (kind === 'LOT') return !can.lotsView ? 'new.kind.held.lot' : null
+  return !can.inspectionsRecord ? 'held.noRecord' : !can.workOrdersView ? 'held.noWorkOrders' : null
+}
+
+/** The Return kind's grades per line (design qi-new "Return"; B-W2a-43's grading: grade, cause, the condition). */
+export interface ReturnDraft {
+  readonly returnId: string | null
+  readonly lines: Readonly<Record<string, { readonly grade: string; readonly cause: string; readonly note: string }>>
+}
+export const RETURN_DRAFT: ReturnDraft = Object.freeze({ returnId: null, lines: {} })
+
+/** The grading's problems (message keys): every received line graded. */
+export function returnProblems(draft: ReturnDraft, record: Pick<ReturnRecord, 'lines'> | null): string[] {
+  if (!draft.returnId) return ['new.return.problem.pick']
+  if (!record) return ['new.return.problem.reading']
+  const received = record.lines.filter((line) => line.receivedQuantity > 0)
+  if (received.length === 0) return ['new.return.problem.nothingReceived']
+  if (received.some((line) => !draft.lines[line.id]?.grade)) return ['new.return.problem.grade']
+  if (received.some((line) => (draft.lines[line.id]?.note.length ?? 0) > 1000)) return ['new.return.problem.note']
+  return []
+}
+
+/** The grading body: every received line with its grade (cause and note when given). */
+export const returnBody = (draft: ReturnDraft, record: Pick<ReturnRecord, 'lines' | 'version'>) => ({
+  version: record.version,
+  lines: record.lines
+    .filter((line) => line.receivedQuantity > 0 && draft.lines[line.id]?.grade)
+    .map((line) => ({
+      lineId: line.id,
+      grade: draft.lines[line.id]!.grade as ReturnRecord['lines'][number]['grade'] & string,
+      cause: (draft.lines[line.id]!.cause || null) as ReturnRecord['lines'][number]['cause'],
+      conditionNote: draft.lines[line.id]!.note.trim() || null,
+    })),
+})
+
 export interface NewDraft {
+  readonly kind: NewKind
+  /** The inspector it is assigned to at once ('' nobody; `USER:<id>` / `WORKER:<id>`). */
+  readonly assignee: string
   readonly workOrderId: string | null
   readonly lotSize: string
   readonly sampleSize: string
@@ -320,7 +437,7 @@ export interface NewDraft {
   readonly note: string
 }
 
-export const NEW_DRAFT: NewDraft = Object.freeze({ workOrderId: null, lotSize: '', sampleSize: '', inspectionLevel: 'II', aqlMajor: '2.5', aqlMinor: '4.0', acceptMajor: '', acceptMinor: '', note: '' })
+export const NEW_DRAFT: NewDraft = Object.freeze({ kind: 'FINAL', assignee: '', workOrderId: null, lotSize: '', sampleSize: '', inspectionLevel: 'II', aqlMajor: '2.5', aqlMinor: '4.0', acceptMajor: '', acceptMinor: '', note: '' })
 
 /** The finished garments of a work order (good at the final operation): null while unknown. */
 export function finishedOf(workOrder: Pick<WorkOrderCells, 'cells'> | null): number | null {
@@ -388,11 +505,25 @@ export interface InspectionsListModel {
   readonly ruleDraft?: RuleDraft
   readonly customerSearch?: Read<readonly PartyPick[]> | null
   readonly reverseDraft?: ReverseDraft
+  /** W2a: Assign inspector (qi-assign) for the rows it names. */
+  readonly assign?: AssignState | null
+  /** W2a: the inline Inspector cell's people per site (read when a cell is first focused) and each row's save mark. */
+  readonly people?: Readonly<Record<string, Read<Inspectors>>>
+  readonly marks?: Readonly<Record<string, CellMark>>
+  /** W2a: New inspection's Return kind — the returns waiting, the picked one, its grades. */
+  readonly returns?: Read<readonly ReturnPick[]> | null
+  readonly returnRecord?: Read<ReturnRecord> | null
+  readonly returnDraft?: ReturnDraft
+  /** New inspection's inspector picker (the work order's site). */
+  readonly newPeople?: Read<Inspectors> | null
   /** Design cases: the focused row, the keys panel open. */
   readonly focusRow?: number
 }
 
 export type ListDialog = { kind: 'new' } | { kind: 'rules' } | { kind: 'reverse'; releaseId: string } | { kind: 'shortcuts' }
+
+/** A cell's save mark (CellSaveMark: saving, saved, unknown) or a refusal with its words. */
+export type CellMark = { readonly state: 'saving' | 'saved' | 'unknown' } | { readonly state: 'refused'; readonly problem: string; readonly lines?: readonly string[] }
 
 /** A reversal's receipt: what it did and what the PPE register did, in our words with the API's facts. */
 export interface ReverseAnswerWords {
@@ -423,19 +554,39 @@ export interface InspectionRecordModel {
   readonly signDraft?: SignDraft
   readonly releaseDraft?: ReleaseDraft
   readonly planDraft?: PlanDraft
-  readonly defectsDraft?: readonly DefectDraft[]
   readonly cancelReason?: string
   /** A changed record while a dialog holds unsaved work: "changed at 10:42 · Reload". */
   readonly stale?: string | null
+  /** W2a Defects & photos: the defects as shown (saved after each change), the save state, the library, the photos. */
+  readonly defects?: DefectsTabModel
+  /** W2a: Assign inspector from the record's band. */
+  readonly assign?: AssignState | null
+}
+
+/** The Defects & photos tab (design ins-defects): the lines, their save state, the library picker, the photos, the picks for an NCR. */
+export interface DefectsTabModel {
+  readonly lines: readonly DefectBody[]
+  readonly saving: 'idle' | 'saving' | 'saved' | 'failed'
+  readonly problem?: string | null
+  readonly lines_refused?: readonly string[]
+  readonly library: Read<readonly PickedDefect[]>
+  readonly photos: Read<readonly InspectionPhoto[]>
+  /** A photo's address once read (presigned, short-lived). */
+  readonly photoSrc: Readonly<Record<string, string>>
+  /** A photo being uploaded for this line's code. */
+  readonly uploading?: string | null
 }
 
 export type RecordDialog =
   | { kind: 'sign' }
   | { kind: 'release'; workOrderSizeId: string }
   | { kind: 'plan' }
-  | { kind: 'defects' }
   | { kind: 'cancel' }
   | { kind: 'shortcuts' }
+  // W2a: add a defect from the library; place a line on the garment; take its photo with markup.
+  | { kind: 'pick' }
+  | { kind: 'zone'; index: number }
+  | { kind: 'photo'; index: number }
 
 export interface PlanDraft {
   readonly lotSize: string
@@ -470,34 +621,61 @@ export const planBody = (draft: PlanDraft) => ({
   acceptMinor: Number(draft.acceptMinor),
 })
 
-export interface DefectDraft {
-  readonly defectClass: 'CRITICAL' | 'MAJOR' | 'MINOR'
-  readonly code: string
-  readonly quantity: string
-  readonly workOrderSizeId: string | null
-  readonly note: string
+// ---- Defects & photos (W2a, B-W2a-67; design ins-defects): the list saved whole (PUT), one change at a time ----------------
+
+/** The defects as the API takes them back (the list is saved whole: one line per class and code). */
+export const defectLinesOf = (inspection: Pick<Inspection, 'defects'>): DefectBody[] =>
+  inspection.defects.map((defect) => ({
+    defectClass: defect.defectClass,
+    code: defect.code,
+    quantity: defect.quantity,
+    workOrderSizeId: defect.workOrderSizeId,
+    note: defect.note,
+    defectCodeId: defect.defectCodeId,
+    zone: defect.zone,
+  }))
+
+/** A defect picked from the library: a new line with its default class and zone, or one more garment on its line. */
+export function withPicked(lines: readonly DefectBody[], picked: Pick<PickedDefect, 'id' | 'code' | 'severity' | 'zone'>): DefectBody[] {
+  const at = lines.findIndex((line) => line.code === picked.code && line.defectClass === picked.severity)
+  if (at >= 0) return lines.map((line, index) => (index === at ? { ...line, quantity: line.quantity + 1 } : line))
+  return [...lines, { defectClass: picked.severity, code: picked.code, quantity: 1, workOrderSizeId: null, note: null, defectCodeId: picked.id, zone: picked.zone }]
 }
 
-export const defectsDraftOf = (inspection: Pick<Inspection, 'defects'>): DefectDraft[] =>
-  inspection.defects.map((defect) => ({ defectClass: defect.defectClass, code: defect.code, quantity: String(defect.quantity), workOrderSizeId: defect.workOrderSizeId, note: defect.note ?? '' }))
+/** One line changed (class, garments, zone, cell, note). */
+export const changedLine = (lines: readonly DefectBody[], index: number, change: Partial<DefectBody>): DefectBody[] => lines.map((line, at) => (at === index ? { ...line, ...change } : line))
 
-/** The defect lines' problems (message keys with the line's place), every one at once. */
-export function defectsProblems(lines: readonly DefectDraft[], sampleSize: number): string[] {
+export const withoutLine = (lines: readonly DefectBody[], index: number): DefectBody[] => lines.filter((_, at) => at !== index)
+
+/** The list's problems before it is sent (message keys of `quality`), every one at once; the API checks the same again. */
+export function defectLineProblems(lines: readonly DefectBody[], sampleSize: number): string[] {
   const problems: string[] = []
   const seen = new Set<string>()
-  lines.forEach((line) => {
-    if (!/^[A-Z0-9][A-Z0-9-]{1,39}$/.test(line.code.trim())) problems.push('defects.problem.code')
-    if (!/^\d+$/.test(line.quantity.trim()) || Number(line.quantity) < 1) problems.push('defects.problem.quantity')
-    else if (Number(line.quantity) > sampleSize) problems.push('defects.problem.overSample')
-    const key = `${line.defectClass}|${line.code.trim()}`
+  const perClass = new Map<string, number>()
+  for (const line of lines) {
+    if (!Number.isInteger(line.quantity) || line.quantity < 1) problems.push('defects.problem.quantity')
+    else if (line.quantity > sampleSize) problems.push('defects.problem.overSample')
+    const key = `${line.defectClass}|${line.code}`
     if (seen.has(key)) problems.push('defects.problem.twice')
     seen.add(key)
-  })
+    perClass.set(line.defectClass, (perClass.get(line.defectClass) ?? 0) + Math.max(0, line.quantity))
+  }
+  if ([...perClass.values()].some((count) => count > sampleSize)) problems.push('defects.problem.classOverSample')
   return [...new Set(problems)]
 }
 
-export const defectsBody = (lines: readonly DefectDraft[]) =>
-  lines.map((line) => ({ defectClass: line.defectClass, code: line.code.trim(), quantity: Number(line.quantity), workOrderSizeId: line.workOrderSizeId, note: line.note.trim() || null }))
+/** The photos of a line (files named after its code). */
+export const photosOf = (photos: readonly InspectionPhoto[], code: string): InspectionPhoto[] => photos.filter((photo) => photo.name.startsWith(`defect-${code}-`))
+
+/** The library's word for a code in the person's language (else the code). */
+export function defectWords(code: string, library: readonly Pick<PickedDefect, 'code' | 'labelIt' | 'labelEn'>[] | null, locale: string): string | null {
+  const found = library?.find((entry) => entry.code === code)
+  if (!found) return null
+  return locale.startsWith('it') ? found.labelIt : found.labelEn
+}
+
+/** What the viewer may do with the defects: record (null) or why not (the record's own reason). */
+export const defectsHeld = (abilities: Pick<RecordAbilities, 'recordHeld'>): string | null => abilities.recordHeld
 
 // ---- CSV ------------------------------------------------------------------------------------------------------------------------------
 

@@ -9,6 +9,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { Parcel, Shipment, ShipmentLine } from '../../api'
 import { kilos, packingNeeds, type ReadyCheck } from '../../model'
 import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
+import { OrderProgressCard } from './OrderProgressCard'
 
 const CHECK_ICON = { ok: CircleCheck, open: CircleAlert, warn: TriangleAlert, notNeeded: CircleMinus } as const
 
@@ -17,7 +18,8 @@ const CHECK_ICON = { ok: CircleCheck, open: CircleAlert, warn: TriangleAlert, no
  * before the goods leave, each in words with the tab that fixes it (the stand-in of the DS ReadinessChecklist); the
  * lines, only from garments quality released (the API plans them so; a quantity changes only while a DRAFT, within what
  * the cell can still ship); the cartons with their contents, weight and size (the packing station fills them live, the
- * office may add or correct). Read-only once packed: unpack first (no label, no live DDT).
+ * office may add or correct). Read-only once packed: unpack first (no label, no live DDT). B-W2a-71: the order's lines on
+ * this shipment as size grids and what stays on backorder.
  */
 export function LinesTab({ shipment, checks, model, actions }: { shipment: Shipment; checks: ReadyCheck[]; model: ShipmentRecordModel; actions?: ShipmentRecordActions }) {
   const t = useT('shipments')
@@ -128,6 +130,9 @@ export function LinesTab({ shipment, checks, model, actions }: { shipment: Shipm
             </details>
           )}
         </Card>
+
+        {/* B-W2a-71: the order's lines on this shipment and what stays on backorder (LOG-004). */}
+        <OrderProgressCard shipment={shipment} model={model} actions={actions} />
 
         <Card padded>
           <div className="fw-sh-card-head">

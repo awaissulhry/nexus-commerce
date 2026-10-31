@@ -2,6 +2,7 @@ import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { StyleDetail, StyleRow, VersionsAnswer } from '../../quotes/api'
 import type { AmendmentsAnswer, AmendPreview, CancelCheck, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
 import type { DraftLine } from '../daily-model'
+import type { MarginTabModel } from './margin/model'
 import type { LiveState, StepUpState } from '../hooks'
 import type { OrderAbilities, Phrase, RecordTab, SizeLayer } from '../model'
 
@@ -104,6 +105,8 @@ export interface OrderRecordModel {
   closedLines: CloseLinesAnswer | null
   /** Copy as new quote just ran: the new quote and what it left out. */
   copied: CopyAnswer | null
+  /** B-W2a-72: the Margin tab (the order's margin quoted → now → so far; margin grain only). */
+  margin?: MarginTabModel
   /** Design cases: what the panels show (the page mounts the live panels instead). */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: what a dialog holds typed. */
@@ -150,6 +153,8 @@ export interface OrderRecordActions {
   onReopenLines?: (lineIds: string[], reason: string) => void
   onCancelOrder?: (reason: string, typed: string) => void
   onCopyAsQuote?: () => void
+  /** B-W2a-72: read the Margin tab again. */
+  onRetryMargin?: () => void
 }
 
 /** The lines editor's own actions (the amendment and the typed New order share it). */

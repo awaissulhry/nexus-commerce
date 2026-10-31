@@ -18,6 +18,7 @@ import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
 import { DatesTab } from './DatesTab'
 import { DocumentsTab } from './DocumentsTab'
+import { MarginTab } from '../margin/view/MarginTab'
 import { LinesTab } from './LinesTab'
 import { MoneyTab } from './MoneyTab'
 import { ProductionTab } from './ProductionTab'
@@ -301,6 +302,7 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
           {model.tab === 'money' && <MoneyTab order={order} model={model} actions={actions} />}
           {model.tab === 'changes' && <ChangesTab order={order} model={model} actions={actions} />}
           {model.tab === 'documents' && <DocumentsTab order={order} model={model} actions={actions} />}
+          {model.tab === 'margin' && <MarginTab margin={model.margin} prefix={model.prefix} orderId={order.id} onRetry={actions?.onRetryMargin} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-so-hint">{t('record.noPanels')}</p>)}
         </div>
         {showDock && (

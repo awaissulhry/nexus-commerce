@@ -139,7 +139,10 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'planning.mrp', title: 'What to buy & make', titleIt: 'Cosa comprare e produrre', wave: 'W1', href: '/planning/mrp' },
           // W2a: B-W2a-45 Planning board (SCR-122) and Lines & subcontractors (SCR-126). Capacity & load and Exceptions join between and after with their steps.
           { id: 'planning.board', title: 'Planning board', titleIt: 'Tabellone di pianificazione', wave: 'W2a', href: '/planning/board' },
+          // B-W2a-70: Capacity & load (SCR-123) between the board and the allocation; Exceptions (SCR-125) after it.
+          { id: 'planning.capacity', title: 'Capacity & load', titleIt: 'Capacità e carico', wave: 'W2a', href: '/planning/capacity' },
           { id: 'planning.allocation', title: 'Lines & subcontractors', titleIt: 'Linee e terzisti', wave: 'W2a', href: '/planning/allocation' },
+          { id: 'planning.exceptions', title: 'Exceptions', titleIt: 'Eccezioni', wave: 'W2a', href: '/planning/exceptions' },
         ],
       },
       // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
@@ -287,14 +290,28 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Main',
         labelIt: 'Principali',
         hideLabel: true,
-        pages: [{ id: 'quality.inspections', title: 'Inspections', titleIt: 'Ispezioni', wave: 'W1', href: '/quality/inspections' }],
+        pages: [
+          { id: 'quality.inspections', title: 'Inspections', titleIt: 'Ispezioni', wave: 'W1', href: '/quality/inspections' },
+          // W2a: B-W2a-67 Holds (SCR-078).
+          { id: 'quality.holds', title: 'Holds', titleIt: 'Blocchi', wave: 'W2a', href: '/quality/holds' },
+        ],
       },
-      // W2a: B-W2a-65 Complaints (SCR-113 W2a part).
+      // W2a: B-W2a-68 Nonconformances (SCR-144, SCR-145) and B-W2a-65 Complaints (SCR-113 W2a part).
       {
         label: 'Problems',
         labelIt: 'Problemi',
         hideLabel: false,
-        pages: [{ id: 'quality.complaints', title: 'Complaints', titleIt: 'Reclami', wave: 'W2a', href: '/quality/complaints' }],
+        pages: [
+          { id: 'quality.ncr', title: 'Nonconformances', titleIt: 'Non conformità', wave: 'W2a', href: '/quality/ncr' },
+          { id: 'quality.complaints', title: 'Complaints', titleIt: 'Reclami', wave: 'W2a', href: '/quality/complaints' },
+        ],
+      },
+      // W2a: B-W2a-67 Defects & dispositions (SCR-079). After Problems (the tree's order).
+      {
+        label: 'Settings',
+        labelIt: 'Impostazioni',
+        hideLabel: false,
+        pages: [{ id: 'quality.defects', title: 'Defects & dispositions', titleIt: 'Difetti e destinazioni', wave: 'W2a', href: '/quality/defects' }],
       },
     ],
   },
@@ -335,6 +352,16 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'finance.invoices', title: 'Invoices', titleIt: 'Fatture', wave: 'W1', href: '/finance/invoices' },
           { id: 'finance.payments', title: 'Payments', titleIt: 'Incassi', wave: 'W1', href: '/finance/payments' },
+        ],
+      },
+      // W2a: B-W2a-72 Costing: Standard vs actual (SCR-154) and Margins (SCR-155).
+      {
+        label: 'Costing',
+        labelIt: 'Costi',
+        hideLabel: false,
+        pages: [
+          { id: 'finance.costing', title: 'Standard vs actual', titleIt: 'Costi standard ed effettivi', wave: 'W2a', href: '/finance/costing' },
+          { id: 'finance.margins', title: 'Margins', titleIt: 'Margini', wave: 'W2a', href: '/finance/margins' },
         ],
       },
       // W2a: B-W2a-51 Accounting export (SCR-156) and Finance reports (SCR-239: the stock valuation).

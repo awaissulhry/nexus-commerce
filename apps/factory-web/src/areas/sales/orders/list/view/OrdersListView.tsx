@@ -16,6 +16,7 @@ import type { OrderRow } from '../../api'
 import { dayInstant, depositTone, ROW_VIEWS, shippedPercent, STATUS_TONE, tileCount, TILES, type Layout, type RowView } from '../../model'
 import type { OrdersListActions, OrdersListModel } from '../list-model'
 import { NewOrderDialog } from './NewOrderDialog'
+import { marginColumn } from '../margin/MarginColumn'
 import { OrdersBoard } from './OrdersBoard'
 import '../../orders.css'
 
@@ -200,10 +201,12 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       { colId: 'promised', headerName: t('col.promised'), field: 'promiseDate', minWidth: 128, flex: 0.9, cellRenderer: PromiseCell },
       { colId: 'shipped', headerName: t('col.shipped'), minWidth: 124, flex: 0.9, cellRenderer: ShippedCell },
       ...(model.can.price ? [{ colId: 'net', headerName: t('col.net'), field: 'netAmount' as const, minWidth: 106, flex: 0.7, type: 'rightAligned', cellRenderer: NetCell }] : []),
+      // B-W2a-72: Margin % as estimated now (costing.view + the margin grain; Owner answer S2).
+      ...(model.margins ? [marginColumn(model.margins, t('col.margin'), t('col.marginHint'), locale)] : []),
       { colId: 'quote', headerName: t('col.quote'), minWidth: 112, flex: 0.7, cellRenderer: QuoteCell },
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.today, model.can.price, model.can.makeWorkOrders])
+  }, [t, locale, model.prefix, model.today, model.can.price, model.can.makeWorkOrders, model.margins])
 
   const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all')
   const clearFilters = () => {
