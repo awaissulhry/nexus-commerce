@@ -8,6 +8,8 @@ import { WORK_ORDER_STATUSES } from './work-orders/machine'
 import { SPLIT_REASONS } from './bundles/split'
 import { REWORK_STATUSES } from './rework/rules'
 import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
+// B-W2b-29: off-standard and indirect time.
+import { BLOCK_ENDINGS, BLOCK_SOURCES, OFF_STANDARD_KINDS } from './offstandard/rules'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -75,6 +77,8 @@ const labelLive = { permission: 'production.serials', floor: 'production.serials
 const reworkLive = { permission: 'production.rework', floor: 'production.rework', fields: ['workOrderId', 'number', 'reworkId'] } as const
 /** Scrap & rework in the office (production.scrap.view). */
 const scrapLive = { permission: 'production.scrap.view', fields: ['workOrderId', 'number'] } as const
+/** B-W2b-29: the labour inbox (production.offstandard.view) and the tablets of the event's site (floor.work). No person in a field. */
+const offStandardLive = { permission: 'production.offstandard.view', floor: 'floor.work', fields: ['blockId', 'siteId', 'lineId', 'status'] } as const
 
 export const events = [
   defineEvent({
@@ -483,5 +487,111 @@ export const events = [
       emailOutboundId: z.uuid(),
       lanes: z.number().int().min(0),
     }),
+  }),
+  // B-W2b-29: off-standard and indirect time (MES-155 … MES-158; modules/production/offstandard). A block's ids, its line,
+  // station, code and state, its day and its minutes: never the worker, a name or a note (Statuto dei Lavoratori art. 4;
+  // the labour inbox and the tablets read the block again). A code's change carries its code only, never its words.
+  //   production.off_standard_code_changed   a company's off-standard or indirect code was added, edited, set inactive
+  //                                          or active again (the settings grid and the floor's tiles read the codes again)
+  //   production.off_standard_started        a block started on the floor: no bundle runs (MES-156, MES-158)
+  //   production.off_standard_ended          a block ended (the worker, a bundle scanned, another tile, the team leader,
+  //                                          the help call, the clock-out): waiting for approval or approved at once
+  //   production.off_standard_recorded       a block typed afterwards by the team leader or the office (ended already)
+  //   production.off_standard_decided        a waiting block was approved or rejected (MES-157), alone or with others
+  //   production.off_standard_changed        an ended block was corrected or a decided one reopened (MES-204: the labour
+  //                                          edit keeps before and after)
+  defineEvent({
+    type: 'production.off_standard_code_changed',
+    context: 'production',
+    description: "A company's off-standard or indirect code was added, edited, set inactive or active again.",
+    payload: z.strictObject({ companyId: z.uuid(), codeId: z.uuid(), code: z.string().min(1).max(40), change: z.enum(['CREATED', 'EDITED', 'DEACTIVATED', 'REACTIVATED']) }),
+    live: { permission: 'production.offstandard.view', fields: ['codeId', 'code', 'change'] },
+  }),
+  defineEvent({
+    type: 'production.off_standard_started',
+    context: 'production',
+    description: 'A block of off-standard or indirect time started on the floor, while no bundle runs.',
+    payload: z.strictObject({
+      blockId: z.uuid(),
+      siteId: z.uuid(),
+      lineId: z.uuid().nullable(),
+      stationId: z.uuid().nullable(),
+      codeId: z.uuid(),
+      code: z.string(),
+      kind: z.enum(OFF_STANDARD_KINDS),
+      source: z.enum(BLOCK_SOURCES),
+      workDate: z.iso.date(),
+      status: z.literal('OPEN'),
+    }),
+    live: offStandardLive,
+  }),
+  defineEvent({
+    type: 'production.off_standard_ended',
+    context: 'production',
+    description: 'A block of off-standard or indirect time ended: waiting for the team leader, or approved at once for a code that needs no approval.',
+    payload: z.strictObject({
+      blockId: z.uuid(),
+      siteId: z.uuid(),
+      lineId: z.uuid().nullable(),
+      stationId: z.uuid().nullable(),
+      codeId: z.uuid(),
+      code: z.string(),
+      kind: z.enum(OFF_STANDARD_KINDS),
+      endedBy: z.enum(BLOCK_ENDINGS),
+      workDate: z.iso.date(),
+      minutes: z.number().int().min(0),
+      status: z.enum(['PENDING', 'APPROVED']),
+    }),
+    live: offStandardLive,
+  }),
+  defineEvent({
+    type: 'production.off_standard_recorded',
+    context: 'production',
+    description: 'A block of off-standard or indirect time was typed afterwards by the team leader or the office.',
+    payload: z.strictObject({
+      blockId: z.uuid(),
+      siteId: z.uuid(),
+      lineId: z.uuid().nullable(),
+      stationId: z.uuid().nullable(),
+      codeId: z.uuid(),
+      code: z.string(),
+      kind: z.enum(OFF_STANDARD_KINDS),
+      workDate: z.iso.date(),
+      minutes: z.number().int().min(0),
+      status: z.enum(['PENDING', 'APPROVED']),
+    }),
+    live: offStandardLive,
+  }),
+  defineEvent({
+    type: 'production.off_standard_decided',
+    context: 'production',
+    description: 'A block of off-standard time waiting for the team leader was approved or rejected.',
+    payload: z.strictObject({
+      blockId: z.uuid(),
+      siteId: z.uuid(),
+      lineId: z.uuid().nullable(),
+      codeId: z.uuid(),
+      code: z.string(),
+      status: z.enum(['APPROVED', 'REJECTED']),
+      decidedOn: z.enum(['OFFICE', 'FLOOR']),
+      /** One of several blocks approved at once ("Approve 8 normal blocks"). */
+      bulk: z.boolean(),
+    }),
+    live: offStandardLive,
+  }),
+  defineEvent({
+    type: 'production.off_standard_changed',
+    context: 'production',
+    description: 'An ended block of off-standard time was corrected, or a decided one reopened, with its labour edit.',
+    payload: z.strictObject({
+      blockId: z.uuid(),
+      siteId: z.uuid(),
+      lineId: z.uuid().nullable(),
+      change: z.enum(['CORRECTED', 'REOPENED']),
+      /** The block's columns that changed (codeId, startedAt, endedAt, lineId, stationId, status). */
+      fields: z.array(z.string()).min(1),
+      status: z.enum(['PENDING', 'APPROVED', 'REJECTED']),
+    }),
+    live: offStandardLive,
   }),
 ] as const

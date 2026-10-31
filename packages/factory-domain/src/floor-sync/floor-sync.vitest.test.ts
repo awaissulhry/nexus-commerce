@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { FACTORY_PERMISSIONS, FLOOR_SHARED_PERMISSIONS } from '../auth/permissions/catalogue'
+import { FACTORY_PERMISSIONS } from '../auth/permissions/catalogue'
 import { ROLE_TEMPLATES } from '../auth/roles/templates'
 import { EVENT_CATALOGUE } from '../events/catalogue'
+import { isFloorPermission } from '../events/define'
 import { FLOOR_DOCUMENT_KINDS } from '../numbering/kinds'
 import { FLOOR_SYNC_KINDS, ONLINE_ONLY_ACTIONS, QUEUED_ACTIONS, offlineBehaviourOf } from './kinds'
 import { FLOOR_SYNC_DISCARD, FLOOR_SYNC_VIEW } from './permissions'
@@ -12,7 +13,8 @@ describe('what queues offline and what waits for the network', () => {
     for (const kind of FLOOR_SYNC_KINDS) {
       const behaviour = offlineBehaviourOf(kind)
       expect(behaviour?.queues).toBe(true)
-      expect(FLOOR_SHARED_PERMISSIONS).toContain(QUEUED_ACTIONS[kind].permission)
+      // A floor role holds it: one the floor shares with the office, or (B-W2b-29: off-standard time) the floor's own floor.work.
+      expect(isFloorPermission(QUEUED_ACTIONS[kind].permission)).toBe(true)
     }
     // Only the bundle ticket prints offline from the tablet's own block today.
     expect(FLOOR_SYNC_KINDS.filter((kind) => QUEUED_ACTIONS[kind].numbers !== null)).toEqual(['production.bundles.make'])

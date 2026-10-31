@@ -30,6 +30,9 @@ import { floorReadinessFor } from '../../../platform/privacy/read'
 import { bundleFlowOf } from '../bundles/flow'
 import { lockBundleForScan, readBundle, readBundleByCode, type BundleRow } from '../bundles/store'
 import { floorRecordSubjectFor, hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
+// W2b B-W2b-29: a bundle scanned ends the running off-standard block (MES-156).
+import { believedTime } from '@nexus/factory-domain/production/offstandard/rules'
+import { endRunningBlock } from '../offstandard/writes'
 import { startOnFirstWork } from '../work-orders/moves'
 import { stationBlock } from '../../plant/checks'
 import { holdOnScan } from '../../quality/holds/checks'
@@ -467,6 +470,8 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   await writeDefects(tools, { scanId: id, siteId: workOrder.siteId, createdById: subject.workerId ? context.actorId : null }, work.lines)
   // A refused send of this action that the device's queue sent again under the same id is resolved by it.
   await resolveRefusals(tx, tools.now, { deviceId: context.deviceId, clientScanId: work.input.clientScanId, scanId: id })
+  // W2b B-W2b-29 hook (offstandard/writes.ts; MES-156): scanning a bundle returns to standard work — the subject's running off-standard block ends at the scan.
+  await endRunningBlock(tools, { tenantId: context.tenantId, siteId: workOrder.siteId, subject, at: believedTime(work.deviceTime, tools.now), endedBy: 'SCAN' })
   const row = (await readScan(tx, id))!
   const after = { workOrderId: workOrder.id, bundleId: locked.bundle.id, operationId: decision.operation.id, operationSeq: decision.operation.seq, goodQuantity: row.goodQuantity, scrapQuantity: row.scrapQuantity, reworkQuantity: row.reworkQuantity, cap: decision.cap, workerId: row.workerId, stationId: row.stationId, clientScanId: row.clientScanId }
   tools.audit({ action: 'production.reportScan', recordType: 'OperationScan', recordId: id, companyId: workOrder.companyId, siteId: workOrder.siteId, after, ...(row.reason ? { reason: row.reason } : {}) })

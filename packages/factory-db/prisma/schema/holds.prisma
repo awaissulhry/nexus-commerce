@@ -197,7 +197,9 @@ model QualityHold {
   /// W2b (schema wave 2/7; design quality.holds "Hold (HLD-0091, link)"): its number from the company's HOLD series
   /// (allocateNumber; a floor document kind, so the bench numbers the hold it places). Given once, when the hold is
   /// placed (or once later for a hold placed before the series existed, while it is ACTIVE), never changed, never blank
-  /// (the …_followups_quality_money_w2b_guards trigger); null: placed before holds were numbered.
+  /// (the …_followups_quality_money_w2b_guards trigger); null: placed before holds were numbered. B-W2b-F1: a NEW hold
+  /// always has one (the …_followups_f1_w2b_guards trigger refuses an insert without it; the column stays nullable for
+  /// the holds placed before).
   number                 String?
   /// What it holds: one record type (Lot, Hide, WorkOrder, Bundle, GarmentSerial, Shipment, Parcel) and one or more of
   /// its ids, distinct, every one a row of the hold's site (no foreign key: an array's elements cannot have one; the

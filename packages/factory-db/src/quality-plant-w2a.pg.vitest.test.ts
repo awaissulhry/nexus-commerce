@@ -114,6 +114,8 @@ const hold = (subjectType: string, subjectIds: readonly string[], extra: Record<
   reasonCode: 'QUALITY_CHECK',
   placedAt: new Date().toISOString(),
   placedById: a.actorId,
+  // B-W2b-F1: a new hold comes numbered (a made-up number).
+  number: `HLD-T-${randomUUID().slice(0, 8)}`,
   ...extra,
 })
 const release = (worker: string | null = null) =>
@@ -216,7 +218,7 @@ describe('a quality hold blocks what it holds', () => {
       client.$transaction(
         async (tx) => {
           await tx.$executeRawUnsafe(
-            `INSERT INTO "QualityHold" ("id", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "placedAt", "placedById") VALUES ($1::uuid, $2::uuid, $3::uuid, 'Lot', ARRAY[$4::uuid], 'QUALITY_CHECK', now(), $5::uuid)`,
+            `INSERT INTO "QualityHold" ("id", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "placedAt", "placedById", "number") VALUES ($1::uuid, $2::uuid, $3::uuid, 'Lot', ARRAY[$4::uuid], 'QUALITY_CHECK', now(), $5::uuid, 'HLD-T-' || gen_random_uuid())`,
             randomUUID(),
             A.companyA,
             A.siteA,
@@ -275,7 +277,7 @@ describe('a quality hold blocks what it holds', () => {
     ] as const) {
       await rolledBack(packer, async (exec) => {
         await exec(
-          `INSERT INTO "QualityHold" ("id", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "placedAt", "placedByWorkerId") VALUES ($1::uuid, $2::uuid, $3::uuid, $4, ARRAY[$5::uuid], 'QUALITY_CHECK', now(), $6::uuid)`,
+          `INSERT INTO "QualityHold" ("id", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "placedAt", "placedByWorkerId", "number") VALUES ($1::uuid, $2::uuid, $3::uuid, $4, ARRAY[$5::uuid], 'QUALITY_CHECK', now(), $6::uuid, 'HLD-T-' || gen_random_uuid())`,
           randomUUID(),
           A.companyA,
           A.siteA,

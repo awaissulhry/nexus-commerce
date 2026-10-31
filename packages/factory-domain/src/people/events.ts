@@ -4,6 +4,7 @@ import { OVERTIME_ANSWERS } from './shifts/rules'
 import { defineEvent } from '../events/define'
 import { EMPLOYEE_KINDS } from './employees/rules'
 import { LEAVER_STEP_KINDS, LEAVER_STEP_STATUSES } from './leavers/rules'
+import { GATE_PURPOSES } from './privacy/purposes'
 
 /**
  * The people module's events (B-W2b-26 employees and teams; design people.employees "Live": employee.created / updated
@@ -25,7 +26,19 @@ import { LEAVER_STEP_KINDS, LEAVER_STEP_STATUSES } from './leavers/rules'
  * when they open).
  *
  * B-W2b-27 (privacy) and the later People steps add their events below, one block each.
+ *
+ * B-W2b-27 (privacy of people data), emitted by apps/factory-api modules/people/privacy in the command that makes the
+ * change. Ids, purposes, states and counts only: never a person, a basis text, a reason or a figure.
+ *
+ *   legal_gate.changed               a purpose of people data was switched on or off at a site, or its leads choice
+ *                                    widened or narrowed: the People screens and Admin › Privacy re-read the gate
+ *   people_settings.privacy_changed  a company's minimum group size or the roles that see one person's figures changed
+ *
+ * Both reach the office screens of people.privacy.view holders; the floor receives none (it reads no legal basis).
  */
+
+export const LEGAL_GATE_CHANGES = ['SWITCHED_ON', 'SWITCHED_OFF', 'LEADS_WIDENED', 'LEADS_NARROWED'] as const
+export const PRIVACY_SETTINGS_CHANGES = ['WIDENED', 'NARROWED'] as const
 
 const by = z.enum(['OFFICE', 'SYSTEM', 'IMPORT'])
 
@@ -87,6 +100,33 @@ export const events = [
     description: 'A leaving closed: DONE (every step done: the person left) or CANCELLED (before the last day).',
     payload: z.strictObject({ caseId: z.uuid(), employeeId: z.uuid(), outcome: z.enum(['DONE', 'CANCELLED']), by }),
     live: { permission: 'people.view', fields: ['caseId', 'employeeId', 'outcome'] },
+  }),
+  // B-W2b-27: privacy of people data.
+  defineEvent({
+    type: 'legal_gate.changed',
+    context: 'people',
+    description: "A purpose of people data (attendance, one person's work figures) was switched on or off at a site, or whether leads see one person's figures there changed.",
+    payload: z.strictObject({
+      gateId: z.uuid(),
+      siteId: z.uuid(),
+      purpose: z.enum(GATE_PURPOSES),
+      change: z.enum(LEGAL_GATE_CHANGES),
+      open: z.boolean(),
+      leadsSeeFigures: z.boolean(),
+    }),
+    live: { permission: 'people.privacy.view', fields: ['gateId', 'siteId', 'purpose', 'change', 'open'] },
+  }),
+  defineEvent({
+    type: 'people_settings.privacy_changed',
+    context: 'people',
+    description: "A company's minimum group size for people figures, or the roles that see one person's figures, changed.",
+    payload: z.strictObject({
+      companyId: z.uuid(),
+      minimumGroupSize: z.number().int().min(3),
+      figureRoleCount: z.number().int().min(0),
+      change: z.enum(PRIVACY_SETTINGS_CHANGES),
+    }),
+    live: { permission: 'people.privacy.view', fields: ['companyId', 'minimumGroupSize', 'change'] },
   }),
 ] as const
 

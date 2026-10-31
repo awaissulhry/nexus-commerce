@@ -176,8 +176,9 @@ describe('an RMA from what the customer was invoiced or shipped (SAL-333, SAL-33
     expect(rma1.lines).toMatchObject([{ seq: 10, size: '52', quantity: 1, ppe: true, safety: true, batchNumber: 'SEED-BT-0001', unitPrice: '400', reason: { code: 'DEFECT', labelEn: 'Defect' } }])
     expect(rma1.tracking.map((row: Json) => [row.step, row.state])).toEqual([['REQUESTED', 'DONE'], ['AUTHORISED', 'DONE'], ['GOODS_BACK', 'CURRENT'], ['INSPECTED', 'WAITING'], ['OUTCOME', 'WAITING']])
     expect(first.body.registerEntries).toMatchObject([{ seq: 10, opened: true }])
-    const [entry] = await admin(`SELECT kind, "sourceType", "partyId", "styleId" FROM "PpeRegisterEntry" WHERE id = $1`, [first.body.registerEntries[0].entryId])
-    expect(entry).toMatchObject({ kind: 'COMPLAINT', sourceType: 'Shipment', partyId: P1 })
+    const [entry] = await admin(`SELECT kind, "sourceType", "sourceId", "partyId", "styleId", "shipmentIds"::text[] AS "shipmentIds" FROM "PpeRegisterEntry" WHERE id = $1`, [first.body.registerEntries[0].entryId])
+    // B-W2b-F1 (Z4:02): the return is the entry's source; the shipment the garment left on is in its list.
+    expect(entry).toMatchObject({ kind: 'COMPLAINT', sourceType: 'ReturnAuthorisation', sourceId: rma1.id, partyId: P1, shipmentIds: [seeded.money.shipping.shipmentId] })
     // The same key answers the same RMA; the next one takes nothing more.
     expect((await call('sales', 'POST', '/sales/returns', body, idem)).body.return.id).toBe(rma1.id)
     expect((await refused('sales', 'POST', '/sales/returns', body, 409)).message).toBe('Nothing of it can come back: 1 sold, 1 already on other returns.')
@@ -372,5 +373,42 @@ describe('a returned garment put back into stock carries its value, so its month
       [[rma1.number, rma.number]],
     )
     expect(waiting).toEqual([])
+  })
+})
+
+describe('B-W2b-F1: one PPE register entry per return, naming every shipment its safety lines came from (Z4:02)', () => {
+  it('a line from another shipment added later joins the entry with its shipment; the same line again adds nothing', async () => {
+    // Two more black jackets of SEED-SO-0002 left, size 52 and 54, each on a shipment of its own (made up: copies of
+    // SEED-SH-0001 with one line each).
+    const sh1 = seeded.money.shipping.shipmentId
+    const [blk50] = await admin<{ id: string }>(`SELECT id FROM "ShipmentLine" WHERE "shipmentId" = $1 AND "salesOrderLineId" = $2`, [sh1, BLK_LINE])
+    const cells = seeded.money.shipping.quality.production.cellIds
+    const shipments: Record<'52' | '54', string> = { '52': newId(), '54': newId() }
+    for (const size of ['52', '54'] as const) {
+      await force(`INSERT INTO "Shipment" SELECT * FROM jsonb_populate_record(NULL::"Shipment", (SELECT to_jsonb(s) || jsonb_build_object('id', $1::uuid, 'number', $2::text) FROM "Shipment" s WHERE id = $3))`, [shipments[size], `SH-F1-${size}`, sh1])
+      await force(
+        `INSERT INTO "ShipmentLine" SELECT * FROM jsonb_populate_record(NULL::"ShipmentLine", (SELECT to_jsonb(l) || jsonb_build_object('id', $1::uuid, 'shipmentId', $2::uuid, 'size', $3::text, 'workOrderSizeId', $4::uuid, 'parcelId', NULL) FROM "ShipmentLine" l WHERE id = $5))`,
+        [newId(), shipments[size], size, cells[`BLK-${size}`], blk50!.id],
+      )
+    }
+    const made = await ok('sales', 'POST', '/sales/returns', { companyId: companyA, partyId: P1, lines: [{ salesOrderLineId: BLK_LINE, size: '52', quantity: 1, reasonCode: 'DEFECT', reasonNote: 'The armour pocket tore at the seam.' }] }, 201)
+    expect(made.registerEntries).toMatchObject([{ seq: 10, opened: true }])
+    const entryId = made.registerEntries[0].entryId as string
+    const read = async () => (await admin(`SELECT "sourceType", "sourceId", "shipmentIds"::text[] AS "shipmentIds", description, version FROM "PpeRegisterEntry" WHERE id = $1`, [entryId]))[0]!
+    expect(await read()).toMatchObject({ sourceType: 'ReturnAuthorisation', sourceId: made.return.id, shipmentIds: [shipments['52']], version: 1, description: expect.stringMatching(/^Return RMA-\d{4}-\d{4} line 10: .*returned for defect\. The customer: The armour pocket tore at the seam\.$/) })
+
+    // Line 20, from the other shipment, added before the goods arrive: the same entry now names both shipments.
+    const added = await ok('sales', 'POST', `/sales/returns/${made.return.id}/lines`, { version: made.return.version, lines: [{ salesOrderLineId: BLK_LINE, size: '54', quantity: 1, reasonCode: 'DEFECT' }] }, 201)
+    const joined = await read()
+    expect(joined).toMatchObject({ shipmentIds: [shipments['52'], shipments['54']], version: 2 })
+    expect(joined.description).toMatch(/\. Line 20: .*returned for defect\.$/)
+    expect(await admin(`SELECT count(*)::int AS n FROM "PpeRegisterEntry" WHERE "sourceType" = 'ReturnAuthorisation' AND "sourceId" = $1`, [made.return.id])).toEqual([{ n: 1 }])
+    expect((await events('compliance.register_entry_changed', entryId)).map((row) => row.payload)).toEqual([expect.objectContaining({ entryId, change: 'EDITED' })])
+    expect(await admin(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action = 'compliance.register.addFrom' AND "recordId" = $1`, [entryId])).toEqual([{ n: 1 }])
+
+    // Line 10's reason given again: the entry names it already, so nothing is written.
+    const line10 = added.return.lines.find((line: Json) => line.seq === 10)
+    await ok('sales', 'PATCH', `/sales/returns/${made.return.id}/lines/${line10.id}`, { version: added.return.version, reasonCode: 'DEFECT', reasonNote: 'The armour pocket tore at the shoulder seam.' })
+    expect(await read()).toMatchObject({ shipmentIds: [shipments['52'], shipments['54']], version: 2 })
   })
 })
