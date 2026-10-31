@@ -29,6 +29,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Quality › Inspections (SCR-076); a release is reviewed in its DetailModal on the list (design §2.3).
   Inspection: '/quality/inspections/[id]',
   QualityRelease: '/quality/inspections?open=[id]',
+  // B-W2a-68: Quality › Nonconformances (SCR-145): an NCR's record (problem, containment, disposition, linked, activity).
+  Nonconformance: '/quality/ncr/[id]',
   // Quality › Complaints (SCR-113 W2a part, B-W2a-65): a complaint's record (a new one is triaged from the list's DetailModal).
   Complaint: '/quality/complaints/[id]',
   // Warehouse › Lots & traceability (SCR-201): a lot's stock, trace and moves; its tests, documents and release stay in
@@ -110,6 +112,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/production/work-orders': '/production/work-orders',
   // The pages read the API's own filters from the address (`?onHold=true`, `?waitingRelease=true`, `?status=OPEN`).
   '/quality/inspections': '/quality/inspections',
+  // B-W2a-68: the NCR list and board (SCR-144; `?view=`, `?q=`, `?site=`, `?mode=board`, New NCR `?new=1&from=&id=`).
+  '/quality/ncr': '/quality/ncr',
   // B-W2a-65: the complaints list reads `?view=`, `?q=` and the API's own filters (`?partyId=`, `?salesOrderId=`, …).
   '/quality/complaints': '/quality/complaints',
   '/quality/lots': '/compliance/tests',

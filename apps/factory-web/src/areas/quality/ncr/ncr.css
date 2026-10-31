@@ -1,0 +1,103 @@
+/*
+ * Quality › Nonconformances (B-W2a-68) LAYOUT only: the "decided" bar beside its words, small headings in dialogs, the
+ * keys list, the head row of the page, the board's footer line. The controls are the design system's; semantic tokens
+ * only (no raw colours, no restyled controls). No page sets a max-width: the pages fill the shell's main area.
+ */
+.fw-ncr-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  width: 100%;
+}
+
+.fw-ncr-bar.is-compact {
+  gap: var(--nds-space-1);
+}
+
+.fw-ncr-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-ncr-keys {
+  margin: 0;
+  padding-inline-start: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-ncr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-ncr-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ncr-boardfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ncr-search {
+  min-width: 12rem;
+  max-width: 22rem;
+  flex: 1 1 12rem;
+}
+
+.fw-ncr-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+}
+
+@media (min-width: 720px) {
+  .fw-ncr-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .fw-ncr-form .is-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.fw-ncr-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-ncr-existing {
+  margin: 0;
+  padding-inline-start: var(--nds-space-16);
+}
+
+/* Print this view: the filters written at the top, the page's own controls left out (design 00 §3.14). */
+.fw-ncr-printonly {
+  display: none;
+}
+
+@media print {
+  .fw-ncr-printonly {
+    display: block;
+    margin: 0;
+  }
+}
