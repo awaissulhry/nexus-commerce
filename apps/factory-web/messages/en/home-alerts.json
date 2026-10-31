@@ -1,0 +1,258 @@
+{
+  "w": {
+    "alerts.ORDER_LATE_RISK.LATE": "Order {label} is {days} days late: it was promised for {promiseDate}.",
+    "alerts.ORDER_LATE_RISK.AT_RISK": "Order {label} is promised for {promiseDate} ({days} days left) and is not ready.",
+    "alerts.HOLD_TOO_LONG": "{label} has been on hold for {hours} hours (the rule says {threshold} h).",
+    "alerts.MATERIAL_SHORT": "Material {item} is short for released work order {label}.",
+    "alerts.APPROVAL_OVERDUE": "Quote {label} has waited {hours} hours for its approval.",
+    "alerts.PO_NOT_CONFIRMED": "Purchase order {label} is not confirmed {days} days after it was sent.",
+    "alerts.CERTIFICATE_EXPIRING": "Certificate {label} expires on {dueDate} ({days} days left).",
+    "alerts.INVOICE_DEADLINE": "The goods of DDT {label} must be invoiced by {dueDate} ({days} days left).",
+    "alerts.INVOICE_DEADLINE.LATE": "The goods of DDT {label} were due to be invoiced by {dueDate}: {days} days late.",
+    "alerts.UNKNOWN": "Alert on {label}."
+  },
+  "refused": {
+    "title": "Not yours to open",
+    "body": "Alerts need the right to see alerts. Ask an administrator if your work needs it."
+  },
+  "band": {
+    "label": "Alerts",
+    "reading": "Reading…",
+    "open_one": "{count} open",
+    "open_other": "{count} open",
+    "openAtLeast_one": "at least {count} open",
+    "openAtLeast_other": "at least {count} open",
+    "more": "More",
+    "noise": "Noise report",
+    "noiseLater": "Comes later (W3): which rules fire too often and what to change.",
+    "keys": "Keyboard shortcuts",
+    "rules": "Rules"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline"
+  },
+  "tile": {
+    "title": "Alerts",
+    "forMeNow_one": "{count} open for you",
+    "forMeNow_other": "{count} open for you",
+    "count": "{count}",
+    "atLeast": "≥ {count}",
+    "unknown": "Not read: the list could not be read.",
+    "partial": "More than 1000 alerts match: the first 1000 were counted.",
+    "OPEN_FOR_ME": {
+      "label": "Open for me",
+      "hint": "Assigned to you, or nobody's yet and its rule tells you."
+    },
+    "CRITICAL": {
+      "label": "Critical",
+      "hint": "Open alerts of critical severity."
+    },
+    "UNASSIGNED": {
+      "label": "Unassigned",
+      "hint": "Open alerts nobody has taken yet."
+    },
+    "ACKNOWLEDGED": {
+      "label": "Acknowledged",
+      "hint": "Someone looked at them; not resolved yet."
+    },
+    "RESOLVED_TODAY": {
+      "label": "Resolved today",
+      "hint": "Resolved by a person or cleared by the system today."
+    }
+  },
+  "filter": {
+    "severity": "Severity",
+    "anySeverity": "Any severity",
+    "kind": "What it watches",
+    "anyKind": "Any rule"
+  },
+  "table": {
+    "title": "Open alerts",
+    "label": "Open alerts"
+  },
+  "count_one": "{count} alert",
+  "count_other": "{count} alerts",
+  "countAtLeast_one": "at least {count} alert",
+  "countAtLeast_other": "at least {count} alerts",
+  "search": "Search a record",
+  "col": {
+    "severity": "Severity",
+    "alert": "Alert",
+    "record": "Record",
+    "rule": "Rule",
+    "assignee": "Whose",
+    "age": "Age",
+    "state": "State",
+    "place": "Site"
+  },
+  "row": {
+    "forMe": "For you",
+    "openRecord": "Open {record} (⌘-click: a new tab)"
+  },
+  "place": {
+    "all": "Every company"
+  },
+  "person": {
+    "system": "Nexus",
+    "you": "You",
+    "nobody": "Nobody yet",
+    "youAfter": "you"
+  },
+  "age": {
+    "today": "Today",
+    "days_one": "{count} day",
+    "days_other": "{count} days"
+  },
+  "state": {
+    "OPEN": "Open",
+    "ACKNOWLEDGED": "Acknowledged",
+    "RESOLVED": "Resolved",
+    "CLEARED": "Cleared",
+    "snoozed": "Snoozed until {date}"
+  },
+  "bulk": {
+    "acknowledge_one": "Acknowledge {count}",
+    "acknowledge_other": "Acknowledge {count}"
+  },
+  "more": {
+    "label": "Show more",
+    "loading": "Reading…"
+  },
+  "empty": {
+    "title": "No open alerts.",
+    "body": "When a rule finds something, it shows here and on Today.",
+    "filtered": {
+      "title": "Nothing matches.",
+      "body": "No alert matches these filters."
+    },
+    "clear": "Clear the filters"
+  },
+  "error": {
+    "title": "The alerts could not be read"
+  },
+  "retry": "Try again",
+  "dismiss": "Dismiss",
+  "cancel": "Cancel",
+  "keysTitle": "Keyboard shortcuts",
+  "keys": {
+    "acknowledge": "Acknowledge the alert",
+    "walk": "Previous / next alert in its popup",
+    "close": "Close"
+  },
+  "popup": {
+    "reading": "Reading the alert…",
+    "noun": "alert",
+    "openRecord": "Open {record}",
+    "assignedTo": "For {name}",
+    "kindTitle": {
+      "ORDER_LATE_RISK": "{record} at risk of being late",
+      "HOLD_TOO_LONG": "{record} on hold too long",
+      "MATERIAL_SHORT": "{record}: material short",
+      "APPROVAL_OVERDUE": "{record}: approval overdue",
+      "PO_NOT_CONFIRMED": "{record} not confirmed",
+      "CERTIFICATE_EXPIRING": "{record} expiring",
+      "INVOICE_DEADLINE": "{record}: invoice deadline near"
+    },
+    "snooze": "Snooze",
+    "assign": "Assign",
+    "acknowledge": "Acknowledge",
+    "resolve": "Resolve",
+    "what": "What",
+    "raised": "Raised on {date}.",
+    "raisedAgain": "Raised on {date} — occurrence {count} for this record.",
+    "resolvedBy": "Resolved by {who} on {date}",
+    "cleared": "Cleared by Nexus on {date}: the condition no longer holds.",
+    "why": "Why: the rule",
+    "ruleOff": "This rule is switched off now: it raises nothing new.",
+    "openRule": "Open the rule",
+    "history": "History of this alert",
+    "similar": "Similar open alerts",
+    "noSimilar": "No other open alert of this kind."
+  },
+  "history": {
+    "RAISED": "Raised by its rule",
+    "ACKNOWLEDGED": "Acknowledged by {who}",
+    "ASSIGNED": "Given to {to} by {who}",
+    "UNASSIGNED": "Taken back from {to} by {who}",
+    "SNOOZED": "Snoozed until {date} by {who}",
+    "RESOLVED": "Resolved by {who}",
+    "CLEARED": "Cleared by Nexus: the condition no longer holds"
+  },
+  "assign": {
+    "title": "Assign the alert",
+    "now": "Now it is for {name}.",
+    "nobodyNow": "Nobody has it yet.",
+    "to": "To",
+    "toHint": "Only people who see its record and handle alerts there.",
+    "pick": "Choose a person…",
+    "me": "Me ({name})",
+    "nobody": "Nobody (take it back)",
+    "noPeople": "Nobody else may be given this alert.",
+    "told": "They are told on the bell.",
+    "pickFirst": "Choose a person first.",
+    "same": "It is theirs already.",
+    "go": "Assign",
+    "takeBack": "Take it back",
+    "nowMine": "Now it is yours."
+  },
+  "resolve": {
+    "title": "Resolve the alert",
+    "note": "What was done",
+    "noteHint": "Required: the history keeps it (at most 1000 characters). ⌘Enter resolves.",
+    "noteEmpty": "Say what was done first.",
+    "noteLong": "At most 1000 characters.",
+    "final": "A resolved alert changes no more; if the condition comes back after the rule's cooldown, a new alert is raised.",
+    "go": "Resolve"
+  },
+  "notice": {
+    "acknowledged": "{record}: acknowledged.",
+    "bulkAcknowledged_one": "{count} alert acknowledged.",
+    "bulkAcknowledged_other": "{count} alerts acknowledged.",
+    "assigned": "{record}: assigned.",
+    "unassigned": "{record}: taken back.",
+    "snoozed": "{record}: snoozed — it comes back by itself.",
+    "resolved": "{record}: resolved."
+  },
+  "held": {
+    "noHandle": "Handling alerts needs the right to handle them.",
+    "offline": "Offline — change it when back online.",
+    "busy": "Saving…",
+    "resolved": "Resolved: it changes no more.",
+    "acknowledged": "Acknowledged already.",
+    "noHandleHere": "You may see this alert but not handle it.",
+    "noneOpen": "None of the selected alerts can be acknowledged.",
+    "rowResolved": "Resolved",
+    "rowAcknowledged": "Acknowledged already",
+    "rowReadOnly": "You may not handle it"
+  },
+  "refusal": {
+    "RESOLVED": "This alert was resolved meanwhile: it changes no more.",
+    "ALREADY_ACKNOWLEDGED": "This alert was acknowledged meanwhile.",
+    "ALREADY_ASSIGNED": "This alert is that person's already.",
+    "NOT_ASSIGNED": "This alert is not assigned to anyone.",
+    "changed": "Someone changed this alert meanwhile: the list was read again — try again.",
+    "assignee": "That person may not be given this alert: they cannot see its record or handle alerts there.",
+    "until": "Snooze until a time later than now, at most 30 days ahead.",
+    "note": "Say what was done: a resolution needs a note.",
+    "invalid": "The change was refused as it is.",
+    "forbidden": "You may not handle this alert.",
+    "gone": "This alert is no longer there: the list was read again.",
+    "offline": "No answer from Nexus: nothing changed. Try again.",
+    "failed": "The change could not be made. Try again."
+  },
+  "problem": {
+    "failed": "Could not be read. Try again.",
+    "forbidden": "You may not see this.",
+    "gone": "This alert is no longer there (or not yours to see).",
+    "offline": "No answer from Nexus: check the connection and try again."
+  },
+  "rules": {
+    "title": "Rules",
+    "body": "The exception rules: what each watches, its number, whom it tells and where, and how often at most.",
+    "label": "Exception rules",
+    "empty": "No rules yet.",
+    "emptyBody": "The built-in rules are made by the first check after a company starts."
+  }
+}

@@ -10,7 +10,9 @@
       "approvals": "Approvazioni",
       "tasks": "Le mie attività",
       "notifications": "Notifiche",
-      "mailToSort": "Posta da smistare"
+      "mailToSort": "Posta da smistare",
+      "insights": "Analisi",
+      "alerts": "Avvisi"
     },
     "products": {
       "area": "Prodotti",
@@ -62,6 +64,7 @@
       "platform": "Piattaforma",
       "documents": "Documenti e numerazioni",
       "languages": "Lingue e formati",
+      "automation": "Approvazioni, automazioni e IA",
       "audit": "Registro attività",
       "connections": "Connessioni e API",
       "data": "Dati",
