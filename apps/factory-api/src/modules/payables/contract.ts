@@ -4,6 +4,7 @@ import { amountMinor, businessDate, defineContract, id, input, instant, output, 
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { LINE_KINDS, MATCH_BASES, MATCH_STATUSES } from '@nexus/factory-domain/payables/match'
 import { INVOICE_KINDS, INVOICE_SOURCES, INVOICE_STATUSES, PAYABLES_LIMITS, TILES } from '@nexus/factory-domain/payables/rules'
+import { PAYABLES_SDI_APPROVALS } from '@nexus/factory-domain/payables/settings'
 
 /**
  * The supplier invoices' contracts (B-W2a-62; FIN-136, FIN-137; design finance.payables, SCR-153). What a supplier
@@ -122,13 +123,17 @@ export const invoiceDetail = output({
   paymentTerms: terms.nullable(),
   creditOf: output({ id: id(), number: z.string(), issueDate: businessDate() }).nullable(),
   credits: z.array(output({ id: id(), number: z.string(), issueDate: businessDate(), status: z.enum(INVOICE_STATUSES) })),
+  /** B-W2b-21 (Z8:05): the SDI file of several invoices (a lotto) it came in, and which of its bodies it is. */
+  sdiFile: output({ id: id(), sdiIdentifier: z.string(), fileName: z.string(), invoiceCount: z.number().int(), bodyIndex: z.number().int(), xmlFileId: id().nullable() }).nullable(),
+  /** B-W2b-21 (Z8:07): a credit note, the supplier claim it settles. */
+  claim: output({ id: id(), number: z.string(), status: z.string() }).nullable(),
   files: output({ xml: fileRef.nullable(), pdf: fileRef.nullable() }),
   /** Who registered it; null: SDI delivered it (nobody of the office). */
   registeredBy: person.nullable(),
   lines: z.array(lineView),
   matches: z.array(matchView),
-  /** The match's settings as they apply (not decided with the accountant yet: in words). */
-  tolerance: output({ basis: z.enum(MATCH_BASES), quantityTolerancePct: z.string(), priceTolerancePct: notMoney(z.string()), decided: z.boolean(), words }),
+  /** The match's settings as they apply (B-W2b-21: the company's payables settings; none set: the W2a rule, not decided). */
+  tolerance: output({ basis: z.enum(MATCH_BASES), quantityTolerancePct: z.string(), priceTolerancePct: notMoney(z.string()), differenceToleranceAmount: money.cost(z.number().int()), decided: z.boolean(), words }),
   approval: output({ approvedAt: instant().nullable(), approvedBy: person.nullable(), note: z.string().nullable(), ready: z.boolean(), problems: z.array(refusal) }),
   dispute: output({ at: instant(), by: person.nullable(), reason: z.string() }).nullable(),
   payment: output({ dueDate: businessDate().nullable(), paidOn: businessDate().nullable(), paymentRef: z.string().nullable() }),
@@ -174,6 +179,8 @@ export const xmlContract = defineContract({
     200: output({
       fileName: z.string(),
       fileId: id(),
+      /** B-W2b-21: an invoice of a file of several (a lotto): which body of the XML is this invoice (1 …); null: the only one. */
+      bodyIndex: z.number().int().nullable(),
       /** The XML as SDI delivered it: it holds the prices, so only with the cost grain. */
       xml: money.cost(z.string()),
       /** What it names, read from it (no amounts): the parties, the orders and delivery notes it refers to, the reason. */
@@ -209,7 +216,17 @@ export const sdiStatusContract = defineContract({
   querystring: input({ companyId: id().optional() }),
   response: {
     200: output({
-      companies: z.array(output({ company: named, account: output({ id: id(), mode: z.string(), status: z.string() }).nullable(), picksUp: z.boolean(), lastPickup: lastPickup.nullable() })),
+      companies: z.array(
+        output({
+          company: named,
+          account: output({ id: id(), mode: z.string(), status: z.string() }).nullable(),
+          picksUp: z.boolean(),
+          /** B-W2b-21: its `waiting` are the SDI inbox's OPEN items (oldest 50). */
+          lastPickup: lastPickup.nullable(),
+          /** B-W2b-21 (Z8:06): how many deliveries wait in the SDI inbox (GET /payables/sdi/inbox). */
+          inboxOpen: z.number().int(),
+        }),
+      ),
     }),
   },
 })
@@ -357,7 +374,8 @@ export const sendToBuyerContract = defineContract({
 export const settleClaimContract = defineContract({
   params: invoiceParams,
   body: input({ version: version(), claimId: id() }),
-  response: { 200: output({ invoice: invoiceDetail, claim: output({ id: id(), number: z.string(), status: z.literal('CLOSED') }) }) },
+  /** B-W2b-21: `claimClosed` — the claim was closed by this credit note (ACCEPTED for a credit); false: it was closed before and is matched only. */
+  response: { 200: output({ invoice: invoiceDetail, claim: output({ id: id(), number: z.string(), status: z.literal('CLOSED') }), claimClosed: z.boolean() }) },
 })
 
 export const pickupContract = defineContract({
@@ -374,3 +392,93 @@ export const pickupContract = defineContract({
     }),
   },
 })
+
+// ---- B-W2b-21 (Z8:03): the payables settings --------------------------------------------------------------------------
+
+const pct = () => z.string().regex(/^\d{1,3}(\.\d{1,4})?$/, 'Expected a percentage from 0 to 100, at most four decimals.')
+const settingsRow = output({
+  id: id(),
+  companyId: id().nullable(),
+  version: z.number().int(),
+  quantityTolerancePct: z.string().nullable(),
+  priceTolerancePct: notMoney(z.string().nullable()),
+  differenceToleranceAmount: money.cost(z.number().int().nullable()),
+  billingBasis: z.enum(MATCH_BASES).nullable(),
+  sdiApproval: z.enum(PAYABLES_SDI_APPROVALS).nullable(),
+  sdiApproverIds: z.array(id()),
+  accepterMayNotApprove: z.boolean().nullable(),
+  updatedAt: instant(),
+})
+const SETTING_SOURCES = ['COMPANY', 'TENANT', 'DEFAULT'] as const
+const settingSource = z.enum(SETTING_SOURCES)
+const settingsAnswer = output({
+  companyId: id().nullable(),
+  company: settingsRow.nullable(),
+  tenant: settingsRow.nullable(),
+  effective: output({
+    quantityTolerancePct: z.string(),
+    priceTolerancePct: notMoney(z.string()),
+    differenceToleranceAmount: money.cost(z.number().int()),
+    billingBasis: z.enum(MATCH_BASES),
+    sdiApproval: z.enum(PAYABLES_SDI_APPROVALS),
+    sdiApproverIds: z.array(id()),
+    accepterMayNotApprove: z.literal(true),
+    /** Every match figure is set (the accountant's, GATE-ACCOUNTANT); false: some follow the W2a rule. */
+    decided: z.boolean(),
+    /** Where each value comes from (COMPANY, TENANT, DEFAULT): words, not amounts. */
+    source: output({ quantityTolerancePct: settingSource, priceTolerancePct: notMoney(z.enum(SETTING_SOURCES)), differenceToleranceAmount: notMoney(z.enum(SETTING_SOURCES)), billingBasis: settingSource, sdiApproval: settingSource, accepterMayNotApprove: settingSource }),
+  }),
+  words,
+  people: z.array(person),
+  mayManage: z.boolean(),
+})
+
+export const getSettingsContract = defineContract({ querystring: input({ companyId: id().optional() }), response: { 200: settingsAnswer } })
+
+export const putSettingsContract = defineContract({
+  body: input({
+    /** null: the tenant-wide settings (a role over every company). */
+    companyId: id().nullable(),
+    /** The row's version as read; absent: the row is made. */
+    version: version().optional(),
+    quantityTolerancePct: pct().nullish(),
+    priceTolerancePct: notMoney(pct().nullish()),
+    differenceToleranceAmount: money.cost(z.number().int().min(0).max(2_147_483_647).nullish()),
+    billingBasis: z.enum(MATCH_BASES).nullish(),
+    sdiApproval: z.enum(PAYABLES_SDI_APPROVALS).nullish(),
+    sdiApproverIds: z.array(id()).max(50).optional(),
+    accepterMayNotApprove: z.boolean().nullish(),
+  }),
+  response: { 200: settingsAnswer },
+})
+
+// ---- B-W2b-21 (Z8:06): the SDI inbox of deliveries the pickup could not record ------------------------------------------
+
+export const SDI_INBOX_STATUSES = ['OPEN', 'RECORDED', 'DISMISSED'] as const
+export const SDI_INBOX_PROBLEMS = ['UNREADABLE', 'SUPPLIER_UNKNOWN', 'OTHER_ADDRESSEE', 'DUPLICATE_NUMBER', 'PERIOD_LOCKED', 'FILE_UNAVAILABLE', 'OTHER'] as const
+const inboxItem = output({
+  id: id(),
+  company: named,
+  accountId: id(),
+  sdiIdentifier: z.string(),
+  fileName: z.string(),
+  receivedAt: instant(),
+  problem: z.enum(SDI_INBOX_PROBLEMS),
+  problemText: z.string(),
+  attempts: z.number().int(),
+  firstSeenAt: instant(),
+  lastTriedAt: instant(),
+  status: z.enum(SDI_INBOX_STATUSES),
+  xmlFileId: id().nullable(),
+  recorded: output({ at: instant(), supplierInvoiceId: id().nullable(), supplierInvoiceFileId: id().nullable() }).nullable(),
+  dismissed: output({ at: instant(), by: person.nullable(), reason: z.string() }).nullable(),
+  version: z.number().int(),
+})
+const inboxParams = input({ itemId: id() })
+
+export const listInboxContract = defineContract({
+  querystring: input({ companyId: id().optional(), status: z.enum(SDI_INBOX_STATUSES).optional(), cursor: id().optional(), limit: z.coerce.number().int().min(1).max(200).default(50) }),
+  response: { 200: output({ items: z.array(inboxItem), nextCursor: id().nullable(), counts: output({ open: z.number().int(), dismissed: z.number().int() }) }) },
+})
+export const dismissInboxContract = defineContract({ params: inboxParams, body: input({ version: version(), reason: reason() }), response: { 200: output({ item: inboxItem }) } })
+export const reopenInboxContract = defineContract({ params: inboxParams, body: input({ version: version() }), response: { 200: output({ item: inboxItem }) } })

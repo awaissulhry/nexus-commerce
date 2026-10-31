@@ -1759,6 +1759,7 @@
     "payables_manage": "Registrare, abbinare e contestare le fatture fornitori",
     "payables_differences_accept": "Accettare a parole una differenza di una fattura fornitore",
     "payables_approve": "Approvare le fatture fornitori per il pagamento",
-    "payables_pay": "Registrare il pagamento di una fattura fornitore"
+    "payables_pay": "Registrare il pagamento di una fattura fornitore",
+    "payables_settings": "Modificare le impostazioni fornitori: tolleranze del confronto, base di fatturazione e chi approva le fatture SDI"
   }
 }

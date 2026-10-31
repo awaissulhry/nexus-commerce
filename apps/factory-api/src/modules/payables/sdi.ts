@@ -16,7 +16,7 @@ import { callerFor, command, COMMAND_SETTINGS, runCommand, type CommandCaller, t
 import { defineCron, type CronJob } from '../../core/cron'
 import type { Log } from '../../core/queue'
 import { serverClock, type Clock } from '../../core/time'
-import { honourPeriodLocks, PeriodLockedError } from '../accounting/period-guard'
+import { honourPeriodLocks, PeriodLockedError, SoftLockedError } from '../accounting/period-guard'
 import { sdiAccountOf } from '../invoicing/sdi/store'
 import { processSdi } from '../invoicing/sdi/runtime'
 import { putGeneratedFile, recordGeneratedFile, type PreparedGeneratedFile } from '../../platform/files/files'
@@ -94,11 +94,17 @@ export function processPayablesSdi(): PayablesSdi {
 
 // ---- recording one delivery ---------------------------------------------------------------------------------------------
 
+/** B-W2b-21 (Z8:06): why a delivery waits, as the SDI inbox's code (factory-db SdiInboxProblem). */
+export type InboxProblem = 'UNREADABLE' | 'SUPPLIER_UNKNOWN' | 'OTHER_ADDRESSEE' | 'DUPLICATE_NUMBER' | 'PERIOD_LOCKED' | 'FILE_UNAVAILABLE' | 'OTHER'
+
 export interface Waiting {
   readonly sdiIdentifier: string
   readonly fileName: string
   readonly receivedAt: string
   readonly problem: string
+  /** B-W2b-21: the inbox's code and the intermediary's id of the delivery (kept on the inbox item, not answered). */
+  readonly code: InboxProblem
+  readonly providerRef: string
 }
 
 export interface Recorded {
@@ -106,6 +112,9 @@ export interface Recorded {
   readonly number: string
   readonly sdiIdentifier: string
   readonly matchStatus: string
+  /** B-W2b-21 (Z8:05): an invoice of a file of several (a lotto): the file and its body. */
+  readonly fileId: string | null
+  readonly bodyIndex: number | null
 }
 
 const SUPPLYING_ROLES = ['SUPPLIER', 'SUBCONTRACTOR'] as const
@@ -170,139 +179,230 @@ async function creditedOf(db: Reader, companyId: string, partyId: string, docume
   return null
 }
 
-/** Why the delivery is not recorded now (a person's work), or the facts to record it. */
-async function checkDelivery(db: Reader, companyId: string, item: SdiReceivedFile): Promise<string | { read: ReceivedFatturaPa; document: ReceivedDocument; party: { id: string; currency: string } }> {
+/** Why the delivery is not recorded now (a person's work, with the inbox's code), or the facts to record it. */
+type DeliveryCheck = { readonly code: InboxProblem; readonly problem: string } | { readonly read: ReceivedFatturaPa; readonly documents: readonly ReceivedDocument[]; readonly party: { id: string; currency: string } }
+
+async function checkDelivery(db: Reader, companyId: string, item: SdiReceivedFile): Promise<DeliveryCheck> {
   let read: ReceivedFatturaPa
   try {
     read = readFatturaPa(item.xml)
   } catch (error) {
-    if (error instanceof FatturaPaReadError) return `The file is not a readable FatturaPA: ${error.message}`
+    if (error instanceof FatturaPaReadError) return { code: 'UNREADABLE', problem: `The file is not a readable FatturaPA: ${error.message}` }
     throw error
   }
-  if (read.documents.length > 1) return `The file holds a batch of ${read.documents.length} invoices (a "lotto"): it is not recorded one by one yet; ask the supplier to send them one per file.`
-  const document = read.documents[0]!
   const company = await db.company.findUnique({ where: { id: companyId }, select: { vatNumber: true, fiscalCode: true, legalName: true } })
-  if (!company) return 'The company of the SDI account is not readable.'
+  if (!company) return { code: 'OTHER', problem: 'The company of the SDI account is not readable.' }
   const buyer = read.buyer
   const ours = sameTaxId(company.vatNumber, buyer.vatNumber) || sameTaxId(company.vatNumber, buyer.vatCode) || sameTaxId(company.fiscalCode, buyer.fiscalCode) || sameTaxId(company.fiscalCode, buyer.vatCode)
-  if (!ours) return `The invoice is addressed to ${buyer.name ?? 'another buyer'} (${buyer.vatNumber ?? buyer.fiscalCode ?? 'no tax id'}), not to ${company.legalName}.`
+  if (!ours) return { code: 'OTHER_ADDRESSEE', problem: `The invoice is addressed to ${buyer.name ?? 'another buyer'} (${buyer.vatNumber ?? buyer.fiscalCode ?? 'no tax id'}), not to ${company.legalName}.` }
   const party = await supplierOfXml(db, companyId, read)
-  if (typeof party === 'string') return party
-  if (document.netTotal < 0 || document.vatTotal < 0 || document.grossTotal < 0) return `Invoice ${document.number} adds up to less than zero: it is not recorded as an invoice (ask the supplier for a credit note, TD04).`
-  if (document.lines.length > PAYABLES_LIMITS.lines) return `Invoice ${document.number} has ${document.lines.length} lines; a supplier invoice is recorded with at most ${PAYABLES_LIMITS.lines}.`
-  const same = await db.supplierInvoice.findFirst({ where: { companyId, partyId: party.id, number: document.number, issueDate: dayDate(document.issueDate) }, select: { source: true, status: true } })
-  if (same) return `Invoice ${document.number} of ${dayWords(document.issueDate)} of this supplier is registered already (${same.source === 'SDI' ? 'from SDI' : 'typed in'}, ${same.status.toLowerCase()}): the SDI one cannot be recorded beside it.`
-  return { read, document, party }
-}
-
-/** The XML and the supplier's own PDF put in the file store, outside any transaction (system caller). */
-async function prepareFiles(system: CommandCaller, companyId: string, invoiceId: string, item: SdiReceivedFile, document: ReceivedDocument): Promise<{ xml: PreparedGeneratedFile; pdf: PreparedGeneratedFile | null }> {
-  const files = processFiles()
-  const xmlName = item.fileName.toLowerCase().endsWith('.xml') ? item.fileName : `${item.fileName.replace(/\.p7m$/i, '')}`
-  const xml = await putGeneratedFile(files, system, { companyId, recordType: RECORD, recordId: invoiceId, kind: 'FISCAL_ARCHIVE', originalName: xmlName.endsWith('.xml') ? xmlName : `${xmlName}.xml`, contentType: 'application/xml', body: Buffer.from(item.xml, 'utf8') })
-  const attached = document.attachments.find((entry) => entry.format === 'PDF' || entry.name.toLowerCase().endsWith('.pdf'))
-  let pdf: PreparedGeneratedFile | null = null
-  if (attached) {
-    const body = Buffer.from(attached.base64, 'base64')
-    if (body.length > 0 && body.subarray(0, 4).toString('latin1') === '%PDF') {
-      pdf = await putGeneratedFile(files, system, { companyId, recordType: RECORD, recordId: invoiceId, kind: 'FISCAL_ARCHIVE', originalName: attached.name.toLowerCase().endsWith('.pdf') ? attached.name : `${attached.name}.pdf`, contentType: 'application/pdf', body })
-    }
+  if (typeof party === 'string') return { code: party.includes('tax identity of') ? 'OTHER' : 'SUPPLIER_UNKNOWN', problem: party }
+  const several = read.documents.length > 1
+  for (const [index, document] of read.documents.entries()) {
+    const which = several ? ` (body ${index + 1} of the file's ${read.documents.length})` : ''
+    if (document.netTotal < 0 || document.vatTotal < 0 || document.grossTotal < 0) return { code: 'OTHER', problem: `Invoice ${document.number}${which} adds up to less than zero: it is not recorded as an invoice (ask the supplier for a credit note, TD04).` }
+    if (document.lines.length > PAYABLES_LIMITS.lines) return { code: 'OTHER', problem: `Invoice ${document.number}${which} has ${document.lines.length} lines; a supplier invoice is recorded with at most ${PAYABLES_LIMITS.lines}.` }
+    // B-W2b-21 (Z8:04): a VOIDED typed invoice frees its number and date; only a live one blocks the SDI one.
+    const same = await db.supplierInvoice.findFirst({ where: { companyId, partyId: party.id, number: document.number, issueDate: dayDate(document.issueDate), status: { not: 'VOIDED' } }, select: { source: true, status: true } })
+    if (same) return { code: 'DUPLICATE_NUMBER', problem: `Invoice ${document.number} of ${dayWords(document.issueDate)}${which} of this supplier is registered already (${same.source === 'SDI' ? 'from SDI' : 'typed in'}, ${same.status.toLowerCase()}): the SDI one cannot be recorded beside it.` }
   }
-  return { xml, pdf }
+  const numbers = read.documents.map((document) => `${document.number}|${document.issueDate}`)
+  if (new Set(numbers).size !== numbers.length) return { code: 'OTHER', problem: 'The file names the same invoice number and date twice: ask the supplier to send it again.' }
+  return { read, documents: read.documents, party }
 }
 
-/** One delivery recorded in ONE system command, matched; or why it waits. Key `sdi-in:<IdentificativoSdI>`. */
-export async function recordDelivery(system: CommandCaller, companyId: string, item: SdiReceivedFile): Promise<Recorded | Waiting> {
-  const waiting = (problem: string): Waiting => ({ sdiIdentifier: item.sdiIdentifier, fileName: item.fileName, receivedAt: item.receivedAt, problem })
+/** The supplier's own PDF attached to one body, put in the file store outside any transaction (null: none attached). */
+async function preparePdf(system: CommandCaller, companyId: string, invoiceId: string, document: ReceivedDocument): Promise<PreparedGeneratedFile | null> {
+  const attached = document.attachments.find((entry) => entry.format === 'PDF' || entry.name.toLowerCase().endsWith('.pdf'))
+  if (!attached) return null
+  const body = Buffer.from(attached.base64, 'base64')
+  if (body.length === 0 || body.subarray(0, 4).toString('latin1') !== '%PDF') return null
+  return putGeneratedFile(processFiles(), system, { companyId, recordType: RECORD, recordId: invoiceId, kind: 'FISCAL_ARCHIVE', originalName: attached.name.toLowerCase().endsWith('.pdf') ? attached.name : `${attached.name}.pdf`, contentType: 'application/pdf', body })
+}
+
+/** The XML as SDI delivered it, put in the file store outside any transaction: on the invoice, or on the file of several (B-W2b-21). */
+async function prepareXml(system: CommandCaller, companyId: string, record: { readonly type: string; readonly id: string }, item: SdiReceivedFile): Promise<PreparedGeneratedFile> {
+  const xmlName = item.fileName.toLowerCase().endsWith('.xml') ? item.fileName : `${item.fileName.replace(/\.p7m$/i, '')}`
+  return putGeneratedFile(processFiles(), system, { companyId, recordType: record.type, recordId: record.id, kind: 'FISCAL_ARCHIVE', originalName: xmlName.endsWith('.xml') ? xmlName : `${xmlName}.xml`, contentType: 'application/xml', body: Buffer.from(item.xml, 'utf8') })
+}
+
+interface BodyToWrite {
+  readonly invoiceId: string
+  readonly document: ReceivedDocument
+  readonly pdf: PreparedGeneratedFile | null
+  /** A body of a file of several: the file and its body (1 …). */
+  readonly file: { readonly id: string; readonly bodyIndex: number } | null
+}
+
+/** One invoice SDI delivered, written inside the delivery's command: the row as SDI said it, its lines with the suggested mapping, its files, the match. */
+async function writeBody(tools: CommandTools, input: { readonly companyId: string; readonly party: { id: string; currency: string }; readonly item: SdiReceivedFile; readonly receivedOn: string; readonly xmlFileId: string | null; readonly candidates: Awaited<ReturnType<typeof candidatesOf>> }, body: BodyToWrite): Promise<Recorded> {
+  const { tx } = tools
+  const { companyId, party, item, receivedOn } = input
+  const { invoiceId, document } = body
+  const creditOfId = await creditedOf(tx, companyId, party.id, document)
+  await tx.supplierInvoice.create({
+    data: {
+      id: invoiceId,
+      companyId,
+      partyId: party.id,
+      source: 'SDI',
+      kind: document.kind,
+      docType: document.docType,
+      number: document.number,
+      issueDate: dayDate(document.issueDate),
+      receivedOn: dayDate(receivedOn),
+      sdiIdentifier: item.sdiIdentifier,
+      sdiFileName: item.fileName,
+      ...(body.file ? { sdiFileId: body.file.id, sdiBodyIndex: body.file.bodyIndex } : {}),
+      currency: document.currency,
+      netTotal: document.netTotal,
+      vatTotal: document.vatTotal,
+      grossTotal: document.grossTotal,
+      withholdingAmount: document.withholdingAmount,
+      stampDutyAmount: document.stampDutyAmount,
+      vatSummary: document.vatSummary.map((row) => ({ ...row })),
+      paymentTerms: document.paymentTerms ? { condition: document.paymentTerms.condition, installments: document.paymentTerms.installments.map((entry) => ({ ...entry })) } : undefined,
+      dueDate: document.dueDate ? dayDate(document.dueDate) : null,
+      creditOfId,
+      createdById: null,
+    },
+    select: { id: true },
+  })
+  let mapped = 0
+  for (const line of document.lines) {
+    const suggestion = document.kind === 'CREDIT_NOTE' ? null : suggestMapping({ seq: line.seq, itemCode: line.itemCode, codes: line.codes.map((code) => code.value) }, document, input.candidates.lines, input.candidates.subcontracts)
+    const kind = receivedLineKind(line.lineType, suggestion)
+    const onOrder = kind === 'CHARGE' ? null : suggestion
+    if (onOrder) mapped++
+    await tx.supplierInvoiceLine.create({
+      data: {
+        id: newId(),
+        partyId: party.id,
+        invoiceId,
+        seq: line.seq,
+        kind,
+        description: line.description,
+        itemCode: line.itemCode,
+        quantity: line.quantity,
+        uom: line.uom,
+        unitPrice: line.unitPrice,
+        discountPct: line.discountPct,
+        netAmount: line.netAmount,
+        vatRatePct: line.vatRatePct,
+        vatNature: line.vatNature,
+        siteId: onOrder?.siteId ?? null,
+        purchaseOrderLineId: onOrder?.kind === 'GOODS' ? onOrder.purchaseOrderLineId : null,
+        subcontractOrderId: onOrder?.kind === 'SUBCONTRACT' ? onOrder.subcontractOrderId : null,
+      },
+      select: { id: true },
+    })
+  }
+  const pdf = body.pdf ? await recordGeneratedFile(tools, body.pdf, { details: { file: "the supplier's PDF attached to the XML", sdiIdentifier: item.sdiIdentifier, number: document.number } }) : null
+  if (input.xmlFileId || pdf) await tx.supplierInvoice.update({ where: { id: invoiceId }, data: { ...(input.xmlFileId ? { xmlFileId: input.xmlFileId } : {}), ...(pdf ? { pdfFileId: pdf.id } : {}) }, select: { id: true } })
+  tools.audit({
+    action: 'payables.sdiReceive',
+    recordType: RECORD,
+    recordId: invoiceId,
+    companyId,
+    after: { source: 'SDI', sdiIdentifier: item.sdiIdentifier, fileName: item.fileName, ...(body.file ? { sdiFileId: body.file.id, sdiBodyIndex: body.file.bodyIndex } : {}), docType: document.docType, number: document.number, issueDate: document.issueDate, receivedOn, currency: document.currency, totals: markMoney('cost', { netTotal: document.netTotal, vatTotal: document.vatTotal, grossTotal: document.grossTotal }), lines: document.lines.length, mapped, creditOfId },
+  })
+  const outcome = await rematchInCommand(tools, invoiceId, { bySystem: true })
+  tools.emit({ type: 'supplier_invoice.received', subject: invoiceId, companyId, payload: { supplierInvoiceId: invoiceId, partyId: party.id, source: 'SDI', kind: document.kind, status: 'RECEIVED', matchStatus: outcome.matchStatus, lines: document.lines.length, mapped } })
+  return { invoiceId, number: document.number, sdiIdentifier: item.sdiIdentifier, matchStatus: outcome.matchStatus, fileId: body.file?.id ?? null, bodyIndex: body.file?.bodyIndex ?? null }
+}
+
+/** B-W2b-21 (Z8:06): the delivery's inbox item, when it waited, is RECORDED with what it became (in the recording command). */
+async function inboxRecorded(tools: CommandTools, sdiIdentifier: string, became: { readonly supplierInvoiceId: string } | { readonly supplierInvoiceFileId: string }): Promise<void> {
+  const item = await tools.tx.sdiInboxItem.findFirst({ where: { sdiIdentifier, status: 'OPEN' }, select: { id: true, companyId: true } })
+  if (!item) return
+  await tools.tx.sdiInboxItem.update({ where: { id: item.id }, data: { status: 'RECORDED', recordedAt: tools.now, ...became, version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
+  tools.audit({ action: 'payables.sdiInboxRecorded', recordType: 'SdiInboxItem', recordId: item.id, companyId: item.companyId, before: { status: 'OPEN' }, after: { status: 'RECORDED', ...became } })
+}
+
+const waitingCodeOf = (error: unknown): InboxProblem => (error instanceof PeriodLockedError || error instanceof SoftLockedError ? 'PERIOD_LOCKED' : 'OTHER')
+
+/**
+ * One delivery recorded in ONE system command, matched; or why it waits. Key `sdi-in:<IdentificativoSdI>`. B-W2b-21
+ * (Z8:05): a file of several invoices (a lotto) is recorded whole in the same command: the SupplierInvoiceFile with the
+ * XML (a file of the file's record), then each body as its own SupplierInvoice naming the file and its body, carrying
+ * the file's IdentificativoSdI and day and its XML; a body that cannot be recorded keeps the whole file waiting.
+ */
+export async function recordDelivery(system: CommandCaller, companyId: string, item: SdiReceivedFile): Promise<Recorded[] | Waiting> {
+  const waiting = (code: InboxProblem, problem: string): Waiting => ({ sdiIdentifier: item.sdiIdentifier, fileName: item.fileName, receivedAt: item.receivedAt, problem, code, providerRef: item.providerRef })
   const checked = await system.withClient((client) => checkDelivery(client, companyId, item))
-  if (typeof checked === 'string') return waiting(checked)
-  const { document, party } = checked
-  const invoiceId = newId()
-  const files = await prepareFiles(system, companyId, invoiceId, item, document)
-  const candidates = await system.withClient((client) => candidatesOf(client, companyId, party.id, document.currency))
+  if ('code' in checked) return waiting(checked.code, checked.problem)
+  const { documents, party } = checked
+  const several = documents.length > 1
+  const fileId = several ? newId() : null
+  const bodies: BodyToWrite[] = []
+  for (const [index, document] of documents.entries()) {
+    const invoiceId = newId()
+    bodies.push({ invoiceId, document, pdf: await preparePdf(system, companyId, invoiceId, document), file: fileId ? { id: fileId, bodyIndex: index + 1 } : null })
+  }
+  const xml = await prepareXml(system, companyId, fileId ? { type: 'SupplierInvoiceFile', id: fileId } : { type: RECORD, id: bodies[0]!.invoiceId }, item)
+  const currencies = [...new Set(documents.map((document) => document.currency))]
+  const candidates = await system.withClient(async (client) => {
+    const byCurrency = new Map<string, Awaited<ReturnType<typeof candidatesOf>>>()
+    for (const currency of currencies) byCurrency.set(currency, await candidatesOf(client, companyId, party.id, currency))
+    return byCurrency
+  })
   const receivedOn = businessDate(new Date(item.receivedAt))
   try {
-    const { result } = await command(system, { name: 'payables.sdiReceive', idempotencyKey: `sdi-in:${item.sdiIdentifier}`, input: { companyId, sdiIdentifier: item.sdiIdentifier, fileName: item.fileName, sha256: files.xml.sha256 } }, async (tools) => {
+    const { result } = await command(system, { name: 'payables.sdiReceive', idempotencyKey: `sdi-in:${item.sdiIdentifier}`, input: { companyId, sdiIdentifier: item.sdiIdentifier, fileName: item.fileName, sha256: xml.sha256, bodies: documents.length } }, async (tools) => {
       const { tx } = tools
       if (await tx.supplierInvoice.findFirst({ where: { sdiIdentifier: item.sdiIdentifier }, select: { id: true } })) throw new ConflictError('This SDI delivery is recorded already.')
-      await honourPeriodLocks(tools, [{ companyId, day: receivedOn, refused: `supplier invoice ${document.number} delivered by SDI on ${dayWords(receivedOn)} is not registered`, path: 'receivedOn', record: { type: RECORD, id: invoiceId } }])
-      const creditOfId = await creditedOf(tx, companyId, party.id, document)
-      await tx.supplierInvoice.create({
-        data: {
-          id: invoiceId,
-          companyId,
-          partyId: party.id,
-          source: 'SDI',
-          kind: document.kind,
-          docType: document.docType,
-          number: document.number,
-          issueDate: dayDate(document.issueDate),
-          receivedOn: dayDate(receivedOn),
-          sdiIdentifier: item.sdiIdentifier,
-          sdiFileName: item.fileName,
-          currency: document.currency,
-          netTotal: document.netTotal,
-          vatTotal: document.vatTotal,
-          grossTotal: document.grossTotal,
-          withholdingAmount: document.withholdingAmount,
-          stampDutyAmount: document.stampDutyAmount,
-          vatSummary: document.vatSummary.map((row) => ({ ...row })),
-          paymentTerms: document.paymentTerms ? { condition: document.paymentTerms.condition, installments: document.paymentTerms.installments.map((entry) => ({ ...entry })) } : undefined,
-          dueDate: document.dueDate ? dayDate(document.dueDate) : null,
-          creditOfId,
-          createdById: null,
-        },
-        select: { id: true },
-      })
-      let mapped = 0
-      for (const line of document.lines) {
-        const suggestion = document.kind === 'CREDIT_NOTE' ? null : suggestMapping({ seq: line.seq, itemCode: line.itemCode, codes: line.codes.map((code) => code.value) }, document, candidates.lines, candidates.subcontracts)
-        const kind = receivedLineKind(line.lineType, suggestion)
-        const onOrder = kind === 'CHARGE' ? null : suggestion
-        if (onOrder) mapped++
-        await tx.supplierInvoiceLine.create({
-          data: {
-            id: newId(),
-            partyId: party.id,
-            invoiceId,
-            seq: line.seq,
-            kind,
-            description: line.description,
-            itemCode: line.itemCode,
-            quantity: line.quantity,
-            uom: line.uom,
-            unitPrice: line.unitPrice,
-            discountPct: line.discountPct,
-            netAmount: line.netAmount,
-            vatRatePct: line.vatRatePct,
-            vatNature: line.vatNature,
-            siteId: onOrder?.siteId ?? null,
-            purchaseOrderLineId: onOrder?.kind === 'GOODS' ? onOrder.purchaseOrderLineId : null,
-            subcontractOrderId: onOrder?.kind === 'SUBCONTRACT' ? onOrder.subcontractOrderId : null,
-          },
-          select: { id: true },
-        })
+      if (await tx.supplierInvoiceFile.findFirst({ where: { sdiIdentifier: item.sdiIdentifier }, select: { id: true } })) throw new ConflictError('This SDI delivery is recorded already (a file of several invoices).')
+      const numbers = documents.map((document) => document.number).join(', ')
+      await honourPeriodLocks(tools, [{ companyId, day: receivedOn, refused: `supplier invoice${several ? 's' : ''} ${numbers} delivered by SDI on ${dayWords(receivedOn)} ${several ? 'are' : 'is'} not registered`, path: 'receivedOn', record: { type: fileId ? 'SupplierInvoiceFile' : RECORD, id: fileId ?? bodies[0]!.invoiceId } }])
+      let xmlFileId: string
+      if (fileId) {
+        await tx.supplierInvoiceFile.create({ data: { id: fileId, companyId, partyId: party.id, sdiIdentifier: item.sdiIdentifier, sdiFileName: item.fileName, receivedOn: dayDate(receivedOn), invoiceCount: documents.length, createdById: null }, select: { id: true } })
+        const stored = await recordGeneratedFile(tools, xml, { details: { file: 'FatturaPA XML as received (a file of several invoices)', sdiIdentifier: item.sdiIdentifier, invoices: documents.length } })
+        await tx.supplierInvoiceFile.update({ where: { id: fileId }, data: { xmlFileId: stored.id }, select: { id: true } })
+        tools.audit({ action: 'payables.sdiReceiveFile', recordType: 'SupplierInvoiceFile', recordId: fileId, companyId, after: { sdiIdentifier: item.sdiIdentifier, fileName: item.fileName, receivedOn, invoiceCount: documents.length, numbers: documents.map((document) => document.number), partyId: party.id } })
+        xmlFileId = stored.id
+      } else {
+        xmlFileId = (await recordGeneratedFile(tools, xml, { details: { file: 'FatturaPA XML as received', sdiIdentifier: item.sdiIdentifier, number: documents[0]!.number } })).id
       }
-      const xml = await recordGeneratedFile(tools, files.xml, { details: { file: 'FatturaPA XML as received', sdiIdentifier: item.sdiIdentifier, number: document.number } })
-      const pdf = files.pdf ? await recordGeneratedFile(tools, files.pdf, { details: { file: "the supplier's PDF attached to the XML", sdiIdentifier: item.sdiIdentifier, number: document.number } }) : null
-      await tx.supplierInvoice.update({ where: { id: invoiceId }, data: { xmlFileId: xml.id, ...(pdf ? { pdfFileId: pdf.id } : {}) }, select: { id: true } })
-      tools.audit({
-        action: 'payables.sdiReceive',
-        recordType: RECORD,
-        recordId: invoiceId,
-        companyId,
-        after: { source: 'SDI', sdiIdentifier: item.sdiIdentifier, fileName: item.fileName, docType: document.docType, number: document.number, issueDate: document.issueDate, receivedOn, currency: document.currency, totals: markMoney('cost', { netTotal: document.netTotal, vatTotal: document.vatTotal, grossTotal: document.grossTotal }), lines: document.lines.length, mapped, creditOfId },
-      })
-      const outcome = await rematchInCommand(tools, invoiceId, { bySystem: true })
-      tools.emit({ type: 'supplier_invoice.received', subject: invoiceId, companyId, payload: { supplierInvoiceId: invoiceId, partyId: party.id, source: 'SDI', kind: document.kind, status: 'RECEIVED', matchStatus: outcome.matchStatus, lines: document.lines.length, mapped } })
-      return { invoiceId, number: document.number, sdiIdentifier: item.sdiIdentifier, matchStatus: outcome.matchStatus }
+      const recorded: Recorded[] = []
+      for (const body of bodies) recorded.push(await writeBody(tools, { companyId, party, item, receivedOn, xmlFileId, candidates: candidates.get(body.document.currency)! }, body))
+      await inboxRecorded(tools, item.sdiIdentifier, fileId ? { supplierInvoiceFileId: fileId } : { supplierInvoiceId: bodies[0]!.invoiceId })
+      return recorded
     })
     return result
   } catch (error) {
-    if (error instanceof PeriodLockedError) return waiting(error.message)
-    if (isDomainError(error)) return waiting(error.message)
+    if (isDomainError(error)) return waiting(waitingCodeOf(error), error.message)
     throw error
   }
+}
+
+// ---- the SDI inbox (B-W2b-21, Z8:06) -----------------------------------------------------------------------------------------
+
+/**
+ * A delivery that waits, in the inbox (factory-db SdiInboxItem): made OPEN the first time, then each pickup adds an attempt
+ * and writes the latest words; a lock per delivery keeps two pickups (the cron and a person) from making it twice.
+ */
+async function upsertInboxItem(tools: CommandTools, where: { readonly companyId: string; readonly accountId: string; readonly at: Date }, entry: Waiting): Promise<void> {
+  const { tx } = tools
+  const tenantId = 'tenantId' in tools.context ? tools.context.tenantId : null
+  if (!tenantId) return
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.payables.sdi-inbox', ${tenantId}::text, ${entry.sdiIdentifier}::text), 0))`
+  const existing = await tx.sdiInboxItem.findFirst({ where: { sdiIdentifier: entry.sdiIdentifier }, select: { id: true, status: true, attempts: true, lastTriedAt: true } })
+  if (!existing) {
+    const id = newId()
+    await tx.sdiInboxItem.create({
+      data: { id, companyId: where.companyId, accountId: where.accountId, providerRef: entry.providerRef, sdiIdentifier: entry.sdiIdentifier, fileName: entry.fileName, receivedAt: new Date(entry.receivedAt), problem: entry.code, problemText: entry.problem.slice(0, 2000), attempts: 1, firstSeenAt: where.at, lastTriedAt: where.at, createdAt: where.at, updatedAt: where.at, createdById: null },
+      select: { id: true },
+    })
+    tools.audit({ action: 'payables.sdiInboxWaiting', recordType: 'SdiInboxItem', recordId: id, companyId: where.companyId, after: { sdiIdentifier: entry.sdiIdentifier, fileName: entry.fileName, problem: entry.code, attempts: 1 } })
+    return
+  }
+  if (existing.status !== 'OPEN') return
+  await tx.sdiInboxItem.update({
+    where: { id: existing.id },
+    data: { attempts: existing.attempts + 1, lastTriedAt: where.at > existing.lastTriedAt ? where.at : existing.lastTriedAt, problem: entry.code, problemText: entry.problem.slice(0, 2000), version: { increment: 1 }, updatedAt: where.at },
+    select: { id: true },
+  })
 }
 
 // ---- a pickup -----------------------------------------------------------------------------------------------------------
@@ -342,9 +442,14 @@ export async function pickUp(caller: CommandCaller, companyId: string, options: 
     if (error instanceof GatewayRefusal || error instanceof GatewayCallFailed) throw new RefusedError([{ code: 'INTERMEDIARY_UNAVAILABLE', message: `The SDI intermediary could not be asked now (${error.message}); the next pickup tries again.` }])
     throw error
   }
-  const known = new Set(
-    (await system.withClient((client) => client.supplierInvoice.findMany({ where: { sdiIdentifier: { in: items.map((item) => item.sdiIdentifier) } }, select: { sdiIdentifier: true } }))).map((row) => row.sdiIdentifier!),
-  )
+  // Known: recorded as an invoice, as a file of several (B-W2b-21), or dismissed by a person from the SDI inbox (tried again once reopened).
+  const known = await system.withClient(async (client) => {
+    const ids = items.map((item) => item.sdiIdentifier)
+    const invoices = await client.supplierInvoice.findMany({ where: { sdiIdentifier: { in: ids } }, select: { sdiIdentifier: true } })
+    const files = await client.supplierInvoiceFile.findMany({ where: { sdiIdentifier: { in: ids } }, select: { sdiIdentifier: true } })
+    const dismissed = await client.sdiInboxItem.findMany({ where: { sdiIdentifier: { in: ids }, status: 'DISMISSED' }, select: { sdiIdentifier: true } })
+    return new Set([...invoices.map((row) => row.sdiIdentifier!), ...files.map((row) => row.sdiIdentifier), ...dismissed.map((row) => row.sdiIdentifier)])
+  })
   const recorded: Recorded[] = []
   const waiting: Waiting[] = []
   for (const item of items.filter((entry) => !known.has(entry.sdiIdentifier))) {
@@ -353,23 +458,25 @@ export async function pickUp(caller: CommandCaller, companyId: string, options: 
       file = await runtime.get(system, account.id, item)
     } catch (error) {
       if (error instanceof GatewayRefusal || error instanceof GatewayCallFailed) {
-        waiting.push({ sdiIdentifier: item.sdiIdentifier, fileName: item.fileName, receivedAt: item.receivedAt, problem: `The intermediary did not hand the file over (${error.message}); the next pickup tries again.` })
+        waiting.push({ sdiIdentifier: item.sdiIdentifier, fileName: item.fileName, receivedAt: item.receivedAt, problem: `The intermediary did not hand the file over (${error.message}); the next pickup tries again.`, code: 'FILE_UNAVAILABLE', providerRef: item.providerRef })
         continue
       }
       throw error
     }
     const outcome = await recordDelivery(system, companyId, file)
-    if ('invoiceId' in outcome) recorded.push(outcome)
+    if (Array.isArray(outcome)) recorded.push(...outcome)
     else waiting.push(outcome)
   }
   const result: PickupResult = { companyId, accountId: account.id, listed: items.length, known: known.size, recorded, waiting, at: at.toISOString() }
   await command(caller, { name: PICKUP_ACTION, input: { companyId, accountId: account.id, listed: items.length, recorded: recorded.map((row) => row.sdiIdentifier), waiting: waiting.map((row) => row.sdiIdentifier), at: result.at }, ...(options.causationId ? { causationId: options.causationId } : {}) }, async (tools) => {
+    // B-W2b-21 (Z8:06): what waits lands in the SDI inbox, one item per delivery (tried again: attempts + 1, the latest words).
+    for (const entry of waiting) await upsertInboxItem(tools, { companyId, accountId: account.id, at }, entry)
     tools.audit({
       action: PICKUP_ACTION,
       recordType: 'IntegrationAccount',
       recordId: account.id,
       companyId,
-      after: { listed: items.length, known: known.size, recorded: recorded.map((row) => ({ invoiceId: row.invoiceId, number: row.number, sdiIdentifier: row.sdiIdentifier })), waiting, byPerson },
+      after: { listed: items.length, known: known.size, recorded: recorded.map((row) => ({ invoiceId: row.invoiceId, number: row.number, sdiIdentifier: row.sdiIdentifier, ...(row.fileId ? { fileId: row.fileId, bodyIndex: row.bodyIndex } : {}) })), waiting: waiting.map(({ providerRef: _providerRef, ...entry }) => entry), byPerson },
     })
     tools.emit({ type: 'supplier_invoice.sdi_picked_up', subject: account.id, companyId, payload: { companyId, accountId: account.id, listed: items.length, recorded: recorded.length, waiting: waiting.length, byPerson } })
     return { ok: true }
@@ -404,12 +511,16 @@ export async function sdiStatus(caller: CommandCaller, query: { readonly company
       const last = account
         ? await client.auditLog.findFirst({ where: { recordType: 'IntegrationAccount', recordId: account.id, action: PICKUP_ACTION }, select: { at: true, audience: true, after: true }, orderBy: [{ at: 'desc' }, { id: 'desc' }] })
         : null
-      const after = (last?.after ?? null) as { listed?: number; recorded?: unknown[]; waiting?: Waiting[] } | null
+      const after = (last?.after ?? null) as { listed?: number; recorded?: unknown[] } | null
+      // B-W2b-21 (Z8:06): what waits is the inbox's OPEN items (no longer the pickup's audit row), oldest first.
+      const open = await client.sdiInboxItem.findMany({ where: { companyId: company.id, status: 'OPEN' }, select: { sdiIdentifier: true, fileName: true, receivedAt: true, problemText: true }, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }], take: 50 })
+      const inboxOpen = await client.sdiInboxItem.count({ where: { companyId: company.id, status: 'OPEN' } })
       out.push({
         company: { id: company.id, code: company.code, name: company.legalName },
         account: account ? { id: account.id, mode: account.mode, status: account.status } : null,
         picksUp: account ? account.status === 'ACTIVE' && runtime.picksUp(account.mode as IntegrationMode) : false,
-        lastPickup: last ? { at: last.at.toISOString(), byPerson: last.audience === 'OFFICE', listed: after?.listed ?? 0, recorded: Array.isArray(after?.recorded) ? after!.recorded!.length : 0, waiting: Array.isArray(after?.waiting) ? after!.waiting! : [] } : null,
+        lastPickup: last ? { at: last.at.toISOString(), byPerson: last.audience === 'OFFICE', listed: after?.listed ?? 0, recorded: Array.isArray(after?.recorded) ? after!.recorded!.length : 0, waiting: open.map((row) => ({ sdiIdentifier: row.sdiIdentifier, fileName: row.fileName, receivedAt: row.receivedAt.toISOString(), problem: row.problemText })) } : null,
+        inboxOpen,
       })
     }
     return { companies: out }

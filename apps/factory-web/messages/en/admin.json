@@ -1759,6 +1759,7 @@
     "payables_manage": "Register, map and dispute supplier invoices",
     "payables_differences_accept": "Accept a difference of a supplier invoice in words",
     "payables_approve": "Approve supplier invoices for payment",
-    "payables_pay": "Record that a supplier invoice was paid"
+    "payables_pay": "Record that a supplier invoice was paid",
+    "payables_settings": "Change the payables settings: match tolerances, billing basis and who approves SDI invoices"
   }
 }

@@ -72,6 +72,17 @@ model ProductionSettings {
   /// Garments per bundle when a make names no size (MES-065: 10-20 in a cutting room; one garment for a made-to-measure
   /// unit whatever this says), from 1 to 500. The office sets it; the floor reads it.
   standardBundleSize     Int                @default(10)
+  /// W2b (B-W2b-12, wave 7/7; MES-097, MES-098, MES-128, MES-067, MES-168): the floor checks of the site (labour.prisma
+  /// holds their enums). More pieces at an operation than the previous one gave (quantityGuard; STRICT: held for a team
+  /// leader's PIN), a required operation skipped (skippedOperationRule; WARN: the team leader is told), scrap above
+  /// `scrapApprovalLimit` pieces in one scan waits for the lead's approval (null: none), one bundle code scanned at every
+  /// operation or a coupon per operation (bundleCodeMode), and a bundle with no scan for `stuckBundleHours` (1-720) is
+  /// stuck. Read by the API steps B-W2b-41, -46 and -53; the trigger "ProductionSettings_floor_checks" keeps the ranges.
+  quantityGuard          FloorRuleMode      @default(STRICT)
+  skippedOperationRule   FloorRuleMode      @default(WARN)
+  scrapApprovalLimit     Int?
+  bundleCodeMode         BundleCodeMode     @default(ONE_CODE)
+  stuckBundleHours       Int                @default(4)
   version                Int                @default(1)
   createdAt              DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
@@ -149,6 +160,11 @@ model WorkOrder {
   heldById        String?         @db.Uuid
   holdRecordType  String?
   holdRecordId    String?         @db.Uuid
+  /// W2b (B-W2b-12, wave 7/7; MES-009, MES-010): a rush flag the dispatch board and the tablet show beside the priority
+  /// (it changes until the work order is CLOSED or CANCELLED), and the work order it was split from (sizes or a quantity
+  /// moved into this one with its own due date; the same site, style and kind; set when it is made, never changed).
+  rush            Boolean         @default(false)
+  splitFromId     String?         @db.Uuid
   version         Int             @default(1)
   createdAt       DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
@@ -168,6 +184,11 @@ model WorkOrder {
   cutLogs       CutLog[]
   bundles       Bundle[]
   scans         OperationScan[]
+  // W2b (wave 7/7): the work order it was split from, and those split from it (Restrict, not Prisma's SetNull default for
+  // an optional relation: that would also clear tenantId and siteId); andon.prisma: the help calls about it.
+  splitFrom     WorkOrder?           @relation("WorkOrderSplit", fields: [tenantId, siteId, splitFromId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  splits        WorkOrder[]          @relation("WorkOrderSplit")
+  helpCalls     HelpCall[]
   // W2a cost-ledger.prisma (wave 7/7): its cost ledger (material, labour, subcontract, overhead, completion).
   /// @not-money the relation to the cost ledger (the rows carry the grain)
   costEntries   WorkOrderCostEntry[]
@@ -202,6 +223,8 @@ model WorkOrder {
   // from that revision's routing and BOM).
   @@unique([tenantId, siteId, styleRevisionId, id])
   @@index([tenantId, status, dueDate])
+  // W2b: the work orders split from one (genealogy, MES-010).
+  @@index([tenantId, splitFromId])
 }
 
 enum WorkOrderKind {
@@ -313,6 +336,11 @@ model WorkOrderOperation {
   workCentre       WorkCentre       @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   scans            OperationScan[]
   correctionRequests ScanCorrectionRequest[]
+  // W2b labour.prisma (wave 7/7): the steps ticked at it, its coupons, the scan findings and the dispatch about it.
+  checklistResults    OperationChecklistResult[]
+  bundleCoupons       BundleCoupon[]
+  scanPatternFindings ScanPatternFinding[]
+  dispatchAssignments DispatchAssignment[]
   // W2a subcontract.prisma: the subcontract orders that send it out.
   subcontractOperations SubcontractOperation[]
   // W2a rework.prisma, schedule.prisma: the rework found at it and done at it, its slots on the planning board.
@@ -493,6 +521,12 @@ model Bundle {
   garmentSerials GarmentSerial[]
   // Its tickets printed again, each with the reason.
   reprints      BundleReprint[]
+  // W2b labour.prisma, andon.prisma (wave 7/7): the steps ticked on it, its coupons, the scan findings about it, the help
+  // calls about it.
+  checklistResults    OperationChecklistResult[]
+  coupons             BundleCoupon[]
+  scanPatternFindings ScanPatternFinding[]
+  helpCalls           HelpCall[]
   // W2a (MES-071): the bundle it was split from, and the bundles split from it (Restrict, not Prisma's SetNull default
   // for an optional relation: that would also clear tenantId, siteId and workOrderId).
   parent        Bundle?         @relation("BundleSplit", fields: [tenantId, siteId, workOrderId, parentBundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -582,6 +616,9 @@ model OperationScan {
   reason               String?
   /// CORRECTION: the team leader or office user who approved it (MES-096).
   approvedById         String?   @db.Uuid
+  /// W2b (B-W2b-12, wave 7/7; MES-088): PAUSE, and only PAUSE: why work stopped, a code of the PAUSE reason list
+  /// (reasons.prisma; break, waiting for material, machine, called away).
+  pauseReasonCode      String?
   /// The signed-in worker; null when the site records the station only.
   workerId             String?   @db.Uuid
   /// The device's station; required when the site records the station only.
@@ -620,6 +657,8 @@ model OperationScan {
   // W2b pay.prisma (schema wave 6/7): the earnings it paid and its holds (not clocked in).
   earningsEntries    EarningsEntry[]
   heldScans          HeldScan[]
+  // W2b labour.prisma (wave 7/7): the members of a team operation (MES-091) its START, RESUME, PARTIAL or REPORT names.
+  members            OperationScanMember[]
   worker      Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   station     Station?           @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device      Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -633,8 +672,18 @@ model OperationScan {
   // One standing report per bundle and operation, and WIP per operation (MES-167).
   @@index([tenantId, bundleId, workOrderOperationId])
   @@index([tenantId, workOrderId])
+  // W2b: a worker's or a station's open operation (off-standard time starts only when no bundle runs, MES-156).
+  @@index([tenantId, siteId, workerId, serverTime])
+  @@index([tenantId, siteId, stationId, serverTime])
 }
 
+/// REPORT, UNDO and CORRECTION are the count ledger (W1): only they carry good, scrap and rework, and every count, WIP and
+/// progress read takes only them. W2b (B-W2b-12, wave 7/7; MES-087, -088, -089, -092, -117) adds the timing of an
+/// operation on a bundle, with no counts but PARTIAL's: START begins a stretch of work, PAUSE stops it with a reason,
+/// RESUME starts it again, HAND_BACK ends it unfinished (the time is kept; the bundle waits for someone else), PARTIAL
+/// ends it with the pieces done so far (another person continues). Labour minutes are the running stretches; a REPORT
+/// (or CORRECTION) of the bundle at the operation ends the stretch that runs. The hand-written
+/// …_floor_work_w2b_guards keep one open stretch per bundle and operation and its subject (worker or station).
 enum ScanKind {
   /// The bundle is done at the operation: good, scrap and rework counts.
   REPORT
@@ -642,6 +691,17 @@ enum ScanKind {
   UNDO
   /// An older scan corrected, approved by a lead (MES-096): the right counts.
   CORRECTION
+  /// W2b: work on the bundle at the operation starts (MES-087): no counts.
+  START
+  /// W2b: work stops for a while (MES-088): its reason (pauseReasonCode), no counts.
+  PAUSE
+  /// W2b: paused work goes on (MES-088): no counts.
+  RESUME
+  /// W2b: the operation is handed back unfinished (MES-089): the time is kept, no counts.
+  HAND_BACK
+  /// W2b: the pieces done so far (MES-092): good (scrap, rework) from 1, fewer than the bundle; another person continues.
+  /// Not a report: it counts towards nothing but the labour split; the REPORT still reports the bundle.
+  PARTIAL
 }
 
 /// A worker's acknowledgement of the floor information notice (PLT-208, SCR-025; Statuto dei Lavoratori art. 4 c.3,

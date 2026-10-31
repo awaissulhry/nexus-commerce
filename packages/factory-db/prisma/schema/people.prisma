@@ -102,6 +102,16 @@ model Employee {
   earningsEntries       EarningsEntry[]
   heldScans             HeldScan[]
   workerStatements      WorkerStatement[]
+  // W2b labour.prisma, andon.prisma (wave 7/7): the person's team-operation memberships, ticked steps, off-standard time,
+  // the edits of their labour records and their disputes, their dispatch, crews and help calls (their floor sign-in's).
+  scanMemberships       OperationScanMember[]
+  checklistResults      OperationChecklistResult[]
+  offStandardEntries    OffStandardEntry[]
+  labourEdits           LabourEdit[]
+  labourDisputes        LabourDispute[]
+  dispatchAssignments   DispatchAssignment[]
+  crewMemberships       CrewMember[]
+  helpCalls             HelpCall[]
 
   @@unique([tenantId, employeeCode])
   @@unique([tenantId, userId])
@@ -159,6 +169,8 @@ model Team {
   line    Line?        @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   members TeamMember[]
   loans   LineLoan[]
+  // W2b andon.prisma (wave 7/7): the help-call types it answers.
+  helpCallTypes HelpCallType[]
 
   @@unique([tenantId, siteId, code])
   // The target of the members' and loans' tenant- and site-safe references.

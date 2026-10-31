@@ -9,15 +9,20 @@ import {
   candidatesContract,
   countsContract,
   createContract,
+  dismissInboxContract,
   getContract,
+  getSettingsContract,
+  listInboxContract,
   listContract,
   patchContract,
   patchLineContract,
   payContract,
   pickupContract,
+  putSettingsContract,
   reasonContract,
   removeLineContract,
   reopenContract,
+  reopenInboxContract,
   sdiStatusContract,
   sendToBuyerContract,
   settleClaimContract,
@@ -25,9 +30,11 @@ import {
   xmlContract,
 } from './contract'
 import { invoiceXml } from './files'
+import { dismissInboxItem, listInbox, reopenInboxItem } from './inbox'
 import { addLine, createInvoice, disputeInvoice, getInvoice, invoiceCounts, listInvoices, mappingCandidates, markWithoutOrder, matchAgain, patchInvoice, patchLine, removeLine, reopenInvoice, voidInvoice } from './invoices'
 import { manifest } from './manifest'
 import { pickUpNow, sdiStatus } from './sdi'
+import { getPayablesSettings, putPayablesSettings } from './settings'
 
 /**
  * Payables (B-W2a-62; FIN-136, FIN-137; design finance.payables, SCR-153 "Supplier invoices"): supplier and
@@ -65,4 +72,11 @@ export default defineRoutes('payables', manifest, async (app) => {
 
   app.get('/payables/sdi', { schema: sdiStatusContract }, async (request) => sdiStatus(request, request.query))
   app.post('/payables/sdi/pickup', { schema: pickupContract }, async (request) => pickUpNow(request, request.body))
+
+  // B-W2b-21: the payables settings (Z8:03) and the SDI inbox (Z8:06). Literal paths, before nothing that could shadow them.
+  app.get('/payables/settings', { schema: getSettingsContract }, async (request) => getPayablesSettings(request, request.query))
+  app.put('/payables/settings', { schema: putSettingsContract }, async (request) => putPayablesSettings(request, request.body, idempotencyKeyFrom(request)))
+  app.get('/payables/sdi/inbox', { schema: listInboxContract }, async (request) => listInbox(request, request.query))
+  app.post('/payables/sdi/inbox/:itemId/dismiss', { schema: dismissInboxContract }, async (request) => dismissInboxItem(request, request.params.itemId, request.body, idempotencyKeyFrom(request)))
+  app.post('/payables/sdi/inbox/:itemId/reopen', { schema: reopenInboxContract }, async (request) => reopenInboxItem(request, request.params.itemId, request.body, idempotencyKeyFrom(request)))
 })

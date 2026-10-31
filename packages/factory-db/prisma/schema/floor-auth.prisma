@@ -50,6 +50,14 @@ model Device {
   /// W2b (B-W2b-03; design "In use since 07:02", never who: Statuto art. 4): when its open floor session began; set
   /// when a session opens on it and cleared when that session ends (with currentSessionId); null: not in use.
   inUseSince       DateTime?    @db.Timestamptz(3)
+  /// W2b (B-W2b-12, wave 7/7; MES-181, MES-186, PLT-059): what the device is for, chosen at enrolment by the office (the
+  /// floor never changes it): STATION a station's tablet (one operator, or a crew: labour.prisma CrewSession), LINE a
+  /// team leader's tablet for a line, DISPLAY a line board with nobody signed in, PHONE one person's own phone. The line
+  /// a LINE or DISPLAY device shows (on the device's site; null: its station's line), and the one worker a PHONE device
+  /// is for (only on a PHONE). The trigger "Device_mode_check" keeps them.
+  mode             DeviceMode   @default(STATION)
+  lineId           String?      @db.Uuid
+  personalWorkerId String?      @db.Uuid
   /// The open floor session, if any: the one operator signed in on it.
   currentSessionId String?      @db.Uuid
   revokedAt        DateTime?    @db.Timestamptz(3)
@@ -92,6 +100,18 @@ model Device {
   // floor-sync.prisma: its queue's recorded events and refused actions.
   syncEvents      FloorSyncEvent[]
   refusedActions  FloorRefusedAction[]
+  // W2b (wave 7/7): the line it shows and the worker a phone is for (Restrict, not Prisma's SetNull default for an
+  // optional relation: that would also clear tenantId and siteId); labour.prisma, andon.prisma: its crews, the steps
+  // ticked, the off-standard time and help calls sent on it, the bundle coupons and disputes made on it, its notes.
+  line                 Line?                      @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  personalWorker       Worker?                    @relation("DevicePersonalWorker", fields: [tenantId, siteId, personalWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  crewSessions         CrewSession[]
+  checklistResults     OperationChecklistResult[]
+  offStandardEntries   OffStandardEntry[]
+  helpCalls            HelpCall[]
+  bundleCoupons        BundleCoupon[]
+  labourDisputes       LabourDispute[]
+  handoverNotes        HandoverNote[]
 
   @@unique([tenantId, siteId, id])
   @@index([tenantId, siteId])
@@ -101,6 +121,18 @@ enum DeviceKind {
   TABLET
   HANDHELD
   PC
+}
+
+/// W2b (wave 7/7): what a device is for (MES-181, MES-186; Owner question 24: a shared tablet per line needs crew mode).
+enum DeviceMode {
+  /// A station's tablet: one operator signed in, or a crew with one active (PLT-059).
+  STATION
+  /// A team leader's tablet for a line: the Line view first.
+  LINE
+  /// A read-only line board (the line TV): nobody signs in.
+  DISPLAY
+  /// One person's own phone: only that worker signs in; it never tracks where they are.
+  PHONE
 }
 
 /// The life of a device (factory-domain auth/floor/status: deviceStatus).
@@ -199,6 +231,18 @@ model Worker {
   // W2b time.prisma (wave 5/7): the worker's clock events and overtime answers on the site's tablets.
   clockEvents            ClockEvent[]
   overtimeAgreements     OvertimeAgreement[]
+  // W2b (wave 7/7) floor-auth.prisma, labour.prisma, andon.prisma (a site that names workers): the phone that is theirs,
+  // the team operations they were a member of, the steps they ticked, their off-standard time, the edits of their labour
+  // records and their disputes, their dispatch, their crews, the help calls they sent.
+  personalDevices        Device[]                   @relation("DevicePersonalWorker")
+  scanMemberships        OperationScanMember[]
+  checklistResults       OperationChecklistResult[]
+  offStandardEntries     OffStandardEntry[]
+  labourEdits            LabourEdit[]
+  labourDisputes         LabourDispute[]
+  dispatchAssignments    DispatchAssignment[]
+  crewMemberships        CrewMember[]
+  helpCalls              HelpCall[]
   // quality.prisma: the final inspections the worker made as the inspector.
   inspections    Inspection[]   @relation("InspectionInspector")
   // W2a (wave 6/7) quality.prisma, holds.prisma, ncr.prisma, plant.prisma: the inspections assigned to the worker, the
@@ -311,6 +355,8 @@ model FloorSession {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   badge           Badge?   @relation(fields: [tenantId, siteId, badgeId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   currentOnDevice Device[] @relation("DeviceCurrentSession")
+  // W2b labour.prisma (wave 7/7): the crew member it is the session of (crew mode, PLT-059).
+  crewMemberships CrewMember[]
 
   // The target of the device's current-session reference.
   @@unique([tenantId, siteId, id])
