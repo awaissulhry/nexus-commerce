@@ -61,18 +61,18 @@ export const WORK_ORDER_CHANGES = ['cells', 'revision', 'details', 'steps'] as c
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 const postedBy = () => z.enum(['OFFICE', 'FLOOR', 'SYSTEM'])
 /** The cutting tables of the event's site and the office's cutting screens (production.cut). */
-const cutLive = { permission: 'production.cut', floor: true, fields: ['workOrderId', 'number', 'hideId'] } as const
+const cutLive = { permission: 'production.cut', floor: 'production.cut', fields: ['workOrderId', 'number', 'hideId'] } as const
 /** The bundles screens of the event's site and the office's (production.bundles). */
-const bundleLive = { permission: 'production.bundles', floor: true, fields: ['workOrderId', 'number', 'bundleId'] } as const
+const bundleLive = { permission: 'production.bundles', floor: 'production.bundles', fields: ['workOrderId', 'number', 'bundleId'] } as const
 /** WIP and the work order record (workorders.view) and the floor devices of the event's site. */
-const scanLive = { permission: 'workorders.view', floor: true, fields: ['workOrderId', 'number', 'bundleId'] } as const
+const scanLive = { permission: 'workorders.view', floor: 'floor.work', fields: ['workOrderId', 'number', 'bundleId'] } as const
 /** Approvals and the refused scans (production.scan.correct) and the floor devices of the event's site. */
-const correctionLive = { permission: 'production.scan.correct', floor: true, fields: ['workOrderId', 'number', 'requestId'] } as const
+const correctionLive = { permission: 'production.scan.correct', floor: 'production.scan', fields: ['workOrderId', 'number', 'requestId'] } as const
 /** The garment label screens of the event's site and the office's (production.serials). */
-const labelLive = { permission: 'production.serials', floor: true, fields: ['workOrderId', 'number', 'workOrderSizeId'] } as const
+const labelLive = { permission: 'production.serials', floor: 'production.serials', fields: ['workOrderId', 'number', 'workOrderSizeId'] } as const
 // W2a B-W2a-13.
 /** The rework of the event's site (production.rework, the floor too). */
-const reworkLive = { permission: 'production.rework', floor: true, fields: ['workOrderId', 'number', 'reworkId'] } as const
+const reworkLive = { permission: 'production.rework', floor: 'production.rework', fields: ['workOrderId', 'number', 'reworkId'] } as const
 /** Scrap & rework in the office (production.scrap.view). */
 const scrapLive = { permission: 'production.scrap.view', fields: ['workOrderId', 'number'] } as const
 
@@ -128,14 +128,14 @@ export const events = [
       /** Released with material short, on the planner's override (its reason is in the audit row). */
       materialOverride: z.boolean(),
     }),
-    live: { ...live, floor: true, fields: ['workOrderId', 'number', 'batchNumber'] },
+    live: { ...live, floor: 'floor.work', fields: ['workOrderId', 'number', 'batchNumber'] },
   }),
   defineEvent({
     type: 'workorder.status_changed',
     context: 'production',
     description: 'A work order was started, completed, closed or cancelled.',
     payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), from: z.enum(WORK_ORDER_STATUSES), to: z.enum(WORK_ORDER_STATUSES) }),
-    live: { ...live, floor: true, fields: ['workOrderId', 'number', 'to'] },
+    live: { ...live, floor: 'floor.work', fields: ['workOrderId', 'number', 'to'] },
   }),
   // B-W2a-12 (modules/production/completion): report finished to stock and taking a report back.
   defineEvent({
@@ -312,7 +312,7 @@ export const events = [
       workOrderId: z.uuid().nullable(),
       bundleId: z.uuid().nullable(),
     }),
-    live: { permission: 'production.scan.correct', floor: true, fields: ['refusalId', 'deviceId', 'code'] },
+    live: { permission: 'production.scan.correct', floor: 'production.scan', fields: ['refusalId', 'deviceId', 'code'] },
   }),
   defineEvent({
     type: 'production.garment_labels_printed',
