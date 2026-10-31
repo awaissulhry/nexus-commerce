@@ -223,6 +223,13 @@ const CALLS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object
   technician: ['production.calls.view', 'production.calls.answer'],
   floor_inspector: ['production.calls.view', 'production.calls.answer'],
 })
+/**
+ * B-W2b-46 (checks before a scan counts, MES-070, MES-097, MES-098; design floor.operation "Team leader override"): the
+ * team leader overrides a held scan on the tablet with their own PIN and a reason. Floor only. The owner from every().
+ */
+const GUARDS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.scan.override'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -243,7 +250,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-27
   ...(audience === 'office' ? (PEOPLE_PRIVACY_ADDS[key] ?? []) : []),
   // B-W2b-35
-  ...((audience === 'office' ? CALLS_ADDS : CALLS_FLOOR_ADDS)[key] ?? [])]
+  ...((audience === 'office' ? CALLS_ADDS : CALLS_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-46
+  ...(audience === 'floor' ? (GUARDS_FLOOR_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

@@ -10,6 +10,8 @@ import { REWORK_STATUSES } from './rework/rules'
 import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
 // B-W2b-29: off-standard and indirect time.
 import { BLOCK_ENDINGS, BLOCK_SOURCES, OFF_STANDARD_KINDS } from './offstandard/rules'
+// B-W2b-46: checks before a scan counts.
+import { GUARD_KINDS, OVERRIDE_REASON_CODES } from './guards/rules'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -50,6 +52,10 @@ import { BLOCK_ENDINGS, BLOCK_SOURCES, OFF_STANDARD_KINDS } from './offstandard/
  *   production.report_subscription_changed  B-W2a-38: someone subscribed to the daily production report by e-mail, or a
  *                                           subscription changed or was turned off (the report page's state refreshes)
  *   production.daily_report_sent            B-W2a-38: the scheduler e-mailed one person's daily production report
+ *   production.scan_guard_flagged           B-W2b-46: a report counted although a check found something (the site's
+ *                                           rule is WARN): the team leader is told (MES-097, MES-098); no person
+ *   production.scan_guard_overridden        B-W2b-46: a team leader overrode the checks that held a report, with their
+ *                                           PIN and a reason tile (MES-070, MES-097, MES-098); no person, no words
  *   production.bundle_coupons_changed       B-W2b-41: a bundle's coupons printed, one reprinted or voided (MES-067)
  *   production.bundle_stuck                 B-W2b-41: a bundle with no scan past its site's limit, once per wait (MES-168)
  *   production.scan_findings_found          B-W2b-41: the scan-pattern checks found patterns about bundles (MES-075)
@@ -84,6 +90,9 @@ const reworkLive = { permission: 'production.rework', floor: 'production.rework'
 const scrapLive = { permission: 'production.scrap.view', fields: ['workOrderId', 'number'] } as const
 /** B-W2b-29: the labour inbox (production.offstandard.view) and the tablets of the event's site (floor.work). No person in a field. */
 const offStandardLive = { permission: 'production.offstandard.view', floor: 'floor.work', fields: ['blockId', 'siteId', 'lineId', 'status'] } as const
+// B-W2b-46.
+/** The checks the floor met: the office's leads and supervisors (production.scan.correct) and the team leaders' tablets (production.scan.override). */
+const guardLive = { permission: 'production.scan.correct', floor: 'production.scan.override', fields: ['workOrderId', 'number', 'bundleId', 'scanId'] } as const
 
 export const events = [
   defineEvent({
@@ -658,5 +667,30 @@ export const events = [
       status: z.enum(['PENDING', 'APPROVED', 'REJECTED']),
     }),
     live: offStandardLive,
+  }),
+  // ---- B-W2b-46: checks before a scan counts (modules/production/guards). Ids, kinds and the reason tile's code only.
+  defineEvent({
+    type: 'production.scan_guard_flagged',
+    context: 'production',
+    description: "A floor report counted although a check before it counts found something the site's rule only warns about (more garments than the operation before passed, a skipped required operation): the team leaders are told.",
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), bundleId: z.uuid(), scanId: z.uuid(), operationId: z.uuid(), operationSeq: z.number().int(), stationId: z.uuid().nullable(), guards: z.array(z.enum(GUARD_KINDS)).min(1) }),
+    live: guardLive,
+  }),
+  defineEvent({
+    type: 'production.scan_guard_overridden',
+    context: 'production',
+    description: "A team leader overrode the checks that held a floor report (more garments than the operation before passed, a skipped required operation, a bundle of another line) with their PIN and a reason; the report counted.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      scanId: z.uuid(),
+      operationId: z.uuid(),
+      operationSeq: z.number().int(),
+      stationId: z.uuid().nullable(),
+      guards: z.array(z.enum(GUARD_KINDS)).min(1),
+      reasonCode: z.enum(OVERRIDE_REASON_CODES),
+    }),
+    live: guardLive,
   }),
 ] as const
