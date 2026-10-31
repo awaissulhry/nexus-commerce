@@ -1,0 +1,216 @@
+/*
+ * DS floor kit — FloorCard (B-W2b-28). Sizes read `--nds-density-*`; colours are semantic roles paired as the contrast
+ * gate measures them (`--nds-<tone>-text` on `--nds-<tone>-soft` for the status, the flags and the icon bubble; the
+ * accent stripe in `--nds-<tone>`). A tone is never colour alone: the status and flags are words, a flag has an icon.
+ */
+.nds-floor-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  padding: var(--nds-density-gap) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-inline-start: var(--nds-space-8) solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  container: nds-floor-card / inline-size;
+}
+.nds-floor-card[data-tone='primary'] {
+  border-inline-start-color: var(--nds-primary);
+}
+.nds-floor-card[data-tone='success'] {
+  border-inline-start-color: var(--nds-success);
+}
+.nds-floor-card[data-tone='warning'] {
+  border-inline-start-color: var(--nds-warning);
+}
+.nds-floor-card[data-tone='danger'] {
+  border-inline-start-color: var(--nds-danger);
+}
+.nds-floor-card[data-tone='info'] {
+  border-inline-start-color: var(--nds-info);
+}
+
+.nds-floor-card-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+.nds-floor-card-icon {
+  width: calc(var(--nds-density-icon) * 1.6);
+  height: calc(var(--nds-density-icon) * 1.6);
+  padding: calc(var(--nds-density-icon) * 0.3);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.nds-floor-card[data-tone='primary'] .nds-floor-card-icon {
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+}
+.nds-floor-card[data-tone='success'] .nds-floor-card-icon {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-floor-card[data-tone='warning'] .nds-floor-card-icon {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-floor-card[data-tone='danger'] .nds-floor-card-icon {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-floor-card[data-tone='info'] .nds-floor-card-icon {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.nds-floor-card-names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nds-floor-card-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--nds-space-10);
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  line-height: 1.2;
+}
+.nds-floor-card-kind {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-floor-card-code {
+  font-family: var(--nds-font-mono);
+  font-size: calc(var(--nds-density-font-body) * 1.35);
+  font-weight: var(--nds-font-weight-extrabold);
+  overflow-wrap: break-word;
+}
+.nds-floor-card-title {
+  font-size: var(--nds-density-font-body);
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+.nds-floor-card-status {
+  padding: var(--nds-space-4) var(--nds-space-14);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-bold);
+  white-space: nowrap;
+}
+.nds-floor-card-status[data-tone='primary'] {
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+}
+.nds-floor-card-status[data-tone='success'],
+.nds-floor-card-flag[data-tone='success'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-floor-card-status[data-tone='warning'],
+.nds-floor-card-flag[data-tone='warning'] {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-floor-card-status[data-tone='danger'],
+.nds-floor-card-flag[data-tone='danger'] {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-floor-card-status[data-tone='info'],
+.nds-floor-card-flag[data-tone='info'] {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+
+/* Two to four facts a row, by the card's own width. */
+.nds-floor-card-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  gap: var(--nds-density-gap);
+  margin: 0;
+}
+.nds-floor-card-fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.nds-floor-card-fact > dt {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-floor-card-fact > dd {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.2);
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.nds-floor-card-fact[data-tone='success'] > dd {
+  color: var(--nds-success-text);
+}
+.nds-floor-card-fact[data-tone='warning'] > dd {
+  color: var(--nds-warning-text);
+}
+.nds-floor-card-fact[data-tone='danger'] > dd {
+  color: var(--nds-danger-text);
+}
+.nds-floor-card-fact[data-tone='info'] > dd {
+  color: var(--nds-info-text);
+}
+.nds-floor-card-fact[data-tone='primary'] > dd {
+  color: var(--nds-primary);
+}
+
+.nds-floor-card-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-floor-card-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-height: var(--nds-density-control-h-sm);
+  padding: var(--nds-space-4) var(--nds-space-14);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-floor-card-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-gap);
+}
+.nds-floor-card-asof {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+
+/* A narrow card (a phone): the status goes under the names, so the code keeps its line. */
+@container nds-floor-card (max-width: 26rem) {
+  .nds-floor-card-head {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .nds-floor-card-status {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

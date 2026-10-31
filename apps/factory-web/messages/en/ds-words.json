@@ -494,5 +494,164 @@
     "ascending": "{column} ↑",
     "descending": "{column} ↓",
     "reading": "Reading…"
+  },
+  "floorElapsed": {
+    "minutes_one": "{count} minute",
+    "minutes_other": "{count} minutes",
+    "hours_one": "{count} hour",
+    "hours_other": "{count} hours",
+    "underMinute": "under a minute",
+    "join": "{hours} {minutes}",
+    "over": "{time} over",
+    "paused": "Paused",
+    "overWord": "Over",
+    "hourUnit": "h",
+    "minuteUnit": "min"
+  },
+  "floorCard": {
+    "cachedAt": "Saved on this tablet · as of {time}",
+    "facts": "Details",
+    "flags": "Flags",
+    "status": "Status"
+  },
+  "floorNamePicker": {
+    "recent": "Worked here recently",
+    "letters": "Jump to a letter",
+    "jumpTo": "Names starting with {letter}",
+    "noneFor": "No names start with {letter}",
+    "empty": "No one is set up here yet. Ask the office."
+  },
+  "floorListUpdates": {
+    "changedUnknown": "List changed",
+    "changed_one": "List changed: {count} update",
+    "changed_other": "List changed: {count} updates",
+    "show": "Show",
+    "announce": "The list changed. Press Show to see it."
+  },
+  "readAloud": {
+    "read": "Read aloud",
+    "stop": "Stop reading",
+    "voice": "Voice: {name}"
+  },
+  "pinSignBlock": {
+    "meaningTitle": "What signing means",
+    "signingAs": "Signing as {name}",
+    "notYou": "Not you?",
+    "records": "Your name, the time and this tablet are recorded with what you sign.",
+    "pin": "Sign with your PIN",
+    "entered": "{entered} of {total}",
+    "clear": "Clear",
+    "back": "Back",
+    "busy": "Checking…",
+    "cancel": "Cancel"
+  },
+  "lawRef": {
+    "about": "{law} — what it says",
+    "official": "Official text",
+    "newTab": "opens in a new tab"
+  },
+  "legalGate": {
+    "states": {
+      "met": "Met",
+      "missing": "Missing",
+      "expired": "Expired",
+      "unknown": "Not checked"
+    },
+    "recordedBy": "Recorded by {who}",
+    "recordedByAt": "Recorded by {who} · {when}",
+    "notRecorded": "Not recorded yet",
+    "record": "Record it",
+    "summary": "{met} of {total} conditions met",
+    "onFolded": "On · every condition met",
+    "onFoldedSince": "On since {since} · every condition met",
+    "onButOpen_one": "On, but {count} condition is no longer met",
+    "onButOpen_other": "On, but {count} conditions are no longer met",
+    "show": "Show conditions",
+    "hide": "Hide conditions",
+    "list": "Conditions",
+    "held_one": "{count} condition missing: {names}",
+    "held_other": "{count} conditions missing: {names}",
+    "namesJoin": ", ",
+    "none": "No conditions are listed for this switch"
+  },
+  "privacyNote": {
+    "levels": {
+      "line": "Line totals",
+      "team": "Team totals",
+      "individual": "One person’s data",
+      "protected": "Protected data"
+    },
+    "recorded": "Opening this is recorded",
+    "region": "Privacy"
+  },
+  "protectedValue": {
+    "restricted": "Restricted",
+    "show": "Show",
+    "showNote": "Opening it is recorded",
+    "opening": "Opening…",
+    "recordedAt": "View recorded · {time}",
+    "recorded": "View recorded",
+    "hide": "Hide",
+    "failed": "It could not be opened",
+    "retry": "Try again"
+  },
+  "dayStrip": {
+    "kinds": {
+      "work": "Worked",
+      "break": "Break",
+      "absence": "Absence",
+      "overtime": "Overtime",
+      "idle": "No scans"
+    },
+    "events": {
+      "in": "Clock-in",
+      "out": "Clock-out",
+      "autoOut": "Automatic clock-out",
+      "manual": "Manual entry",
+      "forgotBadge": "Forgot-badge PIN",
+      "other": "Event"
+    },
+    "shift": "Shift {from}–{to}",
+    "span": "{what} {from}–{to}",
+    "at": "{what} at {time}",
+    "flagged": "flagged for a check",
+    "anomaly": "Anomaly",
+    "textTitle": "The day in words",
+    "legend": "Key",
+    "shiftKey": "Shift",
+    "anomalyKey": "Anomaly"
+  },
+  "dueCell": {
+    "overdue_one": "Overdue by {count} day",
+    "overdue_other": "Overdue by {count} days",
+    "today": "Due today",
+    "dueIn_one": "Due tomorrow",
+    "dueIn_other": "Due in {count} days",
+    "validUntil": "Valid until {date}",
+    "needed": "Needed",
+    "done": "Done",
+    "doneOn": "Done {date}",
+    "none": "—"
+  },
+  "documentSeal": {
+    "version": "Version",
+    "fingerprint": "SHA-256 fingerprint",
+    "sealedAt": "Sealed",
+    "source": "Time from",
+    "sealedBy": "Sealed by",
+    "signers": "Signatures",
+    "signedOn": "Signed {date}",
+    "waiting": "Waiting to sign",
+    "signedCount": "{signed} of {total} signed",
+    "verify": "Verify a file",
+    "verifyNote": "The file stays on this device: only its fingerprint is computed.",
+    "reading": "Computing the fingerprint…",
+    "match": "{file} matches the sealed document",
+    "mismatch": "{file} does NOT match: it differs from the sealed document",
+    "failed": "The file could not be read",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Could not copy",
+    "region": "Document seal"
   }
 }

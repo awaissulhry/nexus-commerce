@@ -1,0 +1,148 @@
+/*
+ * DS — DocumentSeal (B-W2b-28). Colours are semantic roles paired as the contrast gate measures them (the card on
+ * `--nds-surface`, the fingerprint in `--nds-text` on `--nds-surface-sunken`, results in `--nds-<tone>-text` on
+ * `--nds-<tone>-soft`). A result is an icon AND words. Sizes read `--nds-density-*`.
+ */
+.nds-seal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  padding: var(--nds-space-14) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+}
+.nds-seal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+}
+.nds-seal-icon {
+  width: var(--nds-density-icon);
+  height: var(--nds-density-icon);
+  color: var(--nds-text-2);
+}
+.nds-seal-title {
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-seal-version {
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-seal-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  gap: var(--nds-space-10) var(--nds-space-16);
+  margin: 0;
+}
+.nds-seal-fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.nds-seal-hash {
+  grid-column: 1 / -1;
+}
+.nds-seal-fact > dt {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-seal-fact > dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nds-seal-code {
+  padding: var(--nds-space-2) var(--nds-space-6);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-density-font-label);
+  word-break: break-all;
+  user-select: all;
+}
+.nds-seal-signers-head {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-seal-signers > ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: var(--nds-space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-seal-signers li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+.nds-seal-signer-icon {
+  width: 1.1em;
+  height: 1.1em;
+}
+.nds-seal-signers li[data-signed='true'] .nds-seal-signer-icon {
+  color: var(--nds-success-text);
+}
+.nds-seal-signers li[data-signed='false'] .nds-seal-signer-icon {
+  color: var(--nds-warning-text);
+}
+.nds-seal-signer-name {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-seal-signer-role,
+.nds-seal-signer-when,
+.nds-seal-note {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-seal-verify {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+}
+.nds-seal-result {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  flex-basis: 100%;
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-seal-result:empty {
+  display: none;
+}
+.nds-seal-result > svg {
+  flex-shrink: 0;
+  width: 1.15em;
+  height: 1.15em;
+}
+.nds-seal-result[data-result='match'] {
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-seal-result[data-result='mismatch'],
+.nds-seal-result[data-result='failed'] {
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}

@@ -18,6 +18,20 @@ import type { MarginMeterLabels } from '@nexus/ui/charts/margin-meter/index'
 import type { WaterfallLabels } from '@nexus/ui/charts/waterfall/index'
 import type { BarListLabels } from '@nexus/ui/charts/bar-list/index'
 import type { CardListLabels } from '@nexus/ui/grid/card-list/index'
+// B-W2b-28: the floor and people parts (each its own entry point).
+import type { FloorElapsedLabels } from '@nexus/ui/floor/FloorElapsed/index'
+import type { FloorCardLabels } from '@nexus/ui/floor/FloorCard/index'
+import type { FloorNamePickerLabels } from '@nexus/ui/floor/FloorNamePicker/index'
+import type { FloorListUpdatesLabels } from '@nexus/ui/floor/FloorListUpdates/index'
+import type { ReadAloudLabels } from '@nexus/ui/floor/ReadAloud/index'
+import type { PinSignBlockLabels } from '@nexus/ui/components/PinSignBlock/index'
+import type { LawRefLabels } from '@nexus/ui/components/LawRef/index'
+import type { LegalGateLabels } from '@nexus/ui/components/LegalGate/index'
+import type { PrivacyNoteLabels } from '@nexus/ui/components/PrivacyNote/index'
+import type { ProtectedValueLabels } from '@nexus/ui/components/ProtectedValue/index'
+import type { DayStripLabels } from '@nexus/ui/components/DayStrip/index'
+import type { DueCellLabels } from '@nexus/ui/components/DueCell/index'
+import type { DocumentSealLabels } from '@nexus/ui/components/DocumentSeal/index'
 import { formatDateTime, formatNumber, DEFAULT_TIME_ZONE } from './format'
 import { INTL_LOCALE, type Locale } from './locales'
 import type { Translate } from './messages'
@@ -75,6 +89,20 @@ export interface DsLabels {
   barList: BarListLabels
   selectableCard: SelectableCardLabels
   cardList: CardListLabels
+  // B-W2b-28
+  floorElapsed: FloorElapsedLabels
+  floorCard: FloorCardLabels
+  floorNamePicker: FloorNamePickerLabels
+  floorListUpdates: FloorListUpdatesLabels
+  readAloud: ReadAloudLabels
+  pinSignBlock: PinSignBlockLabels
+  lawRef: LawRefLabels
+  legalGate: LegalGateLabels
+  privacyNote: PrivacyNoteLabels
+  protectedValue: ProtectedValueLabels
+  dayStrip: DayStripLabels
+  dueCell: DueCellLabels
+  documentSeal: DocumentSealLabels
 }
 
 const MINUTE = 60_000
@@ -443,6 +471,150 @@ export function dsLabels(t: Translate, locale: Locale, timeZone: string = DEFAUL
       ascending: (column) => t('cardList.ascending', { column }),
       descending: (column) => t('cardList.descending', { column }),
       reading: t('cardList.reading'),
+    },
+    ...floorPeopleLabels(t),
+  }
+}
+
+/** B-W2b-28 — the floor and people parts' words (`ds-words`: floorElapsed … documentSeal). */
+function floorPeopleLabels(t: Translate): Pick<
+  DsLabels,
+  | 'floorElapsed' | 'floorCard' | 'floorNamePicker' | 'floorListUpdates' | 'readAloud' | 'pinSignBlock' | 'lawRef' | 'legalGate'
+  | 'privacyNote' | 'protectedValue' | 'dayStrip' | 'dueCell' | 'documentSeal'
+> {
+  const k = (part: string) => (key: string, params?: Record<string, string | number>) => t(`${part}.${key}`, params)
+  const fe = k('floorElapsed')
+  const fc = k('floorCard')
+  const np = k('floorNamePicker')
+  const lu = k('floorListUpdates')
+  const ra = k('readAloud')
+  const ps = k('pinSignBlock')
+  const lr = k('lawRef')
+  const lg = k('legalGate')
+  const pn = k('privacyNote')
+  const pv = k('protectedValue')
+  const dsk = k('dayStrip')
+  const dc = k('dueCell')
+  const seal = k('documentSeal')
+  return {
+    floorElapsed: {
+      minutes: (count) => fe('minutes', { count }),
+      hours: (count) => fe('hours', { count }),
+      underMinute: fe('underMinute'),
+      join: (hours, minutes) => fe('join', { hours, minutes }),
+      over: (time) => fe('over', { time }),
+      paused: fe('paused'),
+      overWord: fe('overWord'),
+      hourUnit: fe('hourUnit'),
+      minuteUnit: fe('minuteUnit'),
+    },
+    floorCard: { cachedAt: (time) => fc('cachedAt', { time }), facts: fc('facts'), flags: fc('flags'), status: fc('status') },
+    floorNamePicker: {
+      recent: np('recent'),
+      letters: np('letters'),
+      jumpTo: (letter) => np('jumpTo', { letter }),
+      noneFor: (letter) => np('noneFor', { letter }),
+      empty: np('empty'),
+    },
+    floorListUpdates: {
+      changed: (count) => (count <= 0 ? lu('changedUnknown') : lu('changed', { count })),
+      show: lu('show'),
+      announce: lu('announce'),
+    },
+    readAloud: { read: ra('read'), stop: ra('stop'), voice: (name) => ra('voice', { name }) },
+    pinSignBlock: {
+      meaningTitle: ps('meaningTitle'),
+      signingAs: (name) => ps('signingAs', { name }),
+      notYou: ps('notYou'),
+      records: ps('records'),
+      pin: ps('pin'),
+      entered: (entered, total) => ps('entered', { entered, total }),
+      clear: ps('clear'),
+      back: ps('back'),
+      busy: ps('busy'),
+      cancel: ps('cancel'),
+    },
+    lawRef: { about: (law) => lr('about', { law }), official: lr('official'), newTab: lr('newTab') },
+    legalGate: {
+      states: { met: lg('states.met'), missing: lg('states.missing'), expired: lg('states.expired'), unknown: lg('states.unknown') },
+      recordedBy: (who, when) => (when ? lg('recordedByAt', { who, when }) : lg('recordedBy', { who })),
+      notRecorded: lg('notRecorded'),
+      record: lg('record'),
+      summary: (met, total) => lg('summary', { met, total }),
+      onFolded: (since) => (since ? lg('onFoldedSince', { since }) : lg('onFolded')),
+      onButOpen: (count) => lg('onButOpen', { count }),
+      show: lg('show'),
+      hide: lg('hide'),
+      list: lg('list'),
+      held: (count, names) => lg('held', { count, names: names.join(lg('namesJoin')) }),
+      none: lg('none'),
+    },
+    privacyNote: {
+      levels: { line: pn('levels.line'), team: pn('levels.team'), individual: pn('levels.individual'), protected: pn('levels.protected') },
+      recorded: pn('recorded'),
+      region: pn('region'),
+    },
+    protectedValue: {
+      restricted: pv('restricted'),
+      show: pv('show'),
+      showNote: pv('showNote'),
+      opening: pv('opening'),
+      recordedAt: (time) => pv('recordedAt', { time }),
+      recorded: pv('recorded'),
+      hide: pv('hide'),
+      failed: pv('failed'),
+      retry: pv('retry'),
+    },
+    dayStrip: {
+      kinds: { work: dsk('kinds.work'), break: dsk('kinds.break'), absence: dsk('kinds.absence'), overtime: dsk('kinds.overtime'), idle: dsk('kinds.idle') },
+      events: {
+        in: dsk('events.in'),
+        out: dsk('events.out'),
+        'auto-out': dsk('events.autoOut'),
+        manual: dsk('events.manual'),
+        'forgot-badge': dsk('events.forgotBadge'),
+        other: dsk('events.other'),
+      },
+      shift: (from, to) => dsk('shift', { from, to }),
+      span: (what, from, to) => dsk('span', { what, from, to }),
+      at: (what, time) => dsk('at', { what, time }),
+      flagged: dsk('flagged'),
+      anomaly: dsk('anomaly'),
+      textTitle: dsk('textTitle'),
+      legend: dsk('legend'),
+      shiftKey: dsk('shiftKey'),
+      anomalyKey: dsk('anomalyKey'),
+    },
+    dueCell: {
+      overdue: (count) => dc('overdue', { count }),
+      today: dc('today'),
+      dueIn: (count) => dc('dueIn', { count }),
+      validUntil: (date) => dc('validUntil', { date }),
+      needed: dc('needed'),
+      done: dc('done'),
+      doneOn: (date) => dc('doneOn', { date }),
+      none: dc('none'),
+    },
+    documentSeal: {
+      version: seal('version'),
+      fingerprint: seal('fingerprint'),
+      sealedAt: seal('sealedAt'),
+      source: seal('source'),
+      sealedBy: seal('sealedBy'),
+      signers: seal('signers'),
+      signedOn: (date) => seal('signedOn', { date }),
+      waiting: seal('waiting'),
+      signedCount: (signed, total) => seal('signedCount', { signed, total }),
+      verify: seal('verify'),
+      verifyNote: seal('verifyNote'),
+      reading: seal('reading'),
+      match: (file) => seal('match', { file }),
+      mismatch: (file) => seal('mismatch', { file }),
+      failed: seal('failed'),
+      copy: seal('copy'),
+      copied: seal('copied'),
+      copyFailed: seal('copyFailed'),
+      region: seal('region'),
     },
   }
 }
