@@ -1,0 +1,305 @@
+/*
+ * Finance › Receivables & credit (SCR-151) LAYOUT: the band, the tiles per currency, By customer with its age bar
+ * (AgeBar, the design's "NEW BarList" composed here), Reminders to approve, the statement DetailModal, the reminder
+ * dialog and the statement PDF tab. The controls are the design system's; this file only places and scales them with
+ * semantic tokens (no colours of its own). No page max-width (Owner rule 2026-10-29): the page fills the main area.
+ */
+.fw-frv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-frv-band,
+.fw-frv-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-frv-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-frv-date {
+  display: inline-block;
+  width: 11rem;
+  max-width: 100%;
+}
+
+.fw-frv-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-frv-section:focus-visible {
+  outline: 2px solid var(--nds-info-strong);
+  outline-offset: var(--nds-space-4);
+}
+
+.fw-frv-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-frv-muted[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-frv-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: 600;
+}
+
+.fw-frv-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-frv-link {
+  color: var(--nds-text-link);
+}
+
+.fw-frv-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-frv-cell-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs, var(--nds-font-size-sm));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-frv-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-frv-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-frv-tone.is-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-frv-tone.is-warning {
+  color: var(--nds-warning-text);
+}
+
+/* The tiles: one strip per currency, its currency named above when there are several. */
+.fw-frv-tiles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+/* AgeBar: a customer's balance split by age (not due · 1–30 · 31–60 · 61–90 · over 90), widths by share. */
+.fw-frv-age {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  width: 100%;
+}
+
+.fw-frv-age-track {
+  display: flex;
+  height: 0.6rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--nds-surface-sunken);
+  min-width: 0;
+}
+
+.fw-frv-age-part {
+  height: 100%;
+  min-width: 2px;
+}
+
+.fw-frv-age-part.is-NOT_DUE {
+  background: var(--nds-border-strong);
+}
+
+.fw-frv-age-part.is-D1_30 {
+  background: var(--nds-warning);
+}
+
+.fw-frv-age-part.is-D31_60 {
+  background: var(--nds-warning-strong);
+}
+
+.fw-frv-age-part.is-D61_90 {
+  background: var(--nds-danger);
+}
+
+.fw-frv-age-part.is-OVER_90 {
+  background: var(--nds-danger-strong);
+}
+
+.fw-frv-age-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-2) var(--nds-space-8);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs, var(--nds-font-size-sm));
+}
+
+.fw-frv-age-key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-frv-age-key::before {
+  content: '';
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+  background: var(--nds-border-strong);
+}
+
+.fw-frv-age-key.is-D1_30::before {
+  background: var(--nds-warning);
+}
+
+.fw-frv-age-key.is-D31_60::before {
+  background: var(--nds-warning-strong);
+}
+
+.fw-frv-age-key.is-D61_90::before {
+  background: var(--nds-danger);
+}
+
+.fw-frv-age-key.is-OVER_90::before {
+  background: var(--nds-danger-strong);
+}
+
+/* The statement DetailModal: the period, the bridge, the lines, what is open. */
+.fw-frv-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-frv-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-frv-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14) var(--nds-space-20);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-frv-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.fw-frv-bridge {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  margin: 0;
+}
+
+.fw-frv-bridge dt {
+  color: var(--nds-text-muted);
+}
+
+.fw-frv-bridge dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-frv-bridge .is-total {
+  border-top: 1px solid var(--nds-border-subtle);
+  padding-top: var(--nds-space-4);
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
+
+.fw-frv-held {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-frv-text {
+  margin: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md, 6px);
+  background: var(--nds-surface-sunken);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  max-height: 20rem;
+  overflow: auto;
+  font-family: inherit;
+}
+
+/* A card's content: its heading, then its parts, evenly spaced. */
+.fw-frv-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-frv-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+/* The statement PDF tab: one viewer per statement, the page's width. */
+.fw-frv-pdfs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-20);
+  min-width: 0;
+}
+
+@media print {
+  .fw-frv-band,
+  .fw-frv-noprint {
+    display: none;
+  }
+}

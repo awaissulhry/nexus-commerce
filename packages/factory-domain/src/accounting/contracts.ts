@@ -5,7 +5,7 @@ import { CHECK_CODES, MAX_EXPLANATION } from './checks'
 import { INTRASTAT_FLAG_CODES } from './intrastat'
 import { MANIFEST_CHANGES } from './manifest'
 import { ACCOUNTING_PACKAGES, EXPORT_STATUSES, LOCK_LEVELS, LOCK_STATUSES } from './packages'
-import { MONTH } from './periods'
+import { MONTH, PERIOD_LOCK_OVERRIDE_REASON } from './periods'
 
 /**
  * The contracts of the accounting exports, the Intrastat rows, the year-end stock pack and the period locks (B-W2a-39;
@@ -85,6 +85,15 @@ export const lockBody = input({
 export type LockBody = z.infer<typeof lockBody>
 
 export const lockParams = input({ lockId: id() })
+
+/**
+ * B-W2a-F8: the one optional body field of every write route that dates money or stock into a month
+ * (`periodLockOverride: { reason }`). Inside a SOFT-locked month the write goes in only with it, and its command writes
+ * one audit row `accounting.softLockOverride` on the lock (the month, the reason, the record); without it the answer is a
+ * 409 with the issue `period/SOFT_LOCKED`. A HARD lock refuses the write whatever the body says.
+ */
+export const periodLockOverride = input({ reason: z.string().trim().min(PERIOD_LOCK_OVERRIDE_REASON.min).max(PERIOD_LOCK_OVERRIDE_REASON.max) })
+export type PeriodLockOverride = z.infer<typeof periodLockOverride>
 export const liftBody = input({ version: z.number().int().min(1), reason: text(1000) })
 export type LiftBody = z.infer<typeof liftBody>
 

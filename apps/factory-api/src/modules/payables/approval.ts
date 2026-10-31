@@ -11,21 +11,24 @@ import { cleanBody } from '@nexus/factory-domain/threads/rules'
 import { command, type CommandCaller, type CommandTools } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { serverClock } from '../../core/time'
-import { refuseHardLocked } from '../accounting/period-guard'
+import { honourPeriodLocks } from '../accounting/period-guard'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { closeClaimInCommand } from '../purchasing/claims/claims'
 import { followInCommand } from '../../platform/threads/followers'
 import { ensureThread, mentionProblems, writeMessage } from '../../platform/threads/threads'
 import { detailInCommand, RefusedError } from './invoices'
 import { rematchInCommand } from './matching'
-import { invoiceInCommand, officeInvoice, officeOf, readLines, readMatches, RECORD, type InvoiceRow } from './store'
+import { invoiceInCommand, officeInvoice, officeOf, preparationOf, readLines, readMatches, RECORD, type InvoiceRow } from './store'
 import type { DetailView } from './views'
 
 /**
  * Approval and payment of supplier invoices (B-W2a-62; FIN-137; design finance.payables, record tabs Match ("Accept
  * difference with reason", "Send to buyer") and Approval ("You entered this invoice, so someone else approves it";
  * Approve · Reject with reason), the grid's bulk approve "separation of duties respected per row"). Office only; each
- * write is ONE command on the invoice. Separation of duties: the person who registered an invoice never approves it (the
- * …_money_w2a_guards hold the same rule); an invoice SDI delivered was registered by nobody of the office.
+ * write is ONE command on the invoice. Separation of duties (four eyes, the lead's stricter rule of B-W2a-F7): the person
+ * who registered an invoice (the …_money_w2a_guards hold this part too), mapped or matched one of its lines, or accepted
+ * one of its differences never approves it (store.ts preparationOf); an invoice SDI delivered was registered by nobody of
+ * the office, so its mapping and acceptances decide.
  */
 
 const now = (): Date => serverClock.now()
@@ -33,6 +36,7 @@ const now = (): Date => serverClock.now()
 async function approvalFacts(tools: Pick<CommandTools, 'tx'>, invoice: InvoiceRow) {
   const lines = await readLines(tools.tx, invoice.id)
   const matches = await readMatches(tools.tx, invoice.id)
+  const { mappedByIds, acceptedByIds } = await preparationOf(tools.tx, invoice.id)
   return {
     number: invoice.number,
     status: invoice.status as InvoiceStatus,
@@ -40,6 +44,8 @@ async function approvalFacts(tools: Pick<CommandTools, 'tx'>, invoice: InvoiceRo
     kind: invoice.kind as InvoiceKind,
     matchStatus: invoice.matchStatus as MatchStatus,
     createdById: invoice.createdById,
+    mappedByIds,
+    acceptedByIds,
     xmlFileId: invoice.xmlFileId,
     unaccepted: matches.filter((row) => !row.withinTolerance && row.acceptedAt === null).length,
     linesNet: isTyped(invoice.source as InvoiceSource) ? lines.reduce((total, line) => total + line.netAmount, 0) : null,
@@ -48,7 +54,7 @@ async function approvalFacts(tools: Pick<CommandTools, 'tx'>, invoice: InvoiceRo
   }
 }
 
-/** payables.approve: approved for payment, once matched and every difference accepted, never by who registered it. */
+/** payables.approve: approved for payment, once matched and every difference accepted, never by who prepared it. */
 export async function approveInvoice(caller: CommandCaller, invoiceId: string, input: { readonly version: number; readonly note?: string | null | undefined }, idempotencyKey?: string): Promise<{ invoice: DetailView }> {
   const { context } = await officeInvoice(caller, invoiceId, PAYABLES_APPROVE)
   const { result } = await command(caller, { name: 'payables.approve', idempotencyKey, input: { invoiceId, ...input }, record: { type: 'SupplierInvoice', id: invoiceId, expectedVersion: input.version } }, async (tools) => {
@@ -101,7 +107,7 @@ export async function withdrawApproval(caller: CommandCaller, invoiceId: string,
 }
 
 /** payables.pay: the payment recorded (the day the transfer left the bank and its reference); the proposal is W2b. */
-export async function payInvoice(caller: CommandCaller, invoiceId: string, input: { readonly version: number; readonly paidOn: string; readonly paymentRef: string }, idempotencyKey?: string): Promise<{ invoice: DetailView }> {
+export async function payInvoice(caller: CommandCaller, invoiceId: string, input: { readonly version: number; readonly paidOn: string; readonly paymentRef: string; readonly periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string): Promise<{ invoice: DetailView }> {
   const { invoice: seen } = await officeInvoice(caller, invoiceId, PAYABLES_PAY)
   const held = actionProblems({ number: seen.number, status: seen.status as InvoiceStatus, source: seen.source as InvoiceSource }).pay
   if (held) throw new RefusedError([{ code: 'NOT_APPROVED', message: held }])
@@ -110,7 +116,7 @@ export async function payInvoice(caller: CommandCaller, invoiceId: string, input
     const invoice = await invoiceInCommand(tools.tx, invoiceId)
     if (invoice.status !== 'APPROVED') throw new RefusedError([{ code: 'NOT_APPROVED', message: `Invoice ${invoice.number} is ${invoice.status.toLowerCase()}: an invoice is paid once approved.` }])
     if (input.paidOn < invoice.issueDate.toISOString().slice(0, 10)) throw new ValidationError('The payment is dated before the invoice.', [{ path: 'body/paidOn', message: 'Paid before it was issued.' }])
-    await refuseHardLocked(tools.tx, tools.context, [{ companyId: invoice.companyId, day: input.paidOn, refused: `the payment of supplier invoice ${invoice.number} on ${dayWords(input.paidOn)} is not recorded`, path: 'body/paidOn' }])
+    await honourPeriodLocks(tools, [{ companyId: invoice.companyId, day: input.paidOn, refused: `the payment of supplier invoice ${invoice.number} on ${dayWords(input.paidOn)} is not recorded`, path: 'body/paidOn', record: { type: RECORD, id: invoiceId } }], input.periodLockOverride)
     await tools.tx.supplierInvoice.update({ where: { id: invoiceId }, data: { status: 'PAID', paidOn: new Date(`${input.paidOn}T00:00:00.000Z`), paymentRef: input.paymentRef.trim() }, select: { id: true } })
     tools.audit({ action: 'payables.pay', recordType: RECORD, recordId: invoiceId, companyId: invoice.companyId, before: { status: 'APPROVED' }, after: { status: 'PAID', paidOn: input.paidOn, paymentRef: input.paymentRef.trim() } })
     tools.emit({ type: 'supplier_invoice.paid', subject: invoiceId, companyId: invoice.companyId, payload: { supplierInvoiceId: invoiceId, partyId: invoice.partyId, status: 'PAID', matchStatus: invoice.matchStatus, paidOn: input.paidOn } })

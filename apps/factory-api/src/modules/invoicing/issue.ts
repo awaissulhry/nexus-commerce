@@ -13,7 +13,8 @@ import { allocateNumber } from '../../platform/numbering/allocate'
 import type { FilesRuntime } from '../../platform/files/service'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { refundDueAfter } from '@nexus/factory-domain/invoicing/credit-note/credit-note'
-import { hardLockOn } from '../accounting/period-guard'
+import { hardLockOn, honourPeriodLocks } from '../accounting/period-guard'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { lockAll, lockMoney } from '../payments/locks'
 import { lockInvoicing } from './from-shipment/locks'
 import { ordersOfInvoices, settleOrders } from './from-shipment/settlement'
@@ -67,7 +68,7 @@ const dateValue = (date: BusinessDate): Date => new Date(`${date}T00:00:00.000Z`
  * Inside a command that holds the invoice's row (a version bump, or a draft it made): issues it, dated today in
  * Europe/Rome. Refuses (409) what the checks refuse, with every problem.
  */
-export async function issueInCommand(tools: CommandTools, invoiceId: string): Promise<{ invoiceId: string; number: string; issueDate: BusinessDate }> {
+export async function issueInCommand(tools: CommandTools, invoiceId: string, periodLockOverride?: PeriodLockOverride): Promise<{ invoiceId: string; number: string; issueDate: BusinessDate }> {
   const { tx, context, now } = tools
   const invoice = await readInvoice(tx, invoiceId)
   if (!invoice) throw new NotFoundError('Invoice not found.')
@@ -89,6 +90,8 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string): Pr
   const locked = await hardLockOn(tx, context, [{ companyId: invoice.companyId, day: date, refused: `the invoice is not issued today (${dayWords(date)})`, path: 'issueDate' }])
   const problems = [...review.problems, ...(kind === null ? [noSeries(invoice.docType)] : []), ...(locked ? [{ code: 'PERIOD_LOCKED', path: 'issueDate', message: locked.words }] : [])]
   if (problems.length > 0 || kind === null || !review.seller || !review.billTo) throw refusal(problems)
+  // B-W2a-F8: today inside a SOFT period lock needs the override reason (409 period/SOFT_LOCKED without it; audited with it).
+  await honourPeriodLocks(tools, [{ companyId: invoice.companyId, day: date, refused: `the invoice is not issued today (${dayWords(date)})`, path: 'issueDate', record: { type: 'Invoice', id: invoice.id } }], periodLockOverride)
 
   // B-W1-51: a credit note on what is paid leaves a refund due (W2b), recorded on the audit row and by invoice.refund_due.
   const credited = invoice.docType === 'TD04' && invoice.creditOfId ? await creditedInvoiceOf(tx, invoice.creditOfId, invoice.id) : null
@@ -189,7 +192,7 @@ export async function filesAfterIssue(files: FilesRuntime, caller: CommandCaller
  * invoices.issue (step-up): issues a draft (a), then makes its files (b, c). The checks run first, without a lock, for
  * a quick 409 with every problem; the command runs them again under its locks.
  */
-export async function issueInvoice(files: FilesRuntime, caller: CommandCaller, invoiceId: string, body: { version?: number | undefined }, idempotencyKey: string | undefined, stepUp: () => void): Promise<IssueAnswer> {
+export async function issueInvoice(files: FilesRuntime, caller: CommandCaller, invoiceId: string, body: { version?: number | undefined; periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey: string | undefined, stepUp: () => void): Promise<IssueAnswer> {
   const invoice = await officeInvoice(caller, invoiceId, INVOICES_ISSUE)
   stepUp()
   if (invoice.status === 'DRAFT') {
@@ -202,7 +205,7 @@ export async function issueInvoice(files: FilesRuntime, caller: CommandCaller, i
     })
     if (review.length > 0) throw refusal(review)
   }
-  await command(caller, { name: 'invoices.issue', idempotencyKey, input: { invoiceId, ...body }, record: { type: 'Invoice', id: invoice.id, ...(body.version === undefined ? {} : { expectedVersion: body.version }) } }, (tools) => issueInCommand(tools, invoice.id))
+  await command(caller, { name: 'invoices.issue', idempotencyKey, input: { invoiceId, ...body }, record: { type: 'Invoice', id: invoice.id, ...(body.version === undefined ? {} : { expectedVersion: body.version }) } }, (tools) => issueInCommand(tools, invoice.id, body.periodLockOverride))
   const outcome = await filesAfterIssue(files, caller, invoice.id)
   const detail = await caller.withClient(async (client) => invoiceDetail(client, (await readInvoice(client, invoice.id))!))
   return { invoice: detail, ...outcome }

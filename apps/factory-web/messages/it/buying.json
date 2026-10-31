@@ -709,6 +709,7 @@
       "lines": "Righe",
       "answer": "Risposta del fornitore",
       "receipts": "Ricevimenti",
+      "invoices": "Fatture",
       "documents": "Documenti",
       "activity": "Attività",
       "checksOpen_one": "{count} controllo d’invio aperto",

@@ -98,7 +98,8 @@ export function confirmationPhrase(row: Pick<OrderRow, 'status' | 'sentAt' | 'co
 
 // ---- the record -------------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['lines', 'answer', 'receipts', 'documents', 'activity'] as const
+// B-W2a-81: Invoices (the supplier invoices with a line on this order, Finance's; design order lines, answer, receipts, invoices).
+export const RECORD_TABS = ['lines', 'answer', 'receipts', 'invoices', 'documents', 'activity'] as const
 export type OrderTab = (typeof RECORD_TABS)[number]
 export const tabOf = (value: string | null | undefined): OrderTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as OrderTab) : 'lines')
 

@@ -16,7 +16,7 @@ import { callerFor, command, COMMAND_SETTINGS, runCommand, type CommandCaller, t
 import { defineCron, type CronJob } from '../../core/cron'
 import type { Log } from '../../core/queue'
 import { serverClock, type Clock } from '../../core/time'
-import { refuseHardLocked, PeriodLockedError } from '../accounting/period-guard'
+import { honourPeriodLocks, PeriodLockedError } from '../accounting/period-guard'
 import { sdiAccountOf } from '../invoicing/sdi/store'
 import { processSdi } from '../invoicing/sdi/runtime'
 import { putGeneratedFile, recordGeneratedFile, type PreparedGeneratedFile } from '../../platform/files/files'
@@ -225,7 +225,7 @@ export async function recordDelivery(system: CommandCaller, companyId: string, i
     const { result } = await command(system, { name: 'payables.sdiReceive', idempotencyKey: `sdi-in:${item.sdiIdentifier}`, input: { companyId, sdiIdentifier: item.sdiIdentifier, fileName: item.fileName, sha256: files.xml.sha256 } }, async (tools) => {
       const { tx } = tools
       if (await tx.supplierInvoice.findFirst({ where: { sdiIdentifier: item.sdiIdentifier }, select: { id: true } })) throw new ConflictError('This SDI delivery is recorded already.')
-      await refuseHardLocked(tx, tools.context, [{ companyId, day: receivedOn, refused: `supplier invoice ${document.number} delivered by SDI on ${dayWords(receivedOn)} is not registered`, path: 'receivedOn' }])
+      await honourPeriodLocks(tools, [{ companyId, day: receivedOn, refused: `supplier invoice ${document.number} delivered by SDI on ${dayWords(receivedOn)} is not registered`, path: 'receivedOn', record: { type: RECORD, id: invoiceId } }])
       const creditOfId = await creditedOf(tx, companyId, party.id, document)
       await tx.supplierInvoice.create({
         data: {

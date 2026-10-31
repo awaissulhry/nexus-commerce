@@ -129,8 +129,51 @@ export interface HardLockFacts {
  */
 export function hardLockedWords(lock: HardLockFacts, refused: string): string {
   const by = lock.lockedBy ? `, by ${lock.lockedBy}` : ''
+  return `${periodWords(lock)} is closed for good for ${lock.company} (a hard lock since ${dayWords(lock.lockedOn)}${by}): ${refused}. ${HARD_LOCK_WAY_OUT}`
+}
+
+const HARD_LOCK_WAY_OUT = 'Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.'
+
+// ---- a write dated inside a soft lock (B-W2a-F8) ----------------------------------------------------------------------
+
+/** The override reason of a write into a SOFT-locked month: 3 to 500 characters (the body's `periodLockOverride.reason`). */
+export const PERIOD_LOCK_OVERRIDE_REASON = { min: 3, max: 500 } as const
+
+/**
+ * The issue paths of a refusal by a month lock, which the screens say in their own words: `period/SOFT_LOCKED` (sent
+ * without an override reason: ask for one) and `period/HARD_LOCKED` (the database's own refusal, mapped by the API's
+ * error mapper). The API's own HARD check answers at the write's path ("Dated inside a month closed for good.").
+ */
+export const PERIOD_LOCK_ISSUES = { soft: 'period/SOFT_LOCKED', hard: 'period/HARD_LOCKED' } as const
+
+/**
+ * The words of a write refused by a SOFT period lock (FIN-046; design finance.accounting "soft (finance may override with
+ * a reason)"): the month, the lock, how to go on. `refused` says what is not done, as for a hard lock. The write goes in
+ * when it is sent again with an override reason (audited `accounting.softLockOverride`).
+ */
+export function softLockedWords(lock: HardLockFacts, refused: string): string {
+  const by = lock.lockedBy ? `, by ${lock.lockedBy}` : ''
   return (
-    `${periodWords(lock)} is closed for good for ${lock.company} (a hard lock since ${dayWords(lock.lockedOn)}${by}): ${refused}. ` +
-    'Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.'
+    `${periodWords(lock)} is soft-locked for ${lock.company} (since ${dayWords(lock.lockedOn)}${by}): ${refused} without a reason. ` +
+    `Say why it goes into that month (${PERIOD_LOCK_OVERRIDE_REASON.min} to ${PERIOD_LOCK_OVERRIDE_REASON.max} characters, kept in the audit trail) and send it again, or ask finance to lift the soft lock in Finance › Accounting.`
   )
+}
+
+// ---- the database's own refusal (the error mapper's last line of defence, B-W2a-F8) -----------------------------------
+
+/** …_money_w2a_guards factory_period_refuse_locked: `period lock: <what> is dated <day>, inside the closed period <start> to <end> …`. */
+const DATABASE_REFUSAL = /period lock: (.+?) is dated (\d{4}-\d{2}-\d{2}), inside the closed period (\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})/
+const UUID_WORD = / ?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+
+/**
+ * The words of a write the database refused for a HARD lock (check_violation 'period lock: …') because it reached the
+ * database without its command's check: the same frame as `hardLockedWords`, from what the message holds (no company,
+ * no person; the record ids left out). Null for any other message.
+ */
+export function databaseHardLockWords(message: string): string | null {
+  const found = DATABASE_REFUSAL.exec(message)
+  if (!found) return null
+  const what = found[1]!.replace(UUID_WORD, '').replace(/\s+/g, ' ').trim()
+  const thing = what.startsWith('the ') ? what : `the ${what}`
+  return `${periodWords({ start: found[3]!, end: found[4]! })} is closed for good (a hard lock): ${thing} dated ${dayWords(found[2]!)} is not written. ${HARD_LOCK_WAY_OUT}`
 }

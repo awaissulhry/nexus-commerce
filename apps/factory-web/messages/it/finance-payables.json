@@ -1,0 +1,592 @@
+{
+  "noAccess": {
+    "title": "Non hai accesso alle fatture fornitori",
+    "body": "Il tuo ruolo non comprende la lettura delle fatture fornitori. Ce l'hanno amministrazione, acquisti e il titolare."
+  },
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "cancel": "Annulla"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In tempo reale",
+    "offline": "Non in linea — rilegge al ritorno"
+  },
+  "band": {
+    "label": "Fatture fornitori",
+    "readAt": "Letto alle {time}",
+    "reading": "Lettura…",
+    "sdiReading": "Lettura del ritiro SDI…",
+    "sdiUnknown": "Non è stato possibile leggere l'ultimo ritiro SDI",
+    "noSdiAccount": "Nessun conto SDI per ricevere fatture",
+    "noPickupYet": "Nessun ritiro SDI finora",
+    "lastPickup": "Ultimo ritiro SDI {time}",
+    "lastPickupByPerson": "Ultimo ritiro SDI {time} (chiesto da una persona)",
+    "pickUp": "Ritira ora",
+    "addForeign": "Aggiungi fattura estera",
+    "proposal": "Proposta di pagamento",
+    "more": "Altre azioni",
+    "selfInvoices": "Autofatture TD17/18/19"
+  },
+  "held": {
+    "busy": "Attendi: l'ultima modifica è ancora in salvataggio.",
+    "manage": "Il tuo ruolo non può registrare o abbinare fatture fornitori.",
+    "upload": "Il tuo ruolo non può caricare file: prima si carica il PDF della fattura.",
+    "approve": "Il tuo ruolo non può approvare fatture fornitori.",
+    "pay": "Una fattura si paga dopo l'approvazione.",
+    "accept": "Il tuo ruolo non può accettare una differenza: lo fa l'acquisti o l'amministrazione.",
+    "noSdiAccount": "L'azienda non ha un conto SDI per ricevere fatture: impostalo in Sistema › Connessioni e API.",
+    "noIntermediary": "Non è ancora scelto un intermediario SDI: non si può ritirare nulla.",
+    "noneApprovable": "Nessuna delle fatture scelte attende l'approvazione.",
+    "proposalLater": "Le proposte di pagamento arrivano più avanti (W2b): per ora segna ogni fattura pagata nella sua scheda Pagamento.",
+    "selfInvoicesLater": "Le autofatture per gli acquisti dall'estero arrivano più avanti (W2b).",
+    "lastLine": "Una fattura tiene almeno una riga.",
+    "edit": "Si corregge solo una fattura digitata, ricevuta o contestata.",
+    "editSdi": "È arrivata dallo SDI: ciò che dice non cambia mai (la corregge la nota di credito del fornitore).",
+    "map": "Le righe si abbinano finché è ricevuta o contestata.",
+    "dispute": "Si respinge (si contesta al fornitore) solo una fattura ricevuta.",
+    "reopen": "Si riapre solo una fattura contestata.",
+    "withdraw": "Si ritira l'approvazione solo di una fattura approvata e non ancora pagata.",
+    "void": "Si annulla solo una fattura digitata, ricevuta o contestata.",
+    "voidSdi": "È arrivata dallo SDI: un documento fiscale non si annulla mai (risponde la nota di credito del fornitore).",
+    "row": {
+      "APPROVED": "Già approvata",
+      "PAID": "Già pagata",
+      "DISPUTED": "Contestata: riaprila prima",
+      "VOIDED": "Annullata",
+      "RECEIVED": "Attende l'approvazione"
+    }
+  },
+  "tile": {
+    "title": "Da gestire",
+    "failed": "Non è stato possibile caricare cosa c'è da gestire",
+    "NEW_FROM_SDI": "Nuove dallo SDI",
+    "DIFFERENCES": "Differenze da verificare",
+    "TO_APPROVE": "Da approvare",
+    "DUE_THIS_WEEK": "In scadenza questa settimana",
+    "NEW_FROM_SDIHint": "Arrivate dallo SDI, non ancora viste",
+    "DIFFERENCESHint": "Righe fuori tolleranza, non ancora accettate",
+    "TO_APPROVEHint": "Abbinate, nulla da accettare",
+    "DUE_THIS_WEEKHint": "In scadenza entro domenica, scadute comprese",
+    "dueHint": "In scadenza entro il {date}, scadute comprese"
+  },
+  "filter": {
+    "clear": "Togli il filtro {name}"
+  },
+  "list": {
+    "title": "Fatture fornitori",
+    "hint": "Arrivate dallo SDI o digitate da un PDF, con l'esito dell'abbinamento. Gli importi sono costi.",
+    "noCost": "Gli importi non sono mostrati: il tuo ruolo non vede i costi d'acquisto.",
+    "search": "Cerca numero, fornitore, riga",
+    "clearFilters": "Togli i filtri",
+    "failed": "Non è stato possibile caricare le fatture fornitori",
+    "slow": "Caricamento in corso…",
+    "more": "Mostra altre 50",
+    "count_one": "{count} di {total} fattura",
+    "count_other": "{count} di {total} fatture",
+    "empty": {
+      "title": "Ancora nessuna fattura fornitore",
+      "body": "Le fatture arrivano qui dallo SDI; quella di un fornitore estero si aggiunge dal suo PDF."
+    },
+    "noMatch": {
+      "title": "Nessuna fattura con questi filtri",
+      "body": "Togli un filtro o la ricerca."
+    }
+  },
+  "col": {
+    "supplier": "Fornitore",
+    "number": "Numero",
+    "date": "Data",
+    "amount": "Importo",
+    "source": "Origine",
+    "match": "Abbinamento",
+    "approval": "Approvazione",
+    "due": "Scadenza",
+    "paid": "Pagata"
+  },
+  "row": {
+    "net": "imponibile {amount}",
+    "toCheck_one": "{count} differenza da verificare",
+    "toCheck_other": "{count} differenze da verificare",
+    "late_one": "In ritardo di {count} giorno",
+    "late_other": "In ritardo di {count} giorni",
+    "notPaid": "Non pagata"
+  },
+  "kind": {
+    "INVOICE": "Fattura",
+    "CREDIT_NOTE": "Nota di credito",
+    "line": {
+      "GOODS": "Merce",
+      "SUBCONTRACT": "Lavorazione esterna",
+      "SERVICE": "Servizio (senza ordine)",
+      "CHARGE": "Spesa accessoria"
+    }
+  },
+  "source": {
+    "SDI": "SDI",
+    "EMAIL": "E-mail",
+    "MANUAL": "Digitata"
+  },
+  "status": {
+    "RECEIVED": "Da approvare",
+    "APPROVED": "Approvata",
+    "PAID": "Pagata",
+    "DISPUTED": "Contestata",
+    "VOIDED": "Annullata"
+  },
+  "match": {
+    "PENDING": "Non ancora abbinata",
+    "MATCHED": "Corrisponde",
+    "DIFFERENCES": "Differenze",
+    "NO_PO": "Senza ordine",
+    "WAITING_GOODS": "In attesa merce",
+    "title": "Ordinato, ricevuto, fatturato",
+    "line": "Riga {seq}",
+    "orderLine": "{number} riga {seq}",
+    "noOrder": "Nessun ordine",
+    "ordered": "Ordinato",
+    "received": "Ricevuto (non ancora fatturato)",
+    "invoiced": "Fatturato",
+    "times": "{quantity} × {price}",
+    "receipt": "Ultimo ricevimento {number}",
+    "receiptDdt": "Ultimo ricevimento {number} · DDT {ddt} del {date}",
+    "nothingReceived": "Nulla ricevuto finora",
+    "difference": "Differenza {amount}",
+    "accepted": "Accettata",
+    "acceptedBy": "Accettata da {name} il {date}: {note}",
+    "someone": "qualcuno",
+    "accept": "Accetta la differenza con motivo",
+    "again": "Abbina di nuovo",
+    "stale": "Da allora sono cambiati la merce, l'ordine o altre fatture: abbinala di nuovo.",
+    "tolerance": "La tolleranza dell'abbinamento",
+    "explain": "Paghiamo solo ciò che abbiamo ordinato al prezzo concordato e ciò che è davvero arrivato. Le differenze vanno all'acquisti prima del pagamento.",
+    "outside_one": "{count} riga fuori tolleranza",
+    "outside_other": "{count} righe fuori tolleranza",
+    "allWithin": "Ogni riga corrisponde entro la tolleranza.",
+    "sendToBuyer": "Invia all'acquisti",
+    "someUnmapped_one": "{count} riga non ha ancora un ordine: abbinala in Righe.",
+    "someUnmapped_other": "{count} righe non hanno ancora un ordine: abbinale in Righe.",
+    "areaLater": "Il controllo della superficie della pelle (piedi quadri fatturati contro quelli misurati al ricevimento) e il reclamo per superficie arrivano più avanti (W2b).",
+    "empty": {
+      "title": "Nessun ordine collegato",
+      "body": "Scegli l'ordine in Righe, oppure segnala come fattura senza ordine.",
+      "map": "Scegli l'ordine"
+    },
+    "creditNote": {
+      "title": "Una nota di credito non si abbina",
+      "body": "Una nota di credito toglie quanto fatturato sugli ordini delle sue righe; non si abbina mai ai ricevimenti."
+    }
+  },
+  "verdict": {
+    "WITHIN": "Corrisponde",
+    "DIFFERENCE": "Diversa",
+    "WAITING": "In attesa merce"
+  },
+  "bulk": {
+    "approve_one": "Approva {count}",
+    "approve_other": "Approva {count}",
+    "answer": "Approvate {approved}; non approvate {refused}."
+  },
+  "pickup": {
+    "done": "Ritiro SDI: {listed} elencate, {recorded} nuove registrate.",
+    "waiting_one": "{count} consegna attende presso l'intermediario: non si può registrare (vedi la cronologia del ritiro).",
+    "waiting_other": "{count} consegne attendono presso l'intermediario: non si possono registrare (vedi la cronologia del ritiro)."
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "search": "Cerca",
+    "open": "Apri la fattura",
+    "select": "Seleziona la fattura evidenziata"
+  },
+  "foreign": {
+    "title": "Aggiungi fattura estera",
+    "subtitle": "La fattura di un fornitore estero, digitata dal suo PDF. Quella di un fornitore italiano arriva dallo SDI.",
+    "supplierSearch": "Trova il fornitore",
+    "supplierHint": "Codice o nome di un fornitore o di un terzista",
+    "supplierPlaceholder": "Codice o nome",
+    "supplier": "Fornitore",
+    "supplierFirst": "Scrivi per trovare il fornitore",
+    "supplierNone": "Nessun fornitore trovato",
+    "supplierPick": "Scegli il fornitore",
+    "kind": "Tipo",
+    "number": "Numero fattura",
+    "issueDate": "Data fattura",
+    "dueDate": "Scadenza",
+    "currency": "Valuta",
+    "description": "Cosa fattura",
+    "net": "Imponibile",
+    "amountHint": "Nella valuta della fattura, es. 1250,50",
+    "vatRate": "Aliquota IVA %",
+    "vatNature": "Natura IVA",
+    "vatNatureHint": "Con IVA 0: la natura, es. N2.1 (fuori campo) o N6.x (inversione contabile)",
+    "vat": "Importo IVA",
+    "file": "Il PDF della fattura",
+    "fileHint": "Il PDF del fornitore: resta con la fattura (archivio fiscale).",
+    "filePick": "Scegli il PDF",
+    "fileChange": "Scegli un altro PDF",
+    "note": "Nota interna",
+    "datePlaceholder": "gg/mm/aaaa",
+    "dateClear": "Togli la data",
+    "submit": "Registra fattura",
+    "after": "Viene registrata come servizio senza ordine: abbina le righe a un ordine nella scheda Righe se ne fattura uno. La approva un'altra persona.",
+    "problem": {
+      "supplier": "Scegli il fornitore.",
+      "number": "Scrivi il numero della fattura.",
+      "issueDate": "Indica la data della fattura (oggi o prima).",
+      "currency": "La valuta è di tre lettere, es. EUR.",
+      "description": "Di' cosa fattura.",
+      "net": "Scrivi l'imponibile.",
+      "vatRate": "Scrivi l'aliquota IVA (da 0 a 100).",
+      "vat": "Scrivi l'importo IVA (0 se non c'è).",
+      "vatNature": "Con IVA 0, indica la natura (da N1 a N7, es. N2.1).",
+      "file": "Scegli il PDF della fattura."
+    }
+  },
+  "record": {
+    "back": "Fatture fornitori",
+    "backToList": "Torna alle fatture fornitori",
+    "title": "Fattura fornitore",
+    "loading": "Lettura della fattura…",
+    "tabsLabel": "Le schede della fattura",
+    "asReceived": "Come ricevuta",
+    "dock": "Discussione",
+    "dockHint": "La discussione della fattura accanto alle schede (⌘J)",
+    "dockLabel": "La discussione della fattura",
+    "more": "Altre azioni",
+    "void": "Annulla fattura",
+    "downloadPdf": "Scarica il PDF",
+    "copyNumber": "Copia il numero",
+    "dates": "Emessa il {issued} · ricevuta il {received}",
+    "creditOf": "Accredita {number}",
+    "changed": "Modificata da un'altra persona alle {time}.",
+    "reload": "Rileggi",
+    "readOnly": "Sola lettura: il tuo ruolo vede la fattura e non cambia nulla.",
+    "noPanels": "La discussione qui non è disponibile.",
+    "state": {
+      "not_found": {
+        "title": "Fattura fornitore non trovata",
+        "body": "Non esiste, oppure il tuo ruolo non raggiunge la sua azienda o il suo fornitore."
+      },
+      "forbidden": {
+        "title": "Non puoi aprire questa fattura",
+        "body": "Il tuo ruolo non raggiunge questa azienda o questo fornitore."
+      },
+      "error": {
+        "title": "Non è stato possibile caricare la fattura"
+      }
+    }
+  },
+  "tab": {
+    "lines": "Righe",
+    "match": "Abbinamento",
+    "approval": "Approvazione",
+    "payment": "Pagamento",
+    "activity": "Attività",
+    "differences": "Differenze da verificare",
+    "ready": "Pronta per l'approvazione"
+  },
+  "lines": {
+    "title": "Righe",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "typedHint": "Digitata dal PDF del fornitore: modifica, aggiungi o togli righe finché è ricevuta.",
+    "sdiHint": "Letta dall'XML consegnato dallo SDI: ciò che dice non cambia mai; scegli l'ordine che ogni riga fattura (si salva subito).",
+    "add": "Aggiungi riga",
+    "edit": "Modifica riga",
+    "remove": "Togli riga",
+    "menu": "Azioni della riga {seq}",
+    "withoutOrder_one": "Segnala come fattura senza ordine ({count} riga)",
+    "withoutOrder_other": "Segnala come fattura senza ordine ({count} righe)",
+    "candidatesFailed": "Non è stato possibile leggere gli ordini che le righe possono fatturare.",
+    "col": {
+      "seq": "N.",
+      "description": "Descrizione",
+      "quantity": "Quantità",
+      "price": "Prezzo unitario",
+      "vat": "IVA",
+      "net": "Imponibile",
+      "map": "Cosa fattura",
+      "menu": "Azioni"
+    },
+    "mappedPo": "{order} riga {seq}",
+    "mappedSubcontract": "Ordine di lavorazione {order}",
+    "notMapped": "Ancora nessun ordine",
+    "mapPlaceholder": "Scegli la riga d'ordine",
+    "optionPo": "{order} · riga {seq} · {item} · {quantity}",
+    "optionSubcontract": "Ordine di lavorazione {order}",
+    "optionService": "Un servizio (senza ordine)",
+    "optionCharge": "Una spesa accessoria (trasporto, imballo…)",
+    "empty": {
+      "title": "Nessuna riga letta",
+      "body": "Apri il file originale (Come ricevuta)."
+    },
+    "totals": "Totali e IVA",
+    "vatCol": {
+      "rate": "Aliquota",
+      "taxable": "Imponibile",
+      "vat": "Imposta"
+    },
+    "total": "Totale",
+    "gross": "Totale da pagare {amount}",
+    "withholding": "Ritenuta d'acconto {amount} (come letta, non registrata)",
+    "stamp": "Bollo {amount} (come letto, non registrato)",
+    "noCost": "Prezzi e importi non sono mostrati: il tuo ruolo non vede i costi d'acquisto."
+  },
+  "approval": {
+    "title": "Approvazione",
+    "state": "Stato",
+    "approver": "Approvata da",
+    "notYet": "Non ancora approvata",
+    "note": "Nota",
+    "registered": "Registrata",
+    "registeredBy": "Digitata da {name}",
+    "registeredSdi": "Consegnata dallo SDI (nessuno dell'ufficio l'ha digitata)",
+    "ready": "Pronta per l'approvazione: abbinata, nulla da accettare.",
+    "empty": "Pronta per l'approvazione una volta abbinata.",
+    "problems": "Cosa manca prima dell'approvazione",
+    "approve": "Approva",
+    "reject": "Respingi con motivo",
+    "withdraw": "Ritira l'approvazione",
+    "reopen": "Riapri",
+    "disputed": "Contestata al fornitore il {date}",
+    "voided": "Annullata il {date}",
+    "rulesTitle": "Separazione dei compiti",
+    "rules": "Chi ha digitato una fattura non la approva; una fattura consegnata dallo SDI può approvarla chiunque approvi. Approvare non la paga: il pagamento si registra quando il bonifico è partito dalla banca.",
+    "dualLater": "Una seconda approvazione oltre un limite arriva più avanti (W2b)."
+  },
+  "payment": {
+    "title": "Pagamento",
+    "due": "Scadenza",
+    "paidOn": "Pagata il",
+    "notPaid": "Non ancora pagata",
+    "ref": "Riferimento bancario",
+    "amount": "Importo",
+    "batch": "Distinta di pagamento",
+    "batchLater": "Non in una distinta (le distinte arrivano più avanti, W2b)",
+    "markPaid": "Segna pagata",
+    "terms": "Condizioni di pagamento",
+    "noTerms": "La fattura non indica condizioni di pagamento.",
+    "col": {
+      "due": "Scadenza",
+      "method": "Modalità",
+      "amount": "Importo",
+      "iban": "IBAN"
+    },
+    "method": "Modalità {code}",
+    "condition": "Condizione {code} come dice la fattura.",
+    "ibanLater": "Se l'IBAN sia utilizzabile si verifica più avanti (W2b): confrontalo con le coordinate bancarie del fornitore prima di pagare."
+  },
+  "dialog": {
+    "note": "Nota (facoltativa)",
+    "reason": "Motivo",
+    "reasonOptional": "Motivo (facoltativo)",
+    "reasonNeeded": "Indica prima un motivo.",
+    "approve": {
+      "title": "Approvare {number}?",
+      "body": "La fattura di {supplier} diventa pagabile. Non la paga: segnala pagata quando il bonifico è partito dalla banca.",
+      "confirm": "Approva"
+    },
+    "accept": {
+      "title": "Accetta la differenza",
+      "line": "Riga {seq}: {words}",
+      "body": "Pagare più di quanto ordinato (o prima che arrivi la merce) è una decisione scritta: resta con la fattura.",
+      "reason": "Perché la accettiamo",
+      "reasonHint": "Es. il prezzo concordato al telefono con il fornitore",
+      "confirm": "Accetta la differenza"
+    },
+    "sendToBuyer": {
+      "title": "Invia le differenze all'acquisti",
+      "body": "Una nota interna nella discussione della fattura elenca ogni riga fuori tolleranza (senza prezzi) e avvisa chi ha inviato l'ordine.",
+      "message": "Messaggio (facoltativo)",
+      "confirm": "Invia all'acquisti"
+    },
+    "dispute": {
+      "title": "Respingere {number}?",
+      "body": "Viene contestata al fornitore: non si approva né si paga finché non è riaperta o accreditata.",
+      "confirm": "Respingi"
+    },
+    "withdraw": {
+      "title": "Ritirare l'approvazione di {number}?",
+      "body": "Torna ad attendere l'approvazione.",
+      "confirm": "Ritira l'approvazione"
+    },
+    "reopen": {
+      "title": "Riaprire {number}?",
+      "body": "Torna ricevuta: si può abbinare e approvare.",
+      "confirm": "Riapri"
+    },
+    "void": {
+      "title": "Annullare {number}?",
+      "body": "Una fattura digitata per errore si annulla; resta nella cronologia.",
+      "confirm": "Annulla fattura"
+    },
+    "pay": {
+      "title": "Segna pagata {number}",
+      "body": "Registra il giorno in cui il bonifico è partito dalla banca e il suo riferimento.",
+      "paidOn": "Pagata il",
+      "ref": "Riferimento bancario",
+      "refHint": "Il CRO / TRN del bonifico",
+      "confirm": "Segna pagata"
+    },
+    "withoutOrder": {
+      "title": "Una fattura senza ordine",
+      "body_one": "{count} riga di merce senza ordine diventa un servizio: si approva senza abbinamento.",
+      "body_other": "{count} righe di merce senza ordine diventano servizi: si approvano senza abbinamento.",
+      "confirm": "Segnala senza ordine"
+    },
+    "removeLine": {
+      "title": "Togliere la riga {seq}?",
+      "body": "{description}",
+      "confirm": "Togli riga"
+    },
+    "line": {
+      "editTitle": "Modifica la riga",
+      "addTitle": "Aggiungi una riga",
+      "quantity": "Quantità",
+      "uom": "Unità",
+      "unitPrice": "Prezzo unitario",
+      "save": "Salva riga",
+      "add": "Aggiungi riga",
+      "problemQuantity": "La quantità è un numero sopra 0 (fino a 4 decimali).",
+      "problemPrice": "Il prezzo unitario è un numero sopra 0 (fino a 6 decimali)."
+    }
+  },
+  "pay": {
+    "problem": {
+      "day": "Indica il giorno del pagamento.",
+      "future": "Il pagamento non può essere datato dopo oggi.",
+      "beforeIssue": "Il pagamento non può essere datato prima della fattura.",
+      "ref": "Scrivi il riferimento della banca."
+    }
+  },
+  "notice": {
+    "approved": "Approvata.",
+    "accepted": "Differenza accettata per iscritto.",
+    "sentToBuyer_one": "Inviata all'acquisti: avvisata {count} persona.",
+    "sentToBuyer_other": "Inviata all'acquisti: avvisate {count} persone.",
+    "notReached_one": "{count} persona che ha inviato l'ordine non può leggere la discussione della fattura.",
+    "notReached_other": "{count} persone che hanno inviato l'ordine non possono leggere la discussione della fattura.",
+    "disputed": "Respinta: contestata al fornitore.",
+    "withdrawn": "Approvazione ritirata.",
+    "reopened": "Riaperta.",
+    "voided": "Annullata.",
+    "paid": "Segnata pagata.",
+    "withoutOrder": "Segnalata come fattura senza ordine.",
+    "lineRemoved": "Riga tolta.",
+    "lineSaved": "Riga salvata.",
+    "lineAdded": "Riga aggiunta.",
+    "matched": "Abbinata di nuovo."
+  },
+  "refusal": {
+    "NOT_RECEIVED": "Si approva solo una fattura ricevuta.",
+    "OWN_INVOICE": "Hai inserito tu questa fattura, quindi la approva un'altra persona.",
+    "NO_LINES": "La fattura non ha righe: aggiungile prima dal suo PDF.",
+    "NOT_MATCHED": "Prima abbina ogni riga di merce o di lavorazione al suo ordine (o segnala come fattura senza ordine).",
+    "WAITING_GOODS": "La merce fatturata non è ancora tutta arrivata: approvala quando è ricevuta, oppure accetta per iscritto ogni differenza.",
+    "DIFFERENCES": "Una differenza fuori tolleranza si accetta prima per iscritto, oppure la fattura si contesta al fornitore.",
+    "NO_XML": "L'XML consegnato dallo SDI non è ancora salvato: ritira di nuovo prima di approvare.",
+    "LINES_DO_NOT_ADD_UP": "L'imponibile delle righe non torna con quello della fattura: correggi prima le righe o i totali.",
+    "NOT_APPROVED": "Si paga, o se ne ritira l'approvazione, solo una fattura approvata e non ancora pagata.",
+    "NOT_OPEN": "Le righe cambiano solo finché la fattura è ricevuta o contestata.",
+    "FROM_SDI": "È arrivata dallo SDI: ciò che dice non cambia mai (solo come si abbinano le righe).",
+    "COMES_THROUGH_SDI": "La fattura di un fornitore italiano arriva dallo SDI (l'XML è la fattura legale): ritirala dallo SDI invece di digitarla.",
+    "DUPLICATE": "Questa fattura del fornitore con questo numero e questa data è già registrata.",
+    "NOTHING_UNMAPPED": "Nessuna riga di merce è senza ordine.",
+    "NOT_ALLOWED_NOW": "Questa modifica non è consentita nello stato attuale della fattura.",
+    "WITHIN_TOLERANCE": "Questa riga corrisponde entro la tolleranza: non c'è nulla da accettare.",
+    "ACCEPTED": "Questa differenza è già stata accettata.",
+    "NO_DIFFERENCES": "Ogni riga abbinata è entro la tolleranza: non c'è nulla da inviare all'acquisti.",
+    "THREAD_CLOSED": "La discussione della fattura è chiusa: riaprila per inviare le differenze.",
+    "NOT_A_CREDIT_NOTE": "Un reclamo si chiude con la nota di credito del fornitore: questa è una fattura.",
+    "VOIDED": "Una nota di credito annullata non chiude nulla.",
+    "OTHER_SUPPLIER": "Il reclamo è di un altro fornitore o di un'altra azienda.",
+    "NOT_ACCEPTED_FOR_CREDIT": "Una nota di credito chiude un reclamo che il fornitore ha accettato con un accredito.",
+    "NO_INTERMEDIARY": "Non è ancora scelto un intermediario SDI: non si può ritirare nulla.",
+    "INTERMEDIARY_UNAVAILABLE": "L'intermediario SDI non ha risposto: riprova tra qualche minuto.",
+    "NO_SDI_ACCOUNT": "L'azienda non ha un conto SDI attivo per ricevere fatture.",
+    "other": "La modifica è stata rifiutata così com'è."
+  },
+  "problem": {
+    "read": {
+      "signed_out": "La sessione è terminata: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non arriva fin qui.",
+      "not_found": "Non trovato.",
+      "unavailable": "Il server della fabbrica non ha risposto: riprova.",
+      "rate_limited": "Troppe richieste: attendi un momento.",
+      "internal": "Qualcosa non ha funzionato da parte nostra."
+    },
+    "write": {
+      "moved": "Qualcuno ha modificato la fattura nel frattempo: è stata riletta; controlla e riprova.",
+      "state": "Lo stato della fattura ora non lo consente: è stata riletta.",
+      "invalid": "Una parte di ciò che hai scritto è stata rifiutata: controlla i campi.",
+      "paidOn": "Il giorno del pagamento è fuori dall'intervallo tra la data della fattura e oggi.",
+      "mapping": "Questa riga non può fatturare quell'ordine (altro fornitore, azienda o valuta, oppure ordine non inviato).",
+      "lines": "Controlla le righe: una è stata rifiutata.",
+      "signed_out": "La sessione è terminata: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo qui non può farlo.",
+      "not_found": "La fattura non c'è più.",
+      "rate_limited": "Troppe richieste: attendi un momento.",
+      "unavailable": "Il server della fabbrica non ha risposto: riprova.",
+      "internal": "Qualcosa non ha funzionato da parte nostra."
+    }
+  },
+  "xml": {
+    "back": "Torna alla fattura",
+    "title": "Fattura fornitore come ricevuta",
+    "heading": "{number} come ricevuta",
+    "fromSdi": "Consegnata dallo SDI come {file} (id SDI {id}).",
+    "typed": "Digitata dal PDF del fornitore: non c'è un XML.",
+    "names": "Cosa indica",
+    "noXml": "Una fattura digitata non ha XML: la copia che teniamo è il suo PDF.",
+    "failed": "Non è stato possibile leggere l'XML",
+    "missing": "Il file XML non è nell'archivio dei file: ritira di nuovo la fattura dallo SDI, oppure chiedi a un amministratore.",
+    "reading": "Lettura dell'XML…",
+    "supplier": "Fornitore",
+    "buyer": "Committente",
+    "document": "Documento",
+    "documentValue": "{type} n. {number} del {date}",
+    "reason": "Causale",
+    "format": "Formato",
+    "refs": "A cosa si riferisce",
+    "refCol": {
+      "kind": "Tipo",
+      "number": "Numero",
+      "lines": "Righe"
+    },
+    "refOrder": "Ordine",
+    "refDdt": "DDT",
+    "allLines": "Tutte le righe",
+    "attachments": "Allegati: {names}",
+    "pdf": "Il PDF",
+    "showPdf": "Mostra il PDF",
+    "downloadPdf": "Scarica il PDF",
+    "noPdf": "Non è arrivato alcun PDF.",
+    "pdfLoading": "Lettura del PDF…",
+    "pdfFailed": "Non è stato possibile leggere il PDF.",
+    "pdfTitle": "{number} (PDF)",
+    "text": "L'XML come ricevuto ({file})",
+    "textLabel": "L'XML come consegnato dallo SDI",
+    "downloadXml": "Scarica l'XML",
+    "noCost": "L'XML contiene i prezzi: il tuo ruolo non vede i costi d'acquisto, quindi non è mostrato."
+  },
+  "po": {
+    "title": "Fatture fornitore di questo ordine",
+    "hint": "Fatture con una riga su questo ordine, abbinate in Amministrazione. Gli importi sono costi.",
+    "noCost": "Gli importi non sono mostrati: il tuo ruolo non vede i costi d'acquisto.",
+    "count_one": "{count} fattura",
+    "count_other": "{count} fatture",
+    "failed": "Non è stato possibile caricare le fatture fornitori",
+    "empty": {
+      "title": "Ancora nessuna fattura",
+      "body": "Quando arriva la fattura del fornitore e cita questo ordine, compare qui."
+    },
+    "noAccess": {
+      "title": "Le fatture fornitori sono dell'Amministrazione",
+      "body": "Il tuo ruolo non comprende la lettura delle fatture fornitori."
+    },
+    "open": "Apri in Amministrazione",
+    "openCol": "Amministrazione",
+    "more": "Sono mostrate solo le 50 più recenti: vedile tutte in Amministrazione › Fatture fornitori."
+  }
+}

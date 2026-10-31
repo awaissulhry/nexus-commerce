@@ -12,6 +12,7 @@ import { companyLegalOf } from '../../../platform/documents/documents'
 import type { FilesRuntime } from '../../../platform/files/service'
 import type { FileView } from '../../../platform/files/contract'
 import { postMoves, type MoveDraft } from '../../inventory/ledger/post-moves'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { issueSourceDdtInCommand, printSourceDdt } from '../../shipping/ddt/sources'
 import { quantityText } from '../store'
 import { kitGoods, actFacts, detailInCommand } from './orders'
@@ -56,6 +57,8 @@ export interface SendInput {
   readonly pieces: readonly { readonly operationId: string; readonly pieces: number }[]
   readonly bundles: readonly { readonly bundleId: string }[]
   readonly ddt: (Omit<SourceDdtRequest, 'lineIds'> & { readonly lineIds?: readonly string[] | undefined; readonly internalNote?: string | null | undefined }) | null
+  /** B-W2a-F8: the reason a kit sent inside a SOFT-locked month is posted anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 export interface SendAnswer {
@@ -157,7 +160,14 @@ export async function sendKitAs(
         reference: order.number,
         note: `Kit for subcontract order ${order.number}`,
       }))
-      const posted = drafts.length > 0 ? await postMoves(tools, drafts, { key: `purchasing.subcontract.sendKit:${idempotencyKey ?? newId()}`, issuePath: (index) => `body/lines/${index}` }) : []
+      const posted =
+        drafts.length > 0
+          ? await postMoves(tools, drafts, {
+              key: `purchasing.subcontract.sendKit:${idempotencyKey ?? newId()}`,
+              issuePath: (index) => `body/lines/${index}`,
+              periodLockOverride: input.periodLockOverride,
+            })
+          : []
       for (const [index, { row }] of lines.entries()) {
         await tools.tx.subcontractKitLine.update({ where: { id: row.id }, data: { status: 'SENT', sentAt: tools.now, moveId: posted[index]!.id, version: { increment: 1 } }, select: { id: true } })
       }
