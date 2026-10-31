@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
-import { isUuid } from '@nexus/factory-domain/core/ids'
+import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { QUALITY_INSPECTIONS_RECORD } from '@nexus/factory-domain/quality/final/permissions'
 import { HOLD_LIMITS, placedByKind, unholdableWords } from '@nexus/factory-domain/quality/holds/rules'
 import { command, type CommandCaller } from '../../../core/command'
 import type { FloorContext } from '../../../core/context'
+import { allocateNumber } from '../../../platform/numbering/allocate'
 import { reasonWords } from '../../../platform/reasons/service'
 import { asTenantSystem as systemFor } from '../../production/bundles/codes'
 import { asTenantSystem, assertFloorReady } from '../../production/serials/facts'
@@ -29,7 +30,14 @@ import type { Reader } from './store'
  * at the device's site, the permission, the site's floor ready, an inspection of that work order) the command runs as
  * the tenant's system caller, naming the worker (placedByWorkerId; the NCR's finder) and the device (audit). Its
  * Idempotency-Key is derived from the floor request's: a resend answers the stored hold, never a second one. Online
- * only (the NCR takes the office's number at once).
+ * only.
+ *
+ * B-W2b-17 (bench NCR numbered on the floor; HOLD and NCR are floor document kinds since W2b schema wave 2): before the
+ * system's command, the tablet's own command takes the hold's HLD number and the NCR's number from its site's company's
+ * series (allocateNumber in the floor context: the tablet is the allocator, as for its inspections and releases); the
+ * system's command then places the hold and raises the NCR with those ids and numbers. Its key is derived from the floor
+ * request's too, so a resend takes the same numbers. A number is left unused only when the system's command is refused
+ * for good after it (the hold or the NCR not valid): both series are not fiscal.
  */
 
 export interface BenchHoldBody {
@@ -43,6 +51,8 @@ export interface BenchHoldBody {
 
 /** The follow-up's key, one per floor request key (keys are at most 128 characters: a digest of it). */
 export const benchHoldKeyOf = (floorKey: string): string => `bench-hold.${createHash('sha256').update(floorKey).digest('hex').slice(0, 48)}`
+/** B-W2b-17: the tablet's numbering command's key, one per floor request key. */
+export const benchNumbersKeyOf = (floorKey: string): string => `bench-hold-n.${createHash('sha256').update(floorKey).digest('hex').slice(0, 48)}`
 
 /** The ACTIVE holds of a work order as the bench shows them: why, since when, by whom (kind only), the NCR deciding it. */
 export async function benchHolds(db: Reader, workOrderId: string) {
@@ -85,6 +95,16 @@ export async function holdAtBench(caller: CommandCaller, workOrderId: string, bo
   const unholdable = unholdableWords('WorkOrder', { label: header.number, state: header.status })
   if (unholdable) throw new ConflictError(unholdable)
 
+  // B-W2b-17: the tablet numbers the hold and its NCR (the floor's own command, its own key).
+  const { result: numbered } = await command(caller, { name: 'quality.benchHoldNumbers', idempotencyKey: benchNumbersKeyOf(idempotencyKey), input: { workOrderId: header.id, deviceId: floor.deviceId } }, async (tools) => {
+    const holdId = newId()
+    const ncrId = newId()
+    const hold = await allocateNumber(tools, { companyId: header.companyId, kind: 'HOLD' }, { type: 'QualityHold', id: holdId })
+    const ncr = await allocateNumber(tools, { companyId: header.companyId, kind: 'NCR' }, { type: 'Nonconformance', id: ncrId })
+    tools.audit({ action: 'quality.benchHoldNumbers', recordType: 'WorkOrder', recordId: header.id, companyId: header.companyId, siteId: header.siteId, after: { holdId, holdNumber: hold.formatted, ncrId, ncrNumber: ncr.formatted, deviceId: floor.deviceId } })
+    return { holdId, holdNumber: hold.formatted, ncrId, ncrNumber: ncr.formatted }
+  })
+
   const { result, replayed } = await command(
     systemFor(caller, floor),
     { name: 'quality.benchHold', idempotencyKey: benchHoldKeyOf(idempotencyKey), input: { workOrderId: header.id, ...body, reasonNote, deviceId: floor.deviceId, workerId: floor.actorId } },
@@ -97,6 +117,7 @@ export async function holdAtBench(caller: CommandCaller, workOrderId: string, bo
         sourceType: body.inspectionId ? 'Inspection' : null,
         sourceId: body.inspectionId ?? null,
         placedByWorkerId: floor.actorId,
+        numbered: { id: numbered.holdId, number: numbered.holdNumber },
       })
       const reason = (await reasonWords(tools.tx, 'HOLD')).get(body.reasonCode)
       const ncrId = await raiseNcrInCommand(
@@ -111,8 +132,8 @@ export async function holdAtBench(caller: CommandCaller, workOrderId: string, bo
           uom: 'PCS',
           workOrderId: header.id,
         },
-        // The floor's own checks ran above; the system raises it for the bench.
-        { actorId: null, may: () => true },
+        // The floor's own checks ran above; the system raises it for the bench, with the number the tablet took.
+        { actorId: null, may: () => true, numbered: { id: numbered.ncrId, number: numbered.ncrNumber } },
       )
       const ncr = await tools.tx.nonconformance.findUnique({ where: { id: ncrId }, select: { id: true, number: true } })
       tools.audit({ action: 'quality.benchHold', recordType: 'QualityHold', recordId: placed.hold.id, companyId: header.companyId, siteId: header.siteId, after: { workOrderId: header.id, ncrId, deviceId: floor.deviceId, workerId: floor.actorId, inspectionId: body.inspectionId ?? null } })

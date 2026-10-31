@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -18,6 +18,7 @@ import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
+import { pdfFlatText } from '../../../platform/documents/testing/pdf-text'
 
 /**
  * Supplier claims and returns to the supplier (B-W2a-44; SCM-134) on the local stack, with the app's real routes: a
@@ -59,6 +60,10 @@ const SESSIONS: Record<string, SessionContext> = {
   /** Sends goods back but issues no DDT. */
   noDdt: office(A.tenant, [grant(['purchasing.view', 'purchasing.claims.manage', 'purchasing.claims.return'])]),
   viewer: office(A.tenant, [grant(['purchasing.view'])]),
+  /** B-W2b-14: keeps claims and adds photos (files.upload), never removes a file. */
+  photographer: office(A.tenant, [grant(['purchasing.view', 'purchasing.claims.manage', 'purchasing.claims.return', ...DDT, 'files.upload', 'inventory.stock.view', 'threads.read'])]),
+  /** B-W2b-14: may remove a file too (files.delete). */
+  fileAdmin: office(A.tenant, [grant(['purchasing.view', 'purchasing.claims.manage', 'files.read', 'files.upload', 'files.delete'])]),
   /** Reaches the supplier P1 only. */
   otherSupplier: office(A.tenant, [grant(['purchasing.view', 'purchasing.claims.manage', 'purchasing.claims.return', ...DDT], [A.P1])]),
   otherTenant: office(seedUuid(ns.b, 'tenant'), [grant(['purchasing.view', 'purchasing.claims.manage', 'purchasing.claims.return', ...DDT, 'money.cost'])]),
@@ -239,7 +244,7 @@ describe('Return to supplier in one go (SCM-134; rule 2: rejected leather goes b
     expect(await admin(`SELECT count(*)::int AS n FROM "SupplierClaim" WHERE "tenantId" = $1 AND kind = 'RETURN'`, [A.tenant])).toEqual([{ n: 0 }])
   })
 
-  it("from the lot: its hide in stock goes back — a RETURN claim, sent, the stock out (ADJUSTMENT), the return DDT, the credit from what the stock left at", async () => {
+  it("from the lot: its hide in stock goes back — a RETURN claim, sent, the stock out (SUPPLIER_RETURN, B-W2b-14), the return DDT, the credit from what the stock left at", async () => {
     const before = await onHand(`"hideId" = $2`, [hide2])
     expect(Number(before)).toBeGreaterThan(0)
     const body = { from: { lotId: leatherLot }, reasonCode: 'QUALITY', reasonNote: 'Rejected at inspection', remedy: 'CREDIT', mail: { contactIds: [A.orderDesk] }, ddt: TYPED_DDT }
@@ -247,12 +252,12 @@ describe('Return to supplier in one go (SCM-134; rule 2: rejected leather goes b
     const first = await call('warehouse', 'POST', '/purchasing/claims/returns', body, idempotencyKey)
     expect(first.statusCode, first.body).toBe(201)
     returned = first.json()
-    expect(returned.claim).toMatchObject({ number: `CLM-${YEAR}-0002`, kind: 'RETURN', status: 'SENT', supplier: { id: A.P2 }, foundAt: 'STOCK', lines: [expect.objectContaining({ hide: { id: hide2, code: 'SEED-HIDE-0002' } })], returned: 1 })
+    expect(returned.claim).toMatchObject({ number: `CLM-${YEAR}-0002`, kind: 'RETURN', status: 'SENT', supplier: { id: A.P2 }, foundAt: 'STOCK', lines: [expect.objectContaining({ hide: { id: hide2, code: 'SEED-HIDE-0002', state: 'RETURNED' } })], returned: 1 })
     expect(Number(returned.claim.lines[0].quantity)).toBe(Number(before))
     expect(returned.ddt).toMatchObject({ number: expect.stringMatching(new RegExp(`/${YEAR}$`)), pdfProblem: null })
     expect(returned.ddt.file).toMatchObject({ kind: 'FISCAL_ARCHIVE', status: 'AVAILABLE' })
     const [line] = returned.claim.lines
-    expect(line.move).toMatchObject({ reason: 'ADJUSTMENT', fromLocation: { id: store } })
+    expect(line.move).toMatchObject({ reason: 'SUPPLIER_RETURN', fromLocation: { id: store } })
     expect(line.ddt).toMatchObject({ id: returned.ddt.id, cancelled: false })
     expect(returned.claim.ddts).toEqual([expect.objectContaining({ id: returned.ddt.id, reason: 'RETURN', cancelled: false, lineIds: [line.id] })])
     expect(returned.moveIds).toEqual([line.move.id])
@@ -309,7 +314,7 @@ describe('a return prepared first, its goods back later (SCM-134)', () => {
     expect(await admin(`SELECT count(*)::int AS n FROM "EmailOutbound" WHERE "recordId" = $1`, [draft.id])).toEqual([{ n: 0 }])
     expect((await refused('noDdt', 'POST', url(draft.id, '/return'), { version: draft.version, ddt: TYPED_DDT }, 403)).message).toContain('shipping.ddt.issue')
     const back = await ok('warehouse', 'POST', url(draft.id, '/return'), { version: draft.version, lines: [{ lineId: draft.lines[0].id, fromLocationId: store }], ddt: TYPED_DDT }, 201)
-    expect(back.claim.lines[0]).toMatchObject({ move: { reason: 'ADJUSTMENT', quantity: '10.0000', fromLocation: { id: store } }, ddt: { id: back.ddt.id, cancelled: false } })
+    expect(back.claim.lines[0]).toMatchObject({ move: { reason: 'SUPPLIER_RETURN', quantity: '10.0000', fromLocation: { id: store } }, ddt: { id: back.ddt.id, cancelled: false } })
     expect(Number(await onHand(`"lotId" = $2`, [liningLot]))).toBe(Number(before) - 10)
     expect(back.overReserved).toEqual([])
     draft = back.claim
@@ -337,5 +342,124 @@ describe('a return prepared first, its goods back later (SCM-134)', () => {
     expect(seedClaim.reason).toMatchObject({ code: null, note: expect.stringContaining('SEED-HIDE-0002') })
     const cancelled = (await ok('buyer', 'POST', url(seed.claimId, '/cancel'), { version: seedClaim.version, reason: 'Made again from the discrepancy' })).claim
     expect(cancelled).toMatchObject({ status: 'CANCELLED', cancelReason: 'Made again from the discrepancy', actions: { cancel: expect.any(String), send: expect.any(String) } })
+  })
+})
+
+// ---- B-W2b-14: claims follow-ups (the reason code as data, SUPPLIER_RETURN and RETURNED hides, a claim follows its
+// replacement DDT, photos, the claim letter) --------------------------------------------------------------------------------
+
+const sha = (body: Buffer) => createHash('sha256').update(body).digest('hex')
+
+/** A picture's bytes (made up) announced, sent to the local store and confirmed: the file. */
+async function photo(session: string, path: string, name: string): Promise<Json> {
+  const body = Buffer.from(`made-up jpeg bytes ${name} ${newId()}`)
+  const announced = await ok(session, 'POST', path, { originalName: name, contentType: 'image/jpeg', sizeBytes: body.length, sha256: sha(body) }, 201)
+  expect(announced.file).toMatchObject({ kind: 'PHOTO', status: 'PENDING_UPLOAD' })
+  const sent = await app.inject({ method: 'PUT', url: announced.upload.url, headers: announced.upload.headers, payload: body })
+  expect(sent.statusCode, sent.body).toBe(200)
+  return (await ok(session, 'POST', `${path}/${announced.file.id}/complete`)).file
+}
+
+describe('B-W2b-14 claims follow-ups (Z1:04 … Z1:08)', () => {
+  let claim: Json
+  let firstPhoto: Json
+
+  it('Z1:04 the CLAIM reason code is its own column; reason keeps the words (the code when there are none); fixed once sent', async () => {
+    claim = (await ok('photographer', 'POST', '/purchasing/claims', { kind: 'CLAIM', partyId: A.P2, foundAt: 'CUTTING', reasonCode: 'QUALITY', reasonNote: 'Macchie sulla fodera', lines: [{ lotId: liningLot, quantity: '4' }] }, 201)).claim
+    expect(claim.reason).toMatchObject({ code: 'QUALITY', note: 'Macchie sulla fodera' })
+    expect(await admin(`SELECT "reasonCode", reason FROM "SupplierClaim" WHERE id = $1`, [claim.id])).toEqual([{ reasonCode: 'QUALITY', reason: 'Macchie sulla fodera' }])
+    claim = (await ok('photographer', 'PATCH', url(claim.id), { version: claim.version, reasonNote: null })).claim
+    expect(claim.reason).toMatchObject({ code: 'QUALITY', note: null })
+    expect(await admin(`SELECT "reasonCode", reason FROM "SupplierClaim" WHERE id = $1`, [claim.id])).toEqual([{ reasonCode: 'QUALITY', reason: 'QUALITY' }])
+    claim = (await ok('photographer', 'PATCH', url(claim.id), { version: claim.version, reasonNote: 'Macchie sulla fodera, 4 m' })).claim
+    expect(claim.reason).toMatchObject({ code: 'QUALITY', note: 'Macchie sulla fodera, 4 m' })
+  })
+
+  it('Z1:08 photos of what is wrong: PHOTO files of the claim, category CLAIM_PHOTO, through the claim only; removed only from a draft, with files.delete', async () => {
+    const first = await photo('photographer', url(claim.id, '/photos'), 'macchia-1.jpg')
+    expect(first).toMatchObject({ recordType: 'SupplierClaim', recordId: claim.id, visibility: ['OFFICE'] })
+    expect(await admin(`SELECT category::text AS category FROM "StoredFile" WHERE id = $1`, [first.id])).toEqual([{ category: 'CLAIM_PHOTO' }])
+    const second = await photo('photographer', url(claim.id, '/photos'), 'macchia-2.jpg')
+    // The generic files route may not add one (the claims module owns them).
+    const generic = await call('photographer', 'POST', '/files', { companyId: A.companyA, recordType: 'SupplierClaim', recordId: claim.id, kind: 'PHOTO', originalName: 'x.jpg', contentType: 'image/jpeg', sizeBytes: 10, sha256: 'a'.repeat(64) })
+    expect(generic.statusCode, generic.body).toBe(409)
+    expect((await refused('buyer', 'POST', url(claim.id, '/photos'), { originalName: 'x.jpg', contentType: 'image/jpeg', sizeBytes: 10, sha256: 'a'.repeat(64) }, 403)).message).toBe('Adding a photo needs files.upload over the company.')
+    expect((await refused('photographer', 'DELETE', `${url(claim.id, '/photos')}/${second.id}?version=${second.version}`, undefined, 403)).message).toBe('Removing a photo needs files.delete over the company.')
+    await ok('fileAdmin', 'DELETE', `${url(claim.id, '/photos')}/${second.id}?version=${second.version}`)
+    claim = (await ok('photographer', 'GET', url(claim.id))).claim
+    expect(claim.photos).toEqual([expect.objectContaining({ id: first.id, originalName: 'macchia-1.jpg', status: 'AVAILABLE' })])
+    expect(claim.supplierContact).toMatchObject({ id: A.orderDesk })
+    firstPhoto = first
+  })
+
+  it('Z1:08 the claim letter: a preview with its banner, no price; a version kept (GeneratedDocument CLAIM_LETTER); the same contents give it back; new contents a new version', async () => {
+    const preview = await call('viewer', 'GET', url(claim.id, '/letter'))
+    expect(preview.statusCode, preview.body.slice(0, 200)).toBe(200)
+    expect(preview.headers['content-type']).toContain('application/pdf')
+    const text = await pdfFlatText(preview.rawPayload)
+    expect(text).toContain(claim.number)
+    expect(text).toMatch(/ANTEPRIMA|PREVIEW/)
+    expect(text).not.toMatch(/€|EUR\b|prezzo|price/i)
+    const v1 = await ok('photographer', 'POST', url(claim.id, '/letter'), {}, 201)
+    expect(v1).toMatchObject({ made: true, letter: { version: 1, number: claim.number } })
+    const same = await ok('photographer', 'POST', url(claim.id, '/letter'), {}, 201)
+    expect(same).toMatchObject({ made: false, letter: { id: v1.letter.id, version: 1 } })
+    claim = (await ok('photographer', 'PATCH', url(claim.id), { version: claim.version, remedy: 'REPLACEMENT' })).claim
+    const v2 = await ok('photographer', 'POST', url(claim.id, '/letter'), {}, 201)
+    expect(v2).toMatchObject({ made: true, letter: { version: 2 } })
+    const rows = await admin<{ version: number; kind: string; recordType: string; fileId: string }>(`SELECT version, kind::text AS kind, "recordType", "fileId" FROM "GeneratedDocument" WHERE "recordId" = $1 ORDER BY version`, [claim.id])
+    expect(rows.map((row) => [row.version, row.kind, row.recordType])).toEqual([[1, 'CLAIM_LETTER', 'SupplierClaim'], [2, 'CLAIM_LETTER', 'SupplierClaim']])
+    expect(await admin(`SELECT kind::text AS kind, visibility::text[] AS visibility, "partyId" FROM "StoredFile" WHERE id = $1`, [rows[1]!.fileId])).toEqual([{ kind: 'DOCUMENT', visibility: ['OFFICE', 'PARTNER'], partyId: A.P2 }])
+    expect((await ok('viewer', 'GET', url(claim.id))).claim.letters.map((letter: Json) => letter.version)).toEqual([2, 1])
+    // Back to the first contents: a new version naming version 1's file.
+    claim = (await ok('photographer', 'PATCH', url(claim.id), { version: claim.version, remedy: 'CREDIT' })).claim
+    const v3 = await ok('photographer', 'POST', url(claim.id, '/letter'), {}, 201)
+    expect(v3).toMatchObject({ made: true, letter: { version: 3, fileId: v1.letter.fileId } })
+  })
+
+  it('Z1:08 the mail to the supplier carries the current letter; photos are kept after the send', async () => {
+    const check = await ok('photographer', 'GET', url(claim.id, '/send-check'))
+    expect(check.letter).toEqual({ attached: true, problems: [] })
+    expect(check.message).toMatch(/lettera di reclamo|claim letter/)
+    const sent = await ok('photographer', 'POST', url(claim.id, '/send'), { version: claim.version, mail: { contactIds: [A.orderDesk] } })
+    expect(sent.claim.status).toBe('SENT')
+    const current = (await admin<{ id: string; fileId: string }>(`SELECT id, "fileId" FROM "GeneratedDocument" WHERE "recordId" = $1 ORDER BY version DESC LIMIT 1`, [claim.id]))[0]!
+    expect(sent.letterId).toBe(current.id)
+    const messages = await admin<{ attachmentFileIds: string[] }>(`SELECT m."attachmentFileIds" FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordType" = 'SupplierClaim' AND t."recordId" = $1`, [claim.id])
+    expect(messages).toEqual([{ attachmentFileIds: [current.fileId] }])
+    expect((await refused('fileAdmin', 'DELETE', `${url(claim.id, '/photos')}/${firstPhoto.id}?version=${firstPhoto.version}`, undefined, 409)).message).toContain('removed only while it is a draft')
+    // The reason code is fixed once sent (the database refuses it for every login).
+    await expect(admin(`UPDATE "SupplierClaim" SET "reasonCode" = 'WRONG_ITEM' WHERE id = $1`, [claim.id])).rejects.toThrow(/fixed once it is sent/)
+  })
+
+  it('Z1:06 / Z1:07 goods back are SUPPLIER_RETURN moves with the CLAIM code; a hide sent back whole is RETURNED (its previous state kept by the database)', async () => {
+    const moveId = returned.claim.lines[0].move.id
+    expect(await admin(`SELECT reason::text AS reason, "reasonCode", "fromLocationId" FROM "StockMove" WHERE id = $1`, [moveId])).toEqual([{ reason: 'SUPPLIER_RETURN', reasonCode: 'QUALITY', fromLocationId: store }])
+    expect(await admin(`SELECT state::text AS state, "previousState"::text AS "previousState" FROM "Hide" WHERE id = $1`, [hide2])).toEqual([{ state: 'RETURNED', previousState: 'FULL' }])
+    expect(await admin(`SELECT after->>'state' AS state FROM "AuditLog" WHERE "recordType" = 'Hide' AND "recordId" = $1 AND action = 'purchasing.claims.hideReturned'`, [hide2])).toEqual([{ state: 'RETURNED' }])
+    // A reversal of the return that leaves the hide RETURNED is refused at commit (the hide must come back with it).
+    await expect(
+      admin(
+        `INSERT INTO "StockMove" (id, "tenantId", "companyId", "siteId", reason, "itemId", "itemColourId", "lotId", "hideId", "toLocationId", quantity, uom, "baseQuantity", note, "reversalOfId", "idempotencyKey", "occurredAt")
+         SELECT $1, m."tenantId", m."companyId", m."siteId", m.reason, m."itemId", m."itemColourId", m."lotId", m."hideId", m."fromLocationId", m.quantity, m.uom, m."baseQuantity", 'Undo', m.id, $2, now() FROM "StockMove" m WHERE m.id = $3`,
+        [newId(), `test-undo-${run}`, moveId],
+      ),
+    ).rejects.toThrow(/which is still RETURNED/)
+  })
+
+  it('Z1:05 a claim line follows the replacement of its cancelled return DDT', async () => {
+    const back = await ok('photographer', 'POST', '/purchasing/claims/returns', { partyId: A.P2, lines: [{ lotId: liningLot, quantity: '5', fromLocationId: store }], reasonCode: 'WRONG_ITEM', ddt: TYPED_DDT }, 201)
+    const lineId = back.claim.lines[0].id
+    expect(back.claim.lines[0]).toMatchObject({ move: { reason: 'SUPPLIER_RETURN' }, ddt: { id: back.ddt.id } })
+    await ok('photographer', 'POST', `/shipping/ddts/${back.ddt.id}/cancel`, { reason: 'Wrong carrier' })
+    const replacement = await ok('photographer', 'POST', `/shipping/ddt-sources/SupplierClaim/${back.claim.id}/ddt`, TYPED_DDT, 201)
+    expect(replacement.claimLinesKeepingOldDdt).toEqual([])
+    expect(await admin(`SELECT "ddtId" FROM "SupplierClaimLine" WHERE id = $1`, [lineId])).toEqual([{ ddtId: replacement.ddt.id }])
+    const seen = (await ok('photographer', 'GET', url(back.claim.id))).claim
+    expect(seen.lines[0]).toMatchObject({ ddt: { id: replacement.ddt.id, cancelled: false }, liveDdt: { id: replacement.ddt.id } })
+    expect(await admin(`SELECT before->>'ddtId' AS "from", after->>'ddtId' AS "to" FROM "AuditLog" WHERE "recordType" = 'SupplierClaimLine' AND "recordId" = $1 AND action = 'shipping.ddtOnClaimLine' ORDER BY at, id`, [lineId])).toEqual([
+      { from: null, to: back.ddt.id },
+      { from: back.ddt.id, to: replacement.ddt.id },
+    ])
   })
 })

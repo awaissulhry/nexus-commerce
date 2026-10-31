@@ -1,0 +1,110 @@
+/*
+ * DS — CheckList (B-W2b-09). One row per check: the mark (icon + state word, never colour alone), the name and its
+ * reason, the fix at the end. Text roles only.
+ */
+.nds-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-checklist-summary {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-checklist-summary.is-ready {
+  color: var(--nds-success-text);
+}
+.nds-checklist-summary.is-open {
+  color: var(--nds-danger-text);
+}
+.nds-checklist-items {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+.nds-checklist-item {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.nds-checklist-item:first-child {
+  border-top: 0;
+}
+.nds-checklist-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+}
+.nds-checklist-icon {
+  display: inline-flex;
+  flex: none;
+}
+.nds-checklist-item.is-pass .nds-checklist-mark {
+  color: var(--nds-success-text);
+}
+.nds-checklist-item.is-warning .nds-checklist-mark {
+  color: var(--nds-warning-text);
+}
+.nds-checklist-item.is-fail .nds-checklist-mark,
+.nds-checklist-item.is-unknown.is-blocking .nds-checklist-mark {
+  color: var(--nds-danger-text);
+}
+.nds-checklist-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.nds-checklist-name {
+  font-weight: var(--nds-font-weight-medium);
+  overflow-wrap: anywhere;
+}
+.nds-checklist-detail {
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+.nds-checklist-fixes {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  white-space: nowrap;
+}
+.nds-checklist-fix {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nds-checklist-fix:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-xs);
+}
+.nds-checklist.compact .nds-checklist-item {
+  padding: var(--nds-space-6) var(--nds-space-10);
+}
+
+/* A phone: the mark on its own line above the name; the fix under the reason. */
+@media (max-width: 719px) {
+  .nds-checklist-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .nds-checklist-fixes {
+    justify-self: start;
+  }
+}

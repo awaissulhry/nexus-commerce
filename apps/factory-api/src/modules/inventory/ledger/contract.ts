@@ -59,6 +59,8 @@ export const moveView = output({
   workOrderId: id().nullable(),
   reference: z.string().nullable(),
   note: z.string().nullable(),
+  /** B-W2b-15: the code of the reason list the move was made for (a write-off's, an adjustment's, a scrap's), or null. */
+  reasonCode: z.string().nullable().optional(),
   reversalOfId: id().nullable(),
   idempotencyKey: z.string(),
   occurredAt: instant(),
@@ -79,6 +81,8 @@ export const adjustContract = defineContract({
     ...amount,
     /** Why (SCM-192): required. */
     note: why(),
+    /** B-W2b-15: a code of the tenant's ADJUSTMENT reason list (active; one that needs detail has the note anyway). */
+    reasonCode: z.string().trim().regex(/^\S+$/).max(40).optional(),
     reference: reference(),
     /** The cost per base unit to value it at (MANUAL); left out: the lot's cost, else the item's standard cost. */
     unitCost: money.cost(unitPrice()),
@@ -118,7 +122,14 @@ export const scrapContract = defineContract({
 export const reverseContract = defineContract({
   params: input({ moveId: id() }),
   body: input({ note: why() }),
-  response: { 201: output({ move: moveView, reversed: id() }) },
+  response: {
+    201: output({
+      move: moveView,
+      reversed: id(),
+      /** B-W2b-15: the hide a write-off (scrap) made SCRAPPED, back in the state it had; absent for any other move. */
+      reopenedHide: output({ id: id(), code: z.string(), state: z.string() }).optional(),
+    }),
+  },
 })
 
 export const countContract = defineContract({

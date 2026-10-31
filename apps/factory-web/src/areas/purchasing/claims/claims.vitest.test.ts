@@ -284,10 +284,10 @@ describe('the calls, as the API takes them', () => {
   })
 })
 
-const LEFT_KEY = /\b(?:status|statusIn|kind|kindPlural|act|held|problem|common|live|page|tiles|tile|view|list|col|bulk|csv|chip|ret|ddt|field|form|save|claimTab|fact|lines|goods|goodsBack|credit|send|answer|close|cancel|notice|record|remedy|foundAt|uom|lotQuality|moveReason|discrepancyKind|discrepancyStatus|contactRole|language|tab)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+const LEFT_KEY = /\b(?:status|statusIn|kind|kindPlural|act|held|problem|common|live|page|tiles|tile|view|list|col|bulk|csv|chip|ret|ddt|field|form|save|claimTab|fact|lines|goods|goodsBack|credit|send|answer|close|cancel|notice|record|remedy|foundAt|uom|lotQuality|moveReason|discrepancyKind|discrepancyStatus|contactRole|language|tab|newClaim|evidence|letter|photos)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
 /** Permission names are said on purpose ("needs purchasing.claims.manage"); example domains are not keys. */
-const SAID = /\b(?:purchasing\.[a-z.]+|shipping\.ddt\.[a-z]+|inventory\.stock\.view|parties\.view|files\.read|money\.cost|[a-z-]+\.example\.com|example\.com)\b/g
+const SAID = /\b(?:purchasing\.[a-z.]+|shipping\.ddt\.[a-z]+|inventory\.stock\.view|parties\.view|files\.(?:read|upload|delete)|money\.cost|[a-z-]+\.example\.com|example\.com)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>

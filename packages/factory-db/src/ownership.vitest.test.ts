@@ -16,11 +16,17 @@ describe('model ownership', () => {
     expect(problems(loadOwnership())).toEqual([])
     const inputs = policyInputs(loadSchema(), loadOwnership())
     expect(inputs.model.tables.map((table) => table.table).sort()).toEqual([
+      'AbsenceCode',
+      'AbsenceEntry',
       'AccountingExport',
       'AccountingExportFile',
       'Alert',
       'AlertEvent',
       'AlertRule',
+      'AttendanceAnomaly',
+      'AttendanceCorrection',
+      'AttendanceDay',
+      'AttendanceMonthClose',
       'AttentionAction',
       'AttentionActionLog',
       'AuditLog',
@@ -34,6 +40,7 @@ describe('model ownership', () => {
       'Certificate',
       'CertificateCoverage',
       'CertificateRenewal',
+      'ClockEvent',
       'Colour',
       'Colourway',
       'Company',
@@ -50,6 +57,7 @@ describe('model ownership', () => {
       'DeviceEnrolment',
       'DispositionCode',
       'DueTimer',
+      'EarningsEntry',
       'EmailIdentity',
       'EmailOutbound',
       'Employee',
@@ -66,12 +74,14 @@ describe('model ownership', () => {
       'GeneratedDocument',
       'GoodsReceipt',
       'GoodsReceiptLine',
+      'HeldScan',
       'Hide',
       'IdempotencyReceipt',
       'ImportJob',
       'ImportRow',
       'InboundEmail',
       'InboundWebhook',
+      'IncentiveScheme',
       'Inspection',
       'InspectionDefect',
       'IntegrationAccount',
@@ -123,6 +133,9 @@ describe('model ownership', () => {
       'OperationScanDefect',
       'OrgArea',
       'OutboxEvent',
+      'OvertimeAgreement',
+      'OvertimeEntry',
+      'OvertimeRequest',
       'Parcel',
       'Party',
       'PartyAddress',
@@ -130,14 +143,23 @@ describe('model ownership', () => {
       'PartyPriceListAssignment',
       'PartyTaxIdentity',
       'PasswordReset',
+      'PayPeriod',
       'PayablesSettings',
       'Payment',
       'PaymentAllocation',
       'PaymentReminder',
       'PaymentTerms',
+      'PayrollCodeMapping',
+      'PayrollExport',
+      'PayrollExportFile',
+      'PayrollExportLayout',
       'PeopleLegalGate',
       'PeopleSettings',
       'PeriodLock',
+      'PiecePaySwitch',
+      'PieceRateEntry',
+      'PieceRateTable',
+      'PieceRateVersion',
       'PlanVersion',
       'PlanningException',
       'PlanningRun',
@@ -168,6 +190,8 @@ describe('model ownership', () => {
       'QuoteLine',
       'QuoteLineSize',
       'QuoteVersion',
+      'RateAcknowledgement',
+      'RatePublication',
       'ReasonCode',
       'ReceiptDiscrepancy',
       'ReceivablesSettings',
@@ -187,6 +211,7 @@ describe('model ownership', () => {
       'ReworkOrder',
       'Role',
       'RoleAssignment',
+      'RosterEntry',
       'RoutingOperation',
       'SalesOrder',
       'SalesOrderAmendment',
@@ -242,6 +267,7 @@ describe('model ownership', () => {
       'TeamMember',
       'Tenant',
       'Thread',
+      'TimesheetApproval',
       'TodayLayout',
       'TrackingEvent',
       'TypeChangeReview',
@@ -260,6 +286,8 @@ describe('model ownership', () => {
       'Worker',
       'WorkerNoticeAck',
       'WorkerRole',
+      'WorkerStatement',
+      'WorkingTimeRule',
     ])
     expect(inputs.platformTables).toEqual([{ table: 'Tenant', privileges: ['select', 'insert', 'update'], walled: true }])
   })
@@ -430,7 +458,15 @@ describe('model ownership', () => {
 
     it('maps every model that holds personal data: who it is about and the purposes of each column', () => {
       const map = personalDataOf(loadSchema(), loadOwnership())
-      expect(map.map((entry) => entry.model).sort()).toEqual(['Employee', 'EmployeeSkill', 'LeaverCase', 'LeaverStep', 'LineLoan', 'MachineAuthorisation', 'TeamMember'])
+      expect(map.map((entry) => entry.model).sort()).toEqual(
+        [
+          ...['Employee', 'EmployeeSkill', 'LeaverCase', 'LeaverStep', 'LineLoan', 'MachineAuthorisation', 'TeamMember'],
+          // W2b time and attendance (wave 5/7): purpose ATTENDANCE.
+          ...['AbsenceEntry', 'AttendanceAnomaly', 'AttendanceCorrection', 'AttendanceDay', 'ClockEvent', 'OvertimeAgreement', 'OvertimeEntry', 'RosterEntry', 'TimesheetApproval'],
+          // W2b piece pay and the payroll export (wave 6/7): purpose PAY.
+          ...['EarningsEntry', 'HeldScan', 'RateAcknowledgement', 'WorkerStatement'],
+        ].sort(),
+      )
       const employee = map.find((entry) => entry.model === 'Employee')!
       expect(employee.subject).toBe('id')
       expect(employee.columns.firstName).toEqual(['EMPLOYMENT'])

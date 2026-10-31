@@ -74,6 +74,8 @@ model Device {
   cutLogs        CutLog[]
   bundles        Bundle[]
   operationScans OperationScan[]
+  // W2b pay.prisma (schema wave 6/7): the rate publications read on it.
+  rateAcknowledgements RateAcknowledgement[]
   // B-W1-42: correction requests asked and scans refused on it.
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]
@@ -84,6 +86,9 @@ model Device {
   subcontractReceipts    SubcontractReceipt[]
   // numbering.prisma: the numbers of its blocks it used.
   numberBlockUses NumberBlockUse[]
+  // W2b time.prisma (wave 5/7): the clock events and overtime answers recorded on it.
+  clockEvents        ClockEvent[]
+  overtimeAgreements OvertimeAgreement[]
   // floor-sync.prisma: its queue's recorded events and refused actions.
   syncEvents      FloorSyncEvent[]
   refusedActions  FloorRefusedAction[]
@@ -182,11 +187,18 @@ model Worker {
   noticeAcks     WorkerNoticeAck[]
   cutLogs        CutLog[]
   operationScans OperationScan[]
+  // W2b pay.prisma (schema wave 6/7): their receipts of rate publications, the earnings and held scans of their work.
+  rateAcknowledgements RateAcknowledgement[]
+  earningsEntries      EarningsEntry[]
+  heldScans            HeldScan[]
   // B-W1-42: the correction requests they asked and the refused scans they sent (a site that names workers).
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]
   // floor-sync.prisma: its refused queued actions (a site that names workers).
   refusedActions         FloorRefusedAction[]
+  // W2b time.prisma (wave 5/7): the worker's clock events and overtime answers on the site's tablets.
+  clockEvents            ClockEvent[]
+  overtimeAgreements     OvertimeAgreement[]
   // quality.prisma: the final inspections the worker made as the inspector.
   inspections    Inspection[]   @relation("InspectionInspector")
   // W2a (wave 6/7) quality.prisma, holds.prisma, ncr.prisma, plant.prisma: the inspections assigned to the worker, the

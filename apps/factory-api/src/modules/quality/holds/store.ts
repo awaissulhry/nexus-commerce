@@ -28,6 +28,8 @@ export type Reader = CommandTx
 
 export const HOLD_COLUMNS = {
   id: true,
+  /** B-W2b-17: its number from the company's HOLD series ("HLD-2026-0091"); null for holds placed before. */
+  number: true,
   companyId: true,
   siteId: true,
   subjectType: true,
@@ -194,6 +196,8 @@ export function holdView(row: HoldRow, facts: HoldViewFacts) {
   const type = row.subjectType as HoldSubjectType
   return {
     id: row.id,
+    /** B-W2b-17: "HLD-2026-0091" (null: a hold placed before holds were numbered). */
+    number: row.number,
     companyId: row.companyId,
     siteId: row.siteId,
     /** B-W2a-67: the site in words (the list's Site column). */

@@ -84,12 +84,10 @@
       "COMPLETE": "Complete"
     },
     "place": "Kit place:",
-    "placeNone": "Not recorded",
-    "placeLater": "Not recorded yet: a kit's staging place comes with a later step.",
+    "placeNone": "Not staged",
     "mark": "Mark kit complete",
     "markShort_one": "{count} line is still short: the kit is complete once it is picked.",
     "markShort_other": "{count} lines are still short: the kit is complete once they are picked.",
-    "markRecordLater": "Every line is picked: the kit already reads Complete. Marking a kit by hand needs a kit record, which comes with a later step.",
     "check": "Kit complete check",
     "checkList_one": "Pick list made: {count} reservation",
     "checkList_other": "Pick list made: {count} reservations",
@@ -98,7 +96,31 @@
     "lineShort": "{material}: {short} still to pick",
     "allDone": "Every line is picked: the kit is complete",
     "notAllDone_one": "{count} line still short",
-    "notAllDone_other": "{count} lines still short"
+    "notAllDone_other": "{count} lines still short",
+    "placeAt": "{code} · {name}",
+    "placeLabel": "Kit place",
+    "placeHint": "Where the picked material waits for the cutters. Saved as you choose.",
+    "heldNoRight": "Staging and checking a kit needs the right to pick for work orders (inventory.issue).",
+    "heldNoPlaces": "Choosing the place needs the right to see the places (inventory.locations.view).",
+    "heldNotOpen": "The work order is not picked for any more: its kit stays as it is.",
+    "heldNothing": "The work order plans no material: there is no kit to check.",
+    "heldChecked": "The kit is checked complete already.",
+    "heldNotChecked": "The kit is not checked complete.",
+    "busy": "Saving…",
+    "checked": "Checked",
+    "checkedAt": "Checked complete on {at}",
+    "reopen": "Open again",
+    "reopenReason": "Why is it open again?",
+    "reopenWhy": "Say why the kit is open again.",
+    "refused": {
+      "LINES_SHORT": "Not marked: a line of the kit is still short. The pick list was read again.",
+      "WORK_ORDER_NOT_OPEN": "Not saved: the work order is not picked for any more.",
+      "NOTHING_PLANNED": "Not marked: the work order plans no material.",
+      "ALREADY_CHECKED": "Someone checked this kit complete meanwhile. The pick list was read again.",
+      "NOT_CHECKED": "The kit was opened again meanwhile. The pick list was read again.",
+      "PLACE": "That place cannot hold a kit (archived, of another site or a workshop's): choose another.",
+      "OTHER": "The kit was not saved. The pick list was read again."
+    }
   },
   "ready": {
     "word": {

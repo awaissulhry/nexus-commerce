@@ -325,14 +325,14 @@ describe('what was wrong with a delivery, reported to the supplier, tracked to i
     // A missing document, for the delivery as a whole: a kind without a code of the list.
     const missing = (await ok('warehouse', 'POST', url(), { kind: 'MISSING_DOCUMENT', note: 'No Cr VI report in the box.' }, 201)).discrepancy
     expect(missing).toMatchObject({ seq: 40, kind: 'MISSING_DOCUMENT', reasonCode: null, receiptLine: null })
-    // As stored: the code leads the note; the event; the audit; the tile and the list's column.
-    expect(await admin(`SELECT note, kind::text AS kind FROM "ReceiptDiscrepancy" WHERE id = $1`, [stains.id])).toEqual([{ note: 'STAINS: Stains on the grain side.', kind: 'DAMAGED' }])
+    // As stored (B-W2b-14: the code in its own column, the note the receiver's words); the event; the audit; the tile and the list's column.
+    expect(await admin(`SELECT "reasonCode", note, kind::text AS kind FROM "ReceiptDiscrepancy" WHERE id = $1`, [stains.id])).toEqual([{ reasonCode: 'STAINS', note: 'Stains on the grain side.', kind: 'DAMAGED' }])
     expect(await admin(`SELECT payload->>'change' AS change, payload->>'status' AS status FROM "OutboxEvent" WHERE type = 'inventory.receipt_discrepancy_changed' AND payload->>'discrepancyId' = $1`, [short.id])).toEqual([{ change: 'RECORDED', status: 'OPEN' }])
     expect(await admin(`SELECT action FROM "AuditLog" WHERE "recordType" = 'ReceiptDiscrepancy' AND "recordId" = $1`, [short.id])).toEqual([{ action: 'inventory.discrepancyRecorded' }])
     expect((await ok('viewer', 'GET', `/inventory/receipts/counts?siteId=${A.siteA1}`)).counts.discrepanciesOpen).toBeGreaterThanOrEqual(4)
     const listed = (await ok('viewer', 'GET', `/inventory/receipts?discrepancies=open&siteId=${A.siteA1}`)).receipts as Json[]
     expect(listed.find((row) => row.id === receipt.id)?.discrepancies).toEqual({ count: 4, open: 4, unsent: 4 })
-    // The reason list counts its uses (platform/reasons: the code that leads the note).
+    // The reason list counts its uses (platform/reasons: the reasonCode column, B-W2b-14).
     const [list] = (await ok('reasons', 'GET', '/reasons/lists?list=DISCREPANCY')).lists as Json[]
     const used = Object.fromEntries((list!.reasons as Json[]).map((reason) => [reason.code, reason.usedCount]))
     expect(used).toMatchObject({ SHORT: 1, DAMAGED: 1, STAINS: 1, OVER: 0 })
@@ -538,5 +538,86 @@ describe("the tannery's hide list, imported as one receipt (SCM-248)", () => {
     expect((await rowsOf(late.id))[0]!.errors).toEqual([expect.objectContaining({ column: 'order', message: expect.stringContaining('received in full') })])
     const unknown = await dryRun(csv([HEADER, `NO-SUCH-PO;X-01;10;ft2;;;;;;`]))
     expect((await rowsOf(unknown.id))[0]!.errors).toEqual([{ column: 'order', message: 'No purchase order NO-SUCH-PO in this company.' }])
+  })
+})
+
+// ---- B-W2b-14: receiving follow-ups (the reason code as data, the DDT corrected after POSTED, the DDT photo category) --------
+
+describe('B-W2b-14 receiving follow-ups (Z1:01, Z1:02, Z1:03)', () => {
+  let order: Awaited<ReturnType<typeof makeOrder>>
+  let receipt: Json
+
+  beforeAll(async () => {
+    order = await makeOrder([leatherLine('200')])
+    receipt = (await ok('manager', 'POST', '/inventory/receipts', { purchaseOrderId: order.id, supplierDdtNumber: `781-${run}`, supplierDdtDate: '2026-10-20', lines: [{ purchaseOrderLineId: order.lines[0], lots: [{ dyeBatch: 'DB-W2B', hides: hides('W', ['50', '52']) }] }] }, 201)).receipt
+  })
+
+  it("Z1:01 a discrepancy's reason code is its own column; the note keeps the receiver's words; one recorded before W2b still reads its prefix", async () => {
+    const url = `/inventory/receipts/${receipt.id}/discrepancies`
+    const usage = async () => Object.fromEntries((((await ok('reasons', 'GET', '/reasons/lists?list=DISCREPANCY')).lists as Json[])[0]!.reasons as Json[]).map((reason) => [reason.code, reason.usedCount as number]))
+    const usedBefore = await usage()
+    const made = (await ok('warehouse', 'POST', url, { reasonCode: 'STAINS', kind: 'DAMAGED', receiptLineId: receipt.lines[0].id, quantity: '3', uom: 'FT2', note: 'Due macchie sul fiore' }, 201)).discrepancy
+    expect(made).toMatchObject({ kind: 'DAMAGED', reasonCode: 'STAINS', reason: { code: 'STAINS', labelEn: 'Stains' }, note: 'Due macchie sul fiore' })
+    expect(await admin(`SELECT "reasonCode", note FROM "ReceiptDiscrepancy" WHERE id = $1`, [made.id])).toEqual([{ reasonCode: 'STAINS', note: 'Due macchie sul fiore' }])
+    // A change of the reason writes the column (the guard keeps it while OPEN).
+    const changed = (await ok('warehouse', 'PATCH', `${url}/${made.id}`, { version: made.version, reasonCode: 'DAMAGED' })).discrepancy
+    expect(changed).toMatchObject({ reasonCode: 'DAMAGED', note: 'Due macchie sul fiore' })
+    expect(await admin(`SELECT "reasonCode", note FROM "ReceiptDiscrepancy" WHERE id = $1`, [made.id])).toEqual([{ reasonCode: 'DAMAGED', note: 'Due macchie sul fiore' }])
+    // A discrepancy recorded before W2b: no column value, the code at the head of its note.
+    const legacy = newId()
+    await admin(`INSERT INTO "ReceiptDiscrepancy" (id, "tenantId", "siteId", "receiptId", seq, "supplierId", kind, note) VALUES ($1, $2, $3, $4, 90, $5, 'SHORT', 'SHORT: una pelle in meno')`, [legacy, A.tenant, A.siteA1, receipt.id, A.supplier])
+    const listed = (await ok('viewer', 'GET', url)).discrepancies as Json[]
+    expect(listed.find((row) => row.id === legacy)).toMatchObject({ reasonCode: 'SHORT', note: 'una pelle in meno' })
+    // Its next change moves the code to the column and the note to the words alone.
+    const fixed = (await ok('warehouse', 'PATCH', `${url}/${legacy}`, { version: 1, note: 'una pelle in meno (contata due volte)' })).discrepancy
+    expect(fixed).toMatchObject({ reasonCode: 'SHORT', note: 'una pelle in meno (contata due volte)' })
+    expect(await admin(`SELECT "reasonCode", note FROM "ReceiptDiscrepancy" WHERE id = $1`, [legacy])).toEqual([{ reasonCode: 'SHORT', note: 'una pelle in meno (contata due volte)' }])
+    // The reason lists' usage counts read the column (one more DAMAGED, one more SHORT: the legacy row now has its column).
+    const usedAfter = await usage()
+    expect([usedAfter.DAMAGED! - usedBefore.DAMAGED!, usedAfter.SHORT! - usedBefore.SHORT!, usedAfter.STAINS! - usedBefore.STAINS!]).toEqual([1, 1, 0])
+  })
+
+  it('Z1:02 the supplier DDT number and date of a POSTED receipt are corrected with why: one update, the audit row, the event; refusals in words', async () => {
+    const url = `/inventory/receipts/${receipt.id}/supplier-ddt`
+    const before = (await ok('viewer', 'GET', `/inventory/receipts/${receipt.id}`)).receipt
+    expect(before).toMatchObject({ supplierDdtNumber: `781-${run}`, supplierDdtCorrection: null })
+    // Refusals first: nothing changes, a reason too short (the contract), a viewer, a stale version.
+    expect((await refused('warehouse', 'POST', url, { version: before.version, supplierDdtNumber: `781-${run}`, supplierDdtDate: '2026-10-20', reason: 'Nothing to fix' }, 400)).issues).toEqual([expect.objectContaining({ path: 'body/supplierDdtNumber', message: expect.stringContaining('names this DDT already') })])
+    expect((await refused('warehouse', 'POST', url, { version: before.version, supplierDdtNumber: `718-${run}`, supplierDdtDate: '2026-10-20', reason: 'x' }, 400)).issues[0].path).toBe('body/reason')
+    expect((await refused('warehouse', 'POST', url, { version: before.version, supplierDdtNumber: `718-${run}`, supplierDdtDate: '2099-01-01', reason: 'A date in the future' }, 400)).issues).toEqual([expect.objectContaining({ path: 'body/supplierDdtDate' })])
+    expect((await refused('viewer', 'POST', url, { version: before.version, supplierDdtNumber: `718-${run}`, supplierDdtDate: '2026-10-20', reason: 'Not mine to fix' }, 403)).code).toBe('forbidden')
+    expect((await refused('warehouse', 'POST', url, { version: before.version + 5, supplierDdtNumber: `718-${run}`, supplierDdtDate: '2026-10-20', reason: 'Digits swapped at the dock' }, 409)).code).toBe('conflict')
+    const corrected = (await ok('warehouse', 'POST', url, { version: before.version, supplierDdtNumber: `718-${run}`, supplierDdtDate: '2026-10-19', reason: 'Digits swapped at the dock' })).receipt
+    expect(corrected).toMatchObject({ status: 'POSTED', supplierDdtNumber: `718-${run}`, supplierDdtDate: '2026-10-19', supplierDdtCorrection: { byId: IDS.warehouse, reason: 'Digits swapped at the dock', at: expect.any(String) }, version: before.version + 1 })
+    const audit = await admin(`SELECT before, after, reason FROM "AuditLog" WHERE "recordType" = 'GoodsReceipt' AND "recordId" = $1 AND action = 'inventory.supplierDdtCorrected'`, [receipt.id])
+    expect(audit).toEqual([{ before: { supplierDdtNumber: `781-${run}`, supplierDdtDate: '2026-10-20' }, after: { supplierDdtNumber: `718-${run}`, supplierDdtDate: '2026-10-19' }, reason: 'Digits swapped at the dock' }])
+    expect(await admin(`SELECT type, payload->>'supplierDdtNumber' AS n FROM "OutboxEvent" WHERE subject = $1 AND type = 'inventory.receipt_ddt_corrected'`, [receipt.id])).toEqual([{ type: 'inventory.receipt_ddt_corrected', n: `718-${run}` }])
+    // A second correction: a new, later one (the guard refuses a change without it).
+    const again = (await ok('warehouse', 'POST', url, { version: corrected.version, supplierDdtNumber: `718/A-${run}`, supplierDdtDate: '2026-10-19', reason: 'The suffix was missing' })).receipt
+    expect(again.supplierDdtCorrection.reason).toBe('The suffix was missing')
+    expect(Date.parse(again.supplierDdtCorrection.at)).toBeGreaterThan(Date.parse(corrected.supplierDdtCorrection.at))
+    // The database refuses a change of a posted receipt's DDT without a correction, for every login.
+    await expect(admin(`UPDATE "GoodsReceipt" SET "supplierDdtNumber" = 'X' WHERE id = $1`, [receipt.id])).rejects.toThrow(/corrected with a new correction/)
+  })
+
+  it('Z1:02 a reversed receipt keeps its DDT (409 in words)', async () => {
+    const other = await makeOrder([leatherLine('100')])
+    const made = (await ok('manager', 'POST', '/inventory/receipts', { purchaseOrderId: other.id, supplierDdtNumber: `900-${run}`, supplierDdtDate: '2026-10-21', lines: [{ purchaseOrderLineId: other.lines[0], lots: [{ hides: hides('R', ['40']) }] }] }, 201)).receipt
+    const reversed = (await ok('manager', 'POST', `/inventory/receipts/${made.id}/reverse`, { version: made.version, reason: 'Booked on the wrong order' }, 201)).receipt
+    expect((await refused('warehouse', 'POST', `/inventory/receipts/${made.id}/supplier-ddt`, { version: reversed.version, supplierDdtNumber: `909-${run}`, supplierDdtDate: '2026-10-21', reason: 'Too late to fix' }, 409)).message).toBe(`Receipt ${made.number} is reversed: its supplier DDT no longer changes.`)
+  })
+
+  it('Z1:03 the DDT photo is of category DDT_PHOTO; another photo of the receipt never shows as the DDT', async () => {
+    const file = await photo('warehouse', `/inventory/receipts/${receipt.id}/ddt-photos`, 'ddt-w2b.jpg')
+    expect(await admin(`SELECT category::text AS category FROM "StoredFile" WHERE id = $1`, [file.id])).toEqual([{ category: 'DDT_PHOTO' }])
+    // A PHOTO of the receipt without the category (another photo of the goods): not the DDT's.
+    const other = newId()
+    await admin(
+      `INSERT INTO "StoredFile" (id, "tenantId", "companyId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", sha256, "storeAccountId", "storageKey", status, "availableAt", visibility)
+       SELECT $1, f."tenantId", f."companyId", f."recordType", f."recordId", f.kind, 'goods.jpg', f."contentType", f."sizeBytes", f.sha256, f."storeAccountId", f."storageKey" || '-other', 'AVAILABLE', now(), f.visibility FROM "StoredFile" f WHERE f.id = $2`,
+      [other, file.id],
+    )
+    const record = (await ok('viewer', 'GET', `/inventory/receipts/${receipt.id}`)).receipt
+    expect(record.ddtPhotos.map((photo: Json) => photo.id)).toEqual([file.id])
   })
 })

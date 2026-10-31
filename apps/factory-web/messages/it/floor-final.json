@@ -34,7 +34,16 @@
     "ready": "Pronto",
     "toRelease": "da rilasciare",
     "count_one": "{count} ordine di lavoro",
-    "count_other": "{count} ordini di lavoro"
+    "count_other": "{count} ordini di lavoro",
+    "overdue": "Ispezione in ritardo",
+    "inspectionDue": "ispezione entro {time}",
+    "inspectionOverdue": "ispezione in ritardo dal {time}",
+    "assigned": {
+      "mine": "assegnata a te",
+      "office": "assegnata a {name} (ufficio)",
+      "officeUnnamed": "assegnata a un ispettore dell'ufficio",
+      "other": "assegnata a un altro ispettore"
+    }
   },
   "strip": {
     "batch": "lotto {batch}",

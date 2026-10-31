@@ -86,6 +86,22 @@ model Employee {
   skills              EmployeeSkill[]        @relation("EmployeeSkillHolder")
   trainedSkills       EmployeeSkill[]        @relation("EmployeeSkillTrainer")
   machineAuthorisations MachineAuthorisation[]
+  // W2b time.prisma (wave 5/7): the person's roster, overtime answers, clock events, attendance days and their anomalies,
+  // absences, overtime worked, timesheets and corrections of closed days.
+  rosterEntries         RosterEntry[]
+  overtimeAgreements    OvertimeAgreement[]
+  clockEvents           ClockEvent[]
+  attendanceDays        AttendanceDay[]
+  attendanceAnomalies   AttendanceAnomaly[]
+  absenceEntries        AbsenceEntry[]
+  overtimeEntries       OvertimeEntry[]
+  timesheetApprovals    TimesheetApproval[]
+  attendanceCorrections AttendanceCorrection[]
+  // W2b pay.prisma (wave 6/7): the person's receipts of rate publications, earnings, held scans and pay statements.
+  rateAcknowledgements  RateAcknowledgement[]
+  earningsEntries       EarningsEntry[]
+  heldScans             HeldScan[]
+  workerStatements      WorkerStatement[]
 
   @@unique([tenantId, employeeCode])
   @@unique([tenantId, userId])

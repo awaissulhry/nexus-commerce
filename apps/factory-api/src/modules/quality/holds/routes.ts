@@ -2,10 +2,11 @@ import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { requireStepUp } from '../../../platform/auth/office/account'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
-import { countsContract, editContract, getContract, listContract, peopleContract, placeContract, previewContract, releaseContract } from './contract'
+import { countsContract, editContract, getContract, getSettingsContract, listContract, peopleContract, placeContract, previewContract, releaseContract, saveSettingsContract } from './contract'
 import { editHold, placeHold, releaseHold } from './holds'
 import { manifest } from './manifest'
 import { getHold, holdCounts, holdPeople, listHolds, previewHold } from './reads'
+import { getHoldSettings, saveHoldSettings } from './settings'
 
 const flag = (value: 'true' | 'false' | undefined): boolean | undefined => (value === undefined ? undefined : value === 'true')
 
@@ -20,6 +21,13 @@ export default defineRoutes('quality.holds', manifest, async (app) => {
   app.get('/quality/holds/counts', { schema: countsContract }, async (request) => holdCounts(request, request.query))
 
   app.get('/quality/holds/people', { schema: peopleContract }, async (request) => holdPeople(request, request.query.siteId))
+
+  // B-W2b-17: who releases a hold (the placer may, by the company's rule; letting them asks the office's step-up).
+  app.get('/quality/holds/settings', { schema: getSettingsContract }, async (request) => getHoldSettings(request, request.query))
+
+  app.put('/quality/holds/settings', { schema: saveSettingsContract }, async (request) =>
+    saveHoldSettings(request, request.body, { stepUp: () => requireStepUp(officeAuthOf(app), request), idempotencyKey: idempotencyKeyFrom(request) }),
+  )
 
   app.get('/quality/holds/:holdId', { schema: getContract }, async (request) => getHold(request, request.params.holdId))
 

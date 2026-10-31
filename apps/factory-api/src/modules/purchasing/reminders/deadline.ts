@@ -6,8 +6,8 @@ import { PURCHASING_MANAGE } from '@nexus/factory-domain/purchasing/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { detailInCommand, onOrder } from '../orders'
-import { officeOrder, type Reader } from '../store'
-import { automaticRemindersOn } from './daily'
+import { officeContextOf, officeOrder, type Reader } from '../store'
+import { remindersOn } from './settings'
 
 /**
  * The supplier's confirm-by deadline and the reminders of an order (B-W2a-52; SCM-087): the office moves the deadline
@@ -75,5 +75,7 @@ export async function remindersOf(db: Reader, order: { readonly id: string; read
 /** GET /purchasing/orders/:purchaseOrderId/reminders (purchasing.view). */
 export async function orderReminders(caller: CommandCaller, orderId: string) {
   const order = await officeOrder(caller, orderId)
-  return caller.withClient(async (client) => ({ purchaseOrderId: order.id, number: order.number, status: order.status, revision: order.revision, automatic: automaticRemindersOn(order.companyId), ...(await remindersOf(client, order, serverClock.now())) }))
+  const tenantId = officeContextOf(caller).tenantId
+  // B-W2b-14: the Owner's switch for the order's company (its row, else the tenant's, else OFF).
+  return caller.withClient(async (client) => ({ purchaseOrderId: order.id, number: order.number, status: order.status, revision: order.revision, automatic: await remindersOn(client, tenantId, order.companyId), ...(await remindersOf(client, order, serverClock.now())) }))
 }

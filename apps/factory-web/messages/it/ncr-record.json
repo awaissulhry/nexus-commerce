@@ -144,7 +144,8 @@
     "done": "Fatta…",
     "cancel": "Annulla…",
     "cancelOne": "Annulla l'azione {seq}",
-    "foot": "Il contenimento è completo quando almeno un'azione è fatta e nessuna è aperta."
+    "foot": "Il contenimento è completo quando almeno un'azione è fatta e nessuna è aperta.",
+    "cancelledBecause": "Annullata: {reason}"
   },
   "hold": {
     "subject": "Cosa si blocca",

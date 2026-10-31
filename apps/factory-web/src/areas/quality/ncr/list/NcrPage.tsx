@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { isApiError, issuePath } from '../../../../lib/api/errors'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
@@ -9,8 +10,9 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { downloadText, useLive } from '../../_shared/hooks'
 import {
+  assignNcrs,
   defectPicker,
-  editNcr,
+  getNcrSettings,
   listNcrs,
   listPeople,
   listSites,
@@ -21,6 +23,7 @@ import {
   NCR_FROM_TYPES,
   newIdempotencyKey,
   raiseNcr,
+  saveNcrSettings,
   uploadPhoto,
   type NcrCard,
   type NcrCounts,
@@ -32,7 +35,7 @@ import {
   type SiteChoice,
 } from '../api'
 import { useCloseFlow } from '../close'
-import { checkSay, csvText, factsOfSummary, nameOf, ncrAddressOf, ncrAddressText, ncrCan, ncrQueryOf, quantityText, readProblem, refusalOf, type NcrAddress } from '../model'
+import { assignRefusals, checkSay, containmentDraftOf, containmentHoursOf, csvText, factsOfSummary, nameOf, ncrAddressOf, ncrAddressText, ncrCan, ncrQueryOf, quantityText, readProblem, refusalOf, type NcrAddress } from '../model'
 import { NCR_NAMESPACE, NcrMessages, sayWith, type NcrNotice } from '../parts'
 import { draftOf, EMPTY_DRAFT, type ListDialog, type NcrListModel } from './view-model'
 import { NcrListView } from './view/NcrListView'
@@ -185,7 +188,8 @@ function Container() {
   const [dialog, setDialog] = useState<ListDialog | null>(null)
   const photos = useRef<File[]>([])
   const raiseKey = useRef<string | null>(null)
-  const fromKey = address.isNew && address.from ? `${address.from.recordType}:${address.from.recordId}` : null
+  const fromKey = address.isNew && address.from ? `${address.from.recordType}:${address.from.recordId}:${address.defects.join(',')}` : null
+  const companyId = session.company?.id ?? null
   useEffect(() => {
     if (!address.isNew || !can.view) {
       setDialog((current) => (current?.kind === 'new' ? null : current))
@@ -194,14 +198,33 @@ function Container() {
     photos.current = []
     raiseKey.current = null
     const from = address.from && (NCR_FROM_TYPES as readonly string[]).includes(address.from.recordType) ? (address.from as { recordType: NcrFromType; recordId: string }) : null
-    setDialog({ kind: 'new', draft: { ...EMPTY_DRAFT, siteId: siteId ?? '' }, from: from ? { ...from, prefill: null, problem: null } : null, defects: null, busy: false, notice: null })
+    const picked = from?.recordType === 'Inspection' ? [...address.defects] : []
+    setDialog({ kind: 'new', draft: { ...EMPTY_DRAFT, siteId: siteId ?? '' }, from: from ? { ...from, prefill: null, problem: null } : null, defects: null, containment: null, busy: false, notice: null })
     defectPicker(api)
       .then((defects) => setDialog((current) => (current?.kind === 'new' ? { ...current, defects } : current)))
       .catch(() => setDialog((current) => (current?.kind === 'new' ? { ...current, defects: 'failed' } : current)))
+    // B-W2b-17: the containment time the NCR gets — the prefill's, else the company's setting (an NCR by hand).
+    const readContainment = (company: string | null) =>
+      getNcrSettings(api, company)
+        .then((answer) => setDialog((current) => (current?.kind === 'new' ? { ...current, containment: { hours: answer.settings.inForce.hours } } : current)))
+        .catch(() => setDialog((current) => (current?.kind === 'new' ? { ...current, containment: 'failed' } : current)))
     if (from && can.raise)
-      ncrPrefill(api, from)
-        .then((prefill) => setDialog((current) => (current?.kind === 'new' && current.from ? { ...current, from: { ...current.from, prefill }, draft: draftOf(prefill, current.draft) } : current)))
-        .catch((error: unknown) => setDialog((current) => (current?.kind === 'new' && current.from ? { ...current, from: { ...current.from, problem: readProblem(error) } } : current)))
+      ncrPrefill(api, { ...from, defectIds: picked })
+        .then((prefill) => {
+          setDialog((current) =>
+            current?.kind === 'new' && current.from
+              ? { ...current, from: { ...current.from, prefill }, draft: draftOf(prefill, current.draft), containment: prefill.containmentHours !== null ? { hours: prefill.containmentHours } : current.containment }
+              : current,
+          )
+          if (prefill.containmentHours === null) void readContainment(prefill.companyId ?? companyId)
+        })
+        .catch((error: unknown) => {
+          // B-W2b-17: a picked defect line no longer on the inspection is said as such.
+          const problem = picked.length > 0 && isApiError(error) && error.kind === 'not_found' ? 'new.defectsGone' : readProblem(error)
+          setDialog((current) => (current?.kind === 'new' && current.from ? { ...current, from: { ...current.from, problem } } : current))
+          void readContainment(companyId)
+        })
+    else void readContainment(companyId)
     // The dialog opens once per address (`?new=1` and its record).
   }, [address.isNew, fromKey, can.view, can.raise, api])
 
@@ -222,7 +245,7 @@ function Container() {
       source: draft.source,
       foundAt: draft.foundAt,
       ownerId: draft.ownerId || null,
-      ...(from?.prefill ? { from: { recordType: from.prefill.fromType, recordId: from.prefill.fromId } } : {}),
+      ...(from?.prefill ? { from: { recordType: from.prefill.fromType, recordId: from.prefill.fromId, ...(from.prefill.defectIds.length > 0 ? { defectIds: [...from.prefill.defectIds] } : {}) } } : {}),
       ...(!from?.prefill?.siteId && draft.siteId ? { siteId: draft.siteId } : {}),
     }
     try {
@@ -242,31 +265,69 @@ function Container() {
       router.push(`${prefix}/quality/ncr/${encodeURIComponent(record.ncr.id)}`)
     } catch (error) {
       const refusal = refusalOf(error)
-      setDialog((current) => (current?.kind === 'new' ? { ...current, busy: false, notice: { say: refusal.say.key === 'problem.invalid' || refusal.say.key === 'problem.refused' ? { key: 'new.refused' } : refusal.say, tone: 'danger', detail: refusal.detail } } : current))
+      const linesGone = (from?.prefill?.defectIds.length ?? 0) > 0 && isApiError(error) && error.kind === 'not_found'
+      setDialog((current) =>
+        current?.kind === 'new'
+          ? { ...current, busy: false, notice: { say: linesGone ? { key: 'new.defectsGone' } : refusal.say.key === 'problem.invalid' || refusal.say.key === 'problem.refused' ? { key: 'new.refused' } : refusal.say, tone: 'danger', detail: refusal.detail } }
+          : current,
+      )
     }
   }, [dialog, api, router, prefix])
 
-  // ---- Assign owner --------------------------------------------------------------------------------------------------------
+  // ---- Assign owner (B-W2b-17: ONE command for the NCRs picked, every one or none) ------------------------------------------
+  const assignKey = useRef<string | null>(null)
   const submitAssign = useCallback(async () => {
     if (dialog?.kind !== 'assign' || dialog.busy || !dialog.ownerId) return
     setDialog({ ...dialog, busy: true, notice: null })
     const byId = new Map((rows.items ?? []).map((row) => [row.id, row]))
-    let done = 0
-    const detail: string[] = []
-    for (const id of dialog.ids) {
+    const picked = dialog.ids.flatMap((id) => {
       const row = byId.get(id)
-      if (!row) continue
-      try {
-        await editNcr(api, id, { version: row.version, ownerId: dialog.ownerId })
-        done += 1
-      } catch (error) {
-        detail.push(`${row.number}: ${sayWith(t, INTL_LOCALE[lang], refusalOf(error).say) ?? ''}`)
-      }
+      return row ? [row] : []
+    })
+    assignKey.current ??= newIdempotencyKey()
+    try {
+      const answer = await assignNcrs(api, { ncrs: picked.map((row) => ({ id: row.id, version: row.version })), ownerId: dialog.ownerId }, assignKey.current)
+      assignKey.current = null
+      setDialog(null)
+      setNotice({ say: { key: 'list.assigned', params: { count: answer.ncrs.length } }, tone: 'success' })
+      void load()
+    } catch (error) {
+      assignKey.current = null
+      const refused = isApiError(error) ? assignRefusals(error.issues.map((issue) => ({ path: issuePath(issue), message: issue.message })), picked) : []
+      const notice = refused.length > 0
+        ? { say: { key: 'assign.refused.title', params: { count: refused.length, total: picked.length } }, tone: 'danger' as const, lines: refused.map((line) => ({ key: line.key, params: { number: line.number } })) }
+        : { say: refusalOf(error).say, tone: 'danger' as const, detail: refusalOf(error).detail }
+      setDialog((current) => (current?.kind === 'assign' ? { ...current, busy: false, notice } : current))
+      if (refused.some((line) => line.key === 'assign.refused.stale')) void load()
     }
-    setDialog(null)
-    setNotice(done === dialog.ids.length ? { say: { key: 'list.assigned', params: { count: done } }, tone: 'success' } : { say: { key: 'list.assignedSome', params: { done, count: dialog.ids.length } }, tone: 'warning', detail })
-    void load()
-  }, [dialog, rows.items, api, t, lang, load])
+  }, [dialog, rows.items, api, load])
+
+  // ---- the containment time (B-W2b-17: page ⋯ "Containment time…") -----------------------------------------------------------
+  const readContainmentTime = useCallback(() => {
+    setDialog((current) => (current?.kind === 'containmentTime' ? { ...current, answer: null, problem: null } : current))
+    getNcrSettings(api, companyId)
+      .then((answer) => setDialog((current) => (current?.kind === 'containmentTime' ? { ...current, answer, problem: null, draft: containmentDraftOf(answer.settings) } : current)))
+      .catch((error: unknown) => setDialog((current) => (current?.kind === 'containmentTime' ? { ...current, problem: readProblem(error) } : current)))
+  }, [api, companyId])
+  const openContainmentTime = useCallback(() => {
+    setDialog({ kind: 'containmentTime', answer: null, problem: null, draft: { follow: true, hours: '24' }, busy: false, notice: null })
+    readContainmentTime()
+  }, [readContainmentTime])
+  const submitContainmentTime = useCallback(async () => {
+    if (dialog?.kind !== 'containmentTime' || dialog.busy || !dialog.answer) return
+    const hours = containmentHoursOf(dialog.draft)
+    if (hours === undefined) return
+    setDialog({ ...dialog, busy: true, notice: null })
+    try {
+      const answer = await saveNcrSettings(api, { companyId: dialog.answer.settings.companyId, defaultContainmentHours: hours, version: dialog.answer.settings.version })
+      setDialog(null)
+      setNotice({ say: { key: 'containmentTime.saved', params: { count: answer.settings.inForce.hours } }, tone: 'success' })
+    } catch (error) {
+      const refusal = refusalOf(error)
+      setDialog((current) => (current?.kind === 'containmentTime' ? { ...current, busy: false, notice: { say: refusal.say, tone: 'danger', detail: refusal.detail } } : current))
+      if (refusal.stale) readContainmentTime()
+    }
+  }, [dialog, api, readContainmentTime])
 
   // ---- export -----------------------------------------------------------------------------------------------------------------
   const exportRows = useCallback(
@@ -342,6 +403,10 @@ function Container() {
         onAssign: (ids) => setDialog({ kind: 'assign', ids, ownerId: '', busy: false, notice: null }),
         onAssignOwner: (ownerId) => setDialog((current) => (current?.kind === 'assign' ? { ...current, ownerId } : current)),
         onSubmitAssign: () => void submitAssign(),
+        onContainmentTime: openContainmentTime,
+        onContainmentDraft: (patch) => setDialog((current) => (current?.kind === 'containmentTime' ? { ...current, draft: { ...current.draft, ...patch } } : current)),
+        onSubmitContainmentTime: () => void submitContainmentTime(),
+        onRetryContainmentTime: readContainmentTime,
         onDialogClose: () => {
           if (dialog?.kind === 'new') go({ isNew: false, from: null })
           setDialog(null)

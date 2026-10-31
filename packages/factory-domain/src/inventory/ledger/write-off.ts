@@ -8,10 +8,11 @@ import type { Issue } from '../../core/errors'
  * record `StockWriteOff` whose id is the write-off's: its first move's id). A hide goes whole, from wherever it lies,
  * and becomes SCRAPPED; a lot or untracked material goes by quantity from one location.
  *
- * StockMove has no reason-code column (schema need, named in the step notes): the move's note carries the code first,
- * `<CODE>: <note>` (a code has no spaces; the …_supply_guards trigger wants a SCRAP's note anyway), and its idempotency
- * key starts `inventory.writeOff:` (the command's key, one per write-off: `inventory.writeOff:<key>:<n>`). Both are
- * written only by the write-off command, so `writeOffOf` reads them back exactly.
+ * The code is the move's `reasonCode` (B-W2b-15, on StockMove since B-W2b-01): every count of a code's use reads it. The
+ * note still carries the code first, `<CODE>: <note>`, as the Movements screen and the ledger's note column read it; a
+ * write-off posted before W2b has the code in its note only. Its idempotency key starts `inventory.writeOff:` (the
+ * command's key, one per write-off: `inventory.writeOff:<key>:<n>`). Both are written only by the write-off command, so
+ * `writeOffOf` reads them back exactly.
  */
 
 export const WRITE_OFF_COMMAND = 'inventory.writeOff'
@@ -26,10 +27,18 @@ export const writeOffNote = (reasonCode: string, note: string | null | undefined
   return text ? `${reasonCode}: ${text}` : reasonCode
 }
 
-/** A SCRAP move posted by the write-off command, read back: its reason code and the person's words; else null. */
-export function writeOffOf(move: { readonly reason: string; readonly idempotencyKey: string; readonly note: string | null }): { readonly reasonCode: string; readonly note: string | null } | null {
+/**
+ * A SCRAP move posted by the write-off command, read back: its reason code (the move's `reasonCode`; a move of before W2b:
+ * the note's first word) and the person's words; else null.
+ */
+export function writeOffOf(move: { readonly reason: string; readonly idempotencyKey: string; readonly note: string | null; readonly reasonCode?: string | null }): { readonly reasonCode: string; readonly note: string | null } | null {
   if (move.reason !== 'SCRAP' || !move.idempotencyKey.startsWith(`${WRITE_OFF_COMMAND}:`)) return null
   const match = /^([^\s:]+)(?::\s?([\s\S]*))?$/.exec(move.note ?? '')
+  if (move.reasonCode) {
+    // B-W2b-15: the column holds the code; the note's words follow it when the note starts with the same code.
+    const words = match && match[1] === move.reasonCode ? match[2]?.trim() || null : move.note?.trim() || null
+    return { reasonCode: move.reasonCode, note: words }
+  }
   if (!match) return null
   return { reasonCode: match[1]!, note: match[2]?.trim() || null }
 }

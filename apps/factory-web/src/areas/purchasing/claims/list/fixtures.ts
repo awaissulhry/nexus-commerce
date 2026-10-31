@@ -5,7 +5,11 @@ import type { Claim } from '../api'
 import {
   canFor,
   claim,
+  CLAIM_PHOTOS,
   CONTACTS,
+  DISCREPANCY_PHOTOS,
+  LETTERS,
+  PHOTO_ADDRESSES,
   costless,
   COUNTS,
   FOUND_LOTS,
@@ -70,6 +74,8 @@ const leatherPicked = (over: Partial<ReturnDraft> = {}): Partial<ReturnDraft> =>
   quantities: {},
   ...over,
 })
+// B-W2b-14: New claim (the Return dialog in its claim mode).
+const newClaim = (over: Partial<ReturnDraft> = {}, model: Partial<ReturnDialogModel> = {}) => ret(over, { mode: 'claim', ...model })
 const filled = (over: Partial<ReturnDraft> = {}): Partial<ReturnDraft> => leatherPicked({ reasonCode: 'QUALITY', reasonNote: 'Fori vicino al fianco', ddt: { transportBy: 'CARRIER', carrier: 'Trasporti Demo S.r.l.', packages: '1', grossWeightKg: '14,5', appearance: 'Arrotolate su pallet', remarks: '' }, ...over })
 
 function recordCase(role: RoleCase, value: Claim, over: Partial<ClaimRecordModel> = {}): Case {
@@ -114,6 +120,10 @@ const CLAIM_DRAFT = claim('CLAIM', 'DRAFT')
 const CLAIM_SENT = claim('CLAIM', 'SENT')
 const CLAIM_ACCEPTED = claim('CLAIM', 'ACCEPTED')
 const editing = { ...formOf(CLAIM_DRAFT), reasonCode: 'OTHER', reasonNote: '' }
+// B-W2b-14: a claim with its evidence (photos, the discrepancy's photo, two letter versions) and one from an NCR.
+const EVIDENCE_DRAFT = { ...CLAIM_DRAFT, photos: CLAIM_PHOTOS, discrepancyPhotos: DISCREPANCY_PHOTOS, letters: LETTERS }
+const EVIDENCE_SENT = { ...CLAIM_SENT, photos: CLAIM_PHOTOS, discrepancyPhotos: DISCREPANCY_PHOTOS, letters: LETTERS }
+const evidence = { photos: PHOTO_ADDRESSES }
 
 export const designScreen = defineDesignScreen<Case>({
   screen: 'SCR-131',
@@ -188,6 +198,28 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'dialog-close', label: 'Close: how it was settled', model: recordCase('buyer', CLAIM_ACCEPTED, { dialog: { kind: 'close', note: 'Nota di credito NC-DEMO-7 ricevuta.' } }) },
     { id: 'dialog-cancel', label: 'Cancel a draft: why (held until 3 characters)', model: recordCase('buyer', CLAIM_DRAFT, { dialog: { kind: 'cancel', reason: '' } }) },
     { id: 'dialog-remove-lines', label: 'Remove lines of a draft: what goes, what stays', model: recordCase('buyer', CLAIM_DRAFT, { dialog: { kind: 'removeLines', lineIds: CLAIM_DRAFT.lines.map((line) => line.id) } }) },
+    // ---- B-W2b-14 (SCM-135): New claim, the evidence and letter, goods back as SUPPLIER_RETURN ----
+    { id: 'w2b-new-claim', label: 'W2b · New claim (primary, c): find the lot first; no e-mail, no DDT — a draft that keeps the goods', model: listCase('buyer', { ret: newClaim() }) },
+    { id: 'w2b-new-claim-ready', label: 'W2b · New claim ready: the hides of a leather lot, the reason, the remedy, found at cutting (Create claim)', model: listCase('buyer', { ret: newClaim(leatherPicked({ reasonCode: 'QUALITY', reasonNote: 'Buchi vicino al fianco trovati al taglio', foundAt: 'CUTTING' })) }) },
+    { id: 'w2b-new-claim-quantity', label: 'W2b · New claim on a lot by quantity: how much the claim is about (nothing leaves the stock)', model: listCase('buyer', { ret: newClaim({ lot: FOUND_LOTS[1]!, stock: ready(PAD_STOCK), hides: ready([]), quantities: { [PAD_STOCK[0]!.location.id]: '6', [PAD_STOCK[1]!.location.id]: '' }, reasonCode: 'WRONG_ITEM' }) }) },
+    { id: 'w2b-new-claim-held', label: 'W2b · New claim held: the reason is not chosen yet', model: listCase('buyer', { ret: newClaim(leatherPicked()) }) },
+    { id: 'w2b-new-claim-refused', label: 'W2b · New claim refused: a hide is no longer in stock (our words)', model: listCase('buyer', { ret: newClaim(leatherPicked({ reasonCode: 'QUALITY' }), { problem: words('ret.refused.hideGone') }) }) },
+    { id: 'w2b-new-claim-busy', label: 'W2b · Creating the claim', model: listCase('buyer', { ret: newClaim(leatherPicked({ reasonCode: 'QUALITY' }), { busy: true }) }) },
+    { id: 'w2b-new-claim-read-only', label: 'W2b · Read-only: New claim held with the missing permission', model: listCase('readOnly') },
+    { id: 'w2b-evidence-draft', label: 'W2b · Claim › evidence: area affected, two photos (removable from the draft by the owner), the discrepancy’s photo, the supplier’s contact, two letter versions', model: recordCase('owner', EVIDENCE_DRAFT, evidence) },
+    { id: 'w2b-evidence-buyer', label: 'W2b · The buyer: photos added, Remove held without files.delete', model: recordCase('buyer', EVIDENCE_DRAFT, evidence) },
+    { id: 'w2b-evidence-capture', label: 'W2b · Adding a photo of what is wrong (the camera or a file)', model: recordCase('buyer', EVIDENCE_DRAFT, { ...evidence, photoStep: true }) },
+    { id: 'w2b-evidence-loading', label: 'W2b · Photos loading (their addresses not read yet)', model: recordCase('buyer', EVIDENCE_DRAFT, { photos: {} }) },
+    { id: 'w2b-evidence-sent', label: 'W2b · Sent: more photos may be added; removing held (only a draft’s)', model: recordCase('owner', EVIDENCE_SENT, evidence) },
+    { id: 'w2b-evidence-empty', label: 'W2b · No photo and no letter yet', model: recordCase('buyer', CLAIM_DRAFT) },
+    { id: 'w2b-evidence-no-files', label: 'W2b · A role without files.read (planner): the photos and letters held, saying why', model: recordCase('planner', EVIDENCE_SENT, evidence) },
+    { id: 'w2b-evidence-from-ncr', label: 'W2b · A claim opened from a nonconformance: the NCR linked', model: recordCase('buyer', { ...EVIDENCE_SENT, ncr: { id: '00000000-0000-4000-8000-000000007474', number: 'NCR-DEMO-0007' } }, evidence) },
+    { id: 'w2b-dialog-remove-photo', label: 'W2b · Remove a draft’s photo (taken by mistake)', model: recordCase('owner', EVIDENCE_DRAFT, { ...evidence, dialog: { kind: 'removePhoto', fileId: CLAIM_PHOTOS[1]!.id } }) },
+    { id: 'w2b-letter-kept', label: 'W2b · A letter version kept (notice)', model: recordCase('buyer', EVIDENCE_DRAFT, { ...evidence, notice: { tone: 'success', words: words('notice.letterKept', { version: 2 }) } }) },
+    { id: 'w2b-letter-refused', label: 'W2b · The letter refused: the company’s letterhead is incomplete (where to fix it)', model: recordCase('buyer', EVIDENCE_DRAFT, { ...evidence, notice: { tone: 'danger', words: words('letter.refused.letterhead') } }) },
+    { id: 'w2b-send-letter', label: 'W2b · Send: the claim letter (PDF, no price) goes with the e-mail, counting the photos', model: recordCase('buyer', EVIDENCE_DRAFT, { ...evidence, dialog: { kind: 'send', draft: withCheck(sendDraftOf(EVIDENCE_DRAFT), ready(SEND_CHECK)) } }) },
+    { id: 'w2b-send-no-letterhead', label: 'W2b · Send without the letter: the letterhead is incomplete, the e-mail goes as text', model: recordCase('buyer', EVIDENCE_DRAFT, { ...evidence, dialog: { kind: 'send', draft: withCheck(sendDraftOf(EVIDENCE_DRAFT), ready({ ...SEND_CHECK, letter: { attached: false, problems: [{ path: 'company', message: 'x' }] } })) } }) },
+    { id: 'w2b-goods-supplier-return', label: 'W2b · Goods returned: SUPPLIER_RETURN moves; each hide returned to the supplier', model: recordCase('warehouse', RETURN_DONE, { tab: 'goods' }) },
     { id: 'record-loading', label: 'A claim loading', model: recordCase('buyer', CLAIM_SENT, { claim: { status: 'loading' } }) },
     { id: 'record-not-found', label: 'Not found (or another company)', model: recordCase('buyer', CLAIM_SENT, { claim: { status: 'not_found' } }) },
     { id: 'record-forbidden', label: 'Sales: no purchasing.view', model: recordCase('sales', CLAIM_SENT, { claim: { status: 'forbidden' } }) },

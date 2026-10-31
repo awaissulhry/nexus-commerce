@@ -1633,6 +1633,7 @@
     "purchasing_subcontract_receive": "Ricevere la merce di ritorno da un terzista",
     "purchasing_claims_manage": "Preparare, inviare, registrare la risposta e chiudere i reclami ai fornitori",
     "purchasing_claims_return": "Rendere al fornitore la merce di un reso con il DDT di reso",
+    "purchasing_reminders_switch": "Attivare o disattivare i solleciti automatici di conferma degli ordini ai fornitori di una società (con nuova verifica)",
     "invoices_view": "Vedere fatture e note di credito",
     "invoices_manage": "Preparare fatture in bozza",
     "invoices_issue": "Emettere una fattura (non potrà più cambiare)",

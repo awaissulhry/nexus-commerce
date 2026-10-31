@@ -2,6 +2,7 @@ import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { createApiClient, type ApiClient } from '../../../lib/api/client'
+import { ApiError } from '../../../lib/api/errors'
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../lib/i18n/messages'
@@ -9,7 +10,7 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { LIST_PAGES } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { createPickLists, KIT_STATUSES, listPickLists, pickListSheets, READINESS_WORDS } from './api'
-import { canAs, COMPLETE_SHEET, CREATE_RESULTS, PICK_ROWS, pickSheet, SHEET_LINES } from './demo/fixtures'
+import { canAs, CHECKED_SHEET, COMPLETE_SHEET, CREATE_RESULTS, PICK_ROWS, pickSheet, SHEET_LINES, STAGING_PLACES } from './demo/fixtures'
 import { designScreen as listScreen } from './fixtures'
 import {
   addressOf,
@@ -19,12 +20,16 @@ import {
   heldPhrase,
   isPickingEvent,
   kitCheck,
+  kitHeld,
+  kitPlaceWords,
+  kitProblem,
   markCompleteHeld,
   materialReason,
   pickedByWords,
   printHref,
   readinessKey,
   resultPhrase,
+  stagingChoices,
   stopsOf,
   TILES,
   walkOf,
@@ -99,11 +104,33 @@ describe('picking: where to pick, the walk by bin path, the kit check', () => {
     expect(printHref('/w/DEMO', ['a', 'b c'])).toBe('/w/DEMO/warehouse/picking/print?ids=a,b%20c')
   })
 
-  it('holds Mark kit complete with why: lines still short, or no kit record yet once all is picked', () => {
+  it('B-W2b-15: Mark kit complete is held with why (lines short, no right, already checked) and allowed once every line is picked', () => {
+    const warehouse = canAs('warehouse')
+    expect(warehouse.kits).toBe(true)
     expect(kitCheck(pickSheet(PICK_ROWS[0]!))).toMatchObject({ complete: false })
-    expect(markCompleteHeld(pickSheet(PICK_ROWS[0]!))).toEqual({ key: 'kit.markShort', params: { count: 2 } })
+    expect(markCompleteHeld(pickSheet(PICK_ROWS[0]!), warehouse)).toEqual({ key: 'kit.markShort', params: { count: 3 } })
     expect(kitCheck(COMPLETE_SHEET).complete).toBe(true)
-    expect(markCompleteHeld(COMPLETE_SHEET)).toEqual({ key: 'kit.markRecordLater' })
+    expect(markCompleteHeld(COMPLETE_SHEET, warehouse)).toBeNull()
+    expect(markCompleteHeld(COMPLETE_SHEET, canAs('readOnly'))).toEqual({ key: 'kit.heldNoRight' })
+    expect(markCompleteHeld(CHECKED_SHEET, warehouse)).toEqual({ key: 'kit.heldChecked' })
+    expect(kitHeld(CHECKED_SHEET, warehouse, 'reopen')).toBeNull()
+    expect(kitHeld(COMPLETE_SHEET, warehouse, 'reopen')).toEqual({ key: 'kit.heldNotChecked' })
+    const closed = { ...COMPLETE_SHEET, workOrder: { ...COMPLETE_SHEET.workOrder, status: 'COMPLETED' as const } }
+    expect(kitHeld(closed, warehouse, 'stage')).toEqual({ key: 'kit.heldNotOpen' })
+    expect(kitPlaceWords(PICK_ROWS[0]!.kit)).toEqual({ key: 'kit.placeAt', params: { code: 'N-TAG', name: 'Reparto taglio · rastrelliera' } })
+    expect(kitPlaceWords(PICK_ROWS[1]!.kit)).toEqual({ key: 'kit.placeNone' })
+  })
+
+  it('B-W2b-15: a kit waits at a place of the site in use, never a workshop\'s, in walking order; refusals in our words', () => {
+    const place = (id: string, path: string[], kind = 'BIN', status = 'ACTIVE') => ({ id, companyId: 'c', siteId: 's', parentId: null, code: path[path.length - 1]!, name: id, kind, status, depth: path.length - 1, path, version: 1, createdAt: '', updatedAt: '' })
+    const site = { locations: [place('b', ['M', 'M-02']), place('a', ['M']), place('w', ['W'], 'SUBCONTRACTOR'), place('z', ['M', 'M-09'], 'BIN', 'ARCHIVED'), place('c', ['M', 'M-01'])] } as never
+    expect(stagingChoices(site).map((choice) => choice.id)).toEqual(['a', 'c', 'b'])
+    expect(stagingChoices(undefined)).toEqual([])
+    expect(STAGING_PLACES.length).toBeGreaterThan(0)
+    const refusal = (path: string) => new ApiError('conflict', 409, 'conflict', 'x', null, [{ path, message: 'x' }])
+    expect(kitProblem(refusal('kit/LINES_SHORT'))).toEqual({ key: 'kit.refused.LINES_SHORT' })
+    expect(kitProblem(refusal('kit/ALREADY_CHECKED'))).toEqual({ key: 'kit.refused.ALREADY_CHECKED' })
+    expect(kitProblem(new ApiError('invalid', 400, 'validation_error', 'x', null, [{ path: 'body/locationId', message: 'x' }]))).toEqual({ key: 'kit.refused.PLACE' })
   })
 })
 
@@ -187,7 +214,8 @@ describe('every design case draws in both languages with no key left on screen',
       for (const outcome of ['created', 'createdShort', 'nothing', 'nothingShort']) has(`create.result.${outcome}`, { count: 2, number: 'WO-D-0031', short: 1 })
       for (const code of ['ON_HOLD', 'NOT_RELEASED', 'NOT_FOUND', 'NOT_AVAILABLE', 'LOT_NOT_AVAILABLE', 'HIDE_RESERVED', 'HIDE_NOT_IN_STOCK', 'LOT_HELD', 'OTHER']) has(`create.refusal.${code}`)
       has('kit.markShort', { count: 2 })
-      has('kit.markRecordLater')
+      for (const key of ['placeAt', 'placeLabel', 'placeHint', 'heldNoRight', 'heldNoPlaces', 'heldNotOpen', 'heldNothing', 'heldChecked', 'heldNotChecked', 'checked', 'checkedAt', 'reopen', 'reopenReason', 'reopenWhy']) has(`kit.${key}`, { code: 'N-TAG', name: 'Rack', at: '1 Nov' })
+      for (const code of ['LINES_SHORT', 'WORK_ORDER_NOT_OPEN', 'NOTHING_PLANNED', 'ALREADY_CHECKED', 'NOT_CHECKED', 'PLACE', 'OTHER']) has(`kit.refused.${code}`)
     }
   })
 })

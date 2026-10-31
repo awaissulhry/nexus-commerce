@@ -92,6 +92,14 @@ const ROWS = [
   { id: 'wo-demo-0039', number: 'WO-DEMO-0039', batchNumber: null, style: 'GIL-01 · Gilet Demo', dueDate: null, pieces: 12, finished: 12, released: 4, open: false },
 ]
 
+/** B-W2b-17: the bench list says who each open inspection is assigned to and by when it is due (made-up rows). */
+const ASSIGNED_ROWS = [
+  { ...ROWS[1]!, assigned: { kind: 'MINE' as const }, inspectionDueAt: '2026-10-29T13:00:00.000Z', overdue: false },
+  { id: 'wo-demo-0044', number: 'WO-DEMO-0044', batchNumber: 'B-DEMO-26-043', style: 'GIA-01 · Giacca moto Demo', dueDate: '2026-11-04', pieces: 24, finished: 24, released: 0, open: true, assigned: { kind: 'OTHER' as const }, inspectionDueAt: '2026-10-28T15:00:00.000Z', overdue: true },
+  { id: 'wo-demo-0045', number: 'WO-DEMO-0045', batchNumber: null, style: 'PAN-02 · Pantalone Demo', dueDate: '2026-11-12', pieces: 20, finished: 20, released: 0, open: true, assigned: { kind: 'OFFICE' as const, name: 'Bea Demo' }, inspectionDueAt: null, overdue: false },
+  ROWS[0]!,
+]
+
 const failedList = failItem(twoGroups, 'ZIPS', 'La cerniera non funziona (ZIP-FAULT)')
 
 // ---- B-W2a-75: Hold lot (B-W2a-F6: the tenant's HOLD list in the floor's one reason picker) ----
@@ -119,6 +127,12 @@ export const designScreen = defineDesignScreen<FinalViewModel>({
   view: onFloor(FinalView),
   cases: [
     { id: 'pick', label: 'Work orders to inspect', model: base({ kind: 'pick', rows: ROWS }), note: 'Scan the traveller (Home hands its scan over), or pick a row: what the site has finished and not released, highest priority first. The keys are in the list footer\'s icon.' },
+    {
+      id: 'w2b-assigned',
+      label: 'W2b — who each open inspection is assigned to, and by when',
+      model: base({ kind: 'pick', rows: ASSIGNED_ROWS }),
+      note: 'B-W2b-17: "assigned to you", an office inspector by name, or "another inspector" (a worker is never named in a list); the due time in words, an overdue one also says so in its status.',
+    },
     { id: 'empty', label: 'Nothing to inspect', model: base({ kind: 'pick', rows: [] }) },
     { id: 'not-found', label: 'A traveller of no work order here', model: base({ kind: 'pick', rows: ROWS, scanned: { code: 'WO-DEMO-9999', why: 'notFound' } }) },
     { id: 'not-ready', label: 'A work order not released yet', model: base({ kind: 'pick', rows: ROWS, scanned: { code: 'WO-DEMO-0050', why: 'notReady', status: 'DRAFT' } }) },

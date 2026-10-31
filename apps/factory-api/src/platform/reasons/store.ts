@@ -42,9 +42,11 @@ const add = (map: Map<string, number>, code: string | null, n: number) => {
 
 /** Where each list's codes are kept on records (text, never a reference). */
 const USAGE: Partial<Record<ReasonCodeList, (client: Client, used: Map<string, number>) => Promise<void>>> = {
-  // Stock counts (B-W2a-15): a counted line that differs.
+  // Stock counts (B-W2a-15): a counted line that differs. B-W2b-15: and an adjustment move made with a code (its count's
+  // COUNT moves carry their line's code too: counted once, by the line).
   async ADJUSTMENT(client, used) {
     for (const row of await client.stockCountLine.groupBy({ by: ['reasonCode'], where: { reasonCode: { not: null } }, _count: { _all: true } })) add(used, row.reasonCode, row._count._all)
+    for (const row of await client.stockMove.groupBy({ by: ['reasonCode'], where: { reason: 'ADJUSTMENT', reasonCode: { not: null }, reversalOfId: null }, _count: { _all: true } })) add(used, row.reasonCode, row._count._all)
   },
   // Quality holds (wave 6/7): the hold's reason.
   async HOLD(client, used) {
@@ -54,31 +56,32 @@ const USAGE: Partial<Record<ReasonCodeList, (client: Client, used: Map<string, n
   async RETURN(client, used) {
     for (const row of await client.returnLine.groupBy({ by: ['reasonCode'], _count: { _all: true } })) add(used, row.reasonCode, row._count._all)
   },
-  // Write-offs (B-W2a-11): no column yet; the code is the first word of their SCRAP moves' note, one write-off per key.
+  // Write-offs (B-W2a-11): one write-off per key. B-W2b-15: the code is the moves' reasonCode; a write-off of before W2b
+  // has it only as the first word of its note.
   async WRITE_OFF(client, used) {
     const pattern = `${WRITE_OFF_COMMAND}:%`
     const rows = await client.$queryRaw<{ code: string; n: bigint }[]>`
-      SELECT split_part(m."note", ':', 1) AS code, count(DISTINCT regexp_replace(m."idempotencyKey", ':[0-9]+$', '')) AS n
+      SELECT coalesce(m."reasonCode", split_part(m."note", ':', 1)) AS code, count(DISTINCT regexp_replace(m."idempotencyKey", ':[0-9]+$', '')) AS n
         FROM "StockMove" m
-       WHERE m."reason" = 'SCRAP' AND m."idempotencyKey" LIKE ${pattern} AND m."note" IS NOT NULL
+       WHERE m."reason" = 'SCRAP' AND m."idempotencyKey" LIKE ${pattern} AND (m."reasonCode" IS NOT NULL OR m."note" IS NOT NULL)
        GROUP BY 1`
     for (const row of rows) add(used, row.code.trim(), Number(row.n))
   },
-  // Receiving discrepancies (B-W2a-31): no column yet; the code leads the note (`DAMAGED: …`).
+  // Receiving discrepancies (B-W2a-31; B-W2b-14: the reasonCode column; one recorded before W2b leads its note with it).
   async DISCREPANCY(client, used) {
     const rows = await client.$queryRaw<{ code: string; n: bigint }[]>`
-      SELECT substring(d."note" from '^([A-Z][A-Z0-9_]{1,39})(?::|$)') AS code, count(*) AS n
+      SELECT coalesce(d."reasonCode", substring(d."note" from '^([A-Z][A-Z0-9_]{1,39})(?::|$)')) AS code, count(*) AS n
         FROM "ReceiptDiscrepancy" d
-       WHERE d."note" ~ '^[A-Z][A-Z0-9_]{1,39}(:|$)'
+       WHERE d."reasonCode" IS NOT NULL OR d."note" ~ '^[A-Z][A-Z0-9_]{1,39}(:|$)'
        GROUP BY 1`
     for (const row of rows) add(used, row.code, Number(row.n))
   },
-  // Supplier claims (B-W2a-44): no column yet; the code leads the claim's reason (`QUALITY: …`).
+  // Supplier claims (B-W2a-44; B-W2b-14: the reasonCode column; one made before W2b leads its reason with it).
   async CLAIM(client, used) {
     const rows = await client.$queryRaw<{ code: string; n: bigint }[]>`
-      SELECT substring(c."reason" from '^([A-Z][A-Z0-9_]{1,39})(?::|$)') AS code, count(*) AS n
+      SELECT coalesce(c."reasonCode", substring(c."reason" from '^([A-Z][A-Z0-9_]{1,39})(?::|$)')) AS code, count(*) AS n
         FROM "SupplierClaim" c
-       WHERE c."reason" ~ '^[A-Z][A-Z0-9_]{1,39}(:|$)'
+       WHERE c."reasonCode" IS NOT NULL OR c."reason" ~ '^[A-Z][A-Z0-9_]{1,39}(:|$)'
        GROUP BY 1`
     for (const row of rows) add(used, row.code, Number(row.n))
   },

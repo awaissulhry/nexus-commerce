@@ -124,6 +124,13 @@ import {
 } from './claims/contract'
 import { returnGoods, returnToSupplier } from './claims/returns'
 import { sendCheck as claimSendCheck, sendClaim } from './claims/send'
+// B-W2b-14: a claim's photos and letter (./claims), the Owner's reminder switch (./reminders/settings).
+import { announceClaimPhotoContract, completeClaimPhotoContract, makeLetterContract, previewLetterContract, removeClaimPhotoContract } from './claims/contract'
+import { makeLetter, previewLetter } from './claims/letter'
+import { announceClaimPhoto, completeClaimPhoto, removeClaimPhoto } from './claims/photos'
+import { requireStepUp } from '../../platform/auth/office/account'
+import { getReminderSettings, putReminderSwitch } from './reminders/settings'
+import { reminderSettingsContract, reminderSwitchContract } from './reminders/settings-contract'
 import { processFiles } from '../../platform/files/service'
 
 /**
@@ -301,7 +308,7 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.patch('/purchasing/claims/:claimId/lines/:lineId', { schema: editClaimLineContract }, async (request) => claims.editLine(request, request.params.claimId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
   app.delete('/purchasing/claims/:claimId/lines/:lineId', { schema: removeClaimLineContract }, async (request) => claims.removeLine(request, request.params.claimId, request.params.lineId, request.query, idempotencyKeyFrom(request)))
   app.get('/purchasing/claims/:claimId/send-check', { schema: claimSendCheckContract }, async (request) => claimSendCheck(request, request.params.claimId))
-  app.post('/purchasing/claims/:claimId/send', { schema: sendClaimContract }, async (request) => sendClaim(request, request.params.claimId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/claims/:claimId/send', { schema: sendClaimContract }, async (request) => sendClaim(processFiles(), request, request.params.claimId, request.body, idempotencyKeyFrom(request)))
   app.post('/purchasing/claims/:claimId/answer', { schema: answerClaimContract }, async (request) => claims.answerClaim(request, request.params.claimId, request.body, idempotencyKeyFrom(request)))
   app.post('/purchasing/claims/:claimId/close', { schema: closeClaimContract }, async (request) => claims.closeClaim(request, request.params.claimId, request.body, idempotencyKeyFrom(request)))
   app.post('/purchasing/claims/:claimId/cancel', { schema: cancelClaimContract }, async (request) => claims.cancelClaim(request, request.params.claimId, request.body, idempotencyKeyFrom(request)))
@@ -311,6 +318,20 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/claims/returns', { schema: returnToSupplierContract }, async (request, reply) =>
     reply.code(201).send(await returnToSupplier(processFiles(), request, request.body, idempotencyKeyFrom(request), (error) => request.log.error({ err: error }, 'the return DDT is issued; its PDF was not stored'))),
   )
+  // B-W2b-14 (SCM-135; Z1:08): the claim's photos and the claim letter (PDF, no price).
+  app.post('/purchasing/claims/:claimId/photos', { schema: announceClaimPhotoContract }, async (request, reply) =>
+    reply.code(201).send(await announceClaimPhoto(processFiles(), request, request.params.claimId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.post('/purchasing/claims/:claimId/photos/:fileId/complete', { schema: completeClaimPhotoContract }, async (request) => completeClaimPhoto(processFiles(), request, request.params.claimId, request.params.fileId, idempotencyKeyFrom(request)))
+  app.delete('/purchasing/claims/:claimId/photos/:fileId', { schema: removeClaimPhotoContract }, async (request) => removeClaimPhoto(processFiles(), request, request.params.claimId, request.params.fileId, request.query, idempotencyKeyFrom(request)))
+  app.get('/purchasing/claims/:claimId/letter', { schema: previewLetterContract }, async (request, reply) => {
+    const { pdf, fileName } = await previewLetter(request, request.params.claimId, request.query)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
+  app.post('/purchasing/claims/:claimId/letter', { schema: makeLetterContract }, async (request, reply) => reply.code(201).send(await makeLetter(processFiles(), request, request.params.claimId, request.body, idempotencyKeyFrom(request))))
+  // B-W2b-14 (Z1:09): the Owner's per-company switch for automatic PO confirmation reminders (OFF by default; ON asks step-up).
+  app.get('/purchasing/reminders/settings', { schema: reminderSettingsContract }, async (request) => getReminderSettings(request, request.query))
+  app.put('/purchasing/reminders/settings/switch', { schema: reminderSwitchContract }, async (request) => putReminderSwitch(request, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)))
 
   const linkUse = app.officeAuth?.rateLimits.linkUse ?? AUTH_RATE_LIMITS.linkUse
   const limited = { rateLimit: { max: linkUse.max, timeWindow: linkUse.timeWindowMs } }

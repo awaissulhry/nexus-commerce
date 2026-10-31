@@ -86,6 +86,8 @@ export interface MoveDraft {
   readonly reference?: string | null
   /** Why: required for ADJUSTMENT, COUNT, SCRAP and a reversal. */
   readonly note?: string | null
+  /** B-W2b-14/15: the code of the reason list the move was made for (WRITE_OFF, ADJUSTMENT, the floor's SCRAP list, a SUPPLIER_RETURN's CLAIM code…), no spaces. */
+  readonly reasonCode?: string | null
   readonly reversalOfId?: string | null
   /** When it happened (a floor scan: the device's time). Default the command's time. */
   readonly occurredAt?: Date
@@ -123,6 +125,8 @@ export interface PostedMove {
   readonly workOrderId: string | null
   readonly reference: string | null
   readonly note: string | null
+  /** B-W2b-15: the code of the reason list it was made for, or null. */
+  readonly reasonCode: string | null
   readonly reversalOfId: string | null
   readonly idempotencyKey: string
   readonly occurredAt: string
@@ -176,6 +180,7 @@ export const LEDGER_SELECT = {
   workOrderId: true,
   reference: true,
   note: true,
+  reasonCode: true,
   reversalOfId: true,
   idempotencyKey: true,
   occurredAt: true,
@@ -326,6 +331,7 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
       workOrderId: row.workOrderId,
       reference: row.reference,
       note: row.note,
+      ...(row.reasonCode ? { reasonCode: row.reasonCode } : {}),
       reversalOfId: row.reversalOfId,
       idempotencyKey: row.idempotencyKey,
       occurredAt: toUtcIso(row.occurredAt),
@@ -371,6 +377,7 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
     workOrderId: row.workOrderId,
     reference: row.reference,
     note: row.note,
+    reasonCode: row.reasonCode,
     reversalOfId: row.reversalOfId,
     idempotencyKey: row.idempotencyKey,
     occurredAt: toUtcIso(row.occurredAt),
@@ -507,6 +514,7 @@ type MoveRow = Prisma.StockMoveCreateManyInput & {
   workOrderId: string | null
   reference: string | null
   note: string | null
+  reasonCode: string | null
   reversalOfId: string | null
   idempotencyKey: string
   occurredAt: Date
@@ -537,6 +545,7 @@ function rowOf(move: KeyedDraft, index: number, facts: Facts, context: StockCont
     workOrderId: move.workOrderId ?? null,
     reference: move.reference?.trim() || null,
     note: move.note?.trim() || null,
+    reasonCode: move.reasonCode?.trim() || null,
     reversalOfId: move.reversalOfId ?? null,
     idempotencyKey: move.idempotencyKey ?? (key ? `${key}:${index + 1}` : `move:${id}`),
     occurredAt: move.occurredAt ?? now,
