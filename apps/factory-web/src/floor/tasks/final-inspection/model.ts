@@ -238,36 +238,3 @@ export function holdHeld(input: { readonly online: boolean; readonly mayRecord: 
 export function holdQuantity(open: { readonly lotSize: number } | null, order: { readonly finished: number | null; readonly released: number; readonly pieces: number }): number {
   return open ? Math.max(1, open.lotSize) : suggestedLot(order)
 }
-
-export type ReasonTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'
-
-/**
- * A reason's tile tone from the colour the office picked (platform/reasons REASON_COLOURS, the DS tag swatches): the DS
- * grid draws tones only, never the tenant's hex (B-W2a-24). Blue and teal say info, greens success, amber and orange
- * warning, reds danger, violets primary, browns and greys neutral.
- */
-export function reasonTone(colour: string | null | undefined): ReasonTone {
-  switch ((colour ?? '').toLowerCase()) {
-    case '#1f6fde':
-    case '#0e7490':
-      return 'info'
-    case '#15a34a':
-    case '#059669':
-    case '#65a30d':
-      return 'success'
-    case '#b87503':
-    case '#ea580c':
-      return 'warning'
-    case '#e5484d':
-    case '#f43f5e':
-    case '#be185d':
-      return 'danger'
-    case '#c026d3':
-    case '#7400bc':
-    case '#8b5cf6':
-    case '#6366f1':
-      return 'primary'
-    default:
-      return 'neutral'
-  }
-}

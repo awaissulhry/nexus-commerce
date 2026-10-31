@@ -1,8 +1,8 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { onFloor, signedInFrame } from '../../frame/fixtures'
 import { failItem, passGroup, suggestedPlan, type Answer, type Check } from './model'
+import { fromListReason, type PickerList, type PickerReason } from '../reasons/model'
 import { FinalView, type CellModel, type FinalViewModel, type HoldDialogModel, type InspectionModel, type OrderModel } from './view/FinalView'
-import type { HoldReasonModel } from './view/HoldReasons'
 
 /**
  * SCR-097's cases: the inspection bench at tablet width, from the work orders to inspect to the release and its labels,
@@ -94,15 +94,18 @@ const ROWS = [
 
 const failedList = failItem(twoGroups, 'ZIPS', 'La cerniera non funziona (ZIP-FAULT)')
 
-// ---- B-W2a-75: Hold lot ----
-const HOLD_REASONS: HoldReasonModel[] = [
-  { code: 'QUALITY_CHECK', label: 'Verifica qualità', icon: 'shield', tone: 'primary', heldReason: null },
-  { code: 'MISSING_CERTIFICATE', label: 'Certificato mancante', icon: 'award', tone: 'warning', heldReason: null },
-  { code: 'CUSTOMER_REQUEST', label: 'Richiesta del cliente', icon: 'flag', tone: 'info', heldReason: null },
-  { code: 'SUPPLIER_CHECK', label: 'Verifica fornitore', icon: 'truck', tone: 'primary', heldReason: null },
-  { code: 'OTHER', label: 'Altro', icon: null, tone: 'neutral', heldReason: 'Altro chiede una nota scritta: questo blocco lo mette l\'ufficio.' },
+// ---- B-W2a-75: Hold lot (B-W2a-F6: the tenant's HOLD list in the floor's one reason picker) ----
+const holdReason = (code: string, labelIt: string, labelEn: string, icon: string | null, colour: string | null, sortOrder: number, needsDetail = false): PickerReason =>
+  fromListReason({ id: `hold-${code.toLowerCase()}`, list: 'HOLD', code, labelIt, labelEn, labelI18n: {}, icon, colour, needsDetail, sortOrder })
+const HOLD_REASONS: PickerReason[] = [
+  holdReason('QUALITY_CHECK', 'Verifica qualità', 'Quality check', 'shield', '#8b5cf6', 10),
+  holdReason('MISSING_CERTIFICATE', 'Certificato mancante', 'Missing certificate', 'award', '#b87503', 20),
+  holdReason('CUSTOMER_REQUEST', 'Richiesta del cliente', 'Customer request', 'flag', '#1f6fde', 30),
+  holdReason('SUPPLIER_CHECK', 'Verifica fornitore', 'Supplier check', 'truck', '#6366f1', 40),
+  holdReason('OTHER', 'Altro', 'Other', null, null, 90, true),
 ]
-const holdDialog = (extra: Partial<HoldDialogModel> = {}): HoldDialogModel => ({ reasons: HOLD_REASONS, picked: null, quantity: 48, ...extra })
+const holdList = (extra: Partial<PickerList> = {}): PickerList => ({ state: 'ready', reasons: HOLD_REASONS, asOf: null, ...extra })
+const holdDialog = (extra: Partial<HoldDialogModel> = {}): HoldDialogModel => ({ subject: 'WO-DEMO-0042 · B-DEMO-26-041', reasons: holdList(), picked: null, quantity: 48, ...extra })
 const heldOrder = order({
   status: 'ON_HOLD',
   holds: [{ id: 'hold-1', reason: 'Verifica qualità', since: '2026-10-31T08:12:00.000Z', ncr: 'NCR-D-2026-0004' }],
@@ -160,10 +163,12 @@ export const designScreen = defineDesignScreen<FinalViewModel>({
       id: 'hold',
       label: 'Hold the lot: a reason tile',
       model: base({ kind: 'checklist', order: openOrder, inspection: inspection({ checklist: allPass() }), group: 'PACKAGING', failing: null }, { hold: holdDialog({ picked: 'QUALITY_CHECK' }) }),
-      note: 'The tenant\'s HOLD reasons as the DS reason grid (Other asks a written note: the office places that hold). Hold places the quality hold on the work order and opens the NCR that decides it. Enter = Cancel.',
+      note: 'The tenant\'s HOLD reasons in the floor\'s one reason picker (SCR-091, pick mode): what it is about, the choice, the tiles. Other asks a written note: held on the floor with why (quality places that hold). Hold places the quality hold on the work order and opens the NCR that decides it. Enter = Cancel.',
     },
-    { id: 'hold-gate', label: 'Hold lot from the work order', model: base({ kind: 'gate', order: order() }, { hold: holdDialog() }), note: 'Hold lot is the secondary action of the work order, the checklist and the release.' },
-    { id: 'hold-loading', label: 'Hold: reading the reasons', model: base({ kind: 'gate', order: order() }, { hold: holdDialog({ reasons: null }) }) },
+    { id: 'hold-gate', label: 'Hold lot from the work order', model: base({ kind: 'gate', order: order() }, { hold: holdDialog() }), note: 'Hold lot is the secondary action of the work order, the checklist and the release; Hold waits for a reason ("Choose a reason first").' },
+    { id: 'hold-loading', label: 'Hold: reading the reasons', model: base({ kind: 'gate', order: order() }, { hold: holdDialog({ reasons: holdList({ state: 'loading', reasons: [] }) }) }) },
+    { id: 'hold-failed', label: 'Hold: the reasons could not be read', model: base({ kind: 'gate', order: order() }, { hold: holdDialog({ reasons: holdList({ state: 'error', reasons: [] }) }) }), note: 'The picker\'s failed state with Try again (reads the HOLD list again); Hold waits.' },
+    { id: 'hold-kept', label: 'Hold: the reasons this tablet kept', model: base({ kind: 'gate', order: order() }, { hold: holdDialog({ reasons: holdList({ asOf: '2026-10-31T07:40:00.000Z' }), picked: 'MISSING_CERTIFICATE' }) }), note: 'The office did not answer: the reasons read earlier in this visit, with their time.' },
     {
       id: 'hold-refused',
       label: 'Hold refused: the office closed the work order',

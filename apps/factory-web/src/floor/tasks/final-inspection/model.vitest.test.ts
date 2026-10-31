@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CHECKLIST_CODES, checklistProblems, planProblems } from '@nexus/factory-domain/quality/final/rules'
 import { designScreen } from './fixtures'
-import { checklistComplete, FAIL_REASONS, failItem, groupsDone, groupState, labelsToPrint, mainAction, nextGroup, noteOf, passGroup, passItem, reasonOfNote, releaseHeld, suggestedLot, suggestedPlan, withDefect, withoutDefect, withPlanValue, type Check, holdHeld, holdQuantity, reasonTone } from './model'
+import { checklistComplete, FAIL_REASONS, failItem, groupsDone, groupState, labelsToPrint, mainAction, nextGroup, noteOf, passGroup, passItem, reasonOfNote, releaseHeld, suggestedLot, suggestedPlan, withDefect, withoutDefect, withPlanValue, type Check, holdHeld, holdQuantity } from './model'
 
 /** SCR-097's rules without a screen: the checklist taps, the suggested plan, the defect of a failed check, the release's holds. */
 
@@ -110,15 +110,5 @@ describe('Hold lot at the bench (B-W2a-75; design floor.final "Hold lot": a reas
     expect(holdQuantity({ lotSize: 24 }, { finished: 48, released: 0, pieces: 48 })).toBe(24)
     expect(holdQuantity(null, { finished: 48, released: 12, pieces: 48 })).toBe(36)
     expect(holdQuantity(null, { finished: null, released: 0, pieces: 10 })).toBe(1)
-  })
-
-  it('draws a reason\'s colour as a DS tone, never the tenant\'s hex', () => {
-    expect(reasonTone('#1F6FDE')).toBe('info')
-    expect(reasonTone('#e5484d')).toBe('danger')
-    expect(reasonTone('#b87503')).toBe('warning')
-    expect(reasonTone('#7400bc')).toBe('primary')
-    expect(reasonTone('#15a34a')).toBe('success')
-    expect(reasonTone(null)).toBe('neutral')
-    expect(reasonTone('#123456')).toBe('neutral')
   })
 })

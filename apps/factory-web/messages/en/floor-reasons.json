@@ -5,14 +5,20 @@
     "rework": "Rework",
     "pause": "Pause",
     "putLast": "Put it last",
-    "defect": "Defects"
+    "defect": "Defects",
+    "split": "Split the bundle",
+    "hold": "Hold lot",
+    "reject": "Back from the workshop"
   },
   "question": {
     "scrap": "Why is it scrap? Each tap adds one piece",
     "rework": "Why rework? Each tap adds one piece",
     "pause": "Why are you stopping?",
     "putLast": "Why put it last?",
-    "defect": "Which defect? Each tap adds one"
+    "defect": "Which defect? Each tap adds one",
+    "split": "Why do they come off?",
+    "hold": "Why hold it?",
+    "reject": "Why were they rejected?"
   },
   "counted": {
     "of": "of {of} counted",
@@ -43,5 +49,8 @@
   "doneHeld": {
     "choose": "Choose a reason first",
     "notReady": "The reasons are not on screen yet"
+  },
+  "noteHeld": {
+    "hold": "This reason needs a written note: quality places this hold in the office."
   }
 }

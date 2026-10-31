@@ -58,6 +58,16 @@ describe('SCR-095 Bundles & tickets', () => {
     expect(done).toMatch(/3 garments split off BN-[^ ]+ into new bundle BN-[^ ]+ \(Rework\)\. 7 stay in BN-/)
     expect(done).toContain('Sent to the printer')
     expect(render('split-refused')).toContain('The work order is on hold')
+    // B-W2a-F6: why is the floor's one reason picker — what it is about, the choice, the three tiles with their hints.
+    expect(split).toContain('Split the bundle')
+    expect(split).toContain('Why do they come off?')
+    expect(split).toContain('Chosen: Rework')
+    expect(split).toContain('Back to be fixed')
+    expect(render('split', 'it')).toContain('Scelto: Rilavorazione')
+    expect(render('split-why')).toContain('No reason chosen yet')
+    expect(render('split-why')).toContain('Choose a reason first')
+    expect(render('split-offline')).toContain('Chosen: Recut')
+    expect(render('split-offline').match(/Reprint, void and split need the network/g)?.length ?? 0).toBeGreaterThan(3)
     // The card's bar: Back, Split, Reprint (main); Void sits in the card.
     expect(render('bundle-card')).toMatch(/Split<\/span><\/button><button[^>]*is-main[^>]*>.*Reprint/)
   })
