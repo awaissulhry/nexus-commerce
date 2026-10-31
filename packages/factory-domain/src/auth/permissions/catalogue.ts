@@ -96,6 +96,8 @@ import { RECEIVABLES_DEFINITIONS, RECEIVABLES_PERMISSIONS } from '../../receivab
 import { PAYABLES_DEFINITIONS, PAYABLES_PERMISSIONS } from '../../payables/permissions'
 // B-W2a-65: customer complaints (quality.complaints.view | log | manage | acknowledge).
 import { QUALITY_COMPLAINTS_DEFINITIONS, QUALITY_COMPLAINTS_PERMISSIONS } from '../../quality/complaints/permissions'
+// B-W2b-27: privacy of people data (people.privacy.view | manage, people.figures.view).
+import { PEOPLE_PRIVACY_DEFINITIONS, PEOPLE_PRIVACY_PERMISSIONS } from '../../people/privacy/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -470,6 +472,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_COMPLAINTS_DEFINITIONS,
   // B-W2b-14: the Owner's switch for automatic PO confirmation reminders.
   PURCHASING_REMINDERS_DEFINITIONS,
+  // B-W2b-27: privacy of people data.
+  PEOPLE_PRIVACY_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -557,6 +561,8 @@ for (const name of QUALITY_COMPLAINTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 for (const name of HOME_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-14: the Owner's switch for automatic PO confirmation reminders.
 for (const name of PURCHASING_REMINDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-27: privacy of people data.
+for (const name of PEOPLE_PRIVACY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
