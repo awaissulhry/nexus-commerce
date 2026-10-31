@@ -1797,6 +1797,9 @@
     "people_figures_view": "See one person's work figures (only for a role named in the company's privacy settings, while the gate is on)",
     "production_offstandard_view": "See off-standard and indirect time blocks and their counts (no person in the lists)",
     "production_offstandard_codes": "Add and change off-standard and indirect time codes and their pay rules",
-    "production_offstandard_approve": "Approve, reject, reopen and correct off-standard time blocks (never your own)"
+    "production_offstandard_approve": "Approve, reject, reopen and correct off-standard time blocks (never your own)",
+    "production_calls_view": "See help calls, their times per call and line, and who is called for each type (never per person)",
+    "production_calls_answer": "Answer help calls: seen, on the way, solved or cancelled, and what they led to",
+    "production_calls_manage": "Keep a site's help-call types and who answers them"
   }
 }

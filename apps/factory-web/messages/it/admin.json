@@ -1797,6 +1797,9 @@
     "people_figures_view": "Vedere i dati di lavoro di una persona (solo per un ruolo indicato nelle impostazioni privacy dell'azienda, a presupposto attivo)",
     "production_offstandard_view": "Vedere i blocchi di tempo fuori standard e indiretto e i loro conteggi (nessuna persona negli elenchi)",
     "production_offstandard_codes": "Aggiungere e cambiare i codici di tempo fuori standard e indiretto e le loro regole di paga",
-    "production_offstandard_approve": "Approvare, respingere, riaprire e correggere i blocchi di tempo fuori standard (mai i propri)"
+    "production_offstandard_approve": "Approvare, respingere, riaprire e correggere i blocchi di tempo fuori standard (mai i propri)",
+    "production_calls_view": "Vedere le chiamate di aiuto, i loro tempi per chiamata e linea e chi viene chiamato per ogni tipo (mai per persona)",
+    "production_calls_answer": "Rispondere alle chiamate di aiuto: vista, in arrivo, risolta o annullata, e a cosa hanno portato",
+    "production_calls_manage": "Gestire i tipi di chiamata di aiuto di un sito e chi risponde"
   }
 }
