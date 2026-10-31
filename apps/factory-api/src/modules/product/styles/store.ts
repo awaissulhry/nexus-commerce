@@ -5,7 +5,7 @@ import { can, type Permission, type ScopeColumns } from '@nexus/factory-domain/c
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { LocalisedNames } from '@nexus/factory-domain/product/materials/rules'
 import { scaleOrder, type BodyMeasures, type MasterStatus } from '@nexus/factory-domain/product/sizes/rules'
-import type { ColourwayView, MatrixView, RevisionView, SkuView, StyleRow, StyleView } from '@nexus/factory-domain/product/styles/contracts'
+import type { ColourwayView, MatrixView, RevisionView, SkuView, StyleView } from '@nexus/factory-domain/product/styles/contracts'
 import { isOffered, missingCells, type MatrixOffer } from '@nexus/factory-domain/product/styles/matrix'
 import { PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
 import { revisionState, type RevisionSummary } from '@nexus/factory-domain/product/styles/revisions'
@@ -50,6 +50,7 @@ const FIELD_COLUMNS = {
   hsCode: true,
   originCountry: true,
   netMassKg: true,
+  gender: true,
 } as const satisfies Prisma.StyleSelect
 
 /**
@@ -61,6 +62,8 @@ export const STYLE_COLUMNS = {
   companyId: true,
   ...FIELD_COLUMNS,
   garmentTracking: true,
+  copiedFromStyleId: true,
+  copiedFromRevisionId: true,
   status: true,
   version: true,
   createdAt: true,
@@ -76,29 +79,42 @@ interface Ref {
   readonly name: string
 }
 
-/** A style row with its brand, size scale and measurement template. */
+/** A style row with its brand, size scale and measurement template, and (W2b) the style and revision it was copied from. */
 export type StyleRowData = StyleBaseRow & {
   readonly brandParty: { readonly id: string; readonly code: string; readonly legalName: string; readonly tradeName: string | null } | null
   readonly sizeScale: Ref
   readonly measurementTemplate: Ref | null
+  readonly copiedFrom: { readonly style: Ref; readonly revision: { readonly id: string; readonly revision: number } | null } | null
 }
 
-/** The rows with their brand, scale and template (one query per kind, one after another). */
+/** The rows with their brand, scale, template and source (one query per kind, one after another). */
 export async function withRefs(client: FactoryClient | CommandTx, rows: readonly StyleBaseRow[]): Promise<StyleRowData[]> {
   const ids = (pick: (row: StyleBaseRow) => string | null) => [...new Set(rows.map(pick).filter((id): id is string => id !== null))]
   const parties = await client.party.findMany({ where: { id: { in: ids((row) => row.brandPartyId) } }, select: { id: true, code: true, legalName: true, tradeName: true } })
   const scales = await client.sizeScale.findMany({ where: { id: { in: ids((row) => row.sizeScaleId) } }, select: { id: true, code: true, name: true } })
   const templates = await client.measurementTemplate.findMany({ where: { id: { in: ids((row) => row.measurementTemplateId) } }, select: { id: true, code: true, name: true } })
+  // W2b (B-W2b-25): the sources of copies. A copy is of its source's company (B-W2a-09), so whoever sees it sees its source.
+  const sourceIds = ids((row) => row.copiedFromStyleId)
+  const sources = sourceIds.length === 0 ? [] : await client.style.findMany({ where: { id: { in: sourceIds } }, select: { id: true, code: true, name: true } })
+  const revisionIds = ids((row) => row.copiedFromRevisionId)
+  const sourceRevisions = revisionIds.length === 0 ? [] : await client.styleRevision.findMany({ where: { id: { in: revisionIds } }, select: { id: true, revision: true } })
   const byId = <Row extends { id: string }>(list: readonly Row[]) => new Map(list.map((entry) => [entry.id, entry]))
   const party = byId(parties)
   const scale = byId(scales)
   const template = byId(templates)
-  return rows.map((row) => ({
-    ...row,
-    brandParty: row.brandPartyId === null ? null : (party.get(row.brandPartyId) ?? null),
-    sizeScale: scale.get(row.sizeScaleId) ?? { id: row.sizeScaleId, code: '', name: '' },
-    measurementTemplate: row.measurementTemplateId === null ? null : (template.get(row.measurementTemplateId) ?? null),
-  }))
+  const source = byId(sources)
+  const sourceRevision = byId(sourceRevisions)
+  return rows.map((row) => {
+    const from = row.copiedFromStyleId === null ? undefined : source.get(row.copiedFromStyleId)
+    const fromRevision = row.copiedFromRevisionId === null ? undefined : sourceRevision.get(row.copiedFromRevisionId)
+    return {
+      ...row,
+      brandParty: row.brandPartyId === null ? null : (party.get(row.brandPartyId) ?? null),
+      sizeScale: scale.get(row.sizeScaleId) ?? { id: row.sizeScaleId, code: '', name: '' },
+      measurementTemplate: row.measurementTemplateId === null ? null : (template.get(row.measurementTemplateId) ?? null),
+      copiedFrom: from ? { style: { ...from }, revision: fromRevision ? { ...fromRevision } : null } : null,
+    }
+  })
 }
 
 /** One style row with its references, or null. */
@@ -189,6 +205,7 @@ export function fieldsOf(row: Prisma.StyleGetPayload<{ select: typeof FIELD_COLU
     hsCode: row.hsCode,
     originCountry: row.originCountry,
     netMassKg: row.netMassKg === null ? null : decimalText(row.netMassKg.toString()),
+    gender: row.gender,
   }
 }
 
@@ -210,8 +227,8 @@ export interface RowFacts {
   readonly revisions: readonly RevisionSummary[]
 }
 
-/** A row of the style list (SCR-040). */
-export function styleRowView(row: StyleRowData, facts: RowFacts): StyleRow {
+/** What a list row and the record share (the summary of SCR-040 and SCR-041); the list row adds `rowExtras` (./row-extras). */
+export function styleSummaryView(row: StyleRowData, facts: RowFacts) {
   const state = revisionState(facts.revisions)
   const colourwayCount = row._count.colourways
   return {
@@ -233,6 +250,7 @@ export function styleRowView(row: StyleRowData, facts: RowFacts): StyleRow {
     hsCode: row.hsCode,
     originCountry: row.originCountry,
     netMassKg: row.netMassKg === null ? null : decimalText(row.netMassKg.toString()),
+    gender: row.gender,
     status: row.status,
     version: row.version,
     updatedAt: toUtcIso(row.updatedAt),
@@ -248,8 +266,10 @@ export function styleRowView(row: StyleRowData, facts: RowFacts): StyleRow {
       skus: facts.skuCount > 0,
       releasedRevision: state === 'RELEASED',
     },
-  }
+  } satisfies Omit<StyleView, StyleOnly>
 }
+/** The fields the record has and a list row has not. */
+type StyleOnly = 'copiedFrom' | 'description' | 'measurementTemplate' | 'tracking' | 'garmentTracking' | 'range' | 'colourways' | 'matrix' | 'skus' | 'revisions' | 'warnings' | 'createdAt' | 'createdById'
 
 /** Everything the style record shows besides the style row. */
 export interface StyleParts {
@@ -345,7 +365,10 @@ export function styleViewOf(row: StyleRowData, parts: StyleParts): StyleView {
 
   const revisions = [...parts.revisions].sort((a, b) => b.revision - a.revision)
   return {
-    ...styleRowView(row, { skuCount: active.length, revisions }),
+    ...styleSummaryView(row, { skuCount: active.length, revisions }),
+    copiedFrom: row.copiedFrom
+      ? { styleId: row.copiedFrom.style.id, code: row.copiedFrom.style.code, name: row.copiedFrom.style.name, revisionId: row.copiedFrom.revision?.id ?? null, revision: row.copiedFrom.revision?.revision ?? null }
+      : null,
     description: row.description,
     measurementTemplate: row.measurementTemplate ? { ...row.measurementTemplate } : null,
     tracking: garmentTracking(fields),

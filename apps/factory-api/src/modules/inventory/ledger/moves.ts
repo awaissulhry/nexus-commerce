@@ -1,4 +1,5 @@
 import type { Prisma, StockMoveReason, Uom } from '@nexus/factory-db'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
@@ -31,6 +32,8 @@ interface StockInput {
   readonly uom?: Uom | undefined
   readonly baseQuantity?: string | undefined
   readonly reference?: string | null | undefined
+  /** B-W2b-22: why the move goes into a soft-locked month (B-W2a-F8's body field, passed to postMoves). */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 /** The stock fields of a body as a draft (an absent colour or lot stays absent: postMoves fills it in). */
@@ -79,7 +82,7 @@ export async function adjust(caller: CommandCaller, body: AdjustInput, idempoten
       const code = await tools.tx.reasonCode.findFirst({ where: { list: 'ADJUSTMENT', code: body.reasonCode }, select: { active: true } })
       if (!code?.active) throw new ValidationError('Not an active adjustment reason of this company.', [{ path: 'body/reasonCode', message: 'Pick an active adjustment reason.' }])
     }
-    const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.adjust', idempotencyKey), issuePath: () => 'body' })
+    const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.adjust', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride })
     return { move: view(move!) }
   })
   return result
@@ -111,7 +114,7 @@ export async function transfer(caller: CommandCaller, body: TransferInput, idemp
     caller,
     { name: 'inventory.transfer', idempotencyKey, input: body, ...(context.audience === 'floor' && occurredAt ? { deviceTime: occurredAt } : {}) },
     async (tools) => {
-      const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.transfer', idempotencyKey), issuePath: () => 'body' })
+      const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.transfer', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride })
       return { move: view(move!) }
     },
   )
@@ -130,7 +133,7 @@ export async function scrap(caller: CommandCaller, body: ScrapInput, idempotency
   const site = await siteFor(caller, body.siteId, INVENTORY_SCRAP, 'body/siteId')
   const draft: MoveDraft = { siteId: site.id, reason: 'SCRAP', ...stockOf(body), fromLocationId: body.fromLocationId, note: body.note }
   const { result } = await command(caller, { name: 'inventory.scrap', idempotencyKey, input: body }, async (tools) => {
-    const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.scrap', idempotencyKey), issuePath: () => 'body' })
+    const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.scrap', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride })
     return { move: view(move!) }
   })
   return result
@@ -143,7 +146,7 @@ export async function scrap(caller: CommandCaller, body: ScrapInput, idempotency
  * refused (409) when that stock is gone. B-W2b-15: reversing the scrap of a SCRAPPED hide (its write-off) opens the hide
  * again, back to the state it had, in the same command (`reopenedHide`).
  */
-export async function reverse(caller: CommandCaller, moveId: string, body: { readonly note: string }, idempotencyKey?: string): Promise<{ move: MoveView; reversed: string }> {
+export async function reverse(caller: CommandCaller, moveId: string, body: { readonly note: string; readonly periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string): Promise<{ move: MoveView; reversed: string }> {
   const context = officeContextOf(caller)
   const original = isUuid(moveId) ? await caller.withClient((client) => client.stockMove.findUnique({ where: { id: moveId }, select: { ...LEDGER_SELECT, reversals: { select: { id: true } } } })) : null
   if (!original || !mayAt(context, INVENTORY_REVERSE, original)) throw new NotFoundError('Stock move not found.')
@@ -166,7 +169,7 @@ export async function reverse(caller: CommandCaller, moveId: string, body: { rea
   }
   const draft: MoveDraft = { ...reversalOf({ ...original, quantity: original.quantity.toString(), baseQuantity: original.baseQuantity.toString() }, body.note), uom: original.uom }
   const { result } = await command(caller, { name: 'inventory.reverse', idempotencyKey, input: { moveId, ...body } }, async (tools) => {
-    const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.reverse', idempotencyKey), issuePath: () => 'body' })
+    const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.reverse', idempotencyKey), issuePath: () => 'body', periodLockOverride: body.periodLockOverride })
     const reopenedHide = original.reason === 'SCRAP' && original.hideId ? await reopenScrappedHide(tools, { hideId: original.hideId, companyId: original.companyId, siteId: original.siteId }, body.note) : null
     return { move: view(move!), reversed: original.id, ...(reopenedHide ? { reopenedHide } : {}) }
   })
@@ -194,6 +197,8 @@ export interface CountInput {
   readonly note: string
   readonly reference?: string | null | undefined
   readonly lines: readonly { readonly itemId: string; readonly itemColourId?: string | null | undefined; readonly lotId?: string | null | undefined; readonly hideId?: string | null | undefined; readonly counted: string }[]
+  /** B-W2b-22: why the differences go into a soft-locked month. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 /**
@@ -228,7 +233,7 @@ export async function postCount(caller: CommandCaller, body: CountInput, idempot
       note: body.note,
       reference: body.reference ?? null,
     }))
-    const moves = drafts.length > 0 ? await postMoves(tools, drafts, { key: keyFor('inventory.count', idempotencyKey), issuePath: (index) => `body/lines/${booked[index]!.index}` }) : []
+    const moves = drafts.length > 0 ? await postMoves(tools, drafts, { key: keyFor('inventory.count', idempotencyKey), issuePath: (index) => `body/lines/${booked[index]!.index}`, periodLockOverride: body.periodLockOverride }) : []
     if (moves.length === 0) {
       tools.audit({ action: 'inventory.count', recordType: 'Location', recordId: body.locationId, companyId: site.companyId, siteId: site.id, after: { counted: lines.length, differences: 0 }, reason: body.note })
     }

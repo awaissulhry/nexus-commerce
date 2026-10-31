@@ -62,6 +62,8 @@ import { releaseOnWorkOrderDoneHandler, reservationCleanupCron } from './modules
 import { fillTwoFactorSinceAll, twoFactorSinceCron } from './platform/auth/roles/two-factor-since'
 import { liftCatchUpCron, moveLiftsAll } from './platform/email-out/delivery/lift-catch-up'
 import { firstLoadCatchUpCron, writeStepsAll } from './platform/imports/guided/catch-up'
+// B-W2b-22: the cost ledger's nightly catch-up (what waited for a value or a rate).
+import { costCatchUpCron } from './modules/costing/actual/catch-up'
 // B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
 import { loadReports } from './modules/insights/reports/registry'
 
@@ -196,6 +198,7 @@ if (mode === 'worker') {
   crons.push(reservationCleanupCron({ database, log }))
   // B-W2b-24: the W2b data catch-ups again each night (idle passes write nothing).
   crons.push(twoFactorSinceCron({ database, log }), liftCatchUpCron({ database, log }), firstLoadCatchUpCron({ database, log }))
+  crons.push(costCatchUpCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

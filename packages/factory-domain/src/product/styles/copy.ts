@@ -5,9 +5,10 @@ import type { ScaleSizes, StyleFields } from './rules'
 
 /**
  * Copying a style (feature PRD-011; design products.styles pop:styles.duplicate "Duplicate style"), pure. A copy is a
- * NEW style with its own code and name, a DRAFT linked to its source; it takes the source's identity (product type,
- * season, brand, size scale and range, PPE classification, customs data, description) and its colourways, and the
- * parts the person picks:
+ * NEW style with its own code and name, a DRAFT linked to its source (W2b: Style.copiedFromStyleId and the revision it
+ * took the parts from, copiedFromRevisionId); it takes the source's identity (product type, season, brand, size scale
+ * and range, PPE classification, customs data and gender, description) and its colourways, and the parts the person
+ * picks:
  *
  *   BOM           the lines of the source revision with their size quantities and colour grid (onto the copy's
  *                 colourways), and the planned hide yield
@@ -34,6 +35,120 @@ export const PART_NOT_YET: Readonly<Partial<Record<CopyPart, string>>> = Object.
   PICTURES: "The style's sketches and pictures are copied once the gallery arrives (W2b).",
   OPTIONS: 'Style options are copied once option groups arrive (W2b).',
 })
+
+/** A part named in words (refusals and reasons). */
+export const PART_NAME: Readonly<Record<CopyPart, string>> = Object.freeze({
+  BOM: 'the BOM',
+  ROUTING: 'the routing',
+  MEASUREMENTS: 'the made-to-measure set-up',
+  LABELS: 'the garment label',
+  PICTURES: 'the pictures',
+  OPTIONS: 'the options',
+})
+
+// ---- why a part cannot be picked, and what a copy left out, as codes (B-W2b-25) -----------------------------------------
+
+/**
+ * Why the Duplicate dialog cannot offer a part, as a code a screen says in its own words (B-W2a-37 matched the English
+ * sentences by their shape); the answer keeps the sentence beside it (`reason`).
+ *
+ *   NOT_YET              PICTURES and OPTIONS: their pages come later (W2b)
+ *   NOT_MADE_TO_MEASURE  MEASUREMENTS: the source is not made to measure
+ *   NO_REVISION          the source has no revision to take a BOM, routing or label from
+ *   NO_BOM_LINES         the revision has no BOM line
+ *   NO_ROUTING_STEPS     the revision has no routing step
+ *   NO_LABEL             the revision has no garment label
+ *   OWN_LABEL            the revision's label is the source style's own (compliance's rule: a copy gets its own)
+ *   LABEL_RETIRED        the revision's shared label is retired
+ *   NEEDS_PERMISSION     the caller may not write that part (the permission, over every company for a tenant-wide style)
+ */
+export const OFFER_REASONS = ['NOT_YET', 'NOT_MADE_TO_MEASURE', 'NO_REVISION', 'NO_BOM_LINES', 'NO_ROUTING_STEPS', 'NO_LABEL', 'OWN_LABEL', 'LABEL_RETIRED', 'NEEDS_PERMISSION'] as const
+export type OfferReasonCode = (typeof OFFER_REASONS)[number]
+
+/** A reason with the facts its words need (null where a code needs none). */
+export interface OfferReason {
+  readonly code: OfferReasonCode
+  /** The source style's code. */
+  readonly style: string
+  /** The source revision's number (NO_BOM_LINES, NO_ROUTING_STEPS, NO_LABEL, OWN_LABEL, LABEL_RETIRED). */
+  readonly revision: number | null
+  /** The label's code and revision (OWN_LABEL, LABEL_RETIRED). */
+  readonly label: string | null
+  readonly labelRevision: number | null
+  /** The permission the part needs (NEEDS_PERMISSION), and whether over every company (a tenant-wide style). */
+  readonly permission: string | null
+  readonly everyCompany: boolean
+}
+
+/** A reason's facts, the ones its code does not use left null. */
+export const offerReason = (code: OfferReasonCode, style: string, facts: Partial<Omit<OfferReason, 'code' | 'style'>> = {}): OfferReason => ({
+  code,
+  style,
+  revision: facts.revision ?? null,
+  label: facts.label ?? null,
+  labelRevision: facts.labelRevision ?? null,
+  permission: facts.permission ?? null,
+  everyCompany: facts.everyCompany ?? false,
+})
+
+/** A reason in English words (the answer's `reason`; the screens say the code in theirs). */
+export function offerReasonWords(part: CopyPart, reason: OfferReason): string {
+  const label = `Label ${reason.label ?? ''} r${reason.labelRevision ?? ''}`
+  switch (reason.code) {
+    case 'NOT_YET':
+      return PART_NOT_YET[part] ?? `${PART_NAME[part]} cannot be copied yet.`
+    case 'NOT_MADE_TO_MEASURE':
+      return `${reason.style} is not made to measure.`
+    case 'NO_REVISION':
+      return `${reason.style} has no revision yet.`
+    case 'NO_BOM_LINES':
+      return `Revision ${reason.revision} has no BOM lines.`
+    case 'NO_ROUTING_STEPS':
+      return `Revision ${reason.revision} has no routing steps.`
+    case 'NO_LABEL':
+      return `Revision ${reason.revision} has no garment label.`
+    case 'OWN_LABEL':
+      return `${label} is ${reason.style}'s own label: make one for the copy in Compliance.`
+    case 'LABEL_RETIRED':
+      return `${label} is retired.`
+    case 'NEEDS_PERMISSION':
+      return `Copying ${PART_NAME[part]} needs ${reason.permission}${reason.everyCompany ? ' over every company' : ''}.`
+  }
+}
+
+/**
+ * What a copy left out, as a code with its facts (the answer's `noteCodes`; `notes` keeps the English sentences):
+ *
+ *   SIZES_ARCHIVED       sizes of the range archived in the scale since (`sizes`)
+ *   COLOURWAYS_ARCHIVED  archived colourways, not copied (`count`)
+ *   COLOUR_LEFT_OUT      a colourway whose library colour is archived or another company's: the copy's has none (`colourway`)
+ *   BOM_LINES_LEFT_OUT   BOM lines of archived colourways, not copied (`count`)
+ */
+export const COPY_NOTES = ['SIZES_ARCHIVED', 'COLOURWAYS_ARCHIVED', 'COLOUR_LEFT_OUT', 'BOM_LINES_LEFT_OUT'] as const
+export type CopyNoteCode = (typeof COPY_NOTES)[number]
+
+export interface CopyNote {
+  readonly code: CopyNoteCode
+  readonly sizes: readonly string[]
+  readonly count: number | null
+  readonly colourway: string | null
+}
+
+export const leftOutNote = (code: CopyNoteCode, facts: Partial<Omit<CopyNote, 'code'>> = {}): CopyNote => ({ code, sizes: [...(facts.sizes ?? [])], count: facts.count ?? null, colourway: facts.colourway ?? null })
+
+/** A note in English words. */
+export function copyNoteWords(note: CopyNote): string {
+  switch (note.code) {
+    case 'SIZES_ARCHIVED':
+      return `Size(s) ${note.sizes.join(', ')} are archived in the scale: the copy's range leaves them out.`
+    case 'COLOURWAYS_ARCHIVED':
+      return `${note.count} archived colourway(s) are not copied.`
+    case 'COLOUR_LEFT_OUT':
+      return `Colourway ${note.colourway}: its library colour is archived or another company's; the copy has none.`
+    case 'BOM_LINES_LEFT_OUT':
+      return `${note.count} BOM line(s) of archived colourways are not copied.`
+  }
+}
 
 /** The parts that put something in the copy's first revision. */
 export const REVISION_PARTS: readonly CopyablePart[] = Object.freeze(['BOM', 'ROUTING', 'LABELS'])

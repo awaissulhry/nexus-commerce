@@ -70,7 +70,16 @@ describe('a new style (PRD-001, PRD-048)', () => {
       hsCode: null,
       originCountry: null,
       netMassKg: null,
+      gender: null,
     })
+  })
+
+  it('W2b (B-W2b-25): keeps who it is cut for apart from the CN code, changes and clears it, and refuses a word that is no gender', () => {
+    expect(made({ ...JACKET, hsCode: '6201 40 00', gender: 'WOMEN' })).toMatchObject({ hsCode: '62014000', gender: 'WOMEN' })
+    expect(issuesOf({ ...JACKET, gender: 'KIDS' as never })).toEqual([{ path: 'gender', message: 'Expected one of MEN, WOMEN, UNISEX.' }])
+    const current = made({ ...JACKET, gender: 'MEN' })
+    expect(changeStyle(current, { gender: 'UNISEX' }, SCALE)).toMatchObject({ ok: true, changed: ['gender'] })
+    expect(changeStyle(current, { gender: null }, SCALE)).toMatchObject({ ok: true, changed: ['gender'], style: { gender: null } })
   })
 
   it('refuses sizes outside the scale, twice, archived ones, and a base size outside the range', () => {

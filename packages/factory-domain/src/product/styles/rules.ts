@@ -24,7 +24,9 @@ import { customsProblems, normaliseCustoms } from './customs'
  *   tracking    (PRD-025; Reg. (EU) 2016/425 art. 8(5)) a PPE garment carries a type, batch or serial number: its
  *               garments are traced by lot (the work order's batch)
  *   customs     (PRD-018, W2a) the commodity code, the country of origin and the net mass of one garment (./customs),
- *               each optional
+ *               each optional; W2b (B-W2b-25) who it is cut for (`gender`: MEN, WOMEN, UNISEX), apart from the CN
+ *               code (CN chapters 61/62 split men's or boys' from women's or girls'; a unisex garment is declared as
+ *               women's), optional
  *
  * DRAFT → ACTIVE (it has a released revision: it can be sold) → ARCHIVED, and back (PRD-022: never deleted).
  */
@@ -35,6 +37,9 @@ export const PRODUCT_TYPES = ['JACKET', 'TROUSERS', 'SUIT', 'GLOVES', 'VEST', 'O
 export type ProductType = (typeof PRODUCT_TYPES)[number]
 export const PPE_CATEGORIES = ['NOT_PPE', 'CATEGORY_I', 'CATEGORY_II', 'CATEGORY_III'] as const
 export type PpeCategory = (typeof PPE_CATEGORIES)[number]
+/** W2b (B-W2b-25): who the style is cut for (factory-db StyleGender): men's or boys', women's or girls', both. */
+export const STYLE_GENDERS = ['MEN', 'WOMEN', 'UNISEX'] as const
+export type StyleGender = (typeof STYLE_GENDERS)[number]
 
 /** What the style machine's guard reads. */
 export interface StyleFacts {
@@ -81,11 +86,13 @@ export interface StyleFields {
   readonly hsCode: string | null
   readonly originCountry: string | null
   readonly netMassKg: string | null
+  /** W2b (B-W2b-25): who it is cut for, apart from the CN code; null: not on record. */
+  readonly gender: StyleGender | null
 }
 export type StyleField = keyof StyleFields
 export const STYLE_FIELDS: readonly StyleField[] = Object.freeze([
   'code', 'name', 'nameI18n', 'description', 'productType', 'season', 'brandPartyId', 'sizeScaleId', 'sizes', 'baseSize',
-  'ppeCategory', 'ppeStandard', 'ppeClass', 'mtmAllowed', 'measurementTemplateId', 'hsCode', 'originCountry', 'netMassKg',
+  'ppeCategory', 'ppeStandard', 'ppeClass', 'mtmAllowed', 'measurementTemplateId', 'hsCode', 'originCountry', 'netMassKg', 'gender',
 ] as const)
 
 /** A new style as typed: what is left out is empty (no range yet, not PPE unless said, not made to measure). */
@@ -236,6 +243,7 @@ export function styleProblems(style: StyleFields, scale: ScaleSizes, kept: reado
 
   issues.push(...ppeProblems(style))
   issues.push(...customsProblems(style))
+  if (style.gender !== null && !(STYLE_GENDERS as readonly string[]).includes(style.gender)) add('gender', `Expected one of ${STYLE_GENDERS.join(', ')}.`)
   if (style.measurementTemplateId !== null && !style.mtmAllowed) {
     add('measurementTemplateId', 'A measurement template is for a style that may be made to measure (mtmAllowed).')
   }
@@ -295,6 +303,7 @@ export function newStyle(input: StyleInput, scale: ScaleSizes): StyleOutcome {
       hsCode: input.hsCode ?? null,
       originCountry: input.originCountry ?? null,
       netMassKg: input.netMassKg ?? null,
+      gender: input.gender ?? null,
     },
     scale,
   )
