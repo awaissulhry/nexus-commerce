@@ -5,7 +5,7 @@ import { REASON_LIST_GROUPS } from '@nexus/factory-domain/reasons/lists'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { ReasonListsEditor } from '../../_shared/reasons/ReasonListsEditor'
-import { liveMatches, useLive } from '../../quality/_shared/hooks'
+import { isStepUpCancelled, liveMatches, useLive, useStepUp } from '../../quality/_shared/hooks'
 import { problemKey } from '../../quality/_shared/model'
 import { getReturnPolicy, getSalesSettings, listSeries, saveReturnPolicy, saveSalesSettings, type PolicyAnswer, type SalesSettings, type Series } from './api'
 import { LIVE_TYPES, policyBody, policyDraftOf, policyProblems, quoteBody, quoteDraftOf, quoteProblems, refusalOf, settingsCan, type Scope } from './model'
@@ -35,6 +35,8 @@ export function SalesSettingsPage() {
   const [changedAt, setChangedAt] = useState<string | null>(null)
   const [receipt, setReceipt] = useState<SalesSettingsModel['receipt']>(null)
   const [offline, setOffline] = useState(false)
+  // B-W2b-16: raising an approval limit asks for a fresh code (the API answers step_up; the code is asked, then the save again).
+  const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
   const saving = useRef(false)
   const editing = useRef(false)
   editing.current = edit !== null
@@ -94,13 +96,15 @@ export function SalesSettingsPage() {
         if (!policy.value) return
         await saveReturnPolicy(api, policyBody(current.policy, policy.value, scope, company?.id ?? ''))
       } else {
-        await saveSalesSettings(api, quoteBody(current.quote, settings.value, scope, company?.id ?? ''))
+        const body = quoteBody(current.quote, settings.value, scope, company?.id ?? '')
+        await guard('stepUp.sentence', () => saveSalesSettings(api, body))
       }
       setEdit(null)
       setReceipt({ tone: 'success', words: { key: `done.${current.card}` } })
       await load()
     } catch (error) {
-      setEdit((open) => (open ? { ...open, busy: false, problem: refusalOf(error), showProblems: true } : open))
+      if (isStepUpCancelled(error)) setEdit((open) => (open ? { ...open, busy: false, problem: { key: 'stepUp.cancelled' } } : open))
+      else setEdit((open) => (open ? { ...open, busy: false, problem: refusalOf(error), showProblems: true } : open))
     } finally {
       saving.current = false
     }
@@ -134,6 +138,7 @@ export function SalesSettingsPage() {
     offline,
     changedAt,
     receipt,
+    stepUp,
   }
 
   return (
@@ -161,6 +166,8 @@ export function SalesSettingsPage() {
         onReload: () => void load(),
         onRetry: () => void load(),
         onDismissReceipt: () => setReceipt(null),
+        onStepUpSubmit: (code) => void submitStepUp(code),
+        onStepUpCancel: cancelStepUp,
       }}
     />
   )

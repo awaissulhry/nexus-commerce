@@ -1663,6 +1663,7 @@
     "orders_view": "See sales orders",
     "orders_manage": "Work on sales orders",
     "orders_close": "Close a shipped order that is not settled",
+    "orders_waive": "Waive an order’s deposit or a payment step before shipping",
     "privacy_view": "See the company's privacy duties",
     "privacy_manage": "Write and publish notices; record acknowledgements",
     "quality_lots_view": "See a lot's quality record",

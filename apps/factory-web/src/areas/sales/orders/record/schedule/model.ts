@@ -14,12 +14,27 @@ export interface StepAbilities {
   manageOrders: boolean
   /** invoices.manage: invoice a step (a TD02 draft). */
   manageInvoices: boolean
+  /** B-W2b-16: orders.waive (the owner): waive a deposit or a step before shipping, with a reason and a fresh code. */
+  waive: boolean
 }
 
 export const stepAbilitiesOf = (permissions: readonly string[]): StepAbilities => {
   const held = new Set(permissions)
-  return { manageOrders: held.has('orders.manage'), manageInvoices: held.has('invoices.manage') }
+  return { manageOrders: held.has('orders.manage'), manageInvoices: held.has('invoices.manage'), waive: held.has('orders.waive') }
 }
+
+/** B-W2b-16: what can be waived — an advance (the deposit, a balance before shipping); a step due with the invoice never. */
+export const WAIVABLE_KINDS = ['DEPOSIT', 'BEFORE_SHIPPING'] as const
+
+/** B-W2b-16: why "Waive…" waits (or null): only the owner waives; an order cancelled or closed waives nothing more. */
+export function waiveHeld(order: Pick<Order, 'status'>, can: StepAbilities): Phrase | null {
+  if (!can.waive) return phrase('schedule.verbs.held.noWaive')
+  if (order.status === 'CANCELLED' || order.status === 'CLOSED') return phrase('schedule.verbs.held.final')
+  return null
+}
+
+/** B-W2b-16: the reason a waive needs (at least 3 characters, at most 500), or its problem key. */
+export const waiveReasonProblem = (reason: string): string | null => (reason.trim().length < 3 ? 'schedule.verbs.waiveReasonHeld' : reason.trim().length > 500 ? 'schedule.verbs.waiveReasonLong' : null)
 
 const OPEN_STATES: readonly Order['status'][] = ['CONFIRMED', 'IN_PRODUCTION', 'READY']
 
@@ -37,6 +52,11 @@ export function stepVerbs(step: Pick<Milestone, 'kind' | 'status' | 'depositRequ
     return [{ kind: 'invoice', held: can.manageInvoices ? null : phrase('schedule.verbs.held.noInvoice') }]
   }
   return []
+}
+
+/** B-W2b-16: "Waive…" on an open advance step (the deposit, a balance before shipping), with why it waits; null: none. */
+export function waiveVerbOf(step: Pick<Milestone, 'kind' | 'status'>, order: Pick<Order, 'status'>, can: StepAbilities): { kind: 'waive'; held: Phrase | null } | null {
+  return step.status === 'OPEN' && (WAIVABLE_KINDS as readonly string[]).includes(step.kind) ? { kind: 'waive', held: waiveHeld(order, can) } : null
 }
 
 /** The day the request falls due: today or later (YYYY-MM-DD), or its problem. */

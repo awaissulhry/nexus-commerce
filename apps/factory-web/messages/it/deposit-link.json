@@ -12,7 +12,8 @@
     "forOrder": "Ordine {order} (preventivo {quote})",
     "kind": "Tipo",
     "kindPct": "{kind}, {pct} del totale",
-    "due": "Entro il"
+    "due": "Entro il",
+    "forOrderOnly": "Ordine {order}"
   },
   "bank": {
     "title": "Paga con bonifico",

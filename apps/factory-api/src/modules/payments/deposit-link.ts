@@ -34,7 +34,9 @@ import { assertMay, officeContextOf } from './store'
  *          address's older live DEPOSIT_INFO links of the request revoked, the link (the purpose's terms: 30 days, 20
  *          counted opens), the mail on the QUOTE's thread to the quote's contact through email out's `sendEmail` with the
  *          text WITHOUT the link and its email.queued withheld (the worker would send the stored text), audit rows, the
- *          event deposit_request.link_sent. After the commit the mail is composed WITH the link in memory and sent at
+ *          event deposit_request.link_sent. B-W2b-16: a request made on an order without a quote (a typed order's
+ *          deposit, a balance before shipping) goes on the ORDER's thread to the contact named (`contactId`), else the
+ *          customer's INVOICES contact, else its ORDERS contact; its page names the order. After the commit the mail is composed WITH the link in memory and sent at
  *          once (`deliverOutbound`, never retried by a job: a failed one is FAILED and the office sends again). The token
  *          is in the sent mail only, never in an answer, a result, an audit row, an event or a log.
  *   page   `GET /payments/link/deposit` (the link's session; links.open, price grain): the request as its party sees it
@@ -51,57 +53,85 @@ export interface DepositLinkAnswer {
 
 interface Facts {
   readonly request: DepositRow
-  readonly quote: { readonly id: string; readonly number: string; readonly revision: number; readonly language: string }
-  readonly orderNumber: string | null
+  /** The accepted quote version it was asked for; null for a request made on an order (a typed order, a balance). */
+  readonly quote: { readonly id: string; readonly number: string; readonly revision: number; readonly language: string } | null
+  /** B-W2b-16: the order a request without a quote version belongs to (its thread carries the mail). */
+  readonly order: { readonly id: string; readonly number: string; readonly language: string } | null
   readonly contact: { readonly email: string; readonly name: string }
 }
 
-/** The request, its quote version and the quote's contact, read in the office caller's scope. */
-async function factsOf(caller: CommandCaller, depositRequestId: string): Promise<Facts> {
+/** The request's language and where its mail goes: the quote's thread, else (B-W2b-16) its order's. */
+const languageOf = (facts: Pick<Facts, 'quote' | 'order'>): string => facts.quote?.language ?? facts.order?.language ?? 'it'
+
+/**
+ * The request, its quote version and the quote's contact, read in the office caller's scope. B-W2b-16: a request made on
+ * an order without a quote (a typed order's deposit, a balance before shipping) goes to the contact named in the body, or
+ * the customer's INVOICES contact, else its ORDERS contact (active, with an address), on the order's thread.
+ */
+async function factsOf(caller: CommandCaller, depositRequestId: string, contactId: string | undefined): Promise<Facts> {
   const context = officeContextOf(caller)
   return caller.withClient(async (client) => {
     const found = await client.depositRequest.findUnique({ where: { id: depositRequestId }, select: DEPOSIT_COLUMNS })
     assertMay(context, PAYMENTS_VIEW, PAYMENTS_RECORD, found ? { companyId: found.companyId, partyId: found.partyId } : null, 'Deposit request')
     const request = found!
     if (request.status !== 'OPEN') throw new InvalidStateError(`The deposit request is ${request.status}: there is nothing to pay, so no deposit page is sent.`)
-    if (!request.quoteVersionId) throw new InvalidStateError('The deposit request is not one of an accepted quote: its page is sent with the quote.')
+    const orderRow = request.orderId ? await client.salesOrder.findUnique({ where: { id: request.orderId }, select: { id: true, number: true, language: true } }) : null
+    if (!request.quoteVersionId) {
+      if (!orderRow) throw new InvalidStateError('The deposit request names neither a quote nor an order: there is no page to send.')
+      const contact = await orderContactOf(client, request.partyId, contactId)
+      return { request, quote: null, order: orderRow, contact }
+    }
     const version = await client.quoteVersion.findUniqueOrThrow({ where: { id: request.quoteVersionId }, select: { revision: true, language: true, quoteId: true } })
     const quote = await client.quote.findUniqueOrThrow({ where: { id: version.quoteId }, select: { id: true, number: true, contactId: true } })
-    const contact = quote.contactId ? await client.partyContact.findUnique({ where: { id: quote.contactId }, select: { name: true, email: true, status: true } }) : null
-    if (!contact || contact.status !== 'ACTIVE' || !contact.email) {
+    const contact = contactId ? await orderContactOf(client, request.partyId, contactId) : quote.contactId ? await client.partyContact.findUnique({ where: { id: quote.contactId }, select: { name: true, email: true, status: true } }) : null
+    if (!contact || ('status' in contact && contact.status !== 'ACTIVE') || !contact.email) {
       throw new InvalidStateError("The quote's contact has no e-mail address (or is not active): give the quote an active contact with an address, then send the deposit page.")
     }
-    const order = request.orderId ? await client.salesOrder.findUnique({ where: { id: request.orderId }, select: { number: true } }) : null
     return {
       request,
       quote: { id: quote.id, number: quote.number, revision: version.revision, language: version.language },
-      orderNumber: order?.number ?? null,
+      order: orderRow,
       contact: { email: contact.email.trim().toLowerCase(), name: contact.name },
     }
   })
 }
 
+/** B-W2b-16: the contact a typed order's deposit page goes to: the one named, else INVOICES, else ORDERS (active, with an address). */
+async function orderContactOf(client: Parameters<Parameters<CommandCaller['withClient']>[0]>[0], partyId: string, contactId: string | undefined): Promise<{ email: string; name: string }> {
+  const select = { id: true, name: true, email: true, status: true, partyId: true } as const
+  if (contactId !== undefined) {
+    const named = await client.partyContact.findUnique({ where: { id: contactId }, select })
+    if (!named || named.partyId !== partyId || named.status !== 'ACTIVE' || !named.email) throw new InvalidStateError("Not an active contact of the customer with an e-mail address: pick another, or add the address to the customer's contact.")
+    return { email: named.email.trim().toLowerCase(), name: named.name }
+  }
+  for (const role of ['INVOICES', 'ORDERS'] as const) {
+    const found = await client.partyContact.findFirst({ where: { partyId, status: 'ACTIVE', roles: { has: role }, email: { not: null } }, select, orderBy: [{ name: 'asc' }, { id: 'asc' }] })
+    if (found?.email) return { email: found.email.trim().toLowerCase(), name: found.name }
+  }
+  throw new InvalidStateError('The customer has no active invoices or orders contact with an e-mail address: add one (Customers › Contacts), or pick a contact, then send the deposit page.')
+}
+
 /** Mails the deposit page's link to the quote's contact (see the file's comment). */
-export async function sendDepositLink(email: EmailRuntime, request: FastifyRequest, depositRequestId: string, body: { readonly message?: string | undefined }, idempotencyKey?: string): Promise<DepositLinkAnswer> {
+export async function sendDepositLink(email: EmailRuntime, request: FastifyRequest, depositRequestId: string, body: { readonly message?: string | undefined; readonly contactId?: string | undefined }, idempotencyKey?: string): Promise<DepositLinkAnswer> {
   const context = officeContextOf(request)
-  const facts = await factsOf(request, depositRequestId)
-  const locale = localeOf(facts.quote.language)
-  const quoteDocument = quoteDocumentNumber(facts.quote.number, facts.quote.revision)
+  const facts = await factsOf(request, depositRequestId, body.contactId)
+  const locale = localeOf(languageOf(facts))
+  const quoteDocument = facts.quote ? quoteDocumentNumber(facts.quote.number, facts.quote.revision) : null
   // Minted here, outside the command: only its hash enters the transaction.
   const linkId = newId()
   const token = mintLinkToken({ tenantId: context.tenantId, partyId: facts.request.partyId, linkId }).value
-  const mailFor = (expiresAt: Date, url: string | null) => depositLinkMail({ locale, quoteDocument, orderNumber: facts.orderNumber, expiresAt, message: body.message ?? null }, url)
+  const mailFor = (expiresAt: Date, url: string | null) => depositLinkMail({ locale, quoteDocument, orderNumber: facts.order?.number ?? null, expiresAt, message: body.message ?? null }, url)
 
   const { result, replayed } = await command(
     request,
-    { name: 'payments.sendDepositLink', idempotencyKey, input: { depositRequestId, message: body.message ?? null } },
+    { name: 'payments.sendDepositLink', idempotencyKey, input: { depositRequestId, message: body.message ?? null, ...(body.contactId ? { contactId: body.contactId } : {}) } },
     async (tools) => {
       const { tx, now } = tools
       // The request row, locked: a payment that makes it PAID meanwhile waits, and then the page is not sent.
       const [locked] = await tx.$queryRaw<{ status: string }[]>`SELECT "status"::text AS "status" FROM "DepositRequest" WHERE "id" = ${depositRequestId}::uuid FOR UPDATE`
       if (!locked) throw new NotFoundError('Deposit request not found.')
       if (locked.status !== 'OPEN') throw new InvalidStateError(`The deposit request is ${locked.status}: there is nothing to pay, so no deposit page is sent.`)
-      const { request: row, contact, quote } = facts
+      const { request: row, contact, quote, order } = facts
       const revokedLinkIds = await revokeOlderLinks(tools, row, contact.email, context.actorId)
       const terms = linkTerms('DEPOSIT_INFO', {}, now)
       await tx.oneOffLink.createMany({
@@ -133,7 +163,8 @@ export async function sendDepositLink(email: EmailRuntime, request: FastifyReque
       const sender = await tx.user.findUnique({ where: { id: context.actorId }, select: { displayName: true, email: true } })
       const mail = mailFor(terms.expiresAt, null)
       const sent = await queueLinkMail(tools, {
-        quoteId: quote.id,
+        // B-W2b-16: a request made on an order (no quote) writes on the order's thread.
+        record: quote ? { type: 'Quote', id: quote.id } : { type: 'SalesOrder', id: order!.id },
         sender: { userId: context.actorId, name: sender?.displayName ?? 'Ufficio amministrazione', email: sender?.email ?? null },
         to: contact.email,
         subject: mail.subject,
@@ -147,7 +178,7 @@ export async function sendDepositLink(email: EmailRuntime, request: FastifyReque
         companyId: row.companyId,
         after: { linkId, linkExpiresAt: toUtcIso(terms.expiresAt), revokedLinkIds, outboundId: sent.outbound.id, to: contact.email },
       })
-      tools.emit({ type: 'deposit_request.link_sent', subject: row.id, companyId: row.companyId, payload: { depositRequestId: row.id, quoteId: quote.id, partyId: row.partyId, linkId } })
+      tools.emit({ type: 'deposit_request.link_sent', subject: row.id, companyId: row.companyId, payload: { depositRequestId: row.id, quoteId: quote?.id ?? null, orderId: order?.id ?? null, partyId: row.partyId, linkId } })
       return { link: { id: linkId, expiresAt: toUtcIso(terms.expiresAt), to: contact.email, revokedLinkIds }, emailId: sent.outbound.id }
     },
   )
@@ -174,7 +205,8 @@ async function revokeOlderLinks(tools: CommandTools, row: DepositRow, address: s
 }
 
 interface LinkMailInput {
-  readonly quoteId: string
+  /** The thread the mail goes on: the quote's, else (B-W2b-16) the order's. */
+  readonly record: { readonly type: 'Quote' | 'SalesOrder'; readonly id: string }
   readonly sender: { readonly userId: string; readonly name: string; readonly email: string | null }
   readonly to: string
   readonly subject: string
@@ -193,7 +225,7 @@ function queueLinkMail(tools: CommandTools, input: LinkMailInput) {
     // The worker builds a queued mail from its stored text, which has no link: this mail is delivered in-process.
     emit: (event: Parameters<CommandTools['emit']>[0]) => (event.type === 'email.queued' ? undefined : tools.emit(event)),
   }
-  return sendEmail(quiet, { record: { type: 'Quote', id: input.quoteId }, sender: input.sender, to: [input.to], subject: input.subject, body: input.storedText, locale: input.locale })
+  return sendEmail(quiet, { record: input.record, sender: input.sender, to: [input.to], subject: input.subject, body: input.storedText, locale: input.locale })
 }
 
 /** After the commit: sends the queued mail once, with the link, as the tenant's system. Never throws: the outcome says. */
@@ -246,13 +278,16 @@ export async function depositLinkView(request: FastifyRequest) {
       // The link's own scope finds its party's request or nothing.
       const row = await own.depositRequest.findUnique({ where: { id: link.record.id }, select: DEPOSIT_COLUMNS })
       if (!row) throw linkUnavailable()
-      if (!row.quoteVersionId) throw linkUnavailable()
-      const version = await tenant.quoteVersion.findUniqueOrThrow({ where: { id: row.quoteVersionId }, select: { revision: true, language: true, quoteId: true } })
-      const quote = await tenant.quote.findUniqueOrThrow({ where: { id: version.quoteId }, select: { number: true } })
-      const order = row.orderId ? await tenant.salesOrder.findUnique({ where: { id: row.orderId }, select: { number: true } }) : null
+      // B-W2b-16: a request made on an order (no quote version) shows its order; one with neither has no page.
+      if (!row.quoteVersionId && !row.orderId) throw linkUnavailable()
+      const version = row.quoteVersionId ? await tenant.quoteVersion.findUniqueOrThrow({ where: { id: row.quoteVersionId }, select: { revision: true, language: true, quoteId: true } }) : null
+      const quote = version ? await tenant.quote.findUniqueOrThrow({ where: { id: version.quoteId }, select: { number: true } }) : null
+      const order = row.orderId ? await tenant.salesOrder.findUnique({ where: { id: row.orderId }, select: { number: true, language: true } }) : null
+      if (!quote && !order) throw linkUnavailable()
       const company = await tenant.company.findUnique({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } })
-      const language = version.language === 'it' ? 'it' : 'en'
-      const instructions = await instructionsFor(tenant, row, quoteDocumentNumber(quote.number, version.revision), language)
+      const language = (version?.language ?? order?.language) === 'it' ? 'it' : 'en'
+      const document = version && quote ? quoteDocumentNumber(quote.number, version.revision) : order!.number
+      const instructions = await instructionsFor(tenant, row, document, language)
       return {
         deposit: {
           kind: row.kind,
@@ -264,7 +299,7 @@ export async function depositLinkView(request: FastifyRequest) {
           status: row.status,
           paid: row.status === 'PAID',
         },
-        quote: { document: quoteDocumentNumber(quote.number, version.revision) },
+        quote: version && quote ? { document: quoteDocumentNumber(quote.number, version.revision) } : null,
         order: order ? { number: order.number } : null,
         from: { legalName: company?.legalName ?? '', tradeName: company?.tradeName ?? null },
         instructions: { ...instructions, amount: asMoney('price', instructions.amount) },

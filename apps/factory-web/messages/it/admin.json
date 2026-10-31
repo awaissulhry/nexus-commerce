@@ -1663,6 +1663,7 @@
     "orders_view": "Vedere gli ordini clienti",
     "orders_manage": "Lavorare sugli ordini clienti",
     "orders_close": "Chiudere un ordine spedito non saldato",
+    "orders_waive": "Rinunciare all’acconto di un ordine o a una scadenza prima della spedizione",
     "privacy_view": "Vedere gli adempimenti privacy della società",
     "privacy_manage": "Scrivere e pubblicare informative; registrare le prese visione",
     "quality_lots_view": "Vedere la scheda qualità di un lotto",

@@ -5,9 +5,10 @@ import { Banner, Combobox, DateField, EmptyState, Field, Modal } from '@nexus/ui
 import { Button, Input, Select, Spinner, Textarea } from '@nexus/ui/primitives'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale } from '../../../../lib/i18n/provider'
-import { newReturnProblems, outsideWindow, previewProblemWords, returnableKey } from '../model'
+import { newReturnProblems, previewProblemWords } from '../model'
 import type { NewReturnActions, NewReturnModel } from '../view-model'
-import { DayText, Money, say, useDayWords, useWords } from './parts'
+import { say, useDayWords, useWords } from './parts'
+import { ReturnLinePicker } from './ReturnLinePicker'
 
 /**
  * New return (design sales.returns/pop:returns.new; band, `c`, `?new=return`): the customer, then what may come back —
@@ -118,54 +119,7 @@ export function NewReturnModal({ model, actions }: { model: NewReturnModel; acti
           ) : lines.length === 0 ? (
             <EmptyState title={t('newReturn.nothing')} description={t('newReturn.nothingBody')} />
           ) : (
-            <div className="fw-rr-pick">
-              {lines.map((line) => {
-                const key = returnableKey(line)
-                const entry = draft.lines[key] ?? { quantity: '', reasonCode: '', note: '' }
-                const typed = entry.quantity.trim()
-                const over = /^\d+$/.test(typed) && Number(typed) > line.left
-                const late = outsideWindow(line, policy?.windowDays ?? null, model.today)
-                return (
-                  <div key={key} className="fw-rr-pick-row">
-                    <span className="fw-q-cell">
-                      <span className="fw-q-name">{line.description}</span>
-                      <span className="fw-q-hint fw-q-code">
-                        {[line.invoice?.number ? t('newReturn.invoice', { number: line.invoice.number, seq: line.invoice.lineSeq }) : null, line.order ? t('newReturn.orderLine', { number: line.order.number, seq: line.order.lineSeq }) : null].filter(Boolean).join(' · ')}
-                      </span>
-                      <span className="fw-q-hint">
-                        {t('newReturn.soldLeft', { sold: line.sold, left: line.left })}
-                        {model.price && line.pieceValue !== undefined && line.pieceValue !== null ? ' · ' : ''}
-                        {model.price && line.pieceValue !== undefined && line.pieceValue !== null ? <Money minor={line.pieceValue} currency={line.currency} /> : null}
-                        {line.deliveredOn ? ' · ' : ''}
-                        {line.deliveredOn ? (
-                          <>
-                            {t('newReturn.delivered')} <DayText value={line.deliveredOn} />
-                          </>
-                        ) : null}
-                        {line.ppe ? ` · ${t('newReturn.ppe')}` : ''}
-                      </span>
-                      {late !== null && <span className="fw-q-hint">{t('newReturn.outsideWindow', { days: late, window: policy?.windowDays ?? 0 })}</span>}
-                    </span>
-                    <Field label={t('newReturn.pieces')} error={over ? t('refusal.aboveSoldMax', { max: line.left, sold: line.sold }) : undefined}>
-                      <Input inputMode="numeric" value={entry.quantity} disabled={line.left === 0} placeholder={line.left === 0 ? '0' : `≤ ${line.left}`} onChange={(event) => actions?.onNewReturnLine?.(key, { quantity: event.target.value })} aria-label={t('newReturn.piecesOf', { line: line.description })} />
-                    </Field>
-                    <Field label={t('newReturn.reason')} error={model.showProblems && typed && typed !== '0' && !entry.reasonCode ? t('newReturn.problem.reasonShort') : undefined}>
-                      <Select value={entry.reasonCode} disabled={!model.reasons || line.left === 0} onChange={(event) => actions?.onNewReturnLine?.(key, { reasonCode: event.target.value })} aria-label={t('newReturn.reasonOf', { line: line.description })}>
-                        <option value="">{t('newReturn.pickReason')}</option>
-                        {(model.reasons ?? []).map((reason) => (
-                          <option key={reason.code} value={reason.code}>
-                            {locale === 'it' ? reason.labelIt : reason.labelEn}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
-                    <Field label={t('newReturn.reasonNote')}>
-                      <Input value={entry.note} disabled={line.left === 0} onChange={(event) => actions?.onNewReturnLine?.(key, { note: event.target.value })} aria-label={t('newReturn.noteOf', { line: line.description })} />
-                    </Field>
-                  </div>
-                )
-              })}
-            </div>
+            <ReturnLinePicker lines={lines} drafts={draft.lines} reasons={model.reasons} price={model.price} windowDays={policy?.windowDays ?? null} today={model.today} showProblems={model.showProblems} onLine={(key, patch) => actions?.onNewReturnLine?.(key, patch)} />
           )}
         </section>
 

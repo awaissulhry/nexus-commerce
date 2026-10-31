@@ -39,6 +39,8 @@ export interface CustomerPick {
   results: PartyRow[] | null
   problem: string | null
   picked: readonly string[]
+  /** B-W2b-16: the customers' "From" (YYYY-MM-DD): today or an earlier day; '' = today. */
+  from?: string
 }
 
 export interface CompareView {
@@ -105,6 +107,7 @@ export interface PriceListRecordActions {
   onStylePick?: (styleId: string | null) => void
   onStyleField?: (field: 'colourwayId' | 'price', value: string) => void
   onAddPrice?: () => void
+  onCustomerFrom?: (day: string) => void
   onCustomerQuery?: (query: string) => void
   onCustomerToggle?: (partyId: string) => void
   onAddCustomers?: () => void

@@ -4,6 +4,7 @@ import { closeShortPlan, reopenPlan, type ShortLine } from '@nexus/factory-domai
 import { MAX_REASON } from '@nexus/factory-domain/sales/orders/orders'
 import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
+import { reasonFor } from '../../../platform/reasons/service'
 import { lockOrderLines } from '../../production/work-orders/store'
 import { officeContextOf } from './access'
 import { officeOrder, recordAfter } from './moves'
@@ -16,7 +17,8 @@ import type { OrderView } from './views'
  * a reason): the lines' work-order locks, then the order's row (FOR UPDATE, at the version read), the facts read again;
  * then every chosen line's four short-close columns (factory-db SalesOrderLine closedShortQuantity = what is left of it
  * after what shipped, closedShortAt, closedShortById, closeShortReason; the …_sales_w2a_guards trigger takes that change
- * also while PARTLY_SHIPPED).
+ * also while PARTLY_SHIPPED). B-W2b-16: the close may name a code of the CANCEL reason list (closedShortReasonCode, an
+ * active code; its words still required), and the reopen clears it with the four columns.
  *
  *   close    the APPROVED REDUCE replacements of the lines' work-order cells become DONE (B-W2a-13: a reduction waits
  *            for the order line to be lowered); a PARTLY_SHIPPED order with nothing left becomes SHIPPED in the same
@@ -48,8 +50,22 @@ export interface LinesBody {
   readonly lineIds?: readonly string[] | undefined
 }
 
+/** B-W2b-16: a close names why with a code of the CANCEL reason list too (the words stay beside it). */
+export interface CloseLinesBody extends LinesBody {
+  readonly reasonCode?: string | undefined
+}
+
+/** The close's code: an active code of the CANCEL list, its note when the code asks for detail (400 in words). */
+async function checkReasonCode(tools: Pick<CommandTools, 'tx'>, code: string | undefined, reason: string): Promise<string | null> {
+  if (code === undefined) return null
+  const found = await reasonFor(tools.tx, 'CANCEL', code)
+  if (!found || !found.active) throw invalid([{ path: 'body/reasonCode', message: 'Pick an active reason of the cancel list.' }])
+  if (found.needsDetail && reason.trim().length < 3) throw invalid([{ path: 'body/reason', message: 'This reason asks for detail: say more in the words.' }])
+  return found.code
+}
+
 /** orders.manage: close what is left of the lines named (or of every open line). */
-export async function closeLines(caller: CommandCaller, orderId: string, body: LinesBody, idempotencyKey?: string): Promise<{ order: OrderView; closed: { lineId: string; seq: number; closedShortQuantity: number }[]; reducesDone: string[]; stillInWorkOrders: { lineId: string; pieces: number }[] }> {
+export async function closeLines(caller: CommandCaller, orderId: string, body: CloseLinesBody, idempotencyKey?: string): Promise<{ order: OrderView; closed: { lineId: string; seq: number; closedShortQuantity: number }[]; reducesDone: string[]; stillInWorkOrders: { lineId: string; pieces: number }[] }> {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
   const reason = reasonOf(body.reason)
@@ -60,13 +76,14 @@ export async function closeLines(caller: CommandCaller, orderId: string, body: L
     await lockOrderLines(tx, context.tenantId, lineIds)
     const locked = await lockOrder(tx, order.id, body.version)
     const facts = await readOrderFacts(tx, order)
+    const reasonCode = await checkReasonCode(tools, body.reasonCode, reason)
     const plan = closeShortPlan(locked.status, shortLinesOf(facts), [...(body.lineIds ?? [])])
     if (Array.isArray(plan)) {
       if (plan.length === 1 && plan[0]!.path === 'body') throw new InvalidStateError(plan[0]!.message)
       throw invalid(plan)
     }
     for (const line of plan.close) {
-      await tx.salesOrderLine.update({ where: { id: line.id }, data: { closedShortQuantity: line.closedShortQuantity, closedShortAt: now, closedShortById: context.actorId, closeShortReason: reason, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+      await tx.salesOrderLine.update({ where: { id: line.id }, data: { closedShortQuantity: line.closedShortQuantity, closedShortAt: now, closedShortById: context.actorId, closeShortReason: reason, closedShortReasonCode: reasonCode, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
     }
     // B-W2a-13: an APPROVED REDUCE of these lines' cells is done once the order line is lowered.
     const closedIds = plan.close.map((line) => line.id)
@@ -96,7 +113,7 @@ export async function closeLines(caller: CommandCaller, orderId: string, body: L
       recordId: order.id,
       companyId: order.companyId,
       before: { status: locked.status, lines: plan.close.map((line) => ({ lineId: line.id, closedShortQuantity: null })) },
-      after: { status, lines: plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity })), reducesDone },
+      after: { status, lines: plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity })), reducesDone, reasonCode },
       reason,
     })
     tools.emit({ type: 'sales_order.lines_closed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'CLOSED', lineIds: closedIds } })
@@ -136,9 +153,10 @@ export async function reopenLines(caller: CommandCaller, orderId: string, body: 
     } else {
       await tx.salesOrder.update({ where: { id: order.id }, data: { updatedAt: now, version: { increment: 1 } }, select: { id: true } })
     }
-    const before = facts.lines.filter((line) => plan.reopen.includes(line.id)).map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity, closeShortReason: line.closeShortReason }))
+    const before = facts.lines.filter((line) => plan.reopen.includes(line.id)).map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity, closeShortReason: line.closeShortReason, closedShortReasonCode: line.closedShortReasonCode }))
     for (const lineId of plan.reopen) {
-      await tx.salesOrderLine.update({ where: { id: lineId }, data: { closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+      // B-W2b-16: the code goes with the close (the database refuses a code on a line that is not closed short).
+      await tx.salesOrderLine.update({ where: { id: lineId }, data: { closedShortQuantity: null, closedShortAt: null, closedShortById: null, closeShortReason: null, closedShortReasonCode: null, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
     }
     tools.audit({ action: 'orders.reopenLines', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { status: locked.status, lines: before }, after: { status, lines: plan.reopen.map((lineId) => ({ lineId, closedShortQuantity: null })) }, reason })
     tools.emit({ type: 'sales_order.lines_closed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'REOPENED', lineIds: [...plan.reopen] } })

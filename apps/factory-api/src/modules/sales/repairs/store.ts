@@ -5,6 +5,7 @@ import { QUALITY_NCR_VIEW } from '@nexus/factory-domain/quality/ncr/permissions'
 import {
   REPAIR_LIMITS,
   repairActions,
+  reworkRoundOf,
   safetyFailures,
   safetyStateOf,
   statusWords,
@@ -89,6 +90,22 @@ export async function workOrderOf(db: Reader, repair: Pick<RepairRow, 'workOrder
   return { any: row, live: row && row.status !== 'CANCELLED' ? { number: row.number, status: row.status } : null }
 }
 
+/**
+ * B-W2b-16: the repair's earlier work orders (a rework after the repair went back into repair gets its own): the work
+ * orders it named before, from the audit rows of production's make (`workorders.createRepair`, `before.workOrderId`),
+ * oldest first, without the one it names now.
+ */
+export async function earlierWorkOrdersOf(db: Reader, repair: Pick<RepairRow, 'id' | 'workOrderId'>): Promise<{ id: string; number: string; status: string }[]> {
+  const rows = await db.auditLog.findMany({ where: { recordType: 'RepairOrder', recordId: repair.id, action: 'workorders.createRepair' }, select: { before: true }, orderBy: [{ at: 'asc' }, { id: 'asc' }] })
+  const ids = [...new Set(rows.flatMap((row) => {
+    const before = (row.before ?? {}) as { workOrderId?: unknown }
+    return typeof before.workOrderId === 'string' && before.workOrderId !== repair.workOrderId ? [before.workOrderId] : []
+  }))]
+  if (ids.length === 0) return []
+  const found = new Map((await db.workOrder.findMany({ where: { id: { in: ids } }, select: { id: true, number: true, status: true } })).map((row) => [row.id, row]))
+  return ids.flatMap((id) => (found.has(id) ? [found.get(id)!] : []))
+}
+
 /** The repair's live DDT (one per repair; B-W2a-17), or null. */
 export async function liveDdtOf(db: Reader, repairId: string): Promise<{ id: string; number: string } | null> {
   const { live } = await sourceDdtsOf(db as CommandTx, { type: 'RepairOrder', id: repairId })
@@ -156,6 +173,7 @@ export async function repairView(db: Reader, repair: RepairRow, context: OfficeC
     orderBy: [{ issuedAt: 'asc' }, { id: 'asc' }],
   })
   const live = ddts.find((ddt) => ddt.cancellations.length === 0) ?? null
+  const reworkRound = reworkRoundOf(repair.stage as RepairStage, events.map((event) => ({ from: event.fromStage as RepairStage | null, to: event.stage as RepairStage })))
   const history = repair.serial
     ? await db.repairOrder.findMany({ where: { serial: repair.serial, id: { not: repair.id } }, select: { id: true, number: true, kind: true, stage: true, problem: true, createdAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: REPAIR_LIMITS.history })
     : []
@@ -187,6 +205,10 @@ export async function repairView(db: Reader, repair: RepairRow, context: OfficeC
     receivedAt: iso(repair.receivedAt),
     inboundDdt: repair.inboundDdtNumber ? { number: repair.inboundDdtNumber, date: dayOrNull(repair.inboundDdtDate) } : null,
     workOrder: workOrder.any,
+    /** B-W2b-16: the work orders of earlier rounds (a rework after a failed check gets its own), oldest first. */
+    earlierWorkOrders: await earlierWorkOrdersOf(db, repair),
+    /** B-W2b-16: back into repair after it was repaired: a new work order may follow a done one. */
+    reworkRound,
     repairedAt: iso(repair.repairedAt),
     safety: {
       required: repair.safetyCheckRequired,
@@ -210,7 +232,7 @@ export async function repairView(db: Reader, repair: RepairRow, context: OfficeC
     ddts: ddts.map((ddt) => ({ id: ddt.id, number: ddt.number, documentDate: dayOf(ddt.documentDate), reason: ddt.reason, startAt: toUtcIso(ddt.startAt), live: ddt.cancellations.length === 0 })),
     history: history.map((row) => ({ id: row.id, number: row.number, kind: row.kind, stage: row.stage, problem: row.problem, createdAt: toUtcIso(row.createdAt) })),
     ncrs,
-    actions: repairActions({ number: repair.number, stage: repair.stage as RepairStage, workOrder: workOrder.live, liveDdt: live ? { number: live.number } : null, ...safety }),
+    actions: repairActions({ number: repair.number, stage: repair.stage as RepairStage, workOrder: workOrder.live, liveDdt: live ? { number: live.number } : null, reworkRound, ...safety }),
     people: await peopleOf(db, [repair.ownerId, repair.createdById, repair.safetyCheckedById, ...events.map((event) => event.createdById)]),
   }
 }

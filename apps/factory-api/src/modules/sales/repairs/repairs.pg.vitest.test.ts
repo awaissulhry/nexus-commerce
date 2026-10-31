@@ -137,7 +137,12 @@ describe('a repair order from a return line decided Repair (SAL-383)', () => {
     const early = await ok('sales', 'POST', '/sales/repairs/preview', { returnLineId: rma.lines[0].id })
     expect(early.ok).toBe(false)
     expect(early.problems).toEqual([{ path: 'body/returnLineId', message: `Decide line 10 of ${rma.number} first: a repair order is made for a line decided Repair.` }])
-    await ok('sales', 'POST', `/sales/returns/${rma.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma.lines[0].id, disposition: 'REPAIR', goodsOutcome: 'REPAIR' }] })
+    const decided = await ok('sales', 'POST', `/sales/returns/${rma.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma.lines[0].id, disposition: 'REPAIR', goodsOutcome: 'REPAIR' }] })
+    // B-W2b-16: closing now would leave the garment unrepaired: the record says so before the click, the close too.
+    const warning = { code: 'REPAIR_WITHOUT_ORDER', path: 'repairOrder', lineIds: [rma.lines[0].id], seqs: [10], message: 'Line 10 is decided Repair and no repair order was made for the garment (make it from the line, or the garment stays here unrepaired).' }
+    expect(decided.return.closeWarnings).toEqual([warning])
+    // No stock move for a repair: the garment never entered stock.
+    expect(decided.moves).toEqual([])
     fromRma = { rma, lineId: rma.lines[0].id }
   })
 
@@ -167,6 +172,9 @@ describe('a repair order from a return line decided Repair (SAL-383)', () => {
     expect((await refused('sales', 'POST', '/sales/repairs', { returnLineId: fromRma.lineId }, 409)).message).toContain(`${repair.number} is made for it already.`)
     expect(await events('repair.created', repair.id)).toEqual([{ repairId: repair.id, number: repair.number, partyId: P1, kind: 'REPAIR', stage: 'RECEIVED', returnLineId: fromRma.lineId, complaintId: null, safetyCheckRequired: true }])
     expect(await admin(`SELECT action FROM "AuditLog" WHERE "recordId" = $1`, [repair.id])).toEqual([{ action: 'repairs.create' }])
+    // B-W2b-16: with its repair order made, closing the return leaves nothing behind.
+    expect((await ok('sales', 'GET', `/sales/returns/${fromRma.rma.id}`)).return.closeWarnings).toEqual([])
+    expect(repair).toMatchObject({ earlierWorkOrders: [], reworkRound: false })
     fromRma.repair = repair
   })
 
@@ -290,9 +298,28 @@ describe('the stages through the repair work order (SAL-390, MES-019)', () => {
 
   it('back into repair: the check is made again after the next repair, then the garment goes back with its DDT', async () => {
     expect((await refused('production', 'POST', `/sales/repairs/${repair.id}/stage`, { version: repair.version, to: 'IN_REPAIR' }, 400)).issues[0].message).toContain('what still needs doing')
+    expect(held(repair, 'makeWorkOrder')).toBe(`Repair work order ${repair.workOrder.number} is completed: one live work order per repair.`)
     repair = (await ok('production', 'POST', `/sales/repairs/${repair.id}/stage`, { version: repair.version, to: 'IN_REPAIR', note: 'Open the seam and sew it again.' })).repair
-    expect(repair).toMatchObject({ stage: 'IN_REPAIR', repairedAt: null })
+    expect(repair).toMatchObject({ stage: 'IN_REPAIR', repairedAt: null, reworkRound: true })
     expect(steps(repair).slice(3)).toEqual([['IN_REPAIR', 'CURRENT'], ['REPAIRED', 'WAITING'], ['SHIPPED', 'WAITING']])
+    // B-W2b-16: the rework after the failed check gets its own work order once the first one is done.
+    const first = { id: workOrderId, number: repair.workOrder.number, status: 'COMPLETED' }
+    expect(held(repair, 'makeWorkOrder')).toBeNull()
+    expect((await ok('production', 'GET', `/production/work-orders/repair-options?repairOrderId=${repair.id}`)).blockers).toEqual([])
+    const { workOrder: rework } = await ok('production', 'POST', '/production/work-orders/repairs', { repairOrderId: repair.id, version: repair.version, routingSeqs: [20] }, 201)
+    expect(rework.id).not.toBe(workOrderId)
+    repair = await recordOf(repair.id)
+    expect(repair).toMatchObject({ workOrder: { id: rework.id, status: 'DRAFT' }, earlierWorkOrders: [first] })
+    expect(held(repair, 'makeWorkOrder')).toBe(`Repair work order ${rework.number} is draft: one live work order per repair.`)
+    const [audit] = await admin(`SELECT before, reason FROM "AuditLog" WHERE action = 'workorders.createRepair' AND "recordType" = 'RepairOrder' AND "recordId" = $1 ORDER BY at DESC LIMIT 1`, [repair.id])
+    expect(audit).toMatchObject({ before: { workOrderId }, reason: `Rework after ${first.number} (COMPLETED): the repair went back into repair.` })
+    // Repaired waits for the rework's work order now.
+    expect((await refused('production', 'POST', `/sales/repairs/${repair.id}/stage`, { version: repair.version, to: 'REPAIRED' }, 409)).message).toBe(`Repair work order ${rework.number} is draft: complete it first (the repair is done when its work order is).`)
+    await ok('production', 'POST', `/production/work-orders/${rework.id}/release`, {})
+    await ok('production', 'POST', `/production/work-orders/${rework.id}/start`, {})
+    await ok('production', 'POST', `/production/work-orders/${rework.id}/complete`, {})
+    workOrderId = rework.id
+    repair = await recordOf(repair.id)
     repair = (await ok('production', 'POST', `/sales/repairs/${repair.id}/stage`, { version: repair.version, to: 'REPAIRED' })).repair
     expect(repair.safety.state).toBe('OUTDATED')
     expect((await refused('warehouse', 'POST', `/sales/repairs/${repair.id}/ship`, { version: repair.version, ddt: DDT }, 409)).message).toContain('made before the last repair')
