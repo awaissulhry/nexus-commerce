@@ -195,6 +195,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const count = await client.stockCount.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
     return count ? { companyId: count.companyId, siteId: count.siteId, partyId: null } : null
   },
+  // B-W2b-23 (search finds a DDT; it has no page of its own and opens its record panels): a DDT's thread, of its company,
+  // site and recipient, as its shipment's.
+  Ddt: async (client, id) => {
+    const ddt = await client.ddt.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
+    return ddt ? { companyId: ddt.companyId, siteId: ddt.siteId, partyId: ddt.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

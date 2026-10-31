@@ -6,7 +6,7 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { archiveProblems, locationProblems, locationTree, normalizeLocationCode, wouldCycle, type LocationKind } from '@nexus/factory-domain/inventory/locations/rules'
 import { INVENTORY_LOCATIONS_MANAGE, INVENTORY_LOCATIONS_VIEW } from '@nexus/factory-domain/inventory/permissions'
 import { kindChangeProblems, workshopLocationProblems } from '@nexus/factory-domain/purchasing/subcontracting/rules'
-import { command, type CommandCaller, type CommandTx } from '../../../core/command'
+import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayAt, officeContextOf, postedBy, siteFor, stockContextOf, type SiteRow } from '../ledger/access'
 import type { LocationView, SiteLocations } from './contract'
@@ -18,6 +18,18 @@ import type { LocationView, SiteLocations } from './contract'
  * checked here first with the domain's rules (factory-domain inventory/locations), then by the …_supply_guards trigger.
  * Reads name their columns (a floor role reads only what it is granted).
  */
+
+/**
+ * B-W2b-23: a location made, renamed or given another kind, moved or archived, once per command (the search index follows
+ * it; the import's writes too).
+ */
+export function locationChanged(
+  emit: CommandTools['emit'],
+  row: { readonly id: string; readonly companyId: string; readonly siteId: string; readonly code: string; readonly status: 'ACTIVE' | 'ARCHIVED' },
+  change: 'CREATED' | 'EDITED' | 'MOVED' | 'ARCHIVED',
+): void {
+  emit({ type: 'inventory.location_changed', subject: row.id, companyId: row.companyId, siteId: row.siteId, payload: { locationId: row.id, code: row.code, status: row.status, change } })
+}
 
 export const LOCATION_SELECT = {
   id: true,
@@ -151,7 +163,7 @@ export async function createLocation(caller: CommandCaller, input: CreateInput, 
   if (problems.length > 0) throw new ValidationError('The location is not valid.', atBody(problems))
   const parentId = input.parentId ?? null
   try {
-    const { result } = await command(caller, { name: 'inventory.locations.create', idempotencyKey, input }, async ({ tx, audit, now }) => {
+    const { result } = await command(caller, { name: 'inventory.locations.create', idempotencyKey, input }, async ({ tx, audit, emit, now }) => {
       await checkParent(tx, site, parentId, null)
       await checkWorkshop(tx, site, input.kind, input.partyId ?? null)
       if (await tx.location.findFirst({ where: { siteId: site.id, code }, select: { id: true } })) throw taken(site, code)
@@ -161,6 +173,7 @@ export async function createLocation(caller: CommandCaller, input: CreateInput, 
         select: LOCATION_SELECT,
       })
       audit({ recordType: 'Location', recordId: id, companyId: site.companyId, siteId: site.id, after: audited(row) })
+      locationChanged(emit, row, 'CREATED')
       return placed(tx, row)
     })
     return result
@@ -193,9 +206,10 @@ export async function updateLocation(caller: CommandCaller, locationId: string, 
   const { result } = await command(
     caller,
     { name: 'inventory.locations.update', idempotencyKey, input: { locationId, ...input }, record: { type: 'Location', id: locationId, expectedVersion: input.version } },
-    async ({ tx, audit }) => {
+    async ({ tx, audit, emit }) => {
       const row = await tx.location.update({ where: { id: locationId }, data: { name, kind: input.kind ?? before.kind }, select: LOCATION_SELECT })
       audit({ recordType: 'Location', recordId: locationId, companyId: site.companyId, siteId: site.id, before: audited(before), after: audited(row) })
+      locationChanged(emit, row, 'EDITED')
       return placed(tx, row)
     },
   )
@@ -209,10 +223,11 @@ export async function moveLocation(caller: CommandCaller, locationId: string, in
   const { result } = await command(
     caller,
     { name: 'inventory.locations.move', idempotencyKey, input: { locationId, ...input }, record: { type: 'Location', id: locationId, expectedVersion: input.version } },
-    async ({ tx, audit }) => {
+    async ({ tx, audit, emit }) => {
       await checkParent(tx, site, input.parentId, locationId)
       const row = await tx.location.update({ where: { id: locationId }, data: { parentId: input.parentId }, select: LOCATION_SELECT })
       audit({ recordType: 'Location', recordId: locationId, companyId: site.companyId, siteId: site.id, before: { parentId: before.parentId }, after: { parentId: row.parentId } })
+      locationChanged(emit, row, 'MOVED')
       return placed(tx, row)
     },
   )
@@ -235,7 +250,7 @@ export async function archiveLocation(caller: CommandCaller, locationId: string,
   const { result } = await command(
     caller,
     { name: 'inventory.locations.archive', idempotencyKey, input: { locationId, ...input }, record: { type: 'Location', id: locationId, expectedVersion: input.version } },
-    async ({ tx, audit }) => {
+    async ({ tx, audit, emit }) => {
       // The row is locked now (command()'s version bump): its status as it is.
       const { status } = await tx.location.findUniqueOrThrow({ where: { id: locationId }, select: { status: true } })
       const problems = archiveProblems({
@@ -246,6 +261,7 @@ export async function archiveLocation(caller: CommandCaller, locationId: string,
       if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
       const row = await tx.location.update({ where: { id: locationId }, data: { status: 'ARCHIVED' }, select: LOCATION_SELECT })
       audit({ recordType: 'Location', recordId: locationId, companyId: site.companyId, siteId: site.id, before: { status: before.status }, after: { status: row.status } })
+      locationChanged(emit, row, 'ARCHIVED')
       return placed(tx, row)
     },
   )
