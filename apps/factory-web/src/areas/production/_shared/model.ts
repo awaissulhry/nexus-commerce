@@ -142,7 +142,8 @@ export function progressPhrase(row: Pick<WorkOrderRow, 'progress' | 'pieces' | '
 
 // ---- the record --------------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['overview', 'materials', 'cutting', 'bundles', 'operations', 'quality', 'activity'] as const
+// B-W2a-72: 'labour' = Labour & cost (design production.workorders rec:labour), between Quality and Activity.
+export const RECORD_TABS = ['overview', 'materials', 'cutting', 'bundles', 'operations', 'quality', 'labour', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 export function tabOf(value: string | null | undefined): RecordTab {

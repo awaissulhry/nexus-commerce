@@ -134,6 +134,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/compliance/register': 'compliance.register.view', // GET /compliance/register
       '/finance/invoices': 'invoices.view', // GET /invoicing/invoices
       '/finance/payments': 'payments.view', // GET /payments
+      '/finance/costing': 'costing.view', // GET /costing/work-orders (B-W2a-72)
+      '/finance/margins': 'costing.view', // GET /costing/margins (B-W2a-72)
       '/finance/accounting': 'accounting.view', // GET /accounting/exports (B-W2a-51)
       '/finance/reports': 'inventory.stock.view', // GET /costing/valuation (B-W2a-51)
       '/finance/settings': 'invoices.view', // GET /invoicing/settings

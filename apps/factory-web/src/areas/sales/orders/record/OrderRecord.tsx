@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
+import { useOrderMargin } from './margin/use-margin'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { findStyles, getStyle, listVersions, type StyleDetail, type VersionsAnswer } from '../../quotes/api'
@@ -306,6 +307,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
       return { ...known, lines: [...known.lines, ...added], composer: COMPOSER_EMPTY }
     })
 
+  // B-W2a-72: the Margin tab reads the order's margin while it is open.
+  const margin = useOrderMargin(api, orderId, tab === 'margin', session.permissions, order.status === 'ready' ? order.value.version : null)
+
   const model: OrderRecordModel = {
     prefix,
     can,
@@ -334,6 +338,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     cancelCheck,
     closedLines,
     copied,
+    margin: margin.model,
   }
 
   const value = order.status === 'ready' ? order.value : null
@@ -344,6 +349,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       panels={value ? <RecordPanels record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName, emails: [] } : null} /> : null}
       actions={{
         onRetry: () => void load(),
+        onRetryMargin: margin.retry,
         onRetryPart: (which) => {
           if (which === 'cancelCheck') {
             setCancelCheck(PART_LOADING)

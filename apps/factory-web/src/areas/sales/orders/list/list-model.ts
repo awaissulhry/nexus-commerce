@@ -44,6 +44,8 @@ export interface OrdersListModel {
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
   /** B-W2a-50: the New order dialog, open; null: closed. */
   newOrder?: NewOrderDialogModel | null
+  /** B-W2a-72: each order's margin % as estimated now (undefined: still reading; null: not known); null: the column is not drawn. */
+  margins?: ReadonlyMap<string, string | null> | null
   /** Design cases: the starting selection, the focused row, the keys panel. */
   selected?: string[]
   focusRow?: number
