@@ -211,6 +211,9 @@ describe('a work order on hold (MES-008)', () => {
     expect(second.workOrdersHeld).toEqual([])
     const record = await as(qa1, 'GET', `/quality/holds/${first.hold.id}`)
     expect(record.workOrders).toEqual([expect.objectContaining({ id: A.wo1, status: 'ON_HOLD', heldFromStatus: wo1Status, heldByThis: true })])
+    // B-W2a-67: the work order's batch (the evidence trail) and the hold's site in words.
+    expect(record.workOrders[0]).toHaveProperty('batchNumber')
+    expect(record.hold.site).toMatchObject({ id: A.siteA1, code: expect.any(String) })
     expect(record.release.checks.find((check: Json) => check.key === 'NOT_PLACER')).toEqual({ key: 'NOT_PLACER', ok: false, words: 'You placed this hold - another person must release it.' })
     expect(record.release.releasable).toBe(false)
     const own = await release(qa1, first.hold.id, {}, 409)
@@ -290,9 +293,25 @@ describe('the list, the tiles and the record', () => {
     const [lot] = (await ok('viewer', 'GET', `/quality/holds?subjectId=${lining.id}`)).holds as Json[]
     expect(paths(await refused('placer', 'PATCH', `/quality/holds/${lot!.id}`, { version: lot!.version, expectedReleaseOn: '2020-01-01' }, 400))).toEqual(['body/expectedReleaseOn'])
     const { hold } = await ok('placer', 'PATCH', `/quality/holds/${lot!.id}`, { version: lot!.version, ownerId: qa2.id, note: 'Waiting for the supplier\'s report' })
-    expect(hold).toMatchObject({ ownerId: qa2.id, note: 'Waiting for the supplier\'s report', version: lot!.version + 1 })
+    expect(hold).toMatchObject({ ownerId: qa2.id, owner: { id: qa2.id }, note: 'Waiting for the supplier\'s report', version: lot!.version + 1 })
+    // B-W2a-67: the owner by name (an office user), as the Holds list shows it.
+    const [named] = await admin<{ displayName: string }>('SELECT "displayName" FROM "User" WHERE id = $1', [qa2.id])
+    expect(hold.owner.name).toBe(named!.displayName)
     expect((await events('quality.hold_changed')).at(-1)).toEqual({ holdId: lot!.id, fields: ['ownerId', 'note'] })
     expect((await refused('placer', 'PATCH', `/quality/holds/${lot!.id}`, { version: lot!.version, note: 'stale' }, 409)).code).toBe('conflict')
+  })
+})
+
+describe('the owner picker (B-W2a-67)', () => {
+  it('lists the active office people who see holds at the site, me first; only for whoever places holds there', async () => {
+    const answer = await as(qa1, 'GET', `/quality/holds/people?siteId=${A.siteA1}`)
+    expect(answer.people[0]).toMatchObject({ id: qa1.id, me: true })
+    expect(answer.people).toEqual(expect.arrayContaining([expect.objectContaining({ id: qa2.id, me: false })]))
+    expect(answer.people.every((person: Json) => typeof person.name === 'string' && person.name.length > 0)).toBe(true)
+    // Reading holds alone does not pick an owner; another company's site or an unknown one is not found.
+    expect((await refused('viewer', 'GET', `/quality/holds/people?siteId=${A.siteA1}`, undefined, 403)).code).toBe('forbidden')
+    expect((await refused('companyB', 'GET', `/quality/holds/people?siteId=${A.siteA1}`, undefined, 404)).code).toBe('not_found')
+    expect((await refused('placer', 'GET', `/quality/holds/people?siteId=${newId()}`, undefined, 404)).code).toBe('not_found')
   })
 })
 

@@ -1,0 +1,120 @@
+/* GarmentZoneMap (an area part of Quality): layout and the sketch's strokes, semantic tokens only (light and dark). */
+.fw-zone-map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-zone-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-12);
+}
+.fw-zone-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-4);
+  flex: 1 1 120px;
+  max-width: 180px;
+  min-width: 96px;
+}
+.fw-zone-map.is-compact .fw-zone-figure {
+  flex-basis: 84px;
+  max-width: 120px;
+  min-width: 72px;
+}
+.fw-zone-svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.fw-zone-shape {
+  fill: var(--nds-surface);
+  stroke: var(--nds-border-strong);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.fw-zone-shape[role='button'],
+.fw-zone-shape[aria-hidden='true'][data-zone] {
+  cursor: pointer;
+}
+.fw-zone-map:not(:has([role='button'])) .fw-zone-shape {
+  cursor: default;
+}
+.fw-zone-shape:hover {
+  fill: var(--nds-surface-hover);
+}
+.fw-zone-shape[data-picked='true'] {
+  fill: var(--nds-primary-soft);
+  stroke: var(--nds-primary);
+  stroke-width: 2.5;
+}
+.fw-zone-shape:focus {
+  outline: none;
+}
+.fw-zone-shape:focus-visible {
+  stroke: rgb(var(--nds-focus-rgb));
+  stroke-width: 3;
+  stroke-dasharray: 3 2;
+}
+.fw-zone-pin circle {
+  fill: var(--nds-primary);
+  stroke: var(--nds-surface);
+  stroke-width: 1.5;
+}
+.fw-zone-pin .fw-zone-pin-dot {
+  fill: var(--nds-surface);
+  stroke: none;
+}
+.fw-zone-elsewhere {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-zone-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: var(--nds-text-strong);
+  font: inherit;
+  font-size: var(--nds-font-size-sm);
+  cursor: pointer;
+}
+.fw-zone-chip.is-static {
+  cursor: default;
+}
+.fw-zone-chip[data-picked='true'] {
+  border-color: var(--nds-primary);
+  border-width: 2px;
+  background: var(--nds-primary-soft);
+}
+.fw-zone-chip:focus-visible {
+  outline: 2px solid rgb(var(--nds-focus-rgb));
+  outline-offset: 2px;
+}
+.fw-zone-picked {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+.fw-zone-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-zone-sub {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}

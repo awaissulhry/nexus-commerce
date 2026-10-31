@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { DEFECT_CLASSES, INSPECTION_RESULTS, INSPECTION_STATUSES } from '@nexus/factory-domain/quality/final/rules'
 import { CHECK_STATES, FOUR_EYES_RULES, RELEASE_CHECKS, REVERSAL_REASONS, SECOND_PERSON_REASONS, SERIALS_TO } from '@nexus/factory-domain/quality/release/rules'
+import { RETURN_CAUSES, RETURN_GRADES } from '@nexus/factory-domain/sales/returns/rules'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
+import { completeUpload, downloadLink, listFiles, requestUpload } from '../../../record-panels/api'
+import { putToStore, sha256Hex } from '../../../record-panels/store'
 
 /**
  * Every call of Inspections (SCR-075) and the inspection record (SCR-076), each answer checked against the shape the
@@ -13,6 +16,10 @@ import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 const status = z.enum(INSPECTION_STATUSES)
 const who = z.object({ kind: z.enum(['FLOOR', 'OFFICE']), workerId: z.string().nullable(), userId: z.string().nullable() })
 export type Who = z.infer<typeof who>
+
+/** W2a (B-W2a-67): who an inspection is assigned to (an office user by name; a worker named only inside one inspection). */
+const assigned = z.object({ kind: z.enum(['USER', 'WORKER']), userId: z.string().nullable(), workerId: z.string().nullable(), name: z.string().nullable() })
+export type Assigned = z.infer<typeof assigned>
 
 // ---- the list ------------------------------------------------------------------------------------------------------------------
 
@@ -36,6 +43,12 @@ export const inspectionRowSchema = z.object({
   toRelease: z.number(),
   onHold: z.boolean(),
   holdWords: z.string().nullable(),
+  // W2a (B-W2a-67): the assignee, the holds and NCRs from it, "failed - not decided", its version (inline assign).
+  assigned: assigned.nullable(),
+  holds: z.number(),
+  ncrs: z.number(),
+  undecided: z.boolean(),
+  version: z.number(),
   decidedAt: z.string().nullable(),
   createdAt: z.string(),
 })
@@ -45,6 +58,10 @@ export interface InspectionQuery {
   readonly status?: (typeof INSPECTION_STATUSES)[number] | null
   readonly onHold?: boolean
   readonly waitingRelease?: boolean
+  /** W2a: FAILED, the newest decided of its work order, with no hold and no NCR from it yet. */
+  readonly failedUndecided?: boolean
+  /** W2a: assigned to the caller. */
+  readonly mine?: boolean
   readonly workOrderId?: string | null
   readonly limit?: number
 }
@@ -56,6 +73,8 @@ export async function listInspections(api: ApiClient, query: InspectionQuery, si
       ...(query.status ? { status: query.status } : {}),
       ...(query.onHold ? { onHold: 'true' } : {}),
       ...(query.waitingRelease ? { waitingRelease: 'true' } : {}),
+      ...(query.failedUndecided ? { failedUndecided: 'true' } : {}),
+      ...(query.mine ? { assigned: 'me' } : {}),
       ...(query.workOrderId ? { workOrderId: query.workOrderId } : {}),
       limit: query.limit ?? 50,
     },
@@ -219,6 +238,9 @@ const defectSchema = z.object({
   id: z.string(),
   defectClass: z.enum(DEFECT_CLASSES),
   code: z.string(),
+  /** W2a: the library's defect it was picked from (null: typed, W1) and its garment zone. */
+  defectCodeId: z.string().nullable(),
+  zone: z.string().nullable(),
   description: z.string().nullable(),
   quantity: z.number(),
   workOrderSizeId: z.string().nullable(),
@@ -251,6 +273,7 @@ export const inspectionSchema = z.object({
   overridden: z.boolean(),
   overrideReason: z.string().nullable(),
   inspector: who,
+  assigned: assigned.nullable(),
   notMakerStatement: z.boolean(),
   decidedAt: z.string().nullable(),
   signatureSha256: z.string().nullable(),
@@ -293,8 +316,8 @@ export interface ChecklistAnswerBody {
   readonly note?: string | null
 }
 
-/** `POST /quality/inspections`: opens one on a work order's finished garments (it takes its INSPECTION number). */
-export async function openInspection(api: ApiClient, body: PlanBody & { workOrderId: string; note?: string | null }, key: string): Promise<Inspection> {
+/** `POST /quality/inspections`: opens one on a work order's finished garments (it takes its INSPECTION number); W2a: assigned at once. */
+export async function openInspection(api: ApiClient, body: PlanBody & { workOrderId: string; note?: string | null; assigneeId?: string | null; assigneeWorkerId?: string | null }, key: string): Promise<Inspection> {
   return (await api.post('/quality/inspections', { body, schema: inspectionAnswer, idempotencyKey: key })).inspection
 }
 
@@ -314,6 +337,9 @@ export interface DefectBody {
   readonly workOrderSizeId?: string | null
   readonly description?: string | null
   readonly note?: string | null
+  /** W2a: picked from the library (its code is `code`), and its garment zone. */
+  readonly defectCodeId?: string | null
+  readonly zone?: string | null
 }
 
 /** `PUT /quality/inspections/:id/defects`: the whole defect list (one line per class and code). */
@@ -420,4 +446,148 @@ export type PartyPick = z.infer<typeof partyPickSchema>
 export async function findCustomers(api: ApiClient, q: string, signal?: AbortSignal): Promise<PartyPick[]> {
   const answer = await api.get('/parties', { query: { q: q.trim() || undefined, role: 'CUSTOMER,BRAND', limit: 20 }, schema: z.object({ parties: z.array(partyPickSchema) }), signal })
   return answer.parties
+}
+
+// ---- W2a (B-W2a-67): assigning an inspector, the defect picker, photos, returns to inspect -----------------------------------------
+
+export const inspectorSchema = z.object({ kind: z.enum(['USER', 'WORKER']), id: z.string(), name: z.string(), me: z.boolean(), made: z.array(z.string()) })
+export type InspectorPick = z.infer<typeof inspectorSchema>
+export interface Inspectors {
+  readonly inspectors: readonly InspectorPick[]
+  /** The site's floor inspectors are listed (the caller sees the site's workers). */
+  readonly floorListed: boolean
+}
+
+/** `GET /quality/inspections/inspectors?siteId&workOrderIds` (quality.inspections.record): who may be assigned, with what they made. */
+export function listInspectors(api: ApiClient, siteId: string, workOrderIds: readonly string[], signal?: AbortSignal): Promise<Inspectors> {
+  return api.get('/quality/inspections/inspectors', {
+    query: { siteId, ...(workOrderIds.length ? { workOrderIds: [...new Set(workOrderIds)].join(',') } : {}) },
+    schema: z.object({ inspectors: z.array(inspectorSchema), floorListed: z.boolean() }),
+    signal,
+  })
+}
+
+export interface AssignBody {
+  readonly inspections: readonly { readonly id: string; readonly version: number }[]
+  readonly assigneeId: string | null
+  readonly assigneeWorkerId: string | null
+}
+
+/** `POST /quality/inspections/assign`: every inspection or none (409 `inspections/<i>` in words). */
+export async function assignInspections(api: ApiClient, body: AssignBody, key: string): Promise<{ id: string; version: number; assigned: Assigned | null }[]> {
+  return (await api.post('/quality/inspections/assign', { body, schema: z.object({ inspections: z.array(z.object({ id: z.string(), version: z.number(), assigned: assigned.nullable() })) }), idempotencyKey: key })).inspections
+}
+
+export const pickedDefectSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  category: z.object({ id: z.string(), code: z.string(), labelIt: z.string(), labelEn: z.string() }),
+  labelIt: z.string(),
+  labelEn: z.string(),
+  icon: z.string().nullable(),
+  colour: z.string().nullable(),
+  pictureFileId: z.string().nullable(),
+  severity: z.enum(DEFECT_CLASSES),
+  zone: z.string().nullable(),
+  needsDetail: z.boolean(),
+})
+export type PickedDefect = z.infer<typeof pickedDefectSchema>
+
+/** `GET /quality/defects/picker?stage=FINAL` (any session): the active defects of the library in tile order. */
+export async function readDefectPicker(api: ApiClient, signal?: AbortSignal): Promise<PickedDefect[]> {
+  return (await api.get('/quality/defects/picker', { query: { stage: 'FINAL' }, schema: z.object({ defects: z.array(pickedDefectSchema) }), signal })).defects
+}
+
+// ---- returns waiting for their inspection (the New inspection's Return kind; B-W2a-43's routes) -------------------------------------
+
+const returnPickSchema = z.object({
+  id: z.string(),
+  number: z.string(),
+  siteId: z.string(),
+  site: z.object({ id: z.string(), code: z.string() }).nullable(),
+  party: z.object({ id: z.string(), code: z.string(), legalName: z.string() }).nullable(),
+  units: z.number(),
+  receivedUnits: z.number(),
+  receivedAt: z.string().nullable(),
+})
+export type ReturnPick = z.infer<typeof returnPickSchema>
+
+/** `GET /sales/returns?view=toInspect` (sales.returns.view): returns received and waiting for their inspection. */
+export async function listReturnsToInspect(api: ApiClient, signal?: AbortSignal): Promise<ReturnPick[]> {
+  return (await api.get('/sales/returns', { query: { view: 'toInspect' }, schema: z.object({ returns: z.array(returnPickSchema) }), signal })).returns
+}
+
+const returnLineSchema = z.object({
+  id: z.string(),
+  seq: z.number(),
+  description: z.string(),
+  serial: z.string().nullable(),
+  batchNumber: z.string().nullable(),
+  quantity: z.number(),
+  receivedQuantity: z.number(),
+  safety: z.boolean(),
+  grade: z.enum(RETURN_GRADES).nullable(),
+  cause: z.enum(RETURN_CAUSES).nullable(),
+  conditionNote: z.string().nullable(),
+})
+export type ReturnLine = z.infer<typeof returnLineSchema>
+const returnRecordSchema = z.object({ return: z.object({ id: z.string(), number: z.string(), status: z.string(), version: z.number(), lines: z.array(returnLineSchema) }) })
+export type ReturnRecord = z.infer<typeof returnRecordSchema>['return']
+
+/** `GET /sales/returns/:id` (sales.returns.view): its lines with what was received and graded. */
+export async function getReturn(api: ApiClient, returnId: string, signal?: AbortSignal): Promise<ReturnRecord> {
+  return (await api.get(`/sales/returns/${encodeURIComponent(returnId)}`, { schema: returnRecordSchema, signal })).return
+}
+
+export interface GradeBody {
+  readonly version: number
+  readonly lines: readonly { readonly lineId: string; readonly grade: (typeof RETURN_GRADES)[number]; readonly cause?: (typeof RETURN_CAUSES)[number] | null; readonly conditionNote?: string | null }[]
+}
+
+/** `POST /sales/returns/:id/grades` (sales.returns.inspect): the return's inspection, per line. */
+export async function gradeReturn(api: ApiClient, returnId: string, body: GradeBody, key: string): Promise<void> {
+  await api.post(`/sales/returns/${encodeURIComponent(returnId)}/grades`, { body, schema: z.object({}).passthrough(), idempotencyKey: key })
+}
+
+// ---- photos of the defects (files of the inspection, kind PHOTO, named after the defect's code) ---------------------------------------
+
+/** The file name a defect's photo is kept under: `defect-<CODE>-<n>.jpg` (the inspection's files; the code finds them). */
+export const defectPhotoName = (code: string, n: number): string => `defect-${code}-${n}.jpg`
+export const isPhotoOf = (code: string, name: string): boolean => name.startsWith(`defect-${code}-`)
+
+export interface InspectionPhoto {
+  readonly id: string
+  readonly name: string
+  readonly createdAt: string
+}
+
+/** `GET /files?recordType=Inspection&recordId` (files.read): the inspection's photos, newest first. */
+export async function listInspectionPhotos(api: ApiClient, inspectionId: string, signal?: AbortSignal): Promise<InspectionPhoto[]> {
+  const { files } = await listFiles(api, { type: 'Inspection', id: inspectionId }, signal)
+  return files.filter((file) => file.kind === 'PHOTO' && file.status === 'AVAILABLE').map((file) => ({ id: file.id, name: file.originalName, createdAt: file.createdAt }))
+}
+
+/** A defect's photo (the marked copy people see): announce → the bytes to the store → complete (files.upload). */
+export async function uploadDefectPhoto(api: ApiClient, inspection: { id: string; companyId: string }, file: Blob, name: string): Promise<void> {
+  const bytes = await file.arrayBuffer()
+  const { file: stored, upload } = await requestUpload(api, {
+    companyId: inspection.companyId,
+    record: { type: 'Inspection', id: inspection.id },
+    kind: 'PHOTO',
+    name,
+    contentType: file.type || 'image/jpeg',
+    sizeBytes: bytes.byteLength,
+    sha256: await sha256Hex(bytes),
+    visibility: ['OFFICE'],
+    floorSiteId: null,
+    partyId: null,
+  })
+  await putToStore(upload, bytes)
+  await completeUpload(api, stored.id)
+}
+
+/** A photo's address for an <img> (a presigned GET lives 60 seconds; a same-origin path goes through this app's /api). */
+export async function photoAddress(api: ApiClient, fileId: string): Promise<string> {
+  const { download } = await downloadLink(api, fileId)
+  return download.url.startsWith('/') && !download.url.startsWith('//') ? `/api${download.url}` : download.url
 }

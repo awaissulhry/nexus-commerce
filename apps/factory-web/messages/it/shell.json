@@ -84,7 +84,10 @@
     "quality": {
       "area": "Qualità",
       "main": "Principali",
-      "inspections": "Ispezioni"
+      "inspections": "Ispezioni",
+      "holds": "Blocchi",
+      "settings": "Impostazioni",
+      "defects": "Difetti e destinazioni"
     },
     "compliance": {
       "area": "Conformità",

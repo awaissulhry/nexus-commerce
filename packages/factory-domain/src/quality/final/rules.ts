@@ -1,5 +1,6 @@
 import type { Issue } from '../../core/errors'
 import { Dec } from '../../tax/decimal'
+import { GARMENT_ZONES } from '../defects/rules'
 
 /**
  * The final inspection of a work order's finished garments (B-W1-45; QHS-013, QHS-050, QHS-058; A1 §2.5 "Final release";
@@ -64,6 +65,9 @@ export interface ChecklistAnswer {
   readonly note?: string | null | undefined
 }
 
+/** The zone ids a defect may be placed at (factory-domain quality/defects GARMENT_ZONES). */
+const GARMENT_ZONE_IDS: ReadonlySet<string> = new Set(GARMENT_ZONES.map((zone) => zone.id))
+
 export interface DefectLine {
   readonly defectClass: DefectClass
   /** As the defect list names it ("STITCH-SKIP"): capitals, digits and dashes. */
@@ -72,6 +76,9 @@ export interface DefectLine {
   readonly workOrderSizeId?: string | null | undefined
   readonly description?: string | null | undefined
   readonly note?: string | null | undefined
+  /** W2a (B-W2a-67): the library's defect it was picked from (its code is `code`), and where on the garment (a GARMENT_ZONES id). */
+  readonly defectCodeId?: string | null | undefined
+  readonly zone?: string | null | undefined
 }
 
 export interface SamplingPlan {
@@ -185,6 +192,7 @@ export function defectProblems(lines: readonly DefectLine[], context: { readonly
     if (!isWhole(line.quantity, 1)) problems.push(issue(`${at}/quantity`, 'A defect is found on at least one garment.'))
     else if (line.quantity > context.sampleSize) problems.push(issue(`${at}/quantity`, `At most the sample (${context.sampleSize}).`))
     if (line.workOrderSizeId && !context.cellIds.has(line.workOrderSizeId)) problems.push(issue(`${at}/workOrderSizeId`, 'Not a cell of this work order.'))
+    if (line.zone && !GARMENT_ZONE_IDS.has(line.zone)) problems.push(issue(`${at}/zone`, 'Not a zone of the garment map.'))
     for (const field of ['description', 'note'] as const) {
       if ((line[field]?.trim().length ?? 0) > NOTE_MAX) problems.push(issue(`${at}/${field}`, `At most ${NOTE_MAX} characters.`))
     }

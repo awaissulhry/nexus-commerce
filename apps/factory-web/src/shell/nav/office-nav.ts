@@ -158,6 +158,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/work-orders/[id]',
   '/quality/inspections',
   '/quality/inspections/[id]',
+  // B-W2a-67: Quality › Holds (SCR-078; a hold opens in its DetailModal, its tag prints in a tab) and Defects & dispositions (SCR-079).
+  '/quality/holds',
+  '/quality/holds/[id]/tag',
+  '/quality/defects',
   '/compliance/certificates',
   '/compliance/certificates/[id]',
   '/compliance/labels',

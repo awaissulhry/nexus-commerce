@@ -1,17 +1,25 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { X } from 'lucide-react'
 import { Banner, Field, Listbox, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Kbd, RadioCard, Textarea } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, Kbd, RadioCard, Select, Tag, Textarea } from '@nexus/ui/primitives'
 import { REVERSAL_REASONS } from '@nexus/factory-domain/quality/release/rules'
+import { RETURN_CAUSES, RETURN_GRADES } from '@nexus/factory-domain/sales/returns/rules'
 import { useT } from '../../../../lib/i18n/provider'
+import { recordAddress } from '../../../../lib/records/record-links'
+import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import { dash, Facts } from '../../_shared/parts'
-import type { Read } from '../../_shared/model'
-import type { PartyPick, ReleaseDetail, ReleaseRule, WorkOrderCells, WorkOrderPick } from '../api'
+import type { QualityCan, Read } from '../../_shared/model'
+import type { Inspectors, PartyPick, ReleaseDetail, ReleaseRule, ReturnPick, ReturnRecord, WorkOrderCells, WorkOrderPick } from '../api'
 import {
   finishedOf,
   impactLines,
+  inspectorHeld,
+  kindHeld,
+  NEW_KINDS,
+  returnProblems,
   isSerialRelease,
   newProblems,
   partyName,
@@ -22,6 +30,7 @@ import {
   ruleProblems,
   workOrderWords,
   type NewDraft,
+  type ReturnDraft,
   type ReverseDraft,
   type RuleDraft,
 } from '../model'
@@ -68,9 +77,19 @@ export function NewInspectionModal({
   cells,
   busy,
   problem,
+  lines,
+  can,
+  prefix,
+  people,
+  returns,
+  returnRecord,
+  returnDraft,
   onDraft,
   onPick,
   onCreate,
+  onPickReturn,
+  onReturnDraft,
+  onGradeReturn,
   onClose,
 }: {
   open: boolean
@@ -79,9 +98,21 @@ export function NewInspectionModal({
   cells: Read<WorkOrderCells> | null
   busy?: boolean
   problem?: string | null
+  lines?: readonly string[]
+  can: QualityCan
+  prefix: string
+  /** W2a: the inspectors of the picked work order's site (Inspector, optional). */
+  people: Read<Inspectors> | null
+  /** W2a: the Return kind — returns waiting, the picked one, its grades. */
+  returns: Read<readonly ReturnPick[]> | null
+  returnRecord: Read<ReturnRecord> | null
+  returnDraft: ReturnDraft
   onDraft: (draft: NewDraft) => void
   onPick: (workOrderId: string) => void
   onCreate: () => void
+  onPickReturn: (returnId: string) => void
+  onReturnDraft: (draft: ReturnDraft) => void
+  onGradeReturn: () => void
   onClose: () => void
 }) {
   const t = useT('quality')
@@ -90,16 +121,31 @@ export function NewInspectionModal({
     if (open) setTried(false)
   }, [open])
   const finished = finishedOf(cells?.value ?? null)
-  const problems = newProblems(draft, finished)
-  const held = busy ? t('common.working') : problems.length > 0 ? t(problems[0]!) : null
+  const kindReason = kindHeld(draft.kind, can)
+  const pickedPerson = people?.value?.inspectors.find((person) => `${person.kind}:${person.id}` === draft.assignee) ?? null
+  const personHeld = pickedPerson ? inspectorHeld(pickedPerson) : null
+  const problems = draft.kind === 'FINAL' ? newProblems(draft, finished) : draft.kind === 'RETURN' ? returnProblems(returnDraft, returnRecord?.value ?? null) : []
+  const held = busy
+    ? t('common.working')
+    : kindReason
+      ? t(kindReason)
+      : draft.kind === 'LOT'
+        ? t('new.kind.lotElsewhere')
+        : personHeld
+          ? t(personHeld.key, personHeld.params)
+          : problems.length > 0
+            ? t(problems[0]!)
+            : null
   const submit = () => {
     setTried(true)
-    if (!held) onCreate()
+    if (held) return
+    if (draft.kind === 'RETURN') onGradeReturn()
+    else onCreate()
   }
   useSubmitKey(open, submit)
   const set = (change: Partial<NewDraft>) => onDraft({ ...draft, ...change })
   const options = (workOrders.value ?? []).map((wo) => ({ value: wo.id, label: workOrderWords(wo), note: t(`woStatus.${wo.status}`, { site: wo.siteCode }) }))
-  const field = (key: keyof NewDraft, label: string, hint?: string, inputMode: 'numeric' | 'decimal' | 'text' = 'numeric') => (
+  const field = (key: 'lotSize' | 'sampleSize' | 'inspectionLevel' | 'aqlMajor' | 'aqlMinor' | 'acceptMajor' | 'acceptMinor', label: string, hint?: string, inputMode: 'numeric' | 'decimal' | 'text' = 'numeric') => (
     <Field label={label} hint={hint} required>
       <Input size="sm" inputMode={inputMode} value={draft[key] ?? ''} onChange={(event) => set({ [key]: event.target.value } as Partial<NewDraft>)} />
     </Field>
@@ -120,57 +166,193 @@ export function NewInspectionModal({
           <span className="grow" />
           <Button onClick={onClose}>{t('common.cancel')}</Button>
           <Button variant="primary" onClick={submit} heldReason={held}>
-            {t('new.create')}
+            {draft.kind === 'RETURN' ? t('new.return.record') : t('new.create')}
           </Button>
         </>
       }
     >
       <div className="fw-q-form">
-        {workOrders.problem && <Banner tone="danger" title={t('new.workOrdersFailed')}>{t(workOrders.problem)}</Banner>}
-        <Field label={t('new.workOrder')} hint={t('new.workOrderHint')} required>
-          <Listbox
-            size="sm"
-            options={options}
-            value={draft.workOrderId ?? undefined}
-            onChange={onPick}
-            placeholder={workOrders.value === null && !workOrders.problem ? t('common.loading') : t('new.workOrderPick')}
-            searchable
-            searchPlaceholder={t('new.workOrderSearch')}
-            ariaLabel={t('new.workOrder')}
-          />
-        </Field>
-        {workOrders.value?.length === 0 && <p className="fw-q-hint">{t('new.noWorkOrder')}</p>}
-        {draft.workOrderId && cells && (
-          <div className="fw-q-hint" role="status">
-            {cells.problem
-              ? t(cells.problem)
-              : cells.value === null
-                ? t('common.loading')
-                : finished === null
-                  ? t('new.finishedUnknown', { style: `${cells.value.style.code} ${cells.value.style.name}` })
-                  : t('new.finished', { count: finished, pieces: cells.value.pieces, style: `${cells.value.style.code} ${cells.value.style.name}` })}
-          </div>
+        <fieldset className="fw-q-choices fw-q-kinds">
+          <legend>
+            <strong>{t('new.kind.label')}</strong>
+          </legend>
+          {NEW_KINDS.map((kind) => {
+            const reason = kindHeld(kind, can)
+            return (
+              <RadioCard
+                key={kind}
+                name="new-kind"
+                checked={draft.kind === kind}
+                selected={draft.kind === kind}
+                disabled={kind === 'INLINE'}
+                onChange={() => set({ kind })}
+                title={t(`new.kind.${kind}`)}
+                description={reason && kind !== 'FINAL' ? t(reason) : t(`new.kind.${kind}Hint`)}
+              />
+            )
+          })}
+        </fieldset>
+
+        {draft.kind === 'LOT' && (
+          <Banner tone="info" title={t('new.kind.lotElsewhere')}>
+            <Link className="fw-q-link" href={`${prefix}/compliance/tests?view=waiting`}>
+              {t('new.kind.lotOpen')}
+            </Link>
+          </Banner>
         )}
-        <div className="fw-q-form-three">
-          {field('lotSize', t('new.lotSize'), t('new.lotSizeHint'))}
-          {field('sampleSize', t('new.sampleSize'), t('new.sampleSizeHint'))}
-          {field('inspectionLevel', t('new.level'), t('new.levelHint'), 'text')}
-        </div>
-        <div className="fw-q-form-two">
-          {field('aqlMajor', t('new.aqlMajor'), t('new.aqlHint'), 'decimal')}
-          {field('acceptMajor', t('new.acceptMajor'), t('new.acceptHint'))}
-          {field('aqlMinor', t('new.aqlMinor'), t('new.aqlHint'), 'decimal')}
-          {field('acceptMinor', t('new.acceptMinor'), t('new.acceptHint'))}
-        </div>
-        <p className="fw-q-hint">{t('new.tablesLater')}</p>
-        <Field label={t('new.note')}>
-          <Textarea value={draft.note} onChange={(event) => set({ note: event.target.value })} rows={2} />
-        </Field>
-        <p className="fw-q-hint">{t('new.numberWords')}</p>
+
+        {draft.kind === 'RETURN' && (
+          <ReturnPanel returns={returns} record={returnRecord} draft={returnDraft} prefix={prefix} onPick={onPickReturn} onDraft={onReturnDraft} />
+        )}
+
+        {draft.kind === 'FINAL' && (
+          <>
+            {workOrders.problem && <Banner tone="danger" title={t('new.workOrdersFailed')}>{t(workOrders.problem)}</Banner>}
+            <Field label={t('new.workOrder')} hint={t('new.workOrderHint')} required>
+              <Listbox
+                size="sm"
+                options={options}
+                value={draft.workOrderId ?? undefined}
+                onChange={onPick}
+                placeholder={workOrders.value === null && !workOrders.problem ? t('common.loading') : t('new.workOrderPick')}
+                searchable
+                searchPlaceholder={t('new.workOrderSearch')}
+                ariaLabel={t('new.workOrder')}
+              />
+            </Field>
+            {workOrders.value?.length === 0 && <p className="fw-q-hint">{t('new.noWorkOrder')}</p>}
+            {draft.workOrderId && cells && (
+              <div className="fw-q-hint" role="status">
+                {cells.problem
+                  ? t(cells.problem)
+                  : cells.value === null
+                    ? t('common.loading')
+                    : finished === null
+                      ? t('new.finishedUnknown', { style: `${cells.value.style.code} ${cells.value.style.name}` })
+                      : t('new.finished', { count: finished, pieces: cells.value.pieces, style: `${cells.value.style.code} ${cells.value.style.name}` })}
+              </div>
+            )}
+            <div className="fw-q-form-three">
+              {field('lotSize', t('new.lotSize'), t('new.lotSizeHint'))}
+              {field('sampleSize', t('new.sampleSize'), t('new.sampleSizeHint'))}
+              {field('inspectionLevel', t('new.level'), t('new.levelHint'), 'text')}
+            </div>
+            <div className="fw-q-form-two">
+              {field('aqlMajor', t('new.aqlMajor'), t('new.aqlHint'), 'decimal')}
+              {field('acceptMajor', t('new.acceptMajor'), t('new.acceptHint'))}
+              {field('aqlMinor', t('new.aqlMinor'), t('new.aqlHint'), 'decimal')}
+              {field('acceptMinor', t('new.acceptMinor'), t('new.acceptHint'))}
+            </div>
+            <p className="fw-q-hint">{t('new.tablesLater')}</p>
+            <Field label={t('new.inspector')} hint={t('new.inspectorHint')}>
+              {!draft.workOrderId ? (
+                <p className="fw-q-hint">{t('new.inspectorAfterPick')}</p>
+              ) : people?.problem ? (
+                <p className="fw-q-hint">{t(people.problem)}</p>
+              ) : !people?.value ? (
+                <p className="fw-q-hint">{t('common.loading')}</p>
+              ) : (
+                <Select size="sm" aria-label={t('new.inspector')} value={draft.assignee} onChange={(event) => set({ assignee: event.target.value })}>
+                  <option value="">{t('new.inspectorMe')}</option>
+                  {people.value.inspectors
+                    .filter((person) => !person.me)
+                    .map((person) => (
+                      <option key={`${person.kind}:${person.id}`} value={`${person.kind}:${person.id}`} disabled={person.made.length > 0}>
+                        {person.kind === 'WORKER' ? t('assign.benchNamed', { name: person.name }) : person.name}
+                        {person.made.length > 0 ? ` — ${t('assign.made', { orders: person.made.join(', ') })}` : ''}
+                      </option>
+                    ))}
+                </Select>
+              )}
+            </Field>
+            <Field label={t('new.note')}>
+              <Textarea value={draft.note} onChange={(event) => set({ note: event.target.value })} rows={2} />
+            </Field>
+            <p className="fw-q-hint">{t('new.numberWords')}</p>
+          </>
+        )}
         {tried && <Problems keys={problems} />}
-        {problem && <Banner tone="danger" title={t(problem)} />}
+        {problem && <Problems keys={[problem]} lines={lines} title={t('new.refusedTitle')} />}
       </div>
     </Modal>
+  )
+}
+
+/** New inspection › Return (design qi-new "Return (W2a)"): a return received and waiting for its inspection, graded per line. */
+function ReturnPanel({ returns, record, draft, prefix, onPick, onDraft }: { returns: Read<readonly ReturnPick[]> | null; record: Read<ReturnRecord> | null; draft: ReturnDraft; prefix: string; onPick: (returnId: string) => void; onDraft: (draft: ReturnDraft) => void }) {
+  const t = useT('quality')
+  const options = (returns?.value ?? []).map((entry) => ({ value: entry.id, label: `${entry.number} · ${entry.party?.legalName ?? ''}`, note: t('new.return.received', { received: entry.receivedUnits, units: entry.units, site: entry.site?.code ?? '' }) }))
+  const lines = record?.value?.lines.filter((line) => line.receivedQuantity > 0) ?? []
+  const setLine = (lineId: string, change: Partial<{ grade: string; cause: string; note: string }>) =>
+    onDraft({ ...draft, lines: { ...draft.lines, [lineId]: { ...(draft.lines[lineId] ?? { grade: '', cause: '', note: '' }), ...change } } })
+  return (
+    <>
+      {returns?.problem ? (
+        <Banner tone="danger" title={t('new.return.failed')}>
+          {t(returns.problem)}
+        </Banner>
+      ) : (
+        <Field label={t('new.return.pick')} hint={t('new.return.pickHint')} required>
+          <Listbox size="sm" options={options} value={draft.returnId ?? undefined} onChange={onPick} placeholder={returns?.value ? t('new.return.pickPlaceholder') : t('common.loading')} searchable ariaLabel={t('new.return.pick')} />
+        </Field>
+      )}
+      {returns?.value?.length === 0 && <p className="fw-q-hint">{t('new.return.none')}</p>}
+      {record?.problem && <p className="fw-q-hint">{t(record.problem)}</p>}
+      {draft.returnId && record?.value === null && !record?.problem && <p className="fw-q-hint">{t('common.loading')}</p>}
+      {lines.length > 0 && (
+        <ul className="fw-q-return-lines">
+          {lines.map((line) => {
+            const value = draft.lines[line.id] ?? { grade: '', cause: '', note: '' }
+            return (
+              <li key={line.id} className="fw-q-return-line">
+                <span className="fw-q-cell">
+                  <strong>{line.description}</strong>
+                  <span className="fw-q-hint">
+                    {t('new.return.line', { received: line.receivedQuantity, quantity: line.quantity })}
+                    {line.serial ? ` · ${line.serial}` : line.batchNumber ? ` · ${line.batchNumber}` : ''}
+                  </span>
+                  {line.safety && <Tag tone="warning">{t('new.return.safety')}</Tag>}
+                </span>
+                <div className="fw-q-form-three">
+                  <Field label={t('new.return.grade')} required>
+                    <Select size="sm" value={value.grade} onChange={(event) => setLine(line.id, { grade: event.target.value })}>
+                      <option value="">{t('new.return.gradePick')}</option>
+                      {RETURN_GRADES.map((grade) => (
+                        <option key={grade} value={grade}>
+                          {t(`new.return.grades.${grade}`)}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label={t('new.return.cause')}>
+                    <Select size="sm" value={value.cause} onChange={(event) => setLine(line.id, { cause: event.target.value })}>
+                      <option value="">{t('new.return.causeNone')}</option>
+                      {RETURN_CAUSES.map((cause) => (
+                        <option key={cause} value={cause}>
+                          {t(`new.return.causes.${cause}`)}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label={t('new.return.note')}>
+                    <Input size="sm" value={value.note} onChange={(event) => setLine(line.id, { note: event.target.value })} />
+                  </Field>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {record?.value && lines.length === 0 && <p className="fw-q-hint">{t('new.return.problem.nothingReceived')}</p>}
+      {record?.value && (
+        <p className="fw-q-hint">
+          {t('new.return.after')}{' '}
+          <Link className="fw-q-link" href={`${prefix}${recordAddress({ type: 'ReturnAuthorisation', id: record.value.id, label: record.value.number }, OFFICE_PAGES)}`}>
+            {t('new.return.openReturn', { number: record.value.number })}
+          </Link>
+        </p>
+      )}
+    </>
   )
 }
 

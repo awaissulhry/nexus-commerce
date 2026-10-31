@@ -310,4 +310,12 @@ export const events = [
     payload: z.strictObject({ ncrId: z.uuid(), number: z.string(), holdId: z.uuid(), workOrdersLifted: z.array(z.uuid()) }),
     live: { permission: 'quality.ncr.view', fields: ['ncrId', 'number', 'holdId'] },
   }),
+  // B-W2a-67 (design quality.inspections qi-assign): the office assigned an open inspection to its inspector (or cleared it).
+  defineEvent({
+    type: 'quality.inspection_assigned',
+    context: 'quality',
+    description: 'An open final inspection was assigned to its inspector before it is decided, or its assignment was cleared (no name: who is in the inspection).',
+    payload: z.strictObject({ inspectionId: z.uuid(), workOrderId: z.uuid(), number: z.string(), assigned: z.boolean() }),
+    live: { permission: 'quality.inspections.view', fields: ['inspectionId', 'workOrderId', 'number'] },
+  }),
 ] as const

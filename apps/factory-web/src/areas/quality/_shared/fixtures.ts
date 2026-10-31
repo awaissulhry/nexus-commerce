@@ -54,8 +54,14 @@ export const ROLE_PERMISSIONS = {
     'parties.view',
     'files.read',
     'threads.read',
+    // B-W2a-67: the read-only template reads what is on hold and the defect library.
+    'quality.holds.view',
+    'quality.defects.view',
   ],
   sales: templatePermissions('sales'),
+  // B-W2a-67 (Holds): warehouse reads what is on hold, a floor supervisor reads and places, only quality releases.
+  warehouse: templatePermissions('warehouse'),
+  supervisor: templatePermissions('floor_supervisor'),
 } as const
 
 export type RoleCase = keyof typeof ROLE_PERMISSIONS

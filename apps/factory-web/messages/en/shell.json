@@ -84,7 +84,10 @@
     "quality": {
       "area": "Quality",
       "main": "Main",
-      "inspections": "Inspections"
+      "inspections": "Inspections",
+      "holds": "Holds",
+      "settings": "Settings",
+      "defects": "Defects & dispositions"
     },
     "compliance": {
       "area": "Compliance",

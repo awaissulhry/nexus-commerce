@@ -10,35 +10,49 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { isStepUpCancelled, liveMatches, useLive, useRecordTab, useStepUp } from '../../_shared/hooks'
-import { failedRead, hasIssue, problemKey, qualityCan, ready, reading, refusalLines, type Notice, type Read } from '../../_shared/model'
+import { failedRead, hasIssue, newNcrAddress, problemKey, qualityCan, ready, reading, refusalLines, type Notice, type Read } from '../../_shared/model'
 import { QualityMessages, RecordProblem, RecordSkeleton } from '../../_shared/parts'
+import { PlaceHold, type PlaceHoldPrefill } from '../../holds/place/PlaceHold'
 import {
+  assignInspections,
   cancelInspection,
   decideInspection,
   getFinalState,
   getInspection,
   getWorkOrderCells,
+  defectPhotoName,
+  listInspectionPhotos,
+  listInspectors,
   listReleases,
   patchInspection,
+  photoAddress,
   putDefects,
+  readDefectPicker,
   releaseGarments,
+  uploadDefectPhoto,
+  type DefectBody,
   type FinalState,
+  type InspectionPhoto,
   type InspectionRead,
   type Release,
 } from '../api'
 import {
   answer,
+  assigneeBody,
+  assigneeValue,
   checklistBody,
   checklistRows,
-  defectsBody,
-  defectsDraftOf,
+  defectLineProblems,
+  defectLinesOf,
+  photosOf,
   planBody,
   planDraftOf,
   RECORD_TABS,
   releaseDraftOf,
   signDraftOf,
+  type AssignState,
   type ChecklistRow,
-  type DefectDraft,
+  type DefectsTabModel,
   type PlanDraft,
   type RecordDialog,
   type ReleaseDraft,
@@ -64,6 +78,8 @@ export function InspectionRecord({ inspectionId }: { inspectionId: string }) {
 
 const DECISION_EVENTS = ['quality.inspection_', 'quality.garments_released', 'quality.release_reversed', 'quality.release_rule_changed'] as const
 
+const NO_DEFECTS: DefectsTabModel = { lines: [], saving: 'idle', library: reading(), photos: reading(), photoSrc: {} }
+
 function Container({ inspectionId }: { inspectionId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -88,8 +104,12 @@ function Container({ inspectionId }: { inspectionId: string }) {
   const [signDraft, setSignDraft] = useState<SignDraft | undefined>(undefined)
   const [releaseDraft, setReleaseDraft] = useState<ReleaseDraft | undefined>(undefined)
   const [planDraft, setPlanDraft] = useState<PlanDraft | undefined>(undefined)
-  const [defectsDraft, setDefectsDraft] = useState<DefectDraft[] | undefined>(undefined)
   const [cancelReason, setCancelReason] = useState('')
+  // W2a (B-W2a-67): Defects & photos, Assign inspector, Place hold, Create NCR (opens B-W2a-68's New NCR).
+  const [defects, setDefects] = useState<DefectsTabModel>(NO_DEFECTS)
+  const [assign, setAssign] = useState<AssignState | null>(null)
+  const [hold, setHold] = useState<PlaceHoldPrefill | null>(null)
+  const assignKey = useRef<string | null>(null)
   const [stale, setStale] = useState<string | null>(null)
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
   const version = useRef<number | null>(null)
@@ -104,6 +124,7 @@ function Container({ inspectionId }: { inspectionId: string }) {
       const answerRead = await getInspection(api, inspectionId)
       setRead(ready(answerRead))
       setChecklist(checklistRows(answerRead.inspection))
+      setDefects((current) => ({ ...current, lines: defectLinesOf(answerRead.inspection), saving: current.saving === 'saving' ? 'saving' : 'idle' }))
       version.current = answerRead.inspection.version
       setAsOf(new Date().toISOString())
       setStale(null)
@@ -127,6 +148,33 @@ function Container({ inspectionId }: { inspectionId: string }) {
   useEffect(() => {
     void load()
   }, [load])
+
+  // ---- Defects & photos: the library's picker and the inspection's photos, read when the tab opens ----
+  const loadPhotos = useCallback(async () => {
+    if (!can.filesRead) {
+      setDefects((current) => ({ ...current, photos: failedRead('problem.forbidden') }))
+      return
+    }
+    try {
+      const photos = await listInspectionPhotos(api, inspectionId)
+      setDefects((current) => ({ ...current, photos: ready(photos) }))
+      for (const photo of photos) {
+        photoAddress(api, photo.id)
+          .then((src) => setDefects((current) => ({ ...current, photoSrc: { ...current.photoSrc, [photo.id]: src } })))
+          .catch(() => undefined)
+      }
+    } catch (error) {
+      setDefects((current) => ({ ...current, photos: failedRead(problemKey(error)) }))
+    }
+  }, [api, can.filesRead, inspectionId])
+
+  useEffect(() => {
+    if (tab !== 'defects') return
+    readDefectPicker(api)
+      .then((library) => setDefects((current) => ({ ...current, library: ready(library) })))
+      .catch((error: unknown) => setDefects((current) => ({ ...current, library: failedRead(problemKey(error)) })))
+    void loadPhotos()
+  }, [api, loadPhotos, tab])
 
   const live = useLive(
     (change) => {
@@ -194,7 +242,6 @@ function Container({ inspectionId }: { inspectionId: string }) {
       releaseKey.current = null
     }
     if (next?.kind === 'plan' && inspection) setPlanDraft(planDraftOf(inspection))
-    if (next?.kind === 'defects' && inspection) setDefectsDraft(defectsDraftOf(inspection))
     if (next?.kind === 'cancel') setCancelReason('')
     setDialog(next)
     if (next === null && stale) void load()
@@ -296,23 +343,85 @@ function Container({ inspectionId }: { inspectionId: string }) {
     }
   }, [api, inspectionId, load, planDraft])
 
-  const saveDefects = useCallback(async () => {
-    if (!defectsDraft || version.current === null) return
-    setBusy(true)
-    setDialogProblem(null)
+  /** One change of the defects: the whole list saved (PUT) with the version read; the answer is what the screen shows. */
+  const saveLines = useCallback(
+    async (next: readonly DefectBody[]) => {
+      const inspection = read.value?.inspection
+      if (!inspection || version.current === null) return
+      const problems = defectLineProblems(next, inspection.plan.sampleSize)
+      if (problems.length > 0) {
+        setDefects((current) => ({ ...current, problem: problems[0]!, lines_refused: [] }))
+        return
+      }
+      setDefects((current) => ({ ...current, lines: [...next], saving: 'saving', problem: null, lines_refused: [] }))
+      try {
+        const saved = await putDefects(api, inspectionId, { version: version.current, defects: next })
+        version.current = saved.version
+        setRead((current) => (current.value ? ready({ ...current.value, inspection: saved }) : current))
+        setDefects((current) => ({ ...current, lines: defectLinesOf(saved), saving: 'saved' }))
+      } catch (error) {
+        setDefects((current) => ({
+          ...current,
+          lines: defectLinesOf(inspection),
+          saving: 'failed',
+          problem: isApiError(error) && error.kind === 'invalid' ? 'defects.problem.refused' : problemKey(error),
+          lines_refused: isApiError(error) ? error.issues.map((issue) => issue.message ?? '').filter(Boolean) : [],
+        }))
+        if (isApiError(error) && error.kind === 'conflict') void load()
+      }
+    },
+    [api, inspectionId, load, read.value],
+  )
+
+  /** A defect's photo with its marks: the marked copy is uploaded under the line's code, then the photos are read again. */
+  const savePhoto = useCallback(
+    async (index: number, photo: Blob) => {
+      const inspection = read.value?.inspection
+      const line = defects.lines[index]
+      if (!inspection || !line) return
+      setDefects((current) => ({ ...current, uploading: line.code, problem: null }))
+      try {
+        const count = photosOf(defects.photos.value ?? ([] as InspectionPhoto[]), line.code).length
+        await uploadDefectPhoto(api, { id: inspection.id, companyId: inspection.companyId }, photo, defectPhotoName(line.code, count + 1))
+        setDialog(null)
+        setNotice({ key: 'defects.photoSaved', tone: 'success', params: { code: line.code } })
+        await loadPhotos()
+      } catch (error) {
+        setDefects((current) => ({ ...current, problem: problemKey(error) }))
+      } finally {
+        setDefects((current) => ({ ...current, uploading: null }))
+      }
+    },
+    [api, defects.lines, defects.photos.value, loadPhotos, read.value],
+  )
+
+  // ---- Assign inspector (qi-assign) ----
+  const openAssign = useCallback(() => {
+    const inspection = read.value?.inspection
+    if (!inspection) return
+    assignKey.current = null
+    setAssign({ ids: [inspection.id], siteId: inspection.siteId, people: reading(), value: assigneeValue(inspection.assigned), busy: false, problem: null, lines: [] })
+    listInspectors(api, inspection.siteId, [inspection.workOrderId])
+      .then((people) => setAssign((current) => (current ? { ...current, people: ready(people) } : current)))
+      .catch((error: unknown) => setAssign((current) => (current ? { ...current, people: failedRead(problemKey(error)) } : current)))
+  }, [api, read.value])
+
+  const saveAssign = useCallback(async () => {
+    const inspection = read.value?.inspection
+    if (!assign || !inspection || version.current === null) return
+    setAssign({ ...assign, busy: true, problem: null, lines: [] })
+    assignKey.current ??= newIdempotencyKey()
     try {
-      const inspection = await putDefects(api, inspectionId, { version: version.current, defects: defectsBody(defectsDraft) })
-      version.current = inspection.version
-      setRead((current) => (current.value ? ready({ ...current.value, inspection }) : current))
-      setDialog(null)
-      setNotice({ key: 'defects.saved', tone: 'success' })
+      await assignInspections(api, { inspections: [{ id: inspection.id, version: version.current }], ...assigneeBody(assign.value) }, assignKey.current)
+      assignKey.current = null
+      setAssign(null)
+      setNotice({ key: assign.value ? 'assign.done' : 'assign.cleared', tone: 'success', params: { count: 1 } })
+      void load()
     } catch (error) {
-      setDialogProblem(isApiError(error) && error.kind === 'invalid' ? 'defects.problem.refused' : problemKey(error))
-      if (isApiError(error) && error.kind === 'conflict') void load()
-    } finally {
-      setBusy(false)
+      if (!isApiError(error) || error.kind !== 'conflict') assignKey.current = null
+      setAssign((current) => (current ? { ...current, busy: false, problem: isApiError(error) && error.kind === 'conflict' ? 'assign.problem.refused' : problemKey(error), lines: isApiError(error) ? error.issues.map((issue) => issue.message ?? '').filter(Boolean) : [] } : current))
     }
-  }, [api, defectsDraft, inspectionId, load])
+  }, [api, assign, load, read.value])
 
   const cancel = useCallback(async () => {
     if (version.current === null) return
@@ -340,6 +449,7 @@ function Container({ inspectionId }: { inspectionId: string }) {
   if (!read.value) return <RecordSkeleton />
 
   return (
+    <>
     <InspectionRecordView
       model={{
         prefix,
@@ -362,9 +472,10 @@ function Container({ inspectionId }: { inspectionId: string }) {
         signDraft,
         releaseDraft,
         planDraft,
-        defectsDraft,
         cancelReason,
         stale,
+        defects,
+        assign,
       }}
       stepUp={stepUp}
       actions={{
@@ -376,8 +487,28 @@ function Container({ inspectionId }: { inspectionId: string }) {
         onRelease: () => void release(),
         onPlanDraft: setPlanDraft,
         onSavePlan: () => void savePlan(),
-        onDefectsDraft: setDefectsDraft,
-        onSaveDefects: () => void saveDefects(),
+        onLines: (next) => void saveLines(next),
+        onPhoto: (index, photo) => void savePhoto(index, photo),
+        onRetryDefects: () => {
+          void loadPhotos()
+          readDefectPicker(api)
+            .then((library) => setDefects((current) => ({ ...current, library: ready(library) })))
+            .catch((error: unknown) => setDefects((current) => ({ ...current, library: failedRead(problemKey(error)) })))
+        },
+        onDismissDefects: () => setDefects((current) => ({ ...current, problem: null, lines_refused: [] })),
+        onAssign: openAssign,
+        onAssignValue: (value) => setAssign((current) => (current ? { ...current, value } : current)),
+        onAssignSave: () => void saveAssign(),
+        onAssignClose: () => setAssign(null),
+        onPlaceHold: () => {
+          const value = read.value
+          if (!value) return
+          setHold({ subjectType: 'WorkOrder', subjectIds: [value.workOrder.id], sourceType: 'Inspection', sourceId: value.inspection.id, fromLabel: value.inspection.label })
+        },
+        onRaiseNcr: () => {
+          const value = read.value
+          if (value) router.push(newNcrAddress(prefix, 'Inspection', value.inspection.id))
+        },
         onCancelReason: setCancelReason,
         onCancel: () => void cancel(),
         onReload: () => void load(),
@@ -387,5 +518,16 @@ function Container({ inspectionId }: { inspectionId: string }) {
         onStepUpCancel: cancelStepUp,
       }}
     />
+    <PlaceHold
+      open={hold !== null}
+      prefill={hold}
+      onClose={() => setHold(null)}
+      onPlaced={(placed) => {
+        setHold(null)
+        setNotice({ key: placed.workOrdersHeld > 0 ? 'hold.placedWorkOrder' : 'hold.placed', tone: 'success' })
+        void load()
+      }}
+    />
+    </>
   )
 }
