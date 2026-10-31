@@ -27,6 +27,7 @@ import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOps } from '../seed/ops'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
+import { seed as seedPay } from '../seed/pay'
 import { seed as seedPlanning } from '../seed/planning'
 import { seed as seedPlant } from '../seed/plant'
 import { seed as seedPeople } from '../seed/people'
@@ -232,6 +233,9 @@ beforeAll(async () => {
   // The time and attendance schema of W2b (wave 5/7).
   await seedTime({ db: factory, namespace: 'iso-a' })
   await seedTime({ db: factory, namespace: 'iso-b' })
+  // The piece pay and payroll export schema of W2b (wave 6/7).
+  await seedPay({ db: factory, namespace: 'iso-a' })
+  await seedPay({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -283,6 +287,7 @@ it('covers every classified table and every runtime role', () => {
     'DeviceEnrolment',
     'DispositionCode',
     'DueTimer',
+    'EarningsEntry',
     'EmailIdentity',
     'EmailOutbound',
     'Employee',
@@ -299,12 +304,14 @@ it('covers every classified table and every runtime role', () => {
     'GeneratedDocument',
     'GoodsReceipt',
     'GoodsReceiptLine',
+    'HeldScan',
     'Hide',
     'IdempotencyReceipt',
     'ImportJob',
     'ImportRow',
     'InboundEmail',
     'InboundWebhook',
+    'IncentiveScheme',
     'Inspection',
     'InspectionDefect',
     'IntegrationAccount',
@@ -366,14 +373,23 @@ it('covers every classified table and every runtime role', () => {
     'PartyPriceListAssignment',
     'PartyTaxIdentity',
     'PasswordReset',
+    'PayPeriod',
     'PayablesSettings',
     'Payment',
     'PaymentAllocation',
     'PaymentReminder',
     'PaymentTerms',
+    'PayrollCodeMapping',
+    'PayrollExport',
+    'PayrollExportFile',
+    'PayrollExportLayout',
     'PeopleLegalGate',
     'PeopleSettings',
     'PeriodLock',
+    'PiecePaySwitch',
+    'PieceRateEntry',
+    'PieceRateTable',
+    'PieceRateVersion',
     'PlanVersion',
     'PlanningException',
     'PlanningRun',
@@ -404,6 +420,8 @@ it('covers every classified table and every runtime role', () => {
     'QuoteLine',
     'QuoteLineSize',
     'QuoteVersion',
+    'RateAcknowledgement',
+    'RatePublication',
     'ReasonCode',
     'ReceiptDiscrepancy',
     'ReceivablesSettings',
@@ -498,6 +516,7 @@ it('covers every classified table and every runtime role', () => {
     'Worker',
     'WorkerNoticeAck',
     'WorkerRole',
+    'WorkerStatement',
     'WorkingTimeRule',
   ])
   expect(RUNTIME_ROLES).toHaveLength(4)
