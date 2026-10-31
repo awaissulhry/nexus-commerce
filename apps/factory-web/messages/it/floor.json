@@ -294,6 +294,7 @@
     }
   },
   "tile": {
+    "mywork": "Il mio lavoro",
     "operation": "Operazione",
     "cut": "Taglia una pelle",
     "bundles": "Fasci",
@@ -304,6 +305,7 @@
     "final": "Collaudo finale",
     "scan": "Scansiona",
     "hint": {
+      "mywork": "La coda della postazione: cosa viene dopo",
       "scan": "Qualsiasi etichetta della fabbrica",
       "operation": "Segnala un fascio alla tua operazione",
       "cut": "Controlla una pelle e registra il taglio",

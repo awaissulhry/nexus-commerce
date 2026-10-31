@@ -20,6 +20,8 @@ export const holdView = output({
   id: id(),
   companyId: id(),
   siteId: id(),
+  /** B-W2a-67: the site in words. */
+  site: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
   status,
   subjectType: kind,
   /** The held records: id, label (code, number, serial; null when not visible), state. */
@@ -36,6 +38,8 @@ export const holdView = output({
   placedAt: instant(),
   placedBy: by,
   ownerId: id().nullable(),
+  /** B-W2a-67: the owner, an office user by name (the Holds list's Owner column). */
+  owner: output({ id: id(), name: z.string() }).nullable(),
   expectedReleaseOn: z.string().nullable(),
   overdue: z.boolean(),
   ageDays: z.number().int(),
@@ -77,12 +81,18 @@ export const countsContract = defineContract({
   response: { 200: output({ counts: output({ open: z.number().int(), overdue: z.number().int(), system: z.number().int(), mine: z.number().int(), waitingQuarantine: z.number().int() }) }) },
 })
 
+/** B-W2a-67: who may own a hold of the site (the owner picker of the Holds screens). */
+export const peopleContract = defineContract({
+  querystring: input({ siteId: id() }),
+  response: { 200: output({ people: z.array(output({ id: id(), name: z.string(), me: z.boolean() })) }) },
+})
+
 export const getContract = defineContract({
   params: input({ holdId: id() }),
   response: {
     200: output({
       hold: holdView,
-      workOrders: z.array(output({ id: id(), number: z.string(), status: woStatus, heldFromStatus: woStatus.nullable(), holdReason: z.string().nullable(), heldByThis: z.boolean() })),
+      workOrders: z.array(output({ id: id(), number: z.string(), status: woStatus, heldFromStatus: woStatus.nullable(), holdReason: z.string().nullable(), heldByThis: z.boolean(), /** B-W2a-67: its batch (the evidence trail opens from it). */ batchNumber: z.string().nullable() })),
       /** What must be true to release it, for the caller (the GateExplainer; STATEMENT is signed in the release). */
       release: output({ checks: z.array(check), releasable: z.boolean(), mayRelease: z.boolean() }),
       canChange: z.boolean(),

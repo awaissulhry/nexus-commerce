@@ -9,6 +9,8 @@ import { defineManifest } from '../../../core/manifest'
 export const manifest = defineManifest({
   'GET /quality/holds': { audiences: ['office'], permission: 'quality.holds.view', scope: 'record' },
   'GET /quality/holds/counts': { audiences: ['office'], permission: 'quality.holds.view', scope: 'record' },
+  // B-W2a-67: the owner picker (who sees holds at the site), for whoever places or changes holds there.
+  'GET /quality/holds/people': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },
   'GET /quality/holds/:holdId': { audiences: ['office'], permission: 'quality.holds.view', scope: 'record' },
   'POST /quality/holds/preview': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },
   'POST /quality/holds': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },

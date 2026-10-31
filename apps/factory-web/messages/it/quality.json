@@ -60,7 +60,8 @@
     "cancelledBanner": "Questa ispezione è annullata: non rilascia nulla.",
     "tab": {
       "checks": "Controlli e risultati",
-      "decision": "Decisione e firma"
+      "decision": "Decisione e firma",
+      "defects": "Difetti e foto"
     }
   },
   "check": {
@@ -101,7 +102,9 @@
   "hold": {
     "failed": "Bloccati: rilavora e ispeziona di nuovo",
     "reversed_one": "Bloccato: {count} revocato",
-    "reversed_other": "Bloccati: {count} revocati"
+    "reversed_other": "Bloccati: {count} revocati",
+    "placed": "Blocco messo. È in Qualità › Blocchi.",
+    "placedWorkOrder": "Blocco messo: l'ordine di lavoro è bloccato, il reparto sa perché."
   },
   "lotStatus": {
     "QUARANTINE": "In quarantena",
@@ -242,7 +245,9 @@
     "noSettings": "Solo il titolare modifica le regole qualità (quality.settings.manage).",
     "noParties": "Per aggiungere clienti serve parties.view.",
     "noLots": "Per i lotti serve quality.lots.view.",
-    "noBatch": "L'ordine di produzione non ha ancora un numero di lotto."
+    "noBatch": "L'ordine di produzione non ha ancora un numero di lotto.",
+    "noHoldPlace": "Mettere un blocco richiede quality.holds.place (chiedi al responsabile qualità).",
+    "assignedOther": "Assegnata a un altro ispettore: è lui che la registra e la firma."
   },
   "list": {
     "intro": "Ispezioni finali dei capi finiti, il loro rilascio da parte di chi non li ha prodotti, i rilasci revocati e ciò che è bloccato.",
@@ -298,37 +303,42 @@
     "none": {
       "open": "Nessuna ispezione aperta.",
       "waiting": "Nulla di superato è in attesa di rilascio.",
-      "onHold": "Nessun capo è bloccato da un’ispezione.",
       "reversed": "Nessun rilascio è stato revocato.",
       "lots": "Nessun lotto è bloccato.",
-      "all": "Niente qui."
+      "all": "Niente qui.",
+      "mine": "Nulla è assegnato a te.",
+      "failed": "Ogni ispezione non superata è decisa: da ciascuna è nato un blocco o una non conformità."
     },
     "noAccess": {
       "title": "Le ispezioni non sono aperte al tuo ruolo",
       "body": "Serve quality.inspections.view; lo concede il titolare o un amministratore in Sistema › Ruoli e permessi."
-    }
+    },
+    "undecided": "Non ancora decisa: metti un blocco o apri una non conformità",
+    "decidedIn": "Blocchi {holds} · Non conformità {ncrs}",
+    "holds": "Blocchi"
   },
   "view": {
     "all": "Tutte le ispezioni",
     "open": "Aperte",
     "waiting": "In attesa di rilascio",
-    "onHold": "Bloccate",
     "reversed": "Rilasci revocati",
-    "lots": "Lotti bloccati"
+    "lots": "Lotti bloccati",
+    "mine": "In attesa di me",
+    "failed": "Non superate - da decidere"
   },
   "tile": {
     "open": "Aperte",
     "openHint": "Ispezioni non ancora firmate",
     "waiting": "In attesa di rilascio",
     "waitingHint": "Superate, capi ancora da rilasciare",
-    "onHold": "Bloccate",
-    "onHoldHint": "Non superate, o capi revocati",
     "reversed": "Rilasci revocati",
     "reversedHint": "Con capi bloccati o sbloccati",
     "lots": "Lotti bloccati",
     "lotsHint": "In quarantena o bloccati",
     "unknown": "Conteggio non riuscito",
-    "atLeast": "{count}+"
+    "atLeast": "{count}+",
+    "failed": "Non superate - da decidere",
+    "failedHint": "Ancora senza blocco né non conformità"
   },
   "col": {
     "inspection": "Ispezione",
@@ -348,7 +358,9 @@
     "material": "Materiale",
     "lotStatus": "Stato del lotto",
     "crVi": "Cromo VI",
-    "why": "Perché è bloccato"
+    "why": "Perché è bloccato",
+    "assigned": "Ispettore",
+    "signedBy": "Firmata da"
   },
   "row": {
     "menu": "Azioni per {name}",
@@ -356,7 +368,9 @@
     "openNewTab": "Apri in una nuova scheda",
     "release": "Rilascia per la spedizione…",
     "openInspection": "Apri l'ispezione",
-    "copyNumber": "Copia il numero"
+    "copyNumber": "Copia il numero",
+    "placeHold": "Metti un blocco…",
+    "createNcr": "Apri una non conformità…"
   },
   "keys": {
     "title": "Scorciatoie da tastiera",
@@ -428,6 +442,70 @@
       "aql": "Un AQL è una percentuale con al massimo tre decimali (\"2,5\").",
       "level": "Indica il livello di ispezione.",
       "refused": "L'ispezione non è stata aperta: l'ordine di produzione o la sua numerazione ora non lo consentono."
+    },
+    "kind": {
+      "label": "Che cosa si ispeziona",
+      "LOT": "Lotto in arrivo",
+      "LOTHint": "Un lotto di materiale ricevuto: prove e rilascio.",
+      "FINAL": "Finale",
+      "FINALHint": "I capi finiti di un ordine di lavoro.",
+      "INLINE": "In linea",
+      "INLINEHint": "Durante la produzione; arriva con un'ondata successiva.",
+      "RETURN": "Reso",
+      "RETURNHint": "Capi resi da un cliente: classifica ciascuno.",
+      "held": {
+        "inline": "Le ispezioni in linea arrivano con un'ondata successiva (W2b).",
+        "return": "Ispezionare i resi richiede sales.returns.view e sales.returns.inspect.",
+        "lot": "I lotti richiedono quality.lots.view."
+      },
+      "lotElsewhere": "I lotti in arrivo si ispezionano e si rilasciano in Conformità › Test e sostanze.",
+      "lotOpen": "Apri lì i lotti in attesa"
+    },
+    "inspector": "Ispettore (facoltativo)",
+    "inspectorHint": "Chi la registra e la firma; mai chi ha fatto i capi.",
+    "inspectorAfterPick": "Scegli prima l'ordine di lavoro.",
+    "inspectorMe": "Io (l'ho aperta)",
+    "refusedTitle": "Non salvato",
+    "return": {
+      "record": "Registra l'ispezione",
+      "received": "{received} di {units} ricevuti · {site}",
+      "failed": "Non è stato possibile leggere i resi in attesa",
+      "pick": "Reso",
+      "pickHint": "Resi ricevuti e in attesa di ispezione.",
+      "pickPlaceholder": "Scegli un reso",
+      "none": "Nessun reso attende l'ispezione.",
+      "line": "{received} di {quantity} ricevuti",
+      "safety": "Capo protettivo: torna in vendita solo dopo un controllo di sicurezza",
+      "grade": "Stato",
+      "gradePick": "Scegli",
+      "grades": {
+        "NEW": "Come nuovo",
+        "LIKE_NEW": "Quasi nuovo",
+        "GOOD": "Buono",
+        "DAMAGED": "Danneggiato",
+        "UNUSABLE": "Inutilizzabile"
+      },
+      "cause": "Causa",
+      "causeNone": "Non nota",
+      "causes": {
+        "OUR_DEFECT": "Nostro difetto",
+        "TRANSIT": "Danno nel trasporto",
+        "MISUSE": "Uso improprio",
+        "WEAR": "Usura normale",
+        "NO_FAULT": "Nessun difetto"
+      },
+      "note": "Condizione",
+      "after": "Che cosa succede dopo (accredito, riparazione, rientro a magazzino) si decide sul reso.",
+      "openReturn": "Apri {number}",
+      "done": "Reso {number} ispezionato: le righe sono classificate.",
+      "problem": {
+        "pick": "Scegli il reso.",
+        "reading": "Il reso è ancora in lettura.",
+        "nothingReceived": "Di questo reso non è ancora arrivato nulla: si ispeziona quando arriva.",
+        "grade": "Classifica ogni riga ricevuta.",
+        "note": "Una nota sulla condizione è al massimo di 1000 caratteri.",
+        "refused": "L'ispezione del reso non è stata registrata"
+      }
     }
   },
   "rules": {
@@ -678,18 +756,12 @@
   "defects": {
     "heading": "Difetti trovati nel campione",
     "counts": "Critici {critical} · maggiori {major} · minori {minor}",
-    "edit": "Modifica i difetti…",
     "none": "Nessun difetto registrato.",
-    "title": "Difetti trovati",
-    "subtitle": "Una riga per classe e codice; capi del campione di {sample}.",
-    "add": "Aggiungi una riga",
-    "save": "Salva i difetti",
-    "saved": "I difetti sono salvati; l'esito è ricalcolato.",
-    "line": "Riga {n}",
-    "remove": "Togli la riga {n}",
+    "add": "Aggiungi difetto",
+    "saved": "Salvato",
+    "remove": "Togli",
     "classLabel": "Classe",
     "code": "Codice",
-    "codeHint": "Maiuscole, cifre e trattini (\"STITCH-SKIP\").",
     "quantity": "Capi",
     "cell": "Colore e taglia",
     "anyCell": "Nessuna cella in particolare",
@@ -703,12 +775,53 @@
       "MINOR": "Minore"
     },
     "problem": {
-      "code": "Un codice difetto ha da 2 a 40 maiuscole, cifre o trattini.",
       "quantity": "Un difetto si trova su almeno un capo.",
       "overSample": "Al massimo il campione.",
       "twice": "Una riga per classe e codice.",
-      "refused": "I difetti sono stati rifiutati così come sono."
-    }
+      "refused": "I difetti sono stati rifiutati così come sono.",
+      "classOverSample": "Più capi di una gravità del campione."
+    },
+    "openTab": "Difetti e foto",
+    "saving": "Salvataggio…",
+    "notSaved": "Non salvato",
+    "photoSaved": "La foto di {code} è salvata.",
+    "noZone": "nessuna zona",
+    "libraryWordsUnknown": "Dalla libreria",
+    "typed": "Scritto a mano (non dalla libreria)",
+    "classFor": "Gravità di {code}",
+    "zoneFor": "Dove sul capo: {code}, ora {zone}",
+    "quantityFor": "Capi con {code}",
+    "cellFor": "Colore e taglia di {code}",
+    "photoOf": "Foto di {code}",
+    "photos_one": "{count} foto",
+    "photos_other": "{count} foto",
+    "morePhotos_one": "+{count} altra",
+    "morePhotos_other": "+{count} altre",
+    "noPhoto": "Nessuna foto",
+    "addPhotoFor": "Fai una foto di {code}",
+    "noteFor": "Nota su {code}",
+    "menuFor": "Azioni per {code}",
+    "oneMore": "Un capo in più",
+    "zone": "Dove",
+    "photo": "Foto",
+    "countOf": "{klass} {count}",
+    "lines_one": "{count} difetto",
+    "lines_other": "{count} difetti",
+    "noneHint": "Scegli i difetti dalla libreria: il reparto vede gli stessi codici.",
+    "sampleRule": "Capi del campione di {sample}; i conteggi per gravità sono quelli del risultato.",
+    "photosFailed": "Non è stato possibile leggere le foto.",
+    "zoneTitle": "Dove sul capo: {code}",
+    "pickTitle": "Aggiungi un difetto",
+    "pickSubtitle": "Dalla libreria dei difetti (Qualità › Difetti e destinazioni).",
+    "libraryFailed": "Non è stato possibile leggere la libreria dei difetti",
+    "libraryEmpty": "La libreria dei difetti è vuota",
+    "libraryEmptyHint": "Qualità › Difetti e destinazioni la avvia dall'insieme di partenza per abbigliamento in pelle.",
+    "pickSearch": "Cerca per nome o codice",
+    "pickOne": "{words} ({code}, {klass})",
+    "pickNone": "Nessun difetto corrisponde.",
+    "photoTitle": "Foto di {code}",
+    "photoSubtitle": "Segna il difetto con una freccia o un cerchio; la foto segnata resta con l'ispezione.",
+    "uploading": "Salvataggio della foto…"
   },
   "result": {
     "heading": "Esito ora",
@@ -750,12 +863,6 @@
   "sign": {
     "title": "Firma l'esito di {label}",
     "decision": "La tua decisione",
-    "result": {
-      "PASS": "Superata",
-      "FAIL": "Non superata"
-    },
-    "asComputed": "Come la calcolano le regole.",
-    "override": "Contro l'esito calcolato: una deroga con il tuo motivo scritto; il rilascio richiederà poi una seconda persona.",
     "overrideReason": "Perché decidi contro l'esito calcolato",
     "overrideHint": "Almeno 3 caratteri; resta con la firma (QHS-013).",
     "statement": "Non ho prodotto nessuno di questi capi.",
@@ -777,6 +884,21 @@
       "statement": "Spunta che non hai prodotto nessuno di questi capi.",
       "maker": "Hai prodotto alcuni di questi capi: firma un altro ispettore.",
       "refused": "La firma è stata rifiutata così com’è: le righe sotto spiegano perché."
+    },
+    "choice": {
+      "ACCEPT": "Accetta",
+      "CONDITIONAL": "Con riserva",
+      "REJECT": "Rifiuta"
+    },
+    "choiceHint": {
+      "ACCEPT": "Come danno le regole: SUPERATA.",
+      "CONDITIONAL": "Accettata contro il NON SUPERATA calcolato, con il tuo motivo scritto; il rilascio richiede una seconda persona (quattro occhi).",
+      "REJECT": "Come danno le regole: NON SUPERATA. La merce resta bloccata fino a una decisione.",
+      "REJECT_override": "Contro il SUPERATA calcolato: scrivi perché."
+    },
+    "held": {
+      "acceptFail": "Le regole danno NON SUPERATA: accettala solo con riserva, o rifiutala.",
+      "conditionalPass": "Nulla da accettare con riserva: le regole danno SUPERATA."
     }
   },
   "decision": {
@@ -978,6 +1100,52 @@
         "closed_one": "{count} voce di registro, chiusa.",
         "closed_other": "{count} voci di registro, tutte chiuse."
       }
+    }
+  },
+  "raiseNcr": {
+    "held": {
+      "noRight": "Aprire una non conformità richiede quality.ncr.raise (chiedi al responsabile qualità)."
+    }
+  },
+  "assign": {
+    "menu": "Assegna l'ispettore…",
+    "title_one": "Assegna {count} ispezione",
+    "title_other": "Assegna {count} ispezioni",
+    "subtitle": "L'ispettore assegnato la registra e la firma; mai chi ha fatto i capi.",
+    "keyHint": "assegna",
+    "confirm_one": "Assegna {count} ispezione",
+    "confirm_other": "Assegna {count} ispezioni",
+    "clear_one": "Togli l'ispettore da {count} ispezione",
+    "clear_other": "Togli l'ispettore da {count} ispezioni",
+    "bulk_one": "Assegna {count} ispezione",
+    "bulk_other": "Assegna {count} ispezioni",
+    "done_one": "{count} ispezione assegnata.",
+    "done_other": "{count} ispezioni assegnate.",
+    "cleared_one": "Tolto l'ispettore da {count} ispezione.",
+    "cleared_other": "Tolto l'ispettore da {count} ispezioni.",
+    "peopleFailed": "Non è stato possibile leggere gli ispettori del sito",
+    "who": "Chi ispeziona",
+    "whoHint": "Persone d'ufficio che registrano ispezioni in questo sito.",
+    "whoHintFloor": "Persone d'ufficio e ispettori al banco del sito che registrano ispezioni qui.",
+    "nobodyPick": "Nessuno (la ispeziona chi l'ha aperta)",
+    "nobodyAtSite": "Nessun altro registra ispezioni in questo sito.",
+    "nobody": "Non assegnata",
+    "you": "Tu",
+    "named": "{name}",
+    "office": "Un ispettore d'ufficio",
+    "bench": "Un ispettore al banco",
+    "benchNamed": "{name} (banco)",
+    "meNamed": "{name} (tu)",
+    "made": "Ha fatto capi di {orders}",
+    "cellFor": "Ispettore di {label}",
+    "held": {
+      "noRight": "Assegnare richiede quality.inspections.record nel sito.",
+      "notOpen": "Si assegna solo un'ispezione aperta (una firmata tiene il suo ispettore).",
+      "sites": "Le ispezioni scelte sono di siti diversi: assegna un sito alla volta.",
+      "none": "Scegli prima le ispezioni."
+    },
+    "problem": {
+      "refused": "Non è stato assegnato nulla"
     }
   }
 }

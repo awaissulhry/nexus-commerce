@@ -13,8 +13,9 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { dayAt, money, quantity } from '../../../_shared/buying/model'
 import type { PlanLine } from '../api'
-import { decisionPhrase, draftHeld, draftReach, heldByReason, heldReason, PLAN_VIEWS, planState, runSeconds, TILES, visibleLines, type PlanActions, type PlanModel, type PlanView as PlanViewName } from '../model'
+import { decisionPhrase, draftHeld, draftReach, heldByReason, heldReason, MRP_NAMESPACE, PLAN_VIEWS, planState, runSeconds, shortWorkOrders, TILES, visibleLines, type PlanActions, type PlanModel, type PlanView as PlanViewName } from '../model'
 import { PlanDialogs } from './PlanDialogs'
+import { ShortList } from './ShortList'
 import { WhyModal } from './WhyModal'
 import '../../../_shared/buying/buying.css'
 
@@ -32,7 +33,7 @@ export type { PlanActions, PlanModel } from '../model'
  */
 export function PlanView({ model, actions }: { model: PlanModel; actions?: PlanActions }) {
   return (
-    <WithMessages namespaces={['buying', 'lists']}>
+    <WithMessages namespaces={['buying', MRP_NAMESPACE, 'lists']}>
       <PlanScreen model={model} actions={actions} />
     </WithMessages>
   )
@@ -40,8 +41,13 @@ export function PlanView({ model, actions }: { model: PlanModel; actions?: PlanA
 
 function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanActions }) {
   const t = useT('buying')
+  const w = useT(MRP_NAMESPACE)
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
+  /** B-W2a-70: a planner's Draft PO is held with the buyers' queue named (design: "ask a buyer or use Request to buy"). */
+  const heldWords = (key: string) => (key === 'held.noPurchasing' ? w('held.noPurchasingRequests') : t(key))
+  /** A view's name: W1's in `buying`, Short on open work orders in `planning-mrp`. */
+  const viewName = (view: PlanViewName) => (view === 'shortWo' ? w('view.shortWo') : t(`plan.view.${view}`))
   const [query, setQuery] = useState(model.q)
   useEffect(() => setQuery(model.q), [model.q])
   const typed = useRef(false)
@@ -104,7 +110,7 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
   ]
 
   const runHeld = !model.can.planRun ? t('held.noRun') : model.running || state === 'running' ? t('held.running') : !model.siteId ? t('held.noSite') : null
-  const draftAllHeld = !model.can.poManage ? t('held.noPurchasing') : allReach.lines === 0 ? t('held.nothingToBuy') : null
+  const draftAllHeld = !model.can.poManage ? heldWords('held.noPurchasing') : allReach.lines === 0 ? t('held.nothingToBuy') : null
 
   const columns = buildColumns()
   function buildColumns(): ColDef<PlanLine>[] {
@@ -184,7 +190,7 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
         const held = draftHeld(data, model.can)
         const busy = model.drafting.includes(data.id)
         return (
-          <Button size="sm" variant={held ? 'quiet' : 'secondary'} heldReason={held ? t(held) : busy ? t('held.busy') : null} onClick={() => actions?.onDraftOne?.(data.id)} aria-label={t('plan.draftOne', { material: data.item.code })}>
+          <Button size="sm" variant={held ? 'quiet' : 'secondary'} heldReason={held ? heldWords(held) : busy ? t('held.busy') : null} onClick={() => actions?.onDraftOne?.(data.id)} aria-label={t('plan.draftOne', { material: data.item.code })}>
             {busy ? <Spinner size={12} /> : <FilePlus2 size={13} aria-hidden />} {t('plan.draftShort')}
           </Button>
         )
@@ -271,6 +277,30 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
       )
   }
 
+  const searchField = (
+    <Input
+      size="sm"
+      type="search"
+      leadingIcon={<Search size={13} aria-hidden />}
+      aria-label={t('plan.search')}
+      placeholder={t('plan.search')}
+      value={query}
+      onChange={(event) => {
+        typed.current = true
+        setQuery(event.target.value)
+      }}
+    />
+  )
+  const viewSelect = (
+    <Select size="sm" aria-label={t('plan.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as PlanViewName)}>
+      {PLAN_VIEWS.map((view) => (
+        <option key={view} value={view}>
+          {viewName(view)}
+        </option>
+      ))}
+    </Select>
+  )
+
   return (
     <div className="fw-by">
       <div className="fw-by-head">
@@ -311,6 +341,8 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
               { id: 'history', label: t('plan.history'), onSelect: () => actions?.onHistory?.() },
               { id: 'explainer', label: t('plan.explainer.menu'), onSelect: () => actions?.onExplainer?.() },
               { id: 'export', label: t('plan.exportView'), onSelect: () => actions?.onExport?.((lines ?? []).map((line) => line.id)), disabled: !lines || lines.length === 0 },
+              // B-W2a-70 (design page.conn): the same requirement rows in the buyer's queue.
+              ...(model.can.poView ? [{ id: 'requests', label: w('menu.requests'), href: `${model.prefix}/purchasing/requests` }] : []),
               { id: 'keys', label: t('common.shortcuts'), onSelect: () => actions?.onKeys?.() },
             ]}
           />
@@ -323,7 +355,7 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
       {model.notice && (
         <Banner
           tone={model.notice.tone}
-          title={t(model.notice.words.key, model.notice.words.params)}
+          title={model.notice.words.key.startsWith('mrp:') ? w(model.notice.words.key.slice(4), model.notice.words.params) : t(model.notice.words.key, model.notice.words.params)}
           action={
             <span className="fw-by-inline">
               {model.notice.open && (
@@ -405,94 +437,87 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
       )}
 
       <MetricStrip
-        metrics={TILES.map((tile) => ({
-          label: t(`plan.tile.${tile.id}`),
-          value: plan?.run ? String(tile.count(plan.summary)) : '—',
-          onClick: () => actions?.onView?.(model.view === tile.view ? 'open' : tile.view),
-          active: tileView === tile.view,
-        }))}
+        metrics={[
+          ...TILES.map((tile) => ({
+            label: t(`plan.tile.${tile.id}`),
+            value: plan?.run ? String(tile.count(plan.summary)) : '—',
+            onClick: () => actions?.onView?.(model.view === tile.view ? 'open' : tile.view),
+            active: tileView === tile.view,
+          })),
+          // B-W2a-70: Short on open work orders, its own view (counted now from the live plan, not the run).
+          {
+            label: w('tile.shortWo'),
+            value: model.shortages?.status === 'ready' ? String(shortWorkOrders(model.shortages.value)) : '—',
+            hint: w('tile.shortWoHint'),
+            onClick: () => actions?.onView?.(model.view === 'shortWo' ? 'open' : 'shortWo'),
+            active: model.view === 'shortWo',
+          },
+        ]}
       />
 
-      <ListFrame<PlanLine>
-        label={t('plan.tableLabel')}
-        rows={listState ? [] : (lines ?? null)}
-        rowId={(line) => line.id}
-        columns={columns}
-        count={lines ? t('plan.count', { count: lines.length }) : '—'}
-        search={
-          <Input
-            size="sm"
-            type="search"
-            leadingIcon={<Search size={13} aria-hidden />}
-            aria-label={t('plan.search')}
-            placeholder={t('plan.search')}
-            value={query}
-            onChange={(event) => {
-              typed.current = true
-              setQuery(event.target.value)
-            }}
-          />
-        }
-        tools={
-          <Select size="sm" aria-label={t('plan.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as PlanViewName)}>
-            {PLAN_VIEWS.map((view) => (
-              <option key={view} value={view}>
-                {t(`plan.view.${view}`)}
-              </option>
-            ))}
-          </Select>
-        }
-        selection={{
-          selected,
-          onChange: setSelected,
-          actions: (
-            <>
-              <Button
-                size="sm"
-                variant="primary"
-                aria-label={t('plan.bulk.draft', { lines: t('plan.count', { count: pickedReach.lines }), suppliers: t('plan.suppliers', { count: pickedReach.suppliers }) })}
-                heldReason={!model.can.poManage ? t('held.noPurchasing') : pickedReach.lines === 0 ? t('held.noBuyLine') : null}
-                onClick={() => actions?.onDraftMany?.(picked.map((line) => line.id))}
-              >
-                <FilePlus2 size={13} aria-hidden /> <SelectionLabel>{t('plan.bulk.draft', { lines: t('plan.count', { count: pickedReach.lines }), suppliers: t('plan.suppliers', { count: pickedReach.suppliers }) })}</SelectionLabel>
-              </Button>
-              <Button
-                size="sm"
-                aria-label={t('plan.bulk.setAside', { count: picked.filter((line) => line.decision === 'OPEN').length })}
-                heldReason={!model.can.planDecide ? t('held.noDecide') : picked.every((line) => line.decision !== 'OPEN') ? t('held.noneOpen') : null}
-                onClick={() => actions?.onSetAside?.(picked.filter((line) => line.decision === 'OPEN').map((line) => line.id))}
-              >
-                <Ban size={13} aria-hidden /> <SelectionLabel>{t('plan.bulk.setAside', { count: picked.filter((line) => line.decision === 'OPEN').length })}</SelectionLabel>
-              </Button>
-              {picked.some((line) => line.decision === 'IGNORED') && (
+      {model.view === 'shortWo' ? (
+        <ShortList model={model} actions={actions} search={searchField} tools={viewSelect} />
+      ) : (
+        <ListFrame<PlanLine>
+          label={t('plan.tableLabel')}
+          rows={listState ? [] : (lines ?? null)}
+          rowId={(line) => line.id}
+          columns={columns}
+          count={lines ? t('plan.count', { count: lines.length }) : '—'}
+          search={searchField}
+          tools={viewSelect}
+          selection={{
+            selected,
+            onChange: setSelected,
+            actions: (
+              <>
                 <Button
                   size="sm"
-                  aria-label={t('plan.bulk.putBack', { count: picked.filter((line) => line.decision === 'IGNORED').length })}
-                  heldReason={!model.can.planDecide ? t('held.noDecide') : null}
-                  onClick={() => actions?.onReopen?.(picked.filter((line) => line.decision === 'IGNORED').map((line) => line.id))}
+                  variant="primary"
+                  aria-label={t('plan.bulk.draft', { lines: t('plan.count', { count: pickedReach.lines }), suppliers: t('plan.suppliers', { count: pickedReach.suppliers }) })}
+                  heldReason={!model.can.poManage ? heldWords('held.noPurchasing') : pickedReach.lines === 0 ? t('held.noBuyLine') : null}
+                  onClick={() => actions?.onDraftMany?.(picked.map((line) => line.id))}
                 >
-                  <RotateCcw size={13} aria-hidden /> <SelectionLabel>{t('plan.bulk.putBack', { count: picked.filter((line) => line.decision === 'IGNORED').length })}</SelectionLabel>
+                  <FilePlus2 size={13} aria-hidden /> <SelectionLabel>{t('plan.bulk.draft', { lines: t('plan.count', { count: pickedReach.lines }), suppliers: t('plan.suppliers', { count: pickedReach.suppliers }) })}</SelectionLabel>
                 </Button>
-              )}
-              <Button size="sm" aria-label={t('plan.bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((line) => line.id))}>
-                <Download size={13} aria-hidden /> <SelectionLabel>{t('plan.bulk.export', { count: picked.length })}</SelectionLabel>
-              </Button>
-            </>
-          ),
-        }}
-        isRowSelectable={(line) => {
-          const reason = heldReason(line, model.can)
-          return reason ? t(reason) : null
-        }}
-        updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
-        keys={ownKeys}
-        onHelp={() => actions?.onKeys?.()}
-        onOpen={(line) => actions?.onWhy?.(line.id)}
-        state={listState}
-        focusRow={model.focusRow}
-        keysOpen={model.keysOpen}
-      />
-      {model.view !== 'open' && <p className="fw-by-hint">{t('plan.viewing', { view: t(`plan.view.${model.view}`) })}</p>}
+                <Button
+                  size="sm"
+                  aria-label={t('plan.bulk.setAside', { count: picked.filter((line) => line.decision === 'OPEN').length })}
+                  heldReason={!model.can.planDecide ? t('held.noDecide') : picked.every((line) => line.decision !== 'OPEN') ? t('held.noneOpen') : null}
+                  onClick={() => actions?.onSetAside?.(picked.filter((line) => line.decision === 'OPEN').map((line) => line.id))}
+                >
+                  <Ban size={13} aria-hidden /> <SelectionLabel>{t('plan.bulk.setAside', { count: picked.filter((line) => line.decision === 'OPEN').length })}</SelectionLabel>
+                </Button>
+                {picked.some((line) => line.decision === 'IGNORED') && (
+                  <Button
+                    size="sm"
+                    aria-label={t('plan.bulk.putBack', { count: picked.filter((line) => line.decision === 'IGNORED').length })}
+                    heldReason={!model.can.planDecide ? t('held.noDecide') : null}
+                    onClick={() => actions?.onReopen?.(picked.filter((line) => line.decision === 'IGNORED').map((line) => line.id))}
+                  >
+                    <RotateCcw size={13} aria-hidden /> <SelectionLabel>{t('plan.bulk.putBack', { count: picked.filter((line) => line.decision === 'IGNORED').length })}</SelectionLabel>
+                  </Button>
+                )}
+                <Button size="sm" aria-label={t('plan.bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((line) => line.id))}>
+                  <Download size={13} aria-hidden /> <SelectionLabel>{t('plan.bulk.export', { count: picked.length })}</SelectionLabel>
+                </Button>
+              </>
+            ),
+          }}
+          isRowSelectable={(line) => {
+            const reason = heldReason(line, model.can)
+            return reason ? t(reason) : null
+          }}
+          updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
+          keys={ownKeys}
+          onHelp={() => actions?.onKeys?.()}
+          onOpen={(line) => actions?.onWhy?.(line.id)}
+          state={listState}
+          focusRow={model.focusRow}
+          keysOpen={model.keysOpen}
+        />
+      )}
+      {model.view !== 'open' && <p className="fw-by-hint">{t('plan.viewing', { view: viewName(model.view) })}</p>}
 
       <PlanDialogs model={model} actions={actions} ownKeys={ownKeys} />
       {model.why && <WhyModal model={model} actions={actions} order={(lines ?? []).map((line) => line.id)} />}

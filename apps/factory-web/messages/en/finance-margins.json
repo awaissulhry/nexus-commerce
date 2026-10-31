@@ -1,0 +1,260 @@
+{
+  "noAccess": {
+    "title": "You don't have access to margins",
+    "body": "Margins needs the permission {permission}. Ask a person who manages roles."
+  },
+  "band": {
+    "label": "Scope and actions",
+    "readAt": "Read at {time}",
+    "reading": "Reading…",
+    "more": "More actions",
+    "export": "Export this view (CSV)",
+    "exportHeld": "Nothing to export in this view."
+  },
+  "scope": {
+    "from": "Orders from",
+    "fromLabel": "Order date from",
+    "to": "to",
+    "toLabel": "Order date to",
+    "every": "Every date",
+    "any": "any day",
+    "clear": "Clear"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline — reading again when back"
+  },
+  "tiles": {
+    "title": "Margins",
+    "failed": "Couldn't load margins",
+    "noGrain": "The margin tiles need the margin grain (money.margin).",
+    "average": "Average margin %",
+    "averageHint": "As estimated now, over the orders with a known cost",
+    "unknown_one": "{count} order's cost cannot be told yet",
+    "unknown_other": "{count} orders' cost cannot be told yet",
+    "floor": "Orders below the floor",
+    "floorLater": "Comes in a later version (the margin floor flag)",
+    "lost": "Margin lost since quote",
+    "lostHint": "Quoted margin less the margin now (gains offset losses)",
+    "orders": "Orders",
+    "ordersHint": "In scope (not cancelled)",
+    "provisional": "Costs are provisional until the accountant chooses the costing method.",
+    "currencies": "The orders in view are in more than one currency: choose one company to see the totals."
+  },
+  "list": {
+    "title": "Order margin, quote to actual",
+    "hint": "Each order's margin as quoted, as estimated now, and as it ends.",
+    "fileTitle": "Margins",
+    "search": "Search an order or customer reference",
+    "count_one": "{count} order",
+    "count_other": "{count} orders",
+    "more": "Show more",
+    "slow": "Still loading…",
+    "failed": "Couldn't load order margin, quote to actual",
+    "clearFilters": "Clear filters",
+    "noMatch": {
+      "title": "No rows match these filters",
+      "body": "Change the dates, the customer, the style or the search."
+    },
+    "empty": {
+      "title": "No orders in this period",
+      "body": "An order appears here once it is confirmed, with its margin as quoted."
+    }
+  },
+  "bulk": {
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)"
+  },
+  "col": {
+    "order": "Order",
+    "customer": "Customer",
+    "value": "Value",
+    "quotedCost": "Cost at quote",
+    "estimateCost": "Cost estimated now",
+    "actualCost": "Actual cost so far",
+    "margin": "Margin % quoted → now",
+    "actualPct": "So far %",
+    "state": "Status"
+  },
+  "row": {
+    "noRef": "No customer reference",
+    "change": "{amount} since the quote",
+    "provisional": "Provisional"
+  },
+  "stage": {
+    "final": "Final cost",
+    "started": "Cost so far",
+    "notStarted": "No cost posted yet"
+  },
+  "status": {
+    "CONFIRMED": "Confirmed",
+    "IN_PRODUCTION": "In production",
+    "READY": "Ready to ship",
+    "PARTLY_SHIPPED": "Partly shipped",
+    "SHIPPED": "Shipped",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "filter": {
+    "customer": "Customer",
+    "style": "Style",
+    "clear": "Clear the filter {name}"
+  },
+  "by": {
+    "title": "By customer and style",
+    "hint": "Profitability per customer and per style, as estimated now. A bar filters the orders.",
+    "noGrain": "By customer and style needs the margin grain (money.margin).",
+    "failed": "Couldn't load by customer and style",
+    "loading": "Reading the margins by customer and style…",
+    "customer": "By customer",
+    "style": "By style",
+    "empty": "No orders in this period.",
+    "orders_one": "{count} order",
+    "orders_other": "{count} orders",
+    "pick": "{name}: {pct} over {count} orders — show only these"
+  },
+  "detail": {
+    "title": "{number} — profitability",
+    "thisOrder": "Order",
+    "noun": "order",
+    "open": "Open order",
+    "noGrain": "Margins need the margin grain (money.margin).",
+    "provisional": "Provisional: the costing method is not decided yet (the accountant chooses it).",
+    "method": "The costs follow the company's costing method.",
+    "documentsLater": "Invoices, credit notes, payments and freight as links come in a later version.",
+    "orderLink": "Open {number} in Sales › Orders"
+  },
+  "held": {
+    "noOrders": "Opening an order needs the permission {permission}."
+  },
+  "strip": {
+    "quoted": "Quoted margin",
+    "quotedHint": "The lines as sold, at the cost of the quote",
+    "noQuotedCost": "A line has no cost at quote",
+    "estimate": "Current estimate",
+    "estimateHint": "From the work orders that make it",
+    "points": "{points} points since the quote",
+    "actual": "Actual so far",
+    "actualFinal": "The final cost",
+    "actualOpen": "Reads high while work is open",
+    "actualNone": "No cost posted yet",
+    "difference": "Difference",
+    "differenceHint": "Margin now less the margin quoted"
+  },
+  "meter": {
+    "label": "Margin now {now} against {quoted} quoted",
+    "noQuoted": "Margin now {now} (no margin at quote to compare)"
+  },
+  "bridge": {
+    "title": "From price to margin",
+    "noGrain": "The bridge needs the price and the cost grain.",
+    "price": "Price (net)",
+    "freight": "Freight",
+    "noFreight": "Not recorded yet: left out",
+    "margin": "Margin now"
+  },
+  "part": {
+    "MATERIAL": "Material",
+    "LABOUR": "Labour",
+    "SUBCONTRACT": "Subcontract",
+    "OVERHEAD": "Overhead",
+    "ADJUSTMENT": "Adjustment"
+  },
+  "waterfall": {
+    "title": "Where the margin went",
+    "noGrain": "Where the margin went needs the margin and the cost grain: it shows amounts of cost.",
+    "none": "Not told yet: the cost at quote or now is not known.",
+    "QUOTED": "Margin quoted",
+    "NOW": "Margin now",
+    "open": "{part} in Finance › Standard vs actual",
+    "reason": {
+      "PRICE": "Price",
+      "MATERIAL": "Material",
+      "LABOUR": "Labour",
+      "SUBCONTRACT": "Subcontract",
+      "OVERHEAD": "Overhead",
+      "ADJUSTMENT": "Adjustment"
+    }
+  },
+  "lines": {
+    "title": "By line",
+    "none": "The order has no lines.",
+    "line": "Line",
+    "net": "Net",
+    "estimate": "Cost estimate",
+    "actual": "Cost actual",
+    "quotedPct": "Quoted %",
+    "marginPct": "Margin % now",
+    "pieces": "{count} pieces · {closed} closed short",
+    "piecesOnly": "{count} pieces"
+  },
+  "shares": {
+    "title": "Work orders behind the cost",
+    "none": "No work order makes it yet: the cost is the quote's.",
+    "workOrder": "Work order",
+    "pieces": "Pieces for this order",
+    "plan": "Estimate rests on",
+    "estimate": "Estimated",
+    "actual": "So far",
+    "of": "{pieces} of {of}",
+    "done": "Done",
+    "open": "Open",
+    "provisional": "Open · provisional"
+  },
+  "plan": {
+    "STANDARD": "Frozen standards",
+    "ESTIMATE": "Estimate at release",
+    "QUOTED": "The quote's cost",
+    "ACTUAL": "Its actual"
+  },
+  "marginTab": {
+    "title": "Margin",
+    "noView": {
+      "title": "The margin needs the costing permission",
+      "body": "The Margin tab needs the costing permission. The rest of the order stays as it is."
+    },
+    "noGrain": {
+      "title": "The margin needs the margin grain",
+      "body": "Your role does not see margins: ask a person who manages roles."
+    },
+    "loading": "Reading the margin…",
+    "failed": "Couldn't load margin",
+    "inFinance": "See every order in Finance › Margins"
+  },
+  "problem": {
+    "signed_out": "You are signed out. Sign in again.",
+    "forbidden": "Your role may not see this here.",
+    "not_found": "Not found, or it belongs to another company or customer.",
+    "unavailable": "The server cannot be reached. Try again in a moment.",
+    "rate_limited": "Too many requests: wait a moment, then try again.",
+    "invalid": "The request was refused as not valid.",
+    "internal": "Something went wrong on the server."
+  },
+  "csv": {
+    "file": "margins-{day}",
+    "order": "Order",
+    "customer": "Customer",
+    "orderDate": "Order date",
+    "status": "Status",
+    "value": "Value",
+    "quotedCost": "Cost at quote",
+    "estimateCost": "Cost estimated now",
+    "actualCost": "Actual cost so far",
+    "quotedMarginPct": "Quoted margin %",
+    "estimateMarginPct": "Margin % now",
+    "actualMarginPct": "Margin % so far",
+    "marginChange": "Margin change",
+    "currency": "Currency",
+    "stage": "Cost"
+  },
+  "keys": {
+    "title": "Keys",
+    "search": "Search an order",
+    "open": "Open the order's profitability"
+  },
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss"
+  }
+}

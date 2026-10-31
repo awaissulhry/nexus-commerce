@@ -29,6 +29,9 @@ export const INSPECTION_COLUMNS = {
   status: true,
   inspectorWorkerId: true,
   inspectorUserId: true,
+  // W2a (B-W2a-67): who it is assigned to before it is decided (an office user or a worker of the site).
+  assignedInspectorId: true,
+  assignedInspectorWorkerId: true,
   notMakerStatement: true,
   decidedAt: true,
   signatureSha256: true,
@@ -41,7 +44,7 @@ export const INSPECTION_COLUMNS = {
 } as const satisfies Prisma.InspectionSelect
 export type InspectionRow = Prisma.InspectionGetPayload<{ select: typeof INSPECTION_COLUMNS }>
 
-export const DEFECT_COLUMNS = { id: true, inspectionId: true, defectClass: true, code: true, description: true, quantity: true, workOrderSizeId: true, note: true } as const satisfies Prisma.InspectionDefectSelect
+export const DEFECT_COLUMNS = { id: true, inspectionId: true, defectClass: true, code: true, defectCodeId: true, zone: true, description: true, quantity: true, workOrderSizeId: true, note: true } as const satisfies Prisma.InspectionDefectSelect
 export type DefectRow = Prisma.InspectionDefectGetPayload<{ select: typeof DEFECT_COLUMNS }>
 
 export const RELEASE_COLUMNS = {

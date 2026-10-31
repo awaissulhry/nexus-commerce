@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ClipboardCheck, Download, MoreHorizontal, Settings2, X } from 'lucide-react'
+import { ClipboardCheck, Download, Hand, MoreHorizontal, Settings2, UserCheck, X } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/components'
-import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, FilterChip, Pill, Skeleton, Tag } from '@nexus/ui/primitives'
+import { CellSaveMark, SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
+import { Button, FilterChip, Pill, Select, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
@@ -15,10 +15,19 @@ import { countText, type Read } from '../../_shared/model'
 import { dash, Freshness, NoAccess, NoticeBanner, PageHead, QualityMessages, StepUpDialog } from '../../_shared/parts'
 import type { StepUpState } from '../../_shared/hooks'
 import type { InspectionRow, Release } from '../api'
+import { AssignDialog } from './AssignDialog'
 import {
+  assignedWords,
+  assignHeld,
+  assigneeValue,
+  assignRowHeld,
   holdOf,
   lastReversal,
+  kindHeld,
   MAX,
+  NEW_DRAFT,
+  NEW_KINDS,
+  RETURN_DRAFT,
   releaseLabel,
   reversedOf,
   statusOf,
@@ -27,13 +36,16 @@ import {
   whoKey,
   type InspectionsListModel,
   type ListDialog,
+  type CellMark,
   type NewDraft,
+  type ReturnDraft,
   type ReverseDraft,
   type RuleDraft,
   type View,
 } from '../model'
 import { NewInspectionModal, ReverseModal, RulesModal, ShortcutsModal } from './dialogs'
 import { ReleaseDetailModal } from './ReleaseDetailModal'
+import '../inspections.css'
 
 export interface InspectionsListActions {
   onView?: (view: View) => void
@@ -58,6 +70,33 @@ export interface InspectionsListActions {
   onDismissNotice?: () => void
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
+  // W2a (B-W2a-67): Assign inspector (dialog, inline cell), Place hold, Create NCR, New inspection › Return.
+  onAssign?: (rows: readonly InspectionRow[]) => void
+  onAssignValue?: (value: string) => void
+  onAssignSave?: () => void
+  onAssignClose?: () => void
+  onNeedPeople?: (siteId: string, workOrderIds: readonly string[]) => void
+  onAssignCell?: (row: InspectionRow, value: string) => void
+  onPlaceHold?: (row: InspectionRow) => void
+  onRaiseNcr?: (row: InspectionRow) => void
+  onPickReturn?: (returnId: string) => void
+  onReturnDraft?: (draft: ReturnDraft) => void
+  onGradeReturn?: () => void
+}
+
+/** The inline cell's mark: the DS CellSaveMark while saving or unknown, "!" with the refusal's words; nothing once saved. */
+function Mark({ mark }: { mark: CellMark | undefined }) {
+  const t = useT('quality')
+  if (!mark || mark.state === 'saved') return null
+  if (mark.state === 'refused') {
+    const words = [t(mark.problem), ...(mark.lines ?? [])].join(' ')
+    return (
+      <span className="fw-q-refused" role="img" aria-label={words} title={words}>
+        !
+      </span>
+    )
+  }
+  return <CellSaveMark state={mark.state} />
 }
 
 /**
@@ -84,7 +123,9 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
   const dialog = model.dialog ?? null
   const kind = viewKind(model.view)
   const open = (next: ListDialog | null) => actions?.onDialog?.(next)
-  const newHeld = !can.inspectionsRecord ? t('held.noRecord') : !can.workOrdersView ? t('held.noWorkOrders') : null
+  // W2a: New inspection has kinds (a final one, an incoming lot, a return); it is held only when none is open to this person.
+  const kindsOpen = NEW_KINDS.some((newKind) => kindHeld(newKind, can) === null)
+  const newHeld = kindsOpen ? null : !can.inspectionsRecord ? t('held.noRecord') : t('held.noWorkOrders')
 
   // c: New inspection (the frame's keys are / j k x ↵ ?; the same skip of fields, menus and dialogs).
   useEffect(() => {
@@ -100,8 +141,8 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
   })
 
   // The cells reach the page's actions through a ref: a new actions object must not rebuild the columns.
-  const live = useRef({ actions })
-  live.current = { actions }
+  const live = useRef({ actions, people: model.people ?? {}, marks: model.marks ?? {}, rows: model.rows.value ?? [] })
+  live.current = { actions, people: model.people ?? {}, marks: model.marks ?? {}, rows: model.rows.value ?? [] }
   const inspectionHref = (id: string) => `${model.prefix}/quality/inspections/${encodeURIComponent(id)}`
   const releaseHref = (id: string) => `${model.prefix}/quality/inspections?view=reversed&open=${encodeURIComponent(id)}`
   // A lot on hold opens its Warehouse record (SCR-201: stock, trace, the checklist); its decisions link on to Tests & substances.
@@ -126,7 +167,37 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
           <Pill tone={status.tone} dot>
             {t(status.key)}
           </Pill>
-          {hold && <span className="fw-q-hint">{t(hold.key, hold.params)}</span>}
+          {data.undecided ? <span className="fw-q-hint">{t('list.undecided')}</span> : hold && <span className="fw-q-hint">{t(hold.key, hold.params)}</span>}
+          {(data.holds > 0 || data.ncrs > 0) && <span className="fw-q-hint">{t('list.decidedIn', { holds: data.holds, ncrs: data.ncrs })}</span>}
+        </span>
+      )
+    }
+    const AssignedCell = ({ data }: ICellRendererParams<InspectionRow>) => {
+      if (!data) return null
+      const words = assignedWords(data.assigned, model.me)
+      const act = live.current.actions
+      if (!can.inspectionsRecord || data.status !== 'OPEN') return <span className={data.assigned ? undefined : 'fw-q-hint'}>{data.status === 'OPEN' ? t(words.key, words.params) : '—'}</span>
+      const found = live.current.people[data.siteId]
+      const current = assigneeValue(data.assigned)
+      return (
+        <span className="fw-q-cell-row">
+          <Select
+            size="xs"
+            aria-label={t('assign.cellFor', { label: data.label })}
+            value={current}
+            onFocus={() => found === undefined && act?.onNeedPeople?.(data.siteId, live.current.rows.filter((row) => row.siteId === data.siteId).map((row) => row.workOrderId))}
+            onChange={(event) => act?.onAssignCell?.(data, event.target.value)}
+          >
+            <option value="">{t('assign.nobody')}</option>
+            {current && !found?.value?.inspectors.some((entry) => `${entry.kind}:${entry.id}` === current) && <option value={current}>{t(words.key, words.params)}</option>}
+            {(found?.value?.inspectors ?? []).map((entry) => (
+              <option key={`${entry.kind}:${entry.id}`} value={`${entry.kind}:${entry.id}`} disabled={entry.made.length > 0}>
+                {entry.me ? t('assign.meNamed', { name: entry.name }) : entry.kind === 'WORKER' ? t('assign.benchNamed', { name: entry.name }) : entry.name}
+                {entry.made.length > 0 ? ` — ${t('assign.made', { orders: entry.made.join(', ') })}` : ''}
+              </option>
+            ))}
+          </Select>
+          <Mark mark={live.current.marks[data.id]} />
         </span>
       )
     }
@@ -156,6 +227,17 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
             { id: 'open', label: t('row.open'), href: inspectionHref(data.id) },
             { id: 'tab', label: t('row.openNewTab'), href: inspectionHref(data.id), target: '_blank' },
             ...(data.toRelease > 0 && !data.onHold ? [{ id: 'release', label: t('row.release'), href: `${inspectionHref(data.id)}?tab=decision` }] : []),
+            { id: 'sep-w2a', separator: true },
+            {
+              id: 'assign',
+              label: t('assign.menu'),
+              onSelect: () => live.current.actions?.onAssign?.([data]),
+              disabled: !can.inspectionsRecord || assignRowHeld(data) !== null,
+              description: !can.inspectionsRecord ? t('assign.held.noRight') : assignRowHeld(data) ? t(assignRowHeld(data)!) : undefined,
+            },
+            { id: 'hold', label: t('row.placeHold'), onSelect: () => live.current.actions?.onPlaceHold?.(data), disabled: !can.holdsPlace, description: can.holdsPlace ? undefined : t('held.noHoldPlace') },
+            { id: 'ncr', label: t('row.createNcr'), onSelect: () => live.current.actions?.onRaiseNcr?.(data), disabled: !can.ncrRaise, description: can.ncrRaise ? undefined : t('raiseNcr.held.noRight') },
+            { id: 'sep-copy', separator: true },
             { id: 'copy', label: t('row.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(data.label) },
           ]}
         />
@@ -171,14 +253,15 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
       column('inspection', t('col.inspection'), NameCell, { flex: 1.6, minWidth: 180 }),
       { colId: 'workOrder', headerName: t('col.workOrder'), sortable: false, flex: 1, minWidth: 130, valueGetter: (params) => params.data?.number ?? '' },
       column('status', t('col.status'), StatusCell, { flex: 2, minWidth: 220 }),
+      column('assigned', t('col.assigned'), AssignedCell, { flex: 1.3, minWidth: can.inspectionsRecord ? 190 : 140 }),
       column('lot', t('col.lot'), LotCell, { flex: 1, minWidth: 130 }),
       column('released', t('col.released'), ReleasedCell, { flex: 1.2, minWidth: 150 }),
-      column('inspector', t('col.inspector'), InspectorCell, { flex: 1, minWidth: 120 }),
+      column('inspector', t('col.signedBy'), InspectorCell, { flex: 1, minWidth: 120 }),
       column('decided', t('col.decided'), DecidedCell, { flex: 1.1, minWidth: 140 }),
       { ...column('actions', t('col.actions'), ActionsCell, { width: 72, minWidth: 72 }), suppressHeaderMenuButton: true },
     ]
-    // The cells close over the words and the person: a change of language rebuilds them.
-  }, [t, locale, model.prefix, model.me])
+    // The cells close over the words, the person and their rights: a change of language rebuilds them.
+  }, [t, locale, model.prefix, model.me, can.inspectionsRecord, can.holdsPlace, can.ncrRaise, model.people, model.marks])
 
   const releaseColumns = useMemo<ColDef<Release>[]>(() => {
     const NameCell = ({ data }: ICellRendererParams<Release>) => {
@@ -304,7 +387,7 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
   // ---- the toolbar: the view menu and its chip ----
   const viewItems: MenuItemDef[] = [
     { id: 'heading', heading: true, label: t('list.rowsHeading') },
-    ...(['all', 'open', 'waiting', 'onHold', 'reversed', 'lots'] as const).map((view) => ({
+    ...(['all', 'open', 'mine', 'waiting', 'failed', 'reversed', 'lots'] as const).map((view) => ({
       id: view,
       label: t(`view.${view}`),
       checked: model.view === view,
@@ -335,10 +418,19 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
   const rows = read.value ?? []
   const count = rows.length
   const selectedCount = model.selected.length
+  const pickedRows = kind === 'inspections' ? (model.rows.value ?? []).filter((row) => model.selected.includes(row.id)) : []
+  const bulkAssignHeld = kind === 'inspections' ? assignHeld(pickedRows, can) : null
   const bulk = (
-    <Button size="sm" onClick={() => actions?.onExport?.(kind, model.selected)} aria-label={t('list.bulkExport', { count: selectedCount })}>
-      <Download size={13} aria-hidden /> <SelectionLabel>{t('list.bulkExport', { count: selectedCount })}</SelectionLabel>
-    </Button>
+    <>
+      {kind === 'inspections' && (
+        <Button size="sm" onClick={() => actions?.onAssign?.(pickedRows)} heldReason={bulkAssignHeld ? t(bulkAssignHeld) : null} aria-label={t('assign.bulk', { count: selectedCount })}>
+          <UserCheck size={13} aria-hidden /> <SelectionLabel>{t('assign.bulk', { count: selectedCount })}</SelectionLabel>
+        </Button>
+      )}
+      <Button size="sm" onClick={() => actions?.onExport?.(kind, model.selected)} aria-label={t('list.bulkExport', { count: selectedCount })}>
+        <Download size={13} aria-hidden /> <SelectionLabel>{t('list.bulkExport', { count: selectedCount })}</SelectionLabel>
+      </Button>
+    </>
   )
   const state: ReactNode = read.problem ? (
     <EmptyState
@@ -402,6 +494,13 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
         status={<Freshness asOf={model.asOf} live={model.live} />}
         actions={
           <>
+            {can.holdsView && (
+              <Button size="sm" asChild>
+                <Link href={`${model.prefix}/quality/holds`}>
+                  <Hand size={14} aria-hidden /> {t('list.holds')}
+                </Link>
+              </Button>
+            )}
             <Button size="sm" onClick={() => open({ kind: 'rules' })}>
               <Settings2 size={14} aria-hidden /> {t('list.rules')}
             </Button>
@@ -484,11 +583,21 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
       )}
       <NewInspectionModal
         open={dialog?.kind === 'new'}
-        draft={model.newDraft ?? { workOrderId: null, lotSize: '', sampleSize: '', inspectionLevel: 'II', aqlMajor: '2.5', aqlMinor: '4.0', acceptMajor: '', acceptMinor: '', note: '' }}
+        draft={model.newDraft ?? NEW_DRAFT}
+        can={can}
+        prefix={model.prefix}
+        people={model.newPeople ?? null}
+        returns={model.returns ?? null}
+        returnRecord={model.returnRecord ?? null}
+        returnDraft={model.returnDraft ?? RETURN_DRAFT}
+        onPickReturn={(id) => actions?.onPickReturn?.(id)}
+        onReturnDraft={(draft) => actions?.onReturnDraft?.(draft)}
+        onGradeReturn={() => actions?.onGradeReturn?.()}
         workOrders={model.pick?.workOrders ?? { value: null, problem: null }}
         cells={model.pick?.cells ?? null}
         busy={model.busy}
         problem={dialog?.kind === 'new' ? model.dialogProblem : null}
+        lines={dialog?.kind === 'new' ? model.dialogLines : undefined}
         onDraft={(draft) => actions?.onNewDraft?.(draft)}
         onPick={(id) => actions?.onPickWorkOrder?.(id)}
         onCreate={() => actions?.onCreate?.()}
@@ -520,6 +629,7 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
         onReverse={() => actions?.onReverse?.()}
         onClose={() => open(null)}
       />
+      <AssignDialog state={model.assign ?? null} onValue={(value) => actions?.onAssignValue?.(value)} onSave={() => actions?.onAssignSave?.()} onClose={() => actions?.onAssignClose?.()} />
       <ShortcutsModal open={dialog?.kind === 'shortcuts'} onClose={() => open(null)} keys={listKeys(ownKeys, true).map((entry) => ({ keys: entry.keys, does: lists(entry.does) === entry.does ? entry.does : lists(entry.does) }))} />
       {stepUp && <StepUpDialog state={stepUp} onSubmit={(code) => actions?.onStepUpSubmit?.(code)} onCancel={() => actions?.onStepUpCancel?.()} />}
     </div>

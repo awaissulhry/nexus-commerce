@@ -1,0 +1,13 @@
+/*
+ * SCR-091 the reason picker: layout only, inside the DS FloorFrame and the floor tasks' shared parts
+ * (../shared/view/tasks.css). The tiles are the DS ReasonGrid's own; sizes read the floor tier's `--nds-density-*`
+ * tokens; colours are semantic `--nds-*` roles. No raw colour.
+ */
+
+/* What is chosen so far, under "What this is for" (pick mode). */
+.fw-reasons-chosen {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.1);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}

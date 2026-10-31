@@ -1,0 +1,139 @@
+{
+  "held": {
+    "noPurchasingRequests": "Buyers create POs: ask a buyer. The line also waits in their Requests to buy.",
+    "noPoView": "Your role cannot open purchase orders (purchasing.view).",
+    "lineGone": "The line is not in the plan shown: run the plan again.",
+    "lineNotOpen": "The line is in a PO already, set aside, or covered.",
+    "notFirm": "This line has no firm planned order.",
+    "noFirm": "Your role cannot change firm planned orders (planning.firm).",
+    "noBuyFix": "None of the ticked rows has a line to buy.",
+    "noSend": "Your role cannot send purchase orders (purchasing.send).",
+    "noneReady": "No order is ready to send: fix them on their pages first."
+  },
+  "move": {
+    "title": "Move the firm planned order",
+    "confirm": "Move it",
+    "body": "It brings {quantity} {unit} by {date}. Pick the day it should come; the quantity stays.",
+    "date": "New day",
+    "hint": "Today or later. The next run plans around it.",
+    "pickDate": "Pick a day first.",
+    "past": "Pick today or a later day.",
+    "same": "It is on that day already.",
+    "changed": "The line changed since it was read (a new run or a colleague): the plan was read again.",
+    "refused": "The day or the quantity was not accepted: nothing changed.",
+    "failed": "The firm order was not moved. Try again."
+  },
+  "notice": {
+    "moved": "The firm planned order of {material} now comes {date}.",
+    "sent_one": "{count} purchase order sent: its supplier gets the order and the link to confirm.",
+    "sent_other": "{count} purchase orders sent: each supplier gets its order and the link to confirm."
+  },
+  "view": {
+    "shortWo": "Short on open work orders"
+  },
+  "menu": {
+    "requests": "Requests to buy (Purchasing): the same lines in the buyers’ queue"
+  },
+  "tile": {
+    "shortWo": "Work orders short of material",
+    "shortWoHint": "open or planned, counted now"
+  },
+  "short": {
+    "title": "Short on open work orders",
+    "count_one": "{count} shortage",
+    "count_other": "{count} shortages",
+    "started": "Started {date}",
+    "notStarted": "Not started",
+    "due": "Due {date}",
+    "noDue": "No due date",
+    "word": {
+      "NOT_ENOUGH": "Not enough",
+      "DELAYED": "Delayed"
+    },
+    "neededBy": "needed by {date}",
+    "arrives": "arrives {date}, too late",
+    "nothingOnOrder": "Nothing on order",
+    "noFix": "No fix here yet: see the line in the plan",
+    "fix": {
+      "BUY": "Buy",
+      "buyLabel": "Buy {material} for {workOrder}: a draft PO from the plan",
+      "EXPEDITE": "Expedite {number}",
+      "expediteLabel": "Expedite {number} for {workOrder}: open the PO and remind the supplier",
+      "MOVE_FIRM": "Move the firm order"
+    },
+    "col": {
+      "workOrder": "Work order",
+      "dates": "Start · due",
+      "material": "Material short",
+      "short": "Short",
+      "expected": "Expected arrival",
+      "fix": "Fix"
+    },
+    "failed": "Couldn’t load short on open work orders",
+    "empty": {
+      "title": "No work order is waiting for material",
+      "body": "Every open or planned work order has its material in stock, reserved or on the way in time."
+    },
+    "bulk": {
+      "draft_one": "Draft PO for {count} line",
+      "draft_other": "Draft POs for {count} lines"
+    }
+  },
+  "why": {
+    "firm": "A firm planned order brings {quantity} {unit} by {date}: the plan does not change it, and it is what is bought.",
+    "firmCarried": "A firm planned order carried from an earlier plan brings {quantity} {unit} by {date}: the plan does not change it.",
+    "holdHide": "This hide is on hold: {reason}, since {date}",
+    "holdLot": "The lot is on hold: {reason}, since {date}"
+  },
+  "peg": {
+    "title": "For orders: what covers each",
+    "none": "This plan has no pegging for the line (a plan made before it was kept).",
+    "kind": {
+      "ORDER_LINE": "Order line",
+      "WORK_ORDER": "Work order",
+      "SAFETY_STOCK": "Safety stock",
+      "REORDER": "Reorder"
+    },
+    "line": "line {seq}",
+    "size": "size {size}",
+    "mtm": "made to measure",
+    "on": "on",
+    "need": "needs {quantity} {unit} by {date}",
+    "supply": {
+      "STOCK": "Stock",
+      "RESERVATION": "Reserved",
+      "PURCHASE_ORDER": "On order",
+      "PLANNED": "To buy or make",
+      "FIRM": "Firm planned order"
+    },
+    "anyLot": "any lot",
+    "poLine": "{number} line {seq}",
+    "date": "by {date}",
+    "nothing": "Nothing covers it yet."
+  },
+  "send": {
+    "review_one": "Review and send it",
+    "review_other": "Review and send them ({count})",
+    "title_one": "Send {count} purchase order",
+    "title_other": "Send {count} purchase orders",
+    "subtitle": "Each order goes on its own: its mail, its PDF and its link to confirm.",
+    "mailNote": "Nothing is sent before you press Send.",
+    "confirm_one": "Send {count}",
+    "confirm_other": "Send {count}",
+    "failed": "The orders could not be checked or sent",
+    "ready": "Ready to send",
+    "notReady": "Not ready",
+    "to": "To {name} ({email})",
+    "confirmBy": "Asked to confirm by {time}",
+    "cardRefused": "This order cannot be read for sending: open it.",
+    "fixOnPo": "Fix it on its page, then send it from there.",
+    "doneTitle": "Purchase orders sent",
+    "doneBody": "{sent} of {count} sent; each supplier gets its own mail and link to confirm.",
+    "sentOne": "Sent: waiting for the supplier to confirm",
+    "refused": {
+      "conflict": "Not sent: it changed meanwhile (open it and send it from its page)",
+      "forbidden": "Not sent: your role cannot send it",
+      "other": "Not sent: open it to see why"
+    }
+  }
+}

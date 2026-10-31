@@ -6,7 +6,9 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { createShipment, listShipments, listSiteSettings, readyToShip, type ShipmentRow, type SiteSettings } from '../api'
+import { isApiError, issuePath } from '../../../../lib/api/errors'
+import { createShipment, listShipments, listSiteSettings, printDdtOf, readyToShip, type ShipmentRow, type SiteSettings } from '../api'
+import { printDdtsPlan, type PrintOutcome } from '../daily-model'
 import { downloadText, useCoalesced, useLive } from '../hooks'
 import {
   abilitiesOf,
@@ -26,7 +28,7 @@ import {
   zonedToday,
   type RowView,
 } from '../model'
-import type { NewShipmentModel, ShipmentsListModel } from './list-model'
+import type { NewShipmentModel, PrintDdtsModel, ShipmentsListModel } from './list-model'
 import { ShipmentsListView } from './view/ShipmentsListView'
 
 /** The open shipments the ship-today queue reads at once (its cards, tiles and rows). */
@@ -39,6 +41,8 @@ const QUEUE_LIMIT = 200
  * shipment by state (`?rows=`), 50 a page with Show more; the search by number, order, customer PO, customer or tracking
  * number (`?q=`). Live: a shipment or DDT event waits behind "N updates · Show". New shipment (`?new=1`, `&order=<id>`
  * from the order studio) plans a DRAFT from what quality released and is not shipped yet, then opens it. Export N = CSV.
+ * B-W2a-71: Print N DDTs — each selected shipment's live DDT on its site's document printer, one call each, the outcome
+ * per shipment in words; the freight charged in the CSV with the price grain; `?rows=evidence`.
  */
 export function ShipmentsPage() {
   return (
@@ -73,6 +77,8 @@ function ShipmentsContainer() {
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<ShipmentsListModel['notice']>(null)
   const [create, setCreate] = useState<NewShipmentModel | null>(null)
+  const [printDdts, setPrintDdts] = useState<PrintDdtsModel | null>(null)
+  const printKeys = useRef<Record<string, string>>({})
   const readId = useRef(0)
   const createKey = useRef<string | null>(null)
 
@@ -235,6 +241,39 @@ function ShipmentsContainer() {
     updates,
     notice,
     create,
+    printDdts,
+  }
+
+  // ---- Print N DDTs (B-W2a-71) ---------------------------------------------------------------------------------------------
+
+  const printWords = (error: unknown): PrintOutcome['words'] => {
+    if (!isApiError(error)) return { key: 'printDdts.why.internal' }
+    if (error.kind === 'invalid' && error.issues.some((issue) => issuePath(issue).includes('printerId'))) return { key: 'printDdts.why.noPrinter' }
+    if (error.kind === 'conflict') return { key: 'printDdts.why.state' }
+    if (error.kind === 'forbidden') return { key: 'printDdts.why.forbidden' }
+    if (error.kind === 'not_found') return { key: 'printDdts.why.notFound' }
+    return { key: 'printDdts.why.internal' }
+  }
+
+  const runPrintDdts = async () => {
+    if (!printDdts || printDdts.busy || printDdts.outcomes) return
+    const picked = (shown ?? []).filter((row) => printDdts.ids.includes(row.id))
+    const plan = printDdtsPlan(picked)
+    setPrintDdts({ ...printDdts, busy: true })
+    const outcomes: PrintOutcome[] = []
+    // One at a time: each is its own print command on its own site's printer.
+    for (const row of plan.printable) {
+      const key = (printKeys.current[row.id] ??= newIdempotencyKey())
+      try {
+        await printDdtOf(api, row.id, key)
+        outcomes.push({ id: row.id, number: row.number, ddt: row.ddt?.number ?? null, state: 'queued', words: { key: 'printDdts.why.queued' } })
+      } catch (error) {
+        outcomes.push({ id: row.id, number: row.number, ddt: row.ddt?.number ?? null, state: 'refused', words: printWords(error) })
+      }
+    }
+    for (const row of plan.skipped) outcomes.push({ id: row.id, number: row.number, ddt: null, state: 'skipped', words: { key: row.status === 'CANCELLED' ? 'printDdts.why.cancelled' : 'printDdts.why.noDdt' } })
+    printKeys.current = {}
+    setPrintDdts((current) => (current ? { ...current, busy: false, outcomes } : current))
   }
 
   const exportRows = (ids: string[]) => {
@@ -248,7 +287,7 @@ function ShipmentsContainer() {
           const words = carrierWords(row)
           return t(words.key, words.params)
         },
-      }),
+      }, { price: can.price }),
     )
   }
 
@@ -277,6 +316,12 @@ function ShipmentsContainer() {
           }),
         onNewDelivery: (next) => setCreate((current) => (current ? { ...current, ...next } : current)),
         onNewCreate: () => void submitCreate(),
+        onPrintDdts: (ids) => {
+          printKeys.current = {}
+          setPrintDdts({ ids, busy: false, outcomes: null })
+        },
+        onPrintDdtsGo: () => void runPrintDdts(),
+        onPrintDdtsClose: () => setPrintDdts((current) => (current?.busy ? current : null)),
       }}
     />
   )

@@ -31,7 +31,23 @@ const plan = {
   acceptMinor: z.number().int().min(0).max(100_000),
 }
 
-const defectOut = output({ id: id(), defectClass: z.enum(DEFECT_CLASSES), code: z.string(), description: z.string().nullable(), quantity: z.number().int(), workOrderSizeId: id().nullable(), note: z.string().nullable() })
+const defectOut = output({
+  id: id(),
+  defectClass: z.enum(DEFECT_CLASSES),
+  code: z.string(),
+  /** W2a (B-W2a-67): the library's defect it was picked from (null: typed, W1) and where on the garment (a GARMENT_ZONES id). */
+  defectCodeId: id().nullable(),
+  zone: z.string().nullable(),
+  description: z.string().nullable(),
+  quantity: z.number().int(),
+  workOrderSizeId: id().nullable(),
+  note: z.string().nullable(),
+})
+/**
+ * W2a (B-W2a-67; design qi-assign): who an inspection is assigned to before it is decided — an office user (by name) or a
+ * worker of the site (named only inside one inspection, never in the list: Owner answer W1).
+ */
+const assignedOut = output({ kind: z.enum(['USER', 'WORKER']), userId: id().nullable(), workerId: id().nullable(), name: z.string().nullable() })
 export const inspectionOut = output({
   id: id(),
   /** Its own number (INS-2026-0412, the company's INSPECTION series); null for one opened before the series existed. */
@@ -51,6 +67,7 @@ export const inspectionOut = output({
   overridden: z.boolean(),
   overrideReason: z.string().nullable(),
   inspector: who,
+  assigned: assignedOut.nullable(),
   notMakerStatement: z.boolean(),
   decidedAt: instant().nullable(),
   signatureSha256: z.string().nullable(),
@@ -178,7 +195,8 @@ export const benchWorkOrdersContract = defineContract({
 // ---- inspections ------------------------------------------------------------------------------------------------------------
 
 export const openInspectionContract = defineContract({
-  body: input({ workOrderId: id(), ...plan, note: note().nullable().optional() }),
+  /** W2a (B-W2a-67; design qi-new "Inspector (optional)"): the office may assign it at once (never a maker). */
+  body: input({ workOrderId: id(), ...plan, note: note().nullable().optional(), assigneeId: id().nullable().optional(), assigneeWorkerId: id().nullable().optional() }),
   response: { 200: inspectionAnswer, 201: inspectionAnswer },
 })
 
@@ -218,6 +236,9 @@ export const putDefectsContract = defineContract({
           workOrderSizeId: id().nullable().optional(),
           description: note().nullable().optional(),
           note: note().nullable().optional(),
+          /** W2a: picked from the library (an active defect, not a category; `code` is its code) and its garment zone. */
+          defectCodeId: id().nullable().optional(),
+          zone: z.string().trim().max(40).nullable().optional(),
         }),
       )
       .max(MAX_DEFECT_LINES + 1),
@@ -252,6 +273,10 @@ export const listInspectionsContract = defineContract({
     onHold: flag.optional(),
     /** The four-eyes queue: PASSED with garments still to release. */
     waitingRelease: flag.optional(),
+    /** W2a (B-W2a-67; design qi-metrics "Failed - not decided"): the newest decided inspection FAILED, no hold and no NCR from it yet. */
+    failedUndecided: flag.optional(),
+    /** W2a: assigned to the caller (`me`), or not decided and assigned to nobody (`none`). */
+    assigned: z.enum(['me', 'none']).optional(),
     limit,
   }),
   response: {
@@ -277,12 +302,47 @@ export const listInspectionsContract = defineContract({
           toRelease: z.number().int(),
           onHold: z.boolean(),
           holdWords: z.string().nullable(),
+          /** W2a: who it is assigned to (a worker without a name: names only inside one inspection). */
+          assigned: assignedOut.nullable(),
+          /** W2a: the quality holds placed from it (any state) and the NCRs raised from or linked to it (not cancelled). */
+          holds: z.number().int(),
+          ncrs: z.number().int(),
+          /** FAILED, the newest decided of its work order, with no hold and no NCR from it: someone must decide (qi-metrics). */
+          undecided: z.boolean(),
+          version: z.number().int(),
           decidedAt: instant().nullable(),
           createdAt: instant(),
         }),
       ),
     }),
   },
+})
+
+// ---- W2a: assign an inspector (B-W2a-67; design qi-assign, qi-grid inline "Inspector") ----------------------------------------
+
+/**
+ * The people an inspection of these work orders may be assigned to at a site: ACTIVE office users who record inspections
+ * there and, for whoever sees the site's workers, its floor inspectors; each with the work orders of these whose garments
+ * they made (held in the dialog: "Made garments of WO-0142"). Me first, then by name.
+ */
+export const inspectorsContract = defineContract({
+  querystring: input({ siteId: id(), workOrderIds: z.string().max(2000).optional() }),
+  response: {
+    200: output({
+      inspectors: z.array(output({ kind: z.enum(['USER', 'WORKER']), id: id(), name: z.string(), me: z.boolean(), made: z.array(z.string()) })),
+      floorListed: z.boolean(),
+    }),
+  },
+})
+
+/** Assign (or clear) the inspector of OPEN inspections, all in one command: every one or none (409 `inspections/<i>`). */
+export const assignContract = defineContract({
+  body: input({
+    inspections: z.array(input({ id: id(), version })).min(1).max(50),
+    assigneeId: id().nullable().optional(),
+    assigneeWorkerId: id().nullable().optional(),
+  }),
+  response: { 200: output({ inspections: z.array(output({ id: id(), version: z.number().int(), assigned: assignedOut.nullable() })) }) },
 })
 
 // ---- releases and reversals ----------------------------------------------------------------------------------------------------

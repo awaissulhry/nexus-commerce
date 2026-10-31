@@ -225,6 +225,7 @@
     "bundles": "Fasci",
     "operations": "Fasi e WIP",
     "quality": "Qualità",
+    "labour": "Manodopera e costo",
     "activity": "Attività",
     "problems_one": "{count} controllo blocca il rilascio",
     "problems_other": "{count} controlli bloccano il rilascio"

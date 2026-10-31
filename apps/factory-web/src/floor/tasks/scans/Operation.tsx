@@ -350,7 +350,17 @@ export function FloorOperation() {
 
   useFloorKeys({
     enter: step.kind === 'counts' ? () => void finish() : step.kind === 'pick' ? () => onAction({ type: 'pick', operationId: step.options[0]!.id }) : step.kind === 'correct' ? () => void sendCorrection() : null,
-    escape: leave !== null ? null : step.kind === 'scan' || step.kind === 'noPermission' ? () => router.push('/floor') : step.kind === 'correct' ? () => void openCorrections() : back,
+    // Esc in the reason picker (Scrap or Rework open, SCR-091) is Back to the counts; the counts stay.
+    escape:
+      leave !== null
+        ? null
+        : (step.kind === 'counts' || step.kind === 'correct') && (step.open === 'scrap' || step.open === 'rework')
+          ? () => setStep({ ...step, open: null, problem: null })
+          : step.kind === 'scan' || step.kind === 'noPermission'
+            ? () => router.push('/floor')
+            : step.kind === 'correct'
+              ? () => void openCorrections()
+              : back,
   })
 
   if (!me) return null

@@ -2,7 +2,8 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { at, canOf, inShell, PREFIX, SITE, SITE_SOUTH, SUPPLIER_LIST, SUPPLIERS, TIME_ZONE, type Role } from '../../../_shared/buying/fixtures'
 import { ORDER_ROWS, ORDER_SUMMARY } from '../demo/fixtures'
-import { NO_NEW_ORDER, type OrdersListModel } from '../model'
+import { SEND_CARDS, SEND_OUTCOMES } from '../demo/daily/fixtures'
+import { NO_NEW_ORDER, type OrdersListModel, type SendManyModel } from '../model'
 import { OrdersListView } from './view/OrdersListView'
 
 /**
@@ -30,6 +31,9 @@ function listCase(role: Role, over: Partial<OrdersListModel> = {}): OrdersCase {
 }
 
 const only = (...statuses: string[]) => ORDER_ROWS.filter((row) => statuses.includes(row.status))
+
+const SEND_IDS = SEND_CARDS.map((card) => card.id)
+const sendMany = (over: Partial<SendManyModel> = {}): SendManyModel => ({ orderIds: SEND_IDS, cards: { status: 'ready', value: SEND_CARDS }, confirmBy: {}, message: '', sending: false, outcomes: null, problem: null, ...over })
 
 function OrdersDesign({ model }: { model: OrdersCase }) {
   return inShell('/purchasing/orders', createElement(OrdersListView, { model: model.model }), model.role)
@@ -64,5 +68,19 @@ export const designScreen = defineDesignScreen<OrdersCase>({
     { id: 'warehouse', label: 'Warehouse: reads the orders it receives against, no money', model: listCase('warehouse') },
     { id: 'read-only', label: 'Read-only: reads, nothing written', model: listCase('readOnly') },
     { id: 'sales', label: 'Sales: no purchasing.view — the page says so', model: listCase('sales') },
+    // B-W2a-69: Due this week · Late (tiles = saved views), the confirm-by, Expected, Send n.
+    { id: 'w2a-tile-due', label: 'Tile: due this week (an open line expected from today to Sunday)', model: listCase('buyer', { view: 'dueThisWeek', rows: { items: ORDER_ROWS.filter((row) => row.delivery === 'THIS_WEEK'), more: false, problem: null } }) },
+    { id: 'w2a-tile-late', label: 'Tile: late (an open line expected before today)', model: listCase('buyer', { view: 'deliveryLate', rows: { items: ORDER_ROWS.filter((row) => row.delivery === 'LATE'), more: false, problem: null } }) },
+    { id: 'w2a-past-confirm-by', label: 'Rows ▾ Past the confirm-by (the supplier did not answer in time)', model: listCase('buyer', { view: 'pastConfirmBy', rows: { items: ORDER_ROWS.filter((row) => row.number === 'PO-2026-0006'), more: false, problem: null } }) },
+    { id: 'w2a-tiles-unknown', label: 'Tiles: due this week and late unknown (too many open lines) — “—”, never 0', model: listCase('buyer', { summary: { ...ORDER_SUMMARY, dueThisWeek: null, late: null } }) },
+    { id: 'w2a-selection-send', label: 'Selection: Send N (the drafts among the rows) · Export N', model: listCase('buyer', { selected: ORDER_ROWS.slice(0, 3).map((row) => row.id) }) },
+    { id: 'w2a-selection-send-held', label: 'Selection without a draft: Send held with the reason', model: listCase('buyer', { selected: ORDER_ROWS.slice(2, 4).map((row) => row.id) }) },
+    { id: 'w2a-send-many', label: 'Send n: one card per supplier; confirm by per order; one held by a check, one not a draft', model: listCase('buyer', { sendMany: sendMany({ message: 'Grazie, attendiamo conferma.' }) }) },
+    { id: 'w2a-send-many-reading', label: 'Send n: the checks being read', model: listCase('buyer', { sendMany: sendMany({ cards: { status: 'loading' } }) }) },
+    { id: 'w2a-send-many-failed', label: 'Send n: the checks could not be read (Try again)', model: listCase('buyer', { sendMany: sendMany({ cards: { status: 'error', problem: 'problem.offline' } }) }) },
+    { id: 'w2a-send-many-sending', label: 'Send n: sending', model: listCase('buyer', { sendMany: sendMany({ sending: true }) }) },
+    { id: 'w2a-send-many-done', label: 'Send n: done — sent to whom, the confirm-by, one refused (changed meanwhile)', model: listCase('buyer', { sendMany: sendMany({ outcomes: SEND_OUTCOMES }) }) },
+    { id: 'w2a-send-many-offline', label: 'Send n held: offline', model: listCase('buyer', { live: 'offline', sendMany: sendMany() }) },
+    { id: 'w2a-send-many-no-right', label: 'Send n held: no purchasing.send (planner)', model: listCase('planner', { sendMany: sendMany() }) },
   ],
 })

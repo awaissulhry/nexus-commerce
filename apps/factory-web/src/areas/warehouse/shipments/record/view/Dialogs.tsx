@@ -1,14 +1,16 @@
 'use client'
 
-import { useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useState } from 'react'
 import { CheckCircle2, CircleAlert, Lock } from 'lucide-react'
-import { Banner, Field, KeyValue, Modal, phraseMatches } from '@nexus/ui/components'
+import { Banner, Field, KeyValue, phraseMatches } from '@nexus/ui/components'
 import { Button, Checkbox, Input, NumberStepper, Select, Spinner, Textarea } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { DDT_FREIGHT, DDT_REASONS, LINK_EXPIRY_DAYS, TRANSPORT_BY, type Shipment, type TransportBy } from '../../api'
 import { annulPhrase, carrierWords, ddtProblemGroups, kilos, newShipmentLines, newShipmentProblems, type DdtForm } from '../../model'
 import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
+import { DailyDialog } from './DailyDialogs'
+import { close, Frame } from './DialogFrame'
 
 /**
  * A shipment's dialogs (design sh-issue-ddt, sh-buy, sh-handover, sh-annul; W1): Issue DDT (what the office says on it,
@@ -44,7 +46,8 @@ export function ShipmentDialogs({ shipment, model, actions }: { shipment: Shipme
     case 'unpack':
       return <UnpackDialog {...props} />
     default:
-      return null
+      // B-W2a-71: Void labels, the freight charged, the transport evidence.
+      return <DailyDialog {...props} />
   }
 }
 
@@ -53,64 +56,6 @@ interface DialogProps {
   model: ShipmentRecordModel
   actions?: ShipmentRecordActions
 }
-
-const confirmKeys = (held: string | null, go: () => void) => (event: KeyboardEvent) => {
-  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !held) {
-    event.preventDefault()
-    go()
-  }
-}
-
-function Frame({ title, subtitle, held, go, goLabel, onClose, children, problem, size = 'md', tone = 'primary', done }: { title: string; subtitle?: string; held: string | null; go: () => void; goLabel: string; onClose: () => void; children?: ReactNode; problem: ShipmentRecordModel['dialogProblem']; size?: 'sm' | 'md' | 'lg' | 'xl'; tone?: 'primary' | 'danger'; done?: ReactNode }) {
-  const t = useT('shipments')
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={title}
-      subtitle={subtitle}
-      size={size}
-      footer={
-        done ? (
-          <>
-            <span className="grow" />
-            <Button size="sm" variant="primary" onClick={onClose}>
-              {t('common.done')}
-            </Button>
-          </>
-        ) : (
-          <>
-            <span className="grow" />
-            <Button size="sm" onClick={onClose}>
-              {t('common.cancel')}
-            </Button>
-            <Button size="sm" variant={tone} heldReason={held} onClick={go} aria-keyshortcuts="Meta+Enter Control+Enter">
-              {goLabel}
-            </Button>
-          </>
-        )
-      }
-    >
-      <form
-        className="fw-sh-dialog"
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (!held && !done) go()
-        }}
-        onKeyDown={done ? undefined : confirmKeys(held, go)}
-      >
-        {problem && (
-          <Banner tone="danger" title={t(problem.words.key, problem.words.params)}>
-            {problem.detail}
-          </Banner>
-        )}
-        {done ?? children}
-      </form>
-    </Modal>
-  )
-}
-
-const close = (actions?: ShipmentRecordActions) => () => actions?.onDialog?.(null)
 
 // ---- Issue DDT ---------------------------------------------------------------------------------------------------------
 
@@ -149,7 +94,9 @@ function IssueDdtDialog({ shipment, model, actions }: DialogProps) {
         </Banner>
       )}
       <div className="fw-sh-fields">
-        <Field label={t('issue.reason')} error={field('reason')}>
+        {/* B-W2a-71 (the DDT reason choice): each reason says when it applies; processing on account and returns to a
+            supplier travel with the DDT of their own record (B-W2a-17), never a shipment to a customer. */}
+        <Field label={t('issue.reason')} hint={t(`issue.reasonHint.${form.reason ?? 'SALE'}`)} error={field('reason')}>
           <Select size="sm" value={form.reason ?? 'SALE'} onChange={(event) => set({ reason: event.target.value as DdtForm['reason'] })}>
             {DDT_REASONS.map((reason) => (
               <option key={reason} value={reason}>
@@ -185,6 +132,7 @@ function IssueDdtDialog({ shipment, model, actions }: DialogProps) {
           </Select>
         </Field>
       </div>
+      <p className="fw-sh-hint">{t('issue.otherReasons')}</p>
       <Field label={t('issue.remarks')} error={field('remarks')}>
         <Textarea rows={2} value={form.remarks} onChange={(event) => set({ remarks: event.target.value })} />
       </Field>

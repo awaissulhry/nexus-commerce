@@ -126,6 +126,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/purchasing/subcontracting',
   '/purchasing/subcontracting/[id]',
   '/purchasing/subcontracting/[id]/job-sheet',
+  // B-W2a-69: Requests to buy (SCR-236).
+  '/purchasing/requests',
   // B-W2a-63: Returns & claims (SCR-131) and a supplier claim.
   '/purchasing/claims',
   '/purchasing/claims/[id]',
@@ -134,6 +136,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-45: Planning board (SCR-122) and Lines & subcontractors (SCR-126).
   '/planning/board',
   '/planning/allocation',
+  // B-W2a-70: Capacity & load (SCR-123) and Exceptions (SCR-125).
+  '/planning/capacity',
+  '/planning/exceptions',
   // B-W2a-59: Planning settings (SCR-124, SCR-127) and its plant calendar print (a new tab).
   '/planning/settings',
   '/planning/settings/calendar-print',
@@ -152,12 +157,21 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W1-46 … 49 part 2 Warehouse: Shipments (SCR-066), a shipment (SCR-067), Carriers & shipping (SCR-068).
   '/warehouse/shipments',
   '/warehouse/shipments/[id]',
+  // B-W2a-71: a shipment's driver's pack (SCR-067-pack, a new tab: the sheet and every document drawn for one print).
+  '/warehouse/shipments/[id]/pack',
   '/warehouse/shipping',
   '/production/floor',
   '/production/work-orders',
   '/production/work-orders/[id]',
   '/quality/inspections',
   '/quality/inspections/[id]',
+  // B-W2a-67: Quality › Holds (SCR-078; a hold opens in its DetailModal, its tag prints in a tab) and Defects & dispositions (SCR-079).
+  '/quality/holds',
+  '/quality/holds/[id]/tag',
+  '/quality/defects',
+  // B-W2a-68: Quality › Problems › Nonconformances (SCR-144 list and board, SCR-145 the NCR record).
+  '/quality/ncr',
+  '/quality/ncr/[id]',
   // B-W2a-65: Quality › Complaints (SCR-113 W2a part).
   '/quality/complaints',
   '/quality/complaints/[id]',
@@ -181,6 +195,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/finance/accounting/files',
   '/finance/reports',
   '/finance/reports/print',
+  // B-W2a-72: Costing › Standard vs actual (SCR-154) with its variance report (print), and Margins (SCR-155).
+  '/finance/costing',
+  '/finance/costing/print',
+  '/finance/margins',
   // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
   '/admin',
   '/admin/companies',
