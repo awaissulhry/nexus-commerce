@@ -38,12 +38,12 @@
     "col": {
       "report": "Report",
       "area": "Area",
-      "last": "Last opened by me",
+      "last": "Last run by me",
       "schedule": "By e-mail",
       "formats": "Formats",
       "rights": "Your rights"
     },
-    "never": "Not yet (on this device)",
+    "never": "Not yet",
     "mailed": "E-mailed to you",
     "mailable": "Can be e-mailed",
     "notScheduled": "Not scheduled",

@@ -13,12 +13,13 @@ import { seed as seedNumbering } from '../../../../../../packages/factory-db/see
 import { seed as seedProduction } from '../../../../../../packages/factory-db/seed/production'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
-import { callerFor, type CommandCaller } from '../../../core/command'
-import { testAuthenticator, type SessionContext } from '../../../core/context'
+import { callerFor, COMMAND_SETTINGS, runCommand, type CommandCaller } from '../../../core/command'
+import { SYSTEM_ACTOR_ID, testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../auth/sessions/testing/harness'
 import { systemContext } from '../../outbox/system'
 import { applyPlan, planImport } from '../worker'
+import { NO_REASON_THEN, writeStepsAll } from './catch-up'
 
 /**
  * The guided first load and the import templates (B-W2a-41; PLT-185, PLT-177) on the local stack, with the app's real
@@ -180,6 +181,10 @@ describe('the guided first load (PLT-185)', () => {
     expect(await ok('loader', 'POST', `/imports/first-load/suppliers/done`, { companyId: A.companyA })).toMatchObject({ complete: false })
     const [audit] = await admin(`SELECT action, "recordType", reason, after FROM "AuditLog" WHERE action = 'imports.firstLoadStepDone' AND "companyId" = $1 ORDER BY at LIMIT 1`, [A.companyA])
     expect(audit).toMatchObject({ action: 'imports.firstLoadStepDone', recordType: 'ImportJob', reason: 'Customers from the old system', after: { step: 'customers', nothing: false, rows: 3, loaded: 3 } })
+    // B-W2b-24: the step's own row (written once; the database refuses a change).
+    const row = (await admin(`SELECT step, "jobId", "nothingToLoad", reason, "doneById" FROM "FirstLoadStep" WHERE "companyId" = $1 AND step = 'customers'`, [A.companyA]))[0]!
+    expect(row).toMatchObject({ step: 'customers', nothingToLoad: false, reason: null, doneById: IDS.loader })
+    expect(row.jobId).toBe(view.customers.job.id)
   })
 
   it('materials, then opening stock with its quantities per unit and the value only with the cost grain', async () => {
@@ -209,10 +214,36 @@ describe('the guided first load (PLT-185)', () => {
     const held = (await steps()).openOrders!
     expect(held).toMatchObject({ state: 'held', canImport: false, canMarkDone: true })
     expect((await done('openOrders')).json().error.issues[0]).toMatchObject({ path: 'step/noImporter' })
+    // B-W2b-24: "nothing to load" says why (the step's row keeps it).
+    const unexplained = await call('loader', 'POST', '/imports/first-load/openOrders/done', { companyId: A.companyA, nothing: true })
+    expect(unexplained.statusCode).toBe(400)
+    expect(unexplained.json().error.issues[0]).toMatchObject({ path: 'body/reason' })
     const finished = await ok('loader', 'POST', '/imports/first-load/openOrders/done', { companyId: A.companyA, nothing: true, reason: 'Open orders entered by hand' })
     expect(finished.complete).toBe(true)
     expect((finished.steps as Json[]).map((step) => step.state)).toEqual(['done', 'done', 'done', 'done', 'done'])
-    expect((finished.steps as Json[]).at(-1)).toMatchObject({ done: { nothing: true, stillMatches: null } })
+    expect((finished.steps as Json[]).at(-1)).toMatchObject({ done: { nothing: true, reason: 'Open orders entered by hand', stillMatches: null } })
+    expect(await admin(`SELECT "jobId", "nothingToLoad", reason FROM "FirstLoadStep" WHERE "companyId" = $1 AND step = 'openOrders'`, [A.companyA])).toEqual([{ jobId: null, nothingToLoad: true, reason: 'Open orders entered by hand' }])
     expect((await call('loader', 'GET', `/imports/first-load?companyId=${newId()}`)).statusCode).toBe(404)
+  })
+})
+
+describe('B-W2b-24: the steps W2a kept as audit rows get their row', () => {
+  it('writes each from its latest audit row once (a "nothing to load" without a reason says so), then nothing', async () => {
+    const other = (await admin(`SELECT id FROM "Company" WHERE "tenantId" = $1 AND id <> $2 ORDER BY code LIMIT 1`, [A.tenant, A.companyA]))[0]!
+    expect(other).toBeDefined()
+    // As B-W2a-41 kept it: an audit row only, "nothing to load" with no reason.
+    await runCommand(system(), { name: 'imports.firstLoadStepDone', input: null }, async ({ audit }) => {
+      audit({ action: 'imports.firstLoadStepDone', recordType: 'Company', recordId: other.id, companyId: other.id, after: { step: 'customers', nothing: true, jobId: null, rows: 0, loaded: 0 } })
+      return null
+    }, COMMAND_SETTINGS)
+    const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
+    expect(await writeStepsAll({ database: h.database, log })).toMatchObject({ written: 1, failed: 0 })
+    expect(await admin(`SELECT step, "jobId", "nothingToLoad", reason, "doneById" FROM "FirstLoadStep" WHERE "companyId" = $1`, [other.id])).toEqual([
+      { step: 'customers', jobId: null, nothingToLoad: true, reason: NO_REASON_THEN, doneById: SYSTEM_ACTOR_ID },
+    ])
+    expect(await writeStepsAll({ database: h.database, log })).toMatchObject({ written: 0, failed: 0 })
+    // The guided first load reads the row: customers done there.
+    const view = await ok('loader', 'GET', `/imports/first-load?companyId=${other.id}`)
+    expect((view.steps as Json[])[0]).toMatchObject({ step: 'customers', state: 'done', done: { nothing: true, reason: NO_REASON_THEN, byId: null } })
   })
 })

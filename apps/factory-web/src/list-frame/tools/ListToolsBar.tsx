@@ -14,8 +14,8 @@ import { stateOfScreen, type ListToolsState } from './useListTools'
 
 /**
  * The list toolbar's shared words (B-W2a-23; design shell.lists sec:toolbar "Search · Rows ▾ · Columns ▾ · density ·
- * Export ▾ · ⋯"): Columns ▾ (the person's views and the shared ones, Save view as…, Update, Rename or share, Copy
- * link, Remove, then Customise columns…) and Export ▾ (this view as CSV or Excel, the full file for re-import when the
+ * Export ▾ · ⋯"): Columns ▾ (the person's views and the shared ones, Save view as…, Update, Rename or share, Make it
+ * my default / Stop using it as my default (B-W2b-24: my own views only), Copy link, Remove, then Customise columns…) and Export ▾ (this view as CSV or Excel, the full file for re-import when the
  * list has one, then the person's recent exports of the list). The density is chosen in Customise (the one Customise
  * dialog), never a third control in a toolbar that already wraps on a phone. A list without an export has no Export ▾;
  * a person without views.export neither (the section is absent, never a locked box).
@@ -26,7 +26,8 @@ type Dialog = { kind: 'save' } | { kind: 'edit'; view: SavedView } | { kind: 're
 /** Who sees a view, in words, for its menu line. */
 export function sharingWords(t: Translate, view: SavedView): string {
   const who = view.audience === 'ONLY_ME' ? t('tools.onlyMe') : view.audience === 'EVERYONE' ? t('tools.everyone') : view.roleDefault ? t('tools.defaultFor', { role: view.roleName ?? '' }) : t('tools.forRole', { role: view.roleName ?? '' })
-  return view.mine ? who : t('tools.sharedBy', { name: view.ownerName, who })
+  if (!view.mine) return t('tools.sharedBy', { name: view.ownerName, who })
+  return view.personalDefault ? `${who} · ${t('tools.myDefault')}` : who
 }
 
 export interface ColumnsMenuInput {
@@ -45,6 +46,8 @@ export interface ColumnsMenuActions {
   readonly edit: (view: SavedView) => void
   readonly copy: (view: SavedView) => void
   readonly remove: (view: SavedView) => void
+  /** B-W2b-24: make my own view my default of the list (on) or no longer (off). */
+  readonly setDefault: (view: SavedView, on: boolean) => void
   readonly customise: () => void
 }
 
@@ -75,6 +78,11 @@ export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: Col
     } else {
       items.push({ id: 'edit', label: t('tools.edit', { name: active.name }), disabled: true, description: active.mine ? t('tools.held.manage') : t('tools.held.change') })
     }
+    // B-W2b-24: my default view of the list (only a view of my own: the mark is its owner's).
+    if (!active.mine) items.push({ id: 'default', label: t('tools.makeDefault', { name: active.name }), disabled: true, description: t('tools.held.defaultNotOwn') })
+    else if (active.personalDefault) items.push({ id: 'default', label: t('tools.stopDefault', { name: active.name }), description: t('tools.stopDefaultHint'), onSelect: () => act.setDefault(active, false) })
+    else if (canSave) items.push({ id: 'default', label: t('tools.makeDefault', { name: active.name }), description: t('tools.makeDefaultHint'), onSelect: () => act.setDefault(active, true) })
+    else items.push({ id: 'default', label: t('tools.makeDefault', { name: active.name }), disabled: true, description: t('tools.held.save') })
     items.push({ id: 'link', label: t('tools.copyLink', { name: active.name }), onSelect: () => act.copy(active) })
     if (active.changeHeld === null) items.push({ id: 'remove', label: t('tools.remove', { name: active.name }), tone: 'danger', onSelect: () => act.remove(active) })
   }
@@ -241,6 +249,14 @@ export function ListToolsBar<T>({ state }: { state: ListToolsState<T> }) {
       edit: (view) => setDialog({ kind: 'edit', view }),
       copy: (view) => void copy(transport.viewLink(view.id)),
       remove: (view) => setDialog({ kind: 'remove', view }),
+      setDefault: (view, on) =>
+        void transport
+          .setPersonalDefault(view, on, transport.newKey())
+          .then((next) => {
+            state.defaulted(next.view, next.personalDefaultId)
+            receipt(on ? t('tools.save.defaultOn', { name: view.name }) : t('tools.save.defaultOff', { name: view.name }))
+          })
+          .catch((error: unknown) => receipt(t(`tools.problem.${problemOf(error)}`), 'danger')),
       customise: () => setDialog({ kind: 'customise' }),
     },
   )

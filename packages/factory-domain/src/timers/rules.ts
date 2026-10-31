@@ -39,6 +39,8 @@ export const TIMER_KINDS = {
   INVOICE_DEADLINE: "The last day to invoice the goods of a DDT (the 15th of the next month, a deferred invoice).",
   // B-W2a-55: the reminder ladder (record Invoice; the key's offset is the step's days from the due date).
   PAYMENT_REMINDER: "The due date of an invoice's oldest open instalment: a step of the company's reminder ladder.",
+  // B-W2b-24: the restore drill's reminder (record Tenant, key RESTORE_DRILL_DUE:-14d; ops/drills): security.view is told.
+  RESTORE_DRILL_DUE: 'The day the next restore drill is due (90 days after the last one that passed).',
 } as const satisfies Record<string, string>
 export type TimerKind = keyof typeof TIMER_KINDS
 

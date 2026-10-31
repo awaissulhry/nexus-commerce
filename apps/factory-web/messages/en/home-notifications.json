@@ -234,6 +234,9 @@
       },
       "complaint": {
         "safety": "Safety complaint {record}: {title}. It is in the PPE register; the owner acknowledges it on the complaint"
+      },
+      "security": {
+        "drillDue": "The next restore drill is due on {title}: the last one that passed was on {record}"
       }
     },
     "fallback": "News on {record}",

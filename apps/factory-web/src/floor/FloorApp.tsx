@@ -17,7 +17,7 @@ import { floorLocale, IDLE_WARN_MS, idleWarnAfterMs } from './model'
 import { numberKindsOf } from './queue/actions'
 import { FloorQueue, type QueueSnapshot } from './queue/queue'
 import { browserStorage } from './queue/storage'
-import { DeviceReporter, readBattery, sendDeviceState } from './queue/report'
+import { DeviceReporter, readBattery, readNetwork, sendDeviceState } from './queue/report'
 import { AppUpdater, queuedCount, updateStep, VERSION_CHECK_MS, type UpdateSnapshot, type UpdateStep } from './queue/update'
 import { shellQueueOf, type ShellQueue } from './shell/banner'
 import type { SignedOutWhy } from './sign-in/view/SignInView'
@@ -247,7 +247,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     if (!deviceId) return
     const tick = async () => {
       const battery = await readBattery()
-      await reporter.report({ appVersion, batteryPercent: battery.percent, batteryCharging: battery.charging, queuedActions: queuedNow.current })
+      await reporter.report({ appVersion, batteryPercent: battery.percent, batteryCharging: battery.charging, queuedActions: queuedNow.current, network: readNetwork() })
     }
     void tick()
     const timer = window.setInterval(() => void tick(), 60_000)

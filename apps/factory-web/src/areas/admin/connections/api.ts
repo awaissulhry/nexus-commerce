@@ -11,7 +11,9 @@ import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 
 // ---- platform/admin/connections ---------------------------------------------------------------------------------------
 
-export const INTEGRATION_PROVIDERS = ['SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES'] as const
+// B-W2b-24: the virus scanner (ClamAV) and error tracking join (factory-db IntegrationProvider, B-W2b-03): an account of
+// either is read without failing the page's parse; none is created before the Owner's spend yes (GATE-SPEND).
+export const INTEGRATION_PROVIDERS = ['SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES', 'CLAMAV', 'ERROR_TRACKING'] as const
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number]
 export const INTEGRATION_MODES = ['LIVE', 'SANDBOX', 'FAKE'] as const
 export type IntegrationMode = (typeof INTEGRATION_MODES)[number]
