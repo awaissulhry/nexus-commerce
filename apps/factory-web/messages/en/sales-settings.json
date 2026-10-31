@@ -1,0 +1,147 @@
+{
+  "approval": {
+    "discount": "Discount limit",
+    "discountHint": "Largest discount off the list price, 0 to 100",
+    "failed": "Couldn’t load approval rules",
+    "later": "Amount limits, special items, who approves and approval chains come later.",
+    "margin": "Margin floor",
+    "marginHint": "Percent of the net amount, 0 to 100",
+    "marginNoGrain": "Shown only with the margin right",
+    "sub": "When a quote needs an approver before it is sent.",
+    "title": "Quote approval rules"
+  },
+  "card": {
+    "apply": "Apply changes",
+    "discard": "Discard",
+    "edit": "Edit",
+    "editBar": "Editing this card",
+    "fixFirst_one": "Fix {count} field first",
+    "fixFirst_other": "Fix {count} fields first",
+    "readOnly": "Read-only: {why}",
+    "unsaved": "Unsaved changes · ⌘S applies"
+  },
+  "changed": {
+    "reload": "Reload",
+    "title": "Changed by someone else while you were editing."
+  },
+  "done": {
+    "approval": "Quote approval rules applied.",
+    "own": "{code} has its own sales settings now.",
+    "policy": "Return policy applied.",
+    "quote": "Quote defaults applied."
+  },
+  "freight": {
+    "BY_CAUSE": "By cause (us when the cause is ours)",
+    "COMPANY": "Us",
+    "CUSTOMER": "The customer"
+  },
+  "held": {
+    "group": "The group-wide settings are changed only by a role over every company.",
+    "manage": "Changing the sales settings needs the right “Set a company’s quote rules” (finance).",
+    "margin": "The margin floor is part of the quote rules: saving them needs the margin right.",
+    "offline": "Offline: wait for the connection.",
+    "otherCard": "Apply or discard the card you are editing first.",
+    "quotesView": "Seeing the quote rules needs the quotes right.",
+    "returnsView": "Seeing the return policy needs the returns right."
+  },
+  "intro": "What a new quote starts with and when it needs an approver, the return policy and the reasons, and the series the sales documents are numbered from.",
+  "noAccess": {
+    "body": "Seeing them needs the quotes right or the returns right. The sales and finance roles have them; an administrator can give them in Admin › Roles & permissions.",
+    "title": "You don’t have access to the sales settings"
+  },
+  "numbering": {
+    "failed": "Couldn’t load the series",
+    "groupScope": "Series belong to a company: pick This company to see them.",
+    "kind": {
+      "QUOTE": "Quotes",
+      "REPAIR": "Repairs",
+      "RETURN": "Returns (RMA)",
+      "SALES_ORDER": "Orders"
+    },
+    "link": "Admin › Documents & numbering",
+    "missing": "No series: documents of this kind cannot be numbered",
+    "next": "{code} · next {next}",
+    "noRight": "Seeing the series needs the numbering right.",
+    "none": "No series yet",
+    "sub": "Quote, order, RMA and repair series live in Admin › Documents & numbering.",
+    "title": "Numbering"
+  },
+  "offline": {
+    "body": "Apply is held until the connection is back.",
+    "title": "Offline — your changes are kept on this page"
+  },
+  "pct": "{value} %",
+  "policy": {
+    "conditions": "Condition rules",
+    "conditionsHint": "In words: what state the goods must come back in",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "due": "Goods due back within",
+    "dueHint": "Days from the authorisation",
+    "failed": "Couldn’t load return policy",
+    "fee": "Handling fee",
+    "feeHint": "Percent; recorded now, taken off credits later (dropped when the cause is ours)",
+    "follows": "This company follows the group’s return policy",
+    "followsBody": "Change the group’s policy (The whole group), or give this company its own sales settings first: it then keeps its own values.",
+    "freight": "Freight paid by",
+    "later": "The window check at the request and the fee on the credit note come later.",
+    "notSet": "Not set",
+    "own": "Give this company its own settings",
+    "sub": "Window, deadline, freight and conditions; then the reason codes.",
+    "title": "Return policy and reasons",
+    "toReasons": "Return and cancel reasons",
+    "window": "Return window from delivery",
+    "windowHint": "Days; a later request is a warning, never a refusal"
+  },
+  "problem": {
+    "days": "Whole days from 1 to 365, or empty.",
+    "deposit": "A percent above 0 and up to 100, or empty for none.",
+    "long": "At most 2000 characters.",
+    "pct": "A percent from 0 to 100, up to two decimals.",
+    "validity": "Whole days from 1 to 365."
+  },
+  "quote": {
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "deposit": "Deposit",
+    "depositHint": "Percent of the gross total asked at acceptance; empty: none",
+    "failed": "Couldn’t load quote defaults",
+    "later": "Firm offer, terms texts by country and the document language come later.",
+    "noDeposit": "None",
+    "sub": "What a new quote starts with.",
+    "title": "Quote defaults",
+    "validity": "Validity",
+    "validityHint": "Days a new quote stands, 1 to 365"
+  },
+  "reasons": {
+    "noRight": "Seeing the reason lists needs the reasons right.",
+    "none": "No reason list here.",
+    "sub": "The reason codes a return line and a cancellation pick from, in every language.",
+    "title": "Return and cancel reasons"
+  },
+  "refusal": {
+    "followsGroup": "This company follows the group’s sales settings: give it its own first.",
+    "forbidden": "Your role may not change these settings.",
+    "invalid": "Refused as it is: check the fields.",
+    "stale": "Someone changed these settings in the meantime: they were read again."
+  },
+  "rule": {
+    "sentence": "A quote needs approval when its margin is under {margin} % or a line’s discount is over {discount} %.",
+    "sentenceNoMargin": "A quote needs approval when a line’s discount is over {discount} %, or its margin is under the floor."
+  },
+  "scope": {
+    "company": "This company ({code})",
+    "companyHint": "Its own values; a field it does not set follows the group’s.",
+    "companyNone": "This company",
+    "group": "The whole group",
+    "groupHint": "For every company that has no settings of its own. Changed only by a role over every company.",
+    "label": "Settings of"
+  },
+  "source": {
+    "companyDefault": "No values yet: the standard ones apply.",
+    "companyFollows": "This company follows the group’s values.",
+    "companyOwn": "This company’s own values.",
+    "groupDefault": "No group values yet: the standard ones apply.",
+    "groupOwn": "The group’s own values."
+  }
+}

@@ -74,6 +74,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   MaintenanceRequest: '/plant/requests?open=[id]',
   // Sales › Price lists & contracts (SCR-106, B-W2a-49): a customer price list.
   PriceList: '/sales/price-lists/[id]',
+  // Sales › Returns & repairs (SCR-112, B-W2a-77): a customer return (RMA) and a repair or alteration.
+  ReturnAuthorisation: '/sales/returns/[id]',
+  RepairOrder: '/sales/returns/repairs/[id]',
   // Finance › Accounting export (SCR-156, B-W2a-51): a batch opens on its files tab (its checks, explanations and files).
   AccountingExport: '/finance/accounting/files?export=[id]',
   // Production › Scrap & rework (SCR-140, B-W2a-60): a rework order opens in its row's detail on the list.
@@ -156,6 +159,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/plant/machines': '/plant/machines',
   // B-W2a-49: the price lists (SCR-106) read `?rows=`, `?kind=` and `?q=`.
   '/sales/price-lists': '/sales/price-lists',
+  // B-W2a-77: returns and repairs in one grid (SCR-111) read `?view=` and `?q=`.
+  '/sales/returns': '/sales/returns',
+  '/sales/repairs': '/sales/returns',
   // B-W2a-60: the cuts across work orders (SCR-238, `?view=`, `?q=`) and scrap & rework (SCR-140, `?view=`, `?period=`).
   '/production/cutting/cuts': '/production/cutting',
   '/production/scrap': '/production/scrap',

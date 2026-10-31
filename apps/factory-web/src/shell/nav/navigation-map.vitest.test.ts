@@ -97,6 +97,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
       '/sales/orders': 'orders.view', // GET /sales/orders
       '/sales/price-lists': 'pricelists.view', // GET /sales/price-lists (B-W2a-49)
+      '/sales/returns': 'sales.returns.view', // GET /sales/returns (+ GET /sales/repairs with sales.repairs.view) (B-W2a-77)
+      '/sales/settings': 'quotes.view', // GET /sales/settings (B-W2a-77)
       '/products/styles': 'product.styles.view', // GET /product/styles
       '/products/materials': 'product.materials.view', // GET /product/materials
       '/products/operations': 'product.routing.view', // GET /product/operations
@@ -195,7 +197,9 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/sales/customers',
       '/sales/quotes',
       '/sales/orders',
+      '/sales/returns',
       '/sales/price-lists',
+      '/sales/settings',
     ])
     // A role's rows keep the full map's order.
     const order = rows(OFFICE_NAV).map((row) => row.href)

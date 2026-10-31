@@ -90,12 +90,26 @@ export const OFFICE: readonly TreeArea[] = [
           },
         ],
       },
-      // W2a: B-W2a-49 Price lists & contracts (SCR-106). After-sales (sales.returns) joins before it with its step.
+      // W2a: B-W2a-77 Returns & repairs (SCR-111, SCR-112).
+      {
+        label: 'After-sales',
+        labelIt: 'Post-vendita',
+        hideLabel: false,
+        pages: [{ id: 'sales.returns', title: 'Returns & repairs', titleIt: 'Resi e riparazioni', wave: 'W2a', href: '/sales/returns' }],
+      },
+      // W2a: B-W2a-49 Price lists & contracts (SCR-106).
       {
         label: 'Pricing',
         labelIt: 'Prezzi',
         hideLabel: false,
         pages: [{ id: 'sales.pricelists', title: 'Price lists & contracts', titleIt: 'Listini e contratti', wave: 'W2a', href: '/sales/price-lists' }],
+      },
+      // W2a: B-W2a-77 Sales settings (SCR-235).
+      {
+        label: 'Settings',
+        labelIt: 'Impostazioni',
+        hideLabel: false,
+        pages: [{ id: 'sales.settings', title: 'Sales settings', titleIt: 'Impostazioni vendite', wave: 'W2a', href: '/sales/settings' }],
       },
     ],
   },
