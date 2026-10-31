@@ -515,7 +515,8 @@
     "PARTLY_CUT": "Tagliata in parte",
     "REMNANT": "Ritaglio",
     "CONSUMED": "Esaurita",
-    "SCRAPPED": "Scartata"
+    "SCRAPPED": "Scartata",
+    "RETURNED": "Resa al fornitore"
   },
   "correct": {
     "title": "Correggi il taglio di {hide}",
