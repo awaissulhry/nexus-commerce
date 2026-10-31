@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { defineRoutes } from '../../core/manifest'
 import { idempotencyKeyFrom } from '../../core/command'
 import { actOnRow, assignees, handledToday, snoozeRow } from './actions'
@@ -22,6 +23,11 @@ import { getLayout, saveLayout } from './layout'
 import { manifest } from './manifest'
 import { today } from './today'
 import { nudge, waitingOnOthers } from './waiting'
+// B-W2a-79: My numbers and the report pack (reports/; the definitions are loaded from reports/defs/ first).
+import { libraryContract, numbersContract, reportAboutContract, reportResultsContract, reportScheduleContract } from './reports/contract'
+import { myNumbers } from './reports/numbers'
+import { loadReports } from './reports/registry'
+import { library, reportAbout, reportResults, reportSchedule, type ResultsQuery } from './reports/run'
 
 /**
  * Home › Today (B-W1-52; ANA-037; A2 SCR-029 "Today", SCR-031 W1 "Overview"): the needs-attention list computed from the
@@ -57,4 +63,12 @@ export default defineRoutes('insights', manifest, async (app) => {
   app.post('/home/waiting-on-others/:key/nudge', { schema: nudgeContract }, async (request) => nudge(request, request.params.key, idempotencyKeyFrom(request)))
 
   app.get('/home/coming-up', { schema: comingUpContract }, async (request) => comingUp(request, request.query))
+
+  // B-W2a-79: My numbers on Today and the report pack (src/ or dist/ holds reports/defs/).
+  await loadReports(fileURLToPath(new URL('../../', import.meta.url)))
+  app.get('/home/numbers', { schema: numbersContract }, async (request) => myNumbers(request))
+  app.get('/reports', { schema: libraryContract }, async (request) => library(request))
+  app.get('/reports/:key', { schema: reportAboutContract }, async (request) => reportAbout(request, request.params.key))
+  app.get('/reports/:key/results', { schema: reportResultsContract }, async (request) => reportResults(request, request.params.key, request.query as ResultsQuery))
+  app.get('/reports/:key/schedule', { schema: reportScheduleContract }, async (request) => reportSchedule(request, request.params.key))
 })

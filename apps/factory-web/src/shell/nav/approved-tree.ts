@@ -57,12 +57,15 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'home.mail', title: 'Mail to sort', titleIt: 'Posta da smistare', wave: 'W0', href: '/home/mail-to-sort' },
         ],
       },
-      // W2a: B-W2a-78 Alerts (SCR-234). Dashboards (W2b), Reports (B-W2a-79) and the KPI library (W2b) join with their steps.
+      // W2a: B-W2a-79 Reports (SCR-104) and B-W2a-78 Alerts (SCR-234). Dashboards and the KPI library (W2b) join with their steps.
       {
         label: 'Insights',
         labelIt: 'Analisi',
         hideLabel: false,
-        pages: [{ id: 'home.alerts', title: 'Alerts', titleIt: 'Avvisi', wave: 'W2a', href: '/home/alerts' }],
+        pages: [
+          { id: 'home.reports', title: 'Reports', titleIt: 'Report', wave: 'W2a', href: '/home/reports' },
+          { id: 'home.alerts', title: 'Alerts', titleIt: 'Avvisi', wave: 'W2a', href: '/home/alerts' },
+        ],
       },
     ],
   },

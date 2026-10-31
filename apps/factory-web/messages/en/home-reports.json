@@ -1,0 +1,775 @@
+{
+  "noAccess": {
+    "title": "You cannot see the report library",
+    "body": "The report library needs the right to run reports. Ask your administrator for a role that holds it."
+  },
+  "common": {
+    "retry": "Try again",
+    "loading": "Still loading…"
+  },
+  "band": {
+    "label": "Library status"
+  },
+  "error": {
+    "read": "The server did not answer as expected. Try again in a moment.",
+    "forbidden": "Your role does not allow this.",
+    "notFound": "There is no such report.",
+    "invalid": "A filter in the address is not one this report knows.",
+    "offline": "The server cannot be reached. Check the connection."
+  },
+  "library": {
+    "title": "Report library",
+    "intro": "Every ready report, said as the question it answers. Each one shows only what your role may see.",
+    "updated": "Updated {time}",
+    "count_one": "{count} report for you",
+    "count_other": "{count} reports for you",
+    "shown_one": "{count} report",
+    "shown_other": "{count} reports",
+    "search": "Search the library",
+    "areas": "Areas",
+    "allAreas": "All areas",
+    "outside": "Outside my role",
+    "failed": "The library could not be read",
+    "stale": "The library could not be read again",
+    "noMatch": "No report matches",
+    "noMatchBody": "Change the search or the area.",
+    "clear": "Clear the search",
+    "foot": "A report reads its records when you open it, so it is always current.",
+    "col": {
+      "report": "Report",
+      "area": "Area",
+      "last": "Last opened by me",
+      "schedule": "By e-mail",
+      "formats": "Formats",
+      "rights": "Your rights"
+    },
+    "never": "Not yet (on this device)",
+    "mailed": "E-mailed to you",
+    "mailable": "Can be e-mailed",
+    "notScheduled": "Not scheduled",
+    "ready": "You can run it"
+  },
+  "state": {
+    "needsGrain": "Needs {grain} rights",
+    "noAccess": "Reads a list outside your role"
+  },
+  "grain": {
+    "price": "price",
+    "cost": "cost",
+    "margin": "margin",
+    "wages": "wages"
+  },
+  "format": {
+    "CSV": "CSV",
+    "PDF": "PDF"
+  },
+  "area": {
+    "sales": "Sales",
+    "planning": "Planning",
+    "purchasing": "Purchasing",
+    "production": "Production",
+    "quality": "Quality",
+    "compliance": "Compliance",
+    "finance": "Finance"
+  },
+  "report": {
+    "back": "Reports",
+    "noun": "Report",
+    "notFound": "There is no such report",
+    "failed": "The report could not be read",
+    "print": "Print",
+    "export": "Export",
+    "exportCsv": "This result as CSV",
+    "exportPdf": "As PDF (print page, new tab)",
+    "compliance": {
+      "certificates-expiring": {
+        "title": "Certificates expiring",
+        "question": "Which certificates expire soon, and how many styles do they cover?",
+        "definition": "Every valid certificate whose last valid day is from today to the end of the period, soonest first. Days left is 0 on the last valid day.",
+        "sources": "Certificates and what they cover",
+        "col": {
+          "certificate": "Certificate",
+          "standard": "Standard",
+          "ppeClass": "PPE class",
+          "notifiedBody": "Notified body",
+          "validTo": "Valid to",
+          "daysToExpiry": "Days left",
+          "coverage": "Styles covered"
+        },
+        "filter": {
+          "within": "Expires"
+        }
+      }
+    },
+    "finance": {
+      "overdue-receivables": {
+        "title": "Overdue from customers",
+        "question": "Which customers owe us money past the due date?",
+        "definition": "Every customer with an invoice past its due date, per company and currency, most overdue first. Open = what is still to be paid; overdue = the part past its due date; credit notes and payments are taken off.",
+        "sources": "Issued invoices, credit notes and payments with their due dates",
+        "col": {
+          "customer": "Customer",
+          "company": "Company",
+          "invoices": "Open invoices",
+          "oldestDueDate": "Oldest due",
+          "daysLate": "Days late",
+          "overdueAmount": "Overdue",
+          "over90Amount": "Over 90 days",
+          "openAmount": "Open",
+          "remindersSent": "Reminders sent"
+        }
+      },
+      "stock-value": {
+        "title": "Stock value",
+        "question": "What are our stock and work in progress worth at cost?",
+        "definition": "Every stock line (item, colour, lot) of each site with stock now, and each open work order’s cost booked so far (WIP), summed per site and category. A line not fully valued has moves the valuation could not price yet (Finance › Reports says which).",
+        "sources": "Stock moves and their valuation, work order cost entries",
+        "col": {
+          "site": "Site",
+          "category": "Category",
+          "lines": "Stock lines",
+          "notValued": "Lines not fully valued",
+          "stockValue": "Value at cost"
+        },
+        "filter": {
+          "site": "Site"
+        }
+      }
+    },
+    "planning": {
+      "shortages": {
+        "title": "Shortages",
+        "question": "What material is short for our work orders?",
+        "definition": "Each material a work order still needs that the latest plan cannot cover in time: Not enough (no stock or order covers it) or Delayed (an order covers it but arrives after it is needed). Released or started work orders by default.",
+        "sources": "The latest planning run of each site, work orders, stock and purchase orders",
+        "col": {
+          "workOrder": "Work order",
+          "style": "Style",
+          "status": "Status",
+          "site": "Site",
+          "material": "Material",
+          "problem": "Problem",
+          "short": "Short",
+          "neededBy": "Needed by",
+          "expected": "Expected",
+          "purchaseOrder": "Purchase order"
+        },
+        "filter": {
+          "site": "Site",
+          "workOrders": "Work orders"
+        },
+        "choice": {
+          "workOrders": {
+            "RELEASED": "Released or started",
+            "OPEN": "Every open work order"
+          }
+        }
+      }
+    },
+    "production": {
+      "daily": {
+        "title": "Daily production",
+        "question": "What did each line make on the last working day?",
+        "definition": "One site and one day (the first site you see unless you pick one). Good = garments through the line’s last operation; scrap and rework at any of its operations. Efficiency = earned standard minutes ÷ (people × the line’s working minutes), hidden for a line of fewer than 5 people.",
+        "sources": "Floor scans, work orders, line capacity and the site calendar",
+        "col": {
+          "lane": "Line or work centre",
+          "kind": "Kind",
+          "good": "Good",
+          "scrap": "Scrap",
+          "rework": "Rework",
+          "efficiencyPct": "Efficiency"
+        },
+        "filter": {
+          "site": "Site",
+          "day": "Day"
+        },
+        "choice": {
+          "day": {
+            "LAST_WORKING_DAY": "Last working day",
+            "TODAY": "Today so far"
+          }
+        }
+      },
+      "scrap-by-reason": {
+        "title": "Scrap by reason",
+        "question": "Why do we scrap garments, and how many?",
+        "definition": "Garments reported as scrap (or rework) at any operation in the period, per reason code, most garments first. Value at cost = the material of the scrapped pieces at its stock value. The list reads at most 500 reports per run.",
+        "sources": "Floor scrap and rework scans, rework orders and the materials they used",
+        "col": {
+          "reason": "Reason",
+          "code": "Code",
+          "kind": "Kind",
+          "pieces": "Garments",
+          "events": "Times reported",
+          "workOrders": "Work orders",
+          "scrapCost": "Value at cost"
+        },
+        "filter": {
+          "site": "Site",
+          "period": "Period",
+          "kind": "Kind"
+        },
+        "choice": {
+          "kind": {
+            "SCRAP": "Scrap",
+            "REWORK": "Rework"
+          }
+        }
+      },
+      "wip-by-stage": {
+        "title": "WIP by stage",
+        "question": "How much work is in progress at each stage?",
+        "definition": "Every work order in draft, released, in progress or on hold. Garments = ordered in its cells; cut, sewn and finished = garments through those steps so far (none for a draft). Late = due date before today.",
+        "sources": "Work orders, their cells and the floor scans",
+        "col": {
+          "workOrder": "Work order",
+          "style": "Style",
+          "site": "Site",
+          "status": "Stage",
+          "pieces": "Garments",
+          "cut": "Cut",
+          "sewn": "Sewn",
+          "finished": "Finished",
+          "dueDate": "Due",
+          "daysLate": "Days late"
+        },
+        "filter": {
+          "site": "Site",
+          "late": "Due"
+        },
+        "choice": {
+          "late": {
+            "LATE": "Late only"
+          }
+        }
+      }
+    },
+    "purchasing": {
+      "receipts-due": {
+        "title": "Receipts due",
+        "question": "Which deliveries are due from suppliers, and which are late?",
+        "definition": "Each line of a sent, confirmed, partly received or changed purchase order with goods still to come. Expected = the date the supplier confirmed, else the date we asked; late = expected before today; this week = today to Sunday.",
+        "sources": "Purchase orders, their lines and goods receipts",
+        "col": {
+          "order": "Purchase order",
+          "supplier": "Supplier",
+          "site": "Site",
+          "item": "Material",
+          "colour": "Colour",
+          "expectedDate": "Expected",
+          "dateFrom": "Date from",
+          "state": "When",
+          "daysLate": "Days late",
+          "outstanding": "Still to come"
+        },
+        "filter": {
+          "site": "Site",
+          "state": "When"
+        },
+        "choice": {
+          "state": {
+            "LATE": "Late",
+            "THIS_WEEK": "This week",
+            "LATER": "Later"
+          }
+        }
+      }
+    },
+    "quality": {
+      "open-ncrs": {
+        "title": "Open nonconformances",
+        "question": "Which nonconformances are still open, and how old are they?",
+        "definition": "Every nonconformance open, contained or decided, newest first. Age counts whole days since it was found; containment overdue = the containment (or an open action) is due before now. Decisions waiting = dispositions that wait for an approval.",
+        "sources": "Nonconformances, their actions and dispositions",
+        "col": {
+          "ncr": "NCR",
+          "title": "Problem",
+          "stage": "Stage",
+          "severity": "Severity",
+          "source": "Found by",
+          "defect": "Defect",
+          "foundOn": "Found on",
+          "ageDays": "Age (days)",
+          "containment": "Containment",
+          "decisionsWaiting": "Decisions waiting"
+        },
+        "filter": {
+          "site": "Site",
+          "severity": "Severity",
+          "overdue": "Containment"
+        },
+        "choice": {
+          "severity": {
+            "CRITICAL": "Critical",
+            "MAJOR": "Major",
+            "MINOR": "Minor"
+          },
+          "overdue": {
+            "OVERDUE": "Overdue only"
+          }
+        }
+      }
+    },
+    "sales": {
+      "late-orders": {
+        "title": "Late orders",
+        "question": "Which orders are late against their promise date?",
+        "definition": "Orders confirmed, in production, ready to ship or partly shipped whose promise date is before today. Days late counts from the promise date to today.",
+        "sources": "Sales orders",
+        "col": {
+          "order": "Order",
+          "customer": "Customer",
+          "status": "Status",
+          "promiseDate": "Promised",
+          "daysLate": "Days late",
+          "units": "Garments",
+          "shipped": "Shipped",
+          "netAmount": "Net value"
+        }
+      },
+      "margin-by-order": {
+        "title": "Margin by order",
+        "question": "What margin do we make on each order?",
+        "definition": "Every order (cancelled ones left out) with an order date in the period. Margin quoted = net value less the quoted cost; margin now = net value less the estimate now (work orders done at their actual cost, the rest at the larger of plan and actual); margin so far = the cost booked until today. A blank margin: no cost is known yet.",
+        "sources": "Sales orders, their quotes, work orders and cost entries",
+        "col": {
+          "order": "Order",
+          "customer": "Customer",
+          "status": "Status",
+          "orderDate": "Order date",
+          "netAmount": "Net value",
+          "estimateCost": "Cost now",
+          "quotedMarginPct": "Margin quoted",
+          "estimateMarginPct": "Margin now",
+          "actualMarginPct": "Margin so far",
+          "stage": "Cost"
+        },
+        "filter": {
+          "period": "Order date"
+        }
+      },
+      "open-orders": {
+        "title": "Open orders",
+        "question": "Which orders are open, and when are they promised?",
+        "definition": "Every order confirmed, in production, ready to ship or partly shipped, newest first. Days late counts from the promise date to today.",
+        "sources": "Sales orders and their lines",
+        "col": {
+          "order": "Order",
+          "customer": "Customer",
+          "status": "Status",
+          "orderDate": "Order date",
+          "promiseDate": "Promised",
+          "daysLate": "Days late",
+          "units": "Garments",
+          "shipped": "Shipped",
+          "netAmount": "Net value"
+        },
+        "filter": {
+          "status": "Status",
+          "promise": "Promised"
+        },
+        "choice": {
+          "status": {
+            "CONFIRMED": "Confirmed",
+            "IN_PRODUCTION": "In production",
+            "READY": "Ready to ship",
+            "PARTLY_SHIPPED": "Partly shipped"
+          }
+        }
+      },
+      "orders-in": {
+        "title": "Orders in",
+        "question": "Which orders came in, and for how much?",
+        "definition": "Every order with an order date in the period, newest first; cancelled orders are left out. The net value is before VAT.",
+        "sources": "Sales orders",
+        "col": {
+          "order": "Order",
+          "customer": "Customer",
+          "status": "Status",
+          "orderDate": "Order date",
+          "promiseDate": "Promised",
+          "netAmount": "Net value"
+        },
+        "filter": {
+          "period": "Period"
+        }
+      },
+      "shipments-on-time": {
+        "title": "Shipped on time",
+        "question": "Which shipments left on time against the order’s promise date?",
+        "definition": "Every shipment shipped or delivered with a ship date in the period (site days). On time: shipped on or before the order’s promise date; an order without a promise date is said apart and not counted either way.",
+        "sources": "Shipments and their sales orders",
+        "col": {
+          "shipment": "Shipment",
+          "order": "Order",
+          "customer": "Customer",
+          "shippedOn": "Shipped",
+          "promiseDate": "Promised",
+          "onTime": "On time",
+          "daysLate": "Days late"
+        },
+        "filter": {
+          "period": "Period"
+        }
+      }
+    }
+  },
+  "tab": {
+    "label": "Report tabs",
+    "results": "Results",
+    "schedule": "Schedule",
+    "about": "About"
+  },
+  "held": {
+    "noAccess": "This report reads a list your role cannot read",
+    "noAccessBody": "Its definition is under About. Ask your administrator for a role that reads that list if you need it.",
+    "needsGrain": "This report needs {grain} rights",
+    "needsGrainBody": "It is about {grain} figures, which your role does not show. Its definition is under About.",
+    "reading": "Wait until the result is read",
+    "noRows": "Nothing to export: the result has no rows"
+  },
+  "filters": {
+    "label": "What this run looks at",
+    "allSites": "All my sites",
+    "any": "Any",
+    "groupBy": "Group by",
+    "notGrouped": "Not grouped",
+    "applied": "Applied:",
+    "range": "from {from} to {to}"
+  },
+  "period": {
+    "THIS_WEEK": "This week",
+    "LAST_WEEK": "Last week",
+    "THIS_MONTH": "This month",
+    "LAST_MONTH": "Last month",
+    "LAST_8_WEEKS": "Last 8 weeks",
+    "NEXT_7_DAYS": "Next 7 days",
+    "NEXT_30_DAYS": "Next 30 days",
+    "NEXT_90_DAYS": "Next 90 days"
+  },
+  "rights": {
+    "title": "What you see",
+    "link": "My roles",
+    "leftOut": "Left out because of your rights: {grains}.",
+    "smallGroups_one": "Hidden: {count} group of fewer than 5 people (its people figures).",
+    "smallGroups_other": "Hidden: {count} groups of fewer than 5 people (their people figures)."
+  },
+  "results": {
+    "asOf": "Data as of {time}",
+    "reading": "Reading…",
+    "failed": "The result could not be read",
+    "empty": "No rows for these filters.",
+    "emptyBody": "Change a filter above to look wider.",
+    "count_one": "{count} row",
+    "count_other": "{count} rows",
+    "groups_one": "{count} group of {rows} rows",
+    "groups_other": "{count} groups of {rows} rows",
+    "groupsLabel": "Groups by {column}",
+    "showRows": "Show the rows",
+    "groupNone": "None",
+    "rows": "Rows",
+    "totals": "Totals",
+    "currency": "Currency",
+    "severalCurrencies": "Several currencies",
+    "severalCurrenciesHint": "Amounts in several currencies are not added up.",
+    "cut_one": "First {count} row only",
+    "cut_other": "First {count} rows only",
+    "cutBody": "The report stopped there: narrow the filters to see the rest.",
+    "exportSelected_one": "Export {count} row (CSV)",
+    "exportSelected_other": "Export {count} rows (CSV)",
+    "foot": "Read when you opened it, with your rights applied. A row opens its record."
+  },
+  "schedule": {
+    "title": "Who gets it",
+    "failed": "The schedule could not be read",
+    "none": "Not scheduled",
+    "noneBody": "Sending this report on a schedule comes later. Print it or export it as CSV meanwhile.",
+    "manage": "Change on Production reports",
+    "nobody": "Nobody gets it by e-mail yet",
+    "nobodyBody": "Have it e-mailed every morning from Production reports.",
+    "col": {
+      "for": "For",
+      "site": "Site",
+      "when": "When",
+      "language": "Language",
+      "state": "State",
+      "last": "Last sent"
+    },
+    "you": "{name} (you)",
+    "when": "{time}, {days}",
+    "on": "On",
+    "off": "Off",
+    "neverSent": "Not sent yet",
+    "foot": "Each person gets only what their own role may see when it is sent."
+  },
+  "language": {
+    "it": "Italian",
+    "en": "English"
+  },
+  "day": {
+    "1": "Mon",
+    "2": "Tue",
+    "3": "Wed",
+    "4": "Thu",
+    "5": "Fri",
+    "6": "Sat",
+    "7": "Sun"
+  },
+  "about": {
+    "title": "What it counts",
+    "question": "Question",
+    "definition": "How it is made",
+    "sources": "Source records",
+    "refresh": "Refresh",
+    "refreshLive": "Read when you open it: always current",
+    "owner": "Owner",
+    "ownerPack": "The standard report pack",
+    "formats": "Formats",
+    "numbers": "Numbers on Today",
+    "noNumbers": "None",
+    "leftOut": "Left out for you",
+    "nothingLeftOut": "Nothing: your role sees every column",
+    "people": "Small groups",
+    "peopleHidden": "Figures about a group of fewer than 5 people are hidden.",
+    "noPeople": "No figure about people: counts per order, line or document only.",
+    "kpiLater": "The KPI library, where each number’s definition and target are kept, comes later."
+  },
+  "print": {
+    "titleLoading": "Report",
+    "meta": "Read {at} · printed by {person}",
+    "held": "Wait until the report is read",
+    "button": "Print or save as PDF"
+  },
+  "numbers": {
+    "title": "My numbers",
+    "forLens": "for {lens}",
+    "updated": "updated {time}",
+    "failed": "Your numbers could not be read",
+    "explainOf": "How “{label}” is made",
+    "explainTitle": "How this number is made",
+    "atLeast": "At least this many: a list stopped at its limit.",
+    "word": {
+      "ON_TARGET": "On target",
+      "ABOVE_TARGET": "Above target",
+      "BELOW_TARGET": "Below target"
+    },
+    "noTarget": "No target set",
+    "targetAtMost": "Target {value}",
+    "targetAtLeast": "Target {value} or more",
+    "sparkLabel": "{label}, last 8 weeks",
+    "sparkEmpty": "No data in the last 8 weeks",
+    "countedNow": "Counted now; no history is kept yet",
+    "explain": {
+      "definition": "Definition",
+      "formula": "Formula",
+      "sources": "Source records",
+      "period": "Period",
+      "cutOff": "Cut-off",
+      "target": "Target"
+    },
+    "cutOff": "Days run from midnight to midnight at the site (Europe/Rome); weeks start on Monday.",
+    "setBy": "Set by the standard report pack (targets become editable with the KPI library).",
+    "openReport": "Open the report",
+    "kpiLater": "The KPI library comes later.",
+    "noData": "No data yet",
+    "mixed": "Amounts in several currencies are not added up.",
+    "unavailable": "Not available now"
+  },
+  "lens": {
+    "ORDERS": "sales orders",
+    "WORK_ORDERS": "work orders",
+    "PURCHASE_ORDERS": "purchase orders",
+    "INVOICES": "invoices",
+    "LOTS": "lots and quality"
+  },
+  "code": {
+    "ASKED": "Asked",
+    "AUDIT": "Audit",
+    "BUNDLE": "Bundle",
+    "CLOSED": "Closed",
+    "COMPLAINT": "Complaint",
+    "CONFIRMED": "Confirmed",
+    "CONTAINED": "Contained",
+    "CRITICAL": "Critical",
+    "DECIDED": "Decided",
+    "DELAYED": "Delayed",
+    "DRAFT": "Draft",
+    "FINAL": "Final",
+    "FINISHED_GOODS": "Finished goods",
+    "INSPECTION": "Inspection",
+    "IN_PRODUCTION": "In production",
+    "IN_PROGRESS": "In progress",
+    "LATE": "Late",
+    "LATER": "Later",
+    "LEATHER": "Leather",
+    "LINE": "Line",
+    "MAJOR": "Major",
+    "MATERIALS": "Materials",
+    "MINOR": "Minor",
+    "NOT_ENOUGH": "Not enough",
+    "NOT_STARTED": "Not started",
+    "NO_PROMISE": "No promise date",
+    "ON_HOLD": "On hold",
+    "ON_TIME": "On time",
+    "OPEN": "Open",
+    "OTHER": "Other",
+    "OVERDUE": "Overdue",
+    "PACKAGING": "Packaging",
+    "PARTLY_SHIPPED": "Partly shipped",
+    "READY": "Ready to ship",
+    "RELEASED": "Released",
+    "RETURN": "Return",
+    "REWORK": "Rework",
+    "SCRAP": "Scrap",
+    "SHIPPED": "Shipped",
+    "STARTED": "Started",
+    "SUPPLIER": "Supplier",
+    "THIS_WEEK": "This week",
+    "TRIMS": "Trims",
+    "WIP": "Work in progress",
+    "WORK_CENTRE": "Work centre"
+  },
+  "number": {
+    "orders.inThisWeek": {
+      "label": "Orders in this week",
+      "definition": "The net value of the sales orders taken this week.",
+      "formula": "Sum of the net amount (before VAT) of every order with an order date this week, cancelled orders left out.",
+      "sources": "Sales orders",
+      "period": "This week, Monday to today; the line shows the last 8 weeks."
+    },
+    "orders.late": {
+      "label": "Late orders",
+      "definition": "Open orders whose promise date has passed.",
+      "formula": "Count of orders confirmed, in production, ready or partly shipped with a promise date before today.",
+      "sources": "Sales orders",
+      "period": "Now."
+    },
+    "orders.promisedThisWeek": {
+      "label": "Promised this week",
+      "definition": "Open orders promised to the customer for this week.",
+      "formula": "Count of open orders with a promise date from Monday to Sunday of this week.",
+      "sources": "Sales orders",
+      "period": "This week, Monday to Sunday."
+    },
+    "orders.shippedOnTime": {
+      "label": "Shipped on time",
+      "definition": "The share of shipments that left on or before the order’s promise date.",
+      "formula": "Shipments shipped in the last 4 weeks that left on or before their order’s promise date, divided by every shipment shipped in those weeks.",
+      "sources": "Shipments and their sales orders",
+      "period": "The last 4 weeks; the line shows each of the last 8 weeks."
+    },
+    "orders.marginThisMonth": {
+      "label": "Margin this month",
+      "definition": "The average margin of the orders taken this month, from the estimate now.",
+      "formula": "Average estimate margin % of the orders with an order date this month (orders without a known cost left out).",
+      "sources": "Sales orders, their work orders and cost entries",
+      "period": "This month, from the 1st to today."
+    },
+    "workorders.late": {
+      "label": "Work orders late",
+      "definition": "Open work orders past their due date.",
+      "formula": "Count of work orders in draft, released, in progress or on hold with a due date before today.",
+      "sources": "Work orders",
+      "period": "Now."
+    },
+    "planning.shortages": {
+      "label": "Short of material",
+      "definition": "Released work orders that miss a material they need.",
+      "formula": "Count of released or started work orders with at least one material short or arriving after it is needed, in the latest plan.",
+      "sources": "The latest planning run, work orders and purchase orders",
+      "period": "Now, as of the latest planning run."
+    },
+    "planning.loadNextWeek": {
+      "label": "Load next week",
+      "definition": "The booked work of next week against the capacity of the lines and work centres.",
+      "formula": "Booked standard minutes of next week divided by the available minutes (people × working minutes × efficiency) of every line and work centre.",
+      "sources": "The planning board, line capacity and the site calendars",
+      "period": "Next week, Monday to Sunday."
+    },
+    "production.goodLastDay": {
+      "label": "Good garments, last working day",
+      "definition": "Garments that came out of the lines and work centres on the last working day.",
+      "formula": "Good garments through each line’s last operation, summed over the lines and work centres of your sites.",
+      "sources": "Floor scans, work orders and the site calendars",
+      "period": "The last working day of each site’s calendar."
+    },
+    "purchasing.notConfirmed": {
+      "label": "Not confirmed after 2 days",
+      "definition": "Purchase orders sent more than 48 hours ago that the supplier has not confirmed.",
+      "formula": "Count of purchase orders in Sent with a send time more than 48 hours ago.",
+      "sources": "Purchase orders",
+      "period": "Now."
+    },
+    "purchasing.lateDeliveries": {
+      "label": "Deliveries late",
+      "definition": "Purchase orders with goods still to come after the date the supplier confirmed (or we asked).",
+      "formula": "Count of open purchase orders with a line whose expected date (confirmed, else asked) is before today and is not all received.",
+      "sources": "Purchase orders and goods receipts",
+      "period": "Now."
+    },
+    "purchasing.dueThisWeek": {
+      "label": "Deliveries due this week",
+      "definition": "Purchase orders with goods expected from today to Sunday.",
+      "formula": "Count of open purchase orders with a line expected this week and not all received.",
+      "sources": "Purchase orders and goods receipts",
+      "period": "This week, today to Sunday."
+    },
+    "finance.overdue": {
+      "label": "Overdue from customers",
+      "definition": "What customers owe us past the due date.",
+      "formula": "Sum of the open amounts of issued invoices whose due date has passed, credit notes and payments taken off.",
+      "sources": "Invoices, payments and their due dates",
+      "period": "Now."
+    },
+    "finance.sdiRefused": {
+      "label": "Refused by SDI",
+      "definition": "Invoices the tax authority’s exchange (SDI) refused: they must be corrected and sent again.",
+      "formula": "Count of invoices in Rejected.",
+      "sources": "Invoices and the SDI answers",
+      "period": "Now."
+    },
+    "finance.invoicedThisWeek": {
+      "label": "Invoiced this week",
+      "definition": "The net value invoiced this week.",
+      "formula": "Sum of the net totals of the invoices issued this week, credit notes taken off.",
+      "sources": "Invoices and credit notes",
+      "period": "This week, Monday to today; the line shows the last 8 weeks."
+    },
+    "finance.stockValue": {
+      "label": "Stock value",
+      "definition": "What the stock and the work in progress are worth at cost.",
+      "formula": "Sum of the value of every stock move up to now (leather, materials, trims, packaging, finished goods) plus the cost entries of the work in progress.",
+      "sources": "Stock moves and their valuation, work order cost entries",
+      "period": "Now."
+    },
+    "quality.lotsOnHold": {
+      "label": "Lots on hold",
+      "definition": "Received lots that may not be used yet: in quarantine or blocked.",
+      "formula": "Count of lots in Quarantine or Blocked.",
+      "sources": "Lots and their quality decisions",
+      "period": "Now."
+    },
+    "quality.ncrOverdue": {
+      "label": "Containment overdue",
+      "definition": "Open nonconformances whose containment is past its due date.",
+      "formula": "Count of nonconformances still open with the containment (or an open action) due before now.",
+      "sources": "Nonconformances",
+      "period": "Now."
+    },
+    "quality.ncrOpen": {
+      "label": "Open nonconformances",
+      "definition": "Nonconformances not closed yet.",
+      "formula": "Count of nonconformances open, contained or decided.",
+      "sources": "Nonconformances",
+      "period": "Now."
+    },
+    "compliance.certificatesExpiring": {
+      "label": "Certificates expiring in 90 days",
+      "definition": "Valid certificates that end in the next 90 days.",
+      "formula": "Count of certificates in Valid whose last valid day is from today to 90 days from now.",
+      "sources": "Certificates",
+      "period": "Today to 90 days from now."
+    }
+  }
+}
