@@ -38,7 +38,7 @@ import {
   tileValue,
   versionToShow,
 } from './model'
-import { createProblem, writeProblem } from './problems'
+import { createProblem, customersProblem, writeProblem } from './problems'
 import { designScreen as recordScreen } from './record/fixtures'
 
 /**
@@ -213,5 +213,12 @@ describe('every SCR-106 design case draws in both languages with no key left on 
     const readOnly = recordScreen.cases.find((item) => item.id === 'prices-no-money')!.model as { record: { prices: { answer: { entries: object[] } } } }
     expect(sales.record.prices.answer.entries.every((entry) => !('standardCost' in entry) && 'marginPct' in entry)).toBe(true)
     expect(readOnly.record.prices.answer.entries.every((entry) => !('unitPrice' in entry) && !('marginPct' in entry))).toBe(true)
+  })
+})
+
+describe('B-W2b-16: a customer\'s list with its "From" day', () => {
+  it('says a second change of a customer\'s list on one day in its own words, the rest as before', () => {
+    expect(customersProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'body/validFrom', message: 'x' }]))).toEqual({ words: { key: 'customers.refusedDay' }, reload: true })
+    expect(customersProblem(new ApiError('invalid', 400, 'validation_failed', 'x', null, [{ path: 'body/partyIds/0', message: 'x' }])).words.key).toBe('customers.refused')
   })
 })

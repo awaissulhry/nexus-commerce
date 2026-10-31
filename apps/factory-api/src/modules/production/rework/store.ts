@@ -1,6 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { countKindOf, SCAN_KINDS } from '@nexus/factory-domain/production/scans/rules'
 import type { CommandTx } from '../../../core/command'
 
 /**
@@ -61,14 +62,15 @@ export async function readReworkReasons(db: Reader, all = false) {
 /** A scan as a rework's source: its counts, bundle, operation, whether a later row voids it, and its REWORK lines. */
 export async function readSourceScan(db: Reader, scanId: string) {
   if (!isUuid(scanId)) return null
+  // A count scan only (W2b: a timing scan opens no rework).
   const scan = await db.operationScan.findUnique({
-    where: { id: scanId },
+    where: { id: scanId, kind: { in: [...SCAN_KINDS] } },
     select: { id: true, workOrderId: true, bundleId: true, workOrderOperationId: true, kind: true, reworkQuantity: true, scrapQuantity: true, serverTime: true },
   })
   if (!scan) return null
   const voided = (await db.operationScan.count({ where: { correctsId: scan.id } })) > 0
   const lines = await db.operationScanDefect.findMany({ where: { scanId: scan.id, kind: 'REWORK' }, select: { reasonCode: true, quantity: true } })
-  return { ...scan, voided, lines }
+  return { ...scan, kind: countKindOf(scan.kind), voided, lines }
 }
 
 /** The reworks a scan's rework count opened (any status). */

@@ -65,7 +65,8 @@ const lineView = output({
   priority: z.number().int().nullable(),
   siteId: id().nullable(),
   /** B-W2a-30 (SAL-210): closed short — the pieces that will not be made or shipped, when, by whom, why; null: open. */
-  closedShort: output({ quantity: z.number().int(), at: instant().nullable(), byId: id().nullable(), reason: z.string().nullable() }).nullable(),
+  /** B-W2b-16: `reasonCode` = the CANCEL reason code chosen at the close (null for a line closed before W2b). */
+  closedShort: output({ quantity: z.number().int(), at: instant().nullable(), byId: id().nullable(), reason: z.string().nullable(), reasonCode: z.string().nullable() }).nullable(),
   version: z.number().int(),
   /** Its size grid in the style's range order (a made-to-measure unit: one entry, size null), with the progress of each. */
   sizes: z.array(output({ size: z.string().nullable(), quantity: z.number().int(), unitPrice: money.price(z.string().nullable()), progress: progressView })),
@@ -96,6 +97,8 @@ const depositView = output({
    * schedule existed: its deposit).
    */
   stepKind: z.enum(['DEPOSIT', 'BEFORE_SHIPPING']).nullable(),
+  /** B-W2b-16: its version (the owner's waive of a request no step names is sent at it). */
+  version: z.number().int(),
 })
 
 const settlementView = output({

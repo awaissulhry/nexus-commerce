@@ -82,6 +82,10 @@ export const repairView = output({
   inboundDdt: output({ number: z.string(), date: businessDate().nullable() }).nullable(),
   /** Its repair work order (B-W2a-12), any status. */
   workOrder: workOrderRef.nullable(),
+  /** B-W2b-16: the work orders of earlier rounds (a rework after the repair went back into repair gets its own). */
+  earlierWorkOrders: z.array(workOrderRef),
+  /** B-W2b-16: back into repair after it was repaired: a new repair work order may follow a done one. */
+  reworkRound: z.boolean(),
   repairedAt: instant().nullable(),
   safety: output({
     required: z.boolean(),

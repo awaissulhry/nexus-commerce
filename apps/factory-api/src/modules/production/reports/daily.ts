@@ -7,6 +7,7 @@ import { can, scopeWhere, type Actor, type Permission } from '@nexus/factory-dom
 import { businessDate, businessDayRange, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { dailyReport, laneKey, missingRoots, type DailyExtra, type DailyReport, type DailyScan, type LaneRef } from '@nexus/factory-domain/production/reports/daily'
 import { PRODUCTION_REPORTS_VIEW } from '@nexus/factory-domain/production/reports/permissions'
+import { countKindOf, SCAN_KINDS } from '@nexus/factory-domain/production/scans/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
@@ -56,7 +57,7 @@ type ScanRow = Prisma.OperationScanGetPayload<{ select: typeof SCAN_SELECT }>
 
 const toScan = (row: ScanRow): DailyScan => ({
   id: row.id,
-  kind: row.kind,
+  kind: countKindOf(row.kind),
   correctsId: row.correctsId,
   bundleId: row.bundleId,
   workOrderId: row.workOrderId,
@@ -93,7 +94,8 @@ export async function siteFor(db: Reader, actor: Actor, permission: Permission, 
 /** Every scan the day's report needs (see the module comment). */
 async function scansOfDay(db: Reader, siteId: string, range: { readonly start: Date; readonly end: Date }): Promise<DailyScan[]> {
   const rows = new Map<string, ScanRow>()
-  for (const row of await db.operationScan.findMany({ where: { siteId, serverTime: { gte: range.start, lt: range.end } }, select: SCAN_SELECT, orderBy: [{ serverTime: 'asc' }, { id: 'asc' }] })) rows.set(row.id, row)
+  // The count ledger only (W2b: the timing kinds carry no counts; the voiding and root rows below are count rows too).
+  for (const row of await db.operationScan.findMany({ where: { siteId, kind: { in: [...SCAN_KINDS] }, serverTime: { gte: range.start, lt: range.end } }, select: SCAN_SELECT, orderBy: [{ serverTime: 'asc' }, { id: 'asc' }] })) rows.set(row.id, row)
   // The later rows that undo or correct them (and theirs): the day's figures are what stands now.
   let frontier = [...rows.keys()]
   for (let depth = 0; frontier.length > 0 && depth < 20; depth += 1) {

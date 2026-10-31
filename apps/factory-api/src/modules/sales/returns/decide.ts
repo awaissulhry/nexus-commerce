@@ -44,7 +44,8 @@ import { currencyOf, LINE_COLUMNS, lineKeyOf, lineValue, moveKeyPrefix, readLine
  *                                                       INSPECTED), every named line received, graded and not decided;
  *                                                       its stock: an outcome that puts the goods into stock (RESTOCK into
  *                                                       finished goods, SECOND_QUALITY into the place named, QUARANTINE
- *                                                       into a quarantine place) posts ONE ADJUSTMENT into that place of
+ *                                                       into a quarantine place) posts ONE CUSTOMER_RETURN move (B-W2b-16;
+ *                                                       an ADJUSTMENT before W2b) naming the line into that place of
  *                                                       the SKU's FINISHED item (made now when the SKU has none, as a
  *                                                       production receipt does) through postMoves, keyed
  *                                                       `return-line:<line>:1`, valued as a production receipt is (the
@@ -218,7 +219,7 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
     const problems = planned.flatMap((entry) => entry.problems)
     if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'Some lines cannot be decided like this.', problems)
 
-    // The stock first: one ADJUSTMENT into its place per line whose goods go into stock (the SKU's FINISHED item), valued
+    // The stock first: one CUSTOMER_RETURN into its place per line whose goods go into stock (the SKU's FINISHED item), valued
     // at its frozen standard as a production receipt is (a month with a restocked return can then be closed for good).
     const day = businessDate(now)
     const drafts: MoveDraft[] = []
@@ -231,7 +232,10 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
       const cost = await standardCostFor(tx, rma.companyId, itemId, day)
       drafts.push({
         siteId: rma.siteId,
-        reason: 'ADJUSTMENT',
+        // B-W2b-16: a customer return of its own (StockMoveReason CUSTOMER_RETURN, B-W2b-01), naming the return line.
+        reason: 'CUSTOMER_RETURN',
+        returnLineId: entry.line.id,
+        returnPartyId: entry.line.partyId,
         itemId,
         itemColourId: null,
         lotId: null,

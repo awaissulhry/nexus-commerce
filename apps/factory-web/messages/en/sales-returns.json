@@ -30,7 +30,19 @@
     "reason": "Finish reason",
     "submit": "Close",
     "title": "Close return {number}",
-    "warningsBody": "Look at the return: lines to replace without the replacement order, or unchanged goods without their return DDT."
+    "warningsBody": "Look at the return: lines to replace without the replacement order, or unchanged goods without their return DDT.",
+    "checking": "Reading what the close would leave behind…",
+    "pendingTitle_one": "Closing leaves {count} thing open",
+    "pendingTitle_other": "Closing leaves {count} things open",
+    "pendingBody": "You can still close it: these stay to do after the close.",
+    "warn": {
+      "REPLACE_WITHOUT_ORDER_one": "Line {lines} is decided Replace and has no replacement order.",
+      "REPLACE_WITHOUT_ORDER_other": "Lines {lines} are decided Replace and have no replacement order.",
+      "BACK_WITHOUT_DDT_one": "Line {lines} goes back unchanged and no return DDT is issued yet.",
+      "BACK_WITHOUT_DDT_other": "Lines {lines} go back unchanged and no return DDT is issued yet.",
+      "REPAIR_WITHOUT_ORDER_one": "Line {lines} is decided Repair and not every garment has its repair order: it stays here unrepaired.",
+      "REPAIR_WITHOUT_ORDER_other": "Lines {lines} are decided Repair and not every garment has its repair order: they stay here unrepaired."
+    }
   },
   "col": {
     "actions": "Actions",
@@ -1022,7 +1034,9 @@
     "ncrs": "Nonconformances",
     "noWorkOrder": "No repair work order yet.",
     "workOrder": "Repair work order",
-    "workOrderSub": "The repair is done on its work order (Production)."
+    "workOrderSub": "The repair is done on its work order (Production).",
+    "earlier": "Earlier work orders",
+    "rework": "Back into repair after it was repaired: make a new repair work order for the rework (the last one is done)."
   },
   "workOrder": {
     "blocked": "Something stops making it now.",
@@ -1041,5 +1055,15 @@
     "submit_one": "Make it with {count} step",
     "submit_other": "Make it with {count} steps",
     "title": "Repair work order for {number}"
+  },
+  "addLines": {
+    "open": "Add lines",
+    "title": "Add lines to {number}",
+    "sub": "Pick more of what the customer sends back from its invoiced and shipped lines: never more than is left.",
+    "submit_one": "Add {count} line",
+    "submit_other": "Add {count} lines",
+    "taken": "Already line {seq} of this return: change its pieces on the Lines tab.",
+    "done_one": "{count} line added.",
+    "done_other": "{count} lines added."
   }
 }

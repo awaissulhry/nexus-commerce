@@ -118,6 +118,15 @@ const shipped = order('SHIPPED')
 const settled = order('SHIPPED', { settled: true })
 const closed = order('CLOSED', { settled: true, actions: [] })
 const cancelled = order('CANCELLED', { actions: [], chain: { ...confirmed.chain, depositRequests: [deposit({ status: 'CANCELLED' })] } })
+// B-W2b-16: a typed order (no quote): its deposit's page goes to the customer's invoices contact.
+const typed = order('CONFIRMED', { chain: { ...confirmed.chain, quote: null, depositRequests: [deposit({ quoteVersionId: null })] } })
+const CANCEL_REASONS = [
+  { code: 'CUSTOMER_REQUEST', labelIt: 'Richiesta del cliente', labelEn: 'Customer request', needsDetail: false },
+  { code: 'LEAD_TIME', labelIt: 'Tempi di consegna', labelEn: 'Lead time', needsDetail: false },
+  { code: 'OTHER', labelIt: 'Altro', labelEn: 'Other', needsDetail: true },
+]
+const WAIVE_STEPS = { can: { manageOrders: true, manageInvoices: true, waive: true }, opening: null, busy: false, problem: null }
+const BALANCE = SCHEDULE.steps[1]!
 const late = order('IN_PRODUCTION', { promiseDate: '2026-10-24', daysLate: 5 })
 
 const RECORDED = {
@@ -154,7 +163,7 @@ export const closedShort = (() => {
   const value = order('PARTLY_SHIPPED')
   return {
     ...value,
-    lines: value.lines.map((line) => (line.id === LINE_RED ? { ...line, closedShort: { quantity: 2, at: at(30, 16), byId: null, reason: 'Pelle rossa finita: il cliente accetta meno pezzi.' } } : line)),
+    lines: value.lines.map((line) => (line.id === LINE_RED ? { ...line, closedShort: { quantity: 2, at: at(30, 16), byId: null, reason: 'Pelle rossa finita: il cliente accetta meno pezzi.', reasonCode: 'CUSTOMER_REQUEST' } } : line)),
     progress: { ...value.progress, closedShort: 2 },
     dailyActions: value.dailyActions.map((entry) => (entry.action === 'reopenLines' ? { ...entry, allowed: true, held: null } : entry)),
   }
@@ -282,10 +291,21 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'money-schedule-overdue', label: 'W2a · Finance · Payment schedule: the deposit step overdue', model: base('finance', confirmed, { tab: 'money', schedule: { value: SCHEDULE_OVERDUE, problem: null } }) },
     { id: 'money-schedule-remade', label: 'W2a · Owner · Payment schedule remade by an amendment (one step replaced)', model: base('owner', amended(production), { tab: 'money', schedule: { value: SCHEDULE_REMADE, problem: null } }) },
     // B-W2a-80: the schedule card's verbs (B-W2a-F2's note).
-    { id: 'w2a80-schedule-open', label: 'W2a · Finance · Schedule: Open the balance before shipping for payment; invoice the paid deposit (its TD02)', model: base('finance', paidNotSent, { tab: 'money', scheduleSteps: { can: { manageOrders: true, manageInvoices: true }, opening: null, busy: false, problem: null } }) },
-    { id: 'w2a80-schedule-day', label: 'W2a · Finance · Open for payment of a step without a day: the day its request falls due', model: base('finance', paidNotSent, { tab: 'money', schedule: { value: { ...SCHEDULE, steps: SCHEDULE.steps.map((step) => (step.kind === 'BEFORE_SHIPPING' ? { ...step, dueDate: null } : step)) }, problem: null }, scheduleSteps: { can: { manageOrders: true, manageInvoices: true }, opening: { ...SCHEDULE.steps[1]!, dueDate: null }, busy: false, problem: null } }) },
-    { id: 'w2a80-schedule-sales', label: 'W2a · Sales · Schedule verbs held (orders and invoices are managed by others)', model: base('sales', paidNotSent, { tab: 'money', scheduleSteps: { can: { manageOrders: false, manageInvoices: false }, opening: null, busy: false, problem: null } }) },
+    { id: 'w2a80-schedule-open', label: 'W2a · Finance · Schedule: Open the balance before shipping for payment; invoice the paid deposit (its TD02)', model: base('finance', paidNotSent, { tab: 'money', scheduleSteps: { can: { manageOrders: true, manageInvoices: true, waive: false }, opening: null, busy: false, problem: null } }) },
+    { id: 'w2a80-schedule-day', label: 'W2a · Finance · Open for payment of a step without a day: the day its request falls due', model: base('finance', paidNotSent, { tab: 'money', schedule: { value: { ...SCHEDULE, steps: SCHEDULE.steps.map((step) => (step.kind === 'BEFORE_SHIPPING' ? { ...step, dueDate: null } : step)) }, problem: null }, scheduleSteps: { can: { manageOrders: true, manageInvoices: true, waive: false }, opening: { ...SCHEDULE.steps[1]!, dueDate: null }, busy: false, problem: null } }) },
+    { id: 'w2a80-schedule-sales', label: 'W2a · Sales · Schedule verbs held (orders and invoices are managed by others)', model: base('sales', paidNotSent, { tab: 'money', scheduleSteps: { can: { manageOrders: false, manageInvoices: false, waive: false }, opening: null, busy: false, problem: null } }) },
     { id: 'money-schedule-none', label: 'W2a · Sales · No milestones: paid on invoice terms', model: base('sales', noDeposit, { tab: 'money', schedule: { value: SCHEDULE_NONE, problem: null } }) },
+    // B-W2b-16: the owner waives an advance; a typed order's deposit page; the close's reason code.
+    { id: 'w2b16-waive', label: 'W2b · Owner · Schedule: Waive… on the open balance before shipping (and on its deposit card)', model: base('owner', confirmed, { tab: 'money', scheduleSteps: WAIVE_STEPS }) },
+    { id: 'w2b16-waive-dialog', label: 'W2b · Owner · Waive the balance before shipping: what it means, the reason; a fresh code after Waive', model: base('owner', confirmed, { tab: 'money', scheduleSteps: { ...WAIVE_STEPS, waiving: { target: { kind: 'step', id: BALANCE.id, version: BALANCE.version }, label: BALANCE.label, stepKind: 'BEFORE_SHIPPING' } } }) },
+    { id: 'w2b16-waive-deposit', label: 'W2b · Owner · Waive the deposit: production may start without it', model: base('owner', confirmed, { tab: 'money', scheduleSteps: { ...WAIVE_STEPS, waiving: { target: { kind: 'step', id: SCHEDULE.steps[0]!.id, version: 1 }, label: SCHEDULE.steps[0]!.label, stepKind: 'DEPOSIT' } } }) },
+    { id: 'w2b16-waive-refused', label: 'W2b · Owner · Waive refused: the step moved meanwhile (said in the dialog)', model: base('owner', confirmed, { tab: 'money', scheduleSteps: { ...WAIVE_STEPS, problem: { key: 'schedule.verbs.problem.moved' }, waiving: { target: { kind: 'step', id: BALANCE.id, version: BALANCE.version }, label: BALANCE.label, stepKind: 'BEFORE_SHIPPING' } } }) },
+    { id: 'w2b16-waive-held', label: 'W2b · Finance · Waive… held: only the owner waives', model: base('finance', confirmed, { tab: 'money', scheduleSteps: { ...WAIVE_STEPS, can: { ...WAIVE_STEPS.can, waive: false } } }) },
+    { id: 'w2b16-deposit-typed', label: 'W2b · Finance · A typed order’s deposit: Send the bank-details page (to the invoices contact)', model: base('finance', typed, { tab: 'money' }) },
+    { id: 'w2b16-deposit-typed-dialog', label: 'W2b · Finance · Send the page of a typed order’s deposit', model: base('finance', typed, { tab: 'money', dialog: { kind: 'depositLink', requestId: typed.chain.depositRequests[0]!.id } }) },
+    { id: 'w2b16-close-lines-code', label: 'W2b · Sales · Close remaining lines: the reason code from the cancel list, beside the words', model: base('sales', order('PARTLY_SHIPPED'), { dialog: { kind: 'closeLines' }, cancelReasons: CANCEL_REASONS, draft: { reason: 'Il cliente non vuole il resto.', reasonCode: 'CUSTOMER_REQUEST' } }) },
+    { id: 'w2b16-close-lines-no-code', label: 'W2b · Sales · Close remaining lines held: pick a reason code', model: base('sales', order('PARTLY_SHIPPED'), { dialog: { kind: 'closeLines' }, cancelReasons: CANCEL_REASONS, draft: { reason: 'Il cliente non vuole il resto.' } }) },
+    { id: 'w2b16-closed-short-code', label: 'W2b · Sales · Lines: the closed line names its reason code in words', model: base('sales', closedShort, { cancelReasons: CANCEL_REASONS }) },
     { id: 'money-schedule-manager', label: 'W2a · Production manager · Payment schedule without money', model: base('manager', paidNotSent, { tab: 'money' }) },
     { id: 'money-schedule-error', label: 'W2a · Sales · The payment schedule could not be read (Try again)', model: base('sales', confirmed, { tab: 'money', schedule: { value: null, problem: 'problem.read.unavailable' } }) },
     { id: 'new-empty', label: 'W2a · Sales · New order (typed): the draft studio, no line yet — Confirm held', model: draftCase('sales'), note: 'Add a style (n), pick colours, type sizes; the rail prices it as you type.' },

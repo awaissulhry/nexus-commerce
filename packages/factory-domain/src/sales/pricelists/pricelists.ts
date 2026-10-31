@@ -264,3 +264,53 @@ export function compareEntries(before: readonly EntryInput[], after: readonly En
 
 /** How many rows differ (design "Changed rows"). */
 export const changedRows = (rows: readonly ComparedEntry[]): number => rows.filter((row) => row.change !== 'SAME').length
+
+// ---- B-W2b-16: a customer's price list with its "From" day (PartyPriceListAssignment, B-W2b-03) ------------------------
+
+export interface AssignmentRow {
+  readonly id: string
+  readonly priceListId: string
+  readonly validFrom: BusinessDate
+  readonly validTo: BusinessDate | null
+}
+
+export type AssignmentPlan =
+  | { readonly kind: 'NOTHING' }
+  | { readonly kind: 'CHANGE'; readonly end: { readonly id: string; readonly validTo: BusinessDate } | null; readonly start: { readonly priceListId: string; readonly validFrom: BusinessDate } | null }
+  | { readonly kind: 'REFUSED'; readonly path: 'validFrom'; readonly message: string }
+
+/**
+ * Giving a customer a list from a day (or taking its list away): the customer's rows never overlap and only an end moves
+ * (the database's rule), so the list in force (the open row) ends the day before the new one starts, and the new row is
+ * open. A day holds one list: a list given on the same day it changed before is refused in words (the history keeps one
+ * list per day) — taking away a list given today ends it today. `from` is today or earlier (never before the open list's
+ * own start + 1); a later day would leave Party.priceListId ahead of its history.
+ */
+export function assignmentPlan(rows: readonly AssignmentRow[], listId: string | null, from: BusinessDate, today: BusinessDate, words: { readonly party: string; readonly listCode: (id: string) => string }): AssignmentPlan {
+  if (from > today) return { kind: 'REFUSED', path: 'validFrom', message: `A list is given from today (${today}) or an earlier day, not a later one.` }
+  const open = rows.find((row) => row.validTo === null) ?? null
+  if (open !== null && open.priceListId === listId) return { kind: 'NOTHING' }
+  if (open === null && listId === null) return { kind: 'NOTHING' }
+  const latest = [...rows].sort((a, b) => (a.validFrom < b.validFrom ? 1 : -1))[0] ?? null
+  if (listId === null) {
+    // Taking the list away: it ends the day before, or today when it was given today.
+    const end = open!.validFrom < from ? addDays(from, -1) : open!.validFrom
+    return { kind: 'CHANGE', end: { id: open!.id, validTo: end }, start: null }
+  }
+  if (open !== null && open.validFrom >= from) {
+    return {
+      kind: 'REFUSED',
+      path: 'validFrom',
+      message: `${words.party} has had ${words.listCode(open.priceListId)} since ${open.validFrom}: a customer's list changes at most once a day (its history keeps one list per day). Give the new list from ${addDays(open.validFrom, 1)}.`,
+    }
+  }
+  const lastEnd = open === null && latest !== null ? latest.validTo : null
+  if (lastEnd !== null && lastEnd >= from) {
+    return {
+      kind: 'REFUSED',
+      path: 'validFrom',
+      message: `${words.party} had ${words.listCode(latest!.priceListId)} until ${lastEnd}: a customer's list changes at most once a day. Give the new list from ${addDays(lastEnd, 1)}.`,
+    }
+  }
+  return { kind: 'CHANGE', end: open ? { id: open.id, validTo: addDays(from, -1) } : null, start: { priceListId: listId, validFrom: from } }
+}

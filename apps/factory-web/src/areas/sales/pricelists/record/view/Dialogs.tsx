@@ -304,7 +304,11 @@ function AddCustomersDialog({ list, model, actions, onClose }: DialogProps) {
     return () => clearTimeout(timer)
   }, [query])
   const already = new Set(list.customers.map((customer) => customer.id))
-  const held = pick.picked.length === 0 ? t('customers.held.pick') : model.busy ? t('held.busy') : null
+  const locale = useLocale()
+  // B-W2b-16: the customers' "From": today (blank) or an earlier day, never a later one.
+  const from = pick.from ?? ''
+  const fromLater = from !== '' && from > model.today
+  const held = pick.picked.length === 0 ? t('customers.held.pick') : fromLater ? t('customers.held.fromLater') : model.busy ? t('held.busy') : null
   return (
     <Modal
       open
@@ -322,6 +326,9 @@ function AddCustomersDialog({ list, model, actions, onClose }: DialogProps) {
     >
       <div className="fw-pl-dialog">
         <p className="fw-pl-hint">{t('customers.addBody', { currency: list.currency })}</p>
+        <Field label={t('customers.from')} hint={t('customers.fromHint')} error={fromLater ? t('customers.held.fromLater') : undefined}>
+          <DateField value={from} onChange={(day) => actions?.onCustomerFrom?.(day)} max={model.today} locale={INTL_LOCALE[locale]} ariaLabel={t('customers.from')} placeholder={t('customers.fromToday')} clearLabel={t('customers.fromToday')} />
+        </Field>
         <Field label={t('customers.search')}>
           <Input
             autoFocus

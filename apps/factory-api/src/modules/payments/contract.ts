@@ -170,10 +170,13 @@ export const depositReceivedContract = defineContract({
 
 // ---- the deposit page by link (DEPOSIT_INFO) ---------------------------------------------------------------------------
 
-/** Office: mail the deposit page's link to the quote's contact (an OPEN request). The link's token is never in an answer. */
+/**
+ * Office: mail the deposit page's link to the quote's contact (an OPEN request). The link's token is never in an answer.
+ * B-W2b-16: a request made on an order (no quote) goes to `contactId`, else the INVOICES contact, else the ORDERS one.
+ */
 export const sendDepositLinkContract = defineContract({
   params: input({ depositRequestId: id() }),
-  body: input({ message: z.string().trim().max(2000).optional() }),
+  body: input({ message: z.string().trim().max(2000).optional(), contactId: id().optional() }),
   response: {
     201: output({
       link: output({ id: id(), expiresAt: instant(), to: z.string(), revokedLinkIds: z.array(id()) }),
@@ -197,7 +200,8 @@ export const depositLinkViewContract = defineContract({
         status: z.string(),
         paid: z.boolean(),
       }),
-      quote: output({ document: z.string() }),
+      /** B-W2b-16: null for a request made on an order without a quote (the order names it). */
+      quote: output({ document: z.string() }).nullable(),
       order: output({ number: z.string() }).nullable(),
       from: output({ legalName: z.string(), tradeName: z.string().nullable() }),
       instructions: output({

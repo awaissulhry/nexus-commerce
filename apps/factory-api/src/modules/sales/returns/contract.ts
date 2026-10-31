@@ -6,6 +6,7 @@ import {
   FREIGHT_PAYERS,
   GOODS_OUTCOMES,
   PARCEL_CONDITIONS,
+  CLOSE_WARNING_CODES,
   RETURN_ACTIONS,
   RETURN_CAUSES,
   RETURN_DISPOSITIONS,
@@ -156,6 +157,8 @@ export const returnView = output({
   /** SAL-362: each step with its date. */
   tracking: z.array(output({ step: z.enum(TRACKING_STEPS), state: z.enum(STEP_STATES), at: z.string().nullable(), words: z.string() })),
   actions: z.array(output({ action: z.enum(RETURN_ACTIONS), allowed: z.boolean(), held: z.string().nullable() })),
+  /** B-W2b-16: what a close would leave behind (never a refusal): the close dialog says it before the click. */
+  closeWarnings: z.array(output({ code: z.enum(CLOSE_WARNING_CODES), path: z.string(), lineIds: z.array(id()), seqs: z.array(z.number().int()), message: z.string() })),
   policy: policyView.extend({ freightPaidByNow: z.enum(['CUSTOMER', 'COMPANY']).nullable() }),
   stockOutcomes: z.array(outcome),
   version: z.number().int(),

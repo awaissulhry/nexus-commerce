@@ -75,7 +75,13 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    overtime asks and answers, clock events append-only, attendance days and anomalies, absences, overtime entries,
    timesheets, the month close that nothing is written into once closed, corrections append-only, working-time limits;
    it redefines no earlier function), `…_pay_w2b_guards` (W2b wave 6/7: piece pay and the payroll export; its own functions
-   only, no earlier body redefined; it calls money's `factory_money_rome_day`): triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
+   only, no earlier body redefined; it calls money's `factory_money_rome_day`), `…_floor_work_w2b_guards` (W2b wave
+   7/7: operation timing, team members and ticked steps append-only, off-standard time and line days, LabourEdit
+   append-only, disputes, dispatch, coupons, scan findings, crews, device modes, help calls, targets, handover notes;
+   it redefines production's `factory_work_order_guard` (rush, split) and pay's `factory_earnings_entry_check` and
+   `factory_held_scan_guard` (PARTIAL and HAND_BACK pay and hold their pieces), and recreates the OperationScan
+   triggers `OperationScan_check`, `OperationScan_awaits_hold` and `OperationScan_awaits_quality_hold` with WHEN
+   clauses, their functions untouched): triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written
    too but goes the other way: keep it IN `prisma/migrations`, under a timestamp before its schema folder, while

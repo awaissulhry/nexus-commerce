@@ -15,6 +15,7 @@ import {
   type RepairFacts,
 } from '@nexus/factory-domain/production/work-orders/repair'
 import type { PlannedOperation } from '@nexus/factory-domain/production/work-orders/spec'
+import { reworkRoundOf, type RepairStage } from '@nexus/factory-domain/sales/repairs/rules'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { allocateNumber } from '../../../platform/numbering/allocate'
@@ -32,7 +33,8 @@ import { officeWorkOrder, onWorkOrder, todayOfCommand } from './work-orders'
  * these from the repair order's screens; the repair order's stages are its own.
  *
  *   make    ONE command on the RepairOrder (its version bump locks it, so two "Make repair work order" taps make one):
- *           the repair still before its repair is done and without a live repair work order → the garment's sold line
+ *           the repair still before its repair is done and without a live repair work order (B-W2b-16: back into
+ *           repair after it was repaired, a DONE one no longer counts: the new one is the rework's) → the garment's sold line
  *           (asked, its RMA line's, or its serial's cell) checked against the repair → the revision (asked, the line's,
  *           else the style's released one) and the chosen steps at the site's work centres → the number from the
  *           company's WORK_ORDER series → the DRAFT, its one cell (one garment; a made-to-measure one keeps its profile),
@@ -73,6 +75,13 @@ async function officeRepair(caller: CommandCaller, repairOrderId: string, permis
   if (!repair || !can(actorOf(context), WORKORDERS_VIEW, scope!)) throw new NotFoundError('Repair order not found.')
   if (!can(actorOf(context), permission, scope!)) throw new ForbiddenError()
   return repair
+}
+
+/** B-W2b-16: back into repair after it was repaired (its last stage move came from REPAIRED): a rework round. */
+async function reworkRound(db: Reader, repair: Pick<RepairRow, 'id' | 'stage'>): Promise<boolean> {
+  if (repair.stage !== 'IN_REPAIR') return false
+  const last = await db.repairStageEvent.findFirst({ where: { repairId: repair.id }, select: { fromStage: true, stage: true }, orderBy: [{ repairVersion: 'desc' }, { at: 'desc' }] })
+  return reworkRoundOf(repair.stage as RepairStage, last ? [{ from: last.fromStage as RepairStage | null, to: last.stage as RepairStage }] : [])
 }
 
 const repairFacts = (repair: RepairRow): RepairFacts => ({ number: repair.number, companyId: repair.companyId, partyId: repair.partyId, styleId: repair.styleId, colourwayId: repair.colourwayId, size: repair.size })
@@ -149,7 +158,7 @@ export async function createRepairWorkOrder(caller: CommandCaller, body: RepairI
     const stage = repairStageProblem(current.number, current.stage)
     if (stage) throw new InvalidStateError(stage)
     const existing = current.workOrderId ? await tx.workOrder.findUnique({ where: { id: current.workOrderId }, select: { number: true, status: true } }) : null
-    const live = liveWorkOrderProblem(current.number, existing)
+    const live = liveWorkOrderProblem(current.number, existing, await reworkRound(tx, current))
     if (live) throw new InvalidStateError(live)
 
     const known = await knownGarment(tx, current)
@@ -224,7 +233,7 @@ export async function createRepairWorkOrder(caller: CommandCaller, body: RepairI
         steps: operations.map((op) => op.routingSeq),
       },
     })
-    tools.audit({ recordType: 'RepairOrder', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { workOrderId: current.workOrderId }, after: { workOrderId: id } })
+    tools.audit({ recordType: 'RepairOrder', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { workOrderId: current.workOrderId }, after: { workOrderId: id }, ...(existing && existing.status !== 'CANCELLED' ? { reason: `Rework after ${existing.number} (${existing.status}): the repair went back into repair.` } : {}) })
     tools.emit({
       type: 'workorder.created',
       subject: id,
@@ -272,7 +281,7 @@ export async function repairOptions(caller: CommandCaller, repairOrderId: string
     const stage = repairStageProblem(repair.number, repair.stage)
     if (stage) blockers.push(stage)
     const existing = repair.workOrderId ? await client.workOrder.findUnique({ where: { id: repair.workOrderId }, select: { id: true, number: true, status: true } }) : null
-    const live = liveWorkOrderProblem(repair.number, existing)
+    const live = liveWorkOrderProblem(repair.number, existing, await reworkRound(client, repair))
     if (live) blockers.push(live)
     const known = await knownGarment(client, repair)
     const garment = repairGarmentOf({ asked: null, ...known })

@@ -108,6 +108,8 @@ export const LINE_COLUMNS = {
   closedShortAt: true,
   closedShortById: true,
   closeShortReason: true,
+  // B-W2b-16: the CANCEL reason code of the close (kept as text; cleared on reopen).
+  closedShortReasonCode: true,
   version: true,
 } as const satisfies Prisma.SalesOrderLineSelect
 export type LineRow = Prisma.SalesOrderLineGetPayload<{ select: typeof LINE_COLUMNS }>

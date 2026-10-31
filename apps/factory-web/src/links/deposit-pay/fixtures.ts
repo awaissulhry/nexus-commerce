@@ -39,6 +39,7 @@ export const designScreen = defineDesignScreen<DepositPayViewModel>({
     { id: 'to-pay', label: 'The deposit to pay: amount, due date, the bank transfer with Copy', model: base(), note: 'The customer’s page from the bank-details mail (DEPOSIT_INFO). Card payment is W2b.' },
     { id: 'copied', label: 'The IBAN copied', model: base({ copied: 'IBAN' }) },
     { id: 'part-paid', label: 'Part paid already: what is left to pay', model: base({ deposit: linkDeposit({ instructions: { ...linkDeposit().instructions, amount: 128384 } }) }) },
+    { id: 'typed-order', label: 'A deposit of an order typed without a quote (B-W2b-16)', model: base({ deposit: linkDeposit({ quote: null, instructions: { ...linkDeposit().instructions, reference: 'Acconto SO-2026-0091' } }) }) },
     { id: 'quote-only', label: 'A deposit of a quote without an order yet', model: base({ deposit: linkDeposit({ order: null, instructions: { ...linkDeposit().instructions, reference: 'Acconto Q-2026-0188 v2' } }) }) },
     { id: 'no-bank', label: 'No bank account entered yet: the details follow by e-mail', model: base({ deposit: linkDeposit({ instructions: { ...linkDeposit().instructions, bank: null } }) }) },
     { id: 'paid', label: 'Paid — thank you', model: base({ deposit: linkDeposit({ deposit: { ...linkDeposit().deposit, status: 'PAID', paid: true } }) }) },
