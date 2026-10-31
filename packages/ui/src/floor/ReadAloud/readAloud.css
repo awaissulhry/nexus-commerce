@@ -1,0 +1,14 @@
+/*
+ * DS floor kit — ReadAloudButton (B-W2b-28, D27). The button is a FloorButton; the voice line reads
+ * `--nds-density-font-label` in `--nds-text-2`.
+ */
+.nds-floor-readaloud {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+}
+.nds-floor-readaloud-voice {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}

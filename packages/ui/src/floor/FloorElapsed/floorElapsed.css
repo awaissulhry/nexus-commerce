@@ -1,0 +1,67 @@
+/*
+ * DS floor kit — FloorElapsed (B-W2b-28). Sizes read `--nds-density-*`; colours are semantic roles paired as the contrast
+ * gate measures them (`--nds-<tone>-text` on the surface for the numeral, on `--nds-<tone>-soft` for the state word).
+ * A tone is never colour alone: the icon changes (clock → warning, pause) and paused / over carry a word.
+ */
+.nds-floor-elapsed {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  color: var(--nds-text);
+}
+.nds-floor-elapsed-label {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+  text-align: center;
+}
+.nds-floor-elapsed-row {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+.nds-floor-elapsed-icon {
+  color: var(--nds-text-2);
+}
+.nds-floor-elapsed-time {
+  font-size: calc(var(--nds-density-font-numeral) * 1.6);
+  font-weight: var(--nds-font-weight-extrabold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.nds-floor-elapsed[data-size='md'] .nds-floor-elapsed-time {
+  font-size: var(--nds-density-font-numeral);
+}
+.nds-floor-elapsed-unit {
+  margin-inline-start: 0.12em;
+  font-size: 0.45em;
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-2);
+}
+.nds-floor-elapsed-state {
+  padding: var(--nds-space-4) var(--nds-space-12);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-bold);
+  white-space: nowrap;
+}
+.nds-floor-elapsed[data-tone='warning'] :is(.nds-floor-elapsed-time, .nds-floor-elapsed-icon) {
+  color: var(--nds-warning-text);
+}
+.nds-floor-elapsed[data-tone='danger'] :is(.nds-floor-elapsed-time, .nds-floor-elapsed-icon) {
+  color: var(--nds-danger-text);
+}
+.nds-floor-elapsed[data-over='true'] .nds-floor-elapsed-state {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-floor-elapsed[data-paused='true'] .nds-floor-elapsed-time {
+  color: var(--nds-text-2);
+}
