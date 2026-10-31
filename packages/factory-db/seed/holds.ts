@@ -73,7 +73,9 @@ const T = {
   start: new Date('2026-11-27T09:00:00.000Z'),
   left: new Date('2026-11-27T09:30:00.000Z'),
 } as const
-const DDT_DATE = new Date('2026-11-27T00:00:00.000Z')
+// B-W2b-30: dated in the past like the shipping seed's DDTs 143 and 144 (the same day), so the DDT series' last issued
+// date lets a fresh seed issue today's DDTs; the repair's other times stay in the November story above.
+const DDT_DATE = new Date('2026-10-30T00:00:00.000Z')
 const YEAR = '2026'
 
 const BLUE = '#2563EB'
