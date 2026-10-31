@@ -1,11 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
-import { parseLiveData } from '../../../record-panels/live'
+import { useLiveBus } from '../../../shell/live/use-live'
 import type { LiveChange } from '../../../record-panels/model'
 import type { LiveState } from './model'
 
@@ -22,37 +22,8 @@ export function useRecordTab<T extends string>(tabs: readonly T[]): T {
  * the screen reads the part again, it never takes data from the message.
  */
 export function useLive(onChange: (change: LiveChange) => void, onReconnect: () => void): LiveState {
-  const [state, setState] = useState<LiveState>('connecting')
-  const handlers = useRef({ onChange, onReconnect })
-  handlers.current = { onChange, onReconnect }
-  useEffect(() => {
-    if (typeof EventSource === 'undefined') {
-      setState('offline')
-      return
-    }
-    const source = new EventSource('/api/live')
-    let readyOnce = false
-    const onReady = () => {
-      setState('live')
-      if (readyOnce) handlers.current.onReconnect()
-      readyOnce = true
-    }
-    const onMessage = (event: MessageEvent<string>) => {
-      const change = parseLiveData(event.data)
-      if (change) handlers.current.onChange(change)
-    }
-    const onError = () => setState(source.readyState === EventSource.CLOSED ? 'offline' : 'connecting')
-    source.addEventListener('ready', onReady)
-    source.addEventListener('change', onMessage as EventListener)
-    source.addEventListener('error', onError)
-    return () => {
-      source.removeEventListener('ready', onReady)
-      source.removeEventListener('change', onMessage as EventListener)
-      source.removeEventListener('error', onError)
-      source.close()
-    }
-  }, [])
-  return state
+  // B-W2b-05: the tab's ONE live connection (shell/live/bus.ts), shared with the bell and every other screen.
+  return useLiveBus({ onChange, onReconnect })
 }
 
 /** Whether a live event is one of these types (or starts with one of these prefixes ending in `.` or `_`). */

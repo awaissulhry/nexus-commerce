@@ -23,6 +23,7 @@ import { Banner } from '@nexus/ui/components'
 import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { useT } from '../lib/i18n/provider'
 import { WithMessages } from '../record-panels/i18n'
+import { usePrintMode } from '../shell/print/print-mode'
 import { ListKeysInfo } from './ListKeysInfo'
 import { FIT_ROWS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
 import { ListToolsBar } from './tools/ListToolsBar'
@@ -120,6 +121,8 @@ export function ListFrame<T>(props: ListFrameProps<T>) {
 
 function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen }: ListFrameProps<T>) {
   const t = useT('lists')
+  // B-W2b-05 (PLT-171): the print view draws every loaded row for paper, without the list's controls.
+  const printing = usePrintMode()
   const frameRef = useRef<HTMLDivElement>(null)
   // Saved views and export: the layout on screen is applied to the columns the grid draws.
   const listTools = useListTools({ frame: frameRef, listKey, columns, title: title ?? label })
@@ -260,10 +263,14 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
     [t, isRowSelectable],
   )
 
-  const picked = selection ? selected.length : 0
+  const picked = selection && !printing ? selected.length : 0
   // Straight into the card (no wrapper): the DS toolbar's wrap rules match only `.nds-grid-card > .nds-toolbar`, so a
   // phone's card takes a second line instead of pushing tools past its clipped edge.
-  const toolbar = (
+  const toolbar = printing ? (
+    <GridToolbar wrap count={count}>
+      {search && <GridSearchSlot>{search}</GridSearchSlot>}
+    </GridToolbar>
+  ) : (
     <GridToolbar
       wrap
       count={picked > 0 ? t('selected', { count: picked }) : count}
@@ -294,7 +301,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
       )}
     </GridToolbar>
   )
-  const footer = (
+  const footer = printing ? undefined : (
     <GridFooterStrip>
       {more && (
         <Button size="sm" onClick={more.onMore} heldReason={more.held ?? null}>
@@ -324,12 +331,13 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
   else {
     // The long grid keeps its fixed height only while it has more than one page or more to read: a short, complete ledger
     // is as tall as its rows, like every list (no empty band).
-    const long = !!endless && !(endless.done && rows.length <= FIT_ROWS)
+    const long = !printing && !!endless && !(endless.done && rows.length <= FIT_ROWS)
     const layout = long ? { domLayout: 'normal' as const, fit: false } : gridLayout(rows.length)
     body = (
-      <div className={long ? 'fw-list-grid endless' : layout.fit ? 'fw-list-grid fit' : 'fw-list-grid'} role="region" aria-label={label}>
+      <div className={printing ? 'fw-list-grid printing' : long ? 'fw-list-grid endless' : layout.fit ? 'fw-list-grid fit' : 'fw-list-grid'} role="region" aria-label={label}>
         <NexusGrid<T>
-          domLayout={layout.domLayout}
+          domLayout={printing ? 'print' : layout.domLayout}
+          {...(printing ? { height: 'auto' } : {})}
           {...(long ? { onBodyScroll, onModelUpdated: onBodyScroll } : {})}
           rows={rowKind}
           rowData={rows as T[]}
@@ -337,8 +345,8 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
           {...(listTools.layout.density ? { density: listTools.layout.density } : {})}
           getRowId={getRowId}
           onGridReady={onGridReady}
-          rowSelection={rowSelection}
-          selectionColumnDef={selection ? selectionColumnDef : undefined}
+          rowSelection={printing ? undefined : rowSelection}
+          selectionColumnDef={selection && !printing ? selectionColumnDef : undefined}
           onSelectionChanged={onSelectionChanged}
           onCellKeyDown={onCellKeyDown}
           suppressCellFocus={false}
@@ -349,7 +357,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
 
   return (
     <div className="fw-list" ref={frameRef}>
-      {listTools.linkNotice && (
+      {listTools.linkNotice && !printing && (
         <div className="fw-lt-notice">
           <Banner
           tone="warning"

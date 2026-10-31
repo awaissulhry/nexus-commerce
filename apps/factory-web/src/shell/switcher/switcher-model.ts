@@ -16,8 +16,15 @@ export interface SwitcherState {
   site: string | null
   /** The current page without its `/w/<company>` prefix: switching company keeps it. */
   path: string
+  /**
+   * B-W2b-05: the person's roles reach only some of the company's sites — "All sites" then says "All my sites". With one
+   * site there is nothing to choose: the trigger names it, the menu lists no sites.
+   */
+  limited?: boolean
   /** The menu starts open (design fixtures). */
   open?: boolean
+  /** B-W2b-05: the company finder starts open, with this text (design fixtures; more than 7 companies). */
+  finderQuery?: string
 }
 
 /** The same page in another company. A record page (`/sales/orders/<id>`) goes back to its list: a record id belongs to one company. */
@@ -32,10 +39,12 @@ export function currentCompany(state: SwitcherState): CompanyRef | null {
 }
 
 export function currentSite(state: SwitcherState): SiteRef | null {
+  // B-W2b-05: one site only is the site the person works in (nothing to choose).
+  if (state.sites.length === 1) return state.sites[0]!
   return state.site === null ? null : (state.sites.find((site) => site.id === state.site) ?? null)
 }
 
-/** Whether there is anything to switch: more than one company, or any site to narrow to. */
+/** Whether there is anything to switch: more than one company, or more than one site to narrow to (B-W2b-05: one site is no choice). */
 export function switcherHasChoices(state: SwitcherState): { companies: boolean; sites: boolean } {
-  return { companies: state.companies.length > 1, sites: state.sites.length > 0 }
+  return { companies: state.companies.length > 1, sites: state.sites.length > 1 }
 }
