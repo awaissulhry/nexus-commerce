@@ -1,0 +1,297 @@
+{
+  "page": {
+    "asOf": "Dalla pianificazione delle {time}",
+    "noRun": "Nessuna pianificazione ancora eseguita in questo sito",
+    "site": "Sito",
+    "siteOne": "Sito {site}",
+    "run": "Ricalcola ora",
+    "running": "Pianificazione…",
+    "more": "Altre azioni",
+    "export": "Esporta questa vista (CSV)",
+    "keys": "Scorciatoie da tastiera",
+    "noSites": "Questa società non ha siti che pianifichi."
+  },
+  "live": {
+    "connecting": "Connessione agli aggiornamenti in corso…",
+    "live": "In tempo reale",
+    "offline": "Offline: la coda non si aggiorna da sola"
+  },
+  "noAccess": {
+    "title": "Le eccezioni non sono aperte al tuo ruolo",
+    "body": "Il tuo ruolo non può leggere la pianificazione (planning.view). Chiedi a un amministratore se ti serve."
+  },
+  "keys": {
+    "acknowledge": "Prendi in carico le righe spuntate (altrimenti quella attiva)",
+    "snooze": "Rimanda la riga attiva",
+    "resolve": "Risolvi la riga attiva con una nota",
+    "walk": "Eccezione precedente / successiva nel dettaglio"
+  },
+  "held": {
+    "noRun": "Il tuo ruolo non può avviare la pianificazione (planning.run).",
+    "running": "Una pianificazione è in corso: due non si sovrappongono mai.",
+    "noSite": "Scegli prima un sito.",
+    "noManage": "Il tuo ruolo non può gestire le eccezioni (planning.exceptions.manage).",
+    "resolved": "È già risolta.",
+    "acknowledged": "È già presa in carico.",
+    "resolvedRow": "Risolta: non resta nulla da fare.",
+    "noneNew": "Nessuna delle righe spuntate è nuova.",
+    "busy": "Una modifica è in corso di salvataggio…",
+    "loading": "Lettura in corso…"
+  },
+  "row": {
+    "again": "Ritrovata (occorrenza {count})",
+    "today": "Oggi",
+    "age_one": "{count} giorno",
+    "age_other": "{count} giorni",
+    "seen": "Vista l’ultima volta {time}",
+    "menu": "Azioni per {what}",
+    "open": "Apri il dettaglio",
+    "acknowledge": "Prendi in carico",
+    "snooze": "Rimanda…",
+    "resolve": "Risolvi con una nota…"
+  },
+  "col": {
+    "type": "Tipo",
+    "what": "Cosa",
+    "impact": "Impatto",
+    "owner": "Responsabile",
+    "age": "Età",
+    "status": "Stato",
+    "more": "Azioni"
+  },
+  "kind": {
+    "label": "Tipo",
+    "all": "Ogni tipo",
+    "SHORT": "Mancante",
+    "SUPPLY_LATE": "Fornitura in ritardo",
+    "LANE_OVERLOADED": "Linea sovraccarica",
+    "LANE_UNDERUSED": "Linea sottoutilizzata",
+    "PAST_DUE": "Scaduto",
+    "EXCESS": "Eccesso",
+    "BELOW_SAFETY_STOCK": "Sotto la scorta di sicurezza",
+    "MOVE_EARLIER": "Anticipare",
+    "MOVE_LATER": "Posticipare",
+    "CANCEL": "Annullare",
+    "NEGATIVE_STOCK": "Giacenza negativa"
+  },
+  "view": {
+    "label": "Righe",
+    "queue": "Da smaltire",
+    "new": "Nuove",
+    "mine": "Mie",
+    "snoozedToday": "Rimandate fino a oggi",
+    "snoozed": "Rimandate",
+    "resolved": "Risolte",
+    "all": "Tutte"
+  },
+  "tile": {
+    "title": "In attesa di te",
+    "new": "Nuove",
+    "mine": "Mie",
+    "snoozedToday": "Rimandate fino a oggi",
+    "hint": {
+      "new": "trovate da una pianificazione, nessuno le ha prese",
+      "mine": "aperte, con te come responsabile",
+      "snoozedToday": "tornano prima di fine giornata"
+    }
+  },
+  "list": {
+    "label": "Eccezioni",
+    "count_one": "{count} eccezione",
+    "count_other": "{count} eccezioni",
+    "search": "Cerca materiale, ordine, linea…",
+    "more": "Mostra altre 50",
+    "viewing": "In vista: {view}"
+  },
+  "bulk": {
+    "acknowledge_one": "Prendi in carico {count}",
+    "acknowledge_other": "Prendi in carico {count}",
+    "export_one": "Esporta {count}",
+    "export_other": "Esporta {count}"
+  },
+  "error": {
+    "title": "Impossibile leggere le eccezioni",
+    "failed": "La risposta non è arrivata. Riprova tra poco.",
+    "forbidden": "Il tuo ruolo non può leggere la pianificazione di questo sito.",
+    "offline": "Nessuna connessione al server della fabbrica.",
+    "gone": "Questa eccezione non esiste più qui.",
+    "noSite": "Non c’è alcun sito da pianificare in questa società."
+  },
+  "empty": {
+    "noMatch": {
+      "title": "Nessuna eccezione corrisponde",
+      "body": "Cambia la ricerca, il tipo o le righe mostrate."
+    },
+    "clear": {
+      "title": "Niente che la pianificazione non sappia risolvere. Ottimo lavoro.",
+      "body": "Ogni eccezione dell’ultima pianificazione è presa in carico, rimandata o risolta."
+    },
+    "noRun": "Avvia la pianificazione una volta: ogni esecuzione elenca qui ciò che non ha saputo risolvere."
+  },
+  "common": {
+    "retry": "Riprova",
+    "clearFilters": "Togli i filtri",
+    "dismiss": "Chiudi",
+    "cancel": "Annulla"
+  },
+  "notice": {
+    "acknowledged_one": "{count} eccezione presa in carico: ora è tua se non aveva un responsabile.",
+    "acknowledged_other": "{count} eccezioni prese in carico: sono tue quelle senza responsabile.",
+    "snoozed": "Rimandata fino a {date}: torna da sola.",
+    "snoozedRun": "Rimandata fino alla prossima pianificazione: torna quando la pianificazione gira di nuovo.",
+    "resolved": "Risolta con la tua nota. Se una pianificazione successiva la ritrova, torna come nuova occorrenza.",
+    "ran": "Il piano è stato ricalcolato: la coda mostra ciò che non ha saputo risolvere.",
+    "runBusy": "Per questo stabilimento è già in corso un calcolo: attendi che finisca."
+  },
+  "refusal": {
+    "failed": "La modifica non è stata salvata. Riprova.",
+    "resolved": "Nel frattempo è stata risolta: non è cambiato nulla.",
+    "acknowledged": "Nel frattempo qualcuno l’ha presa in carico: non è cambiato nulla.",
+    "changed": "È cambiata da quando l’hai letta (una pianificazione o un collega): la coda è stata riletta.",
+    "until": "Rimanda a un momento successivo, o fino alla prossima pianificazione.",
+    "note": "La nota deve avere da 3 a 1000 caratteri.",
+    "sites": "Prendi in carico le eccezioni di un sito alla volta.",
+    "invalid": "La richiesta non era valida: non è cambiato nulla.",
+    "forbidden": "Il tuo ruolo non può gestire questa eccezione.",
+    "gone": "Questa eccezione non esiste più qui.",
+    "offline": "Nessuna connessione: non è stato inviato nulla."
+  },
+  "status": {
+    "NEW": "Nuova",
+    "ACKNOWLEDGED": "Presa in carico",
+    "SNOOZED": "Rimandata fino al {date}",
+    "SNOOZED_RUN": "Rimandata alla prossima pianificazione",
+    "RESOLVED": "Risolta",
+    "CLEARED": "Superata da una pianificazione"
+  },
+  "owner": {
+    "none": "Ancora nessuno",
+    "you": "Tu"
+  },
+  "what": {
+    "orderLine": "{order} riga {seq}"
+  },
+  "words": {
+    "orders_one": "{count} ordine",
+    "orders_other": "{count} ordini"
+  },
+  "s": {
+    "SHORT": {
+      "buy": "{material}: mancano {quantity} per {who}, servono il {date}; non è ancora ordinato nulla.",
+      "make": "{material}: mancano {quantity} per {who}, servono il {date}; non è ancora previsto di produrli.",
+      "late_one": "Ordinato oggi arriva con {count} giorno di ritardo.",
+      "late_other": "Ordinato oggi arriva con {count} giorni di ritardo."
+    },
+    "SUPPLY_LATE": {
+      "late_one": "{material}: {po} arriva il {date}; serve il {need} ({count} giorno di ritardo).",
+      "late_other": "{material}: {po} arriva il {date}; serve il {need} ({count} giorni di ritardo).",
+      "overdue": "{material}: {po} era atteso il {date} e {quantity} non sono ancora arrivati."
+    },
+    "PAST_DUE_one": "{order} riga {seq} scadeva il {date} ({count} giorno fa) e serve ancora materiale.",
+    "PAST_DUE_other": "{order} riga {seq} scadeva il {date} ({count} giorni fa) e serve ancora materiale.",
+    "EXCESS": {
+      "po": "{material}: {quantity} di {po} sono più di quanto servono gli ordini.",
+      "firm": "{material}: {quantity} dell’ordine pianificato fisso sono più di quanto servono gli ordini."
+    },
+    "CANCEL": {
+      "po": "{material}: nessun ordine ha più bisogno dei {quantity} di {po}.",
+      "firm": "{material}: nessun ordine ha più bisogno dell’ordine pianificato fisso ({quantity})."
+    },
+    "MOVE_EARLIER_one": "{material}: l’ordine pianificato fisso è del {date}; {quantity} servono dal {need}. Anticipalo di {count} giorno.",
+    "MOVE_EARLIER_other": "{material}: l’ordine pianificato fisso è del {date}; {quantity} servono dal {need}. Anticipalo di {count} giorni.",
+    "BELOW_SAFETY_STOCK": "{material}: la giacenza scende a {projected} il {date}, sotto la scorta di sicurezza di {safety}.",
+    "NEGATIVE_STOCK": "{material}: sono impegnati {quantity} in più della giacenza utilizzabile (un ricevimento non registrato, o giacenza spostata nel frattempo).",
+    "LANE_OVERLOADED": "{lane} è prenotata al {pct}% dal {from} al {to} ({booked} di {available} min).",
+    "LANE_UNDERUSED": "{what} è sottoutilizzata.",
+    "MOVE_LATER": "{what}: la fornitura può arrivare più tardi."
+  },
+  "title": {
+    "late_one": "{who} sarà in ritardo di {count} giorno",
+    "late_other": "{who} sarà in ritardo di {count} giorni",
+    "lateOrders_one": "{count} ordine sarà in ritardo fino a {days} giorni",
+    "lateOrders_other": "{count} ordini saranno in ritardo fino a {days} giorni",
+    "supplyLate_one": "{po} arriva con {count} giorno di ritardo",
+    "supplyLate_other": "{po} arriva con {count} giorni di ritardo",
+    "pastDue_one": "{what} è scaduta da {count} giorno",
+    "pastDue_other": "{what} è scaduta da {count} giorni",
+    "of": "{kind}: {what}"
+  },
+  "impact": {
+    "orders_one": "{count} ordine",
+    "orders_other": "{count} ordini",
+    "late_one": "{count} giorno di ritardo",
+    "late_other": "{count} giorni di ritardo"
+  },
+  "fix": {
+    "buy": "Compralo: la riga in Cosa comprare e produrre",
+    "make": "Pianificalo: la riga in Cosa comprare e produrre",
+    "board": "Sposta {number} sul tabellone",
+    "workOrder": "Apri l’ordine di produzione {number}",
+    "chase": "Sollecita {number} (promemoria al fornitore)",
+    "elsewhere": "Compra altrove: la riga in Cosa comprare e produrre",
+    "cancelLine": "Annulla la riga su {number}",
+    "reduceLine": "Modifica o chiudi a saldo la riga su {number}",
+    "firmLine": "L’ordine pianificato fisso: la riga in Cosa comprare e produrre",
+    "moveFirm": "Anticipa l’ordine pianificato fisso: la riga in Cosa comprare e produrre",
+    "order": "Apri l’ordine {number}",
+    "boardLane": "Apri {lane} sul tabellone",
+    "capacity": "Capacità e carico di quella settimana",
+    "line": "La riga in Cosa comprare e produrre",
+    "stock": "Giacenza di {code}",
+    "material": "Materiale {code}"
+  },
+  "detail": {
+    "titleLoading": "Eccezione",
+    "prev": "Eccezione precedente",
+    "next": "Eccezione successiva",
+    "first": "È la prima eccezione dell’elenco.",
+    "last": "È l’ultima eccezione dell’elenco.",
+    "snooze": "Rimanda",
+    "resolve": "Risolvi",
+    "acknowledge": "Prendi in carico",
+    "byAt": "{name}, {time}",
+    "cleared": "Superata: una pianificazione successiva non l’ha più trovata.",
+    "resolvedBy": "Risolta da {name}",
+    "snoozedUntil": "Rimandata fino a {time}: torna da sola.",
+    "snoozedRun": "Rimandata alla prossima pianificazione.",
+    "words": "In parole semplici",
+    "impact": "Impatto",
+    "found": "Trovata la prima volta",
+    "age_one": "aperta da {count} giorno",
+    "age_other": "aperta da {count} giorni",
+    "lastSeen": "Vista l’ultima volta da una pianificazione",
+    "owner": "Responsabile",
+    "ownerYou": "{name} (tu)",
+    "acknowledged": "Presa in carico",
+    "record": "Riguarda",
+    "chainLater": "L’intera catena delle cause, passo per passo fino al fornitore, arriva in una fase successiva.",
+    "fixes": "Come risolvere",
+    "noFix": "Nessun record da aprire per questa: risolvila con una nota quando è gestita.",
+    "fixHint": "Ogni soluzione apre il suo record; ⌘-clic tiene aperta questa coda."
+  },
+  "snooze": {
+    "this": "questa eccezione",
+    "nextRun": "Dopo la prossima pianificazione"
+  },
+  "resolve": {
+    "title": "Risolvi con una nota",
+    "confirm": "Risolvi",
+    "body": "Scrivi cosa è stato fatto. Se una pianificazione successiva la ritrova, torna come nuova occorrenza.",
+    "note": "Cosa è stato fatto",
+    "noteHint": "Da 3 a 1000 caratteri.",
+    "noteShort": "Scrivi almeno 3 caratteri.",
+    "noteLong": "Al massimo 1000 caratteri."
+  },
+  "csv": {
+    "type": "Tipo",
+    "what": "Cosa",
+    "sentence": "In parole",
+    "orders": "Ordini coinvolti",
+    "daysLate": "Giorni di ritardo",
+    "owner": "Responsabile",
+    "ageDays": "Età (giorni)",
+    "status": "Stato",
+    "firstSeen": "Trovata la prima volta",
+    "lastSeen": "Vista l’ultima volta"
+  }
+}

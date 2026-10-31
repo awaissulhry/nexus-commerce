@@ -34,6 +34,7 @@
       "area": "Purchasing",
       "main": "Main",
       "suppliers": "Suppliers",
+      "requests": "Requests to buy",
       "orders": "Purchase orders",
       "outside": "Outside work",
       "subcontracting": "Subcontract orders",
@@ -87,7 +88,10 @@
       "inspections": "Inspections",
       "holds": "Holds",
       "settings": "Settings",
-      "defects": "Defects & dispositions"
+      "defects": "Defects & dispositions",
+      "problems": "Problems",
+      "ncr": "Nonconformances",
+      "complaints": "Complaints"
     },
     "compliance": {
       "area": "Compliance",
@@ -103,6 +107,9 @@
       "main": "Main",
       "invoices": "Invoices",
       "payments": "Payments",
+      "costingGroup": "Costing",
+      "costing": "Standard vs actual",
+      "margins": "Margins",
       "settingsGroup": "Settings",
       "settings": "Finance settings",
       "close": "Close",
@@ -116,6 +123,8 @@
       "mrp": "What to buy & make",
       "board": "Planning board",
       "allocation": "Lines & subcontractors",
+      "capacity": "Capacity & load",
+      "exceptions": "Exceptions",
       "settingsGroup": "Settings",
       "settings": "Planning settings"
     },

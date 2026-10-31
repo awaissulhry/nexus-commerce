@@ -5,6 +5,7 @@ import { bundlesOf, canOf, cutLogOf, FINAL, inShell, panels, panelsModel, PICK, 
 import { PART_LOADING, type WorkOrderRecordModel } from './record-model'
 import { AVAILABILITY, DAILY_ROLE_OF, dailyFor, heldWorkOrder, HOLD, HOLD_RECORD, releaseCheckW2a } from '../daily/demo/fixtures'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
+import { LABOUR, labourAs } from '../labour/fixtures'
 
 /**
  * SCR-070 — the work order studio (design production.workorders "Record: Work order") with made-up data only: a draft
@@ -136,5 +137,12 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2a-scrap-none', label: 'W2a · Quality: no scrap and no rework yet', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', daily: dailyFor('manager', 'IN_PROGRESS', { scrap: { value: [], problem: null } }) }) },
     { id: 'w2a-scrap-loading', label: 'W2a · Quality: scrap and rework loading', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', daily: dailyFor('manager', 'IN_PROGRESS', { scrap: { value: null, problem: null } }) }) },
     { id: 'w2a-scrap-error', label: 'W2a · Quality: scrap and rework could not be read (Try again)', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', daily: dailyFor('manager', 'IN_PROGRESS', { scrap: { value: null, problem: 'problem.read' } }) }) },
+    // ---- B-W2a-72: Labour & cost (the work order's cost from the ledger; the cost grain only; never per person) ----
+    { id: 'w2a-labour', label: 'W2a · Labour & cost: planned · actual · variance · per garment, the bridge, materials per lot, labour per operation', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR) }), note: 'Standard 4,600.00, actual so far 5,028.00 (+428.00): material +508.00 (price +196.00, usage +312.00), labour −80.00 (3,680 of 4,000 standard minutes earned).' },
+    { id: 'w2a-labour-no-cost', label: 'W2a · Labour & cost · Production manager (no cost grain): the whole section needs money.cost, said in words', model: recordCase('manager', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('manager', null) }) },
+    { id: 'w2a-labour-no-view', label: 'W2a · Labour & cost · without costing.view: which permission', model: recordCase('teamLeader', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('none', null) }) },
+    { id: 'w2a-labour-draft', label: 'W2a · Labour & cost of a draft: nothing costed before the release', model: draft('manager', 'ready', { tab: 'labour', labour: labourAs('finance', null) }) },
+    { id: 'w2a-labour-loading', label: 'W2a · Labour & cost reading', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', { value: null, problem: null }) }) },
+    { id: 'w2a-labour-error', label: "W2a · Labour & cost couldn't load: Try again (the rest of the record stays usable)", model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', { value: null, problem: 'problem.unavailable' }) }) },
   ],
 })

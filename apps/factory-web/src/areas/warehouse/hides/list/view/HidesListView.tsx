@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Download, MoreHorizontal, Printer, Search, X } from 'lucide-react'
+import { Bookmark, Download, MoreHorizontal, Printer, Search, Trash2, X } from 'lucide-react'
 import { EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Select } from '@nexus/ui/primitives'
@@ -10,10 +10,16 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
+import { recordAddress } from '../../../../../lib/records/record-links'
+import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import type { HideRow, StateCount } from '../../../../_shared/stock/api'
 import { convertArea, movesHref, otherAreaUnit, quantity, sumPerUnit, unitTotals } from '../../../../_shared/stock/model'
 import { HideStatePill, NoAccess, QualityPill } from '../../../../_shared/stock/parts'
 import { KeysModal, LotsMessages, useWords, type Words } from '../../../lots/shared/parts'
+import { holdOfHide, holdReasonWords, reserveSelectionHeld, scrapSelectionHeld } from '../../../lots/shared/daily'
+import { demandLabel, demandRecord } from '../../../stock/daily/model'
+import { ReserveDialog } from '../../../stock/daily/ReserveDialog'
+import { WriteOffDialog } from '../../../stock/daily/WriteOffDialog'
 import { HIDE_TILES, HIDE_VIEWS, tagHeldKey, type HideFilters, type HidesListActions, type HidesListModel, type HideView } from '../../model'
 import { PrintTagsDialog } from '../../print/PrintTagsDialog'
 
@@ -33,6 +39,9 @@ export function stateWords(count: StateCount | null, t: Words, locale: ReturnTyp
  * batch and shade, grade, its measured area in the unit of entry and the other unit, what is left of it, its state,
  * where it lies, thickness, defects, when it came, the tannery's number. `/` searches or takes a scanned tag (one hit
  * opens the hide). Selected: Print N tags (label printer or PDF), Export N; a consumed or scrapped hide gets no tag.
+ * B-W2a-64: the Reserved tile and view, "Reserved for" (the work order or order line, a done one said "release it"), a
+ * held hide says why (its own or its lot's quality hold, in the reason's words: never shown as free), and on the
+ * selection "Reserve to a work order…" and "Scrap…" (the shared every-day dialogs), each held with its reason.
  */
 export function HidesListView({ model, actions }: { model: HidesListModel; actions?: HidesListActions }) {
   return (
@@ -81,17 +90,40 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
           <span className="fw-st-sub">{data.colour ? `${data.colour.code} ${data.colour.name}` : '—'}</span>
         </span>
       ) : null
-    const LotCell = ({ data }: ICellRendererParams<HideRow>) =>
-      data ? (
+    const LotCell = ({ data }: ICellRendererParams<HideRow>) => {
+      if (!data) return null
+      const hold = holdOfHide(model.holds, data)
+      const why = hold ? t('hd.daily.onHold', { reason: holdReasonWords(hold, model.holdReasons, locale) }) : null
+      return (
+        // Two lines, as every row: the lot and its pills, then a hold's reason in words (B-W2a-64: held, never free).
         <span className="fw-st-cell">
-          <Link className="fw-st-link fw-wl-code" href={`${model.prefix}/warehouse/lots/${encodeURIComponent(data.lot.id)}`}>
-            {data.lot.code}
-          </Link>
-          <span>
+          <span className="fw-wl-line">
+            <Link className="fw-st-link fw-wl-code" href={`${model.prefix}/warehouse/lots/${encodeURIComponent(data.lot.id)}`}>
+              {data.lot.code}
+            </Link>
             <QualityPill status={data.lot.qualityStatus} />
           </span>
+          {why && (
+            <span className="fw-st-sub fw-wl-held" title={why}>
+              {why}
+            </span>
+          )}
         </span>
-      ) : null
+      )
+    }
+    const ReservedCell = ({ data }: ICellRendererParams<HideRow>) => {
+      if (!data) return null
+      if (!data.reservedFor) return <span className="fw-st-sub">—</span>
+      const target = demandRecord(data.reservedFor.demand)
+      return (
+        <span className="fw-st-cell">
+          <Link className="fw-st-link fw-wl-code" href={`${model.prefix}${recordAddress(target, OFFICE_PAGES)}`}>
+            {demandLabel(data.reservedFor.demand)}
+          </Link>
+          <span className="fw-st-sub">{data.reservedFor.stale ? t('hd.daily.stale') : t(data.reservedFor.demand.type === 'WorkOrder' ? 'hd.daily.forWorkOrder' : 'hd.daily.forOrderLine')}</span>
+        </span>
+      )
+    }
     const BatchCell = ({ data }: ICellRendererParams<HideRow>) =>
       data ? (
         <span className="fw-st-cell">
@@ -142,13 +174,15 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
             { id: 'lot', label: t('hd.openLot', { code: data.lot.code }), href: `${model.prefix}/warehouse/lots/${encodeURIComponent(data.lot.id)}` },
             { id: 'moves', label: t('hd.openMoves'), href: movesHref(model.prefix, { siteId: data.siteId, itemId: data.item.id, lotId: data.lot.id, hideId: data.id }) },
             ...(model.can.printLabels && !tagHeldKey(data) ? [{ id: 'print', label: t('hd.printTag'), onSelect: () => actions?.print?.onOpen?.([data.id]) }] : []),
+            ...(model.daily.reserve && !reserveSelectionHeld([data], model.daily) ? [{ id: 'reserve', label: t('hd.daily.reserveOne'), onSelect: () => actions?.onReserve?.([data.id]) }] : []),
+            ...(model.daily.scrap && !scrapSelectionHeld([data], model.daily) ? [{ id: 'scrap', label: t('hd.daily.scrapOne'), onSelect: () => actions?.onScrap?.([data.id]) }] : []),
           ]}
         />
       ) : null
     return [
       { colId: 'tag', headerName: t('hd.col.tag'), minWidth: 150, flex: 1, cellRenderer: TagCell },
       { colId: 'article', headerName: t('hd.col.article'), minWidth: 185, flex: 1.4, cellRenderer: ArticleCell },
-      { colId: 'lot', headerName: t('hd.col.lot'), minWidth: 140, flex: 0.9, cellRenderer: LotCell },
+      { colId: 'lot', headerName: t('hd.col.lot'), minWidth: 200, flex: 1, cellRenderer: LotCell },
       { colId: 'batch', headerName: t('hd.col.batch'), minWidth: 105, flex: 0.7, cellRenderer: BatchCell },
       { colId: 'grade', headerName: t('hd.col.grade'), field: 'grade', minWidth: 90, flex: 0.4, valueFormatter: (params) => params.value ?? '—' },
       { colId: 'area', headerName: t('hd.col.area'), minWidth: 110, flex: 0.8, type: 'rightAligned', cellRenderer: AreaCell },
@@ -157,10 +191,11 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
       { colId: 'place', headerName: t('hd.col.place'), minWidth: 150, flex: 1, cellRenderer: PlaceCell },
       { colId: 'thickness', headerName: t('hd.col.thickness'), field: 'thicknessMm', minWidth: 100, flex: 0.5, type: 'rightAligned', valueFormatter: (params) => (params.value ? `${quantity(params.value as string, locale)} mm` : '—') },
       { colId: 'defects', headerName: t('hd.col.defects'), minWidth: 160, flex: 1, cellRenderer: DefectsCell },
+      { colId: 'reservedFor', headerName: t('hd.col.reservedFor'), minWidth: 140, flex: 0.8, cellRenderer: ReservedCell },
       { colId: 'received', headerName: t('hd.col.received'), field: 'receivedAt', minWidth: 110, flex: 0.6, valueFormatter: (params) => (params.value ? formatDate(params.value as string, place) : '—') },
       { colId: 'more', headerName: t('rec.actions'), minWidth: 84, maxWidth: 84, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.can.printLabels, model.timeZone, actions])
+  }, [t, locale, model.prefix, model.can.printLabels, model.timeZone, model.holds, model.holdReasons, model.daily, actions])
 
   if (!model.can.stockView) {
     return (
@@ -213,6 +248,8 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
     )
   ) : undefined
   const printHeld = !model.can.printLabels ? t('hd.print.noRight') : picked.some((row) => tagHeldKey(row)) ? t('hd.print.someHeld') : null
+  const reserveHeld = reserveSelectionHeld(picked, model.daily)
+  const scrapHeld = scrapSelectionHeld(picked, model.daily)
 
   const search = (
     <Input
@@ -300,6 +337,12 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
               <Button size="sm" variant="primary" aria-label={t('hd.bulk.print', { count: picked.length })} heldReason={printHeld} onClick={() => actions?.print?.onOpen?.(picked.map((row) => row.id))}>
                 <Printer size={13} aria-hidden /> <SelectionLabel>{t('hd.bulk.print', { count: picked.length })}</SelectionLabel>
               </Button>
+              <Button size="sm" aria-label={t('hd.daily.reserve', { count: picked.length })} heldReason={reserveHeld ? t(reserveHeld) : null} onClick={() => actions?.onReserve?.(picked.map((row) => row.id))}>
+                <Bookmark size={13} aria-hidden /> <SelectionLabel>{t('hd.daily.reserve', { count: picked.length })}</SelectionLabel>
+              </Button>
+              <Button size="sm" variant="danger-outline" aria-label={t('hd.daily.scrap', { count: picked.length })} heldReason={scrapHeld ? t(scrapHeld) : null} onClick={() => actions?.onScrap?.(picked.map((row) => row.id))}>
+                <Trash2 size={13} aria-hidden /> <SelectionLabel>{t('hd.daily.scrap', { count: picked.length })}</SelectionLabel>
+              </Button>
               <Button size="sm" aria-label={t('stock:common.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
                 <Download size={13} aria-hidden /> <SelectionLabel>{t('stock:common.export', { count: picked.length })}</SelectionLabel>
               </Button>
@@ -315,6 +358,8 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
       />
 
       {model.print && <PrintTagsDialog dialog={model.print} hides={printing} actions={actions?.print} />}
+      {model.reserve && <ReserveDialog model={model.reserve} actions={actions?.reserve} />}
+      {model.writeOff && <WriteOffDialog model={model.writeOff} actions={actions?.writeOff} />}
       {help && <KeysModal own={ownKeys} onClose={() => setHelp(false)} />}
     </div>
   )

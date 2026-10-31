@@ -84,15 +84,15 @@ export interface PartyRecordActions {
  * Activity. Later-wave tabs are not drawn. Fetches nothing: PartyRecord.tsx reads and writes; the record panels
  * (thread, files, history) come in as `panels` and `documents`.
  */
-export function PartyRecordView({ model, actions, panels, documents, terms }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode }) {
+export function PartyRecordView({ model, actions, panels, documents, terms, items }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode }) {
   return (
     <PartiesMessages>
-      <PartyRecord model={model} actions={actions} panels={panels} documents={documents} terms={terms} />
+      <PartyRecord model={model} actions={actions} panels={panels} documents={documents} terms={terms} items={items} />
     </PartiesMessages>
   )
 }
 
-function PartyRecord({ model, actions, panels, documents, terms }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode }) {
+function PartyRecord({ model, actions, panels, documents, terms, items }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode }) {
   const t = useT('parties')
   const locale = useLocale()
   const side = model.side
@@ -253,6 +253,8 @@ function PartyRecord({ model, actions, panels, documents, terms }: { model: Part
         {tab === 'tax' && terms}
         {tab === 'orders' && side === 'customers' && <DealsTab model={model} actions={actions} />}
         {tab === 'orders' && side === 'suppliers' && <PurchaseOrdersTab model={model} />}
+        {/* B-W2a-69: a supplier's Items & prices (Purchasing's Approved sources). */}
+        {tab === 'items' && side === 'suppliers' && items}
         {tab === 'documents' && documents}
         {tab === 'activity' && panels}
       </RecordFrame>

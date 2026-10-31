@@ -8,6 +8,7 @@ import { failedRead, reading, ready } from '../../../quality/_shared/model'
 import type { CertificateDetail, CertificateFile } from '../api'
 import { BRANDS, byNumber, CERTIFICATES, COMPANIES, COVERAGE_0001, coveredBy, demoCoverage, demoDetail, JACKET, PROTECTOR, refusedFor, STYLE_FACTS, STYLE_OPTIONS, TODAY, TROUSERS } from '../fixtures'
 import { blankCheck, blankCoverage, certCan, defaultLapseDate, draftOf, lapseSummary, type CertificateRecordModel, type LapseAnswer, type LapseModel, type RecordTab } from '../model'
+import { EXPIRED_RENEWAL, renewalsModel, RENEWAL_STATES, REVIEWS, TOURING_RENEWAL, URBAN_RENEWAL, URBAN_RENEWED } from '../renewals/fixtures'
 import { CertificateRecordView } from './view/CertificateRecordView'
 
 /**
@@ -63,6 +64,7 @@ function recordCase(detail: CertificateDetail | null, over: Partial<CertificateR
       dialogProblem: null,
       dialogLines: [],
       dockOpen: false,
+      renewals: null,
       ...over,
     },
   }
@@ -130,6 +132,11 @@ const FILES: CertificateFile[] = [file(1, 'demo-cert-0001.pdf'), file(2, 'demo-t
 
 const sameBody = ready(CERTIFICATES.filter((entry) => entry.notifiedBodyNumber === valid.notifiedBodyNumber && entry.id !== valid.id))
 
+// W2a (B-W2a-66): the Renewals tab of CERT-DEMO-0002 (ends 2026-11-23: every alert fired, the renewal under way).
+const urban = demoDetail(byNumber('CERT-DEMO-0002'), [demoCoverage(21, byNumber('CERT-DEMO-0002').id, { styleId: JACKET.id, style: { id: JACKET.id, code: JACKET.code, name: JACKET.name } })])
+const renewalsTab = (detail: CertificateDetail, over: Parameters<typeof renewalsModel>[0] = {}, role: RoleCase = 'owner') => recordCase(detail, { tab: 'renewals', renewals: renewalsModel(over) }, role)
+const answerDraft = (over: Partial<ReturnType<typeof renewalsModel>['draft']> = {}) => ({ ...renewalsModel().draft, ...over })
+
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-051',
   title: 'Certificate record (coverage, lapse check, status)',
@@ -177,5 +184,22 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'error', label: "The API didn't answer", model: recordCase(null, { detail: failedRead('problem.unavailable') }, 'owner', false) },
     { id: 'not-found', label: 'Not found (another company’s certificate)', model: recordCase(null, { detail: failedRead('problem.notFound') }, 'owner', false) },
     { id: 'shortcuts', label: 'The keys (?)', model: recordCase(valid, { dialog: { kind: 'shortcuts' } }) },
+    { id: 'w2a-renewals', label: 'W2a Renewals: the alerts fired, the renewal under way', model: renewalsTab(urban), note: 'The five-year bar with the window and the 180 / 90 / 30-day marks; each alert in words (whom it told, when); the task’s steps; the application recorded after the window; Link the new certificate is the next step. Below: the changes to the approved type (one waiting, one told, one approved).' },
+    { id: 'w2a-renewals-before', label: 'W2a Renewals: years left, the window opens in 2028', model: renewalsTab(valid, { renewals: ready(TOURING_RENEWAL), reviews: ready([]) }), note: 'Start renewal is the next step; the alert timers are set once the dates come near; no changes since issue.' },
+    { id: 'w2a-start', label: 'W2a Start renewal: the task as it will be made', model: renewalsTab(valid, { renewals: ready(TOURING_RENEWAL), dialog: { kind: 'start' } }), note: 'For me, a colleague or nobody yet; the steps in Italian or English; nothing is sent to the notified body.' },
+    { id: 'w2a-applied', label: 'W2a Record the application: a day after the window', model: renewalsTab(urban, { renewals: ready({ ...URBAN_RENEWAL, renewal: { ...URBAN_RENEWAL.renewal!, appliedOn: null, reference: null, inWindow: null }, nextStep: 'APPLY' }), dialog: { kind: 'applied' } }), note: 'Recorded anyway: whether a late application is taken is the notified body’s decision.' },
+    { id: 'w2a-link', label: 'W2a Link the new certificate', model: renewalsTab(urban, { dialog: { kind: 'link' }, draft: answerDraft({ successorId: URBAN_RENEWAL.candidates[0]!.id }) }) },
+    { id: 'w2a-link-none', label: 'W2a Link held: no registered certificate yet', model: renewalsTab(urban, { renewals: ready({ ...URBAN_RENEWAL, candidates: [] }), dialog: { kind: 'link' } }) },
+    { id: 'w2a-renewed', label: 'W2a Renewed: the alerts stopped, one style not carried over', model: renewalsTab(urban, { renewals: ready(URBAN_RENEWED) }) },
+    { id: 'w2a-expired', label: 'W2a Renewals of an expired certificate', model: renewalsTab(demoDetail(byNumber('CERT-DEMO-0006'), []), { renewals: ready(EXPIRED_RENEWAL), reviews: ready([]) }) },
+    { id: 'w2a-notify', label: 'W2a Tell the notified body (recorded, nothing sent)', model: renewalsTab(urban, { dialog: { kind: 'notify', reviewId: REVIEWS[0]!.id } }) },
+    { id: 'w2a-not-needed', label: 'W2a Not needed: held without the reason', model: renewalsTab(urban, { dialog: { kind: 'notNeeded', reviewId: REVIEWS[0]!.id } }) },
+    { id: 'w2a-answer', label: 'W2a Record the answer: approved, its PDF chosen', model: renewalsTab(urban, { dialog: { kind: 'answer', reviewId: REVIEWS[1]!.id }, draft: answerDraft({ fileName: 'demo-answer-0412.pdf', reference: 'DEMO-ADD-0008' }) }) },
+    { id: 'w2a-answer-held', label: 'W2a Record the answer: held without the notified body’s letter', model: renewalsTab(urban, { dialog: { kind: 'answer', reviewId: REVIEWS[1]!.id }, draft: answerDraft({ decision: 'REFUSED' }) }) },
+    { id: 'w2a-refused', label: 'W2a A renewal step refused by the API', model: renewalsTab(urban, { dialog: { kind: 'link' }, draft: answerDraft({ successorId: URBAN_RENEWAL.candidates[0]!.id }), problem: 'ren.write.refused', lines: ['Certificate CERT-DEMO-0009 is DRAFT: register the new certificate first (a draft may still change).'] }) },
+    { id: 'w2a-selected', label: 'W2a Changes: two selected (Export 2)', model: renewalsTab(urban, { selected: [REVIEWS[0]!.id, REVIEWS[1]!.id] }) },
+    { id: 'w2a-product', label: 'W2a Product developer: reads, every renewal step held', model: renewalsTab(urban, {}, 'production') },
+    { id: 'w2a-loading', label: 'W2a Renewals loading', model: recordCase(urban, { tab: 'renewals', renewals: RENEWAL_STATES.loading }) },
+    { id: 'w2a-error', label: 'W2a Renewals could not be read', model: recordCase(urban, { tab: 'renewals', renewals: RENEWAL_STATES.error }) },
   ],
 })

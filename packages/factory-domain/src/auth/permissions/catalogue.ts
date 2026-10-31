@@ -88,6 +88,8 @@ import { SALES_REPAIRS_DEFINITIONS, SALES_REPAIRS_PERMISSIONS } from '../../sale
 import { RECEIVABLES_DEFINITIONS, RECEIVABLES_PERMISSIONS } from '../../receivables/permissions'
 // B-W2a-62: payables (payables.view | manage | differences.accept | approve | pay).
 import { PAYABLES_DEFINITIONS, PAYABLES_PERMISSIONS } from '../../payables/permissions'
+// B-W2a-65: customer complaints (quality.complaints.view | log | manage | acknowledge).
+import { QUALITY_COMPLAINTS_DEFINITIONS, QUALITY_COMPLAINTS_PERMISSIONS } from '../../quality/complaints/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -456,6 +458,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   RECEIVABLES_DEFINITIONS,
   // B-W2a-62: payables (supplier and subcontractor invoices, the three-way match, approval, payment).
   PAYABLES_DEFINITIONS,
+  // B-W2a-65: customer complaints (log, triage, the owner's acknowledgement of a safety alert).
+  QUALITY_COMPLAINTS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -535,6 +539,8 @@ for (const name of SALES_REPAIRS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of RECEIVABLES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-62: payables.
 for (const name of PAYABLES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-65: customer complaints.
+for (const name of QUALITY_COMPLAINTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

@@ -16,7 +16,7 @@ import type { LotWithHides, Receipt } from '../../api'
 import type { Discrepancy, StoredPhoto } from '../../daily-api'
 import { changeHeld, claimHeld, ddtPhotoHeld, DISCREPANCY_TONE, NAMESPACE, photoHeld, removeHeld, reportableWhy, reportHeld, reportIds, settleMoves, takesDiscrepancies, wantedDocuments, type Say } from '../../daily-model'
 import type { ReceiptDailyActions, ReceiptDailyModel } from '../../daily-state'
-import { blankDiscrepancy, claimDraft, draftOf, reportDraft, requestDraft } from '../../daily-model'
+import { blankDiscrepancy, claimDraft, draftOf, reportDraft, requestDraft, requestOpenHeld } from '../../daily-model'
 import '../../receipts-daily.css'
 
 /**
@@ -26,7 +26,7 @@ import '../../receipts-daily.css'
  *    was reported; New discrepancy, Send report (the PDF to the supplier on the receipt's thread), Claim from the
  *    supplier (B-W2a-44), and a row's detail (`?open=`) with its photos and the moves a person makes by hand.
  *  - Documents check (SCM-115): the supplier's delivery note with its photo, and the documents the lots still wait for
- *    with "Request from supplier" (a mail in the supplier's language on the receipt's thread).
+ *    with "Request from supplier" (B-W2a-F4: the standard mail in the supplier's language to its own contacts, on the receipt's thread).
  * Views only: they fetch nothing.
  */
 
@@ -382,7 +382,7 @@ export function DocumentsTab({ receipt, lots, daily, actions, prefix, timeZone }
   }, [ids])
   const wanted = lots ? wantedDocuments(receipt, lots) : null
   const ddtWhy = words(t, ddtPhotoHeld(receipt, daily.can)) ?? (daily.uploading ? t('held.busy') : null)
-  const requestWhy = !daily.can.email ? t('held.noEmail') : !daily.can.parties ? t('held.noParties') : wanted && wanted.length === 0 ? t('held.nothingWanted') : null
+  const requestWhy = words(t, requestOpenHeld(receipt, wanted, daily.can))
 
   const ddtCard: ReactNode = (
     <Card padded>
@@ -419,7 +419,7 @@ export function DocumentsTab({ receipt, lots, daily, actions, prefix, timeZone }
       <div className="fw-by-stack">
         <div className="fw-by-card-head">
           <h3 className="fw-by-h3">{t('docs.wantedTitle')}</h3>
-          <Button size="sm" heldReason={wanted ? requestWhy : t('held.loading')} onClick={() => wanted && actions?.onDialog?.({ kind: 'request', draft: requestDraft(wanted) })}>
+          <Button size="sm" heldReason={requestWhy} onClick={() => wanted && actions?.onDialog?.({ kind: 'request', draft: requestDraft(wanted) })}>
             <Mail size={13} aria-hidden /> {t('docs.request')}
           </Button>
         </div>

@@ -9,6 +9,8 @@ import { HOLD_QUARANTINE, HOLD_SUBJECT_TYPES } from './holds/rules'
 import { CONTAINMENT_CHANGES, DECISION_CHANGES, NCR_CHANGED_FIELDS } from './ncr/changes'
 import { CONTAINMENT_KINDS, NCR_SOURCES, NCR_STAGES } from './ncr/rules'
 import { DEFECT_CLASSES } from './defects/rules'
+// B-W2a-65: customer complaints.
+import { CHANGED_FIELDS as COMPLAINT_CHANGED_FIELDS, COMPLAINT_CATEGORIES, COMPLAINT_CHANNELS, COMPLAINT_SEVERITIES, COMPLAINT_STATUSES } from './complaints/rules'
 
 /**
  * The quality module's events (plan A1 §3.4). The lab step (B-W1-34, modules/quality/lab) emits them in the command that
@@ -38,7 +40,17 @@ import { DEFECT_CLASSES } from './defects/rules'
  * action added, changed, done or cancelled (the hold it placed or names), `ncr.decision_changed` for each decision
  * added, changed, removed, approved or carried out (the stock moves posted, the follow-up made), `ncr.hold_closed` when
  * the NCR closes a hold it decides. They reach the NCR screens of the office (quality.ncr.view). No cost, price or name.
+ *
+ * Customer complaints (B-W2a-65, modules/quality/complaints): `complaint.received` once per complaint logged (numbered),
+ * `complaint.changed` when its facts or internal note change (which fields), `complaint.triaged` for each triage (the
+ * category, severity and answer due; a re-triage too), `complaint.safety_raised` once, when a complaint is first found to
+ * be about safety (the owner and quality are told: platform/notifications; its PPE register entry is opened in the same
+ * command), `complaint.safety_acknowledged` once, when the owner acknowledges it, `complaint.status_changed` for each move
+ * (investigating, answered, back to investigating, closed). They reach the complaint screens of the office
+ * (quality.complaints.view: the triage count, the tiles, the safety banner). Ids, numbers and codes only.
  */
+const complaintLive = { permission: 'quality.complaints.view', fields: ['complaintId', 'number'] } as const
+const complaintStatus = z.enum(COMPLAINT_STATUSES)
 const lotStatus = z.enum(['QUARANTINE', 'RELEASED', 'REJECTED', 'BLOCKED'])
 
 export const events = [
@@ -317,5 +329,48 @@ export const events = [
     description: 'An open final inspection was assigned to its inspector before it is decided, or its assignment was cleared (no name: who is in the inspection).',
     payload: z.strictObject({ inspectionId: z.uuid(), workOrderId: z.uuid(), number: z.string(), assigned: z.boolean() }),
     live: { permission: 'quality.inspections.view', fields: ['inspectionId', 'workOrderId', 'number'] },
+  }),
+  // B-W2a-65: customer complaints (ids, numbers and codes; never the customer's words, a name or an amount).
+  defineEvent({
+    type: 'complaint.received',
+    context: 'quality',
+    description: "A customer's complaint was logged (numbered from the company's COMPLAINT series), with how it came in and what it is about.",
+    payload: z.strictObject({ complaintId: z.uuid(), number: z.string(), partyId: z.uuid(), channel: z.enum(COMPLAINT_CHANNELS), salesOrderId: z.uuid().nullable(), shipmentId: z.uuid().nullable(), returnId: z.uuid().nullable(), styleId: z.uuid().nullable() }),
+    live: { ...complaintLive, fields: ['complaintId', 'number', 'channel'] },
+  }),
+  defineEvent({
+    type: 'complaint.changed',
+    context: 'quality',
+    description: "A complaint's facts (what it is about, the customer's words or reference) or its internal note changed.",
+    payload: z.strictObject({ complaintId: z.uuid(), number: z.string(), fields: z.array(z.enum(COMPLAINT_CHANGED_FIELDS)) }),
+    live: complaintLive,
+  }),
+  defineEvent({
+    type: 'complaint.triaged',
+    context: 'quality',
+    description: 'A complaint was triaged by quality (or triaged again): its category, severity, owner and the day the answer is due.',
+    payload: z.strictObject({ complaintId: z.uuid(), number: z.string(), category: z.enum(COMPLAINT_CATEGORIES), severity: z.enum(COMPLAINT_SEVERITIES), ownerId: z.uuid(), answerDueOn: z.string(), from: complaintStatus, to: complaintStatus }),
+    live: { ...complaintLive, fields: ['complaintId', 'number', 'category', 'to'] },
+  }),
+  defineEvent({
+    type: 'complaint.safety_raised',
+    context: 'quality',
+    description: 'A complaint was found to be about safety (Reg. (EU) 2016/425 art. 8(4)): the owner and quality are told at once, and its PPE register entry is opened in the same step.',
+    payload: z.strictObject({ complaintId: z.uuid(), number: z.string(), styleId: z.uuid().nullable(), registerEntryId: z.uuid().nullable(), raisedById: z.uuid().nullable() }),
+    live: { ...complaintLive, fields: ['complaintId', 'number', 'registerEntryId'] },
+  }),
+  defineEvent({
+    type: 'complaint.safety_acknowledged',
+    context: 'quality',
+    description: "The owner acknowledged a safety complaint's alert: the safety banner no longer shows it.",
+    payload: z.strictObject({ complaintId: z.uuid(), number: z.string(), acknowledgedById: z.uuid() }),
+    live: complaintLive,
+  }),
+  defineEvent({
+    type: 'complaint.status_changed',
+    context: 'quality',
+    description: 'A complaint moved: its investigation started, it was answered, it went back to investigating, or it closed (with a reason).',
+    payload: z.strictObject({ complaintId: z.uuid(), number: z.string(), from: complaintStatus, to: complaintStatus }),
+    live: { ...complaintLive, fields: ['complaintId', 'number', 'from', 'to'] },
   }),
 ] as const

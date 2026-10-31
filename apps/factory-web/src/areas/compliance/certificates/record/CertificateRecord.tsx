@@ -50,6 +50,11 @@ import {
   type RecordDialog,
 } from '../model'
 import { CertMessages } from '../view/parts'
+import { reviewsCsv, RENEWAL_ACTS, type RenewalAct } from '../renewals/model'
+import { useRenewals } from '../renewals/use-renewals'
+import type { Review } from '../renewals/api'
+import { csvLine, downloadText } from '../../../quality/_shared/hooks'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { CertificateRecordView } from './view/CertificateRecordView'
 
 const WIDE = '(min-width: 1280px)'
@@ -102,6 +107,8 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
   const companies = useMemo(() => session.companies.map((company) => ({ id: company.id, name: company.name })), [session.companies])
   const tab = useRecordTab(RECORD_TABS)
   const today = useMemo(() => todayInRome(), [])
+  const locale = useLocale()
+  const t = useT('certificates')
   const [detail, setDetail] = useState<Read<CertificateDetail>>(reading())
   const [styles, setStyles] = useState<Record<string, StyleFacts | null | undefined>>({})
   const [sameBody, setSameBody] = useState<Read<Certificate[]> | null>(null)
@@ -198,9 +205,30 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
     if (params?.get('pdf') === 'failed') setNotice({ key: 'files.uploadFailedAfterCreate', tone: 'warning' })
   }, [params])
 
+  // W2a (B-W2a-66): the Renewals tab (read while open; its writes move the certificate's version: read it again).
+  const askedAct = params?.get('act') ?? ''
+  const exportReviews = (reviews: readonly Review[]) => {
+    const header = [t('ren.csv.style'), t('ren.csv.revision'), t('ren.csv.compared'), t('ren.csv.kind'), t('ren.csv.before'), t('ren.csv.after'), t('ren.csv.status'), t('ren.csv.answered'), t('ren.csv.reference')]
+    const lines = reviewsCsv(reviews, header, { status: (review) => t(`ren.status.${review.status}`), kind: (kind) => t(`ren.kind.${kind}`) }).map(csvLine)
+    downloadText(`type-changes-${new Date().toISOString().slice(0, 10)}.csv`, lines.join('\r\n'))
+    setNotice({ key: 'ren.done.exported', params: { count: reviews.length }, tone: 'success' })
+  }
+  const renewals = useRenewals({
+    api,
+    certificateId,
+    can,
+    active: tab === 'renewals',
+    today,
+    locale: locale === 'en' ? 'en' : 'it',
+    act: tab === 'renewals' && (RENEWAL_ACTS as readonly string[]).includes(askedAct) ? (askedAct as RenewalAct) : null,
+    onCertificateChanged: () => void load(),
+    onExport: exportReviews,
+  })
+
   const live = useLive(
     (change) => {
-      if (liveMatches(change, ['compliance.certificate_']) && change.fields.certificateId === certificateId && !dialog) void load()
+      if (liveMatches(change, ['compliance.certificate_', 'compliance.renewal_']) && change.fields.certificateId === certificateId && !dialog) void load()
+      if (tab === 'renewals' && liveMatches(change, ['compliance.renewal_', 'compliance.certificate_renewed', 'compliance.type_change_']) && change.fields.certificateId === certificateId && !renewals.model.dialog) void renewals.reload()
     },
     () => void load(),
   )
@@ -478,6 +506,7 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
         dialogProblem,
         dialogLines,
         dockOpen,
+        renewals: renewals.model,
       }}
       panels={panels}
       actions={{
@@ -527,6 +556,7 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
         onCheckClearStyle: () => setCheck((current) => (current ? { ...current, style: null, colourwayId: '', size: '', result: null } : current)),
         onCheckPatch: (patch) => setCheck((current) => (current ? { ...current, ...patch, result: null, problem: null } : current)),
         onCheckRun: () => void runCheck(),
+        renewals: renewals.actions,
       }}
     />
   )

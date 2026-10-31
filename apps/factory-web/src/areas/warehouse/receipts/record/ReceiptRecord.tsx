@@ -4,14 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
-import { formatDate } from '../../../../lib/i18n/format'
 import { useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { pickerReasons, type PickerReason } from '../../../_shared/reasons/api'
 import { downloadText, useCoalesced, useLive, useThreadDock } from '../../../_shared/buying/hooks'
-import { buyingCan, csvOf, dayAt, part, PART_LOADING, phrase, readProblem, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
+import { buyingCan, csvOf, part, PART_LOADING, phrase, readProblem, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
 import { getReceipt, receiptLots, reverseReceipt, type LotWithHides, type Receipt } from '../api'
 import {
   changeDiscrepancy,
@@ -23,10 +22,10 @@ import {
   removeDiscrepancy,
   reportCheck,
   reportPreviewBytes,
+  requestCheck,
+  sendDocumentRequest,
   sendReport,
-  sendRequestMail,
   settleDiscrepancy,
-  supplierContacts,
   uploadDdtPhoto,
   uploadDiscrepancyPhoto,
   type Discrepancy,
@@ -42,12 +41,12 @@ import {
   readSay,
   reportBody,
   reportProblem,
-  requestLanguage,
+  requestBody,
   requestProblem,
-  requestText,
   say,
   settleProblem,
   withCheck,
+  withRequestCheck,
   type Say,
 } from '../daily-model'
 import type { DailyDialog, DailyNotice, ReceiptDailyModel } from '../daily-state'
@@ -248,40 +247,21 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
     return () => window.clearInterval(timer)
   }, [api, receiptId, sentEmail])
 
-  const requestOpen = daily?.kind === 'request' && daily.draft.contacts.value === null && daily.draft.contacts.problem === null
   const value = receipt.status === 'ready' ? receipt.value : null
+
+  // B-W2a-F4: the request's own check (inventory.receipts.documents.request): the documents, the supplier's contacts.
+  const requestOpen = daily?.kind === 'request' && daily.draft.check.value === null && daily.draft.check.problem === null
   useEffect(() => {
-    if (!requestOpen || !value) return
+    if (!requestOpen) return
     const controller = new AbortController()
-    supplierContacts(api, value.supplier.id, controller.signal)
-      .then((contacts) =>
-        setDaily((current) => {
-          if (current?.kind !== 'request') return current
-          const quality = contacts.filter((contact) => contact.roles.includes('QUALITY'))
-          const to = (quality.length > 0 ? quality : contacts.slice(0, 1)).map((contact) => contact.id)
-          const language = requestLanguage(contacts, to)
-          return { kind: 'request', draft: { ...current.draft, contacts: part(contacts), to, language } }
-        }),
-      )
+    requestCheck(api, receiptId, controller.signal)
+      .then((check) => setDaily((current) => (current?.kind === 'request' ? { kind: 'request', draft: withRequestCheck(current.draft, check) } : current)))
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
-        setDaily((current) => (current?.kind === 'request' ? { kind: 'request', draft: { ...current.draft, contacts: { value: null, problem: readSay(error) } } } : current))
+        setDaily((current) => (current?.kind === 'request' ? { kind: 'request', draft: { ...current.draft, check: { value: null, problem: readSay(error) } } } : current))
       })
     return () => controller.abort()
-  }, [api, requestOpen, value])
-
-  // The request's standard words follow the language and what is asked until the person changes the text.
-  const requestTextKey = daily?.kind === 'request' && !daily.draft.edited && daily.draft.contacts.value ? `${daily.draft.language}|${daily.draft.asked.join(',')}` : null
-  useEffect(() => {
-    if (requestTextKey === null || !value) return
-    setDaily((current) => {
-      if (current?.kind !== 'request' || current.draft.edited) return current
-      const language = current.draft.language
-      const asked = current.draft.wanted.filter((entry) => current.draft.asked.includes(entry.key))
-      const text = requestText(language, { number: value.number, supplierDdtNumber: value.supplierDdtNumber, ddtDay: value.supplierDdtDate ? formatDate(dayAt(value.supplierDdtDate), { locale: language, timeZone: TIME_ZONE }) : null }, asked)
-      return { kind: 'request', draft: { ...current.draft, subject: text.subject, body: text.body } }
-    })
-  }, [requestTextKey, value])
+  }, [api, receiptId, requestOpen])
 
   // ---- the daily writes ----
 
@@ -376,10 +356,9 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
   const request = () =>
     run(async () => {
       const current = dailyRef.current
-      if (current?.kind !== 'request' || !current.draft.contacts.value) return
-      const to = current.draft.contacts.value.filter((contact) => current.draft.to.includes(contact.id)).map((contact) => contact.email!).filter(Boolean)
-      await sendRequestMail(api, receiptId, { to, subject: current.draft.subject.trim(), body: current.draft.body.trim(), locale: current.draft.language }, dailyKey.current)
-      setDaily({ kind: 'request', draft: { ...current.draft, sentTo: to } })
+      if (current?.kind !== 'request' || !current.draft.check.value) return
+      const sent = await sendDocumentRequest(api, receiptId, requestBody(current.draft), dailyKey.current)
+      setDaily({ kind: 'request', draft: { ...current.draft, sentTo: sent.to } })
     }, requestProblem)
 
   const openDetail = useCallback(

@@ -139,3 +139,106 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* B-W2a-64: the as-of dialog's day and time side by side (stacked when narrow). */
+.fw-stk-asof {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--nds-space-12);
+}
+
+/* B-W2a-64: Stock below 720 px — the card list (DS gap D3, composed). */
+.fw-stkc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-stkc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-stkc-search {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.fw-stkc-search > * {
+  width: 100%;
+}
+
+.fw-stkc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-stkc-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+
+.fw-stkc-card.is-on {
+  border-color: var(--nds-primary);
+  background: var(--nds-primary-soft);
+}
+
+.fw-stkc-thumb {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+
+.fw-stkc-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-stkc-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+/* B-W2a-64: the lot's quality pill and a quality hold's pill on ONE line (the reason is the cell's second line). */
+.fw-stk-pills {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* A quality hold's reason under the lot's pill: the warning text tone (the words say it; never colour alone). */
+.fw-stk-held {
+  color: var(--nds-warning-text);
+  font-weight: var(--nds-font-weight-medium);
+}

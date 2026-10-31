@@ -1,0 +1,59 @@
+/*
+ * Purchasing › Requests to buy (SCR-236) LAYOUT only: the detail's two cards side by side on a wide screen, the netting's
+ * numbered sentences, a group's later rows. The controls are the design system's and the buying office's (buying.css);
+ * semantic tokens only. No page max-width (Owner rule 2026-10-29): the page fills the shell's main area.
+ */
+.fw-rq-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .fw-rq-detail {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.fw-rq-detail > * {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+}
+
+.fw-rq-netting {
+  margin: 0;
+  padding-inline-start: var(--nds-space-20, var(--nds-space-16));
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-rq-h4 {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs, var(--nds-font-size-sm));
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* A group's later rows leave the group cell empty (its name and count are on its first row). */
+.fw-rq-group-rest {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-inline-start: 2px solid var(--nds-border);
+}
+
+/* The Draft POs dialog's cards: one per supplier and delivery site, side by side on a wide dialog. */
+.fw-rq-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+}

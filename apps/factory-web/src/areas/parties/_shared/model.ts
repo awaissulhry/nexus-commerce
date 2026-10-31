@@ -49,7 +49,8 @@ export type ListView = 'open' | 'active' | 'prospects' | 'brands' | 'invoice' | 
 export type TileId = 'active' | 'prospects' | 'vies' | 'invoice' | 'blocked'
 
 export type CustomerTab = 'overview' | 'addresses' | 'tax' | 'orders' | 'documents' | 'activity'
-export type SupplierTab = 'overview' | 'contacts' | 'orders' | 'activity'
+// B-W2a-69: 'items' = Items & prices (Approved sources; the slot is Purchasing's, areas/purchasing/suppliers).
+export type SupplierTab = 'overview' | 'contacts' | 'items' | 'orders' | 'activity'
 export type RecordTab = CustomerTab | SupplierTab
 
 export interface SideConfig {
@@ -89,7 +90,7 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
     newStatus: 'PROSPECT',
     views: ['open', 'active', 'prospects', 'suppliers', 'subcontractors', 'carriers', 'blocked', 'archived', 'all'],
     tiles: ['active', 'prospects', 'blocked'],
-    tabs: ['overview', 'contacts', 'orders', 'activity'],
+    tabs: ['overview', 'contacts', 'items', 'orders', 'activity'], // B-W2a-69: items
     recordType: 'Party',
   },
 }

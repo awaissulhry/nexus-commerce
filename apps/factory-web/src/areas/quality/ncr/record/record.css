@@ -1,0 +1,68 @@
+/*
+ * The NCR record (SCR-145) LAYOUT only: two-line grid cells, a row of small controls, the stock lines of a carry-out,
+ * the photo list, the save marks' colours from semantic tokens. No restyled control, no raw colour, no max-width on the
+ * page (it fills the shell's main area; the quality frame's columns stack below their breakpoints).
+ */
+.fw-ncr-r-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-ncr-r-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fw-ncr-r-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-ncr-r-qty {
+  width: 7rem;
+  max-width: 100%;
+}
+
+.fw-ncr-r-ok {
+  color: var(--nds-success-text);
+}
+
+.fw-ncr-r-bad {
+  color: var(--nds-danger-text);
+}
+
+.fw-ncr-r-bar {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.fw-ncr-r-files,
+.fw-ncr-r-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-ncr-r-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding-block: var(--nds-space-6);
+  border-bottom: 1px solid var(--nds-border);
+}

@@ -16,6 +16,8 @@ import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model
 import { CarrierTab } from './CarrierTab'
 import { ShipmentDialogs } from './Dialogs'
 import { DocumentsTab } from './DocumentsTab'
+import { ExportTab } from './ExportTab'
+import { InvoiceTab } from './InvoiceTab'
 import { LinesTab } from './LinesTab'
 import { TrackingTab } from './TrackingTab'
 import '../../shipments.css'
@@ -30,7 +32,10 @@ export type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model
  * every check the law and the customer need with its fix; the lines from released garments only; the cartons), Documents
  * (the DDT: the draft and its problems, issued once with its number and frozen, annulled with its reason; the
  * Declaration of Conformity and the user information; the customer's document link), Carrier & label, Tracking &
- * delivery, Activity (the record panels; beside any tab on a wide screen with ⌘J). No money anywhere.
+ * delivery, Activity (the record panels; beside any tab on a wide screen with ⌘J). B-W2a-71 adds Export (the intra-EU
+ * transport evidence: the papers that prove the goods reached another EU state) and Invoice (the freight charged — the
+ * one price on a shipment, drawn only with the price grain), Void labels, the order's backorder, Other documents and the
+ * driver's pack (a new tab).
  */
 export function ShipmentRecordView({ model, actions, panels }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode }) {
   return (
@@ -142,12 +147,14 @@ function ReadyRecord({ shipment, model, actions, panels }: { shipment: Shipment;
     if (tab === 'tracking') return model.tracking?.value ? model.tracking.value.events.length : null
     return null
   }
-  const problemTabs = new Set(checks.filter((check) => check.state === 'open').map((check) => check.tab))
+  const problemTabs = new Set<RecordTab>(checks.filter((check) => check.state === 'open').map((check) => check.tab))
+  // The evidence is chased after the goods left: its dot shows while it is awaited or partial.
+  const evidenceOpen = shipment.transportEvidence.status === 'AWAITED' || shipment.transportEvidence.status === 'PARTIAL'
   const tabs: TabItem[] = RECORD_TABS.map((tab) => ({
     id: tab,
     href: `${recordHref}?tab=${tab}`,
     label:
-      problemTabs.has(tab) && !isFinal(shipment.status) && !hasLeft(shipment.status) ? (
+      (problemTabs.has(tab) && !isFinal(shipment.status) && !hasLeft(shipment.status)) || (tab === 'export' && evidenceOpen) ? (
         <span className="fw-sh-tablabel">
           {t(`tab.${tab}`)}
           <span className="fw-sh-dot" aria-label={t('tab.problem')} role="img" />
@@ -172,6 +179,8 @@ function ReadyRecord({ shipment, model, actions, panels }: { shipment: Shipment;
     ...(liveDdt ? [{ id: 'annul', label: t('action.annul', { number: liveDdt.number }), disabled: !!annulHeld, description: annulHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'annulDdt', ddtId: liveDdt.id }) }] : []),
     ...(shipment.status === 'PACKED' && model.can.pack ? [{ id: 'unpack', label: t('action.unpack'), disabled: !!liveDdt || shipment.parcels.some((parcel) => parcel.trackingNumber), description: liveDdt ? t('held.unpackDdt') : shipment.parcels.some((parcel) => parcel.trackingNumber) ? t('held.unpackLabels') : undefined, onSelect: () => actions?.onDialog?.({ kind: 'unpack' }) }] : []),
     ...(shipment.status === 'DRAFT' || shipment.status === 'PACKED' ? [{ id: 'cancel', label: t('action.cancel'), disabled: !!cancelHeld, description: cancelHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []),
+    // B-W2a-71: the driver's pack (design tab:sh-tab-pack "All documents"), in a new tab.
+    ...(shipment.status !== 'CANCELLED' ? [{ id: 'pack', label: t('action.pack'), href: `${recordHref}/pack`, target: '_blank' as const }] : []),
     ...(model.can.viewOrders ? [{ id: 'order', label: t('action.openOrder', { number: shipment.salesOrder.number }), href: `${model.prefix}/sales/orders/${shipment.salesOrderId}?tab=shipments` }] : []),
     {
       id: 'copy',
@@ -283,6 +292,8 @@ function ReadyRecord({ shipment, model, actions, panels }: { shipment: Shipment;
           {model.tab === 'documents' && <DocumentsTab shipment={shipment} model={model} actions={actions} />}
           {model.tab === 'carrier' && <CarrierTab shipment={shipment} model={model} actions={actions} />}
           {model.tab === 'tracking' && <TrackingTab shipment={shipment} model={model} actions={actions} />}
+          {model.tab === 'export' && <ExportTab shipment={shipment} model={model} actions={actions} />}
+          {model.tab === 'invoice' && <InvoiceTab shipment={shipment} model={model} actions={actions} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-sh-hint">{t('record.noPanels')}</p>)}
         </div>
         {showDock && (

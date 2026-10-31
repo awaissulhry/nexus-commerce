@@ -9,6 +9,8 @@ import { companyPrefix } from '../../../lib/session/session'
 import { csvLine, downloadText, liveMatches, useLive } from '../../quality/_shared/hooks'
 import { failedRead, problemKey, reading, ready, type Notice, type Read } from '../../quality/_shared/model'
 import { checkGarment, createCertificate, getStyleFacts, listBrands, listCertificates, pickedFile, searchStyles, uploadPdf, type BrandOption, type Certificate, type PickedFile, type StyleOption } from './api'
+import { listReviews } from './renewals/api'
+import { waitingByCertificate } from './renewals/model'
 import { addressOf, blankCheck, blankDraft, certCan, certificatesCsv, draftFieldOf, filtersFromAddress, holderOf, inputOf, kindOf, todayInRome, type AddModel, type CertFilters, type CheckModel, type ListDialog } from './model'
 import { CertMessages } from './view/parts'
 import { certificateHref, CertificatesListView } from './view/CertificatesListView'
@@ -43,6 +45,7 @@ function CertificatesContainer() {
   const filters = useMemo(() => filtersFromAddress(params), [params])
   const companies = useMemo(() => session.companies.map((company) => ({ id: company.id, name: company.name })), [session.companies])
   const [rows, setRows] = useState<Read<Certificate[]>>(reading())
+  const [waiting, setWaiting] = useState<Read<Record<string, number>> | null>(null)
   const [today, setToday] = useState<string | null>(null)
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
@@ -63,6 +66,10 @@ function CertificatesContainer() {
     const controller = new AbortController()
     request.current = controller
     try {
+      // W2a: the changes to the approved type waiting for the notified body (the column and the `changes` view).
+      listReviews(api, { state: 'WAITING' }, controller.signal)
+        .then((answer) => !controller.signal.aborted && setWaiting(ready(waitingByCertificate(answer.reviews))))
+        .catch((error) => !controller.signal.aborted && (error as { name?: string } | null)?.name !== 'AbortError' && setWaiting(failedRead(problemKey(error))))
       const register = await listCertificates(api, controller.signal)
       if (controller.signal.aborted) return
       setRows(ready(register.certificates))
@@ -98,7 +105,7 @@ function CertificatesContainer() {
 
   const live = useLive(
     (change) => {
-      if (liveMatches(change, ['compliance.certificate_'])) setUpdates((count) => count + 1)
+      if (liveMatches(change, ['compliance.certificate_', 'compliance.type_change_', 'compliance.renewal_'])) setUpdates((count) => count + 1)
     },
     () => void load(),
   )
@@ -204,7 +211,7 @@ function CertificatesContainer() {
 
   return (
     <CertificatesListView
-      model={{ prefix, can, companies, brands, filters, rows, today, asOf, live, updates, selected, notice, dialog, add, check, explainerOpen }}
+      model={{ prefix, can, companies, brands, filters, rows, waiting, today, asOf, live, updates, selected, notice, dialog, add, check, explainerOpen }}
       actions={{
         onFilters: setFilters,
         onRetry: () => void load(),

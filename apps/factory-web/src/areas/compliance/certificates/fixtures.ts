@@ -172,6 +172,8 @@ function listModel(over: Partial<CertificatesListModel> = {}, role: RoleCase = '
       brands: BRANDS,
       filters: { view: 'all', kind: 'all', q: '' },
       rows: ready(CERTIFICATES),
+      // W2a: CERT-DEMO-0001's jacket revision 3 and CERT-DEMO-0008's revision 2 wait for the notified body.
+      waiting: ready({ [byNumber('CERT-DEMO-0001').id]: 1, [byNumber('CERT-DEMO-0008').id]: 2 }),
       today: TODAY,
       asOf: NOW,
       live: 'live',
@@ -242,5 +244,9 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'no-match', label: 'Nothing matches', model: listModel({ filters: { view: 'all', kind: 'all', q: 'zzz' } }) },
     { id: 'loading', label: 'Loading', model: listModel({ rows: reading(), asOf: null, live: 'connecting', today: null }) },
     { id: 'error', label: "The API didn't answer", model: listModel({ rows: failedRead('problem.unavailable') }), note: 'Never drawn as an empty register; the tiles say "—", not 0.' },
+    { id: 'w2a-changes', label: 'W2a Rows ▾ Changes waiting for the notified body', model: listModel({ filters: { view: 'changes', kind: 'all', q: '' } }), note: 'The column links to the Renewals tab; ⋯ Start renewal opens it with the dialog.' },
+    { id: 'w2a-changes-none', label: 'W2a Changes waiting: none', model: listModel({ filters: { view: 'changes', kind: 'all', q: '' }, waiting: ready({}) }) },
+    { id: 'w2a-changes-failed', label: 'W2a Changes could not be read', model: listModel({ waiting: failedRead('problem.unavailable') }), note: 'The column says "—", never "none".' },
+    { id: 'w2a-product', label: 'W2a Product developer: Start renewal held', model: listModel({}, 'production') },
   ],
 })

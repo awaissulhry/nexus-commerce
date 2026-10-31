@@ -1,5 +1,7 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { canFor, NOW, PREFIX } from '../../library/demo'
+import { canFor, NOW, PREFIX, ROLE_PERMISSIONS } from '../../library/demo'
+import { pricesModel, withoutCost as sourcesWithoutCost, materialSources } from '../../../purchasing/suppliers/sources/demo/fixtures'
+import { sourcesCan } from '../../../purchasing/suppliers/sources/model'
 import { failed, ready } from '../../library/model'
 import { CERTIFICATES, LEATHER, LIBRARY_COLOURS, LOTS, PROTECTOR, STOCK, SUPPLIER_ROWS, TEXTILE, withoutCost } from '../demo'
 import type { MaterialRecordViewModel } from './record-model'
@@ -9,7 +11,9 @@ import { MaterialRecordView } from './view/MaterialRecordView'
  * SCR-048 the material record — made-up data only: a chrome-tanned leather bought by the hide (52.5 ft²), stocked in
  * ft² and cut in dm², three colours and an archived one, three lots (released, waiting, failed); a lining with its
  * composition; a protector covered by a made-up EN 1621 certificate. Role cases: the Owner, a product developer (no
- * money), quality and sales (read).
+ * money), quality and sales (read). B-W2a-69: Suppliers & prices › Supplier prices (`supplier-prices-*`): Purchasing's
+ * approved sources of the leather, read only — normal, no cost grain, only the default supplier, none, couldn't load,
+ * loading, and a role without purchasing.view.
  */
 
 const base: MaterialRecordViewModel = {
@@ -28,14 +32,20 @@ const base: MaterialRecordViewModel = {
   changed: null,
   dialog: null,
   refused: null,
+  supplierPrices: pricesModel(LEATHER.id, { defaultSupplier: LEATHER.defaultSupplier }),
 }
-const as = (role: 'developer' | 'quality' | 'sales', model: MaterialRecordViewModel): MaterialRecordViewModel => ({
-  ...model,
-  can: canFor(role),
-  material: model.material.status === 'ready' ? { status: 'ready', value: withoutCost(model.material.value) } : model.material,
-  lots: canFor(role).lots ? model.lots : null,
-  stock: canFor(role).stock ? model.stock : null,
-})
+const as = (role: 'developer' | 'quality' | 'sales', model: MaterialRecordViewModel): MaterialRecordViewModel => {
+  const sources = sourcesCan(ROLE_PERMISSIONS[role])
+  return {
+    ...model,
+    can: canFor(role),
+    material: model.material.status === 'ready' ? { status: 'ready', value: withoutCost(model.material.value) } : model.material,
+    lots: canFor(role).lots ? model.lots : null,
+    stock: canFor(role).stock ? model.stock : null,
+    supplierPrices: pricesModel(LEATHER.id, { defaultSupplier: LEATHER.defaultSupplier, can: { view: sources.view, cost: sources.cost } }),
+  }
+}
+const prices = (over: Parameters<typeof pricesModel>[1]): MaterialRecordViewModel => ({ ...base, tab: 'suppliers', supplierPrices: pricesModel(LEATHER.id, { defaultSupplier: LEATHER.defaultSupplier, ...over }) })
 const protector: MaterialRecordViewModel = { ...base, material: { status: 'ready', value: PROTECTOR }, certificates: ready(CERTIFICATES), lots: ready({ lots: [], capped: false }), stock: ready({ rows: [], totals: [], truncated: false }) }
 const textile: MaterialRecordViewModel = { ...base, material: { status: 'ready', value: TEXTILE }, lots: ready({ lots: [], capped: true }), stock: ready({ rows: [], totals: [], truncated: false }) }
 
@@ -55,7 +65,19 @@ export const designScreen = defineDesignScreen<MaterialRecordViewModel>({
     { id: 'properties-leather', label: 'Properties: leather', model: { ...base, tab: 'properties' } },
     { id: 'properties-textile', label: 'Properties: composition', model: { ...textile, tab: 'properties' }, note: 'Fibres add up to 100 % before Save (held with the gap).' },
     { id: 'suppliers', label: 'Suppliers & prices (Owner)', model: { ...base, tab: 'suppliers' }, note: 'The standard cost per ft², per hide and per dm²; set with a reason for the audit row.' },
-    { id: 'suppliers-developer', label: 'Suppliers & prices: no cost grain', model: { ...as('developer', base), tab: 'suppliers' } },
+    { id: 'suppliers-developer', label: 'Suppliers & prices: no cost grain', model: { ...as('developer', base), tab: 'suppliers' }, note: 'The production manager reads no purchasing either: Supplier prices says what is missing.' },
+    { id: 'supplier-prices', label: 'Supplier prices (Owner)', model: prices({}), note: 'Purchasing\u2019s approved sources of the leather: primary first; Open the supplier goes to its Items & prices.' },
+    {
+      id: 'supplier-prices-no-cost',
+      label: 'Supplier prices: no cost grain (a planner)',
+      model: { ...as('developer', base), tab: 'suppliers', supplierPrices: pricesModel(LEATHER.id, { defaultSupplier: LEATHER.defaultSupplier, can: { view: true, cost: false }, read: { status: 'ready', rows: sourcesWithoutCost(materialSources(LEATHER.id)), more: false } }) },
+      note: 'Reads Purchasing without the cost grain: no price column, not even as —.',
+    },
+    { id: 'supplier-prices-default', label: 'Supplier prices: only the default supplier', model: prices({ read: { status: 'ready', rows: [], more: false } }) },
+    { id: 'supplier-prices-none', label: 'Supplier prices: no source, no default supplier', model: prices({ read: { status: 'ready', rows: [], more: false }, defaultSupplier: null }) },
+    { id: 'supplier-prices-error', label: "Supplier prices: couldn't load", model: prices({ read: { status: 'error', problem: 'problem.offline' } }), note: 'The standard cost and the default supplier stay usable.' },
+    { id: 'supplier-prices-loading', label: 'Supplier prices: loading', model: prices({ read: { status: 'loading' } }) },
+    { id: 'supplier-prices-no-access', label: 'Supplier prices: no purchasing.view', model: prices({ can: { view: false, cost: true } }) },
     { id: 'compliance-leather', label: 'Compliance: leather and its lots', model: { ...base, tab: 'compliance' }, note: 'Cr VI ≤ 3 mg/kg (never above: refused at the field); the lots\' results link to Compliance › Tests.' },
     { id: 'compliance-protector', label: 'Compliance: a protector', model: { ...protector, tab: 'compliance' }, note: 'A PPE component: the EN 1621 certificate covering it, linked to Compliance › Certificates.' },
     { id: 'compliance-capped', label: 'Compliance: no lot among the newest', model: { ...textile, tab: 'compliance' } },
