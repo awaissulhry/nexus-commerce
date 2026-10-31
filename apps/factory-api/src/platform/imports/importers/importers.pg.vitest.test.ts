@@ -111,6 +111,7 @@ const termsId = newId()
 const oldTermsId = newId()
 const listId = newId()
 const dollarListId = newId()
+const secondListId = newId()
 
 beforeAll(async () => {
   db = await migratedDatabase('importers_w2b25')
@@ -129,8 +130,8 @@ beforeAll(async () => {
     [termsId, oldTermsId, tenant],
   )
   await admin(
-    `INSERT INTO "PriceList" (id, "tenantId", code, name, kind, currency) VALUES ($1, $3, 'TEST-PL-ALL', 'Made-up list', 'BASE', 'EUR'), ($2, $3, 'TEST-PL-USD', 'Made-up dollar list', 'BASE', 'USD')`,
-    [listId, dollarListId, tenant],
+    `INSERT INTO "PriceList" (id, "tenantId", code, name, kind, currency) VALUES ($1, $3, 'TEST-PL-ALL', 'Made-up list', 'BASE', 'EUR'), ($2, $3, 'TEST-PL-USD', 'Made-up dollar list', 'BASE', 'USD'), ($4, $3, 'TEST-PL-B', 'Made-up second list', 'BASE', 'EUR')`,
+    [listId, dollarListId, tenant, secondListId],
   )
   for (const [key, person] of Object.entries(PEOPLE)) {
     const roleId = newId()
@@ -213,6 +214,21 @@ describe("a customer's commercial terms in the parties import (B-W2b-25)", () =>
     expect(audit[0]!.after).toMatchObject({ listId, incoterm: 'FCA', minimumOrderAmount: { $money: 'price', value: null } })
     const events = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE subject = $1 AND type = 'party.updated'`, [C2])
     expect(events.map((event) => event.payload.fields)).toContainEqual(['priceListId', 'incoterm'])
+
+    // B-W2b-16: the dated list history follows, as with the terms card: one open row from today for each customer given a list.
+    const history = await admin<{ party: string; list: string; open: boolean; today: boolean }>(
+      `SELECT p.code AS party, l.code AS list, a."validTo" IS NULL AS open, a."validFrom" = (now() AT TIME ZONE 'Europe/Rome')::date AS today
+       FROM "PartyPriceListAssignment" a JOIN "Party" p ON p.id = a."partyId" JOIN "PriceList" l ON l.id = a."priceListId" WHERE p.code IN ('NEW-C1', 'SEED-C2') ORDER BY p.code`,
+    )
+    expect(history).toEqual([
+      { party: 'NEW-C1', list: 'TEST-PL-ALL', open: true, today: true },
+      { party: 'SEED-C2', list: 'TEST-PL-ALL', open: true, today: true },
+    ])
+    expect((await admin(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "recordId" = $1 AND action = 'priceLists.assign'`, [C2]))[0]!.n).toBe(1)
+    // A customer's list changes at most once a day: a second list today is refused in the dry run, in the history's words.
+    const twice = await upload('manager', 'parties.parties', csv(['Code;Price list', 'SEED-C2;TEST-PL-B']))
+    expect(twice).toMatchObject({ status: 'PLANNED', errorCount: 1 })
+    expect(errorsOf(await rowsOf('manager', twice.id), 2)).toEqual([{ column: 'list', message: expect.stringMatching(/SEED-C2 has had TEST-PL-ALL since .*: a customer's list changes at most once a day/) }])
 
     // The same sheet again: the terms rows are unchanged now.
     const again = await upload('manager', 'parties.parties', csv(['Code;Price list;Incoterm', 'SEED-C2;TEST-PL-ALL;FCA', 'NEW-C1;TEST-PL-ALL;DAP']))

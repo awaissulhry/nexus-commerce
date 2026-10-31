@@ -1,18 +1,23 @@
 import type { Prisma } from '@nexus/factory-db'
 import type { Issue } from '@nexus/factory-domain/core/errors'
 import { can, grantsFor, type Actor } from '@nexus/factory-domain/core/permissions'
+import { businessDate } from '@nexus/factory-domain/core/time'
 import type { CellValue } from '@nexus/factory-domain/imports/cells'
 import type { RowIssue, RowValues } from '@nexus/factory-domain/imports/importer'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { termsOfRow, TERMS_COLUMNS, type ImportedTerms } from '@nexus/factory-domain/parties/importer'
 import type { PartyRole } from '@nexus/factory-domain/parties/rules'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
+import { assignmentPlan } from '@nexus/factory-domain/sales/pricelists/pricelists'
 import { PRICE_LISTS_MANAGE, PRICE_LISTS_VIEW } from '@nexus/factory-domain/sales/pricelists/permissions'
 import { PAYMENT_TERMS_VIEW } from '@nexus/factory-domain/sales/terms/permissions'
 import type { InvoiceTiming } from '@nexus/factory-domain/sales/terms/terms'
 import type { CommandTools, CommandTx } from '../../../core/command'
 import { ApiError } from '../../../core/errors'
-import { listProblemFor } from '../../../modules/sales/pricelists/lists'
+import { serverClock } from '../../../core/time'
+import { givePriceListInCommand } from '../../../modules/sales/pricelists/assignments'
+import { listCodesOf, listProblemFor } from '../../../modules/sales/pricelists/lists'
+import { dayText } from '../../../modules/sales/pricelists/store'
 // Types only: the registry lists the parties adapter, which uses this file.
 import type { CheckRow, ImportScope } from '../registry'
 
@@ -31,9 +36,11 @@ import type { CheckRow, ImportScope } from '../registry'
  *            columns, one audit row `parties.setCommercialTerms` in the shape of the terms card's (`listId`, the minimum
  *            order marked price) and `party.updated` with the fields that changed.
  *
- * A price list given here writes Party.priceListId as the terms card does on main. The customer's dated list history
- * (PartyPriceListAssignment, B-W2b-16) reads the audit row's `listId` for a list given before it keeps rows; once that
- * step's writer is on main, this writer calls it too (see build notes w2b-25).
+ * A price list given here moves the customer's dated list history exactly as the terms card does (B-W2b-16,
+ * modules/sales/pricelists/assignments.ts `givePriceListInCommand`, in the same command as Party.priceListId): the open
+ * row ends yesterday and the new one starts today; a customer's list changes at most once a day, so the check refuses a
+ * second change on the same day in the dry run, in the history's own words (factory-domain `assignmentPlan`), and the
+ * write refuses it again (the batch stops with the words) should one slip in between.
  */
 
 const AUDIT_ACTION = 'parties.setCommercialTerms'
@@ -48,6 +55,7 @@ class TermsRefused extends ApiError {
 const TERMS_PARTY = {
   id: true,
   code: true,
+  createdAt: true,
   companyId: true,
   roles: true,
   currency: true,
@@ -122,6 +130,16 @@ export async function checkTerms(client: CommandTx, rows: readonly CheckRow[], s
   const listByCode = new Map(lists.map((row) => [row.code, row]))
   const listById = new Map(lists.map((row) => [row.id, row]))
 
+  // The dated list history (B-W2b-16) of the customers whose list a row changes: at most one change per customer per day.
+  const changing = rows.flatMap((row) => {
+    const party = parties.get(String(row.key.code))
+    const list = text(row.values.list) === null ? undefined : listByCode.get(text(row.values.list)!)
+    return party && list && list.id !== party.priceListId ? [party.id] : []
+  })
+  const history = changing.length === 0 ? [] : await client.partyPriceListAssignment.findMany({ where: { partyId: { in: changing } }, select: { id: true, partyId: true, priceListId: true, validFrom: true, validTo: true } })
+  const historyCodes = await listCodesOf(client, [...new Set(history.map((entry) => entry.priceListId))])
+  const today = businessDate(serverClock.now())
+
   return rows.map((row) => {
     const issues: RowIssue[] = []
     const party = parties.get(String(row.key.code))
@@ -142,6 +160,11 @@ export async function checkTerms(client: CommandTx, rows: readonly CheckRow[], s
       else {
         const problem = listProblemFor(list, subject)
         if (problem) issues.push({ column: 'list', message: problem })
+        else if (party && list.id !== party.priceListId) {
+          const rowsOfParty = history.filter((entry) => entry.partyId === party.id).map((entry) => ({ id: entry.id, priceListId: entry.priceListId, validFrom: dayText(entry.validFrom)!, validTo: dayText(entry.validTo) }))
+          const plan = assignmentPlan(rowsOfParty, list.id, today, today, { party: party.code, listCode: (id) => historyCodes.get(id) ?? listById.get(id)?.code ?? id })
+          if (plan.kind === 'REFUSED') issues.push({ column: 'list', message: plan.message })
+        }
       }
     } else if (row.values.currency !== undefined && party?.priceListId) {
       // The row moves the currency and the customer keeps its list: the list must be in the new currency (as the terms card).
@@ -217,6 +240,11 @@ export async function writeTermsInCommand(tools: CommandTools, partyId: string, 
 
   const changed = FIELDS.filter((field) => String(next[field]) !== String(before[field]))
   if (changed.length === 0) return
+  // B-W2b-16: the customer's dated list history follows its list in the same command (from today; one change per day).
+  if (changed.includes('priceListId')) {
+    const codes = await listCodesOf(tx, [before.priceListId, next.priceListId].filter((id): id is string => id !== null))
+    await givePriceListInCommand(tools, { id: row.id, code: row.code, priceListId: before.priceListId, createdAt: row.createdAt }, next.priceListId, (id) => codes.get(id) ?? id)
+  }
   // command() bumps only the record it guards (the import job): the party's version moves here (not for a party this row made).
   await tx.party.update({
     where: { id: partyId },
