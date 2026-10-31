@@ -1,0 +1,96 @@
+{
+  "title": "DS words in the person's language",
+  "subtitle": "Every design-system part that speaks, with its words from the ds-words catalogue. Made-up data.",
+  "section": {
+    "fields": "Fields",
+    "time": "Time",
+    "files": "Files and media",
+    "grid": "Grids and tags",
+    "dialogs": "Dialogs",
+    "editing": "Editing"
+  },
+  "field": {
+    "due": "Due date",
+    "ends": "Ends",
+    "period": "Period",
+    "customer": "Customer",
+    "note": "Note",
+    "icon": "Icon",
+    "colour": "Colour",
+    "density": "Density",
+    "marks": "Cell save marks",
+    "confirm": "Typed confirmation"
+  },
+  "timeline": {
+    "label": "Order steps",
+    "received": "Order received",
+    "deposit": "Deposit paid",
+    "customs": "Customs check failed",
+    "shipped": "Shipped"
+  },
+  "asOf": {
+    "label": "Stock read"
+  },
+  "countdown": {
+    "label": "Reply due"
+  },
+  "job": {
+    "label": "Exporting rows",
+    "detail": "{done} of {total} rows"
+  },
+  "media": {
+    "label": "Photos",
+    "front": "Front",
+    "back": "Back",
+    "files": "Documents"
+  },
+  "open": {
+    "review": "Review changes",
+    "detail": "Open a row",
+    "stepUp": "Ask for the code",
+    "confirm": "Delete a draft",
+    "preferences": "Customise columns",
+    "modal": "Open a dialog"
+  },
+  "review": {
+    "summary": "Saved in the factory only.",
+    "list": "Price list DEMO-A",
+    "discount": "Discount",
+    "level": "Automation level",
+    "watch": "Watch",
+    "act": "Act",
+    "refused": "Refused: the limit is 10%"
+  },
+  "detail": {
+    "title": "Demo row {code}",
+    "overview": "Overview",
+    "history": "History",
+    "body": "The row’s content goes here."
+  },
+  "stepUp": {
+    "title": "Raise the discount limit",
+    "sentence": "The code allows raising the discount limit to 15%.",
+    "refused": "That code is not right. Try the next one."
+  },
+  "confirm": {
+    "title": "Delete draft DEMO-7",
+    "consequence": "The draft and its lines are removed.",
+    "finding": "No order uses it",
+    "unknown": "Open quotes",
+    "sideEffect": "The customer is not told.",
+    "acknowledge": "I understand this cannot be undone.",
+    "verb": "Delete draft"
+  },
+  "prefs": {
+    "identity": "Identity",
+    "money": "Money",
+    "column": "Column {n}"
+  },
+  "modal": {
+    "title": "A dialog",
+    "body": "Its close button speaks the page’s language."
+  },
+  "edit": {
+    "message": "Edit a field: the bar counts the changes."
+  }
+}
