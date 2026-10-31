@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { money } from '@nexus/factory-domain/money/marked'
 import {
@@ -485,7 +486,11 @@ export const previewDecisionsContract = defineContract({
 
 export const decideContract = defineContract({
   params: returnParams,
-  body: input({ version, lines: z.array(decisionLine).min(1).max(RETURN_LIMITS.lines) }),
+  body: input({
+    version,
+    lines: z.array(decisionLine).min(1).max(RETURN_LIMITS.lines),
+    periodLockOverride: periodLockOverride.optional(),
+  }),
   response: { 200: output({ return: returnView, moves: z.array(output({ lineId: id(), moveId: id(), locationId: id().nullable() })), registerEntries: z.array(registerEntry) }) },
 })
 

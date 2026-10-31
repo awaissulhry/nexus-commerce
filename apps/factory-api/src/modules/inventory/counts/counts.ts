@@ -36,6 +36,7 @@ import { processFiles } from '../../../platform/files/service'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { officeContextOf, seesCost, siteFor } from '../ledger/access'
 import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import type { AddLineBody, CountRecordView, CreateCountBody, EditCountBody, LineView, RecordLinesBody } from './contract'
 import { balancesAt, heldByOtherCounts, siteLocations, subtreeOf, unitCostOf, unitCostsOf } from './ledger-at'
 import { countSheetsPdf, valuedListFiles } from './papers'
@@ -680,7 +681,7 @@ export interface AppliedMove {
  * the ledger values them; idempotency key `inventory.count:<count>:<line>`), each line naming its move while the count
  * is APPROVED, then the count APPLIED. A SUBMITTED count under the approval limit is approved by the same command.
  */
-export async function applyCount(caller: CommandCaller, countId: string, body: { readonly version: number }, idempotencyKey?: string): Promise<{ count: CountRecordView; moves: AppliedMove[] }> {
+export async function applyCount(caller: CommandCaller, countId: string, body: { readonly version: number; readonly periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string): Promise<{ count: CountRecordView; moves: AppliedMove[] }> {
   const context = officeContextOf(caller)
   must(context, INVENTORY_ADJUST, await visibleCount(caller, countId), 'Posting a count\'s differences needs inventory.adjust.')
   const { result } = await countsCommand(
@@ -720,7 +721,12 @@ export async function applyCount(caller: CommandCaller, countId: string, body: {
       const posted: PostedMove[] = []
       for (let start = 0; start < drafts.length; start += 500) {
         const chunk = drafts.slice(start, start + 500)
-        posted.push(...(await postMoves(tools, chunk, { issuePath: (index) => `lines/${differing[start + index]!.seq}` })))
+        posted.push(
+          ...(await postMoves(tools, chunk, {
+            issuePath: (index) => `lines/${differing[start + index]!.seq}`,
+            periodLockOverride: body.periodLockOverride,
+          })),
+        )
       }
       const moves: AppliedMove[] = []
       for (const [index, line] of differing.entries()) {

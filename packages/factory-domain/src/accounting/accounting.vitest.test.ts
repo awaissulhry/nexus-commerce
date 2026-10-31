@@ -4,7 +4,8 @@ import { intrastatFileRows, intrastatRowOf, isEuSale, type IntrastatLineFacts } 
 import { buyerOfBillTo, fileRows, paymentDocument, salesJournalDocument, type SalesInvoiceFacts } from './journals'
 import { canonicalJson, differenceOf, fingerprint, heldDocuments, parseManifest, type ExportDocument } from './manifest'
 import { packageProblems } from './packages'
-import { dayWords, hardLockedWords, isYearEndPeriod, lockPhrases, monthLabel, periodOfDays, periodOfMonth, periodWords, phraseMatches, yearEndMonthNumber } from './periods'
+import { databaseHardLockWords, dayWords, hardLockedWords, isYearEndPeriod, lockPhrases, monthLabel, PERIOD_LOCK_ISSUES, periodOfDays, periodOfMonth, periodWords, phraseMatches, softLockedWords, yearEndMonthNumber } from './periods'
+import { periodLockOverride } from './contracts'
 import { yearEndDocuments } from './year-end'
 
 /**
@@ -45,6 +46,32 @@ describe('periods (whole months, Europe/Rome days)', () => {
         'Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
     )
     expect(hardLockedWords({ ...lock, lockedBy: null }, 'x')).toContain('(a hard lock since 2 Oct 2026): x.')
+  })
+
+  it('says a write into a soft-locked month sent without a reason in words, and how to go on (B-W2a-F8)', () => {
+    const lock = { start: '2026-10-01', end: '2026-10-31', company: 'Seed Company A S.r.l.', lockedOn: '2026-11-03', lockedBy: 'Fiona Neri' }
+    expect(softLockedWords(lock, 'the payment received on 20 Oct 2026 is not recorded')).toBe(
+      'October 2026 is soft-locked for Seed Company A S.r.l. (since 3 Nov 2026, by Fiona Neri): the payment received on 20 Oct 2026 is not recorded without a reason. ' +
+        'Say why it goes into that month (3 to 500 characters, kept in the audit trail) and send it again, or ask finance to lift the soft lock in Finance › Accounting.',
+    )
+    expect(softLockedWords({ ...lock, lockedBy: null }, 'x')).toContain('(since 3 Nov 2026): x without a reason.')
+    expect(PERIOD_LOCK_ISSUES).toEqual({ soft: 'period/SOFT_LOCKED', hard: 'period/HARD_LOCKED' })
+    expect(periodLockOverride.safeParse({ reason: '  ok ' }).success).toBe(false)
+    expect(periodLockOverride.safeParse({ reason: 'Bank statement arrived late.' }).success).toBe(true)
+    expect(periodLockOverride.safeParse({ reason: 'x'.repeat(501) }).success).toBe(false)
+    expect(periodLockOverride.safeParse({ reason: 'Late statement.', extra: 1 }).success).toBe(false)
+  })
+
+  it("turns the database's own hard-lock refusal into the same words, without record ids (B-W2a-F8)", () => {
+    const words = (what: string) =>
+      databaseHardLockWords(`period lock: ${what} is dated 2026-09-15, inside the closed period 2026-09-01 to 2026-09-30 of its company (a HARD lock: the accountant has it; lift the lock first, with a reason)`)
+    expect(words('payment 0190f000-0000-7000-8000-000000000001 (CRO-1)')).toBe(
+      'September 2026 is closed for good (a hard lock): the payment (CRO-1) dated 15 Sep 2026 is not written. ' +
+        'Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
+    )
+    expect(words('the payment of supplier invoice 0190f000-0000-7000-8000-000000000002 (number 2026/7)')).toContain(': the payment of supplier invoice (number 2026/7) dated 15 Sep 2026 is not written.')
+    expect(words('stock move 0190f000-0000-7000-8000-000000000003 (ISSUE)')).toContain(': the stock move (ISSUE) dated 15 Sep 2026')
+    expect(databaseHardLockWords('payments: something else entirely')).toBeNull()
   })
 })
 
