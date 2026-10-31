@@ -1,3 +1,59 @@
+## Floor and people parts — FloorCard, FloorElapsed, FloorNamePicker, FloorList updates slot, PinSignBlock (D22), display tier (D26), read-aloud (D27), LawRef, LegalGate, PrivacyNote, ProtectedValue, DayStrip, DueCell, DocumentSeal (B-W2b-28) — 2026-10-31
+
+Additive only: thirteen new parts in new folders, each its own entry point with its stylesheet imported by the part
+(none in a barrel the web pulls into its pages), one optional prop on a part Commerce's catalog draws (`FloorList`
+`updates`: without it the same HTML as before, held by a test), and a fourth density tier in its own block after the
+floor block (`[data-density='display']`: nothing reads it unless a screen sets the attribute; `DENSITIES`,
+`DensityName` and `isDensityName` keep their three tiers). Every part speaks through `labels?: Partial<XLabels>` (the
+B-W2b-04 rule: English `X_LABELS` beside it, `mergeLabels`); times and dates come written from the app (or a
+`formatTime` / `formatDate` / `locale` / `timeZone`). Data in, events out: none reads an API.
+- **`FloorCard`** (`floor/FloorCard/`; A2 G5): the typed card of a scanned thing at floor size — type icon, kind and code
+  as the heading, a title line, the status as a word in a tinted capsule, at most 8 big facts (a fact without a value
+  is left out; a fact's tone colours its value, which is the word), flags with icon + word, "Saved on this tablet · as
+  of 10:42" for a card from the cache.
+- **`FloorElapsed`** (`floor/FloorElapsed/`): a count-up (`since`, `carriedMs`, `paused`) or count-down (`until`; past zero
+  it counts the time over, "Over", danger) at 1.6 × the numeral size, `minutes` precision ("7 h 42 min"); tones rise with
+  `warnAfterMs` / `dangerAfterMs` with an icon change; ONE shared second-ticker for the page (stopped while hidden); a
+  screen reader hears minute-level words in a polite region, never every second.
+- **`FloorNamePicker`** (`floor/FloorNamePicker/`): name tiles with initials (no photos), recent people first then A–Z
+  by the page language (accents ignored; other scripts keep their letter), a letter strip that always shows A–Z (a
+  letter with no names is held and says so), arrows between tiles by where they are drawn; held whole with the reason
+  (offline), a person held alone, an empty state.
+- **FloorList updates slot** (`floor/FloorListUpdates/`, the floor form of D11): `FloorListUpdates` — a big "List
+  changed · Show" button, sticky above the rows, one polite sentence when the list first changes — and
+  `useFloorListUpdates(rows, { key, version })`, which keeps the rows on screen until Show (first rows and rows into an
+  empty list go in at once). `FloorList` takes it as `updates`.
+- **`ReadAloudButton`** (D27, `floor/ReadAloud/`): the browser's own speech (Web Speech, on the device) in the person's
+  language, sentence by sentence; the voice named under the button; no voice for the language → no button (and none on
+  the server); Stop, one voice at a time on the page, stops when the screen goes.
+- **`PinSignBlock`** (D22, `components/PinSignBlock/`): SignBlock's PIN variant — what is signed, what signing means,
+  "Signing as …" with "Not you?", what is recorded, then `PinPad`; `heldReason` / `locked` / `busy` hold every key with
+  the reason on screen; `done` replaces the pad. The PIN goes to `onSign` only; the app records who, when, the device and
+  the fingerprint.
+- **Display tier** (D26, `tokens/density.ts`): `DISPLAY_DENSITY`, `displayDensityAttrs()`, `displayDensityTokens`,
+  `displayDensityCss` — body 32 px, labels 24, numerals 96, icons 48, controls 56 / 64 / 80; never smaller than the floor
+  tier. Generated into `tokens.css` and `tokens-global.css` after the floor block (`npm run tokens:gen`).
+- **`LawRef`** (`components/LawRef/`): a chip naming a law that opens its plain words and the official link (a
+  `DetailPopover` toggletip: click, keyboard, touch or a resting pointer); `lawRefText()` for prints and held reasons.
+- **`LegalGate`** (`components/LegalGate/`): legal preconditions with state (icon + word), law, who recorded it and when,
+  a link to record it; the switch (`action`) held with the missing conditions in words, on screen too
+  (`legalGateHeld`); folds to one line when on with every condition met; on with a condition no longer met says so.
+- **`PrivacyNote`** (`components/PrivacyNote/`): what level of personal data a view shows (line, team, one person,
+  protected), who may see more, the law, "Opening this is recorded" — a band pill or a panel, every word on screen,
+  `role="note"`.
+- **`ProtectedValue`** (`components/ProtectedValue/`): special-category data — "Restricted" and who may see it, or Show
+  ("Opening it is recorded") → the app reads the value (the server logs the view) → the value with "View recorded · 10:42"
+  and Hide; held while opening; a failed read says so with Try again.
+- **`DayStrip`** (`components/DayStrip/`): a day bar — shift outline, spans by kind (breaks hatched, idle dashed),
+  clock events as marks (flagged ones as diamonds), overlay rows, anomaly marks, hour ticks in the site's zone, a key —
+  and the same day as an ordered list of sentences (screen reader only, or on screen with `showText`).
+- **`DueCell`** (`components/DueCell/`): a due date as tone and words (Overdue by 3 days / Needed / Due today / Due in 12
+  days / Valid until … / Done …); `DueCellRenderer` for a grid column (no AG import: params taken structurally) and
+  `dueComparator` sorting by urgency; calendar days only, `today` = the site's date.
+- **`DocumentSeal`** (`components/DocumentSeal/`): version, the SHA-256 fingerprint (whole in groups of 8, short, Copy),
+  when and by which clock, who sealed it, the signers with dates ("1 of 2 signed"), and Verify a file: the SHA-256 of a
+  file the person picks, computed on the device (Web Crypto), "matches" or "does NOT match" with the file's name.
+
 ## Shared parts the W2a screens composed — grid card list (D3), RecordNav (D13), SaveStatus (D6), CheckList, TraceTree, MarginMeter, Waterfall, BarList, print view, FileRow actions, SelectableCard; AreaNavItem `target` (B-W2b-09) — 2026-10-31
 
 Additive only: nine new parts in new folders, each its own entry point with its stylesheet imported by the part (none

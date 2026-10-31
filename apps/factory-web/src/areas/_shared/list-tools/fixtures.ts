@@ -49,6 +49,7 @@ const view = (over: Partial<SavedView> & Pick<SavedView, 'id' | 'name'>): SavedV
   roleId: null,
   roleName: null,
   roleDefault: false,
+  personalDefault: false,
   state: { query: '' },
   changeHeld: null,
   version: 1,
@@ -76,12 +77,15 @@ const VIEWS = [LATE, ROSSI, EVERYTHING, START]
 const answer = (over: Partial<ViewsAnswer> = {}): ViewsAnswer => ({
   views: VIEWS,
   roleDefaultId: START.id,
+  personalDefaultId: null,
   roles: [ROLE_SALES],
   allRoles: [ROLE_FINANCE, ROLE_SALES],
   can: { save: true, manage: true, export: true },
   exports: { formats: ['CSV', 'XLSX'] },
   ...over,
 })
+// B-W2b-24: Late is my own default view of the list: the list opens on it before the role's default.
+const MY_DEFAULT = answer({ views: [view({ ...LATE, personalDefault: true }), ROSSI, EVERYTHING, START], personalDefaultId: LATE.id })
 // A sales person: saves and shares with their role, exports; no views.manage (everyone and role defaults held).
 const SALES = answer({ allRoles: [], can: { save: true, manage: false, export: true } })
 // Read-only: uses the views shared with it; saves none, exports nothing.
@@ -156,7 +160,10 @@ export const designScreen = defineDesignScreen<ListToolsModel>({
     { id: 'view-open', label: 'A view of mine is on screen: its name on the trigger, its filter and columns applied', model: page({ query: 'late=true' }, { layout: { columns: LATE.state.columns, viewId: LATE.id } }) },
     { id: 'view-changed', label: 'The screen differs from the view: “· changed”, Update offered', model: page({ query: 'late=true&q=beta' }, { layout: { columns: LATE.state.columns, viewId: LATE.id }, design: { menu: 'columns' } }) },
     { id: 'role-default', label: "The list opens on the role's default view (Sales start)", model: page({}, { layout: null }), note: 'A clean address and no working layout: the default of the first role held.' },
-    { id: 'shared-view', label: 'A view shared by someone else: Copy link only (its owner changes it)', model: page({ query: 'rows=all' }, { layout: { viewId: EVERYTHING.id }, design: { menu: 'columns' } }) },
+    { id: 'my-default', label: 'The list opens on my default view (Late, my customers), before the role’s default', model: page({}, { answer: MY_DEFAULT, layout: null }), note: 'A clean address and no working layout: my own default first (B-W2b-24); the role default only for those without one.' },
+    { id: 'my-default-menu', label: 'Columns ▾ on my default: marked “my default”, Stop using it as my default', model: page({ query: 'late=true' }, { answer: MY_DEFAULT, layout: { columns: LATE.state.columns, viewId: LATE.id }, design: { menu: 'columns' } }) },
+    { id: 'make-default', label: 'Columns ▾ on a view of mine: Make it my default', model: page({ query: 'q=rossi&rows=all' }, { layout: { density: 'compact', viewId: ROSSI.id }, design: { menu: 'columns' } }), note: 'Only a view of my own can be my default; a shared view says so (held with the reason) and is saved as my own first.' },
+    { id: 'shared-view', label: 'A view shared by someone else: Copy link only (its owner changes it); my default held with the reason', model: page({ query: 'rows=all' }, { layout: { viewId: EVERYTHING.id }, design: { menu: 'columns' } }) },
     { id: 'customise', label: 'Customise columns: order, show, freeze; the rows’ density', model: page({}, { design: { dialog: 'customise' } }) },
     { id: 'save-view', label: 'Save view: name, who sees it, what it keeps', model: page({ query: 'late=true' }, { design: { dialog: 'save' } }) },
     { id: 'save-view-sales', label: 'Save view without views.manage: everyone and a role default held with the reason', model: page({ query: 'late=true' }, { answer: SALES, design: { dialog: 'save' } }) },

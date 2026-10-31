@@ -107,7 +107,8 @@
     "held": {
       "save": "Saving views needs the right to save views",
       "manage": "Needs the right to manage views",
-      "change": "Only its owner changes it (or someone with the right to manage views)"
+      "change": "Only its owner changes it (or someone with the right to manage views)",
+      "defaultNotOwn": "Only a view of your own can be your default: save this one as your own view first"
     },
     "linkNotShared": "The view in this link is not shared with you, or was removed: the list shows as it is.",
     "dismiss": "Dismiss",
@@ -151,7 +152,9 @@
       "saveChanges": "Save",
       "saving": "Saving…",
       "saved": "View saved",
-      "updated": "View updated"
+      "updated": "View updated",
+      "defaultOn": "“{name}” is now your default view of this list",
+      "defaultOff": "The list no longer opens on “{name}” for you"
     },
     "removeDialog": {
       "title": "Remove the view “{name}”?",
@@ -250,6 +253,11 @@
       "withheldNet": "needs price rights"
     },
     "customiseItem": "Customise columns…",
+    "myDefault": "my default",
+    "makeDefault": "Make “{name}” my default",
+    "makeDefaultHint": "The list opens on it for you, before your role’s default",
+    "stopDefault": "Stop using “{name}” as my default",
+    "stopDefaultHint": "The list opens on your role’s default again, or as built",
     "freezeFirst": "Freeze “{column}” at the left edge",
     "freezeHint": "It stays in view while the rows scroll sideways",
     "withheld": "Hidden by your rights",

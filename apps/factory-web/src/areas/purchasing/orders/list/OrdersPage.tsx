@@ -13,6 +13,8 @@ import { createOrder, listOrders, sendChecks, sendMany, type OrderRow, type Orde
 import { sendManyBody } from '../daily-model'
 import { NO_NEW_ORDER, orderQuery, orderViewOf, type NewOrderModel, type OrdersListModel, type OrderView, type SendManyModel } from '../model'
 import { OrdersListView } from './view/OrdersListView'
+import { typedNumberRefusal } from '../../../admin/documents/override/model'
+import { useNumberField } from '../../../admin/documents/override/use-number-field'
 
 /**
  * `/w/<company>/purchasing/orders` (SCR-058): the orders of the saved view (`?view=`, or the API's own `?status=` and
@@ -53,6 +55,9 @@ function OrdersContainer() {
   const [sendManyState, setSendMany] = useState<SendManyModel | null>(null)
   const sendManyKey = useRef(newIdempotencyKey())
   const readId = useRef(0)
+  // B-W2b-24 (PLT-125): the number the new order will get, or a migrated order's old number (numbering.override).
+  const newSite = newOrder?.siteId ? sites.find((entry) => entry.id === newOrder.siteId) : undefined
+  const numberField = useNumberField(api, { kind: 'PURCHASE_ORDER', companyId: newSite?.companyId ?? session.company?.id ?? null, mayType: session.permissions.includes('numbering.override'), open: newOrder !== null })
 
   const address = useCallback(
     (next: { view?: OrderView; q?: string }) => {
@@ -154,13 +159,21 @@ function OrdersContainer() {
     if (!companyId) return
     setNewOrder({ ...draft, busy: true, problem: null })
     try {
-      const order = await createOrder(api, { companyId, siteId: draft.siteId, partyId: draft.supplier.id, ...(draft.requestedDate ? { requestedDate: draft.requestedDate } : {}) })
+      const typed = numberField.typed
+      const order = await createOrder(api, { companyId, siteId: draft.siteId, partyId: draft.supplier.id, ...(draft.requestedDate ? { requestedDate: draft.requestedDate } : {}), ...(typed ? { typedNumber: typed } : {}) })
       setNewOrder(null)
       router.push(`${prefix}/purchasing/orders/${order.id}?tab=lines`)
     } catch (error) {
+      // A typed number that clashed meanwhile: the popup opens again on it, saying why.
+      const code = typedNumberRefusal(error)
+      if (code) {
+        numberField.refused(code)
+        setNewOrder((current) => (current ? { ...current, busy: false, problem: null } : current))
+        return
+      }
       setNewOrder((current) => (current ? { ...current, busy: false, problem: writeProblem(error, (_paths, info) => (info.kind === 'conflict' ? phrase('po.new.refused') : null)) } : current))
     }
-  }, [api, newOrder, prefix, router, session.company?.id, sites])
+  }, [api, newOrder, prefix, router, session.company?.id, sites, numberField])
 
   const exportRows = useCallback(
     (ids: string[]) => {
@@ -220,7 +233,7 @@ function OrdersContainer() {
     }
   }, [api, sendManyState, load])
 
-  const model: OrdersListModel = { prefix, can, view, q, rows, summary, sites, asOf, live, updates, notice, newOrder, sendMany: sendManyState }
+  const model: OrdersListModel = { prefix, can, view, q, rows, summary, sites, asOf, live, updates, notice, newOrder: newOrder ? { ...newOrder, number: numberField.model } : null, sendMany: sendManyState }
 
   return (
     <OrdersListView
@@ -256,6 +269,7 @@ function OrdersContainer() {
           onSite: (siteId) => setNewOrder((current) => (current ? { ...current, siteId: siteId || null } : current)),
           onRequestedDate: (requestedDate) => setNewOrder((current) => (current ? { ...current, requestedDate } : current)),
           onCreate: () => void create(),
+          number: numberField.actions,
         },
       }}
     />

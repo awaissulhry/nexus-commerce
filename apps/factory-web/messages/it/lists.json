@@ -107,7 +107,8 @@
     "held": {
       "save": "Salvare le viste richiede il permesso di salvare viste",
       "manage": "Richiede il permesso di gestire le viste",
-      "change": "La modifica solo chi l'ha creata (o chi può gestire le viste)"
+      "change": "La modifica solo chi l'ha creata (o chi può gestire le viste)",
+      "defaultNotOwn": "Solo una vista tua può essere la tua predefinita: salva prima questa come vista tua"
     },
     "linkNotShared": "La vista di questo link non è condivisa con te, oppure è stata rimossa: l'elenco si apre così com'è.",
     "dismiss": "Chiudi",
@@ -151,7 +152,9 @@
       "saveChanges": "Salva",
       "saving": "Salvataggio…",
       "saved": "Vista salvata",
-      "updated": "Vista aggiornata"
+      "updated": "Vista aggiornata",
+      "defaultOn": "«{name}» è ora la tua vista predefinita di questo elenco",
+      "defaultOff": "L’elenco non si apre più su «{name}» per te"
     },
     "removeDialog": {
       "title": "Rimuovere la vista «{name}»?",
@@ -250,6 +253,11 @@
       "withheldNet": "servono i permessi sui prezzi"
     },
     "customiseItem": "Personalizza colonne…",
+    "myDefault": "la mia predefinita",
+    "makeDefault": "Rendi «{name}» la mia vista predefinita",
+    "makeDefaultHint": "L’elenco si apre su questa vista per te, prima della vista predefinita del tuo ruolo",
+    "stopDefault": "Non usare più «{name}» come mia vista predefinita",
+    "stopDefaultHint": "L’elenco si apre di nuovo sulla vista predefinita del tuo ruolo, o con le colonne di base",
     "freezeFirst": "Blocca «{column}» a sinistra",
     "freezeHint": "Resta in vista mentre le righe scorrono di lato",
     "withheld": "Nascoste dai tuoi permessi",

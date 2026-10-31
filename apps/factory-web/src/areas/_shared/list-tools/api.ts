@@ -28,6 +28,7 @@ export const savedViewSchema = z.object({
   roleId: z.string().nullable(),
   roleName: z.string().nullable(),
   roleDefault: z.boolean(),
+  personalDefault: z.boolean(),
   state,
   changeHeld: z.string().nullable(),
   version: z.number(),
@@ -36,6 +37,7 @@ export const savedViewSchema = z.object({
 export const viewsAnswerSchema = z.object({
   views: z.array(savedViewSchema),
   roleDefaultId: z.string().nullable(),
+  personalDefaultId: z.string().nullable(),
   roles: z.array(role),
   allRoles: z.array(role),
   can: z.object({ save: z.boolean(), manage: z.boolean(), export: z.boolean() }),
@@ -134,6 +136,14 @@ export const createView = (api: ApiClient, listKey: string, draft: ViewDraft, id
   wrap(api.post('/views', { body: { listKey, ...draft }, idempotencyKey, schema: z.object({ view: savedViewSchema }) }).then((answer) => answer.view))
 export const updateView = (api: ApiClient, view: SavedView, change: Partial<ViewDraft>, idempotencyKey: string): Promise<SavedView> =>
   wrap(api.request('PATCH', `/views/${seg(view.id)}`, { body: { version: view.version, ...change }, idempotencyKey, schema: z.object({ view: savedViewSchema }) }).then((answer) => answer.view))
+/** B-W2b-24: my default view of a list: PUT marks it, DELETE takes the mark off (platform/views/defaults). */
+const personalDefaultAnswer = z.object({ view: savedViewSchema, personalDefaultId: z.string().nullable() })
+export const setPersonalDefault = (api: ApiClient, view: SavedView, on: boolean, idempotencyKey: string): Promise<{ view: SavedView; personalDefaultId: string | null }> =>
+  wrap(
+    on
+      ? api.request('PUT', `/views/${seg(view.id)}/personal-default`, { body: { version: view.version }, idempotencyKey, schema: personalDefaultAnswer })
+      : api.request('DELETE', `/views/${seg(view.id)}/personal-default`, { query: { version: view.version }, idempotencyKey, schema: personalDefaultAnswer }),
+  )
 export const removeView = (api: ApiClient, view: SavedView): Promise<void> =>
   wrap(api.request('DELETE', `/views/${seg(view.id)}`, { query: { version: view.version }, schema: z.object({ deleted: z.literal(true) }) }).then(() => undefined))
 

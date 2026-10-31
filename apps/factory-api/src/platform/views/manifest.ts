@@ -15,4 +15,7 @@ export const manifest = defineManifest({
   // screen's company and each row's command asks it again over the row (the apply takes an Idempotency-Key).
   'POST /views/bulk/preview': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
   'POST /views/bulk/apply': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
+  // B-W2b-24 (Z12:07): my default view of a list (my own view only; the handler says why not in words).
+  'PUT /views/:viewId/personal-default': { audiences: ['office'], permission: 'views.save', scope: 'record' },
+  'DELETE /views/:viewId/personal-default': { audiences: ['office'], permission: 'views.save', scope: 'record' },
 })

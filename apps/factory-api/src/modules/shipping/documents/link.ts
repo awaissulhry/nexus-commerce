@@ -134,7 +134,7 @@ export async function sendDocumentLinks(request: SendRequest): Promise<SendResul
   const facts = await caller.withClient(async (client) => {
     const contacts = await contactsOf(client, shipment.partyId)
     const addresses = addressesOf(request.to, contacts)
-    const suppressed = addresses.length > 0 ? await client.suppression.findMany({ where: { address: { in: addresses } }, select: { address: true } }) : []
+    const suppressed = addresses.length > 0 ? await client.suppression.findMany({ where: { address: { in: addresses }, liftedAt: null }, select: { address: true } }) : []
     const read = await readDocuments(client, shipment)
     return { addresses, suppressed: new Set(suppressed.map((row) => row.address)), read }
   })

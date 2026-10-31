@@ -13,6 +13,10 @@
  *   floor        Android tablets on a factory floor, landscape, gloved hands: nothing under 48 px, controls 56 px,
  *                primary actions 64 px, body 18 px, counts in 40 px numerals, and 48 px between separate targets
  *                (8 mm on a 10-inch 1280 × 800 tablet, about 6 CSS px per mm).
+ *   display      (D26, B-W2b-28) wall screens: the line TV read from across the floor, not touched. Body 32 px, labels
+ *                24 px, numerals 96 px, icons 48 px. On a 55-inch 1920 × 1080 TV one CSS px is about 0.63 mm, so the body's
+ *                em is about 20 mm (read at 5 m and more) and a numeral about 60 mm (read across a hall). Kept OUT of
+ *                `DENSITIES` / `DensityName` on purpose — see "The display tier" below.
  *
  * ## How a subtree switches tier
  *
@@ -37,6 +41,15 @@
  * A value that an existing token already holds is written as that token (`var(--nds-space-48)`, `var(--nds-font-size-lg)`,
  * `var(--nds-radius-2xl)`); a value no scale holds is a px literal (56, 64, 44, the 16 px body, icons, focus widths).
  * The numbers below are what TypeScript reads; the test checks every token reference resolves to exactly that number.
+ *
+ * ## The display tier (D26, B-W2b-28)
+ *
+ * A fourth tier for wall screens, with its own exports (`DISPLAY_DENSITY`, `displayDensityTokens`, `displayDensityCss`,
+ * `displayDensityAttrs`) and its own block, emitted after the floor block (`[data-density='display']`). It is NOT a
+ * member of `DENSITIES` / `DensityName` / `isDensityName`: those name the tiers a person works in, and existing code maps
+ * over them (the Commerce catalog draws one card per tier from a `Record<DensityName, …>`), so adding a member would
+ * change what that code draws and type-checks. Nothing reads `--nds-density-*` inside `display` unless a screen opts in
+ * with `displayDensityAttrs()` on its root, so no existing page can change.
  */
 
 export interface DensityCssVar {
@@ -123,6 +136,31 @@ const SCALE = {
 
 export type DensityName = keyof typeof SCALE
 
+/**
+ * The display tier's numbers (D26): the line TV, read from 3–10 m and not touched. Never smaller than the floor tier
+ * (a display may still be a kiosk someone taps), with type sized for distance rather than for fingers.
+ */
+const DISPLAY_SCALE = {
+  targetMin: tok('--nds-space-48', 48),
+  controlHSm: 56,
+  controlH: 64,
+  controlHPrimary: 80,
+  padX: tok('--nds-space-32', 32),
+  gap: tok('--nds-space-24', 24),
+  targetGap: tok('--nds-space-48', 48),
+  radius: tok('--nds-radius-3xl', 14),
+  fontLabel: 24,
+  fontBody: 32,
+  fontNumeral: 96,
+  icon: 48,
+  focusW: 4,
+  focusOffset: 3,
+} as const satisfies Record<DensityTokenKey, Dim>
+
+/** The wall-screen tier's name (D26). Not a `DensityName`: see "The display tier" above. */
+export const DISPLAY_DENSITY = 'display' as const
+export type DisplayDensityName = typeof DISPLAY_DENSITY
+
 /** The tiers, smallest first. */
 export const DENSITIES = ['standard', 'comfortable', 'floor'] as const satisfies readonly DensityName[]
 
@@ -148,6 +186,11 @@ const cssOf = (d: Dim): string => (typeof d === 'number' ? `${d}px` : `var(${d.t
 
 const keys = Object.keys(DENSITY_TOKENS) as DensityTokenKey[]
 
+/** The attribute that switches a wall screen's root to the display tier (D26): `<main {...displayDensityAttrs()}>`. */
+export function displayDensityAttrs(): { 'data-density': DisplayDensityName } {
+  return { 'data-density': DISPLAY_DENSITY }
+}
+
 /** Each tier's numbers in px — for TypeScript consumers that must hand over a number (an icon's `size`). */
 export const densityTokens = Object.fromEntries(
   DENSITIES.map((d) => [d, Object.fromEntries(keys.map((k) => [k, pxOf(SCALE[d][k])]))]),
@@ -157,6 +200,12 @@ export const densityTokens = Object.fromEntries(
 export const densityCss = Object.fromEntries(
   DENSITIES.map((d) => [d, Object.fromEntries(keys.map((k) => [k, cssOf(SCALE[d][k])]))]),
 ) as { readonly [D in DensityName]: { readonly [K in DensityTokenKey]: string } }
+
+/** The display tier's numbers in px (D26). */
+export const displayDensityTokens = Object.fromEntries(keys.map((k) => [k, pxOf(DISPLAY_SCALE[k])])) as { readonly [K in DensityTokenKey]: number }
+
+/** The display tier's values as written in the CSS (D26). */
+export const displayDensityCss = Object.fromEntries(keys.map((k) => [k, cssOf(DISPLAY_SCALE[k])])) as { readonly [K in DensityTokenKey]: string }
 
 const SECTION: { readonly [D in DensityName]: string } = {
   standard: 'Density: standard, the default (tokens/density.ts)',
@@ -173,9 +222,20 @@ export const densitySelector = (d: DensityName): string => `[data-density='${d}'
 /**
  * One block per tier, emitted after `.dark` by `tools/generate-tokens-css.ts`. The standard block is also `:root`, so a
  * consumer outside any tier reads today's sizes, and a subtree inside a comfortable or floor screen can step back to them
- * with `data-density="standard"`. Blocks of their own: the existing `:root` block is not touched.
+ * with `data-density="standard"`. Blocks of their own: the existing `:root` block is not touched. The display tier's
+ * block (D26) comes last, after the floor block, so the three earlier blocks stay byte-identical.
  */
-export const densityBlocks: ReadonlyArray<{ selector: string; vars: ReadonlyArray<DensityCssVar> }> = DENSITIES.map((d) => ({
-  selector: d === 'standard' ? `:root, ${densitySelector(d)}` : densitySelector(d),
-  vars: varsOf(d),
-}))
+export const densityBlocks: ReadonlyArray<{ selector: string; vars: ReadonlyArray<DensityCssVar> }> = [
+  ...DENSITIES.map((d) => ({
+    selector: d === 'standard' ? `:root, ${densitySelector(d)}` : densitySelector(d),
+    vars: varsOf(d),
+  })),
+  {
+    selector: `[data-density='${DISPLAY_DENSITY}']`,
+    vars: keys.map((k, i) => ({
+      ...(i === 0 ? { section: 'Density: display (wall screens, the line TV; D26)' } : {}),
+      name: DENSITY_TOKENS[k].css,
+      value: displayDensityCss[k],
+    })),
+  },
+]

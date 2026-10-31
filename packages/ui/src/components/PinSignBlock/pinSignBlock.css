@@ -1,0 +1,136 @@
+/*
+ * DS — PinSignBlock (B-W2b-28, D22). Sized by the page density (`--nds-density-*`): glove-sized on the floor tier, the
+ * console's sizes at standard. Colours are semantic `--nds-*` roles paired as the contrast gate measures them (the
+ * message words in `--nds-<tone>-text` on `--nds-<tone>-soft`; the done tick in `--nds-success-text` on its tint).
+ */
+.nds-pinsign {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  line-height: 1.45;
+}
+.nds-pinsign-title {
+  font-size: calc(var(--nds-density-font-body) * 1.25);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.25;
+}
+.nds-pinsign-summary {
+  min-width: 0;
+}
+
+/* What signing means: set apart, read before the PIN, never small print. */
+.nds-pinsign-meaning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-inline-start: var(--nds-space-4) solid var(--nds-primary);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+}
+.nds-pinsign-meaning-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--nds-density-icon);
+  height: var(--nds-density-icon);
+  color: var(--nds-primary);
+}
+.nds-pinsign-meaning-icon > svg {
+  width: 100%;
+  height: 100%;
+}
+.nds-pinsign-meaning-title {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-2);
+}
+.nds-pinsign-meaning-body {
+  font-size: var(--nds-density-font-body);
+}
+
+.nds-pinsign-signer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+.nds-pinsign-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: calc(var(--nds-density-icon) * 1.6);
+  height: calc(var(--nds-density-icon) * 1.6);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+  font-weight: var(--nds-font-weight-extrabold);
+}
+.nds-pinsign-signer-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+.nds-pinsign-signing-as {
+  font-weight: var(--nds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+.nds-pinsign-signer-detail,
+.nds-pinsign-records {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-pinsign-records {
+  margin: 0;
+}
+.nds-pinsign-message {
+  margin: 0;
+  padding: var(--nds-space-10) var(--nds-density-pad-x);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-pinsign-message[data-tone='warning'] {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-pinsign-message[data-tone='info'] {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.nds-pinsign-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+}
+.nds-pinsign-done {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-success);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-pinsign-done-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--nds-density-icon);
+  height: var(--nds-density-icon);
+}
+.nds-pinsign-done-icon > svg {
+  width: 100%;
+  height: 100%;
+}
+.nds-pinsign-done-body > :first-child {
+  margin-top: 0;
+}
+.nds-pinsign-done-body > :last-child {
+  margin-bottom: 0;
+}

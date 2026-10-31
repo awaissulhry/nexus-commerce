@@ -510,6 +510,8 @@
       "alerts.CERTIFICATE_EXPIRING": "Il certificato {label} scade il {dueDate} (mancano {days} giorni).",
       "alerts.INVOICE_DEADLINE": "La merce del DDT {label} va fatturata entro il {dueDate} (mancano {days} giorni).",
       "alerts.INVOICE_DEADLINE.LATE": "La merce del DDT {label} andava fatturata entro il {dueDate}: {days} giorni di ritardo.",
+      "alerts.INTEGRATION_FAILING": "Il collegamento {label} non funziona da {hours} ore: la sua ultima chiamata non è riuscita.",
+      "alerts.INTEGRATION_FAILING.NEVER": "Il collegamento {label} non ha mai funzionato: nessuna chiamata è riuscita nelle {hours} ore da quando è stato impostato.",
       "why.RULE_ALERT.assigned": "È assegnato a te.",
       "why.RULE_ALERT.recipient": "La regola \"{rule}\" avvisa te.",
       "alerts.UNKNOWN": "Avviso su {label}."

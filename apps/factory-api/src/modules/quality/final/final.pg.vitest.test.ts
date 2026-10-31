@@ -484,8 +484,8 @@ describe('the release gate (QHS-051, QHS-058, PLT-097)', () => {
     // gate's shape (checks/WORK_ORDER), after the signature and before the database's QualityRelease_awaits_quality_hold.
     const holdId = newId()
     await admin(
-      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById")
-       VALUES ($1, $2, $3, $4, 'WorkOrder', ARRAY[$5]::uuid[], 'QUALITY_CHECK', 'A stain found at packing (made up).', '2026-11-21T09:00:00Z', $6, $6)`,
+      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById", "number")
+       VALUES ($1, $2, $3, $4, 'WorkOrder', ARRAY[$5]::uuid[], 'QUALITY_CHECK', 'A stain found at packing (made up).', '2026-11-21T09:00:00Z', $6, $6, 'HLD-T-' || gen_random_uuid())`,
       [holdId, A.tenant, A.companyA, A.siteA1, workOrder.id, owner.id],
     )
     try {

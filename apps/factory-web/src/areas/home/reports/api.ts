@@ -36,6 +36,8 @@ export const librarySchema = z.object({
       formats: z.array(z.enum(REPORT_FORMATS)),
       mail: z.string().nullable(),
       mailed: z.boolean(),
+      /** B-W2b-24: when the person last ran it (their own run log on the server), or null. */
+      lastRunByMe: z.string().nullable(),
     }),
   ),
 })
@@ -71,6 +73,8 @@ export const aboutSchema = z.object({
   numbers: z.array(z.object({ key: z.string(), label: z.string() })),
   mail: z.string().nullable(),
   formats: z.array(z.enum(REPORT_FORMATS)),
+  /** B-W2b-24: when the person last ran this report (their own run log), or null. */
+  lastRunByMe: z.string().nullable(),
 })
 export type ReportAbout = z.infer<typeof aboutSchema>
 export type ReportFilter = ReportAbout['filters'][number]

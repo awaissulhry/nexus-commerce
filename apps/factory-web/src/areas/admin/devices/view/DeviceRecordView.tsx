@@ -11,7 +11,8 @@ import type { Device } from '../../shared/api'
 import { adminHref, STATUS_TONE } from '../../shared/model'
 import { AdminMessages, dash, NoticeBanner, RecordProblem } from '../../shared/view/parts'
 import { RecordFrame } from '../../shared/view/RecordFrame'
-import { batteryOf, deviceTileMatch, isOutdated, type DeviceRecordModel, type DeviceTab } from '../model'
+import { batteryOf, deviceTileMatch, isOutdated, networkKey, type DeviceRecordModel, type DeviceTab } from '../model'
+import { inUseSinceWords } from './columns'
 import { EnrolWizard, RevokeConfirm } from './DeviceDialogs'
 
 export type { DeviceRecordModel } from '../model'
@@ -42,6 +43,7 @@ export function DeviceRecordView({ model, actions, panels }: { model: DeviceReco
 
 function DeviceRecord({ model, actions, panels }: { model: DeviceRecordModel; actions?: DeviceRecordActions; panels?: ReactNode }) {
   const t = useT('admin')
+  const locale = useLocale()
   const href = (path: string) => adminHref(model.prefix, path)
   const back = { href: href('/devices'), label: t('nav.devices') }
   const device = model.device
@@ -82,7 +84,7 @@ function DeviceRecord({ model, actions, panels }: { model: DeviceRecordModel; ac
         status={
           <span className="fw-adm-tags">
             <Pill tone={STATUS_TONE[device.status] ?? 'neutral'}>{t(`devices.status.${device.status}`)}</Pill>
-            {device.inUse && <Tag tone="info">{t('devices.inUse')}</Tag>}
+            {device.inUse && <Tag tone="info">{inUseSinceWords(device, { t, locale, now: new Date(model.now).getTime() }) ?? t('devices.inUse')}</Tag>}
           </span>
         }
         actions={
@@ -188,6 +190,7 @@ function StatusTab({ model, actions }: { model: DeviceRecordModel; actions?: Dev
   const battery = batteryOf(device)
   const outdated = isOutdated(device, model.currentVersion)
   const reported = device.statusReportedAt ? t('device.health.reportedAt', { at: formatDateTime(device.statusReportedAt, { locale }) }) : undefined
+  const network = networkKey(device)
   return (
     <div className="fw-adm-stack">
       <Card header={t('device.health.title')} headingLevel={2} padded>
@@ -212,7 +215,9 @@ function StatusTab({ model, actions }: { model: DeviceRecordModel; actions?: Dev
               ...(reported ? { hint: reported } : {}),
             },
             { label: t('device.health.enrolled'), value: device.enrolledAt ? formatDateTime(device.enrolledAt, { locale }) : '—' },
-            { label: t('device.health.inUse'), value: t(device.inUse ? 'device.health.inUseYes' : 'device.health.inUseNo'), hint: t('device.health.neverWho') },
+            // B-W2b-24: the network as the tablet said it; since when someone is signed in (never who).
+            { label: t('device.health.network'), value: network ? t(network) : t(device.statusReportedAt ? 'devices.network.unknown' : 'device.health.notReported'), ...(reported ? { hint: reported } : {}) },
+            { label: t('device.health.inUse'), value: device.inUse ? (inUseSinceWords(device, { t, locale, now }) ?? t('device.health.inUseYes')) : t('device.health.inUseNo'), hint: t('device.health.neverWho') },
             ...(device.revokedAt ? [{ label: t('device.health.revoked'), value: formatDateTime(device.revokedAt, { locale }) }] : []),
           ]}
         />

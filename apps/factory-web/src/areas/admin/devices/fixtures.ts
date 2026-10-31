@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { DEVICES, inShell, NOW, panels, PREFIX, PRINTERS, SITES, STATIONS } from '../shared/fixtures'
+import { at, DEVICES, inShell, NOW, panels, PREFIX, PRINTERS, SITES, STATIONS } from '../shared/fixtures'
 import { failed, loaded, loading } from '../shared/model'
 import type { Device } from '../shared/api'
 import type { DeviceRecordModel, DevicesViewModel, SiteChoice } from './model'
@@ -20,10 +20,12 @@ type Case = { page: 'list'; model: DevicesViewModel } | { page: 'device'; model:
  */
 const CURRENT_VERSION = '1.4.0'
 const REPORTED = DEVICES[0]!.lastSeenAt
+// B-W2b-24: the network each tablet last said (the second one's browser does not say), and since when "Tablet taglio 1"
+// is in use (06:12 Rome, today; never who).
 const STATE: Readonly<Record<number, Partial<Device>>> = {
-  0: { batteryPercent: 82, batteryCharging: true, queuedActions: 0, statusReportedAt: REPORTED },
-  1: { batteryPercent: 12, batteryCharging: false, queuedActions: 0, statusReportedAt: DEVICES[1]!.lastSeenAt },
-  2: { batteryPercent: 57, batteryCharging: false, queuedActions: 3, statusReportedAt: REPORTED },
+  0: { batteryPercent: 82, batteryCharging: true, queuedActions: 0, statusReportedAt: REPORTED, network: 'WIFI', inUseSince: at(29, 5, 12) },
+  1: { batteryPercent: 12, batteryCharging: false, queuedActions: 0, statusReportedAt: DEVICES[1]!.lastSeenAt, network: null },
+  2: { batteryPercent: 57, batteryCharging: false, queuedActions: 3, statusReportedAt: REPORTED, network: 'CELLULAR' },
 }
 const STATEFUL: Device[] = DEVICES.map((item, index) => ({ ...item, ...(STATE[index] ?? {}) }))
 
@@ -81,6 +83,9 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'device-binding', label: 'Device: station & mode', model: device(0) },
     { id: 'device-status', label: 'Device: status and danger zone', model: device(0, { tab: 'status' }) },
     { id: 'device-silent', label: 'Device: not seen for 3 days', model: device(1, { tab: 'status' }) },
+    // B-W2b-24: the network the tablet said and since when someone is signed in on it (never who); an older session from yesterday.
+    { id: 'device-in-use', label: 'Device: in use since this morning, on Wi-Fi', model: device(0, { tab: 'status' }), note: 'B-W2b-24: "In use since 06:12" and "Network: Wi-Fi", as the tablet said; never who (Statuto dei Lavoratori art. 4).' },
+    { id: 'device-in-use-yesterday', label: 'Device: in use since yesterday, mobile data', model: device(0, { tab: 'status', device: { ...STATEFUL[0]!, network: 'CELLULAR', inUseSince: at(28, 15, 40) } }), note: 'B-W2b-24: a sign-in from another day shows the day and the time.' },
     {
       id: 'device-outdated',
       label: 'Device: an older app version, 3 actions waiting',

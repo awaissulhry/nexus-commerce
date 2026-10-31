@@ -1,0 +1,138 @@
+/*
+ * DS — LegalGate (B-W2b-28). Colours are semantic roles paired as the contrast gate measures them (`--nds-<tone>-text` on
+ * `--nds-<tone>-soft` for the state words and the lines; the card on `--nds-surface`). A state is never colour alone:
+ * an icon AND a word. Sizes read `--nds-density-*` (the console's sizes at standard).
+ */
+.nds-legalgate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  padding: var(--nds-space-14) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  container: nds-legalgate / inline-size;
+}
+.nds-legalgate[data-folded='true'] {
+  padding-block: var(--nds-space-8);
+}
+.nds-legalgate-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+}
+.nds-legalgate-icon {
+  flex-shrink: 0;
+  width: var(--nds-density-icon);
+  height: var(--nds-density-icon);
+  color: var(--nds-text-2);
+}
+.nds-legalgate-title {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.1);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-legalgate-line {
+  padding: var(--nds-space-2) var(--nds-space-10);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-legalgate-line[data-tone='success'] {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-legalgate-line[data-tone='warning'] {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-legalgate-items {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-legalgate-item {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, auto) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--nds-space-6) var(--nds-space-14);
+  padding: var(--nds-space-10) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.nds-legalgate-item:first-child {
+  border-top: 0;
+}
+.nds-legalgate-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  justify-self: start;
+  padding: var(--nds-space-2) var(--nds-space-10);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-bold);
+  white-space: nowrap;
+}
+.nds-legalgate-state-icon {
+  width: 1.15em;
+  height: 1.15em;
+}
+.nds-legalgate-item[data-state='met'] .nds-legalgate-state {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-legalgate-item[data-state='missing'] .nds-legalgate-state {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-legalgate-item[data-state='expired'] .nds-legalgate-state {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-legalgate-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.nds-legalgate-label {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.nds-legalgate-detail,
+.nds-legalgate-who {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-legalgate-link {
+  color: var(--nds-text-link);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+}
+.nds-legalgate-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-14);
+}
+.nds-legalgate-held {
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-warning-text);
+}
+/* A narrow card (a phone, a side column): the state above, the link under the words — by the card's own width. */
+@container nds-legalgate (max-width: 34rem) {
+  .nds-legalgate-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

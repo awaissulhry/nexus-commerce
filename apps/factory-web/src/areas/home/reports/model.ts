@@ -6,7 +6,7 @@ import { REPORT_AREAS, type Grain, type LibraryReport, type ReportAbout, type Re
 /**
  * Home › Reports' rules (SCR-104; B-W2a-79; design home.reports): the library's address and filters, a report's
  * address (tab, filters, grouping), how a cell is said, the CSV of a result, the rights banner, the held reasons and
- * "last opened by me". Pure: the containers load, the views draw.
+ * "last run by me" (from the server). Pure: the containers load, the views draw.
  */
 
 export type Translate = (key: string, params?: Record<string, string | number>) => string
@@ -69,29 +69,6 @@ export function stateWords(report: Pick<LibraryReport, 'state' | 'grain'>, t: Tr
   if (report.state === 'NEEDS_GRAIN') return t('state.needsGrain', { grain: t(`grain.${report.grain ?? 'price'}`) })
   if (report.state === 'NO_ACCESS') return t('state.noAccess')
   return null
-}
-
-// ---- "last opened by me" (this browser only) ------------------------------------------------------------------------------
-
-export const LAST_OPENED_KEY = 'fw.reports.lastOpened'
-
-/** When I last opened each report in this browser (a per-person convenience; empty when storage is off). */
-export function readLastOpened(storage: Pick<Storage, 'getItem'> | null): Record<string, string> {
-  try {
-    const raw = storage?.getItem(LAST_OPENED_KEY)
-    const parsed = raw ? (JSON.parse(raw) as unknown) : {}
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.fromEntries(Object.entries(parsed).filter(([, value]) => typeof value === 'string')) : {}
-  } catch {
-    return {}
-  }
-}
-
-export function markOpened(storage: Pick<Storage, 'getItem' | 'setItem'> | null, key: string, at: string): void {
-  try {
-    storage?.setItem(LAST_OPENED_KEY, JSON.stringify({ ...readLastOpened(storage), [key]: at }))
-  } catch {
-    // Storage off (private window): nothing to remember.
-  }
 }
 
 // ---- a report ---------------------------------------------------------------------------------------------------------------

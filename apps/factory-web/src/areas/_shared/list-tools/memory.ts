@@ -83,7 +83,7 @@ export function memoryTransport(model: MemoryToolsModel, store: MemoryStore, que
       const answer = views()
       if (answer.views.some((view) => view.mine && view.name.toLowerCase() === draft.name.toLowerCase())) throw new ToolsError('nameTaken')
       const role = draft.roleId ? (answer.allRoles.find((entry) => entry.id === draft.roleId) ?? answer.roles.find((entry) => entry.id === draft.roleId)) : null
-      const view: SavedView = { id: id('aaaa'), listKey, name: draft.name, ownerId: 'me', ownerName: 'Demo', mine: true, audience: draft.audience, roleId: draft.roleId, roleName: role?.name ?? null, roleDefault: draft.roleDefault, state: normaliseState(draft.state), changeHeld: null, version: 1 }
+      const view: SavedView = { id: id('aaaa'), listKey, name: draft.name, ownerId: 'me', ownerName: 'Demo', mine: true, audience: draft.audience, roleId: draft.roleId, roleName: role?.name ?? null, roleDefault: draft.roleDefault, personalDefault: false, state: normaliseState(draft.state), changeHeld: null, version: 1 }
       return replace(view)
     },
     updateView: async (view, change) => {
@@ -92,7 +92,16 @@ export function memoryTransport(model: MemoryToolsModel, store: MemoryStore, que
     },
     removeView: async (view) => {
       const answer = views()
-      store.answer = { ...answer, views: answer.views.filter((entry) => entry.id !== view.id) }
+      store.answer = { ...answer, views: answer.views.filter((entry) => entry.id !== view.id), personalDefaultId: answer.personalDefaultId === view.id ? null : answer.personalDefaultId }
+    },
+    // B-W2b-24: my default view (only my own; the old default loses its mark, as the API does).
+    setPersonalDefault: async (view, on) => {
+      const answer = views()
+      if (!view.mine) throw new ToolsError('forbidden')
+      const next = { ...view, personalDefault: on, version: view.version + 1 }
+      const others = answer.views.map((entry) => (entry.id === view.id ? next : on && entry.personalDefault ? { ...entry, personalDefault: false, version: entry.version + 1 } : entry))
+      store.answer = { ...answer, views: others, personalDefaultId: on ? view.id : null }
+      return { view: next, personalDefaultId: on ? view.id : null }
     },
     startExport: async (ask) => {
       if (store.jobs.filter((job) => job.status === 'QUEUED' || job.status === 'RUNNING').length >= 3) throw new ToolsError('busy')
