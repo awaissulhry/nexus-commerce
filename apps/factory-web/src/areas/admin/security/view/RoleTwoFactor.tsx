@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react'
 import { Banner, Card } from '@nexus/ui/components'
 import { Button, Skeleton, Tag, Toggle } from '@nexus/ui/primitives'
-import { useT } from '../../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { TwoFactorRole } from '../api'
 import { canTake, withoutTwoFactor, type Dialog, type Read } from '../model'
-import { SecurityMessages } from './SecurityView'
+import { SecurityMessages, sinceWords } from './SecurityView'
 import { TwoFactorDialog, type TwoFactorActions } from './SecurityDialogs'
 
 export interface RoleTwoFactorModel {
@@ -39,6 +39,7 @@ export function RoleTwoFactor({ model, actions }: { model: RoleTwoFactorModel; a
 
 function TwoFactorCard({ model, actions }: { model: RoleTwoFactorModel; actions?: RoleTwoFactorActions }) {
   const t = useT('admin-security')
+  const locale = useLocale()
   const read = model.role
   const role = read.state === 'ok' ? read.value : null
   const [draft, setDraft] = useState<boolean>(model.draft ?? role?.requireMfa ?? false)
@@ -62,6 +63,8 @@ function TwoFactorCard({ model, actions }: { model: RoleTwoFactorModel; actions?
             <Toggle checked={draft} onChange={setDraft} disabled={fixed !== null} aria-label={t('sec.role.toggle')} />
             <span>{t('sec.role.toggle')}</span>
           </label>
+          {/* B-W2b-24: since when it asks (Role.requireMfaSince). */}
+          {role?.requireMfa && <p className="fw-adm-hint">{sinceWords(role, t, locale)}</p>}
           {fixed && <p className="fw-adm-hint">{fixed}</p>}
           <div>
             <h3 className="fw-sec-sub">{t('sec.role.members')}</h3>

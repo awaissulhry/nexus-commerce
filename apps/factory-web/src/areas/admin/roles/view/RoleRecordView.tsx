@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Banner, Card, SummaryTable } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
+import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { adminHref, GRAINS } from '../../shared/model'
@@ -149,6 +150,7 @@ function PermissionsTab({ model }: { model: RoleRecordModel }) {
 
 function RulesTab({ model, actions }: { model: RoleRecordModel; actions?: RoleRecordActions }) {
   const t = useT('admin')
+  const locale = useLocale()
   const role = model.role!
   return (
     <div className="fw-adm-stack">
@@ -161,6 +163,8 @@ function RulesTab({ model, actions }: { model: RoleRecordModel; actions?: RoleRe
       ) : (
         <Card header={t('role.mfa.title')} headingLevel={2} padded>
           <p className="fw-adm-intro">{t(role.requireMfa ? 'role.mfa.on' : 'role.mfa.off')}</p>
+          {/* B-W2b-24: since when it asks (Role.requireMfaSince). */}
+          {role.requireMfa && <p className="fw-adm-hint">{role.requireMfaSince ? t('role.mfa.since', { day: formatDate(role.requireMfaSince, { locale }) }) : t('role.mfa.sinceUnknown')}</p>}
         </Card>
       )}
     </div>

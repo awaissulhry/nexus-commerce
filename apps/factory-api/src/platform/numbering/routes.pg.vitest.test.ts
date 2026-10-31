@@ -10,6 +10,7 @@ import { callerFor, command } from '../../core/command'
 import { testAuthenticator, type RequestContext, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { allocateNumber } from './allocate'
+import { typedNumber } from './override'
 
 /**
  * The numbering routes on the local stack, with the app's real routes: an admin lists the series, creates one with
@@ -24,6 +25,8 @@ const tenantA = newId()
 const tenantB = newId()
 const companyOne = newId()
 const companyTwo = newId()
+// B-W2b-24: a company of its own for the preview and the override (no series of the earlier tests).
+const companyThree = newId()
 const companyB = newId()
 const user = newId()
 
@@ -34,6 +37,10 @@ const SESSIONS: Record<string, SessionContext> = {
   viewer: { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['numbering.view'])] },
   'admin-b': { audience: 'office', tenantId: tenantB, actorId: user, grants: [grant(['numbering.view', 'numbering.manage'])] },
   floor: { audience: 'floor', tenantId: tenantA, actorId: user, siteId: newId(), deviceId: newId(), grants: [grant(['numbering.view', 'numbering.manage'])] },
+  // B-W2b-24 (PLT-125): a buyer sees the next purchase order number; who holds numbering.override types a migrated one.
+  buyer: { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['purchasing.manage'])] },
+  override: { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['purchasing.manage', 'numbering.override'])] },
+  stranger: { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant(['parties.view'])] },
 }
 
 const call = (session: string | undefined, method: 'GET' | 'POST' | 'PUT', url: string, payload?: unknown) =>
@@ -45,7 +52,7 @@ beforeAll(async () => {
   db = await migratedDatabase('numbering_routes')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 4 } })
   for (const [tenantId, slug, companies] of [
-    [tenantA, 'nr-a', [companyOne, companyTwo]],
+    [tenantA, 'nr-a', [companyOne, companyTwo, companyThree]],
     [tenantB, 'nr-b', [companyB]],
   ] as const) {
     await db.admin.query('INSERT INTO "Tenant" (id, slug, name) VALUES ($1, $2, $2)', [tenantId, slug])
@@ -177,5 +184,67 @@ describe('PUT /numbering/series/:seriesId/start and POST /numbering/series/:seri
     expect((await call('admin', 'PUT', `/numbering/series/${two.id}/start`, { startValue: 0, version: 1 })).statusCode).toBe(400)
     expect((await call('admin', 'PUT', `/numbering/series/not-a-uuid/start`, { startValue: 5, version: 1 })).statusCode).toBe(400)
     expect((await call('admin', 'PUT', `/numbering/series/${newId()}/start`, { startValue: 5, version: 1 })).statusCode).toBe(404)
+  })
+})
+
+describe('B-W2b-24 (PLT-125): the number preview and the controlled override of a migrated document', () => {
+  let poSeries: Series
+
+  it('previews the number a new document would get, to who makes such documents, without reserving it', async () => {
+    poSeries = created(await call('admin', 'POST', '/numbering/series', { companyId: companyThree, kind: 'PURCHASE_ORDER', year: 2026, pattern: 'PO-{YYYY}-{N:5}', startValue: 18 }))
+    const asked = await call('buyer', 'GET', `/numbering/preview?companyId=${companyThree}&kind=PURCHASE_ORDER&date=2026-10-31`)
+    expect(asked.statusCode, asked.body).toBe(200)
+    expect(asked.json().preview).toMatchObject({ kind: 'PURCHASE_ORDER', code: 'MAIN', scopeKey: '2026', number: 'PO-2026-00018', fiscal: false, newPeriod: false, held: null })
+    // Twice: the same number (nothing was taken).
+    expect((await call('admin', 'GET', `/numbering/preview?companyId=${companyThree}&kind=PURCHASE_ORDER&date=2026-10-31`)).json().preview.number).toBe('PO-2026-00018')
+    // A new year: that year's first number, from the newest row.
+    expect((await call('buyer', 'GET', `/numbering/preview?companyId=${companyThree}&kind=PURCHASE_ORDER&date=2027-01-04`)).json().preview).toMatchObject({ scopeKey: '2027', number: 'PO-2027-00001', newPeriod: true })
+    // No series of the kind, and a person who neither sees series nor makes such documents.
+    expect((await call('buyer', 'GET', `/numbering/preview?companyId=${companyThree}&kind=WORK_ORDER`)).statusCode).toBe(403)
+    expect((await call('admin', 'GET', `/numbering/preview?companyId=${companyThree}&kind=WORK_ORDER`)).json().preview).toMatchObject({ number: null, held: 'noSeries' })
+    expect((await call('stranger', 'GET', `/numbering/preview?companyId=${companyThree}&kind=PURCHASE_ORDER`)).statusCode).toBe(403)
+    expect((await call('admin-b', 'GET', `/numbering/preview?companyId=${companyThree}&kind=PURCHASE_ORDER`)).statusCode).toBe(404)
+  })
+
+  it('says at once what a typed number meets: free, taken, still to come from the series, a fiscal kind, a bad shape', async () => {
+    // The series gives PO-2026-00018 to an order: that number is taken from now on.
+    const recordId = newId()
+    await command(callerFor(database, { ...SESSIONS.admin!, requestId: newId() } as RequestContext), { name: 'purchasing.create', input: {} }, async (tools) => {
+      const number = await allocateNumber(tools, { companyId: companyThree, kind: 'PURCHASE_ORDER' }, { type: 'PurchaseOrder', id: recordId, date: '2026-10-31' })
+      tools.audit({ recordType: 'PurchaseOrder', recordId, companyId: companyThree, after: { number: number.formatted } })
+      return null
+    })
+    const check = async (number: string, kind = 'PURCHASE_ORDER', session = 'override') => call(session, 'POST', '/numbering/override/check', { companyId: companyThree, kind, number })
+    expect((await check(' OA-19-0412 ')).json()).toEqual({ number: 'OA-19-0412', ok: true, refusal: null })
+    expect((await check('PO-2026-00018')).json()).toMatchObject({ ok: false, refusal: { code: 'taken' } })
+    expect((await check('PO-2026-00040')).json()).toMatchObject({ ok: false, refusal: { code: 'future', message: expect.stringMatching(/series will give this number later/) } })
+    expect((await check('FT-2019-0007', 'INVOICE')).json()).toMatchObject({ ok: false, refusal: { code: 'kind' } })
+    expect((await check('OA 19 0412')).json()).toMatchObject({ ok: false, refusal: { code: 'shape' } })
+    expect((await check('OA-19-0412', 'PURCHASE_ORDER', 'buyer')).statusCode).toBe(403)
+  })
+
+  it('gives a migrated document its typed number inside its command: audited with the reason, the series untouched; a clash refused', async () => {
+    const before = await db.admin.query('SELECT "nextValue", version FROM "NumberSeries" WHERE id = $1', [poSeries.id])
+    const allocations = Number((await db.admin.query('SELECT count(*)::int AS n FROM "NumberAllocation" WHERE "seriesId" = $1', [poSeries.id])).rows[0].n)
+    const recordId = newId()
+    const typed = await command(callerFor(database, { ...SESSIONS.override!, requestId: newId() } as RequestContext), { name: 'purchasing.create', input: {} }, async (tools) => {
+      const number = await typedNumber(tools, { companyId: companyThree, kind: 'PURCHASE_ORDER' }, { type: 'PurchaseOrder', id: recordId }, { number: ' OA-19-0412 ', reason: ' Open order of the old system ' })
+      tools.audit({ recordType: 'PurchaseOrder', recordId, companyId: companyThree, after: { number: number.formatted } })
+      return number
+    })
+    expect(typed.result).toEqual({ formatted: 'OA-19-0412', kind: 'PURCHASE_ORDER', typed: true })
+    const audit = await db.admin.query('SELECT action, after, reason FROM "AuditLog" WHERE "recordId" = $1 AND action = $2', [recordId, 'numbering.override'])
+    expect(audit.rows).toEqual([{ action: 'numbering.override', after: { kind: 'PURCHASE_ORDER', number: 'OA-19-0412', typed: true }, reason: 'Open order of the old system' }])
+    expect((await db.admin.query('SELECT "nextValue", version FROM "NumberSeries" WHERE id = $1', [poSeries.id])).rows).toEqual(before.rows)
+    expect(Number((await db.admin.query('SELECT count(*)::int AS n FROM "NumberAllocation" WHERE "seriesId" = $1', [poSeries.id])).rows[0].n)).toBe(allocations)
+    // Refused: a number the series gave, without the permission, without a reason, a fiscal kind.
+    const attempt = (session: string, kind: 'PURCHASE_ORDER' | 'INVOICE', number: string, reason: string) =>
+      command(callerFor(database, { ...SESSIONS[session]!, requestId: newId() } as RequestContext), { name: 'purchasing.create', input: {} }, async (tools) => {
+        await typedNumber(tools, { companyId: companyThree, kind }, { type: 'PurchaseOrder', id: newId() }, { number, reason })
+      })
+    await expect(attempt('override', 'PURCHASE_ORDER', 'PO-2026-00018', 'Carried over')).rejects.toMatchObject({ issues: [{ path: 'body/typedNumber/taken' }] })
+    await expect(attempt('buyer', 'PURCHASE_ORDER', 'OA-19-0999', 'Carried over')).rejects.toMatchObject({ name: 'ForbiddenError' })
+    await expect(attempt('override', 'PURCHASE_ORDER', 'OA-19-0999', ' ')).rejects.toMatchObject({ issues: [{ path: 'body/typedNumber/reason' }] })
+    await expect(attempt('override', 'INVOICE', 'FT-2019-0007', 'Carried over')).rejects.toMatchObject({ issues: [{ path: 'body/typedNumber/kind' }] })
   })
 })

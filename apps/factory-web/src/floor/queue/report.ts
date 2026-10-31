@@ -5,7 +5,8 @@ import type { ApiClient } from '../../lib/api/client'
  * The tablet tells the office about itself (B-W2a-42; PLT-241; design admin.devices "App version", "Battery", the Status
  * tab's "actions waiting to sync"): the floor app's version this page runs, the battery when the browser says it
  * (Chromium's Battery Status API; null elsewhere), and how many actions wait in its offline queue — a count of the
- * device's queue, never whose. `POST /floor/device/state` (the device token and CSRF, signed in or not).
+ * device's queue, never whose; B-W2b-24: and the network it is on when the browser says it (readNetwork).
+ * `POST /floor/device/state` (the device token and CSRF, signed in or not).
  *
  * Sent at start, then at most every REPORT_EVERY_MS, and at once when the app version changes or the queue empties or
  * starts to fill (what the office's Devices page shows). A failed report is tried at the next tick; it never blocks
@@ -14,11 +15,16 @@ import type { ApiClient } from '../../lib/api/client'
 
 export const REPORT_EVERY_MS = 5 * 60_000
 
+/** B-W2b-24: the network the tablet says it is on (the API's Device.network). */
+export type DeviceNetwork = 'WIFI' | 'ETHERNET' | 'CELLULAR' | 'OTHER'
+
 export interface DeviceState {
   readonly appVersion: string
   readonly batteryPercent: number | null
   readonly batteryCharging: boolean | null
   readonly queuedActions: number
+  /** B-W2b-24: null when the browser does not say (Safari, Firefox). */
+  readonly network?: DeviceNetwork | null
 }
 
 export interface LastReport {
@@ -49,6 +55,22 @@ export async function readBattery(): Promise<{ percent: number | null; charging:
     return { percent: Number.isFinite(percent) && percent >= 0 && percent <= 100 ? percent : null, charging: typeof battery.charging === 'boolean' ? battery.charging : null }
   } catch {
     return { percent: null, charging: null }
+  }
+}
+
+/** Network Information API types (`navigator.connection.type`) and what the office is told. */
+const NETWORK_OF: Readonly<Record<string, DeviceNetwork>> = { wifi: 'WIFI', ethernet: 'ETHERNET', cellular: 'CELLULAR', bluetooth: 'OTHER', wimax: 'OTHER', mixed: 'OTHER', other: 'OTHER' }
+
+/**
+ * B-W2b-24: the network, where the browser says it (Chrome on Android does; Safari and Firefox do not): Wi-Fi, cable,
+ * mobile data or another; null for "none", "unknown" or no answer (never a guess).
+ */
+export function readNetwork(): DeviceNetwork | null {
+  try {
+    const type = (globalThis.navigator as (Navigator & { connection?: { type?: unknown } }) | undefined)?.connection?.type
+    return typeof type === 'string' ? (NETWORK_OF[type] ?? null) : null
+  } catch {
+    return null
   }
 }
 

@@ -96,6 +96,18 @@ describe('the tablet reports its state (PLT-241)', () => {
     // The same version again: no second row.
     await browser.post('/floor/device/state', state({ appVersion: '1.1.0' }))
     expect(await admin(`SELECT 1 FROM "AuditLog" WHERE "recordId" = $1::uuid AND action = 'floor.deviceAppUpdated'`, [deviceId])).toHaveLength(1)
+    // B-W2b-24: the network the tablet says, and since when it is in use (never who); left out by an older app: kept.
+    expect(await listed(deviceId)).toMatchObject({ inUse: true, inUseSince: expect.any(String), network: null })
+    expect((await browser.post('/floor/device/state', state({ appVersion: '1.1.0', network: 'WIFI' }))).status).toBe(200)
+    expect(await listed(deviceId)).toMatchObject({ network: 'WIFI' })
+    expect((await browser.post('/floor/device/state', state({ appVersion: '1.1.0' }))).status).toBe(200)
+    expect(await listed(deviceId)).toMatchObject({ network: 'WIFI' })
+    expect((await browser.post('/floor/device/state', state({ appVersion: '1.1.0', network: 'SATELLITE' }))).status).toBe(400)
+    const [row] = await admin(`SELECT "inUseSince" IS NOT NULL AS since FROM "Device" WHERE id = $1::uuid`, [deviceId])
+    expect(row).toEqual({ since: true })
+    expect((await browser.post('/floor/sign-out')).status).toBe(200)
+    expect(await listed(deviceId)).toMatchObject({ inUse: false, inUseSince: null })
+    expect((await admin(`SELECT "inUseSince" FROM "Device" WHERE id = $1::uuid`, [deviceId]))[0]).toEqual({ inUseSince: null })
   })
 
   it('refuses a report without the CSRF token, without a device, from a revoked device, or out of range', async () => {

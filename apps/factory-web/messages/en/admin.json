@@ -1239,7 +1239,9 @@
     "mfa": {
       "title": "Two-factor",
       "on": "Required: the role gives nothing until two-factor is proved in the session.",
-      "off": "Not required by this role."
+      "off": "Not required by this role.",
+      "since": "Asked since {day}.",
+      "sinceUnknown": "Asked since before Nexus kept the date."
     },
     "floorHolders": "A floor role is held by floor workers ({count} now); see them in Users › Floor.",
     "nobody": "Nobody has this role.",
@@ -1274,7 +1276,8 @@
       "station": "Station",
       "lastSeen": "Last seen",
       "version": "App version",
-      "battery": "Battery"
+      "battery": "Battery",
+      "network": "Network"
     },
     "status": {
       "PENDING": "Waiting",
@@ -1287,6 +1290,7 @@
       "PC": "PC"
     },
     "inUse": "In use",
+    "inUseSince": "In use since {time}",
     "notSeenTag": "Not seen for 24 h",
     "outdatedTag": "Older version",
     "battery": {
@@ -1295,11 +1299,18 @@
       "lowTag": "Low",
       "unknown": "Not said by this browser"
     },
+    "network": {
+      "WIFI": "Wi-Fi",
+      "ETHERNET": "Cable",
+      "CELLULAR": "Mobile data",
+      "OTHER": "Other network",
+      "unknown": "Not said by this browser"
+    },
     "empty": {
       "title": "No tablets yet",
       "body": "Enrol one: it takes a minute with the QR code."
     },
-    "later": "The print queue (every label with its tries and Retry) comes in W1; the network a tablet uses is not reported yet.",
+    "later": "The print queue (every label with its tries and Retry) comes in W1.",
     "step": {
       "where": "Where will it work?",
       "scan": "Scan this on the tablet",
@@ -1461,11 +1472,12 @@
       "silent": "Not seen since {at}: it may be off or out of Wi-Fi.",
       "enrolled": "Enrolled",
       "inUse": "Right now",
+      "network": "Network",
       "inUseYes": "In use",
       "inUseNo": "Nobody signed in",
       "neverWho": "Never who (Statuto dei Lavoratori art. 4).",
       "revoked": "Revoked",
-      "later": "The network the tablet uses is not reported yet.",
+      "later": "Battery, network and the queue are what the tablet last said of itself; a browser that does not tell leaves them unreported.",
       "outdated": "A newer version of the floor app is out ({version}). The tablet updates by itself once nothing waits in its queue.",
       "queued": "Actions waiting to sync",
       "queuedValue_one": "{count} action",
@@ -1760,6 +1772,18 @@
     "payables_differences_accept": "Accept a difference of a supplier invoice in words",
     "payables_approve": "Approve supplier invoices for payment",
     "payables_pay": "Record that a supplier invoice was paid",
-    "payables_settings": "Change the payables settings: match tolerances, billing basis and who approves SDI invoices"
+    "payables_settings": "Change the payables settings: match tolerances, billing basis and who approves SDI invoices",
+    "plant_view": "See machines, machine requests and maintenance jobs",
+    "plant_machines_manage": "Register, change and retire machines; keep classes and symptoms",
+    "plant_report": "Report a machine problem (marking it unsafe stops it)",
+    "plant_requests_triage": "Triage machine requests",
+    "plant_jobs_manage": "Make, plan, assign and close maintenance jobs",
+    "plant_jobs_work": "Work a maintenance job as its technician",
+    "plant_signSafe": "Sign an unsafe machine safe again (technicians only)",
+    "quality_complaints_view": "See customer complaints",
+    "quality_complaints_log": "Log a customer complaint",
+    "quality_complaints_manage": "Triage, follow up and close customer complaints",
+    "quality_complaints_acknowledge": "Acknowledge a safety complaint's alert (the owner)",
+    "numbering_override": "Type a number for a migrated document (never a fiscal series; clashes refused, reason kept)"
   }
 }

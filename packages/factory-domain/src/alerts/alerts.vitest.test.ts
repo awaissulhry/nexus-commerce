@@ -47,7 +47,8 @@ const state = (n: number, extra: Partial<KeyState> = {}): KeyState => ({ alertId
 
 describe('the kinds of rule', () => {
   it('ship a built-in rule each, whose numbers their own schema reads, and refuse numbers out of range', () => {
-    expect(RULE_KINDS).toHaveLength(7)
+    // B-W2b-24: + INTEGRATION_FAILING (the design's last built-in).
+    expect(RULE_KINDS).toHaveLength(8)
     expect(kindsOf('DATE')).toEqual(['CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE'])
     for (const kind of RULE_KINDS) {
       const read = readThreshold(kind, KINDS[kind].builtIn.threshold)
@@ -191,6 +192,11 @@ describe('words', () => {
     expect(phraseText(alertPhrase('ORDER_LATE_RISK', 'SO-1', { promiseDate: '2026-10-28', daysLeft: -2, late: true }), 'SO-1')).toBe('Order SO-1 is 2 days late: it was promised for 2026-10-28.')
     expect(phraseText(alertPhrase('ORDER_LATE_RISK', 'SO-1', { promiseDate: '2026-11-02', daysLeft: 3, late: false }), 'SO-1', 'it')).toBe("L'ordine SO-1 è promesso per il 02/11/2026 (mancano 3 giorni) e non è pronto.")
     expect(phraseText(alertPhrase('INVOICE_DEADLINE', '12/2026', { dueDate: '2026-11-15', daysLeft: -1 }), '12/2026')).toBe('The goods of DDT 12/2026 were due to be invoiced by 2026-11-15: 1 days late.')
+    // B-W2b-24: a connection failing, and one that never worked.
+    expect(phraseText(alertPhrase('INTEGRATION_FAILING', 'SES main', { hours: 3 }), 'SES main')).toBe('Connection SES main has not worked for 3 hours: its last call failed.')
+    expect(phraseText(alertPhrase('INTEGRATION_FAILING', 'SES main', { hours: 5, never: true }), 'SES main', 'it')).toBe('Il collegamento SES main non ha mai funzionato: nessuna chiamata è riuscita nelle 5 ore da quando è stato impostato.')
+    expect(ruleSentence({ ruleKind: 'INTEGRATION_FAILING', threshold: { hours: 1 }, channels: ['IN_APP'], cooldownMinutes: 1440 }, { place: null, recipient: 'Administrator' })).toBe('When a connection has not worked for more than 1 h, tell Administrator by the bell at most once a day.')
+    expect(readThreshold('INTEGRATION_FAILING', { hours: 0 }).ok).toBe(false)
     expect(phraseText(alertPhrase('NOPE', 'X', {}), 'X')).toBe('Alert on X.')
     for (const kind of RULE_KINDS) expect(alertPhrase(kind, 'L', {}), kind).not.toBeNull()
   })

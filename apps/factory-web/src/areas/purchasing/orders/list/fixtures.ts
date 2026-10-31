@@ -6,6 +6,9 @@ import { SEND_CARDS, SEND_OUTCOMES } from '../demo/daily/fixtures'
 import { NO_NEW_ORDER, type OrdersListModel, type SendManyModel } from '../model'
 import { OrdersListView } from './view/OrdersListView'
 
+/** B-W2b-24: a made-up next purchase order number (the series' next, not reserved). */
+const NUMBER_PREVIEW = { companyId: '0190f0e2-6161-7000-8000-000000000001', kind: 'PURCHASE_ORDER' as const, date: '2026-10-31', code: 'MAIN', scopeKey: '2026', number: 'PO-2026-00018', fiscal: false, newPeriod: false, held: null }
+
 /**
  * SCR-058 — Purchase orders (design purchasing.orders) with made-up orders only: the tiles "Where POs stand", the list
  * (drafts, sent and waiting, not confirmed after 48 h, changes proposed, confirmed by link, partly received, received,
@@ -59,6 +62,24 @@ export const designScreen = defineDesignScreen<OrdersCase>({
     { id: 'new-prospect', label: 'New purchase order: a prospect (drafted, sent once approved)', model: listCase('buyer', { newOrder: { ...NO_NEW_ORDER, query: 'couros', suppliers: [SUPPLIERS.prospect], supplier: SUPPLIERS.prospect, siteId: SITE.id } }) },
     { id: 'new-blocked', label: 'New purchase order: a blocked supplier (held with the reason)', model: listCase('buyer', { newOrder: { ...NO_NEW_ORDER, query: 'blocc', suppliers: [SUPPLIERS.blocked], supplier: SUPPLIERS.blocked, siteId: SITE.id } }) },
     { id: 'new-loading', label: 'New purchase order: suppliers loading', model: listCase('buyer', { newOrder: { ...NO_NEW_ORDER } }) },
+    // B-W2b-24 (PLT-125): the number it will get (not reserved), and a migrated open order keeping its old number.
+    {
+      id: 'new-number',
+      label: 'New purchase order: the number it will get',
+      model: listCase('buyer', { newOrder: { ...NO_NEW_ORDER, suppliers: SUPPLIER_LIST, supplier: SUPPLIERS.tannery, siteId: SITE.id, number: { kind: 'PURCHASE_ORDER', preview: { state: 'ready', value: NUMBER_PREVIEW }, canOverride: false, typed: null, dialog: null } } }),
+      note: 'A buyer without numbering.override sees the next number only; it is given when the order is saved.',
+    },
+    {
+      id: 'new-migrated',
+      label: 'New purchase order: a migrated open order keeps its old number',
+      model: listCase('buyer', { newOrder: { ...NO_NEW_ORDER, suppliers: SUPPLIER_LIST, supplier: SUPPLIERS.tannery, siteId: SITE.id, number: { kind: 'PURCHASE_ORDER', preview: { state: 'ready', value: NUMBER_PREVIEW }, canOverride: true, typed: { number: 'OA-19-0412', reason: 'Open order of the old system' }, dialog: null } } }),
+      note: 'Typed in the popup (numbering.override): the API checks it again and keeps the reason in the order\'s history.',
+    },
+    {
+      id: 'new-override',
+      label: 'New purchase order: Type a number for a migrated document (refused at once)',
+      model: listCase('buyer', { newOrder: { ...NO_NEW_ORDER, suppliers: SUPPLIER_LIST, supplier: SUPPLIERS.tannery, siteId: SITE.id, number: { kind: 'PURCHASE_ORDER', preview: { state: 'ready', value: NUMBER_PREVIEW }, canOverride: true, typed: null, dialog: { kind: 'PURCHASE_ORDER', number: 'PO-2026-00040', reason: 'Carried over', check: 'refused', refusal: 'future' } } } }),
+    },
     { id: 'shortcuts', label: 'Keyboard shortcuts (?)', model: listCase('buyer', { helpOpen: true }) },
     { id: 'empty', label: 'First day: no purchase order yet', model: listCase('buyer', { rows: { items: [], more: false, problem: null }, summary: { drafts: 0, waiting: 0, notConfirmedAfter48h: 0, changesProposed: 0, declined: 0 } }) },
     { id: 'loading', label: 'Loading', model: listCase('buyer', { rows: { items: null, more: false, problem: null }, summary: null, asOf: null, live: 'connecting' }) },
