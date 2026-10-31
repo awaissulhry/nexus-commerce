@@ -17,15 +17,17 @@ import { followInCommand } from '../../platform/threads/followers'
 import { ensureThread, mentionProblems, writeMessage } from '../../platform/threads/threads'
 import { detailInCommand, RefusedError } from './invoices'
 import { rematchInCommand } from './matching'
-import { invoiceInCommand, officeInvoice, officeOf, readLines, readMatches, RECORD, type InvoiceRow } from './store'
+import { invoiceInCommand, officeInvoice, officeOf, preparationOf, readLines, readMatches, RECORD, type InvoiceRow } from './store'
 import type { DetailView } from './views'
 
 /**
  * Approval and payment of supplier invoices (B-W2a-62; FIN-137; design finance.payables, record tabs Match ("Accept
  * difference with reason", "Send to buyer") and Approval ("You entered this invoice, so someone else approves it";
  * Approve · Reject with reason), the grid's bulk approve "separation of duties respected per row"). Office only; each
- * write is ONE command on the invoice. Separation of duties: the person who registered an invoice never approves it (the
- * …_money_w2a_guards hold the same rule); an invoice SDI delivered was registered by nobody of the office.
+ * write is ONE command on the invoice. Separation of duties (four eyes, the lead's stricter rule of B-W2a-F7): the person
+ * who registered an invoice (the …_money_w2a_guards hold this part too), mapped or matched one of its lines, or accepted
+ * one of its differences never approves it (store.ts preparationOf); an invoice SDI delivered was registered by nobody of
+ * the office, so its mapping and acceptances decide.
  */
 
 const now = (): Date => serverClock.now()
@@ -33,6 +35,7 @@ const now = (): Date => serverClock.now()
 async function approvalFacts(tools: Pick<CommandTools, 'tx'>, invoice: InvoiceRow) {
   const lines = await readLines(tools.tx, invoice.id)
   const matches = await readMatches(tools.tx, invoice.id)
+  const { mappedByIds, acceptedByIds } = await preparationOf(tools.tx, invoice.id)
   return {
     number: invoice.number,
     status: invoice.status as InvoiceStatus,
@@ -40,6 +43,8 @@ async function approvalFacts(tools: Pick<CommandTools, 'tx'>, invoice: InvoiceRo
     kind: invoice.kind as InvoiceKind,
     matchStatus: invoice.matchStatus as MatchStatus,
     createdById: invoice.createdById,
+    mappedByIds,
+    acceptedByIds,
     xmlFileId: invoice.xmlFileId,
     unaccepted: matches.filter((row) => !row.withinTolerance && row.acceptedAt === null).length,
     linesNet: isTyped(invoice.source as InvoiceSource) ? lines.reduce((total, line) => total + line.netAmount, 0) : null,
@@ -48,7 +53,7 @@ async function approvalFacts(tools: Pick<CommandTools, 'tx'>, invoice: InvoiceRo
   }
 }
 
-/** payables.approve: approved for payment, once matched and every difference accepted, never by who registered it. */
+/** payables.approve: approved for payment, once matched and every difference accepted, never by who prepared it. */
 export async function approveInvoice(caller: CommandCaller, invoiceId: string, input: { readonly version: number; readonly note?: string | null | undefined }, idempotencyKey?: string): Promise<{ invoice: DetailView }> {
   const { context } = await officeInvoice(caller, invoiceId, PAYABLES_APPROVE)
   const { result } = await command(caller, { name: 'payables.approve', idempotencyKey, input: { invoiceId, ...input }, record: { type: 'SupplierInvoice', id: invoiceId, expectedVersion: input.version } }, async (tools) => {

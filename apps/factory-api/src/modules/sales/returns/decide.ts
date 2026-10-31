@@ -1,7 +1,7 @@
 import { ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { fromMinorUnits } from '@nexus/factory-domain/core/money'
-import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { SALES_RETURNS_DECIDE } from '@nexus/factory-domain/sales/returns/permissions'
 import {
@@ -24,7 +24,7 @@ import {
 } from '@nexus/factory-domain/sales/returns/rules'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { postMoves, type MoveDraft } from '../../inventory/ledger/post-moves'
-import { defaultPlaceOf, finishedItemFor, finishedPlaces, readSkus, skuKey, type SkuRow } from '../../inventory/finished/post'
+import { defaultPlaceOf, finishedItemFor, finishedPlaces, readSkus, skuKey, standardCostFor, type SkuRow } from '../../inventory/finished/post'
 import { officeReturn } from './access'
 import { openSafetyEntries, type SafetyEntry } from './register'
 import { lockReturn, recordOf, touchReturn } from './rma'
@@ -46,7 +46,12 @@ import { currencyOf, LINE_COLUMNS, lineKeyOf, lineValue, moveKeyPrefix, readLine
  *                                                       into a quarantine place) posts ONE ADJUSTMENT into that place of
  *                                                       the SKU's FINISHED item (made now when the SKU has none, as a
  *                                                       production receipt does) through postMoves, keyed
- *                                                       `return-line:<line>:1`; REPAIR, SCRAP and BACK_TO_CUSTOMER move
+ *                                                       `return-line:<line>:1`, valued as a production receipt is (the
+ *                                                       item's FROZEN standard cost of the company in force today,
+ *                                                       inventory/finished/post.ts standardCostFor; second quality and
+ *                                                       quarantine at the same standard: one FINISHED item per SKU; no
+ *                                                       standard yet: unvalued until finance freezes one, whose freeze
+ *                                                       values it); REPAIR, SCRAP and BACK_TO_CUSTOMER move
  *                                                       nothing (the goods never entered stock); the line's decision,
  *                                                       outcome and credit; the RMA → INSPECTED once every received line is
  *                                                       decided; a safety return's PPE register entry; events
@@ -210,7 +215,9 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
     const problems = planned.flatMap((entry) => entry.problems)
     if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'Some lines cannot be decided like this.', problems)
 
-    // The stock first: one ADJUSTMENT into its place per line whose goods go into stock (the SKU's FINISHED item).
+    // The stock first: one ADJUSTMENT into its place per line whose goods go into stock (the SKU's FINISHED item), valued
+    // at its frozen standard as a production receipt is (a month with a restocked return can then be closed for good).
+    const day = businessDate(now)
     const drafts: MoveDraft[] = []
     const draftLine: PlannedDecision[] = []
     for (const entry of planned) {
@@ -218,6 +225,7 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
       const orderLine = entry.sold!.orderLine!
       const style = await tx.style.findUniqueOrThrow({ where: { id: orderLine.styleId }, select: { name: true, companyId: true, garmentTracking: true } })
       const itemId = await finishedItemFor(tools as CommandTools, entry.sku, { styleName: style.name, colourwayName: entry.sold!.colourway?.name ?? entry.sku.sku, garmentTracking: style.garmentTracking, companyId: style.companyId })
+      const cost = await standardCostFor(tx, rma.companyId, itemId, day)
       drafts.push({
         siteId: rma.siteId,
         reason: 'ADJUSTMENT',
@@ -231,6 +239,7 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
         reference: rma.number,
         note: `Customer return ${rma.number} line ${entry.line.seq}: the goods ${outcomeWords(entry.goodsOutcome)} (${entry.disposition}).`,
         idempotencyKey: `${moveKeyPrefix(entry.line.id)}1`,
+        ...(cost ? { cost } : {}),
       })
       draftLine.push(entry)
     }

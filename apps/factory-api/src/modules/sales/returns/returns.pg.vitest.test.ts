@@ -63,6 +63,8 @@ const SESSIONS: Record<string, () => SessionContext> = {
   dock: floorSession(siteA, ['sales.returns.receive', 'sales.returns.inspect']),
   dockElsewhere: floorSession(OTHER_SITE, ['sales.returns.receive', 'sales.returns.inspect']),
   dockReceiveOnly: floorSession(siteA, ['sales.returns.receive']),
+  /** Finance's standards (B-W2a-21): the returned garment's frozen standard. */
+  costing: office(['costing.view', 'costing.standards.manage', 'money.cost']),
 }
 
 async function call(session: string, method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, body?: unknown, idempotencyKey = key(session)) {
@@ -81,6 +83,17 @@ async function refused(session: string, method: 'GET' | 'POST' | 'PATCH' | 'PUT'
 }
 const events = (type: string, subject: string) => admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = $1 AND subject = $2 ORDER BY "occurredAt", id`, [type, subject])
 const recordOf = async (returnId: string, session = 'sales') => (await ok(session, 'GET', `/sales/returns/${returnId}`)).return
+/** A write past the database's guards (the seed's facts only: never what the test then proves). */
+async function force(sql: string, values: unknown[] = []): Promise<void> {
+  await admin('SET session_replication_role = replica')
+  try {
+    await admin(sql, values)
+  } finally {
+    await admin('SET session_replication_role = DEFAULT')
+  }
+}
+/** The value the stock ledger gave a move (none: not valued). */
+const valuationOf = async (moveId: string) => (await admin<{ method: string; unitCost: string; valueAmount: number }>(`SELECT method::text, "unitCost"::text AS "unitCost", "valueAmount" FROM "StockValuation" WHERE "moveId" = $1`, [moveId]))[0] ?? null
 
 async function photo(session: string, url: string, name: string): Promise<Json> {
   const body = Buffer.from(`made-up jpeg bytes ${name} ${newId()}`)
@@ -316,5 +329,44 @@ describe('status, cancel, close and the list (SAL-362)', () => {
     expect(counts.counts).toMatchObject({ waiting: 0, toInspect: 1, toDecide: 1, replacement: 0 })
     expect(counts.counts.open).toBeGreaterThanOrEqual(3)
     expect((await ok('viewer', 'GET', `/sales/returns?q=${encodeURIComponent('P1-RET-9')}&view=all`)).returns.map((row: Json) => row.number)).toEqual([rma1.number])
+  })
+})
+
+describe('a returned garment put back into stock carries its value, so its month can be closed for good (B-W2a-F7)', () => {
+  let standard: Json
+
+  it('finance freezes the garment’s standard: the jacket quarantined before it is valued at it by the freeze', async () => {
+    const [move] = await admin<{ id: string; itemId: string }>(`SELECT id, "itemId" FROM "StockMove" WHERE reference = $1 AND reason = 'ADJUSTMENT'`, [rma1.number])
+    // Decided before any standard existed (inventory/finished/post.ts values at the frozen standard only): no value yet.
+    expect(await valuationOf(move!.id)).toBeNull()
+    const made = await ok('costing', 'POST', '/costing/standards', { companyId: companyA, itemId: move!.itemId, validFrom: `${TODAY.slice(0, 7)}-01`, materialCost: '180.000000', labourCost: '95.500000', note: 'Season standard of the returned jacket (made up).' }, 201)
+    const frozen = await ok('costing', 'POST', `/costing/standards/${made.standard.id}/freeze`, { version: made.standard.version })
+    expect(frozen.standard).toMatchObject({ status: 'FROZEN', unitCost: expect.stringMatching(/^275\.5/) })
+    expect(frozen.valued).toEqual({ moves: 1, workOrders: [], skipped: [] })
+    expect(await valuationOf(move!.id)).toMatchObject({ method: 'STANDARD_COST', valueAmount: 27_550 })
+    expect(Number((await valuationOf(move!.id))!.unitCost)).toBe(275.5)
+    standard = frozen.standard
+  })
+
+  it('a garment put back into stock after the freeze carries the standard at once (RESTOCK); none of the returns waits for a value', async () => {
+    // A second RED 52 left with SEED-SH-0001 (made up: the seed ships one), so one more can come back.
+    await force(`UPDATE "ShipmentLine" SET quantity = 2 WHERE "salesOrderLineId" = $1 AND size = '52'`, [RED_LINE])
+    const made = await ok('sales', 'POST', '/sales/returns', { companyId: companyA, partyId: P1, lines: [{ salesOrderLineId: RED_LINE, size: '52', quantity: 1, reasonCode: 'WRONG_SIZE' }] }, 201)
+    const rma = made.return
+    const received = await ok('sales', 'POST', `/sales/returns/${rma.id}/receipts`, { version: rma.version, parcels: 1, parcelCondition: 'INTACT', lines: [{ lineId: rma.lines[0].id, quantity: 1 }] }, 201)
+    const graded = await ok('sales', 'POST', `/sales/returns/${rma.id}/grades`, { version: received.return.version, lines: [{ lineId: rma.lines[0].id, grade: 'NEW', cause: 'NO_FAULT' }] })
+    expect(graded.return.lines[0]).toMatchObject({ suggestedOutcome: 'RESTOCK', restockHeld: null })
+    const decided = await ok('sales', 'POST', `/sales/returns/${rma.id}/decisions`, { version: graded.return.version, lines: [{ lineId: rma.lines[0].id, disposition: 'CREDIT_ONLY', goodsOutcome: 'RESTOCK' }] })
+    expect(decided.return.lines[0]).toMatchObject({ goodsOutcome: 'RESTOCK', stock: [{ locationCode: 'A1-FG', quantity: '1' }] })
+    // Valued as a production receipt is: the item's frozen standard of the company in force today.
+    expect(await valuationOf(decided.moves[0].moveId)).toMatchObject({ method: 'STANDARD_COST', valueAmount: 27_550 })
+    expect(Number((await valuationOf(decided.moves[0].moveId))!.unitCost)).toBe(Number(standard.unitCost))
+    // The hard close's own count (accounting/facts.ts unvaluedMovesIn): no move of the returns waits for a value.
+    const waiting = await admin(
+      `SELECT m.id FROM "StockMove" m WHERE m.reference = ANY($1::text[]) AND NOT EXISTS (SELECT 1 FROM "StockValuation" v WHERE v."moveId" = m.id)
+         AND ((m."fromLocationId" IS NULL AND m."toLocationId" IS NOT NULL) OR (m."toLocationId" IS NULL AND m."fromLocationId" IS NOT NULL))`,
+      [[rma1.number, rma.number]],
+    )
+    expect(waiting).toEqual([])
   })
 })
