@@ -2691,6 +2691,33 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     await settle()
   })
 
+  it('X7 a write dated in the soft-locked month is refused without a reason, goes in with one, and the override is audited on the lock (B-W2a-F8)', async () => {
+    // While the month is only soft-locked (X4), before it is closed for good: after a HARD lock nothing dated today is written.
+    const month = monthOfDay(today())
+    const body = { companyId: companyA(), partyId: kx().p1, amount: 100, receivedOn: today(), externalRef: 'CRO-GOLDEN-SOFT-MONTH' }
+    const refused = await ok(P.finance, 'POST', '/payments', body, 409)
+    expect((refused.error.issues as Json[]).map((issue) => issue.path)).toEqual(['period/SOFT_LOCKED', 'body/receivedOn'])
+    expect(refused.error.message).toMatch(new RegExp(`^${monthLabel(month)} is soft-locked for .+ \\(since .+\\): the payment received on .+ \\(bank reference CRO-GOLDEN-SOFT-MONTH\\) is not recorded without a reason\\. `))
+    const listed = async () => ((await ok(P.finance, 'GET', `/payments?companyId=${companyA()}&from=${today()}&to=${today()}&limit=200`)).payments as Json[]).filter((row) => row.externalRef === 'CRO-GOLDEN-SOFT-MONTH')
+    expect(await listed()).toEqual([])
+    const reason = 'The transfer of the last day showed on the bank statement after the export.'
+    const made = (await ok(P.finance, 'POST', '/payments', { ...body, periodLockOverride: { reason } }, 201)).payment
+    expect(made).toMatchObject({ status: 'RECEIVED', receivedOn: today(), externalRef: 'CRO-GOLDEN-SOFT-MONTH' })
+    expect((await listed()).map((row) => row.id)).toEqual([made.id])
+    const audit = await admin<Json>(w, `SELECT "recordType", "recordId", reason, "actorId", after FROM "AuditLog" WHERE action = 'accounting.softLockOverride'`, [])
+    expect(audit).toEqual([
+      {
+        recordType: 'PeriodLock',
+        recordId: G.lock.id,
+        reason,
+        actorId: P.finance.id,
+        after: { periodStart: G.lock.period.start, periodEnd: G.lock.period.end, level: 'SOFT', writes: [{ day: today(), path: 'body/receivedOn', record: { type: 'Payment', id: made.id } }] },
+      },
+    ])
+    keep(made.id)
+    await settle()
+  })
+
   it('X5 closing the month for good needs its typed phrase: refused in words without it', async () => {
     const month = monthOfDay(today())
     const phrases = lockPhrases(month)
@@ -2714,8 +2741,6 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect((await ok(P.finance, 'GET', `/accounting/periods/${september}?companyId=${companyA()}`)).lock).toMatchObject({ level: 'HARD', status: 'LOCKED' })
     await settle()
   })
-
-  it.todo('X7 a write into a SOFT-locked month with an override reason, audited accounting.softLockOverride — no write path honours a SOFT lock yet: modules/accounting/period-guard.ts enforces HARD only and no code writes accounting.softLockOverride (the recipe of the w2a-39 note, for B-W2a-54/55/61/62 or a follow-up)')
 
   // ---- Z the end checks -----------------------------------------------------------------------------------------------------
 
@@ -2774,6 +2799,8 @@ const EXPECTED_ACTIONS: string[] = [
   'shipping.setFreight', 'shipping.ship', 'shipping.trackingMove', 'tasks.create', 'tasks.setStatus', 'workers.create',
   'workers.resetPin', 'workorders.complete', 'workorders.create', 'workorders.createRepair', 'workorders.release',
   'workorders.start',
+  // X7 (B-W2a-F8): a payment written into the soft-locked month with its reason.
+  'accounting.softLockOverride',
 ]
 
 /** Every event type the day leaves on its own records (subject = one of them). */

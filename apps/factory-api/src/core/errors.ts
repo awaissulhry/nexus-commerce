@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { hasZodFastifySchemaValidationErrors } from 'fastify-type-provider-zod'
+import { databaseHardLockWords, PERIOD_LOCK_ISSUES } from '@nexus/factory-domain/accounting/periods'
 import { DomainError, type ErrorCode, type Issue } from '@nexus/factory-domain/core/errors'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
 import { reportError } from '../observability/tracker'
@@ -93,6 +94,18 @@ function validationIssues(error: unknown): Issue[] {
   }))
 }
 
+/**
+ * B-W2a-F8: the database's own refusal of a write dated inside a HARD period lock (…_money_w2a_guards
+ * factory_period_refuse_locked: check_violation 'period lock: …'), when a write reached it without its command's check:
+ * a 409 in the words of the commands' check (issue `period/HARD_LOCKED`), never a 500. The last line of defence.
+ */
+function hardPeriodLockRefusal(error: unknown): MappedError | null {
+  const cause = (error as { meta?: { driverAdapterError?: { cause?: { originalCode?: unknown; originalMessage?: unknown } } } } | null)?.meta?.driverAdapterError?.cause
+  if (cause?.originalCode !== '23514' || typeof cause.originalMessage !== 'string') return null
+  const message = databaseHardLockWords(cause.originalMessage)
+  return message ? { status: STATUS_OF.conflict, code: 'conflict', message, issues: [{ path: PERIOD_LOCK_ISSUES.hard, message: 'Dated inside a month closed for good.' }], unexpected: false } : null
+}
+
 /** What an error becomes on the wire. Pure, so the mapping is tested without a server. */
 export function mapError(error: unknown): MappedError {
   if (error instanceof DomainError) {
@@ -102,6 +115,8 @@ export function mapError(error: unknown): MappedError {
   if (error instanceof ApiError) {
     return { status: STATUS_OF[error.code], code: error.code, message: error.message, unexpected: error.code === 'internal_error' }
   }
+  const closedMonth = hardPeriodLockRefusal(error)
+  if (closedMonth) return closedMonth
   if (hasZodFastifySchemaValidationErrors(error)) {
     const code: ErrorCode = 'validation_failed'
     return { status: STATUS_OF[code], code, message: MESSAGE_OF[code], issues: validationIssues(error), unexpected: false }

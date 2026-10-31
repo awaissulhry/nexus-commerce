@@ -508,3 +508,49 @@ describe('a write dated in a month closed for good (a HARD period lock) is refus
     expect((await admin('SELECT status FROM "Invoice" WHERE id = $1', [draft.id]))[0]!.status).toBe('DRAFT')
   })
 })
+
+describe('an invoice issued today inside a SOFT-locked month needs an override reason (B-W2a-F8)', () => {
+  const today = businessDate(new Date())
+  const month = periodOfMonth(today.slice(0, 7))
+  let financeId: string
+  let lockId: string
+
+  beforeAll(async () => {
+    financeId = (await admin<{ id: string }>(`SELECT id FROM "User" WHERE email = 'fiona.finance@inv-a.example.com'`))[0]!.id
+    // This month soft-locked, as POST /accounting/locks locks a month (the row of the month is locked again when one is there).
+    const [row] = await admin<{ id: string }>(`SELECT id FROM "PeriodLock" WHERE "companyId" = $1 AND "periodStart" = $2`, [c1(), month.start])
+    lockId = row?.id ?? newId()
+    if (row) {
+      await admin(`UPDATE "PeriodLock" SET status = 'LOCKED', level = 'SOFT', "lockedAt" = now(), "lockedById" = $2, "unlockedAt" = NULL, "unlockedById" = NULL, "unlockReason" = NULL, version = version + 1 WHERE id = $1`, [lockId, financeId])
+    } else {
+      await admin(`INSERT INTO "PeriodLock" (id, "tenantId", "companyId", "periodStart", "periodEnd", level, "lockedAt", "lockedById") VALUES ($1, $2, $3, $4, $5, 'SOFT', now(), $6)`, [lockId, tenant.id, c1(), month.start, month.end, financeId])
+    }
+  })
+
+  afterAll(async () => {
+    await admin(`UPDATE "PeriodLock" SET status = 'UNLOCKED', "unlockedAt" = now(), "unlockedById" = $2, "unlockReason" = 'The test is over.', version = version + 1 WHERE id = $1`, [lockId, financeId])
+  })
+
+  it('refuses the issue without a reason (period/SOFT_LOCKED, no number taken), issues it with one and audits the override', async () => {
+    const draft = (await td01()).invoice
+    const before = await seriesNext()
+    await stepUp(h, finance, financeSecret)
+    const refused = await finance.post(`/invoicing/invoices/${draft.id}/issue`, {})
+    expect(refused.status, JSON.stringify(refused.body)).toBe(409)
+    expect((refused.body.error.issues as Json[]).map((issue) => issue.path)).toEqual(['period/SOFT_LOCKED', 'issueDate'])
+    expect(refused.body.error.message).toMatch(new RegExp(`^${monthLabel(month.month)} is soft-locked for .+ \\(since ${dayWords(today)}, by fiona finance\\): the invoice is not issued today \\(${dayWords(today)}\\) without a reason\\. `))
+    expect(await seriesNext()).toBe(before)
+    expect((await admin('SELECT status FROM "Invoice" WHERE id = $1', [draft.id]))[0]!.status).toBe('DRAFT')
+
+    const issued = await as(finance, 'POST', `/invoicing/invoices/${draft.id}/issue`, { periodLockOverride: { reason: 'Goods left on the last day; the accountant agreed.' } })
+    expect(issued.invoice).toMatchObject({ status: 'ISSUED', number: numberOf(before), issueDate: today })
+    expect(await admin(`SELECT "recordType", "recordId", reason, after FROM "AuditLog" WHERE action = 'accounting.softLockOverride'`)).toEqual([
+      {
+        recordType: 'PeriodLock',
+        recordId: lockId,
+        reason: 'Goods left on the last day; the accountant agreed.',
+        after: { periodStart: month.start, periodEnd: month.end, level: 'SOFT', writes: [{ day: today, path: 'issueDate', record: { type: 'Invoice', id: draft.id } }] },
+      },
+    ])
+  })
+})

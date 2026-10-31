@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { amountMinor, businessDate, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { LINE_KINDS, MATCH_BASES, MATCH_STATUSES } from '@nexus/factory-domain/payables/match'
@@ -255,6 +256,7 @@ export const createContract = defineContract({
     inboundEmailId: id().nullish(),
     internalNote: z.string().trim().max(PAYABLES_LIMITS.note).nullish(),
     lines: z.array(lineInput).min(1).max(PAYABLES_LIMITS.lines),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: created,
 })
@@ -276,11 +278,19 @@ export const patchContract = defineContract({
     creditOfId: id().nullish(),
     fileId: id().optional(),
     internalNote: z.string().trim().max(PAYABLES_LIMITS.note).nullish(),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: one,
 })
 
-export const addLineContract = defineContract({ params: invoiceParams, body: lineInput.extend({ version: version() }), response: { 201: output({ invoice: invoiceDetail }) } })
+export const addLineContract = defineContract({
+  params: invoiceParams,
+  body: lineInput.extend({
+    version: version(),
+    periodLockOverride: periodLockOverride.optional(),
+  }),
+  response: { 201: output({ invoice: invoiceDetail }) },
+})
 
 export const patchLineContract = defineContract({
   params: lineParams,
@@ -296,16 +306,33 @@ export const patchLineContract = defineContract({
     netAmount: money.cost(amountMinor().optional()),
     vatRatePct: vatRate().optional(),
     vatNature: vatNature().nullish(),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: one,
 })
 
-export const removeLineContract = defineContract({ params: lineParams, body: input({ version: version() }), response: one })
+export const removeLineContract = defineContract({
+  params: lineParams,
+  body: input({
+    version: version(),
+    periodLockOverride: periodLockOverride.optional(),
+  }),
+  response: one,
+})
 export const versionContract = defineContract({ params: invoiceParams, body: input({ version: version() }), response: one })
 export const reasonContract = defineContract({ params: invoiceParams, body: input({ version: version(), reason: reason() }), response: one })
 export const reopenContract = defineContract({ params: invoiceParams, body: input({ version: version(), reason: reason().optional() }), response: one })
 export const approveContract = defineContract({ params: invoiceParams, body: input({ version: version(), note: z.string().trim().max(PAYABLES_LIMITS.note).nullish() }), response: one })
-export const payContract = defineContract({ params: invoiceParams, body: input({ version: version(), paidOn: businessDate(), paymentRef: z.string().trim().min(1).max(PAYABLES_LIMITS.paymentRef) }), response: one })
+export const payContract = defineContract({
+  params: invoiceParams,
+  body: input({
+    version: version(),
+    paidOn: businessDate(),
+    paymentRef: z.string().trim().min(1).max(PAYABLES_LIMITS.paymentRef),
+    periodLockOverride: periodLockOverride.optional(),
+  }),
+  response: one,
+})
 export const acceptContract = defineContract({ params: matchParams, body: input({ version: version(), note: reason() }), response: one })
 
 export const bulkApproveContract = defineContract({
