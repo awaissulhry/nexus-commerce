@@ -386,5 +386,113 @@
       "max": "Maximum",
       "count": "Count"
     }
+  },
+  "fileRow": {
+    "replace": "Replace file",
+    "remove": "Remove file"
+  },
+  "saveStatus": {
+    "saved": "All changes saved",
+    "savedAt": "All changes saved · {time}",
+    "saving": "Saving…",
+    "failed_one": "{count} change not saved",
+    "failed_other": "{count} changes not saved",
+    "retry": "Retry",
+    "unsaved": "Unsaved changes",
+    "unsavedCount_one": "{count} unsaved change",
+    "unsavedCount_other": "{count} unsaved changes",
+    "offline": "Offline",
+    "offlineCount_one": "Offline — {count} change waits to be sent",
+    "offlineCount_other": "Offline — {count} changes wait to be sent",
+    "region": "Save status"
+  },
+  "checkList": {
+    "state": {
+      "pass": "Done",
+      "warning": "Warning",
+      "fail": "Open",
+      "checking": "Checking",
+      "skipped": "Not needed",
+      "unknown": "Unknown"
+    },
+    "allPass_one": "The check passes",
+    "allPass_other": "All {count} checks pass",
+    "openOnly": "The check is open",
+    "open_one": "{count} of {total} checks open",
+    "open_other": "{count} of {total} checks open",
+    "checking": "Checking again…",
+    "button_one": "{action} · {count} check open",
+    "button_other": "{action} · {count} checks open",
+    "held_one": "{count} check open: {names}",
+    "held_other": "{count} checks open: {names}",
+    "join": ", ",
+    "none": "No checks"
+  },
+  "traceTree": {
+    "possible": "may hold it",
+    "possibleCount_one": "{count} may hold it",
+    "possibleCount_other": "{count} may hold it",
+    "levels": "Levels",
+    "tick": "Include {name} and everything under it",
+    "selected_one": "{count} selected",
+    "selected_other": "{count} selected",
+    "keys": "Keys: ↑ ↓ move · → open or go in · ← close or go out · Home / End first or last · Enter opens the record · Space ticks",
+    "empty": "Nothing to show"
+  },
+  "printView": {
+    "print": "Print",
+    "back": "Back",
+    "printedBy": "Printed by {person} on {when}",
+    "printedOn": "Printed on {when}",
+    "filters": "Filters: {list}",
+    "filter": "{label}: {value}",
+    "join": " · ",
+    "noFilters": "No filters: every row",
+    "strip": "Print"
+  },
+  "marginMeter": {
+    "label": "Margin",
+    "underFloor": "{value} — under the {floor} floor",
+    "underTarget": "{value} — under the {target} target",
+    "onTarget": "{value} — at or above the {target} target",
+    "overFloor": "{value} — above the {floor} floor",
+    "plain": "{value}",
+    "unknown": "Margin not known",
+    "floorMark": "Floor {floor}",
+    "targetMark": "Target {target}"
+  },
+  "waterfall": {
+    "up": "+ {amount}",
+    "down": "− {amount}",
+    "stepName": "{label}, {amount}, now {total}",
+    "totalName": "{label}, {amount}",
+    "open": "Show how {label} is made",
+    "empty": "Nothing to show"
+  },
+  "barList": {
+    "name": "Name",
+    "value": "Value",
+    "unknown": "—",
+    "part": "{label}: {value}",
+    "partsJoin": "; ",
+    "pick": "Show {label}: {value}",
+    "empty": "Nothing to show"
+  },
+  "selectableCard": {
+    "selected": "Selected"
+  },
+  "cardList": {
+    "select": "Select",
+    "done": "Done",
+    "selectAll": "Select all",
+    "selected_one": "{count} selected",
+    "selected_other": "{count} selected",
+    "selectOne": "Select {name}",
+    "nothingToSelect": "Nothing here can be selected",
+    "sortBy": "Sort by",
+    "listOrder": "List order",
+    "ascending": "{column} ↑",
+    "descending": "{column} ↓",
+    "reading": "Reading…"
   }
 }
