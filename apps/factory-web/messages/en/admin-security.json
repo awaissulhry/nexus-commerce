@@ -134,6 +134,7 @@
       "col": {
         "role": "Role",
         "asks": "Two-factor",
+        "since": "Asked since",
         "holders": "People",
         "without": "Without two-factor",
         "fixed": "Why it stays"
@@ -141,6 +142,11 @@
       "asks": {
         "yes": "Asked",
         "no": "Not asked"
+      },
+      "since": {
+        "on": "Asked since {day}",
+        "unknown": "Asked since before Nexus kept the date",
+        "notAsked": "—"
       },
       "without": {
         "none": "Everyone has it",

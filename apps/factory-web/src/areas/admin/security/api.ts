@@ -76,6 +76,8 @@ const twoFactorRole = z.object({
   name: z.string(),
   system: z.boolean(),
   requireMfa: z.boolean(),
+  /** B-W2b-24: since when it asks (UTC); null while it does not ask, or when it asked before Nexus recorded the time. */
+  requireMfaSince: z.string().nullable().default(null),
   lock: z.enum(['floor', 'money', 'template']).nullable(),
   templateAsks: z.boolean(),
   version: z.number(),

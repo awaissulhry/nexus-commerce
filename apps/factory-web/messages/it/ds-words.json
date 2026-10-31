@@ -494,5 +494,164 @@
     "ascending": "{column} ↑",
     "descending": "{column} ↓",
     "reading": "Lettura…"
+  },
+  "floorElapsed": {
+    "minutes_one": "{count} minuto",
+    "minutes_other": "{count} minuti",
+    "hours_one": "{count} ora",
+    "hours_other": "{count} ore",
+    "underMinute": "meno di un minuto",
+    "join": "{hours} e {minutes}",
+    "over": "{time} in più",
+    "paused": "In pausa",
+    "overWord": "Oltre",
+    "hourUnit": "h",
+    "minuteUnit": "min"
+  },
+  "floorCard": {
+    "cachedAt": "Salvato su questo tablet · aggiornato alle {time}",
+    "facts": "Dettagli",
+    "flags": "Segnalazioni",
+    "status": "Stato"
+  },
+  "floorNamePicker": {
+    "recent": "Hanno lavorato qui di recente",
+    "letters": "Vai a una lettera",
+    "jumpTo": "Nomi che iniziano con {letter}",
+    "noneFor": "Nessun nome inizia con {letter}",
+    "empty": "Qui non è ancora configurato nessuno. Chiedi all’ufficio."
+  },
+  "floorListUpdates": {
+    "changedUnknown": "Elenco cambiato",
+    "changed_one": "Elenco cambiato: {count} aggiornamento",
+    "changed_other": "Elenco cambiato: {count} aggiornamenti",
+    "show": "Mostra",
+    "announce": "L’elenco è cambiato. Premi Mostra per vederlo."
+  },
+  "readAloud": {
+    "read": "Leggi ad alta voce",
+    "stop": "Ferma la lettura",
+    "voice": "Voce: {name}"
+  },
+  "pinSignBlock": {
+    "meaningTitle": "Cosa significa firmare",
+    "signingAs": "Firmi come {name}",
+    "notYou": "Non sei tu?",
+    "records": "Con la firma vengono registrati il tuo nome, l’ora e questo tablet.",
+    "pin": "Firma con il tuo PIN",
+    "entered": "{entered} di {total}",
+    "clear": "Cancella",
+    "back": "Indietro",
+    "busy": "Verifica in corso…",
+    "cancel": "Annulla"
+  },
+  "lawRef": {
+    "about": "{law} — cosa dice",
+    "official": "Testo ufficiale",
+    "newTab": "si apre in una nuova scheda"
+  },
+  "legalGate": {
+    "states": {
+      "met": "Soddisfatta",
+      "missing": "Mancante",
+      "expired": "Scaduta",
+      "unknown": "Da verificare"
+    },
+    "recordedBy": "Registrata da {who}",
+    "recordedByAt": "Registrata da {who} · {when}",
+    "notRecorded": "Non ancora registrata",
+    "record": "Registrala",
+    "summary": "{met} di {total} condizioni soddisfatte",
+    "onFolded": "Attivo · tutte le condizioni soddisfatte",
+    "onFoldedSince": "Attivo dal {since} · tutte le condizioni soddisfatte",
+    "onButOpen_one": "Attivo, ma {count} condizione non è più soddisfatta",
+    "onButOpen_other": "Attivo, ma {count} condizioni non sono più soddisfatte",
+    "show": "Mostra le condizioni",
+    "hide": "Nascondi le condizioni",
+    "list": "Condizioni",
+    "held_one": "Manca {count} condizione: {names}",
+    "held_other": "Mancano {count} condizioni: {names}",
+    "namesJoin": ", ",
+    "none": "Per questo interruttore non è indicata nessuna condizione"
+  },
+  "privacyNote": {
+    "levels": {
+      "line": "Totali di linea",
+      "team": "Totali di squadra",
+      "individual": "Dati di una persona",
+      "protected": "Dati protetti"
+    },
+    "recorded": "L’apertura viene registrata",
+    "region": "Riservatezza"
+  },
+  "protectedValue": {
+    "restricted": "Riservato",
+    "show": "Mostra",
+    "showNote": "L’apertura viene registrata",
+    "opening": "Apertura…",
+    "recordedAt": "Visualizzazione registrata · {time}",
+    "recorded": "Visualizzazione registrata",
+    "hide": "Nascondi",
+    "failed": "Non è stato possibile aprirlo",
+    "retry": "Riprova"
+  },
+  "dayStrip": {
+    "kinds": {
+      "work": "Lavorato",
+      "break": "Pausa",
+      "absence": "Assenza",
+      "overtime": "Straordinario",
+      "idle": "Nessuna scansione"
+    },
+    "events": {
+      "in": "Entrata",
+      "out": "Uscita",
+      "autoOut": "Uscita automatica",
+      "manual": "Inserimento manuale",
+      "forgotBadge": "PIN per badge dimenticato",
+      "other": "Evento"
+    },
+    "shift": "Turno {from}–{to}",
+    "span": "{what} {from}–{to}",
+    "at": "{what} alle {time}",
+    "flagged": "da verificare",
+    "anomaly": "Anomalia",
+    "textTitle": "La giornata a parole",
+    "legend": "Legenda",
+    "shiftKey": "Turno",
+    "anomalyKey": "Anomalia"
+  },
+  "dueCell": {
+    "overdue_one": "Scaduto da {count} giorno",
+    "overdue_other": "Scaduto da {count} giorni",
+    "today": "Scade oggi",
+    "dueIn_one": "Scade domani",
+    "dueIn_other": "Scade tra {count} giorni",
+    "validUntil": "Valido fino al {date}",
+    "needed": "Da fare",
+    "done": "Fatto",
+    "doneOn": "Fatto il {date}",
+    "none": "—"
+  },
+  "documentSeal": {
+    "version": "Versione",
+    "fingerprint": "Impronta SHA-256",
+    "sealedAt": "Sigillato",
+    "source": "Ora fornita da",
+    "sealedBy": "Sigillato da",
+    "signers": "Firme",
+    "signedOn": "Firmato il {date}",
+    "waiting": "In attesa di firma",
+    "signedCount": "{signed} di {total} firmate",
+    "verify": "Verifica un file",
+    "verifyNote": "Il file resta su questo dispositivo: se ne calcola solo l’impronta.",
+    "reading": "Calcolo dell’impronta…",
+    "match": "{file} corrisponde al documento sigillato",
+    "mismatch": "{file} NON corrisponde: è diverso dal documento sigillato",
+    "failed": "Non è stato possibile leggere il file",
+    "copy": "Copia",
+    "copied": "Copiata",
+    "copyFailed": "Copia non riuscita",
+    "region": "Sigillo del documento"
   }
 }

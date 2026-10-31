@@ -48,8 +48,12 @@ const entry = (key: string, permission: string, change: Partial<LibraryReport> =
   formats: ['CSV', 'PDF'],
   mail: null,
   mailed: false,
+  lastRunByMe: null,
   ...change,
 })
+
+/** B-W2b-24: when I last ran each report (the server's run log; made-up times). */
+export const LAST_RUN: Record<string, string> = { 'sales.late-orders': '2026-10-29T15:10:00.000Z', 'production.daily': '2026-10-30T07:05:00.000Z' }
 
 const PACK: LibraryReport[] = [
   entry('sales.late-orders', 'orders.view'),
@@ -70,7 +74,7 @@ const PACK: LibraryReport[] = [
 
 const AREAS = (['sales', 'planning', 'purchasing', 'production', 'quality', 'compliance', 'finance'] as const).map((area) => ({ area, label: area }))
 
-export const OWNER_LIBRARY: Library = { asOf: AS_OF, areas: AREAS, reports: PACK }
+export const OWNER_LIBRARY: Library = { asOf: AS_OF, areas: AREAS, reports: PACK.map((report) => ({ ...report, lastRunByMe: LAST_RUN[report.key] ?? null })) }
 
 /** A planner: no price, cost or margin; no costing, receivables, purchasing… lists. */
 export const PLANNER_LIBRARY: Library = {
@@ -84,7 +88,6 @@ export const PLANNER_LIBRARY: Library = {
   }),
 }
 
-export const LAST_OPENED: Record<string, string> = { 'sales.late-orders': '2026-10-29T15:10:00.000Z', 'production.daily': '2026-10-30T07:05:00.000Z' }
 
 // ---- a report: Open orders ----------------------------------------------------------------------------------------------
 
@@ -126,6 +129,7 @@ export const OPEN_ORDERS_ABOUT: ReportAbout = {
   numbers: [{ key: 'orders.promisedThisWeek', label: 'Promised this week' }],
   mail: null,
   formats: ['CSV', 'PDF'],
+  lastRunByMe: '2026-10-29T15:10:00.000Z',
 }
 
 const order = (n: number, number: string, customer: string, status: string, orderDate: string, promise: string | null, daysLate: number | null, units: number, shipped: number, net: number) => ({

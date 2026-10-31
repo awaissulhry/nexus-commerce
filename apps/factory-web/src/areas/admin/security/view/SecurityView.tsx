@@ -218,9 +218,15 @@ function ProtectionCard({ facts }: { facts: Read<SecurityFacts> }) {
   )
 }
 
+/** B-W2b-24: since when a role asks for two-factor, in words (a day in the site's zone). */
+export function sinceWords(role: Pick<TwoFactorRole, 'requireMfa' | 'requireMfaSince'>, t: Translate, locale: ReturnType<typeof useLocale>): string {
+  if (!role.requireMfa) return t('sec.tf.since.notAsked')
+  return role.requireMfaSince ? t('sec.tf.since.on', { day: formatDate(role.requireMfaSince, { locale }) }) : t('sec.tf.since.unknown')
+}
+
 /** The two-factor list's columns (exported: a test draws each cell alone). */
-export function twoFactorColumns(ctx: { t: Translate; prefix: string; words: { name: (role: { key: string; name: string }) => string } }): ColDef<TwoFactorRole>[] {
-  const { t, words } = ctx
+export function twoFactorColumns(ctx: { t: Translate; locale: ReturnType<typeof useLocale>; prefix: string; words: { name: (role: { key: string; name: string }) => string } }): ColDef<TwoFactorRole>[] {
+  const { t, words, locale } = ctx
   return [
     {
       colId: 'name',
@@ -243,6 +249,15 @@ export function twoFactorColumns(ctx: { t: Translate; prefix: string; words: { n
           {t(role.requireMfa ? 'sec.tf.asks.yes' : 'sec.tf.asks.no')}
         </Pill>
       )),
+    },
+    {
+      // B-W2b-24: since when the role asks (the day in the site's zone; "before Nexus kept the time" for a role that asked earlier).
+      colId: 'since',
+      headerName: t('sec.tf.col.since'),
+      valueGetter: ({ data }) => (data ? sinceWords(data, t, locale) : ''),
+      flex: 1,
+      minWidth: 150,
+      cellRenderer: cellOf<TwoFactorRole>((role) => <span className={role.requireMfa && role.requireMfaSince ? undefined : 'fw-adm-hint'}>{sinceWords(role, t, locale)}</span>),
     },
     {
       colId: 'holders',
@@ -281,7 +296,8 @@ function SignInCard({ model, actions }: { model: SecurityViewModel; actions?: Se
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   useEffect(() => setSelected(model.selected ?? []), [model.selected])
   const [help, setHelp] = useState(false)
-  const columns = useMemo(() => twoFactorColumns({ t, prefix: model.prefix, words }), [t, model.prefix, words])
+  const locale = useLocale()
+  const columns = useMemo(() => twoFactorColumns({ t, locale, prefix: model.prefix, words }), [t, locale, model.prefix, words])
   const facts = model.facts.state === 'ok' ? model.facts.value.signIn : null
   const list: TwoFactorList | null = model.twoFactor.state === 'ok' ? model.twoFactor.value : null
   const roles = list?.roles ?? []

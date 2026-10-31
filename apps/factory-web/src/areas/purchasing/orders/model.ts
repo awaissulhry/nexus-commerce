@@ -1,3 +1,4 @@
+import type { NumberFieldActions, NumberFieldModel } from '../../admin/documents/override/model'
 import type { Tone } from '@nexus/ui/primitives'
 import { decimalValue, phrase, type BuyingCan, type Loaded, type Part, type Phrase } from '../../_shared/buying/model'
 import type { MaterialDetail, MaterialOption, SiteOption, SupplierOption } from '../../_shared/buying/api'
@@ -255,6 +256,8 @@ export interface NewOrderModel {
   requestedDate: string
   busy: boolean
   problem: Phrase | null
+  /** B-W2b-24 (PLT-125): the number it will get (not reserved), or the old system's number typed for a migrated order. */
+  number?: NumberFieldModel
 }
 
 export const NO_NEW_ORDER: NewOrderModel = Object.freeze({ query: '', suppliers: null, suppliersProblem: null, supplier: null, siteId: null, requestedDate: '', busy: false, problem: null }) as NewOrderModel
@@ -306,6 +309,8 @@ export interface OrdersListActions {
     onSite?: (siteId: string) => void
     onRequestedDate?: (day: string) => void
     onCreate?: () => void
+    /** B-W2b-24: the number line and the popup "Type a number for a migrated document". */
+    number?: NumberFieldActions
   }
 }
 

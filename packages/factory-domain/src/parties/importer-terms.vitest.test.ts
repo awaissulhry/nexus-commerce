@@ -31,6 +31,15 @@ describe('the commercial terms columns of the parties import (B-W2b-25)', () => 
     expect(importRecordValues(party({ terms: undefined }))).toMatchObject({ paymentTermsCode: null, list: null, invoicing: 'PER_SHIPMENT', minimumOrder: null })
   })
 
+  it('stay blank for a supplier, so its own file for re-import plans UNCHANGED', () => {
+    const supplier = party({ fields: { ...party().fields, code: 'S-1', roles: ['SUPPLIER', 'SUBCONTRACTOR'] }, terms: undefined })
+    const values = importRecordValues(supplier)
+    for (const column of TERMS_COLUMNS) expect(values[column], column).toBeNull()
+    const row = Object.fromEntries(Object.entries(values).filter(([name, value]) => !name.startsWith('$') && value !== null)) as RowValues
+    expect(plan(row, supplier)).toEqual({ action: 'UNCHANGED' })
+    expect(plan({ ...row, invoicing: 'PER_SHIPMENT' }, supplier)).toMatchObject({ action: 'ERROR' })
+  })
+
   it('create a customer with its terms, reading Italian words for the invoicing', () => {
     const row = { code: 'C-2', legalName: 'Nuovo Cliente S.r.l.', roles: 'cliente', paymentTermsCode: 'BB60', list: 'LIST-B', defaultDepositPct: '25', invoicing: 'MONTHLY', incoterm: 'DAP', preferredCarrier: 'BRT', minimumOrder: '200.5' }
     expect(plan(row)).toEqual({ action: 'CREATE', after: row })

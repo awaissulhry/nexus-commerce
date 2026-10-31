@@ -6,7 +6,8 @@
     "APPROVAL_OVERDUE": "Approvazioni in ritardo",
     "PO_NOT_CONFIRMED": "Ordini di acquisto non confermati",
     "CERTIFICATE_EXPIRING": "Certificati in scadenza",
-    "INVOICE_DEADLINE": "Merce spedita vicina alla scadenza di fatturazione"
+    "INVOICE_DEADLINE": "Merce spedita vicina alla scadenza di fatturazione",
+    "INTEGRATION_FAILING": "Collegamenti in errore"
   },
   "when": {
     "ORDER_LATE_RISK": "Quando un ordine è promesso entro {daysBeforePromise} e non è pronto, o è in ritardo",
@@ -15,7 +16,8 @@
     "APPROVAL_OVERDUE": "Quando un'approvazione aspetta più di {hours}",
     "PO_NOT_CONFIRMED": "Quando un ordine di acquisto non è confermato entro l'ora chiesta al fornitore (senza un'ora: {days} dopo l'invio)",
     "CERTIFICATE_EXPIRING": "{daysBefore} prima che un certificato scada",
-    "INVOICE_DEADLINE": "{daysBefore} prima della scadenza per fatturare la merce di un DDT"
+    "INVOICE_DEADLINE": "{daysBefore} prima della scadenza per fatturare la merce di un DDT",
+    "INTEGRATION_FAILING": "Quando un collegamento non funziona da più di {hours}"
   },
   "sentence": {
     "full": "{when} {place}, avvisa {recipient} con {channels} {cooldown}.",

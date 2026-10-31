@@ -682,3 +682,22 @@
   --nds-density-focus-w: 3px;
   --nds-density-focus-offset: 2px;
 }
+
+[data-density='display'] {
+
+  /* ── Density: display (wall screens, the line TV; D26) ── */
+  --nds-density-target-min: var(--nds-space-48);
+  --nds-density-control-h-sm: 56px;
+  --nds-density-control-h: 64px;
+  --nds-density-control-h-primary: 80px;
+  --nds-density-pad-x: var(--nds-space-32);
+  --nds-density-gap: var(--nds-space-24);
+  --nds-density-target-gap: var(--nds-space-48);
+  --nds-density-radius: var(--nds-radius-3xl);
+  --nds-density-font-label: 24px;
+  --nds-density-font-body: 32px;
+  --nds-density-font-numeral: 96px;
+  --nds-density-icon: 48px;
+  --nds-density-focus-w: 4px;
+  --nds-density-focus-offset: 3px;
+}

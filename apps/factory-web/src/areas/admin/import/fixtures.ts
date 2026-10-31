@@ -223,7 +223,7 @@ const OPENING_OFF_DIFFS = [
   { path: 'difference/quantity/FT2', message: 'FT2: 1284.5000 in the sheet, 1176.3227 loaded.' },
   { path: 'difference/value', message: 'Stock value: 84210.50 EUR in the sheet, 77903.10 EUR loaded.' },
 ]
-const doneOn = (day: number, hour: number, over: Partial<NonNullable<FirstLoadStepView['done']>> = {}) => ({ at: at(day, hour, 0), byId: USERS[0]!.id, nothing: false, stillMatches: true, ...over })
+const doneOn = (day: number, hour: number, over: Partial<NonNullable<FirstLoadStepView['done']>> = {}) => ({ at: at(day, hour, 0), byId: USERS[0]!.id, nothing: false, reason: null, stillMatches: true, ...over })
 const PARTIES_DONE = (step: 'customers' | 'suppliers') => stepView(step, { state: 'done', job: PARTIES_JOB, reconciliation: PARTIES, matches: true, done: doneOn(27, 12) })
 const MATERIALS_DONE = stepView('materials', { state: 'done', job: MATERIALS_JOB, reconciliation: MATERIALS, matches: true, done: doneOn(28, 11) })
 const OPENING_DONE = stepView('openingStock', {
@@ -268,6 +268,8 @@ const FIRST_DONE = firstLoad([
   OPENING_DONE,
   stepView('openOrders', { state: 'done', done: doneOn(29, 11, { nothing: true, stillMatches: null }) }),
 ])
+// B-W2b-24: the step's row keeps why there was nothing to load; the Done line says it.
+const FIRST_DONE_WHY = firstLoad(FIRST_DONE.steps!.map((step) => (step.step === 'openOrders' ? { ...step, done: doneOn(29, 11, { nothing: true, reason: 'No open orders before the go-live (made-up example).', stillMatches: null }) } : step)))
 const FIRST_NO_RIGHT = firstLoad(FIRST_START.steps!.map((step) => ({ ...step, canImport: false, canMarkDone: false })))
 
 const page = (over: Partial<ImportViewModel> = {}): ImportViewModel => ({
@@ -337,6 +339,7 @@ export const designScreen = defineDesignScreen<ImportViewModel>({
     { id: 'first-running', label: 'First load: an import under way', model: page({ firstLoad: FIRST_RUNNING }), note: 'Open the import under way; Done held until it is applied.' },
     { id: 'first-open-orders', label: 'First load: open orders have no import', model: page({ firstLoad: FIRST_OPEN_ORDERS }), note: 'Import held with the reason; Nothing to load once they are entered as sales orders.' },
     { id: 'first-done', label: 'First load: all done', model: page({ firstLoad: FIRST_DONE }), note: 'When each step was done; materials no longer match since (two records archived).' },
+    { id: 'first-done-reason', label: 'First load: nothing to load, with its reason', model: page({ firstLoad: FIRST_DONE_WHY }), note: 'B-W2b-24: the reason given for "Nothing to load" is kept on the step and said on its Done line.' },
     { id: 'first-no-right', label: 'First load: no right to import or mark done', model: page({ firstLoad: FIRST_NO_RIGHT }), note: 'Every action held with the right it needs.' },
     { id: 'first-confirm-done', label: 'First load: mark materials done', model: page({ firstLoad: { ...FIRST_MID, confirm: { step: 'materials', nothing: false, reason: '' } } }) },
     {

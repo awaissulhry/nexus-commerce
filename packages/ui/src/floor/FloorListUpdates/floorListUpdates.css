@@ -1,0 +1,14 @@
+/*
+ * DS floor kit — FloorList's updates slot (B-W2b-28). Sticky at the top of the scroll area so the button is in reach;
+ * drawn only while rows wait. The button is a FloorButton (its own colours and sizes).
+ */
+.nds-floor-list-updates {
+  display: block;
+}
+.nds-floor-list-updates[data-waiting='true'] {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-block-end: var(--nds-density-gap);
+  background: var(--nds-bg);
+}

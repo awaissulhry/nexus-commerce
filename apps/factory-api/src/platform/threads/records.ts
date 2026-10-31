@@ -201,6 +201,13 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const ddt = await client.ddt.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return ddt ? { companyId: ddt.companyId, siteId: ddt.siteId, partyId: ddt.partyId } : null
   },
+  // modules/people (B-W2b-26; PLT-020: a team as a group, with its own notes): the team's company and site; internal notes
+  // only (no party). NOT the employee record yet: a thread is read with threads.read over its company and site, so every
+  // role that reads threads there would read notes about a person; it waits for a per-record read permission here.
+  Team: async (client, id) => {
+    const team = await client.team.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return team ? { companyId: team.companyId, siteId: team.siteId, partyId: null } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

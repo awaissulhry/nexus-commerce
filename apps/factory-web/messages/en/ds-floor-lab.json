@@ -1,0 +1,143 @@
+{
+  "title": "Floor and people design-system parts",
+  "subtitle": "The floor kit's new parts and the people and plant parts two or more areas name, now in the design system. Made-up data.",
+  "section": {
+    "floor": "Floor parts (floor tier)",
+    "floorNote": "Drawn at tablet and glove sizes, as on a floor tablet.",
+    "people": "People and plant parts",
+    "display": "Display tier (line TV)",
+    "displayNote": "The fourth density tier, for wall screens read from across the floor: a 32 px body and 96 px numerals."
+  },
+  "part": {
+    "card": "Floor card",
+    "elapsed": "Elapsed time",
+    "names": "Name picker",
+    "list": "Floor list with the updates slot",
+    "read": "Read aloud",
+    "sign": "Sign with the PIN",
+    "privacy": "Privacy note",
+    "law": "Law reference",
+    "protected": "Protected value",
+    "gate": "Legal gate",
+    "day": "Day strip",
+    "due": "Due dates",
+    "seal": "Document seal"
+  },
+  "card": {
+    "kind": "Bundle",
+    "title": "Demo jacket · Black",
+    "ready": "Ready",
+    "pieces": "Pieces",
+    "op": "Operation",
+    "opValue": "Op 30 Sewing",
+    "size": "Size",
+    "colour": "Colour",
+    "colourValue": "Black",
+    "short": "Short",
+    "shortValue": "1 piece short",
+    "order": "Work order",
+    "flagCheck": "Waiting for a check"
+  },
+  "elapsed": {
+    "running": "Running",
+    "call": "Help call open",
+    "today": "Clocked in today",
+    "break": "Break ends",
+    "paused": "Operation paused"
+  },
+  "names": {
+    "label": "No badge? Pick your name",
+    "offline": "Name and PIN need the network. Use your badge.",
+    "picked": "Picked: {name}. The PIN step comes next."
+  },
+  "list": {
+    "label": "My work",
+    "op": {
+      "sew": "Sewing",
+      "cut": "Cutting",
+      "pack": "Packing"
+    },
+    "status": {
+      "ready": "Ready",
+      "waiting": "Waiting",
+      "done": "Done"
+    },
+    "pieces": "pieces",
+    "simulate": "Change the list (demo)"
+  },
+  "read": {
+    "text": "This tablet records your scans, the time and the station. It never records where you are, your face or your fingerprint. You can see your own records on My day.",
+    "note": "Hidden when this browser has no voice for the page's language."
+  },
+  "sign": {
+    "title": "Sign the final check",
+    "summary": "32 of 32 garments checked · lot L-0042 · order SO-0101",
+    "meaning": "By signing you confirm you checked every garment against the checklist and that they conform.",
+    "detail": "Final inspection",
+    "held": "Signing needs the network. It is kept and sent when the tablet is back online.",
+    "locked": "Locked until 10:47. Ask your team leader to reset your PIN.",
+    "wrong_one": "Wrong PIN. {count} try left.",
+    "wrong_other": "Wrong PIN. {count} tries left.",
+    "done": "Signed at {time}. The check is recorded.",
+    "demo": "Demo PIN: {pin}"
+  },
+  "law": {
+    "statuto": "Remote monitoring of workers needs an agreement with the worker representatives or an authorisation from the labour inspectorate.",
+    "training": "The employer gives every worker sufficient and adequate training on health and safety, refreshed over time.",
+    "gdpr": "Health data is a special category: processed only where the law allows it, by the people who need it.",
+    "piece": "Piece rates are communicated to the workers before the work starts.",
+    "sentence": "Supervisors repeat their safety training every two years, in person."
+  },
+  "privacy": {
+    "lineText": "Line totals · individual figures private",
+    "who": "HR and the worker see individual figures",
+    "individualWho": "Only this worker and HR",
+    "protectedWho": "Only HR and safety roles"
+  },
+  "gate": {
+    "title": "Piece pay at Demo Site",
+    "basis": "Scans name workers with a recorded legal basis",
+    "notice": "The worker notice covers piece pay and is acknowledged",
+    "noticeDetail": "{done} of {total} acknowledged",
+    "noticeLink": "Open the notice",
+    "scheme": "Scheme and collective agreement chosen",
+    "rates": "Rates published to the workers before work starts",
+    "codes": "Earning codes mapped for the payroll export",
+    "start": "Start piece pay from 1 December",
+    "started": "Piece pay would start here (demo: nothing is sent)."
+  },
+  "due": {
+    "general": "General safety training",
+    "supervisor": "Supervisor refresher",
+    "firstAid": "First aid",
+    "fire": "Fire safety",
+    "forklift": "Forklift licence",
+    "note": "Sorted by urgency: the most urgent first."
+  },
+  "seal": {
+    "title": "LUL calendar · October 2026",
+    "source": "Nexus server clock",
+    "hr": "HR",
+    "consultant": "Labour consultant",
+    "download": "Download the demo file to verify it"
+  },
+  "protected": {
+    "label": "Fitness judgement",
+    "value": "Fit, with limits: no lifting over 10 kg",
+    "who": "Only HR and safety roles see it"
+  },
+  "day": {
+    "label": "Marta Demo · Tue 3 Nov",
+    "badge": "badge at the reader",
+    "machine": "Machine status (station 4)",
+    "running": "Running",
+    "down": "Down",
+    "anomaly": "Clock-out missing; automatic clock-out after the shift end + 15 min",
+    "showText": "Show the day in words",
+    "hideText": "Hide the day in words"
+  },
+  "display": {
+    "call": "Line 1 · help call open",
+    "stop": "Line 2 · since the last stop"
+  }
+}

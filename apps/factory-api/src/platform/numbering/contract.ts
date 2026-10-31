@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { MAX_BLOCK_SIZE } from '@nexus/factory-domain/numbering/blocks'
 import { DOCUMENT_KINDS, MAX_NUMBER, MAX_YEAR, MIN_YEAR, NUMBER_RESETS, SCAN_ID_KINDS, SERIES_CODE } from '@nexus/factory-domain/numbering/kinds'
+import { MAX_TYPED_NUMBER_LENGTH, OVERRIDE_REFUSALS } from '@nexus/factory-domain/numbering/override'
 import { MAX_PATTERN_LENGTH } from '@nexus/factory-domain/numbering/format'
 
 /**
@@ -200,3 +201,47 @@ export const topUpContract = defineContract({
   }),
   response: { 200: output({ scanTag: z.string(), blocks: z.array(blockView), reserved: z.array(blockView) }) },
 })
+
+// ---- B-W2b-24: the number preview and the controlled override (override.ts; PLT-125) ---------------------------------------
+
+/** Why no number can be previewed: no series of the kind, several (name the code), closed, or past its last number. */
+export const PREVIEW_HELD = ['noSeries', 'several', 'closed', 'exhausted'] as const
+
+export const numberPreview = output({
+  companyId: id(),
+  kind: z.enum(DOCUMENT_KINDS),
+  /** The document's date the number is for (`YYYY-MM-DD`, Europe/Rome; default today). */
+  date: z.string(),
+  code: z.string().nullable(),
+  scopeKey: z.string().nullable(),
+  /** The number it would get now, as printed — NOT reserved: the document takes its number when it is saved. */
+  number: z.string().nullable(),
+  fiscal: z.boolean(),
+  /** The first number of a new year (that year's series row is made with the document). */
+  newPeriod: z.boolean(),
+  held: z.enum(PREVIEW_HELD).nullable(),
+})
+export type NumberPreview = z.infer<typeof numberPreview>
+
+export const previewContract = defineContract({
+  querystring: input({ companyId: id(), kind: z.enum(DOCUMENT_KINDS), code: z.string().regex(SERIES_CODE).optional(), date: businessDate().optional() }),
+  response: { 200: output({ preview: numberPreview }) },
+})
+
+const OVERRIDE_CODES = Object.keys(OVERRIDE_REFUSALS) as [keyof typeof OVERRIDE_REFUSALS, ...(keyof typeof OVERRIDE_REFUSALS)[]]
+
+export const overrideCheck = output({
+  /** The number as it would be kept (trimmed). */
+  number: z.string(),
+  ok: z.boolean(),
+  refusal: output({ code: z.enum(OVERRIDE_CODES), message: z.string() }).nullable(),
+})
+export type OverrideCheck = z.infer<typeof overrideCheck>
+
+export const overrideCheckContract = defineContract({
+  body: input({ companyId: id(), kind: z.enum(DOCUMENT_KINDS), number: z.string().max(200) }),
+  response: { 200: overrideCheck },
+})
+
+/** What a module's create body takes for a migrated document (`typedNumber`): the number and why. */
+export const typedNumberField = () => input({ number: z.string().max(MAX_TYPED_NUMBER_LENGTH + 20), reason: z.string().max(500) })

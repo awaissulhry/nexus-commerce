@@ -99,24 +99,25 @@ describe('the layout on screen (model)', () => {
 
 const translators = LOCALES.map((locale) => [locale, createTranslator(locale, CATALOGUE[locale].lists ?? {})] as const)
 const KEY = /\btools\.[a-zA-Z_.]+/
-const view = (over: Partial<SavedView>): SavedView => ({ id: 'v', listKey: 'sales.orders', name: 'Late', ownerId: 'me', ownerName: 'Demo Owner', mine: true, audience: 'ONLY_ME', roleId: null, roleName: null, roleDefault: false, state: { query: '' }, changeHeld: null, version: 1, ...over })
+const view = (over: Partial<SavedView>): SavedView => ({ id: 'v', listKey: 'sales.orders', name: 'Late', ownerId: 'me', ownerName: 'Demo Owner', mine: true, audience: 'ONLY_ME', roleId: null, roleName: null, roleDefault: false, personalDefault: false, state: { query: '' }, changeHeld: null, version: 1, ...over })
 const ANSWER: ViewsAnswer = {
   views: [view({ id: 'mine' }), view({ id: 'shared', mine: false, ownerName: 'Demo Bianchi', audience: 'ROLE', roleId: 'r', roleName: 'Demo sales', roleDefault: true, changeHeld: 'no' })],
   roleDefaultId: 'shared',
+  personalDefaultId: null,
   roles: [{ id: 'r', name: 'Demo sales' }],
   allRoles: [],
   can: { save: true, manage: false, export: true },
   exports: { formats: ['CSV', 'XLSX'] },
 }
 const noop = () => undefined
-const ACT = { apply: noop, reload: noop, save: noop, update: noop, edit: noop, copy: noop, remove: noop, customise: noop }
+const ACT = { apply: noop, reload: noop, save: noop, update: noop, edit: noop, copy: noop, remove: noop, setDefault: noop, customise: noop }
 const words = (items: { label?: unknown; description?: unknown }[]) => items.flatMap((item) => [item.label, item.description]).filter((text): text is string => typeof text === 'string')
 
 describe('Columns ▾ and Export ▾ (items in both languages, no key on screen)', () => {
   it('lists my views, then the shared ones with who shared them; the active view’s verbs; Customise last', () => {
     for (const [locale, t] of translators) {
       const items = columnsMenuItems(t, { answer: ANSWER, problem: null, active: ANSWER.views[0]!, changed: true, asBuilt: false }, ACT)
-      expect(items.map((item) => item.id)).toEqual(['h-views', 'built', 'v-mine', 'h-shared', 'v-shared', 's-views', 'save', 'update', 'edit', 'link', 'remove', 's-customise', 'customise'])
+      expect(items.map((item) => item.id)).toEqual(['h-views', 'built', 'v-mine', 'h-shared', 'v-shared', 's-views', 'save', 'update', 'edit', 'default', 'link', 'remove', 's-customise', 'customise'])
       expect(items.find((item) => item.id === 'v-mine')?.checked).toBe(true)
       for (const text of words(items)) expect(text, locale).not.toMatch(KEY)
       expect(sharingWords(t, ANSWER.views[1]!)).toContain('Demo Bianchi')
@@ -131,6 +132,31 @@ describe('Columns ▾ and Export ▾ (items in both languages, no key on screen)
     const reader = columnsMenuItems(t, { answer: { ...ANSWER, can: { save: false, manage: false, export: false } }, problem: null, active: null, changed: false, asBuilt: true }, ACT)
     expect(reader.find((item) => item.id === 'save')).toMatchObject({ disabled: true, description: expect.any(String) })
     expect(reader.find((item) => item.id === 'built')?.checked).toBe(true)
+  })
+
+  it('my default view (B-W2b-24): make my own view my default, stop using it, marked in the menu; a shared view held with the reason', () => {
+    for (const [locale, t] of translators) {
+      const calls: [string, boolean][] = []
+      const act = { ...ACT, setDefault: (target: SavedView, on: boolean) => void calls.push([target.id, on]) }
+      const make = columnsMenuItems(t, { answer: ANSWER, problem: null, active: ANSWER.views[0]!, changed: false, asBuilt: false }, act)
+      const item = make.find((entry) => entry.id === 'default')!
+      expect(item.disabled ?? false).toBe(false)
+      item.onSelect?.()
+      const marked = view({ id: 'mine', personalDefault: true })
+      const answer = { ...ANSWER, views: [marked, ANSWER.views[1]!], personalDefaultId: 'mine' }
+      const stop = columnsMenuItems(t, { answer, problem: null, active: marked, changed: false, asBuilt: false }, act)
+      stop.find((entry) => entry.id === 'default')!.onSelect?.()
+      expect(calls).toEqual([
+        ['mine', true],
+        ['mine', false],
+      ])
+      expect(stop.find((entry) => entry.id === 'v-mine')?.description).toBe(`${t('tools.onlyMe')} · ${t('tools.myDefault')}`)
+      const shared = columnsMenuItems(t, { answer, problem: null, active: ANSWER.views[1]!, changed: false, asBuilt: false }, act)
+      expect(shared.find((entry) => entry.id === 'default')).toMatchObject({ disabled: true, description: t('tools.held.defaultNotOwn') })
+      const reader = columnsMenuItems(t, { answer: { ...ANSWER, can: { save: false, manage: false, export: false } }, problem: null, active: ANSWER.views[0]!, changed: false, asBuilt: false }, act)
+      expect(reader.find((entry) => entry.id === 'default')).toMatchObject({ disabled: true, description: t('tools.held.save') })
+      for (const text of [...words(make), ...words(stop), ...words(shared)]) expect(text, locale).not.toMatch(KEY)
+    }
   })
 
   it('while the views are read, and when they could not be', () => {
@@ -210,13 +236,32 @@ describe('the tools in memory (the gallery’s)', () => {
     expect(state).toMatchObject({ status: 'DONE', rowCount: 900, file: { name: expect.stringMatching(/\.csv$/) } })
     expect((await transport().listExports('sales.orders')).map((entry) => entry.id)).toEqual([job.id])
   })
+
+  it('my default view (B-W2b-24): one per list, the old one loses its mark, never another person’s view, gone with its view', async () => {
+    const model = { pageKey: 'sales.orders', locale: 'en' as const, answer: { ...ANSWER, views: [] }, jobs: [] }
+    const store = memoryStore(model)
+    const transport = memoryTransport(model, store, '', () => undefined)
+    const first = await transport.createView('sales.orders', { name: 'First', audience: 'ONLY_ME', roleId: null, roleDefault: false, state: { query: '' } }, 'k')
+    const second = await transport.createView('sales.orders', { name: 'Second', audience: 'ONLY_ME', roleId: null, roleDefault: false, state: { query: 'late=true' } }, 'k')
+    expect(await transport.setPersonalDefault(first, true, 'k')).toMatchObject({ personalDefaultId: first.id, view: { personalDefault: true, version: 2 } })
+    expect((await transport.setPersonalDefault(second, true, 'k')).personalDefaultId).toBe(second.id)
+    const answer = await transport.listViews('sales.orders')
+    expect(answer.personalDefaultId).toBe(second.id)
+    expect(answer.views.filter((entry) => entry.personalDefault).map((entry) => entry.id)).toEqual([second.id])
+    await expect(transport.setPersonalDefault(view({ id: 'theirs', mine: false }), true, 'k')).rejects.toMatchObject({ problem: 'forbidden' })
+    const current = answer.views.find((entry) => entry.id === second.id)!
+    expect((await transport.setPersonalDefault(current, false, 'k')).personalDefaultId).toBeNull()
+    await transport.setPersonalDefault(first, true, 'k')
+    await transport.removeView(first)
+    expect((await transport.listViews('sales.orders')).personalDefaultId).toBeNull()
+  })
 })
 
 describe('SCR-232 — every case draws in both languages with no key left on screen', () => {
   it('has the cases the design names (views, customise, save, export job, held, loading, failed)', () => {
     expect(designScreen.screen).toBe('SCR-232')
     const ids = designScreen.cases.map((entry) => entry.id)
-    for (const id of ['toolbar', 'columns-menu', 'customise', 'save-view', 'save-view-sales', 'edit-view', 'remove-view', 'export-menu', 'export-running', 'export-done', 'export-failed', 'export-expired', 'read-only', 'no-export', 'views-loading', 'views-failed', 'link-not-shared', 'empty']) {
+    for (const id of ['toolbar', 'columns-menu', 'customise', 'save-view', 'save-view-sales', 'edit-view', 'remove-view', 'export-menu', 'export-running', 'export-done', 'export-failed', 'export-expired', 'read-only', 'no-export', 'views-loading', 'views-failed', 'link-not-shared', 'empty', 'my-default', 'my-default-menu', 'make-default']) {
       expect(ids, id).toContain(id)
     }
   })

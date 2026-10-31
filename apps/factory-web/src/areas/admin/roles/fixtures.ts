@@ -29,6 +29,7 @@ const twoFactorOf = (index: number, over: Partial<TwoFactorRole> = {}): TwoFacto
     name: base.name,
     system: base.system,
     requireMfa: base.requireMfa,
+    requireMfaSince: null,
     lock: null,
     templateAsks: false,
     version: base.version,
@@ -68,6 +69,9 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'role-two-factor-on', label: 'Role: two-factor switched on, not saved yet', model: role(3, { tab: 'rules', twoFactor: tf(twoFactorOf(3), { draft: true }) }) },
     { id: 'role-two-factor-fixed', label: 'Role: a ready-made role that always asks', model: role(1, { tab: 'rules', twoFactor: tf(twoFactorOf(1, { requireMfa: true, lock: 'template', templateAsks: true })) }), note: 'Held with its reason.' },
     { id: 'role-two-factor-mine', label: 'Role: a role you hold', model: role(3, { tab: 'rules', twoFactor: tf(twoFactorOf(3, { heldByMe: true })) }) },
+    // B-W2b-24: since when the role asks (Role.requireMfaSince), and a role that asked before the date was kept.
+    { id: 'role-two-factor-since', label: 'Role: asks for two-factor, since a day', model: role(3, { tab: 'rules', twoFactor: tf(twoFactorOf(3, { requireMfa: true, requireMfaSince: '2026-10-28T13:05:00.000Z' })) }), note: 'B-W2b-24: "Asked since" the day in the site zone.' },
+    { id: 'role-two-factor-since-unknown', label: 'Role: asked before the date was kept', model: role(3, { tab: 'rules', twoFactor: tf(twoFactorOf(3, { requireMfa: true })) }), note: 'B-W2b-24: a role that asked before Nexus kept the date (requireMfaSince null).' },
     {
       id: 'role-two-factor-dialog',
       label: 'Role: asking two-factor, who it affects',

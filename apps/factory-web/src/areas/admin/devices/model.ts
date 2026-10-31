@@ -42,6 +42,16 @@ export function isOutdated(device: Device, current: string | null | undefined): 
   return device.status === 'ACTIVE' && Boolean(current) && device.appVersion !== null && device.appVersion !== current
 }
 
+/** B-W2b-24: the message key of the network the tablet last said (`devices.network.WIFI`), or null when it never said. */
+export function networkKey(device: Pick<Device, 'network'>): string | null {
+  return device.network ? `devices.network.${device.network}` : null
+}
+
+/** B-W2b-24: since when someone is signed in on it (never who); null when nobody is signed in or the time is not known. */
+export function inUseSinceOf(device: Pick<Device, 'inUse' | 'inUseSince'>): string | null {
+  return device.inUse && device.inUseSince ? device.inUseSince : null
+}
+
 export interface SiteChoice {
   id: string
   name: string

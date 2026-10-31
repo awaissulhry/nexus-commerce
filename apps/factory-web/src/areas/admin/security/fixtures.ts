@@ -100,6 +100,7 @@ const role = (n: number, key: string, name: string, extra: Partial<TwoFactorRole
   name,
   system: !key.startsWith('custom.'),
   requireMfa: false,
+  requireMfaSince: null,
   lock: null,
   templateAsks: false,
   version: 1,
@@ -108,15 +109,16 @@ const role = (n: number, key: string, name: string, extra: Partial<TwoFactorRole
   ...extra,
 })
 const ROLES: TwoFactorRole[] = [
-  role(1, 'owner', 'Owner', { requireMfa: true, lock: 'money', templateAsks: true, holders: [people.anna], heldByMe: true }),
-  role(2, 'admin', 'Administrator', { requireMfa: true, lock: 'template', templateAsks: true, holders: [people.lucia] }),
-  role(3, 'finance', 'Finance', { requireMfa: true, lock: 'money', templateAsks: true, holders: [people.lucia] }),
+  role(1, 'owner', 'Owner', { requireMfa: true, requireMfaSince: '2026-09-01T07:30:00.000Z', lock: 'money', templateAsks: true, holders: [people.anna], heldByMe: true }),
+  role(2, 'admin', 'Administrator', { requireMfa: true, requireMfaSince: '2026-09-01T07:30:00.000Z', lock: 'template', templateAsks: true, holders: [people.lucia] }),
+  role(3, 'finance', 'Finance', { requireMfa: true, requireMfaSince: '2026-09-01T07:30:00.000Z', lock: 'money', templateAsks: true, holders: [people.lucia] }),
+  // B-W2b-24: a role that asked before Nexus recorded since when (since unknown).
   role(4, 'sales', 'Sales', { requireMfa: true, lock: 'money', templateAsks: true, holders: [people.marco] }),
   role(5, 'planner', 'Planner', { holders: [people.paolo, people.marco] }),
   role(6, 'buyer', 'Buyer', { holders: [people.paolo] }),
   role(7, 'warehouse', 'Warehouse'),
   role(8, 'read_only', 'Read-only', { holders: [people.lucia] }),
-  role(9, 'custom.office_manager', 'Responsabile ufficio (esempio)', { requireMfa: true, holders: [people.paolo] }),
+  role(9, 'custom.office_manager', 'Responsabile ufficio (esempio)', { requireMfa: true, requireMfaSince: '2026-10-28T13:05:00.000Z', holders: [people.paolo] }),
 ]
 const TWO_FACTOR: TwoFactorList = { roles: ROLES, canChange: true }
 

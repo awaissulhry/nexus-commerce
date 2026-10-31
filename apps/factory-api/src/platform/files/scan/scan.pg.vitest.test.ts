@@ -15,6 +15,7 @@ import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { createGateway } from '../../gateway/gateway'
+import { useGateway } from '../../gateway/service'
 import { testRedis, type TestRedis } from '../../outbox/testing'
 import { createSecretsService } from '../../secrets/envelope'
 import { localKeyProvider } from '../../secrets/local'
@@ -123,6 +124,8 @@ beforeAll(async () => {
   )
   const secrets = createSecretsService({ providers: [localKeyProvider({ masterKey: randomBytes(32), environment: 'test' })] })
   const gateway = createGateway({ environment: 'test', redis: connection, prefix: redis.prefix, secrets, sleep: async () => {}, log: { info() {}, warn() {}, error() {} } })
+  // B-W2b-24: the scans of a tenant with a virus-scan account go through the process gateway.
+  useGateway(gateway)
   useFiles(createFilesRuntime({ gateway, local: localFileStore({ root: localRoot, environment: 'test' }) }))
   app = await buildApp(
     { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
@@ -138,6 +141,7 @@ beforeEach(() => {
 afterAll(async () => {
   useScanner(undefined)
   useFiles(undefined)
+  useGateway(undefined)
   await app?.close()
   await redis?.cleanup()
   await database?.close()
@@ -259,5 +263,29 @@ describe('the sweep (files.scanPending)', () => {
     expect(await audits(file.id)).toContain('files.recordScan')
     // Scanning off: the tick does nothing.
     expect(await sweepPendingScans({ database, log, clock: later, scanner: null })).toMatchObject({ scanned: 0, scanner_unavailable: 0 })
+  })
+})
+
+describe('B-W2b-24: with a virus-scan account (CLAMAV), each scan is ledgered for the tenant', () => {
+  it('one IntegrationCall per scan (the verdict, never the bytes); a paused account holds the file as a scanner that did not answer', async () => {
+    const account = newId()
+    await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode, "rateLimitPerMinute", "rateLimitBurst") VALUES ($1, $2, 'CLAMAV', 'scan', 'Virus scan (fake)', 'FAKE', 6000, 1000)`, [account, tenant])
+    const { file } = await upload(pdf('ledgered'))
+    expect(file).toMatchObject({ status: 'AVAILABLE', scanStatus: 'CLEAN' })
+    const calls = await admin<Record<string, unknown>>(`SELECT provider, operation, status, "companyId" FROM "IntegrationCall" WHERE "accountId" = $1`, [account])
+    expect(calls).toEqual([{ provider: 'CLAMAV', operation: 'files.scan', status: 'SUCCEEDED', companyId: null }])
+    const [summary] = await admin<{ request: unknown; response: unknown }>(`SELECT "requestSummary" AS request, "responseSummary" AS response FROM "IntegrationCall" WHERE "accountId" = $1`, [account])
+    expect(summary).toMatchObject({ request: { fileId: file.id, engine: 'fake' }, response: { verdict: 'CLEAN', engine: 'Fake scanner 1' } })
+    expect((await admin<{ lastOkAt: Date | null }>(`SELECT "lastOkAt" FROM "IntegrationAccount" WHERE id = $1`, [account]))[0]!.lastOkAt).not.toBeNull()
+    // The kill switch: a PAUSED account calls nothing; the upload waits, held for its scan.
+    await admin(`UPDATE "IntegrationAccount" SET status = 'PAUSED' WHERE id = $1`, [account])
+    const held = await upload(pdf('paused'))
+    expect(held.file).toMatchObject({ status: 'QUARANTINED', scanStatus: 'PENDING', quarantineReason: 'scan_pending' })
+    expect(await admin(`SELECT status, reason FROM "IntegrationCall" WHERE "accountId" = $1 ORDER BY "startedAt"`, [account])).toEqual([
+      { status: 'SUCCEEDED', reason: null },
+      { status: 'REFUSED', reason: 'account_paused' },
+    ])
+    await admin(`UPDATE "IntegrationAccount" SET status = 'ACTIVE' WHERE id = $1`, [account])
+    expect(await confirm(held.file.id)).toMatchObject({ status: 'AVAILABLE', scanStatus: 'CLEAN' })
   })
 })
