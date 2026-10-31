@@ -55,6 +55,8 @@ model User {
   roleAssignments   RoleAssignment[]
   // floor-auth.prisma: the floor worker records linked to this person.
   workers           Worker[]
+  // W2b people.prisma (wave 4/7): the person's employee record, if any.
+  employee          Employee?
   // privacy.prisma: the person's acknowledgements of their company's staff notice.
   staffNoticeAcks   StaffNoticeAck[]
   // insights.prisma: Today's alerts assigned to the person, and the person's arrangement of Today (one: its id is theirs).
