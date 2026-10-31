@@ -40,3 +40,7 @@ export { IconPicker, type IconPickerProps } from './IconPicker'
 export { TAG_ICONS, TagGlyph, tagIconSpec, type TagGlyphProps, type TagIconSpec } from './icons/tag-icons'
 export { ColorSwatchPicker, SWATCHES } from './ColorSwatchPicker'
 export type { ColorSwatchPickerProps } from './ColorSwatchPicker'
+// DS words in the person's language (B-W2b-04, 2026-10-31): each part's optional `labels` prop; English defaults.
+export { TEXTAREA_LABELS, type TextareaLabels } from './TextareaLabels'
+export { ICON_PICKER_LABELS, type IconPickerLabels } from './IconPickerLabels'
+export { COLOR_SWATCH_PICKER_LABELS, type ColorSwatchPickerLabels } from './ColorSwatchPickerLabels'

@@ -46,6 +46,9 @@ model Refund {
   /// By when it must be paid back (e.g. 14 days from a consumer's withdrawal, D.Lgs. 206/2005 art. 56), when there is a
   /// deadline.
   dueDate       DateTime?     @db.Date
+  /// W2b (schema wave 2/7; B-W2a-61's schema need, for the accounting export): why the money goes back. Set when it is
+  /// recorded and changed while DUE; null: not said (a refund recorded before W2b).
+  reasonCode    RefundReason?
   /// DUE → PAID | CANCELLED; PAID → VOIDED (typed by mistake). CANCELLED and VOIDED are final.
   status        RefundStatus  @default(DUE)
   /// Set exactly from PAID on: the date the transfer left the bank (value date), the bank's reference (CRO / TRN; unique
@@ -80,6 +83,19 @@ model Refund {
   @@index([tenantId, partyId, status])
   @@index([tenantId, creditNoteId])
   @@index([tenantId, paymentId])
+}
+
+/// Why a refund pays money back (W2b; the accounting export's reason).
+enum RefundReason {
+  /// Goods returned (a credit note from a return).
+  RETURN
+  /// A price corrected after the invoice (a credit note for the difference).
+  PRICE_ADJUSTMENT
+  /// A deposit paid back (an order cancelled, a caparra returned).
+  DEPOSIT_BACK
+  /// Money paid twice or too much (a payment's unplaced part).
+  OVERPAYMENT
+  OTHER
 }
 
 enum RefundStatus {
@@ -213,4 +229,31 @@ model ReceivablesSettings {
   company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, companyId])
+}
+
+/// W2b (schema wave 2/7, B-W2b-02; FIN-110; B-W2a-55's gap "STATUTORY interest has no amount"): the reference rate for
+/// statutory late-payment interest in one half-year (D.Lgs. 231/2002 art. 5: the rate the European Central Bank applied
+/// to its main refinancing operations on the half-year's first day, as the Ministry publishes it, plus the points the law
+/// adds), typed in by finance with where it was published. The domain reads the row of each half-year a delay falls in;
+/// it never hard-codes a rate, and computes no statutory interest for a half-year without a row. Tenant-wide (every
+/// company of the tenant applies the same law). Corrected, never deleted.
+model InterestReferenceRate {
+  id               String   @id @db.Uuid
+  tenantId         String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The half-year's first day: 1 January or 1 July. One row per half-year.
+  halfYearStart    DateTime @db.Date
+  /// The reference rate in force on that day, percent a year, as published (−10 to 100).
+  referenceRatePct Decimal  @db.Decimal(7, 4)
+  /// The points the law adds for the kind of transaction (art. 5 c.1: eight for commercial transactions), 0 to 100; the
+  /// statutory rate of the half-year is the sum.
+  addedPointsPct   Decimal  @db.Decimal(7, 4)
+  /// Where it was published (the Ministry's notice in the Gazzetta Ufficiale, the ECB's page): never blank.
+  source           String
+  note             String?
+  version          Int      @default(1)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?  @db.Uuid
+
+  @@unique([tenantId, halfYearStart])
 }

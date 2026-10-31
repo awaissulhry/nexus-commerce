@@ -8,7 +8,9 @@ import { Tooltip } from '../primitives/Tooltip'
 import { createLayerStack, ownsKeys, returnFocusOrder, type ReturnFocusTarget } from './modalStack'
 import { createBackdropPress, watchGridEscape } from './overlayDismiss'
 import { opensDark } from '../lib/opens-dark'
+import { mergeLabels } from '../lib/labels'
 import { useHydrated } from './useHydrated'
+import { MODAL_LABELS, type ModalLabels } from './ModalLabels'
 
 // Shared stack keeps background content out of keyboard and assistive-technology navigation. Bottom first: the last
 // dialog opened is on top, answers Esc and Tab, and everything else — the dialogs under it too — is inert (modalStack.ts).
@@ -104,6 +106,8 @@ export interface ModalProps {
    * nothing either. The Button's `heldReason` rule: a control that refuses says why (`scripts/check-silent-disabled.mjs`).
    */
   closeHeld?: string | null
+  /** Its words in the person's language (B-W2b-04): the close button's name. Default English ("Close"). */
+  labels?: Partial<ModalLabels>
 }
 
 /**
@@ -115,8 +119,9 @@ export interface ModalProps {
  */
 export function Modal({
   open, onClose, title, subtitle, footer, size = 'sm', children, readable = false, className, anchor, 'aria-label': ariaLabel,
-  returnFocusTo, headerActions, subheader, initialFocus = 'first', busy = false, closeHeld = null,
+  returnFocusTo, headerActions, subheader, initialFocus = 'first', busy = false, closeHeld = null, labels,
 }: ModalProps) {
+  const words = mergeLabels(MODAL_LABELS, labels)
   const hydrated = useHydrated()
   const titleId = useId()
   const subtitleId = useId()
@@ -221,9 +226,9 @@ export function Modal({
           {headerActions != null && <div className="nds-modal-h-actions">{headerActions}</div>}
           {closeHeld
             ? <Tooltip label={closeHeld} portal>
-                <button type="button" className="nds-modal-x" aria-label="Close" aria-disabled aria-description={closeHeld}><X size={18} /></button>
+                <button type="button" className="nds-modal-x" aria-label={words.close} aria-disabled aria-description={closeHeld}><X size={18} /></button>
               </Tooltip>
-            : <button type="button" className="nds-modal-x" onClick={onClose} aria-label="Close">
+            : <button type="button" className="nds-modal-x" onClick={onClose} aria-label={words.close}>
                 <X size={18} />
               </button>}
         </div>

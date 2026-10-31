@@ -66,6 +66,10 @@ model CostingSettings {
   /// on the method never changes (the …_money_w2a_guards trigger; the screen holds it "with that reason").
   methodLockedAt   DateTime?     @db.Timestamptz(3)
   methodLockedById String?       @db.Uuid
+  /// W2b (schema wave 2/7; B-W2a-21's follow-up "a costing method that is not tied to the overhead row"): true on a
+  /// company's row made to hold its costing method only: its overhead is the tenant-wide row's (overheadPct stays 0 and
+  /// is not read). false: the row's own overhead (every row before W2b). The tenant-wide row is always false.
+  overheadFromTenant Boolean   @default(false)
   version     Int      @default(1)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)

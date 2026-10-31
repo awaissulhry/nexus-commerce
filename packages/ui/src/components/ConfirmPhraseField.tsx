@@ -3,6 +3,8 @@
 import { useId, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
 import { Input } from '../primitives/Input'
+import { mergeLabels } from '../lib/labels'
+import { CONFIRM_PHRASE_FIELD_LABELS, type ConfirmPhraseFieldLabels } from './ConfirmPhraseFieldLabels'
 
 /**
  * ConfirmPhraseField — "type this exactly to confirm": the typed confirmation of a step that cannot be undone the same
@@ -34,12 +36,7 @@ export function phraseMatchState(typed: string, phrase: string): PhraseMatchStat
   return phrase.startsWith(typed) ? 'partial' : 'mismatch'
 }
 
-export const PHRASE_STATE_TEXT: Readonly<Record<PhraseMatchState, string>> = {
-  empty: 'Capital letters and spaces count.',
-  partial: 'Keep typing.',
-  mismatch: 'Does not match. Capital letters and spaces count.',
-  match: 'Matches.',
-}
+export const PHRASE_STATE_TEXT: Readonly<Record<PhraseMatchState, string>> = CONFIRM_PHRASE_FIELD_LABELS.states
 
 export interface ConfirmPhraseFieldProps {
   /** The exact text to type: a SKU, an item number, a count. */
@@ -53,21 +50,25 @@ export interface ConfirmPhraseFieldProps {
   className?: string
   disabled?: boolean
   autoFocus?: boolean
+  /** Its words in the person's language (B-W2b-04): the label around the phrase and the state line. Default English;
+   *  `label` wins. */
+  labels?: Partial<ConfirmPhraseFieldLabels>
 }
 
-export function ConfirmPhraseField({ phrase, value, onChange, label, id, className, disabled, autoFocus }: ConfirmPhraseFieldProps) {
+export function ConfirmPhraseField({ phrase, value, onChange, label, id, className, disabled, autoFocus, labels }: ConfirmPhraseFieldProps) {
+  const words = mergeLabels(CONFIRM_PHRASE_FIELD_LABELS, labels)
   const auto = useId()
   const inputId = id ?? `${auto}-input`
   const stateId = `${auto}-state`
   const state = phraseMatchState(value, phrase)
   return (
     <div className={['nds-field-w', className].filter(Boolean).join(' ')}>
-      <label htmlFor={inputId}>{label ?? <>Type <strong className="nds-confirm-h">{phrase}</strong> exactly to confirm</>}</label>
+      <label htmlFor={inputId}>{label ?? words.typeToConfirm(<strong className="nds-confirm-h">{phrase}</strong>)}</label>
       <Input id={inputId} value={value} onChange={e => onChange(e.target.value)} disabled={disabled} autoFocus={autoFocus}
         aria-describedby={stateId} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} />
       <span id={stateId} className="nds-field-hint" aria-live="polite" data-state={state}>
         {state === 'match' && <Check size={12} strokeWidth={2.5} aria-hidden="true" className="nds-confirm-phrase-ok" />}
-        {PHRASE_STATE_TEXT[state]}
+        {words.states[state]}
       </span>
     </div>
   )

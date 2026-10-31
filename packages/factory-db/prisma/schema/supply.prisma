@@ -370,7 +370,8 @@ model MaterialRequirement {
   firmedAt            DateTime?           @db.Timestamptz(3)
   firmedById          String?             @db.Uuid
   /// W2a: the firm line of an earlier run of the site that this line carries (the same material, colour and action);
-  /// written with the line, never changed. A carried line is firm.
+  /// written with the line, never changed. A carried line is written firm; W2b (schema wave 2/7, B-W2a-22's need): it
+  /// may be made planned again (its firm columns cleared) and keeps this as its history.
   firmCarriedFromId   String?             @db.Uuid
   version             Int                 @default(1)
   createdAt           DateTime            @default(now()) @db.Timestamptz(3)
@@ -406,4 +407,28 @@ enum RequirementDecision {
   OPEN
   ORDERED
   IGNORED
+}
+
+/// W2b (schema wave 2/7, B-W2b-02; W2b plan §3 "Owner switch", B-W2a-52's schema need; design purchasing.settings
+/// "Confirmation"): the purchasing settings of a company, or the tenant-wide ones. Today the Owner's switch for the
+/// automatic PO confirmation reminders: B-W2a-52's daily run e-mails a supplier to confirm a sent order only while it is
+/// on (off by default; turned on after go-live, B-W2b-14 shows it). A reminder a person sends by hand is not affected. The
+/// row's id is the company's id, or the tenant's own id for the tenant-wide row (as ReceivablesSettings); the company's
+/// row wins. No row: off.
+model PurchasingSettings {
+  /// The company's id; the tenant's id for the tenant-wide row (companyId null).
+  id                           String   @id @db.Uuid
+  tenantId                     String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: the tenant-wide settings.
+  companyId                    String?  @db.Uuid
+  /// The Owner's switch: automatic confirmation reminders reach suppliers only when true.
+  confirmationRemindersEnabled Boolean  @default(false)
+  version                      Int      @default(1)
+  createdAt                    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById                  String?  @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
 }

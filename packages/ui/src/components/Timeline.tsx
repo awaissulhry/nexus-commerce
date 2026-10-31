@@ -3,6 +3,8 @@
 import type { ReactNode } from 'react'
 import type { Tone } from '../primitives/tone'
 import { AsOf } from './AsOf'
+import { mergeLabels } from '../lib/labels'
+import { TIMELINE_LABELS, type TimelineLabels } from './TimelineLabels'
 
 export interface TimelineStep {
   key: string
@@ -27,10 +29,12 @@ export interface TimelineProps {
   /** The read's clock, for "2 min ago". Default: now. */
   now?: number
   className?: string
+  /** Its words in the person's language (B-W2b-04): the tone words, "not yet" and each time's words. Default English. */
+  labels?: Partial<TimelineLabels>
 }
 
 /** Read by a screen reader before the label, so a warning or a failure is never told by colour alone. */
-const TONE_WORD: Partial<Record<Tone, string>> = { warning: 'Needs attention: ', danger: 'Problem: ' }
+const toneWords = (words: TimelineLabels): Partial<Record<Tone, string>> => ({ warning: words.needsAttention, danger: words.problem })
 
 /**
  * Timeline — a read-only record of what happened, in order (sheet publish parity, 2026-10-02).
@@ -40,7 +44,9 @@ const TONE_WORD: Partial<Record<Tone, string>> = { warning: 'Needs attention: ',
  * dot is filled with the tone's TEXT colour, so it clears 3:1 on the surface (WCAG 1.4.11) in both themes; a step
  * that has not happened is a hollow ring.
  */
-export function Timeline({ steps, label, now, className }: TimelineProps) {
+export function Timeline({ steps, label, now, className, labels }: TimelineProps) {
+  const words = mergeLabels(TIMELINE_LABELS, labels)
+  const TONE_WORD = toneWords(words)
   return (
     <ol className={`nds-timeline${className ? ` ${className}` : ''}`} aria-label={label}>
       {steps.map(step => (
@@ -53,8 +59,8 @@ export function Timeline({ steps, label, now, className }: TimelineProps) {
                 {step.label}
               </span>
               {step.at === null
-                ? <span className="nds-as-of">not yet</span>
-                : step.at !== undefined && <AsOf at={step.at} kind="event" now={now} />}
+                ? <span className="nds-as-of">{words.notYet}</span>
+                : step.at !== undefined && <AsOf at={step.at} kind="event" now={now} labels={words.asOf} />}
               {step.action != null && <span className="nds-timeline-action">{step.action}</span>}
             </span>
             {step.detail != null && <span className="nds-timeline-detail">{step.detail}</span>}

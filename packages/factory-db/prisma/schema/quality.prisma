@@ -105,6 +105,9 @@ model Inspection {
   /// changes it); a decided inspection keeps it.
   assignedInspectorId       String?  @db.Uuid
   assignedInspectorWorkerId String?  @db.Uuid
+  /// W2b (schema wave 2/7; design quality.inspections "Due", inline): by when it is to be done; null: no date. The
+  /// office sets and moves it while OPEN (the floor never does); a decided or cancelled inspection keeps it.
+  dueAt                     DateTime? @db.Timestamptz(3)
   /// When it was decided (PASSED or FAILED), and the SHA-256 (hex) of the decision as the inspector signed it (the
   /// e-signature, QHS-058): set exactly then.
   decidedAt         DateTime?        @db.Timestamptz(3)
@@ -137,6 +140,8 @@ model Inspection {
   @@unique([tenantId, number])
   @@index([tenantId, workOrderId])
   @@index([tenantId, status])
+  // W2b: the open inspections by due date (the list's Due column and its overdue view).
+  @@index([tenantId, status, dueAt])
 }
 
 enum InspectionStatus {
@@ -496,6 +501,13 @@ model QualitySettings {
   /// Customers (parties of the tenant with the CUSTOMER role) whose garments always need a second person at release;
   /// a company's list adds to the tenant-wide one.
   secondPersonPartyIds String[]     @default([]) @db.Uuid
+  /// W2b (schema wave 2/7; design quality.settings qs-sod "A hold is released by someone other than the person who placed
+  /// it: on / off"): true lets the person who placed a hold release it too; false: someone else releases it (today's
+  /// rule). null: not set on this row (a company row follows the tenant-wide one; no row: false).
+  placerMayRelease        Boolean?
+  /// W2b (B-W2a-47's default): hours after a problem is found by which an NCR's containment is due when nobody says
+  /// otherwise, 1 to 720. null: not set on this row (a company row follows the tenant-wide one; no row: 24).
+  defaultContainmentHours Int?
   version          Int              @default(1)
   createdAt        DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
