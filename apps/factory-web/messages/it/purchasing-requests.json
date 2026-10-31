@@ -1,0 +1,420 @@
+{
+  "title": "Richieste d'acquisto",
+  "common": {
+    "asOf": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "cancel": "Annulla",
+    "clearFilters": "Togli i filtri",
+    "dismiss": "Chiudi",
+    "done": "Fatto",
+    "loading": "Caricamento…",
+    "more": "Mostra altre",
+    "retry": "Riprova",
+    "shortcuts": "Scorciatoie da tastiera"
+  },
+  "live": {
+    "connecting": "Collegamento agli aggiornamenti…",
+    "live": "In tempo reale",
+    "offline": "Aggiornamenti sospesi",
+    "offlineNet": "Offline — non si può creare nulla finché la connessione non torna"
+  },
+  "problem": {
+    "read": "Il server non ha risposto come previsto. Riprova.",
+    "forbidden": "Il tuo ruolo non può vedere o fare questo.",
+    "offline": "Nessuna connessione al server. Controlla la rete e riprova.",
+    "gone": "Non esiste più, o appartiene a un’altra azienda.",
+    "write": "Non è stato salvato. Riprova.",
+    "changed": "Qualcuno l’ha modificato nel frattempo: è stato riletto. Controlla e riprova.",
+    "invalid": "Qualcosa non è stato accettato. Controlla e riprova.",
+    "slowDown": "Troppi tentativi insieme. Attendi un momento e riprova."
+  },
+  "noAccess": {
+    "title": "Le richieste d’acquisto non sono nel tuo ruolo",
+    "body": "Per vedere cosa comprare serve purchasing.view. Chiedi a un amministratore se compri per lo stabilimento."
+  },
+  "band": {
+    "draft_one": "Crea ordine per {count}",
+    "draft_other": "Crea ordini per {count}",
+    "draftNone": "Crea ordini",
+    "plan": "Cosa comprare e produrre"
+  },
+  "tile": {
+    "open": "Aperte",
+    "need14": "Servono entro 14 giorni",
+    "waiting": "In attesa di approvazione",
+    "converted": "Convertite oggi",
+    "waitingHint": "Le richieste del personale arrivano più avanti"
+  },
+  "tiles": {
+    "failed": "Impossibile caricare cosa c’è da gestire"
+  },
+  "list": {
+    "label": "Richieste d’acquisto",
+    "search": "Cerca materiale, fornitore, ordine…",
+    "viewLabel": "Righe",
+    "kindLabel": "Tipo",
+    "groupLabel": "Raggruppa",
+    "siteLabel": "Sede",
+    "count_one": "{count} richiesta",
+    "count_other": "{count} richieste",
+    "countOf_one": "{count} di {total} richiesta",
+    "countOf_other": "{count} di {total} richieste",
+    "failed": "Impossibile caricare le richieste",
+    "empty": {
+      "title": "Nessuna richiesta aperta",
+      "body": "Non c’è nulla che il piano o un punto di riordino chieda di comprare.",
+      "plan": "Esegui il piano in Cosa comprare e produrre"
+    },
+    "noMatch": {
+      "title": "Nessuna richiesta corrisponde",
+      "body": "Cambia la ricerca o le righe mostrate."
+    },
+    "viewing": "Mostrate: {view}"
+  },
+  "view": {
+    "open": "Aperte",
+    "need14": "Servono entro 14 giorni",
+    "held": "Aperte, non ordinabili ora",
+    "converted": "In un ordine d’acquisto",
+    "setAside": "Rifiutate",
+    "all": "Tutte"
+  },
+  "kind": {
+    "all": "Ogni tipo",
+    "PLAN": "Piano",
+    "REORDER": "Punto di riordino"
+  },
+  "groupBy": {
+    "none": "Nessun gruppo",
+    "supplier": "Per fornitore",
+    "week": "Per settimana di necessità"
+  },
+  "site": {
+    "all": "Tutte le sedi"
+  },
+  "col": {
+    "source": "Origine",
+    "material": "Materiale",
+    "quantity": "Quantità",
+    "need": "Serve il · ordina entro",
+    "supplier": "Fornitore suggerito",
+    "by": "Richiesta da",
+    "status": "Stato",
+    "value": "Valore",
+    "more": "Altro",
+    "group": {
+      "supplier": "Fornitore",
+      "week": "Settimana"
+    }
+  },
+  "group": {
+    "supplier": "{name}",
+    "noSupplier": "Ancora senza fornitore",
+    "week": "Settimana {week} · {year}",
+    "noWeek": "Senza data",
+    "count_one": "{count} richiesta",
+    "count_other": "{count} richieste"
+  },
+  "source": {
+    "plan": "Esecuzione del piano",
+    "firm": "Ordine pianificato fisso",
+    "shortage_one": "Mancanza per {numbers}",
+    "shortage_other": "Mancanza per {count} ordini di lavoro ({numbers}…)",
+    "reorderPoint": "Punto di riordino raggiunto",
+    "minMax": "Sotto la scorta minima"
+  },
+  "by": {
+    "planRun": "Esecuzione del piano",
+    "reorderPoint": "Regola di riordino a {site}",
+    "minMax": "Regola min–max a {site}",
+    "live": "Controllata al momento, non salvata"
+  },
+  "crVi": "test cromo VI",
+  "hides_one": "≈ {count} pelle",
+  "hides_other": "≈ {count} pelli",
+  "rounded_one": "arrotondata in {count} passaggio",
+  "rounded_other": "arrotondata in {count} passaggi",
+  "quantityFrom": {
+    "FIRM": "come fissata dal pianificatore",
+    "SOURCE": "nell’unità del fornitore",
+    "PLAN": "come suggerisce il piano",
+    "ITEM": "secondo le condizioni del materiale"
+  },
+  "orderBy": {
+    "on": "ordina entro il {date}",
+    "passed": "giorno per ordinare passato ({date})"
+  },
+  "supplier": {
+    "none": "Nessun fornitore",
+    "pick": "scegline uno nella richiesta",
+    "theSupplier": "il fornitore"
+  },
+  "supplierFrom": {
+    "CHOSEN": "scelto da te",
+    "FIRM": "dall’ordine pianificato fisso",
+    "SITE": "il fornitore preferito della sede",
+    "DEFAULT": "il fornitore predefinito del materiale",
+    "SOURCE_one": "la fonte approvata ({count} approvata)",
+    "SOURCE_other": "la migliore fonte approvata su {count}"
+  },
+  "status": {
+    "OPEN": "Aperta",
+    "CONVERTED": "In un ordine d’acquisto",
+    "SET_ASIDE": "Rifiutata",
+    "held": "Aperta · bloccata",
+    "inOrder": "In {number}",
+    "setAsideWhy": "Rifiutata: {reason}"
+  },
+  "notOpen": {
+    "CONVERTED": "Già nell’ordine d’acquisto {number}",
+    "SET_ASIDE": "Rifiutata: rimettila prima in Cosa comprare e produrre",
+    "OPEN": "Aperta"
+  },
+  "hold": {
+    "NO_SUPPLIER": "Nessun fornitore: aprila e scegline uno approvato",
+    "NOT_A_SUPPLIER": "{supplier} non è un fornitore: scegline un altro",
+    "SUPPLIER_BLOCKED": "{supplier} è bloccato: scegline un altro o sbloccalo",
+    "SUPPLIER_ARCHIVED": "{supplier} è archiviato: scegline un altro",
+    "NOT_APPROVED": "{supplier} non è una fonte approvata di {material}: scegline una approvata",
+    "MATERIAL_ARCHIVED": "{material} è archiviato: non si può comprare",
+    "NOT_OPEN": "Non più aperta: qualcuno l’ha decisa nel frattempo",
+    "PLAN_REPLACED": "Un piano più recente ha sostituito questa riga: rileggi l’elenco",
+    "NOT_NEEDED": "La scorta non è più al punto di riordino: nulla da comprare"
+  },
+  "warning": {
+    "SUPPLIER_PROSPECT": "Il fornitore è un potenziale: l’ordine si può creare, non inviare, finché non è approvato.",
+    "NO_PRICE": "Nessun prezzo registrato per questo fornitore: scrivilo sull’ordine prima di inviarlo.",
+    "ORDER_BY_PASSED": "Il giorno per ordinare è passato: la merce può arrivare dopo la data di necessità.",
+    "NO_LEAD_TIME": "Nessun tempo di consegna registrato: il giorno per ordinare è la data di necessità.",
+    "SOURCE_UNIT_NOT_CONVERTED": "Il materiale non converte più l’unità del fornitore: si compra nella sua unità d’acquisto."
+  },
+  "row": {
+    "menu": "Altro per {material}",
+    "open": "Apri la richiesta",
+    "source": "Record di origine (nuova scheda)",
+    "draft": "Crea ordine",
+    "reject": "Rifiuta con motivo"
+  },
+  "bulk": {
+    "draft_one": "Crea ordine per {count}",
+    "draft_other": "Crea ordini per {count}",
+    "reject_one": "Rifiuta {count} con motivo",
+    "reject_other": "Rifiuta {count} con motivo",
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)"
+  },
+  "held": {
+    "busy": "In corso…",
+    "loading": "Ancora in lettura…",
+    "noManage": "Per creare ordini d’acquisto serve purchasing.manage",
+    "noDecide": "Per rifiutare serve planning.decide",
+    "offline": "Offline: attendi la connessione",
+    "selectFirst": "Seleziona prima delle richieste",
+    "noneOpen": "Nessuna di queste è aperta e pronta",
+    "reorderNoReject": "Un punto di riordino non si rifiuta: cambia la regola di riordino"
+  },
+  "keys": {
+    "draft": "Crea ordini per le richieste selezionate (nella richiesta: questa)",
+    "walk": "Richiesta successiva / precedente"
+  },
+  "detail": {
+    "title": "Richiesta · {material}",
+    "titleLoading": "Richiesta",
+    "position": "{index} di {count}",
+    "previous": "Precedente",
+    "next": "Successiva",
+    "first": "È la prima richiesta",
+    "last": "È l’ultima richiesta",
+    "source": "Record di origine",
+    "draft": "Crea ordine",
+    "failed": "Impossibile caricare la richiesta",
+    "gone": "Questa richiesta non esiste più: il piano o la regola è cambiato.",
+    "facts": "Cosa comprare",
+    "lead": "Tempo di consegna",
+    "noLead": "Nessuno registrato",
+    "leadDays_one": "{count} giorno",
+    "leadDays_other": "{count} giorni",
+    "closedDays_one": "{count} giorno di chiusura del fornitore saltato",
+    "closedDays_other": "{count} giorni di chiusura del fornitore saltati",
+    "inBase": "{quantity} {uom} nell’unità del materiale",
+    "codes": "Codici del fornitore",
+    "price": "Prezzo unitario",
+    "noPrice": "Ancora senza prezzo",
+    "why": "Perché si chiede",
+    "rounding": "Come è stata arrotondata la quantità",
+    "ruleNote": "Nota della regola: {note}",
+    "forWhat": "A cosa serve",
+    "salesOrders_one": "Per l’ordine",
+    "salesOrders_other": "Per {count} ordini",
+    "workOrders_one": "Manca per l’ordine di lavoro",
+    "workOrders_other": "Manca per {count} ordini di lavoro",
+    "onOrder": "Già in ordine",
+    "onOrderNone": "Ancora nulla in ordine.",
+    "order": "Ordine",
+    "open": "Ancora da arrivare",
+    "sources": "Fornitori approvati",
+    "noSources": "Nessuna fonte approvata: si può usare qualsiasi fornitore.",
+    "unit": "vende in {uom}",
+    "minimum": "minimo {quantity}",
+    "multiple": "multipli di {quantity}",
+    "supplierLead": "il tempo di consegna abituale del fornitore",
+    "pickClosed": "Solo una richiesta aperta può cambiare fornitore.",
+    "history": "Storico",
+    "openOrder": "Apri l’ordine",
+    "setAsideNote": "Nota: {note}"
+  },
+  "preference": {
+    "PRIMARY": "Principale",
+    "BACKUP": "Di riserva"
+  },
+  "net": {
+    "need": "Serve: {quantity} {uom}",
+    "usable": "Scorta utilizzabile: − {quantity} {uom}",
+    "held": "Scorta bloccata non contata: {quantity} {uom}",
+    "onOrder": "Già in ordine: − {quantity} {uom}",
+    "short": "Mancano: {quantity} {uom}",
+    "position": "Posizione di scorta: {usable} utilizzabili + {onOrder} in ordine − {reserved} riservati = {position} {uom}",
+    "atPoint": "Al punto di riordino di {level} {uom} o sotto",
+    "belowMinimum": "Sotto la scorta minima di {level} {uom}",
+    "ruleOrders": "La regola ordina {quantity} {uom}",
+    "buy": {
+      "FIRM": "Compra {quantity} {uom}, come l’ha fissata il pianificatore",
+      "SOURCE": "Compra {quantity} {uom}, nell’unità e nei multipli del fornitore",
+      "PLAN": "Compra {quantity} {uom}, come suggerisce il piano",
+      "ITEM": "Compra {quantity} {uom}, secondo le condizioni del materiale"
+    }
+  },
+  "rounding": {
+    "WHOLE_UNITS": "Unità intere: {quantity} {uom}",
+    "MINIMUM": "Almeno il minimo: {quantity} {uom}",
+    "MULTIPLE": "A multipli: {quantity} {uom}",
+    "MAXIMUM": "Al massimo il massimo: {quantity} {uom}",
+    "LOT_SIZE": "Il lotto della regola: {quantity} {uom}",
+    "UP_TO_MAXIMUM": "Fino alla scorta massima: {quantity} {uom}",
+    "OTHER": "Arrotondata: {quantity} {uom}"
+  },
+  "history": {
+    "run": "L’esecuzione del piano l’ha trovata",
+    "setAside": "Rifiutata: {reason}",
+    "ordered": "Inserita in {number}",
+    "reorderLive": "La regola di riordino della sede la chiede ora (controllata a ogni lettura dell’elenco)."
+  },
+  "reason": {
+    "CUSTOMER_SUPPLIES": "la fornisce il cliente",
+    "SUBSTITUTE": "si usa un sostituto",
+    "STOCK_NOT_IN_SYSTEM": "la scorta c’è ma non è ancora nel sistema",
+    "OTHER": "un altro motivo"
+  },
+  "draft": {
+    "title_one": "Crea un ordine d’acquisto per {count} richiesta",
+    "title_other": "Crea ordini d’acquisto per {count} richieste",
+    "subtitle_one": "{lines} righe in {count} bozza",
+    "subtitle_other": "{lines} righe in {count} bozze",
+    "confirm_one": "Crea {count} ordine",
+    "confirm_other": "Crea {count} ordini",
+    "reading": "Lettura di cosa verrebbe creato…",
+    "previewFailed": "Impossibile leggere cosa verrebbe creato",
+    "heldTitle_one": "{count} richiesta non si può ordinare ora: tutto il gruppo la aspetta",
+    "heldTitle_other": "{count} richieste non si possono ordinare ora: tutto il gruppo le aspetta",
+    "leaveOut_one": "Lasciala fuori",
+    "leaveOut_other": "Lasciale fuori",
+    "heldFirst_one": "Lascia prima fuori la richiesta bloccata",
+    "heldFirst_other": "Lascia prima fuori le {count} richieste bloccate",
+    "noRight": "Non puoi creare ordini per {supplier} a {site}",
+    "nothing": "Nulla da creare.",
+    "aRequest": "Una richiesta",
+    "cardMeta_one": "a {site} · {count} riga · {currency}",
+    "cardMeta_other": "a {site} · {count} righe · {currency}",
+    "cardTotal": "Valore previsto: {amount}",
+    "where": "Dove vanno le righe per {supplier}",
+    "addTo": "Aggiungi alla bozza {number}",
+    "addToHint_one": "Ora ha {count} riga",
+    "addToHint_other": "Ora ha {count} righe",
+    "newDraft": "Una nuova bozza",
+    "newDraftHint": "Il numero viene dalla serie quando si crea",
+    "willCreate": "Si crea una nuova bozza d’ordine per questo fornitore e questa sede.",
+    "checksLater": "I controlli d’invio (prezzi, date, contatto) si fanno quando invii ogni ordine.",
+    "nothingSent": "Non si invia nulla: le bozze ti aspettano.",
+    "doneTitle": "Bozze d’ordine create",
+    "doneBody_one": "{lines} righe sono andate in {count} bozza",
+    "doneBody_other": "{lines} righe sono andate in {count} bozze",
+    "created_one": "Nuova bozza · {lines} righe aggiunte · {count} riga",
+    "created_other": "Nuova bozza · {lines} righe aggiunte · {count} righe",
+    "added_one": "{lines} righe aggiunte · ora {count} riga",
+    "added_other": "{lines} righe aggiunte · ora {count} righe"
+  },
+  "party": {
+    "PROSPECT": "Potenziale",
+    "OTHER": "Non attivo"
+  },
+  "refused": {
+    "notApproved": "Un fornitore scelto non è una fonte approvata di quel materiale: scegline uno approvato nella richiesta.",
+    "changed": "Qualcosa è cambiato nel frattempo (il piano, una bozza o la scorta): l’anteprima è stata riletta. Controlla e conferma.",
+    "invalid": "Una richiesta non si può ordinare così: l’anteprima è stata riletta con il motivo."
+  },
+  "reject": {
+    "title_one": "Rifiuta {count} richiesta",
+    "title_other": "Rifiuta {count} richieste",
+    "confirm_one": "Rifiuta {count}",
+    "confirm_other": "Rifiuta {count}",
+    "body": "Le righe del piano vengono messe da parte in Cosa comprare e produrre: non si compra nulla finché qualcuno non le rimette.",
+    "reason": "Motivo",
+    "pick": "Scegli un motivo",
+    "pickReason": "Scegli prima un motivo",
+    "note": "Nota",
+    "noteHint": "Facoltativa: cosa deve sapere il pianificatore",
+    "noteOther": "Scrivi il motivo in poche parole",
+    "noteNeeded": "Un altro motivo richiede una nota",
+    "planSees": "Il pianificatore vede il motivo sulla riga del piano."
+  },
+  "notice": {
+    "drafted_one": "{lines} righe inserite in {count} ordine d’acquisto:",
+    "drafted_other": "{lines} righe inserite in {count} ordini d’acquisto:",
+    "rejected_one": "{count} richiesta rifiutata: la riga del piano è messa da parte.",
+    "rejected_other": "{count} richieste rifiutate: le righe del piano sono messe da parte."
+  },
+  "csv": {
+    "kind": "Tipo",
+    "site": "Sede",
+    "material": "Materiale",
+    "colour": "Colore",
+    "quantity": "Quantità",
+    "uom": "Unità",
+    "need": "Data di necessità",
+    "orderBy": "Ordina entro",
+    "supplier": "Fornitore",
+    "status": "Stato",
+    "value": "Valore",
+    "currency": "Valuta"
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paio",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "mezze pelli",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  },
+  "poStatus": {
+    "DRAFT": "Bozza",
+    "SENT": "Inviato",
+    "CHANGES_PROPOSED": "Modifiche proposte",
+    "CONFIRMED": "Confermato",
+    "DECLINED": "Rifiutato",
+    "PARTLY_RECEIVED": "Ricevuto in parte",
+    "RECEIVED": "Ricevuto",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  }
+}

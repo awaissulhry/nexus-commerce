@@ -1,0 +1,352 @@
+{
+  "tile": {
+    "dueThisWeek": "In arrivo questa settimana",
+    "deliveryLate": "In ritardo"
+  },
+  "view": {
+    "dueThisWeek": "Attesi questa settimana",
+    "deliveryLate": "Consegne in ritardo",
+    "pastConfirmBy": "Oltre il termine di conferma"
+  },
+  "delivery": {
+    "LATE": "In ritardo",
+    "THIS_WEEK": "Questa settimana",
+    "LATER": "Più avanti"
+  },
+  "language": {
+    "it": "italiano",
+    "en": "inglese"
+  },
+  "list": {
+    "colExpected": "Atteso",
+    "answerBy": "Risposta entro {time}",
+    "pastConfirmBy": "Oltre il termine ({time})",
+    "send": "Invia",
+    "sendN_one": "Invia {count}",
+    "sendN_other": "Invia {count}",
+    "sendNoDraft": "Seleziona prima delle bozze: si inviano solo le bozze.",
+    "keySend": "Invia le bozze selezionate (x seleziona la riga)"
+  },
+  "sendMany": {
+    "title_one": "Invia {count} ordine d'acquisto",
+    "title_other": "Invia {count} ordini d'acquisto",
+    "subtitle": "Una scheda per fornitore: ogni ordine parte da solo, con il suo link di conferma.",
+    "supplier": "Fornitore",
+    "order": "Ordine",
+    "reading": "Leggo cosa serve a ogni ordine prima che parta…",
+    "readFailed": "Impossibile leggere gli ordini da inviare",
+    "goes": "Parte",
+    "stays": "Resta",
+    "to": "A {name} · {email} · in {language}",
+    "confirmByOf": "Conferma entro per {number}",
+    "message": "Messaggio a tutti i fornitori",
+    "messageHint": "Facoltativo: aggiunto a ogni mail dopo il testo standard.",
+    "eachOwn": "Ogni ordine è un invio a sé: uno rifiutato non ferma gli altri.",
+    "link": "Ogni fornitore riceve un link monouso per confermare, proporre altre date o quantità, o rifiutare — senza account.",
+    "reminder": "Dopo il termine di conferma il buyer riceve un avviso; i solleciti partono solo a mano finché il titolare non attiva quelli automatici.",
+    "confirm_one": "Invia {count} ordine",
+    "confirm_other": "Invia {count} ordini",
+    "held": {
+      "reading": "Attendi: sto leggendo gli ordini.",
+      "offline": "Offline: ora non si può inviare nulla.",
+      "none": "Nessuno di questi ordini può partire ora: vedi ogni scheda.",
+      "notDraft": "Non è più una bozza: è stato inviato o cambiato nel frattempo.",
+      "gone": "Non si trova più (rimosso, o di un'altra azienda).",
+      "refused": "Non si è potuto leggere: apri l'ordine."
+    },
+    "doneTitle_one": "{count} ordine inviato",
+    "doneTitle_other": "{count} ordini inviati",
+    "sent": "inviato a {to}.",
+    "answerBy": "risposta entro {time}",
+    "refused": {
+      "conflict": "non inviato: è cambiato nel frattempo — aprilo e invialo di nuovo.",
+      "invalid": "non inviato: qualcosa nell'ordine non va — aprilo.",
+      "other": "non inviato: riprova dall'ordine."
+    },
+    "fake": "Su questo computer la mail arriva solo alla casella di prova."
+  },
+  "send": {
+    "confirmBy": "Conferma entro",
+    "confirmByHint": "Predefinito {time} (48 ore, di più se il fornitore è chiuso). Dopo, il buyer riceve un avviso.",
+    "confirmByHintNone": "Predefinito: 48 ore dopo l'invio, di più se il fornitore è chiuso.",
+    "changesTold": "Il fornitore legge cosa cambia nella revisione {revision}:",
+    "changeNote": "Nota su cosa è cambiato",
+    "changeNoteHint": "Facoltativa: perché è cambiato, nella mail di questa revisione.",
+    "confirmByRefused": "Quel termine di conferma non si può usare: scegli un'ora dopo adesso, entro la durata del link."
+  },
+  "change": {
+    "open": "Modifica (revisione {revision})",
+    "title": "Modificare {number}?",
+    "becomesDraft": "L'ordine diventa la bozza della revisione {revision}: cambia righe e dettagli, poi invialo.",
+    "linksStop": "I link di {supplier} per rispondere smettono di funzionare ora; la sua risposta resta nella storia delle revisioni.",
+    "confirmedAgain": "{supplier} aveva confermato questo ordine: la nuova revisione va confermata di nuovo.",
+    "sendAfter": "Il fornitore non vede nulla finché non invii la nuova revisione.",
+    "note": "Perché cambia (per la storia)",
+    "noteHint": "Facoltativo; resta con l'ordine, mai in una mail.",
+    "confirm": "Avvia la revisione {revision}",
+    "bannerHint": "Gli ordini inviati sono in sola lettura. Modifica avvia la revisione {revision}: il fornitore la vede dopo che la invii.",
+    "bannerReceived": "È arrivata merce: l'ordine non cambia più. Annulla una riga o chiudila a saldo dal ⋯ della riga.",
+    "fromTo": "{field}: {before} → {after}",
+    "held": {
+      "draft": "È una bozza: cambiala qui e inviala.",
+      "proposed": "Il fornitore ha proposto modifiche: prima accetta, rifiuta o fai una controproposta.",
+      "received": "È arrivata merce: annulla una riga o chiudila a saldo.",
+      "closed": "L'ordine è chiuso o annullato."
+    }
+  },
+  "counter": {
+    "open": "Controproposta",
+    "title": "Controproposta su {number}?",
+    "confirm": "Avvia la revisione {revision}",
+    "fromAsked": "Le modifiche del fornitore sono rifiutate; la revisione {revision} parte da quanto avevi chiesto, da cambiare e inviare.",
+    "means": "Controproposta: la revisione {revision} da quanto avevi chiesto — cambiala e inviala.",
+    "held": {
+      "noProposal": "Nessuna proposta aspetta la tua decisione."
+    }
+  },
+  "revisionDraft": {
+    "title": "Bozza della revisione {revision} — il fornitore la vede dopo che la invii",
+    "nothingYet": "Ancora nulla di cambiato rispetto alla revisione che ha il fornitore.",
+    "unknown": "Non si è potuto leggere cosa è cambiato finora; l'invio lo mostra di nuovo."
+  },
+  "revisions": {
+    "title": "Revisioni",
+    "draftOpen": "Bozza della revisione {revision}",
+    "notSent": "Non ancora inviato: la revisione 1 nasce al primo invio.",
+    "onlyOne": "Solo la revisione 1.",
+    "version": "Revisione {revision}",
+    "sent": "Inviata {time} da {by}",
+    "someone": "qualcuno dell'ufficio",
+    "viaLink": "il link",
+    "confirmedBy": "Confermata {time} da {name}",
+    "first": "Il primo invio: {count} righe.",
+    "noChange": "Inviata di nuovo senza modifiche.",
+    "line": "Riga {seq} ({item})",
+    "removedLine": "una riga non più nell'ordine",
+    "note": "Nota al fornitore:",
+    "pdf": "PDF",
+    "openPdf": "Apri il PDF della revisione {revision}",
+    "pricesSame": "Prezzi come prima: {amount} netto.",
+    "netFromTo": "Netto: {before} → {after}",
+    "priceFromTo": "Prezzo riga {seq}: {before} → {after}",
+    "kind": {
+      "ADDED": "{line}: aggiunta",
+      "REMOVED": "{line}: tolta",
+      "CANCELLED": "{line}: annullata",
+      "CHANGED": "{line}: cambiata"
+    },
+    "answer": {
+      "NOT_SENT": "Non inviata",
+      "WAITING": "In attesa",
+      "CONFIRMED": "Confermata",
+      "DECLINED": "Rifiutata",
+      "CHANGES_PROPOSED": "Modifiche proposte",
+      "RECEIVED": "Ricevuta",
+      "CANCELLED": "Annullata"
+    }
+  },
+  "field": {
+    "requestedDate": "Data richiesta",
+    "incoterms": "Incoterms",
+    "paymentTerms": "Termini di pagamento",
+    "note": "Nota al fornitore",
+    "quantity": "Quantità",
+    "needDate": "Data di fabbisogno",
+    "colour": "Colore",
+    "description": "Descrizione",
+    "articleCode": "Codice articolo del fornitore",
+    "colourCode": "Codice colore del fornitore",
+    "grade": "Scelta",
+    "thicknessMin": "Spessore da",
+    "thicknessMax": "Spessore a",
+    "oneDyeBatch": "Un solo bagno di tintura",
+    "tolerance": "Tolleranza di superficie",
+    "other": "Un dettaglio"
+  },
+  "value": {
+    "none": "nessuno",
+    "yes": "sì",
+    "no": "no",
+    "otherColour": "un altro colore"
+  },
+  "reminders": {
+    "title": "Solleciti inviati",
+    "busy": "Attendi: si sta salvando una modifica.",
+    "confirmBy": "Conferma entro",
+    "noDeadline": "Nessun termine chiesto (inviato prima che esistessero i termini di conferma)",
+    "automatic": "Solleciti automatici",
+    "automaticOn": "Attivi per questa azienda",
+    "automaticOff": "Spenti per questa azienda",
+    "switchHint": "L'interruttore del titolare, spento di base: finché non è acceso, i solleciti partono solo a mano.",
+    "nextAt": "Il prossimo {time}",
+    "notWaiting": "L'ordine non aspetta la risposta del fornitore: nessun sollecito parte.",
+    "manualOnly_one": "{count} sollecito per questa revisione. Sollecita a mano quando serve.",
+    "manualOnly_other": "{count} solleciti per questa revisione. Sollecita a mano quando serve.",
+    "overdueManual_one": "Il termine di conferma è passato; finora {count} sollecito. Il buyer è stato avvisato.",
+    "overdueManual_other": "Il termine di conferma è passato; finora {count} solleciti. Il buyer è stato avvisato.",
+    "nextAutomatic_one": "Finora {count} sollecito; il prossimo automatico {time}.",
+    "nextAutomatic_other": "Finora {count} solleciti; il prossimo automatico {time}.",
+    "noMoreAutomatic_one": "Finora {count} sollecito; per questa revisione non ne partono altri automatici (al massimo 3).",
+    "noMoreAutomatic_other": "Finora {count} solleciti; per questa revisione non ne partono altri automatici (al massimo 3).",
+    "none": "Nessun sollecito inviato.",
+    "byRun": "Il giro giornaliero",
+    "byHand": "A mano ({name})",
+    "col": {
+      "when": "Quando",
+      "revision": "Revisione",
+      "how": "Come",
+      "to": "A",
+      "mail": "Mail"
+    },
+    "mail": {
+      "QUEUED": "In attesa",
+      "SENT": "Inviata",
+      "DELIVERED": "Consegnata",
+      "FAILED": "Non riuscita",
+      "OTHER": "Sconosciuto"
+    }
+  },
+  "confirmBy": {
+    "move": "Sposta il termine di conferma",
+    "title": "Sposta il termine di conferma di {number}",
+    "label": "Conferma entro",
+    "hint": "Nell'ora dello stabilimento; entro la durata del link.",
+    "now": "Ora: {time}",
+    "none": "Nessun termine chiesto finora.",
+    "pick": "Scegli prima un'ora.",
+    "same": "È già il termine chiesto.",
+    "nothingSent": "A {supplier} non si invia nulla: è la scadenza dell'ufficio.",
+    "alert": "L'avviso al buyer segue il nuovo termine.",
+    "confirm": "Sposta",
+    "ahead": "Il fornitore ha ancora tempo.",
+    "passed": "Passato: il fornitore non ha risposto in tempo.",
+    "refused": "Quell'ora non si può usare: scegline una dopo adesso, entro la durata del link.",
+    "held": {
+      "notSent": "Solo un ordine inviato in attesa di risposta ha un termine di conferma."
+    }
+  },
+  "remind": {
+    "open": "Sollecita il fornitore",
+    "title": "Sollecita {supplier}",
+    "to": "A {name} · {email}",
+    "asked": "Risposta chiesta entro {time}.",
+    "askedNone": "Non è stato chiesto un termine di conferma.",
+    "noLink": "La mail porta il PDF dell'ordine, non il link: chiede di usare il link ricevuto, o di rispondere per averne uno nuovo.",
+    "before_one": "Per questa revisione è già partito {count} sollecito.",
+    "before_other": "Per questa revisione sono già partiti {count} solleciti.",
+    "fake": "Su questo computer la mail arriva solo alla casella di prova.",
+    "message": "Le tue parole",
+    "messageHint": "Facoltativo: dopo il testo standard, nella lingua del fornitore.",
+    "confirm": "Invia il sollecito",
+    "held": {
+      "notWaiting": "Si sollecita solo un ordine inviato in attesa di risposta.",
+      "noEmail": "Il contatto dell'ordine non ha un'e-mail: scegli un altro contatto (Modifica dettagli)."
+    }
+  },
+  "line": {
+    "cancel": "Annulla la riga",
+    "cancelN_one": "Annulla {count} riga",
+    "cancelN_other": "Annulla {count} righe",
+    "closeShort": "Chiudi a saldo",
+    "held": {
+      "cancelled": "Già annullata.",
+      "closedShort": "Già chiusa a saldo.",
+      "newInDraft": "Nuova in questa bozza: toglila invece.",
+      "cameCloseShort": "È arrivata merce: chiudila a saldo invece.",
+      "proposed": "Prima accetta o rifiuta le modifiche del fornitore.",
+      "orderClosed": "L'ordine è chiuso: niente da annullare.",
+      "allCame": "È arrivato tutto: non resta nulla da chiudere.",
+      "nothingCame": "Per l'ordine non è ancora arrivato nulla: annulla la riga invece.",
+      "nothingCameLine": "Per questa riga non è ancora arrivato nulla: annullala invece.",
+      "allCameLine": "È arrivata tutta: non resta nulla da chiudere."
+    }
+  },
+  "ended": {
+    "CANCELLED": "Annullata",
+    "CLOSED_SHORT": "Chiusa a saldo"
+  },
+  "closeShort": {
+    "title": "Chiudi a saldo",
+    "means": "Il resto di una riga non arriverà: chiuderla a saldo toglie quanto ancora atteso; la pianificazione lo libera (la riga del piano torna aperta).",
+    "open_one": "Chiudi {count} riga a saldo",
+    "open_other": "Chiudi {count} righe a saldo",
+    "none": "Ora nessuna riga si può chiudere a saldo.",
+    "nothing": "Nessuna riga aperta.",
+    "can": "Arrivata in parte: si può chiudere a saldo",
+    "line": "Chiudi la riga {seq} a saldo",
+    "lineShort": "Chiudi a saldo",
+    "col": {
+      "state": "Stato"
+    }
+  },
+  "end": {
+    "cancelTitle_one": "Annullare {count} riga di {number}?",
+    "cancelTitle_other": "Annullare {count} righe di {number}?",
+    "closeTitle_one": "Chiudere a saldo {count} riga di {number}?",
+    "closeTitle_other": "Chiudere a saldo {count} righe di {number}?",
+    "cancelMeans_one": "La riga resta nell'ordine come annullata: non se ne aspetta più nulla.",
+    "cancelMeans_other": "Le righe restano nell'ordine come annullate: non se ne aspetta più nulla.",
+    "closeMeans_one": "Quanto è arrivato resta; il resto della riga non è più atteso.",
+    "closeMeans_other": "Quanto è arrivato resta; il resto delle righe non è più atteso.",
+    "plan_one": "{count} riga del piano torna aperta in Cosa comprare e produrre.",
+    "plan_other": "{count} righe del piano tornano aperte in Cosa comprare e produrre.",
+    "supplierTold": "A {supplier} arriva una mail con le righe che finiscono.",
+    "supplierNotTold": "Al fornitore non arriva nessuna mail.",
+    "withRevision": "Il fornitore lo legge con la revisione {revision} quando la invii.",
+    "cancelConfirm_one": "Annulla {count} riga",
+    "cancelConfirm_other": "Annulla {count} righe",
+    "closeConfirm_one": "Chiudi {count} riga a saldo",
+    "closeConfirm_other": "Chiudi {count} righe a saldo"
+  },
+  "cancel": {
+    "confirmed": "{supplier} ha confermato questo ordine: annullarlo chiude un contratto. Viene avvisato subito."
+  },
+  "reach": {
+    "loading": "Leggo cosa tocca…",
+    "failed": "Impossibile leggere cosa tocca",
+    "waiting": "Attendi: sto leggendo cosa tocca.",
+    "tableLabel": "Cosa tocca, riga per riga",
+    "col": {
+      "ordered": "Ordinato",
+      "received": "Arrivato",
+      "outstanding": "Ancora atteso",
+      "supplies": "Serve a",
+      "held": "Si può?"
+    },
+    "lineOk": "Sì",
+    "suppliesNothing": "Nessun ordine del piano",
+    "planLines_one": "{count} riga del piano",
+    "planLines_other": "{count} righe del piano",
+    "demand": {
+      "SAFETY_STOCK": "scorta di sicurezza",
+      "REORDER": "regola di riordino",
+      "OTHER": "una riga d'ordine cliente"
+    },
+    "workOrders_one": "{count} ordine di lavoro perde questa fornitura:",
+    "workOrders_other": "{count} ordini di lavoro perdono questa fornitura:",
+    "salesOrders_one": "{count} ordine cliente ne risente:",
+    "salesOrders_other": "{count} ordini cliente ne risentono:",
+    "unnumbered": "(senza numero)",
+    "noOrders": "Nessun ordine di lavoro o cliente dell'ultimo piano ne dipende.",
+    "noPlan": "Lo stabilimento non ha ancora un piano: non si sa cosa ne dipende.",
+    "held": {
+      "someLine": "La riga {seq} non si può: vedi l'elenco.",
+      "lastLines": "Sono le ultime righe aperte: annulla l'ordine invece.",
+      "atDock": "La merce è in banchina (un ricevimento aperto): prima registra o storna il ricevimento.",
+      "other": "Ora non si può fare: rileggi l'ordine."
+    }
+  },
+  "refused": {
+    "changed": "Qualcuno ha cambiato l'ordine nel frattempo: è stato riletto — guarda e riprova."
+  },
+  "notice": {
+    "changed": "La revisione {revision} è una bozza: cambiala, poi inviala.",
+    "countered": "Le modifiche del fornitore sono rifiutate: la revisione {revision} è una bozza da cambiare e inviare.",
+    "linesCancelled_one": "{count} riga annullata.",
+    "linesCancelled_other": "{count} righe annullate.",
+    "closedShort_one": "{count} riga chiusa a saldo: la pianificazione libera il resto.",
+    "closedShort_other": "{count} righe chiuse a saldo: la pianificazione libera il resto.",
+    "confirmByMoved": "Il termine di conferma è stato spostato; l'avviso lo segue.",
+    "reminded": "Sollecito inviato a {email}."
+  }
+}

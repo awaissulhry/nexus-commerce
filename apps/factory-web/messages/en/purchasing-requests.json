@@ -1,0 +1,420 @@
+{
+  "title": "Requests to buy",
+  "common": {
+    "asOf": "As of {time}",
+    "notYet": "Not read yet",
+    "cancel": "Cancel",
+    "clearFilters": "Clear filters",
+    "dismiss": "Dismiss",
+    "done": "Done",
+    "loading": "Loading…",
+    "more": "Show more",
+    "retry": "Try again",
+    "shortcuts": "Keyboard shortcuts"
+  },
+  "live": {
+    "connecting": "Connecting to live updates…",
+    "live": "Live",
+    "offline": "Live updates paused",
+    "offlineNet": "Offline — nothing can be drafted until the connection is back"
+  },
+  "problem": {
+    "read": "The server did not answer as expected. Try again.",
+    "forbidden": "Your role cannot see or do this.",
+    "offline": "No connection to the server. Check the network and try again.",
+    "gone": "It no longer exists, or belongs to another company.",
+    "write": "It was not saved. Try again.",
+    "changed": "Someone changed it meanwhile: it was read again. Check and try again.",
+    "invalid": "Something was not accepted. Check and try again.",
+    "slowDown": "Too many tries at once. Wait a moment and try again."
+  },
+  "noAccess": {
+    "title": "Requests to buy are not in your role",
+    "body": "Seeing what to buy needs purchasing.view. Ask an administrator if you buy for the factory."
+  },
+  "band": {
+    "draft_one": "Draft PO for {count}",
+    "draft_other": "Draft POs for {count}",
+    "draftNone": "Draft POs",
+    "plan": "What to buy & make"
+  },
+  "tile": {
+    "open": "Open",
+    "need14": "Need date within 14 days",
+    "waiting": "Waiting approval",
+    "converted": "Converted today",
+    "waitingHint": "Staff requests come later"
+  },
+  "tiles": {
+    "failed": "Couldn’t load what is to handle"
+  },
+  "list": {
+    "label": "Requests to buy",
+    "search": "Search material, supplier, order…",
+    "viewLabel": "Rows",
+    "kindLabel": "Kind",
+    "groupLabel": "Group",
+    "siteLabel": "Site",
+    "count_one": "{count} request",
+    "count_other": "{count} requests",
+    "countOf_one": "{count} of {total} request",
+    "countOf_other": "{count} of {total} requests",
+    "failed": "Couldn’t load requests",
+    "empty": {
+      "title": "No open requests",
+      "body": "Nothing the plan or a reorder point asks to buy is waiting.",
+      "plan": "Run the plan on What to buy & make"
+    },
+    "noMatch": {
+      "title": "No request matches",
+      "body": "Change the search or the rows shown."
+    },
+    "viewing": "Showing: {view}"
+  },
+  "view": {
+    "open": "Open",
+    "need14": "Need date within 14 days",
+    "held": "Open, cannot be drafted now",
+    "converted": "In a purchase order",
+    "setAside": "Rejected",
+    "all": "All"
+  },
+  "kind": {
+    "all": "Every kind",
+    "PLAN": "Plan",
+    "REORDER": "Reorder point"
+  },
+  "groupBy": {
+    "none": "No groups",
+    "supplier": "By supplier",
+    "week": "By need week"
+  },
+  "site": {
+    "all": "Every site"
+  },
+  "col": {
+    "source": "Source",
+    "material": "Material",
+    "quantity": "Quantity",
+    "need": "Need date · order by",
+    "supplier": "Suggested supplier",
+    "by": "Requested by",
+    "status": "Status",
+    "value": "Value",
+    "more": "More",
+    "group": {
+      "supplier": "Supplier",
+      "week": "Need week"
+    }
+  },
+  "group": {
+    "supplier": "{name}",
+    "noSupplier": "No supplier yet",
+    "week": "Week {week} · {year}",
+    "noWeek": "No need date",
+    "count_one": "{count} request",
+    "count_other": "{count} requests"
+  },
+  "source": {
+    "plan": "Plan run",
+    "firm": "Firm planned order",
+    "shortage_one": "Shortage for {numbers}",
+    "shortage_other": "Shortage for {count} work orders ({numbers}…)",
+    "reorderPoint": "Reorder point reached",
+    "minMax": "Below its minimum"
+  },
+  "by": {
+    "planRun": "Plan run",
+    "reorderPoint": "Reorder rule at {site}",
+    "minMax": "Min–max rule at {site}",
+    "live": "Checked live, not stored"
+  },
+  "crVi": "chromium VI test",
+  "hides_one": "≈ {count} hide",
+  "hides_other": "≈ {count} hides",
+  "rounded_one": "rounded in {count} step",
+  "rounded_other": "rounded in {count} steps",
+  "quantityFrom": {
+    "FIRM": "as fixed by the planner",
+    "SOURCE": "in the supplier’s unit",
+    "PLAN": "as the plan suggests",
+    "ITEM": "by the material’s terms"
+  },
+  "orderBy": {
+    "on": "order by {date}",
+    "passed": "order-by day passed ({date})"
+  },
+  "supplier": {
+    "none": "No supplier",
+    "pick": "pick one in the request",
+    "theSupplier": "the supplier"
+  },
+  "supplierFrom": {
+    "CHOSEN": "picked by you",
+    "FIRM": "from the firm planned order",
+    "SITE": "the site’s preferred supplier",
+    "DEFAULT": "the material’s default supplier",
+    "SOURCE_one": "the approved source ({count} approved)",
+    "SOURCE_other": "the best approved source of {count}"
+  },
+  "status": {
+    "OPEN": "Open",
+    "CONVERTED": "In a purchase order",
+    "SET_ASIDE": "Rejected",
+    "held": "Open · held",
+    "inOrder": "In {number}",
+    "setAsideWhy": "Rejected: {reason}"
+  },
+  "notOpen": {
+    "CONVERTED": "Already in purchase order {number}",
+    "SET_ASIDE": "Rejected: put it back on What to buy & make first",
+    "OPEN": "Open"
+  },
+  "hold": {
+    "NO_SUPPLIER": "No supplier yet: open it and pick an approved one",
+    "NOT_A_SUPPLIER": "{supplier} is not a supplier: pick another",
+    "SUPPLIER_BLOCKED": "{supplier} is blocked: pick another or unblock it",
+    "SUPPLIER_ARCHIVED": "{supplier} is archived: pick another",
+    "NOT_APPROVED": "{supplier} is not an approved source of {material}: pick an approved one",
+    "MATERIAL_ARCHIVED": "{material} is archived: nothing can be bought",
+    "NOT_OPEN": "No longer open: someone decided it meanwhile",
+    "PLAN_REPLACED": "A newer plan replaced this line: read the list again",
+    "NOT_NEEDED": "The stock is no longer at the reorder point: nothing to buy"
+  },
+  "warning": {
+    "SUPPLIER_PROSPECT": "The supplier is a prospect: the order can be drafted, not sent, until it is approved.",
+    "NO_PRICE": "No price on record for this supplier: type it on the order before sending.",
+    "ORDER_BY_PASSED": "The day to order by has passed: the goods may come after the need date.",
+    "NO_LEAD_TIME": "No lead time on record: the day to order by is the need date itself.",
+    "SOURCE_UNIT_NOT_CONVERTED": "The material no longer converts the supplier’s unit: bought in its own purchase unit."
+  },
+  "row": {
+    "menu": "More for {material}",
+    "open": "Open the request",
+    "source": "Source record (new tab)",
+    "draft": "Draft PO",
+    "reject": "Reject with reason"
+  },
+  "bulk": {
+    "draft_one": "Draft PO for {count}",
+    "draft_other": "Draft POs for {count}",
+    "reject_one": "Reject {count} with reason",
+    "reject_other": "Reject {count} with reason",
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)"
+  },
+  "held": {
+    "busy": "Working on it…",
+    "loading": "Still reading…",
+    "noManage": "Drafting purchase orders needs purchasing.manage",
+    "noDecide": "Rejecting needs planning.decide",
+    "offline": "Offline: wait for the connection",
+    "selectFirst": "Select requests first",
+    "noneOpen": "None of these is open and ready to draft",
+    "reorderNoReject": "A reorder point cannot be rejected: change the reorder rule"
+  },
+  "keys": {
+    "draft": "Draft POs for the selected requests (in the request: this one)",
+    "walk": "Next / previous request in the request"
+  },
+  "detail": {
+    "title": "Request · {material}",
+    "titleLoading": "Request",
+    "position": "{index} of {count}",
+    "previous": "Previous",
+    "next": "Next",
+    "first": "This is the first request",
+    "last": "This is the last request",
+    "source": "Source record",
+    "draft": "Draft PO",
+    "failed": "Couldn’t load the request",
+    "gone": "This request no longer exists: the plan or the rule changed.",
+    "facts": "What to buy",
+    "lead": "Lead time",
+    "noLead": "None on record",
+    "leadDays_one": "{count} day",
+    "leadDays_other": "{count} days",
+    "closedDays_one": "{count} closed day of the supplier skipped",
+    "closedDays_other": "{count} closed days of the supplier skipped",
+    "inBase": "{quantity} {uom} in the material’s unit",
+    "codes": "Supplier codes",
+    "price": "Unit price",
+    "noPrice": "No price yet",
+    "why": "Why it is asked",
+    "rounding": "How the quantity was rounded",
+    "ruleNote": "The rule’s note: {note}",
+    "forWhat": "What it is for",
+    "salesOrders_one": "For the order",
+    "salesOrders_other": "For {count} orders",
+    "workOrders_one": "Short for the work order",
+    "workOrders_other": "Short for {count} work orders",
+    "onOrder": "Already on order",
+    "onOrderNone": "Nothing on order for it yet.",
+    "order": "Order",
+    "open": "Still to come",
+    "sources": "Approved suppliers",
+    "noSources": "No approved source yet: any supplier may be used.",
+    "unit": "sells in {uom}",
+    "minimum": "minimum {quantity}",
+    "multiple": "steps of {quantity}",
+    "supplierLead": "the supplier’s usual lead time",
+    "pickClosed": "Only an open request takes another supplier.",
+    "history": "History",
+    "openOrder": "Open the order",
+    "setAsideNote": "Note: {note}"
+  },
+  "preference": {
+    "PRIMARY": "Primary",
+    "BACKUP": "Backup"
+  },
+  "net": {
+    "need": "Needed: {quantity} {uom}",
+    "usable": "Usable stock: − {quantity} {uom}",
+    "held": "Held stock not counted: {quantity} {uom}",
+    "onOrder": "Already on order: − {quantity} {uom}",
+    "short": "Short: {quantity} {uom}",
+    "position": "Stock position: {usable} usable + {onOrder} on order − {reserved} reserved = {position} {uom}",
+    "atPoint": "At or below the reorder point of {level} {uom}",
+    "belowMinimum": "Below the minimum of {level} {uom}",
+    "ruleOrders": "The rule orders {quantity} {uom}",
+    "buy": {
+      "FIRM": "Buy {quantity} {uom}, as the planner fixed it",
+      "SOURCE": "Buy {quantity} {uom}, in the supplier’s unit and steps",
+      "PLAN": "Buy {quantity} {uom}, as the plan suggests",
+      "ITEM": "Buy {quantity} {uom}, by the material’s terms"
+    }
+  },
+  "rounding": {
+    "WHOLE_UNITS": "Whole units: {quantity} {uom}",
+    "MINIMUM": "At least the minimum: {quantity} {uom}",
+    "MULTIPLE": "In steps: {quantity} {uom}",
+    "MAXIMUM": "At most the maximum: {quantity} {uom}",
+    "LOT_SIZE": "The rule’s lot size: {quantity} {uom}",
+    "UP_TO_MAXIMUM": "Up to the maximum stock: {quantity} {uom}",
+    "OTHER": "Rounded: {quantity} {uom}"
+  },
+  "history": {
+    "run": "The plan run found it",
+    "setAside": "Rejected: {reason}",
+    "ordered": "Drafted into {number}",
+    "reorderLive": "The site’s reorder rule asks for it now (checked each time the list is read)."
+  },
+  "reason": {
+    "CUSTOMER_SUPPLIES": "the customer supplies it",
+    "SUBSTITUTE": "a substitute is used",
+    "STOCK_NOT_IN_SYSTEM": "the stock is there but not in the system yet",
+    "OTHER": "another reason"
+  },
+  "draft": {
+    "title_one": "Draft a purchase order for {count} request",
+    "title_other": "Draft purchase orders for {count} requests",
+    "subtitle_one": "{lines} lines into {count} draft",
+    "subtitle_other": "{lines} lines into {count} drafts",
+    "confirm_one": "Draft {count} PO",
+    "confirm_other": "Draft {count} POs",
+    "reading": "Reading what would be drafted…",
+    "previewFailed": "Couldn’t read what would be drafted",
+    "heldTitle_one": "{count} request cannot be drafted now: the whole batch waits for it",
+    "heldTitle_other": "{count} requests cannot be drafted now: the whole batch waits for them",
+    "leaveOut_one": "Leave it out",
+    "leaveOut_other": "Leave them out",
+    "heldFirst_one": "Leave out the held request first",
+    "heldFirst_other": "Leave out the {count} held requests first",
+    "noRight": "You may not draft for {supplier} at {site}",
+    "nothing": "Nothing to draft.",
+    "aRequest": "A request",
+    "cardMeta_one": "to {site} · {count} line · {currency}",
+    "cardMeta_other": "to {site} · {count} lines · {currency}",
+    "cardTotal": "Expected value: {amount}",
+    "where": "Where the lines for {supplier} go",
+    "addTo": "Add to draft {number}",
+    "addToHint_one": "It has {count} line now",
+    "addToHint_other": "It has {count} lines now",
+    "newDraft": "A new draft",
+    "newDraftHint": "The number comes from the series when it is made",
+    "willCreate": "A new draft purchase order is made for this supplier and site.",
+    "checksLater": "The send checks (prices, dates, contact) run when you send each order.",
+    "nothingSent": "Nothing is sent: the drafts wait for you.",
+    "doneTitle": "Draft purchase orders made",
+    "doneBody_one": "{lines} lines went into {count} draft",
+    "doneBody_other": "{lines} lines went into {count} drafts",
+    "created_one": "New draft · {lines} lines added · {count} line",
+    "created_other": "New draft · {lines} lines added · {count} lines",
+    "added_one": "{lines} lines added · now {count} line",
+    "added_other": "{lines} lines added · now {count} lines"
+  },
+  "party": {
+    "PROSPECT": "Prospect",
+    "OTHER": "Not active"
+  },
+  "refused": {
+    "notApproved": "A picked supplier is not an approved source of that material: pick an approved one in the request.",
+    "changed": "Something changed meanwhile (the plan, a draft or the stock): the preview was read again. Check and confirm.",
+    "invalid": "A request cannot be drafted as it is: the preview was read again with the reason."
+  },
+  "reject": {
+    "title_one": "Reject {count} request",
+    "title_other": "Reject {count} requests",
+    "confirm_one": "Reject {count}",
+    "confirm_other": "Reject {count}",
+    "body": "The plan lines are set aside on What to buy & make: nothing is bought for them until someone puts them back.",
+    "reason": "Reason",
+    "pick": "Pick a reason",
+    "pickReason": "Pick a reason first",
+    "note": "Note",
+    "noteHint": "Optional: what the planner should know",
+    "noteOther": "Say the reason in a few words",
+    "noteNeeded": "Another reason needs a note",
+    "planSees": "The planner sees the reason on the plan line."
+  },
+  "notice": {
+    "drafted_one": "{lines} lines drafted into {count} purchase order:",
+    "drafted_other": "{lines} lines drafted into {count} purchase orders:",
+    "rejected_one": "{count} request rejected: the plan line is set aside.",
+    "rejected_other": "{count} requests rejected: their plan lines are set aside."
+  },
+  "csv": {
+    "kind": "Kind",
+    "site": "Site",
+    "material": "Material",
+    "colour": "Colour",
+    "quantity": "Quantity",
+    "uom": "Unit",
+    "need": "Need date",
+    "orderBy": "Order by",
+    "supplier": "Supplier",
+    "status": "Status",
+    "value": "Value",
+    "currency": "Currency"
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  },
+  "poStatus": {
+    "DRAFT": "Draft",
+    "SENT": "Sent",
+    "CHANGES_PROPOSED": "Changes proposed",
+    "CONFIRMED": "Confirmed",
+    "DECLINED": "Declined",
+    "PARTLY_RECEIVED": "Partly received",
+    "RECEIVED": "Received",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  }
+}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, MoreHorizontal, Pencil, Plus, Trash2, XCircle } from 'lucide-react'
+import { AlertTriangle, Ban, CheckCircle2, MoreHorizontal, Pencil, Plus, Scissors, Trash2, XCircle } from 'lucide-react'
 import { Card, KeyValue, Menu, ProgressBar } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Tag } from '@nexus/ui/primitives'
@@ -11,6 +11,9 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { dayAt, money, quantity, unitPrice } from '../../../../_shared/buying/model'
 import type { PoLine, PurchaseOrder } from '../../api'
 import { leatherSpecs, receivedShare, type OrderRecordActions, type OrderRecordModel } from '../../model'
+import { addedInDraft, cancelLineHeld, closeShortHeld } from '../../daily-model'
+import { RevisionDraftBanner } from './ChangesSections'
+import { useSay } from './DailyDialogs'
 import { detailsOf } from './OrderRecordView'
 
 /**
@@ -23,10 +26,18 @@ import { detailsOf } from './OrderRecordView'
  */
 export function LinesTab({ order, model, actions }: { order: PurchaseOrder; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('buying')
+  const td = useT('purchasing-orders')
+  const say = useSay()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const draft = order.status === 'DRAFT'
   const editable = draft && model.can.poManage
+  // B-W2a-69: lines that end — cancelled (a sent order's line, or one an earlier revision sent) or closed short.
+  const added = addedInDraft(model.revisions.value)
+  const cancelHeldOf = (line: PoLine) => cancelLineHeld(order, line, added, model.can)
+  const closeHeldOf = (line: PoLine) => closeShortHeld(order, line, model.can)
+  const ending = !draft && model.can.poManage && ['SENT', 'DECLINED', 'CONFIRMED', 'PARTLY_RECEIVED'].includes(order.status)
+  const selectable = editable || ending
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   const rowsKey = order.lines.map((line) => line.id).join(',')
   useEffect(() => setSelected((current) => current.filter((id) => rowsKey.includes(id))), [rowsKey])
@@ -52,6 +63,12 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
         <span className="fw-by-cell">
           <span className="fw-by-ellipsis">
             {data.item.code} · {data.item.name}
+            {data.ended && (
+              <>
+                {' '}
+                <Tag tone="neutral">{td(`ended.${data.ended.kind}`)}</Tag>
+              </>
+            )}
           </span>
           <span className="fw-by-cell-sub">
             {[data.colour ? `${data.colour.code} ${data.colour.name}` : null, data.supplierArticleCode ? t('po.line.theirCode', { code: [data.supplierArticleCode, data.supplierColourCode].filter(Boolean).join(' / ') }) : null].filter(Boolean).join(' · ') || t(`kind.${data.item.kind}`)}
@@ -105,19 +122,30 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
           <span className="fw-by-cell-sub">{t('po.line.unitPrice', { price: unitPrice(data.unitPrice ?? null, order.currency, locale), unit: t(`uom.${data.uom}`) })}</span>
         </span>
       ) : null
-    const PlanCell = ({ data }: ICellRendererParams<PoLine>) => (data && data.plan.length > 0 ? <Tag tone="info">{t('po.line.fromPlan')}</Tag> : null)
-    const MoreCell = ({ data }: ICellRendererParams<PoLine>) =>
-      data && editable ? (
-        <Menu
-          label={<MoreHorizontal size={16} aria-hidden />}
-          align="right"
-          triggerProps={{ 'aria-label': t('po.line.menu', { seq: data.seq }) }}
-          items={[
-            { id: 'edit', label: t('po.line.edit'), icon: <Pencil size={14} aria-hidden />, onSelect: () => actions?.onEditLine?.(data.id) },
-            { id: 'remove', label: t('po.line.remove'), icon: <Trash2 size={14} aria-hidden />, tone: 'danger', onSelect: () => actions?.onDialog?.({ kind: 'removeLines', lineIds: [data.id] }) },
-          ]}
-        />
+    const PlanCell = ({ data }: ICellRendererParams<PoLine>) =>
+      data ? (
+        data.ended ? (
+          <span className="fw-by-cell-sub" title={data.ended.reason ?? undefined}>
+            {td(`ended.${data.ended.kind}`)}
+          </span>
+        ) : data.plan.length > 0 ? (
+          <Tag tone="info">{t('po.line.fromPlan')}</Tag>
+        ) : null
       ) : null
+    const MoreCell = ({ data }: ICellRendererParams<PoLine>) => {
+      if (!data || (!editable && !ending)) return null
+      // A draft of revision 2+ cancels the lines an earlier revision sent; a sent order cancels or closes its open lines short.
+      const cancel = !data.ended && (ending || (editable && order.revision > 1 && !added.has(data.id))) ? cancelHeldOf(data) : undefined
+      const close = ending && order.status === 'PARTLY_RECEIVED' && !data.ended ? closeHeldOf(data) : undefined
+      const items = [
+        ...(editable && !data.ended ? [{ id: 'edit', label: t('po.line.edit'), icon: <Pencil size={14} aria-hidden />, onSelect: () => actions?.onEditLine?.(data.id) }] : []),
+        ...(cancel === null ? [{ id: 'cancelLine', label: td('line.cancel'), icon: <Ban size={14} aria-hidden />, tone: 'danger' as const, onSelect: () => actions?.daily?.onEndLines?.('CANCEL_LINES', [data.id]) }] : []),
+        ...(close === null ? [{ id: 'closeShort', label: td('line.closeShort'), icon: <Scissors size={14} aria-hidden />, onSelect: () => actions?.daily?.onEndLines?.('CLOSE_SHORT', [data.id]) }] : []),
+        ...(editable && !data.ended ? [{ id: 'remove', label: t('po.line.remove'), icon: <Trash2 size={14} aria-hidden />, tone: 'danger' as const, onSelect: () => actions?.onDialog?.({ kind: 'removeLines', lineIds: [data.id] }) }] : []),
+      ]
+      if (items.length === 0) return null
+      return <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" triggerProps={{ 'aria-label': t('po.line.menu', { seq: data.seq }) }} items={items} />
+    }
     return [
       { colId: 'seq', headerName: t('po.col.seq'), field: 'seq', minWidth: 58, maxWidth: 70, type: 'rightAligned' },
       { colId: 'material', headerName: t('po.col.material'), minWidth: 210, flex: 1.7, cellRenderer: MaterialCell },
@@ -127,17 +155,27 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
       ...(order.status !== 'DRAFT' ? [{ colId: 'received', headerName: t('po.col.received'), minWidth: 170, flex: 1.1, cellRenderer: ReceivedCell } satisfies ColDef<PoLine>] : []),
       ...(model.can.cost ? [{ colId: 'net', headerName: t('po.col.net'), minWidth: 140, flex: 0.9, type: 'rightAligned', cellRenderer: PriceCell } satisfies ColDef<PoLine>] : []),
       { colId: 'plan', headerName: t('po.col.plan'), minWidth: 124, flex: 0.6, cellRenderer: PlanCell },
-      ...(editable ? [{ colId: 'more', headerName: t('po.col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell } satisfies ColDef<PoLine>] : []),
+      ...(selectable ? [{ colId: 'more', headerName: t('po.col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell } satisfies ColDef<PoLine>] : []),
     ]
-  }, [t, locale, order.status, order.currency, model.can.cost, editable])
+  }, [t, td, locale, order.status, order.currency, order.revision, model.can.cost, editable, ending, added])
 
   const checks = order.send?.checks ?? []
   const blocking = checks.filter((check) => check.severity === 'BLOCKS')
   const warnings = checks.filter((check) => check.severity === 'WARNING')
   const details = detailsOf(order)
 
+  const picked = order.lines.filter((line) => selected.includes(line.id))
+  const cancelPicked = picked.filter((line) => cancelHeldOf(line) === null)
+  const bulkCancelHeld = picked.length === 0 ? null : cancelPicked.length < picked.length ? say(cancelHeldOf(picked.find((line) => cancelHeldOf(line) !== null)!)) : null
+  const bulkCancel = (ending || (editable && order.revision > 1)) && (
+    <Button size="sm" tone="danger" heldReason={bulkCancelHeld} aria-label={td('line.cancelN', { count: picked.length })} onClick={() => actions?.daily?.onEndLines?.('CANCEL_LINES', picked.map((line) => line.id))}>
+      <Ban size={13} aria-hidden /> <SelectionLabel>{td('line.cancelN', { count: picked.length })}</SelectionLabel>
+    </Button>
+  )
+
   return (
     <div className="fw-by-stack">
+      <RevisionDraftBanner order={order} model={model} />
       <div className="fw-by-stack">
         {editable && (
           <div className="fw-by-head">
@@ -154,18 +192,24 @@ export function LinesTab({ order, model, actions }: { order: PurchaseOrder; mode
           columns={columns}
           count={t('po.lines.count', { count: order.lines.length })}
           selection={
-            editable
+            selectable
               ? {
                   selected,
                   onChange: setSelected,
                   actions: (
-                    <Button size="sm" tone="danger" aria-label={t('po.lines.remove', { count: selected.length })} onClick={() => actions?.onDialog?.({ kind: 'removeLines', lineIds: [...selected] })}>
-                      <Trash2 size={13} aria-hidden /> <SelectionLabel>{t('po.lines.remove', { count: selected.length })}</SelectionLabel>
-                    </Button>
+                    <>
+                      {bulkCancel}
+                      {editable && (
+                        <Button size="sm" tone="danger" aria-label={t('po.lines.remove', { count: selected.length })} onClick={() => actions?.onDialog?.({ kind: 'removeLines', lineIds: [...selected] })}>
+                          <Trash2 size={13} aria-hidden /> <SelectionLabel>{t('po.lines.remove', { count: selected.length })}</SelectionLabel>
+                        </Button>
+                      )}
+                    </>
                   ),
                 }
               : undefined
           }
+          isRowSelectable={(line) => (line.ended ? td(`ended.${line.ended.kind}`) : null)}
           keys={editable ? [{ keys: ['n'], does: t('po.lines.keyAdd') }] : []}
           onOpen={editable ? (line) => actions?.onEditLine?.(line.id) : undefined}
           state={

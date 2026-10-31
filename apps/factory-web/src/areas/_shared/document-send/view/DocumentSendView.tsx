@@ -27,10 +27,10 @@ const CHECK_ICON: Record<SendCheckItem['state'], ReactNode> = {
  * blocking check's reason, never silently disabled; ⌘↵ sends; Esc closes and keeps the draft. After the send the dialog
  * shows the result: to whom, when, how long the link lives — or that the mail failed, with "Send a new link".
  */
-export function DocumentSendView({ open, model, actions }: { open: boolean; model: DocumentSendModel; actions?: DocumentSendActions }) {
+export function DocumentSendView({ open, model, actions, extra }: { open: boolean; model: DocumentSendModel; actions?: DocumentSendActions; extra?: ReactNode }) {
   return (
     <WithMessages namespaces={['send']}>
-      <DocumentSend open={open} model={model} actions={actions} />
+      <DocumentSend open={open} model={model} actions={actions} extra={extra} />
     </WithMessages>
   )
 }
@@ -44,7 +44,8 @@ export function DocumentSendPreview({ model }: { model: DocumentSendPreviewModel
   return <DocumentSendView open model={model[locale]} />
 }
 
-function DocumentSend({ open, model, actions }: { open: boolean; model: DocumentSendModel; actions?: DocumentSendActions }) {
+/** `extra`: the host's own fields of this send, below the message (B-W2a-69: a purchase order's confirm-by and change note). */
+function DocumentSend({ open, model, actions, extra }: { open: boolean; model: DocumentSendModel; actions?: DocumentSendActions; extra?: ReactNode }) {
   const t = useT('send')
   const shell = useT('shell')
   const locale = useLocale()
@@ -131,6 +132,7 @@ function DocumentSend({ open, model, actions }: { open: boolean; model: Document
                 <Field label={t('message.label')} hint={t('message.hint')}>
                   <Textarea value={model.fields.message} onChange={(event) => actions?.onField?.('message', event.target.value)} rows={6} maxLength={4000} readOnly={!model.canSend || model.sending} />
                 </Field>
+                {extra}
               </section>
 
               {model.recipientCan.length > 0 && (

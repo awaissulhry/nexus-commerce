@@ -4,7 +4,8 @@ import type { MaterialDetail, MaterialOption, SiteOption, SupplierOption } from 
 import type { LiveState } from '../../_shared/buying/hooks'
 import type { DocumentSendModel } from '../../_shared/document-send/model'
 import type { RecordPanelsViewModel } from '../../../record-panels/model'
-import type { OrderDocuments, OrderReceipt, OrderRow, OrderSummary, PoLine, PoStatus, PurchaseOrder, SendCheck, SendCheckAnswer, SupplierAnswer, SupplierView } from './api'
+import type { OrderDocuments, OrderReceipt, OrderReminders, OrderRevisions, OrderRow, OrderSummary, PoLine, PoStatus, PurchaseOrder, SendCard, SendCheck, SendCheckAnswer, SendOutcome, SupplierAnswer, SupplierView } from './api'
+import type { DailyDialog, SendExtra } from './daily-model'
 
 /**
  * Purchase orders (SCR-058) and the PO studio (SCR-059) — the screens' rules, pure: the saved views (the tiles are
@@ -27,7 +28,8 @@ export const STATUS_TONE: Readonly<Record<PoStatus, Tone>> = Object.freeze({
 
 // ---- the list ---------------------------------------------------------------------------------------------------------------
 
-export const ORDER_VIEWS = ['all', 'drafts', 'waiting', 'late', 'proposed', 'confirmed', 'partly', 'received', 'declined', 'cancelled'] as const
+// B-W2a-69: Rows ▾ Expected this week · Late (the API's `?due=`) and Past the confirm-by (`?pastConfirmBy=true`).
+export const ORDER_VIEWS = ['all', 'drafts', 'waiting', 'late', 'pastConfirmBy', 'proposed', 'confirmed', 'dueThisWeek', 'deliveryLate', 'partly', 'received', 'declined', 'cancelled'] as const
 export type OrderView = (typeof ORDER_VIEWS)[number]
 
 const VIEW_STATUS: Readonly<Partial<Record<OrderView, PoStatus>>> = Object.freeze({
@@ -47,22 +49,29 @@ export function orderViewOf(params: { get(name: string): string | null } | null)
   const view = params?.get('view') ?? ''
   if ((ORDER_VIEWS as readonly string[]).includes(view)) return view as OrderView
   if (params?.get('waitingOver48h') === 'true') return 'late'
+  if (params?.get('pastConfirmBy') === 'true') return 'pastConfirmBy'
+  if (params?.get('due') === 'THIS_WEEK') return 'dueThisWeek'
+  if (params?.get('due') === 'LATE') return 'deliveryLate'
   const status = params?.get('status')
   const found = (Object.entries(VIEW_STATUS) as [OrderView, PoStatus][]).find(([name, value]) => value === status && name !== 'late')
   return found?.[0] ?? 'all'
 }
 
 export function orderQuery(view: OrderView, q: string, cursor: string | null = null) {
-  return { status: VIEW_STATUS[view] ?? null, waitingOver48h: view === 'late', q, cursor }
+  const due = view === 'dueThisWeek' ? ('THIS_WEEK' as const) : view === 'deliveryLate' ? ('LATE' as const) : null
+  return { status: VIEW_STATUS[view] ?? null, waitingOver48h: view === 'late', q, cursor, ...(due ? { due } : {}), ...(view === 'pastConfirmBy' ? { pastConfirmBy: true } : {}) }
 }
 
-/** "Where POs stand": saved views with the API's counts. */
-export const ORDER_TILES: readonly { id: string; view: OrderView; count: (summary: OrderSummary) => number }[] = Object.freeze([
+/** "Where POs stand": saved views with the API's counts (null: not known, drawn '—', never 0). */
+export const ORDER_TILES: readonly { id: string; view: OrderView; count: (summary: OrderSummary) => number | null }[] = Object.freeze([
   { id: 'drafts', view: 'drafts', count: (summary) => summary.drafts },
   { id: 'waiting', view: 'waiting', count: (summary) => summary.waiting },
   { id: 'late', view: 'late', count: (summary) => summary.notConfirmedAfter48h },
   { id: 'proposed', view: 'proposed', count: (summary) => summary.changesProposed },
   { id: 'declined', view: 'declined', count: (summary) => summary.declined },
+  // B-W2a-69 (SCM-067): an open line expected from today to Sunday; expected before today.
+  { id: 'dueThisWeek', view: 'dueThisWeek', count: (summary) => summary.dueThisWeek ?? null },
+  { id: 'deliveryLate', view: 'deliveryLate', count: (summary) => summary.late ?? null },
 ])
 
 /** The confirmation column in words: sent n days ago, confirmed by link by a name, changes proposed, declined. */
@@ -137,10 +146,13 @@ export function nextStep(order: PurchaseOrder, can: Pick<BuyingCan, 'poSend' | '
   }
 }
 
-/** Why cancelling is held: never once confirmed (a contract) or received (closed, never cancelled); sent ones need the send right. */
-export function cancelHeld(order: PurchaseOrder, can: Pick<BuyingCan, 'poManage' | 'poSend'>): Phrase | null {
+/**
+ * Why cancelling is held: never once goods came (closed, never cancelled: close the rest short) or while the supplier's
+ * proposal waits; sent ones need the send right. W2a (B-W2a-52): a confirmed order may be cancelled — the dialog says a
+ * contract ends and the supplier is told.
+ */
+export function cancelHeld(order: Pick<PurchaseOrder, 'status'>, can: Pick<BuyingCan, 'poManage' | 'poSend'>): Phrase | null {
   if (!can.poManage) return phrase('held.noManage')
-  if (order.status === 'CONFIRMED') return phrase('po.cancelHeld.contract')
   if (order.status === 'PARTLY_RECEIVED' || order.status === 'RECEIVED' || order.status === 'CLOSED') return phrase('po.cancelHeld.received')
   if (order.status === 'CHANGES_PROPOSED') return phrase('po.cancelHeld.proposed')
   if (order.status === 'CANCELLED') return phrase('po.cancelHeld.cancelled')
@@ -259,6 +271,8 @@ export interface OrdersListModel {
   updates: number
   notice: { tone: 'success' | 'danger' | 'info'; words: Phrase } | null
   newOrder: NewOrderModel | null
+  /** B-W2a-69: Send n (one card per supplier) while it is open. */
+  sendMany?: SendManyModel | null
   /** Design cases. */
   selected?: readonly string[]
   focusRow?: number
@@ -277,6 +291,14 @@ export interface OrdersListActions {
   onOpen?: (id: string) => void
   onNew?: (open: boolean) => void
   onDismissNotice?: () => void
+  /** B-W2a-69: Send n — open with these orders, or close (null). */
+  onSendMany?: (orderIds: string[] | null) => void
+  sendMany?: {
+    onConfirmBy?: (orderId: string, confirmBy: string) => void
+    onMessage?: (message: string) => void
+    onSend?: () => void
+    onRetry?: () => void
+  }
   newOrder?: {
     onQuery?: (q: string) => void
     onSupplier?: (supplier: SupplierOption | null) => void
@@ -316,10 +338,21 @@ export interface DetailsDraft {
   internalNote: string
 }
 
+/** Send n (B-W2a-69): the cards read by send-checks, the confirm-by chosen per order, one message, the outcomes after. */
+export interface SendManyModel {
+  orderIds: string[]
+  cards: { status: 'loading' } | { status: 'error'; problem: string } | { status: 'ready'; value: SendCard[] }
+  confirmBy: Readonly<Record<string, string>>
+  message: string
+  sending: boolean
+  outcomes: SendOutcome[] | null
+  problem: Phrase | null
+}
+
 export type OrderDialog =
   | { kind: 'send' }
   | { kind: 'newLink'; message: string }
-  | { kind: 'cancel'; reason: string; message: string }
+  | DailyDialog
   | { kind: 'line'; draft: LineDraft }
   | { kind: 'removeLines'; lineIds: string[] }
   | { kind: 'details'; draft: DetailsDraft }
@@ -336,6 +369,15 @@ export interface OrderRecordModel {
   answer: Part<SupplierAnswer>
   receipts: Part<OrderReceipt[]> | null
   documents: Part<OrderDocuments>
+  /** B-W2a-69: every revision with its diff and answer, the draft's changes so far; the reminders and the confirm-by. */
+  revisions: Part<OrderRevisions>
+  reminders: Part<OrderReminders>
+  /** The send dialog's own PO fields (confirm-by, a later revision's change note) while it is open. */
+  sendExtra?: SendExtra | null
+  /** What send-check said of this send: the default confirm-by and a later revision's changes (the supplier's words). */
+  sendFacts?: { confirmBy: string | null; changes: string[] | null } | null
+  /** Now (design cases: a fixed instant), for the confirm-by's "passed". */
+  now?: string
   /** The send dialog's model while it is open (built by the container from send-check and the person's fields). */
   send: DocumentSendModel | null
   /** A draft's sample PDF for a new tab (the preview route; only with the cost grain), else null. */
@@ -367,7 +409,6 @@ export interface OrderRecordActions {
     onNewLink?: () => void
   }
   onNewLink?: () => void
-  onCancel?: () => void
   onAccept?: () => void
   onRefuse?: () => void
   onSaveDetails?: () => void
@@ -383,5 +424,20 @@ export interface OrderRecordActions {
   onAddLine?: () => void
   onSupplierView?: () => void
   onDownload?: (fileId: string) => void
-  onRetryPart?: (part: 'answer' | 'receipts' | 'documents') => void
+  onRetryPart?: (part: 'answer' | 'receipts' | 'documents' | 'revisions' | 'reminders') => void
+  /** B-W2a-69: the changes after the send. */
+  daily?: {
+    onSendExtra?: (extra: SendExtra) => void
+    onChange?: () => void
+    onCounter?: () => void
+    /** Open the cancel dialog (reads the reach first). */
+    onCancelOrder?: () => void
+    onConfirmCancel?: () => void
+    /** Open cancel lines / close short for these lines (reads the reach first). */
+    onEndLines?: (action: 'CANCEL_LINES' | 'CLOSE_SHORT', lineIds: string[]) => void
+    onConfirmEnd?: () => void
+    onConfirmBy?: () => void
+    onRemind?: () => void
+    onOpenRevision?: (fileId: string) => void
+  }
 }

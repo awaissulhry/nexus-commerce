@@ -287,7 +287,10 @@ function whenWords(kind: RuleKind, threshold: Record<string, number | boolean>, 
     case 'APPROVAL_OVERDUE':
       return it ? `Quando un'approvazione aspetta più di ${n('hours')} h` : `When an approval waits longer than ${n('hours')} h`
     case 'PO_NOT_CONFIRMED':
-      return it ? `Quando un ordine di acquisto non è confermato ${days(n('days'))} dopo l'invio` : `When a purchase order is not confirmed ${days(n('days'))} after it was sent`
+      // B-W2a-69: the order's confirm-by time; the days only for an order sent without one.
+      return it
+        ? `Quando un ordine di acquisto non è confermato entro l'ora chiesta al fornitore (senza un'ora: ${days(n('days'))} dopo l'invio)`
+        : `When a purchase order is not confirmed by the time the supplier was asked to answer by (none asked: ${days(n('days'))} after it was sent)`
     case 'CERTIFICATE_EXPIRING':
       return it ? `${days(n('daysBefore'))} prima che un certificato scada` : `${days(n('daysBefore'))} before a certificate expires`
     case 'INVOICE_DEADLINE':

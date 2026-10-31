@@ -1,4 +1,5 @@
 import type { Lot } from '../../../quality/_shared/lots'
+import type { SupplierPricesModel } from '../../../purchasing/suppliers/sources/model'
 import type { LibraryCan, Notice, Read, WriteProblem } from '../../library/model'
 import type { ColourInput, CoveringCertificate, LibraryColour, MaterialColour, MaterialPatch, MaterialStock, MaterialView, SupplierRow } from '../api'
 import type { MaterialTab } from '../model'
@@ -39,6 +40,8 @@ export interface MaterialRecordViewModel {
   dialog: MaterialDialog | null
   /** The last refused write's fields (for a form to point at). */
   refused: WriteProblem | null
+  /** B-W2a-69: Purchasing's approved sources of this material (Suppliers & prices › Supplier prices, read only). */
+  supplierPrices?: SupplierPricesModel
 }
 
 export interface MaterialRecordActions {
@@ -55,4 +58,6 @@ export interface MaterialRecordActions {
   onSupplierSearch?: (q: string) => void
   onDialog?: (dialog: MaterialDialog | null) => void
   onDismissNotice?: () => void
+  /** B-W2a-69: read the Supplier prices again after a failed read. */
+  onRetrySupplierPrices?: () => void
 }

@@ -116,7 +116,8 @@ describe('one party record, two sides (SCR-032, SCR-056)', () => {
     const can = { view: true, manage: true, block: true, vies: true, quotes: true, orders: true, purchaseOrders: true, price: true, cost: true, threads: true }
     expect(recordTabs(SIDES.customers, can)).toEqual(['overview', 'addresses', 'tax', 'orders', 'documents', 'activity'])
     expect(recordTabs(SIDES.customers, { ...can, quotes: false, orders: false, threads: false })).toEqual(['overview', 'addresses', 'tax'])
-    expect(recordTabs(SIDES.suppliers, { ...can, purchaseOrders: false })).toEqual(['overview', 'contacts', 'activity'])
+    // B-W2a-69: Items & prices stays in view without purchasing.view: the tab says what is missing.
+    expect(recordTabs(SIDES.suppliers, { ...can, purchaseOrders: false })).toEqual(['overview', 'contacts', 'items', 'activity'])
   })
 
   it('a party opens on its record page from anywhere (Today, the palette); New party opens New customer', () => {
@@ -304,7 +305,9 @@ function literalKeys(): string[] {
   const pattern = new RegExp(`['"\`]((?:${PREFIXES.join('|')})\\.[A-Za-z0-9_.]*[A-Za-z0-9_])['"\`]`, 'g')
   const keys = new Set<string>()
   for (const dir of ['parties', 'sales/customers', 'purchasing/suppliers'])
-    for (const file of sources(join(SRC, dir))) for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!)) keys.add(match[1]!)
+    // B-W2a-69: purchasing/suppliers/sources speaks its own catalogue (purchasing-sources), checked by its own test.
+    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`)))
+      for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!)) keys.add(match[1]!)
   return [...keys].sort()
 }
 const has = (key: string) =>
