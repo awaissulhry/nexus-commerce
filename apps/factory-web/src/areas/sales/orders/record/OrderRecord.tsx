@@ -24,6 +24,7 @@ import {
   getOrder,
   getSdi,
   getSettlement,
+  listCancelReasons,
   listOrderWorkOrders,
   markReady,
   recordDepositPayment,
@@ -31,6 +32,7 @@ import {
   sendToSdi,
   type AmendmentsAnswer,
   type CancelCheck,
+  type CancelReason,
   type CloseLinesAnswer,
   type CopyAnswer,
   type DepositLinkAnswer,
@@ -107,6 +109,15 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const [cancelCheck, setCancelCheck] = useState<Part<CancelCheck> | null>(null)
   const [closedLines, setClosedLines] = useState<CloseLinesAnswer | null>(null)
   const [copied, setCopied] = useState<CopyAnswer | null>(null)
+  // B-W2b-16: the CANCEL reasons (the code a close of lines names, and its words on a closed line).
+  const [cancelReasons, setCancelReasons] = useState<CancelReason[] | null>(null)
+  useEffect(() => {
+    const abort = new AbortController()
+    listCancelReasons(api, abort.signal)
+      .then(setCancelReasons)
+      .catch(() => setCancelReasons(null))
+    return () => abort.abort()
+  }, [api])
   const searchSeq = useRef(0)
   const { dockOpen, toggleDock } = useThreadDock()
   const { stepUp, guard, ensureFresh, submitStepUp, cancelStepUp } = useStepUp(api)
@@ -320,12 +331,15 @@ function RecordContainer({ orderId }: { orderId: string }) {
     },
     onNotice: (words, tone) => setNotice({ tone, words }),
     onInvoiced: (invoiceId) => router.push(`${prefix}/finance/invoices/${invoiceId}?tab=lines`),
+    // B-W2b-16: the owner's waive asks a fresh code (the record's step-up).
+    stepUp: { ensureFresh, guard },
   })
   const margin = useOrderMargin(api, orderId, tab === 'margin', session.permissions, order.status === 'ready' ? order.value.version : null)
 
   const model: OrderRecordModel = {
     prefix,
     can,
+    cancelReasons,
     today: romeToday(),
     tab,
     order,
@@ -459,10 +473,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
         onComposerPick: composerPick,
         onComposerToggle: (colourwayId) => setAmend((known) => (known ? { ...known, composer: { ...known.composer, picked: known.composer.picked.includes(colourwayId) ? known.composer.picked.filter((id) => id !== colourwayId) : [...known.composer.picked, colourwayId] } } : known)),
         onComposerAdd: composerAdd,
-        onCloseLines: (lineIds, reason) =>
+        onCloseLines: (lineIds, reason, reasonCode) =>
           void write(
             async () => {
-              const answer = await closeLines(api, orderId, { version: version(), reason, ...(lineIds.length > 0 ? { lineIds } : {}) })
+              const answer = await closeLines(api, orderId, { version: version(), reason, ...(reasonCode ? { reasonCode } : {}), ...(lineIds.length > 0 ? { lineIds } : {}) })
               setClosedLines(answer)
               return answer.order
             },

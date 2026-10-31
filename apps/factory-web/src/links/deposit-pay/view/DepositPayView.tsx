@@ -39,7 +39,7 @@ function DepositPay({ model, actions }: { model: DepositPayViewModel; actions?: 
     <LinkFrameView
       model={{
         sender: sender ? { name: sender, companyId: null } : null,
-        title: deposit ? (deposit.order ? t('title', { order: deposit.order.number }) : t('titleQuote', { quote: deposit.quote.document })) : null,
+        title: deposit ? (deposit.order ? t('title', { order: deposit.order.number }) : t('titleQuote', { quote: deposit.quote?.document ?? '' })) : null,
         body: valid ? { kind: 'task' } : { kind: 'link', state: model.link === 'valid' ? 'loading' : model.link, purpose: 'DEPOSIT_INFO', expiresAt: null, usesLeft: null },
         timeZone: model.timeZone,
       }}
@@ -91,7 +91,8 @@ function DepositBody({ deposit, model, actions }: { deposit: LinkDeposit; model:
           dense
           labelCase="sentence"
           items={[
-            { label: t('what.for'), value: deposit.order ? t('what.forOrder', { order: deposit.order.number, quote: deposit.quote.document }) : deposit.quote.document },
+            // B-W2b-16: an order typed without a quote names only the order.
+            { label: t('what.for'), value: deposit.order ? (deposit.quote ? t('what.forOrder', { order: deposit.order.number, quote: deposit.quote.document }) : t('what.forOrderOnly', { order: deposit.order.number })) : (deposit.quote?.document ?? '—') },
             { label: t('what.kind'), value: deposit.deposit.depositPct ? t('what.kindPct', { kind, pct: pct(deposit.deposit.depositPct) }) : kind },
             { label: t('what.due'), value: day(instructions.dueDate, locale, model.timeZone) },
           ]}

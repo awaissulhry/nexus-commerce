@@ -10,7 +10,8 @@ import type { ApiClient } from '../../lib/api/client'
 
 export const linkDepositSchema = z.object({
   deposit: z.object({ kind: z.string(), depositPct: z.string().nullable(), currency: z.string(), amount: z.number().optional(), dueDate: z.string(), status: z.string(), paid: z.boolean() }),
-  quote: z.object({ document: z.string() }),
+  /** B-W2b-16: null for a deposit asked on an order typed without a quote (the order names it). */
+  quote: z.object({ document: z.string() }).nullable(),
   order: z.object({ number: z.string() }).nullable(),
   from: z.object({ legalName: z.string(), tradeName: z.string().nullable() }),
   instructions: z.object({

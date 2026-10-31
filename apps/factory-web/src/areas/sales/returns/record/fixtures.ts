@@ -2,7 +2,7 @@ import { createElement, useEffect, useState } from 'react'
 import { STEP_UP_CLOSED } from '../../../quality/_shared/hooks'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { BLANK_CHECKLIST, BLANK_DDT, BLANK_REPAIR, receiptDraftOf, type DecisionDraft } from '../model'
-import { canFor, CREDIT_NOTES, inShell, ME, NOW, PEOPLE, PREFIX, REASONS, REPAIR_PASSED, REPAIR_RECEIVED, REPAIR_REPAIRED, REPAIR_ROWS, REPAIR_SHIPPED, RMA_AUTHORISED, RMA_INSPECTED, RMA_RECEIVED, TODAY, type RoleCase } from '../demo/fixtures'
+import { canFor, CREDIT_NOTES, inShell, ME, NOW, PEOPLE, PREFIX, REASONS, REPAIR_PASSED, REPAIR_RECEIVED, REPAIR_REPAIRED, REPAIR_REWORK, REPAIR_REWORK_ORDERED, REPAIR_ROWS, REPAIR_SHIPPED, RETURNABLE, RMA_AUTHORISED, RMA_INSPECTED, RMA_RECEIVED, TODAY, type RoleCase } from '../demo/fixtures'
 import type { RepairModel, RmaModel } from '../view-model'
 import { RepairRecordView } from '../repair/view/RepairRecordView'
 import { RmaRecordView } from './view/RmaRecordView'
@@ -171,7 +171,38 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'rma-shipments', label: 'Shipments: goods in with the customer’s DDT', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, tab: 'shipments' }) } },
     { id: 'rma-shipments-empty', label: 'Shipments: nothing booked', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { tab: 'shipments' }) } },
     { id: 'rma-ddt', label: 'Issue return DDT (preview)', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, tab: 'shipments', dialog: { kind: 'ddt', draft: { ...BLANK_DDT, carrier: 'Demo courier', weight: '1.4' }, preview: { draft: { lines: [{ seq: 1, description: 'Demo touring jacket, Red, size 52', quantity: '1', uom: 'PCS' }] }, problems: [], expectedNumber: '147/2026', reasons: ['RETURN'] }, previewing: false } }) } },
-    { id: 'rma-close', label: 'Close return: finish reason', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, close: { number: RMA_INSPECTED.number, reason: '', note: '', busy: false, problem: null, warnings: null } }) } },
+    { id: 'rma-close', label: 'Close return: finish reason', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, close: { number: RMA_INSPECTED.number, reason: '', note: '', busy: false, problem: null, warnings: null, pending: [] } }) } },
+    {
+      id: 'rma-close-pending',
+      label: 'Close return: what it would leave behind, said before the click (a line decided Repair without its repair order)',
+      model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, close: { number: RMA_INSPECTED.number, reason: 'REPAIRED', note: '', busy: false, problem: null, warnings: null, pending: [{ code: 'REPAIR_WITHOUT_ORDER', seqs: [10], lineIds: [RMA_INSPECTED.lines[0]!.id] }, { code: 'BACK_WITHOUT_DDT', seqs: [20, 30], lineIds: [] }] } }) },
+    },
+    { id: 'rma-close-checking', label: 'Close return from the list: reading what it would leave behind', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, close: { number: RMA_INSPECTED.number, reason: '', note: '', busy: false, problem: null, warnings: null, pending: null } }) } },
+    {
+      id: 'rma-add-lines',
+      label: 'Add lines on an open return: what may still come back (one line already on it, one with nothing left)',
+      model: {
+        kind: 'rma',
+        role: 'owner',
+        model: rmaModel('owner', {
+          rma: { ...RMA_AUTHORISED, lines: [{ ...RMA_AUTHORISED.lines[0]!, invoiceLineId: RETURNABLE[0]!.invoiceLineId }] },
+          addLines: { lines: { [RETURNABLE[1]!.invoiceLineId!]: { quantity: '2', reasonCode: 'WRONG_SIZE', note: '' } }, returnable: { value: { lines: RETURNABLE, policy: RMA_AUTHORISED.policy }, loading: false, problem: null }, showProblems: false, busy: false, problem: null },
+        }),
+      },
+    },
+    {
+      id: 'rma-add-lines-refused',
+      label: 'Add lines: more than is left (refused at the field with the numbers), a reason missing',
+      model: {
+        kind: 'rma',
+        role: 'owner',
+        model: rmaModel('owner', {
+          addLines: { lines: { [RETURNABLE[1]!.invoiceLineId!]: { quantity: '9', reasonCode: '', note: '' } }, returnable: { value: { lines: RETURNABLE, policy: RMA_AUTHORISED.policy }, loading: false, problem: null }, showProblems: true, busy: false, problem: null },
+        }),
+      },
+    },
+    { id: 'rma-add-lines-loading', label: 'Add lines: reading what may come back', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { addLines: { lines: {}, returnable: { value: null, loading: true, problem: null }, showProblems: false, busy: false, problem: null } }) } },
+    { id: 'rma-add-lines-held', label: 'Lines after the goods arrived: Add lines held with why', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_RECEIVED }) } },
     { id: 'rma-make-repair', label: 'Make repair order from a line decided Repair', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { rma: RMA_INSPECTED, tab: 'inspection', newRepair: { draft: { ...BLANK_REPAIR, returnLineId: RMA_INSPECTED.lines[0]!.id }, fromLine: { returnNumber: RMA_INSPECTED.number, seq: 10, garment: 'JK-DEMO-100 · Red · 52' }, customers: { items: [], problem: null }, preview: null, previewing: false, showProblems: false, busy: false, problem: null, today: TODAY } }) } },
     { id: 'rma-changed', label: 'Changed by someone else · Reload; a receipt', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { changedAt: NOW, receipt: { tone: 'success', words: { key: 'done.created', params: { number: 'RMA-DEMO-0001' } } } }) } },
     { id: 'rma-offline', label: 'RMA offline: writes held', model: { kind: 'rma', role: 'owner', model: rmaModel('owner', { offline: true, live: 'offline' }) } },
@@ -186,6 +217,8 @@ export const designScreen = defineDesignScreen<DesignModel>({
       model: { kind: 'repair', role: 'owner', model: repairModel('owner', { tab: 'work', dialog: { kind: 'workOrder', seqs: [20], problem: null, options: { workOrder: null, garment: { orderNumber: 'SO-DEMO-003', lineSeq: 10, size: '52', problems: [] }, revision: { id: 'demo-rev', revision: 2, status: 'RELEASED' }, steps: [{ seq: 10, code: 'CUT', name: 'Cutting', standardMinutes: '4', available: true }, { seq: 20, code: 'SEW', name: 'Sewing', standardMinutes: '12', available: true }, { seq: 30, code: 'PRS', name: 'Pressing', standardMinutes: '2', available: false }], blockers: [] } } }) },
     },
     { id: 'repair-repaired', label: 'Repaired: the work history; Send back held until the check', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: REPAIR_REPAIRED, tab: 'work' }) } },
+    { id: 'repair-rework', label: 'Back into repair after a failed check: a new repair work order for the rework (the first one is done)', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: REPAIR_REWORK, tab: 'work' }) } },
+    { id: 'repair-rework-ordered', label: 'The rework on its own work order; the first one listed among the earlier ones', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: REPAIR_REWORK_ORDERED, tab: 'work' }) } },
     { id: 'repair-safety', label: 'Safety check: the GateChecklist, blank', model: { kind: 'repair', role: 'inspector', model: repairModel('inspector', { repair: REPAIR_REPAIRED, tab: 'safety' }) } },
     { id: 'repair-safety-filled', label: 'Safety check filled: protector replaced (lot, level); will pass', model: { kind: 'repair', role: 'inspector', model: repairModel('inspector', { repair: REPAIR_REPAIRED, tab: 'safety', checklist: filledChecklist }) } },
     { id: 'repair-safety-problems', label: 'Sign pressed with points missing', model: { kind: 'repair', role: 'inspector', model: repairModel('inspector', { repair: REPAIR_REPAIRED, tab: 'safety', showCheckProblems: true }) } },

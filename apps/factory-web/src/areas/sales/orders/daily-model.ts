@@ -103,12 +103,16 @@ export function closableLines(order: Pick<Order, 'lines'>): ClosableLine[] {
 
 export const closedLines = (order: Pick<Order, 'lines'>): OrderLine[] => [...order.lines].sort((a, b) => a.seq - b.seq).filter((line) => line.closedShort)
 
-/** The close's own problem with the lines chosen (the API holds the same rule), or null. */
-export function closeChoiceProblem(order: Pick<Order, 'lines'>, chosen: readonly string[], reason: string): Phrase | null {
+/**
+ * The close's own problem with the lines chosen (the API holds the same rule), or null. B-W2b-16: when the CANCEL list is
+ * read, a code of it is asked too (the words stay required); a list that could not be read asks none (the API takes none).
+ */
+export function closeChoiceProblem(order: Pick<Order, 'lines'>, chosen: readonly string[], reason: string, reasonCode = '', reasons: readonly { readonly code: string }[] | null = null): Phrase | null {
   if (chosen.length === 0) return phrase('closeLines.problem.none')
   const anyShipped = order.lines.some((line) => line.progress.shipped > 0)
   const stillOpen = order.lines.filter((line) => !line.closedShort && !chosen.includes(line.id) && leftOf(line) > 0)
   if (!anyShipped && stillOpen.length === 0 && order.lines.filter((line) => !line.closedShort && !chosen.includes(line.id)).length === 0) return phrase('closeLines.problem.all')
+  if (reasons && reasons.length > 0 && !reasons.some((entry) => entry.code === reasonCode)) return phrase('closeLines.problem.reasonCode')
   if (reason.trim() === '') return phrase('closeLines.problem.reason')
   return null
 }

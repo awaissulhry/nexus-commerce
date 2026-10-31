@@ -5,17 +5,18 @@ import type { ApiClient } from '../../../../../lib/api/client'
 import { newIdempotencyKey } from '../../../../../lib/api/client'
 import { isApiError, issuePath } from '../../../../../lib/api/errors'
 import type { Milestone } from '../../api'
+import { isStepUpCancelled } from '../../hooks'
 import type { Phrase } from '../../model'
-import { invoiceStep, openStep } from './api'
+import { invoiceStep, openStep, waive } from './api'
 import { stepAbilitiesOf } from './model'
-import type { ScheduleStepsActions, ScheduleStepsModel } from './view/StepVerbs'
+import type { ScheduleStepsActions, ScheduleStepsModel, Waiving } from './view/StepVerbs'
 
 /** A refusal of a step verb in words (the API's English is never drawn): moved meanwhile, refused by state, no right. */
 function stepProblem(error: unknown): Phrase {
   if (!isApiError(error)) return { key: 'schedule.verbs.problem.write' }
   if (error.kind === 'conflict') return { key: error.issues.map(issuePath).some((path) => path.includes('version')) ? 'schedule.verbs.problem.moved' : 'schedule.verbs.problem.state' }
   if (error.kind === 'invalid') return { key: 'schedule.verbs.problem.day' }
-  if (error.kind === 'forbidden') return { key: 'schedule.verbs.problem.forbidden' }
+  if (error.kind === 'forbidden') return { key: error.issues.map(issuePath).includes('stepUp') ? 'schedule.verbs.problem.stepUp' : 'schedule.verbs.problem.forbidden' }
   return { key: 'schedule.verbs.problem.write' }
 }
 
@@ -23,10 +24,20 @@ function stepProblem(error: unknown): Phrase {
  * The schedule card's verbs for the order studio (B-W2a-80): open a before-shipping step for payment, invoice a paid step
  * (its TD02 draft opens in Finance). Each write once, with its own Idempotency-Key; the schedule is read again after.
  */
-export function useScheduleSteps(input: { api: ApiClient; orderId: string; permissions: readonly string[]; reload: () => void; onNotice: (words: Phrase, tone: 'success' | 'danger') => void; onInvoiced: (invoiceId: string) => void }) {
-  const { api, orderId, permissions, reload, onNotice, onInvoiced } = input
+export function useScheduleSteps(input: {
+  api: ApiClient
+  orderId: string
+  permissions: readonly string[]
+  reload: () => void
+  onNotice: (words: Phrase, tone: 'success' | 'danger') => void
+  onInvoiced: (invoiceId: string) => void
+  /** B-W2b-16: the record's step-up (the waive asks a fresh code first). */
+  stepUp?: { ensureFresh: (sentence: string) => Promise<void>; guard: <T>(sentence: string, work: () => Promise<T>) => Promise<T> }
+}) {
+  const { api, orderId, permissions, reload, onNotice, onInvoiced, stepUp } = input
   const can = useMemo(() => stepAbilitiesOf(permissions), [permissions])
   const [opening, setOpening] = useState<Milestone | null>(null)
+  const [waiving, setWaiving] = useState<Waiving | null>(null)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<Phrase | null>(null)
 
@@ -38,6 +49,7 @@ export function useScheduleSteps(input: { api: ApiClient; orderId: string; permi
       try {
         await work()
       } catch (error) {
+        if (isStepUpCancelled(error)) return
         const words = stepProblem(error)
         if (inDialog) setProblem(words)
         else onNotice(words, 'danger')
@@ -49,8 +61,24 @@ export function useScheduleSteps(input: { api: ApiClient; orderId: string; permi
     [busy, onNotice, reload],
   )
 
-  const model: ScheduleStepsModel = { can, opening, busy, problem }
+  const model: ScheduleStepsModel = { can, opening, waiving, busy, problem }
   const actions: ScheduleStepsActions = {
+    onWaive: (next) => {
+      setWaiving(next)
+      setProblem(null)
+    },
+    onConfirmWaive: (target, reason) => {
+      const key = newIdempotencyKey()
+      void run(async () => {
+        const sentence = 'stepUp.sentence.waive'
+        if (stepUp) await stepUp.ensureFresh(sentence)
+        const send = () => waive(api, orderId, target.target, reason.trim(), key)
+        await (stepUp ? stepUp.guard(sentence, send) : send())
+        setWaiving(null)
+        onNotice({ key: 'schedule.verbs.waived', params: { step: target.label } }, 'success')
+        reload()
+      }, true)
+    },
     onOpen: (step) => {
       setOpening(step)
       setProblem(null)

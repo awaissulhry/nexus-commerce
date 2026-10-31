@@ -186,7 +186,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         closedShort:
           line.closedShortQuantity === null
             ? null
-            : { quantity: line.closedShortQuantity, at: instantOrNull(line.closedShortAt), byId: line.closedShortById, reason: line.closeShortReason },
+            : { quantity: line.closedShortQuantity, at: instantOrNull(line.closedShortAt), byId: line.closedShortById, reason: line.closeShortReason, reasonCode: line.closedShortReasonCode },
         version: line.version,
         sizes:
           sizes.length > 0
@@ -202,7 +202,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         const view = depositViewOf(row)
         // The percentage as the database holds it ("30.0000" → "30"; deposits.ts's own text turns a whole "30" into "3").
         const depositPct = row.depositPct === null ? null : decimalText(row.depositPct.toString())
-        return { ...view, depositPct, amount: asMoney('price', view.amount), paidAmount: asMoney('price', placed.paid.get(row.id) ?? 0), link: placed.links.get(row.id) ?? null, stepKind: stepKinds.get(row.id) ?? null }
+        return { ...view, depositPct, amount: asMoney('price', view.amount), paidAmount: asMoney('price', placed.paid.get(row.id) ?? 0), link: placed.links.get(row.id) ?? null, stepKind: stepKinds.get(row.id) ?? null, version: row.version }
       }),
       workOrders: facts.workOrders.map((row) => ({ id: row.id, number: row.number, status: row.status, siteId: row.siteId, releasedAt: instantOrNull(row.releasedAt) })),
       shipments: facts.shipments.map((row) => ({ id: row.id, number: row.number, status: row.status, shippedAt: instantOrNull(row.shippedAt), deliveredAt: instantOrNull(row.deliveredAt) })),

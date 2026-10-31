@@ -113,10 +113,26 @@ const DONE_WORK_ORDER = ['COMPLETED', 'CLOSED']
 /** Where a repair work order can still be made: before the repair is done (production's own rule). */
 export const WORK_ORDER_STAGES: readonly RepairStage[] = Object.freeze(['AWAITING_GOODS', 'RECEIVED', 'ESTIMATED', 'APPROVED', 'IN_REPAIR'])
 
-export function makeWorkOrderHeld(number: string, stage: RepairStage, workOrder: RepairWorkOrder | null): string | null {
-  if (workOrder) return `Repair work order ${workOrder.number} is ${workOrder.status.toLowerCase().replace('_', ' ')}: one live work order per repair.`
+export function makeWorkOrderHeld(number: string, stage: RepairStage, workOrder: RepairWorkOrder | null, reworkRound = false): string | null {
+  if (workOrder && !reworkAllowed(stage, workOrder, reworkRound)) return `Repair work order ${workOrder.number} is ${workOrder.status.toLowerCase().replace('_', ' ')}: one live work order per repair.`
   if (!WORK_ORDER_STAGES.includes(stage)) return stage === 'REPAIRED' ? `Repair ${number} is repaired: back into repair first if it needs more work.` : `Repair ${number} is ${stageWords(stage)}.`
   return null
+}
+
+/**
+ * B-W2b-16 (B-W2a-57's gap: "the rework after a failed check is not on a work order"): a garment put back into repair
+ * after it was repaired (REPAIRED → IN_REPAIR: a failed safety check, or more work found) may get a NEW repair work order
+ * once the last one is done (COMPLETED or CLOSED). The new one becomes the repair's work order: REPAIRED then waits for
+ * it to be completed. A rework round is the repair IN_REPAIR whose last move came from REPAIRED (`reworkRoundOf`).
+ */
+export function reworkAllowed(stage: RepairStage, workOrder: RepairWorkOrder | null, reworkRound: boolean): boolean {
+  return reworkRound && stage === 'IN_REPAIR' && workOrder !== null && DONE_WORK_ORDER.includes(workOrder.status)
+}
+
+/** The repair is in a rework round: IN_REPAIR, and its last stage move came back from REPAIRED. */
+export function reworkRoundOf(stage: RepairStage, moves: readonly { readonly from: RepairStage | null; readonly to: RepairStage }[]): boolean {
+  const last = moves.at(-1)
+  return stage === 'IN_REPAIR' && last !== undefined && last.to === 'IN_REPAIR' && last.from === 'REPAIRED'
 }
 
 // ---- the moves the office makes by hand (POST …/stage) -------------------------------------------------------------
@@ -395,6 +411,8 @@ export interface ActionFacts extends SafetyFacts {
   readonly stage: RepairStage
   readonly workOrder: RepairWorkOrder | null
   readonly liveDdt: { readonly number: string } | null
+  /** B-W2b-16: back into repair after it was repaired (`reworkRoundOf`): a new work order may follow a done one. */
+  readonly reworkRound?: boolean
 }
 
 export interface ActionState {
@@ -415,7 +433,7 @@ export function repairActions(facts: ActionFacts): ActionState[] {
     held('receive', receiveHeld(facts.number, facts.stage)),
     held('estimate', move('ESTIMATED')),
     held('approve', move('APPROVED')),
-    held('makeWorkOrder', makeWorkOrderHeld(facts.number, facts.stage, facts.workOrder)),
+    held('makeWorkOrder', makeWorkOrderHeld(facts.number, facts.stage, facts.workOrder, facts.reworkRound ?? false)),
     held('startRepair', facts.stage === 'REPAIRED' ? `Repair ${facts.number} is repaired: put it back into repair instead.` : move('IN_REPAIR')),
     held('finishRepair', move('REPAIRED')),
     held('reopenRepair', facts.stage === 'REPAIRED' ? null : `Repair ${facts.number} is ${stageWords(facts.stage)}: only a repaired garment goes back into repair.`),

@@ -30,7 +30,7 @@ import { assertMay, officeContextOf } from './access'
 import { recordAfter } from './moves'
 import { newLineDraft, priceLines, type LineDraft, type NewLineInput, type PricedLines } from './pricing'
 import { makeScheduleInCommand } from './schedule'
-import { asDay, hasOrderSeries, type Reader } from './store'
+import { asDay, dayOf, hasOrderSeries, type Reader } from './store'
 import type { OrderView } from './views'
 
 /**
@@ -341,6 +341,7 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
   }
   // The deposit (B-W1-24's rules: its legal kind and fiscal decision), named on the order: no quote version.
   let deposit: { id: string; amount: number; dueDate: Date; depositPct: Prisma.Decimal | null } | null = null
+  let depositFiscal: 'TD02' | 'NONE' | null = null
   if (depositAsked) {
     const draft = depositRequestFor({ depositPct: plan.depositPct, depositKind: plan.depositKind, depositAmount: plan.depositAmount, currency: plan.currency }, today, plan.party.profile, depositDueDaysOf(plan.instalments, DEPOSIT_DUE_DAYS))
     if (draft) {
@@ -364,6 +365,7 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
         },
         select: { id: true, amount: true, dueDate: true, depositPct: true },
       })
+      depositFiscal = draft.fiscalDocument
       tools.audit({
         action: 'sales.deposits.request',
         recordType: 'DepositRequest',
@@ -399,6 +401,15 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
     },
   })
   tools.emit({ type: 'sales_order.created', subject: id, companyId: body.companyId, payload: { orderId: id, number: number.formatted, quoteId: null, versionId: null, partyId: plan.party.row.id, depositRequestIds: deposit ? [deposit.id] : [] } })
+  // B-W2b-16: the typed order's deposit gets its own event (the quote's deposit_request.created needs a quote version).
+  if (deposit) {
+    tools.emit({
+      type: 'deposit_request.created_for_order',
+      subject: deposit.id,
+      companyId: body.companyId,
+      payload: { depositRequestId: deposit.id, orderId: id, number: number.formatted, partyId: plan.party.row.id, stepKind: 'DEPOSIT', fiscalDocument: depositFiscal!, dueDate: dayOf(deposit.dueDate) },
+    })
+  }
   return { orderId: id, number: number.formatted }
 }
 

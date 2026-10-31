@@ -193,3 +193,15 @@
   align-items: center;
   gap: var(--nds-space-4);
 }
+
+/* ---- B-W2b-16: the Lines tab's head (the hint, Add lines) and the close's warnings before the click ---- */
+.fw-rr-lines-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-rr-lines-head > .grow {
+  flex: 1 1 auto;
+}

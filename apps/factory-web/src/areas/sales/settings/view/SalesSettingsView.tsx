@@ -9,6 +9,9 @@ import type { Translate } from '../../../../lib/i18n/messages'
 import { useT } from '../../../../lib/i18n/provider'
 import type { LiveState, Tone } from '../../../quality/_shared/model'
 import { Freshness, NoAccess, PageHead, QualityMessages, Section } from '../../../quality/_shared/parts'
+import type { StepUpState } from '../../../quality/_shared/hooks'
+import { StepUpModal } from '@nexus/ui/patterns'
+import { useDsLabels } from '../../../../lib/i18n/ds-labels'
 import { FREIGHT_PAYERS, type FreightPayer, type PolicyAnswer, type SalesSettings, type Series } from '../api'
 import { policyProblems, quoteProblems, ruleSentence, salesSeries, sourceWords, type PolicyDraft, type QuoteDraft, type Scope, type SettingsCan, type Words } from '../model'
 import '../settings.css'
@@ -43,6 +46,8 @@ export interface SalesSettingsModel {
   readonly offline: boolean
   readonly changedAt: string | null
   readonly receipt: { readonly tone: Tone; readonly words: Words } | null
+  /** B-W2b-16: the fresh code a raised approval limit asks for (closed: none asked). */
+  readonly stepUp?: StepUpState
 }
 
 export interface SalesSettingsActions {
@@ -55,6 +60,8 @@ export interface SalesSettingsActions {
   onReload?: () => void
   onRetry?: () => void
   onDismissReceipt?: () => void
+  onStepUpSubmit?: (code: string) => void
+  onStepUpCancel?: () => void
 }
 
 export function SalesSettingsView({ model, actions, reasons }: { model: SalesSettingsModel; actions?: SalesSettingsActions; reasons?: ReactNode }) {
@@ -95,6 +102,7 @@ function Settings({ model, actions, reasons }: { model: SalesSettingsModel; acti
 
   return (
     <div className="fw-q">
+      {model.stepUp && <RaiseStepUp state={model.stepUp} actions={actions} />}
       <PageHead intro={t('intro')} status={<Freshness asOf={model.asOf} live={model.live} />} />
       <div className="fw-ss-scope">
         <span className="fw-q-hint" id="fw-ss-scope-label">
@@ -265,6 +273,7 @@ function ApprovalCard({ model, actions }: { model: SalesSettingsModel; actions?:
                     <p className="fw-ss-sentence" aria-live="polite">
                       {say(t, ruleSentence(editing.quote, model.can.margin))}
                     </p>
+                    <p className="fw-q-hint">{t('approval.raiseStepUp')}</p>
                     <EditBar model={model} actions={actions} problems={problems.length} />
                   </div>
                 ) : (
@@ -478,5 +487,27 @@ function NumberingCard({ model }: { model: SalesSettingsModel }) {
         </p>
       </section>
     </Card>
+  )
+}
+
+/**
+ * B-W2b-16 (design ssettings.approval "Raising a limit asks for step-up"): a higher discount limit or a lower margin floor
+ * lets more quotes through without an approver, so the API asks a fresh code; the DS StepUpModal in this page's words.
+ */
+function RaiseStepUp({ state, actions }: { state: StepUpState; actions?: SalesSettingsActions }) {
+  const t = useWords()
+  const labels = useDsLabels()
+  return (
+    <StepUpModal
+      open={state.open}
+      title={t('stepUp.title')}
+      sentence={state.sentence ? t(state.sentence) : ''}
+      busy={state.busy}
+      error={state.problem ? t(state.problem) : null}
+      onSubmit={(code) => actions?.onStepUpSubmit?.(code)}
+      onClose={() => actions?.onStepUpCancel?.()}
+      confirmLabel={t('stepUp.confirm')}
+      labels={labels.stepUp}
+    />
   )
 }
