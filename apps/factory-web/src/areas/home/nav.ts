@@ -1,4 +1,4 @@
-import { Bell, BellRing, CheckCheck, Home, Inbox, ListTodo, Sun } from 'lucide-react'
+import { BarChart3, Bell, BellRing, CheckCheck, Home, Inbox, ListTodo, Sun } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -34,11 +34,16 @@ export const officeArea: OfficeAreaNav = {
           { id: 'home-mail-to-sort', label: 'shell:nav.home.mailToSort', href: '/home/mail-to-sort', icon: Inbox, permission: 'email.triage' },
         ],
       },
-      // B-W2a-78: Insights › Alerts (SCR-234): the open alerts of the records I may see, and the exception rules.
+      // B-W2a-79 + B-W2a-78: Insights (design 01 "Insights · Analisi") › Reports (SCR-104: the report library, each report obeying
+      // the person's data permissions) and Alerts (SCR-234: the open alerts of the records I may see, and the exception rules).
+      // Dashboards and the KPI library (W2b) join this group.
       {
         id: 'home-insights',
         label: 'shell:nav.home.insights',
-        items: [{ id: 'home-alerts', label: 'shell:nav.home.alerts', href: '/home/alerts', icon: BellRing, permission: 'alerts.view' }],
+        items: [
+          { id: 'home-reports', label: 'shell:nav.home.reports', href: '/home/reports', icon: BarChart3, permission: 'home.reports.view' },
+          { id: 'home-alerts', label: 'shell:nav.home.alerts', href: '/home/alerts', icon: BellRing, permission: 'alerts.view' },
+        ],
       },
     ],
   },

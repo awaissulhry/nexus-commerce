@@ -1,0 +1,131 @@
+/*
+ * Today › My numbers (design home.today key-numbers; B-W2a-79) LAYOUT: the tiles in a grid that fills the work column,
+ * each a bordered surface like the DS metric tile, and the "How this number is made" popover's content. Semantic tokens
+ * only; the target words carry an icon, never a colour alone.
+ */
+.fw-kn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-kn-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-kn-h {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-kn-muted {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.4;
+}
+
+.fw-kn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+}
+
+.fw-kn-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-kn-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-kn-label {
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+span.fw-kn-label {
+  color: inherit;
+}
+
+.fw-kn-info {
+  flex: none;
+  color: var(--nds-text-muted);
+}
+
+.fw-kn-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-xl, var(--nds-font-size-lg));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.fw-kn-none {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-kn-target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+
+.fw-kn-word {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-success-text);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-kn-word--off {
+  color: var(--nds-warning-text);
+}
+
+.fw-kn-explain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 26rem;
+}
+
+.fw-kn-explain-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.fw-kn-explain-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
