@@ -12,7 +12,7 @@ import { completeUpload, requestUpload } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
 import { DISCREPANCY_RECORD } from './discrepancies'
 import { visibleReceipt } from './read'
-import { RECEIPT_COLUMNS, type Reader, type ReceiptRow } from './store'
+import { DDT_PHOTO_WHERE, RECEIPT_COLUMNS, type Reader, type ReceiptRow } from './store'
 
 /**
  * Photos at receiving (B-W2a-31): the supplier's delivery note (SCM-115; design floor.receive sec "ddt" and
@@ -20,6 +20,8 @@ import { RECEIPT_COLUMNS, type Reader, type ReceiptRow } from './store'
  * photos). Each is a PHOTO file (platform/files: JPEG, PNG, WebP, HEIC) of its record — the delivery note's of the
  * GoodsReceipt, a discrepancy's of the ReceiptDiscrepancy — announced here, PUT to the presigned URL, then confirmed
  * with …/complete (AVAILABLE, or QUARANTINED when what arrived differs). As the write-off's photos (B-W2a-11).
+ * B-W2b-14: the delivery note's photo is of category DDT_PHOTO (StoredFile.category), so another photo of the receipt
+ * never shows as the DDT; its limit counts the DDT photos.
  *
  *   POST /inventory/receipts/:receiptId/ddt-photos (+ /:fileId/complete)   office and floor, inventory.receive
  *   POST /inventory/receipts/:receiptId/discrepancies/:discrepancyId/photos (+ /:fileId/complete)
@@ -71,7 +73,7 @@ async function photoCount(db: Reader, recordType: string, recordId: string): Pro
 export async function announceDdtPhoto(request: FastifyRequest, receiptId: string, body: PhotoUpload, idempotencyKey?: string) {
   const { receipt, uploader, floor } = await ddtReceipt(request, receiptId)
   if (receipt.status === 'CANCELLED') throw new InvalidStateError(`Receipt ${receipt.number} was cancelled: it takes no photo.`)
-  const held = await uploader.withClient((client) => photoCount(client, RECEIPT_RECORD, receipt.id))
+  const held = await uploader.withClient((client) => client.storedFile.count({ where: DDT_PHOTO_WHERE(receipt.id) }))
   if (held >= DISCREPANCY_LIMITS.photos) throw new InvalidStateError(`Receipt ${receipt.number} holds ${DISCREPANCY_LIMITS.photos} photos already.`)
   return requestUpload(
     processFiles(),
@@ -85,6 +87,7 @@ export async function announceDdtPhoto(request: FastifyRequest, receiptId: strin
       contentType: body.contentType,
       sizeBytes: body.sizeBytes,
       sha256: body.sha256,
+      category: 'DDT_PHOTO',
       ...(floor ? { visibility: ['OFFICE', 'FLOOR'] as const, floorSiteId: receipt.siteId } : {}),
     },
     idempotencyKey,
@@ -95,7 +98,7 @@ export async function announceDdtPhoto(request: FastifyRequest, receiptId: strin
 /** POST /inventory/receipts/:receiptId/ddt-photos/:fileId/complete */
 export async function completeDdtPhoto(request: FastifyRequest, receiptId: string, fileId: string, idempotencyKey?: string) {
   const { receipt, uploader } = await ddtReceipt(request, receiptId)
-  const file = isUuid(fileId) ? await uploader.withClient((client) => client.storedFile.findFirst({ where: { id: fileId, recordType: RECEIPT_RECORD, recordId: receipt.id, kind: 'PHOTO' }, select: { id: true } })) : null
+  const file = isUuid(fileId) ? await uploader.withClient((client) => client.storedFile.findFirst({ where: { id: fileId, recordType: RECEIPT_RECORD, recordId: receipt.id, kind: 'PHOTO', category: 'DDT_PHOTO' }, select: { id: true } })) : null
   if (!file) throw new NotFoundError('Photo not found.')
   return { file: await completeUpload(processFiles(), uploader, fileId, idempotencyKey, { viaModule: true }) }
 }

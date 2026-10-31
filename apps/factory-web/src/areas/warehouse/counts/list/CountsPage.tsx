@@ -162,17 +162,18 @@ function CountsContainer() {
 
   const find = useCallback(
     (text: string) => {
-      if (!can.materials || text.trim().length < 2) {
+      // B-W2b-15: the count's own item search (materials and finished garments) of the chosen site.
+      if (!can.materials || !draftSite || text.trim().length < 2) {
         setFound(null)
         return
       }
       setSearching(true)
-      findMaterials(api, text)
+      findMaterials(api, draftSite, text)
         .then(setFound)
         .catch(() => setFound([]))
         .finally(() => setSearching(false))
     },
-    [api, can.materials],
+    [api, can.materials, draftSite],
   )
 
   const create = useCallback(async () => {

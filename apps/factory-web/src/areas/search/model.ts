@@ -8,7 +8,7 @@ import { companyPrefix } from '../../lib/session/session'
  */
 
 /** The record types the index holds today (one indexer each, apps/factory-api platform/search/indexers/). */
-export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'PurchaseOrder', 'WorkOrder', 'Lot', 'Hide', 'GoodsReceipt', 'Shipment', 'Invoice'] as const
+export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'PurchaseOrder', 'WorkOrder', 'Lot', 'Hide', 'GoodsReceipt', 'Shipment', 'Invoice', /* B-W2a-83 */ 'ReturnAuthorisation', 'RepairOrder', 'Complaint', 'SupplierClaim'] as const
 
 /** The status codes the search catalogue says in words (`search:status.<code>`); another code is not shown. */
 export const STATUS_CODES: ReadonlySet<string> = new Set([
@@ -16,6 +16,8 @@ export const STATUS_CODES: ReadonlySet<string> = new Set([
   'CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CHANGES_PROPOSED', 'PARTLY_RECEIVED', 'RECEIVED',
   'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'ON_HOLD', 'QUARANTINE', 'REJECTED', 'OPEN', 'POSTED', 'REVERSED', 'PACKED', 'DELIVERED', 'RETURNED',
   'ISSUED', 'NOT_DELIVERABLE', 'ERROR',
+  // B-W2a-83: a customer return, a repair, a complaint.
+  'REQUESTED', 'AUTHORISED', 'INSPECTED', 'AWAITING_GOODS', 'ESTIMATED', 'IN_REPAIR', 'REPAIRED', 'NEW', 'TRIAGED', 'INVESTIGATING', 'ANSWERED',
 ])
 
 /** The areas whose name the shell's navigation says (`shell:nav.<area>.area`). */
@@ -97,7 +99,7 @@ export function numbersOf(results: readonly Pick<SearchResult, 'recordId' | 'num
 
 const WARNING = new Set(['PENDING_APPROVAL', 'CHANGES_PROPOSED', 'ON_HOLD', 'QUARANTINE', 'PARTLY_SHIPPED', 'PARTLY_RECEIVED'])
 const DANGER = new Set(['BLOCKED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'REJECTED', 'NOT_DELIVERABLE', 'ERROR', 'REVERSED', 'RETURNED'])
-const DONE = new Set(['ACCEPTED', 'SHIPPED', 'RECEIVED', 'RELEASED', 'COMPLETED', 'DELIVERED', 'POSTED', 'ISSUED', 'ACTIVE', 'CONFIRMED', 'APPROVED'])
+const DONE = new Set(['ACCEPTED', 'SHIPPED', 'RECEIVED', 'RELEASED', 'COMPLETED', 'DELIVERED', 'POSTED', 'ISSUED', 'ACTIVE', 'CONFIRMED', 'APPROVED', 'INSPECTED', 'REPAIRED', 'ANSWERED'])
 
 /** The tone a status is drawn in (a pill): waiting, refused or stopped, done, or neutral. */
 export function statusTone(code: string | null): 'neutral' | 'info' | 'success' | 'warning' | 'danger' {
@@ -110,6 +112,6 @@ export function statusTone(code: string | null): 'neutral' | 'info' | 'success' 
 }
 
 /** The view permissions of the record types the index holds: a person who holds none of them has nothing to search. */
-export const SEARCH_VIEW_PERMISSIONS: readonly string[] = Object.freeze(['parties.view', 'quotes.view', 'orders.view', 'product.styles.view', 'product.materials.view', 'purchasing.view', 'workorders.view', 'inventory.stock.view', 'shipping.view', 'invoices.view'])
+export const SEARCH_VIEW_PERMISSIONS: readonly string[] = Object.freeze(['parties.view', 'quotes.view', 'orders.view', 'product.styles.view', 'product.materials.view', 'purchasing.view', 'workorders.view', 'inventory.stock.view', 'shipping.view', 'invoices.view', /* B-W2a-83 */ 'sales.returns.view', 'sales.repairs.view', 'quality.complaints.view'])
 
 export const canSearchSomething = (permissions: readonly string[]): boolean => permissions.some((permission) => SEARCH_VIEW_PERMISSIONS.includes(permission))

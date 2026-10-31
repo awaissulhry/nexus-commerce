@@ -16,7 +16,9 @@ import {
   assignedWords,
   checklistCounts,
   checklistGroups,
+  dueState,
   recordAbilities,
+  savedDefectIds,
   releaseHeld,
   releaseLabel,
   resultNow,
@@ -56,6 +58,9 @@ export interface InspectionRecordActions {
   onAssignClose?: () => void
   onPlaceHold?: () => void
   onRaiseNcr?: () => void
+  /** B-W2b-17: the defect lines picked on Defects & photos, and "Create NCR from N defects" (their saved ids). */
+  onPickDefects?: (keys: readonly string[]) => void
+  onRaiseNcrFrom?: (defectIds: readonly string[]) => void
   onCancelReason?: (reason: string) => void
   onCancel?: () => void
   onReload?: () => void
@@ -148,6 +153,13 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
       {read.workOrder.batchNumber && <span className="fw-q-hint">· {t('record.batch', { batch: read.workOrder.batchNumber })}</span>}
       {style && <span className="fw-q-hint">· {style.code} {style.name}</span>}
       {inspection.status === 'OPEN' && <span className="fw-q-hint">· {t(assignedWords(inspection.assigned, model.me, true).key, assignedWords(inspection.assigned, model.me, true).params)}</span>}
+      {/* B-W2b-17: by when it is due (overdue in words and in the danger tone). */}
+      {inspection.dueAt && (inspection.status === 'OPEN' || inspection.overdue) && (
+        <span className={dueState(inspection).tone === 'danger' ? 'fw-q-cell-row' : 'fw-q-hint'}>
+          · {t(dueState(inspection).key, { at: formatDateTime(inspection.dueAt, { locale }) })}
+          {dueState(inspection).tone === 'danger' && <Tag tone="danger">{t('due.overdueTag')}</Tag>}
+        </span>
+      )}
     </span>
   )
 
@@ -199,6 +211,7 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
           sampleSize={inspection.plan.sampleSize}
           held={abilities.recordHeld}
           canRaise={can.ncrRaise}
+          saved={savedDefectIds(inspection)}
           dialog={dialog?.kind === 'pick' || dialog?.kind === 'zone' || dialog?.kind === 'photo' ? dialog : null}
           actions={{
             onLines: actions?.onLines,
@@ -206,6 +219,8 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
             onRetry: actions?.onRetryDefects,
             onDismiss: actions?.onDismissDefects,
             onRaiseNcr: () => actions?.onRaiseNcr?.(),
+            onSelect: actions?.onPickDefects,
+            onRaiseNcrFrom: actions?.onRaiseNcrFrom,
             onDialog: (next) => open(next),
           }}
         />

@@ -102,6 +102,31 @@ export function freightRuleProblems(input: { readonly rule: FreightRule; readonl
   return problems
 }
 
+// ---- W2b (B-W2b-19): how the charge was decided, and what the carrier charged us ------------------------------------
+
+/**
+ * Shipment.freightBasis (B-W2b-01): RULE when the site's rule gave the charge, MANUAL when the office typed it, null
+ * while no charge is decided (the database keeps a basis only with a charge). Replaces W2a's last freight audit row.
+ */
+export const FREIGHT_CHARGE_BASES = ['RULE', 'MANUAL'] as const
+export type FreightChargeBasis = (typeof FREIGHT_CHARGE_BASES)[number]
+
+/** The basis a charge gets: null without a charge. */
+export const chargeBasisOf = (charge: number | null, byHand: boolean): FreightChargeBasis | null => (charge === null ? null : byHand ? 'MANUAL' : 'RULE')
+
+/**
+ * The freight cost (B-W2a-29 and -48 gaps; Shipment.freightCost + freightCostCurrency, the cost grain): what the carrier
+ * charged us for the shipment, typed from its invoice by the office, in minor units of its currency (both or neither),
+ * still changed after the goods left (the carrier's invoice comes later), never once the shipment is cancelled.
+ */
+export function freightCostProblems(status: ShipmentStatus, cost: number | null, currency: string | null, at = 'body'): Issue[] {
+  if (status === 'CANCELLED') return [{ path: 'state', message: 'The shipment is CANCELLED: its freight cost no longer changes.' }]
+  const problems: Issue[] = []
+  if (cost !== null && !isAmount(cost)) problems.push({ path: `${at}/freightCost`, message: 'Expected the freight cost as whole minor units, 0 or more.' })
+  if (cost !== null && (currency === null || !/^[A-Z]{3}$/.test(currency))) problems.push({ path: `${at}/currency`, message: 'Expected the ISO 4217 currency of the carrier\'s invoice.' })
+  return problems
+}
+
 /** Why the office cannot change a shipment's freight charge now (empty: it can): until the shipment is cancelled. */
 export function freightChargeProblems(status: ShipmentStatus, charge: number | null): string[] {
   if (status === 'CANCELLED') return ['The shipment is CANCELLED: its freight charge no longer changes.']

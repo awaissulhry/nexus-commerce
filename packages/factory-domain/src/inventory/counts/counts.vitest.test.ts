@@ -234,3 +234,11 @@ describe('the papers', () => {
     expect(withExpected.table.columns.reduce((sum, column) => sum + column.width, 0)).toBe(1000)
   })
 })
+
+describe('B-W2b-15: the list\'s saved rows the tiles count', () => {
+  it('waiting for approval = submitted over the limit; to apply = approved, or submitted under the limit', async () => {
+    const { countListViewFilter } = await import('./rules')
+    expect(countListViewFilter('waitingApproval')).toEqual([{ status: 'SUBMITTED', approvalRequired: true }])
+    expect(countListViewFilter('toApply')).toEqual([{ status: 'APPROVED' }, { status: 'SUBMITTED', approvalRequired: false }])
+  })
+})

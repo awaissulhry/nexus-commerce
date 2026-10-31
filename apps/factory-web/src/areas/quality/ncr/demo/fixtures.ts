@@ -1,5 +1,5 @@
 import { at, COMPANY_ID, ME, NOW, SITE_ID, uid } from '../../_shared/fixtures'
-import type { ContainmentAction, Decision, DefectChoice, DispositionChoice, NcrCard, NcrCounts, NcrLane, NcrPrefill, NcrRecord, NcrSummary, OperationChoice, Person, ReasonChoice, SiteChoice, StockPlace } from '../api'
+import type { ContainmentAction, Decision, DefectChoice, DispositionChoice, NcrCard, NcrCounts, NcrLane, NcrPrefill, NcrRecord, NcrSettingsAnswer, NcrSummary, OperationChoice, Person, ReasonChoice, SiteChoice, StockPlace } from '../api'
 
 /**
  * Made-up data of the Nonconformances screens (SCR-144, SCR-145): DEMO- numbers, Demo names, made-up quantities. Nothing
@@ -226,6 +226,7 @@ const actions: ContainmentAction[] = [
     doneAt: at(27, 11, 0),
     doneById: uid('5201', 1),
     evidenceNote: 'Placed with the NCR.',
+    cancelReason: null,
     files: 0,
     record: { type: 'QualityHold', id: uid('5311', 1) },
     hold: { id: uid('5311', 1), status: 'ACTIVE', subjectType: 'WorkOrder', count: 1 },
@@ -243,6 +244,7 @@ const actions: ContainmentAction[] = [
     doneAt: at(27, 14, 30),
     doneById: uid('5201', 2),
     evidenceNote: 'Two bundles checked, 4 more pockets found and added to the quantity.',
+    cancelReason: null,
     files: 1,
     record: null,
     hold: null,
@@ -386,6 +388,8 @@ export const PREFILL: NcrPrefill = {
   source: 'INSPECTION',
   foundAt: 'FINAL',
   title: 'Open seam at the left shoulder',
+  titleParts: null,
+  defectIds: [],
   description: 'Found at final inspection of WO-DEMO-0150.',
   foundOn: at(29, 9, 10),
   foundById: ME,
@@ -408,6 +412,7 @@ export const PREFILL: NcrPrefill = {
   problem: null,
   files: [{ id: uid('5360', 1), kind: 'PHOTO', originalName: 'shoulder-seam.jpg' }],
   existing: [{ id: base.id, number: base.number, stage: base.stage }],
+  containmentHours: 24,
 }
 
 export const DEFECTS: DefectChoice[] = [
@@ -431,3 +436,51 @@ export const OPERATIONS: OperationChoice[] = [
 ]
 
 export const ASOF = NOW
+
+// ---- B-W2b-17 (made-up) ---------------------------------------------------------------------------------------------
+
+/** New NCR from two picked defect lines of INS-DEMO-0412 (the prefill takes only those lines; its title in parts). */
+export const PREFILL_DEFECTS: NcrPrefill = {
+  ...PREFILL,
+  title: '2 defects at Inspection INS-DEMO-0412',
+  titleParts: { key: 'INSPECTION_DEFECTS', values: { count: '2', inspection: 'INS-DEMO-0412' } },
+  defectIds: [uid('5306', 1), uid('5306', 2)],
+  description: 'SEAM-OPEN × 3 (SHOULDER_L); LINING-TORN × 2 (LINING)\nFound at final inspection of WO-DEMO-0150.',
+  quantityAffected: '5',
+  zone: null,
+  existing: [],
+  containmentHours: 48,
+}
+
+/** New NCR from a rejected bundle: the title in parts, worded in the reader's language. */
+export const PREFILL_BUNDLE: NcrPrefill = {
+  ...PREFILL,
+  fromType: 'Bundle',
+  fromId: uid('5307', 1),
+  label: 'Bundle DEMO-BN-0031',
+  source: 'BUNDLE',
+  foundAt: 'IN_LINE',
+  title: 'Rejected bundle DEMO-BN-0031',
+  titleParts: { key: 'BUNDLE_REJECTED', values: { bundle: 'DEMO-BN-0031' } },
+  description: null,
+  quantityAffected: '10',
+  severity: null,
+  defectCodeId: null,
+  zone: null,
+  links: [{ recordType: 'Bundle', recordId: uid('5307', 1), note: null }],
+  files: [],
+  existing: [],
+  containmentHours: 24,
+}
+
+/** The company's containment time: its own 48 hours (the tenant's 24 below it). */
+export const CONTAINMENT_SETTINGS: NcrSettingsAnswer = {
+  settings: { companyId: COMPANY_ID, inForce: { hours: 48, source: 'COMPANY' }, own: { defaultContainmentHours: 48, updatedAt: at(20, 9, 0) }, version: 3 },
+  mayChange: true,
+}
+
+/** A containment cancelled with its reason (B-W2b-17's own column), and one cancelled before (its reason in the evidence). */
+export const CANCELLED_ACTIONS: ContainmentAction[] = [
+  { ...actions[1]!, id: uid('5310', 21), seq: 3, kind: 'CHECK_SHIPPED', description: 'Check the two shipments of last week', status: 'CANCELLED', doneAt: null, doneById: null, evidenceNote: null, cancelReason: 'Nothing of this work order was shipped yet.', files: 0, version: 2 },
+  { ...actions[1]!, id: uid('5310', 22), seq: 4, kind: 'TELL_CUSTOMER', description: null, status: 'CANCELLED', doneAt: null, doneById: null, evidenceNote: 'Cancelled: The customer is told with the shipment note.', cancelReason: 'The customer is told with the shipment note.', files: 0, version: 2 },
+]

@@ -72,6 +72,8 @@ model Party {
   contacts            PartyContact[]
   taxIdentities       PartyTaxIdentity[]
   measurementProfiles MeasurementProfile[]
+  // W2b people.prisma (wave 4/7): as an agency, the agency workers it employs.
+  agencyEmployees     Employee[]           @relation("EmployeeAgency")
   // product.prisma: the items it supplies by default, the styles made for it as a brand, the BOM lines bought from it.
   suppliedItems       Item[]
   brandStyles         Style[]
@@ -108,11 +110,16 @@ model Party {
   refunds              Refund[]
   paymentReminders     PaymentReminder[]
   supplierInvoices     SupplierInvoice[]
+  // W2b payables.prisma (schema wave 2/7): the files of several invoices it sent.
+  supplierInvoiceFiles SupplierInvoiceFile[]
   // pricing.prisma: its default payment terms and price list (Restrict, not Prisma's SetNull default for an optional
   // relation: that would also clear tenantId).
   termsOfPayment       PaymentTerms?        @relation(fields: [tenantId, paymentTermsId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   /// @not-money the relation to its default price list
   priceList            PriceList?           @relation(fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b pricing.prisma: the price lists it was given, each from a day (the Customers tab's "From").
+  /// @not-money the relation to its dated price list assignments
+  priceListAssignments PartyPriceListAssignment[]
   // returns.prisma, complaints.prisma: its returns, repairs and complaints.
   returnAuthorisations ReturnAuthorisation[]
   repairOrders         RepairOrder[]

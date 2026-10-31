@@ -292,14 +292,13 @@
     "assignSubmit": "Assegna {count}",
     "assigned_one": "{count} non conformità ha il suo responsabile.",
     "assigned_other": "{count} non conformità hanno il loro responsabile.",
-    "assignedSome": "{done} di {count} non conformità hanno il loro responsabile; le altre sono state rifiutate.",
     "heldAssignNone": "Nessuna delle non conformità scelte è ancora aperta.",
-    "heldAssignSites": "Scegli non conformità di un solo stabilimento: il responsabile deve raggiungerlo.",
     "heldAssignOwner": "Scegli prima un responsabile.",
     "heldAssignMax": "Al massimo 50 non conformità alla volta.",
     "foot": "Una riga apre la non conformità. Scegli righe per assegnare un responsabile o esportarle.",
     "boardFoot": "La lavagna mostra le stesse righe per stato; Chiusa mostra gli ultimi 30 giorni.",
-    "printFilters": "Righe: {rows} · Stabilimento: {site} · Ricerca: {search}"
+    "printFilters": "Righe: {rows} · Stabilimento: {site} · Ricerca: {search}",
+    "heldAssignOffline": "Offline: assegna quando torni in linea."
   },
   "view": {
     "open": "Aperte",
@@ -410,7 +409,13 @@
     "createdPhotosFailed": "{number} è aperta, ma una foto non è stata aggiunta: aggiungila sulla non conformità.",
     "openIt": "Apri {number}",
     "refused": "La non conformità non è stata creata.",
-    "heldSeverity": "Di' prima quanto è grave."
+    "heldSeverity": "Di' prima quanto è grave.",
+    "fromDefects_one": "Da {count} riga di difetto di {inspection}.",
+    "fromDefects_other": "Da {count} righe di difetto di {inspection}.",
+    "defectsGone": "Una riga di difetto scelta non è più nell'ispezione: riapri l'ispezione e scegli le righe.",
+    "containmentReading": "Lettura del tempo di contenimento dell'azienda…",
+    "containmentFailed": "Non è stato possibile leggere il tempo di contenimento: la fabbrica imposta la scadenza quando crea la non conformità.",
+    "containmentDue": "Contenimento entro {span} dalla scoperta del problema (il tempo di contenimento dell'azienda)."
   },
   "zone": {
     "FRONT": "Davanti",
@@ -438,5 +443,74 @@
     "POCKET": "Tasca",
     "LINING": "Fodera",
     "LABEL": "Etichetta"
+  },
+  "title": {
+    "INSPECTION_DEFECT": "{defectWords} all'ispezione {inspection}",
+    "INSPECTION_DEFECTS_one": "{count} difetto all'ispezione {inspection}",
+    "INSPECTION_DEFECTS_other": "{count} difetti all'ispezione {inspection}",
+    "INSPECTION_FAILED": "Controlli non superati all'ispezione {inspection}",
+    "BUNDLE_REJECTED": "Pacco {bundle} scartato",
+    "SCAN_REJECTED_one": "{count} capo scartato in {operation}",
+    "SCAN_REJECTED_other": "{count} capi scartati in {operation}",
+    "SCAN_REJECTED_op_one": "{count} capo scartato in una fase",
+    "SCAN_REJECTED_op_other": "{count} capi scartati in una fase",
+    "WORK_ORDER": "Problema sull'ordine di lavoro {workOrder}",
+    "GARMENT": "Problema sul capo {serial}",
+    "LOT": "Problema con il lotto {lot}",
+    "HIDE": "Problema con la pelle {hide}",
+    "RECEIPT": "Problema con la consegna dell'entrata merci {receipt}",
+    "DISCREPANCY": "{kind} nell'entrata merci {receipt}",
+    "CLAIM": "Reclamo al fornitore {claim}",
+    "HOLD": "Merce bloccata: {reasonCode}",
+    "RMA": "Capi resi con {rma}",
+    "RETURN_LINE": "Reso: {description}",
+    "COMPLAINT": "Reclamo {complaint}"
+  },
+  "discrepancyKind": {
+    "SHORT": "Quantità mancante",
+    "OVER": "Quantità in eccesso",
+    "DAMAGED": "Merce danneggiata",
+    "WRONG_ITEM": "Articolo errato",
+    "WRONG_COLOUR": "Colore errato",
+    "MISSING_DOCUMENT": "Documento mancante",
+    "OTHER": "Differenza"
+  },
+  "containmentTime": {
+    "menu": "Tempo di contenimento…",
+    "title": "Tempo di contenimento delle nuove non conformità",
+    "intro": "Entro quanto, dalla scoperta di un problema, va fatto il contenimento quando nessuno dice altro. Le non conformità già aperte tengono la loro scadenza.",
+    "reading": "Lettura del tempo di contenimento…",
+    "readFailed": "Non è stato possibile leggere il tempo di contenimento.",
+    "hours_one": "{count} ora",
+    "hours_other": "{count} ore",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "source": {
+      "COMPANY": "Il tempo proprio di questa azienda.",
+      "TENANT": "Il tempo di tutte le aziende (questa non ne ha uno proprio).",
+      "DEFAULT": "Il valore predefinito (nessun tempo impostato)."
+    },
+    "followTenant": "Segui il tempo di tutte le aziende",
+    "followDefault": "Segui il valore predefinito (24 ore)",
+    "hours": "Ore dalla scoperta del problema",
+    "hoursHint": "Ore intere da 1 a 720 (30 giorni).",
+    "heldNoRight": "Per cambiare il tempo di contenimento serve quality.settings.manage; lo concede il titolare o un amministratore.",
+    "heldReading": "Il tempo di contenimento è ancora in lettura.",
+    "heldOffline": "Offline: cambialo quando torni in linea.",
+    "heldHours": "Scrivi ore intere da 1 a 720.",
+    "heldSame": "Non hai ancora cambiato nulla.",
+    "saved_one": "Salvato: il contenimento delle nuove non conformità scade {count} ora dopo la scoperta del problema.",
+    "saved_other": "Salvato: il contenimento delle nuove non conformità scade {count} ore dopo la scoperta del problema."
+  },
+  "assign": {
+    "refused": {
+      "title_one": "{count} delle {total} non conformità non può prendere il responsabile: non è cambiato nulla.",
+      "title_other": "{count} delle {total} non conformità non possono prendere il responsabile: non è cambiato nulla.",
+      "stale": "{number}: cambiata dopo la lettura dell'elenco — rileggi l'elenco",
+      "noRight": "{number}: il tuo ruolo non segue le non conformità del suo stabilimento (quality.ncr.manage)",
+      "frozen": "{number}: chiusa o annullata: non cambia più",
+      "notFound": "{number}: non si trova più",
+      "other": "{number}: rifiutata dalla fabbrica"
+    }
   }
 }

@@ -35,6 +35,35 @@ export const designScreen = defineDesignScreen<CompanySwitcherViewModel>({
       id: 'many',
       label: 'Many companies',
       model: { companies: MANY_COMPANIES, company: 'GAMMA', sites: DEMO_SITES, site: null, path: '/admin', open: true },
+      note: 'B-W2b-05: more than 7 companies — the current one and "Find a company…", which opens the search.',
+    },
+    {
+      id: 'many-search',
+      label: 'Many companies: Find a company',
+      model: { companies: MANY_COMPANIES, company: 'GAMMA', sites: DEMO_SITES, site: null, path: '/sales/orders', finderQuery: '' },
+      note: 'Type a name or a code; ↓ to the companies, Enter opens the same page there, ⌘Enter in a new tab, Esc closes.',
+    },
+    {
+      id: 'many-search-typed',
+      label: 'Many companies: searched',
+      model: { companies: MANY_COMPANIES, company: 'GAMMA', sites: DEMO_SITES, site: null, path: '/sales/orders', finderQuery: 'del' },
+    },
+    {
+      id: 'many-search-none',
+      label: 'Many companies: nothing matches',
+      model: { companies: MANY_COMPANIES, company: 'GAMMA', sites: DEMO_SITES, site: null, path: '/sales/orders', finderQuery: 'zzz' },
+    },
+    {
+      id: 'limited-sites',
+      label: 'A role limited to some sites',
+      model: { companies: DEMO_COMPANIES, company: 'DEMO', sites: DEMO_SITES, site: null, path: '/warehouse/stock', limited: true, open: true },
+      note: 'B-W2b-05: only the sites the person\'s roles reach, and "All my sites".',
+    },
+    {
+      id: 'one-site',
+      label: 'One site only',
+      model: { companies: DEMO_COMPANIES, company: 'DEMO', sites: DEMO_SITES.slice(0, 1), site: null, path: '/warehouse/stock', limited: true, open: true },
+      note: 'B-W2b-05: the site is named, there is nothing to choose.',
     },
   ],
 })

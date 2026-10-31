@@ -133,8 +133,12 @@ export interface FinishedDraft {
   readonly note?: string | null
 }
 
-/** The FROZEN standard cost of the item in force today for the company, in the item's currency (null: none). */
-async function standardCostFor(tx: CommandTx, companyId: string, itemId: string, day: string): Promise<MoveDraft['cost']> {
+/**
+ * The FROZEN standard cost of the item in force on the day for the company, in the item's currency (null: none). The one
+ * valuation of a finished garment that comes into stock: a production receipt here, a customer return put back into stock
+ * (modules/sales/returns decide.ts: RESTOCK, SECOND_QUALITY, QUARANTINE).
+ */
+export async function standardCostFor(tx: CommandTx, companyId: string, itemId: string, day: string): Promise<MoveDraft['cost']> {
   const item = await tx.item.findUnique({ where: { id: itemId }, select: { currency: true } })
   if (!item) return null
   const rows = await tx.standardCost.findMany({

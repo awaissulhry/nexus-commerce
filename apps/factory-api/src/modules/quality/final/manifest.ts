@@ -26,6 +26,8 @@ export const manifest = defineManifest({
   'GET /quality/releases': { audiences: ['office'], permission: 'quality.inspections.view', scope: 'record' },
   'GET /quality/releases/:releaseId': { audiences: ['office'], permission: 'quality.inspections.view', scope: 'record' },
   'POST /quality/releases/:releaseId/reverse': { audiences: ['office'], permission: 'quality.garments.reverse', scope: 'record' },
+  // B-W2b-17: by when open inspections are due (office; quality.inspections.record over each one, checked in the handler).
+  'POST /quality/inspections/due': { audiences: ['office'], permission: 'quality.inspections.record', scope: 'record' },
   'GET /quality/release-rule': { audiences: ['office'], permission: 'quality.inspections.view', scope: 'record' },
   'PUT /quality/release-rule': { audiences: ['office'], permission: 'quality.settings.manage', scope: 'record' },
   'GET /quality/evidence': { audiences: ['office'], permission: 'quality.inspections.view', scope: 'record' },

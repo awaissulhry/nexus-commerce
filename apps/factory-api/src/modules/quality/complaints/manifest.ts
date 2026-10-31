@@ -23,4 +23,8 @@ export const manifest = defineManifest({
   'POST /quality/complaints/:complaintId/status': manage,
   'POST /quality/complaints/:complaintId/close': manage,
   'POST /quality/complaints/:complaintId/register': manage,
+  // B-W2b-17: Link… / Unlink (log while NEW, manage once triaged: checked in the handler, as for the facts; an NCR also
+  // needs quality.ncr.raise / quality.ncr.manage at its site).
+  'POST /quality/complaints/:complaintId/links': log,
+  'DELETE /quality/complaints/:complaintId/links/:recordType/:recordId': log,
 })

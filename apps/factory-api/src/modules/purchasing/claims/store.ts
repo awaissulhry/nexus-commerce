@@ -30,6 +30,9 @@ export const CLAIM_COLUMNS = {
   purchaseOrderId: true,
   foundAt: true,
   reason: true,
+  // B-W2b-14: the CLAIM reason code as data, and the nonconformance a claim came from.
+  reasonCode: true,
+  ncrId: true,
   remedy: true,
   status: true,
   currency: true,

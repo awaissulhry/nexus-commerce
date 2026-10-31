@@ -119,4 +119,13 @@ export const manifest = defineManifest({
   'POST /purchasing/claims/:claimId/cancel': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
   'POST /purchasing/claims/:claimId/return': { audiences: ['office'], permission: 'purchasing.claims.return', scope: 'record' },
   'POST /purchasing/claims/returns': { audiences: ['office'], permission: 'purchasing.claims.return', scope: 'record' },
+  // B-W2b-14 (SCM-135; Z1:08): the claim's photos (files.upload / files.delete too, checked by the handler) and its letter.
+  'POST /purchasing/claims/:claimId/photos': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'POST /purchasing/claims/:claimId/photos/:fileId/complete': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'DELETE /purchasing/claims/:claimId/photos/:fileId': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'GET /purchasing/claims/:claimId/letter': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/claims/:claimId/letter': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  // B-W2b-14 (Z1:09): where the Owner's reminder switch stands (purchasing.view) and the switch itself (the owner's, step-up).
+  'GET /purchasing/reminders/settings': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'PUT /purchasing/reminders/settings/switch': { audiences: ['office'], permission: 'purchasing.reminders.switch', scope: 'record' },
 })

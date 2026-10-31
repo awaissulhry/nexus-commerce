@@ -296,7 +296,7 @@ describe('navigation, pages, words and the design fixtures', () => {
     const used = new Set<string>()
     for (const file of files(dir)) for (const match of readFileSync(file, 'utf8').matchAll(/'(today\.[a-zA-Z.]+[a-zA-Z])'/g)) used.add(match[1]!)
     // Keys built from codes: every kind, severity, group, lens and stage the API names.
-    const KINDS = ['ORDER_PROMISE', 'WORK_ORDER_HELD', 'LOT_HOLD', 'INVOICE_SDI', 'QUOTE_APPROVAL', 'PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'SCAN_CORRECTION', 'SCAN_REFUSAL', 'INVOICE_TO_ISSUE', 'REGISTER_DUTY', 'PRIVACY_DUTY', 'STYLE_COMPLIANCE', 'MAIL_TO_SORT']
+    const KINDS = ['ORDER_PROMISE', 'WORK_ORDER_HELD', 'LOT_HOLD', 'INVOICE_SDI', 'QUOTE_APPROVAL', 'PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'SCAN_CORRECTION', 'SCAN_REFUSAL', 'INVOICE_TO_ISSUE', 'REGISTER_DUTY', 'PRIVACY_DUTY', 'STYLE_COMPLIANCE', 'MAIL_TO_SORT', 'NCR_DECISION']
     for (const kind of KINDS) used.add(`today.kind.${kind}`)
     for (const severity of ['HIGH', 'MEDIUM', 'LOW']) used.add(`today.severity.${severity}`)
     for (const group of ['NOW', 'TODAY', 'THIS_WEEK', 'LATER']) used.add(`today.group.${group}`)

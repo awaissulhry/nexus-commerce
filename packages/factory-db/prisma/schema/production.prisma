@@ -43,6 +43,12 @@
 // bundles, scans and acknowledgements (and reprints or voids a bundle's ticket); no table here has a cost, price or
 // wages column. Portal and link sessions read nothing here. Nobody deletes a work order (cancelled), a bundle (voided),
 // a cut log, a scan or an acknowledgement; the office deletes only a DRAFT work order's parts.
+//
+// W2b (schema wave 1/7, B-W2b-01; the B-W2a-13, -18, -25, -74, -76 notes): a scrap or rework reason carries an icon, a
+// colour, its words in the floor's other languages and "needs detail" for the floor's tiles (MES-125); a split bundle
+// keeps why it was split; and an outside operation is reported by the subcontract receipt that brought the bundle back
+// (OperationScan.subcontractReceiptLineId: no worker, no station, never a person; the …_followups_stock_w2b_guards
+// trigger), so the next operation of the bundle may be scanned.
 
 /// A site's floor rules (SCR-074, B-W1-37): who a floor record names (MES-278: the monitoring switch with its legal
 /// reference), and the standard bundle size of its cutting room (MES-065). The site's row has the site's own id; a site
@@ -200,6 +206,8 @@ model WorkOrder {
   repairOrders  RepairOrder[]
   // W2a subcontract.prisma: the work sent out of it to workshops.
   subcontractOrders SubcontractOrder[]
+  // W2b kits.prisma (B-W2b-01): its material kit (staging place, marked complete).
+  kits              WorkOrderKit[]
   // W2a rework.prisma, schedule.prisma: its rework, the replacements of its scrap, its slots on the planning board.
   reworkOrders        ReworkOrder[]
   replacementRequests ReplacementRequest[]
@@ -487,6 +495,9 @@ model Bundle {
   /// it was cut: the garments still in a bundle are its quantity less its children's that are not VOID, at least one
   /// (the …_production_w2a_guards trigger, under a lock per parent).
   parentBundleId  String?      @db.Uuid
+  /// W2b (B-W2a-13): why it was split off its parent (the floor's split reasons, a code as text; not blank, no spaces);
+  /// only on a split bundle, set when it is made, never changed. Null on a bundle split before W2b.
+  splitReason     String?
   status          BundleStatus @default(ACTIVE)
   voidedAt        DateTime?    @db.Timestamptz(3)
   voidReason      String?
@@ -522,6 +533,9 @@ model Bundle {
   children      Bundle[]        @relation("BundleSplit")
   // W2a rework.prisma: the rework of the garments it carries.
   reworkOrders  ReworkOrder[]
+  // W2b subcontract.prisma (B-W2b-01): its trips to workshops, and what came back of it.
+  subcontractBundles      SubcontractBundle[]
+  subcontractReceiptLines SubcontractReceiptLine[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, clientEventId])
@@ -611,6 +625,10 @@ model OperationScan {
   stationId            String?   @db.Uuid
   /// The floor device it came from (null: a correction written in the office).
   deviceId             String?   @db.Uuid
+  /// W2b (B-W2a-25, -76): a REPORT of an outside operation made by the subcontract receipt line that brought the bundle
+  /// back (the workshop did the work): then it names no worker, no station and no device, and its counts are the
+  /// line's (good; scrapped as scrap; defective as rework). The office (or the system) writes it, never the floor role.
+  subcontractReceiptLineId String?  @db.Uuid
   /// The device's id for the scan (A1 §3.8 clientEventId), unique per device: a resent scan is applied once.
   clientScanId         String
   /// The device's clock, kept for the record (more than 24 h of skew is flagged by the API); serverTime orders rows.
@@ -636,11 +654,17 @@ model OperationScan {
   // W2a cost-ledger.prisma (wave 7/7): the labour (or scrap) it posted to its work order's cost ledger.
   /// @not-money the relation to the cost ledger (the rows carry the grain)
   costEntries        WorkOrderCostEntry[]
+  // W2b pay.prisma (schema wave 6/7): the earnings it paid and its holds (not clocked in).
+  earningsEntries    EarningsEntry[]
+  heldScans          HeldScan[]
   // W2b labour.prisma (wave 7/7): the members of a team operation (MES-091) its START, RESUME, PARTIAL or REPORT names.
   members            OperationScanMember[]
   worker      Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   station     Station?           @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device      Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (B-W2b-01): the subcontract receipt line that reported the outside operation (Restrict, not Prisma's SetNull
+  // default for an optional relation: that would also clear tenantId, siteId and workOrderId).
+  subcontractReceiptLine SubcontractReceiptLine? @relation(fields: [tenantId, siteId, workOrderId, subcontractReceiptLineId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, deviceId, clientScanId])
   // The target of the undos' and corrections' reference: on the scan's own site.
@@ -746,6 +770,13 @@ model ScrapReason {
   code        String
   labelIt     String
   labelEn     String
+  /// W2b (B-W2a-18, -74; MES-125): the words in the other floor languages of the tenant's sites ({ "ro": "…" }), the
+  /// design system's tag icon (IconPicker id; null: the standard look), a swatch ("#RRGGBB"; null: none) and "needs
+  /// detail" (an "Other" reason: the floor adds a photo, the office a note), as ReasonCode keeps them.
+  labelI18n   Json       @default("{}")
+  icon        String?
+  colour      String?
+  needsDetail Boolean    @default(false)
   /// Tiles are shown in this order (lower first).
   sortOrder   Int        @default(0)
   active      Boolean    @default(true)

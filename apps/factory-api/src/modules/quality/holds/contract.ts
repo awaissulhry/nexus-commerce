@@ -18,6 +18,8 @@ const by = output({ kind: z.enum(['USER', 'WORKER', 'SYSTEM']), userId: id().nul
 
 export const holdView = output({
   id: id(),
+  /** B-W2b-17: the hold's number ("HLD-2026-0091"); null for a hold placed before holds were numbered. */
+  number: z.string().nullable(),
   companyId: id(),
   siteId: id(),
   /** B-W2a-67: the site in words. */
@@ -72,6 +74,8 @@ export const listContract = defineContract({
     overdue: flag,
     system: flag,
     quarantine: quarantine.optional(),
+    /** B-W2b-17: a hold's number or part of it. */
+    q: z.string().trim().max(40).optional(),
   }),
   response: { 200: output({ holds: z.array(holdView), truncated: z.boolean() }) },
 })
@@ -94,7 +98,7 @@ export const getContract = defineContract({
       hold: holdView,
       workOrders: z.array(output({ id: id(), number: z.string(), status: woStatus, heldFromStatus: woStatus.nullable(), holdReason: z.string().nullable(), heldByThis: z.boolean(), /** B-W2a-67: its batch (the evidence trail opens from it). */ batchNumber: z.string().nullable() })),
       /** What must be true to release it, for the caller (the GateExplainer; STATEMENT is signed in the release). */
-      release: output({ checks: z.array(check), releasable: z.boolean(), mayRelease: z.boolean() }),
+      release: output({ checks: z.array(check), releasable: z.boolean(), mayRelease: z.boolean(), /** B-W2b-17: the company's rule lets the placer release. */ placerMayRelease: z.boolean() }),
       canChange: z.boolean(),
     }),
   },
@@ -154,4 +158,32 @@ export const releaseContract = defineContract({
     notMakerStatement: z.boolean().optional(),
   }),
   response: { 200: output({ hold: holdView, workOrdersLifted: z.array(workOrderMove.extend({ to: woStatus })), checks: z.array(check) }) },
+})
+
+// ---- B-W2b-17: who releases a hold (design quality.settings qs-sod) --------------------------------------------------
+
+const source = z.enum(['COMPANY', 'TENANT', 'DEFAULT'])
+const holdSettings = output({
+  companyId: id().nullable(),
+  inForce: output({ placerMayRelease: z.boolean(), source }),
+  own: output({ placerMayRelease: z.boolean().nullable(), updatedAt: instant() }).nullable(),
+  /** The row's version (0: never saved): PUT sends it back. */
+  version: z.number().int().min(0),
+})
+
+export const getSettingsContract = defineContract({
+  querystring: input({ companyId: id().optional() }),
+  response: { 200: output({ settings: holdSettings, mayChange: z.boolean() }) },
+})
+
+export const saveSettingsContract = defineContract({
+  body: input({
+    companyId: id().nullable().optional(),
+    /** null: follow the tenant-wide rule (a company) or the default (tenant-wide: false). */
+    placerMayRelease: z.boolean().nullable(),
+    version: z.number().int().min(0),
+    /** Letting the placer release (the looser rule) asks why, and a fresh code. */
+    reason: z.string().max(1000).nullable().optional(),
+  }),
+  response: { 200: output({ settings: holdSettings, loosened: z.boolean(), mayChange: z.boolean() }) },
 })

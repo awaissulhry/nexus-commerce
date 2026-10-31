@@ -5,20 +5,22 @@ import { Camera, CheckCircle2, ExternalLink, Trash2 } from 'lucide-react'
 import { DISCREPANCY_KINDS, DISCREPANCY_LIMITS, type DiscrepancyKind } from '@nexus/factory-domain/inventory/receipts/discrepancies'
 import { DOCUMENT_REQUEST_LIMITS } from '@nexus/factory-domain/inventory/receipts/document-request'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
-import { Banner, Field, Modal } from '@nexus/ui/components'
+import { Banner, DateField, Field, Modal } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { PhotoCapture } from '@nexus/ui/components/PhotoCapture/index'
 import { Button, Checkbox, Input, Radio, Select, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
 import { usePhotoWords } from '../../../../../lib/ds-words/photo-capture'
-import { formatDateTime } from '../../../../../lib/i18n/format'
+import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { pdfViewerLabels } from '../../../../../lib/pdf/labels'
-import { quantity } from '../../../../_shared/buying/model'
+import { dayAt, quantity } from '../../../../_shared/buying/model'
 import type { Receipt } from '../../api'
 import { reportHref } from '../../daily-api'
 import {
   checkProblemKeys,
   claimDraftHeld,
+  DDT_FIX_LIMITS,
+  ddtFixHeld,
   deliveryOf,
   discrepancyHeld,
   draftKind,
@@ -99,7 +101,40 @@ export function DailyDialogs(props: Props) {
       return <ClaimDialog {...props} dialog={dialog} />
     case 'request':
       return <RequestDialog {...props} dialog={dialog} />
+    case 'ddtFix':
+      return <DdtFixDialog {...props} dialog={dialog} />
   }
+}
+
+// ---- B-W2b-14: correct the supplier's DDT number and date on a posted receipt (Z1:02) ---------------------------------------
+
+const todayIn = (timeZone?: string): string => new Intl.DateTimeFormat('en-CA', { timeZone: timeZone ?? 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+
+function DdtFixDialog({ receipt, daily, actions, dialog, timeZone }: Props & { dialog: Extract<DailyDialog, { kind: 'ddtFix' }> }) {
+  const t = useT(NAMESPACE)
+  const locale = useLocale()
+  const draft = dialog.draft
+  const today = todayIn(timeZone)
+  const set = (next: Partial<typeof draft>) => actions?.onDialog?.({ kind: 'ddtFix', draft: { ...draft, ...next } })
+  const held = words(t, ddtFixHeld(draft, receipt, daily.can, daily.busy, today))
+  const now = receipt.supplierDdtNumber ? t('ddtFix.now', { number: receipt.supplierDdtNumber, date: receipt.supplierDdtDate ? formatDate(dayAt(receipt.supplierDdtDate), { locale, timeZone }) : '—' }) : t('ddtFix.nowNone')
+  return (
+    <Frame title={t('ddtFix.title', { number: receipt.number })} subtitle={now} held={held} label={t('ddtFix.confirm')} onConfirm={() => actions?.onSaveDdtFix?.()} daily={daily} actions={actions}>
+      <p className="fw-by-text">{t('ddtFix.body')}</p>
+      <div className="fw-by-fields">
+        <Field label={t('docs.ddtNumber')} hint={t('ddtFix.numberHint')}>
+          <Input size="sm" maxLength={DDT_FIX_LIMITS.number} value={draft.ddtNumber} onChange={(event) => set({ ddtNumber: event.target.value })} autoFocus />
+        </Field>
+        <Field label={t('docs.ddtDate')}>
+          <DateField value={draft.ddtDate} onChange={(value) => set({ ddtDate: value })} locale={locale === 'it' ? 'it-IT' : 'en-GB'} max={today} clearable clearLabel={t('common.clear')} />
+        </Field>
+      </div>
+      <Field label={t('ddtFix.reason')} required hint={t('ddtFix.reasonHint')}>
+        <Textarea rows={2} maxLength={DDT_FIX_LIMITS.reason} value={draft.reason} onChange={(event) => set({ reason: event.target.value })} />
+      </Field>
+      <p className="fw-by-hint">{t('ddtFix.kept')}</p>
+    </Frame>
+  )
 }
 
 // ---- New discrepancy (pop rc-disc-new: kind · line · quantity · photos · note) -------------------------------------------------

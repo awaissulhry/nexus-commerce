@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import {
   availabilityOf,
   consumption,
+  demandDone,
   giveBack,
+  isDoneWorkOrder,
   issueConflict,
   kindFor,
   openOf,
   releaseReasonProblem,
   releaseRefusal,
   reserveRefusals,
+  systemReleaseReason,
   type HeldReservation,
   type ReserveRequest,
   type StockPart,
@@ -173,5 +176,23 @@ describe('releasing', () => {
     expect(releaseRefusal({ status: 'ACTIVE' }, 'Reservation 1')).toBeNull()
     expect(releaseRefusal({ status: 'ISSUED' }, 'Reservation 1')).toMatch(/fully issued/)
     expect(releaseRefusal({ status: 'RELEASED' }, 'Reservation 1')).toMatch(/released already/)
+  })
+})
+
+describe('released by the system (B-W2b-15; SCM-211)', () => {
+  it('only once the demand is done: a work order completed, closed or cancelled; an order line closed short or an order no longer open', () => {
+    expect(['DRAFT', 'RELEASED', 'IN_PROGRESS', 'ON_HOLD'].map((status) => demandDone({ type: 'WorkOrder', number: 'WO-1', status }))).toEqual([false, false, false, false])
+    expect(['COMPLETED', 'CLOSED', 'CANCELLED'].map((status) => demandDone({ type: 'WorkOrder', number: 'WO-1', status }))).toEqual([true, true, true])
+    expect(demandDone({ type: 'SalesOrderLine', number: 'SO-1', seq: 10, orderStatus: 'CONFIRMED', closedShort: false })).toBe(false)
+    expect(demandDone({ type: 'SalesOrderLine', number: 'SO-1', seq: 10, orderStatus: 'CONFIRMED', closedShort: true })).toBe(true)
+    expect(['SHIPPED', 'CLOSED', 'CANCELLED'].map((orderStatus) => demandDone({ type: 'SalesOrderLine', number: 'SO-1', seq: 10, orderStatus, closedShort: false }))).toEqual([true, true, true])
+    expect(isDoneWorkOrder('ON_HOLD')).toBe(false)
+  })
+
+  it('keeps a reason in words that says the system released it and why', () => {
+    expect(systemReleaseReason({ type: 'WorkOrder', number: 'WO-26-0031', status: 'COMPLETED' }, 'WORK_ORDER_DONE')).toBe('Released by the system: work order WO-26-0031 is completed, so nothing needs the rest any more.')
+    expect(systemReleaseReason({ type: 'WorkOrder', number: 'WO-26-0031', status: 'CANCELLED' }, 'NIGHTLY_CLEANUP')).toBe('Released by the nightly clean-up: work order WO-26-0031 is cancelled, so nothing needs it any more.')
+    expect(systemReleaseReason({ type: 'SalesOrderLine', number: 'ORD-7', seq: 20, orderStatus: 'CONFIRMED', closedShort: true }, 'NIGHTLY_CLEANUP')).toContain('line 20 of order ORD-7 was closed short')
+    expect(systemReleaseReason({ type: 'SalesOrderLine', number: 'ORD-7', seq: 20, orderStatus: 'PARTLY_SHIPPED', closedShort: false }, 'NIGHTLY_CLEANUP')).toContain('order ORD-7 is partly shipped')
   })
 })

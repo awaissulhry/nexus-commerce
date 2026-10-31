@@ -24,6 +24,14 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] }
       }
+    },
+    "InterestReferenceRate": {
+      "about": "W2b (schema wave 2/7): finance types the reference rate of each half-year for statutory late-payment interest (D.Lgs. 231/2002 art. 5) with where it was published; the reminder ladder reads it. Office only. Corrected, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
     }
   }
 }

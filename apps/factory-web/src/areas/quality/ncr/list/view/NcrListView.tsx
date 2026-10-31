@@ -22,6 +22,7 @@ import { zoneWords, ContainmentDue, DecidedBar, KeysDialog, NcrMessages, NcrStep
 import { CloseNcrDialog } from '../../view/CloseNcrDialog'
 import type { NcrListActions, NcrListModel } from '../view-model'
 import { AssignDialog } from './AssignDialog'
+import { ContainmentTimeDialog } from './ContainmentTimeDialog'
 import { NewNcrDialog } from './NewNcrDialog'
 
 export type { NcrListActions, NcrListModel } from '../view-model'
@@ -187,7 +188,6 @@ function NcrList({ model, actions }: { model: NcrListModel; actions?: NcrListAct
   const items = model.rows.items ?? []
   const picked = items.filter((row) => selected.includes(row.id))
   const pickedOpen = picked.filter((row) => row.stage !== 'CLOSED' && row.stage !== 'CANCELLED')
-  const pickedSites = new Set(pickedOpen.map((row) => row.siteId))
   const filtered = model.address.view !== 'open' || model.address.siteId !== null || model.address.q.trim() !== ''
   const ownKeys: ListKey[] = [
     { keys: ['c'], does: t('keys.new') },
@@ -323,6 +323,8 @@ function NcrList({ model, actions }: { model: NcrListModel; actions?: NcrListAct
             triggerProps={{ 'aria-label': t('list.more') }}
             items={[
               { id: 'print', label: t('list.print'), onSelect: () => actions?.onPrint?.() },
+              // B-W2b-17: the company's containment time for new NCRs (read by everyone here; changed with quality.settings.manage).
+              { id: 'containmentTime', label: t('containmentTime.menu'), onSelect: () => actions?.onContainmentTime?.() },
               { id: 'keys', label: t('keys.title'), onSelect: () => setKeysOpen(true) },
             ]}
           />
@@ -400,7 +402,7 @@ function NcrList({ model, actions }: { model: NcrListModel; actions?: NcrListAct
                 <Button
                   size="sm"
                   aria-label={t('list.assign', { count: pickedOpen.length })}
-                  heldReason={!model.can.manage ? t('held.noManage') : !model.can.people ? t('held.noPeople') : pickedOpen.length === 0 ? t('list.heldAssignNone') : pickedSites.size > 1 ? t('list.heldAssignSites') : pickedOpen.length > 50 ? t('list.heldAssignMax') : null}
+                  heldReason={!model.can.manage ? t('held.noManage') : !model.can.people ? t('held.noPeople') : pickedOpen.length === 0 ? t('list.heldAssignNone') : pickedOpen.length > 50 ? t('list.heldAssignMax') : model.live === 'offline' ? t('list.heldAssignOffline') : null}
                   onClick={() => actions?.onAssign?.(pickedOpen.map((row) => row.id))}
                 >
                   <UserPlus size={13} aria-hidden /> <SelectionLabel>{t('list.assign', { count: pickedOpen.length })}</SelectionLabel>
@@ -424,6 +426,7 @@ function NcrList({ model, actions }: { model: NcrListModel; actions?: NcrListAct
 
       {model.dialog?.kind === 'new' && <NewNcrDialog prefix={model.prefix} dialog={model.dialog} sites={model.sites} people={model.people} can={model.can} actions={actions} />}
       {model.dialog?.kind === 'assign' && <AssignDialog dialog={model.dialog} people={model.people} actions={actions} />}
+      {model.dialog?.kind === 'containmentTime' && <ContainmentTimeDialog dialog={model.dialog} offline={model.live === 'offline'} actions={actions} />}
       {model.close && <CloseNcrDialog model={model.close} actions={actions?.close} />}
       <NcrStepUp state={model.stepUp} onSubmit={(code) => actions?.onStepUpSubmit?.(code)} onCancel={() => actions?.onStepUpCancel?.()} />
       {keysOpen && <KeysDialog own={board ? [...ownKeys, ...boardKeys] : ownKeys} frame={!board} onClose={() => setKeysOpen(false)} />}

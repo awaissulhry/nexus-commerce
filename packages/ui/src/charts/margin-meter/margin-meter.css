@@ -1,0 +1,115 @@
+/*
+ * DS — MarginMeter (B-W2b-09). A track with the fill from 0 to the margin, the floor mark (a solid line) and the target
+ * mark (a dashed line): marks differ by shape, not only colour. Fills use the tone's fill role, words its text role.
+ */
+.nds-marginmeter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-marginmeter-track {
+  position: relative;
+  display: block;
+  height: var(--nds-space-8);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--nds-border-subtle);
+  overflow: visible;
+}
+.nds-marginmeter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-text-3);
+}
+.nds-marginmeter.tone-success .nds-marginmeter-fill {
+  background: var(--nds-success);
+}
+.nds-marginmeter.tone-warning .nds-marginmeter-fill {
+  background: var(--nds-warning);
+}
+.nds-marginmeter.tone-danger .nds-marginmeter-fill {
+  background: var(--nds-danger);
+}
+.nds-marginmeter-mark {
+  position: absolute;
+  top: calc(var(--nds-space-4) * -1);
+  bottom: calc(var(--nds-space-4) * -1);
+  width: 0;
+  border-left: 2px solid var(--nds-text-strong);
+  transform: translateX(-1px);
+}
+.nds-marginmeter-mark.is-target {
+  border-left-style: dashed;
+  border-left-color: var(--nds-text-2);
+}
+.nds-marginmeter-words {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+.nds-marginmeter.tone-success .nds-marginmeter-words {
+  color: var(--nds-success-text);
+}
+.nds-marginmeter.tone-warning .nds-marginmeter-words {
+  color: var(--nds-warning-text);
+}
+.nds-marginmeter.tone-danger .nds-marginmeter-words {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-marginmeter-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+.nds-marginmeter-keyitem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+.nds-marginmeter-swatch {
+  display: inline-block;
+  width: 0;
+  height: var(--nds-space-12);
+  border-left: 2px solid var(--nds-text-strong);
+}
+.nds-marginmeter-swatch.is-target {
+  border-left-style: dashed;
+  border-left-color: var(--nds-text-2);
+}
+
+/* mini: one line in a grid cell — the bar, then the value. */
+.nds-marginmeter.mini {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--nds-space-6);
+  width: 100%;
+  font-size: var(--nds-font-size-xs);
+}
+.nds-marginmeter.mini .nds-marginmeter-track {
+  flex: 1 1 auto;
+  min-width: var(--nds-space-32);
+  height: var(--nds-space-6);
+}
+.nds-marginmeter.mini .nds-marginmeter-mark {
+  top: calc(var(--nds-space-2) * -1);
+  bottom: calc(var(--nds-space-2) * -1);
+}
+.nds-marginmeter-value {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.nds-marginmeter.mini.tone-danger .nds-marginmeter-value {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-marginmeter.mini.tone-warning .nds-marginmeter-value {
+  color: var(--nds-warning-text);
+}

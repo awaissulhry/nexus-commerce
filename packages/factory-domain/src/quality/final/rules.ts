@@ -263,3 +263,24 @@ export const isOverride = (decision: InspectionResult, computed: Pick<ComputedRe
  * the series existed (W1 history, no number), its place among its work order's inspections: "WO-0003 · inspection 2".
  */
 export const inspectionLabel = (workOrderNumber: string, seq: number, number: string | null = null): string => number ?? `${workOrderNumber} · inspection ${seq}`
+
+// ---- W2b follow-ups (B-W2b-17) ---------------------------------------------------------------------------------------
+
+/** How far ahead an inspection's due time may be set (design qi-grid inline "Due"). */
+export const INSPECTION_DUE_MAX_DAYS = 366
+
+/**
+ * By when an open inspection is due (Inspection.dueAt, W2b schema wave 2; the office sets and moves it while it is OPEN,
+ * the floor never does): a time after now and at most a year ahead. Null clears it.
+ */
+export function dueProblem(dueAt: Date | null, now: Date): { readonly path: string; readonly message: string } | null {
+  if (dueAt === null) return null
+  if (Number.isNaN(dueAt.getTime())) return { path: 'dueAt', message: 'A date and time.' }
+  if (dueAt.getTime() <= now.getTime()) return { path: 'dueAt', message: 'The inspection is due later than now.' }
+  if (dueAt.getTime() > now.getTime() + INSPECTION_DUE_MAX_DAYS * 86_400_000) return { path: 'dueAt', message: 'At most a year ahead.' }
+  return null
+}
+
+/** An OPEN inspection past its due time. */
+export const inspectionOverdue = (inspection: { readonly status: string; readonly dueAt: Date | null }, now: Date): boolean =>
+  inspection.status === 'OPEN' && inspection.dueAt !== null && inspection.dueAt.getTime() < now.getTime()

@@ -21,7 +21,6 @@ import {
   listPeople,
   listRepairs,
   listReturnReasons,
-  makeCreditNotes,
   makeReplacementOrder,
   previewDecisions,
   previewRepair,
@@ -303,13 +302,6 @@ function Container({ returnId }: { returnId: string }) {
           const answer = await makeReplacementOrder(api, current, { internalNote: dialog.note.trim() || null }, dialogKey.current)
           setDialog(null)
           await after({ key: 'done.replacement', params: { number: answer.order.number } }, `${prefix}/sales/orders/${encodeURIComponent(answer.order.id)}`)
-          break
-        }
-        case 'credit': {
-          const answer = await makeCreditNotes(api, current.id, dialogKey.current)
-          setDialog(null)
-          setReceipt({ tone: 'success', words: { key: 'done.creditNotes', params: { count: answer.creditNotes.length } } })
-          await loadCredit()
           break
         }
         case 'ddt': {

@@ -18,7 +18,7 @@ import type { Assigned, DefectBody, FinalCell, FinalState, Inspection, Inspectio
  * "On hold" view and tile are gone, an old address is sent there (`holdsAddressFor`); "Failed - not decided" and "Waiting
  * for me" (assigned to me) joined.
  */
-export const VIEWS = ['all', 'open', 'mine', 'waiting', 'failed', 'reversed', 'lots'] as const
+export const VIEWS = ['all', 'open', 'mine', 'overdue', 'waiting', 'failed', 'reversed', 'lots'] as const
 export type View = (typeof VIEWS)[number]
 export type ViewKind = 'inspections' | 'releases' | 'lots'
 
@@ -33,6 +33,7 @@ export function viewFromAddress(params: { get(name: string): string | null } | n
   if (asked && (VIEWS as readonly string[]).includes(asked)) return asked as View
   if (params?.get('failedUndecided') === 'true') return 'failed'
   if (params?.get('assigned') === 'me') return 'mine'
+  if (params?.get('overdue') === 'true') return 'overdue'
   if (params?.get('waitingRelease') === 'true') return 'waiting'
   if (params?.get('reversed') === 'true') return 'reversed'
   if (params?.get('status') === 'OPEN') return 'open'
@@ -48,7 +49,7 @@ export function holdsAddressFor(params: { get(name: string): string | null } | n
 }
 
 /** The tiles: each a named saved filter (pressing one shows its view; the count and the list agree). */
-export const TILES = ['open', 'waiting', 'failed', 'reversed', 'lots'] as const satisfies readonly View[]
+export const TILES = ['open', 'overdue', 'waiting', 'failed', 'reversed', 'lots'] as const satisfies readonly View[]
 export type TileId = (typeof TILES)[number]
 
 /** A tile's count: the rows its read gave, "at least" when the read was cut at its limit; null = it could not count. */
@@ -424,6 +425,8 @@ export const returnBody = (draft: ReturnDraft, record: Pick<ReturnRecord, 'lines
 
 export interface NewDraft {
   readonly kind: NewKind
+  /** B-W2b-17: by when it is due (an ISO instant, '' for none; the office only). */
+  readonly dueAt: string
   /** The inspector it is assigned to at once ('' nobody; `USER:<id>` / `WORKER:<id>`). */
   readonly assignee: string
   readonly workOrderId: string | null
@@ -437,7 +440,7 @@ export interface NewDraft {
   readonly note: string
 }
 
-export const NEW_DRAFT: NewDraft = Object.freeze({ kind: 'FINAL', assignee: '', workOrderId: null, lotSize: '', sampleSize: '', inspectionLevel: 'II', aqlMajor: '2.5', aqlMinor: '4.0', acceptMajor: '', acceptMinor: '', note: '' })
+export const NEW_DRAFT: NewDraft = Object.freeze({ kind: 'FINAL', dueAt: '', assignee: '', workOrderId: null, lotSize: '', sampleSize: '', inspectionLevel: 'II', aqlMajor: '2.5', aqlMinor: '4.0', acceptMajor: '', acceptMinor: '', note: '' })
 
 /** The finished garments of a work order (good at the final operation): null while unknown. */
 export function finishedOf(workOrder: Pick<WorkOrderCells, 'cells'> | null): number | null {
@@ -449,9 +452,11 @@ export function finishedOf(workOrder: Pick<WorkOrderCells, 'cells'> | null): num
 const whole = (text: string, min: number) => /^\d+$/.test(text.trim()) && Number(text) >= min
 
 /** New inspection's problems (message keys), every one at once; the API checks the same again. */
-export function newProblems(draft: NewDraft, finished: number | null): string[] {
+export function newProblems(draft: NewDraft, finished: number | null, now: Date = new Date()): string[] {
   const problems: string[] = []
   if (!draft.workOrderId) return ['new.problem.workOrder']
+  const due = dueProblemKey(draft.dueAt || null, now)
+  if (due) problems.push(due)
   if (finished === 0) problems.push('new.problem.nothingFinished')
   if (!whole(draft.lotSize, 1)) problems.push('new.problem.lotSize')
   else if (finished !== null && Number(draft.lotSize) > finished) problems.push('new.problem.lotOverFinished')
@@ -516,6 +521,8 @@ export interface InspectionsListModel {
   readonly returnDraft?: ReturnDraft
   /** New inspection's inspector picker (the work order's site). */
   readonly newPeople?: Read<Inspectors> | null
+  /** B-W2b-17: Set due date for the rows it names (the bulk action). */
+  readonly due?: DueState | null
   /** Design cases: the focused row, the keys panel open. */
   readonly focusRow?: number
 }
@@ -575,6 +582,8 @@ export interface DefectsTabModel {
   readonly photoSrc: Readonly<Record<string, string>>
   /** A photo being uploaded for this line's code. */
   readonly uploading?: string | null
+  /** B-W2b-17: the lines picked for "Create NCR from N defects" (their keys, `<class>|<code>`). */
+  readonly selected?: readonly string[]
 }
 
 export type RecordDialog =
@@ -679,13 +688,107 @@ export const defectsHeld = (abilities: Pick<RecordAbilities, 'recordHeld'>): str
 
 // ---- CSV ------------------------------------------------------------------------------------------------------------------------------
 
-export const INSPECTION_CSV_HEAD = ['csv.inspection', 'csv.workOrder', 'csv.status', 'csv.lot', 'csv.sample', 'csv.released', 'csv.reversed', 'csv.toRelease', 'csv.onHold', 'csv.decidedAt'] as const
+export const INSPECTION_CSV_HEAD = ['csv.inspection', 'csv.workOrder', 'csv.status', 'csv.due', 'csv.lot', 'csv.sample', 'csv.released', 'csv.reversed', 'csv.toRelease', 'csv.onHold', 'csv.decidedAt'] as const
 
 export function inspectionCsvRow(row: InspectionRow, t: (key: string, params?: Record<string, string | number>) => string): (string | number)[] {
-  return [row.label, row.number, t(statusOf(row).key), row.lotSize, row.sampleSize, row.released, row.reversed, row.toRelease, row.onHold ? t('csv.yes') : t('csv.no'), row.decidedAt ?? '']
+  return [row.label, row.number, t(statusOf(row).key), row.dueAt ?? '', row.lotSize, row.sampleSize, row.released, row.reversed, row.toRelease, row.onHold ? t('csv.yes') : t('csv.no'), row.decidedAt ?? '']
 }
 
 // ---- live --------------------------------------------------------------------------------------------------------------------------
 
 /** The live events that change these lists (B-W1-34, B-W1-45 events). */
 export const LIST_EVENTS = ['quality.inspection_', 'quality.garments_released', 'quality.release_reversed', 'quality.release_rule_changed', 'lot.'] as const
+
+// ---- B-W2b-17: by when an inspection is due (design qi-grid inline "Due"; Inspection.dueAt) ----------------------------
+
+/** How far ahead a due time may be set (the API's INSPECTION_DUE_MAX_DAYS). */
+export const DUE_MAX_DAYS = 366
+/** The most inspections one "Set due date" names (the API's limit). */
+export const DUE_LIMIT = 50
+
+/** A due time's problem before it is sent (a `quality` key), or null: later than now and at most a year ahead. */
+export function dueProblemKey(dueAt: string | null, now: Date): string | null {
+  if (!dueAt) return null
+  const at = new Date(dueAt).getTime()
+  if (Number.isNaN(at)) return 'due.problem.invalid'
+  if (at <= now.getTime()) return 'due.problem.past'
+  if (at > now.getTime() + DUE_MAX_DAYS * 86_400_000) return 'due.problem.far'
+  return null
+}
+
+const pad2 = (value: number) => String(value).padStart(2, '0')
+
+/** An ISO instant as a `datetime-local` value in the reader's time ("2026-10-31T16:00"); '' for none. */
+export function toLocalInput(iso: string | null): string {
+  if (!iso) return ''
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return ''
+  return `${at.getFullYear()}-${pad2(at.getMonth() + 1)}-${pad2(at.getDate())}T${pad2(at.getHours())}:${pad2(at.getMinutes())}`
+}
+
+/** A `datetime-local` value back as an ISO instant; null for '' (cleared) or an unreadable value. */
+export function fromLocalInput(value: string): string | null {
+  if (!value.trim()) return null
+  const at = new Date(value)
+  return Number.isNaN(at.getTime()) ? null : at.toISOString()
+}
+
+/** Why the Due of one row cannot be changed here (a `quality` key), or null: the right, and an open inspection. */
+export function dueRowHeld(row: Pick<InspectionRow, 'status'>, can: Pick<QualityCan, 'inspectionsRecord'>): string | null {
+  if (!can.inspectionsRecord) return 'due.held.noRight'
+  return row.status === 'OPEN' ? null : 'due.held.notOpen'
+}
+
+/** Why "Set due date N" is held for these rows (a `quality` key), or null. */
+export function dueBulkHeld(rows: readonly Pick<InspectionRow, 'status'>[], can: Pick<QualityCan, 'inspectionsRecord'>): string | null {
+  if (!can.inspectionsRecord) return 'due.held.noRight'
+  if (rows.length === 0) return 'due.held.none'
+  if (rows.length > DUE_LIMIT) return 'due.held.tooMany'
+  if (rows.some((row) => row.status !== 'OPEN')) return 'due.held.notOpenSome'
+  return null
+}
+
+/** The due time in words with its tone: none, due (when), overdue (when; danger, said in words, never colour only). */
+export function dueState(item: Pick<InspectionRow, 'dueAt' | 'overdue' | 'status'>): { key: string; tone: 'neutral' | 'info' | 'danger' } {
+  if (!item.dueAt) return { key: 'due.none', tone: 'neutral' }
+  if (item.status === 'OPEN' && item.overdue) return { key: 'due.overdue', tone: 'danger' }
+  return { key: 'due.at', tone: 'info' }
+}
+
+/** The Set due date dialog's state: which inspections, the time picked (ISO, '' to clear), what went wrong. */
+export interface DueState {
+  readonly ids: readonly string[]
+  readonly value: string
+  readonly busy: boolean
+  readonly problem: string | null
+  readonly lines: readonly string[]
+}
+
+/** The dialog's held reason (a `quality` key), or null. */
+export function dueDialogHeld(state: Pick<DueState, 'value' | 'busy'>, now: Date): string | null {
+  if (state.busy) return 'common.working'
+  return dueProblemKey(state.value || null, now)
+}
+
+// ---- B-W2b-17: "Create NCR from N defects" (design ins-defects; the NCR prefill reads the picked lines) ------------------
+
+/** A defect line's key in the list (one line per class and code). */
+export const defectKey = (line: Pick<DefectBody, 'defectClass' | 'code'>): string => `${line.defectClass}|${line.code}`
+
+/** The saved lines' ids by key: what the NCR is raised from (a line not saved yet has none). */
+export const savedDefectIds = (inspection: Pick<Inspection, 'defects'>): Readonly<Record<string, string>> =>
+  Object.fromEntries(inspection.defects.map((defect) => [defectKey(defect), defect.id]))
+
+/** The picked lines' saved ids, in the list's order. */
+export const pickedDefectIds = (picked: readonly string[], saved: Readonly<Record<string, string>>): string[] => picked.flatMap((key) => (saved[key] ? [saved[key]!] : []))
+
+/** Why "Create NCR from N defects" is held (a `quality` key), or null. */
+export function ncrFromDefectsHeld(picked: readonly string[], saved: Readonly<Record<string, string>>, canRaise: boolean): string | null {
+  if (!canRaise) return 'raiseNcr.held.noRight'
+  if (picked.length === 0) return 'defects.ncr.held.none'
+  if (pickedDefectIds(picked, saved).length !== picked.length) return 'defects.ncr.held.unsaved'
+  return null
+}
+
+/** New NCR's address with the picked lines (B-W2a-68's New NCR + `&defects=`): `newNcrAddress(…)` + the ids. */
+export const ncrFromDefectsAddress = (base: string, ids: readonly string[]): string => (ids.length > 0 ? `${base}${base.includes('?') ? '&' : '?'}defects=${ids.map(encodeURIComponent).join(',')}` : base)

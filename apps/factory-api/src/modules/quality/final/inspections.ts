@@ -13,6 +13,8 @@ import {
   decisionProblems,
   defectCounts,
   defectProblems,
+  dueProblem,
+  inspectionOverdue,
   inspectionLabel,
   isOverride,
   planProblems,
@@ -148,7 +150,7 @@ export const planOf = (row: InspectionRow): SamplingPlan => ({
 })
 
 /** One inspection as every screen shows it: its plan, checklist, defects, the result now (computed) and the decision. */
-export function inspectionView(row: InspectionRow, defects: readonly DefectRow[], context: { readonly number: string; readonly seq: number; readonly names?: ReadonlyMap<string, string> }) {
+export function inspectionView(row: InspectionRow, defects: readonly DefectRow[], context: { readonly number: string; readonly seq: number; readonly names?: ReadonlyMap<string, string>; readonly now?: Date }) {
   const plan = planOf(row)
   const checklist = checklistAnswers(row.checklist)
   const computed = computedResult({ counts: defectCounts(defects), plan, checklist })
@@ -172,6 +174,9 @@ export function inspectionView(row: InspectionRow, defects: readonly DefectRow[]
     inspector: { kind: row.inspectorWorkerId ? ('FLOOR' as const) : ('OFFICE' as const), workerId: row.inspectorWorkerId, userId: row.inspectorUserId },
     /** W2a: who it is assigned to (inside one inspection a worker is named). */
     assigned: assignedView(row, context.names, true),
+    /** B-W2b-17: by when it is due (the office sets it while OPEN) and whether it is past it. */
+    dueAt: row.dueAt ? toUtcIso(row.dueAt) : null,
+    overdue: inspectionOverdue(row, context.now ?? new Date()),
     notMakerStatement: row.notMakerStatement,
     decidedAt: row.decidedAt ? toUtcIso(row.decidedAt) : null,
     signatureSha256: row.signatureSha256,
@@ -214,6 +219,8 @@ export interface OpenBody extends SamplingPlan {
   /** W2a: the office assigns it at once (never a maker; ./assign.ts). */
   readonly assigneeId?: string | null | undefined
   readonly assigneeWorkerId?: string | null | undefined
+  /** B-W2b-17: by when it is due (office only). */
+  readonly dueAt?: string | null | undefined
 }
 
 export async function openInspection(caller: CommandCaller, body: OpenBody, idempotencyKey: string | undefined) {
@@ -223,9 +230,13 @@ export async function openInspection(caller: CommandCaller, body: OpenBody, idem
   const identity = await callerIdentity(caller)
   const assignee: Assignee = { userId: body.assigneeId ?? null, workerId: body.assigneeWorkerId ?? null }
   if (isAssigned(assignee) && context.audience !== 'office') throw new ForbiddenError('The office assigns an inspection to its inspector; the floor does not.')
+  const dueAt = body.dueAt ? new Date(body.dueAt) : null
+  if (dueAt && context.audience !== 'office') throw new ForbiddenError('The office sets by when an inspection is due; the floor does not.')
   const { result } = await command(caller, { name: 'quality.inspection.open', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
     if (isAssigned(assignee) && context.audience === 'office') await assertAssignable(tx, context, assignee, header, now)
+    const due = dueProblem(dueAt, now)
+    if (due) throw invalid(due.message, [due])
     // B-W2a-F1 hook (quality/holds checks.ts): a work order ON_HOLD, in its hold's words (wave 5's Inspection_awaits_hold).
     const held = await holdOnInspection(tx, tools.context, { workOrderId: header.id })
     if (held) throw new InvalidStateError(held)
@@ -256,6 +267,7 @@ export async function openInspection(caller: CommandCaller, body: OpenBody, idem
         inspectorUserId: signer.userId,
         assignedInspectorId: assignee.userId,
         assignedInspectorWorkerId: assignee.workerId,
+        dueAt,
         note: body.note?.trim() || null,
         createdAt: now,
         updatedAt: now,

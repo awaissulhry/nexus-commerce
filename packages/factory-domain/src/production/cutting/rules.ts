@@ -277,8 +277,8 @@ export function cuttableRefusal(facts: Pick<CutFacts, 'workOrder' | 'hide' | 'lo
   }
   const usability = usabilityOf(facts.lot)
   if (!usability.usable) return { code: usability.reason, message: lotWords(facts.lot.code, usability.reason) }
-  if (hide.state === 'CONSUMED' || hide.state === 'SCRAPPED') {
-    return { code: 'HIDE_USED_UP', message: `Hide ${hide.code} is ${hide.state === 'CONSUMED' ? 'used up' : 'scrapped'}; it is not cut.` }
+  if (hide.state === 'CONSUMED' || hide.state === 'SCRAPPED' || hide.state === 'RETURNED') {
+    return { code: 'HIDE_USED_UP', message: `Hide ${hide.code} is ${hide.state === 'CONSUMED' ? 'used up' : hide.state === 'RETURNED' ? 'sent back to its supplier' : 'scrapped'}; it is not cut.` }
   }
   return null
 }

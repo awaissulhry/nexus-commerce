@@ -1,5 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
+import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
+import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import {
   CANCELLED,
   COUNTING,
@@ -31,6 +33,8 @@ import { CountRecordView } from './view/CountRecordView'
  * differences, Approve, Send back, Year-end sign-off, Found stock, Give a reason, Edit, Cancel) and the states. Roles:
  * Owner, Warehouse (the counter: no money; may not approve their own variance), Finance (signs off), Read-only, Sales.
  */
+
+const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
 
 interface RecordCase {
   role: CountRole
@@ -96,6 +100,19 @@ export const designScreen = defineDesignScreen<RecordCase>({
         },
       }),
     },
+    {
+      id: 'dialog-found-finished',
+      label: 'Dialog: Found stock — the search finds a finished garment (one item per SKU) beside the materials',
+      model: recordCase('warehouse', COUNTING, {
+        dialog: {
+          kind: 'found',
+          found: { draft: { locationId: PLACES[2]!.id, item: MATERIALS[2]!, colourId: null, lotId: null, hideId: null, counted: '2', reasonCode: 'MISPLACED', reasonNote: '' }, places: PLACES, found: MATERIALS, searching: false, colours: [], lots: [], hides: null },
+        },
+      }),
+    },
+    { id: 'activity', label: 'Activity: the count\'s thread, files and history (internal notes only)', model: recordCase('warehouse', COUNTING, { tab: 'activity', panelsPreview: { ...conversation, record: { type: 'StockCount', id: COUNTING.id, companyId: COUNTING.companyId, siteId: COUNTING.site.id }, title: COUNTING.number, party: null } }) },
+    { id: 'activity-no-right', label: 'Activity without threads.read: said in words', model: recordCase('readOnly', COUNTING, { tab: 'activity', can: { ...recordModel('readOnly', COUNTING).can, threads: false } }) },
+    { id: 'lines-places', label: 'Lines: the place filter lists every place with its lines and counted (the API\'s figures)', model: recordCase('warehouse', COUNTING, { lines: { ...lines(LINES), locationId: PLACES[2]!.id } }) },
     { id: 'dialog-reason', label: 'Dialog: Give a reason to 2 lines (it asks for a note)', model: recordCase('owner', COUNTING, { tab: 'differences', dialog: { kind: 'reason', lineIds: [DIFFS[0]!.id, DIFFS[2]!.id], reasonCode: 'NOT_RECORDED', reasonNote: '' } }) },
     { id: 'dialog-cancel', label: 'Dialog: Cancel the count (reason first)', model: recordCase('warehouse', COUNTING, { dialog: { kind: 'cancel', reason: '' } }) },
     { id: 'dialog-edit', label: 'Dialog: Edit team and note', model: recordCase('warehouse', COUNTING, { dialog: { kind: 'edit', team: 'Squadra A', note: '' } }) },

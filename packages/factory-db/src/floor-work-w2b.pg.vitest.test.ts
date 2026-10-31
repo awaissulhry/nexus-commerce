@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed as seedAndon, type AndonSeed } from '../seed/andon'
 import { seed as seedCore, type CoreSeed } from '../seed/_core'
 import { seed as seedLabour, type LabourSeed } from '../seed/labour'
+import { seed as seedPay, type PaySeed } from '../seed/pay'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels, partnerWalledColumns } from './ownership'
 import { FLOOR_ROLE, OFFICE_ROLE, PARTNER_ROLE, RUNTIME_LOGIN } from './roles'
@@ -39,6 +40,7 @@ let factory: FactoryDatabase
 let a: CoreSeed
 let labour: LabourSeed
 let andon: AndonSeed
+let pay: PaySeed
 
 const NS = 'w2b12-a'
 const key = (name: string): string => seedUuid(NS, name)
@@ -53,7 +55,11 @@ const A = {
   cut1: key('site:A1:station:CUT-01'),
   b1Station: key('site:B1:station:SEW-01'),
   b1Worker: key('worker:B1:operator'),
+  team: key('people:team:A1:L1-A'),
+  teamB: key('people:team:B1:L1-B'),
 }
+/** The employees behind the floor sign-ins (seed/people.ts: Worker.employeeId): the operator's E1, the lead's E2, B1's. */
+const E = { operator: `00000000${key('people:employee:A1:1').slice(8)}`, lead: key('people:employee:A1:2'), b1: key('people:employee:B1:1') }
 
 const office = (): FactoryScope => ({ audience: 'office', tenantId: a.tenantId, actorId: a.actorId })
 const floorAs = (actorId: string): FactoryScope => ({ audience: 'floor', tenantId: a.tenantId, actorId, siteId: A.site })
@@ -86,7 +92,8 @@ beforeAll(async () => {
   labour = await seedLabour({ db: factory, namespace: NS })
   await seedAndon({ db: factory, namespace: 'w2b12-b' })
   await seedLabour({ db: factory, namespace: 'w2b12-b' })
-}, 240_000)
+  pay = await seedPay({ db: factory, namespace: NS })
+}, 300_000)
 
 afterAll(async () => {
   await factory?.close()
@@ -98,6 +105,7 @@ const operator = () => p().operatorId
 const lead = () => p().leadId
 const asOperator = () => floorAs(operator())
 const asLead = () => floorAs(lead())
+const employeeOf = (worker: unknown): string | null => (worker === operator() ? E.operator : worker === lead() ? E.lead : null)
 /** A scan of WO-0001 from the cutting tablet, as the operator, at a server time after the previous one. */
 const scan = (kind: string, bundle: 0 | 1, operation: 'cut' | 'qc' | 'pack', extra: Record<string, unknown> = {}) =>
   insert(asOperator(), 'OperationScan', {
@@ -124,6 +132,7 @@ const block = (extra: Record<string, unknown> = {}) => {
       lineId: A.line,
       stationId: A.sew1,
       workerId: operator(),
+      employeeId: E.operator,
       codeId: labour.codeIds.WAIT_MATERIAL,
       source: 'FLOOR',
       workDate: '2026-11-19',
@@ -232,10 +241,10 @@ describe('the timing of an operation (MES-087…092, MES-117)', () => {
     // A team operation: the members are named on its START (or RESUME, PARTIAL, REPORT), never on a PAUSE.
     const started = randomUUID()
     expect(await scan('START', 1, 'qc', { id: started })).toBe(1)
-    expect(await insert(asOperator(), 'OperationScanMember', { id: randomUUID(), siteId: A.site, scanId: started, workerId: lead() })).toBe(1)
+    expect(await insert(asOperator(), 'OperationScanMember', { id: randomUUID(), siteId: A.site, scanId: started, workerId: lead(), employeeId: E.lead })).toBe(1)
     const paused = randomUUID()
     expect(await scan('PAUSE', 1, 'qc', { id: paused, pauseReasonCode: 'BREAK' })).toBe(1)
-    await expect(insert(asOperator(), 'OperationScanMember', { id: randomUUID(), siteId: A.site, scanId: paused, workerId: lead() })).rejects.toThrow(/members are named on its START/)
+    await expect(insert(asOperator(), 'OperationScanMember', { id: randomUUID(), siteId: A.site, scanId: paused, workerId: lead(), employeeId: E.lead })).rejects.toThrow(/members are named on its START/)
     expect(await scan('HAND_BACK', 1, 'qc')).toBe(1)
   })
 
@@ -305,13 +314,15 @@ describe('the timing of an operation (MES-087…092, MES-117)', () => {
         bundleId: p().bundleIds[0],
         stepCode: 'FOLD',
         workerId: operator(),
+        employeeId: E.operator,
         deviceId: p().deviceId,
         clientEventId: `t-${tag()}`,
         ...extra,
       })
     expect(await tick({})).toBe(1)
     await expect(tick({ stepCode: 'fold the sleeves' })).rejects.toThrow(/a code without spaces/)
-    await expect(tick({ workerId: null })).rejects.toThrow(/records the worker/)
+    await expect(tick({ workerId: null, employeeId: null })).rejects.toThrow(/records the worker/)
+    await expect(tick({ employeeId: E.lead })).rejects.toThrow(/names employee .* but worker .* is the floor sign-in of/)
     await hold('IN_PROGRESS')
     try {
       await expect(tick({})).rejects.toThrow(/ON_HOLD/)
@@ -362,6 +373,7 @@ describe('off-standard time and line days (MES-155…157, MES-203, MES-204)', ()
       recordType: 'OffStandardEntry',
       recordId: pending.id,
       workerId: operator(),
+      employeeId: E.operator,
       before: { endedAt: '2026-11-19T09:00:00.000Z' },
       after: { endedAt: '2026-11-19T08:55:00.000Z' },
       reason: 'The material came at 09:55.',
@@ -408,6 +420,7 @@ describe('off-standard time and line days (MES-155…157, MES-203, MES-204)', ()
         recordType: 'OperationScan',
         recordId: p().scanIds[2],
         workerId: operator(),
+        employeeId: E.operator,
         before: { goodQuantity: 2 },
         after: { goodQuantity: 1 },
         reason: 'One set stained.',
@@ -419,11 +432,12 @@ describe('off-standard time and line days (MES-155…157, MES-203, MES-204)', ()
     await expect(edit({ after: { goodQuantity: 2 } })).rejects.toThrow(/not equal/)
     await expect(edit({ reason: ' ' })).rejects.toThrow(/says why and who/)
     await expect(edit({ createdById: null })).rejects.toThrow(/says why and who/)
-    await expect(edit({ disputeId: labour.disputeIds[0], workerId: null })).rejects.toThrow(/another worker's record/)
+    await expect(edit({ disputeId: labour.disputeIds[0], workerId: null, employeeId: null })).rejects.toThrow(/another worker's record/)
+    await expect(edit({ workerId: null })).rejects.toThrow(/names an employee only with the worker/)
   })
 
   it("a dispute: OPEN with the worker's words, answered by someone else, then final; never at a site that names no worker", async () => {
-    const dispute = { siteId: A.site, workerId: operator(), workDate: '2026-11-17', recordType: 'OffStandardEntry', recordId: labour.blockIds[1], message: 'I cleaned for 20 minutes.' }
+    const dispute = { siteId: A.site, workerId: operator(), employeeId: E.operator, workDate: '2026-11-17', recordType: 'OffStandardEntry', recordId: labour.blockIds[1], message: 'I cleaned for 20 minutes.' }
     const id = randomUUID()
     expect(await insert(asOperator(), 'LabourDispute', { id, ...dispute })).toBe(1)
     await expect(run(asOperator(), `UPDATE "LabourDispute" SET message = 'Something else.' WHERE id = $1::uuid`, id)).rejects.toThrow(/never change/)
@@ -435,7 +449,7 @@ describe('off-standard time and line days (MES-155…157, MES-203, MES-204)', ()
     await expect(run(office(), `UPDATE "LabourDispute" SET status = 'OPEN', "withdrawnAt" = NULL WHERE id = $1::uuid`, id)).rejects.toThrow(/then final/)
     await expect(insert(office(), 'LabourDispute', { id: randomUUID(), ...dispute, status: 'UPHELD' })).rejects.toThrow(/starts OPEN/)
     // B1 records the station only: no record there names a worker, so none is disputed.
-    await expect(insert(office(), 'LabourDispute', { id: randomUUID(), ...dispute, siteId: A.siteB, workerId: A.b1Worker })).rejects.toThrow(/records the station, not the worker/)
+    await expect(insert(office(), 'LabourDispute', { id: randomUUID(), ...dispute, siteId: A.siteB, workerId: A.b1Worker, employeeId: E.b1 })).rejects.toThrow(/records the station, not the worker/)
   })
 })
 
@@ -447,14 +461,16 @@ describe('help calls and their routing (MES-142…148)', () => {
 
   it("one open call per station and type; the station's line; the caller only where the site names workers", async () => {
     await expect(call()).rejects.toThrow(UNIQUE)
-    expect(await call({ typeId: andon.typeIds.teamLeader, workerId: operator() })).toBe(1)
+    await expect(call({ typeId: andon.typeIds.teamLeader, workerId: operator() })).rejects.toThrow(/names employee none, but worker .* is the floor sign-in of/)
+    await expect(call({ typeId: andon.typeIds.teamLeader, employeeId: E.operator })).rejects.toThrow(/names an employee only with the worker/)
+    expect(await call({ typeId: andon.typeIds.teamLeader, workerId: operator(), employeeId: E.operator })).toBe(1)
     await expect(call({ typeId: andon.typeIds.material, lineId: null })).rejects.toThrow(/carries the line of its station/)
     await expect(call({ typeId: andon.typeIds.material, stationId: A.cut1, lineId: null, bundleId: p().bundleIds[0] })).rejects.toThrow(/a bundle with its work order/)
     // A type at B1 (records stations): a call there names no worker.
     const typeB = randomUUID()
     expect(await insert(office(), 'HelpCallType', { id: typeB, companyId: A.companyB, siteId: A.siteB, code: 'MATERIAL', kind: 'MATERIAL' })).toBe(1)
     await expect(
-      insert(office(), 'HelpCall', { id: randomUUID(), siteId: A.siteB, typeId: typeB, stationId: A.b1Station, lineId: key('site:B1:line:L1'), workerId: A.b1Worker, sentAt: new Date().toISOString() }),
+      insert(office(), 'HelpCall', { id: randomUUID(), siteId: A.siteB, typeId: typeB, stationId: A.b1Station, lineId: key('site:B1:line:L1'), workerId: A.b1Worker, employeeId: E.b1, sentAt: new Date().toISOString() }),
     ).rejects.toThrow(/records the station, not the worker/)
     expect(await insert(office(), 'HelpCall', { id: randomUUID(), siteId: A.siteB, typeId: typeB, stationId: A.b1Station, lineId: key('site:B1:line:L1'), sentAt: new Date().toISOString() })).toBe(1)
   })
@@ -477,11 +493,16 @@ describe('help calls and their routing (MES-142…148)', () => {
     expect(await call()).toBe(1)
   })
 
-  it('a type: a code, a responder role of the tenant, escalation in range, the waiting on an OFF_STANDARD code', async () => {
+  it('a type: a code, a responder team of its site (ACTIVE), escalation in range, the waiting on an OFF_STANDARD code', async () => {
     const type = (extra: Record<string, unknown>) => insert(office(), 'HelpCallType', { id: randomUUID(), companyId: A.company, siteId: A.site, code: `Q_${tag()}`, kind: 'QUALITY', ...extra })
-    expect(await type({ responderRecordType: 'Role', responderRecordId: key('role:floor_inspector'), escalateAfterMinutes: 15, offStandardCodeId: labour.codeIds.WAIT_HELP })).toBe(1)
-    await expect(type({ responderRecordType: 'Role', responderRecordId: randomUUID() })).rejects.toThrow(/not a role of the tenant/)
-    await expect(type({ responderRecordType: 'Group', responderRecordId: randomUUID() })).rejects.toThrow(/Team or Role/)
+    expect(await type({ responderTeamId: A.team, escalateAfterMinutes: 15, offStandardCodeId: labour.codeIds.WAIT_HELP })).toBe(1)
+    // B1's team answers no call of A1 (the reference keeps the site).
+    await expect(type({ responderTeamId: A.teamB })).rejects.toThrow(/foreign key|Foreign key/)
+    // An archived team answers no new call type.
+    const archived = randomUUID()
+    expect(await insert(office(), 'Team', { id: archived, companyId: A.company, siteId: A.site, code: `T-${tag()}`, name: 'Old team' })).toBe(1)
+    expect(await run(office(), `UPDATE "Team" SET status = 'ARCHIVED' WHERE id = $1::uuid`, archived)).toBe(1)
+    await expect(type({ responderTeamId: archived })).rejects.toThrow(/is ARCHIVED; help-call type .* an ACTIVE team of its site/)
     await expect(type({ escalateAfterMinutes: 0 })).rejects.toThrow(/1-240 minutes/)
     await expect(type({ offStandardCodeId: labour.codeIds.CLEANING })).rejects.toThrow(/ACTIVE OFF_STANDARD code/)
     await expect(run(office(), `UPDATE "HelpCallType" SET code = 'OTHER' WHERE id = $1::uuid`, andon.typeIds.material)).rejects.toThrow(/keeps its company, site and code/)
@@ -493,7 +514,7 @@ describe('help calls and their routing (MES-142…148)', () => {
 
 describe('dispatch, coupons, findings, targets and handover notes', () => {
   it('a dispatch line: a station or an operation, an operator or an operation at a station, bundles of the work order', async () => {
-    const line = (extra: Record<string, unknown>) => insert(office(), 'DispatchAssignment', { id: randomUUID(), siteId: A.site, workDate: '2026-11-19', ...extra })
+    const line = (extra: Record<string, unknown>) => insert(office(), 'DispatchAssignment', { id: randomUUID(), siteId: A.site, workDate: '2026-11-19', employeeId: employeeOf(extra.workerId), ...extra })
     expect(await line({ workerId: operator(), workOrderId: p().workOrderId, workOrderOperationId: p().operationIds.pack, bundleIds: [p().bundleIds[0], p().bundleIds[1]] })).toBe(1)
     await expect(line({ workerId: operator() })).rejects.toThrow(/names a station or an operation/)
     await expect(line({ workOrderId: p().workOrderId, workOrderOperationId: p().operationIds.pack })).rejects.toThrow(/an operator or an operation queued at a station/)
@@ -504,7 +525,8 @@ describe('dispatch, coupons, findings, targets and handover notes', () => {
     await expect(line({ stationId: A.sew1, workerId: operator(), sequence: 0 })).rejects.toThrow(/a lane order from 1/)
     await expect(line({ stationId: A.sew1, workerId: operator(), overrideReason: 'Trained last week.' })).rejects.toThrow(/override with its reason and who/)
     // The team leader reassigns on the floor; the office removes a line.
-    expect(await run(asLead(), `UPDATE "DispatchAssignment" SET "workerId" = $2::uuid WHERE id = $1::uuid`, labour.dispatchIds[0], lead())).toBe(1)
+    await expect(run(asLead(), `UPDATE "DispatchAssignment" SET "workerId" = $2::uuid WHERE id = $1::uuid`, labour.dispatchIds[0], lead())).rejects.toThrow(/is the floor sign-in of/)
+    expect(await run(asLead(), `UPDATE "DispatchAssignment" SET "workerId" = $2::uuid, "employeeId" = $3::uuid WHERE id = $1::uuid`, labour.dispatchIds[0], lead(), E.lead)).toBe(1)
     expect(await run(office(), `DELETE FROM "DispatchAssignment" WHERE id = $1::uuid`, labour.dispatchIds[0])).toBe(1)
   })
 
@@ -562,7 +584,7 @@ describe('crews, device modes, work orders and the floor checks', () => {
     await expect(insert(asOperator(), 'CrewSession', { ...crewRow, id: randomUUID() })).rejects.toThrow(UNIQUE)
     const member = (workerId: string, extra: Record<string, unknown> = {}) => {
       const id = randomUUID()
-      return { id, done: insert(asOperator(), 'CrewMember', { id, siteId: A.site, crewSessionId: crew, workerId, joinedAt: new Date(START - 1_800_000).toISOString(), ...extra }) }
+      return { id, done: insert(asOperator(), 'CrewMember', { id, siteId: A.site, crewSessionId: crew, workerId, employeeId: employeeOf(workerId), joinedAt: new Date(START - 1_800_000).toISOString(), ...extra }) }
     }
     const first = member(operator(), { active: true })
     expect(await first.done).toBe(1)
@@ -613,6 +635,49 @@ describe('crews, device modes, work orders and the floor checks', () => {
     await expect(run(office(), `UPDATE "ProductionSettings" SET "scrapApprovalLimit" = 0 WHERE id = $1::uuid`, A.site)).rejects.toThrow(/from 1 scrapped piece/)
     expect(await run(office(), `UPDATE "ProductionSettings" SET "scrapApprovalLimit" = 3, "bundleCodeMode" = 'COUPON_PER_OPERATION' WHERE id = $1::uuid`, A.site)).toBe(1)
     await run(office(), `UPDATE "ProductionSettings" SET "scrapApprovalLimit" = NULL, "bundleCodeMode" = 'ONE_CODE' WHERE id = $1::uuid`, A.site)
+  })
+})
+
+// --- pay reads the new scan kinds (pay.prisma, wave 6/7) -----------------------------------------------------------
+
+describe('pay and the timing kinds (MES-092; c.c. art. 2101)', () => {
+  it('a PARTIAL is paid and held like a report; a time mark (START) is neither', async () => {
+    const started = randomUUID()
+    const partial = randomUUID()
+    expect(await scan('START', 1, 'pack', { id: started })).toBe(1)
+    expect(await scan('PARTIAL', 1, 'pack', { id: partial, goodQuantity: 1 })).toBe(1)
+    const entry = (operationScanId: string) => ({
+      id: randomUUID(),
+      companyId: A.company,
+      siteId: A.site,
+      payPeriodId: pay.periodIds.november,
+      employeeId: E.operator,
+      workerId: operator(),
+      workDate: '2026-11-20',
+      kind: 'SCAN',
+      operationScanId,
+      rateEntryId: pay.rateEntryIds.pack,
+      pieces: 1,
+      rate: '0.300000',
+      amount: 30,
+      idempotencyKey: `test:${tag()}`,
+    })
+    expect(await insert(office(), 'EarningsEntry', entry(partial))).toBe(1)
+    await expect(insert(office(), 'EarningsEntry', entry(started))).rejects.toThrow(/standing report, correction or partial \(scan .* is a START/)
+    const held = (operationScanId: string) => ({
+      id: randomUUID(),
+      companyId: A.company,
+      siteId: A.site,
+      payPeriodId: pay.periodIds.november,
+      employeeId: E.operator,
+      workerId: operator(),
+      operationScanId,
+      reason: 'NOT_CLOCKED_IN',
+      heldAt: new Date().toISOString(),
+      key: `held:test:${tag()}`,
+    })
+    expect(await insert(office(), 'HeldScan', held(partial))).toBe(1)
+    await expect(insert(office(), 'HeldScan', held(started))).rejects.toThrow(/report, correction or partial scan of its own worker \(scan .* is a START/)
   })
 })
 

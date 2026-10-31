@@ -137,6 +137,7 @@ export const receipt = (over: Partial<Receipt> = {}): Receipt => ({
   purchaseOrder: { id: PO.id, number: PO.number, status: 'PARTLY_RECEIVED', version: 6 },
   supplierDdtNumber: 'DDT-DEMO-562',
   supplierDdtDate: '2026-10-29',
+  supplierDdtCorrection: null,
   receivedAt: at(29, 8, 15),
   note: null,
   location: { id: SITE.locations[0]!.id, code: 'N-RCV', name: 'Banchina ricevimento' },

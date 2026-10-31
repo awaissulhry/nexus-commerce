@@ -114,6 +114,51 @@ function RecordDesign({ model }: { model: DesignModel }) {
 
 const tab = (value: RecordTab) => ({ tab: value })
 
+// ---- B-W2b-17: Link… / Unlink (design cmp-links) -------------------------------------------------------------------------
+const NCR_31 = SAFETY.ncrs[0]!
+const LINKED = complaintOf(SAFETY, { safety: { state: 'ACKNOWLEDGED', raisedAt: SAFETY.safety.raisedAt, acknowledgedAt: NOW, acknowledgedById: ME }, serial: 'S-DEMO-000512', evidence: { kind: 'serial', subject: 'S-DEMO-000512' }, ncrs: [NCR_31, { id: '0190f0e2-6507-7000-8000-000000000032', number: 'NCR-DEMO-0032', stage: 'CONTAINED' }] })
+const linkTab = (complaint: Complaint, role: RoleCase, over: Partial<ComplaintRecordModel> = {}) => recordModel(complaint, role, { tab: 'linked', raisedFrom: [NCR_31.id], ...over })
+const linkDialog = (type: '' | 'SalesOrder' | 'Shipment' | 'ReturnAuthorisation' | 'GarmentSerial' | 'Nonconformance', over: Partial<{ recordId: string; serial: string }> = {}): RecordDialog => ({ kind: 'link', type, recordId: over.recordId ?? '', serial: over.serial ?? '' })
+const ORDER_OPTIONS = { type: 'SalesOrder' as const, items: [{ id: '0190f0e2-6504-7000-8000-000000000003', label: 'SO-DEMO-003' }, { id: '0190f0e2-6504-7000-8000-000000000004', label: 'SO-DEMO-004' }], problem: null }
+const NCR_OPTIONS = { type: 'Nonconformance' as const, items: [{ id: '0190f0e2-6507-7000-8000-000000000040', label: 'NCR-DEMO-0040', sub: 'Shoulder protector pocket seam (made-up)' }, { id: '0190f0e2-6507-7000-8000-000000000041', label: 'NCR-DEMO-0041', sub: 'Lining label missing (made-up)' }], problem: null }
+const RETURN_OPTIONS = { type: 'ReturnAuthorisation' as const, items: [{ id: '0190f0e2-6508-7000-8000-000000000005', label: 'RMA-DEMO-0005' }], problem: null }
+const NEW_COMPLAINT = complaintOf(NEW)
+const W2B_CASES = [
+  {
+    id: 'w2b-linked',
+    label: 'W2b — Linked records: Link…, and Unlink on each linked record',
+    model: { role: 'owner' as RoleCase, record: linkTab(LINKED, 'owner') },
+    note: 'B-W2b-17: the order, shipment, return and garment are the complaint\'s own facts (one each); NCR-DEMO-0031 was raised from it, so its Unlink is held with the reason.',
+  },
+  { id: 'w2b-link-what', label: 'W2b — Link…: what to link (types held with their reasons)', model: { role: 'owner' as RoleCase, record: linkTab(LINKED, 'owner', { dialog: linkDialog('') }) }, note: 'Order and shipment say what is linked now: unlink it first to link another.' },
+  { id: 'w2b-link-order', label: 'W2b — Link… an order of this customer', model: { role: 'owner' as RoleCase, record: linkTab(NEW_COMPLAINT, 'owner', { dialog: linkDialog('SalesOrder', { recordId: ORDER_OPTIONS.items[0]!.id }), linkOptions: ORDER_OPTIONS }) } },
+  { id: 'w2b-link-order-taken', label: 'W2b — Link… an order while one is linked: held', model: { role: 'owner' as RoleCase, record: linkTab(LINKED, 'owner', { dialog: linkDialog('SalesOrder', { recordId: ORDER_OPTIONS.items[1]!.id }), linkOptions: ORDER_OPTIONS }) } },
+  { id: 'w2b-link-return', label: 'W2b — Link… a return', model: { role: 'owner' as RoleCase, record: linkTab(NEW_COMPLAINT, 'owner', { dialog: linkDialog('ReturnAuthorisation'), linkOptions: RETURN_OPTIONS }) } },
+  { id: 'w2b-link-garment', label: 'W2b — Link… a garment by its serial', model: { role: 'owner' as RoleCase, record: linkTab(complaintOf(INVESTIGATING), 'owner', { dialog: linkDialog('GarmentSerial', { serial: 'S-DEMO-000777' }) }) } },
+  { id: 'w2b-link-ncr', label: 'W2b — Link… an open NCR of the company', model: { role: 'owner' as RoleCase, record: linkTab(LINKED, 'owner', { dialog: linkDialog('Nonconformance', { recordId: NCR_OPTIONS.items[0]!.id }), linkOptions: NCR_OPTIONS }) } },
+  { id: 'w2b-link-reading', label: 'W2b — Link…: the choices still being read', model: { role: 'owner' as RoleCase, record: linkTab(NEW_COMPLAINT, 'owner', { dialog: linkDialog('Shipment'), linkOptions: { type: 'Shipment', items: null, problem: null } }) } },
+  { id: 'w2b-link-error', label: 'W2b — Link…: the choices could not be read', model: { role: 'owner' as RoleCase, record: linkTab(NEW_COMPLAINT, 'owner', { dialog: linkDialog('Shipment'), linkOptions: { type: 'Shipment', items: null, problem: 'quality:problem.unavailable' } }) } },
+  {
+    id: 'w2b-link-refused',
+    label: 'W2b — Link… refused: linked to another one already (in words)',
+    model: { role: 'owner' as RoleCase, record: linkTab(NEW_COMPLAINT, 'owner', { dialog: linkDialog('SalesOrder', { recordId: ORDER_OPTIONS.items[0]!.id }), linkOptions: ORDER_OPTIONS, dialogProblem: 'links.refused.taken' }) },
+  },
+  { id: 'w2b-link-garment-unknown', label: 'W2b — Link… a serial no garment of ours has', model: { role: 'owner' as RoleCase, record: linkTab(complaintOf(INVESTIGATING), 'owner', { dialog: linkDialog('GarmentSerial', { serial: 'S-DEMO-999999' }), dialogProblem: 'links.refused.garment' }) } },
+  { id: 'w2b-unlink', label: 'W2b — Unlink the shipment', model: { role: 'owner' as RoleCase, record: linkTab(LINKED, 'owner', { dialog: { kind: 'unlink', type: 'Shipment', recordId: LINKED.shipment!.id, label: LINKED.shipment!.number } }) } },
+  { id: 'w2b-unlink-garment', label: 'W2b — Unlink the garment (its serial)', model: { role: 'owner' as RoleCase, record: linkTab(LINKED, 'owner', { dialog: { kind: 'unlink', type: 'GarmentSerial', recordId: '', label: 'S-DEMO-000512' } }) } },
+  {
+    id: 'w2b-unlink-refused',
+    label: 'W2b — Unlink refused: the NCR was raised from this complaint',
+    model: { role: 'owner' as RoleCase, record: linkTab(LINKED, 'owner', { raisedFrom: null, dialog: { kind: 'unlink', type: 'Nonconformance', recordId: NCR_31.id, label: NCR_31.number }, dialogProblem: 'links.refused.source' }) },
+    note: 'When the source could not be read before, the API refuses and the dialog says why.',
+  },
+  { id: 'w2b-linked-closed', label: 'W2b — Closed: links read-only', model: { role: 'owner' as RoleCase, record: linkTab(complaintOf(CLOSED, { order: { id: '0190f0e2-6504-7000-8000-000000000009', number: 'SO-DEMO-009', status: 'SHIPPED', currency: 'EUR' } }), 'owner') } },
+  { id: 'w2b-linked-read-only', label: 'W2b — Read-only role: Link… and Unlink held with the permission', model: { role: 'readOnly' as RoleCase, record: linkTab(LINKED, 'readOnly') } },
+  { id: 'w2b-linked-sales', label: 'W2b — Sales on a new complaint: Link… what its role sees (a garment held: no serial finder)', model: { role: 'sales' as RoleCase, record: linkTab(NEW_COMPLAINT, 'sales', { dialog: linkDialog('') }) } },
+  { id: 'w2b-linked-offline', label: 'W2b — Offline: Link… and Unlink held', model: { role: 'owner' as RoleCase, record: linkTab(LINKED, 'owner', { live: 'offline', offline: true }) } },
+  { id: 'w2b-mail-hint', label: 'W2b — Complaint tab: mail naming the number lands on the thread', model: { role: 'owner' as RoleCase, record: recordModel(LINKED, 'owner') } },
+]
+
 export const designScreen = defineDesignScreen<DesignModel>({
   screen: 'SCR-113-complaint',
   title: 'Complaint (W2a: record, linked records, activity)',
@@ -158,6 +203,7 @@ export const designScreen = defineDesignScreen<DesignModel>({
     },
     { id: 'changed', label: 'Changed by someone else while open: Reload', model: { role: 'owner', record: recordModel(complaintOf(INVESTIGATING), 'owner', { changedAt: NOW }) } },
     { id: 'offline', label: 'Offline: the last copy, writes held', model: { role: 'owner', record: recordModel(complaintOf(INVESTIGATING), 'owner', { live: 'offline', offline: true }) } },
+    ...W2B_CASES,
     { id: 'loading', label: 'Loading', model: { role: 'owner', record: 'loading' } },
     { id: 'not-found', label: 'Not found', model: { role: 'owner', record: 'notFound' } },
     { id: 'no-permission', label: 'No permission', model: { role: 'none', record: 'forbidden' } },

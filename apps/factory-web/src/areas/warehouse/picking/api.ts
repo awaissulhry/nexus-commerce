@@ -59,13 +59,17 @@ export type KitWorkOrder = z.infer<typeof workOrder>
 const pickedBy = z.array(z.object({ kind: z.enum(['OFFICE', 'TEAM']), name: z.string().nullable() }))
 export type PickedBy = z.infer<typeof pickedBy>
 const pickList = z.object({ created: z.boolean(), reservations: z.number(), createdAt: z.string().nullable() })
+/** B-W2b-15: the kit record — where it waits, when it was checked complete (never who), its version (0: none yet). */
+const kitPlace = z.object({ id: z.string(), code: z.string(), name: z.string() })
+const kit = z.object({ status: z.enum(KIT_STATUSES), location: kitPlace.nullable(), checkedAt: z.string().nullable(), version: z.number() })
+export type KitView = z.infer<typeof kit>
 
 const rowSchema = z.object({
   workOrder,
   cutDate: z.string().nullable(),
   readiness,
   lines: z.object({ all: z.number(), picked: z.number(), short: z.number() }),
-  kit: z.object({ status: z.enum(KIT_STATUSES), location: z.null() }),
+  kit,
   pickList,
   pickedBy,
   startedAt: z.string().nullable(),
@@ -129,7 +133,7 @@ const sheetSchema = z.object({
   workOrder: workOrder.extend({ batchNumber: z.string().nullable(), version: z.number(), issuable: z.boolean() }),
   cutDate: z.string().nullable(),
   readiness,
-  kit: z.object({ status: z.enum(KIT_STATUSES), location: z.null(), all: z.number(), picked: z.number(), short: z.number() }),
+  kit: kit.extend({ all: z.number(), picked: z.number(), short: z.number() }),
   pickList,
   pickedBy,
   startedAt: z.string().nullable(),
@@ -167,3 +171,36 @@ export const pickListSheets = (api: ApiClient, workOrderIds: readonly string[], 
 
 export const createPickLists = (api: ApiClient, siteId: string, workOrderIds: readonly string[]) =>
   api.post('/inventory/picking/pick-lists', { body: { siteId, workOrderIds }, schema: z.object({ created: z.number(), results: z.array(resultSchema) }), idempotencyKey: newIdempotencyKey() })
+
+// ---- B-W2b-15: the kit of one work order (modules/inventory/kits) -------------------------------------------------------------
+
+export const KIT_HELD_CODES = ['WORK_ORDER_NOT_OPEN', 'LINES_SHORT', 'NOTHING_PLANNED', 'ALREADY_CHECKED', 'NOT_CHECKED'] as const
+const kitAction = z.object({ allowed: z.boolean(), held: z.enum(KIT_HELD_CODES).nullable(), count: z.number().optional() })
+const kitRecord = z.object({
+  workOrderId: z.string(),
+  number: z.string(),
+  workOrderStatus: z.string(),
+  siteId: z.string(),
+  status: z.enum(KIT_STATUSES),
+  lines: z.object({ all: z.number(), picked: z.number(), short: z.number() }),
+  location: kitPlace.nullable(),
+  checkedAt: z.string().nullable(),
+  note: z.string().nullable(),
+  version: z.number(),
+  actions: z.object({ stage: kitAction, complete: kitAction, reopen: kitAction }),
+})
+export type KitRecord = z.infer<typeof kitRecord>
+const kitAnswer = z.object({ kit: kitRecord })
+const kitPath = (workOrderId: string) => `/inventory/kits/${encodeURIComponent(workOrderId)}`
+
+/** The kit staged at a place of the work order's site (null: taken off its place); the version read (0: no record yet). */
+export const stageKit = (api: ApiClient, workOrderId: string, version: number, locationId: string | null) =>
+  api.post(`${kitPath(workOrderId)}/stage`, { body: { version, locationId }, schema: kitAnswer, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.kit)
+
+/** "Mark kit complete": every line is picked; the API holds it while a line is short (409 kit/LINES_SHORT). */
+export const completeKit = (api: ApiClient, workOrderId: string, version: number) =>
+  api.post(`${kitPath(workOrderId)}/complete`, { body: { version }, schema: kitAnswer, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.kit)
+
+/** A kit checked complete is open again, with the reason (kept in the work order's history). */
+export const reopenKit = (api: ApiClient, workOrderId: string, version: number, reason: string) =>
+  api.post(`${kitPath(workOrderId)}/reopen`, { body: { version, reason }, schema: kitAnswer, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.kit)

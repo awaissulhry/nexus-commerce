@@ -401,3 +401,64 @@ export function ncrActions(facts: NcrFacts): { readonly edit: string | null; rea
 export function ageDays(from: Date, now: Date): number {
   return Math.max(0, Math.floor((now.getTime() - from.getTime()) / 86_400_000))
 }
+
+// ---- W2b follow-ups (B-W2b-17) ---------------------------------------------------------------------------------------
+
+/**
+ * The containment time (B-W2a-47's 24 hours made a setting; QualitySettings.defaultContainmentHours, W2b schema wave 2):
+ * hours after the problem was found by which an NCR's containment is due when the person says nothing. The company's
+ * row wins, else the tenant-wide row, else 24.
+ */
+export const DEFAULT_CONTAINMENT_HOURS = 24
+export const CONTAINMENT_HOURS_LIMITS = Object.freeze({ min: 1, max: 720 })
+export type SettingSource = 'COMPANY' | 'TENANT' | 'DEFAULT'
+
+export function containmentHoursInForce(company: number | null | undefined, tenant: number | null | undefined): { readonly hours: number; readonly source: SettingSource } {
+  if (company !== null && company !== undefined) return { hours: company, source: 'COMPANY' }
+  if (tenant !== null && tenant !== undefined) return { hours: tenant, source: 'TENANT' }
+  return { hours: DEFAULT_CONTAINMENT_HOURS, source: 'DEFAULT' }
+}
+
+export function containmentHoursProblem(hours: number | null): Issue | null {
+  if (hours === null) return null
+  if (!Number.isInteger(hours) || hours < CONTAINMENT_HOURS_LIMITS.min || hours > CONTAINMENT_HOURS_LIMITS.max) {
+    return { path: 'body/defaultContainmentHours', message: `Whole hours from ${CONTAINMENT_HOURS_LIMITS.min} to ${CONTAINMENT_HOURS_LIMITS.max} (30 days).` }
+  }
+  return null
+}
+
+/**
+ * An NCR's prefilled title in parts (B-W2a-68's gap: the API's English sentence on Italian screens): the screen words the
+ * key with its values in the reader's language; `title` stays the English sentence the API stores when the person
+ * leaves the field as it was prefilled.
+ */
+export const NCR_TITLE_KEYS = [
+  'INSPECTION_DEFECT',
+  'INSPECTION_DEFECTS',
+  'INSPECTION_FAILED',
+  'BUNDLE_REJECTED',
+  'SCAN_REJECTED',
+  'WORK_ORDER',
+  'GARMENT',
+  'LOT',
+  'HIDE',
+  'RECEIPT',
+  'DISCREPANCY',
+  'CLAIM',
+  'HOLD',
+  'RMA',
+  'RETURN_LINE',
+  'COMPLAINT',
+] as const
+export type NcrTitleKey = (typeof NCR_TITLE_KEYS)[number]
+export interface NcrTitleParts {
+  readonly key: NcrTitleKey
+  /** The values the words name (codes, numbers, counts, a defect's code; never a person). */
+  readonly values: Readonly<Record<string, string>>
+}
+
+/** The most defect lines picked for one NCR ("Create NCR from N defects"). */
+export const NCR_PICKED_DEFECTS_LIMIT = 50
+
+/** Bulk owner (design ncr-grid "Assign owner N"): at most this many NCRs in one command. */
+export const NCR_BULK_LIMIT = 50

@@ -1,3 +1,86 @@
+## Shared parts the W2a screens composed — grid card list (D3), RecordNav (D13), SaveStatus (D6), CheckList, TraceTree, MarginMeter, Waterfall, BarList, print view, FileRow actions, SelectableCard; AreaNavItem `target` (B-W2b-09) — 2026-10-31
+
+Additive only: nine new parts in new folders, each its own entry point with its stylesheet imported by the part (none
+in a barrel the web pulls into its pages, so no Commerce page carries their code or CSS), plus two optional props on
+parts Commerce draws — a page that passes none renders the same HTML as before (checked by rendering the touched parts
+with default props from main's source and from this one). Every part speaks through `labels?: Partial<XLabels>` (the
+B-W2b-04 rule: English `X_LABELS` beside it, `mergeLabels`); numbers and money come in through the app's `format`.
+Data in, events out: none reads an API.
+- **`GridCardList`** (D3, `grid/card-list/`): a list's rows as cards below 720 px (`useCardList()`), drawn from the
+  list's OWN `ColDef`s (`cardFieldsOf`: the first shown column is the title — a real link with `hrefOf` —, a column with
+  no header the actions, the rest label: value lines through the column's renderer; `fields` moves or redraws a column).
+  The list's search, tools and sort (`onSortChange`) are passed in; Select mode with Select all (mixed), held boxes from
+  `isRowSelectable` with the reason, the bulk actions while rows are selected, `x` on a card, Done; skeletons while
+  reading, the list's state in place of the cards, Show more. No AG module needed.
+- **`RecordNav`** (D13, `patterns/record-nav/`): Previous / Next record on a record page — real links (`hrefOf`,
+  `linkAs`), "53 of 56", J / K (not while typing, in a grid or a list, or under a dialog), held at the ends with the
+  reason, never wraps. The same words as `DetailModal`'s nav (`recordNavView` reuses its rules).
+- **`SaveStatus`** (D6, `components/SaveStatus/`): the band's save words — saved (time), saving, failed + Retry (held
+  with a reason when asked), unsaved (form, count when known), offline (changes waiting) — icon, tone and words, one
+  polite live region mounted from the first render.
+- **`CheckList`** (`patterns/checklist/`; the design's CheckList and ReadinessChecklist are this one part): checks with
+  pass / warning / fail / checking / skipped / unknown, each with an icon AND a word, the reason, a Fix link or button;
+  `checkListHeld` / `checkListButton` feed the action's held primary ("Release · 2 checks open"); fail, checking and
+  unknown hold unless a check says `blocks`; the summary is a live region.
+- **`TraceTree`** (`patterns/trace-tree/`): a genealogy tree (WAI-ARIA tree: ↑ ↓ → ← Home End, Enter follows the node's
+  link, Space ticks), the counts per level with "may hold it" apart (`traceLevels`), tickable branches for the reach of a
+  hold or recall (a tick reaches everything under it that may be ticked; mixed parents; held nodes say why), the keys in
+  one information icon under it.
+- **`MarginMeter`** (`charts/margin-meter/`): margin % against the floor and the target — bar with a solid floor mark
+  and a dashed target mark, tone AND words ("18.2 % — under the 20 % floor"), `role="meter"`; renders nothing without
+  the margin grain (`allowed`); "Margin not known", never 0; a `mini` form for grid cells.
+- **`Waterfall`** (`charts/waterfall/`): signed steps from a start to a result on one scale with 0 — price or cost
+  (`good`: which way is good) — each step a real link (`href`) or a `DetailPopover` (`detail`); signed amounts written;
+  totals checked against their steps (`mismatchWords`); `heldReason` in place of the chart without the grain.
+- **`BarList`** (`charts/bar-list/`): labelled bars on one scale (a loss left of 0), the value written, stacked parts with
+  a legend and alternating patterns (ageing buckets), a drill-down button (`onPick`, `aria-pressed`) or link; drawn as a
+  table (caption, name and value columns), so a screen reader reads rows and parts.
+- **Print view** (`patterns/print-view/`: `PrintView`, `PrintSection`): on screen a strip with Print (held while reading)
+  and the way back; on paper and screen the title, meta lines, "Printed by … on …" and the filters line ("Filters: … " or
+  "No filters: every row"); light while open and for the print itself; `[data-print-hide]` (and `printHide`) kept off
+  paper; sections never split; page numbers in the sheet's margin.
+- **`SelectableCard`** (`components/SelectableCard/`): a whole card that is one control — picked by a frame, a tick and
+  a word; held with its reason, never disabled; `SelectableCardGroup` as a radio group (one Tab stop, arrows move and
+  pick, held cards skipped) or a set of toggles.
+- **`FileRow` actions slot** (`actions`): the app's Download / Open / ⋯ drawn first, before Replace and Remove (`disabled`
+  does not lock them); such a row carries `has-actions` and may wrap — the cluster moves under the name on a phone (three
+  new `.nds-filerow.has-actions` rules in `styles/components.css`; no row without the slot matches them); `labels` for
+  "Replace file" / "Remove file" (`FILE_ROW_LABELS`, components barrel).
+- **`AreaNavItem.target`** / **`WorkspaceNavItem.target`** (`_blank`, + `targetLabel`): a nav row that opens its page in a
+  new tab (a window page; B-W2a-83's gap): `target` + `rel` on the link, a new-tab mark and the words for a screen reader,
+  the host's `onNavigate` not called for it. A row without it renders exactly as before.
+
+## DS words in the person's language — a `labels` prop on 24 parts, Textarea rows (B-W2b-04) — 2026-10-31
+
+Additive only: every new prop is optional and defaults to today's English, so a page that passes none renders exactly
+what it rendered before (checked by rendering 125 cases of every touched part with default props from main's source and
+from this one: byte-identical HTML). Each part takes `labels?: Partial<XLabels>`; its English words are the exported
+`X_LABELS` in a `*Labels.ts` beside it (one merge, `lib/labels.ts`: a word left out, or `undefined`, stays English). A
+word with a number or a name in it is a function (`unsaved: (count) => …`, `previous: (noun) => …`). The props that
+already carried words (`placeholder`, `clearLabel`, `applyLabel`, `confirmLabel`, `title`, `listLabel`, `ariaLabel`,
+`label`, `doneLabel`, `emptyLabel`, `counterLabel`, `nav.noun`…) still win over `labels`.
+- **Words:** `Modal` (close button), `EditModeBar`, `ReviewChangesModal` + `ReviewChangesPanel` (one `ReviewChangesLabels`:
+  title, buttons, held reasons, columns, the Done line, conflicts), `DetailModal` (Prev / Next, "3 of 12", held
+  reasons, "Reading…", Try again, Sections), `StepUpModal`, `ActionConfirm` (+ `useActionConfirm(labels)`; headings,
+  columns, the reversal sentence, and its `AsOf` / `ConfirmPhraseField` words), `CellSaveMark`, `DateField` (weekday
+  letters, month buttons, empty and clear words), `DateTimeField` (+ the date part's words), `DateRangePicker`
+  (`locale`, weekday letters, month buttons, preset names), `Timeline` (tone words, "not yet", its `AsOf`), `AsOf`
+  (empty words, and the `ago` / `when` writers a host passes for its language), `Countdown` ("in …", "now", unit
+  letters), `PreferencesModal` + `usePreferencesPanes` (every word of the plain, tabbed and grouped layouts),
+  `GridDensityToggle`, `JobProgress`, `IconPicker` and `ColorSwatchPicker` (group, "No icon", each name by id / English
+  name), `FileDropzone` (prompt, default hints, refusals), `MediaStrip`, `Combobox`, `ConfirmPhraseField`, `Textarea`
+  (the counter's words).
+- **Rules that write words** take them as an optional last argument, English by default: `reviewTitle`, `saveWords`,
+  `ackWords`, `saveHeldReason`, `saveButtonWords`, `reviewNote`, `resultWords`, `doneSummary` (reviewChangesModel),
+  `detailPosition`, `detailNavLabel`, `detailNavHeld` (detailModalModel), `reversalSentence` (+ `REVERSAL_WORDS`),
+  `textareaCount` (`tooLong`). `countdownWords` says the ticker's unit letters in the given words.
+- **`Textarea honourRows`** (default false): `rows` sets the height (the 168 px floor gives way). Without it every
+  field keeps the floor whatever `rows` says, as before — Commerce passes `rows` on ~30 fields and none changes.
+- Barrels: each area's barrel exports its parts' `*_LABELS` and `*Labels` types (components, patterns, primitives,
+  grid/renderers, grid/toolbars; `REVERSAL_WORDS` from grid). Not changed: month and day names still come from `Intl`
+  in `locale`, the calendars still start on Sunday, and `SectionLayout`, `FileRow`, `ReplyComposer`, `OptionList` /
+  `MultiSelect` and `GridViewsMenu` still speak English (DS-GAPS).
+
 ## Board view, calendar grid, reason grid, photo capture (factory gaps D19 D20 D21 + CalendarGrid) — 2026-10-30
 
 Four new parts in new files; nothing existing changes (no barrel, component, token, style or grid file is edited), and

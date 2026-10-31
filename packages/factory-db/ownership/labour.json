@@ -1,22 +1,30 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/labour.prisma (rules: src/ownership.ts; roles: src/roles.ts). Floor work (W2b schema wave 7/7, B-W2b-12): the office (factory_runtime) keeps the codes, closes line days, answers disputes, plans the dispatch and reviews scan findings through command(); the floor tablets (factory_floor_runtime, their own site) record team members, ticked steps, off-standard time, disputes, coupons and crews, and the team leader on the floor approves, edits and reassigns. The partner reads nothing here (no portal or link sees floor work); nothing here has a money column. A person is named only on the rows of their own records (the person columns are listed in each entry's about, for the privacy export and erase); their figures are read only through the API's legal gate (Statuto art. 4 c.1, GATE-LABOUR; Owner answer F2: never a list, filter, group or total by person). OperationScanMember, OperationChecklistResult and LabourEdit are append-only (no update or delete for anyone; their triggers). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/labour.prisma (rules: src/ownership.ts; roles: src/roles.ts). Floor work (W2b schema wave 7/7, B-W2b-12): the office (factory_runtime) keeps the codes, closes line days, answers disputes, plans the dispatch and reviews scan findings through command(); the floor tablets (factory_floor_runtime, their own site) record team members, ticked steps, off-standard time, disputes, coupons and crews, and the team leader on the floor approves, edits and reassigns. The partner reads nothing here (no portal or link sees floor work); nothing here has a money column. A person is named only on the rows of their own records, by the worker and the worker's employee (\"personal\": subject employeeId, each personal column with its purposes, PLT-207/209, for the privacy export and erasure; every column the floor reads carries the floor purpose PRODUCTION); their figures are read only through the API's legal gate (Statuto art. 4 c.1, GATE-LABOUR; Owner answer F2: never a list, filter, group or total by person). OperationScanMember, OperationChecklistResult and LabourEdit are append-only (no update or delete for anyone; their triggers). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "OperationScanMember": {
-      "about": "The members of a team operation: the tablet (or the office, entering for the lead) inserts them with the scan; both read them. Never changed or removed. Person column: workerId (purpose PERFORMANCE).",
+      "about": "The members of a team operation: the tablet (or the office, entering for the lead) inserts them with the scan; both read them. Never changed or removed. Personal: see \"personal\" (the person = employeeId).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert"] },
         "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": { "workerId": ["PRODUCTION", "PAY"], "scanId": ["PRODUCTION", "PAY"] }
       }
     },
     "OperationChecklistResult": {
-      "about": "The steps ticked inside an operation: the tablet inserts them; both read them (Finish waits for the required ones). Never changed or removed. Person column: workerId (purpose PERFORMANCE; null where the site records stations).",
+      "about": "The steps ticked inside an operation: the tablet inserts them; both read them (Finish waits for the required ones). Never changed or removed. Personal: see \"personal\" (the person = employeeId).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert"] },
         "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": { "workerId": ["PRODUCTION"], "stepCode": ["PRODUCTION"], "outcome": ["PRODUCTION"] }
       }
     },
     "OffStandardCode": {
@@ -29,12 +37,16 @@
       }
     },
     "OffStandardEntry": {
-      "about": "Off-standard and indirect time: the tablet starts and ends a block (and the team leader on the floor approves or edits it); the office types, approves, rejects and edits blocks. Never deleted (rejected instead). Person columns: workerId, approvedById, rejectedById (purpose PERFORMANCE; workerId null where the site records stations).",
+      "about": "Off-standard and indirect time: the tablet starts and ends a block (and the team leader on the floor approves or edits it); the office types, approves, rejects and edits blocks. Never deleted (rejected instead). Personal: see \"personal\" (the person = employeeId).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
         "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": { "workerId": ["PRODUCTION", "PAY", "PERFORMANCE"], "codeId": ["PRODUCTION", "PAY", "PERFORMANCE"], "workDate": ["PRODUCTION", "PAY", "PERFORMANCE"], "startedAt": ["PRODUCTION", "PAY", "PERFORMANCE"], "endedAt": ["PRODUCTION", "PAY", "PERFORMANCE"], "status": ["PRODUCTION", "PAY", "PERFORMANCE"], "rejectReason": ["PRODUCTION", "PAY", "PERFORMANCE"], "note": ["PRODUCTION", "PAY", "PERFORMANCE"] }
       }
     },
     "LabourDay": {
@@ -47,30 +59,42 @@
       }
     },
     "LabourEdit": {
-      "about": "The append-only record of every edit of a labour record (before, after, who, why): written in the command that edits, by the office or the team leader on the floor; both read it (the off-standard trigger reads it as the role that fires it). Never changed or removed. Person column: workerId (whose record; purpose PERFORMANCE).",
+      "about": "The append-only record of every edit of a labour record (before, after, who, why): written in the command that edits, by the office or the team leader on the floor; both read it (the off-standard trigger reads it as the role that fires it). Never changed or removed. Personal: see \"personal\" (the person = employeeId).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert"] },
         "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": { "workerId": ["PRODUCTION", "PAY", "PERFORMANCE"], "recordType": ["PRODUCTION", "PAY", "PERFORMANCE"], "recordId": ["PRODUCTION", "PAY", "PERFORMANCE"], "before": ["PRODUCTION", "PAY", "PERFORMANCE"], "after": ["PRODUCTION", "PAY", "PERFORMANCE"], "reason": ["PRODUCTION", "PAY", "PERFORMANCE"] }
       }
     },
     "LabourDispute": {
-      "about": "A worker's dispute of their own record: raised on the floor (My day) or in the office, withdrawn by the worker, answered by the team leader or HR. Never deleted. Person columns: workerId, answeredById (purpose PERFORMANCE; GDPR art. 15).",
+      "about": "A worker's dispute of their own record: raised on the floor (My day) or in the office, withdrawn by the worker, answered by the team leader or HR. Never deleted. Personal: see \"personal\" (the person = employeeId).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
         "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": { "workerId": ["PRODUCTION", "PAY", "PERFORMANCE"], "recordType": ["PRODUCTION", "PAY", "PERFORMANCE"], "recordId": ["PRODUCTION", "PAY", "PERFORMANCE"], "message": ["PRODUCTION", "PAY", "PERFORMANCE"], "status": ["PRODUCTION", "PAY", "PERFORMANCE"], "answer": ["PRODUCTION", "PAY", "PERFORMANCE"] }
       }
     },
     "DispatchAssignment": {
-      "about": "The day's dispatch: the office plans and rearranges it (a plan, not a ledger: removed with Undo; every move is in the audit log); the floor reads it (My work, the line view) and the team leader reassigns there. Person columns: workerId, overrideById.",
+      "about": "The day's dispatch: the office plans and rearranges it (a plan, not a ledger: removed with Undo; every move is in the audit log); the floor reads it (My work, the line view) and the team leader reassigns there. Personal: see \"personal\" (the person = employeeId).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
         "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": { "workerId": ["PRODUCTION"], "overrideReason": ["PRODUCTION", "SAFETY"] }
       }
     },
     "BundleCoupon": {
@@ -100,12 +124,16 @@
       }
     },
     "CrewMember": {
-      "about": "The workers of a crew: the tablet adds them (badge scan), switches the active one and lets them leave; the office reads them and ends them with a revoke or a deactivation. Never deleted. Person column: workerId (who worked where, when: traceability, as FloorSession).",
+      "about": "The workers of a crew: the tablet adds them (badge scan), switches the active one and lets them leave; the office reads them and ends them with a revoke or a deactivation. Never deleted. Personal: see \"personal\" (the person = employeeId).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "update"] },
         "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": { "workerId": ["PRODUCTION"], "active": ["PRODUCTION"], "joinedAt": ["PRODUCTION"], "leftAt": ["PRODUCTION"] }
       }
     }
   }

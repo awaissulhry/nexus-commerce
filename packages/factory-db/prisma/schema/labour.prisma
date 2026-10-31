@@ -20,8 +20,9 @@
 // group or total by person is never the API's to offer (Owner answer F2). The person columns are listed in each
 // ownership entry's "about" for the privacy export and erase (B-W1-36's pack; B-W2b-27).
 //
-// Links to the People tables of B-W2b-06 (Employee, Team), not on main when this wave was built, go through the floor
-// Worker (Worker.employeeId comes with B-W2b-06) or as recordType + recordId (a help call's responder group).
+// A row that names a worker also names the person behind the floor sign-in (people.prisma Employee, B-W2b-06):
+// `employeeId` is the worker's Worker.employeeId (null while the worker has no employee record, and with no worker), so
+// the privacy export and erasure (ownership "personal", PLT-207) and pay find a person's floor records by the person.
 
 /// One member of a team operation (MES-091): the workers who did the work a START, RESUME, PARTIAL or REPORT of a
 /// bundle at an operation records together, the scan's own worker included. How a team's work splits for pay is the
@@ -36,14 +37,19 @@ model OperationScanMember {
   /// The START, RESUME, PARTIAL or REPORT it is a member of.
   scanId      String   @db.Uuid
   workerId    String   @db.Uuid
+  /// The worker's employee (Worker.employeeId; null while it has none).
+  employeeId  String?  @db.Uuid
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   createdById String?  @db.Uuid
 
-  scan   OperationScan @relation(fields: [tenantId, siteId, scanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
-  worker Worker        @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  scan     OperationScan @relation(fields: [tenantId, siteId, scanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker   Worker        @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  employee Employee?     @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, scanId])
   @@index([tenantId, workerId])
+  @@index([tenantId, employeeId])
 }
 
 /// One step ticked inside an operation on a bundle (MES-102: "tick-off steps, each with who and when"; Finish waits until
@@ -63,6 +69,8 @@ model OperationChecklistResult {
   outcome              ChecklistOutcome @default(DONE)
   /// The signed-in worker; null when the site records the station only.
   workerId             String?          @db.Uuid
+  /// The worker's employee (Worker.employeeId; null with no worker, or while it has none).
+  employeeId           String?          @db.Uuid
   /// The device's station; required when the site records the station only.
   stationId            String?          @db.Uuid
   /// The floor device it came from (null: entered in the office).
@@ -77,11 +85,13 @@ model OperationChecklistResult {
   bundle    Bundle             @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   worker    Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee  Employee?          @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   station   Station?           @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device    Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, deviceId, clientEventId])
   @@index([tenantId, bundleId, workOrderOperationId])
+  @@index([tenantId, employeeId])
 }
 
 /// What a ticked step says.
@@ -166,6 +176,8 @@ model OffStandardEntry {
   stationId      String?              @db.Uuid
   /// The signed-in worker; null when the site records the station only.
   workerId       String?              @db.Uuid
+  /// The worker's employee (Worker.employeeId; null with no worker, or while it has none).
+  employeeId     String?              @db.Uuid
   codeId         String               @db.Uuid
   /// FLOOR the worker's tile, LEAD typed by the team leader or the office, HELP_CALL the waiting while a call is open
   /// (helpCallId, exactly then), SYSTEM the API on its own (an open block closed at clock-out).
@@ -202,6 +214,7 @@ model OffStandardEntry {
   line     Line?           @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   station  Station?        @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   worker   Worker?         @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee Employee?       @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   helpCall HelpCall?       @relation(fields: [tenantId, siteId, helpCallId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device   Device?         @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
@@ -209,6 +222,7 @@ model OffStandardEntry {
   // A line's day (its close), a worker's day, a call's waiting.
   @@index([tenantId, lineId, workDate])
   @@index([tenantId, workerId, workDate])
+  @@index([tenantId, employeeId, workDate])
   @@index([tenantId, helpCallId])
 }
 
@@ -278,8 +292,9 @@ model LabourEdit {
   /// The record edited: its model name and id.
   recordType  String
   recordId    String    @db.Uuid
-  /// The worker whose record it is (null: a station's record, or a line's).
+  /// The worker whose record it is (null: a station's record, or a line's), and their employee (Worker.employeeId).
   workerId    String?   @db.Uuid
+  employeeId  String?   @db.Uuid
   /// The changed fields before and after: two JSON objects with the same keys, not equal.
   before      Json
   after       Json
@@ -294,12 +309,14 @@ model LabourEdit {
   site    Site           @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   line    Line?          @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
-  worker  Worker?        @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
-  dispute LabourDispute? @relation(fields: [tenantId, siteId, disputeId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker   Worker?        @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee Employee?      @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  dispute  LabourDispute? @relation(fields: [tenantId, siteId, disputeId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
-  // A record's history; a line's day.
+  // A record's history; a line's day; a person's edits.
   @@index([tenantId, recordId])
   @@index([tenantId, lineId, workDate])
+  @@index([tenantId, employeeId])
 }
 
 /// A worker's dispute of one of their own labour records (MES-206; GDPR art. 15: a worker reads their own records and may
@@ -311,6 +328,8 @@ model LabourDispute {
   tenantId      String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   siteId        String              @db.Uuid
   workerId      String              @db.Uuid
+  /// The worker's employee (Worker.employeeId; null while it has none).
+  employeeId    String?             @db.Uuid
   lineId        String?             @db.Uuid
   workDate      DateTime            @db.Date
   /// The record disputed: its model name and id (an OperationScan, an OffStandardEntry, a team share…).
@@ -333,16 +352,18 @@ model LabourDispute {
   updatedAt     DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
   createdById   String?             @db.Uuid
 
-  worker Worker       @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker   Worker       @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
-  line   Line?        @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
-  device Device?      @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
-  edits  LabourEdit[]
+  employee Employee?    @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  line     Line?        @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device   Device?      @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  edits    LabourEdit[]
 
   @@unique([tenantId, deviceId, clientEventId])
   // The target of the edits' reference: on the dispute's own site.
   @@unique([tenantId, siteId, id])
   @@index([tenantId, workerId, status])
+  @@index([tenantId, employeeId])
 }
 
 enum LabourDisputeStatus {
@@ -370,8 +391,9 @@ model DispatchAssignment {
   workOrderOperationId String?             @db.Uuid
   /// Some bundles of the work order only (distinct; empty: all of the operation's).
   bundleIds            String[]            @default([]) @db.Uuid
-  /// The operator (null: an operation queued at a station, nobody named yet).
+  /// The operator (null: an operation queued at a station, nobody named yet), and their employee (Worker.employeeId).
   workerId             String?             @db.Uuid
+  employeeId           String?             @db.Uuid
   /// The order in the station's (or line's) lane, from 1.
   sequence             Int?
   /// A missing skill accepted anyway: why and who (both or neither).
@@ -388,10 +410,12 @@ model DispatchAssignment {
   station   Station?            @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   operation WorkOrderOperation? @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   worker    Worker?             @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee  Employee?           @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   // A day's board per line, a worker's day (My work, MES-022), an operation's placements.
   @@index([tenantId, siteId, workDate])
   @@index([tenantId, workerId, workDate])
+  @@index([tenantId, employeeId])
   @@index([tenantId, workOrderOperationId])
 }
 
@@ -524,6 +548,8 @@ model CrewMember {
   siteId         String        @db.Uuid
   crewSessionId  String        @db.Uuid
   workerId       String        @db.Uuid
+  /// The worker's employee (Worker.employeeId; null while it has none).
+  employeeId     String?       @db.Uuid
   floorSessionId String?       @db.Uuid
   /// The active member: every action books to them (at most one per crew: the partial unique index).
   active         Boolean       @default(false)
@@ -537,10 +563,12 @@ model CrewMember {
   crew         CrewSession   @relation(fields: [tenantId, siteId, crewSessionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   worker       Worker        @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  employee     Employee?     @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   floorSession FloorSession? @relation(fields: [tenantId, siteId, floorSessionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, crewSessionId])
   @@index([tenantId, workerId])
+  @@index([tenantId, employeeId])
 }
 
 /// The floor checks of production.prisma's ProductionSettings (MES-025, MES-097, MES-098): what a check does when it

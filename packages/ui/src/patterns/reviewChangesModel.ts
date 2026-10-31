@@ -8,6 +8,11 @@
  * page's review (Where · What · Now · New · Note, a per-change result after Save). The pages keep their copies for now.
  */
 import type { ReactNode } from 'react'
+import { REVIEW_CHANGES_LABELS, type ReviewChangesLabels } from './ReviewChangesModalLabels'
+
+/** The words these rules write (B-W2b-04: the review's `labels`); English by default. Columns stay keys (`reviewColumns`). */
+type W = ReviewChangesLabels
+const EN = REVIEW_CHANGES_LABELS
 
 export interface ReviewChange {
   id: string
@@ -47,16 +52,12 @@ export type ReviewState =
   | { phase: 'saving'; done?: number }
   | { phase: 'done'; results: Readonly<Record<string, ReviewResult>> }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
-
-export const reviewTitle = (n: number): string => `Review ${plural(n, 'change')}`
-export const saveWords = (n: number): string => `Save ${plural(n, 'change')}`
+export const reviewTitle = (n: number, words: W = EN): string => words.title(n)
+export const saveWords = (n: number, words: W = EN): string => words.save(n)
 export const raiseCount = (changes: readonly Pick<ReviewChange, 'raise'>[]): number => changes.filter((c) => c.raise).length
 
-export function ackWords(raises: number): string {
-  return raises === 1
-    ? 'I understand this change lets automation do more, from its next run.'
-    : `I understand these ${raises} changes let automation do more, from their next run.`
+export function ackWords(raises: number, words: W = EN): string {
+  return words.ack(raises)
 }
 
 /**
@@ -64,23 +65,23 @@ export function ackWords(raises: number): string {
  * the read, then the form above the table (`lead`: the host's own words, "Type a bid"), then nothing to save, then
  * problems, then the tick.
  */
-export function saveHeldReason(args: { state: ReviewState; count: number; problems: number; raises: number; ack: boolean; lead?: string | null }): string | null {
+export function saveHeldReason(args: { state: ReviewState; count: number; problems: number; raises: number; ack: boolean; lead?: string | null }, words: W = EN): string | null {
   const { state, count, problems, raises, ack, lead } = args
-  if (state.phase === 'reading') return 'Reading today\'s values first'
-  if (state.phase === 'failed') return 'Today\'s values could not be read'
-  if (state.phase === 'saving') return 'Saving'
-  if (state.phase === 'done') return 'Already saved'
+  if (state.phase === 'reading') return words.heldReading
+  if (state.phase === 'failed') return words.heldFailed
+  if (state.phase === 'saving') return words.heldSaving
+  if (state.phase === 'done') return words.heldSaved
   if (lead) return lead
-  if (count === 0) return 'Nothing to save'
-  if (problems > 0) return problems === 1 ? 'Fix the problem first' : 'Fix the problems first'
-  if (raises > 0 && !ack) return 'Tick the box first'
+  if (count === 0) return words.heldNothing
+  if (problems > 0) return problems === 1 ? words.heldProblem : words.heldProblems
+  if (raises > 0 && !ack) return words.heldTick
   return null
 }
 
 /** The primary button's words: "Save 3 changes", "Saving 2 of 3…". */
-export function saveButtonWords(state: ReviewState, count: number, label?: string): string {
-  if (state.phase === 'saving') return state.done != null ? `Saving ${state.done} of ${count}…` : 'Saving…'
-  return label ?? saveWords(count)
+export function saveButtonWords(state: ReviewState, count: number, label?: string, words: W = EN): string {
+  if (state.phase === 'saving') return state.done != null ? words.savingOf(state.done, count) : words.saving
+  return label ?? saveWords(count, words)
 }
 
 /** The one table's columns: Where only when a change has it; Note only when one has it (or a raise); Result once done. */
@@ -94,15 +95,15 @@ export function reviewColumns(changes: readonly Pick<ReviewChange, 'where' | 'no
 }
 
 /** The Note cell: the host's note, or for a raise with none, the plain fact. */
-export const reviewNote = (c: Pick<ReviewChange, 'note' | 'raise'>): ReactNode => c.note ?? (c.raise ? 'Lets automation do more' : '')
+export const reviewNote = (c: Pick<ReviewChange, 'note' | 'raise'>, words: W = EN): ReactNode => c.note ?? (c.raise ? words.raiseNote : '')
 
 /**
  * The Result cell's words: the result's own, except where they only repeat the New column ("Rejected | Rejected",
  * "Archived | Archived", audit R2 NICE) — then a plain "Done".
  */
-export function resultWords(change: Pick<ReviewChange, 'next'>, result: Pick<ReviewResult, 'ok' | 'words'>): string {
+export function resultWords(change: Pick<ReviewChange, 'next'>, result: Pick<ReviewResult, 'ok' | 'words'>, words: W = EN): string {
   const same = typeof change.next === 'string' && change.next.trim().toLowerCase() === result.words.trim().toLowerCase()
-  return result.ok && same ? 'Done' : result.words
+  return result.ok && same ? words.done : result.words
 }
 
 const VERB_FROM_WORDS = /^(?:already\s+)?(undone|archived|restored)\b/i
@@ -122,6 +123,7 @@ export function doneSummary(
   changes: readonly Pick<ReviewChange, 'id'>[],
   results: Readonly<Record<string, ReviewResult>>,
   verb = 'saved',
+  words: W = EN,
 ): { line: string; tone: 'success' | 'warning' | 'danger' } {
   const told = changes.map((c) => results[c.id]).filter((r): r is ReviewResult => !!r)
   const count = (ok: boolean) => {
@@ -132,11 +134,11 @@ export function doneSummary(
   const went = count(true)
   const failed = count(false)
   const failedTotal = failed.reduce((sum, [, n]) => sum + n, 0)
-  const wentWords = went.map(([v, n]) => `${n} ${v}`).join(' · ')
+  const wentWords = went.map(([v, n]) => words.counted(n, v)).join(' · ')
   if (!went.length) {
     const v = failed[0]?.[0] ?? verb
-    return { line: failedTotal ? `Nothing ${v} · ${plural(failedTotal, 'change')} not ${v}` : `Nothing ${v}`, tone: 'danger' }
+    return { line: failedTotal ? `${words.nothing(v)} · ${words.changesNot(failedTotal, v)}` : words.nothing(v), tone: 'danger' }
   }
   if (!failedTotal) return { line: wentWords, tone: 'success' }
-  return { line: `${wentWords} · ${failed.map(([v, n]) => `${n} not ${v}`).join(' · ')}`, tone: 'warning' }
+  return { line: `${wentWords} · ${failed.map(([v, n]) => words.notCounted(n, v)).join(' · ')}`, tone: 'warning' }
 }

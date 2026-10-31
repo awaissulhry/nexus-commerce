@@ -242,7 +242,9 @@ export function LinesTab({ value, model, actions }: { value: CountRecord; model:
     ]
   }, [t, locale, model.timeZone, value.countTeam, editable])
 
-  const places = usePlaces(model.lines.items)
+  // B-W2b-15: every place of the count with its line counts (the API's), else the places of the lines read so far.
+  const seenPlaces = usePlaces(model.lines.items)
+  const places = model.places && model.places.length > 0 ? model.places.map((place) => ({ ...place.location, lines: place.lines, counted: place.counted })) : seenPlaces.map((place) => ({ ...place, lines: null as number | null, counted: null as number | null }))
 
   if (value.status === 'DRAFT') {
     const startHeld = say(t, heldPhrase(value, 'start', model.can))
@@ -335,7 +337,7 @@ export function LinesTab({ value, model, actions }: { value: CountRecord; model:
                   <option value="">{t('lines.allPlaces')}</option>
                   {places.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {`${item.code} · ${item.name}`}
+                      {item.lines === null ? `${item.code} · ${item.name}` : t('lines.placeOption', { code: item.code, name: item.name, lines: item.lines, counted: item.counted ?? 0 })}
                     </option>
                   ))}
                 </Select>

@@ -307,3 +307,41 @@ export function releaseRefusal(reservation: { readonly status: ReservationStatus
   if (reservation.status === 'ISSUED') return `${label} is fully issued to its work order: there is nothing left to release.`
   return null
 }
+
+// ---- released by the system (B-W2b-15; SCM-211) -------------------------------------------------------------------------
+
+/**
+ * A work order whose reservations hold nothing any more: completed, closed or cancelled. The …_followups_stock_w2b_guards
+ * reservation trigger lets the system (no person) release the rest of a reservation only then.
+ */
+export const DONE_WORK_ORDER_STATUSES = ['COMPLETED', 'CLOSED', 'CANCELLED'] as const
+export const isDoneWorkOrder = (status: string): boolean => (DONE_WORK_ORDER_STATUSES as readonly string[]).includes(status)
+
+/** At most this many reservations in one system release (the nightly clean-up takes the rest on its next round). */
+export const MAX_SYSTEM_RELEASE = 200
+
+/** What a reservation's demand is when the system looks at it: its work order, or its order line and order. */
+export type ReservationDemand =
+  | { readonly type: 'WorkOrder'; readonly number: string; readonly status: string }
+  | { readonly type: 'SalesOrderLine'; readonly number: string; readonly seq: number; readonly orderStatus: string; readonly closedShort: boolean }
+
+/** Is the demand done (the system may release the rest of its reservation)? The trigger's own rule. */
+export function demandDone(demand: ReservationDemand): boolean {
+  if (demand.type === 'WorkOrder') return isDoneWorkOrder(demand.status)
+  return demand.closedShort || !isOpenOrder(demand.orderStatus)
+}
+
+/**
+ * The reason a system release keeps (Reservation.releaseReason, in English like every stored reason): who released it
+ * (the system) and why (the demand is done), so a person reading the reservation later knows it was not a person's act.
+ * `by` says which run: the work order's own event, or the nightly clean-up.
+ */
+export function systemReleaseReason(demand: ReservationDemand, by: 'WORK_ORDER_DONE' | 'NIGHTLY_CLEANUP'): string {
+  const what =
+    demand.type === 'WorkOrder'
+      ? `work order ${demand.number} is ${demand.status.toLowerCase()}`
+      : demand.closedShort
+        ? `line ${demand.seq} of order ${demand.number} was closed short`
+        : `order ${demand.number} is ${demand.orderStatus.toLowerCase().replace(/_/g, ' ')}`
+  return by === 'NIGHTLY_CLEANUP' ? `Released by the nightly clean-up: ${what}, so nothing needs it any more.` : `Released by the system: ${what}, so nothing needs the rest any more.`
+}

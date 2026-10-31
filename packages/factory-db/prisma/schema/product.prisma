@@ -391,6 +391,15 @@ model Style {
   hsCode                String?
   originCountry         String?
   netMassKg             Decimal?    @db.Decimal(10, 3)
+  /// W2b (B-W2b-03; design style identity "Customs: HS code, origin, gender"): who it is cut for, apart from the CN
+  /// code (CN chapters 61/62 split men's or boys' from women's or girls'); null: not on record.
+  gender                StyleGender?
+  /// W2b (B-W2b-03; B-W2a-09's copy): the style it was copied from and that style's revision the copy took its parts
+  /// from (the "Copied from" line); null: not a copy, or copied before W2b (the audit rows say it then). Never itself;
+  /// the revision only with its style; set once, when the copy is made (or filled in later from the audit), never
+  /// changed.
+  copiedFromStyleId     String?     @db.Uuid
+  copiedFromRevisionId  String?     @db.Uuid
   status                StyleStatus @default(DRAFT)
   version               Int         @default(1)
   createdAt             DateTime    @default(now()) @db.Timestamptz(3)
@@ -401,6 +410,11 @@ model Style {
   brandParty          Party?                @relation(fields: [tenantId, brandPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   sizeScale           SizeScale             @relation(fields: [tenantId, sizeScaleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   measurementTemplate MeasurementTemplate?  @relation(fields: [tenantId, measurementTemplateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b: the style and revision it was copied from, and the copies made of it (Restrict, not Prisma's SetNull default
+  // for an optional relation: that would also clear tenantId).
+  copiedFrom          Style?                @relation("StyleCopiedFrom", fields: [tenantId, copiedFromStyleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  copiedFromRevision  StyleRevision?        @relation("StyleCopiedFromRevision", fields: [tenantId, copiedFromStyleId, copiedFromRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  copies              Style[]               @relation("StyleCopiedFrom")
   colourways          Colourway[]
   revisions           StyleRevision[]
   // compliance.prisma: what covers and documents it.
@@ -412,6 +426,8 @@ model Style {
   salesOrderLines     SalesOrderLine[]
   // production.prisma: the work orders that make it.
   workOrders          WorkOrder[]
+  // W2b pay.prisma (schema wave 6/7): the piece-rate tables of its own.
+  pieceRateTables     PieceRateTable[]
   // quality.prisma: the PPE register's entries about it.
   ppeRegisterEntries  PpeRegisterEntry[]
   // W2a ncr.prisma: the nonconformances about it.
@@ -433,6 +449,17 @@ enum StyleStatus {
   DRAFT
   ACTIVE
   ARCHIVED
+}
+
+/// Who a style is cut for (W2b; customs: CN chapters 61/62, Note 9: a garment that is neither is classified as women's
+/// or girls').
+enum StyleGender {
+  /// Men's or boys'.
+  MEN
+  /// Women's or girls'.
+  WOMEN
+  /// Cut for both (classified as women's or girls' for customs).
+  UNISEX
 }
 
 /// The kind of garment: it decides the measurement template and, with the protection, the PPE classification.
@@ -566,6 +593,8 @@ model StyleRevision {
   // W2a compliance.prisma: the type-change reviews of this revision, and those that compare a revision with it.
   typeChangeReviews         TypeChangeReview[] @relation("TypeChangeReviewRevision")
   comparedTypeChangeReviews TypeChangeReview[] @relation("TypeChangeReviewComparedRevision")
+  // W2b: the styles copied from this revision.
+  copies                    Style[]            @relation("StyleCopiedFromRevision")
 
   @@unique([tenantId, styleId, revision])
   // The target of the references from the revision's parts: a revision of the same style.
@@ -704,6 +733,10 @@ model Operation {
 
   company Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   routing RoutingOperation[]
+  // W2b skills.prisma (wave 4/7): the skills about it.
+  skills  Skill[]
+  // W2b pay.prisma (schema wave 6/7): the piece rates that pay it.
+  pieceRateEntries PieceRateEntry[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])

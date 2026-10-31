@@ -17,6 +17,7 @@ import { PRODUCTION_SCAN_CORRECT } from '../production/scans/permissions'
 import { WORKORDERS_RELEASE, WORKORDERS_VIEW } from '../production/work-orders/permissions'
 import { PURCHASING_SEND, PURCHASING_VIEW } from '../purchasing/permissions'
 import { QUALITY_LOTS_REJECT, QUALITY_LOTS_RELEASE, QUALITY_LOTS_VIEW } from '../quality/lab/permissions'
+import { QUALITY_NCR_APPROVE, QUALITY_NCR_VIEW } from '../quality/ncr/permissions'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '../sales/orders/permissions'
 import { QUOTES_APPROVE, QUOTES_VIEW } from '../sales/quotes/permissions'
 import { Dec } from '../tax/decimal'
@@ -68,6 +69,9 @@ export const ATTENTION_KINDS = [
   // B-W2a-33 (design home.alerts conn "Today's Needs me shows my open alerts"): the exception rules' stored alerts that are
   // mine (assigned to me, or nobody's yet and their rule tells me), read only when Today is asked for them (`include`).
   'RULE_ALERT',
+  // B-W2b-17 (B-W2a-47's gap, design home.approvals "every request that needs my yes"): NCR decisions that wait for an
+  // approval (four eyes: never the person who decided them), in the Approvals tile; decided on the NCR's own record.
+  'NCR_DECISION',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
@@ -282,6 +286,17 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
   }),
   // B-W2a-33: my open alerts of the exception rules (platform/alerts). Mine when assigned to me, or unassigned and the rule
   // tells me; handled in the alert itself (acknowledge, assign, snooze, resolve with a note), never with Today's verbs.
+  // B-W2b-17: NCR decisions waiting for an approval (modules/insights/sources/ncr-decisions.ts). Approved on the NCR's
+  // Disposition tab (the record opens): never by the person who decided it.
+  NCR_DECISION: rule({
+    kind: 'NCR_DECISION',
+    category: 'APPROVAL',
+    label: 'NCR decisions waiting for your approval',
+    view: QUALITY_NCR_VIEW,
+    act: [QUALITY_NCR_APPROVE],
+    decide: 'OPEN',
+    live: ['ncr.decision_changed', 'ncr.stage_changed'],
+  }),
   RULE_ALERT: rule({
     kind: 'RULE_ALERT',
     category: 'ALERT',

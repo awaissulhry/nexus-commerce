@@ -203,6 +203,11 @@ export interface ReleaseFacts {
   readonly crViOpen: readonly string[] | null
   /** An inspection's hold: the work orders with no inspection PASSED after the hold. */
   readonly reinspectionOpen: readonly string[] | null
+  /**
+   * B-W2b-17 (design quality.settings qs-sod "A hold is released by someone other than the person who placed it: on /
+   * off"): the company's rule lets the person who placed a hold release it too. Absent or false: someone else releases it.
+   */
+  readonly placerMayRelease?: boolean | undefined
 }
 
 /** What must be true to release, each line in words (design qh-release GateExplainer and its four-eyes lines). */
@@ -211,8 +216,12 @@ export function releaseChecks(facts: ReleaseFacts): ReleaseCheck[] {
     { key: 'ACTIVE', ok: facts.status === 'ACTIVE', words: facts.status === 'ACTIVE' ? 'The hold is active.' : `The hold is ${facts.status.toLowerCase()} already.` },
     {
       key: 'NOT_PLACER',
-      ok: !facts.placedByReleaser,
-      words: facts.placedByReleaser ? 'You placed this hold - another person must release it.' : 'Released by someone other than the person who placed it.',
+      ok: !facts.placedByReleaser || facts.placerMayRelease === true,
+      words: !facts.placedByReleaser
+        ? 'Released by someone other than the person who placed it.'
+        : facts.placerMayRelease === true
+          ? "You placed this hold; the company's rule lets the person who placed it release it."
+          : 'You placed this hold - another person must release it.',
     },
   ]
   if (facts.madeBy !== null) {
@@ -283,3 +292,24 @@ export const isOverdue = (hold: { readonly status: HoldStatus; readonly expected
 export type PlacedByKind = 'USER' | 'WORKER' | 'SYSTEM'
 export const placedByKind = (hold: { readonly placedById: string | null; readonly placedByWorkerId: string | null }): PlacedByKind =>
   hold.placedById ? 'USER' : hold.placedByWorkerId ? 'WORKER' : 'SYSTEM'
+
+// ---- W2b follow-ups (B-W2b-17) ---------------------------------------------------------------------------------------
+
+/** Where a setting in force comes from: the company's row, the tenant-wide row, or the default. */
+export type HoldSettingSource = 'COMPANY' | 'TENANT' | 'DEFAULT'
+
+/**
+ * Who releases a hold (QualitySettings.placerMayRelease, W2b schema wave 2): the company's row wins, else the tenant-wide
+ * row, else false (someone other than the placer releases it — B-W2a-26's rule).
+ */
+export function placerMayReleaseInForce(company: boolean | null | undefined, tenant: boolean | null | undefined): { readonly placerMayRelease: boolean; readonly source: HoldSettingSource } {
+  if (company !== null && company !== undefined) return { placerMayRelease: company, source: 'COMPANY' }
+  if (tenant !== null && tenant !== undefined) return { placerMayRelease: tenant, source: 'TENANT' }
+  return { placerMayRelease: false, source: 'DEFAULT' }
+}
+
+/** Letting the placer release is the looser rule (design qs-loosen): it asks for the reason and a fresh code. */
+export const isHoldRuleLoosening = (before: boolean, after: boolean): boolean => !before && after
+
+/** A hold's number in words when it has none (holds placed before B-W2b-17 numbered them). */
+export const holdLabel = (hold: { readonly number: string | null; readonly id: string }): string => hold.number ?? `hold ${hold.id.slice(0, 8)}`

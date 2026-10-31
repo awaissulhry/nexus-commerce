@@ -57,7 +57,6 @@ export function ReleaseHoldDialog({
           : null
   const statement = details.some(needsStatement)
   const single = holds.length === 1 ? holds[0]! : null
-  void me
 
   useEffect(() => {
     if (!open) return
@@ -72,7 +71,9 @@ export function ReleaseHoldDialog({
   })
 
   if (!open) return null
-  const label = single ? (single.hold.subjects.length === 1 ? `${t(kindKey(single.hold.subjectType))} ${single.hold.subjects[0]?.label ?? '—'}` : `${single.hold.subjects.length} ${t(nounKey(single.hold.subjectType), { count: single.hold.subjects.length })}`) : null
+  const what = single ? (single.hold.subjects.length === 1 ? `${t(kindKey(single.hold.subjectType))} ${single.hold.subjects[0]?.label ?? '—'}` : `${single.hold.subjects.length} ${t(nounKey(single.hold.subjectType), { count: single.hold.subjects.length })}`) : null
+  // B-W2b-17: the hold's number first when it has one.
+  const label = single && what ? (single.hold.number ? `${single.hold.number} · ${what}` : what) : null
   return (
     <Modal
       open
@@ -105,7 +106,7 @@ export function ReleaseHoldDialog({
         )}
         {single ? (
           single.detail ? (
-            <CheckList checks={checkLines(single.detail, t)} label={t('decision.checks')} />
+            <CheckList checks={checkLines(single.detail, t, me)} label={t('decision.checks')} />
           ) : (
             <p className="fw-q-loading" role="status">
               <Spinner size={14} /> {t('release.reading')}
@@ -119,6 +120,7 @@ export function ReleaseHoldDialog({
               return (
                 <li key={entry.hold.id}>
                   <strong>
+                    {entry.hold.number ? `${entry.hold.number} · ` : ''}
                     {t(kindKey(entry.hold.subjectType))} {entry.hold.subjects[0]?.label ?? '—'}
                   </strong>{' '}
                   — {entry.detail === null ? t('release.reading') : !may ? t('held.noReleaseHere') : open ? t(`held.check.${open}`) : t('release.ready')}

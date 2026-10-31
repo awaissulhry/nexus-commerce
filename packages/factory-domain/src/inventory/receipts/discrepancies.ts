@@ -20,9 +20,10 @@ import { QUANTITY_SCALE } from '../ledger/moves'
  *   settle   SENT → AGREED (the supplier accepts it) → CREDITED (its credit arrived); CLOSED from any state but CLOSED,
  *            with what settled it (or why it is not pursued). CLOSED is final.
  *
- * The reason code has no column of its own on ReceiptDiscrepancy (W2a wave 3): it leads the note as `<CODE>: <note>`, as
- * a write-off's does (B-W2a-11); `discrepancyNote` writes it and `readDiscrepancyNote` reads it back for the codes the
- * list knows. A schema follow-up may give it a column.
+ * The reason code (B-W2b-14, the W2b column ReceiptDiscrepancy.reasonCode): written to its own column, the note keeps the
+ * receiver's words only. W2a wrote it at the head of the note as `<CODE>: <note>`, as a write-off's (B-W2a-11):
+ * `discrepancyReasonOf` reads the column and, for a discrepancy recorded before W2b (no column value), that prefix
+ * (`readDiscrepancyNote`) for the codes the list knows. `discrepancyNote` is how W2a stored it (kept for those reads).
  */
 
 export const DISCREPANCY_KINDS = ['SHORT', 'OVER', 'DAMAGED', 'WRONG_ITEM', 'WRONG_COLOUR', 'MISSING_DOCUMENT', 'OTHER'] as const
@@ -106,6 +107,15 @@ export function readDiscrepancyNote(stored: string | null, knownCodes: ReadonlyS
   if (!match || !knownCodes.has(match[1]!)) return { reasonCode: null, note: stored }
   const rest = match[2]?.trim() ?? ''
   return { reasonCode: match[1]!, note: rest === '' ? null : rest }
+}
+
+/**
+ * The reason code and the receiver's words of a stored discrepancy (B-W2b-14): the reasonCode column, else (recorded
+ * before W2b) the code at the head of the note when the list knows it.
+ */
+export function discrepancyReasonOf(row: { readonly reasonCode: string | null; readonly note: string | null }, knownCodes: ReadonlySet<string>): { readonly reasonCode: string | null; readonly note: string | null } {
+  if (row.reasonCode !== null) return { reasonCode: row.reasonCode, note: row.note?.trim() ? row.note.trim() : null }
+  return readDiscrepancyNote(row.note, knownCodes)
 }
 
 /** A discrepancy's quantity: above 0, at most four decimals, with its unit; both or neither. */

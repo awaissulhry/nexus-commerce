@@ -187,7 +187,7 @@ describe('the walls', () => {
     const ddts = await seriesOf(companyA, 'DDT')
     // Reads: only the floor's kinds, of its tenant.
     const kinds = await asFloor<{ kind: string }>('SELECT DISTINCT kind::text AS kind FROM "NumberSeries" ORDER BY 1')
-    expect(kinds.map((row) => row.kind)).toEqual(['GOODS_RECEIPT', 'INSPECTION', 'LOT', 'RELEASE'])
+    expect(kinds.map((row) => row.kind)).toEqual(['GOODS_RECEIPT', 'HOLD', 'INSPECTION', 'LOT', 'NCR', 'RELEASE'])
     expect(await asFloor('SELECT 1 FROM "NumberAllocation" WHERE kind = \'INVOICE\'')).toEqual([])
     expect(await asFloor('SELECT 1 FROM "NumberSeries" WHERE id = $1::uuid FOR UPDATE', [invoices.id])).toEqual([])
     // Writes: nothing moves, nothing is added.

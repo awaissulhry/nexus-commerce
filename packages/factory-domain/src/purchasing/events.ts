@@ -36,6 +36,7 @@ import { CLAIM_KINDS, CLAIM_STATUSES } from './claims/rules'
  *                                  again; the supplier told when it holds the order); lines of a partly received order
  *                                  closed short; the confirm-by deadline moved; a reminder to confirm sent (by the buyer,
  *                                  or by the daily run once a company switches automatic reminders on)
+ *   purchasing_settings.changed   the Owner's switch for automatic confirmation reminders (B-W2b-14).
  *   supplier_claim.created | updated | sent | answered | goods_returned | closed | cancelled
  *                                  a claim to a supplier (B-W2a-44; modules/purchasing/claims): made (by hand, from
  *                                  discrepancies, from a lot, or as a Return to supplier), changed (header, lines), sent
@@ -307,5 +308,13 @@ export const events = [
     description: 'A reminder to confirm a purchase order went to its supplier, by the buyer or by the daily run of the automatic reminders.',
     payload: z.strictObject({ ...base, revision: z.number().int().min(1), reminderId: z.uuid(), outboundId: z.uuid(), automatic: z.boolean() }),
     live,
+  }),
+  // B-W2b-14: the Owner's switch for automatic PO confirmation reminders, per company (or tenant-wide).
+  defineEvent({
+    type: 'purchasing_settings.changed',
+    context: 'purchasing',
+    description: "The owner switched a company's (or every company's) automatic purchase order confirmation reminders on or off.",
+    payload: z.strictObject({ settingsId: z.uuid(), companyId: z.uuid().nullable(), confirmationRemindersEnabled: z.boolean() }),
+    live: { permission: 'purchasing.view', fields: ['settingsId', 'companyId', 'confirmationRemindersEnabled'] },
   }),
 ] as const

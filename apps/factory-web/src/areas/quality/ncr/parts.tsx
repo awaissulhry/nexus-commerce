@@ -97,6 +97,8 @@ export interface NcrNotice {
   readonly say: Say
   readonly tone: 'success' | 'info' | 'warning' | 'danger'
   readonly detail?: readonly string[]
+  /** B-W2b-17: lines in our words (the refused NCRs of a bulk owner change), shown before the detail lines. */
+  readonly lines?: readonly Say[]
   readonly link?: { readonly href: string; readonly label: Say } | null
 }
 
@@ -120,6 +122,13 @@ export function NoticeLine({ notice, onDismiss }: { notice: NcrNotice | null | u
         <a className="fw-q-link" href={notice.link.href}>
           {say(notice.link.label)}
         </a>
+      )}
+      {notice.lines && notice.lines.length > 0 && (
+        <ul className="fw-q-lines">
+          {notice.lines.map((line, index) => (
+            <li key={`${line.key}:${index}`}>{say(line)}</li>
+          ))}
+        </ul>
       )}
       {notice.detail && notice.detail.length > 0 && (
         <ul className="fw-q-lines">

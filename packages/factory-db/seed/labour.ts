@@ -12,6 +12,7 @@ import {
   ScanPatternKind,
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
+import { seed as seedPeople } from './people'
 import { seed as seedProduction, type ProductionSeed } from './production'
 
 /**
@@ -45,7 +46,9 @@ import { seed as seedProduction, type ProductionSeed } from './production'
  * (both still derived from the namespace). The labour edit's createdAt is the database's own (now()): the off-standard
  * trigger matches an edit to its transaction by it.
  *
- * Every name and value is invented. Idempotent: each record is written once and skipped when it exists.
+ * Each row that names the operator (or the team leader) names the employee behind the sign-in too (E1, E2 of
+ * seed/people.ts: Worker.employeeId). Every name and value is invented. Idempotent: each record is written once and skipped
+ * when it exists.
  */
 
 const T = {
@@ -137,8 +140,10 @@ export interface LabourSeed {
 export async function seed(context: SeedContext): Promise<LabourSeed> {
   const { db, namespace } = context
   // The CLI runs the seeds in name order: the work order, its bundles and scans, the workers and the tablet come from
-  // the production seed (which runs the floor sign-in, privacy and earlier seeds; all idempotent).
+  // the production seed (which runs the floor sign-in, privacy and earlier seeds), the employees behind the workers from
+  // the people seed (it links the operator to E1, the team leader to E2); all idempotent.
   const production = await seedProduction(context)
+  const people = await seedPeople(context)
   const codeIds = await seedOffStandardCodes(context)
   const { id, firstId, lastId } = ids(namespace)
   const tenantId = id('tenant')
@@ -148,6 +153,9 @@ export async function seed(context: SeedContext): Promise<LabourSeed> {
   const lineL1 = id('site:A1:line:L1')
   const station = { sew1: id('site:A1:station:SEW-01'), sew2: id('site:A1:station:SEW-02') }
   const { operatorId, leadId, deviceId, workOrderId, operationIds, bundleIds, scanIds } = production
+  /** The operator's and the team leader's employees (Worker.employeeId). */
+  const operatorEmployee = people.employeeIds.e1
+  const leadEmployee = people.employeeIds.e2
   const office = { audience: 'office' as const, tenantId, actorId }
   const asOperator = { audience: 'floor' as const, tenantId, actorId: operatorId, siteId: siteA }
   const select = { id: true } as const
@@ -169,8 +177,8 @@ export async function seed(context: SeedContext): Promise<LabourSeed> {
   await db.withScope(asOperator, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.operationScanMember.findUnique({ where: { id: memberId }, select })) return
-      await tx.operationScanMember.create({ data: { id: memberId, siteId: siteA, scanId: scanIds[2], workerId: operatorId, createdAt: T.ticked, createdById: operatorId }, select })
-      const tick = { siteId: siteA, workOrderId, workOrderOperationId: operationIds.sew, bundleId: bundleIds[1], workerId: operatorId, deviceId, deviceTime: T.ticked, serverTime: T.ticked, createdById: operatorId }
+      await tx.operationScanMember.create({ data: { id: memberId, siteId: siteA, scanId: scanIds[2], workerId: operatorId, employeeId: operatorEmployee, createdAt: T.ticked, createdById: operatorId }, select })
+      const tick = { siteId: siteA, workOrderId, workOrderOperationId: operationIds.sew, bundleId: bundleIds[1], workerId: operatorId, employeeId: operatorEmployee, deviceId, deviceTime: T.ticked, serverTime: T.ticked, createdById: operatorId }
       await tx.operationChecklistResult.create({ data: { id: tickIds[0], ...tick, stepCode: 'TRIM_THREADS', outcome: ChecklistOutcome.DONE, clientEventId: 'seed-tick-1' }, select })
       await tx.operationChecklistResult.create({ data: { id: tickIds[1], ...tick, stepCode: 'POCKET_ZIP', outcome: ChecklistOutcome.NOT_APPLICABLE, clientEventId: 'seed-tick-2' }, select })
     }),
@@ -178,7 +186,7 @@ export async function seed(context: SeedContext): Promise<LabourSeed> {
   await db.withScope(asOperator, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.offStandardEntry.findUnique({ where: { id: blockIds[0] }, select })) return
-      const block = { companyId: companyA, siteId: siteA, lineId: lineL1, stationId: station.sew1, workerId: operatorId, source: OffStandardSource.FLOOR, deviceId, createdById: operatorId }
+      const block = { companyId: companyA, siteId: siteA, lineId: lineL1, stationId: station.sew1, workerId: operatorId, employeeId: operatorEmployee, source: OffStandardSource.FLOOR, deviceId, createdById: operatorId }
       await tx.offStandardEntry.create({
         data: { id: blockIds[1], ...block, codeId: codeIds.CLEANING, workDate: DAY.cleaned, startedAt: T.cleanStart, endedAt: T.cleanEnd, status: OffStandardStatus.APPROVED, approvedAt: T.cleanEnd, clientEventId: 'seed-off-2', deviceTime: T.cleanStart, createdAt: T.cleanStart, updatedAt: T.cleanEnd },
         select,
@@ -188,7 +196,7 @@ export async function seed(context: SeedContext): Promise<LabourSeed> {
         data: { id: blockIds[0], ...block, codeId: codeIds.WAIT_MATERIAL, workDate: DAY.waited, startedAt: T.typedStart, endedAt: T.waitEnd, status: OffStandardStatus.PENDING, note: 'The lining trolley ran out.', clientEventId: 'seed-off-1', deviceTime: T.typedStart, createdAt: T.typedStart, updatedAt: T.waitEnd },
         select,
       })
-      const dispute = { siteId: siteA, workerId: operatorId, lineId: lineL1, workDate: DAY.waited, deviceId, createdById: operatorId, createdAt: T.disputed, updatedAt: T.disputed }
+      const dispute = { siteId: siteA, workerId: operatorId, employeeId: operatorEmployee, lineId: lineL1, workDate: DAY.waited, deviceId, createdById: operatorId, createdAt: T.disputed, updatedAt: T.disputed }
       await tx.labourDispute.create({
         data: { id: disputeIds[0], ...dispute, recordType: 'OperationScan', recordId: scanIds[2], message: 'I sewed both sleeve sets; the stain was on the leather before it reached me.', clientEventId: 'seed-dispute-1' },
         select,
@@ -199,8 +207,8 @@ export async function seed(context: SeedContext): Promise<LabourSeed> {
       })
       const crew = { siteId: siteA, createdById: operatorId }
       await tx.crewSession.create({ data: { id: crewId, ...crew, deviceId, startedAt: T.crewStart, endedAt: T.crewEnd, endReason: FloorSessionEndReason.SHIFT_END, createdAt: T.crewStart, updatedAt: T.crewEnd }, select })
-      await tx.crewMember.create({ data: { id: crewMemberIds[0], ...crew, crewSessionId: crewId, workerId: operatorId, joinedAt: T.crewStart, leftAt: T.crewEnd, createdAt: T.crewStart, updatedAt: T.crewEnd }, select })
-      await tx.crewMember.create({ data: { id: crewMemberIds[1], ...crew, crewSessionId: crewId, workerId: leadId, joinedAt: T.leadJoined, leftAt: T.leadLeft, createdAt: T.leadJoined, updatedAt: T.leadLeft }, select })
+      await tx.crewMember.create({ data: { id: crewMemberIds[0], ...crew, crewSessionId: crewId, workerId: operatorId, employeeId: operatorEmployee, joinedAt: T.crewStart, leftAt: T.crewEnd, createdAt: T.crewStart, updatedAt: T.crewEnd }, select })
+      await tx.crewMember.create({ data: { id: crewMemberIds[1], ...crew, crewSessionId: crewId, workerId: leadId, employeeId: leadEmployee, joinedAt: T.leadJoined, leftAt: T.leadLeft, createdAt: T.leadJoined, updatedAt: T.leadLeft }, select })
     }),
   )
 
@@ -225,6 +233,7 @@ export async function seed(context: SeedContext): Promise<LabourSeed> {
           recordType: 'OffStandardEntry',
           recordId: blockIds[0],
           workerId: operatorId,
+          employeeId: operatorEmployee,
           before: { startedAt: T.typedStart.toISOString() },
           after: { startedAt: T.waitStart.toISOString() },
           reason: 'The worker disputed the start; the trolley ran out at 10:40.',
@@ -249,7 +258,7 @@ export async function seed(context: SeedContext): Promise<LabourSeed> {
       // A plan, not a ledger: the office may remove a line, so each is written when it is missing.
       const planned = { siteId: siteA, workDate: DAY.dispatch, lineId: lineL1, sequence: 1, createdAt: T.planned, updatedAt: T.planned, createdById: actorId }
       const lines = [
-        { id: dispatchIds[0], ...planned, stationId: station.sew1, workerId: operatorId },
+        { id: dispatchIds[0], ...planned, stationId: station.sew1, workerId: operatorId, employeeId: operatorEmployee },
         { id: dispatchIds[1], ...planned, stationId: station.sew2, workOrderId, workOrderOperationId: operationIds.sew, bundleIds: [bundleIds[0]] },
       ]
       for (const data of lines) if (!(await tx.dispatchAssignment.findUnique({ where: { id: data.id }, select }))) await tx.dispatchAssignment.create({ data, select })

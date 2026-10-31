@@ -1,0 +1,100 @@
+/* B-W2b-05 — the top bar's scope on a page (the site chip) and the company finder (more than 7 companies). Layout only,
+   semantic tokens. */
+.fw-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-scope-chip-note {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  white-space: nowrap;
+}
+
+.fw-company-finder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-company-finder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+}
+
+.fw-company-finder-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text);
+  text-decoration: none;
+}
+
+.fw-company-finder-row:hover,
+.fw-company-finder-row:focus-visible {
+  background: var(--nds-surface-hover);
+}
+
+.fw-company-finder-row[aria-current='true'] {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-company-finder-code {
+  color: var(--nds-text-muted);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-company-finder-empty {
+  margin: 0;
+  color: var(--nds-text-muted);
+}
+
+.fw-start-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-start-page-pickers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+  padding-left: var(--nds-space-24);
+}
+
+.fw-start-page-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+  flex-wrap: wrap;
+}
+
+.fw-start-page fieldset,
+fieldset.fw-start-page {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.fw-visually-hidden-legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

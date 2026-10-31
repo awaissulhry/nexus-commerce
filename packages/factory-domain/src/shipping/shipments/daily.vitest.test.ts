@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contentsKey, nextPackingList, packingListNumber, packingListProblems } from '../packing/versions'
+import { contentsKey, currentPackingList, nextPackingList, packingListNumber, packingListProblems } from '../packing/versions'
 import { backorderTotals, backorderWords, closedShortAtShipProblems, orderCapProblems, sizeBackorder } from './backorder'
 import { freightByRule, freightChargeProblems, freightRuleProblems, type FreightFacts } from './freight'
 import { cellInStock, onShipmentsFromRelease, takeFromStock } from './stock'
@@ -137,12 +137,19 @@ describe('the packing list, version by version (LOG-012)', () => {
     expect(contentsKey({ ...contents, parcels: [{ ...contents.parcels[0]!, grossWeightKg: '2.6000' }, contents.parcels[1]!] })).not.toBe(contentsKey(contents))
   })
 
-  it('same contents and language: the stored version; new contents: n + 1; another language: the same version number', () => {
+  it('W2b rows: the newest contents and language print again; anything else is n + 1, reusing an older version\'s file when it matches', () => {
     const versions = [{ fileId: 'f1', version: 1, fingerprint: 'x', language: 'it' as const }]
-    expect(nextPackingList([], 'x', 'it')).toEqual({ reuse: null, version: 1 })
-    expect(nextPackingList(versions, 'x', 'it')).toEqual({ reuse: versions[0], version: 1 })
-    expect(nextPackingList(versions, 'x', 'en')).toEqual({ reuse: null, version: 1 })
-    expect(nextPackingList(versions, 'y', 'it')).toEqual({ reuse: null, version: 2 })
+    expect(nextPackingList([], 'x', 'it')).toEqual({ again: null, reuse: null, version: 1 })
+    expect(nextPackingList(versions, 'x', 'it')).toEqual({ again: versions[0], reuse: null, version: 1 })
+    // Another language is another file, and so another version (a version is one row, one file).
+    expect(nextPackingList(versions, 'x', 'en')).toEqual({ again: null, reuse: null, version: 2 })
+    expect(nextPackingList(versions, 'y', 'it')).toEqual({ again: null, reuse: null, version: 2 })
+    // Contents back to version 1's: version 3, printed with version 1's file; the newest is the current one.
+    const three = [...versions, { fileId: 'f2', version: 2, fingerprint: 'y', language: 'it' as const }]
+    expect(nextPackingList(three, 'x', 'it')).toEqual({ again: null, reuse: versions[0], version: 3 })
+    expect(currentPackingList(three, 'y', 'PACKED')).toEqual(three[1])
+    expect(currentPackingList(three, 'x', 'PACKED')).toBeNull()
+    expect(currentPackingList(three, 'y', 'CANCELLED')).toBeNull()
     expect(packingListNumber('SH-00003', 1)).toBe('SH-00003')
     expect(packingListNumber('SH-00003', 2)).toBe('SH-00003/2')
     expect(packingListProblems('CANCELLED', 2, 0)).toEqual(['The shipment is CANCELLED: it has no packing list any more.'])

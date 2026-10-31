@@ -56,6 +56,8 @@ import { creditNoteHandlers } from './modules/invoicing/credit-note/handlers'
 import { payablesHandlers, sdiPickupCron } from './modules/payables/sdi'
 // B-W2a-66: the certificate renewal stages.
 import { renewalStagesCron } from './modules/compliance/renewals/stages'
+// B-W2b-15
+import { releaseOnWorkOrderDoneHandler, reservationCleanupCron } from './modules/inventory/reservations/system-release'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -95,6 +97,8 @@ const W2A_55_HANDLERS: readonly EventHandler[] = ladderHandlers()
 const W2A_61_HANDLERS: readonly EventHandler[] = creditNoteHandlers()
 // B-W2a-62: a company's SDI pickup came due (the supplier invoices SDI delivered); goods arrived for an invoice (match again).
 const W2A_62_HANDLERS: readonly EventHandler[] = payablesHandlers()
+// B-W2b-15: a work order completed, closed or cancelled → the rest of its reservations released by the system.
+const W2B_15_HANDLERS: readonly EventHandler[] = [releaseOnWorkOrderDoneHandler()]
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {
@@ -155,7 +159,7 @@ if (mode === 'worker') {
   await standardReasonsForNewTenants({ database, log }).catch((error) => log.error({ err: error }, 'the standard reasons could not be given at start'))
   await indexNewTenants({ database, indexers: SEARCH_INDEXERS, log }).catch((error) => log.error({ err: error }, 'the search index could not be built at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
@@ -176,6 +180,8 @@ if (mode === 'worker') {
   crons.push(sdiPickupCron({ database, log }))
   // B-W2a-66: the certificate renewal stages (the 180- and 90-day CERTIFICATE_EXPIRING rules, made once per tenant).
   crons.push(renewalStagesCron({ database, log }))
+  // B-W2b-15: the nightly reservation clean-up (SCM-211): reservations whose demand is done, released by the system.
+  crons.push(reservationCleanupCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

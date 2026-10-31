@@ -1,6 +1,7 @@
 import { HandoverTopic, HelpCallKind, HelpCallStatus, OffStandardSource, OffStandardStatus } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seedOffStandardCodes, type OffStandardCodeKey } from './labour'
+import { seed as seedPeople } from './people'
 import { seed as seedProduction, type ProductionSeed } from './production'
 
 /**
@@ -8,9 +9,10 @@ import { seed as seedProduction, type ProductionSeed } from './production'
  * as the app does: the routing and targets in the tenant's office scope, the calls, the team leader's reason and the
  * handover note in A1's floor scope.
  *
- *   routing      three help-call types of A1 (codes of the HELP_CALL reason list): MATERIAL (answered by the team
- *                leaders' floor role, escalated after 10 minutes), MAINTENANCE (the technicians' floor role, 5 minutes),
- *                TEAM_LEADER (the site's team leaders, never escalated); the waiting books to WAIT_HELP (seed/labour.ts).
+ *   routing      three help-call types of A1 (codes of the HELP_CALL reason list): MATERIAL (answered by the line team
+ *                L1-A of seed/people.ts, escalated after 10 minutes), MAINTENANCE (the same team, 5 minutes), TEAM_LEADER
+ *                (the site's team leaders, never escalated); the waiting books to WAIT_HELP (seed/labour.ts). The caller
+ *                is named with the employee behind the operator's sign-in (E1).
  *   calls        17 Nov: a material call from SEW-01 (09:10 Rome) seen at 09:12, on the way at 09:14, solved at 09:22 by
  *                the team leader, with the operator's waiting booked (WAIT_HELP, approved as it ended); a maintenance call
  *                from SEW-02 at 13:05 still SENT (no caller named).
@@ -54,9 +56,11 @@ export interface AndonSeed {
 
 export async function seed(context: SeedContext): Promise<AndonSeed> {
   const { db, namespace } = context
-  // The CLI runs the seeds in name order (this one early): the line, stations, workers, floor roles and tablet come from
-  // the production seed (it runs the core, floor sign-in and privacy seeds), the off-standard codes from seed/labour.ts.
+  // The CLI runs the seeds in name order (this one early): the line, stations, workers and tablet come from the production
+  // seed (it runs the core, floor sign-in and privacy seeds), the employees and the line team from the people seed, the
+  // off-standard codes from seed/labour.ts (all idempotent).
   const production = await seedProduction(context)
+  const people = await seedPeople(context)
   const codeIds = await seedOffStandardCodes(context)
   const id = (key: string): string => seedUuid(namespace, key)
   const firstId = (key: string): string => `00000000${id(key).slice(8)}`
@@ -81,12 +85,12 @@ export async function seed(context: SeedContext): Promise<AndonSeed> {
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
       const types = [
-        { typeId: typeIds.material, code: 'MATERIAL', kind: HelpCallKind.MATERIAL, responder: id('role:team_leader'), escalateAfterMinutes: 10, sortOrder: 10 },
-        { typeId: typeIds.maintenance, code: 'MAINTENANCE', kind: HelpCallKind.MAINTENANCE, responder: id('role:technician'), escalateAfterMinutes: 5, sortOrder: 20 },
-        { typeId: typeIds.teamLeader, code: 'TEAM_LEADER', kind: HelpCallKind.SUPERVISOR, responder: null, escalateAfterMinutes: null, sortOrder: 30 },
+        { typeId: typeIds.material, code: 'MATERIAL', kind: HelpCallKind.MATERIAL, responderTeamId: people.teamIds.a, escalateAfterMinutes: 10, sortOrder: 10 },
+        { typeId: typeIds.maintenance, code: 'MAINTENANCE', kind: HelpCallKind.MAINTENANCE, responderTeamId: people.teamIds.a, escalateAfterMinutes: 5, sortOrder: 20 },
+        { typeId: typeIds.teamLeader, code: 'TEAM_LEADER', kind: HelpCallKind.SUPERVISOR, responderTeamId: null, escalateAfterMinutes: null, sortOrder: 30 },
       ]
-      for (const { typeId, code, kind, responder, ...routing } of types) {
-        const data = { ...routing, responderRecordType: responder ? 'Role' : null, responderRecordId: responder, offStandardCodeId: codeIds.WAIT_HELP }
+      for (const { typeId, code, kind, ...routing } of types) {
+        const data = { ...routing, offStandardCodeId: codeIds.WAIT_HELP }
         await tx.helpCallType.upsert({
           where: { id: typeId },
           create: { id: typeId, companyId: companyA, siteId: siteA, code, kind, ...data, createdAt: T.routing, updatedAt: T.routing, createdById: actorId },
@@ -114,6 +118,7 @@ export async function seed(context: SeedContext): Promise<AndonSeed> {
           stationId: station.sew1,
           lineId: lineL1,
           workerId: operatorId,
+          employeeId: people.employeeIds.e1,
           note: 'Lining for size 52.',
           status: HelpCallStatus.SOLVED,
           sentAt: T.sent,
@@ -141,6 +146,7 @@ export async function seed(context: SeedContext): Promise<AndonSeed> {
           lineId: lineL1,
           stationId: station.sew1,
           workerId: operatorId,
+          employeeId: people.employeeIds.e1,
           codeId: codeIds.WAIT_HELP,
           source: OffStandardSource.HELP_CALL,
           helpCallId: callIds[0],

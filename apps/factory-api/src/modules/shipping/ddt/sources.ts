@@ -15,6 +15,7 @@ import {
   type SourceDdtRequest,
 } from '@nexus/factory-domain/shipping/ddt/sources'
 import { SHIPPING_DDT_ISSUE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
+import type { TransportMode } from '@nexus/factory-domain/shipping/shipments/transport'
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { companyLegalOf } from '../../../platform/documents/documents'
@@ -51,6 +52,8 @@ import { expectedDdtNumber, readAnyDdt } from './store'
 export interface SourceIssueBody extends SourceDdtRequest {
   readonly version?: number | undefined
   readonly internalNote?: string | null | undefined
+  /** B-W2b-19 (Intrastat): the mode of transport the DDT keeps (null: not recorded). */
+  readonly transportMode?: TransportMode | null | undefined
 }
 
 const issues = (problems: readonly Issue[]) => new ValidationError(problems.length === 1 ? problems[0]!.message : 'The DDT cannot be issued as it stands.', problems)
@@ -141,8 +144,8 @@ export interface IssuedSource {
   /** The source lines it carries (the repair itself for its garment). */
   readonly lineIds: readonly string[]
   /**
-   * Supplier claim lines that name a cancelled DDT already: their ddtId is set once (the …_supply_w2a_guards trigger),
-   * so they keep it; this DDT's lines name them (a schema follow-up may let the column move to the replacement).
+   * Supplier claim lines that name a live DDT already and keep it (B-W2b-14: a line whose DDT was cancelled follows the
+   * replacement instead; the draft refuses goods a live DDT carries, so this stays empty in practice).
    */
   readonly claimLinesKeepingOldDdt: readonly string[]
   readonly source: SourceHeader
@@ -180,6 +183,9 @@ export async function issueSourceDdtInCommand(tools: CommandTools, company: Comp
       partyId: header.partyId,
       sourceType: header.type,
       sourceId: header.id,
+      // B-W2b-19: the language it is printed in and the mode of transport (Intrastat) stay with the DDT.
+      language: facts.language,
+      transportMode: body.transportMode ?? null,
       numberSeriesId: number.seriesId,
       number: number.formatted,
       documentDate: day(number.documentDate),
@@ -219,13 +225,16 @@ export async function issueSourceDdtInCommand(tools: CommandTools, company: Comp
   }
   if (header.type === 'SupplierClaim' && lineIds.length > 0) {
     const rows = await tools.tx.supplierClaimLine.findMany({ where: { id: { in: lineIds }, claimId: header.id }, select: { id: true, ddtId: true }, orderBy: { id: 'asc' } })
+    // B-W2b-14 (B-W2a-44's follow-up): a claim line whose DDT was cancelled follows this replacement (the W2b claim line
+    // guard lets its ddtId move from a cancelled DDT to the live DDT of its claim that lists it); one on a live DDT keeps it.
+    const cancelled = new Set((await tools.tx.ddtCancellation.findMany({ where: { ddtId: { in: rows.flatMap((row) => (row.ddtId ? [row.ddtId] : [])) } }, select: { ddtId: true } })).map((row) => row.ddtId))
     for (const row of rows) {
-      if (row.ddtId !== null) {
+      if (row.ddtId !== null && !cancelled.has(row.ddtId)) {
         kept.push(row.id)
         continue
       }
       await tools.tx.supplierClaimLine.update({ where: { id: row.id }, data: { ddtId: id, version: { increment: 1 } }, select: { id: true } })
-      tools.audit({ action: 'shipping.ddtOnClaimLine', recordType: 'SupplierClaimLine', recordId: row.id, companyId: header.companyId, siteId: header.siteId, before: { ddtId: null }, after: { ddtId: id, ddt: number.formatted } })
+      tools.audit({ action: 'shipping.ddtOnClaimLine', recordType: 'SupplierClaimLine', recordId: row.id, companyId: header.companyId, siteId: header.siteId, before: { ddtId: row.ddtId }, after: { ddtId: id, ddt: number.formatted, ...(row.ddtId ? { replaces: row.ddtId } : {}) } })
     }
   }
 

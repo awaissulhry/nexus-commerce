@@ -5,9 +5,9 @@ import { firstOfficePage, OFFICE_NAV, officeNavFor } from '../nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from './view/OfficeShellView'
 
 /**
- * SCR-003 — the Office frame with the W1 navigation (B-W1-08): the Owner's full rail (11 areas in the approved tree's
- * order, Admin at the foot), each area's Pages overlay open on its first page, and two roles' smaller maps. People are
- * the system role templates as W1 ships them (made-up names; nothing real).
+ * SCR-003 — the Office frame with the navigation of W1 (B-W1-08) and W2a (B-W2a-83): the Owner's full rail (12 areas in
+ * the approved tree's order, Plant right above Admin at the foot), each area's Pages overlay open on its first page, and
+ * two roles' smaller maps. People are the system role templates as the build ships them (made-up names; nothing real).
  */
 
 const navOf = (role: Parameters<typeof rolePermissions>[0]) => officeNavFor(permissionCheck(rolePermissions(role)))
@@ -48,7 +48,7 @@ export const designScreen = defineDesignScreen<OfficeShellViewModel>({
       id: 'owner',
       label: 'Owner on Home › Today (pages closed)',
       model: owner,
-      note: 'The full W1 rail: Home, Sales, Products, Planning, Purchasing, Warehouse, Production, Quality, Compliance, Finance, Admin at the foot. Rail: hover or Tab. Search: ⌘K. Phone: bottom bar.',
+      note: 'The full rail: Home, Sales, Products, Planning, Purchasing, Warehouse, Production, Quality, Compliance, Finance, Plant, Admin at the foot. Rail: hover or Tab. Search: ⌘K. Phone: bottom bar.',
     },
     ...areaCases,
     {
@@ -61,7 +61,7 @@ export const designScreen = defineDesignScreen<OfficeShellViewModel>({
       id: 'warehouse',
       label: 'Warehouse role: its pages open',
       model: { ...at({ ...owner, nav: warehouse }, firstOfficePage(warehouse, { areaId: 'warehouse' })), areaNavOpen: true },
-      note: 'Only the rows the warehouse role may open, in the same order: no Finance, no Admin.',
+      note: 'Only the rows the warehouse role may open, in the same order: of Finance only Finance reports (quantities), of Admin only Import & export.',
     },
     {
       id: 'sales',
@@ -115,6 +115,59 @@ export const designScreen = defineDesignScreen<OfficeShellViewModel>({
       id: 'palette',
       label: 'Search open with a scanned label',
       model: { ...owner, paletteOpen: true, paletteQuery: DEMO_LABELS.hide },
+    },
+    // ── B-W2b-05 ─────────────────────────────────────────────────────────────────────────────────────────────────────
+    {
+      id: 'live',
+      label: 'The band: live, and Print this view',
+      model: { ...at(owner, '/sales/orders'), live: 'live', printKind: 'view', query: 'late=true' },
+      note: 'COL-077: one live connection per tab, said in the band. Print opens this view (its filters) for paper in a new tab.',
+    },
+    {
+      id: 'live-offline',
+      label: 'The band: not live',
+      model: { ...at(owner, '/sales/orders'), live: 'offline', printKind: 'view' },
+      note: 'While the stream is down the tab keeps ONE fallback read every 30 s and says so; it comes back by itself.',
+    },
+    {
+      id: 'print-record',
+      label: 'The band on a record: Print view of the record',
+      model: { ...at(owner, '/sales/orders/0190f0e2-3333-7000-8000-000000000002'), live: 'live', printKind: 'record' },
+      note: 'PLT-171: the record for paper in a new tab (its band and every panel), with the company, site and page numbers.',
+    },
+    {
+      id: 'phone-owner',
+      label: 'Phone: the Owner\'s 4 tabs and More',
+      model: { ...owner, live: 'live' },
+      note: 'PLT-162 — at phone width: Home, Sales, Warehouse, Production, then More (every other area, in rail order: tap it). Esc or the close button closes the sheet.',
+    },
+    {
+      id: 'phone-warehouse',
+      label: 'Phone: a warehouse person\'s tabs',
+      model: { ...at({ ...owner, nav: warehouse }, firstOfficePage(warehouse, { areaId: 'warehouse' })), live: 'live' },
+      note: 'The areas their role opens the most of (Home, Products, Purchasing, Warehouse), in rail order; the rest under More.',
+    },
+    {
+      id: 'phone-sales',
+      label: 'Phone: a sales person\'s tabs',
+      model: { ...at({ ...owner, nav: sales }, firstOfficePage(sales, { areaId: 'sales' })), live: 'live' },
+    },
+    {
+      id: 'phone-last-page',
+      label: 'Phone: tabs open the page used last',
+      model: { ...owner, lastPages: { sales: '/sales/orders', warehouse: '/warehouse/stock' } },
+      note: 'Sales opens Orders, Warehouse opens Stock (the pages used last on this device); the others their first page.',
+    },
+    {
+      id: 'window',
+      label: 'A window page: the planning board',
+      model: { ...at(owner, '/planning/board'), frame: 'window', live: 'live' },
+      note: 'Z15:01 — no rail, no Pages, no bottom bar: Back to Office, the page\'s name, company and site, the live state, Close (when the window opened from a row). Its navigation row opens it in a new tab.',
+    },
+    {
+      id: 'window-offline',
+      label: 'A window page, not live',
+      model: { ...at(owner, '/planning/board'), frame: 'window', live: 'offline', switcher: { ...switcher, site: DEMO_SITES[0].id, path: '/planning/board' } },
     },
   ],
 })

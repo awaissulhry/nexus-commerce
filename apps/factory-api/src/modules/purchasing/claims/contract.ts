@@ -5,7 +5,8 @@ import { money } from '@nexus/factory-domain/money/marked'
 import { ITEM_TRACKINGS } from '@nexus/factory-domain/product/materials/rules'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { CLAIM_ACTIONS, CLAIM_FOUND_AT, CLAIM_KINDS, CLAIM_LIMITS, CLAIM_OUTCOMES, CLAIM_REMEDIES, CLAIM_STATUSES } from '@nexus/factory-domain/purchasing/claims/rules'
-import { fileView } from '../../../platform/files/contract'
+import { HIDE_STATES } from '@nexus/factory-domain/inventory/issue/rules'
+import { fileView, presignedView } from '../../../platform/files/contract'
 import { sourceRequest } from '../../shipping/ddt/contract'
 
 /**
@@ -68,7 +69,8 @@ const lineView = output({
   item: output({ id: id(), code: z.string(), name: z.string(), baseUom: z.enum(UOMS), tracking: z.enum(ITEM_TRACKINGS) }),
   colour: named.nullable(),
   lot: output({ id: id(), code: z.string(), qualityStatus: z.string() }).nullable(),
-  hide: ref.nullable(),
+  /** B-W2b-14: its state (RETURNED once it went back whole). */
+  hide: output({ id: id(), code: z.string(), state: z.enum(HIDE_STATES).nullable() }).nullable(),
   discrepancy: output({ id: id(), seq: z.number().int(), kind: z.string(), status: z.string(), receiptId: id() }).nullable(),
   receiptLineId: id().nullable(),
   quantity: z.string(),
@@ -86,6 +88,9 @@ const lineView = output({
   note: z.string().nullable(),
   version: z.number().int(),
 })
+
+const claimFile = output({ id: id(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), version: z.number().int(), createdAt: instant(), createdById: id().nullable() })
+const letterView = output({ id: id(), version: z.number().int(), language: z.string(), number: z.string().nullable(), fileId: id(), createdAt: instant(), createdById: id().nullable() })
 
 const claimDetail = output({
   ...summary,
@@ -112,6 +117,16 @@ const claimDetail = output({
   }),
   /** Each action: null = allowed now, else why not in words. */
   actions: output(Object.fromEntries(CLAIM_ACTIONS.map((action) => [action, z.string().nullable()])) as Record<(typeof CLAIM_ACTIONS)[number], z.ZodNullable<z.ZodString>>),
+  /** B-W2b-14 (SCM-135): the claim's own photos of what is wrong (CLAIM_PHOTO). */
+  photos: z.array(claimFile),
+  /** The photos of the receipt discrepancies its lines pursue (they stay the discrepancy's). */
+  discrepancyPhotos: z.array(claimFile.extend({ discrepancyId: id(), discrepancySeq: z.number().int().nullable() })),
+  /** The claim letter's versions, the newest (the current one) first. */
+  letters: z.array(letterView),
+  /** The supplier's contact a claim goes to first (QUALITY, then ORDERS), with an e-mail. */
+  supplierContact: output({ id: id(), name: z.string(), email: z.string(), roles: z.array(z.string()) }).nullable(),
+  /** The nonconformance it came from (a RETURN_TO_SUPPLIER decision). */
+  ncr: output({ id: id(), number: z.string() }).nullable(),
   people: z.array(output({ id: id(), name: z.string() })),
 })
 const one = output({ claim: claimDetail })
@@ -244,6 +259,8 @@ export const sendCheckContract = defineContract({
       language: z.enum(DOCUMENT_LANGUAGES),
       subject: z.string(),
       message: z.string(),
+      /** B-W2b-14: the claim letter (PDF) goes with the mail; if not, why (the company's letterhead). */
+      letter: output({ attached: z.boolean(), problems: z.array(output({ path: z.string(), message: z.string() })) }),
     }),
   },
 })
@@ -257,7 +274,7 @@ export const sendClaimContract = defineContract({
     /** The claim by e-mail on its thread; null: the supplier was told another way (the goods travel with the return DDT). */
     mail: mailInput.nullable(),
   }),
-  response: { 200: output({ claim: claimDetail, emailId: id().nullable() }) },
+  response: { 200: output({ claim: claimDetail, emailId: id().nullable(), /** B-W2b-14: the letter version the mail carried. */ letterId: id().nullable() }) },
 })
 
 export const answerClaimContract = defineContract({
@@ -310,4 +327,27 @@ export const returnToSupplierContract = defineContract({
     ddt: returnDdt,
   }),
   response: { 201: returnAnswer },
+})
+
+// ---- B-W2b-14 (SCM-135): the claim's photos and its letter ---------------------------------------------------------------
+
+const photoBody = input({
+  originalName: z.string().min(1).max(500),
+  /** A picture: the PHOTO kind's types (JPEG, PNG, WebP, HEIC). */
+  contentType: z.string().min(1).max(200),
+  sizeBytes: z.number().int().min(1),
+  sha256: z.string(),
+})
+const photoParams = input({ claimId: id(), fileId: id() })
+
+export const announceClaimPhotoContract = defineContract({ params: claimParams, body: photoBody, response: { 201: output({ file: fileView, upload: presignedView }) } })
+export const completeClaimPhotoContract = defineContract({ params: photoParams, response: { 200: output({ file: fileView }) } })
+export const removeClaimPhotoContract = defineContract({ params: photoParams, querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: output({ file: fileView }) } })
+
+/** The letter's PDF preview (inline, the "preview" banner; stored nowhere). */
+export const previewLetterContract = defineContract({ params: claimParams, querystring: input({ language: z.enum(DOCUMENT_LANGUAGES).optional() }), response: {} })
+export const makeLetterContract = defineContract({
+  params: claimParams,
+  body: input({ language: z.enum(DOCUMENT_LANGUAGES).optional() }),
+  response: { 201: output({ letter: letterView, /** False: the newest version already showed exactly this. */ made: z.boolean() }) },
 })

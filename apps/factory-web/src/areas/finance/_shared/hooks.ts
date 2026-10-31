@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
-import { parseLiveData } from '../../../record-panels/live'
+import { useLiveBus } from '../../../shell/live/use-live'
 import type { LiveChange } from '../../../record-panels/model'
 
 export type LiveState = 'connecting' | 'live' | 'offline'
@@ -16,38 +16,8 @@ export type LiveState = 'connecting' | 'live' | 'offline'
  * everything again). A message is a hint: the page reads the part again.
  */
 export function useLive(onChange: (change: LiveChange) => void, onReconnect: () => void, enabled = true): LiveState {
-  const [state, setState] = useState<LiveState>('connecting')
-  const handlers = useRef({ onChange, onReconnect })
-  handlers.current = { onChange, onReconnect }
-  useEffect(() => {
-    if (!enabled) return
-    if (typeof EventSource === 'undefined') {
-      setState('offline')
-      return
-    }
-    const source = new EventSource('/api/live')
-    let readyOnce = false
-    const onReady = () => {
-      setState('live')
-      if (readyOnce) handlers.current.onReconnect()
-      readyOnce = true
-    }
-    const onMessage = (event: MessageEvent<string>) => {
-      const change = parseLiveData(event.data)
-      if (change) handlers.current.onChange(change)
-    }
-    const onError = () => setState(source.readyState === EventSource.CLOSED ? 'offline' : 'connecting')
-    source.addEventListener('ready', onReady)
-    source.addEventListener('change', onMessage as EventListener)
-    source.addEventListener('error', onError)
-    return () => {
-      source.removeEventListener('ready', onReady)
-      source.removeEventListener('change', onMessage as EventListener)
-      source.removeEventListener('error', onError)
-      source.close()
-    }
-  }, [enabled])
-  return state
+  // B-W2b-05: the tab's ONE live connection (shell/live/bus.ts), shared with the bell and every other screen.
+  return useLiveBus({ onChange, onReconnect }, enabled)
 }
 
 /** Calls `run` at most once per `ms` while changes keep coming (a burst of floor scans: one read). */

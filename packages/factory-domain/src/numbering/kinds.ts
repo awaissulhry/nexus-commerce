@@ -41,6 +41,10 @@ export const NUMBER_KINDS = [
   'MAINTENANCE_JOB',
   // W2a wave 7 (factory-db numbering.prisma): accounting export batches (EXP-…).
   'ACCOUNTING_EXPORT',
+  // W2b wave 2 (factory-db numbering.prisma): quality holds (HLD-…).
+  'HOLD',
+  // W2b wave 6 (factory-db numbering.prisma): payroll exports for the labour consultant (PAY-…).
+  'PAYROLL_EXPORT',
 ] as const
 export type NumberKind = (typeof NUMBER_KINDS)[number]
 
@@ -83,12 +87,12 @@ export function isFiscalKind(kind: NumberKind): boolean {
 
 /**
  * The document kinds a floor tablet may number from its own command, online (goods received at the dock, their lots, a
- * final inspection opened at the bench and its release): the company's series of its site, the same gapless series the
- * office numbers from. Never a fiscal kind: invoices, credit notes, deposit invoices and DDTs stay with the office. The
+ * final inspection opened at the bench and its release; W2b: a hold placed and an NCR raised at the bench): the company's
+ * series of its site, the same gapless series the office numbers from. Never a fiscal kind: invoices, credit notes, deposit invoices and DDTs stay with the office. The
  * database holds the same list (factory-db ownership/numbering.json: the floor's policies see and write only the series
  * and numbers of these kinds; the …_numbering_floor_documents_guards triggers refuse a fiscal series to the floor).
  */
-export const FLOOR_DOCUMENT_KINDS = ['GOODS_RECEIPT', 'LOT', 'INSPECTION', 'RELEASE'] as const satisfies readonly DocumentKind[]
+export const FLOOR_DOCUMENT_KINDS = ['GOODS_RECEIPT', 'LOT', 'INSPECTION', 'RELEASE', 'HOLD', 'NCR'] as const satisfies readonly DocumentKind[]
 export type FloorDocumentKind = (typeof FLOOR_DOCUMENT_KINDS)[number]
 
 export function isFloorDocumentKind(value: unknown): value is FloorDocumentKind {
@@ -183,6 +187,8 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   NCR: 'NCR',
   MAINTENANCE_JOB: 'MJ',
   ACCOUNTING_EXPORT: 'EXP',
+  HOLD: 'HLD',
+  PAYROLL_EXPORT: 'PAY',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

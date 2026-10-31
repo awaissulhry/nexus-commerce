@@ -1,3 +1,4 @@
+import { isMarkedJson } from '../money/marked'
 import { Dec } from '../tax/decimal'
 import type { MatchStatus } from './match'
 
@@ -48,6 +49,10 @@ export interface InvoiceFacts {
   readonly kind: InvoiceKind
   readonly matchStatus: MatchStatus
   readonly createdById: string | null
+  /** The office people who mapped or matched one of its lines (preparersOf; left out: nobody). */
+  readonly mappedByIds?: readonly string[]
+  /** The office people who accepted one of its differences (preparersOf; left out: nobody). */
+  readonly acceptedByIds?: readonly string[]
   readonly xmlFileId: string | null
   /** Differences outside the tolerance nobody accepted yet. */
   readonly unaccepted: number
@@ -59,11 +64,18 @@ export interface InvoiceFacts {
 
 export type Refusal = { readonly code: string; readonly message: string }
 
-/** Why the invoice cannot be approved by this person now (empty: it can). The design: "Ready for approval once matched". */
+/**
+ * Why the invoice cannot be approved by this person now (empty: it can). The design: "Ready for approval once matched".
+ * Four eyes (the lead's stricter rule, B-W2a-F7): whoever entered it (a typed one), mapped or matched one of its lines, or
+ * accepted one of its differences does not approve it; an invoice SDI delivered has no one who entered it, but has its
+ * mapping and acceptances. One refusal says it, the first that applies.
+ */
 export function approvalProblems(invoice: InvoiceFacts, approverId: string): Refusal[] {
   const problems: Refusal[] = []
   if (invoice.status !== 'RECEIVED') problems.push({ code: 'NOT_RECEIVED', message: `Invoice ${invoice.number} is ${invoice.status.toLowerCase()}: only a received invoice is approved.` })
   if (invoice.createdById !== null && invoice.createdById === approverId) problems.push({ code: 'OWN_INVOICE', message: 'You entered this invoice, so someone else approves it.' })
+  else if (invoice.mappedByIds?.includes(approverId)) problems.push({ code: 'OWN_MAPPING', message: 'You mapped or matched its lines, so someone else approves it.' })
+  else if (invoice.acceptedByIds?.includes(approverId)) problems.push({ code: 'OWN_ACCEPTANCE', message: 'You accepted one of its differences, so someone else approves it.' })
   if (invoice.lines === 0) problems.push({ code: 'NO_LINES', message: 'The invoice has no lines: add them from its PDF first.' })
   if (invoice.matchStatus === 'PENDING') problems.push({ code: 'NOT_MATCHED', message: 'Map every goods or subcontract line to its order (or mark it a service, for an invoice without PO) first.' })
   if (invoice.matchStatus === 'WAITING_GOODS') problems.push({ code: 'WAITING_GOODS', message: 'The goods invoiced have not all arrived yet: approve it once they are received (or accept each difference in words).' })
@@ -73,6 +85,49 @@ export function approvalProblems(invoice: InvoiceFacts, approverId: string): Ref
     problems.push({ code: 'LINES_DO_NOT_ADD_UP', message: "The lines' net does not add up to the invoice's taxable amount: correct the lines or the totals first." })
   }
   return problems
+}
+
+/** The audit actions on an invoice that prepare it for approval (payables API: invoices.ts, approval.ts). */
+export const PREPARING_ACTIONS = ['payables.addLine', 'payables.changeLine', 'payables.withoutOrder', 'payables.acceptDifference'] as const
+
+export interface PreparationFacts {
+  /** Its lines and three-way match rows as stored (createdById: who wrote them; acceptedById: who accepted). */
+  readonly lines: readonly { readonly createdById: string | null }[]
+  readonly matches: readonly { readonly createdById: string | null; readonly acceptedById: string | null }[]
+  /** Its office audit rows of PREPARING_ACTIONS (a line's mapping before and after, money-marked or plain). */
+  readonly audit: readonly { readonly action: string; readonly actorId: string; readonly before: unknown; readonly after: unknown }[]
+}
+
+const plainOf = (value: unknown): Record<string, unknown> => {
+  const unwrapped = isMarkedJson(value) ? value.value : value
+  return unwrapped !== null && typeof unwrapped === 'object' && !Array.isArray(unwrapped) ? (unwrapped as Record<string, unknown>) : {}
+}
+const MAPPING_FIELDS = ['kind', 'purchaseOrderLineId', 'subcontractOrderId'] as const
+
+/**
+ * Who prepared the invoice for approval, from what is stored: a line entered with its mapping, a line's kind or order
+ * changed, the lines marked services ("without order"), a match row written by a person's command (mapping it or matching
+ * it again), and an accepted difference (the row's acceptedById, and the audit's acceptDifference: an acceptance a later
+ * match dropped still counts). The system (the SDI pickup, the worker's match after the goods) is nobody.
+ */
+export function preparersOf(facts: PreparationFacts): { mappedByIds: string[]; acceptedByIds: string[] } {
+  const mapped = new Set<string>()
+  const accepted = new Set<string>()
+  for (const line of facts.lines) if (line.createdById) mapped.add(line.createdById)
+  for (const match of facts.matches) {
+    if (match.createdById) mapped.add(match.createdById)
+    if (match.acceptedById) accepted.add(match.acceptedById)
+  }
+  for (const row of facts.audit) {
+    if (row.action === 'payables.acceptDifference') accepted.add(row.actorId)
+    else if (row.action === 'payables.addLine' || row.action === 'payables.withoutOrder') mapped.add(row.actorId)
+    else if (row.action === 'payables.changeLine') {
+      const before = plainOf(row.before)
+      const after = plainOf(row.after)
+      if (MAPPING_FIELDS.some((field) => (before[field] ?? null) !== (after[field] ?? null))) mapped.add(row.actorId)
+    }
+  }
+  return { mappedByIds: [...mapped].sort(), acceptedByIds: [...accepted].sort() }
 }
 
 /** What may be done to the invoice now, in words for the held actions (the record's band). */
@@ -149,17 +204,24 @@ const refersTo = (entry: { readonly lines: readonly number[] }, seq: number): bo
 
 /**
  * The order line a received line most likely bills ("Supplier invoices arrive from SDI already matched"), or null: the
- * office maps it. In order: the purchase order the line names (its line number, else the article code, else its only
- * open line), or the subcontract order it names; the delivery notes it names (the receipts with that DDT number); the
- * article code among the supplier's open order lines. Only one candidate is ever chosen; two equal ones leave it to a
- * person.
+ * office maps it. In order: the purchase order the line names (its line number, else the article code), or the
+ * subcontract order it names, else the only open line of the orders it names; the delivery notes it names (the receipts
+ * with that DDT number: the article code, else their only open line); the article code among the supplier's open order
+ * lines. Only one candidate is ever chosen; two equal ones (two orders named, each with one open line) leave it to a
+ * person. A line that names an article never lands on an order line of another article (B-W2a-F7: an invoice naming two
+ * orders without line numbers put every line on the first order's only line): it stays unmapped and the person maps it.
  */
 export function suggestMapping(line: MappingLine, refs: MappingRefs, orderLines: readonly OrderLineCandidate[], subcontracts: readonly SubcontractCandidate[]): Suggestion | null {
   const codes = new Set([tidy(line.itemCode), ...(line.codes ?? []).map(tidy)].filter((code) => code !== ''))
-  const byCode = (pool: readonly OrderLineCandidate[]) => pool.filter((candidate) => codes.has(tidy(candidate.supplierArticleCode)) || codes.has(tidy(candidate.itemCode)))
+  const matches = (candidate: OrderLineCandidate) => codes.has(tidy(candidate.supplierArticleCode)) || codes.has(tidy(candidate.itemCode))
+  /** No article named, or this one: the only kind of line a suggestion may land on. */
+  const fits = (candidate: OrderLineCandidate) => codes.size === 0 || matches(candidate)
+  const byCode = (pool: readonly OrderLineCandidate[]) => pool.filter(matches)
   const one = <T>(pool: readonly T[]): T | null => (pool.length === 1 ? pool[0]! : null)
+  const onlyOf = (pools: readonly (readonly OrderLineCandidate[])[]) => one([...new Set(pools.map((pool) => one(pool)).filter((only): only is OrderLineCandidate => only !== null && fits(only)))])
   const open = orderLines.filter((candidate) => candidate.open)
 
+  const orders: OrderLineCandidate[][] = []
   for (const order of refs.orders.filter((entry) => refersTo(entry, line.seq) && entry.document !== null)) {
     const number = tidy(order.document)
     const subcontract = one(subcontracts.filter((candidate) => tidy(candidate.number) === number))
@@ -167,22 +229,25 @@ export function suggestMapping(line: MappingLine, refs: MappingRefs, orderLines:
     const ofOrder = open.filter((candidate) => tidy(candidate.orderNumber) === number)
     if (ofOrder.length === 0) continue
     const item = order.item !== null ? Number.parseInt(order.item, 10) : Number.NaN
-    const bySeq = Number.isInteger(item) ? one(ofOrder.filter((candidate) => candidate.seq === item)) : null
+    const bySeq = Number.isInteger(item) ? one(ofOrder.filter((candidate) => candidate.seq === item && fits(candidate))) : null
     if (bySeq) return { kind: 'GOODS', purchaseOrderLineId: bySeq.id, siteId: bySeq.siteId, how: 'ORDER_LINE' }
     const coded = one(byCode(ofOrder))
     if (coded) return { kind: 'GOODS', purchaseOrderLineId: coded.id, siteId: coded.siteId, how: 'ORDER_CODE' }
-    const only = one(ofOrder)
-    if (only) return { kind: 'GOODS', purchaseOrderLineId: only.id, siteId: only.siteId, how: 'ORDER_ONLY_LINE' }
+    orders.push(ofOrder)
   }
+  const onlyOrdered = onlyOf(orders)
+  if (onlyOrdered) return { kind: 'GOODS', purchaseOrderLineId: onlyOrdered.id, siteId: onlyOrdered.siteId, how: 'ORDER_ONLY_LINE' }
+  const ddts: OrderLineCandidate[][] = []
   for (const ddt of refs.ddts.filter((entry) => refersTo(entry, line.seq))) {
     const number = tidy(ddt.number)
     const delivered = open.filter((candidate) => candidate.ddtNumbers.some((value) => tidy(value) === number))
     if (delivered.length === 0) continue
     const coded = one(byCode(delivered))
     if (coded) return { kind: 'GOODS', purchaseOrderLineId: coded.id, siteId: coded.siteId, how: 'DDT_CODE' }
-    const only = one(delivered)
-    if (only) return { kind: 'GOODS', purchaseOrderLineId: only.id, siteId: only.siteId, how: 'DDT_ONLY_LINE' }
+    ddts.push(delivered)
   }
+  const onlyDelivered = onlyOf(ddts)
+  if (onlyDelivered) return { kind: 'GOODS', purchaseOrderLineId: onlyDelivered.id, siteId: onlyDelivered.siteId, how: 'DDT_ONLY_LINE' }
   if (codes.size > 0) {
     const coded = one(byCode(open))
     if (coded) return { kind: 'GOODS', purchaseOrderLineId: coded.id, siteId: coded.siteId, how: 'CODE' }

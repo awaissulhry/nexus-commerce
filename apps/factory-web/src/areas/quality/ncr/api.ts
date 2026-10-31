@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { DEFECT_CLASSES, DISPOSITION_FOLLOW_UPS, DISPOSITION_MOVES, DISPOSITION_OUTCOMES, QUALITY_STAGES } from '@nexus/factory-domain/quality/defects/rules'
 import { HOLD_SUBJECT_TYPES } from '@nexus/factory-domain/quality/holds/rules'
-import { BOARD_LANES, CONTAINMENT_KINDS, CONTAINMENT_STATUSES, DECISION_STATES, NCR_FROM_TYPES, NCR_LINK_TYPES, NCR_SOURCES, NCR_STAGES, STAGE_CHECKS } from '@nexus/factory-domain/quality/ncr/rules'
+import { BOARD_LANES, CONTAINMENT_KINDS, CONTAINMENT_STATUSES, DECISION_STATES, NCR_FROM_TYPES, NCR_LINK_TYPES, NCR_SOURCES, NCR_STAGES, NCR_TITLE_KEYS, STAGE_CHECKS } from '@nexus/factory-domain/quality/ncr/rules'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { completeUpload, listFiles, requestUpload } from '../../../record-panels/api'
@@ -32,8 +32,9 @@ export type DispositionOutcome = (typeof DISPOSITION_OUTCOMES)[number]
 export type DispositionMove = (typeof DISPOSITION_MOVES)[number]
 export type DispositionFollowUp = (typeof DISPOSITION_FOLLOW_UPS)[number]
 export type HoldSubjectType = (typeof HOLD_SUBJECT_TYPES)[number]
+export type NcrTitleKey = (typeof NCR_TITLE_KEYS)[number]
 
-export { BOARD_LANES, CONTAINMENT_KINDS, DEFECT_CLASSES, HOLD_SUBJECT_TYPES, NCR_FROM_TYPES, NCR_LINK_TYPES, NCR_SOURCES, NCR_STAGES, QUALITY_STAGES, UOMS }
+export { BOARD_LANES, CONTAINMENT_KINDS, DEFECT_CLASSES, HOLD_SUBJECT_TYPES, NCR_FROM_TYPES, NCR_LINK_TYPES, NCR_SOURCES, NCR_STAGES, NCR_TITLE_KEYS, QUALITY_STAGES, UOMS }
 
 const seg = (value: string) => encodeURIComponent(value)
 type Query = Record<string, string | number | boolean | null | undefined>
@@ -110,6 +111,8 @@ const actionSchema = z.object({
   doneAt: z.string().nullable(),
   doneById: z.string().nullable(),
   evidenceNote: z.string().nullable(),
+  /** B-W2b-17: why it was cancelled (its own column; older actions: read from "Cancelled: …" by the API). */
+  cancelReason: z.string().nullable(),
   files: z.number(),
   record: z.object({ type: z.string(), id: z.string() }).nullable(),
   hold: z.object({ id: z.string(), status: z.string(), subjectType: z.string(), count: z.number() }).nullable(),
@@ -230,6 +233,10 @@ export const prefillSchema = z.object({
   source: z.enum(NCR_SOURCES),
   foundAt: z.enum(QUALITY_STAGES),
   title: z.string().nullable(),
+  /** B-W2b-17: the title in parts — the screen words it in the reader's language (`title` is the API's English). */
+  titleParts: z.object({ key: z.enum(NCR_TITLE_KEYS), values: z.record(z.string(), z.string()) }).nullable(),
+  /** B-W2b-17: the inspection's defect lines it took ("Create NCR from N defects"; empty: all of them). */
+  defectIds: z.array(z.string()),
   description: z.string().nullable(),
   foundOn: z.string().nullable(),
   foundById: z.string().nullable(),
@@ -252,12 +259,16 @@ export const prefillSchema = z.object({
   problem: z.string().nullable(),
   files: z.array(z.object({ id: z.string(), kind: z.string(), originalName: z.string() })),
   existing: z.array(z.object({ id: z.string(), number: z.string(), stage: z.enum(NCR_STAGES) })),
+  /** B-W2b-17: the company's containment time in hours (null: the record names no company — read the settings). */
+  containmentHours: z.number().nullable(),
 })
 export type NcrPrefill = z.infer<typeof prefillSchema>
 
-/** ncr-new's prefill from the record it is raised from (quality.ncr.raise). */
-export const ncrPrefill = (api: ApiClient, from: { recordType: NcrFromType; recordId: string }, signal?: AbortSignal) =>
-  api.get('/quality/ncr/prefill', { query: { recordType: from.recordType, recordId: from.recordId }, schema: z.object({ prefill: prefillSchema }), signal }).then((answer) => answer.prefill)
+/** ncr-new's prefill from the record it is raised from (quality.ncr.raise); B-W2b-17: an inspection's picked defect lines. */
+export const ncrPrefill = (api: ApiClient, from: { recordType: NcrFromType; recordId: string; defectIds?: readonly string[] }, signal?: AbortSignal) =>
+  api
+    .get('/quality/ncr/prefill', { query: clean({ recordType: from.recordType, recordId: from.recordId, defectIds: from.defectIds?.length ? from.defectIds.join(',') : undefined }), schema: z.object({ prefill: prefillSchema }), signal })
+    .then((answer) => answer.prefill)
 
 export const getNcr = (api: ApiClient, ncrId: string, signal?: AbortSignal) => api.get(`/quality/ncr/${seg(ncrId)}`, { schema: one, signal }).then((answer) => answer.record)
 
@@ -283,7 +294,8 @@ export interface NcrContent {
 }
 
 export interface RaiseBody extends NcrContent {
-  from?: { recordType: NcrFromType; recordId: string }
+  /** B-W2b-17: `defectIds` = the inspection's defect lines it is raised from. */
+  from?: { recordType: NcrFromType; recordId: string; defectIds?: string[] }
   siteId?: string
 }
 
@@ -291,6 +303,30 @@ export const raiseNcr = (api: ApiClient, body: RaiseBody, idempotencyKey: string
 
 export const editNcr = (api: ApiClient, ncrId: string, body: NcrContent & { version: number }) =>
   api.request('PATCH', `/quality/ncr/${seg(ncrId)}`, { body, schema: one, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.record)
+
+/**
+ * B-W2b-17 (design ncr-grid "Assign owner N"): ONE command gives the picked NCRs (≤ 50) one owner, or none: every NCR or
+ * none — a 409 names each refused one at `ncrs/<i>` (its index in `ncrs`).
+ */
+export const assignNcrs = (api: ApiClient, body: { ncrs: { id: string; version: number }[]; ownerId: string | null }, idempotencyKey: string) =>
+  api.post('/quality/ncr/assign', { body, schema: z.object({ ncrs: z.array(summarySchema), changed: z.array(z.string()) }), idempotencyKey })
+
+const settingsSchema = z.object({
+  companyId: z.string().nullable(),
+  inForce: z.object({ hours: z.number(), source: z.enum(['COMPANY', 'TENANT', 'DEFAULT']) }),
+  own: z.object({ defaultContainmentHours: z.number().nullable(), updatedAt: z.string() }).nullable(),
+  version: z.number(),
+})
+export type NcrSettings = z.infer<typeof settingsSchema>
+const settingsAnswer = z.object({ settings: settingsSchema, mayChange: z.boolean() })
+export type NcrSettingsAnswer = z.infer<typeof settingsAnswer>
+
+/** B-W2b-17: the company's containment time for new NCRs (the company's row, else the tenant's, else 24 hours). */
+export const getNcrSettings = (api: ApiClient, companyId: string | null, signal?: AbortSignal) => api.get('/quality/ncr/settings', { query: clean({ companyId }), schema: settingsAnswer, signal })
+
+/** B-W2b-17: change it (quality.settings.manage): 1 to 720 hours, or null (follow the tenant's row / the default). */
+export const saveNcrSettings = (api: ApiClient, body: { companyId: string | null; defaultContainmentHours: number | null; version: number }) =>
+  api.request('PUT', '/quality/ncr/settings', { body, schema: settingsAnswer, idempotencyKey: newIdempotencyKey() })
 
 /** The board's drag (one stage at a time): 409 `stage/<CHECK>` when a check is not met. */
 export const moveNcr = (api: ApiClient, ncrId: string, body: { version: number; to: 'CONTAINED' | 'DECIDED' }) =>

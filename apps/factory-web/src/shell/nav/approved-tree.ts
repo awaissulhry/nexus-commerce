@@ -1,12 +1,15 @@
 /**
- * The approved navigation tree's W0/W1 part (design 01-navigation-tree, 2026-10-29, with the Owner's answers of the same
- * day): what the W1 build must show, in this order and with these words. Copied from the tree's JSON (outside this
- * repository) by B-W1-08 and held here so the navigation test (navigation-map.vitest.test.ts) can walk it; a later wave
- * that ships a page adds it here from the tree, with its address.
+ * The approved navigation tree's W0, W1 and W2a part (design 01-navigation-tree, 2026-10-29, with the Owner's answers of
+ * the same day): what the build must show, in this order and with these words. Copied from the tree's JSON (outside this
+ * repository) by B-W1-08, the W2a pages added by each W2a screen step and checked whole against the tree by B-W2a-83 (rail,
+ * groups, pages, words, floor tiles and modes); held here so the navigation test (navigation-map.vitest.test.ts) can walk
+ * it. A later wave that ships a page adds it here from the tree, with its address.
  *
- *  - OFFICE: the rail areas (the tree's `order`), their groups and pages. `href` is the page's built address; `early`
- *    and `deferred` name a page the build ships outside its tree wave and why.
- *  - FLOOR: the W0/W1 floor tasks with their tile (floor/model.ts TILE_KEYS) and the station modes the tree gives them.
+ *  - OFFICE: the rail areas (the tree's `order`: People, 11, is W2b, so Plant 12 sits right above Admin 13), their groups
+ *    and pages. `href` is the page's built address; `early` and `deferred` name a page the build ships outside its tree
+ *    wave and why.
+ *  - FLOOR: the W0–W2a floor tasks with their tile (floor/model.ts TILE_KEYS) and the station modes the tree gives them
+ *    (My work: see its line).
  *  - LINKS: the W1 link pages with their task (links/_nav/link-types.ts).
  *  - FRAME: the top bar's own pages the palette finds (design 01 "Frame & me").
  */
@@ -535,10 +538,10 @@ export const FLOOR: ReadonlyArray<{
     tile: 'scan',
     modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor', 'maintenance', 'phone'],
   },
-  // W2a: B-W2a-74 My work (SCR-089), the station's queue. The design's modes are sewing, cutting, warehouse, inspection,
-  // phone: the warehouse's task inbox (SCM-274) and the phone's personal list are W2b, so W2a gives it every station with
-  // a queue — the packing bench too (the dispatch list is per station, whatever its work centre).
-  { id: 'floor.mywork', title: 'My work', titleIt: 'Il mio lavoro', tile: 'mywork', modes: ['sewing', 'cutting', 'packing', 'inspection', 'phone'] },
+  // W2a: B-W2a-74 My work (SCR-089), the station's queue, in the tree's modes. The build differs, named in the navigation
+  // test: the warehouse's task inbox (SCM-274) and the phone's personal list are W2b, so W2a gives it every station with
+  // a queue — the packing bench too (the dispatch list is per station, whatever its work centre), not the warehouse.
+  { id: 'floor.mywork', title: 'My work', titleIt: 'Il mio lavoro', tile: 'mywork', modes: ['sewing', 'cutting', 'warehouse', 'inspection', 'phone'] },
   { id: 'floor.operation', title: 'Operation', titleIt: 'Operazione', tile: 'operation', modes: ['sewing', 'cutting', 'packing'] },
   { id: 'floor.hidecut', title: 'Hide check & cut log', titleIt: 'Controllo pelle e taglio', tile: 'cut', modes: ['cutting'] },
   { id: 'floor.bundles', title: 'Bundles & tickets', titleIt: 'Fasci e cartellini', tile: 'bundles', modes: ['cutting'] },

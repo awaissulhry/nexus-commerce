@@ -28,6 +28,7 @@ import { pdfFileIdsOf } from '../ddt/store'
 import { readSettings } from '../settings/settings'
 import { PACKING_DOCUMENTS } from './contract'
 import { contentsView, lockedStatus, packLineOf, packParcelOf, readContents, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
+import { currentPackingListFile } from '../shipments/packing-list'
 
 /**
  * Packing (B-W1-46; LOG-039, LOG-002, QHS-073; A2 SCR-098 on the floor, SCR-067 in the office): the office and a floor
@@ -58,14 +59,11 @@ async function packingShipment(caller: CommandCaller, shipmentId: string): Promi
 export async function packingDocuments(db: CommandTx, shipmentId: string) {
   const ddt = await db.ddt.findFirst({ where: { shipmentId, cancellations: { none: {} } }, select: { id: true, number: true, documentDate: true } })
   const ddtFile = ddt ? ((await pdfFileIdsOf(db, [ddt.id])).get(ddt.id) ?? null) : null
-  const packingList = await db.storedFile.findFirst({
-    where: { recordType: 'Shipment', recordId: shipmentId, kind: 'DOCUMENT', status: 'AVAILABLE', contentType: 'application/pdf', visibility: { has: 'FLOOR' } },
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    select: { id: true, createdAt: true },
-  })
+  // B-W2b-19: the current packing list is the newest version's file (GeneratedDocument rows; it may be an older file).
+  const packingList = await currentPackingListFile(db, shipmentId)
   return {
     ddt: ddt ? { id: ddt.id, number: ddt.number, documentDate: ddt.documentDate.toISOString().slice(0, 10), fileId: ddtFile } : null,
-    packingList: packingList ? { fileId: packingList.id, createdAt: toUtcIso(packingList.createdAt) } : null,
+    packingList: packingList ? { fileId: packingList.id, createdAt: toUtcIso(packingList.printedAt) } : null,
   }
 }
 

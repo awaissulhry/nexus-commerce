@@ -1,16 +1,22 @@
+import { FILES_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { InvalidStateError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
+import { can } from '@nexus/factory-domain/core/permissions'
+import { legalProblems } from '@nexus/factory-domain/documents/legal'
 import type { DocumentLanguage } from '@nexus/factory-domain/documents/model'
 import { claimMail } from '@nexus/factory-domain/purchasing/claims/mail'
 import { PURCHASING_CLAIMS_MANAGE } from '@nexus/factory-domain/purchasing/claims/permissions'
-import { CLAIM_LIMITS, CLAIM_REASON_LIST, readClaimReason, sendProblems, type ClaimKind, type ClaimRemedy } from '@nexus/factory-domain/purchasing/claims/rules'
+import { CLAIM_LIMITS, CLAIM_REASON_LIST, claimReasonOf, sendProblems, type ClaimKind, type ClaimRemedy } from '@nexus/factory-domain/purchasing/claims/rules'
 import { supplierLanguageOf } from '@nexus/factory-domain/purchasing/orders'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
-import type { OfficeContext } from '../../../core/context'
+import { actorOf, type OfficeContext } from '../../../core/context'
+import { companyLegalOf } from '../../../platform/documents/documents'
 import { sendEmail } from '../../../platform/email-out/outbound'
+import type { FilesRuntime } from '../../../platform/files/service'
 import { actorIdOf, senderOf, type Reader } from '../store'
 import { detailInCommand } from './claims'
 import { followDiscrepancies } from './follow'
+import { keepLetterInCommand, prepareLetter, type PreparedLetter } from './letter'
 import { CLAIM_RECORD, claimInCommand, factsOf, officeClaim, readLines, type ClaimRow } from './store'
 import type { ClaimDetailView } from './views'
 
@@ -21,7 +27,9 @@ import type { ClaimDetailView } from './views'
  * the supplier's party, so its reply lands on the claim) to the supplier's contacts — the text of factory-domain claims
  * `claimMail` in the supplier's language, never a price — or `mail: null` when the supplier was told another way (the
  * goods travel with the return DDT, a call). E-mail leaves through email out (QUEUED; the worker delivers it; FAKE SES
- * locally and in tests): no real provider here.
+ * locally and in tests): no real provider here. B-W2b-14 (Z1:08): a mail carries the claim letter (PDF, no price; ./letter:
+ * prepared before the command, kept as the claim's current GeneratedDocument CLAIM_LETTER in it) when the company's
+ * letterhead is complete; otherwise it goes as text only, as before, and the send-check says why.
  *
  *   GET  /purchasing/claims/:claimId/send-check   purchasing.claims.manage: the contacts with an e-mail (QUALITY, then
  *        ORDERS first, the first suggested), the language, the subject and standard text, and why it cannot go yet
@@ -53,14 +61,21 @@ async function contactsOf(db: Reader, partyId: string) {
   return { party, contacts: [...contacts].sort((a, b) => QUALITY_FIRST(a.roles) - QUALITY_FIRST(b.roles)) }
 }
 
+/** The mail's language when none is asked: the first chosen contact's, else the party's (unknown contact: the party's). */
+async function mailLanguage(db: Reader, partyId: string, contactId: string | undefined): Promise<DocumentLanguage> {
+  const party = await db.party.findUniqueOrThrow({ where: { id: partyId }, select: { language: true } })
+  const contact = contactId && isUuid(contactId) ? await db.partyContact.findFirst({ where: { id: contactId, partyId }, select: { language: true } }) : null
+  return supplierLanguageOf(contact?.language ?? null, party.language)
+}
+
 /** The claim's mail in a language: its lines named as the supplier knows them (no price). */
-async function mailOf(db: Reader, claim: ClaimRow, language: DocumentLanguage, recipientName: string | null, message: string | null) {
+async function mailOf(db: Reader, claim: ClaimRow, language: DocumentLanguage, recipientName: string | null, message: string | null, letterAttached = false) {
   const lines = await readLines(db, claim.id)
   const items = new Map((await db.item.findMany({ where: { id: { in: [...new Set(lines.map((line) => line.itemId))] } }, select: { id: true, code: true, name: true, nameI18n: true } })).map((row) => [row.id, row]))
   const colours = new Map((await db.itemColour.findMany({ where: { id: { in: lines.flatMap((line) => (line.itemColourId ? [line.itemColourId] : [])) } }, select: { id: true, name: true } })).map((row) => [row.id, row.name]))
   const lots = new Map((await db.lot.findMany({ where: { id: { in: lines.flatMap((line) => (line.lotId ? [line.lotId] : [])) } }, select: { id: true, code: true, supplierLotRef: true } })).map((row) => [row.id, row]))
   const hides = new Map((await db.hide.findMany({ where: { id: { in: lines.flatMap((line) => (line.hideId ? [line.hideId] : [])) } }, select: { id: true, code: true, supplierCode: true } })).map((row) => [row.id, row]))
-  const { code, note } = readClaimReason(claim.reason)
+  const { code, note } = claimReasonOf(claim)
   const reason = code ? await db.reasonCode.findFirst({ where: { list: CLAIM_REASON_LIST, code }, select: { labelIt: true, labelEn: true } }) : null
   const receipt = claim.goodsReceiptId ? await db.goodsReceipt.findUnique({ where: { id: claim.goodsReceiptId }, select: { number: true, supplierDdtNumber: true } }) : null
   const order = claim.purchaseOrderId ? await db.purchaseOrder.findUnique({ where: { id: claim.purchaseOrderId }, select: { number: true } }) : null
@@ -96,17 +111,30 @@ async function mailOf(db: Reader, claim: ClaimRow, language: DocumentLanguage, r
     }),
     recipientName,
     message,
+    letterAttached,
   })
 }
 
 /** purchasing.claims.manage: what the send would do now, and why it cannot yet. */
+/**
+ * B-W2b-14: why the claim letter cannot go with the mail (empty: it goes): the company's letterhead (c.c. art. 2250) and
+ * the sender's files.read (a mail carries only a file its sender may read).
+ */
+async function letterProblemsOf(caller: CommandCaller, context: OfficeContext, claim: ClaimRow): Promise<Issue[]> {
+  const problems = legalProblems(await companyLegalOf(caller, claim.companyId))
+  if (!can(actorOf(context), FILES_READ, { companyId: claim.companyId })) problems.push({ path: 'letter/filesRead', message: 'The claim letter goes with the mail only for a sender who may read files (files.read): the mail goes as text.' })
+  return problems
+}
+
 export async function sendCheck(caller: CommandCaller, claimId: string) {
-  const { claim } = await officeClaim(caller, claimId, PURCHASING_CLAIMS_MANAGE)
+  const { context, claim } = await officeClaim(caller, claimId, PURCHASING_CLAIMS_MANAGE)
+  // B-W2b-14: the claim letter goes with the mail when it may (else the mail is text only, as before).
+  const letterProblems = await letterProblemsOf(caller, context, claim)
   return caller.withClient(async (client) => {
     const { party, contacts } = await contactsOf(client, claim.partyId)
     const suggested = contacts[0] ?? null
     const language = supplierLanguageOf(suggested?.language ?? null, party.language)
-    const mail = await mailOf(client, claim, language, suggested?.name ?? null, null)
+    const mail = await mailOf(client, claim, language, suggested?.name ?? null, null, letterProblems.length === 0)
     const lines = await readLines(client, claim.id)
     const problems: Issue[] = [
       ...sendProblems(factsOf(claim, lines)).map((message) => ({ path: 'claim', message })),
@@ -119,6 +147,8 @@ export async function sendCheck(caller: CommandCaller, claimId: string) {
       language,
       subject: mail.subject,
       message: mail.body,
+      /** B-W2b-14: does the claim letter (PDF) go with the mail, and if not why (the letterhead). */
+      letter: { attached: letterProblems.length === 0, problems: letterProblems },
     }
   })
 }
@@ -127,7 +157,7 @@ export async function sendCheck(caller: CommandCaller, claimId: string) {
  * The send inside the caller's command (the claim's row is held: its version bump, or it was made in this command):
  * DRAFT | REJECTED → SENT, the discrepancies reported, the mail queued on the claim's thread when asked.
  */
-export async function sendInCommand(tools: CommandTools, context: OfficeContext, claimId: string, input: Omit<SendInput, 'version'>): Promise<{ outboundId: string | null; recipients: number }> {
+export async function sendInCommand(tools: CommandTools, context: OfficeContext, claimId: string, input: Omit<SendInput, 'version'>, letter: PreparedLetter | null = null): Promise<{ outboundId: string | null; recipients: number; letterId: string | null }> {
   const { tx, now } = tools
   const claim = await claimInCommand(tx, claimId)
   const remedy = input.remedy ?? (claim.remedy as ClaimRemedy | null)
@@ -159,8 +189,12 @@ export async function sendInCommand(tools: CommandTools, context: OfficeContext,
   await tx.supplierClaim.update({ where: { id: claimId }, data: { status: 'SENT', sentAt: now, sentById: actorIdOf(tools), remedy }, select: { id: true } })
   const reported = await followDiscrepancies(tools, claim, 'SENT')
   let outboundId: string | null = null
+  let letterId: string | null = null
   if (input.mail) {
-    const mail = await mailOf(tx, { ...claim, remedy }, language, recipientName, input.mail.message ?? null)
+    // B-W2b-14: the claim letter, kept as the claim's current version, goes with the mail.
+    const kept = letter ? await keepLetterInCommand(tools, claimId, letter) : null
+    letterId = kept?.id ?? null
+    const mail = await mailOf(tx, { ...claim, remedy }, language, recipientName, input.mail.message ?? null, kept !== null)
     const sent = await sendEmail(tools, {
       record: { type: CLAIM_RECORD, id: claimId },
       sender: await senderOf(tx, context),
@@ -168,6 +202,7 @@ export async function sendInCommand(tools: CommandTools, context: OfficeContext,
       cc: [...(input.mail.cc ?? [])],
       subject: input.mail.subject?.trim() ? input.mail.subject.trim() : mail.subject,
       body: mail.body,
+      ...(kept ? { attachments: [kept.fileId] } : {}),
       locale: language,
     })
     outboundId = sent.outbound.id
@@ -180,21 +215,27 @@ export async function sendInCommand(tools: CommandTools, context: OfficeContext,
     companyId: claim.companyId,
     siteId: claim.siteId,
     before: { status: claim.status, remedy: claim.remedy },
-    after: { status: 'SENT', remedy, again, outboundId, recipients, language: input.mail ? language : null, discrepanciesReported: reported },
+    after: { status: 'SENT', remedy, again, outboundId, recipients, language: input.mail ? language : null, discrepanciesReported: reported, letterId },
   })
   tools.emit({ type: 'supplier_claim.sent', subject: claimId, companyId: claim.companyId, siteId: claim.siteId, payload: { supplierClaimId: claimId, number: claim.number, status: 'SENT', again, outboundId, recipients } })
-  return { outboundId, recipients }
+  return { outboundId, recipients, letterId }
 }
 
-/** purchasing.claims.manage: the claim to the supplier (see the file's comment). A repeated Idempotency-Key sends no second mail. */
-export async function sendClaim(caller: CommandCaller, claimId: string, input: SendInput, idempotencyKey?: string): Promise<{ claim: ClaimDetailView; emailId: string | null }> {
-  const { context } = await officeClaim(caller, claimId, PURCHASING_CLAIMS_MANAGE)
+/**
+ * purchasing.claims.manage: the claim to the supplier (see the file's comment). A repeated Idempotency-Key sends no second
+ * mail. The letter is prepared first (outside the command: the file store), for the remedy the send chooses.
+ */
+export async function sendClaim(files: FilesRuntime, caller: CommandCaller, claimId: string, input: SendInput, idempotencyKey?: string): Promise<{ claim: ClaimDetailView; emailId: string | null; letterId: string | null }> {
+  const { context, claim } = await officeClaim(caller, claimId, PURCHASING_CLAIMS_MANAGE)
+  // The letter in the mail's language: the one asked, else the first chosen contact's (as sendInCommand decides it).
+  const language = input.mail ? (input.mail.language ?? (await caller.withClient((client) => mailLanguage(client, claim.partyId, input.mail!.contactIds[0])))) : undefined
+  const prepared = input.mail && (await letterProblemsOf(caller, context, claim)).length === 0 ? (await prepareLetter(files, caller, claim, { language, remedy: input.remedy ?? (claim.remedy as ClaimRemedy | null) })).letter : null
   const { result } = await command(
     caller,
     { name: 'purchasing.claims.send', idempotencyKey, input: { claimId, ...input }, record: { type: 'SupplierClaim', id: claimId, expectedVersion: input.version } },
     async (tools) => {
-      const sent = await sendInCommand(tools, context, claimId, input)
-      return { claim: await detailInCommand(tools, claimId), emailId: sent.outboundId }
+      const sent = await sendInCommand(tools, context, claimId, input, prepared)
+      return { claim: await detailInCommand(tools, claimId), emailId: sent.outboundId, letterId: sent.letterId }
     },
   )
   return result

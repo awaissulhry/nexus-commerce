@@ -12,8 +12,8 @@
 
 /// What a help call from a station is about, and who answers it (MES-142, MES-144; design production.settings
 /// "Help-call routing": type → responder group, escalate after minutes). Per site; the type's words, icon and colour
-/// are its code's in the HELP_CALL reason list (reasons.prisma). The responder group is a People team (B-W2b-06's Team,
-/// not on main when this wave was built) or a role (office or floor): as recordType + recordId. A MATERIAL call asks for extra
+/// are its code's in the HELP_CALL reason list (reasons.prisma). The responder group is a team of the site (people.prisma
+/// Team: its members' phones get the push). A MATERIAL call asks for extra
 /// material (MES-137); a MACHINE call offers a maintenance job. The waiting time at the station while a call is open
 /// books to an off-standard code (MES-148). Never deleted: set inactive.
 model HelpCallType {
@@ -24,10 +24,8 @@ model HelpCallType {
   /// A code of the HELP_CALL reason list; unique on the site. Never changes.
   code                 String
   kind                 HelpCallKind
-  /// The responder group: "Team" (people.prisma, B-W2b-06) or "Role" (roles.prisma, an office or floor role) and its
-  /// id; both or neither (none: the site's team leaders).
-  responderRecordType  String?
-  responderRecordId    String?          @db.Uuid
+  /// The responder group: an ACTIVE team of the site (null: the site's team leaders).
+  responderTeamId      String?          @db.Uuid
   /// An open call is escalated after these minutes (1-240; null: never).
   escalateAfterMinutes Int?
   /// The off-standard code the station's waiting time books to while a call of this type is open (an OFF_STANDARD code
@@ -41,7 +39,8 @@ model HelpCallType {
   createdById          String?          @db.Uuid
 
   site            Site             @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
-  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId (siteId).
+  responderTeam   Team?            @relation(fields: [tenantId, siteId, responderTeamId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   offStandardCode OffStandardCode? @relation(fields: [tenantId, companyId, offStandardCodeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   calls           HelpCall[]
 
@@ -71,8 +70,9 @@ model HelpCall {
   stationId         String         @db.Uuid
   /// The station's line (copied when it is sent; null: a station off any line).
   lineId            String?        @db.Uuid
-  /// The caller, only where the site records workers.
+  /// The caller, only where the site records workers, and their employee (Worker.employeeId).
   workerId          String?        @db.Uuid
+  employeeId        String?        @db.Uuid
   /// The work order and bundle it is about, if any (a bundle with its work order).
   workOrderId       String?        @db.Uuid
   bundleId          String?        @db.Uuid
@@ -111,6 +111,7 @@ model HelpCall {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   line      Line?              @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   worker    Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee  Employee?          @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   workOrder WorkOrder?         @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   bundle    Bundle?            @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   device    Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -120,8 +121,9 @@ model HelpCall {
   @@unique([tenantId, deviceId, clientEventId])
   // The target of the off-standard entries' reference: on the call's own site.
   @@unique([tenantId, siteId, id])
-  // A line's calls by time (the line view, the TV board, the calls page).
+  // A line's calls by time (the line view, the TV board, the calls page); a person's calls (the privacy export).
   @@index([tenantId, siteId, lineId, sentAt])
+  @@index([tenantId, employeeId])
 }
 
 enum HelpCallStatus {

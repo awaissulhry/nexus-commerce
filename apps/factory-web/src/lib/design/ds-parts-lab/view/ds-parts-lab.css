@@ -1,0 +1,87 @@
+/* The shared DS parts lab (/design/ds-parts, B-W2b-09): the parts in cards that fill the main area (no page max-width). */
+.fw-dsp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  padding: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-dsp-card {
+  min-width: 0;
+}
+
+.fw-dsp-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: var(--nds-space-20);
+  align-items: start;
+}
+
+.fw-dsp-wide,
+.fw-dsp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dsp-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dsp-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-dsp-note {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dsp-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-dsp-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-dsp-mini {
+  max-width: 220px;
+}
+
+.fw-dsp-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-dsp-band-title {
+  font-weight: 600;
+}
+
+/* The card list as a phone shows it: the gallery's 390 width is the real check; wider frames keep a phone column. */
+.fw-dsp-phone {
+  max-width: 420px;
+  min-width: 0;
+}

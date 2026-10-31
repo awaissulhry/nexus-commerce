@@ -28,6 +28,9 @@ export const designScreen = defineDesignScreen<HoldTagsModel>({
   cases: [
     { id: 'one', label: 'One hold: its tag with the QR, the reason, since when, the owner', model: tags(), note: 'A print page stands in for the label PDF (the API has none for a hold yet). Print hides the shell.' },
     { id: 'several', label: 'Several holds (Print tags of the selection)', model: tags({ holds: ready(HOLDS) }) },
+    // B-W2b-17: the hold's number on the tag (and in the QR's code line); an older hold says "—".
+    { id: 'w2b-number', label: 'W2b The tag says the hold’s number', model: tags({ holds: ready([HOLDS[1]!]) }) },
+    { id: 'w2b-number-older', label: 'W2b A hold placed before holds were numbered: "—" on its tag', model: tags({ holds: ready(HOLDS.filter((hold) => hold.number === null)) }) },
     { id: 'loading', label: 'Reading the holds', model: tags({ holds: reading() }) },
     { id: 'error', label: 'The holds could not be read', model: tags({ holds: failedRead('problem.unavailable') }) },
     { id: 'empty', label: 'Nothing to print', model: tags({ holds: ready([]) }) },
