@@ -1,4 +1,5 @@
 import { ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { fromMinorUnits } from '@nexus/factory-domain/core/money'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -68,6 +69,8 @@ export interface DecisionLine {
 export interface DecisionsBody {
   readonly version: number
   readonly lines: readonly DecisionLine[]
+  /** B-W2a-F8: the reason goods put back into stock inside a SOFT-locked month are posted anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 interface PlannedDecision {
@@ -234,7 +237,13 @@ export async function decideReturn(caller: CommandCaller, returnId: string, body
       })
       draftLine.push(entry)
     }
-    const posted = drafts.length > 0 ? await postMoves(tools, drafts, { issuePath: (index) => `body/lines/${draftLine[index]!.index}` }) : []
+    const posted =
+      drafts.length > 0
+        ? await postMoves(tools, drafts, {
+            issuePath: (index) => `body/lines/${draftLine[index]!.index}`,
+            periodLockOverride: body.periodLockOverride,
+          })
+        : []
     const moves = posted.map((move, index) => ({ lineId: draftLine[index]!.line.id, moveId: move.id, locationId: move.toLocationId }))
 
     const actorId = context.actorId

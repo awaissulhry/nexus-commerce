@@ -37,6 +37,7 @@ import { lockOrderForReceipt, readOrderForFloorReceipt, setOrderReceiptProgress,
 import { activeSourcesOf } from '../../purchasing/supplier-items/store'
 import { officeContextOf, postedBy, stockContextOf } from '../ledger/access'
 import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { lotNumber, receiptNumber } from './numbers'
 import { receiptDetail } from './read'
 import { readColours, readEarlierLots, readItems, readOrderLines, RECEIPT_COLUMNS, type ItemRow, type OrderLineRow } from './store'
@@ -102,6 +103,8 @@ export interface ReceiptBody {
   readonly receivedAt?: string | undefined
   readonly note?: string | null | undefined
   readonly lines: readonly LineBody[]
+  /** B-W2a-F8: the reason goods received inside a SOFT-locked month are posted anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 const blank = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -435,7 +438,11 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
       }
     }
   }
-  const moves = await postMoves(tools, drafts, { key, issuePath: (index) => `body/moves/${index}` })
+  const moves = await postMoves(tools, drafts, {
+    key,
+    issuePath: (index) => `body/moves/${index}`,
+    periodLockOverride: body.periodLockOverride,
+  })
 
   // 7. Posted: the ledger now holds exactly its lines (the deferred check at commit); the order moves on (the floor's in
   // the system command after this one: its role may not change the order).

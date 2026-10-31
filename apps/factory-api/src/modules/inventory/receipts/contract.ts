@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { amountMinor, businessDate, defineContract, id, input, instant, output, quantity } from '@nexus/factory-domain/core/contracts'
 import { HIDE_STATES } from '@nexus/factory-domain/inventory/issue/rules'
 import { ITEM_TRACKINGS } from '@nexus/factory-domain/inventory/ledger/moves'
@@ -227,6 +228,7 @@ export const recordReceiptContract = defineContract({
     receivedAt: instant().optional(),
     note: text(1000).nullish(),
     lines: z.array(lineInput).min(1).max(RECEIPT_LIMITS.lines),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: {
     201: output({
