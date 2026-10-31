@@ -204,6 +204,25 @@ const PEOPLE_PRIVACY_ADDS: Readonly<Record<string, readonly Permission[]>> = Obj
   admin: ['people.privacy.view'],
   production_manager: ['people.privacy.view'],
 })
+/**
+ * B-W2b-35 (help calls, MES-142 … MES-145, MES-147, MES-137; design production.calls, floor.supervisor, floor.help): the
+ * office reads the calls and answers them where its people respond (production, the floor supervisor, maintenance, the
+ * warehouse for material, quality); the production manager keeps the types and who answers them (Floor rules & codes).
+ * On the floor the team leader (the line view), the technician and the floor inspector read their line's calls and
+ * answer them; every floor role SENDS a call with floor.work and needs nothing here. Owner and read-only from every().
+ */
+const CALLS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.calls.view', 'production.calls.answer', 'production.calls.manage'],
+  floor_supervisor: ['production.calls.view', 'production.calls.answer'],
+  maintenance: ['production.calls.view', 'production.calls.answer'],
+  warehouse: ['production.calls.view', 'production.calls.answer'],
+  quality_inspector: ['production.calls.view', 'production.calls.answer'],
+})
+const CALLS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.calls.view', 'production.calls.answer'],
+  technician: ['production.calls.view', 'production.calls.answer'],
+  floor_inspector: ['production.calls.view', 'production.calls.answer'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -222,7 +241,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-41
   ...(audience === 'office' ? (BUNDLES_TRACKED_ADDS[key] ?? []) : []),
   // B-W2b-27
-  ...(audience === 'office' ? (PEOPLE_PRIVACY_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PEOPLE_PRIVACY_ADDS[key] ?? []) : []),
+  // B-W2b-35
+  ...((audience === 'office' ? CALLS_ADDS : CALLS_FLOOR_ADDS)[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -276,6 +297,19 @@ const PEOPLE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.free
 const PEOPLE_TEAM_TEMPLATES: ReadonlySet<string> = new Set(['production_manager', 'floor_supervisor', 'quality_inspector', 'warehouse', 'maintenance'])
 const peopleAddedFor = (key: string, audience: RoleAudience): readonly Permission[] =>
   audience === 'office' ? [...(PEOPLE_ADDS[key] ?? []), ...(PEOPLE_TEAM_TEMPLATES.has(key) ? ['people.team.view' as Permission] : [])] : []
+/**
+ * B-W2b-32 (shifts and overtime requests; MES-218, MES-222; design people.shifts): the administrator (who keeps the HR
+ * register until an HR template comes: move these with B-W2b-26's) and the production manager plan every roster of their
+ * sites and ask and approve planned overtime; the floor supervisor reads the roster, plans the roster of the teams they
+ * lead (design: "Leads edit their team; others read") and asks overtime, never approves it. Office only: a worker reads
+ * their own published shifts and answers an ask on the tablet with floor.work. Owner and read-only from every().
+ */
+const PEOPLE_SHIFTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.shifts.view', 'people.shifts.manage', 'people.overtime.manage', 'people.overtime.approve'],
+  production_manager: ['people.shifts.view', 'people.shifts.manage', 'people.overtime.manage', 'people.overtime.approve'],
+  floor_supervisor: ['people.shifts.view', 'people.shifts.team', 'people.overtime.manage'],
+})
+const peopleShiftsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (PEOPLE_SHIFTS_ADDS[key] ?? []) : [])
 
 /**
  * B-W2b-24 (PLT-125, design admin.documents popup `override`): type the number a migrated document had in the old system —
@@ -286,7 +320,7 @@ const NUMBERING_OVERRIDE_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'fin
 const numberingOverrideAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' && NUMBERING_OVERRIDE_TEMPLATES.has(key) ? ['numbering.override' as Permission] : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience), ...numberingOverrideAddedFor(key, audience), ...peopleAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience), ...numberingOverrideAddedFor(key, audience), ...peopleAddedFor(key, audience), ...peopleShiftsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 
