@@ -93,6 +93,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/tasks': 'home.view', // GET /tasks (B-W2a-40)
       '/home/notifications': 'home.view', // GET /notifications (B-W2a-40)
       '/home/mail-to-sort': 'email.triage', // GET /email/inbound
+      '/home/alerts': 'alerts.view', // GET /alerts (B-W2a-78)
       '/sales/customers': 'parties.view', // GET /parties
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
       '/sales/orders': 'orders.view', // GET /sales/orders
@@ -157,6 +158,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/admin/security': 'security.view', // GET /admin/security (B-W2a-36)
       '/admin/documents': 'numbering.view', // GET /numbering/series
       '/admin/languages': 'companies.view',
+      '/admin/automation': 'alerts.rules.manage', // GET /alerts/rules/:id/timers, the rules kept (B-W2a-78)
       '/admin/connections': 'integrations.view', // GET /integrations/accounts
       '/admin/import': 'imports.view', // GET /imports
       '/admin/audit': 'audit.read', // GET /audit
@@ -202,6 +204,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/tasks',
       '/home/notifications',
       '/home/mail-to-sort',
+      '/home/alerts',
       '/sales/customers',
       '/sales/quotes',
       '/sales/orders',

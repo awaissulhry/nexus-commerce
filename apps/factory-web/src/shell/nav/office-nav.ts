@@ -105,6 +105,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/home/tasks',
   '/home/notifications',
   '/home/mail-to-sort',
+  // B-W2a-78: Home › Insights › Alerts (SCR-234).
+  '/home/alerts',
   '/records/[type]/[id]',
   '/sales/customers',
   '/sales/customers/[partyId]',
@@ -213,6 +215,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/admin/roles/[roleId]',
   // B-W2a-36: Security & health (SCR-166).
   '/admin/security',
+  // B-W2a-78: Approvals, automation & AI (SCR-167, W2a part: Reminders & timers).
+  '/admin/automation',
   // B-W0-28 Admin: Documents & numbering, Languages & formats, Connections & API (and a connection), Import & export,
   // Audit log.
   '/admin/documents',

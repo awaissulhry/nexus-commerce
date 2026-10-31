@@ -1,0 +1,258 @@
+{
+  "w": {
+    "alerts.ORDER_LATE_RISK.LATE": "L'ordine {label} è in ritardo di {days} giorni: era promesso per il {promiseDate}.",
+    "alerts.ORDER_LATE_RISK.AT_RISK": "L'ordine {label} è promesso per il {promiseDate} (mancano {days} giorni) e non è pronto.",
+    "alerts.HOLD_TOO_LONG": "{label} è bloccato da {hours} ore (la regola dice {threshold} h).",
+    "alerts.MATERIAL_SHORT": "Il materiale {item} manca per l'ordine di lavoro rilasciato {label}.",
+    "alerts.APPROVAL_OVERDUE": "Il preventivo {label} aspetta la sua approvazione da {hours} ore.",
+    "alerts.PO_NOT_CONFIRMED": "L'ordine di acquisto {label} non è confermato {days} giorni dopo l'invio.",
+    "alerts.CERTIFICATE_EXPIRING": "Il certificato {label} scade il {dueDate} (mancano {days} giorni).",
+    "alerts.INVOICE_DEADLINE": "La merce del DDT {label} va fatturata entro il {dueDate} (mancano {days} giorni).",
+    "alerts.INVOICE_DEADLINE.LATE": "La merce del DDT {label} andava fatturata entro il {dueDate}: {days} giorni di ritardo.",
+    "alerts.UNKNOWN": "Avviso su {label}."
+  },
+  "refused": {
+    "title": "Non è tua da aprire",
+    "body": "Gli avvisi richiedono il permesso di vedere gli avvisi. Chiedi a un amministratore se ti serve per il tuo lavoro."
+  },
+  "band": {
+    "label": "Avvisi",
+    "reading": "Lettura…",
+    "open_one": "{count} aperto",
+    "open_other": "{count} aperti",
+    "openAtLeast_one": "almeno {count} aperto",
+    "openAtLeast_other": "almeno {count} aperti",
+    "more": "Altro",
+    "noise": "Rapporto sul rumore",
+    "noiseLater": "Arriva più avanti (W3): quali regole scattano troppo spesso e cosa cambiare.",
+    "keys": "Scorciatoie da tastiera",
+    "rules": "Regole"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In diretta",
+    "offline": "Offline"
+  },
+  "tile": {
+    "title": "Avvisi",
+    "forMeNow_one": "{count} aperto per te",
+    "forMeNow_other": "{count} aperti per te",
+    "count": "{count}",
+    "atLeast": "≥ {count}",
+    "unknown": "Non letto: non è stato possibile leggere l'elenco.",
+    "partial": "Più di 1000 avvisi corrispondono: sono stati contati i primi 1000.",
+    "OPEN_FOR_ME": {
+      "label": "Aperti per me",
+      "hint": "Assegnati a te, o ancora di nessuno e la loro regola avvisa te."
+    },
+    "CRITICAL": {
+      "label": "Critici",
+      "hint": "Avvisi aperti di gravità critica."
+    },
+    "UNASSIGNED": {
+      "label": "Non assegnati",
+      "hint": "Avvisi aperti che nessuno ha ancora preso."
+    },
+    "ACKNOWLEDGED": {
+      "label": "Presi in carico",
+      "hint": "Qualcuno li ha visti; non ancora risolti."
+    },
+    "RESOLVED_TODAY": {
+      "label": "Risolti oggi",
+      "hint": "Risolti da una persona o chiusi dal sistema oggi."
+    }
+  },
+  "filter": {
+    "severity": "Gravità",
+    "anySeverity": "Qualsiasi gravità",
+    "kind": "Cosa controlla",
+    "anyKind": "Qualsiasi regola"
+  },
+  "table": {
+    "title": "Avvisi aperti",
+    "label": "Avvisi aperti"
+  },
+  "count_one": "{count} avviso",
+  "count_other": "{count} avvisi",
+  "countAtLeast_one": "almeno {count} avviso",
+  "countAtLeast_other": "almeno {count} avvisi",
+  "search": "Cerca un record",
+  "col": {
+    "severity": "Gravità",
+    "alert": "Avviso",
+    "record": "Record",
+    "rule": "Regola",
+    "assignee": "Di chi",
+    "age": "Età",
+    "state": "Stato",
+    "place": "Stabilimento"
+  },
+  "row": {
+    "forMe": "Per te",
+    "openRecord": "Apri {record} (⌘-clic: nuova scheda)"
+  },
+  "place": {
+    "all": "Tutte le società"
+  },
+  "person": {
+    "system": "Nexus",
+    "you": "Tu",
+    "nobody": "Ancora nessuno",
+    "youAfter": "te"
+  },
+  "age": {
+    "today": "Oggi",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni"
+  },
+  "state": {
+    "OPEN": "Aperto",
+    "ACKNOWLEDGED": "Preso in carico",
+    "RESOLVED": "Risolto",
+    "CLEARED": "Chiuso dal sistema",
+    "snoozed": "Rimandato fino a {date}"
+  },
+  "bulk": {
+    "acknowledge_one": "Prendi in carico {count}",
+    "acknowledge_other": "Prendi in carico {count}"
+  },
+  "more": {
+    "label": "Mostra altri",
+    "loading": "Lettura…"
+  },
+  "empty": {
+    "title": "Nessun avviso aperto.",
+    "body": "Quando una regola trova qualcosa, compare qui e in Oggi.",
+    "filtered": {
+      "title": "Nessun risultato.",
+      "body": "Nessun avviso corrisponde a questi filtri."
+    },
+    "clear": "Togli i filtri"
+  },
+  "error": {
+    "title": "Non è stato possibile leggere gli avvisi"
+  },
+  "retry": "Riprova",
+  "dismiss": "Chiudi",
+  "cancel": "Annulla",
+  "keysTitle": "Scorciatoie da tastiera",
+  "keys": {
+    "acknowledge": "Prendi in carico l'avviso",
+    "walk": "Avviso precedente / successivo nel riquadro",
+    "close": "Chiudi"
+  },
+  "popup": {
+    "reading": "Lettura dell'avviso…",
+    "noun": "avviso",
+    "openRecord": "Apri {record}",
+    "assignedTo": "Per {name}",
+    "kindTitle": {
+      "ORDER_LATE_RISK": "{record} a rischio di ritardo",
+      "HOLD_TOO_LONG": "{record} bloccato da troppo",
+      "MATERIAL_SHORT": "{record}: materiale mancante",
+      "APPROVAL_OVERDUE": "{record}: approvazione in ritardo",
+      "PO_NOT_CONFIRMED": "{record} non confermato",
+      "CERTIFICATE_EXPIRING": "{record} in scadenza",
+      "INVOICE_DEADLINE": "{record}: scadenza di fatturazione vicina"
+    },
+    "snooze": "Rimanda",
+    "assign": "Assegna",
+    "acknowledge": "Prendi in carico",
+    "resolve": "Risolvi",
+    "what": "Cosa",
+    "raised": "Sollevato il {date}.",
+    "raisedAgain": "Sollevato il {date} — la volta n. {count} per questo record.",
+    "resolvedBy": "Risolto da {who} il {date}",
+    "cleared": "Chiuso da Nexus il {date}: la condizione non c'è più.",
+    "why": "Perché: la regola",
+    "ruleOff": "Questa regola ora è spenta: non solleva nulla di nuovo.",
+    "openRule": "Apri la regola",
+    "history": "Storia di questo avviso",
+    "similar": "Avvisi aperti simili",
+    "noSimilar": "Nessun altro avviso aperto di questo tipo."
+  },
+  "history": {
+    "RAISED": "Sollevato dalla sua regola",
+    "ACKNOWLEDGED": "Preso in carico da {who}",
+    "ASSIGNED": "Dato a {to} da {who}",
+    "UNASSIGNED": "Tolto a {to} da {who}",
+    "SNOOZED": "Rimandato fino al {date} da {who}",
+    "RESOLVED": "Risolto da {who}",
+    "CLEARED": "Chiuso da Nexus: la condizione non c'è più"
+  },
+  "assign": {
+    "title": "Assegna l'avviso",
+    "now": "Ora è di {name}.",
+    "nobodyNow": "Non è ancora di nessuno.",
+    "to": "A",
+    "toHint": "Solo chi vede il suo record e gestisce gli avvisi lì.",
+    "pick": "Scegli una persona…",
+    "me": "Io ({name})",
+    "nobody": "Nessuno (riprendilo)",
+    "noPeople": "Nessun altro può ricevere questo avviso.",
+    "told": "Viene avvisato con la campanella.",
+    "pickFirst": "Scegli prima una persona.",
+    "same": "È già suo.",
+    "go": "Assegna",
+    "takeBack": "Riprendilo",
+    "nowMine": "Ora è tuo."
+  },
+  "resolve": {
+    "title": "Risolvi l'avviso",
+    "note": "Cosa è stato fatto",
+    "noteHint": "Obbligatorio: resta nella storia (al massimo 1000 caratteri). ⌘Invio risolve.",
+    "noteEmpty": "Scrivi prima cosa è stato fatto.",
+    "noteLong": "Al massimo 1000 caratteri.",
+    "final": "Un avviso risolto non cambia più; se la condizione torna dopo l'intervallo della regola, viene sollevato un nuovo avviso.",
+    "go": "Risolvi"
+  },
+  "notice": {
+    "acknowledged": "{record}: preso in carico.",
+    "bulkAcknowledged_one": "{count} avviso preso in carico.",
+    "bulkAcknowledged_other": "{count} avvisi presi in carico.",
+    "assigned": "{record}: assegnato.",
+    "unassigned": "{record}: ripreso.",
+    "snoozed": "{record}: rimandato — torna da solo.",
+    "resolved": "{record}: risolto."
+  },
+  "held": {
+    "noHandle": "Per gestire gli avvisi serve il permesso di gestirli.",
+    "offline": "Offline — cambialo quando torni online.",
+    "busy": "Salvataggio…",
+    "resolved": "Risolto: non cambia più.",
+    "acknowledged": "Già preso in carico.",
+    "noHandleHere": "Puoi vedere questo avviso ma non gestirlo.",
+    "noneOpen": "Nessuno degli avvisi scelti può essere preso in carico.",
+    "rowResolved": "Risolto",
+    "rowAcknowledged": "Già preso in carico",
+    "rowReadOnly": "Non puoi gestirlo"
+  },
+  "refusal": {
+    "RESOLVED": "Questo avviso è stato risolto nel frattempo: non cambia più.",
+    "ALREADY_ACKNOWLEDGED": "Questo avviso è stato preso in carico nel frattempo.",
+    "ALREADY_ASSIGNED": "Questo avviso è già di quella persona.",
+    "NOT_ASSIGNED": "Questo avviso non è assegnato a nessuno.",
+    "changed": "Qualcuno ha cambiato questo avviso nel frattempo: l'elenco è stato riletto — riprova.",
+    "assignee": "Quella persona non può ricevere questo avviso: non vede il suo record o non gestisce gli avvisi lì.",
+    "until": "Rimanda a un momento dopo adesso, al massimo fra 30 giorni.",
+    "note": "Scrivi cosa è stato fatto: per risolvere serve una nota.",
+    "invalid": "La modifica è stata rifiutata così com'è.",
+    "forbidden": "Non puoi gestire questo avviso.",
+    "gone": "Questo avviso non c'è più: l'elenco è stato riletto.",
+    "offline": "Nessuna risposta da Nexus: non è cambiato nulla. Riprova.",
+    "failed": "Non è stato possibile fare la modifica. Riprova."
+  },
+  "problem": {
+    "failed": "Non è stato possibile leggere. Riprova.",
+    "forbidden": "Non puoi vederlo.",
+    "gone": "Questo avviso non c'è più (o non puoi vederlo).",
+    "offline": "Nessuna risposta da Nexus: controlla la connessione e riprova."
+  },
+  "rules": {
+    "title": "Regole",
+    "body": "Le regole delle eccezioni: cosa controlla ciascuna, il suo numero, chi avvisa e dove, e quante volte al massimo.",
+    "label": "Regole delle eccezioni",
+    "empty": "Ancora nessuna regola.",
+    "emptyBody": "Le regole di serie le crea il primo controllo dopo l'avvio di una società."
+  }
+}

@@ -1,0 +1,134 @@
+/* The exception rules' shared parts (B-W2a-78): RuleSentence and the rule dialog. Layout only, semantic tokens. */
+
+.fw-rule-sentence {
+  margin: 0;
+  line-height: 2.1;
+  color: var(--nds-text);
+}
+.fw-rule-sentence.is-editing {
+  font-size: var(--nds-font-size-md);
+}
+.fw-rule-value {
+  font-weight: 600;
+}
+.fw-rule-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  vertical-align: middle;
+  flex-wrap: wrap;
+}
+.fw-rule-number {
+  width: 5.5em;
+}
+.fw-rule-select {
+  display: inline-block;
+  width: auto;
+  max-width: 100%;
+  vertical-align: middle;
+}
+.fw-rule-problem {
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rule-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}
+.fw-rule-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-16);
+}
+.fw-rule-row > * {
+  min-width: 12rem;
+}
+.fw-rule-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.fw-rule-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-rule-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.fw-rule-h {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  color: var(--nds-text);
+}
+.fw-rule-test {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+.fw-rule-sample {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-16);
+}
+.fw-rule-timers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  max-height: 16rem;
+  overflow-y: auto;
+}
+.fw-rule-timers li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  align-items: baseline;
+}
+.fw-rule-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  width: 100%;
+}
+.fw-rule-footer .grow {
+  flex: 1;
+}
+
+/* The rules list's cells. */
+.fw-rules-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-4) 0;
+  min-width: 0;
+  line-height: 1.4;
+  white-space: normal;
+}
+.fw-rules-sentence {
+  color: var(--nds-text-link);
+}
+.fw-rules-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-rules-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}

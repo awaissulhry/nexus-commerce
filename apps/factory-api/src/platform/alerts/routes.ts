@@ -1,8 +1,9 @@
 import { idempotencyKeyFrom } from '../../core/command'
 import { defineRoutes } from '../../core/manifest'
-import { acknowledgeAlert, alertCounts, assignAlert, bulkAcknowledge, getAlert, listAlerts, resolveAlert, snoozeAlert } from './alerts'
+import { acknowledgeAlert, alertAssignees, alertCounts, assignAlert, bulkAcknowledge, getAlert, listAlerts, resolveAlert, snoozeAlert } from './alerts'
 import {
   acknowledgeContract,
+  alertAssigneesContract,
   alertCountsContract,
   assignContract,
   bulkAcknowledgeContract,
@@ -12,18 +13,19 @@ import {
   listAlertsContract,
   listRulesContract,
   resolveContract,
+  ruleChoicesContract,
   ruleTimersContract,
   snoozeContract,
   testRuleContract,
   updateRuleContract,
 } from './contract'
 import { manifest } from './manifest'
-import { createRule, getRule, listRules, ruleTimers, testRule, updateRule } from './rules'
+import { createRule, getRule, listRules, ruleChoices, ruleTimers, testRule, updateRule } from './rules'
 
 /**
  * Exception rules and stored alerts (B-W2a-33; ANA-036, PLT-100): the alerts with their tiles, one alert, acknowledge
  * (one, or the selection), assign, snooze, resolve with a note; the rules, one rule, a new one, a change, a dry run, a
- * DATE rule's timers. The engine (scheduler and worker) is ./engine.ts; the date timers are platform/timers.
+ * DATE rule's timers; B-W2a-78: who an alert may be given to, and the roles and places a rule dialog offers. The engine (scheduler and worker) is ./engine.ts; the date timers are platform/timers.
  */
 export default defineRoutes('alerts', manifest, async (app) => {
   app.get('/alerts', { schema: listAlertsContract }, async (request) => listAlerts(request, request.query))
@@ -36,6 +38,8 @@ export default defineRoutes('alerts', manifest, async (app) => {
 
   app.post('/alerts/rules', { schema: createRuleContract }, async (request, reply) => reply.code(201).send(await createRule(request, request.body, idempotencyKeyFrom(request))))
 
+  app.get('/alerts/rules/choices', { schema: ruleChoicesContract }, async (request) => ruleChoices(request))
+
   app.get('/alerts/rules/:id', { schema: getRuleContract }, async (request) => getRule(request, request.params.id))
 
   app.put('/alerts/rules/:id', { schema: updateRuleContract }, async (request) => updateRule(request, request.params.id, request.body, idempotencyKeyFrom(request)))
@@ -45,6 +49,8 @@ export default defineRoutes('alerts', manifest, async (app) => {
   app.get('/alerts/rules/:id/timers', { schema: ruleTimersContract }, async (request) => ruleTimers(request, request.params.id))
 
   app.get('/alerts/:id', { schema: getAlertContract }, async (request) => getAlert(request, request.params.id))
+
+  app.get('/alerts/:id/assignees', { schema: alertAssigneesContract }, async (request) => alertAssignees(request, request.params.id))
 
   app.post('/alerts/:id/acknowledge', { schema: acknowledgeContract }, async (request) => acknowledgeAlert(request, request.params.id, request.body, idempotencyKeyFrom(request)))
 

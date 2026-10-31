@@ -10,7 +10,9 @@
       "approvals": "Approvals",
       "tasks": "My tasks",
       "notifications": "Notifications",
-      "mailToSort": "Mail to sort"
+      "mailToSort": "Mail to sort",
+      "insights": "Insights",
+      "alerts": "Alerts"
     },
     "products": {
       "area": "Products",
@@ -64,6 +66,7 @@
       "platform": "Platform",
       "documents": "Documents & numbering",
       "languages": "Languages & formats",
+      "automation": "Approvals, automation & AI",
       "audit": "Audit log",
       "connections": "Connections & API",
       "data": "Data",

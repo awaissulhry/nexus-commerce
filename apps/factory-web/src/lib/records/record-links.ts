@@ -72,6 +72,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   IntegrationAccount: '/admin/connections/[id]',
   // Home › My tasks (SCR-233, B-W2a-40): a task opens in its DetailModal on the list.
   Task: '/home/tasks?open=[id]',
+  // Home › Alerts (SCR-234, B-W2a-78): an exception rule's alert opens in its DetailModal on the list (Today's RULE_ALERT
+  // row and the bell's `alert:` anchor follow).
+  Alert: '/home/alerts?open=[id]',
   // B-W2a-53 Plant › Maintenance: a machine (SCR-150), a maintenance job (SCR-149); a request opens in its DetailModal on
   // the queue (SCR-148).
   Machine: '/plant/machines/[id]',
@@ -100,6 +103,8 @@ export const ATTENTION_PAGES: Readonly<Record<string, string>> = Object.freeze({
 /** An API list route → the web page that shows it (with the same query). */
 export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/email/inbound': '/home/mail-to-sort',
+  // B-W2a-78: the alerts (`?tile=`, `?severity=`, `?kind=`, `?q=` as the API reads them; `ruleKind` is the page's `kind`).
+  '/alerts': '/home/alerts',
   '/parties': '/sales/customers',
   // The quote list (SCR-034) reads `status` and `q` as the API does; the approvals queue (SCR-030) reads `view`.
   '/sales/quotes': '/sales/quotes',

@@ -57,6 +57,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'home.mail', title: 'Mail to sort', titleIt: 'Posta da smistare', wave: 'W0', href: '/home/mail-to-sort' },
         ],
       },
+      // W2a: B-W2a-78 Alerts (SCR-234). Dashboards (W2b), Reports (B-W2a-79) and the KPI library (W2b) join with their steps.
+      {
+        label: 'Insights',
+        labelIt: 'Analisi',
+        hideLabel: false,
+        pages: [{ id: 'home.alerts', title: 'Alerts', titleIt: 'Avvisi', wave: 'W2a', href: '/home/alerts' }],
+      },
     ],
   },
   {
@@ -469,6 +476,8 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'admin.documents', title: 'Documents & numbering', titleIt: 'Documenti e numerazioni', wave: 'W0', href: '/admin/documents' },
           { id: 'admin.languages', title: 'Languages & formats', titleIt: 'Lingue e formati', wave: 'W0', href: '/admin/languages' },
+          // W2a: B-W2a-78 Approvals, automation & AI (SCR-167, the Reminders & timers part). Fields & lists (W2b) joins before it.
+          { id: 'admin.automation', title: 'Approvals, automation & AI', titleIt: 'Approvazioni, automazioni e IA', wave: 'W2a', href: '/admin/automation' },
           { id: 'admin.connections', title: 'Connections & API', titleIt: 'Connessioni e API', wave: 'W0', href: '/admin/connections' },
         ],
       },
