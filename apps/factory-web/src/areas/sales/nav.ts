@@ -1,4 +1,4 @@
-import { ClipboardList, Contact, FileText, Handshake, Tags } from 'lucide-react'
+import { ClipboardList, Contact, FileText, Handshake, Settings, Tags, Undo2 } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -29,11 +29,23 @@ export const officeArea: OfficeAreaNav = {
           { id: 'sales-orders', label: 'shell:nav.sales.orders', href: '/sales/orders', icon: ClipboardList, permission: 'orders.view' },
         ],
       },
+      // SCR-111 / SCR-112 (B-W2a-77): After-sales › Returns & repairs — customer returns (RMAs) and repairs in one grid.
+      {
+        id: 'sales-aftersales',
+        label: 'shell:nav.sales.aftersales',
+        items: [{ id: 'sales-returns', label: 'shell:nav.sales.returns', href: '/sales/returns', icon: Undo2, permission: 'sales.returns.view' }],
+      },
       // SCR-106 (B-W2a-49): Pricing › Price lists & contracts — customer price lists by dated version, their customers.
       {
         id: 'sales-pricing',
         label: 'shell:nav.sales.pricing',
         items: [{ id: 'sales-pricelists', label: 'shell:nav.sales.pricelists', href: '/sales/price-lists', icon: Tags, permission: 'pricelists.view' }],
+      },
+      // SCR-235 (B-W2a-77): Settings › Sales settings — quote rules and defaults, return policy and reasons, numbering.
+      {
+        id: 'sales-settings',
+        label: 'shell:nav.sales.settings',
+        items: [{ id: 'sales-settings-page', label: 'shell:nav.sales.salesSettings', href: '/sales/settings', icon: Settings, permission: 'quotes.view' }],
       },
     ],
   },

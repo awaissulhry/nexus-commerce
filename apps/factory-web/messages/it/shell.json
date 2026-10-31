@@ -30,7 +30,11 @@
       "quotes": "Preventivi",
       "orders": "Ordini",
       "pricing": "Prezzi",
-      "pricelists": "Listini e contratti"
+      "pricelists": "Listini e contratti",
+      "aftersales": "Post-vendita",
+      "returns": "Resi e riparazioni",
+      "settings": "Impostazioni",
+      "salesSettings": "Impostazioni vendite"
     },
     "purchasing": {
       "area": "Acquisti",

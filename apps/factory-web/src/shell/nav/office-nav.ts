@@ -119,6 +119,11 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-49: Sales › Pricing › Price lists & contracts (SCR-106) and a price list.
   '/sales/price-lists',
   '/sales/price-lists/[listId]',
+  // B-W2a-77: Sales › After-sales › Returns & repairs (SCR-111), a return and a repair (SCR-112), Sales settings (SCR-235).
+  '/sales/returns',
+  '/sales/returns/[id]',
+  '/sales/returns/repairs/[id]',
+  '/sales/settings',
   '/purchasing/suppliers',
   '/purchasing/suppliers/[partyId]',
   // B-W1-30/31 part 2: Purchase orders (SCR-058) and the PO studio (SCR-059).

@@ -1,0 +1,38 @@
+/*
+ * Sales › Settings (SCR-235; B-W2a-77) LAYOUT: the scope switch and the cards' grid. The page fills the shell's main area
+ * (Owner rule 2026-10-29: no page max-width); wide screens get two columns of cards. Semantic tokens only.
+ */
+
+.fw-ss-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-ss-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-ss-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-ss-sentence {
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border-inline-start: 3px solid var(--nds-text-link);
+  background: var(--nds-surface-sunken);
+  border-radius: var(--nds-radius-sm);
+}
+
+.fw-ss-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}

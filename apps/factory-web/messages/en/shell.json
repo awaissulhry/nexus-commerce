@@ -30,7 +30,11 @@
       "quotes": "Quotes",
       "orders": "Orders",
       "pricing": "Pricing",
-      "pricelists": "Price lists & contracts"
+      "pricelists": "Price lists & contracts",
+      "aftersales": "After-sales",
+      "returns": "Returns & repairs",
+      "settings": "Settings",
+      "salesSettings": "Sales settings"
     },
     "purchasing": {
       "area": "Purchasing",
