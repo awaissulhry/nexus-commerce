@@ -162,6 +162,8 @@
     "promised": "Promesso",
     "shipped": "Spedito",
     "net": "Imponibile",
+    "margin": "Margine %",
+    "marginHint": "Come stimato ora",
     "quote": "Dal preventivo",
     "more": "Altro"
   },
@@ -226,6 +228,7 @@
     "shipments": "Spedizioni",
     "money": "Fatture e pagamenti",
     "documents": "Documenti",
+    "margin": "Margine",
     "activity": "Attività",
     "depositOpen": "C'è un acconto aperto",
     "changes": "Modifiche"

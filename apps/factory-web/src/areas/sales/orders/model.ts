@@ -256,7 +256,8 @@ export function ordersCsv(rows: readonly OrderRow[], price: boolean, words: { he
 // ---- the record ---------------------------------------------------------------------------------------------------------
 
 /** The record's tabs; `changes` (B-W2a-50, SCR-107) lists the amendments since confirmation. */
-export const RECORD_TABS = ['lines', 'dates', 'production', 'shipments', 'money', 'changes', 'documents', 'activity'] as const
+// B-W2a-72: 'margin' = the Margin tab (design order.margin), between Documents and Activity.
+export const RECORD_TABS = ['lines', 'dates', 'production', 'shipments', 'money', 'changes', 'documents', 'margin', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 export const tabOf = (asked: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(asked ?? '') ? (asked as RecordTab) : 'lines')

@@ -40,6 +40,9 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // A company's existing chromium VI reports for its opening stock (modules/inventory/opening, B-W1-35; record id = the
   // company's id): CERTIFICATE files only, the evidence the imported lots' results rest on.
   OpeningStock: { kinds: ['CERTIFICATE'], route: 'POST /inventory/opening/reports, then POST /inventory/opening/reports/:fileId/complete' },
+  // The notified body's answer to a change of the approved type (modules/compliance/type-changes, B-W2a-66): every kind; the
+  // decision APPROVED or REFUSED rests on it.
+  TypeChangeReview: { route: 'POST /compliance/type-changes/:reviewId/answer-file, then POST …/answer-file/:fileId/complete' },
 })
 
 /** How a caller of requestUpload / completeUpload reaches them: the generic files routes, or a module's own route. */

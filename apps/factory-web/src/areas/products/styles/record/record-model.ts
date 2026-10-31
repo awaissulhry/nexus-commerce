@@ -1,4 +1,5 @@
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
+import type { PanelRead, RecordPanelsViewModel } from '../../../../record-panels/model'
+import type { Assignable, TaskDraft } from '../../../../record-panels/tasks/model'
 import type { WizardActions } from '../../../admin/import/view/ImportWizard'
 import type {
   BomExportFormat,
@@ -16,6 +17,7 @@ import type {
   RoutingView,
   ScaleRow,
   StyleComplianceView,
+  StyleTypeChanges,
   StepPatch,
   StylePatch,
   StyleView,
@@ -61,6 +63,8 @@ export type StyleDialog =
   /** W2a: a routing step's subcontract details (design pop:styles.opDrawer "Subcontract details"). */
   | { kind: 'subcontract'; stepId: string }
   | { kind: 'upload'; documentKind: 'DECLARATION_OF_CONFORMITY' | 'USER_INFORMATION'; language: string }
+  /** W2a (B-W2a-66): a task for Compliance about a change that may need the notified body. */
+  | { kind: 'tellCompliance'; certificateId: string }
   | { kind: 'help' }
 
 export interface SearchState<T> {
@@ -86,6 +90,10 @@ export interface StyleRecordViewModel {
   /** The draft's cost against the released revision's (the strip's change), when both exist. */
   costCompare: CostDiffView | null
   compliance: Part<StyleComplianceView>
+  /** W2a (B-W2a-66): what the revision changes against the certified type, per covering certificate. */
+  typeChanges: Part<StyleTypeChanges>
+  /** W2a: the people a "Tell Compliance" task may be given to (while that dialog is open). */
+  taskPeople: PanelRead<readonly Assignable[]> | null
   libraries: {
     scales: ScaleRow[] | null
     colours: ColourRow[] | null
@@ -173,6 +181,8 @@ export interface StyleRecordActions {
   onUpload?: (input: { kind: 'DECLARATION_OF_CONFORMITY' | 'USER_INFORMATION'; language: string; number: string | null; file: File }) => Promise<boolean>
   onDownload?: (documentId: string, fileId: string) => void
   onAssignLabel?: (templateId: string | null) => Promise<boolean>
+  /** W2a: the task for Compliance (resolves true when it was made). */
+  onTellCompliance?: (draft: TaskDraft) => Promise<boolean>
   // W2a
   onDuplicate?: () => void
   duplicate?: DuplicateActions

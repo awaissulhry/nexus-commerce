@@ -133,7 +133,7 @@ describe('Purchase orders (SCR-058/059)', () => {
     expect(nextStep(order('DRAFT'), canOf('planner')).held).toEqual({ key: 'held.noSend' })
     expect(nextStep(order('CHANGES_PROPOSED'), canOf('buyer'))).toEqual({ kind: 'review', held: null })
     expect(nextStep(order('CONFIRMED'), canOf('buyer'))).toEqual({ kind: 'receive', held: { key: 'held.noReceive' } })
-    expect(cancelHeld(order('CONFIRMED'), canOf('buyer'))).toEqual({ key: 'po.cancelHeld.contract' })
+    expect(cancelHeld(order('CONFIRMED'), canOf('buyer'))).toBeNull() // W2a (B-W2a-52): a confirmed order may be cancelled
     expect(cancelHeld(order('SENT'), canOf('buyer'))).toBeNull()
   })
 

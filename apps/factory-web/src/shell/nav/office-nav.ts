@@ -126,6 +126,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/purchasing/subcontracting',
   '/purchasing/subcontracting/[id]',
   '/purchasing/subcontracting/[id]/job-sheet',
+  // B-W2a-69: Requests to buy (SCR-236).
+  '/purchasing/requests',
   // B-W2a-63: Returns & claims (SCR-131) and a supplier claim.
   '/purchasing/claims',
   '/purchasing/claims/[id]',
@@ -161,6 +163,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-68: Quality › Problems › Nonconformances (SCR-144 list and board, SCR-145 the NCR record).
   '/quality/ncr',
   '/quality/ncr/[id]',
+  // B-W2a-65: Quality › Complaints (SCR-113 W2a part).
+  '/quality/complaints',
+  '/quality/complaints/[id]',
   '/compliance/certificates',
   '/compliance/certificates/[id]',
   '/compliance/labels',
@@ -181,6 +186,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/finance/accounting/files',
   '/finance/reports',
   '/finance/reports/print',
+  // B-W2a-72: Costing › Standard vs actual (SCR-154) with its variance report (print), and Margins (SCR-155).
+  '/finance/costing',
+  '/finance/costing/print',
+  '/finance/margins',
   // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
   '/admin',
   '/admin/companies',
@@ -210,6 +219,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/warehouse/hides/[id]',
   '/warehouse/lots',
   '/warehouse/lots/[id]',
+  // B-W2a-64: the trace of a record that is not a lot (SCR-201-trace, opened by the Trace dialog; no navigation row).
+  '/warehouse/lots/trace',
   '/warehouse/moves',
   '/warehouse/locations',
   '/warehouse/locations/[id]',

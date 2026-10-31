@@ -73,7 +73,10 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   routings), Sizes & measurements (size scales; the scale record with its sizes' body measures). Shared parts, rules,
   role cases and the `library` catalogue's test in `products/library/`. Each folder: `api.ts`, `model.ts`, the page
   container, `view/`, `record/`, `fixtures.ts` (made-up data).
-- `src/areas/compliance/certificates/` (SCR-050 register, SCR-051 the record with coverage and the lapse check) and
+- `src/areas/compliance/certificates/` (SCR-050 register, SCR-051 the record with coverage and the lapse check; B-W2a-66: the
+  Renewals tab `?tab=renewals&act=renew|applied|link` in `renewals/` — api, model, `use-renewals.ts` container hook, view, made-up
+  fixtures — and the register's "Change waiting" column and `?view=changes`; the style compliance tab's "Changes that may need the
+  notified body" + Tell Compliance (the ONE New task dialog)) and
   `src/areas/compliance/labels/` (SCR-053 list, `SCR-053-label` the PPE label builder: the preview re-rendered as you
   type with factory-domain's `renderLabel` over the values the API's preview answers; CE mark, pictogram and care
   symbols are named stand-ins). Catalogues `certificates`, `labels`.
@@ -109,6 +112,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   lots, Cr VI results, the lot release; PPE register SCR-113): their shared parts are `areas/quality/_shared/` (record
   frame, check list = the gate in words, step-up hook + DS StepUpModal, live hook, `qualityCan`, the lot schema);
   catalogues `quality`, `lab`, `register`.
+- `src/areas/quality/complaints/` — Quality › Problems › Complaints (B-W2a-65; SCR-113-complaints list, SCR-113-complaint the record; catalogue `complaints`): `?view=new|safety|dueSoon|open|answeredMonth|closed|all` (the tiles = named filters), `?category=` `?severity=` `?mine=1` `?q=`, `?new=1` Log complaint (a scanned serial fills customer, garment, order, shipment through `POST /quality/complaints/preview`; photos after logging through the generic files routes), `?open=<id>` the triage DetailModal (J / K over the NEW queue; Safety asks `ComplaintSafetyConfirm`, which names who is told from `/quality/complaints/people`); the danger safety banner (one at a time, never timed out; Acknowledge = the owner's `quality.complaints.acknowledge`); the record `?tab=complaint|linked|activity` (`?do=ncr|register` from the list's verbs; NCR via POST /quality/ncr from Complaint, repair via POST /sales/repairs {complaintId}); held steps are the API's `held/<CODE>` in words (`held.<CODE>`).
 - B-W2a-40 (every day at Home): `src/areas/home/notifications/` (SCR-005, `/home/notifications?tab=&state=`, catalogue
   `home-notifications`; the shell's bell is `shell/office/use-bell.ts`: ONE `GET /notifications/counts` when the shell
   mounts, then live `notification.created`, a reconnect, or the window event `factory:notifications-changed` that any

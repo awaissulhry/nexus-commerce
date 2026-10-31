@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Download, MoreHorizontal, Search } from 'lucide-react'
+import { Download, GitBranch, MoreHorizontal, Search, ShieldCheck } from 'lucide-react'
 import { EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select } from '@nexus/ui/primitives'
@@ -15,6 +15,8 @@ import { CR_VI_TONE, daysSince, lotWaitKey, movesHref, quantity } from '../../..
 import { Dual, NoAccess, QualityPill, Qty } from '../../../../_shared/stock/parts'
 import { LOT_MENU_VIEWS, LOT_TILES, type LotsListActions, type LotsListModel, type LotView } from '../../model'
 import { KeysModal, LotsMessages, useWords } from '../../shared/parts'
+import { ReleaseDialog } from '../../release/ReleaseDialog'
+import { TraceDialog } from '../../trace/TraceDialog'
 
 export type { LotsListActions, LotsListModel } from '../../model'
 
@@ -25,7 +27,8 @@ export type { LotsListActions, LotsListModel } from '../../model'
  * lot, dye batch and shade, when and with which receipt it came (or opening stock), its quality and why it waits, Cr VI
  * against its limit, the evidence and documents, what is on hand (hides and area for leather), the work orders it went
  * to and its age. `/` searches or takes a scanned lot label (one hit opens the lot). Export N; the decisions stay in
- * Compliance › Tests & substances (row ⋯).
+ * Compliance › Tests & substances (row ⋯). B-W2a-64: the band's Trace… (one field, any code) and Release… (selection
+ * aware: "Release 3 lots" reviews which can go and which cannot, with reasons), also in the selection row.
  */
 export function LotsListView({ model, actions }: { model: LotsListModel; actions?: LotsListActions }) {
   return (
@@ -182,6 +185,7 @@ function LotsList({ model, actions }: { model: LotsListModel; actions?: LotsList
 
   const tileView = LOT_TILES.find((tile) => tile.view === model.view)?.view ?? null
   const picked = (model.rows.items ?? []).filter((row) => selected.includes(row.id))
+  const releaseHeld = !model.daily.lotsRelease ? t('lt.rel.held.noRight') : picked.length === 0 ? t('lt.rel.held.pick') : null
   const filtered = model.q.trim() !== '' || model.view !== 'all'
   const ownKeys: ListKey[] = []
   const clearFilters = (
@@ -260,6 +264,14 @@ function LotsList({ model, actions }: { model: LotsListModel; actions?: LotsList
           {' · '}
           {t(`stock:live.${model.live}`)}
         </span>
+        <span className="fw-st-actions">
+          <Button size="sm" onClick={() => actions?.onTrace?.()}>
+            <GitBranch size={14} aria-hidden /> {t('lt.find.open')}
+          </Button>
+          <Button size="sm" variant="primary" heldReason={releaseHeld} onClick={() => actions?.onRelease?.(picked.map((row) => row.id))}>
+            <ShieldCheck size={14} aria-hidden /> {picked.length > 0 ? t('lt.rel.button', { count: picked.length }) : t('lt.rel.buttonNone')}
+          </Button>
+        </span>
       </div>
 
       <MetricStrip
@@ -287,9 +299,14 @@ function LotsList({ model, actions }: { model: LotsListModel; actions?: LotsList
           selected,
           onChange: setSelected,
           actions: (
-            <Button size="sm" aria-label={t('stock:common.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
-              <Download size={13} aria-hidden /> <SelectionLabel>{t('stock:common.export', { count: picked.length })}</SelectionLabel>
-            </Button>
+            <>
+              <Button size="sm" variant="primary" aria-label={t('lt.rel.button', { count: picked.length })} heldReason={releaseHeld} onClick={() => actions?.onRelease?.(picked.map((row) => row.id))}>
+                <ShieldCheck size={13} aria-hidden /> <SelectionLabel>{t('lt.rel.button', { count: picked.length })}</SelectionLabel>
+              </Button>
+              <Button size="sm" aria-label={t('stock:common.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
+                <Download size={13} aria-hidden /> <SelectionLabel>{t('stock:common.export', { count: picked.length })}</SelectionLabel>
+              </Button>
+            </>
           ),
         }}
         updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
@@ -302,6 +319,8 @@ function LotsList({ model, actions }: { model: LotsListModel; actions?: LotsList
       <p className="fw-wl-hint">{t('lt.list.decideWhere')}</p>
 
       {help && <KeysModal own={ownKeys} onClose={() => setHelp(false)} />}
+      {model.release && <ReleaseDialog model={model.release} actions={actions?.release} />}
+      {model.find && <TraceDialog model={model.find} actions={actions?.find} />}
     </div>
   )
 }

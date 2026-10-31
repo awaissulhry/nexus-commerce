@@ -60,7 +60,9 @@
     "QualityRelease": "Un rilascio",
     "Inspection": "Un'ispezione",
     "Shipment": "Una spedizione",
-    "LabResult": "Un risultato di laboratorio (Cr VI)"
+    "LabResult": "Un risultato di laboratorio (Cr VI)",
+    "Nonconformance": "Una non conformità (NCR)",
+    "Complaint": "Un reclamo del cliente"
   },
   "list": {
     "table": "Voci del registro DPI",

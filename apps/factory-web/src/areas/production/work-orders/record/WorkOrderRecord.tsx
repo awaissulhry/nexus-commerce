@@ -38,6 +38,7 @@ import { abilitiesOf, cellsBody, liveTouches, readProblem, releaseRefusalCodes, 
 import { PART_LOADING, type Loaded, type Part, type RecordDialog, type ReprintRun, type WorkOrderRecordModel } from './record-model'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { useStepUp, isStepUpCancelled } from '../../../quality/_shared/hooks'
+import { useLabourCost } from '../labour/use-labour'
 import { getAvailability, getFinished, getHold, getReadiness, getScrap, getYield, holdReasons, listHolds, placeHold, releaseHold, reportFinished, reserveHides, splitBundle } from '../daily/api'
 import { beforeRelease, DAILY_NAMESPACE, dailyCan, dailyProblem, dailyReadProblem, FINISHABLE, LOADING, NO_DAILY, READINESS_STATUSES, type DailyDialog, type DailyModel } from '../daily/model'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
@@ -286,6 +287,9 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
 
   const version = () => current.current?.version ?? 1
 
+  // B-W2a-72: the Labour & cost tab reads the work order's cost while it is open.
+  const labour = useLabourCost(api, workOrderId, tab === 'labour', session.permissions, workOrder.status === 'ready' ? { status: workOrder.value.status, version: workOrder.value.version } : null)
+
   const model: WorkOrderRecordModel = {
     prefix,
     can,
@@ -311,6 +315,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     bundleOpen,
     cutOpen,
     daily: { ...daily, can: dcan, stepUp },
+    labour: labour.model,
   }
 
   const value = workOrder.status === 'ready' ? workOrder.value : null
@@ -321,6 +326,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
       panels={value ? <RecordPanels record={{ type: 'WorkOrder', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.style.code}`} /> : null}
       actions={{
         onRetry: () => void load(),
+        onRetryLabour: labour.retry,
         onRetryPart: () => value && void loadParts(value),
         onReload: () => void load(),
         onDock: toggleDock,

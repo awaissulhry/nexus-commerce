@@ -1,0 +1,352 @@
+{
+  "tile": {
+    "dueThisWeek": "Due this week",
+    "deliveryLate": "Late"
+  },
+  "view": {
+    "dueThisWeek": "Expected this week",
+    "deliveryLate": "Late deliveries",
+    "pastConfirmBy": "Past the confirm-by time"
+  },
+  "delivery": {
+    "LATE": "Late",
+    "THIS_WEEK": "This week",
+    "LATER": "Later"
+  },
+  "language": {
+    "it": "Italian",
+    "en": "English"
+  },
+  "list": {
+    "colExpected": "Expected",
+    "answerBy": "Answer by {time}",
+    "pastConfirmBy": "Past the confirm-by ({time})",
+    "send": "Send",
+    "sendN_one": "Send {count}",
+    "sendN_other": "Send {count}",
+    "sendNoDraft": "Select drafts first: only drafts are sent.",
+    "keySend": "Send the selected drafts (x selects the row)"
+  },
+  "sendMany": {
+    "title_one": "Send {count} purchase order",
+    "title_other": "Send {count} purchase orders",
+    "subtitle": "One card per supplier: each order goes on its own, with its own confirm link.",
+    "supplier": "Supplier",
+    "order": "Order",
+    "reading": "Reading what each order needs before it goes…",
+    "readFailed": "Couldn't read the orders to send",
+    "goes": "Goes",
+    "stays": "Stays",
+    "to": "To {name} · {email} · in {language}",
+    "confirmByOf": "Confirm by for {number}",
+    "message": "Message to every supplier",
+    "messageHint": "Optional: added to each mail after the standard text.",
+    "eachOwn": "Each order is its own send: one refused does not stop the others.",
+    "link": "Each supplier gets a one-off link to confirm, propose other dates or quantities, or decline — no account.",
+    "reminder": "After the confirm-by time the buyer is alerted; reminders go only by hand until the Owner switches the automatic ones on.",
+    "confirm_one": "Send {count} order",
+    "confirm_other": "Send {count} orders",
+    "held": {
+      "reading": "Wait: the orders are being read.",
+      "offline": "Offline: nothing can be sent now.",
+      "none": "None of these orders can go now: see each card.",
+      "notDraft": "Not a draft any more: it was sent or changed meanwhile.",
+      "gone": "Not found any more (removed, or another company's).",
+      "refused": "It could not be read: open the order."
+    },
+    "doneTitle_one": "{count} order sent",
+    "doneTitle_other": "{count} orders sent",
+    "sent": "sent to {to}.",
+    "answerBy": "answer by {time}",
+    "refused": {
+      "conflict": "not sent: it changed meanwhile — open it and send it again.",
+      "invalid": "not sent: something on the order is not right — open it.",
+      "other": "not sent: try it from the order."
+    },
+    "fake": "On this computer the mail goes to the test mailbox only."
+  },
+  "send": {
+    "confirmBy": "Confirm by",
+    "confirmByHint": "Default {time} (48 hours, longer by the supplier's closed days). The buyer is alerted after it.",
+    "confirmByHintNone": "Default: 48 hours after the send, longer by the supplier's closed days.",
+    "changesTold": "The supplier reads what changed in revision {revision}:",
+    "changeNote": "Note on what changed",
+    "changeNoteHint": "Optional: why it changed, in the mail of this revision.",
+    "confirmByRefused": "That confirm-by time cannot be used: pick a time after now, within the link's life."
+  },
+  "change": {
+    "open": "Change (revision {revision})",
+    "title": "Change {number}?",
+    "becomesDraft": "The order becomes the draft of revision {revision}: change its lines and details, then send it.",
+    "linksStop": "{supplier}'s links to answer stop working now; their answer is kept with revision history.",
+    "confirmedAgain": "{supplier} confirmed this order: the new revision needs their confirmation again.",
+    "sendAfter": "The supplier sees nothing until you send the new revision.",
+    "note": "Why it changes (for the history)",
+    "noteHint": "Optional; kept with the order, never in a mail.",
+    "confirm": "Start revision {revision}",
+    "bannerHint": "Sent orders are read-only. Change starts revision {revision}: the supplier sees it after you send it.",
+    "bannerReceived": "Goods came: the order no longer changes. Cancel a line or close it short from ⋯ on the line.",
+    "fromTo": "{field}: {before} → {after}",
+    "held": {
+      "draft": "It is a draft: change it here and send it.",
+      "proposed": "The supplier proposed changes: accept, refuse or counter-propose first.",
+      "received": "Goods came: cancel a line or close it short instead.",
+      "closed": "The order is closed or cancelled."
+    }
+  },
+  "counter": {
+    "open": "Counter-propose",
+    "title": "Counter-propose on {number}?",
+    "confirm": "Start revision {revision}",
+    "fromAsked": "The supplier's changes are refused; revision {revision} starts from what you asked, to change and send.",
+    "means": "Counter-propose: revision {revision} from what you asked — change it and send it.",
+    "held": {
+      "noProposal": "No proposal waits for your decision."
+    }
+  },
+  "revisionDraft": {
+    "title": "Revision {revision} draft — the supplier sees it after you send it",
+    "nothingYet": "Nothing changed yet against the revision the supplier has.",
+    "unknown": "What changed so far could not be read; the send shows it again."
+  },
+  "revisions": {
+    "title": "Revisions",
+    "draftOpen": "Draft of revision {revision}",
+    "notSent": "Not sent yet: revision 1 is made at the first send.",
+    "onlyOne": "Only revision 1.",
+    "version": "Revision {revision}",
+    "sent": "Sent {time} by {by}",
+    "someone": "someone in the office",
+    "viaLink": "the link",
+    "confirmedBy": "Confirmed {time} by {name}",
+    "first": "The first send: {count} lines.",
+    "noChange": "Sent again with no change.",
+    "line": "Line {seq} ({item})",
+    "removedLine": "a line no longer on the order",
+    "note": "Note to the supplier:",
+    "pdf": "PDF",
+    "openPdf": "Open the PDF of revision {revision}",
+    "pricesSame": "Prices as before: {amount} net.",
+    "netFromTo": "Net: {before} → {after}",
+    "priceFromTo": "Line {seq} price: {before} → {after}",
+    "kind": {
+      "ADDED": "{line}: added",
+      "REMOVED": "{line}: removed",
+      "CANCELLED": "{line}: cancelled",
+      "CHANGED": "{line}: changed"
+    },
+    "answer": {
+      "NOT_SENT": "Not sent",
+      "WAITING": "Waiting",
+      "CONFIRMED": "Confirmed",
+      "DECLINED": "Declined",
+      "CHANGES_PROPOSED": "Changes proposed",
+      "RECEIVED": "Received",
+      "CANCELLED": "Cancelled"
+    }
+  },
+  "field": {
+    "requestedDate": "Requested date",
+    "incoterms": "Incoterms",
+    "paymentTerms": "Payment terms",
+    "note": "Note to the supplier",
+    "quantity": "Quantity",
+    "needDate": "Need date",
+    "colour": "Colour",
+    "description": "Description",
+    "articleCode": "Their article code",
+    "colourCode": "Their colour code",
+    "grade": "Grade",
+    "thicknessMin": "Thickness from",
+    "thicknessMax": "Thickness to",
+    "oneDyeBatch": "One dye batch",
+    "tolerance": "Area tolerance",
+    "other": "A detail"
+  },
+  "value": {
+    "none": "none",
+    "yes": "yes",
+    "no": "no",
+    "otherColour": "another colour"
+  },
+  "reminders": {
+    "title": "Reminders sent",
+    "busy": "Wait: a change is being saved.",
+    "confirmBy": "Confirm by",
+    "noDeadline": "No time asked (sent before confirm-by times existed)",
+    "automatic": "Automatic reminders",
+    "automaticOn": "On for this company",
+    "automaticOff": "Off for this company",
+    "switchHint": "The Owner's switch, off by default: until it is on, reminders go only by hand.",
+    "nextAt": "Next one {time}",
+    "notWaiting": "The order is not waiting for the supplier's answer: no reminder goes.",
+    "manualOnly_one": "{count} reminder for this revision. Remind by hand when it is needed.",
+    "manualOnly_other": "{count} reminders for this revision. Remind by hand when it is needed.",
+    "overdueManual_one": "The confirm-by time passed; {count} reminder so far. The buyer was alerted.",
+    "overdueManual_other": "The confirm-by time passed; {count} reminders so far. The buyer was alerted.",
+    "nextAutomatic_one": "{count} reminder so far; the next automatic one {time}.",
+    "nextAutomatic_other": "{count} reminders so far; the next automatic one {time}.",
+    "noMoreAutomatic_one": "{count} reminder so far; no more automatic ones for this revision (at most 3).",
+    "noMoreAutomatic_other": "{count} reminders so far; no more automatic ones for this revision (at most 3).",
+    "none": "No reminder sent yet.",
+    "byRun": "The daily run",
+    "byHand": "By hand ({name})",
+    "col": {
+      "when": "When",
+      "revision": "Revision",
+      "how": "How",
+      "to": "To",
+      "mail": "Mail"
+    },
+    "mail": {
+      "QUEUED": "Waiting",
+      "SENT": "Sent",
+      "DELIVERED": "Delivered",
+      "FAILED": "Failed",
+      "OTHER": "Unknown"
+    }
+  },
+  "confirmBy": {
+    "move": "Move confirm-by",
+    "title": "Move the confirm-by of {number}",
+    "label": "Confirm by",
+    "hint": "In the site's time; within the link's life.",
+    "now": "Now: {time}",
+    "none": "No time asked yet.",
+    "pick": "Pick a time first.",
+    "same": "That is the time already asked.",
+    "nothingSent": "Nothing is sent to {supplier}: this is the office's deadline.",
+    "alert": "The buyer's alert follows the new time.",
+    "confirm": "Move it",
+    "ahead": "The supplier still has time.",
+    "passed": "Passed: the supplier did not answer in time.",
+    "refused": "That time cannot be used: pick one after now, within the link's life.",
+    "held": {
+      "notSent": "Only a sent order waiting for its answer has a confirm-by time."
+    }
+  },
+  "remind": {
+    "open": "Remind the supplier",
+    "title": "Remind {supplier}",
+    "to": "To {name} · {email}",
+    "asked": "Asked to answer by {time}.",
+    "askedNone": "No confirm-by time was asked.",
+    "noLink": "The mail carries the order's PDF, not the link: it asks to use the link received, or to reply for a new one.",
+    "before_one": "{count} reminder already went for this revision.",
+    "before_other": "{count} reminders already went for this revision.",
+    "fake": "On this computer the mail goes to the test mailbox only.",
+    "message": "Your words",
+    "messageHint": "Optional: after the standard text, in the supplier's language.",
+    "confirm": "Send the reminder",
+    "held": {
+      "notWaiting": "Only a sent order waiting for its answer is reminded.",
+      "noEmail": "The order's contact has no e-mail: pick another contact (Edit details)."
+    }
+  },
+  "line": {
+    "cancel": "Cancel line",
+    "cancelN_one": "Cancel {count} line",
+    "cancelN_other": "Cancel {count} lines",
+    "closeShort": "Close short",
+    "held": {
+      "cancelled": "Cancelled already.",
+      "closedShort": "Closed short already.",
+      "newInDraft": "New in this draft: remove it instead.",
+      "cameCloseShort": "Goods came for it: close it short instead.",
+      "proposed": "Accept or refuse the supplier's changes first.",
+      "orderClosed": "The order is closed: nothing to cancel.",
+      "allCame": "Everything came: nothing is left to close.",
+      "nothingCame": "Nothing came yet against the order: cancel the line instead.",
+      "nothingCameLine": "Nothing came for this line yet: cancel it instead.",
+      "allCameLine": "It came in full: nothing is left to close."
+    }
+  },
+  "ended": {
+    "CANCELLED": "Cancelled",
+    "CLOSED_SHORT": "Closed short"
+  },
+  "closeShort": {
+    "title": "Close short",
+    "means": "The rest of a line will not come: closing it short ends what is still expected; planning releases it (the plan line is open again).",
+    "open_one": "Close {count} line short",
+    "open_other": "Close {count} lines short",
+    "none": "No line can be closed short now.",
+    "nothing": "No open line.",
+    "can": "Part came: may be closed short",
+    "line": "Close line {seq} short",
+    "lineShort": "Close short",
+    "col": {
+      "state": "State"
+    }
+  },
+  "end": {
+    "cancelTitle_one": "Cancel {count} line of {number}?",
+    "cancelTitle_other": "Cancel {count} lines of {number}?",
+    "closeTitle_one": "Close {count} line of {number} short?",
+    "closeTitle_other": "Close {count} lines of {number} short?",
+    "cancelMeans_one": "The line stays on the order as cancelled: nothing more of it is expected.",
+    "cancelMeans_other": "The lines stay on the order as cancelled: nothing more of them is expected.",
+    "closeMeans_one": "What came stays; the rest of the line is no longer expected.",
+    "closeMeans_other": "What came stays; the rest of the lines is no longer expected.",
+    "plan_one": "{count} plan line opens again in What to buy & make.",
+    "plan_other": "{count} plan lines open again in What to buy & make.",
+    "supplierTold": "{supplier} is mailed which lines end.",
+    "supplierNotTold": "The supplier is not mailed.",
+    "withRevision": "The supplier reads it with revision {revision} when you send it.",
+    "cancelConfirm_one": "Cancel {count} line",
+    "cancelConfirm_other": "Cancel {count} lines",
+    "closeConfirm_one": "Close {count} line short",
+    "closeConfirm_other": "Close {count} lines short"
+  },
+  "cancel": {
+    "confirmed": "{supplier} confirmed this order: cancelling ends a contract. They are told at once."
+  },
+  "reach": {
+    "loading": "Reading what this reaches…",
+    "failed": "Couldn't read what this reaches",
+    "waiting": "Wait: what this reaches is being read.",
+    "tableLabel": "What it reaches, per line",
+    "col": {
+      "ordered": "Ordered",
+      "received": "Came",
+      "outstanding": "Still expected",
+      "supplies": "Supplies",
+      "held": "Can it?"
+    },
+    "lineOk": "Yes",
+    "suppliesNothing": "No order of the plan",
+    "planLines_one": "{count} plan line",
+    "planLines_other": "{count} plan lines",
+    "demand": {
+      "SAFETY_STOCK": "safety stock",
+      "REORDER": "reorder rule",
+      "OTHER": "a customer order line"
+    },
+    "workOrders_one": "{count} work order loses this supply:",
+    "workOrders_other": "{count} work orders lose this supply:",
+    "salesOrders_one": "{count} customer order is affected:",
+    "salesOrders_other": "{count} customer orders are affected:",
+    "unnumbered": "(no number)",
+    "noOrders": "No work or customer order of the latest plan depends on it.",
+    "noPlan": "The site has no plan yet: what depends on it is not known.",
+    "held": {
+      "someLine": "Line {seq} cannot: see the list.",
+      "lastLines": "These are the last open lines: cancel the order instead.",
+      "atDock": "Goods for it are at the dock (an open receipt): post or reverse the receipt first.",
+      "other": "It cannot be done now: read the order again."
+    }
+  },
+  "refused": {
+    "changed": "Someone changed the order meanwhile: it was read again — look and try again."
+  },
+  "notice": {
+    "changed": "Revision {revision} is a draft: change it, then send it.",
+    "countered": "The supplier's changes are refused: revision {revision} is a draft to change and send.",
+    "linesCancelled_one": "{count} line cancelled.",
+    "linesCancelled_other": "{count} lines cancelled.",
+    "closedShort_one": "{count} line closed short: planning releases the rest.",
+    "closedShort_other": "{count} lines closed short: planning releases the rest.",
+    "confirmByMoved": "The confirm-by time moved; the alert follows it.",
+    "reminded": "Reminder sent to {email}."
+  }
+}

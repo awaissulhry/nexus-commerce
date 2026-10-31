@@ -5,6 +5,8 @@ import { ASSIGNMENT_RULES } from './assignments'
 import { THREAD_RULES } from './threads'
 // B-W2a-35: machine requests to maintenance, jobs to their technician.
 import { PLANT_RULES } from './plant'
+// B-W2a-65: a safety complaint's alert to the owner and quality.
+import { COMPLAINT_RULES } from './complaints'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -13,4 +15,6 @@ import { PLANT_RULES } from './plant'
  */
 export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RULES, ...ASSIGNMENT_RULES, ...APPROVAL_RULES, ...PLANT_RULES,
   // B-W2a-33: the exception rules' alerts (ALERT to the rule's recipients; ASSIGNMENT to an alert's assignee).
-  ...ALERT_RULES])
+  ...ALERT_RULES,
+  // B-W2a-65: a safety complaint (ALERT to who acknowledges it and who follows complaints up).
+  ...COMPLAINT_RULES])

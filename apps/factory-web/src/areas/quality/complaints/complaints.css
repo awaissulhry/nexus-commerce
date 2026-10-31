@@ -1,0 +1,181 @@
+/*
+ * Quality › Complaints (B-W2a-65) LAYOUT only: the triage's two columns, the photos grid, the radio cards' row, the
+ * scan field with its button, the answer-due words' tone. The controls are the design system's; semantic tokens only (no
+ * raw colours, no restyled controls). No page max-width (Owner rule 2026-10-29): the shared fw-q page fills the main area.
+ */
+.fw-cmp-ellipsis {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-cmp-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-cmp-words {
+  margin: 0;
+  color: var(--nds-text);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-cmp-error {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cmp-due-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-cmp-due-warning {
+  color: var(--nds-warning-text);
+}
+
+.fw-cmp-due-neutral {
+  color: var(--nds-text-2);
+}
+
+/* The triage: the complaint's facts beside the triage form on a wide dialog; one column below 900 px. */
+.fw-cmp-triage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: var(--nds-space-20);
+  align-items: start;
+}
+
+.fw-cmp-triage-facts,
+.fw-cmp-triage-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-cmp-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-cmp-radios {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-cmp-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-cmp-photo {
+  display: block;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-cmp-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fw-cmp-photo:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+
+.fw-cmp-scan {
+  display: flex;
+  gap: var(--nds-space-8);
+  align-items: center;
+  min-width: 0;
+}
+
+.fw-cmp-scan > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fw-cmp-consequences li + li {
+  margin-top: var(--nds-space-4);
+}
+
+/* The record's linked records: one group per kind, links wrapping. */
+.fw-cmp-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-cmp-link-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-cmp-link-group ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-cmp-aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .fw-cmp-triage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .fw-cmp-radios {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-cmp-scan {
+    flex-wrap: wrap;
+  }
+}
+
+@media print {
+  .fw-q-head .fw-q-actions {
+    display: none;
+  }
+}
+
+/* The list's category cell: the category and severity tags on one line (never wrapping into the next row). */
+.fw-cmp-tags {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--nds-space-4);
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}

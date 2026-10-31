@@ -205,7 +205,8 @@
     "trackingSaved": "The garment numbering is saved.",
     "labelNamed": "The revision names its garment label.",
     "subcontractSaved": "Subcontract details saved.",
-    "inHouse": "The step is done in-house again."
+    "inHouse": "The step is done in-house again.",
+    "toldCompliance": "The task for Compliance is made: it shows on the style's Tasks and in their My tasks."
   },
   "identity": {
     "title": "Identity",
@@ -1464,6 +1465,49 @@
       "workshop": "Choose the workshop.",
       "fee": "Write a fee of 0 or more, with at most 6 decimals.",
       "days": "Write whole days from 0 to 365."
+    }
+  },
+  "typeChange": {
+    "title": "Changes that may need the notified body",
+    "introDraft": "What draft revision {revision} changes in the outer leather, its thickness, a protector model, the seams or the lining against the type a certificate approved (Reg. (EU) 2016/425 Annex V 7.2).",
+    "introReleased": "What revision {revision} changed in the outer leather, its thickness, a protector model, the seams or the lining against the type a certificate approved (Reg. (EU) 2016/425 Annex V 7.2).",
+    "failed": "The changes against the certified type could not be read.",
+    "banner": {
+      "found": "Against {number} (notified body {body}, the type of revision {compared}): this may need the notified body.",
+      "reviewed": "Against {number} (notified body {body}, the type of revision {compared}): reviewed in Compliance.",
+      "held": "Against {number} (notified body {body}, the type of revision {compared}): its class label is held until the answer is recorded."
+    },
+    "list": "What changed against {number}",
+    "to": "becomes",
+    "open": "Open in Compliance",
+    "tell": "Tell Compliance",
+    "kind": {
+      "OUTER_LEATHER": "Outer leather",
+      "THICKNESS": "Thickness",
+      "PROTECTOR": "Protector model",
+      "SEAMS": "Seams",
+      "LINING": "Lining",
+      "OTHER": "Other"
+    },
+    "status": {
+      "OPEN": "Waiting for Compliance",
+      "NOTIFIED": "Told the notified body",
+      "APPROVED": "Approved addition",
+      "REFUSED": "Refused: a new examination",
+      "NOT_NEEDED": "Not needed"
+    },
+    "labelHeld": "This revision's garments print no class label until the notified body's answer is recorded.",
+    "labelFree": "The class label prints.",
+    "atRelease": "At release Compliance gets a review of it; until its answer this revision prints no class label.",
+    "law": "Compliance decides with the notified body; the certificate itself is kept in Compliance › Certificates.",
+    "held": {
+      "task": "Your role does not make tasks on a style (tasks.manage and threads.post)."
+    },
+    "task": {
+      "title": "Check the changes of {code} revision {revision} with the notified body",
+      "description": "Revision {revision} changes the type certificate {number} (notified body {body}) approved with revision {compared}:",
+      "step1": "Decide whether notified body {body} must be told",
+      "step2": "Record the decision on the certificate's Renewals tab"
     }
   }
 }

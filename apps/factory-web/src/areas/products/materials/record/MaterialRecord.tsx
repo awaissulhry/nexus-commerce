@@ -26,6 +26,9 @@ import {
   type MaterialView,
 } from '../api'
 import { tabOf } from '../model'
+import { listSources } from '../../../purchasing/suppliers/sources/api'
+import { sourcesCan, type SourcesRead, type SupplierPricesModel } from '../../../purchasing/suppliers/sources/model'
+import { readProblem as sourcesProblem } from '../../../_shared/buying/model'
 import type { MaterialDialog, MaterialLoad, MaterialRecordViewModel } from './record-model'
 import { MaterialRecordView } from './view/MaterialRecordView'
 
@@ -63,6 +66,9 @@ function Container({ materialId }: { materialId: string }) {
   const [changed, setChanged] = useState<{ at: string } | null>(null)
   const [dialog, setDialog] = useState<MaterialDialog | null>(null)
   const [refused, setRefused] = useState<WriteProblem | null>(null)
+  // B-W2a-69: Purchasing's approved sources of this material (Supplier prices), with purchasing.view only.
+  const sourceCan = useMemo(() => sourcesCan(session.permissions), [session.permissions])
+  const [sources, setSources] = useState<SourcesRead>({ status: 'loading' })
   const writing = useRef(false)
   const current = material.status === 'ready' ? material.value : null
 
@@ -114,8 +120,26 @@ function Container({ materialId }: { materialId: string }) {
     })
   }, [load, loadBeside])
 
+  const companyId = session.company?.id
+  const loadSources = useCallback(() => {
+    if (!sourceCan.view) return
+    setSources({ status: 'loading' })
+    listSources(api, { itemId: materialId, ...(companyId ? { companyId } : {}), limit: 200 })
+      .then((page) => setSources({ status: 'ready', rows: page.items, more: page.nextCursor !== null }))
+      .catch((error: unknown) => setSources({ status: 'error', problem: sourcesProblem(error) }))
+  }, [api, companyId, materialId, sourceCan.view])
+  useEffect(() => {
+    if (tab === 'suppliers') loadSources()
+  }, [tab, loadSources])
+  const tabRef = useRef(tab)
+  tabRef.current = tab
+  const loadSourcesRef = useRef(loadSources)
+  loadSourcesRef.current = loadSources
+
   useLiveChanges({
     onChange: (change) => {
+      // B-W2a-69: a source of this material changed in Purchasing: the read-only Supplier prices are read again.
+      if (change.type.startsWith('supplier_item.') && change.fields.itemId === materialId && tabRef.current === 'suppliers') loadSourcesRef.current()
       if (!change.type.startsWith('material.') || writing.current) return
       const subject = change.fields.itemId
       if (subject === materialId) setChanged({ at: new Date().toISOString() })
@@ -148,7 +172,8 @@ function Container({ materialId }: { materialId: string }) {
     }
   }
 
-  const model: MaterialRecordViewModel = { prefix, can, tab, material, libraryColours, certificates, lots, stock, suppliers, save, busy, notice, changed, dialog, refused }
+  const supplierPrices: SupplierPricesModel = { prefix, can: { view: sourceCan.view, cost: sourceCan.cost }, read: sources, defaultSupplier: current?.defaultSupplier ?? null }
+  const model: MaterialRecordViewModel = { prefix, can, tab, material, libraryColours, certificates, lots, stock, suppliers, save, busy, notice, changed, dialog, refused, supplierPrices }
 
   return (
     <MaterialRecordView
@@ -184,6 +209,7 @@ function Container({ materialId }: { materialId: string }) {
         },
         onDialog: setDialog,
         onDismissNotice: () => setNotice(null),
+        onRetrySupplierPrices: loadSources,
       }}
     />
   )

@@ -12,6 +12,7 @@ import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import type { LedgerRow } from '../../../_shared/stock/api'
 import { money, quantity, reverseHeldKey, unitCost } from '../../../_shared/stock/model'
 import { ReasonTag } from '../../../_shared/stock/parts'
+import { reasonLabel } from '../../stock/daily/model'
 import { mirrorOf, sideKey, type MovesPageActions, type MovesPageModel } from '../model'
 
 /**
@@ -142,7 +143,9 @@ export function MoveDetailModal({ model, actions }: { model: MovesPageModel; act
               <KeyValue
                 labelCase="sentence"
                 items={[
-                  { label: t('mv.col.note'), value: move.note ?? t('mv.detail.noNote') },
+                  // B-W2a-64: a write-off says its reason in words and its own note (kept as "<CODE>: <note>").
+                  ...(move.writeOff ? [{ label: t('mv.detail.writeOff'), value: reasonLabel(model.writeOffReasons ?? [], move.writeOff.reasonCode, locale) }] : []),
+                  { label: t('mv.col.note'), value: (move.writeOff ? move.writeOff.note : move.note) ?? t('mv.detail.noNote') },
                   { label: t('mv.col.document'), value: move.document && docHref(move) ? <Link className="fw-st-link" href={docHref(move)!}>{move.document.number}</Link> : (move.reference ?? '—'), hint: move.document && move.reference && move.reference !== move.document.number ? move.reference : undefined },
                   { label: t('mv.col.posted'), value: postedBy(move), hint: move.worker ? t('mv.detail.worker', { name: move.worker }) : move.postedBy.audience === 'FLOOR' && move.stationOnly ? t('mv.detail.stationOnly') : undefined },
                   { label: t('mv.detail.happened'), value: formatDateTime(move.occurredAt, place), hint: move.postedBy.audience === 'FLOOR' ? t('mv.detail.deviceClock') : undefined },

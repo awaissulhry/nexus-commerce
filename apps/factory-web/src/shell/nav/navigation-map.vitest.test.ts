@@ -107,6 +107,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/planning/settings': 'planning.view', // GET /planning/settings (B-W2a-59)
       '/purchasing/suppliers': 'parties.view', // GET /parties
       '/purchasing/orders': 'purchasing.view', // GET /purchasing/orders
+      '/purchasing/requests': 'purchasing.view', // GET /purchasing/requests (B-W2a-69)
       '/purchasing/subcontracting': 'purchasing.view', // GET /purchasing/subcontracting/orders (B-W2a-56)
       '/purchasing/claims': 'purchasing.view', // GET /purchasing/claims (B-W2a-63)
       '/warehouse/stock': 'inventory.stock.view', // GET /inventory/stock
@@ -127,12 +128,15 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
       '/quality/ncr': 'quality.ncr.view', // GET /quality/ncr (B-W2a-68)
+      '/quality/complaints': 'quality.complaints.view', // GET /quality/complaints (B-W2a-65)
       '/compliance/certificates': 'compliance.certificates.view', // GET /compliance/certificates
       '/compliance/labels': 'compliance.certificates.view', // GET /compliance/labels
       '/compliance/tests': 'quality.lots.view', // GET /quality/lots
       '/compliance/register': 'compliance.register.view', // GET /compliance/register
       '/finance/invoices': 'invoices.view', // GET /invoicing/invoices
       '/finance/payments': 'payments.view', // GET /payments
+      '/finance/costing': 'costing.view', // GET /costing/work-orders (B-W2a-72)
+      '/finance/margins': 'costing.view', // GET /costing/margins (B-W2a-72)
       '/finance/accounting': 'accounting.view', // GET /accounting/exports (B-W2a-51)
       '/finance/reports': 'inventory.stock.view', // GET /costing/valuation (B-W2a-51)
       '/finance/settings': 'invoices.view', // GET /invoicing/settings
@@ -180,11 +184,11 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/shipping',
       '/admin/import',
     ])
-    // The sales role: all of Sales, Home's approvals and mail, no Compliance or Planning.
+    // The sales role: all of Sales, Home's approvals and mail; of Quality only Nonconformances (B-W2a-68: sales raise NCRs
+    // from what a customer reports) and Complaints (B-W2a-65: sales logs them); no Compliance or Planning.
     const sales = officeNavFor(permissionCheck(templateOf('sales')!.permissions))
-    // B-W2a-68: of Quality only Nonconformances (sales raise NCRs from what a customer reports).
     expect(sales.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'purchasing', 'warehouse', 'production', 'quality', 'finance', 'admin'])
-    expect(rows(sales).filter((row) => row.href.startsWith('/quality/')).map((row) => row.href)).toEqual(['/quality/ncr'])
+    expect(rows(sales).filter((row) => row.href.startsWith('/quality/')).map((row) => row.href)).toEqual(['/quality/ncr', '/quality/complaints'])
     expect(rows(sales).filter((row) => row.href.startsWith('/sales/') || row.href.startsWith('/home/')).map((row) => row.href)).toEqual([
       '/home/today',
       '/home/approvals',

@@ -6,7 +6,8 @@ import { defineManifest } from '../../../core/manifest'
  * over the receipt's; the reads inventory.stock.view (the expected lines inventory.receive). Handlers check each record
  * with can() and filter the lists with scopeWhere() (`record`). A goods-in tablet receives through modules/inventory/receiving (B-W1-33).
  * B-W2a-31 adds the delivery note's photos (office and floor), the discrepancies with their photos and the report to the
- * supplier (inventory.discrepancies.manage / .report), and the totals of a tannery hide list import.
+ * supplier (inventory.discrepancies.manage / .report), and the totals of a tannery hide list import. B-W2a-F4 adds the
+ * request for the documents the lots wait for (inventory.receipts.documents.request).
  */
 export const manifest = defineManifest({
   'GET /inventory/receipts': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
@@ -30,6 +31,9 @@ export const manifest = defineManifest({
   'GET /inventory/receipts/:receiptId/discrepancy-report': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
   'GET /inventory/receipts/:receiptId/discrepancy-report/check': { audiences: ['office'], permission: 'inventory.discrepancies.report', scope: 'record' },
   'POST /inventory/receipts/:receiptId/discrepancy-report': { audiences: ['office'], permission: 'inventory.discrepancies.report', scope: 'record' },
+  // B-W2a-F4 (Owner answer 1A): the receipt's missing documents asked of the supplier's own contacts (not email.send).
+  'GET /inventory/receipts/:receiptId/documents/request': { audiences: ['office'], permission: 'inventory.receipts.documents.request', scope: 'record' },
+  'POST /inventory/receipts/:receiptId/documents/request': { audiences: ['office'], permission: 'inventory.receipts.documents.request', scope: 'record' },
   // B-W2a-31 (SCM-248): a tannery hide list's totals against its order (the import itself: POST /imports, importer inventory.hideList).
   'GET /inventory/receipts/hide-lists/:importId': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
 })
