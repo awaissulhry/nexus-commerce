@@ -198,6 +198,7 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // Finance (SCR-080 … SCR-083): invoices and the invoice record, payments and the payment record, finance settings.
   '/finance/invoices',
   '/finance/invoices/[id]',
+  '/finance/invoices/[id]/xml', // B-W2a-80: the legal XML shown readable (SCR-081-xml, a new tab)
   '/finance/payments',
   '/finance/payments/[id]',
   '/finance/settings',
@@ -210,6 +211,12 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/finance/costing',
   '/finance/costing/print',
   '/finance/margins',
+  // B-W2a-81: Receivables & credit (SCR-151) with the statement PDF tab; Supplier invoices (SCR-153), the record and the XML tab.
+  '/finance/receivables',
+  '/finance/receivables/statement',
+  '/finance/payables',
+  '/finance/payables/[id]',
+  '/finance/payables/[id]/xml',
   // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
   '/admin',
   '/admin/companies',

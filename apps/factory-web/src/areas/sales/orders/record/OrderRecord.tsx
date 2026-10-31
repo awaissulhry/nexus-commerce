@@ -46,6 +46,7 @@ import { amendLines, draftOf, newKey, withCells } from '../daily-model'
 import { abilitiesOf, knownIds, liveTouches, readProblem, romeToday, tabOf, writeProblem, type SizeLayer } from '../model'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type Loaded, type OrderRecordModel, type Part, type RecordDialog } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
+import { useScheduleSteps } from './schedule/use-schedule-steps'
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -308,6 +309,18 @@ function RecordContainer({ orderId }: { orderId: string }) {
     })
 
   // B-W2a-72: the Margin tab reads the order's margin while it is open.
+  // B-W2a-80: the schedule card's verbs (B-W2a-F2's note): open a before-shipping step, invoice a paid step.
+  const scheduleSteps = useScheduleSteps({
+    api,
+    orderId,
+    permissions: session.permissions,
+    reload: () => {
+      const value = current.current
+      if (value) loadParts(value)
+    },
+    onNotice: (words, tone) => setNotice({ tone, words }),
+    onInvoiced: (invoiceId) => router.push(`${prefix}/finance/invoices/${invoiceId}?tab=lines`),
+  })
   const margin = useOrderMargin(api, orderId, tab === 'margin', session.permissions, order.status === 'ready' ? order.value.version : null)
 
   const model: OrderRecordModel = {
@@ -339,6 +352,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     closedLines,
     copied,
     margin: margin.model,
+    scheduleSteps: scheduleSteps.model,
   }
 
   const value = order.status === 'ready' ? order.value : null
@@ -350,6 +364,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       actions={{
         onRetry: () => void load(),
         onRetryMargin: margin.retry,
+        scheduleSteps: scheduleSteps.actions,
         onRetryPart: (which) => {
           if (which === 'cancelCheck') {
             setCancelCheck(PART_LOADING)

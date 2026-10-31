@@ -1,10 +1,15 @@
 import type { CustomerRow, OpenItem, Payment, PaymentRow } from '../../_shared/api'
 import type { LiveState, StepUpState } from '../../_shared/hooks'
 import type { FinanceAbilities, Phrase } from '../../_shared/model'
+import type { OpenRefunds, Refund, ToRefund } from '../refunds/api'
+import type { RefundAbilities, RefundDraft, RefundMove, RefundRows, RefundTarget } from '../refunds/model'
+import type { RefundDialogModel } from '../refunds/view/RefundDialogs'
+import type { RefundsListModel } from '../refunds/view/RefundsList'
 
 /** SCR-082 — the payments page's view model (PaymentsListView draws it and fetches nothing). */
 
-export const PAYMENT_ROWS_VIEWS = ['all', 'received', 'voided'] as const
+/** B-W2a-80: `refunds` (design "Rows ▾: … Refunds") shows the refunds and what is to refund in place of the payments. */
+export const PAYMENT_ROWS_VIEWS = ['all', 'received', 'voided', 'refunds'] as const
 export type PaymentRowsView = (typeof PAYMENT_ROWS_VIEWS)[number]
 
 /** The customer a payment is recorded for, in the company it is recorded in. */
@@ -46,6 +51,12 @@ export interface PaymentsListModel {
   updates: number
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
   dialog: RecordDialogState | null
+  /** B-W2a-80: who may refund; the tile "Refunds to make"; the refunds rows (`?rows=refunds&refunds=`); the Refund dialog and a refund's move. */
+  refundCan?: RefundAbilities
+  openRefunds?: OpenRefunds | null
+  refunds?: RefundsListModel | null
+  refundDialog?: RefundDialogModel | null
+  refundMove?: { refund: Refund; move: RefundMove; busy: boolean; problem: Phrase | null; start?: { reference?: string; reason?: string } } | null
   /** Step 1's customer search. */
   customers: { q: string; items: CustomerRow[] | null; problem: string | null }
   /** Step 2's open items of the chosen customer, oldest first. */
@@ -87,4 +98,15 @@ export interface PaymentsListActions {
   onDismissNotice?: () => void
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
+  /** B-W2a-80: the refunds. */
+  onRefundRows?: (rows: RefundRows) => void
+  onRefundMore?: () => void
+  onRetryRefunds?: () => void
+  onOpenRefund?: (note: ToRefund | null) => void
+  onRecordRefund?: (target: RefundTarget, draft: RefundDraft) => void
+  onCloseRefund?: () => void
+  onMoveRefund?: (refund: Refund, move: RefundMove) => void
+  onDoMove?: (input: { paidOn: string; reference: string; reason: string }) => void
+  onCloseMove?: () => void
+  onExportRefunds?: (ids: string[]) => void
 }

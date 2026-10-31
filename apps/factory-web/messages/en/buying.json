@@ -709,6 +709,7 @@
       "lines": "Lines",
       "answer": "Supplier’s answer",
       "receipts": "Receipts",
+      "invoices": "Invoices",
       "documents": "Documents",
       "activity": "Activity",
       "checksOpen_one": "{count} send check open",

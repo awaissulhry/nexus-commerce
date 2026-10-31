@@ -5,10 +5,13 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { allocatePayment, getPayment, openItems, reverseAllocation, voidPayment, type Payment } from '../../_shared/api'
+import { allocatePayment, getPayment, reverseAllocation, voidPayment, type Payment } from '../../_shared/api'
 import { useCoalesced, useLive } from '../../_shared/hooks'
 import { abilitiesOf, allocationsOf, readProblem, romeToday, writeProblem } from '../../_shared/model'
-import type { Loaded } from '../../invoices/record/record-model'
+import type { Loaded, Part } from '../../invoices/record/record-model'
+import { newIdempotencyKey } from '../../../../lib/api/client'
+import { cancelRefund, listRefunds, openItemsFor, payRefund, recordRefund, voidRefund, type Refund } from '../refunds/api'
+import { refundAbilitiesOf, refundAskOf, refundsTouched } from '../refunds/model'
 import { paymentTabOf, type PaymentDialog, type PaymentRecordModel } from './record-model'
 import { PaymentRecordView } from './view/PaymentRecordView'
 
@@ -20,7 +23,7 @@ import { PaymentRecordView } from './view/PaymentRecordView'
  */
 export function PaymentRecord({ paymentId }: { paymentId: string }) {
   return (
-    <WithMessages namespaces={['finance', 'lists']}>
+    <WithMessages namespaces={['finance', 'finance-daily', 'lists']}>
       <RecordContainer paymentId={paymentId} />
     </WithMessages>
   )
@@ -41,18 +44,36 @@ function RecordContainer({ paymentId }: { paymentId: string }) {
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<PaymentDialog | null>(null)
   const [dialogProblem, setDialogProblem] = useState<PaymentRecordModel['dialogProblem']>(null)
+  const refundCan = useMemo(() => refundAbilitiesOf(session.permissions), [session.permissions])
+  const [creditBalance, setCreditBalance] = useState<number | null>(null)
+  const [refunds, setRefunds] = useState<Part<Refund[]> | null>(null)
+
+  /** B-W2a-80: the payment's refunds (a credit balance given back), with their versions for the moves. */
+  const readRefunds = useCallback(async (value: Payment) => {
+    if ((value.refunds ?? []).length === 0) {
+      setRefunds(null)
+      return
+    }
+    setRefunds((known) => known ?? { value: null, problem: null })
+    try {
+      setRefunds({ value: (await listRefunds(api, { paymentId: value.id, view: 'all', limit: 50 })).refunds, problem: null })
+    } catch (error) {
+      setRefunds({ value: null, problem: readProblem(error) })
+    }
+  }, [api])
 
   const load = useCallback(async () => {
     try {
       const next = await getPayment(api, paymentId)
       current.current = next
       setPayment({ status: 'ready', value: next })
+      void readRefunds(next)
     } catch (error) {
       if (isApiError(error) && error.kind === 'not_found') setPayment({ status: 'not_found' })
       else if (isApiError(error) && error.kind === 'forbidden') setPayment({ status: 'forbidden' })
       else setPayment({ status: 'error', problem: readProblem(error) })
     }
-  }, [api, paymentId])
+  }, [api, paymentId, readRefunds])
 
   useEffect(() => {
     void load()
@@ -61,7 +82,7 @@ function RecordContainer({ paymentId }: { paymentId: string }) {
   const reread = useCoalesced(() => void load(), 700)
   const live = useLive(
     (change) => {
-      if (change.type.startsWith('payment.') && Object.values(change.fields).includes(paymentId)) reread()
+      if ((change.type.startsWith('payment.') || refundsTouched(change)) && Object.values(change.fields).includes(paymentId)) reread()
     },
     () => void load(),
   )
@@ -71,7 +92,10 @@ function RecordContainer({ paymentId }: { paymentId: string }) {
     if (!value) return
     setItems({ value: null, problem: null })
     try {
-      setItems({ value: await openItems(api, value.companyId, value.partyId), problem: null })
+      // B-W2a-80: the matcher's answer for this payment also says the customer's credit balance.
+      const answer = await openItemsFor(api, { companyId: value.companyId, partyId: value.partyId, paymentId: value.id })
+      setItems({ value: answer.items, problem: null })
+      setCreditBalance(answer.creditBalance.find((entry) => entry.currency === value.currency)?.amount ?? 0)
     } catch (error) {
       setItems({ value: null, problem: readProblem(error) })
     }
@@ -100,7 +124,24 @@ function RecordContainer({ paymentId }: { paymentId: string }) {
   )
 
   const version = () => current.current?.version ?? 1
-  const model: PaymentRecordModel = { prefix, can, today: romeToday(), tab, payment, items, live, notice, busy, dialog, dialogProblem }
+  const model: PaymentRecordModel = { prefix, can, today: romeToday(), tab, payment, items, live, notice, busy, dialog, dialogProblem, refundCan, creditBalance, refunds }
+
+  /** One refund write; the payment is read again after it (what is left to place changes). */
+  const refundWrite = async (run: () => Promise<Refund>, success: string) => {
+    if (busy) return
+    setBusy(true)
+    setDialogProblem(null)
+    try {
+      await run()
+      setDialog(null)
+      setNotice({ tone: 'success', words: { key: success } })
+      await load()
+    } catch (error) {
+      setDialogProblem(writeProblem(error))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <PaymentRecordView
@@ -117,6 +158,16 @@ function RecordContainer({ paymentId }: { paymentId: string }) {
         onPlace: (plan) => void write(() => allocatePayment(api, paymentId, version(), allocationsOf(items.value ?? [], plan)), 'notice.placed'),
         onReverse: (allocationId, note) => void write(() => reverseAllocation(api, paymentId, allocationId, note), 'notice.takenBack'),
         onVoid: (reason) => void write(() => voidPayment(api, paymentId, version(), reason), 'notice.voided'),
+        onRefund: (target, draft) => {
+          const key = newIdempotencyKey()
+          void refundWrite(() => recordRefund(api, refundAskOf(target, draft), key), draft.when === 'now' ? 'notice.balanceRefunded' : 'notice.balanceRefundDue')
+        },
+        onRefundMove: (refund, move, input) => {
+          const key = newIdempotencyKey()
+          const run = move === 'paid' ? () => payRefund(api, refund, { paidOn: input.paidOn, externalRef: input.reference }, key) : move === 'cancel' ? () => cancelRefund(api, refund, input.reason, key) : () => voidRefund(api, refund, input.reason, key)
+          void refundWrite(run, `notice.refundMoved.${move}`)
+        },
+        onRetryRefunds: () => current.current && void readRefunds(current.current),
       }}
     />
   )

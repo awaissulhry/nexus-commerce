@@ -1,4 +1,6 @@
 import type { InvoiceQuery, InvoiceRow, Queue } from '../../_shared/api'
+import type { Deferred, DeferredGroup, ReturnCredit } from '../daily/api'
+import type { ShippedView } from '../daily/model'
 import type { LiveState } from '../../_shared/hooks'
 import type { FinanceAbilities, Phrase, RowView } from '../../_shared/model'
 
@@ -17,6 +19,12 @@ export interface InvoicesListModel {
   tiles: { drafts: number | null; atSdi: number | null; rejected: number | null; notDelivered: number | null } | null
   /** Shipped, not invoiced: the DDTs per customer; null value while it loads. */
   queue: { value: Queue | null; problem: string | null }
+  /** B-W2a-80: the deferred invoices due by the 15th (the tile, its saved filter, the month's deferred invoice); null: unread or failed. */
+  deferred?: Deferred | null
+  /** B-W2a-80: "Shipped, not invoiced" rows — every DDT, or those a deferred invoice takes (`?shipped=deferred`). */
+  shippedView?: ShippedView
+  /** B-W2a-80: a customer return's credit notes (`?return=<id>`, from the return's inspection): what it would credit now. */
+  returnCredit?: { value: ReturnCredit | null; problem: string | null }
   /** The rejected invoices for the banner, with SDI's deadline to send them again (read per invoice). */
   rejected: Array<{ id: string; number: string | null; partyName: string; deadline: string | null; overdue: boolean }>
   /** When the rows were read (ISO). */
@@ -25,8 +33,8 @@ export interface InvoicesListModel {
   /** Live changes waiting behind "N updates · Show" (rows never move under the cursor). */
   updates: number
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
-  /** "Invoice shipped goods" with the DDTs it starts from (none: the person picks). */
-  dialog: { kind: 'fromDdts'; ddtIds: string[]; partyId: string | null } | null
+  /** "Invoice shipped goods" with the DDTs it starts from (none: the person picks); B-W2a-80: a month's deferred invoice, a return's credit notes. */
+  dialog: { kind: 'fromDdts'; ddtIds: string[]; partyId: string | null } | { kind: 'deferred'; group: DeferredGroup } | { kind: 'returnCredit'; returnId: string } | null
   dialogProblem: Phrase | null
   busy: boolean
   /** Design cases: the starting selections, the focused row, the keys panel, what the dialog holds. */
@@ -47,5 +55,10 @@ export interface InvoicesListActions {
   onExport?: (ids: string[]) => void
   onDialog?: (dialog: InvoicesListModel['dialog']) => void
   onCreateFromDdts?: (input: { ddtIds: string[]; docType: 'TD01' | 'TD24' }) => void
+  /** B-W2a-80: the shipped list's saved filter, a month's deferred invoice, a return's credit notes. */
+  onShippedView?: (view: ShippedView) => void
+  onCreateDeferred?: (group: DeferredGroup) => void
+  onRetryReturnCredit?: () => void
+  onCreateReturnCredit?: (lineIds: string[] | null) => void
   onDismissNotice?: () => void
 }

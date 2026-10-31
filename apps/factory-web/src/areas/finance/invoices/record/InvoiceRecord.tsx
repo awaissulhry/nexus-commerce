@@ -30,6 +30,8 @@ import {
 } from '../../_shared/api'
 import { isStepUpCancelled, useCoalesced, useLive, useStepUp, useThreadDock } from '../../_shared/hooks'
 import { abilitiesOf, lineInputsOf, readProblem, recordTouched, romeToday, writeProblem } from '../../_shared/model'
+import { releaseOverpayment } from '../daily/api'
+import { withCharge, withoutLine } from '../daily/model'
 import { PART_LOADING, tabOf, type InvoiceRecordModel, type Loaded, type Part, type RecordDialog } from './record-model'
 import { InvoiceRecordView } from './view/InvoiceRecordView'
 
@@ -44,7 +46,7 @@ import { InvoiceRecordView } from './view/InvoiceRecordView'
  */
 export function InvoiceRecord({ invoiceId }: { invoiceId: string }) {
   return (
-    <WithMessages namespaces={['finance', 'lists', 'records']}>
+    <WithMessages namespaces={['finance', 'finance-daily', 'lists', 'records']}>
       <RecordContainer invoiceId={invoiceId} />
     </WithMessages>
   )
@@ -69,7 +71,8 @@ function RecordContainer({ invoiceId }: { invoiceId: string }) {
   const [sdi, setSdi] = useState<Part<Sdi> | null>(null)
   const sdiRef = useRef<Sdi | null>(null)
   const [pdf, setPdf] = useState<InvoiceRecordModel['pdf']>({ status: 'idle', src: null })
-  const [dialog, setDialog] = useState<RecordDialog | null>(null)
+  // B-W2a-80: the list's row verb "Credit note" lands with `?do=credit` (the dialog opens once the invoice is read).
+  const [dialog, setDialog] = useState<RecordDialog | null>(params?.get('do') === 'credit' ? { kind: 'credit' } : null)
   const dialogRef = useRef<RecordDialog | null>(null)
   dialogRef.current = dialog
   const [busy, setBusy] = useState(false)
@@ -305,6 +308,23 @@ function RecordContainer({ invoiceId }: { invoiceId: string }) {
             return null
           }, null),
         onRemoveDeduction: (lineId) => void write(() => removeDeduction(api, invoiceId, lineId, version()), { tone: 'success', words: { key: 'notice.deductionRemoved' } }),
+        onAddCharge: (draft) => {
+          const stored = current.current
+          if (!stored) return
+          void write(() => replaceLines(api, invoiceId, stored.version, withCharge(stored, draft)), { tone: 'success', words: { key: 'notice.linesSaved' } })
+        },
+        onRemoveCharge: (lineId) => {
+          const stored = current.current
+          if (!stored) return
+          void write(() => replaceLines(api, invoiceId, stored.version, withoutLine(stored, lineId)), { tone: 'success', words: { key: 'notice.linesSaved' } })
+        },
+        onCarry: (note) => {
+          const key = newIdempotencyKey()
+          void write(async () => {
+            await releaseOverpayment(api, invoiceId, note, key)
+            return null
+          }, { tone: 'success', words: { key: 'notice.carried' } })
+        },
         onMakeFiles: () => void write(() => makeFiles(api, invoiceId), { tone: 'success', words: { key: 'notice.filesMade' } }),
         onDownload: (fileId) => {
           void (async () => {

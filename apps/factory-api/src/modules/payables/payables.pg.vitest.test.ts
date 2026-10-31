@@ -160,6 +160,10 @@ describe('the list and its tiles (design finance.payables "To handle")', () => {
     const listed = await ok('clerk', 'GET', '/payables/invoices?tile=DIFFERENCES')
     expect(listed.items.map((row: Json) => row.number)).toEqual(['2026/0412'])
     expect(listed.items[0]).toMatchObject({ source: 'SDI', matchStatus: 'DIFFERENCES', differencesToCheck: 1, netTotal: 46_650 })
+    // B-W2a-81 (the PO's Invoices tab): the invoices with a line on that order's lines; none for an order nobody billed.
+    const onOrder = await ok('clerk', 'GET', `/payables/invoices?purchaseOrderId=${inventory.supply.purchaseOrderId}`)
+    expect(onOrder.items.map((row: Json) => row.number)).toEqual(['2026/0412'])
+    expect(await ok('clerk', 'GET', `/payables/invoices?purchaseOrderId=${inventory.supply.draftPurchaseOrderId}`)).toMatchObject({ items: [], count: 0 })
     const blind = await ok('viewer', 'GET', '/payables/invoices?tile=DIFFERENCES')
     expect(keysOf(blind)).not.toContain('netTotal')
     expect((await ok('otherSupplier', 'GET', '/payables/invoices')).items).toEqual([])

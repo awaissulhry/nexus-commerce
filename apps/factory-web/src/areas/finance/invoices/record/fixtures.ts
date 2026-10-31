@@ -3,6 +3,7 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import type { Invoice, Sdi } from '../../_shared/api'
 import { STEP_UP_CLOSED } from '../../_shared/hooks'
 import { at, canOf, CHECKS_FAIL, CHECKS_READY, EXPORT_LINES, inShell, invoice, panelsModel, PREFIX, RELATED, RELATED_PAID, sdi, TD02, TD04, TODAY, withoutPrices, type Role } from '../../_demo/fixtures'
+import { DRAFT_DUE_SOON, DRAFT_WITH_CHARGES, OVERPAID, TD04_ISSUED } from '../daily/demo/fixtures'
 import type { InvoiceRecordModel } from './record-model'
 import { InvoiceRecordView } from './view/InvoiceRecordView'
 
@@ -116,5 +117,19 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'error', label: 'The read failed (in words, Try again)', model: { ...base('finance', draft), record: { ...base('finance', draft).record, invoice: { status: 'error', problem: 'problem.read.unavailable' } } } },
     { id: 'not-found', label: 'Not found (another company, or a wrong address)', model: { ...base('finance', draft), record: { ...base('finance', draft).record, invoice: { status: 'not_found' } } } },
     { id: 'no-permission', label: 'No permission (invoices.view over its company and customer)', model: { ...base('sales', draft), record: { ...base('sales', draft).record, invoice: { status: 'forbidden' } } } },
+    // B-W2a-80: charge lines, the issue deadline of a draft, where the due dates come from, refund or carry an over-payment.
+    { id: 'w2a-charges', label: 'W2a · Finance · A draft with freight and packaging charge lines; issue by 8 Nov; due dates from the terms BB30FM', model: base('finance', DRAFT_WITH_CHARGES), note: 'Charges apart from the goods in the totals; each charge line names its kind and may be removed while a draft.' },
+    { id: 'w2a-charge-dialog', label: 'W2a · Finance · Add a charge line: kind, words prefilled, quantity, price (VAT follows the goods)', model: base('finance', DRAFT_WITH_CHARGES, { dialog: { kind: 'charge' }, draft: { charge: { kind: 'SAMPLES', description: 'Campionatura', quantity: '1', unitPrice: '35' } } }) },
+    { id: 'w2a-charge-empty', label: 'W2a · Finance · Add a charge line: held until the kind and the price are given', model: base('finance', DRAFT_WITH_CHARGES, { dialog: { kind: 'charge' } }) },
+    { id: 'w2a-charge-refused', label: 'W2a · Finance · Add a charge line refused (said inside the dialog)', model: base('finance', DRAFT_WITH_CHARGES, { dialog: { kind: 'charge' }, draft: { charge: { kind: 'FEE', description: 'Maggiorazione urgenza', quantity: '1', unitPrice: '40' } }, dialogProblem: { key: 'problem.write.invalid' } }) },
+    { id: 'w2a-charge-issued', label: 'W2a · Finance · An issued invoice: no charge to add (an issued invoice never changes)', model: base('finance', { ...DRAFT_WITH_CHARGES, status: 'DELIVERED', number: 'FT-2026-00031', issueDate: TODAY }, {}, sdi('delivered')) },
+    { id: 'w2a-charge-sales', label: 'W2a · Sales · Charge lines read-only: Add charge line held with why', model: base('sales', DRAFT_WITH_CHARGES) },
+    { id: 'w2a-due-soon', label: 'W2a · Finance · A deferred draft to issue within 2 days (the countdown in the band)', model: base('finance', DRAFT_DUE_SOON) },
+    { id: 'w2a-overpaid', label: 'W2a · Finance · Paid, then credited: refund it (Payments) or carry it to the credit balance', model: base('finance', OVERPAID, { related: { value: { ...RELATED_PAID, creditNotes: [{ id: TD04_ISSUED.id, number: TD04_ISSUED.number, issueDate: TODAY, status: 'DELIVERED', grossTotal: 6100 }] }, problem: null } }, sdi('delivered')) },
+    { id: 'w2a-carry', label: 'W2a · Finance · Carry the credit: a note says why', model: base('finance', OVERPAID, { dialog: { kind: 'carry' }, draft: { note: 'The customer asked to keep it for the next order.' } }, sdi('delivered')) },
+    { id: 'w2a-carry-refused', label: 'W2a · Finance · Carry refused: a refund of its credit note is live (said in words)', model: base('finance', OVERPAID, { dialog: { kind: 'carry' }, draft: { note: 'Keep it for the next order.' }, dialogProblem: { key: 'problem.write.state' } }, sdi('delivered')) },
+    { id: 'w2a-carry-sales', label: 'W2a · Sales · Paid, then credited: carry held (recording payments is Finance’s)', model: base('sales', OVERPAID, {}, sdi('delivered')) },
+    { id: 'w2a-td04-refund', label: 'W2a · Finance · An issued credit note: Refund (opens the Refund dialog in Payments)', model: base('finance', TD04_ISSUED, {}, sdi('delivered')) },
+    { id: 'w2a-xml-link', label: 'W2a · Finance · Documents: the XML viewed readable in a new tab', model: base('finance', delivered, { tab: 'documents' }, sdi('delivered')) },
   ],
 })

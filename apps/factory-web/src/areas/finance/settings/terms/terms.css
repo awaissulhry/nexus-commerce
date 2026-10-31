@@ -1,0 +1,7 @@
+/* Finance settings › Payment terms (B-W2a-80): an instalment row of the terms dialog — layout only, semantic tokens. */
+@media (min-width: 720px) {
+  .fw-fin-row.is-instalment {
+    grid-template-columns: minmax(90px, 0.8fr) minmax(220px, 2fr) minmax(90px, 0.8fr) minmax(130px, auto);
+    align-items: start;
+  }
+}

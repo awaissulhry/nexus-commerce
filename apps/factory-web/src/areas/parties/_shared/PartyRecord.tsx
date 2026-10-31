@@ -55,7 +55,7 @@ import {
   type RecordDialog,
   type Side,
 } from './model'
-import { PartyRecordView } from './view/PartyRecordView'
+import { PartyRecordView, type OverviewSlot } from './view/PartyRecordView'
 
 /**
  * The record container of both sides (`/w/<company>/sales/customers/<id>` SCR-033, `/w/<company>/purchasing/
@@ -70,15 +70,15 @@ export type TermsSlot = (party: Party, reload: () => void) => ReactNode
 /** B-W2a-69: a supplier's Items & prices tab (Purchasing's Approved sources), drawn with the party read. */
 export type ItemsSlot = (party: Party, reload: () => void) => ReactNode
 
-export function PartyRecord({ side, partyId, terms, items }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot }) {
+export function PartyRecord({ side, partyId, terms, items, overview }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot }) {
   return (
     <WithMessages namespaces={['parties']}>
-      <PartyRecordContainer side={side} partyId={partyId} terms={terms} items={items} />
+      <PartyRecordContainer side={side} partyId={partyId} terms={terms} items={items} overview={overview} />
     </WithMessages>
   )
 }
 
-function PartyRecordContainer({ side, partyId, terms, items }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot }) {
+function PartyRecordContainer({ side, partyId, terms, items, overview }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot; overview?: OverviewSlot }) {
   const config = SIDES[side]
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -337,6 +337,7 @@ function PartyRecordContainer({ side, partyId, terms, items }: { side: Side; par
       documents={documents}
       terms={party && terms ? terms(party, () => void load()) : null}
       items={party && items ? items(party, () => void load()) : null}
+      overview={overview}
       actions={{
         onRetry: () => {
           setProblem(null)

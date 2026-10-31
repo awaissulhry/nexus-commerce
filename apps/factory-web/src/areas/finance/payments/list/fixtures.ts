@@ -4,6 +4,9 @@ import { STEP_UP_CLOSED } from '../../_shared/hooks'
 import { canOf, COMPANY, CUSTOMER, inShell, OPEN_ITEMS, PARTIES, PAYMENT, PAYMENT_REVERSED, PAYMENT_ROWS, PREFIX, TD01_ID, TODAY, withoutPrices, type Role } from '../../_demo/fixtures'
 import type { PaymentRecordModel } from '../record/record-model'
 import { PaymentRecordView } from '../record/view/PaymentRecordView'
+import { permissionsOf } from '../../invoices/daily/demo/fixtures'
+import { OPEN_REFUNDS, REFUND_DUE, REFUND_OF_BALANCE, REFUND_PAID, REFUNDS_ALL } from '../refunds/demo/fixtures'
+import { refundAbilitiesOf, refundRowsFrom, targetOfNote } from '../refunds/model'
 import type { PaymentsListModel } from './list-model'
 import { PaymentsListView } from './view/PaymentsListView'
 
@@ -42,6 +45,8 @@ const list = (role: Role, over: Partial<PaymentsListModel> = {}): PaymentsCase =
       busy: false,
       dialogProblem: null,
       stepUp: STEP_UP_CLOSED,
+      refundCan: refundAbilitiesOf(permissionsOf(role)),
+      openRefunds: can.price ? OPEN_REFUNDS : withoutPrices(OPEN_REFUNDS),
       ...over,
     },
   }
@@ -52,7 +57,7 @@ const record = (role: Role, payment = PAYMENT, over: Partial<PaymentRecordModel>
   return {
     role,
     kind: 'record',
-    record: { prefix: PREFIX, can, today: TODAY, tab: 'allocation', payment: { status: 'ready', value: can.price ? payment : withoutPrices(payment) }, items: { value: null, problem: null }, live: 'live', notice: null, busy: false, dialog: null, dialogProblem: null, ...over },
+    record: { prefix: PREFIX, can, today: TODAY, tab: 'allocation', payment: { status: 'ready', value: can.price ? payment : withoutPrices(payment) }, items: { value: null, problem: null }, live: 'live', notice: null, busy: false, dialog: null, dialogProblem: null, refundCan: refundAbilitiesOf(permissionsOf(role)), ...over },
   }
 }
 
@@ -103,5 +108,27 @@ export const designScreen = defineDesignScreen<PaymentsCase>({
     { id: 'payment-loading', label: 'Payment record: loading', model: record('finance', PAYMENT, { payment: { status: 'loading' } }) },
     { id: 'payment-not-found', label: 'Payment record: not found', model: record('finance', PAYMENT, { payment: { status: 'not_found' } }) },
     { id: 'payment-no-permission', label: 'Payment record: no permission', model: record('sales', PAYMENT, { payment: { status: 'forbidden' } }) },
+    // B-W2a-80: refunds to make, the Refund dialog, Rows ▾ Refunds and a refund's moves, the credit balance on a payment.
+    { id: 'w2a-refunds-tile', label: 'W2a · Finance · Tile "Refunds to make" and the band’s Refund', model: list('finance'), note: 'The tile opens Rows ▾ Refunds (what is to refund now).' },
+    { id: 'w2a-refunds-open', label: 'W2a · Finance · Rows ▾ Refunds: a credit note to refund and a refund due', model: list('finance', { rows: 'refunds', refunds: { prefix: PREFIX, can: refundAbilitiesOf(permissionsOf('finance')), rows: 'open', items: refundRowsFrom('open', OPEN_REFUNDS, null), problem: null, more: false } }) },
+    { id: 'w2a-refunds-all', label: 'W2a · Finance · Every refund: due, made (with its reference), cancelled, a credit balance given back', model: list('finance', { rows: 'refunds', refunds: { prefix: PREFIX, can: refundAbilitiesOf(permissionsOf('finance')), rows: 'all', items: refundRowsFrom('all', null, REFUNDS_ALL), problem: null, more: true, selected: [REFUND_PAID.id] } }) },
+    { id: 'w2a-refunds-empty', label: 'W2a · Finance · Nothing to refund', model: list('finance', { rows: 'refunds', openRefunds: { ...OPEN_REFUNDS, counts: { refundsDue: 0, creditNotesToRefund: 0 }, refundsDue: [], creditNotesToRefund: [] }, refunds: { prefix: PREFIX, can: refundAbilitiesOf(permissionsOf('finance')), rows: 'open', items: [], problem: null, more: false } }) },
+    { id: 'w2a-refunds-error', label: 'W2a · Finance · The refunds could not be read (Try again)', model: list('finance', { rows: 'refunds', openRefunds: null, refunds: { prefix: PREFIX, can: refundAbilitiesOf(permissionsOf('finance')), rows: 'open', items: null, problem: 'problem.read.unavailable', more: false } }) },
+    { id: 'w2a-refund-dialog', label: 'W2a · Finance · Refund: the credit note it settles, capped at what is refundable; made already', model: list('finance', { refundDialog: { targets: OPEN_REFUNDS.creditNotesToRefund.map(targetOfNote), targetsProblem: null, start: OPEN_REFUNDS.creditNotesToRefund[0]!.creditNoteId, can: refundAbilitiesOf(permissionsOf('finance')), today: TODAY, busy: false, problem: null, draft: { reference: 'TRN-ESEMPIO-0099' } } }) },
+    { id: 'w2a-refund-later', label: 'W2a · Finance · Refund to make by a day (recorded as due)', model: list('finance', { refundDialog: { targets: OPEN_REFUNDS.creditNotesToRefund.map(targetOfNote), targetsProblem: null, start: OPEN_REFUNDS.creditNotesToRefund[0]!.creditNoteId, can: refundAbilitiesOf(permissionsOf('finance')), today: TODAY, busy: false, problem: null, draft: { when: 'later', amount: '30,00', dueDate: '2026-11-05' } } }) },
+    { id: 'w2a-refund-over', label: 'W2a · Finance · Refund above what is refundable: held with why', model: list('finance', { refundDialog: { targets: OPEN_REFUNDS.creditNotesToRefund.map(targetOfNote), targetsProblem: null, start: OPEN_REFUNDS.creditNotesToRefund[0]!.creditNoteId, can: refundAbilitiesOf(permissionsOf('finance')), today: TODAY, busy: false, problem: null, draft: { amount: '61,01', reference: 'TRN-ESEMPIO-0099' } } }) },
+    { id: 'w2a-refund-pick', label: 'W2a · Finance · Refund from the band: choose the credit note', model: list('finance', { refundDialog: { targets: [...OPEN_REFUNDS.creditNotesToRefund.map(targetOfNote), targetOfNote({ ...OPEN_REFUNDS.creditNotesToRefund[0]!, creditNoteId: 'other', number: 'FT-2026-00036', refundableAmount: 2440 })], targetsProblem: null, start: null, can: refundAbilitiesOf(permissionsOf('finance')), today: TODAY, busy: false, problem: null } }) },
+    { id: 'w2a-refund-refused', label: 'W2a · Finance · Refund refused: the bank reference was counted already', model: list('finance', { refundDialog: { targets: OPEN_REFUNDS.creditNotesToRefund.map(targetOfNote), targetsProblem: null, start: OPEN_REFUNDS.creditNotesToRefund[0]!.creditNoteId, can: refundAbilitiesOf(permissionsOf('finance')), today: TODAY, busy: false, problem: { key: 'problem.write.reference' }, draft: { reference: 'TRN-ESEMPIO-0002' } } }) },
+    { id: 'w2a-refund-sales', label: 'W2a · Sales · Refund held: refunds are Finance’s', model: list('sales', { refundDialog: { targets: OPEN_REFUNDS.creditNotesToRefund.map(targetOfNote), targetsProblem: null, start: null, can: refundAbilitiesOf(permissionsOf('sales')), today: TODAY, busy: false, problem: null } }) },
+    { id: 'w2a-refund-paid', label: 'W2a · Finance · A refund due marked made: value date and bank reference', model: list('finance', { rows: 'refunds', refunds: { prefix: PREFIX, can: refundAbilitiesOf(permissionsOf('finance')), rows: 'open', items: refundRowsFrom('open', OPEN_REFUNDS, null), problem: null, more: false }, refundMove: { refund: REFUND_DUE, move: 'paid', busy: false, problem: null, start: { reference: 'TRN-ESEMPIO-0100' } } }) },
+    { id: 'w2a-refund-cancel', label: 'W2a · Finance · Cancel a refund due: the customer keeps the credit', model: list('finance', { rows: 'refunds', refunds: { prefix: PREFIX, can: refundAbilitiesOf(permissionsOf('finance')), rows: 'open', items: refundRowsFrom('open', OPEN_REFUNDS, null), problem: null, more: false }, refundMove: { refund: REFUND_DUE, move: 'cancel', busy: false, problem: null, start: { reason: 'The customer asked to keep the credit.' } } }) },
+    { id: 'w2a-refund-void', label: 'W2a · Finance · Void a refund made by mistake', model: list('finance', { rows: 'refunds', refunds: { prefix: PREFIX, can: refundAbilitiesOf(permissionsOf('finance')), rows: 'all', items: refundRowsFrom('all', null, REFUNDS_ALL), problem: null, more: false }, refundMove: { refund: REFUND_PAID, move: 'void', busy: false, problem: null } }) },
+    { id: 'w2a-balance', label: 'W2a · Finance · A payment with 500.00 not placed: the customer’s credit balance, Refund it', model: record('finance', PAYMENT), note: 'Design rec:Payment match: "Overpayment → customer credit balance".' },
+    { id: 'w2a-balance-refund', label: 'W2a · Finance · Refund the credit balance of a payment', model: record('finance', PAYMENT, { dialog: { kind: 'refund' }, draft: { refund: { reference: 'TRN-ESEMPIO-0101' } } }) },
+    { id: 'w2a-balance-refunds', label: 'W2a · Finance · A payment with a refund of its balance due (Mark made / Cancel)', model: record('finance', { ...PAYMENT, unallocated: 30000, refunded: 20000, refunds: [{ id: REFUND_OF_BALANCE.id, status: 'DUE', amount: 20000, dueDate: '2026-11-03', paidOn: null }] }, { refunds: { value: [REFUND_OF_BALANCE], problem: null } }) },
+    { id: 'w2a-balance-place', label: 'W2a · Finance · Place the rest: what stays unplaced is the customer’s credit balance', model: record('finance', PAYMENT, { dialog: { kind: 'place' }, items: { value: OPEN_ITEMS.slice(0, 1), problem: null }, creditBalance: 50000, draft: { plan: { [OPEN_ITEMS[0]!.id]: '200,00' } } }) },
+    { id: 'w2a-balance-none', label: 'W2a · Finance · Place the rest when the customer has nothing open: it becomes a credit balance', model: record('finance', PAYMENT, { dialog: { kind: 'place' }, items: { value: [], problem: null }, creditBalance: 50000 }) },
+    { id: 'w2a-balance-step', label: 'W2a · Finance · Record a payment: a deposit and the balance before shipping, told apart', model: list('finance', { dialog: { kind: 'record', step: 2, customer: { id: PARTIES[0].id, name: PARTIES[0].name, companyId: COMPANY }, invoiceId: null }, items: { value: [OPEN_ITEMS[1]!, { ...OPEN_ITEMS[1]!, id: 'balance-step', stepKind: 'BEFORE_SHIPPING', amount: 280000, openAmount: 280000 }], problem: null }, draft: { amount: '1200,00', receivedOn: TODAY, reference: 'CRO-ESEMPIO-77' } }) },
+    { id: 'w2a-balance-sales', label: 'W2a · Sales · A payment with a credit balance: Refund held', model: record('sales', PAYMENT) },
   ],
 })

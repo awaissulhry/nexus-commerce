@@ -1,4 +1,4 @@
-import { Banknote, FileText, FolderArchive, PieChart, SlidersHorizontal, Receipt, Scale, TrendingUp } from 'lucide-react'
+import { Banknote, FileInput, FileText, FolderArchive, HandCoins, PieChart, SlidersHorizontal, Receipt, Scale, TrendingUp } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -27,7 +27,15 @@ export const officeArea: OfficeAreaNav = {
           { id: 'finance-invoices', label: 'shell:nav.finance.invoices', href: '/finance/invoices', icon: FileText, permission: 'invoices.view' },
           // SCR-082: payments received and where they are placed (payments.view).
           { id: 'finance-payments', label: 'shell:nav.finance.payments', href: '/finance/payments', icon: Banknote, permission: 'payments.view' },
+          // B-W2a-81: Receivables & credit (SCR-151: what customers owe by age, statements, reminders to approve; receivables.view).
+          { id: 'finance-receivables', label: 'shell:nav.finance.receivables', href: '/finance/receivables', icon: HandCoins, permission: 'receivables.view' },
         ],
+      },
+      // B-W2a-81: Payables & bank › Supplier invoices (SCR-153: from SDI or typed, matched to PO and receipt, approved, paid; payables.view). Bank: W2b.
+      {
+        id: 'finance-payables',
+        label: 'shell:nav.finance.payablesGroup',
+        items: [{ id: 'finance-payables-page', label: 'shell:nav.finance.payables', href: '/finance/payables', icon: FileInput, permission: 'payables.view' }],
       },
       // B-W2a-72: Costing › Standard vs actual (SCR-154) and Margins (SCR-155): costing.view; amounts by the cost, price and margin grains.
       {

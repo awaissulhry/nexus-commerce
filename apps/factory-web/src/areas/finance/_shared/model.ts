@@ -518,7 +518,9 @@ export function lineInputsOf(lines: readonly InvoiceLine[], drafts: readonly Lin
     .map((line) => {
       const draft = drafts.find((entry) => entry.id === line.id)
       return {
-        kind: line.kind as 'GOODS' | 'SERVICE',
+        kind: line.kind as 'GOODS' | 'SERVICE' | 'CHARGE',
+        // B-W2a-54: a charge line goes back with its kind (without it the API refuses the whole PUT).
+        ...(line.kind === 'CHARGE' ? { chargeKind: line.chargeKind ?? 'OTHER' } : {}),
         description: (draft?.description ?? line.description).trim(),
         itemCode: line.itemCode,
         quantity: draft ? (parseQuantity(draft.quantity) ?? line.quantity) : line.quantity,
@@ -612,8 +614,10 @@ export function allocationsOf(items: readonly Pick<OpenItem, 'id' | 'target'>[],
 }
 
 /** How an open item is called: the invoice number, else the deposit of its order. */
-export function itemLabel(item: Pick<OpenItem, 'target' | 'number' | 'orderNumber'>): Phrase {
+export function itemLabel(item: Pick<OpenItem, 'target' | 'number' | 'orderNumber'> & { stepKind?: OpenItem['stepKind'] }): Phrase {
   if (item.target === 'INVOICE') return phrase('item.invoice', { number: item.number ?? '—' })
+  // B-W2a-F2/-61: a before-shipping step's request is the balance before shipping, not the deposit.
+  if (item.stepKind === 'BEFORE_SHIPPING') return item.orderNumber ? phrase('item.balance', { order: item.orderNumber }) : phrase('item.balanceNoOrder')
   return item.orderNumber ? phrase('item.deposit', { order: item.orderNumber }) : phrase('item.depositNoOrder')
 }
 

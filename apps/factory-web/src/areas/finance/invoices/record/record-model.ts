@@ -2,6 +2,7 @@ import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { Checks, CreditAsk, CreditReason, Invoice, Related, Sdi } from '../../_shared/api'
 import type { LiveState, StepUpState } from '../../_shared/hooks'
 import type { FinanceAbilities, LineDraft, Phrase } from '../../_shared/model'
+import type { ChargeDraft } from '../daily/model'
 
 /** SCR-081 — the invoice record's view model (InvoiceRecordView draws it and fetches nothing). */
 
@@ -33,6 +34,10 @@ export type RecordDialog =
   /** A draft's text: the causale and the due date. */
   | { kind: 'details' }
   | { kind: 'delete' }
+  /** B-W2a-80: add a charge line to a draft (freight, packaging, samples, a fee). */
+  | { kind: 'charge' }
+  /** B-W2a-80: carry an over-paid invoice's excess to the customer's credit balance. */
+  | { kind: 'carry' }
 
 export interface InvoiceRecordModel {
   prefix: string
@@ -64,7 +69,7 @@ export interface InvoiceRecordModel {
   /** Design cases: what the panels show (the page mounts the live panels instead). */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: what a dialog holds typed. */
-  draft?: { mode?: 'full' | 'lines' | 'amount'; reason?: CreditReason; text?: string; amount?: string; lines?: LineDraft[]; causale?: string; dueDate?: string }
+  draft?: { mode?: 'full' | 'lines' | 'amount'; reason?: CreditReason; text?: string; amount?: string; lines?: LineDraft[]; causale?: string; dueDate?: string; charge?: Partial<ChargeDraft>; note?: string }
 }
 
 export interface InvoiceRecordActions {
@@ -82,6 +87,10 @@ export interface InvoiceRecordActions {
   onSaveDetails?: (input: { causale: string | null; dueDate: string | null }) => void
   onDelete?: () => void
   onRemoveDeduction?: (lineId: string) => void
+  /** B-W2a-80: a charge line added to or removed from a draft; an over-payment carried to the credit balance. */
+  onAddCharge?: (draft: ChargeDraft) => void
+  onRemoveCharge?: (lineId: string) => void
+  onCarry?: (note: string) => void
   onMakeFiles?: () => void
   onDownload?: (fileId: string) => void
   onViewPdf?: () => void
