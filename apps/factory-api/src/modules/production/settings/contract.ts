@@ -3,6 +3,9 @@ import { defineContract, id, input, instant, output } from '@nexus/factory-domai
 import { MONITORING_CHANGES } from '@nexus/factory-domain/production/events'
 import { MAX_BUNDLE_SIZE } from '@nexus/factory-domain/production/bundles/rules'
 import { MONITORING_BASES, SCAN_SUBJECTS } from '@nexus/factory-domain/production/settings/monitoring'
+// B-W2b-53: floor rules per site (MES-294) and the floor's full reason lists (MES-293).
+import { BUNDLE_CODE_MODES, FLOOR_RULE_FIELDS, FLOOR_RULE_MODES, MAX_SCRAP_APPROVAL_LIMIT } from '@nexus/factory-domain/production/settings/floor-rules'
+import { FLOOR_REASON_LISTS } from '@nexus/factory-domain/production/settings/reason-lists'
 
 /**
  * A site's floor rules (B-W1-37; A2 SCR-074; MES-278, PLT-208): the monitoring switch with its legal basis, and the
@@ -133,6 +136,8 @@ export const noticeAcksContract = defineContract({
   },
 })
 
+const mode = z.enum(FLOOR_RULE_MODES)
+
 export const floorRulesContract = defineContract({
   response: {
     200: output({
@@ -142,6 +147,117 @@ export const floorRulesContract = defineContract({
       workerAcknowledged: z.boolean(),
       /** Garments per bundle when the cutter names no size (MES-065). */
       standardBundleSize: z.number().int(),
+      /** B-W2b-53 (MES-294): the site's floor checks a tablet shows or acts on; the scrap limit is a count (no money). */
+      checks: output({ quantityGuard: mode, skippedOperationRule: mode, scrapApprovalLimit: z.number().int().nullable(), bundleCodeMode: z.enum(BUNDLE_CODE_MODES) }),
+      /** One's own last report is undone until the next scan on the tablet or this many seconds after it (the same at every site). */
+      undoWindowSeconds: z.number().int(),
+    }),
+  },
+})
+
+// ---- B-W2b-53: floor rules per site (MES-294) -----------------------------------------------------------------------------------
+
+const checksView = output({
+  /** More pieces than the previous operation passed (MES-097). */
+  quantityGuard: mode,
+  /** The sequence: a required operation skipped (MES-098); FREE = relaxed, STRICT = strict. */
+  skippedOperationRule: mode,
+  /** Scrap above this many pieces in one scan waits for the team leader's approval (MES-128); null: none needed. */
+  scrapApprovalLimit: z.number().int().nullable(),
+  /** Shown here, changed by the bundles step (MES-067). */
+  bundleCodeMode: z.enum(BUNDLE_CODE_MODES),
+  stuckBundleHours: z.number().int(),
+})
+
+const floorRulesView = {
+  site: siteView,
+  checks: checksView,
+  /** true: the site has no floor rules yet and runs on the defaults. */
+  isDefault: z.boolean(),
+  /** The quantity guard, the sequence and the scrap limit in words, in that order. */
+  words: z.array(z.string()),
+  /** The same at every site for now (per-site columns are a schema follow-up). */
+  fixed: output({
+    undoWindowSeconds: z.number().int(),
+    clockOffSeconds: z.number().int(),
+    clockFlagSeconds: z.number().int(),
+    /** No limit yet: null. */
+    offlineMaxHours: z.number().int().nullable(),
+    offlineMaxActions: z.number().int().nullable(),
+    /** The actions a tablet holds while offline. */
+    onlineOnly: z.array(z.string()),
+    words: z.array(z.string()),
+  }),
+  /** Idle sign-out as the tablets' settings of the site keep it (changed at PUT /auth/floor/sites/:siteId/settings). */
+  idleSignOut: output({ idleMinutes: z.number().int(), shiftEnds: z.array(z.string()), badgeOnlySignIn: z.boolean(), isDefault: z.boolean(), words: z.string() }),
+  /** The version to send back with a change; null while the site has no floor rules. */
+  version: z.number().int().nullable(),
+  updatedAt: instant().nullable(),
+  /** The caller holds production.settings.manage over the site. */
+  canManage: z.boolean(),
+}
+
+export const getFloorRulesContract = defineContract({
+  params: input({ siteId: id() }),
+  response: { 200: output(floorRulesView) },
+})
+
+export const changeFloorRulesContract = defineContract({
+  params: input({ siteId: id() }),
+  body: input({
+    quantityGuard: mode.optional(),
+    skippedOperationRule: mode.optional(),
+    /** Pieces in one scan (1 to a bundle's 500); null: scrap needs no approval. */
+    scrapApprovalLimit: z.number().int().min(1).max(MAX_SCRAP_APPROVAL_LIMIT).nullable().optional(),
+    /** Kept in the audit row. */
+    reason,
+    /** The version read; left out while the site has no floor rules. */
+    version: z.number().int().min(1).optional(),
+  }),
+  response: {
+    200: output({
+      ...floorRulesView,
+      /** false: nothing changed (no audit row, no event). */
+      changed: z.boolean(),
+      changedFields: z.array(z.enum(FLOOR_RULE_FIELDS)),
+      /** What the change means from now on, in words. */
+      changeWords: z.array(z.string()),
+    }),
+  },
+})
+
+// ---- B-W2b-53: the floor's full reason lists (MES-293) -------------------------------------------------------------------------
+
+const floorList = z.enum(FLOOR_REASON_LISTS)
+const reasonListView = output({
+  list: floorList,
+  active: count(),
+  inactive: count(),
+  /** The codes of the full list this list does not have yet (active or not, a code is never added twice). */
+  fullMissing: z.array(z.string()),
+})
+
+export const reasonListsContract = defineContract({
+  response: {
+    200: output({
+      lists: z.array(reasonListView),
+      /** The caller keeps the lists (reasons.manage over every company and site): "Add the full list" is offered. */
+      canManage: z.boolean(),
+    }),
+  },
+})
+
+export const addFullReasonsContract = defineContract({
+  body: input({
+    /** The lists to complete; left out: every floor list. */
+    lists: z.array(floorList).min(1).max(FLOOR_REASON_LISTS.length).optional(),
+  }),
+  response: {
+    200: output({
+      lists: z.array(reasonListView),
+      canManage: z.boolean(),
+      /** The codes added per list (none: nothing was missing, nothing written). */
+      added: z.array(output({ list: floorList, codes: z.array(z.string()) })),
     }),
   },
 })

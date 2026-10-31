@@ -6,6 +6,7 @@ import { cellLabel, partsOf } from '@nexus/factory-domain/production/cutting/rul
 import { PRODUCTION_SCRAP, PRODUCTION_SCRAP_APPROVE, PRODUCTION_SCRAP_VIEW } from '@nexus/factory-domain/production/scrap/permissions'
 import {
   askRefusal,
+  type AskFacts,
   cancelRefusal,
   decisionRefusal,
   recutDoneRefusal,
@@ -18,6 +19,8 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { readPlannedParts } from '../cutting/store'
 import { lockReplacement, readCellLabels, readReplacement, REPLACEMENT_COLUMNS, replacementViews, type ReplacementRow } from './store'
+// B-W2b-53 (MES-128): held scrap posts no replacement.
+import { scrapPostingHeld } from './over-limit'
 
 /**
  * Replace scrapped garments (B-W2a-13; MES-130; design production.scrap "Replace scrapped quantity"): a RECUT for the
@@ -108,13 +111,19 @@ async function askInCommand(tools: CommandTools, workOrderId: string, body: AskI
   await tx.$queryRaw`SELECT "id" FROM "WorkOrder" WHERE "id" = ${workOrderId}::uuid FOR UPDATE`
   const workOrder = (await tx.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, number: true, status: true } }))!
   let cellId = body.workOrderSizeId ?? null
-  let source: { what: string; scrapped: number; replaced: number } | null = null
+  let source: AskFacts['source'] = null
   if (body.sourceScanId) {
     const scan = (await tx.operationScan.findUnique({ where: { id: body.sourceScanId }, select: { id: true, bundleId: true, scrapQuantity: true, kind: true } }))!
     const bundle = await tx.bundle.findUnique({ where: { id: scan.bundleId }, select: { workOrderSizeId: true, code: true } })
     cellId = bundle?.workOrderSizeId ?? cellId
     const voided = (await tx.operationScan.count({ where: { correctsId: scan.id } })) > 0
-    source = { what: `The scan of bundle ${bundle?.code ?? ''}`, scrapped: voided ? 0 : scan.scrapQuantity, replaced: replacedFrom(await tx.replacementRequest.findMany({ where: { sourceScanId: scan.id }, select: { status: true, quantity: true } })) }
+    source = {
+      what: `The scan of bundle ${bundle?.code ?? ''}`,
+      scrapped: voided ? 0 : scan.scrapQuantity,
+      replaced: replacedFrom(await tx.replacementRequest.findMany({ where: { sourceScanId: scan.id }, select: { status: true, quantity: true } })),
+      // B-W2b-53 (MES-128): scrap above the site's limit is replaced only once the team leader approved it.
+      heldBy: await scrapPostingHeld(tx, scan.id),
+    }
   } else if (body.reworkOrderId) {
     const rework = (await tx.reworkOrder.findUnique({ where: { id: body.reworkOrderId }, select: { id: true, workOrderSizeId: true, status: true, scrapQuantity: true } }))!
     cellId = rework.workOrderSizeId

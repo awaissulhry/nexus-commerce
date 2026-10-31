@@ -3,7 +3,11 @@ import { defineRoutes } from '../../../core/manifest'
 import { requireStepUp } from '../../../platform/auth/office/account'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { changeBundleSizeContract, changeScanSubjectContract, floorRulesContract, getRulesContract, listRulesContract, noticeAcksContract, recordLegalBasisContract } from './contract'
+// B-W2b-53: floor rules per site (MES-294) and the floor's full reason lists (MES-293).
+import { addFullReasonsContract, changeFloorRulesContract, getFloorRulesContract, reasonListsContract } from './contract'
+import { changeFloorRules, floorChecksRead, getFloorRules } from './floor-rules'
 import { manifest } from './manifest'
+import { addFullReasons, reasonLists } from './reason-lists'
 import { changeBundleSize, changeScanSubject, floorRules, getRules, listNoticeAcks, listRules, recordLegalBasis } from './settings'
 
 /**
@@ -31,5 +35,16 @@ export default defineRoutes('production.settings', manifest, async (app) => {
 
   app.get('/production/settings/:siteId/notice-acks', { schema: noticeAcksContract }, async (request) => listNoticeAcks(request, request.params.siteId))
 
-  app.get('/production/floor-rules', { schema: floorRulesContract }, async (request) => floorRules(request))
+  // B-W2b-53: the floor's read also carries the site's checks and the undo window.
+  app.get('/production/floor-rules', { schema: floorRulesContract }, async (request) => ({ ...(await floorRules(request)), ...(await floorChecksRead(request)) }))
+
+  // B-W2b-53 (MES-294): the floor checks per site (quantity guard, sequence, scrap approval limit) and what is not per site yet.
+  app.get('/production/settings/:siteId/floor-rules', { schema: getFloorRulesContract }, async (request) => getFloorRules(request, request.params.siteId))
+
+  app.post('/production/settings/:siteId/floor-rules', { schema: changeFloorRulesContract }, async (request) => changeFloorRules(request, request.params.siteId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-53 (MES-293): the floor's full reason lists through the W2a editor's stores.
+  app.get('/production/settings/reasons', { schema: reasonListsContract }, async (request) => reasonLists(request))
+
+  app.post('/production/settings/reasons/full', { schema: addFullReasonsContract }, async (request) => addFullReasons(request, request.body, idempotencyKeyFrom(request)))
 })

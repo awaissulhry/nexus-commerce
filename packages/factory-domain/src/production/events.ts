@@ -8,6 +8,9 @@ import { WORK_ORDER_STATUSES } from './work-orders/machine'
 import { SPLIT_REASONS } from './bundles/split'
 import { REWORK_STATUSES } from './rework/rules'
 import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
+// B-W2b-53: floor rules per site and scrap above the limit.
+import { DECIDED_ON, SCRAP_DECISIONS } from './scrap/approval'
+import { FLOOR_RULE_FIELDS, FLOOR_RULE_MODES } from './settings/floor-rules'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -48,6 +51,10 @@ import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
  *   production.report_subscription_changed  B-W2a-38: someone subscribed to the daily production report by e-mail, or a
  *                                           subscription changed or was turned off (the report page's state refreshes)
  *   production.daily_report_sent            B-W2a-38: the scheduler e-mailed one person's daily production report
+ *   production.floor_rules_changed          B-W2b-53: a site's floor checks changed (the quantity guard, the sequence,
+ *                                           the scrap approval limit); Floor rules & codes and the site's tablets re-read
+ *   production.scrap_over_limit_decided     B-W2b-53: a scan's scrap above the site's limit was approved (it posts) or
+ *                                           refused, by a team leader on the tablet or in the office (MES-128)
  */
 export const MONITORING_CHANGES = ['WIDENED', 'NARROWED', 'BASIS_RECORDED', 'BASIS_REPLACED'] as const
 
@@ -483,5 +490,37 @@ export const events = [
       emailOutboundId: z.uuid(),
       lanes: z.number().int().min(0),
     }),
+  }),
+  // B-W2b-53: floor rules per site (MES-294) and scrap above a site's limit (MES-128). Ids, modes, counts and states:
+  // no reason text, no person (who decided stays in the audit log).
+  defineEvent({
+    type: 'production.floor_rules_changed',
+    context: 'production',
+    description: "A site's floor checks changed: the quantity guard, the sequence (skipped operations) or the scrap approval limit.",
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      fields: z.array(z.enum(FLOOR_RULE_FIELDS)).min(1),
+      quantityGuard: z.enum(FLOOR_RULE_MODES),
+      skippedOperationRule: z.enum(FLOOR_RULE_MODES),
+      scrapApprovalLimit: z.number().int().min(1).nullable(),
+    }),
+    live: { permission: 'production.settings.view', floor: 'floor.work', fields: ['siteId', 'fields'] },
+  }),
+  defineEvent({
+    type: 'production.scrap_over_limit_decided',
+    context: 'production',
+    description: "A scan's scrap above its site's limit was approved (it posts: replacement, scrap of stock, cost) or refused (it does not), on the tablet or in the office.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      siteId: z.uuid(),
+      bundleId: z.uuid(),
+      scanId: z.uuid(),
+      decision: z.enum(SCRAP_DECISIONS),
+      scrapQuantity: z.number().int().min(1),
+      limit: z.number().int().min(1),
+      decidedOn: z.enum(DECIDED_ON),
+    }),
+    live: { permission: 'production.scrap.view', floor: 'floor.lead', fields: ['workOrderId', 'number', 'scanId'] },
   }),
 ] as const

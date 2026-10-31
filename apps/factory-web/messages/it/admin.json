@@ -1712,6 +1712,7 @@
     "production_scrap_view": "Vedere scarti e rilavorazioni",
     "production_scrap": "Registrare scarti e chiedere sostituzioni",
     "production_scrap_approve": "Approvare riduzioni d'ordine",
+    "production_scrap_overLimit": "Approvare o rifiutare scarti oltre il limite del reparto",
     "production_reports_view": "Vedere il report giornaliero di produzione per linea, modello e taglia",
     "production_reports_subscribe": "Inviare il report di produzione ai colleghi",
     "production_cutting_view": "Vedere la resa del taglio",
