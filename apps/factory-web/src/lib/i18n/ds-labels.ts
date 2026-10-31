@@ -6,6 +6,18 @@ import type {
 import type { DetailModalLabels, EditModeBarLabels, PreferencesModalLabels, ReviewChangesLabels, StepUpModalLabels } from '@nexus/ui/patterns'
 import type { ColorSwatchPickerLabels, IconPickerLabels, TextareaLabels } from '@nexus/ui/primitives'
 import type { CellSaveMarkLabels, GridDensityToggleLabels } from '@nexus/ui/grid'
+// B-W2b-09: the shared parts the W2a screens composed (each its own entry point).
+import type { FileRowLabels } from '@nexus/ui/components'
+import type { SaveStatusLabels } from '@nexus/ui/components/SaveStatus/index'
+import type { SelectableCardLabels } from '@nexus/ui/components/SelectableCard/index'
+import type { RecordNavLabels } from '@nexus/ui/patterns/record-nav/index'
+import type { CheckListLabels } from '@nexus/ui/patterns/checklist/index'
+import type { TraceTreeLabels } from '@nexus/ui/patterns/trace-tree/index'
+import type { PrintViewLabels } from '@nexus/ui/patterns/print-view/index'
+import type { MarginMeterLabels } from '@nexus/ui/charts/margin-meter/index'
+import type { WaterfallLabels } from '@nexus/ui/charts/waterfall/index'
+import type { BarListLabels } from '@nexus/ui/charts/bar-list/index'
+import type { CardListLabels } from '@nexus/ui/grid/card-list/index'
 import { formatDateTime, formatNumber, DEFAULT_TIME_ZONE } from './format'
 import { INTL_LOCALE, type Locale } from './locales'
 import type { Translate } from './messages'
@@ -50,6 +62,19 @@ export interface DsLabels {
   combobox: ComboboxLabels
   confirmPhrase: ConfirmPhraseFieldLabels
   textarea: TextareaLabels
+  // B-W2b-09
+  fileRow: FileRowLabels
+  saveStatus: SaveStatusLabels
+  /** The same words as `detail` (one Prev / Next rule for modals and pages). */
+  recordNav: RecordNavLabels
+  checkList: CheckListLabels
+  traceTree: TraceTreeLabels
+  printView: PrintViewLabels
+  marginMeter: MarginMeterLabels
+  waterfall: WaterfallLabels
+  barList: BarListLabels
+  selectableCard: SelectableCardLabels
+  cardList: CardListLabels
 }
 
 const MINUTE = 60_000
@@ -319,6 +344,105 @@ export function dsLabels(t: Translate, locale: Locale, timeZone: string = DEFAUL
     textarea: {
       counter: (used, limit) => t('textarea.counter', { used: num(used), limit: num(limit) }),
       tooLong: (over) => t('textarea.tooLong', { count: over, n: num(over) }),
+    },
+    // B-W2b-09 — the shared parts the W2a screens composed.
+    fileRow: { replace: t('fileRow.replace'), remove: t('fileRow.remove') },
+    saveStatus: {
+      saved: t('saveStatus.saved'),
+      savedAt: (time) => t('saveStatus.savedAt', { time }),
+      saving: t('saveStatus.saving'),
+      failed: (count) => t('saveStatus.failed', { count }),
+      retry: t('saveStatus.retry'),
+      unsaved: t('saveStatus.unsaved'),
+      unsavedCount: (count) => t('saveStatus.unsavedCount', { count }),
+      offline: t('saveStatus.offline'),
+      offlineCount: (count) => t('saveStatus.offlineCount', { count }),
+      region: t('saveStatus.region'),
+    },
+    recordNav: {
+      noun: d('noun'),
+      previous: (noun) => d('previous', { noun }),
+      next: (noun) => d('next', { noun }),
+      moveBetween: (noun) => d('moveBetween', { noun }),
+      position: (place, total) => d('position', { place: num(place), total: num(total) }),
+      notInTable: (noun) => d('notInTable', { noun }),
+      first: (noun, onPage) => d(onPage ? 'firstOnPage' : 'first', { noun }),
+      last: (noun, onPage) => d(onPage ? 'lastOnPage' : 'last', { noun }),
+    },
+    checkList: {
+      states: {
+        pass: t('checkList.state.pass'), warning: t('checkList.state.warning'), fail: t('checkList.state.fail'),
+        checking: t('checkList.state.checking'), skipped: t('checkList.state.skipped'), unknown: t('checkList.state.unknown'),
+      },
+      allPass: (total) => t('checkList.allPass', { count: total }),
+      // The plural follows the open checks (Italian "1 controllo aperto su 5"); one check alone has its own sentence.
+      open: (open, total) => (total === 1 ? t('checkList.openOnly') : t('checkList.open', { count: open, total })),
+      checking: t('checkList.checking'),
+      button: (action, open) => t('checkList.button', { action, count: open }),
+      held: (open, names) => t('checkList.held', { count: open, names }),
+      join: (names) => names.join(t('checkList.join')),
+      none: t('checkList.none'),
+    },
+    traceTree: {
+      possible: t('traceTree.possible'),
+      possibleCount: (count) => t('traceTree.possibleCount', { count }),
+      levels: t('traceTree.levels'),
+      tick: (name) => t('traceTree.tick', { name }),
+      selected: (count) => t('traceTree.selected', { count }),
+      keys: t('traceTree.keys'),
+      empty: t('traceTree.empty'),
+    },
+    printView: {
+      print: t('printView.print'),
+      back: t('printView.back'),
+      printedBy: (person, when) => t('printView.printedBy', { person, when }),
+      printedOn: (when) => t('printView.printedOn', { when }),
+      filters: (list) => t('printView.filters', { list }),
+      filter: (label, value) => t('printView.filter', { label, value }),
+      join: t('printView.join'),
+      noFilters: t('printView.noFilters'),
+      strip: t('printView.strip'),
+    },
+    marginMeter: {
+      label: t('marginMeter.label'),
+      underFloor: (value, floor) => t('marginMeter.underFloor', { value, floor }),
+      underTarget: (value, target) => t('marginMeter.underTarget', { value, target }),
+      onTarget: (value, target) => t('marginMeter.onTarget', { value, target }),
+      overFloor: (value, floor) => t('marginMeter.overFloor', { value, floor }),
+      plain: (value) => t('marginMeter.plain', { value }),
+      unknown: t('marginMeter.unknown'),
+      floorMark: (floor) => t('marginMeter.floorMark', { floor }),
+      targetMark: (target) => t('marginMeter.targetMark', { target }),
+    },
+    waterfall: {
+      up: (amount) => t('waterfall.up', { amount }),
+      down: (amount) => t('waterfall.down', { amount }),
+      stepName: (label, amount, total) => t('waterfall.stepName', { label, amount, total }),
+      totalName: (label, amount) => t('waterfall.totalName', { label, amount }),
+      open: (label) => t('waterfall.open', { label }),
+      empty: t('waterfall.empty'),
+    },
+    barList: {
+      name: t('barList.name'),
+      value: t('barList.value'),
+      unknown: t('barList.unknown'),
+      parts: (parts) => parts.map((part) => t('barList.part', { label: part.label, value: part.value })).join(t('barList.partsJoin')),
+      pick: (label, value) => t('barList.pick', { label, value }),
+      empty: t('barList.empty'),
+    },
+    selectableCard: { selected: t('selectableCard.selected') },
+    cardList: {
+      select: t('cardList.select'),
+      done: t('cardList.done'),
+      selectAll: t('cardList.selectAll'),
+      selected: (count) => t('cardList.selected', { count }),
+      selectOne: (name) => t('cardList.selectOne', { name }),
+      nothingToSelect: t('cardList.nothingToSelect'),
+      sortBy: t('cardList.sortBy'),
+      listOrder: t('cardList.listOrder'),
+      ascending: (column) => t('cardList.ascending', { column }),
+      descending: (column) => t('cardList.descending', { column }),
+      reading: t('cardList.reading'),
     },
   }
 }
