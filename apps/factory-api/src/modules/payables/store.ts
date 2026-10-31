@@ -4,6 +4,7 @@ import { ForbiddenError, NotFoundError, UnauthenticatedError } from '@nexus/fact
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { PAYABLES_VIEW } from '@nexus/factory-domain/payables/permissions'
+import { PREPARING_ACTIONS, preparersOf } from '@nexus/factory-domain/payables/rules'
 import type { CommandCaller, CommandTools, CommandTx } from '../../core/command'
 import { actorOf, type OfficeContext } from '../../core/context'
 import { systemContext } from '../../platform/outbox/system'
@@ -151,6 +152,18 @@ export async function readInvoice(db: Reader, invoiceId: string): Promise<Invoic
 
 export const readLines = (db: Reader, invoiceId: string): Promise<LineRow[]> => db.supplierInvoiceLine.findMany({ where: { invoiceId }, select: LINE_COLUMNS, orderBy: { seq: 'asc' } })
 export const readMatches = (db: Reader, invoiceId: string): Promise<MatchRow[]> => db.supplierInvoiceMatch.findMany({ where: { invoiceId }, select: MATCH_COLUMNS, orderBy: { id: 'asc' } })
+
+/**
+ * Who of the office prepared the invoice for approval (four eyes, B-W2a-F7: factory-domain payables/rules preparersOf):
+ * its lines' and match rows' writers and accepters, and its audit rows of a mapping or an acceptance (office ones only:
+ * the SDI pickup and the worker's match are the system's).
+ */
+export async function preparationOf(db: Reader, invoiceId: string): Promise<{ mappedByIds: string[]; acceptedByIds: string[] }> {
+  const lines = await db.supplierInvoiceLine.findMany({ where: { invoiceId }, select: { createdById: true } })
+  const matches = await db.supplierInvoiceMatch.findMany({ where: { invoiceId }, select: { createdById: true, acceptedById: true } })
+  const audit = await db.auditLog.findMany({ where: { recordType: RECORD, recordId: invoiceId, audience: 'OFFICE', action: { in: [...PREPARING_ACTIONS] } }, select: { action: true, actorId: true, before: true, after: true } })
+  return preparersOf({ lines, matches, audit })
+}
 
 /** The invoice the caller may see and act on, read in its scope (404 / 403 as assertMay). */
 export async function officeInvoice(caller: CommandCaller, invoiceId: string, permission: Permission = PAYABLES_VIEW): Promise<{ context: OfficeContext; invoice: InvoiceRow }> {

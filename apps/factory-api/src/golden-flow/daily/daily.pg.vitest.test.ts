@@ -1154,6 +1154,15 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     })
     expect(decided.return.lines[0].effect).toContain(`at ${fg.code}; a credit note to make (Finance)`)
     expect(decided.moves).toEqual([{ lineId: G.rma.lineId, moveId: expect.any(String), locationId: fg.id }])
+    // B-W2a-F7: the jacket back in stock is valued as a production receipt is, at the BLK 52's standard frozen in M00b.
+    const [valued] = await admin<{ method: string; unitCost: string; standard: string }>(
+      w,
+      `SELECT v.method::text AS method, v."unitCost"::text AS "unitCost", s."unitCost"::text AS standard FROM "StockValuation" v JOIN "StockMove" m ON m.id = v."moveId"
+         JOIN "StandardCost" s ON s."itemId" = m."itemId" AND s."companyId" = m."companyId" AND s.status = 'FROZEN' WHERE v."moveId" = $1`,
+      [decided.moves[0].moveId],
+    )
+    expect(valued).toMatchObject({ method: 'STANDARD_COST' })
+    expect(Number(valued!.unitCost)).toBe(Number(valued!.standard))
     G.rma = { ...G.rma, version: decided.return.version, status: 'INSPECTED', creditAmount: G.rma.pieceValue }
 
     // The worker (W2A_61 creditNoteHandlers): return.credit_due → the TD04 draft on invoice 1, the RMA line named on it.
@@ -1789,7 +1798,7 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect(pickup.waiting).toEqual([])
     expect(pickup.recorded).toEqual([expect.objectContaining({ number: 'GB-2026-0001', matchStatus: 'MATCHED' })])
     const invoice = await bInvoice(P.finance, pickup.recorded[0].invoiceId)
-    // SDI's delivery is registered by nobody of the office (system context): any approver may approve it.
+    // SDI's delivery is registered, mapped and matched by nobody of the office (system context): any approver may approve it.
     expect(invoice).toMatchObject({ source: 'SDI', kind: 'INVOICE', docType: 'TD01', status: 'RECEIVED', registeredBy: null, netTotal: 42_000, vatTotal: 9_240, grossTotal: 51_240, matchStatus: 'MATCHED' })
     expect(invoice.lines[0]).toMatchObject({ kind: 'GOODS', purchaseOrderLine: { orderNumber: G.po.number, seq: 10 } })
     expect(invoice.matches[0]).toMatchObject({ verdict: 'WITHIN', withinTolerance: true, differenceAmount: 0 })
@@ -2670,20 +2679,20 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     await settle()
   })
 
-  it('X4 finance soft-locks the month naming the batch; every stock move the day made has its value, except the returned jacket put back into stock (X5b)', async () => {
+  it('X4 finance soft-locks the month naming the batch; every stock move the day made has its value, the returned jacket put back into stock too', async () => {
     const month = monthOfDay(today())
     const soft = await ok(P.finance, 'POST', '/accounting/locks', { companyId: companyA(), month, level: 'SOFT', note: `Month end: exported as ${G.export.number}.` })
     // A SOFT lock names what a HARD one refuses (an SDI-rejected invoice, a stock move without its value, an open year-end
     // inventory; in December the missing year-end inventory). The day's issues, receipts, write-off, count, kit and returns
-    // to the supplier are all valued; the one move without a value is the return's restock (R05): the gap of X5b.
+    // to the supplier are all valued, and so is the return's restock (R05: at the frozen standard, B-W2a-F7).
     const unvalued = await admin<{ reason: string; reference: string | null }>(
       w,
       `SELECT m.reason, m.reference FROM "StockMove" m WHERE m."companyId" = $1 AND m."createdAt" BETWEEN $2 AND now() AND NOT EXISTS (SELECT 1 FROM "StockValuation" v WHERE v."moveId" = m.id)
          AND ((m."fromLocationId" IS NULL AND m."toLocationId" IS NOT NULL) OR (m."toLocationId" IS NULL AND m."fromLocationId" IS NOT NULL))`,
       [companyA(), G.dayStart],
     )
-    expect(unvalued).toEqual([{ reason: 'ADJUSTMENT', reference: G.rma.number }])
-    expect(soft.warnings.map((warning: Json) => warning.code)).toEqual(['STOCK_NOT_VALUED', ...(KX_YEAR_END ? ['YEAR_END_COUNT_MISSING'] : [])])
+    expect(unvalued).toEqual([])
+    expect(soft.warnings.map((warning: Json) => warning.code)).toEqual(KX_YEAR_END ? ['YEAR_END_COUNT_MISSING'] : [])
     expect(soft.lock).toMatchObject({ level: 'SOFT', status: 'LOCKED', period: expect.objectContaining({ month }), export: { id: G.export.id, number: G.export.number, status: 'EXPORTED' }, lockedBy: expect.objectContaining({ id: P.finance.id }), words: expect.stringContaining('Soft-locked') })
     G.lock = soft.lock
     keep(soft.lock.id)
@@ -2726,7 +2735,30 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect(wrong.error.message).toBe(`Closing ${monthLabel(month)} for good needs its phrase typed.`)
   })
 
-  it.todo('X5b the month is closed for good (HARD, with its phrase) — refused STOCK_NOT_VALUED: the returned jacket put back into stock (R05) is an ADJUSTMENT of its FINISHED item posted without a value: sales/returns/decide.ts sends postMoves no cost, postMoves reads only Item.standardCost (none on a FINISHED item), the FROZEN standard frozen in M00b is read only by finished-goods receipts (inventory/finished/post.ts), and a freeze values only PRODUCTION_RECEIPT moves afterwards (costing/standards/standards.ts); no route values the move later, so the month holding a restocked return can never be closed (B-W2a-43, with B-W2a-21)')
+  it('X5b the month is closed for good with its phrase (every stock move valued, the restocked return too: B-W2a-F7); then a payment and a write-off dated today are refused in words', async () => {
+    const month = monthOfDay(today())
+    const hard = { companyId: companyA(), month, level: 'HARD', phrase: lockPhrases(month).en, version: G.lock.version }
+    if (KX_YEAR_END) {
+      // December closes company A's fiscal year: its HARD close waits for the year-end inventory, and for nothing else.
+      const refused = await ok(P.finance, 'POST', '/accounting/locks', hard, 409)
+      expect((refused.error.issues as Json[]).map((issue) => issue.path)).toEqual(['problem/YEAR_END_COUNT_MISSING'])
+      return
+    }
+    const closed = await ok(P.finance, 'POST', '/accounting/locks', hard)
+    expect(closed.warnings).toEqual([])
+    expect(closed.lock).toMatchObject({ id: G.lock.id, level: 'HARD', status: 'LOCKED', period: expect.objectContaining({ month }), lockedBy: expect.objectContaining({ id: P.finance.id }), words: expect.stringMatching(/^Closed for good/) })
+    G.lock = closed.lock
+    // Nothing dated today can be written now (so this is the day's last write stage): refused in words before the database.
+    const words = new RegExp(`^${monthLabel(month)} is closed for good for .+ \\(a hard lock since .+\\): `)
+    const payment = await ok(P.finance, 'POST', '/payments', { companyId: companyA(), partyId: kx().p1, amount: 100, receivedOn: today(), externalRef: 'CRO-GOLDEN-HARD-CLOSED' }, 409)
+    expect(payment.error.issues).toEqual([{ path: 'body/receivedOn', message: 'Dated inside a month closed for good.' }])
+    expect(payment.error.message).toMatch(words)
+    const writeOff = await ok(P.warehouse, 'POST', '/inventory/write-offs', { siteId: siteA1(), reasonCode: 'DAMAGED', note: 'Found after the close', lines: [{ lotId: kx().liningLot, fromLocationId: kx().bin, quantity: '0.5' }] }, 409)
+    expect((writeOff.error.issues as Json[]).map((issue) => issue.message)).toEqual(['Dated inside a month closed for good.'])
+    expect(writeOff.error.message).toMatch(words)
+    expect(writeOff.error.message).toContain('is not posted. Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month')
+    await settle()
+  })
 
   it('X6 a month closed for good refuses what is dated in it, in words: a payment dated in September 2026 (seeded HARD lock) is not recorded', async () => {
     const s = kx()
