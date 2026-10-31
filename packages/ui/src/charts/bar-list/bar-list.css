@@ -1,0 +1,197 @@
+/*
+ * DS — BarList (B-W2b-09). A table drawn as bars: the name (a button or a link to drill down), the track on one scale
+ * with the value written after it. Stacked parts alternate a pattern (solid, hatched) so the legend reads without
+ * colour; fills use the tone's fill role, words the text roles.
+ */
+.nds-barlist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-barlist.is-empty {
+  color: var(--nds-text-2);
+}
+.nds-barlist-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+.nds-barlist-key li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+.nds-barlist-swatch {
+  display: inline-block;
+  width: var(--nds-space-12);
+  height: var(--nds-space-10);
+  border-radius: var(--nds-radius-xs);
+}
+.nds-barlist-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.nds-barlist-colname {
+  width: 38%;
+}
+.nds-barlist-row > * {
+  padding: var(--nds-space-4) 0;
+  vertical-align: middle;
+}
+.nds-barlist-name {
+  padding-right: var(--nds-space-12);
+  font-weight: var(--nds-font-weight-normal);
+  text-align: start;
+}
+.nds-barlist-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nds-barlist-sub {
+  display: block;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+.nds-barlist-pick {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nds-text-link);
+  font: inherit;
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.nds-barlist-pick:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nds-barlist-row.is-active .nds-barlist-pick {
+  font-weight: var(--nds-font-weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nds-barlist-pick:focus-visible,
+.nds-barlist-link:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-xs);
+}
+.nds-barlist-link {
+  color: var(--nds-text-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nds-barlist-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.nds-barlist-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: var(--nds-space-32);
+  height: var(--nds-space-12);
+}
+.nds-barlist-zero {
+  position: absolute;
+  top: calc(var(--nds-space-2) * -1);
+  bottom: calc(var(--nds-space-2) * -1);
+  width: 0;
+  border-left: 1px solid var(--nds-border-strong);
+}
+.nds-barlist-fill,
+.nds-barlist-stack {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: var(--nds-radius-xs);
+}
+.nds-barlist-stack {
+  display: flex;
+  overflow: hidden;
+}
+.nds-barlist-part {
+  flex: none;
+  height: 100%;
+  border-right: 1px solid var(--nds-surface);
+}
+.nds-barlist-part:last-child {
+  border-right: 0;
+}
+.nds-barlist-value {
+  flex: none;
+  min-width: 4.5rem;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
+}
+.nds-barlist-row.is-unknown .nds-barlist-value {
+  color: var(--nds-text-2);
+}
+
+/* Fills by tone (the bar, a part, a legend swatch). */
+.nds-barlist-fill,
+.tone-neutral.nds-barlist-part,
+.tone-neutral.nds-barlist-swatch {
+  background-color: var(--nds-text-3);
+}
+.nds-barlist-row.tone-info .nds-barlist-fill,
+.tone-info.nds-barlist-part,
+.tone-info.nds-barlist-swatch {
+  background-color: var(--nds-info);
+}
+.nds-barlist-row.tone-success .nds-barlist-fill,
+.tone-success.nds-barlist-part,
+.tone-success.nds-barlist-swatch {
+  background-color: var(--nds-success);
+}
+.nds-barlist-row.tone-warning .nds-barlist-fill,
+.tone-warning.nds-barlist-part,
+.tone-warning.nds-barlist-swatch {
+  background-color: var(--nds-warning);
+}
+.nds-barlist-row.tone-danger .nds-barlist-fill,
+.tone-danger.nds-barlist-part,
+.tone-danger.nds-barlist-swatch {
+  background-color: var(--nds-danger);
+}
+.nds-barlist-row.tone-danger .nds-barlist-value {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* Patterns for stacked parts: every other part hatched, so neighbours differ by more than colour. */
+.pattern-1.nds-barlist-part,
+.pattern-1.nds-barlist-swatch {
+  background-image: repeating-linear-gradient(135deg, transparent 0 3px, var(--nds-surface) 3px 4.5px);
+}
+.pattern-3.nds-barlist-part,
+.pattern-3.nds-barlist-swatch {
+  background-image: repeating-linear-gradient(45deg, transparent 0 3px, var(--nds-surface) 3px 4.5px);
+}
+
+@media (max-width: 479px) {
+  .nds-barlist-colname {
+    width: 44%;
+  }
+  .nds-barlist-value {
+    min-width: 3.5rem;
+  }
+}

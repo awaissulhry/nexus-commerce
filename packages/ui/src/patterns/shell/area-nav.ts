@@ -57,6 +57,13 @@ export interface AreaNavItem extends AreaNavEntry {
   children?: readonly AreaNavItem[]
   /** What the rows under it are, for the chevron's name ("Show Amazon markets"). */
   childrenLabel?: string
+  /**
+   * `_blank`: the row opens its page in a new tab on a plain click — a window page (the planning board, the line TV's
+   * preview; B-W2b-09, the gap B-W2a-83 named). The sub-sidebar draws a new-tab mark and says `targetLabel`.
+   */
+  target?: '_blank'
+  /** Said after the label of a `target` row, in the person's language: "opens in a new tab". */
+  targetLabel?: string
 }
 
 /** A group of rows in a sub-sidebar. */
@@ -210,6 +217,7 @@ export function areaSubNavGroups(area: AreaNavArea, options: AreaSubNavOptions):
       href: toHref(item.href),
       ...(item.icon ? { icon: createElement(item.icon, { size: 16, 'aria-hidden': true }) } : {}),
       ...(item.ariaLabel ? { ariaLabel: item.ariaLabel } : {}),
+      ...(item.target ? { target: item.target, ...(item.targetLabel ? { targetLabel: item.targetLabel } : {}) } : {}),
       active: item === current,
       ...(n !== undefined && n > 0 ? { badge: n.toLocaleString('en') } : {}),
       ...(children.length > 0 ? { children, ...(item.childrenLabel ? { childrenLabel: item.childrenLabel } : {}) } : {}),

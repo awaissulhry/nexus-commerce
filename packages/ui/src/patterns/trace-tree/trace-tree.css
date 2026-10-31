@@ -1,0 +1,135 @@
+/*
+ * DS — TraceTree (B-W2b-09). Rows indented by depth, a chevron for the rows that open, the tick box when a reach is
+ * chosen, the level's word before the code; "may hold it" in words and a dashed edge (never colour alone).
+ */
+.nds-tracetree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-tracetree-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-tracetree-levels li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+.nds-tracetree-sub,
+.nds-tracetree-count {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+.nds-tracetree-count {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+.nds-tracetree-tree {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+.nds-tracetree-row {
+  display: grid;
+  grid-template-columns: var(--nds-space-16) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--nds-space-6);
+  padding: var(--nds-space-4) var(--nds-space-10);
+  padding-inline-start: calc(var(--nds-space-10) + var(--nds-tt-depth, 0) * var(--nds-space-20));
+  border-top: 1px solid var(--nds-border-subtle);
+  cursor: default;
+}
+.nds-tracetree-row:first-child {
+  border-top: 0;
+}
+.nds-tracetree-row:hover {
+  background: var(--nds-surface-hover);
+}
+.nds-tracetree-row:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--nds-radius-xs);
+}
+.nds-tracetree-row.is-checked {
+  background: var(--nds-wash-primary);
+}
+.nds-tracetree-row.is-possible {
+  border-inline-start: 2px dashed var(--nds-border-strong);
+}
+.nds-tracetree-chevron {
+  display: inline-flex;
+  grid-column: 1;
+  color: var(--nds-text-2);
+}
+.nds-tracetree-box {
+  grid-column: 2;
+  margin: 0;
+  accent-color: var(--nds-primary);
+}
+.nds-tracetree-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-8);
+  grid-column: 3;
+  min-width: 0;
+}
+.nds-tracetree-row:not(:has(.nds-tracetree-box)) .nds-tracetree-main {
+  grid-column: 2 / -1;
+}
+.nds-tracetree-kind {
+  color: var(--nds-text-2);
+}
+.nds-tracetree-link {
+  color: var(--nds-text-link);
+  font-family: var(--nds-font-mono);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nds-tracetree-label {
+  font-family: var(--nds-font-mono);
+}
+.nds-tracetree-possible {
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-xs);
+  font-style: italic;
+}
+.nds-tracetree-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+}
+.nds-tracetree-note {
+  grid-column: 3;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+.nds-tracetree-empty {
+  color: var(--nds-text-2);
+}
+.nds-tracetree-foot {
+  display: flex;
+  justify-content: flex-end;
+  color: var(--nds-text-2);
+}
+
+@media (max-width: 719px) {
+  .nds-tracetree-row {
+    padding-inline-start: calc(var(--nds-space-6) + var(--nds-tt-depth, 0) * var(--nds-space-10));
+  }
+}
