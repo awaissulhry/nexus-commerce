@@ -57,7 +57,8 @@ const listDetailView = listRowView.extend({
   createdAt: instant(),
   createdById: id().nullable(),
   versions: z.array(versionView),
-  customers: z.array(output({ id: id(), code: z.string(), legalName: z.string(), status: z.string(), companyId: id().nullable(), version: z.number().int() })),
+  /** B-W2b-16: `from` = since when the customer has the list (`fromSource` ROW: its history; AUDIT: given before W2b). */
+  customers: z.array(output({ id: id(), code: z.string(), legalName: z.string(), status: z.string(), companyId: id().nullable(), version: z.number().int(), from: businessDate().nullable(), fromSource: z.enum(['ROW', 'AUDIT']).nullable() })),
   fallbackOf: z.array(output({ id: id(), code: z.string(), name: z.string(), kind: z.enum(PRICE_LIST_KINDS), status: z.string() })),
 })
 
@@ -116,7 +117,8 @@ export const updateListContract = defineContract({
   response: one,
 })
 export const moveListContract = defineContract({ params: listParams, body: input({ version }), response: one })
-export const customersContract = defineContract({ params: listParams, body: input({ partyIds: z.array(id()).min(1).max(200) }), response: one })
+/** B-W2b-16: `validFrom` (adding only; default today, never a later day) is the customers' "From". */
+export const customersContract = defineContract({ params: listParams, body: input({ partyIds: z.array(id()).min(1).max(200), validFrom: businessDate().optional() }), response: one })
 
 export const getVersionContract = defineContract({ params: versionParams, response: { 200: versionAnswer } })
 export const nextVersionContract = defineContract({

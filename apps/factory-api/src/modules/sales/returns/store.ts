@@ -3,6 +3,7 @@ import { fromMinorUnits } from '@nexus/factory-domain/core/money'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import {
+  closeWarningsOf,
   effectWithAmount,
   effectWords,
   followUpOf,
@@ -259,11 +260,16 @@ export async function photoCounts(db: Reader, recordType: string, recordIds: rea
 export async function lineMoves(db: Reader, lineIds: readonly string[]): Promise<Map<string, { id: string; locationId: string | null; locationCode: string | null; quantity: string }[]>> {
   const out = new Map<string, { id: string; locationId: string | null; locationCode: string | null; quantity: string }[]>()
   if (lineIds.length === 0) return out
-  const moves = await db.stockMove.findMany({ where: { OR: lineIds.map((id) => ({ idempotencyKey: { startsWith: `${moveKeyPrefix(id)}` } })) }, select: { id: true, idempotencyKey: true, toLocationId: true, quantity: true }, orderBy: { createdAt: 'asc' } })
+  // B-W2b-16: a CUSTOMER_RETURN names its line; a move made before W2b (an ADJUSTMENT) is found by its key.
+  const moves = await db.stockMove.findMany({
+    where: { OR: [{ returnLineId: { in: [...lineIds] }, reversalOfId: null }, ...lineIds.map((id) => ({ idempotencyKey: { startsWith: `${moveKeyPrefix(id)}` } }))] },
+    select: { id: true, idempotencyKey: true, returnLineId: true, toLocationId: true, quantity: true },
+    orderBy: { createdAt: 'asc' },
+  })
   const places = moves.length ? await db.location.findMany({ where: { id: { in: [...new Set(moves.flatMap((move) => (move.toLocationId ? [move.toLocationId] : [])))] } }, select: { id: true, code: true } }) : []
   const codeOf = new Map(places.map((place) => [place.id, place.code]))
   for (const move of moves) {
-    const lineId = move.idempotencyKey.split(':')[1]!
+    const lineId = move.returnLineId ?? move.idempotencyKey.split(':')[1]!
     const list = out.get(lineId) ?? []
     list.push({ id: move.id, locationId: move.toLocationId, locationCode: move.toLocationId ? (codeOf.get(move.toLocationId) ?? null) : null, quantity: move.quantity.toString() })
     out.set(lineId, list)
@@ -291,6 +297,8 @@ export interface RecordFacts {
   readonly moves: Map<string, { id: string; locationId: string | null; locationCode: string | null; quantity: string }[]>
   readonly ddts: { readonly live: readonly { id: string; number: string; lineIds: readonly string[] }[]; readonly cancelled: readonly { id: string; number: string; lineIds: readonly string[] }[] }
   readonly policy: ReturnPolicy
+  /** B-W2b-16: the repair orders made from each line that are not cancelled. */
+  readonly repairs: Map<string, number>
 }
 
 /** Everything the record shows (flat reads, in order). */
@@ -310,8 +318,23 @@ export async function readRecordFacts(db: Reader, rma: RmaRow): Promise<RecordFa
   const moves = await lineMoves(db, lines.map((line) => line.id))
   const ddts = await sourceDdtsOf(db as CommandTx, { type: 'ReturnAuthorisation', id: rma.id })
   const policy = await policyOf(db, rma.companyId)
-  return { rma, lines, receipts, sold, party, company, site, salesOrder, replacementOrder, reasons, linePhotos, receiptPhotos, moves, ddts, policy }
+  const repairs = await liveRepairsByLine(db, lines.map((line) => line.id))
+  return { rma, lines, receipts, sold, party, company, site, salesOrder, replacementOrder, reasons, linePhotos, receiptPhotos, moves, ddts, policy, repairs }
 }
+
+/** B-W2b-16: the repair orders made from each of these lines that are not cancelled (one per garment received). */
+export async function liveRepairsByLine(db: Reader, lineIds: readonly string[]): Promise<Map<string, number>> {
+  if (lineIds.length === 0) return new Map()
+  const rows = await db.repairOrder.groupBy({ by: ['returnLineId'], where: { returnLineId: { in: [...lineIds] }, stage: { not: 'CANCELLED' } }, _count: { _all: true } })
+  return new Map(rows.flatMap((row) => (row.returnLineId ? [[row.returnLineId, row._count._all] as const] : [])))
+}
+
+/** B-W2b-16: what a close would leave behind (factory-domain closeWarningsOf), for the record and for the close itself. */
+export const closeWarningsFor = (lines: readonly Pick<LineRow, 'id' | 'seq' | 'receivedQuantity' | 'disposition' | 'goodsOutcome' | 'replacementLineId'>[], repairs: ReadonlyMap<string, number>, liveReturnDdt: boolean) =>
+  closeWarningsOf(
+    lines.map((line) => ({ id: line.id, seq: line.seq, received: line.receivedQuantity, disposition: line.disposition as ReturnDisposition | null, goodsOutcome: line.goodsOutcome as GoodsOutcome | null, replaced: line.replacementLineId !== null, repairs: repairs.get(line.id) ?? 0 })),
+    liveReturnDdt,
+  )
 
 const price = <T>(value: T) => asMoney('price', value)
 
@@ -446,6 +469,8 @@ export function returnView(facts: RecordFacts, now: Date) {
       lines: facts.lines.map((line) => ({ quantity: line.quantity, received: line.receivedQuantity, graded: line.grade !== null, disposition: line.disposition as ReturnDisposition | null, goodsOutcome: line.goodsOutcome as GoodsOutcome | null, replaced: line.replacementLineId !== null })),
       replacementOrder: rma.replacementOrderId !== null,
     }),
+    // B-W2b-16: said in the close dialog before the click (the close answers the same warnings).
+    closeWarnings: closeWarningsFor(facts.lines, facts.repairs, facts.ddts.live.length > 0),
     policy: { ...facts.policy, freightPaidByNow: freightPayerOf(facts.policy, (received.find((line) => line.cause)?.cause as ReturnCause | undefined) ?? null) },
     stockOutcomes: [...STOCK_OUTCOMES],
     version: rma.version,

@@ -181,7 +181,8 @@ export const orderLineSchema = z.object({
   priority: z.number().nullable(),
   siteId: z.string().nullable(),
   /** B-W2a-30 (SAL-210): closed short — the pieces that will not be made or shipped, when, by whom, why; null: open. */
-  closedShort: z.object({ quantity: z.number(), at: instant.nullable(), byId: z.string().nullable(), reason: z.string().nullable() }).nullable().default(null),
+  /** B-W2b-16: `reasonCode` = the CANCEL reason code chosen at the close (null for a line closed before W2b). */
+  closedShort: z.object({ quantity: z.number(), at: instant.nullable(), byId: z.string().nullable(), reason: z.string().nullable(), reasonCode: z.string().nullable().default(null) }).nullable().default(null),
   version: z.number(),
   sizes: z.array(z.object({ size: z.string().nullable(), quantity: z.number(), unitPrice: z.string().nullable().optional(), progress: progressSchema })),
   progress: progressSchema,
@@ -206,6 +207,8 @@ export const depositRequestSchema = z.object({
   link: z.object({ sentAt: instant, to: z.string().nullable(), expiresAt: instant, state: z.enum(LINK_STATES) }).nullable().default(null),
   /** B-W2a-F2: the schedule step the request pays — DEPOSIT, or BEFORE_SHIPPING (the balance before shipping, not the deposit). */
   stepKind: z.enum(['DEPOSIT', 'BEFORE_SHIPPING']).nullable().default(null),
+  /** B-W2b-16: the owner's waive of a request no schedule step names is sent at it. */
+  version: z.number().default(1),
 })
 export type DepositRequest = z.infer<typeof depositRequestSchema>
 
@@ -577,7 +580,7 @@ const closeLinesSchema = z.object({
 export type CloseLinesAnswer = z.infer<typeof closeLinesSchema>
 
 /** "Close remaining lines": what is left of the lines named (none: every open line) will not be made or shipped. */
-export function closeLines(api: ApiClient, orderId: string, body: { version: number; reason: string; lineIds?: string[] }): Promise<CloseLinesAnswer> {
+export function closeLines(api: ApiClient, orderId: string, body: { version: number; reason: string; reasonCode?: string; lineIds?: string[] }): Promise<CloseLinesAnswer> {
   return api.post(`${orderPath(orderId)}/close-lines`, { body, schema: closeLinesSchema, idempotencyKey: newIdempotencyKey() })
 }
 
@@ -662,4 +665,14 @@ export type CopyAnswer = z.infer<typeof copyAnswerSchema>
 /** "Copy as new quote": a draft quote for the same customer with the order's lines (what is left out is counted). */
 export function copyAsQuote(api: ApiClient, orderId: string): Promise<CopyAnswer> {
   return api.post(`${orderPath(orderId)}/copy-as-quote`, { body: {}, schema: copyAnswerSchema, idempotencyKey: newIdempotencyKey() })
+}
+
+// ---- B-W2b-16: the CANCEL reason list (the close's reason code) -----------------------------------------------------------
+
+const reasonOption = z.object({ code: z.string(), labelIt: z.string(), labelEn: z.string(), needsDetail: z.boolean() })
+export type CancelReason = z.infer<typeof reasonOption>
+
+/** The active reasons of the CANCEL list, in order (signed in, no permission): why lines are closed short. */
+export async function listCancelReasons(api: ApiClient, signal?: AbortSignal): Promise<CancelReason[]> {
+  return (await api.get('/reasons', { query: { list: 'CANCEL' }, schema: z.object({ reasons: z.array(reasonOption) }), signal })).reasons
 }

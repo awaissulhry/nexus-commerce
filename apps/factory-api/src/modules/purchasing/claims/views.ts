@@ -115,6 +115,10 @@ export async function claimDetailOf(db: Reader, claim: ClaimRow, now: Date) {
   const peopleIds = unique([claim.createdById, claim.sentById])
   const people = peopleIds.length === 0 ? [] : await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true } })
   const value = linesValue(lines)
+  // B-W2b-21 (Z8:07): the supplier's credit notes that name this claim (payables settle-claim), not voided.
+  const matched = await db.supplierInvoice.findMany({ where: { claimId: claim.id, status: { not: 'VOIDED' } }, select: { id: true, number: true, issueDate: true, status: true, netTotal: true, grossTotal: true }, orderBy: [{ issueDate: 'asc' }, { id: 'asc' }] })
+  // The taxable amount: the claim's value is the goods' (net of VAT).
+  const matchedTotal = matched.reduce((sum, note) => sum + note.netTotal, 0)
   const evidence = await evidenceOf(db, claim, lines)
 
   return {
@@ -170,9 +174,9 @@ export async function claimDetailOf(db: Reader, claim: ClaimRow, now: Date) {
       /** The credit asked: the lines' value, or the amount agreed with the supplier; none for a replacement. */
       expected: asMoney('cost', claim.expectedCreditAmount),
       value: asMoney('cost', value),
-      /** The supplier's credit note matched to the claim (Finance, B-W2a-62): none yet. */
-      matched: null,
-      difference: null,
+      /** B-W2b-21 (Z8:07): the supplier's credit notes that settle it (not voided), and what they give against the credit expected. */
+      matched: matched.length === 0 ? null : { total: asMoney('cost', matchedTotal), creditNotes: matched.map((note) => ({ id: note.id, number: note.number, issueDate: dayOf(note.issueDate)!, status: note.status, netTotal: asMoney('cost', note.netTotal), grossTotal: asMoney('cost', note.grossTotal) })) },
+      difference: asMoney('cost', matched.length === 0 || (claim.expectedCreditAmount ?? value) === null ? null : matchedTotal - (claim.expectedCreditAmount ?? value)!),
     },
     actions: claimActions(factsOf(claim, lines)),
     ...evidence,

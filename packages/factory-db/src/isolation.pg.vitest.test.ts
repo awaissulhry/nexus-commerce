@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAccounting } from '../seed/accounting'
 import { seed as seedAlerts } from '../seed/alerts'
+import { seed as seedAndon } from '../seed/andon'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedCalendar } from '../seed/calendar'
@@ -20,6 +21,7 @@ import { seed as seedImports } from '../seed/imports'
 import { seed as seedInsights } from '../seed/insights'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedInventory } from '../seed/inventory'
+import { seed as seedLabour } from '../seed/labour'
 import { seed as seedLinks } from '../seed/links'
 import { seed as seedMoney } from '../seed/money'
 import { seed as seedNumbering } from '../seed/numbering'
@@ -236,6 +238,11 @@ beforeAll(async () => {
   // The piece pay and payroll export schema of W2b (wave 6/7).
   await seedPay({ db: factory, namespace: 'iso-a' })
   await seedPay({ db: factory, namespace: 'iso-b' })
+  // The floor work schema of W2b (wave 7/7).
+  for (const seedFloorWork of [seedAndon, seedLabour]) {
+    await seedFloorWork({ db: factory, namespace: 'iso-a' })
+    await seedFloorWork({ db: factory, namespace: 'iso-b' })
+  }
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -265,6 +272,7 @@ it('covers every classified table and every runtime role', () => {
     'BomLineColour',
     'BomLineSize',
     'Bundle',
+    'BundleCoupon',
     'BundleReprint',
     'CalendarDay',
     'Certificate',
@@ -277,6 +285,8 @@ it('covers every classified table and every runtime role', () => {
     'Complaint',
     'ComplianceDocument',
     'CostingSettings',
+    'CrewMember',
+    'CrewSession',
     'CutLog',
     'CutLogPiece',
     'Ddt',
@@ -285,6 +295,7 @@ it('covers every classified table and every runtime role', () => {
     'DepositRequest',
     'Device',
     'DeviceEnrolment',
+    'DispatchAssignment',
     'DispositionCode',
     'DueTimer',
     'EarningsEntry',
@@ -304,7 +315,10 @@ it('covers every classified table and every runtime role', () => {
     'GeneratedDocument',
     'GoodsReceipt',
     'GoodsReceiptLine',
+    'HandoverNote',
     'HeldScan',
+    'HelpCall',
+    'HelpCallType',
     'Hide',
     'IdempotencyReceipt',
     'ImportJob',
@@ -325,12 +339,16 @@ it('covers every classified table and every runtime role', () => {
     'ItemPlanning',
     'LabResult',
     'LabelTemplate',
+    'LabourDay',
+    'LabourDispute',
+    'LabourEdit',
     'LabourRate',
     'LeaverCase',
     'LeaverStep',
     'Line',
     'LineCapacity',
     'LineLoan',
+    'LineTarget',
     'LinkEvidence',
     'Location',
     'Lot',
@@ -357,10 +375,14 @@ it('covers every classified table and every runtime role', () => {
     'NumberBlock',
     'NumberBlockUse',
     'NumberSeries',
+    'OffStandardCode',
+    'OffStandardEntry',
     'OneOffLink',
     'Operation',
+    'OperationChecklistResult',
     'OperationScan',
     'OperationScanDefect',
+    'OperationScanMember',
     'OrgArea',
     'OutboxEvent',
     'OvertimeAgreement',
@@ -451,6 +473,7 @@ it('covers every classified table and every runtime role', () => {
     'SalesSettings',
     'SavedView',
     'ScanCorrectionRequest',
+    'ScanPatternFinding',
     'ScheduleSlot',
     'ScrapReason',
     'SdiInboxItem',

@@ -14,7 +14,8 @@ import { isOverdue, MILESTONE_TONE } from '../../daily-model'
 import { dayInstant, depositInvoicesOf, depositSteps, linkHeld, paymentHeld, SDI_TONE, sdiSendHeld, stillToPay, type DepositStepState, type Tone } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
-import { OpenStepDialog, StepVerbs } from '../schedule/view/StepVerbs'
+import { waiveHeld } from '../schedule/model'
+import { OpenStepDialog, StepVerbs, WaiveDialog } from '../schedule/view/StepVerbs'
 
 const REQUEST_TONE: Record<DepositRequest['status'], Tone> = { OPEN: 'warning', PAID: 'success', WAIVED: 'neutral', CANCELLED: 'neutral' }
 const INVOICE_TONE: Record<string, Tone> = { DRAFT: 'neutral', ISSUED: 'info', SENT: 'info', DELIVERED: 'success', NOT_DELIVERABLE: 'warning', REJECTED: 'danger', ERROR: 'danger' }
@@ -66,6 +67,7 @@ export function MoneyTab({ order, model, actions }: { order: Order; model: Order
         </div>
         <InvoicesCard order={order} model={model} actions={actions} />
       </div>
+      {model.scheduleSteps?.waiving && <WaiveDialog waiving={model.scheduleSteps.waiving} model={model.scheduleSteps} actions={actions?.scheduleSteps} />}
     </div>
   )
 }
@@ -155,6 +157,7 @@ export function DepositCard({ request, order, model, actions }: { request: Depos
   const left = stillToPay(request)
   const overdue = request.status === 'OPEN' && request.dueDate < model.today
   const linkWait = linkHeld(request, model.can)
+  const waiveWait = model.scheduleSteps ? waiveHeld(order, model.scheduleSteps.can) : null
   const payWait = paymentHeld(request, model.can)
   const sendWait = sdi ? sdiSendHeld(model.can, sdi.canSend && sdi.state.next.action === 'SEND') : null
   const invoiceHref = (invoice: ChainInvoice) => `${model.prefix}${recordAddress({ type: 'Invoice', id: invoice.id, label: invoice.number ?? undefined, companyId: order.companyId }, OFFICE_PAGES)}`
@@ -186,7 +189,8 @@ export function DepositCard({ request, order, model, actions }: { request: Depos
           <StepIcon state={steps.requested} />
           <span className="fw-so-step-body">
             <b>{t('deposit.step.requested')}</b>
-            <span>{t('deposit.step.requestedWords', { date: formatDate(request.createdAt, { locale }) })}</span>
+            {/* B-W2b-16: a typed order's deposit (no quote) was asked when the office entered the order. */}
+            <span>{t(request.quoteVersionId ? 'deposit.step.requestedWords' : 'deposit.step.requestedTyped', { date: formatDate(request.createdAt, { locale }) })}</span>
           </span>
         </li>
         <li className={`fw-so-step is-${steps.page}`}>
@@ -220,6 +224,12 @@ export function DepositCard({ request, order, model, actions }: { request: Depos
           {request.status === 'OPEN' && (
             <Button size="sm" variant="primary" heldReason={payWait ? t(payWait.key) : busy} onClick={() => actions?.onDialog?.({ kind: 'depositPayment', requestId: request.id })}>
               {t('deposit.record')}
+            </Button>
+          )}
+          {/* B-W2b-16: the owner waives the advance (its step with it), with a reason and a fresh code. */}
+          {request.status === 'OPEN' && model.scheduleSteps && (
+            <Button size="sm" variant="ghost" heldReason={waiveWait ? t(waiveWait.key) : (request.paidAmount ?? 0) > 0 ? t('schedule.verbs.held.partPaid') : busy} onClick={() => actions?.scheduleSteps?.onWaive?.(waiveTargetOf(request, model, t('deposit.title', { kind: t(`depositKind.${request.kind}`) })))}>
+              {t('schedule.verbs.waive')}
             </Button>
           )}
         </li>
@@ -338,4 +348,13 @@ function InvoicesCard({ order, model, actions }: { order: Order; model: OrderRec
       )}
     </Card>
   )
+}
+
+/** B-W2b-16: what "Waive…" on a deposit request waives — the open step that names it, else the request itself (at its version). */
+function waiveTargetOf(request: DepositRequest, model: OrderRecordModel, words: string) {
+  const step = model.schedule?.value?.steps.find((entry) => entry.depositRequestId === request.id && entry.status === 'OPEN') ?? null
+  const stepKind: 'DEPOSIT' | 'BEFORE_SHIPPING' = request.stepKind === 'BEFORE_SHIPPING' ? 'BEFORE_SHIPPING' : 'DEPOSIT'
+  return step
+    ? { target: { kind: 'step' as const, id: step.id, version: step.version }, label: words, stepKind }
+    : { target: { kind: 'request' as const, id: request.id, version: request.version }, label: words, stepKind }
 }

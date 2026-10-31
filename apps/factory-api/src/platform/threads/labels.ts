@@ -60,6 +60,8 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   Complaint: async (client, id) => (await client.complaint.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   // B-W2b-15 (modules/inventory/counts): a stock count by its number.
   StockCount: async (client, id) => (await client.stockCount.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  // B-W2b-23: a DDT by its number.
+  Ddt: async (client, id) => (await client.ddt.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
 })
 
 /** The record's label, or null when it is not there for this caller. A type without its own labeller: its type and id end. */

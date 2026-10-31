@@ -16,6 +16,8 @@ import { defineEvent } from '../events/define'
  *   payment_reminder.cancelled  cancelled by a person, or by the ladder because what it asks changed (paid, credited)
  *   receivables_settings.changed  the ladder, the late-payment rule or the Owner's switch of a company (or the tenant)
  *   customer_statement.sent     a customer was e-mailed its statement of account
+ *   interest_rate.recorded      B-W2b-21: finance recorded a half-year's reference rate for statutory late-payment interest
+ *   interest_rate.changed       B-W2b-21: a half-year's reference rate was corrected (the rate, the points, the source)
  */
 const action = z.enum(['EMAIL', 'LETTER', 'CALL'])
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -77,5 +79,20 @@ export const events = [
     description: 'A customer was e-mailed its statement of account (the PDF on its record).',
     payload: z.strictObject({ partyId: z.uuid(), fileId: z.uuid(), outboundId: z.uuid(), from: day, to: day }),
     live: { permission: 'receivables.view', fields: ['partyId', 'from', 'to'] },
+  }),
+  // B-W2b-21 (D.Lgs. 231/2002 art. 5): the half-year reference rates statutory interest is computed from; tenant-wide.
+  defineEvent({
+    type: 'interest_rate.recorded',
+    context: 'receivables',
+    description: "A half-year's reference rate for statutory late-payment interest was recorded (with where it was published).",
+    payload: z.strictObject({ rateId: z.uuid(), halfYearStart: day }),
+    live: { permission: 'receivables.view', fields: ['rateId', 'halfYearStart'] },
+  }),
+  defineEvent({
+    type: 'interest_rate.changed',
+    context: 'receivables',
+    description: "A half-year's reference rate for statutory late-payment interest was corrected.",
+    payload: z.strictObject({ rateId: z.uuid(), halfYearStart: day }),
+    live: { permission: 'receivables.view', fields: ['rateId', 'halfYearStart'] },
   }),
 ] as const

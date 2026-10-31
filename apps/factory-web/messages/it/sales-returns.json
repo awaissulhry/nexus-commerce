@@ -30,7 +30,19 @@
     "reason": "Motivo di chiusura",
     "submit": "Chiudi",
     "title": "Chiudi il reso {number}",
-    "warningsBody": "Guarda il reso: righe da sostituire senza ordine di sostituzione, o merce tal quale senza DDT di reso."
+    "warningsBody": "Guarda il reso: righe da sostituire senza ordine di sostituzione, o merce tal quale senza DDT di reso.",
+    "checking": "Lettura di ciò che la chiusura lascerebbe aperto…",
+    "pendingTitle_one": "La chiusura lascia {count} cosa aperta",
+    "pendingTitle_other": "La chiusura lascia {count} cose aperte",
+    "pendingBody": "Puoi chiuderlo comunque: restano da fare dopo la chiusura.",
+    "warn": {
+      "REPLACE_WITHOUT_ORDER_one": "La riga {lines} è decisa Sostituzione e non ha l’ordine di sostituzione.",
+      "REPLACE_WITHOUT_ORDER_other": "Le righe {lines} sono decise Sostituzione e non hanno l’ordine di sostituzione.",
+      "BACK_WITHOUT_DDT_one": "La riga {lines} torna invariata e il DDT di reso non è ancora emesso.",
+      "BACK_WITHOUT_DDT_other": "Le righe {lines} tornano invariate e il DDT di reso non è ancora emesso.",
+      "REPAIR_WITHOUT_ORDER_one": "La riga {lines} è decisa Riparazione e non ogni capo ha il suo ordine di riparazione: resta qui non riparato.",
+      "REPAIR_WITHOUT_ORDER_other": "Le righe {lines} sono decise Riparazione e non ogni capo ha il suo ordine di riparazione: restano qui non riparate."
+    }
   },
   "col": {
     "actions": "Azioni",
@@ -1022,7 +1034,9 @@
     "ncrs": "Non conformità",
     "noWorkOrder": "Ancora nessun ordine di lavoro di riparazione.",
     "workOrder": "Ordine di lavoro di riparazione",
-    "workOrderSub": "La riparazione si fa sul suo ordine di lavoro (Produzione)."
+    "workOrderSub": "La riparazione si fa sul suo ordine di lavoro (Produzione).",
+    "earlier": "Ordini di lavoro precedenti",
+    "rework": "Tornato in riparazione dopo essere stato riparato: crea un nuovo ordine di lavoro di riparazione per la rilavorazione (l’ultimo è completato)."
   },
   "workOrder": {
     "blocked": "Qualcosa impedisce di crearlo ora.",
@@ -1041,5 +1055,15 @@
     "submit_one": "Crealo con {count} fase",
     "submit_other": "Crealo con {count} fasi",
     "title": "Ordine di lavoro di riparazione per {number}"
+  },
+  "addLines": {
+    "open": "Aggiungi righe",
+    "title": "Aggiungi righe a {number}",
+    "sub": "Scegli altro di ciò che il cliente rende dalle sue righe fatturate e spedite: mai più di quanto resta.",
+    "submit_one": "Aggiungi {count} riga",
+    "submit_other": "Aggiungi {count} righe",
+    "taken": "È già la riga {seq} di questo reso: cambia i pezzi nella scheda Righe.",
+    "done_one": "{count} riga aggiunta.",
+    "done_other": "{count} righe aggiunte."
   }
 }

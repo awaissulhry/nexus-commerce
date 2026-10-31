@@ -8,7 +8,8 @@
     "marginHint": "Percent of the net amount, 0 to 100",
     "marginNoGrain": "Shown only with the margin right",
     "sub": "When a quote needs an approver before it is sent.",
-    "title": "Quote approval rules"
+    "title": "Quote approval rules",
+    "raiseStepUp": "Raising a limit (a higher discount limit or a lower margin floor) asks for a fresh code from your authenticator app."
   },
   "card": {
     "apply": "Apply changes",
@@ -143,5 +144,16 @@
     "companyOwn": "This company’s own values.",
     "groupDefault": "No group values yet: the standard ones apply.",
     "groupOwn": "The group’s own values."
+  },
+  "stepUp": {
+    "title": "Confirm it’s you",
+    "sentence": "A higher limit lets more quotes go out without an approver: confirm it with a fresh code.",
+    "confirm": "Confirm and save",
+    "cancelled": "Nothing was saved: the code was not given.",
+    "problem": {
+      "wrong": "That code was not accepted. Type the newest code.",
+      "locked": "Too many wrong codes. Wait a few minutes.",
+      "unavailable": "The code could not be checked. Try again."
+    }
   }
 }

@@ -57,7 +57,8 @@ export const versionSchema = z.object({
 })
 export type PriceVersion = z.infer<typeof versionSchema>
 
-const listCustomerSchema = z.object({ id: z.string(), code: z.string(), legalName: z.string(), status: z.string(), companyId: z.string().nullable(), version: z.number() })
+/** B-W2b-16: `from` = since when the customer has the list (`fromSource` ROW: its history; AUDIT: given before W2b). */
+const listCustomerSchema = z.object({ id: z.string(), code: z.string(), legalName: z.string(), status: z.string(), companyId: z.string().nullable(), version: z.number(), from: z.string().nullable().default(null), fromSource: z.enum(['ROW', 'AUDIT']).nullable().default(null) })
 export type ListCustomer = z.infer<typeof listCustomerSchema>
 
 export const listDetailSchema = listRowSchema.omit({ customers: true }).extend({
@@ -169,8 +170,9 @@ export async function moveList(api: ApiClient, list: Pick<PriceListDetail, 'id' 
   return (await api.post(`${listPath(list.id)}/${move}`, { body: { version: list.version }, schema: oneList, idempotencyKey: newIdempotencyKey() })).list
 }
 
-export async function setCustomers(api: ApiClient, listId: string, partyIds: readonly string[], action: 'add' | 'remove'): Promise<PriceListDetail> {
-  return (await api.post(`${listPath(listId)}/customers${action === 'remove' ? '/remove' : ''}`, { body: { partyIds }, schema: oneList, idempotencyKey: newIdempotencyKey() })).list
+export async function setCustomers(api: ApiClient, listId: string, partyIds: readonly string[], action: 'add' | 'remove', validFrom?: string): Promise<PriceListDetail> {
+  // B-W2b-16: `validFrom` (adding only; default today, never later) is the customers' "From".
+  return (await api.post(`${listPath(listId)}/customers${action === 'remove' ? '/remove' : ''}`, { body: { partyIds, ...(action === 'add' && validFrom ? { validFrom } : {}) }, schema: oneList, idempotencyKey: newIdempotencyKey() })).list
 }
 
 export function nextVersion(api: ApiClient, listId: string, fromVersionId: string | null): Promise<VersionAnswer> {

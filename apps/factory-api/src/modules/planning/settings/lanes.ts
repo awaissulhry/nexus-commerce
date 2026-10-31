@@ -5,6 +5,7 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { businessDate, businessDayStart, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { actualWeek, earnedByLine } from '@nexus/factory-domain/planning/capacity/actual'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
+import { countKindOf, SCAN_KINDS } from '@nexus/factory-domain/production/scans/rules'
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import { uniformBuckets, weekStart } from '@nexus/factory-domain/planning/settings/buckets'
 import { PLANNING_SETTINGS_MANAGE } from '@nexus/factory-domain/planning/settings/permissions'
@@ -133,8 +134,8 @@ export async function actualEfficiencyOf(db: Reader, site: SiteRow, lines: reado
   const weeks = uniformBuckets(from, to, 'WEEK')
   const calendars = await workingCalendarsFor(db, lines.map((line) => ({ scope: 'LINE' as const, id: line.id })), { from, to })
   const scans = await db.operationScan.findMany({
-    where: { siteId: site.id, serverTime: { gte: businessDayStart(from, site.timezone) } },
-    // Never the worker: per line only.
+    // The count ledger only (W2b: the timing kinds carry no counts). Never the worker: per line only.
+    where: { siteId: site.id, kind: { in: [...SCAN_KINDS] }, serverTime: { gte: businessDayStart(from, site.timezone) } },
     select: { id: true, kind: true, bundleId: true, workOrderOperationId: true, correctsId: true, goodQuantity: true, stationId: true, serverTime: true },
     orderBy: [{ serverTime: 'asc' }, { id: 'asc' }],
   })
@@ -146,7 +147,7 @@ export async function actualEfficiencyOf(db: Reader, site: SiteRow, lines: reado
   const stations = counting.length ? await db.station.findMany({ where: { id: { in: ids(counting.map((scan) => scan.stationId)) } }, select: { id: true, lineId: true } }) : []
   const earned = earnedByLine({
     // The voiding rows are later than the rows they void, so every one that matters was read with them.
-    scans: scans.map((scan) => ({ id: scan.id, kind: scan.kind, correctsId: scan.correctsId, bundleId: scan.bundleId, operationId: scan.workOrderOperationId, good: scan.serverTime.getTime() < end ? scan.goodQuantity : 0, stationId: scan.stationId, at: scan.serverTime })),
+    scans: scans.map((scan) => ({ id: scan.id, kind: countKindOf(scan.kind), correctsId: scan.correctsId, bundleId: scan.bundleId, operationId: scan.workOrderOperationId, good: scan.serverTime.getTime() < end ? scan.goodQuantity : 0, stationId: scan.stationId, at: scan.serverTime })),
     bundles: new Map(bundles.map((bundle) => [bundle.id, bundle])),
     standardMinutes: new Map(operations.map((operation) => [operation.id, operation.standardMinutes.toString()])),
     lineOfStation: new Map(stations.map((station) => [station.id, station.lineId])),

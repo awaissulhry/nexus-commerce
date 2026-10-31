@@ -7,6 +7,7 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandCaller } from '../../core/command'
 import { paymentTermsOf } from '../invoicing/facts'
 import { balancesOf, unplacedPayments } from './credit-balance'
+import { depositsToCarry } from './deposit-carry'
 import { refundedOf } from './refunds'
 import { allocatedOf, assertMay, officeContextOf } from './store'
 
@@ -25,9 +26,11 @@ import { allocatedOf, assertMay, officeContextOf } from './store'
  *                    targets and amounts shown (one payment, many invoices, in one command)
  *   creditBalance    what the customer's RECEIVED payments hold unplaced, per currency (a refund of it, or an allocation)
  *   noInvoiceDeposit an invoice of an order whose deposit was paid on a request that issues no TD02 (NONE: an EU business
- *                    with a VIES proof): what that deposit holds. The money stays on the request (a PAID request's
- *                    allocations are final in the database): the settlement counts it as paying the order, the invoice's
- *                    open amount does not — the office should not ask it twice (named gap: a schema need to carry it)
+ *                    with a VIES proof): what that deposit still holds (null: nothing, or carried already)
+ *
+ * B-W2b-21 (Z8:01): such a deposit is carried onto the order's invoice in one command (POST
+ * /payments/deposit-requests/:id/carry, deposit-carry.ts): `depositToCarry` names the requests whose money waits (the
+ * screen's "Carry the deposit"), `carriedDepositAmount` what carried deposits place on the invoice (inside its paid part).
  */
 
 const day = (value: Date): string => value.toISOString().slice(0, 10)
@@ -54,12 +57,14 @@ export async function openItems(caller: CommandCaller, query: { companyId: strin
     // B-W2a-61: the step of the payment schedule each request is, and the NONE deposits paid on the invoices' orders.
     const steps = requestIds.length === 0 ? [] : await client.salesOrderMilestone.findMany({ where: { depositRequestId: { in: requestIds } }, select: { depositRequestId: true, kind: true } })
     const orderIds = [...new Set(invoices.flatMap((invoice) => (invoice.salesOrderId ? [invoice.salesOrderId] : [])))]
-    const noneRequests = orderIds.length === 0 ? [] : await client.depositRequest.findMany({ where: { orderId: { in: orderIds }, fiscalDocument: 'NONE', status: 'PAID' }, select: { id: true, orderId: true } })
-    const nonePaid = noneRequests.length === 0 ? [] : await client.paymentAllocation.groupBy({ by: ['depositRequestId'], where: { depositRequestId: { in: noneRequests.map((request) => request.id) } }, _sum: { amount: true } })
+    // B-W2b-21: what PAID NONE deposits of the invoices' orders still hold (not carried yet), and what carries place on each invoice.
+    const toCarry = await depositsToCarry(client, orderIds)
+    const carriedRows = invoiceIds.length === 0 ? [] : await client.paymentAllocation.findMany({ where: { invoiceId: { in: invoiceIds }, carriedFromId: { not: null } }, select: { id: true, invoiceId: true, amount: true } })
+    const carriedBack = carriedRows.length === 0 ? [] : await client.paymentAllocation.findMany({ where: { reversalOfId: { in: carriedRows.map((row) => row.id) } }, select: { reversalOfId: true } })
+    const carriedOn = (invoiceId: string): number => carriedRows.filter((row) => row.invoiceId === invoiceId && !carriedBack.some((back) => back.reversalOfId === row.id)).reduce((sum, row) => sum + row.amount, 0)
     const noInvoiceDepositOf = (orderId: string | null): number | null => {
-      if (!orderId) return null
-      const own = noneRequests.filter((request) => request.orderId === orderId)
-      return own.length === 0 ? null : own.reduce((sum, request) => sum + (nonePaid.find((entry) => entry.depositRequestId === request.id)?._sum.amount ?? 0), 0)
+      const own = orderId ? (toCarry.get(orderId) ?? []) : []
+      return own.length === 0 ? null : own.reduce((sum, entry) => sum + entry.amount, 0)
     }
 
     const items = [
@@ -80,6 +85,8 @@ export async function openItems(caller: CommandCaller, query: { companyId: strin
           amount: request.amount,
           open: openOnDeposit(request.amount, paidRequests.find((entry) => entry.depositRequestId === request.id)?._sum.amount ?? 0),
           noInvoiceDeposit: null as number | null,
+          depositToCarry: [] as { depositRequestId: string; amount: number }[],
+          carriedDeposit: 0,
         }
       }),
       ...invoices.map((invoice) => ({
@@ -97,6 +104,8 @@ export async function openItems(caller: CommandCaller, query: { companyId: strin
         amount: invoice.grossTotal,
         open: openOnInvoice(invoice.grossTotal, credited.find((entry) => entry.creditOfId === invoice.id)?._sum.grossTotal ?? 0, paidInvoices.find((entry) => entry.invoiceId === invoice.id)?._sum.amount ?? 0),
         noInvoiceDeposit: noInvoiceDepositOf(invoice.salesOrderId),
+        depositToCarry: invoice.salesOrderId ? (toCarry.get(invoice.salesOrderId) ?? []) : [],
+        carriedDeposit: carriedOn(invoice.id),
       })),
     ]
       .filter((item) => item.open > 0)
@@ -113,12 +122,14 @@ export async function openItems(caller: CommandCaller, query: { companyId: strin
     const balances = balancesOf(await unplacedPayments(client, { companyId: query.companyId, partyId: query.partyId }))
 
     return {
-      items: items.map(({ open, amount, noInvoiceDeposit, ...item }) => ({
+      items: items.map(({ open, amount, noInvoiceDeposit, depositToCarry, carriedDeposit, ...item }) => ({
         ...item,
         amount: asMoney('price', amount),
         openAmount: asMoney('price', open),
         ...(suggestion ? { suggestedAmount: asMoney('price', suggestion.suggested.get(item.id) ?? 0) } : {}),
         noInvoiceDepositAmount: asMoney('price', noInvoiceDeposit),
+        depositToCarry: depositToCarry.map((entry) => ({ depositRequestId: entry.depositRequestId, amount: asMoney('price', entry.amount) })),
+        carriedDepositAmount: asMoney('price', carriedDeposit),
       })),
       left: suggestion ? { amount: asMoney('price', left!), afterSuggestion: asMoney('price', suggestion.left) } : null,
       creditBalance: balances.map((entry) => ({ currency: entry.currency, amount: asMoney('price', entry.amount) })),

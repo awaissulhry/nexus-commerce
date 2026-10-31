@@ -7,7 +7,8 @@ import { letterDocument, movementLabel, statementDocument } from './documents'
 import { effectiveSettings, interestProblems, ladderOf, ladderProblems, numberedLadder, stepWords, switchBlockers, switchWords, type LadderStep } from './ladder'
 import { addToAgeing, bucketOf, emptyAgeing, firstOpenDueDate, instalmentsOf, openInstalments, statementOf, type Movement } from './ledger'
 import { RECEIVABLES_PERMISSIONS } from './permissions'
-import { agreedInterest, claimNow, coveredLevel, planLadder, reachedStep, reminderByHand, type KnownReminder, type OpenInvoice } from './reminders'
+import { halfYearStartOf, missingHalfYears, rateProblems, statutoryInterest, statutoryRateOf, statutoryRateWords, type ReferenceRate } from './interest'
+import { agreedInterest, claimNow, coveredLevel, HELD_REASONS, instalmentCoveredLevel, planLadder, reachedStep, reminderByHand, WAIT_REASONS, type KnownReminder, type OpenInvoice } from './reminders'
 import { reminderLanguageOf, reminderText } from './wording'
 
 const LADDER: LadderStep[] = [
@@ -192,6 +193,85 @@ describe('the reminder ladder', () => {
   })
 })
 
+describe('statutory interest from the half-year rates (B-W2b-21; D.Lgs. 231/2002 art. 5)', () => {
+  const H1: ReferenceRate = { halfYearStart: '2026-01-01', referenceRatePct: '2.15', addedPointsPct: '8' }
+  const H2: ReferenceRate = { halfYearStart: '2026-07-01', referenceRatePct: '2.4', addedPointsPct: '8' }
+
+  it('splits the delay by half-year, each day at its half-year rate, simple interest, half up once', () => {
+    expect([halfYearStartOf('2026-06-30'), halfYearStartOf('2026-07-01'), halfYearStartOf('2026-12-31')]).toEqual(['2026-01-01', '2026-07-01', '2026-07-01'])
+    expect(statutoryRateOf(H1)).toBe('10.15')
+    // 10 days at 10.15 % (21–30 June) + 10 days at 10.40 % (1–10 July) on 1,000.00: 563.01 → 563 cents.
+    expect(statutoryInterest(100_000, '2026-06-20', '2026-07-10', [H1, H2])).toEqual({ amount: 563, missing: [], days: 20 })
+    // Half up: 18.25 × 10 % × 1 day / 365 = 0.5 → 1.
+    expect(statutoryInterest(1825, '2026-07-01', '2026-07-02', [{ halfYearStart: '2026-07-01', referenceRatePct: '2', addedPointsPct: '8' }]).amount).toBe(1)
+    // Due today or later: no delay, nothing.
+    expect(statutoryInterest(100_000, '2026-07-10', '2026-07-10', [])).toEqual({ amount: 0, missing: [], days: 0 })
+    expect(statutoryInterest(100_000, '2026-08-01', '2026-07-10', []).amount).toBe(0)
+  })
+
+  it('a half-year of the delay without its rate: no amount at all, the half-year named; never an assumed rate', () => {
+    expect(statutoryInterest(100_000, '2026-06-20', '2026-07-10', [H2])).toEqual({ amount: null, missing: ['2026-01-01'], days: 20 })
+    expect(missingHalfYears([{ halfYearStart: '2025-07-01' }, H2], '2025-07-01', '2026-12-31')).toEqual(['2026-01-01'])
+    expect(statutoryRateWords([{ ...H2, source: 'G.U. (placeholder)' }], '2026-10-30')).toContain('10.4 % a year')
+    expect(statutoryRateWords([H2], '2027-01-05')).toContain('No reference rate is recorded for the half-year from 1 January 2027')
+    expect(rateProblems({ halfYearStart: '2026-03-01', referenceRatePct: '-11', addedPointsPct: '101', source: ' ' }).map((issue) => issue.path)).toEqual(['body/halfYearStart', 'body/referenceRatePct', 'body/addedPointsPct', 'body/source'])
+    expect(rateProblems({ halfYearStart: '2026-07-01', referenceRatePct: '-0.5', addedPointsPct: '8', source: 'G.U.' })).toEqual([])
+  })
+
+  it('a STATUTORY reminder carries the amount; without the half-year rate it says interest is due, without one', () => {
+    const planned = (rates: ReferenceRate[]) => planLadder({ ladder: LADDER, today: '2026-10-30', invoices: [invoice('b', '2026-10-20', 100_000)], reminders: [], minimumAmount: null, interest: { mode: 'STATUTORY', agreedPct: null, rates }, prepare: true }).prepare[0]!
+    // 10 days at 10.40 %: 284.93 → 285.
+    expect(planned([H2])).toMatchObject({ level: 2, amountDue: 100_000, interestAmount: 285 })
+    expect(planned([H1])).toMatchObject({ interestAmount: null, interestMissing: ['2026-07-01'] })
+    const text = reminderText('LATE_7', { language: 'en', customerName: 'C', companyName: 'Co', currency: 'EUR', action: 'EMAIL', offsetDays: 7, lines: planned([]).lines, amountDue: 100_000, interestAmount: null, interestMode: 'STATUTORY', recoveryChargeAmount: null, iban: null })
+    expect(text.body).toContain('Late-payment interest is due on the overdue amounts under D.Lgs. 231/2002.')
+  })
+})
+
+describe('the ladder per instalment (B-W2b-21)', () => {
+  // One invoice of 1,000.00 in two instalments: 500.00 due 30 Sep, 500.00 due 30 Nov.
+  const twoInstalments = (firstOpen = 500) => invoice('x', '2026-09-30', 0, { instalments: [{ dueDate: '2026-09-30', amount: 500, open: firstOpen }, { dueDate: '2026-11-30', amount: 500, open: 500 }] })
+  const first = reminder('r1', 1, 'SENT', ['x'], 500, { preparedOn: '2026-09-27' })
+  const second = reminder('r2', 2, 'SENT', ['x'], 500, { preparedOn: '2026-10-08' })
+
+  it('a reminder covers the instalments it claimed; the first instalment climbs to level 2 alone', () => {
+    expect(instalmentCoveredLevel('x', '2026-09-30', [first], LADDER)).toBe(1)
+    expect(instalmentCoveredLevel('x', '2026-11-30', [first, second], LADDER)).toBe(0)
+    expect(instalmentCoveredLevel('x', '2026-11-30', [reminder('h', 2, 'SENT', ['x'], 1000, { byHand: true })], LADDER)).toBe(2)
+    const plan = planLadder({ ladder: LADDER, today: '2026-10-08', invoices: [twoInstalments()], reminders: [first], minimumAmount: null, interest: NONE, prepare: true })
+    expect(plan.prepare.map((entry) => [entry.level, entry.invoiceIds, entry.amountDue, entry.oldestDueDate])).toEqual([[2, ['x'], 500, '2026-09-30']])
+  })
+
+  it('the second instalment reaches its own level 1 while the first reaches level 3: two reminders, each claiming its instalment', () => {
+    const plan = planLadder({ ladder: LADDER, today: '2026-11-28', invoices: [twoInstalments()], reminders: [first, second], minimumAmount: null, interest: NONE, prepare: true })
+    expect(plan.prepare.map((entry) => [entry.level, entry.amountDue, entry.oldestDueDate])).toEqual([
+      [1, 500, '2026-11-30'],
+      [3, 500, '2026-09-30'],
+    ])
+    // Without a firing: a timer for today per level due, and the second instalment's next step (+7 on 7 Dec).
+    const idle = planLadder({ ladder: LADDER, today: '2026-11-28', invoices: [twoInstalments()], reminders: [first, second], minimumAmount: null, interest: NONE, prepare: false })
+    expect(idle.timers.map((timer) => [timer.level, timer.dueDate, timer.fireOn])).toEqual([
+      [3, '2026-09-30', '2026-11-28'],
+      [1, '2026-11-30', '2026-11-28'],
+      [2, '2026-11-30', '2026-12-07'],
+    ])
+    // 100.00 paid (the oldest instalment first): the level-3 claim changed (cancelled), the level-1 one did not.
+    const third = reminder('r3', 1, 'PREPARED', ['x'], 500, { preparedOn: '2026-11-28' })
+    const fourth = reminder('r4', 3, 'PREPARED', ['x'], 500, { preparedOn: '2026-11-28' })
+    const paid = planLadder({ ladder: LADDER, today: '2026-11-29', invoices: [twoInstalments(400)], reminders: [first, second, third, fourth], minimumAmount: null, interest: NONE, prepare: false })
+    expect(paid.cancel.map((entry) => entry.reminderId)).toEqual(['r4'])
+  })
+
+  it('holds an invoice whose deposit without a deposit invoice is not carried onto it yet', () => {
+    const plan = planLadder({ ladder: LADDER, today: '2026-10-30', invoices: [invoice('b', '2026-10-20', 600, { depositToCarry: true })], reminders: [], minimumAmount: null, interest: NONE, prepare: false })
+    expect(plan.prepare).toEqual([])
+    expect(plan.waiting).toEqual([{ invoiceId: 'b', level: 2, reason: 'DEPOSIT_TO_CARRY' }])
+    expect(plan.timers.map((timer) => [timer.level, timer.fireOn])).toEqual([[3, '2026-11-19']])
+    expect(WAIT_REASONS.DEPOSIT_TO_CARRY).toContain('carry the deposit')
+    expect(HELD_REASONS.DEPOSIT_TO_CARRY).toContain('Payments')
+  })
+})
+
 describe('the wording (placeholders to confirm with the accountant)', () => {
   const facts = {
     customerName: 'Cliente Uno S.r.l.',
@@ -259,7 +339,7 @@ describe('catalogues', () => {
     expect(templateOf('read_only')!.permissions).not.toContain('receivables.reminders.approve')
     // B-W2a-81: sales reads what a customer owes (the customer's Overdue), never a reminder move.
     expect(RECEIVABLES_PERMISSIONS.filter((name) => templateOf('sales')!.permissions.includes(name))).toEqual(['receivables.view'])
-    for (const type of ['payment_reminder.prepared', 'payment_reminder.approved', 'payment_reminder.sent', 'payment_reminder.skipped', 'payment_reminder.cancelled', 'payment_reminder.changed', 'receivables_settings.changed', 'customer_statement.sent']) {
+    for (const type of ['payment_reminder.prepared', 'payment_reminder.approved', 'payment_reminder.sent', 'payment_reminder.skipped', 'payment_reminder.cancelled', 'payment_reminder.changed', 'receivables_settings.changed', 'customer_statement.sent', 'interest_rate.recorded', 'interest_rate.changed']) {
       expect(EVENT_CATALOGUE.find(type, 1)?.context).toBe('receivables')
     }
   })

@@ -43,5 +43,6 @@ export async function invoiceXml(caller: CommandCaller, invoiceId: string) {
   } catch (error) {
     if (!(error instanceof FatturaPaReadError)) throw error
   }
-  return { fileName: file.originalName, fileId: file.id, xml: asMoney('cost', xml), read }
+  // B-W2b-21: an invoice of a file of several (a lotto) reads the file's XML: its body says which document is this invoice.
+  return { fileName: file.originalName, fileId: file.id, bodyIndex: invoice.sdiBodyIndex, xml: asMoney('cost', xml), read }
 }

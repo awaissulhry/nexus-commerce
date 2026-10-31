@@ -256,10 +256,13 @@ describe('the decision: money, stock and work in one step (SAL-341), the replace
     const decided = await ok('sales', 'POST', `/sales/returns/${rma1.id}/decisions`, { version: record.version, lines: [{ lineId: record.lines[0].id, disposition: 'REPLACE', goodsOutcome: 'QUARANTINE' }] })
     expect(decided.return).toMatchObject({ status: 'INSPECTED', lines: [{ disposition: 'REPLACE', goodsOutcome: 'QUARANTINE', creditAmount: 0, followUp: 'REPLACEMENT_ORDER', stock: [{ locationCode: 'A1-QUA', quantity: '1' }] }] })
     expect(decided.return.lines[0].effect).toBe('No credit; goods are held in quarantine at A1-QUA; on the replacement order')
-    const [move] = await admin(`SELECT m.reason, m.quantity::text, m.reference, i.code, i.kind FROM "StockMove" m JOIN "Item" i ON i.id = m."itemId" WHERE m.id = $1`, [decided.moves[0].moveId])
-    expect(move).toEqual({ reason: 'ADJUSTMENT', quantity: '1.0000', reference: rma1.number, code: 'SEED-JKT-02-RED-52', kind: 'FINISHED' })
+    // B-W2b-16: a CUSTOMER_RETURN move of its own, naming the return line and its customer (an ADJUSTMENT before W2b).
+    const [move] = await admin(`SELECT m.reason, m.quantity::text, m.reference, m."returnLineId", m."returnPartyId", i.code, i.kind FROM "StockMove" m JOIN "Item" i ON i.id = m."itemId" WHERE m.id = $1`, [decided.moves[0].moveId])
+    expect(move).toEqual({ reason: 'CUSTOMER_RETURN', quantity: '1.0000', reference: rma1.number, returnLineId: record.lines[0].id, returnPartyId: rma1.partyId, code: 'SEED-JKT-02-RED-52', kind: 'FINISHED' })
     expect((await events('return.decided', rma1.id))[0]?.payload).toMatchObject({ inspected: true, moveIds: [decided.moves[0].moveId] })
     expect(await events('return.credit_due', rma1.id)).toEqual([])
+    // B-W2b-16: the record says before the close what it would leave behind (the Replace line without its order).
+    expect(decided.return.closeWarnings).toEqual([{ code: 'REPLACE_WITHOUT_ORDER', path: 'replacementOrder', lineIds: [record.lines[0].id], seqs: [10], message: 'Line 10 is decided Replace and no replacement order was made.' }])
     // Decided lines are final; closing waits for nothing but says what the outcome still lacks.
     expect((await refused('sales', 'POST', `/sales/returns/${rma1.id}/decisions`, { version: decided.return.version, lines: [{ lineId: record.lines[0].id, disposition: 'SCRAP' }] }, 400)).issues[0].message).toBe('Line 10 is decided already (REPLACE).')
 
@@ -272,6 +275,7 @@ describe('the decision: money, stock and work in one step (SAL-341), the replace
     expect((await events('return.replacement_ordered', rma1.id))[0]?.payload).toMatchObject({ orderId: made.order.id, orderNumber: made.order.number })
     expect((await refused('sales', 'POST', `/sales/returns/${rma1.id}/replacement-order`, { version: made.return.version }, 409)).message).toBe(`Return ${rma1.number} has its replacement order already.`)
 
+    expect(made.return.closeWarnings).toEqual([])
     const closed = await ok('sales', 'POST', `/sales/returns/${rma1.id}/close`, { version: made.return.version, reason: 'Replaced; the torn jacket waits in quarantine for the NCR.' })
     expect(closed).toMatchObject({ return: { status: 'CLOSED', statusReason: 'Replaced; the torn jacket waits in quarantine for the NCR.' }, warnings: [] })
     expect(closed.return.tracking.at(-1)).toMatchObject({ step: 'OUTCOME', state: 'DONE' })
@@ -336,7 +340,7 @@ describe('a returned garment put back into stock carries its value, so its month
   let standard: Json
 
   it('finance freezes the garment’s standard: the jacket quarantined before it is valued at it by the freeze', async () => {
-    const [move] = await admin<{ id: string; itemId: string }>(`SELECT id, "itemId" FROM "StockMove" WHERE reference = $1 AND reason = 'ADJUSTMENT'`, [rma1.number])
+    const [move] = await admin<{ id: string; itemId: string }>(`SELECT id, "itemId" FROM "StockMove" WHERE reference = $1 AND reason = 'CUSTOMER_RETURN'`, [rma1.number])
     // Decided before any standard existed (inventory/finished/post.ts values at the frozen standard only): no value yet.
     expect(await valuationOf(move!.id)).toBeNull()
     const made = await ok('costing', 'POST', '/costing/standards', { companyId: companyA, itemId: move!.itemId, validFrom: `${TODAY.slice(0, 7)}-01`, materialCost: '180.000000', labourCost: '95.500000', note: 'Season standard of the returned jacket (made up).' }, 201)

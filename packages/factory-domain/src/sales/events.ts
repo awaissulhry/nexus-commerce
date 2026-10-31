@@ -74,6 +74,11 @@ import { REPAIR_KINDS, REPAIR_STAGES, SAFETY_RESULTS } from './repairs/rules'
  *   repair.stage_changed         it moved: received, estimated, approved, in repair, repaired, back into repair, shipped
  *                                back (with its DDT: ddt.source_issued), cancelled
  *   repair.safety_checked        a repaired protective garment's safety check was signed: PASS or FAIL
+ * B-W2b-16 (orders follow-ups; live: orders.view):
+ *   deposit_request.created_for_order  a deposit request made on an order without a quote version (a typed order's
+ *                                deposit, a balance before shipping): the quote's deposit_request.created needs a quote
+ *   deposit_request.waived       the owner waived a deposit request (with its step): the customer need not pay it in
+ *                                advance; sales_order.schedule_changed WAIVED names the step
  */
 const live = { permission: 'quotes.view', fields: ['quoteId', 'versionId'] } as const
 const orderLive = { permission: 'orders.view', fields: ['orderId', 'number'] } as const
@@ -282,8 +287,8 @@ export const events = [
   defineEvent({
     type: 'sales_order.schedule_changed',
     context: 'sales',
-    description: "A sales order's payment schedule was made, made again after an amendment, a step paid with its deposit request, its open steps cancelled with the order, or a before-shipping step's deposit request made when the office opened the step.",
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['MADE', 'REMADE', 'PAID', 'CANCELLED', 'REQUESTED']), milestoneIds: z.array(z.uuid()) }),
+    description: "A sales order's payment schedule was made, made again after an amendment, a step paid with its deposit request, its open steps cancelled with the order, a before-shipping step's deposit request made when the office opened the step, or a step waived by the owner.",
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['MADE', 'REMADE', 'PAID', 'CANCELLED', 'REQUESTED', 'WAIVED']), milestoneIds: z.array(z.uuid()) }),
     live: { ...orderLive, fields: ['orderId', 'number', 'change'] },
   }),
   // B-W2a-43: customer returns (ids, numbers and what changed; never an amount, a price or a credit value).
@@ -385,5 +390,20 @@ export const events = [
     description: "A repaired protective garment's safety check was signed (seams, abrasion zones, closures, protectors, the certificate still covers it): passed, so it may go back, or failed.",
     payload: z.strictObject({ repairId: z.uuid(), number: z.string(), result: z.enum(SAFETY_RESULTS) }),
     live: { ...repairLive, fields: ['repairId', 'number', 'result'] },
+  }),
+  // B-W2b-16: deposit requests of an order (ids, the step's kind and the fiscal decision; never an amount).
+  defineEvent({
+    type: 'deposit_request.created_for_order',
+    context: 'sales',
+    description: "A deposit request was made on an order without a quote version (OPEN): a typed order's deposit, or a balance before shipping (an advance invoiced with a TD02 when paid before the goods leave).",
+    payload: z.strictObject({ depositRequestId: z.uuid(), orderId: z.uuid(), number: z.string(), partyId: z.uuid(), stepKind: z.enum(['DEPOSIT', 'BEFORE_SHIPPING']), fiscalDocument: z.enum(['TD02', 'NONE']), dueDate: z.iso.date() }),
+    live: { ...orderLive, fields: ['depositRequestId', 'orderId', 'number', 'stepKind'] },
+  }),
+  defineEvent({
+    type: 'deposit_request.waived',
+    context: 'sales',
+    description: "The owner waived an order's deposit request with a reason and a fresh step-up (nothing was paid on it): the customer need not pay it in advance; a waived deposit lets production start.",
+    payload: z.strictObject({ depositRequestId: z.uuid(), orderId: z.uuid(), number: z.string(), partyId: z.uuid(), milestoneIds: z.array(z.uuid()) }),
+    live: { ...orderLive, fields: ['depositRequestId', 'orderId', 'number'] },
   }),
 ] as const
