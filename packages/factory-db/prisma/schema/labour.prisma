@@ -1,0 +1,561 @@
+// Floor work (W2b schema wave 7/7, B-W2b-12; plan W2B §6 row 7/7; features MES-022…033, MES-067, MES-074, MES-075,
+// MES-078, MES-087…102, MES-117, MES-128, MES-155…158, MES-168, MES-181…196, MES-201…206, MES-293, MES-294, PLT-059):
+// the members of a team operation and the steps ticked inside an operation, off-standard and indirect time with its
+// codes and pay rules, each line's day and its close, the append-only record of every edit of a labour record, the
+// workers' disputes, the day's dispatch, bundle coupons and the scan-pattern findings about bundles, and crews on one
+// tablet. The timing of an operation itself (START, PAUSE, RESUME, HAND_BACK, PARTIAL) is production.prisma's
+// OperationScan; andon.prisma holds the line's help calls, hourly targets and handover notes. apps/factory-api writes
+// them through command() (the API steps B-W2b-29, -40, -41, -45, -47, -49, -52, -53), the floor through floorCommand
+// and the offline queue (A1 §3.8: device time, server time, a client event id unique per device).
+//
+// Workers (Statuto dei Lavoratori, L. 300/1970, art. 4; GDPR arts. 5, 13, 15; Owner answers W1, F2, H3; GATE-LABOUR):
+// a person's own labour (their minutes, off-standard time, team share, edits and disputes) is personal data whose
+// figures need the site's legal basis (art. 4 c.1; purpose PERFORMANCE). So the line's figures and the person's records
+// live apart: LabourDay, LineTarget, the help calls, the handover notes and the scan-pattern findings carry no person
+// column; a person is named only on the rows of their own records (OperationScanMember, OperationChecklistResult,
+// OffStandardEntry, LabourEdit, LabourDispute, DispatchAssignment, CrewMember), and only where the site records workers:
+// the …_floor_work_w2b_guards call production's factory_production_check_subject (a site that records the station
+// names the station and no worker; a named worker has acknowledged the information notice). No table here holds a
+// productivity figure, a ranking, a rate or pay (piece pay is pay.prisma's, behind its own switch); a list, filter,
+// group or total by person is never the API's to offer (Owner answer F2). The person columns are listed in each
+// ownership entry's "about" for the privacy export and erase (B-W1-36's pack; B-W2b-27).
+//
+// Links to the People tables of B-W2b-06 (Employee, Team), not on main when this wave was built, go through the floor
+// Worker (Worker.employeeId comes with B-W2b-06) or as recordType + recordId (a help call's responder group).
+
+/// One member of a team operation (MES-091): the workers who did the work a START, RESUME, PARTIAL or REPORT of a
+/// bundle at an operation records together, the scan's own worker included. How a team's work splits for pay is the
+/// incentive scheme's (B-W2b-38). Only at a site that records workers, each member having acknowledged the notice.
+/// One row per scan and worker is the module's (the isolation copy test allows no unique key of ids alone). Never
+/// changed or removed (the …_floor_work_w2b_guards triggers, for every login).
+/// @append-only
+model OperationScanMember {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String   @db.Uuid
+  /// The START, RESUME, PARTIAL or REPORT it is a member of.
+  scanId      String   @db.Uuid
+  workerId    String   @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  scan   OperationScan @relation(fields: [tenantId, siteId, scanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker Worker        @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, scanId])
+  @@index([tenantId, workerId])
+}
+
+/// One step ticked inside an operation on a bundle (MES-102: "tick-off steps, each with who and when"; Finish waits until
+/// every required step is ticked — the steps themselves are the operation's instructions, W2b-4, so a step is named by
+/// its code as the tablet showed it). Who: the signed-in worker, or the station where the site records stations. Taken
+/// only while the work order is RELEASED or IN_PROGRESS and not held, on an ACTIVE bundle. Never changed or removed.
+/// @append-only
+model OperationChecklistResult {
+  id                   String           @id @db.Uuid
+  tenantId             String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String           @db.Uuid
+  workOrderId          String           @db.Uuid
+  workOrderOperationId String           @db.Uuid
+  bundleId             String           @db.Uuid
+  /// The step's code in the operation's checklist (no spaces).
+  stepCode             String
+  outcome              ChecklistOutcome @default(DONE)
+  /// The signed-in worker; null when the site records the station only.
+  workerId             String?          @db.Uuid
+  /// The device's station; required when the site records the station only.
+  stationId            String?          @db.Uuid
+  /// The floor device it came from (null: entered in the office).
+  deviceId             String?          @db.Uuid
+  /// The device's id for the event (A1 §3.8), unique per device: a resent tick is applied once.
+  clientEventId        String?
+  deviceTime           DateTime?        @db.Timestamptz(3)
+  serverTime           DateTime         @default(now()) @db.Timestamptz(3)
+  createdById          String?          @db.Uuid
+
+  operation WorkOrderOperation @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle    Bundle             @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  worker    Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  station   Station?           @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device    Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, deviceId, clientEventId])
+  @@index([tenantId, bundleId, workOrderOperationId])
+}
+
+/// What a ticked step says.
+enum ChecklistOutcome {
+  /// The step was done.
+  DONE
+  /// The step does not apply to this bundle (a size without the pocket).
+  NOT_APPLICABLE
+}
+
+/// A code for time not on standard work (MES-155, MES-158; design production.settings "Off-standard codes"): waiting,
+/// machine down or a help call (OFF_STANDARD), or useful work no standard covers — cleaning, training, samples, a
+/// meeting (INDIRECT). Each with its pay rule (MES-155; the CCNL's rules are UNVERIFIED: the company sets them with its
+/// labour consultant) and whether the team leader approves a block of it (MES-157). Per company (pay is the employer's);
+/// shown on the floor tiles with its icon and colour in the reader's language. The code never changes; a code no longer
+/// used is set inactive, never deleted.
+model OffStandardCode {
+  id            String             @id @db.Uuid
+  tenantId      String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String             @db.Uuid
+  /// Upper-case letters, digits and underscores; unique in the company. Never changes (entries keep it).
+  code          String
+  kind          OffStandardKind
+  payRule       OffStandardPayRule
+  /// A block of it waits for the team leader's approval (MES-157); false: approved when it ends.
+  needsApproval Boolean            @default(true)
+  labelIt       String
+  labelEn       String
+  /// The words in the other floor languages of the company's sites: { "ro": "…", "ur": "…" }.
+  labelI18n     Json               @default("{}")
+  /// The design system's tag icon (IconPicker id); null: the plain dot.
+  icon          String?
+  /// A swatch of the design system's ColorSwatchPicker ("#RRGGBB"); null: none.
+  colour        String?
+  sortOrder     Int                @default(0)
+  active        Boolean            @default(true)
+  version       Int                @default(1)
+  createdAt     DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?            @db.Uuid
+
+  company       Company            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  entries       OffStandardEntry[]
+  // andon.prisma: the help-call types whose waiting time books to it (MES-148).
+  helpCallTypes HelpCallType[]
+
+  @@unique([tenantId, companyId, code])
+  // The target of the entries' and help-call types' references: a code of the same company.
+  @@unique([tenantId, companyId, id])
+}
+
+enum OffStandardKind {
+  /// Time lost to the work: waiting for work or material, a machine down, waiting on a help call.
+  OFF_STANDARD
+  /// Useful work no standard covers: cleaning, training, samples, a meeting.
+  INDIRECT
+}
+
+/// How a block of off-standard time is paid (MES-155): the person's average earnings, the base hourly pay, or not at
+/// all. The rules behind each are the CCNL's and the labour consultant's (UNVERIFIED); pay reads them (B-W2b-43).
+enum OffStandardPayRule {
+  AVERAGE
+  BASE
+  UNPAID
+}
+
+/// A block of off-standard or indirect time (MES-156, MES-157, MES-148): started when no bundle runs (the tile "No
+/// bundle: what are you doing?"), ended by the worker, by a bundle scan (standard work again), by the help call it waits
+/// on, or typed afterwards by the team leader; then approved by the team leader when its code says so. Its day is the
+/// site's day it started in (workDate), on the line it was spent for; nothing of it changes once that line's day is
+/// CLOSED. After it ended, a change of its facts comes with a LabourEdit of the same transaction (MES-204). Names the
+/// worker where the site records workers, else the station.
+model OffStandardEntry {
+  id             String               @id @db.Uuid
+  tenantId       String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The site's company: its codes.
+  companyId      String               @db.Uuid
+  siteId         String               @db.Uuid
+  /// The line the time was spent for (null: a station off any line, or none).
+  lineId         String?              @db.Uuid
+  /// The station; required when the site records the station only.
+  stationId      String?              @db.Uuid
+  /// The signed-in worker; null when the site records the station only.
+  workerId       String?              @db.Uuid
+  codeId         String               @db.Uuid
+  /// FLOOR the worker's tile, LEAD typed by the team leader or the office, HELP_CALL the waiting while a call is open
+  /// (helpCallId, exactly then), SYSTEM the API on its own (an open block closed at clock-out).
+  source         OffStandardSource
+  helpCallId     String?              @db.Uuid
+  /// The site's day it started in (Site.timezone), and when it started and ended (null: running).
+  workDate       DateTime             @db.Date
+  startedAt      DateTime             @db.Timestamptz(3)
+  endedAt        DateTime?            @db.Timestamptz(3)
+  /// OPEN (running) → PENDING (ended, waiting for the team leader) | APPROVED (ended; a code that needs no approval);
+  /// PENDING → APPROVED | REJECTED; APPROVED | REJECTED → PENDING (reopened, with a LabourEdit).
+  status         OffStandardStatus    @default(OPEN)
+  approvedAt     DateTime?            @db.Timestamptz(3)
+  /// Who approved it (a team leader or office user; never the worker it is about); null: approved when it ended.
+  approvedById   String?              @db.Uuid
+  rejectedAt     DateTime?            @db.Timestamptz(3)
+  rejectedById   String?              @db.Uuid
+  /// Why it was rejected, sent to the person in their language.
+  rejectReason   String?
+  note           String?
+  /// The floor device it came from (null: the office).
+  deviceId       String?              @db.Uuid
+  /// The device's id for the event (A1 §3.8), unique per device.
+  clientEventId  String?
+  deviceTime     DateTime?            @db.Timestamptz(3)
+  version        Int                  @default(1)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?              @db.Uuid
+
+  site     Site            @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  code     OffStandardCode @relation(fields: [tenantId, companyId, codeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  line     Line?           @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  station  Station?        @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker   Worker?         @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  helpCall HelpCall?       @relation(fields: [tenantId, siteId, helpCallId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device   Device?         @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, deviceId, clientEventId])
+  // A line's day (its close), a worker's day, a call's waiting.
+  @@index([tenantId, lineId, workDate])
+  @@index([tenantId, workerId, workDate])
+  @@index([tenantId, helpCallId])
+}
+
+enum OffStandardSource {
+  FLOOR
+  LEAD
+  HELP_CALL
+  SYSTEM
+}
+
+enum OffStandardStatus {
+  OPEN
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// One line's day (MES-203; design production.labour "Line days"): CLOSED once its off-standard time is coded (no block
+/// OPEN or PENDING) and its anomalies are cleared (the attendance anomalies are the API's to check: time.prisma); closed
+/// days feed pay. Reopening needs a reason (and the API's permission). The row is made when the day is first closed or
+/// reopened (a day without a row is OPEN).
+model LabourDay {
+  id           String          @id @db.Uuid
+  tenantId     String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId       String          @db.Uuid
+  lineId       String          @db.Uuid
+  /// The site's day (Site.timezone).
+  workDate     DateTime        @db.Date
+  status       LabourDayStatus @default(OPEN)
+  /// The latest close, exactly while CLOSED.
+  closedAt     DateTime?       @db.Timestamptz(3)
+  closedById   String?         @db.Uuid
+  /// The latest reopening, with its reason (all or none; the audit log keeps every one).
+  reopenedAt   DateTime?       @db.Timestamptz(3)
+  reopenedById String?         @db.Uuid
+  reopenReason String?
+  note         String?
+  version      Int             @default(1)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?         @db.Uuid
+
+  line Line @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, lineId, workDate])
+}
+
+enum LabourDayStatus {
+  OPEN
+  CLOSED
+}
+
+/// One edit of a labour record (MES-204: "every edit keeps before / after, who, when and why"): the record (its type and
+/// id: an OperationScan correction, an OffStandardEntry, an OperationScanMember set, a LabourDay, a DispatchAssignment,
+/// later the attendance tables), the fields before and after (only those that changed), why, who (createdById) and
+/// when; the worker whose record it is, and the dispute it answers, when there is one. Never changed or removed (the
+/// …_floor_work_w2b_guards triggers, for every login): the history of a labour record is the list of its edits.
+/// @append-only
+model LabourEdit {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String    @db.Uuid
+  siteId      String    @db.Uuid
+  lineId      String?   @db.Uuid
+  /// The site's day of the record.
+  workDate    DateTime  @db.Date
+  /// The record edited: its model name and id.
+  recordType  String
+  recordId    String    @db.Uuid
+  /// The worker whose record it is (null: a station's record, or a line's).
+  workerId    String?   @db.Uuid
+  /// The changed fields before and after: two JSON objects with the same keys, not equal.
+  before      Json
+  after       Json
+  /// Why: required.
+  reason      String
+  /// The dispute it answers (an UPHELD one), if any.
+  disputeId   String?   @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  /// Who edited it (an office user or a team leader on the floor): required.
+  createdById String?   @db.Uuid
+
+  site    Site           @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  line    Line?          @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker  Worker?        @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  dispute LabourDispute? @relation(fields: [tenantId, siteId, disputeId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A record's history; a line's day.
+  @@index([tenantId, recordId])
+  @@index([tenantId, lineId, workDate])
+}
+
+/// A worker's dispute of one of their own labour records (MES-206; GDPR art. 15: a worker reads their own records and may
+/// say one is wrong): which record, the worker's words, and the answer of the team leader or HR (never the worker's own).
+/// UPHELD: the correction follows as a LabourEdit naming the dispute (or a CORRECTION scan). Only at a site that records
+/// workers.
+model LabourDispute {
+  id            String              @id @db.Uuid
+  tenantId      String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId        String              @db.Uuid
+  workerId      String              @db.Uuid
+  lineId        String?             @db.Uuid
+  workDate      DateTime            @db.Date
+  /// The record disputed: its model name and id (an OperationScan, an OffStandardEntry, a team share…).
+  recordType    String
+  recordId      String              @db.Uuid
+  /// The worker's words: required.
+  message       String
+  /// OPEN → UPHELD | REJECTED (answered) | WITHDRAWN (by the worker); then final.
+  status        LabourDisputeStatus @default(OPEN)
+  /// The answer, in words, exactly when UPHELD or REJECTED, with when and who.
+  answer        String?
+  answeredAt    DateTime?           @db.Timestamptz(3)
+  answeredById  String?             @db.Uuid
+  withdrawnAt   DateTime?           @db.Timestamptz(3)
+  /// The floor device it was raised on (null: the office or a phone link).
+  deviceId      String?             @db.Uuid
+  clientEventId String?
+  version       Int                 @default(1)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?             @db.Uuid
+
+  worker Worker       @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  line   Line?        @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device Device?      @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  edits  LabourEdit[]
+
+  @@unique([tenantId, deviceId, clientEventId])
+  // The target of the edits' reference: on the dispute's own site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, workerId, status])
+}
+
+enum LabourDisputeStatus {
+  OPEN
+  UPHELD
+  REJECTED
+  WITHDRAWN
+}
+
+/// One line of a day's dispatch (MES-022, MES-023, MES-027, MES-028; design production.dispatch): an operator assigned
+/// to a station or to an operation of a work order (optionally some of its bundles), or an operation queued at a station
+/// with nobody named, for one day, in the lane's order. Assigning checks the operator's qualification first (the API's
+/// qualificationCheck, B-W2b-39: a missing skill is held, or accepted with an override reason by the site's rule). A
+/// plan, not a ledger: the office rearranges it (every move is in the audit log); the team leader reassigns on the floor.
+model DispatchAssignment {
+  id                   String              @id @db.Uuid
+  tenantId             String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String              @db.Uuid
+  /// The site's day it is for.
+  workDate             DateTime            @db.Date
+  lineId               String?             @db.Uuid
+  stationId            String?             @db.Uuid
+  /// The operation (with its work order, both or neither).
+  workOrderId          String?             @db.Uuid
+  workOrderOperationId String?             @db.Uuid
+  /// Some bundles of the work order only (distinct; empty: all of the operation's).
+  bundleIds            String[]            @default([]) @db.Uuid
+  /// The operator (null: an operation queued at a station, nobody named yet).
+  workerId             String?             @db.Uuid
+  /// The order in the station's (or line's) lane, from 1.
+  sequence             Int?
+  /// A missing skill accepted anyway: why and who (both or neither).
+  overrideReason       String?
+  overrideById         String?             @db.Uuid
+  note                 String?
+  version              Int                 @default(1)
+  createdAt            DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?             @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  line      Line?               @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  station   Station?            @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation WorkOrderOperation? @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker    Worker?             @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A day's board per line, a worker's day (My work, MES-022), an operation's placements.
+  @@index([tenantId, siteId, workDate])
+  @@index([tenantId, workerId, workDate])
+  @@index([tenantId, workOrderOperationId])
+}
+
+/// A coupon (MES-067: a site chooses one bundle code scanned at every operation, or a coupon per operation): the ticket
+/// stub of one bundle for one operation, with its own scannable code. A lost coupon is VOID with its reason and replaced
+/// by a new one (replacesId). One ACTIVE coupon per bundle and operation (the partial unique index).
+model BundleCoupon {
+  id                   String       @id @db.Uuid
+  tenantId             String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String       @db.Uuid
+  workOrderId          String       @db.Uuid
+  bundleId             String       @db.Uuid
+  workOrderOperationId String       @db.Uuid
+  /// The scannable id on the coupon (factory-domain numbering/scan-id), unique in the tenant.
+  code                 String
+  /// ACTIVE → VOID (final; when and why).
+  status               CouponStatus @default(ACTIVE)
+  voidedAt             DateTime?    @db.Timestamptz(3)
+  voidReason           String?
+  /// The coupon this one replaces (the same bundle and operation, VOID).
+  replacesId           String?      @db.Uuid
+  /// The floor device it was printed on (null: the office).
+  deviceId             String?      @db.Uuid
+  version              Int          @default(1)
+  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?      @db.Uuid
+
+  bundle       Bundle             @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation    WorkOrderOperation @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId, workOrderId.
+  replaces     BundleCoupon?      @relation("BundleCouponReplacement", fields: [tenantId, siteId, workOrderId, replacesId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  replacements BundleCoupon[]     @relation("BundleCouponReplacement")
+  device       Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, code])
+  // The target of the replacements' reference: a coupon of the same site and work order.
+  @@unique([tenantId, siteId, workOrderId, id])
+  @@index([tenantId, bundleId, workOrderOperationId])
+}
+
+enum CouponStatus {
+  ACTIVE
+  VOID
+}
+
+/// One scan-pattern finding about a bundle (MES-075; design production.bundles "Scan-pattern checks"): scans bunched at
+/// a shift's end, a bundle moved but not scanned, gaps shorter than the standard allows, over a window; reviewed by the
+/// office. About a bundle, never a person (Statuto art. 4: patterns to talk about, not scores): no person column; "Show
+/// who" reads the window's scans for one finding with a purpose and an audit row (the API's, B-W2b-41). The job that
+/// finds them writes them; their facts never change.
+model ScanPatternFinding {
+  id                   String          @id @db.Uuid
+  tenantId             String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String          @db.Uuid
+  workOrderId          String          @db.Uuid
+  bundleId             String          @db.Uuid
+  /// The operation it is about (null: the bundle as a whole).
+  workOrderOperationId String?         @db.Uuid
+  kind                 ScanPatternKind
+  /// The window the pattern was seen in (start before end).
+  windowStart          DateTime        @db.Timestamptz(3)
+  windowEnd            DateTime        @db.Timestamptz(3)
+  /// What was seen, as counts and times (a JSON object; never a worker's id or name).
+  detail               Json            @default("{}")
+  /// OPEN → REVIEWED | DISMISSED (a note says why), then final.
+  status               FindingStatus   @default(OPEN)
+  reviewedAt           DateTime?       @db.Timestamptz(3)
+  reviewedById         String?         @db.Uuid
+  reviewNote           String?
+  version              Int             @default(1)
+  createdAt            DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Null: the finding job.
+  createdById          String?         @db.Uuid
+
+  bundle    Bundle              @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId, workOrderId.
+  operation WorkOrderOperation? @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId, status])
+  @@index([tenantId, bundleId])
+}
+
+enum ScanPatternKind {
+  /// Many scans in the last minutes of a shift (ticket hoarding).
+  BUNCHED_AT_SHIFT_END
+  /// The bundle reached a later operation with an earlier one not scanned.
+  MOVED_NOT_SCANNED
+  /// Scans closer together than the operation's standard minutes allow.
+  GAP_BELOW_STANDARD
+}
+
+enum FindingStatus {
+  OPEN
+  REVIEWED
+  DISMISSED
+}
+
+/// Crew mode on one station tablet (PLT-059, Owner question 24): several workers signed in, one active (every action
+/// books to the active member). One open crew per device (the partial unique index); a crew is ended when its last
+/// member leaves, or by the device's sign-out, idle time or shift end.
+model CrewSession {
+  id          String         @id @db.Uuid
+  tenantId    String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String         @db.Uuid
+  deviceId    String         @db.Uuid
+  startedAt   DateTime       @db.Timestamptz(3)
+  /// When it ended and why (both or neither; FloorSessionEndReason's words).
+  endedAt     DateTime?      @db.Timestamptz(3)
+  endReason   FloorSessionEndReason?
+  version     Int            @default(1)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?        @db.Uuid
+
+  device  Device       @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  members CrewMember[]
+
+  // The target of the members' reference: on the crew's own site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, deviceId])
+}
+
+/// One worker of a crew (PLT-059): up to four signed in at once, exactly one of them active while the crew is open; a
+/// worker is in one open crew at a time. Their floor session on the device, when the API keeps one per member.
+model CrewMember {
+  id             String        @id @db.Uuid
+  tenantId       String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId         String        @db.Uuid
+  crewSessionId  String        @db.Uuid
+  workerId       String        @db.Uuid
+  floorSessionId String?       @db.Uuid
+  /// The active member: every action books to them (at most one per crew: the partial unique index).
+  active         Boolean       @default(false)
+  joinedAt       DateTime      @db.Timestamptz(3)
+  leftAt         DateTime?     @db.Timestamptz(3)
+  version        Int           @default(1)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?       @db.Uuid
+
+  crew         CrewSession   @relation(fields: [tenantId, siteId, crewSessionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker       Worker        @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  floorSession FloorSession? @relation(fields: [tenantId, siteId, floorSessionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, crewSessionId])
+  @@index([tenantId, workerId])
+}
+
+/// The floor checks of production.prisma's ProductionSettings (MES-025, MES-097, MES-098): what a check does when it
+/// finds something.
+enum FloorRuleMode {
+  /// Nothing stops; nobody is told.
+  FREE
+  /// The scan counts; the team leader is told.
+  WARN
+  /// The scan waits for a team leader's override with their PIN and a reason.
+  STRICT
+}
+
+/// How a site's bundles are scanned (MES-067): one code on the bundle ticket at every operation, or a coupon per operation.
+enum BundleCodeMode {
+  ONE_CODE
+  COUPON_PER_OPERATION
+}

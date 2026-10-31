@@ -161,6 +161,8 @@ model Company {
   /// @not-money the relation to its price lists
   priceLists           PriceList[]
   complaints           Complaint[]
+  // W2b labour.prisma (wave 7/7): its off-standard and indirect time codes with their pay rules.
+  offStandardCodes     OffStandardCode[]
   // calendar.prisma: its calendars (its own and its sites', lines', workshops' and suppliers') and its shift patterns.
   workCalendars        WorkCalendar[]
   shiftPatterns        ShiftPattern[]
@@ -253,6 +255,11 @@ model Site {
   // production.prisma: its garment label prints (B-W1-44) and bundle ticket reprints.
   garmentLabelPrints      GarmentLabelPrint[]
   bundleReprints          BundleReprint[]
+  // W2b labour.prisma, andon.prisma (wave 7/7): its off-standard time, the edits of its labour records, its help-call
+  // types and their routing.
+  offStandardEntries      OffStandardEntry[]
+  labourEdits             LabourEdit[]
+  helpCallTypes           HelpCallType[]
   // floor-sync.prisma: the refused queued actions of its tablets.
   refusedActions          FloorRefusedAction[]
   // shipping.prisma: its shipping settings, the shipments that leave it and their DDTs.
@@ -308,6 +315,17 @@ model Line {
   // W2a production.prisma, schedule.prisma: the work orders allocated to it, its slots on the planning board.
   workOrders    WorkOrder[]
   scheduleSlots ScheduleSlot[]
+  // W2b floor-auth.prisma, labour.prisma, andon.prisma (wave 7/7): the line and display devices that show it, its days
+  // and their off-standard time, edits and disputes, its dispatch, hourly targets, handover notes and help calls.
+  devices             Device[]
+  labourDays          LabourDay[]
+  offStandardEntries  OffStandardEntry[]
+  labourEdits         LabourEdit[]
+  labourDisputes      LabourDispute[]
+  dispatchAssignments DispatchAssignment[]
+  lineTargets         LineTarget[]
+  handoverNotes       HandoverNote[]
+  helpCalls           HelpCall[]
 
   @@unique([tenantId, siteId, code])
   @@unique([tenantId, siteId, id])
@@ -396,6 +414,12 @@ model Station {
   // B-W1-42: correction requests asked and refused scans sent at the station.
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]
+  // W2b labour.prisma, andon.prisma (wave 7/7): the steps ticked, the off-standard time and help calls at the station
+  // (a site that records stations names it), its dispatch.
+  checklistResults       OperationChecklistResult[]
+  offStandardEntries     OffStandardEntry[]
+  helpCalls              HelpCall[]
+  dispatchAssignments    DispatchAssignment[]
   // floor-sync.prisma: the refused queued actions of its tablets.
   refusedActions         FloorRefusedAction[]
 

@@ -56,6 +56,15 @@ export const CLIENT_SCAN_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,63}$/
 
 export const SCAN_KINDS = ['REPORT', 'UNDO', 'CORRECTION'] as const
 export type ScanKind = (typeof SCAN_KINDS)[number]
+/**
+ * W2b (B-W2b-12, schema wave 7/7): the database's ScanKind also holds the timing of an operation (START, PAUSE, RESUME,
+ * HAND_BACK, PARTIAL), which carries no counts. SCAN_KINDS is the count ledger: every count, WIP and progress read
+ * filters on it (`kind: { in: [...SCAN_KINDS] }`) and reads the kind back through countKindOf.
+ */
+export function countKindOf(kind: string): ScanKind {
+  if ((SCAN_KINDS as readonly string[]).includes(kind)) return kind as ScanKind
+  throw new Error(`production: scan kind ${kind} is a timing kind, not a count; the read filters on SCAN_KINDS`)
+}
 
 // ---- refusals -------------------------------------------------------------------------------------------------------------------
 

@@ -1,0 +1,41 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/andon.prisma (rules: src/ownership.ts; roles: src/roles.ts). The line's signals (W2b schema wave 7/7, B-W2b-12): the office keeps the help-call routing and the hourly targets and reads and answers calls; the floor tablets (factory_floor_runtime, their own site) send calls, answer them on the line view, give the reason of a short hour and write handover notes; a DISPLAY device reads targets and calls. Line figures only: no row here is a person's figure (the caller is named only where the site records workers). The partner reads nothing; no money column. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "HelpCallType": {
+      "about": "The site's help-call types and their routing (responder group, escalation, the off-standard code of the waiting): the office keeps them; the floor reads its site's for the call tiles. No person column. Never deleted (set inactive).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "HelpCall": {
+      "about": "Help calls: the station's tablet sends one, the team leader on the floor or a responder in the office marks it seen, on the way, solved or cancelled; the escalation job marks it escalated. Never deleted. Person columns: workerId (the caller, only where the site records workers), seenById, onTheWayById, solvedById, cancelledById.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "LineTarget": {
+      "about": "Each line's hourly targets: the office sets and removes them; the floor reads them (the line view, the TV board) and the team leader gives the reason of a short hour (only the reason columns: the trigger). No person column but who gave the reason.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "HandoverNote": {
+      "about": "A line's handover note per shift: the team leader writes and edits it on the floor (or in the office); the next shift reads it at sign-in. Never deleted. Person column: who wrote it (createdById).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

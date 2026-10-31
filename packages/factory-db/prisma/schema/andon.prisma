@@ -1,0 +1,198 @@
+// The line's signals (W2b schema wave 7/7, B-W2b-12; plan W2B §6 row 7/7; features MES-033, MES-084, MES-137,
+// MES-142…148, MES-161, MES-162, ANA-007; design production.calls, production.settings "Help-call routing",
+// floor.supervisor, floor.display): help calls from a station with their routing to a responder group and their times,
+// each line's hourly targets with the team leader's reason for a short hour, and the handover note of a line for the
+// next shift. apps/factory-api writes them through command() (B-W2b-35 help calls, B-W2b-49 handover notes, B-W2b-50
+// targets and boards), the floor through floorCommand and the offline queue.
+//
+// Line figures only (Statuto dei Lavoratori art. 4; Owner answer F2: the line view and the TV per line, never a ranking
+// of people): a call names its station and line; the caller is named only where the site records workers (and has
+// acknowledged the notice), and a response time is a call's and a line's, never a person's figure in a list or total.
+// Targets and notes carry no person column but who wrote them.
+
+/// What a help call from a station is about, and who answers it (MES-142, MES-144; design production.settings
+/// "Help-call routing": type → responder group, escalate after minutes). Per site; the type's words, icon and colour
+/// are its code's in the HELP_CALL reason list (reasons.prisma). The responder group is a People team (B-W2b-06's Team,
+/// not on main when this wave was built) or a role (office or floor): as recordType + recordId. A MATERIAL call asks for extra
+/// material (MES-137); a MACHINE call offers a maintenance job. The waiting time at the station while a call is open
+/// books to an off-standard code (MES-148). Never deleted: set inactive.
+model HelpCallType {
+  id                   String           @id @db.Uuid
+  tenantId             String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId            String           @db.Uuid
+  siteId               String           @db.Uuid
+  /// A code of the HELP_CALL reason list; unique on the site. Never changes.
+  code                 String
+  kind                 HelpCallKind
+  /// The responder group: "Team" (people.prisma, B-W2b-06) or "Role" (roles.prisma, an office or floor role) and its
+  /// id; both or neither (none: the site's team leaders).
+  responderRecordType  String?
+  responderRecordId    String?          @db.Uuid
+  /// An open call is escalated after these minutes (1-240; null: never).
+  escalateAfterMinutes Int?
+  /// The off-standard code the station's waiting time books to while a call of this type is open (an OFF_STANDARD code
+  /// of the site's company; null: the waiting is not booked).
+  offStandardCodeId    String?          @db.Uuid
+  sortOrder            Int              @default(0)
+  active               Boolean          @default(true)
+  version              Int              @default(1)
+  createdAt            DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?          @db.Uuid
+
+  site            Site             @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  offStandardCode OffStandardCode? @relation(fields: [tenantId, companyId, offStandardCodeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  calls           HelpCall[]
+
+  @@unique([tenantId, siteId, code])
+  // The target of the calls' reference: a type of the same site.
+  @@unique([tenantId, siteId, id])
+}
+
+enum HelpCallKind {
+  MACHINE
+  MATERIAL
+  QUALITY
+  SUPERVISOR
+  MAINTENANCE
+  OTHER
+}
+
+/// One help call (andon; MES-142…147): sent from a station in one tap (the station, its line and, where the site records
+/// workers, the caller), routed by its type; SENT → SEEN → ON_THE_WAY → SOLVED, each with its time and who (steps may be
+/// skipped forward), or CANCELLED. One open call per station and type (the partial unique index): a second tap shows
+/// the open one. What it led to (a maintenance job, an NCR, a material request) as recordType + recordId.
+model HelpCall {
+  id                String         @id @db.Uuid
+  tenantId          String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId            String         @db.Uuid
+  typeId            String         @db.Uuid
+  stationId         String         @db.Uuid
+  /// The station's line (copied when it is sent; null: a station off any line).
+  lineId            String?        @db.Uuid
+  /// The caller, only where the site records workers.
+  workerId          String?        @db.Uuid
+  /// The work order and bundle it is about, if any (a bundle with its work order).
+  workOrderId       String?        @db.Uuid
+  bundleId          String?        @db.Uuid
+  note              String?
+  status            HelpCallStatus @default(SENT)
+  sentAt            DateTime       @db.Timestamptz(3)
+  /// Each step's time and who took it (a team leader, a responder; an office user or a floor worker), set once.
+  seenAt            DateTime?      @db.Timestamptz(3)
+  seenById          String?        @db.Uuid
+  onTheWayAt        DateTime?      @db.Timestamptz(3)
+  onTheWayById      String?        @db.Uuid
+  solvedAt          DateTime?      @db.Timestamptz(3)
+  solvedById        String?        @db.Uuid
+  /// SOLVED: how (a code, no spaces) and a note.
+  resolutionCode    String?
+  resolutionNote    String?
+  cancelledAt       DateTime?      @db.Timestamptz(3)
+  cancelledById     String?        @db.Uuid
+  /// When the escalation job raised it (past its type's minutes, still open).
+  escalatedAt       DateTime?      @db.Timestamptz(3)
+  /// What it led to: a MaintenanceJob, a Nonconformance, a material request … (both or neither).
+  outcomeRecordType String?
+  outcomeRecordId   String?        @db.Uuid
+  /// The floor device it was sent from (null: the office).
+  deviceId          String?        @db.Uuid
+  /// The device's id for the event (A1 §3.8), unique per device: a resent call is made once.
+  clientEventId     String?
+  deviceTime        DateTime?      @db.Timestamptz(3)
+  version           Int            @default(1)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?        @db.Uuid
+
+  type      HelpCallType       @relation(fields: [tenantId, siteId, typeId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  station   Station            @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  line      Line?              @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker    Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder WorkOrder?         @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle    Bundle?            @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  device    Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // labour.prisma: the waiting time booked while it was open (MES-148).
+  waiting   OffStandardEntry[]
+
+  @@unique([tenantId, deviceId, clientEventId])
+  // The target of the off-standard entries' reference: on the call's own site.
+  @@unique([tenantId, siteId, id])
+  // A line's calls by time (the line view, the TV board, the calls page).
+  @@index([tenantId, siteId, lineId, sentAt])
+}
+
+enum HelpCallStatus {
+  SENT
+  SEEN
+  ON_THE_WAY
+  SOLVED
+  CANCELLED
+}
+
+/// One line's target for one hour of one day (MES-161, MES-162, ANA-007): pieces, against which the line's output hour
+/// by hour is read (team totals only), with the team leader's reason for a short hour (a DOWNTIME code and/or words).
+model LineTarget {
+  id              String    @id @db.Uuid
+  tenantId        String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String    @db.Uuid
+  lineId          String    @db.Uuid
+  /// The site's day and the hour in it (0-23, Site.timezone) the target is for.
+  workDate        DateTime  @db.Date
+  hour            Int
+  /// Pieces (finished at the line's last operation), from 0.
+  targetPieces    Int
+  /// A short hour: why, as a code of the DOWNTIME reason list and/or words, with when and who (with either).
+  shortReasonCode String?
+  shortNote       String?
+  shortReasonAt   DateTime? @db.Timestamptz(3)
+  shortReasonById String?   @db.Uuid
+  version         Int       @default(1)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?   @db.Uuid
+
+  line Line @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, lineId, workDate, hour])
+}
+
+/// The handover note of one line for the next shift (MES-033; floor.supervisor "Handover note", floor.signin "the
+/// line's handover note if new since your last shift"): topic tiles and a short text, by the team leader (who wrote it:
+/// createdById). One per line, day and shift (the shift's label, as the site's shift pattern names it).
+model HandoverNote {
+  id          String          @id @db.Uuid
+  tenantId    String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String          @db.Uuid
+  lineId      String          @db.Uuid
+  /// The site's day of the shift it was written in, and the shift's label ("A", "Morning").
+  shiftDate   DateTime        @db.Date
+  shiftLabel  String
+  /// Distinct topics (at least a topic or a text).
+  topics      HandoverTopic[] @default([])
+  /// A short text, at most 1000 characters.
+  text        String?
+  /// The floor device it was written on (null: the office).
+  deviceId    String?         @db.Uuid
+  version     Int             @default(1)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?         @db.Uuid
+
+  line   Line    @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  device Device? @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, lineId, shiftDate, shiftLabel])
+}
+
+enum HandoverTopic {
+  PROBLEMS
+  HALF_DONE_BUNDLES
+  MACHINES
+  MATERIAL
+  QUALITY
+  OTHER
+}
