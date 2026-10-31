@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Download, MoreHorizontal, PackagePlus, Search, Timer, Truck } from 'lucide-react'
+import { Download, MoreHorizontal, PackagePlus, Printer, Search, Timer, Truck } from 'lucide-react'
 import { Banner, Card, Countdown, EmptyState, Menu, MetricStrip, Modal } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select, Tag } from '@nexus/ui/primitives'
@@ -12,9 +12,11 @@ import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { ShipmentRow } from '../../api'
+import { money, printDdtsHeld, printDdtsPlan } from '../../daily-model'
 import { carrierWords, kilos, placeOf, ROW_VIEWS, STATUS_TONE, TILES, waitsForHandOver, needsLabels, type CutOffCard, type RowView } from '../../model'
 import type { ShipmentsListActions, ShipmentsListModel } from '../list-model'
 import { NewShipmentDialog } from './NewShipmentDialog'
+import { PrintDdtsDialog } from './PrintDdtsDialog'
 import '../../shipments.css'
 
 export type { ShipmentsListActions, ShipmentsListModel } from '../list-model'
@@ -26,7 +28,9 @@ export type { ShipmentsListActions, ShipmentsListModel } from '../list-model'
  * (what has not left yet), then every shipment by state; search by number, order, customer PO, customer or tracking
  * number; select-all, shift range, x; Export N (CSV) while rows are selected (no API acts on many shipments: printing
  * many DDTs is W2a); live changes behind "N updates · Show". New shipment (c) plans one from what quality released.
- * No money on this page (freight is W2a, the label's cost is the carrier's invoice).
+ * B-W2a-71: the Freight charged column (a price: only with the price grain; the label's cost stays the carrier's
+ * invoice), Print N DDTs in the selection row, the EU transport proof still to file (`?rows=evidence`, and a line in the
+ * Status cell).
  */
 export function ShipmentsListView({ model, actions }: { model: ShipmentsListModel; actions?: ShipmentsListActions }) {
   return (
@@ -73,6 +77,9 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
   })
 
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
+  const printPlan = printDdtsPlan(picked)
+  const printable = printPlan.printable.length
+  const printHeld = printDdtsHeld(printPlan, model.can)
   const ownKeys: ListKey[] = model.can.manage ? [{ keys: ['c'], does: t('list.keyNew') }] : []
   const searchField = (
     <Input
@@ -117,7 +124,13 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
       data ? (
         <span className="fw-sh-cell">
           <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill>
-          {needsLabels(data) ? <span className="fw-sh-cell-sub">{t('list.needsLabels', { count: data.parcels - data.labelled })}</span> : waitsForHandOver(data) ? <span className="fw-sh-cell-sub">{t('list.waitsHandOver')}</span> : null}
+          {needsLabels(data) ? (
+            <span className="fw-sh-cell-sub">{t('list.needsLabels', { count: data.parcels - data.labelled })}</span>
+          ) : waitsForHandOver(data) ? (
+            <span className="fw-sh-cell-sub">{t('list.waitsHandOver')}</span>
+          ) : data.transportEvidence === 'AWAITED' || data.transportEvidence === 'PARTIAL' ? (
+            <span className="fw-sh-cell-sub">{t(`list.evidence.${data.transportEvidence}`)}</span>
+          ) : null}
         </span>
       ) : null
     const CustomerCell = ({ data }: ICellRendererParams<ShipmentRow>) =>
@@ -181,6 +194,13 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
       const card = model.cards?.find((entry) => entry.shipments > 0 && entry.cutOff && entry.key === (data.transportBy === 'CARRIER' ? (data.carrierCode ?? 'none') : data.transportBy))
       return card?.cutOff ? <Countdown to={card.cutOff.at} label={(left) => t('cutoff.left', { left, time: card.cutOff!.time })} doneLabel={t('cutoff.passed', { time: card.cutOff.time })} /> : <span className="fw-sh-muted">{t('list.noCutOff')}</span>
     }
+    // B-W2a-71 (design sh-grid "Freight charged (price, W2a)"): the API sends no amount without the price grain.
+    const FreightCell = ({ data }: ICellRendererParams<ShipmentRow>) => {
+      if (!data) return null
+      if (data.freightCharge === undefined) return <span className="fw-sh-muted">—</span>
+      if (data.freightCharge === null) return <span className="fw-sh-muted">{data.status === 'CANCELLED' ? '—' : t('list.freightOpen')}</span>
+      return <span>{money(data.freightCharge, data.currency, locale)}</span>
+    }
     const MoreCell = ({ data }: ICellRendererParams<ShipmentRow>) =>
       data ? (
         <Menu
@@ -207,9 +227,10 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
       { colId: 'ddt', headerName: t('col.ddt'), minWidth: 110, flex: 0.7, cellRenderer: DdtCell },
       { colId: 'tracking', headerName: t('col.tracking'), minWidth: 130, flex: 0.9, cellRenderer: TrackingCell },
       { colId: 'when', headerName: t('col.when'), minWidth: 150, flex: 0.9, cellRenderer: WhenCell },
+      ...(model.can.price ? [{ colId: 'freight', headerName: t('col.freight'), field: 'freightCharge' as const, minWidth: 150, flex: 0.8, type: 'rightAligned', cellRenderer: FreightCell }] : []),
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.cards, model.can.viewOrders])
+  }, [t, locale, model.prefix, model.cards, model.can.viewOrders, model.can.price])
 
   const narrowed = model.q.trim() !== '' || model.carrier !== null || (model.rows !== 'today' && model.rows !== 'all')
   const clearFilters = () => {
@@ -301,9 +322,15 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
           selected,
           onChange: setSelected,
           actions: (
-            <Button size="sm" variant="primary" aria-label={t('bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
-              <Download size={13} aria-hidden /> <SelectionLabel>{t('bulk.export', { count: picked.length })}</SelectionLabel>
-            </Button>
+            <>
+              <Button size="sm" variant="primary" aria-label={t('bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
+                <Download size={13} aria-hidden /> <SelectionLabel>{t('bulk.export', { count: picked.length })}</SelectionLabel>
+              </Button>
+              {/* B-W2a-71 (design sh-grid selection row "Print 4 DDTs"). */}
+              <Button size="sm" aria-label={t('bulk.printDdts', { count: printable })} heldReason={printHeld ? t(printHeld.key, printHeld.params) : null} onClick={() => actions?.onPrintDdts?.(picked.map((row) => row.id))}>
+                <Printer size={13} aria-hidden /> <SelectionLabel>{t('bulk.printDdts', { count: printable })}</SelectionLabel>
+              </Button>
+            </>
           ),
         }}
         updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
@@ -329,6 +356,7 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
       )}
 
       {model.create && <NewShipmentDialog model={model.create} can={model.can} actions={actions} />}
+      {model.printDdts && <PrintDdtsDialog model={model.printDdts} rows={items ?? []} can={model.can} actions={actions} />}
     </div>
   )
 }

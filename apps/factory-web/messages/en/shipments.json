@@ -26,7 +26,8 @@
     "DELIVERED": "Delivered",
     "RETURNED": "Returned",
     "CANCELLED": "Cancelled",
-    "all": "All shipments"
+    "all": "All shipments",
+    "evidence": "EU proof to file"
   },
   "tile": {
     "toPack": "To pack",
@@ -113,7 +114,9 @@
     "weight": "Weight kg",
     "ddt": "DDT",
     "tracking": "Tracking",
-    "shipped": "Shipped at"
+    "shipped": "Shipped at",
+    "freight": "Freight charged",
+    "currency": "Currency"
   },
   "col": {
     "number": "Shipment",
@@ -126,7 +129,8 @@
     "ddt": "DDT",
     "tracking": "Tracking",
     "when": "Ship by",
-    "more": "More"
+    "more": "More",
+    "freight": "Freight charged"
   },
   "list": {
     "updated": "Updated {time}",
@@ -173,11 +177,18 @@
     "empty": {
       "title": "No shipments yet",
       "body": "A shipment is planned from the garments quality released for an order."
+    },
+    "freightOpen": "Not decided",
+    "evidence": {
+      "AWAITED": "EU proof awaited",
+      "PARTIAL": "EU proof partial"
     }
   },
   "bulk": {
     "export_one": "Export {count} (CSV)",
-    "export_other": "Export {count} (CSV)"
+    "export_other": "Export {count} (CSV)",
+    "printDdts_one": "Print {count} DDT",
+    "printDdts_other": "Print {count} DDTs"
   },
   "cutoff": {
     "label": "Carrier cut-offs today",
@@ -271,7 +282,26 @@
     "parcelFull": "Holds garments: move them first",
     "nothingToAttach": "Everything on file is attached",
     "noRecipients": "The customer has no orders or quality contact with an e-mail",
-    "cancelledShipment": "The shipment is cancelled"
+    "cancelledShipment": "The shipment is cancelled",
+    "noFreight": "Needs the right to change the freight charged",
+    "noPrice": "Needs the price grain: the amount is shown to those who see prices",
+    "freightCancelled": "The shipment is cancelled: its freight no longer changes",
+    "noVoid": "Needs the right to void labels",
+    "voidLeft": "The goods left: a label is voided only before they leave",
+    "voidCollected_one": "The carrier has the labelled parcel already: ask the carrier to stop or return it",
+    "voidCollected_other": "The carrier has every labelled parcel already: ask the carrier to stop or return them",
+    "noPrintDdt": "Needs the right to pack (it prints the shipments' papers)",
+    "noDdtSelected": "None of the selected shipments has a live DDT",
+    "noEvidence": "Needs the right to file the transport evidence",
+    "noUpload": "Needs the right to upload files",
+    "evidenceNotLeft": "Decided and filed once the goods left",
+    "evidenceNotNeeded": "This shipment needs no transport evidence",
+    "evidenceComplete": "The evidence is complete",
+    "evidenceShort": "Needs two papers, one of them a transport document",
+    "evidenceOpen": "The evidence is not complete",
+    "evidenceReopenFirst": "Reopen the evidence first",
+    "evidencePapers_one": "{count} paper is on file: a shipment with papers keeps needing them",
+    "evidencePapers_other": "{count} papers are on file: a shipment with papers keeps needing them"
   },
   "step": {
     "pack": "Mark packed",
@@ -286,7 +316,8 @@
     "unpack": "Unpack",
     "cancel": "Cancel shipment",
     "openOrder": "Open order {number}",
-    "copyNumber": "Copy the number"
+    "copyNumber": "Copy the number",
+    "pack": "Driver's pack (new tab)"
   },
   "tab": {
     "lines": "Lines & cartons",
@@ -294,7 +325,9 @@
     "carrier": "Carrier & label",
     "tracking": "Tracking & delivery",
     "activity": "Activity",
-    "problem": "Something to do here"
+    "problem": "Something to do here",
+    "export": "Export",
+    "invoice": "Invoice"
   },
   "record": {
     "back": "Shipments",
@@ -466,8 +499,8 @@
       "vat": "VAT {vat}",
       "net": "net {value} kg",
       "carrier": "Carrier: {name}",
-      "goods_one": "{lines} line · {pieces} garments",
-      "goods_other": "{lines} lines · {pieces} garments",
+      "goods_one": "{lines} line · garments: {pieces}",
+      "goods_other": "{lines} lines · garments: {pieces}",
       "lines_one": "{count} goods line",
       "lines_other": "{count} goods lines",
       "batch": "batch {batch}",
@@ -583,7 +616,8 @@
     "pdf": "PDF",
     "downloadOf": "Download the label of parcel {seq}",
     "labelsHidden": "Print states show to those who pack.",
-    "noPrinter": "This site has no label printer: the labels print from their PDF."
+    "noPrinter": "This site has no label printer: the labels print from their PDF.",
+    "labelsMore": "More for the labels"
   },
   "tracking": {
     "title": "Tracking",
@@ -637,7 +671,16 @@
     },
     "check": "Check again",
     "go": "Issue DDT {number}",
-    "goShip": "Issue DDT {number} and hand over"
+    "goShip": "Issue DDT {number} and hand over",
+    "reasonHint": {
+      "SALE": "Goods sold to the customer (the usual reason).",
+      "RETURN_FROM_WORK": "The customer's goods going back after we worked on them.",
+      "ON_APPROVAL": "Goods the customer may keep or send back (conto visione).",
+      "REPAIR": "Goods travelling to or from a repair.",
+      "SAMPLE": "Samples for the customer, not sold.",
+      "OTHER": "Say the reason in words below; it is printed as typed."
+    },
+    "otherReasons": "Processing on account and returns to a supplier travel with the DDT of their own record (Subcontracting, the supplier claim), never on a shipment to a customer."
   },
   "annul": {
     "title": "Annul DDT {number}",
@@ -753,7 +796,16 @@
     "delivery": "Delivery saved.",
     "labelsPrinted": "Labels sent to the printer.",
     "shipped": "Handed over: the goods left.",
-    "cancelled": "Shipment cancelled."
+    "cancelled": "Shipment cancelled.",
+    "packingListVersion": "Packing list {number} made (version {version}): the packing station prints it.",
+    "packingListSame": "Nothing changed since version {version}: packing list {number} is the same file.",
+    "freightRule": "The freight is back to the site's rule.",
+    "freightTyped": "Freight charged saved.",
+    "paperFiled": "Paper filed with the shipment.",
+    "evidenceComplete": "Transport evidence marked complete.",
+    "evidenceReopened": "Transport evidence reopened.",
+    "evidenceNeeded": "The shipment now needs its transport evidence.",
+    "evidenceNotNeeded": "The shipment needs no transport evidence."
   },
   "problem": {
     "read": {
@@ -789,5 +841,338 @@
     "empty_other": "cartons {parcels} filled or removed (they are empty)",
     "serials_one": "{count} serial scanned",
     "serials_other": "{count} serials scanned"
+  },
+  "void": {
+    "action_one": "Void {count} label…",
+    "action_other": "Void {count} labels…",
+    "title": "Void labels",
+    "parcels": "Labels to void",
+    "all_one": "The carrier voids the label of the one labelled parcel of this shipment.",
+    "all_other": "Voiding one parcel voids all {count} parcels of this shipment: the carrier cancels each label.",
+    "fee": "The label fee comes back only within the carrier's own window: the carrier decides, not us.",
+    "after": "The parcels can change again; buy new labels before the goods leave.",
+    "kept_one": "The carrier has parcel {parcels} already: its label stays (ask the carrier to stop or return it).",
+    "kept_other": "The carrier has parcels {parcels} already: their labels stay (ask the carrier to stop or return them).",
+    "reason": "Why",
+    "reasonHint": "A wrong weight, a wrong service, a new address… kept in the shipment's history.",
+    "go_one": "Void {count} label",
+    "go_other": "Void {count} labels",
+    "held": {
+      "reason": "Say why (3 letters or more)"
+    },
+    "busy": "Asking the carrier…",
+    "done_one": "{count} label voided.",
+    "done_other": "{count} labels voided.",
+    "partial": "Some labels stay: see each parcel.",
+    "next": "Buy the labels again when the parcels are right.",
+    "outcome": {
+      "CANCELLED": "Parcel {seq}: cancelled at the carrier.",
+      "QUEUED": "Parcel {seq}: the carrier confirms the cancellation later.",
+      "NOT_SENT": "Parcel {seq}: never sent to the carrier, cleared here.",
+      "kept": "Parcel {seq}: keeps its label."
+    }
+  },
+  "charge": {
+    "cardTitle": "Freight charged",
+    "title": "Freight charged to the customer",
+    "state": {
+      "byHand": "Typed by hand",
+      "byRule": "By the site's rule",
+      "open": "Not decided yet"
+    },
+    "now": "Charged now",
+    "notDecided": "Not decided yet",
+    "hidden": "Shown to those who see prices",
+    "hiddenNote": "Freight is a price: its amount is shown to those who see prices.",
+    "rule": "The site's rule gives",
+    "ruleNone": "No amount: type it by hand",
+    "why": "Why",
+    "currency": "Currency",
+    "whenLeaves": "The site's rule sets it when the goods leave; type it now to charge another amount.",
+    "beforeLeft": "Typed by hand it stays as typed; the invoice reads it when it is issued.",
+    "afterLeft": "It still changes until the shipment is cancelled; the invoice reads it when it is issued.",
+    "change": "Change freight",
+    "amount": "Amount ({currency})",
+    "amountHint": "0 charges no freight. The order's currency.",
+    "backToRule": "Back to the site's rule (clear the typed amount)",
+    "invoiceNote": "The invoice bills it as its freight line (Finance).",
+    "go": "Charge {amount}",
+    "goRule": "Back to the rule",
+    "held": {
+      "amount": "Type an amount, e.g. 12,50",
+      "none": "Type an amount"
+    },
+    "basis": {
+      "NO_SETTINGS": "The site has no shipping settings, so no freight rule: type the freight by hand.",
+      "CUSTOMER_COLLECTS": "The customer collects the goods: no freight is charged.",
+      "BUYER_INCOTERM": "The customer's terms leave the carriage to the customer: no freight is charged.",
+      "NO_PRICE": "Nothing on the order carries a price (a replacement order): no freight is charged.",
+      "OTHER_CURRENCY": "The order is in another currency than the site's rule: type the freight by hand.",
+      "RULE_NONE": "The site charges no freight by default.",
+      "FREE_FROM": "The order reaches the site's free-freight value: the freight is free.",
+      "PER_SHIPMENT": "The site's rule charges one amount per shipment.",
+      "PER_PARCEL_one": "The site's rule charges one amount for the {parcels} parcel.",
+      "PER_PARCEL_other": "The site's rule charges one amount for each of the {parcels} parcels.",
+      "NO_PARCELS": "The site's rule charges per parcel and the shipment has no parcel yet."
+    }
+  },
+  "invoice": {
+    "title": "Invoice",
+    "fromDdt": "Finance invoices these goods from DDT {number} (Finance › Invoices, Shipped, not invoiced): its number, SDI state and total are on the invoice.",
+    "noDdt": "No DDT yet: the invoice follows the DDT.",
+    "noDdtNeeded": "Finance invoices these goods from the shipment (Finance › Invoices).",
+    "freightLine": "The freight charged above is the invoice's freight line.",
+    "open": "Open Finance › Invoices"
+  },
+  "backorder": {
+    "title": "The order on this shipment",
+    "partialTag": "Partial shipment",
+    "completeTag": "Completes the order",
+    "complete": "This shipment completes the order: nothing stays on backorder.",
+    "completeShort_one": "This shipment completes the order; {closed} garment was closed short and never ships.",
+    "completeShort_other": "This shipment completes the order; {closed} garments were closed short and never ship.",
+    "partialBoth_one": "{count} garment of the order stays on backorder — ready for the next shipment: {ready}; still to be made or released: {making}.",
+    "partialBoth_other": "{count} garments of the order stay on backorder — ready for the next shipment: {ready}; still to be made or released: {making}.",
+    "partialReady_one": "{count} garment of the order stays on backorder, released and ready for the next shipment.",
+    "partialReady_other": "{count} garments of the order stay on backorder — ready for the next shipment: {ready}.",
+    "partialMaking_one": "{count} garment of the order stays on backorder, still to be made or released.",
+    "partialMaking_other": "{count} garments of the order stay on backorder, still to be made or released.",
+    "promise": "promised {date}",
+    "line": "Line {seq}",
+    "lineLabel": "Order line {seq} {style} by size",
+    "closed": "Closed short",
+    "closedWhy": "Closed short: {reason}",
+    "col": {
+      "garments": "Garments",
+      "total": "Total"
+    },
+    "measure": {
+      "ordered": "Ordered",
+      "released": "Released",
+      "shippedBefore": "Shipped before",
+      "otherOpen": "On other shipments",
+      "thisShipment": "This shipment",
+      "left": "Still to ship"
+    },
+    "others": "Other shipments of the order:"
+  },
+  "printDdts": {
+    "title_one": "Print {count} DDT",
+    "title_other": "Print {count} DDTs",
+    "subtitle_one": "{count} shipment selected",
+    "subtitle_other": "{count} shipments selected",
+    "what": "Each live DDT goes to its site's document printer (Carriers & shipping), one print job each:",
+    "printer": "A site with no document printer is said per shipment; its DDT's PDF can be downloaded from the shipment.",
+    "skipped_one": "{numbers} has no live DDT yet: skipped.",
+    "skipped_other": "{numbers} have no live DDT yet: skipped.",
+    "go_one": "Print {count} DDT",
+    "go_other": "Print {count} DDTs",
+    "busy": "Sending to the printers…",
+    "done_one": "{count} DDT sent to its printer.",
+    "done_other": "{count} DDTs sent to their printers.",
+    "ddt": "DDT {number}",
+    "state": {
+      "queued": "Queued",
+      "refused": "Not printed",
+      "skipped": "Skipped"
+    },
+    "why": {
+      "queued": "the print job is queued.",
+      "noPrinter": "its site has no document printer: set it in Carriers & shipping.",
+      "state": "the DDT's PDF is not stored yet, or the printer takes no jobs now.",
+      "forbidden": "your role does not print at its site.",
+      "notFound": "it no longer exists.",
+      "internal": "something went wrong: try again.",
+      "cancelled": "the shipment is cancelled.",
+      "noDdt": "no live DDT yet."
+    }
+  },
+  "other": {
+    "title": "Other documents",
+    "printAll": "Print all",
+    "name": "Packing list {number}",
+    "version": "version {version}",
+    "contents_one": "{count} garment, parcels: {parcels}",
+    "contents_other": "{count} garments, parcels: {parcels}",
+    "current": "Current",
+    "older": "Older",
+    "download": "Download packing list {number}",
+    "none": "No packing list yet: make it from the cartons (Lines & cartons).",
+    "noneCancelled": "No packing list.",
+    "note": "A packing list is made again when the cartons change; each version keeps its number. Print all opens the driver's pack in a new tab."
+  },
+  "pack": {
+    "title": "Driver's pack · {number}",
+    "back": "‹ Shipment {number}",
+    "meta": "{company} · read {at}",
+    "how": "Print sends this sheet and every ticked document at once, each page on its own sheet of paper. A single PDF file of the whole pack is not made: each document's own PDF is on the shipment.",
+    "print_one": "Print the sheet and {count} document",
+    "print_other": "Print the sheet and {count} documents",
+    "held": {
+      "reading": "Reading the documents",
+      "files": "The documents are still being read"
+    },
+    "reading": "Reading the shipment…",
+    "readingDocuments": "Reading the documents…",
+    "noAccess": "Your role does not reach shipments (shipping.view).",
+    "noFiles": "Your role does not read files: the sheet prints alone.",
+    "cancelled": "The shipment is cancelled: nothing leaves with this pack.",
+    "sheet": "The driver's sheet",
+    "sheetTitle": "Consignment {number}",
+    "field": {
+      "sender": "Sender",
+      "recipient": "Recipient",
+      "destination": "Deliver to",
+      "carrier": "Carrier",
+      "ddt": "DDT",
+      "start": "Transport starts",
+      "parcels": "Parcels",
+      "order": "Order"
+    },
+    "ddtOf": "{number} of {date}",
+    "noDdt": "Not issued yet: the goods do not leave without it",
+    "ddtNotNeeded": "Not needed",
+    "notWeighed": "not all weighed",
+    "parcelsLabel": "The parcels with their tracking numbers",
+    "inThePack": "In the pack",
+    "missing": {
+      "ddt": "Not issued yet.",
+      "ddtPdf": "Its PDF is not stored yet: print it again from the shipment.",
+      "packingList": "No packing list yet: make it from the cartons.",
+      "travel": "Not on file: the goods cannot leave without it.",
+      "noFiles": "Prints with the right to read files."
+    },
+    "fileFailed": "It could not be read: open the shipment and download it.",
+    "sign": {
+      "driver": "Driver (name and signature)",
+      "collected": "Collected on (date and time)",
+      "warehouse": "Handed over by"
+    },
+    "drawing": "Drawing the pages…",
+    "drawFailed": "This PDF could not be drawn: print it from the shipment.",
+    "page": "{document}, page {page} of {pages}"
+  },
+  "evidence": {
+    "title": "Intra-EU transport evidence",
+    "status": {
+      "NOT_NEEDED": "Not needed",
+      "AWAITED": "Awaited",
+      "PARTIAL": "Partial",
+      "COMPLETE": "Complete"
+    },
+    "need": {
+      "sale": "A zero-rated sale to another EU state ({country}): keep the proof that the goods arrived there (art. 41 DL 331/1993).",
+      "byOffice": "The office said this shipment needs the proof that the goods arrived in {country}.",
+      "italy": "Not needed: delivered in Italy.",
+      "none": "Not needed: not a zero-rated sale to another EU state.",
+      "whenLeaves": "A zero-rated sale to {country}: the proof is awaited once the goods leave.",
+      "later": "Decided when the goods leave: only a zero-rated sale to another EU state needs it.",
+      "title": {
+        "needed": "This shipment needs the evidence",
+        "notNeeded": "This shipment needs no evidence"
+      },
+      "what": {
+        "needed": "The shipment is then awaited until its papers are on file and a person marks them complete.",
+        "notNeeded": "The shipment no longer waits for transport papers. Use it only when the sale is not zero-rated to another EU state."
+      },
+      "hint": {
+        "needed": "E.g. the order was zero-rated after it left; kept in the shipment's history.",
+        "notNeeded": "E.g. the goods stayed in Italy; kept in the shipment's history."
+      },
+      "go": {
+        "needed": "It needs the evidence",
+        "notNeeded": "It needs none"
+      }
+    },
+    "missing": {
+      "none": "Nothing on file yet: two papers from parties independent of each other, one of them a transport document.",
+      "transport_one": "{count} paper on file, not a transport document: add a signed CMR, the carrier's invoice or its proof of delivery.",
+      "transport_other": "{count} papers on file, none a transport document: add a signed CMR, the carrier's invoice or its proof of delivery.",
+      "second_one": "{count} paper on file: a second one from another independent party is needed.",
+      "second_other": "{count} papers on file: a second one from another independent party is needed.",
+      "check": "The papers on file may be enough: a person checks them and marks the evidence complete."
+    },
+    "kind": {
+      "CMR": "Signed CMR",
+      "CARRIER_INVOICE": "Carrier's invoice",
+      "POD": "Proof of delivery",
+      "OTHER": "Other paper"
+    },
+    "kindHint": {
+      "CMR": "The consignment note signed by the recipient at delivery.",
+      "CARRIER_INVOICE": "The carrier's invoice for this transport.",
+      "POD": "The carrier's proof of delivery (signature, time, place).",
+      "OTHER": "An insurance, bank or authority paper about this transport."
+    },
+    "papers": {
+      "label": "Papers on file",
+      "none": {
+        "title": "No paper on file",
+        "body": "File the carrier's proof of delivery, the signed CMR or the carrier's invoice."
+      },
+      "filed": "filed {when}",
+      "notAvailable": "not available",
+      "download": "Download {name}"
+    },
+    "completeSince": "Complete since {date}.",
+    "note": "Note",
+    "law": "Art. 45a Reg. (EU) 282/2011: two non-contradictory papers from parties independent of each other, of us and of the buyer — two transport documents (a signed CMR, the carrier's invoice, its proof of delivery), or one with an insurance, bank or authority paper. Kept 10 years.",
+    "more": "More for the evidence",
+    "action": {
+      "file": "File a paper",
+      "complete": "Mark complete",
+      "reopen": "Reopen…",
+      "needed": "It needs the evidence…",
+      "notNeeded": "It needs no evidence…"
+    },
+    "file": {
+      "title": "File a transport paper",
+      "kind": "Kind of paper",
+      "hint": "PDF or a photo (JPEG, PNG), up to 25 MB.",
+      "ready": "Ready to file · {size}",
+      "another": "Choose another",
+      "held": "Choose the file",
+      "go": "File the paper",
+      "kept": "Kept 10 years with the shipment.",
+      "busy": "Sending the file…",
+      "empty": "The file is empty.",
+      "size": "Larger than 25 MB.",
+      "type": "Not a PDF or a photo."
+    },
+    "complete": {
+      "title": "Mark the evidence complete",
+      "what_one": "{count} paper on file:",
+      "what_other": "{count} papers on file:",
+      "check": "Check that the papers come from parties independent of each other, of us and of the buyer, and do not contradict each other.",
+      "note": "Note (what is on file)",
+      "noteHint": "Optional; kept with the evidence.",
+      "go": "Mark complete"
+    },
+    "reopen": {
+      "title": "Reopen the evidence",
+      "what": "A paper was found wrong: the evidence goes back to partial (or awaited without papers).",
+      "go": "Reopen"
+    },
+    "reason": {
+      "label": "Why",
+      "held": "Say why (3 letters or more)"
+    }
+  },
+  "export": {
+    "title": "Export papers",
+    "destination": "Destination",
+    "shipTo": "Ship to",
+    "class": {
+      "italy": "Italy",
+      "eu": "Another EU state ({country})",
+      "outside": "Outside the EU ({country})",
+      "unknown": "Not known"
+    },
+    "what": {
+      "italy": "Not needed: delivered in Italy.",
+      "eu": "Inside the EU no customs papers are needed; a zero-rated sale keeps its transport evidence (above).",
+      "outside": "Goods leaving the EU need export papers and the proof of exit (art. 8 DPR 633/72).",
+      "unknown": "The ship-to has no country."
+    }
   }
 }

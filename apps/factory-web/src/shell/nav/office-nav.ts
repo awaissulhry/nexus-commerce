@@ -152,6 +152,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W1-46 … 49 part 2 Warehouse: Shipments (SCR-066), a shipment (SCR-067), Carriers & shipping (SCR-068).
   '/warehouse/shipments',
   '/warehouse/shipments/[id]',
+  // B-W2a-71: a shipment's driver's pack (SCR-067-pack, a new tab: the sheet and every document drawn for one print).
+  '/warehouse/shipments/[id]/pack',
   '/warehouse/shipping',
   '/production/floor',
   '/production/work-orders',
