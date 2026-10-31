@@ -3,6 +3,8 @@ import { defineEvent } from '../events/define'
 import { EMPLOYEE_KINDS } from './employees/rules'
 import { LEAVER_STEP_KINDS, LEAVER_STEP_STATUSES } from './leavers/rules'
 import { GATE_PURPOSES } from './privacy/purposes'
+// B-W2b-34
+import { VERSION_STATUSES } from './piecerates/rates'
 
 /**
  * The people module's events (B-W2b-26 employees and teams; design people.employees "Live": employee.created / updated
@@ -37,6 +39,11 @@ import { GATE_PURPOSES } from './privacy/purposes'
 
 export const LEGAL_GATE_CHANGES = ['SWITCHED_ON', 'SWITCHED_OFF', 'LEADS_WIDENED', 'LEADS_NARROWED'] as const
 export const PRIVACY_SETTINGS_CHANGES = ['WIDENED', 'NARROWED'] as const
+
+// B-W2b-34
+export const PIECE_RATE_TABLE_CHANGES = ['CREATED', 'EDITED', 'ARCHIVED'] as const
+export const PIECE_RATE_VERSION_CHANGES = ['CREATED', 'EDITED', 'RATES_SET', 'IN_FORCE', 'CONFIRMED', 'SUPERSEDED', 'CANCELLED'] as const
+export const PIECE_PAY_SWITCH_CHANGES = ['PRECONDITIONS_RECORDED', 'SWITCHED_ON', 'SWITCHED_OFF'] as const
 
 const by = z.enum(['OFFICE', 'SYSTEM', 'IMPORT'])
 
@@ -123,5 +130,52 @@ export const events = [
       change: z.enum(PRIVACY_SETTINGS_CHANGES),
     }),
     live: { permission: 'people.privacy.view', fields: ['companyId', 'minimumGroupSize', 'change'] },
+  }),
+  // B-W2b-34: piece rates and the legal switch of piece pay (MES-254, MES-255, MES-262; c.c. arts. 2100-2101), emitted by
+  // apps/factory-api modules/people/piecerates in the command that makes the change. Ids, numbers, states and counts
+  // only: never a rate, an amount, a worker or a reason. They reach the office screens of people.piecerates.view holders
+  // (the rate table, "Read by n of m", the legal switch); the floor receives none (a worker reads their rates when they
+  // open them).
+  defineEvent({
+    type: 'piece_rate_table.changed',
+    context: 'people',
+    description: 'A piece-rate table of a site was added, changed or archived.',
+    payload: z.strictObject({ tableId: z.uuid(), siteId: z.uuid(), change: z.enum(PIECE_RATE_TABLE_CHANGES) }),
+    live: { permission: 'people.piecerates.view', fields: ['tableId', 'siteId', 'change'] },
+  }),
+  defineEvent({
+    type: 'piece_rate_version.changed',
+    context: 'people',
+    description: 'A version of piece rates was made, changed, put in force (provisional or confirmed), confirmed after its trial, superseded by a later one, or cancelled as a draft.',
+    payload: z.strictObject({ versionId: z.uuid(), tableId: z.uuid(), siteId: z.uuid(), versionNo: z.number().int().min(1), change: z.enum(PIECE_RATE_VERSION_CHANGES), status: z.enum(VERSION_STATUSES) }),
+    live: { permission: 'people.piecerates.view', fields: ['versionId', 'tableId', 'siteId', 'versionNo', 'change', 'status'] },
+  }),
+  defineEvent({
+    type: 'rate_publication.changed',
+    context: 'people',
+    description: 'A version of piece rates was published to workers of its site (on the floor, on paper or both), or a publication of a draft was withdrawn.',
+    payload: z.strictObject({ publicationId: z.uuid(), versionId: z.uuid(), siteId: z.uuid(), lineId: z.uuid().nullable(), change: z.enum(['PUBLISHED', 'WITHDRAWN']), workers: z.number().int().min(0) }),
+    live: { permission: 'people.piecerates.view', fields: ['publicationId', 'versionId', 'siteId', 'change', 'workers'] },
+  }),
+  defineEvent({
+    type: 'rate.read',
+    context: 'people',
+    description: "Workers acknowledged a publication of piece rates: on a floor device, or on a signed paper copy the office recorded (how many, never who): the 'Read by' counts.",
+    payload: z.strictObject({ publicationId: z.uuid(), versionId: z.uuid(), siteId: z.uuid(), channel: z.enum(['DEVICE', 'PAPER']), receipts: z.number().int().min(1) }),
+    live: { permission: 'people.piecerates.view', fields: ['publicationId', 'versionId', 'siteId', 'channel', 'receipts'] },
+  }),
+  defineEvent({
+    type: 'piece_pay.switched',
+    context: 'people',
+    description: "The legal switch of piece pay at a site: its preconditions recorded, piece pay started from a day, or stopped (by a person, or because the site's gate for one person's work figures was switched off).",
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      change: z.enum(PIECE_PAY_SWITCH_CHANGES),
+      state: z.enum(['OFF', 'ON']),
+      onFrom: z.iso.date().nullable(),
+      offFrom: z.iso.date().nullable(),
+      by: z.enum(['OFFICE', 'GATE_OFF']),
+    }),
+    live: { permission: 'people.piecerates.view', fields: ['siteId', 'change', 'state', 'onFrom', 'offFrom'] },
   }),
 ] as const
