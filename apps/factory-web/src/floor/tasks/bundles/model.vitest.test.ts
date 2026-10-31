@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { editQuantity, jobMoving, jobOfCode, maxAt, nextBundleSize, pendingByCell, proposalOf, ticketLayout, ticketPrint, uncounted, type JobState, type MadeTicket } from './model'
+import { editQuantity, jobMoving, jobOfCode, liveOf, maxAt, nextBundleSize, pendingByCell, proposalOf, splitMax, ticketLayout, ticketPrint, uncounted, type JobState, type MadeTicket } from './model'
 
 /** SCR-095's rules without a screen: the proposal, a bundle's quantity changed, what the tablet made, the print state. */
 
@@ -91,5 +91,21 @@ describe('the ticket as a label', () => {
     const pending = JSON.stringify(ticketLayout({ ...ticket, code: null }, words))
     expect(pending).not.toContain('barcode')
     expect(pending).toContain('Numbered by the office')
+  })
+})
+
+describe('split a bundle (B-W2a-75; the API\'s rule: factory-domain liveGarments)', () => {
+  it('the garments still in a bundle: as cut, less its children that are not void; at least one stays', () => {
+    const bundles = [
+      { id: 'p', parentBundleId: null, quantity: 10, status: 'ACTIVE' as const },
+      { id: 'c1', parentBundleId: 'p', quantity: 3, status: 'ACTIVE' as const },
+      { id: 'c2', parentBundleId: 'p', quantity: 2, status: 'VOID' as const },
+      { id: 'other', parentBundleId: 'x', quantity: 4, status: 'ACTIVE' as const },
+    ]
+    expect(liveOf({ id: 'p', quantity: 10 }, bundles)).toBe(7)
+    expect(liveOf({ id: 'c1', quantity: 3 }, bundles)).toBe(3)
+    expect(splitMax(7)).toBe(6)
+    expect(splitMax(1)).toBe(0)
+    expect(splitMax(0)).toBe(0)
   })
 })

@@ -122,6 +122,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   and Today with `include=TASKS,MENTIONS,ALERTS` (six tiles, my tasks and mentions with Done / Snooze, Coming up). "Snooze
   until" is ONE dialog (`areas/home/today/view/SnoozeDialog.tsx` over `today/snooze.ts`: the site's times).
 - B-W2a-79 Home › Insights › Reports (`src/areas/home/reports/`, catalogue `home-reports`): SCR-104 the library `/home/reports?q=&area=&outside=1` (the shared list frame; reports outside the role hidden until asked; "last opened by me" in localStorage), SCR-104-report `/home/reports/<key>?tab=results|schedule|about&<filters>&group=` (filters + Group by, "What you see" banner, rows → records, Export ▾ CSV of the rows the API sent / PDF = the print tab), SCR-104-print `…/print`. My numbers on Today: `areas/home/today/numbers/` (GET /home/numbers; the flow strip's lens picks the numbers; ⓘ = "How this number is made"). A report's words: `report.<area>.<name>.{title,question,definition,sources,col.*,filter.*,choice.*}`, codes `code.<CODE>`, numbers `number.<key>.*` (the API's registry test reads them).
+- B-W2a-78 (alerts and the exception rules): `src/areas/home/alerts/` Home › Insights › Alerts (SCR-234, `/home/alerts?tile=
+  &severity=&kind=&q=&open=<alert>&rule=<id>|new`, `#rules`; catalogue `home-alerts`: an alert is said from its phrase `w.<key>` =
+  factory-domain ALERT_TEMPLATES, held equal by a test): tiles, the open alerts (list frame, Acknowledge N), the alert's
+  DetailModal (D acknowledge, Assign through `GET /alerts/:id/assignees`, Snooze = today's SnoozeDialog ≤ 30 days, Resolve with a
+  note), the Rules; `RECORD_PAGES.Alert`. `src/areas/admin/automation/` Admin › Platform › Approvals, automation & AI (SCR-167
+  W2a part, `?view=timers`, keys 1–5; the other four lists held with their wave; catalogue `admin-automation`). Both keep rules
+  through `src/areas/_shared/rules/` (catalogue `rules`): `use-rules.ts` (THE hook: list, switch, number, the dialog's choices
+  / dry run / timers / save), `view/RuleSentence.tsx` (the NEW part: a rule as one sentence with its parts as fields; its words
+  equal factory-domain `ruleSentence`, held by a test), `view/RuleDialog.tsx`, `view/RulesList.tsx`, `demo.ts` (made-up rules).
 - `src/lib/records/record-links.ts` — where a record opens: its own page once built (`RECORD_PAGES`, one line per record
   page; list pages in `LIST_PAGES`), else the record panel route `/w/<company>/records/<type>/<id>` (SCR-006 panels).
   Home › Today (`src/areas/home/today/`, SCR-029) and its lists open records through it.
@@ -181,6 +190,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Assign jobs; `record/` `?tab=problem|handback|activity`; `sheet/` the job sheet with its QR), `machines/` Machines & tools
   (SCR-150 `?view=&q=&site=&class=&new=1`: inline station / work centre, New machine, Retire N; `record/`
   `?tab=overview|history`; `tags/` the tag sheet). Pickers: `GET /plant/places`, `GET /plant/technicians?siteId`.
+  B-W2a-73: `settings/` Plant settings (SCR-241 `/plant/settings?class=`, catalogue `plant-settings`: the W2a section
+  Symptoms on the floor — the SCR-242 editor model on the group's symptoms, saved per cell; New symptom, the starter set,
+  Stop offering / Offer again / moves; `SymptomIconPicker` over `lib/plant/symptom-icons.ts`, the ONE symptom icon map the
+  Office and the Floor share), and the floor's `floor/tasks/machine/` (SCR-179 `/floor/machine`, tile `machine`, catalogue
+  `floor-machine`: which machine → symptom tiles (DS ReasonGrid) → the report queued as `plant.report`; a technician's My
+  jobs, the job, start / wait / hand back / take back, sign safe with the PIN; Scan anything's machine card).
 - The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
   write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
   and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):
@@ -190,6 +205,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `locations/` (SCR-065 + record); `areas/production/settings/` (SCR-074: who floor records name, its legal basis, step-up
   when widening); `areas/admin/privacy/` (SCR-086: duties, notices, DPIA, register; sample texts said on screen);
   `floor/tasks/labels/` (SCR-096, `/floor/labels`: garment labels behind the certificate gate; online only).
+  B-W2a-76: `floor/tasks/returns-in/` (SCR-180, `/floor/returnsin`: scan the RMA → parcel condition + photos → lines by serial/batch
+  scan or tap → ONE receipt, photos onto it → grade per garment (suggestion = factory-domain suggestedOutcome; the office
+  decides) → the inspection place scanned) and `floor/tasks/kits/` (SCR-181, `/floor/kits`: Send a kit = ticks by scan,
+  held while incomplete, the DDT's facts, send + the DDT PDF full screen with Print; Receive back = bundles by scan,
+  reject/scrapped with a REWORK reason, material back) on the floor routes `/purchasing/subcontracting/kits…`; both online
+  only for the write; each view wraps its catalogues (+ reason-kit, photo-kit, shell for the PDF words) in WithMessages.
 
 ## Rules
 - `FACTORY_API_URL` has NO fallback: without it `next dev`, `next build` and `next start` refuse to start

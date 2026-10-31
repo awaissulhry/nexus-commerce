@@ -75,7 +75,7 @@ describe('the shapes and words mirror factory-domain (B-W2a-79)', () => {
     for (const page of ['/home/reports', '/home/reports/[key]', '/home/reports/[key]/print']) expect(OFFICE_PAGES.has(page), page).toBe(true)
     const home = OFFICE_NAV.areas.find((area) => area.id === 'home')!
     const insights = (home.sections ?? []).find((section) => section.id === 'home-insights')!
-    expect(insights.items.map((item) => [item.href, item.permission])).toEqual([['/home/reports', 'home.reports.view']])
+    expect(insights.items.map((item) => [item.href, item.permission])).toEqual([['/home/reports', 'home.reports.view'], ['/home/alerts', 'alerts.view']])
   })
 })
 

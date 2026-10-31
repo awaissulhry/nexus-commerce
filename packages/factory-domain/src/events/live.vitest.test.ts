@@ -18,7 +18,22 @@ const scanAccepted = defineEvent({
   context: 'production',
   description: 'A floor scan was accepted.',
   payload: z.strictObject({ bundleId: z.string(), operation: z.string(), pieceRate: z.string() }),
-  live: { permission: 'production.read', floor: true, fields: ['bundleId', 'operation'] },
+  live: { permission: 'production.read', floor: 'production.scan', fields: ['bundleId', 'operation'] },
+})
+// B-W2a-F5: the office reads (planning.view, quality.holds.view) no floor role holds; the floor's own permission.
+const planPublished = defineEvent({
+  type: 'plan.published',
+  context: 'planning',
+  description: 'A plan was published to the floor.',
+  payload: z.strictObject({ planVersionId: z.string(), number: z.number() }),
+  live: { permission: 'planning.view', floor: 'floor.work', fields: ['planVersionId', 'number'] },
+})
+const holdPlaced = defineEvent({
+  type: 'hold.placed',
+  context: 'quality',
+  description: 'A hold was placed.',
+  payload: z.strictObject({ holdId: z.string() }),
+  live: { permission: 'quality.holds.view', floor: 'floor.work', fields: ['holdId'] },
 })
 const quoteSent = defineEvent({
   type: 'quote.sent',
@@ -28,7 +43,7 @@ const quoteSent = defineEvent({
   live: { permission: 'quotes.read', fields: ['number'] },
 })
 const silent = defineEvent({ type: 'ledger.reconciled', context: 'inventory', description: 'x', payload: z.strictObject({}) })
-const catalogue = createCatalogue([scanAccepted, quoteSent, silent])
+const catalogue = createCatalogue([scanAccepted, planPublished, holdPlaced, quoteSent, silent])
 
 const envelope = (definition: { type: string; version: number }, payload: unknown, scope: Partial<EventEnvelope> = {}): EventEnvelope => ({
   eventId: '0190a000-0000-7000-8000-0000000000e1',
@@ -47,9 +62,11 @@ const envelope = (definition: { type: string; version: number }, payload: unknow
   ...scope,
 })
 
-const all: Grant = { permissions: ['production.read', 'quotes.read'], companies: 'all', sites: 'all', parties: 'all' }
+const all: Grant = { permissions: ['production.read', 'quotes.read', 'planning.view', 'quality.holds.view'], companies: 'all', sites: 'all', parties: 'all' }
+/** What a floor role holds (auth/roles/templates.ts operator): floor permissions only, never the office reads. */
+const floorRole: Grant = { permissions: ['floor.work', 'production.scan'], companies: 'all', sites: 'all', parties: 'all' }
 const office = (grants: Grant[] = [all], tenantId = TENANT): Actor => ({ audience: 'office', tenantId, grants })
-const floor = (siteId = SITE): Actor => ({ audience: 'floor', tenantId: TENANT, siteId, grants: [all] })
+const floor = (siteId = SITE, grants: Grant[] = [floorRole]): Actor => ({ audience: 'floor', tenantId: TENANT, siteId, grants })
 
 describe('liveMessageFor', () => {
   it('carries the scope and only the live fields, never money even if the payload has it', () => {
@@ -99,6 +116,51 @@ describe('liveViewFor', () => {
     expect(liveViewFor({ ...scan, siteId: null }, floor(), catalogue)).toBeNull()
     const view = liveViewFor({ ...scan, fields: { ...scan.fields, pieceRate: '0.120000', unitCost: '9.00' } }, floor(), catalogue)
     expect(view?.fields).toEqual({ bundleId: 'B1', operation: 'SEW' })
+  })
+
+  describe('the floor, through the rule\'s floor permission (B-W2a-F5)', () => {
+    const plan = liveMessageFor(envelope(planPublished, { planVersionId: 'PV1', number: 2 }), planPublished)!
+    const hold = liveMessageFor(envelope(holdPlaced, { holdId: 'H1' }), holdPlaced)!
+
+    it('sends a floor viewer holding the floor permission the floor events of its own site', () => {
+      const { tenantId: _plan, ...planView } = plan
+      const { tenantId: _hold, ...holdView } = hold
+      expect(liveViewFor(plan, floor(), catalogue)).toEqual(planView)
+      expect(liveViewFor(hold, floor(), catalogue)).toEqual(holdView)
+      expect(liveViewFor(scan, floor(), catalogue)?.fields).toEqual({ bundleId: 'B1', operation: 'SEW' })
+      // floor.work alone opens the plan and the hold, not the scan (its floor permission is production.scan).
+      const workOnly = floor(SITE, [{ ...floorRole, permissions: ['floor.work'] }])
+      expect(liveViewFor(plan, workOnly, catalogue)).toEqual(planView)
+      expect(liveViewFor(scan, workOnly, catalogue)).toBeNull()
+    })
+
+    it('sends nothing about another site, or an event without a site', () => {
+      expect(liveViewFor(plan, floor(OTHER_SITE), catalogue)).toBeNull()
+      expect(liveViewFor(hold, floor(OTHER_SITE), catalogue)).toBeNull()
+      expect(liveViewFor({ ...plan, siteId: null }, floor(), catalogue)).toBeNull()
+      expect(liveViewFor(plan, { ...floor(), siteId: undefined }, catalogue)).toBeNull()
+    })
+
+    it('sends nothing of an office-only event, whatever the floor viewer holds', () => {
+      expect(liveViewFor(quote, floor(), catalogue)).toBeNull()
+      expect(liveViewFor(quote, floor(SITE, [all, floorRole]), catalogue)).toBeNull()
+    })
+
+    it('sends nothing to a floor viewer without the floor permission, even one holding the office read', () => {
+      const officeReads = floor(SITE, [all])
+      expect(liveViewFor(plan, officeReads, catalogue)).toBeNull()
+      expect(liveViewFor(hold, officeReads, catalogue)).toBeNull()
+      expect(liveViewFor(scan, officeReads, catalogue)).toBeNull()
+      expect(liveViewFor(plan, floor(SITE, []), catalogue)).toBeNull()
+      // The floor permission for another site does not reach this one.
+      expect(liveViewFor(plan, floor(SITE, [{ ...floorRole, sites: [OTHER_SITE] }]), catalogue)).toBeNull()
+    })
+
+    it('still asks an office viewer the office permission, never the floor one', () => {
+      expect(liveViewFor(plan, office(), catalogue)).not.toBeNull()
+      expect(liveViewFor(plan, office([floorRole]), catalogue)).toBeNull()
+      expect(liveViewFor(hold, office([{ ...all, sites: [OTHER_SITE] }]), catalogue)).toBeNull()
+    })
   })
 
   it('sends nothing for an undeclared or silent type, or to other audiences', () => {

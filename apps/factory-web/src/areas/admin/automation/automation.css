@@ -1,0 +1,60 @@
+/*
+ * Admin › Approvals, automation & AI (SCR-167) LAYOUT: the band, the lists' switch, Reminders & timers, the modules'
+ * reminders. The page fills the shell's main area (no max-width: Owner rule 2026-10-29); semantic tokens only.
+ */
+.fw-automation,
+.fw-automation-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-automation {
+  gap: var(--nds-space-20);
+}
+
+.fw-automation-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-automation-status,
+.fw-automation-actions,
+.fw-automation-views {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-automation-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-automation-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-automation-modules,
+.fw-automation-keys {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-automation-modules li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}

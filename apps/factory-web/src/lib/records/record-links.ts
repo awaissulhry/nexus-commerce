@@ -74,6 +74,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Task: '/home/tasks?open=[id]',
   // Home › Insights › Reports (SCR-104, B-W2a-79): a report of the standard pack by its key (`sales.late-orders`).
   Report: '/home/reports/[id]',
+  // Home › Alerts (SCR-234, B-W2a-78): an exception rule's alert opens in its DetailModal on the list (Today's RULE_ALERT
+  // row and the bell's `alert:` anchor follow).
+  Alert: '/home/alerts?open=[id]',
   // B-W2a-53 Plant › Maintenance: a machine (SCR-150), a maintenance job (SCR-149); a request opens in its DetailModal on
   // the queue (SCR-148).
   Machine: '/plant/machines/[id]',
@@ -81,6 +84,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   MaintenanceRequest: '/plant/requests?open=[id]',
   // Sales › Price lists & contracts (SCR-106, B-W2a-49): a customer price list.
   PriceList: '/sales/price-lists/[id]',
+  // Sales › Returns & repairs (SCR-112, B-W2a-77): a customer return (RMA) and a repair or alteration.
+  ReturnAuthorisation: '/sales/returns/[id]',
+  RepairOrder: '/sales/returns/repairs/[id]',
   // Finance › Accounting export (SCR-156, B-W2a-51): a batch opens on its files tab (its checks, explanations and files).
   AccountingExport: '/finance/accounting/files?export=[id]',
   // Production › Scrap & rework (SCR-140, B-W2a-60): a rework order opens in its row's detail on the list.
@@ -102,6 +108,8 @@ export const ATTENTION_PAGES: Readonly<Record<string, string>> = Object.freeze({
 /** An API list route → the web page that shows it (with the same query). */
 export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/email/inbound': '/home/mail-to-sort',
+  // B-W2a-78: the alerts (`?tile=`, `?severity=`, `?kind=`, `?q=` as the API reads them; `ruleKind` is the page's `kind`).
+  '/alerts': '/home/alerts',
   '/parties': '/sales/customers',
   // The quote list (SCR-034) reads `status` and `q` as the API does; the approvals queue (SCR-030) reads `view`.
   '/sales/quotes': '/sales/quotes',
@@ -173,6 +181,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/plant/machines': '/plant/machines',
   // B-W2a-49: the price lists (SCR-106) read `?rows=`, `?kind=` and `?q=`.
   '/sales/price-lists': '/sales/price-lists',
+  // B-W2a-77: returns and repairs in one grid (SCR-111) read `?view=` and `?q=`.
+  '/sales/returns': '/sales/returns',
+  '/sales/repairs': '/sales/returns',
   // B-W2a-60: the cuts across work orders (SCR-238, `?view=`, `?q=`) and scrap & rework (SCR-140, `?view=`, `?period=`).
   '/production/cutting/cuts': '/production/cutting',
   '/production/scrap': '/production/scrap',

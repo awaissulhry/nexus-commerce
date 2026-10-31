@@ -1,4 +1,4 @@
-import { Building2, FileClock, FileLock, Hash, HeartPulse, Languages, ListChecks, PlugZap, Settings, ShieldCheck, Tablet, Upload, Users } from 'lucide-react'
+import { Building2, FileClock, FileLock, Hash, HeartPulse, Languages, ListChecks, PlugZap, Settings, ShieldCheck, Tablet, Upload, Users, Workflow } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -61,6 +61,8 @@ export const officeArea: OfficeAreaNav = {
         items: [
           { id: 'admin-documents', label: 'shell:nav.admin.documents', href: '/admin/documents', icon: Hash, permission: 'numbering.view' },
           { id: 'admin-languages', label: 'shell:nav.admin.languages', href: '/admin/languages', icon: Languages, permission: 'companies.view' },
+          // B-W2a-78 (SCR-167): Approvals, automation & AI — W2a: Reminders & timers (the date rules and their timers).
+          { id: 'admin-automation', label: 'shell:nav.admin.automation', href: '/admin/automation', icon: Workflow, permission: 'alerts.rules.manage' },
           { id: 'admin-connections', label: 'shell:nav.admin.connections', href: '/admin/connections', icon: PlugZap, permission: 'integrations.view' },
         ],
       },

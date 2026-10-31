@@ -57,12 +57,15 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'home.mail', title: 'Mail to sort', titleIt: 'Posta da smistare', wave: 'W0', href: '/home/mail-to-sort' },
         ],
       },
-      // B-W2a-79: Insights › Reports (SCR-104).
+      // W2a: B-W2a-79 Reports (SCR-104) and B-W2a-78 Alerts (SCR-234). Dashboards and the KPI library (W2b) join with their steps.
       {
         label: 'Insights',
         labelIt: 'Analisi',
         hideLabel: false,
-        pages: [{ id: 'home.reports', title: 'Reports', titleIt: 'Report', wave: 'W2a', href: '/home/reports' }],
+        pages: [
+          { id: 'home.reports', title: 'Reports', titleIt: 'Report', wave: 'W2a', href: '/home/reports' },
+          { id: 'home.alerts', title: 'Alerts', titleIt: 'Avvisi', wave: 'W2a', href: '/home/alerts' },
+        ],
       },
     ],
   },
@@ -97,12 +100,26 @@ export const OFFICE: readonly TreeArea[] = [
           },
         ],
       },
-      // W2a: B-W2a-49 Price lists & contracts (SCR-106). After-sales (sales.returns) joins before it with its step.
+      // W2a: B-W2a-77 Returns & repairs (SCR-111, SCR-112).
+      {
+        label: 'After-sales',
+        labelIt: 'Post-vendita',
+        hideLabel: false,
+        pages: [{ id: 'sales.returns', title: 'Returns & repairs', titleIt: 'Resi e riparazioni', wave: 'W2a', href: '/sales/returns' }],
+      },
+      // W2a: B-W2a-49 Price lists & contracts (SCR-106).
       {
         label: 'Pricing',
         labelIt: 'Prezzi',
         hideLabel: false,
         pages: [{ id: 'sales.pricelists', title: 'Price lists & contracts', titleIt: 'Listini e contratti', wave: 'W2a', href: '/sales/price-lists' }],
+      },
+      // W2a: B-W2a-77 Sales settings (SCR-235).
+      {
+        label: 'Settings',
+        labelIt: 'Impostazioni',
+        hideLabel: false,
+        pages: [{ id: 'sales.settings', title: 'Sales settings', titleIt: 'Impostazioni vendite', wave: 'W2a', href: '/sales/settings' }],
       },
     ],
   },
@@ -410,6 +427,22 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'plant.machines', title: 'Machines & tools', titleIt: 'Macchine e attrezzature', wave: 'W2a', href: '/plant/machines' },
         ],
       },
+      // B-W2a-73: Plant settings (a W2b page) ships with its W2a section only, Symptoms on the floor (SCR-241).
+      {
+        label: 'Settings',
+        labelIt: 'Impostazioni',
+        hideLabel: false,
+        pages: [
+          {
+            id: 'plant.settings',
+            title: 'Plant settings',
+            titleIt: 'Impostazioni stabilimento',
+            wave: 'W2b',
+            href: '/plant/settings',
+            early: 'W2A-PLAN §10: its W2a section "Symptoms on the floor" (SCR-241, B-W2a-73) ships on the W2b page.',
+          },
+        ],
+      },
     ],
   },
   {
@@ -460,6 +493,8 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'admin.documents', title: 'Documents & numbering', titleIt: 'Documenti e numerazioni', wave: 'W0', href: '/admin/documents' },
           { id: 'admin.languages', title: 'Languages & formats', titleIt: 'Lingue e formati', wave: 'W0', href: '/admin/languages' },
+          // W2a: B-W2a-78 Approvals, automation & AI (SCR-167, the Reminders & timers part). Fields & lists (W2b) joins before it.
+          { id: 'admin.automation', title: 'Approvals, automation & AI', titleIt: 'Approvazioni, automazioni e IA', wave: 'W2a', href: '/admin/automation' },
           { id: 'admin.connections', title: 'Connections & API', titleIt: 'Connessioni e API', wave: 'W0', href: '/admin/connections' },
         ],
       },
@@ -491,14 +526,23 @@ export const FLOOR: ReadonlyArray<{
     tile: 'scan',
     modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor', 'maintenance', 'phone'],
   },
+  // W2a: B-W2a-74 My work (SCR-089), the station's queue. The design's modes are sewing, cutting, warehouse, inspection,
+  // phone: the warehouse's task inbox (SCM-274) and the phone's personal list are W2b, so W2a gives it every station with
+  // a queue — the packing bench too (the dispatch list is per station, whatever its work centre).
+  { id: 'floor.mywork', title: 'My work', titleIt: 'Il mio lavoro', tile: 'mywork', modes: ['sewing', 'cutting', 'packing', 'inspection', 'phone'] },
   { id: 'floor.operation', title: 'Operation', titleIt: 'Operazione', tile: 'operation', modes: ['sewing', 'cutting', 'packing'] },
   { id: 'floor.hidecut', title: 'Hide check & cut log', titleIt: 'Controllo pelle e taglio', tile: 'cut', modes: ['cutting'] },
   { id: 'floor.bundles', title: 'Bundles & tickets', titleIt: 'Fasci e cartellini', tile: 'bundles', modes: ['cutting'] },
   { id: 'floor.receive', title: 'Receive goods', titleIt: 'Ricevi merce', tile: 'receive', modes: ['warehouse'] },
   { id: 'floor.pick', title: 'Pick & issue', titleIt: 'Preleva e consegna', tile: 'pick', modes: ['warehouse'] },
+  // W2a: B-W2a-76 Receive a return (SCR-180) and Subcontract kits (SCR-181).
+  { id: 'floor.returnsin', title: 'Receive a return', titleIt: 'Ricevi un reso', tile: 'returnsin', modes: ['warehouse'] },
+  { id: 'floor.kits', title: 'Subcontract kits', titleIt: 'Kit per terzisti', tile: 'kits', modes: ['warehouse'] },
   { id: 'floor.labels', title: 'Garment labels', titleIt: 'Etichette capo', tile: 'labels', modes: ['packing'] },
   { id: 'floor.pack', title: 'Pack', titleIt: 'Imballa', tile: 'pack', modes: ['packing'] },
   { id: 'floor.final', title: 'Final inspection & release', titleIt: 'Collaudo finale e rilascio', tile: 'final', modes: ['inspection'] },
+  // W2a: B-W2a-73 the floor area Maintenance & safety, its machine problem (SCR-179); Report an incident is W2b.
+  { id: 'floor.machine', title: 'Machine problem & jobs', titleIt: 'Guasto e interventi', tile: 'machine', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'maintenance'] },
 ]
 
 export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string; readonly scr: readonly string[]; readonly task: string }> = [

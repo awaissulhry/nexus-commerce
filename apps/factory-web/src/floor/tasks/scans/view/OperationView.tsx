@@ -12,7 +12,9 @@ import { FloorFrameView, type FrameAction, type FrameModel } from '../../../fram
 import { FloorState } from '../../../frame/view/FloorState'
 import type { LabelType } from '../../../scan/scan-model'
 import type { TaskProblem } from '../../shared/task-api'
-import { HeldLine, ListFooter, ProblemState, ReasonGrid, TaskCard, TaskLine, Ticks, UndoStrip, type TickState } from '../../shared/view/TaskParts'
+import { HeldLine, ListFooter, ProblemState, TaskCard, TaskLine, Ticks, UndoStrip, type TickState } from '../../shared/view/TaskParts'
+import { fromScanReason } from '../../reasons/model'
+import { ReasonPickerBody, type ReasonPickerAction, type ReasonPickerModel } from '../../reasons/view/ReasonPicker'
 import {
   CORRECTION_REASONS,
   finishHeld,
@@ -127,14 +129,37 @@ export function countsText(t: Translate, counts: { good: number; scrap: number; 
   return parts.join(' · ')
 }
 
-const reasonLabel = (reason: CardReason, locale: Locale) => reason.label[locale] ?? reason.label.en
+/** The kind of reasons the open counter asks (Scrap or Rework opens the reason picker, SCR-091), or null. */
+export function pickerKindOf(open: CountsOpen): DefectKind | null {
+  return open === 'scrap' ? 'SCRAP' : open === 'rework' ? 'REWORK' : null
+}
+
+/**
+ * The reason picker (SCR-091) over the bundle card's reasons (W2a: the illustrated picker; design floor.operation
+ * "counts"): what it is for ("Scrap · the bundle · Op 20 …") and the running count, each tap one piece with that reason.
+ */
+export function pickerOf(input: { bundleCode: string; operation: { seq: number; name: string }; kind: DefectKind; reasons: readonly CardReason[]; counts: Counts; expected: number; problem: 'atMost' | null }): ReasonPickerModel {
+  return {
+    purpose: input.kind === 'SCRAP' ? 'scrap' : 'rework',
+    subject: `${input.bundleCode} · Op ${input.operation.seq} ${input.operation.name}`,
+    reasons: input.reasons.filter((reason) => reason.kind === input.kind).map(fromScanReason),
+    counts: input.kind === 'SCRAP' ? input.counts.scrap : input.counts.rework,
+    of: input.expected,
+    problem: input.problem,
+  }
+}
 
 export function OperationView({ model, onAction, onFrame, camera }: OperationViewProps) {
   const t = useT('floor-scans')
   const shared = useT('floor-tasks')
   const floor = useT('floor')
   const locale = useLocale()
+  const reasonsT = useT('floor-reasons')
   const send = (action: OperationAction) => onAction?.(action)
+  // A tap on a reason tile adds one piece with that reason; − on the tile takes one off (reason-first counting).
+  const pickerSend = (kind: DefectKind) => (action: ReasonPickerAction) => {
+    if (action.type === 'count') send({ type: action.delta > 0 ? 'reason' : 'unreason', kind, code: action.id })
+  }
   const { step } = model
   const time = (value: string) => formatTime(value, { locale, timeZone: model.timeZone })
   const statusWord = (status: string) => {
@@ -311,6 +336,22 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
       const good = goodOf(step.counts, expected)
       const held = finishHeld(step.counts, step.operation.expected)
       const heldWords = held ? t(`finish.held.${held}`, { count: expected }) : step.busy ? t('finish.busy') : null
+      const kind = pickerKindOf(step.open)
+      if (kind) {
+        // Scrap or Rework opened the reason picker: Done goes back to the counts, Finish stays one tap away.
+        actions = [
+          { label: reasonsT('done'), icon: <ArrowLeft />, variant: 'secondary', onPress: () => send({ type: 'open', what: null }) },
+          { label: t('finish.label', { count: good }), icon: <Check />, onPress: () => send({ type: 'finish' }), heldReason: heldWords },
+        ]
+        const picker = pickerOf({ bundleCode: step.card.bundle.code, operation: step.operation, kind, reasons: step.card.reasons, counts: step.counts, expected, problem: step.problem ?? null })
+        body = (
+          <>
+            {model.last ? <LastLine last={model.last} t={t} shared={shared} send={send} /> : null}
+            <ReasonPickerBody model={picker} onAction={pickerSend(kind)} onBack={() => send({ type: 'open', what: null })} timeZone={model.timeZone} />
+          </>
+        )
+        break
+      }
       actions = [
         { label: t('counts.scrap'), icon: <TriangleAlert />, variant: step.open === 'scrap' ? 'warning' : 'secondary', onPress: () => send({ type: 'open', what: step.open === 'scrap' ? null : 'scrap' }) },
         { label: t('counts.rework'), icon: <Wrench />, variant: step.open === 'rework' ? 'warning' : 'secondary', onPress: () => send({ type: 'open', what: step.open === 'rework' ? null : 'rework' }) },
@@ -321,7 +362,7 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
           {model.last ? <LastLine last={model.last} t={t} shared={shared} send={send} /> : null}
           <div className="fw-task-split">
             <BundleFacts card={step.card} operation={step.operation} asOf={step.asOf} t={t} shared={shared} locale={locale} time={time} />
-            <CountsPanel counts={step.counts} expected={expected} open={step.open} problem={step.problem ?? null} reasons={step.card.reasons} t={t} locale={locale} send={send} />
+            <CountsPanel counts={step.counts} expected={expected} open={step.open} problem={step.problem ?? null} t={t} locale={locale} send={send} />
           </div>
         </>
       )
@@ -382,6 +423,13 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
     case 'correct': {
       const expected = totalOfTarget(step.target)
       const held = correctionHeld(step.target, step.counts, step.reason)
+      const kind = pickerKindOf(step.open)
+      if (kind) {
+        actions = [{ label: reasonsT('done'), icon: <Check />, onPress: () => send({ type: 'open', what: null }) }]
+        const picker = pickerOf({ bundleCode: step.target.bundleCode, operation: step.target.operation, kind, reasons: step.reasons, counts: step.counts, expected, problem: step.problem ?? null })
+        body = <ReasonPickerBody model={picker} onAction={pickerSend(kind)} onBack={() => send({ type: 'open', what: null })} timeZone={model.timeZone} />
+        break
+      }
       actions = [
         { label: shared('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'corrections' }) },
         { label: t('correction.send'), icon: <Send />, onPress: () => send({ type: 'send' }), heldReason: held ? t(`correction.held.${held}`) : null },
@@ -404,7 +452,7 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
             </TaskLine>
           </TaskCard>
           <div className="fw-floor-stack">
-            <CountsPanel counts={step.counts} expected={expected} open={step.open} problem={step.problem ?? null} reasons={step.reasons} t={t} locale={locale} send={send} withButtons />
+            <CountsPanel counts={step.counts} expected={expected} open={step.open} problem={step.problem ?? null} t={t} locale={locale} send={send} withButtons />
             <section className="fw-floor-stack" aria-labelledby="fw-scans-why">
               <h3 id="fw-scans-why" className="fw-floor-subtitle">
                 {t('correction.why')}
@@ -575,13 +623,12 @@ function PickTiles({ options, t, onPick }: { options: readonly CardOperation[]; 
   )
 }
 
-/** Good, Scrap and Rework with the expected number beside each; the reason tiles or the pad of the one open. */
+/** Good, Scrap and Rework with the expected number beside each; the pad of Good when open (Scrap and Rework open the reason picker). */
 function CountsPanel({
   counts,
   expected,
   open,
   problem,
-  reasons,
   t,
   locale,
   send,
@@ -591,7 +638,6 @@ function CountsPanel({
   expected: number
   open: CountsOpen
   problem: 'atMost' | null
-  reasons: readonly CardReason[]
   t: Translate
   locale: Locale
   send: (action: OperationAction) => void
@@ -602,15 +648,6 @@ function CountsPanel({
   const scrap = scrapOf(counts)
   const rework = reworkOf(counts)
   const of = t('counts.of', { count: expected })
-  const kind: DefectKind | null = open === 'scrap' ? 'SCRAP' : open === 'rework' ? 'REWORK' : null
-  const lines = kind === 'SCRAP' ? counts.scrap : counts.rework
-  const tiles = kind
-    ? reasons
-        .filter((reason) => reason.kind === kind)
-        .slice()
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((reason) => ({ code: reason.code, label: reasonLabel(reason, locale), count: lines[reason.code] ?? 0 }))
-    : []
   const counter = (what: 'good' | 'scrap' | 'rework', value: number, icon: ReactNode) => (
     <FloorButton
       size="lg"
@@ -671,21 +708,7 @@ function CountsPanel({
           autoFocus
         />
       ) : null}
-      {kind ? (
-        <section className="fw-floor-stack" aria-labelledby="fw-scans-reasons">
-          <h3 id="fw-scans-reasons" className="fw-floor-subtitle">
-            {t(kind === 'SCRAP' ? 'reasons.scrap' : 'reasons.rework')}
-          </h3>
-          <ReasonGrid
-            label={t(kind === 'SCRAP' ? 'reasons.scrap' : 'reasons.rework')}
-            reasons={tiles}
-            onPick={(code) => send({ type: 'reason', kind, code })}
-            onRemove={(code) => send({ type: 'unreason', kind, code })}
-            removeLabel={(reason) => t('reasons.remove', { reason })}
-          />
-        </section>
-      ) : null}
-      {withButtons && !kind && open !== 'good' ? <p className="fw-floor-muted">{t('counts.tapHint')}</p> : null}
+      {withButtons && open !== 'good' ? <p className="fw-floor-muted">{t('counts.tapHint')}</p> : null}
     </section>
   )
 }

@@ -549,3 +549,34 @@ describe("the office screens' pickers (B-W2a-53)", () => {
     await no('manager', 'GET', `/plant/technicians?siteId=${newId()}`, undefined, 404)
   })
 })
+
+// ---- the floor's offline queue (B-W2a-73) ------------------------------------------------------------------------------
+
+describe("a report saved on the tablet first (B-W2a-73: the floor's queue, kind plant.report)", () => {
+  it('arrives through the floor sync once, at the tablet’s time, naming the machine and never a person; a refused one says why', async () => {
+    let seq = 0
+    const event = (payload: Json) => ({ clientEventId: `ev-${run}-${++seq}`, seq, kind: 'plant.report', occurredAt: new Date(Date.now() - 120_000).toISOString(), workerId: A.operatorA1, payload })
+    const sync = async (list: Json[]) => (await ok('operator', 'POST', '/floor/sync', { events: list }, 200)).events as Json[]
+    const noise = event({ assetNumber: 'seed-sew-l1-01', symptomId: plant.symptomIds['NOISE'], down: false })
+    const [first] = await sync([noise])
+    expect(first).toMatchObject({ clientEventId: noise.clientEventId, status: 'accepted', result: { type: 'MaintenanceRequest' }, refusal: null })
+    const [again] = await sync([noise])
+    expect(again).toMatchObject({ status: 'duplicate', result: first!.result })
+    const rows = await admin<{ id: string; reportedAt: Date; deviceId: string; symptomId: string }>('SELECT id::text, "reportedAt", "deviceId"::text, "symptomId"::text FROM "MaintenanceRequest" WHERE id = $1', [first!.result.id])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ deviceId: A.sewTablet, symptomId: plant.symptomIds['NOISE'] })
+    expect(new Date(rows[0]!.reportedAt).toISOString()).toBe(noise.occurredAt)
+    const [ledger] = await admin<{ kind: string; resultType: string; resultId: string }>('SELECT kind, "resultType", "resultId"::text FROM "FloorSyncEvent" WHERE "clientEventId" = $1', [noise.clientEventId])
+    expect(ledger).toEqual({ kind: 'plant.report', resultType: 'MaintenanceRequest', resultId: first!.result.id })
+    // "Other" without words: refused for good, in the plant's words, kept on the tablet's refused list (the tag, no person).
+    const other = event({ assetNumber: 'SEED-SEW-L1-01', symptomId: plant.symptomIds['OTHER'], down: true })
+    const [refused] = await sync([other])
+    expect(refused).toMatchObject({ status: 'refused', refusal: { code: 'DETAIL_NEEDED', final: true } })
+    expect(refused!.refusal.fix).toContain('Write what you see')
+    const [kept] = await admin<{ code: string; summary: Json }>('SELECT code, summary FROM "FloorRefusedAction" WHERE "clientEventId" = $1', [other.clientEventId])
+    expect(kept).toEqual({ code: 'DETAIL_NEEDED', summary: { code: 'SEED-SEW-L1-01' } })
+    // A tablet whose person may not report: refused by the kind's permission.
+    const [denied] = (await ok('noReport', 'POST', '/floor/sync', { events: [event({ machineId: plant.machineIds[0], description: 'Smoke.', down: true })] }, 200)).events as Json[]
+    expect(denied).toMatchObject({ status: 'refused' })
+  })
+})

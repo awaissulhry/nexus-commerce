@@ -163,9 +163,20 @@ const RECEIPT_DOCUMENTS_ADDS: Readonly<Record<string, readonly Permission[]>> = 
   warehouse: ['inventory.receipts.documents.request'],
   buyer: ['inventory.receipts.documents.request'],
 })
+/**
+ * B-W2a-76 (design floor.kits; SCM-140, SCM-142): on the floor the warehouse tablet's operator and team leader send a
+ * subcontract kit (with its DDT for work on our behalf) and receive the goods back, bundle by bundle. Floor only: the
+ * office warehouse holds both already (B-W2a-25). Never a fee.
+ */
+const SUBCONTRACT_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  operator: ['purchasing.subcontract.kit', 'purchasing.subcontract.receive'],
+  team_leader: ['purchasing.subcontract.kit', 'purchasing.subcontract.receive'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
+  // B-W2a-76
+  ...(audience === 'floor' ? (SUBCONTRACT_FLOOR_ADDS[key] ?? []) : []),
   // B-W2a-61
   ...(audience === 'office' ? (REFUNDS_ADDS[key] ?? []) : []),
   // B-W2a-62

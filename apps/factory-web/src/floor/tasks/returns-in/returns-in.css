@@ -1,0 +1,27 @@
+/*
+ * Receive a return (SCR-180): layout only, inside the DS FloorFrame; sizes from the floor tier's `--nds-density-*`
+ * tokens. The shared parts' layout is in ../shared/view/tasks.css.
+ */
+
+/* The parcel count beside the photo button: two columns on a tablet, one on a phone. */
+.fw-returns-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18em), 1fr));
+  gap: var(--nds-density-gap);
+  align-items: start;
+}
+
+/* A button with its words beside it (a garment's photo). */
+.fw-returns-row-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-density-target-gap);
+}
+
+/* The photos taken, each with its remove button. */
+.fw-returns-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+}

@@ -121,6 +121,19 @@ const inspectionParams = input({ inspectionId: id() })
 const releaseParams = input({ releaseId: id() })
 const inspectionAnswer = output({ inspection: inspectionOut })
 
+/** A quality hold of a work order as the bench shows it (B-W2a-75): no person's name, the placer's kind only. */
+const benchHoldOut = output({
+  id: id(),
+  reasonCode: z.string(),
+  reasonIt: z.string(),
+  reasonEn: z.string(),
+  reasonNote: z.string().nullable(),
+  placedAt: instant(),
+  placedBy: z.enum(['USER', 'WORKER', 'SYSTEM']),
+  /** The NCR that decides it, once one does. */
+  ncrNumber: z.string().nullable(),
+})
+
 // ---- the work order's final state ----------------------------------------------------------------------------------------
 
 export const workOrderFinalContract = defineContract({
@@ -150,7 +163,27 @@ export const workOrderFinalContract = defineContract({
       maker: makerOut,
       documents: z.array(output({ code: z.string(), message: z.string() })),
       rule: output({ rule: z.enum(FOUR_EYES_RULES), source: z.enum(['COMPANY', 'TENANT', 'DEFAULT']), words: z.string(), customerListed: z.boolean() }),
+      /** B-W2a-75: the ACTIVE quality holds of the work order (releasing and packing wait for quality), oldest first. */
+      holds: z.array(benchHoldOut),
     }),
+  },
+})
+
+/**
+ * B-W2a-75 — Hold lot at the inspection bench (floor): a reason of the HOLD list (its note when it asks one), the open
+ * inspection when there is one, the garments held. ONE command places the hold on the work order and raises the NCR that
+ * decides it (./bench-hold.ts). 201 with the hold as the bench shows it and the NCR's number.
+ */
+export const benchHoldContract = defineContract({
+  params: workOrderParams,
+  body: input({
+    reasonCode: z.string().trim().min(1).max(40),
+    reasonNote: z.string().trim().max(500).nullish(),
+    inspectionId: id().nullish(),
+    quantity: garments,
+  }),
+  response: {
+    201: output({ hold: benchHoldOut, workOrderHeld: z.boolean(), ncr: output({ id: id(), number: z.string() }), replayed: z.boolean() }),
   },
 })
 

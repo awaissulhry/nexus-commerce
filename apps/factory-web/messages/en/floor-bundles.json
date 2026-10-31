@@ -38,7 +38,9 @@
     "colour": "Colour",
     "size": "Size",
     "scans": "Scans so far",
-    "replaced": "Earlier tickets (replaced)"
+    "replaced": "Earlier tickets (replaced)",
+    "live": "Still in it",
+    "liveValue": "{live} of {quantity}"
   },
   "proposal": {
     "type": "Work order",
@@ -149,8 +151,9 @@
     "reprint": "Reprint",
     "void": "Void",
     "held": {
-      "network": "Reprint and void need the network: they wait until it is back."
-    }
+      "network": "Reprint, void and split need the network: they wait until it is back."
+    },
+    "split": "Split"
   },
   "reprint": {
     "title": "Why a new ticket?",
@@ -224,6 +227,50 @@
     "REPLACED": {
       "message": "This ticket was replaced by a new one.",
       "fix": "Scan the new ticket."
+    },
+    "SPLIT_TOO_MANY": {
+      "message": "That is more garments than can come off: at least one stays in the bundle.",
+      "fix": "Type fewer garments."
+    },
+    "WORK_ORDER_ON_HOLD": {
+      "message": "The work order is on hold: its bundles change once quality lifts the hold.",
+      "fix": "Put the bundle aside and ask your team leader."
     }
+  },
+  "split": {
+    "title": "Split some garments off",
+    "body_one": "{count} garment is in this bundle. How many come off into a new bundle with its own ticket? At least one stays.",
+    "body_other": "{count} garments are in this bundle. How many come off into a new bundle with its own ticket? At least one stays.",
+    "bodyReading": "How many come off into a new bundle with its own ticket? At least one stays.",
+    "pad": {
+      "label": "Garments that come off"
+    },
+    "reason": {
+      "label": "Why do they come off?",
+      "REWORK": {
+        "label": "Rework",
+        "hint": "Back to be fixed"
+      },
+      "RECUT": {
+        "label": "Recut",
+        "hint": "Pieces cut again"
+      },
+      "HOLD": {
+        "label": "Hold",
+        "hint": "Set aside for quality"
+      }
+    },
+    "genealogy": "The new bundle keeps its history: the same work order, size and hides as this one.",
+    "confirm_one": "Split off {count} · print ticket",
+    "confirm_other": "Split off {count} · print ticket",
+    "confirmNone": "Split off · print ticket",
+    "held": {
+      "reading": "Reading the bundle: a moment",
+      "one": "Only one garment is in it: nothing can come off.",
+      "quantity": "Type how many come off: 1 to {max}",
+      "reason": "Pick why first"
+    },
+    "done_one": "{count} garment split off {parent} into new bundle {code} ({reason}). {live} stay in {parent}.",
+    "done_other": "{count} garments split off {parent} into new bundle {code} ({reason}). {live} stay in {parent}."
   }
 }

@@ -1,0 +1,111 @@
+{
+  "title": "Il mio lavoro",
+  "scan": {
+    "label": "Scansiona il fascio per iniziare",
+    "hint": "Si inizia scansionando il fascio vero: nessuna riga da scegliere"
+  },
+  "loading": "Caricamento della coda di questa postazione…",
+  "status": {
+    "station": "{station}",
+    "plan": "piano v{number}",
+    "asOf": "aggiornato alle {time}"
+  },
+  "fromTablet": "Da questo tablet",
+  "changed": "Elenco cambiato · Mostra",
+  "upcoming": "Nuovo piano v{number} dalle {time}",
+  "next": {
+    "title": "Prossimo",
+    "type": "Prossimo",
+    "none": {
+      "title": "Ancora niente di pronto",
+      "body": "Ogni lavoro qui aspetta qualcosa: il perché è nell'elenco. Scansiona un fascio per lavorarlo."
+    }
+  },
+  "then": {
+    "title": "Poi",
+    "count_one": "Ancora {count} lavoro",
+    "count_other": "Ancora {count} lavori",
+    "done_one": "{count} fatto",
+    "done_other": "{count} fatti"
+  },
+  "entry": {
+    "title": "In coda",
+    "gone": {
+      "title": "Non è più in coda",
+      "body": "È stato finito o il piano è cambiato. Torna all'elenco."
+    }
+  },
+  "state": {
+    "READY": "Pronto",
+    "WAITING_FOR_PREVIOUS": "In attesa",
+    "waitingFor": "Aspetta Op {seq}",
+    "NOT_RELEASED": "Non ancora rilasciato",
+    "ON_HOLD": "Bloccato",
+    "DONE": "Fatto"
+  },
+  "op": "Op {seq} · {name}",
+  "pieces_one": "pezzo da fare",
+  "pieces_other": "pezzi da fare",
+  "rush": "Urgente",
+  "onHoldWhy": "Bloccato: {reason}",
+  "due": "consegna {date}",
+  "waitingHere_one": "{count} pezzo qui",
+  "waitingHere_other": "{count} pezzi qui",
+  "scanToStart": "Scansiona il fascio per iniziarlo.",
+  "fact": {
+    "style": "Modello",
+    "due": "Consegna",
+    "planned": "Previsto per",
+    "waiting": "In attesa qui"
+  },
+  "cantFind": {
+    "open": "Non lo trovo",
+    "title": "Non lo trovi?",
+    "body": "Mettilo in fondo e passa al prossimo, oppure chiedi aiuto.",
+    "help": "Chiedi aiuto: materiale",
+    "helpHeld": "La chiamata di aiuto arriva con un prossimo aggiornamento: chiedi al tuo capo reparto.",
+    "putLast": "Metti in fondo"
+  },
+  "putLast": {
+    "done": "Fatto",
+    "row": "Messo in fondo: {reason}",
+    "said": "{number} · Op {seq} messo in fondo su questo tablet ({reason}). Il piano dell'ufficio non cambia."
+  },
+  "error": {
+    "title": "Impossibile caricare la coda",
+    "body": "Scansiona comunque un fascio per lavorare."
+  },
+  "offline": {
+    "body": "La coda arriva dall'ufficio la prima volta. Scansiona comunque un fascio per lavorare."
+  },
+  "empty": {
+    "noStation": {
+      "title": "Questo tablet non è in una postazione",
+      "body": "L'ufficio lo assegna a una postazione (Sistema › Dispositivi e stampanti). Scansiona un fascio per lavorarlo."
+    },
+    "nothingPublished": {
+      "title": "Nessun piano pubblicato",
+      "body": "Lavora dai fasci finché l'ufficio non pubblica il piano."
+    },
+    "firstUpcoming": {
+      "title": "Il primo piano, v{number}, inizia alle {time}",
+      "body": "Fino ad allora, scansiona un fascio per lavorarlo."
+    },
+    "nothingQueued": {
+      "title": "Niente in coda per questa postazione",
+      "body": "Scansiona un fascio per lavorarlo."
+    },
+    "allDone": {
+      "title": "Tutto il previsto qui è fatto",
+      "body": "Scansiona un fascio per lavorarlo."
+    }
+  },
+  "noPermission": {
+    "title": "Niente da fare qui con il tuo ruolo",
+    "body": "Chiedi al tuo capo reparto."
+  },
+  "keys": {
+    "rows": "Passa da un lavoro all'altro",
+    "open": "Apri il lavoro selezionato"
+  }
+}

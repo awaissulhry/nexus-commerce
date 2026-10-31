@@ -1,0 +1,195 @@
+/*
+ * Sales › Returns & repairs (SCR-111, SCR-112; B-W2a-77) LAYOUT: the kind mark, the milestone tracker, the gate checklist,
+ * the lines' editable cells and the dialogs' grids. The page frame, sections and forms are the shared quality layout
+ * (areas/quality/_shared/quality.css); the controls are the design system's; this file places them with semantic tokens
+ * only. No page sets a max-width (Owner rule 2026-10-29).
+ */
+
+.fw-rr-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  white-space: nowrap;
+}
+
+.fw-rr-ellipsis {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-rr-cell-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-rr-refused {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* ---- MilestoneTracker: the record's steps (wraps on a phone) ---- */
+.fw-rr-track {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-rr-track-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nds-space-6);
+  align-items: start;
+  padding-block-start: var(--nds-space-6);
+  border-block-start: 2px solid var(--nds-border);
+}
+
+.fw-rr-track-step[data-state='DONE'] {
+  border-block-start-color: var(--nds-success-text);
+}
+
+.fw-rr-track-step[data-state='CURRENT'] {
+  border-block-start-color: var(--nds-text-link);
+}
+
+.fw-rr-track-mark {
+  display: inline-flex;
+  margin-block-start: 2px;
+  color: var(--nds-text-2);
+}
+
+.fw-rr-track-step[data-state='DONE'] .fw-rr-track-mark {
+  color: var(--nds-success-text);
+}
+
+.fw-rr-track-step[data-state='CURRENT'] .fw-rr-track-mark {
+  color: var(--nds-text-link);
+}
+
+.fw-rr-track-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-rr-track-label {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+/* ---- GateChecklist: the safety check's points ---- */
+.fw-rr-gate {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-rr-gate-point {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-6);
+  align-items: center;
+  padding-block-end: var(--nds-space-10);
+  border-block-end: 1px solid var(--nds-border);
+}
+
+@media (min-width: 900px) {
+  .fw-rr-gate-point {
+    grid-template-columns: minmax(200px, 1fr) auto minmax(110px, auto);
+  }
+}
+
+.fw-rr-gate-name {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-rr-gate-label {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rr-gate-word {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.fw-rr-gate-point[data-state='PASS'] .fw-rr-gate-word {
+  color: var(--nds-success-text);
+}
+
+.fw-rr-gate-point[data-state='FAIL'] .fw-rr-gate-word {
+  color: var(--nds-danger-text);
+}
+
+/* ---- dialogs: the lines to pick, the decision rows ---- */
+.fw-rr-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-height: min(48vh, 520px);
+  overflow-y: auto;
+}
+
+.fw-rr-pick-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-6) var(--nds-space-10);
+  align-items: end;
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+@media (min-width: 760px) {
+  .fw-rr-pick-row {
+    grid-template-columns: minmax(0, 2fr) minmax(90px, 0.6fr) minmax(160px, 1.2fr) minmax(0, 1.2fr);
+  }
+}
+
+.fw-rr-decision {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8) var(--nds-space-12);
+  align-items: end;
+}
+
+@media (min-width: 900px) {
+  .fw-rr-decision {
+    grid-template-columns: minmax(0, 1.4fr) minmax(150px, 1fr) minmax(170px, 1fr) minmax(120px, 0.7fr);
+  }
+}
+
+.fw-rr-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-rr-photo {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: var(--nds-radius-md);
+  border: 1px solid var(--nds-border);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-rr-settings-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}

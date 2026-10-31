@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowLeft, Ban, CircleAlert, CircleCheck, CircleDashed, Hash, Layers, Minus, Plus, Printer, RotateCcw, ScanLine, ShieldOff, Tag, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Ban, CircleAlert, CircleCheck, CircleDashed, Hash, Layers, Minus, Plus, Printer, RotateCcw, ScanLine, ShieldOff, Split, Tag, Trash2, X } from 'lucide-react'
 import { Modal } from '@nexus/ui/components'
 import { LabelPreview, type LabelPrintState } from '@nexus/ui/components/LabelPreview/index'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, QuantityPad, ScanInput, qtyHeldReason, type CameraScanner, type FloorAction, type FloorActions } from '@nexus/ui/floor'
@@ -12,7 +12,8 @@ import { FloorFrameView, type FrameAction, type FrameModel } from '../../../fram
 import { FloorState } from '../../../frame/view/FloorState'
 import type { TaskProblem } from '../../shared/task-api'
 import { HeldLine, ListFooter, ProblemState, TaskCard, TaskLine, Ticks, type TickState } from '../../shared/view/TaskParts'
-import { MAX_BUNDLE_SIZE, MAX_BUNDLES_PER_TAP, MIN_BUNDLE_SIZE, REPRINT_REASONS, ticketLayout, VOID_REASONS, type ReprintReason, type TicketContent, type TicketPrint, type VoidReason } from '../model'
+import { MAX_BUNDLE_SIZE, MAX_BUNDLES_PER_TAP, MIN_BUNDLE_SIZE, REPRINT_REASONS, SPLIT_REASONS, splitMax, ticketLayout, VOID_REASONS, type ReprintReason, type SplitReason, type TicketContent, type TicketPrint, type VoidReason } from '../model'
+import { SplitReasons } from './SplitReasons'
 import { TicketQr } from './TicketQr'
 import '../bundles.css'
 
@@ -25,10 +26,13 @@ import '../bundles.css'
  *   proposal  the proposed bundles per size and colour with the bundle size (a tap on a bundle changes its quantity), the
  *             printer, then "Make N bundles · print N tickets" (one tap); the tickets made here with their two ticks and
  *             their print state (queued, sent, printed, failed with Retry)
- *   bundle    a scanned ticket: its facts, its operations with ticks, Reprint (a reason) and Void (a confirm and a reason)
+ *   bundle    a scanned ticket: its facts, its operations with ticks, Reprint (a reason), Void (a confirm and a reason)
+ *             and — W2a, B-W2a-75 (MES-071) — Split: how many garments come off (the pad, at least one stays) and why
+ *             (rework, recut, hold: the DS reason grid) into a child bundle with its own ticket; the genealogy stays
  *
  * Making a bundle is saved on this tablet first and works offline (its ticket numbered from the tablet's own block; it
- * prints on the station's printer when the office records it). Reprint and void need the network: held with the reason.
+ * prints on the station's printer when the office records it). Reprint, void and split need the network: held with the
+ * reason.
  * No money, no person: the floor never sees who made a bundle.
  */
 
@@ -93,9 +97,23 @@ export interface CardModel {
   operations: readonly { seq: number; code: string; name: string; done: boolean }[]
   replacedCodes: readonly string[]
   ticket: TicketContent
+  /** The garments still in it when garments were split off (B-W2a-75); null: not read. */
+  live?: number | null
 }
 
-export type BundleDone = { kind: 'reprinted'; replacedCode: string; ticket: TicketModel } | { kind: 'voided'; code: string; quantity: number }
+export type BundleDone =
+  | { kind: 'reprinted'; replacedCode: string; ticket: TicketModel }
+  | { kind: 'voided'; code: string; quantity: number }
+  /** B-W2a-75: garments split off into a child bundle (its ticket), the garments still in the parent. */
+  | { kind: 'split'; parentCode: string; quantity: number; reason: SplitReason; live: number; ticket: TicketModel }
+
+/** B-W2a-75: the split step: how many come off (the pad), why; `live` once the work order is read. */
+export interface SplitModel {
+  quantity: number | null
+  reason: SplitReason | null
+  live: number | null
+  reading?: boolean
+}
 
 export type BundlesStep =
   | { kind: 'loading'; code?: string | null }
@@ -114,7 +132,7 @@ export type BundlesStep =
       making?: boolean
       asOf?: string | null
     }
-  | { kind: 'bundle'; card: CardModel; stage: 'card' | 'reprint' | 'void'; reason?: VoidReason | null; busy?: boolean; done?: BundleDone | null; problem?: TaskProblem | null; asOf?: string | null }
+  | { kind: 'bundle'; card: CardModel; stage: 'card' | 'reprint' | 'void' | 'split'; reason?: VoidReason | null; busy?: boolean; done?: BundleDone | null; problem?: TaskProblem | null; asOf?: string | null; split?: SplitModel | null }
   | { kind: 'problem'; problem: TaskProblem; code?: string | null }
   | { kind: 'noPermission' }
 
@@ -145,6 +163,10 @@ export type BundlesAction =
   | { type: 'void' }
   | { type: 'voidReason'; reason: VoidReason }
   | { type: 'voidConfirm' }
+  | { type: 'split' }
+  | { type: 'splitQuantity'; value: number | null }
+  | { type: 'splitReason'; reason: SplitReason }
+  | { type: 'splitConfirm' }
   | { type: 'cancel' }
   | { type: 'reload' }
 
@@ -156,7 +178,7 @@ export interface BundlesViewProps {
 }
 
 /** The refusal codes the screen has its own words for (factory-domain production/bundles BUNDLE_REFUSALS). */
-export const BUNDLE_REFUSAL_WORDS = ['FLOOR_NOT_READY', 'WORK_ORDER_NOT_OPEN', 'NOT_CUT_FROM_HIDES', 'NOTHING_TO_BUNDLE', 'MORE_THAN_CUT', 'NOT_A_PART', 'SINGLE_PIECE', 'TOO_MANY_BUNDLES', 'VOIDED', 'SCANNED', 'REPLACED'] as const
+export const BUNDLE_REFUSAL_WORDS = ['FLOOR_NOT_READY', 'WORK_ORDER_NOT_OPEN', 'NOT_CUT_FROM_HIDES', 'NOTHING_TO_BUNDLE', 'MORE_THAN_CUT', 'NOT_A_PART', 'SINGLE_PIECE', 'TOO_MANY_BUNDLES', 'VOIDED', 'SCANNED', 'REPLACED', 'SPLIT_TOO_MANY', 'WORK_ORDER_ON_HOLD'] as const
 
 /** The words of a refusal code the screen knows, else null (the API's then). */
 export function refusalWords(t: Translate, code: string): { message: string; fix: string | null } | null {
@@ -406,6 +428,13 @@ export function BundlesView({ model, onAction, onFrame, camera }: BundlesViewPro
       const { card } = step
       const voided = card.status === 'VOID'
       const networkHeld = model.online ? null : t('card.held.network')
+      const split = step.stage === 'split' ? (step.split ?? { quantity: null, reason: null, live: null }) : null
+      const splitLive = split?.live ?? null
+      const splitTop = splitLive === null ? Math.max(0, card.quantity - 1) : splitMax(splitLive)
+      const splitHeld = split
+        ? (networkHeld ??
+          (split.reading ? t('split.held.reading') : splitTop < 1 ? t('split.held.one') : step.busy ? t('busy') : split.quantity === null || split.quantity < 1 || split.quantity > splitTop ? t('split.held.quantity', { max: splitTop }) : split.reason === null ? t('split.held.reason') : null))
+        : null
       body = (
         <div className="fw-floor-stack">
           {step.stage === 'card' ? scanField(t('scan.hint.card')) : null}
@@ -416,6 +445,11 @@ export function BundlesView({ model, onAction, onFrame, camera }: BundlesViewPro
           {step.done?.kind === 'reprinted' ? (
             <TaskLine tone="success" icon={<CircleCheck />}>
               {t('reprint.done', { code: step.done.ticket.content.code ?? '—', old: step.done.replacedCode })}
+            </TaskLine>
+          ) : null}
+          {step.done?.kind === 'split' ? (
+            <TaskLine tone="success" icon={<CircleCheck />}>
+              {t('split.done', { count: step.done.quantity, code: step.done.ticket.content.code ?? '—', parent: step.done.parentCode, reason: t(`split.reason.${step.done.reason}.label`), live: number(step.done.live) })}
             </TaskLine>
           ) : null}
           {step.problem ? <ProblemState problem={step.problem} words={(code) => refusalWords(t, code)} /> : null}
@@ -445,6 +479,7 @@ export function BundlesView({ model, onAction, onFrame, camera }: BundlesViewPro
                 { label: t('fact.colour'), value: card.colourway },
                 { label: t('fact.size'), value: card.size },
                 { label: t('fact.scans'), value: number(card.scans) },
+                ...(card.live !== null && card.live !== undefined && card.live < card.quantity ? [{ label: t('fact.live'), value: t('fact.liveValue', { live: number(card.live), quantity: number(card.quantity) }) }] : []),
                 ...(card.replacedCodes.length > 0 ? [{ label: t('fact.replaced'), value: card.replacedCodes.join(', ') }] : []),
               ]}
             >
@@ -471,6 +506,14 @@ export function BundlesView({ model, onAction, onFrame, camera }: BundlesViewPro
                   </ul>
                 </section>
               ) : null}
+              {/* Void sits in the card, away from the action bar: rare, final, and only before any scan (W2a: the bar holds Split). */}
+              {step.stage === 'card' && !step.done && !voided ? (
+                <div className="fw-floor-row-actions">
+                  <FloorButton size="md" variant="danger" icon={<Trash2 />} heldReason={networkHeld} onClick={() => send({ type: 'void' })}>
+                    {t('card.void')}
+                  </FloorButton>
+                </div>
+              ) : null}
             </TaskCard>
             <div className="fw-floor-stack">
               {step.stage === 'reprint' ? (
@@ -488,7 +531,43 @@ export function BundlesView({ model, onAction, onFrame, camera }: BundlesViewPro
                   </div>
                   {networkHeld ? <HeldLine text={networkHeld} /> : null}
                 </section>
-              ) : step.done?.kind === 'reprinted' ? (
+              ) : split ? (
+                <section className="fw-floor-section" aria-labelledby="fw-bundles-split">
+                  <h2 id="fw-bundles-split" className="fw-floor-section-title">
+                    {t('split.title')}
+                  </h2>
+                  <p className="fw-floor-lead">{splitLive === null ? t('split.bodyReading') : t('split.body', { count: splitLive })}</p>
+                  {splitTop < 1 && !split.reading ? (
+                    <HeldLine text={t('split.held.one')} />
+                  ) : (
+                    <QuantityPad
+                      label={t('split.pad.label')}
+                      value={split.quantity}
+                      onChange={(value) => send({ type: 'splitQuantity', value })}
+                      min={1}
+                      max={Math.max(1, splitTop)}
+                      unit={t('pad.unit')}
+                      decrementLabel={t('pad.less')}
+                      incrementLabel={t('pad.more')}
+                      clearLabel={t('pad.clear')}
+                      backLabel={t('pad.back')}
+                      emptyLabel={t('pad.empty')}
+                      rangeLabel={(min, max) => t('pad.range', { min: min ?? 1, max: max ?? splitTop })}
+                      decimalSeparator={locale === 'it' ? ',' : '.'}
+                      autoFocus
+                    />
+                  )}
+                  <SplitReasons
+                    label={t('split.reason.label')}
+                    words={Object.fromEntries(SPLIT_REASONS.map((reason) => [reason, { label: t(`split.reason.${reason}.label`), hint: t(`split.reason.${reason}.hint`) }])) as Record<SplitReason, { label: string; hint: string }>}
+                    value={split.reason}
+                    onChange={(reason) => send({ type: 'splitReason', reason })}
+                    heldReason={networkHeld}
+                  />
+                  <p className="fw-floor-muted">{t('split.genealogy')}</p>
+                  {networkHeld ? <HeldLine text={networkHeld} /> : null}
+                </section>
+              ) : step.done?.kind === 'reprinted' || step.done?.kind === 'split' ? (
                 <TicketList tickets={[step.done.ticket]} online={model.online} t={t} onRetry={(key) => send({ type: 'retryPrint', key })} />
               ) : (
                 <div className="fw-bundles-label">
@@ -531,12 +610,17 @@ export function BundlesView({ model, onAction, onFrame, camera }: BundlesViewPro
         </div>
       )
       if (step.stage === 'reprint') actions = [{ label: tt('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'cancel' }) }]
+      else if (split)
+        actions = [
+          { label: tt('action.back'), icon: <X />, onPress: () => send({ type: 'cancel' }) },
+          { label: split.quantity !== null && split.quantity >= 1 ? t('split.confirm', { count: split.quantity }) : t('split.confirmNone'), icon: <Split />, onPress: () => send({ type: 'splitConfirm' }), heldReason: splitHeld },
+        ]
       else if (step.done || voided)
         actions = [back, { label: tt('action.scanAnother'), icon: <ScanLine />, onPress: () => send({ type: 'back' }) }]
       else
         actions = [
           back,
-          { label: t('card.void'), icon: <Trash2 />, variant: 'danger', onPress: () => send({ type: 'void' }), heldReason: networkHeld },
+          { label: t('card.split'), icon: <Split />, onPress: () => send({ type: 'split' }), heldReason: networkHeld ?? (card.quantity < 2 ? t('split.held.one') : null) },
           { label: t('card.reprint'), icon: <Printer />, onPress: () => send({ type: 'reprint' }), heldReason: networkHeld },
         ]
       break

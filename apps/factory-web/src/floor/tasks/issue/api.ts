@@ -65,7 +65,7 @@ const pickListAnswer = z.object({
       covered: z.boolean(),
       usable: z.object({ onHand: decimal, candidates: z.array(candidate), more: z.number() }),
       held: z.array(z.object({ reason: z.string(), lotCode: z.string(), onHand: decimal, hides: z.number() })),
-      atWorkOrder: z.array(z.object({ lotId: z.string().nullable(), lotCode: z.string().nullable(), hideId: z.string().nullable(), hideCode: z.string().nullable(), quantity: decimal })),
+      atWorkOrder: z.array(z.object({ lotId: z.string().nullable(), lotCode: z.string().nullable(), hideId: z.string().nullable(), hideCode: z.string().nullable(), quantity: decimal, cut: decimal, returnable: decimal })),
     }),
   ),
   undo: z
@@ -138,6 +138,70 @@ export function issueStock(api: ApiClient, workOrderId: string, stock: { code: s
     schema: issueAnswer,
     idempotencyKey,
   })
+}
+
+// ---- Return unused (B-W2a-75; design floor.pick sec "return"; SCM-216) -----------------------------------------------------
+
+const returnAnswer = z.object({ return: z.object({ id: z.string(), hideState: z.string().nullable(), move: z.object({ id: z.string() }).passthrough() }) })
+export type Returned = z.infer<typeof returnAnswer>['return']
+
+/** Back to stock (B-W1-39's route): the stock by id, the measured quantity in the base unit, where it goes. */
+export function returnUnused(
+  api: ApiClient,
+  workOrderId: string,
+  body: ({ hideId: string } | { lotId: string } | { itemId: string; itemColourId: string | null }) & { quantity: string; toLocationId: string; occurredAt: string },
+  idempotencyKey: string,
+): Promise<TaskOutcome<Returned>> {
+  const { itemColourId, ...rest } = body as typeof body & { itemColourId?: string | null }
+  return floorWrite(api, 'POST', `/inventory/picking/work-orders/${seg(workOrderId)}/return`, { body: { ...rest, ...(itemColourId ? { itemColourId } : {}) }, schema: returnAnswer, idempotencyKey }).then((outcome) =>
+    outcome.ok ? { ok: true, value: outcome.value.return } : outcome,
+  )
+}
+
+const locationsAnswer = z.object({ sites: z.array(z.object({ id: z.string(), locations: z.array(z.object({ id: z.string(), code: z.string(), name: z.string(), kind: z.string(), status: z.string() })) })) })
+export type ReturnPlace = { readonly id: string; readonly code: string; readonly name: string }
+
+/** Where returned stock may go: the site's active storage places (warehouse, zone, bin), as the cut's remnant does. */
+export async function fetchReturnPlaces(api: ApiClient, siteId: string): Promise<TaskOutcome<ReturnPlace[]>> {
+  const result = await floorRead(api, '/inventory/locations', { query: { siteId }, schema: locationsAnswer })
+  if (!result.ok) return result
+  const places = result.value.sites
+    .flatMap((site) => site.locations)
+    .filter((location) => location.status === 'ACTIVE' && (location.kind === 'BIN' || location.kind === 'ZONE' || location.kind === 'WAREHOUSE'))
+    .map((location) => ({ id: location.id, code: location.code, name: location.name }))
+  return { ok: true, value: places }
+}
+
+const printersAnswer = z.object({ printers: z.array(z.object({ id: z.string(), name: z.string(), kind: z.string(), status: z.string() })) })
+const stationsAnswer = z.object({ stations: z.array(z.object({ id: z.string(), labelPrinterId: z.string().nullable() })) })
+
+/** The site's active label printers and the device's station's own (platform/print; print.view). */
+export async function fetchLabelPrinters(api: ApiClient, siteId: string, stationId: string | null): Promise<TaskOutcome<{ printers: { id: string; name: string }[]; stationPrinterId: string | null }>> {
+  const printers = await floorRead(api, '/print/printers', { query: { siteId }, schema: printersAnswer })
+  if (!printers.ok) return printers
+  const stations = stationId ? await floorRead(api, '/print/stations', { query: { siteId }, schema: stationsAnswer }) : null
+  const stationPrinterId = stations?.ok ? (stations.value.stations.find((station) => station.id === stationId)?.labelPrinterId ?? null) : null
+  return { ok: true, value: { printers: printers.value.printers.filter((printer) => printer.kind === 'LABEL_ZPL' && printer.status === 'ACTIVE').map((printer) => ({ id: printer.id, name: printer.name })), stationPrinterId } }
+}
+
+const jobSchema = z.object({ id: z.string(), status: z.enum(['QUEUED', 'SENT', 'PRINTED', 'FAILED']), lastError: z.string().nullable(), version: z.number() })
+export type TagJob = z.infer<typeof jobSchema>
+
+/** The remnant's new tag: one HIDE label job (platform/print POST /print/jobs/label; print.labels). */
+export function printRemnantTag(api: ApiClient, body: { printerId: string; hideId: string; label: { kind: 'HIDE'; language: 'it' | 'en'; scanId: string; title: string; fields: Record<string, string | null> } }, idempotencyKey: string): Promise<TaskOutcome<TagJob>> {
+  return floorWrite(api, 'POST', '/print/jobs/label', { body: { printerId: body.printerId, recordType: 'Hide', recordId: body.hideId, copies: 1, label: body.label }, schema: z.object({ job: jobSchema }), idempotencyKey }).then((outcome) =>
+    outcome.ok ? { ok: true, value: outcome.value.job } : outcome,
+  )
+}
+
+export function readTagJob(api: ApiClient, jobId: string): Promise<TaskOutcome<TagJob>> {
+  return floorRead(api, `/print/jobs/${seg(jobId)}`, { schema: z.object({ job: jobSchema }) }).then((outcome) => (outcome.ok ? { ok: true, value: outcome.value.job } : outcome))
+}
+
+export function retryTagJob(api: ApiClient, job: Pick<TagJob, 'id' | 'version'>, idempotencyKey: string): Promise<TaskOutcome<TagJob>> {
+  return floorWrite(api, 'POST', `/print/jobs/${seg(job.id)}/retry`, { body: { version: job.version }, schema: z.object({ job: jobSchema }), idempotencyKey }).then((outcome) =>
+    outcome.ok ? { ok: true, value: outcome.value.job } : outcome,
+  )
 }
 
 export function undoLastIssue(api: ApiClient, issueId: string, idempotencyKey: string): Promise<TaskOutcome<z.infer<typeof undoAnswer>>> {

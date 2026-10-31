@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { floorRead, floorWrite, seg, type TaskOutcome } from '../shared/task-api'
-import type { JobState } from './model'
+import type { JobState, SplitReason } from './model'
 
 /**
  * Bundles & tickets' calls (apps/factory-api modules/production/bundles, platform/print; B-W1-41): the work orders whose
@@ -51,6 +51,8 @@ const bundle = z.object({
   quantity: z.number(),
   status: z.enum(['ACTIVE', 'VOID']),
   clientEventId: z.string().nullable(),
+  /** W2a (B-W2a-13, MES-071): the bundle it was split off, or null. */
+  parentBundleId: z.string().nullable().optional(),
   version: z.number(),
   createdAt: z.string(),
 })
@@ -103,6 +105,10 @@ export type Reprinted = z.infer<typeof reprintAnswer>
 const voidAnswer = z.object({ bundle, cell, replayed: z.boolean() })
 export type Voided = z.infer<typeof voidAnswer>
 
+/** B-W2a-75: a split (MES-071): the child bundle with its ticket, the parent with the garments still in it. */
+const splitAnswer = z.object({ bundle, parent: bundle.extend({ live: z.number() }), ticket: ticketAnswer, replayed: z.boolean() })
+export type SplitDone = z.infer<typeof splitAnswer>
+
 /** The work orders whose cut waits for bundles; `number`: that one (the traveller), even when nothing waits. */
 export function fetchWorkOrders(api: ApiClient, number?: string): Promise<TaskOutcome<BundleWorkOrder[]>> {
   return floorRead(api, '/production/bundles/work-orders', { query: { number, limit: number ? 1 : 30 }, schema: workOrdersAnswer }).then((outcome) =>
@@ -124,6 +130,14 @@ export function reprintBundle(api: ApiClient, bundleId: string, body: { reason: 
 
 export function voidBundle(api: ApiClient, bundleId: string, reason: string, idempotencyKey: string): Promise<TaskOutcome<Voided>> {
   return floorWrite(api, 'POST', `/production/bundles/${seg(bundleId)}/void`, { body: { reason }, schema: voidAnswer, idempotencyKey })
+}
+
+/**
+ * B-W2a-75 (design floor.bundles "Split a bundle"): `quantity` garments off into a child bundle with its own ticket,
+ * printed where a reprint prints (the station's printer, else the site's only one). Online only, as reprint and void.
+ */
+export function splitBundle(api: ApiClient, bundleId: string, body: { quantity: number; reason: SplitReason; language?: 'it' | 'en' }, idempotencyKey: string): Promise<TaskOutcome<SplitDone>> {
+  return floorWrite(api, 'POST', `/production/bundles/${seg(bundleId)}/split`, { body, schema: splitAnswer, idempotencyKey })
 }
 
 /** The print jobs of a bundle's tickets (the bundles module queues each ticket with `recordType: 'Bundle'`), newest first. */

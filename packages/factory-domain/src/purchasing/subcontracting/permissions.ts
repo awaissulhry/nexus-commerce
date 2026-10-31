@@ -5,7 +5,8 @@ import { definePermissions } from '../../auth/permissions/registry'
  * Subcontracting (B-W2a-25; SCM-138, SCM-140, SCM-141, SCM-142; apps/factory-api modules/purchasing/subcontracting;
  * design purchasing.subcontracting, floor.kits). Seeing subcontract orders and the stock at each workshop is
  * purchasing.view (fees and values only with the cost grain, money.cost). Each act is checked with can() against the
- * order's company, site AND workshop (the party), so a role limited to some workshops reaches only theirs. Office only.
+ * order's company, site AND workshop (the party), so a role limited to some workshops reaches only theirs. The floor
+ * holds kit and receive at its own device's site (B-W2a-76, the warehouse tablet's Subcontract kits task).
  *
  *   subcontract.manage   prepare an order from a work order's outside operations (pieces per size, fee, return date),
  *                        its kit plan, issue it to the workshop, take an issued one back to draft, cancel it while nothing
@@ -36,3 +37,6 @@ export const PURCHASING_SUBCONTRACT_KIT = 'purchasing.subcontract.kit' satisfies
 export const PURCHASING_SUBCONTRACT_RECEIVE = 'purchasing.subcontract.receive' satisfies Permission
 
 export const PURCHASING_SUBCONTRACT_PERMISSIONS: readonly Permission[] = Object.freeze([PURCHASING_SUBCONTRACT_MANAGE, PURCHASING_SUBCONTRACT_KIT, PURCHASING_SUBCONTRACT_RECEIVE])
+
+/** B-W2a-76: what a floor role may hold of them (FLOOR_SHARED_PERMISSIONS): the kit out and the goods back, at its own site. */
+export const PURCHASING_SUBCONTRACT_FLOOR_PERMISSIONS: readonly Permission[] = Object.freeze([PURCHASING_SUBCONTRACT_KIT, PURCHASING_SUBCONTRACT_RECEIVE])

@@ -29,7 +29,7 @@ import { actorOf, type OfficeContext } from '../../core/context'
 import { serverClock } from '../../core/time'
 import { heldRoles } from '../auth/roles/access'
 import { ruleSentenceOf } from './rules'
-import { ALERT_COLUMNS, heldOf, maySee, officeOf, peopleNames, visibleWhere, type AlertRow, type Reader } from './store'
+import { ALERT_COLUMNS, heldOf, maySee, officeOf, peopleNames, placeNames, visibleWhere, type AlertRow, type Reader } from './store'
 
 /**
  * Stored alerts (B-W2a-33; ANA-036; design home.alerts "Alerts" tiles, "Open alerts" with the popup alert): the list
@@ -60,6 +60,8 @@ interface ViewContext {
   readonly now: Date
   readonly held: readonly HeldRole[]
   readonly names: ReadonlyMap<string, string>
+  /** B-W2a-78: the names of the alerts' sites and companies (the list's "Site" column). */
+  readonly places?: Awaited<ReturnType<typeof placeNames>>
 }
 
 const scopeOf = (row: Pick<AlertRow, 'companyId' | 'siteId' | 'partyId'>) => ({ companyId: row.companyId, siteId: row.siteId, partyId: row.partyId })
@@ -81,6 +83,7 @@ export function alertView(row: AlertRow, context: ViewContext) {
     companyId: row.companyId,
     siteId: row.siteId,
     partyId: row.partyId,
+    placeLabel: (row.siteId ? context.places?.sites.get(row.siteId) : undefined) ?? (row.companyId ? context.places?.companies.get(row.companyId) : undefined) ?? null,
     sentence: phraseText(phrase, row.recordLabel, 'en'),
     words: phrase ? { key: phrase.key, params: { ...phrase.params } } : { key: 'alerts.UNKNOWN', params: { label: row.recordLabel } },
     facts: (row.facts && typeof row.facts === 'object' && !Array.isArray(row.facts) ? row.facts : {}) as Record<string, unknown>,
@@ -100,7 +103,8 @@ export function alertView(row: AlertRow, context: ViewContext) {
 const peopleOf = (rows: readonly AlertRow[]): (string | null)[] => rows.flatMap((row) => [row.acknowledgedById, row.assignedToId, row.assignedById, row.snoozedById, row.resolvedById])
 
 async function viewContextOf(db: Reader, context: OfficeContext, rows: readonly AlertRow[], now: Date, extraPeople: readonly (string | null)[] = []): Promise<ViewContext> {
-  return { actor: actorOf(context), me: context.actorId, now, held: await heldOf(db, context.actorId, now), names: await peopleNames(db, [...peopleOf(rows), ...extraPeople]) }
+  const places = await placeNames(db, rows.map((row) => ({ companyId: row.companyId, siteId: row.siteId, recipientRoleId: null })))
+  return { actor: actorOf(context), me: context.actorId, now, held: await heldOf(db, context.actorId, now), names: await peopleNames(db, [...peopleOf(rows), ...extraPeople]), places }
 }
 
 // ---- the list ------------------------------------------------------------------------------------------------------------
@@ -297,13 +301,36 @@ export async function acknowledgeAlert(caller: CommandCaller, id: string, body: 
 }
 
 /** Whether this person may be given the alert: ACTIVE, and may see and handle it (their live roles, at its place). */
-async function mayBeGiven(tx: CommandTx, tenantId: string, userId: string, row: AlertRow, now: Date): Promise<boolean> {
+async function mayBeGiven(tx: Reader, tenantId: string, userId: string, row: AlertRow, now: Date): Promise<boolean> {
   const user = await tx.user.findFirst({ where: { id: userId, status: 'ACTIVE' }, select: { id: true } })
   if (!user) return false
   const actor: Actor = { audience: 'office', tenantId, grants: sessionGrants({ requireMfa: false }, await heldRoles(tx, userId, now), true) }
   return maySee(actor, row, ALERTS_HANDLE)
 }
 const ASSIGNEE_REFUSED = 'This person may not be given the alert: they cannot see its record or handle alerts there.'
+
+/** The most people GET /alerts/:id/assignees reads (by name). */
+export const ASSIGNABLE_MAX = 500
+
+/**
+ * GET /alerts/:id/assignees (B-W2a-78, the popup's Assign): the ACTIVE people the alert may be given to — the same check
+ * as the assign itself (`mayBeGiven`: they see its record and handle alerts at its place). The reader must handle it
+ * there too. Names only, by name; nobody is counted.
+ */
+export async function alertAssignees(caller: CommandCaller, id: string) {
+  const context = officeOf(caller)
+  const actor = actorOf(context)
+  const now = serverClock.now()
+  return caller.withClient(async (db) => {
+    const row = await db.alert.findFirst({ where: { AND: [{ id }, visibleWhere(actor)] }, select: ALERT_COLUMNS })
+    if (!row) throw new NotFoundError('Alert not found.')
+    if (!maySee(actor, row, ALERTS_HANDLE)) throw new ForbiddenError('You may see this alert but not handle it.')
+    const users = await db.user.findMany({ where: { status: 'ACTIVE' }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }], take: ASSIGNABLE_MAX, select: { id: true, displayName: true } })
+    const people: { id: string; name: string; me: boolean }[] = []
+    for (const user of users) if (await mayBeGiven(db, context.tenantId, user.id, row, now)) people.push({ id: user.id, name: user.displayName, me: user.id === context.actorId })
+    return { people, complete: users.length < ASSIGNABLE_MAX }
+  })
+}
 
 /** POST /alerts/:id/assign: to a colleague who may handle it (they are told), or back to nobody (null). */
 export async function assignAlert(caller: CommandCaller, id: string, body: { readonly version: number; readonly assigneeId: string | null }, idempotencyKey?: string) {

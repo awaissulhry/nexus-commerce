@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
+import { businessDate } from '@nexus/factory-domain/core/time'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { zxingCamera } from '../../camera'
 import { useFloor } from '../../FloorApp'
@@ -10,10 +11,12 @@ import { useFloorKeys } from '../../keys'
 import { readScan } from '../../scan/scan-model'
 import { AsOfMemory, codeKey } from '../shared/as-of'
 import type { TaskProblem } from '../shared/task-api'
-import { fetchExpected, fetchOrder, fetchReceipt, postReceipt, printTags, retryTag, type ExpectedOrder, type FloorReceipt, type OrderToReceive, type ReceiptNote, type ReprintReason } from './api'
+import { fetchExpected, fetchOrder, fetchReceipt, postReceipt, printTags, retryTag, uploadDdtPhoto, type ExpectedOrder, type FloorReceipt, type OrderToReceive, type ReceiptNote, type ReprintReason } from './api'
 import {
   addHide,
   addLot,
+  ddtFromPad,
+  ddtNumberOf,
   deliverySummary,
   emptyDelivery,
   entered,
@@ -46,6 +49,9 @@ import { ReceiveView, type ReceiveAction, type ReceiveStage } from './view/Recei
  * the hide tags are numbered by the office): offline the entries stay on screen and Finish is held with the reason. After
  * the post the tags' print state is read again every few seconds while a tag is on its way; Retry and Reprint are one
  * call each.
+ *
+ * B-W2a-75: the delivery note step (number, date, photo): the number and the date go with the receipt; the photo stays on
+ * this tablet (memory only) until the receipt is posted, then it is sent as the receipt's photo (Retry when it fails).
  */
 
 // What the tablet read during the visit (offline it stays on screen with its time; nothing is stored).
@@ -85,6 +91,11 @@ export function FloorReceive() {
     code: string | null
   } | null>(null)
   const [refusedSeq, setRefusedSeq] = useState<number | null>(null)
+  // B-W2a-75: the delivery note's photo kept on this tablet until the post; the date tiles' "another day"; the camera.
+  const [ddtPhoto, setDdtPhoto] = useState<{ blob: Blob; url: string } | null>(null)
+  const [ddtMoreDays, setDdtMoreDays] = useState(false)
+  const [ddtCamera, setDdtCamera] = useState(false)
+  const [photoSend, setPhotoSend] = useState<'sending' | 'sent' | 'failed' | null>(null)
   const started = useRef(false)
   // The post's key, kept while the body sent is the same (a retry of a lost answer is answered, never posted twice).
   const postKey = useRef<{ body: string; key: string } | null>(null)
@@ -185,6 +196,18 @@ export function FloorReceive() {
     [api, ddtCode, fail, feedback, openOrder, refuse, siteId],
   )
 
+  /** The delivery note photo, sent as the receipt's once it is posted (B-W2a-31's route; the floor's site). */
+  const sendPhoto = useCallback(
+    async (receiptId: string, number: string, blob: Blob) => {
+      setPhotoSend('sending')
+      const sent = await uploadDdtPhoto(api, receiptId, blob, `ddt-${number}.jpg`)
+      if (!sent.ok && sent.problem.kind === 'signedOut') return void sessionEnded()
+      setPhotoSend(sent.ok ? 'sent' : 'failed')
+      feedback(sent.ok ? 'success' : 'error')
+    },
+    [api, feedback, sessionEnded],
+  )
+
   const refreshReceipt = useCallback(
     async (receiptId: string) => {
       const answer = await fetchReceipt(api, receiptId)
@@ -214,6 +237,7 @@ export function FloorReceive() {
       setSelectedHideId(answer.value.receipt.hides[0]?.id ?? null)
       setReprintAsk(false)
       setStage('done')
+      if (ddtPhoto) void sendPhoto(answer.value.receipt.id, answer.value.receipt.number, ddtPhoto.blob)
       return
     }
     const failed = answer.problem
@@ -246,7 +270,7 @@ export function FloorReceive() {
       return refuse('LINE_REFUSED', order.order.number)
     }
     return fail(found, order.order.number)
-  }, [api, busy, delivery, fail, feedback, locale, order, refuse])
+  }, [api, busy, ddtPhoto, delivery, fail, feedback, locale, order, refuse, sendPhoto])
 
   const reprint = useCallback(
     async (reason: ReprintReason, all: boolean) => {
@@ -283,6 +307,13 @@ export function FloorReceive() {
 
   const next = useCallback(() => {
     setStage('scan')
+    setDdtPhoto((photo) => {
+      if (photo) URL.revokeObjectURL(photo.url)
+      return null
+    })
+    setDdtMoreDays(false)
+    setDdtCamera(false)
+    setPhotoSend(null)
     setOrder(null)
     setDelivery(null)
     setLineId(null)
@@ -307,9 +338,9 @@ export function FloorReceive() {
       setProblem(null)
       const text = read.code.trim()
       if (stage === 'scan') return openCode(text)
-      if (stage === 'lines' && delivery) {
+      if ((stage === 'lines' || stage === 'ddt') && delivery) {
         feedback('success')
-        return setDelivery({ ...delivery, ddtNumber: text })
+        return setDelivery({ ...delivery, ddtNumber: ddtNumberOf(text) })
       }
       if (stage === 'line' && hideForm) {
         feedback('success')
@@ -491,6 +522,40 @@ export function FloorReceive() {
         setProblem(null)
         if (order && stage !== 'scan') return void openOrder(order.order.id, order.order.number, delivery?.ddtNumber ?? null)
         return void loadExpected()
+      case 'ddt':
+        setHoldAsk(false)
+        return setStage('ddt')
+      case 'ddtPad':
+        if (delivery) setDelivery({ ...delivery, ddtNumber: ddtFromPad(action.value) })
+        return
+      case 'ddtClearNumber':
+        if (delivery) setDelivery({ ...delivery, ddtNumber: null })
+        return
+      case 'ddtDate':
+        if (delivery) setDelivery({ ...delivery, ddtDate: action.date })
+        return
+      case 'ddtMoreDays':
+        return setDdtMoreDays((open) => !open)
+      case 'ddtCamera':
+        return setDdtCamera(action.open)
+      case 'ddtPhoto':
+        feedback('success')
+        setDdtCamera(false)
+        return setDdtPhoto((photo) => {
+          if (photo) URL.revokeObjectURL(photo.url)
+          return { blob: action.photo.photo, url: URL.createObjectURL(action.photo.photo) }
+        })
+      case 'ddtPhotoRemove':
+        return setDdtPhoto((photo) => {
+          if (photo) URL.revokeObjectURL(photo.url)
+          return null
+        })
+      case 'ddtDone':
+        setDdtCamera(false)
+        return setStage('lines')
+      case 'photoRetry':
+        if (posted && ddtPhoto) void sendPhoto(posted.receipt.id, posted.receipt.number, ddtPhoto.blob)
+        return
     }
   }
 
@@ -509,7 +574,11 @@ export function FloorReceive() {
             : saveQuantity
           : stage === 'lines'
             ? () => onAction({ type: 'finish' })
-            : stage === 'finish'
+            : stage === 'ddt'
+              ? ddtCamera
+                ? null
+                : () => onAction({ type: 'ddtDone' })
+              : stage === 'finish'
               ? () => void post()
               : stage === 'done'
                 ? next
@@ -518,7 +587,7 @@ export function FloorReceive() {
       ? onProblem
       : leaveAsk
         ? () => setLeaveAsk(false)
-        : stage === 'line' || stage === 'finish'
+        : stage === 'line' || stage === 'finish' || (stage === 'ddt' && !ddtCamera)
           ? () => onAction({ type: 'lines' })
           : stage === 'lines'
             ? () => onAction({ type: 'leave' })
@@ -551,6 +620,8 @@ export function FloorReceive() {
         reprintAsk,
         problem,
         refusedSeq,
+        ddt: delivery ? { today: businessDate(new Date()), moreDays: ddtMoreDays, camera: ddtCamera, photo: ddtPhoto ? { url: ddtPhoto.url } : null } : null,
+        photoSend,
       }}
       onFrame={onFrame}
       onAction={onAction}
