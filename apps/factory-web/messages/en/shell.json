@@ -87,6 +87,7 @@
       "main": "Main",
       "inspections": "Inspections",
       "problems": "Problems",
+      "ncr": "Nonconformances",
       "complaints": "Complaints"
     },
     "compliance": {
