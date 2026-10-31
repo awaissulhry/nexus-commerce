@@ -1,0 +1,170 @@
+/*
+ * DS floor kit — FloorNamePicker (B-W2b-28). Sizes read `--nds-density-*`; colours are semantic roles (the initials in
+ * `--nds-primary` on `--nds-primary-soft`, held words in `--nds-warning-text`). Held is a dashed border, a lock and the
+ * reason — never colour alone.
+ */
+.nds-floor-names {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+.nds-floor-names-label {
+  font-size: calc(var(--nds-density-font-body) * 1.2);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-floor-names-message,
+.nds-floor-names-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: var(--nds-density-gap) var(--nds-density-pad-x);
+  border: 1px dashed var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  font-size: var(--nds-density-font-body);
+}
+.nds-floor-names-message {
+  border-style: solid;
+  border-color: var(--nds-warning);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-floor-names-empty {
+  color: var(--nds-text-2);
+}
+
+/* The strip: keys side by side, like the PIN pad's (a keyboard row, not separate actions). */
+.nds-floor-names-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+.nds-floor-names-letter {
+  min-width: var(--nds-density-control-h-sm);
+  min-height: var(--nds-density-control-h-sm);
+  padding: 0 var(--nds-space-8);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.nds-floor-names-letter[aria-disabled='true'] {
+  border-style: dashed;
+  color: var(--nds-text-3);
+  cursor: default;
+}
+@media (hover: hover) {
+  .nds-floor-names-letter:hover:not([aria-disabled='true']) {
+    background: var(--nds-surface-hover);
+  }
+}
+
+.nds-floor-names-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+}
+.nds-floor-names-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  scroll-margin-top: var(--nds-density-gap);
+}
+.nds-floor-names-heading {
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* Three a row on a tablet, two on a phone, one in a narrow column — by the grid's own width. */
+.nds-floor-names-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: var(--nds-density-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-floor-name-cell {
+  display: grid;
+  min-width: 0;
+}
+.nds-floor-name {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  min-height: var(--nds-density-control-h-primary);
+  padding: var(--nds-space-8) var(--nds-density-pad-x) var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  .nds-floor-name:hover:not([aria-disabled='true']) {
+    background: var(--nds-surface-hover);
+  }
+}
+.nds-floor-name:focus-visible,
+.nds-floor-names-letter:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-focus);
+  outline-offset: var(--nds-density-focus-offset);
+}
+.nds-floor-name[aria-disabled='true'] {
+  border-style: dashed;
+  cursor: default;
+}
+.nds-floor-name-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: calc(var(--nds-density-icon) * 1.8);
+  height: calc(var(--nds-density-icon) * 1.8);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-extrabold);
+}
+.nds-floor-name-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nds-floor-name-name {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+.nds-floor-name-detail {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-floor-name-held {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-warning-text);
+}
+.nds-floor-name-held > .nds-floor-icon {
+  width: var(--nds-density-font-label);
+  height: var(--nds-density-font-label);
+}
