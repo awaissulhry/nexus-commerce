@@ -32,6 +32,10 @@ import type { CommandCaller } from '../../core/command'
  *               person may see (money only with its grain) through the importer's own load, so the file reads back
  *               through the same importer as UNCHANGED rows until someone edits a cell.
  *
+ * B-W2b-13 (Z16:02), optional:
+ *   idOf        a row's id as the web list frame names the row (its rowId); default the row's `id`. An export of the
+ *               SELECTED rows (the selection row's Export N) keeps the view's rows whose id was selected.
+ *
  * A list without a source shows no Export ▾ (its own "Export N" of the selected rows stays). Tests set their own
  * sources with useExportSources([...]).
  */
@@ -72,6 +76,7 @@ export interface ExportSource<Query, Row> {
   refusal?(actor: Actor): string | null
   count?(caller: CommandCaller, query: Query): Promise<number>
   readonly reimport?: ExportReimport<Row>
+  idOf?(row: Row): string
 }
 
 /** A source with its types erased, as the registry and the worker hold it. */
@@ -79,6 +84,13 @@ export type AnyExportSource = ExportSource<unknown, unknown>
 
 export class ExportSourceError extends Error {
   override name = 'ExportSourceError'
+}
+
+/** A row's id as the list frame names it: the source's idOf, else the row's own `id` (null: the row has none). */
+export function rowIdOf(source: Pick<AnyExportSource, 'idOf'>, row: unknown): string | null {
+  if (source.idOf) return source.idOf(row)
+  const id = (row as { id?: unknown } | null)?.id
+  return typeof id === 'string' ? id : null
 }
 
 /** The list's address under /w/<company>: the source's page, else its key with `/` for its dots. */

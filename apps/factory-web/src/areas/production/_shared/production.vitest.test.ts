@@ -32,7 +32,6 @@ import {
   viewFromAddress,
   viewQuery,
   waitingAt,
-  workOrdersCsv,
   writeProblem,
 } from './model'
 import { createHeld, overOpen, NO_NEW_ORDER } from '../work-orders/list-model'
@@ -198,13 +197,6 @@ describe('refusals in words, addresses, the CSV, the new work order', () => {
     expect(viewFromAddress(params('status=NOPE'))).toBe('open')
     expect(viewQuery('open', ' wo ')).toMatchObject({ open: true, q: 'wo', limit: 50 })
     expect(viewQuery('RELEASED', '')).toMatchObject({ status: 'RELEASED', q: undefined })
-  })
-  it('the CSV quotes what needs it and leaves unknown counts empty', () => {
-    const csv = workOrdersCsv([{ ...LIST_ROWS[0]!, styleName: 'Giacca, "demo"' }], { header: ['a', 'b'], status: (status) => `S:${status}` })
-    const [, line] = csv.trim().split('\n')
-    expect(line).toContain('"Giacca, ""demo"""')
-    expect(line).toContain('S:DRAFT')
-    expect(line).toContain(',,,,')
   })
   it('the new work order: never more than is open on a line; held with the reason until it can go', () => {
     const lines = [{ id: 'l1', seq: 1, kind: 'SIZE_GRID', styleId: 's', styleCode: 'S', styleName: 'S', colourwayId: 'c', colourwayCode: 'BLK', madeToMeasure: false, sizes: [{ size: '50', ordered: 4, onWorkOrders: 1, open: 3 }] }]

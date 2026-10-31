@@ -5,6 +5,11 @@ import {
   changePinContract,
   createDeviceContract,
   createWorkerContract,
+  crewContract,
+  crewEndContract,
+  crewJoinContract,
+  crewLeaveContract,
+  crewSwitchContract,
   deviceContract,
   editDeviceContract,
   editWorkerContract,
@@ -13,6 +18,7 @@ import {
   floorStepUpContract,
   getSettingsContract,
   issueBadgeContract,
+  kioskCheckContract,
   listDevicesContract,
   listWorkersContract,
   putSettingsContract,
@@ -28,7 +34,8 @@ import {
   workerStatusContract,
 } from './contract'
 import { deviceCookieOf } from './cookies'
-import { deviceInfo, enrolDevice, reportDeviceState } from './device'
+import { endCrew, getCrew, joinCrew, leaveCrew, switchCrew } from './crew'
+import { deviceInfo, enrolDevice, reportDeviceState, reportKioskCheck } from './device'
 import { manifest } from './manifest'
 import { createDevice, editDevice, getSettings, listDevices, putSettings, renewEnrolment, revokeDevice } from './registry'
 import { changePin, floorMe, floorSignIn, floorSignOut, floorStepUp, switchOperator } from './sign-in'
@@ -47,6 +54,12 @@ import { createWorker, editWorker, issueBadge, listWorkers, resetPin, revokeBadg
  *   GET  /floor/me              the operator, device, site, session times, language and permissions
  *   POST /floor/pin             the operator changes their PIN (required after an administrator's reset)
  *   POST /floor/step-up         the operator proves their PIN again: signing acts and My day open for 2 minutes
+ *   POST /floor/device/kiosk    B-W2b-52: the kiosk lock guide's honest check, as the tablet reports it (signed in or not)
+ *   GET  /floor/crew            B-W2b-52: the crew on this station tablet (null: one operator)
+ *   POST /floor/crew/join       B-W2b-52: the next person's badge (or name) + PIN: they join the crew and become active
+ *   POST /floor/crew/switch     B-W2b-52: a member proves it is them (badge, or PIN): they become the active one
+ *   POST /floor/crew/leave      B-W2b-52: the active member signs out of the crew
+ *   POST /floor/crew/end        B-W2b-52: everyone on the crew signs out
  * The Office:
  *   GET   /auth/floor/devices                        the device registry (in use or not, never by whom)
  *   POST  /auth/floor/devices                        enrol a device: a PENDING device + a one-time QR code (15 minutes)
@@ -80,9 +93,16 @@ export default defineRoutes('auth-floor', manifest, async (app) => {
   app.post('/floor/sign-in', { schema: signInContract, config: perDevice(limits.floorSignIn) }, (request, reply) => floorSignIn(auth(), request, reply, request.body))
   app.post('/floor/switch', { schema: switchContract, config: perDevice(limits.floorSignIn) }, (request, reply) => switchOperator(auth(), request, reply, request.body))
   app.post('/floor/sign-out', { schema: signOutContract }, (request, reply) => floorSignOut(auth(), request, reply))
-  app.get('/floor/me', { schema: floorMeContract }, (request) => floorMe(request))
+  app.get('/floor/me', { schema: floorMeContract }, (request) => floorMe(auth(), request))
   app.post('/floor/pin', { schema: changePinContract, config: perDevice(limits.floorSignIn) }, (request) => changePin(auth(), request, request.body))
   app.post('/floor/step-up', { schema: floorStepUpContract, config: perDevice(limits.floorSignIn) }, (request) => floorStepUp(auth(), request, request.body))
+  // B-W2b-52: the kiosk check (PLT-227) and crew mode (PLT-059); the crew's routes take a secret, so the sign-in's limit.
+  app.post('/floor/device/kiosk', { schema: kioskCheckContract, config: perDevice(limits.floorSignIn) }, (request) => reportKioskCheck(auth(), request, request.body))
+  app.get('/floor/crew', { schema: crewContract }, (request) => getCrew(auth(), request))
+  app.post('/floor/crew/join', { schema: crewJoinContract, config: perDevice(limits.floorSignIn) }, (request, reply) => joinCrew(auth(), request, reply, request.body))
+  app.post('/floor/crew/switch', { schema: crewSwitchContract, config: perDevice(limits.floorSignIn) }, (request, reply) => switchCrew(auth(), request, reply, request.body))
+  app.post('/floor/crew/leave', { schema: crewLeaveContract }, (request, reply) => leaveCrew(auth(), request, reply))
+  app.post('/floor/crew/end', { schema: crewEndContract }, (request, reply) => endCrew(auth(), request, reply))
 
   app.get('/auth/floor/devices', { schema: listDevicesContract }, (request) => listDevices(auth(), request, request.query))
   app.post('/auth/floor/devices', { schema: createDeviceContract }, (request) => createDevice(auth(), request, request.body))

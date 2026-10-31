@@ -819,5 +819,13 @@
     "opLink": "{seq} {code}: {waiting} in attesa, {good} fatti — apri i fasci in attesa qui",
     "late": "Ordini in ritardo",
     "noLate": "Nessun ordine in ritardo."
+  },
+  "w2b": {
+    "heldFinal": "Gli ordini di lavoro chiusi o annullati tengono data di consegna e priorità",
+    "noun_one": "ordine di lavoro",
+    "noun_other": "ordini di lavoro",
+    "quickDue": "Consegna",
+    "dueDate": "data di consegna",
+    "boardHeld": "Un ordine di lavoro cambia stato con il suo passo (rilascio, sospensione, completamento, chiusura): aprilo per spostarlo."
   }
 }

@@ -12,6 +12,9 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { standardBundleSizeFor } from '../settings/bundle-size'
 import { bundleView, bundleWorkOrder, cellView, countsOf, mayBundle, ticketBase, ticketOf, workerOf } from './bundles'
+// W2b B-W2b-41.
+import { couponScan } from '@nexus/factory-domain/production/bundles/coupons'
+import { bundleCodeModeFor, readCouponByCode } from './coupons'
 import { BUNDLE_HEADER, readBundleByCode, readBundles, readCellLabels, readHeader, readOperations, readReprints, readScans, readTicketJobs, stationPrinterOf, type Reader, type ScanRow } from './store'
 
 /**
@@ -119,6 +122,8 @@ export async function bundlesOfWorkOrder(caller: CommandCaller, workOrderId: str
       stationPrinterId,
       /** Where the tickets go when the make names no printer: the station's, else the site's only one; null: name one. */
       defaultPrinterId: stationPrinterId ?? (printers.length === 1 ? printers[0]!.id : null),
+      // W2b B-W2b-41 (MES-067): the site's bundle code mode (coupons to print after the make when COUPON_PER_OPERATION).
+      bundleCodeMode: await bundleCodeModeFor(db, workOrder.siteId),
     }
   })
 }
@@ -146,9 +151,15 @@ export async function scanBundle(caller: CommandCaller, query: { readonly code: 
     const done = standingOperations(scans)
     const style = await db.style.findUnique({ where: { id: workOrder.styleId }, select: { id: true, code: true, name: true } })
     const operations = await readOperations(db, workOrder.id)
+    // W2b B-W2b-41 (MES-067): a coupon's code names its bundle and its one operation; an old or voided coupon is refused.
+    const coupon = await readCouponByCode(db, code)
+    const couponOperation = coupon ? operations.find((operation) => operation.id === coupon.workOrderOperationId) : undefined
+    const replacement = coupon?.status === 'VOID' ? await db.bundleCoupon.findFirst({ where: { bundleId: bundle.id, workOrderOperationId: coupon.workOrderOperationId, status: 'ACTIVE' }, select: { code: true } }) : null
+    const couponWords = coupon ? couponScan({ coupon, replacement, operation: couponOperation ?? null, named: null }) : null
     return {
       scanned: code,
-      refusal: scannedBundleRefusal(bundle, code),
+      refusal: scannedBundleRefusal(bundle, code) ?? (couponWords && !couponWords.ok && couponWords.code !== 'NOT_AN_OPERATION' ? { code: couponWords.code, message: couponWords.message } : null),
+      coupon: coupon ? { id: coupon.id, code: coupon.code, status: coupon.status, operation: { id: coupon.workOrderOperationId, seq: couponOperation?.seq ?? 0, code: couponOperation?.code ?? '', name: couponOperation?.name ?? '' } } : null,
       bundle: { ...bundleView(bundle, labels), scans: scans.length },
       workOrder: { id: workOrder.id, number: workOrder.number, batchNumber: workOrder.batchNumber, status: workOrder.status, siteId: workOrder.siteId, style: style ?? { id: workOrder.styleId, code: '', name: '' } },
       operations: operations.map((operation) => ({ id: operation.id, seq: operation.seq, code: operation.code, name: operation.name, scanRequired: operation.scanRequired, done: done.has(operation.id) })),
@@ -159,7 +170,8 @@ export async function scanBundle(caller: CommandCaller, query: { readonly code: 
 
 // ---- the office's bundles of a work order ---------------------------------------------------------------------------------------
 
-async function hidesOf(db: Reader, cutLogIds: readonly string[]) {
+/** The hides (and lots) these cut log entries cut, by entry (genealogy; W2b B-W2b-41: the tracking reads it too). */
+export async function hidesOf(db: Reader, cutLogIds: readonly string[]) {
   if (cutLogIds.length === 0) return new Map<string, { hideId: string; code: string; lotId: string; lotCode: string }>()
   const entries = await db.cutLog.findMany({ where: { id: { in: [...cutLogIds] } }, select: { id: true, hideId: true, lotId: true } })
   const hides = new Map((await db.hide.findMany({ where: { id: { in: [...new Set(entries.map((entry) => entry.hideId))] } }, select: { id: true, code: true } })).map((hide) => [hide.id, hide.code]))

@@ -263,7 +263,7 @@ export function ExportJobDialog({ job, problem, onDownload, onAgain, onClose }: 
       open
       onClose={onClose}
       title={title}
-      subtitle={job.viewName ? t('tools.job.fromView', { name: job.viewName }) : undefined}
+      subtitle={job.selected ? t('tools.job.selected', { count: job.selected }) : job.viewName ? t('tools.job.fromView', { name: job.viewName }) : undefined}
       size="md"
       footer={
         <>

@@ -19,6 +19,14 @@ import { ScanIdsRefusedError } from '../numbering/scan-ids'
 import { OffStandardRefusedError } from '../../modules/production/offstandard/access'
 import { floorEndContract, floorStartContract } from '../../modules/production/offstandard/contract'
 import { floorEnd, floorStart } from '../../modules/production/offstandard/floor'
+// B-W2b-35: help calls from the floor's queue.
+import { holds } from '@nexus/factory-domain/core/permissions'
+import { PRODUCTION_CALLS_ANSWER } from '@nexus/factory-domain/production/calls/permissions'
+import { actorOf } from '../../core/context'
+import { CallRefusedError } from '../../modules/production/calls/access'
+import { answerCall } from '../../modules/production/calls/answer'
+import { queuedAnswerBody, sendContract } from '../../modules/production/calls/contract'
+import { closeAtStation, sendCall } from '../../modules/production/calls/station'
 // B-W2b-33: the signed-in worker's clock kept offline.
 import { ClockRefusedError } from '../../modules/people/clock/access'
 import { clockFromQueue } from '../../modules/people/clock/clock'
@@ -40,6 +48,10 @@ import { queuedClockBody } from '../../modules/people/clock/contract'
  *                                         it arrives, and the station's queued scans after it are refused, not final)
  *   production.offStandard.start / .end   modules/production/offstandard floorStart / floorEnd (B-W2b-29: a tile tapped
  *                                         or the running block ended, with the tablet's time when believable)
+ *   andon.call.send / .answer             modules/production/calls sendCall (B-W2b-35: a call from the station, the
+ *                                         tablet's time when believable; the station's open call of the type answers a
+ *                                         second one) and a step of a call (a responder's answerCall, else the station's
+ *                                         own closeAtStation)
  *   people.clock.record                   modules/people/clock clockFromQueue (B-W2b-33: the signed-in worker's clock-in,
  *                                         clock-out or break with the tablet's time, flagged when its clock looked wrong)
  *
@@ -74,6 +86,7 @@ export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof BundleRefusedError || error instanceof CutRefusedError) return moduleRefusal(error.refusal as ModuleRefusal)
   if (error instanceof PlantRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof OffStandardRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
+  if (error instanceof CallRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof ClockRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix, final: error.refusal.final })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
@@ -151,6 +164,24 @@ async function applyOffStandard(caller: CommandCaller, event: QueuedEvent, key: 
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'OffStandardEntry', id: result.block.id } }
 }
 
+/** B-W2b-35: a queued call or a step of one, through the calls' own commands (the key: `<device>.<client event id>`). */
+async function applyCall(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const occurredAt = event.occurredAt ? { occurredAt: event.occurredAt } : {}
+  if (event.kind === 'andon.call.send') {
+    const body = parsed(sendContract.body, { ...event.payload, clientEventId: event.clientEventId, ...occurredAt })
+    if (!body.ok) return refusedBy(body.refusal)
+    const result = await sendCall(caller, body.value, key)
+    return { status: result.replayed || result.existing ? 'duplicate' : 'accepted', result: { type: 'HelpCall', id: result.call.id } }
+  }
+  const body = parsed(queuedAnswerBody, { ...event.payload, ...occurredAt })
+  if (!body.ok) return refusedBy(body.refusal)
+  const { callId, step, ...rest } = body.value
+  const context = caller.factoryContext
+  const responder = context !== null && holds(actorOf(context), PRODUCTION_CALLS_ANSWER)
+  const result = !responder && (step === 'SOLVED' || step === 'CANCELLED') ? await closeAtStation(caller, callId, step, rest, key) : await answerCall(caller, callId, step, rest, key)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'HelpCall', id: result.call.id } }
+}
+
 /** B-W2b-33: a clock action kept offline, through the clock's own command (its key: `<device>.<client event id>`). */
 async function applyClock(caller: CommandCaller, event: QueuedEvent, key: string, sentAt: string | undefined): Promise<Applied> {
   const body = parsed(queuedClockBody, { ...event.payload, clientEventId: event.clientEventId, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
@@ -180,6 +211,9 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
       case 'production.offStandard.start':
       case 'production.offStandard.end':
         return await applyOffStandard(caller, event, context.key)
+      case 'andon.call.send':
+      case 'andon.call.answer':
+        return await applyCall(caller, event, context.key)
       case 'people.clock.record':
         return await applyClock(caller, event, context.key, context.sentAt)
     }

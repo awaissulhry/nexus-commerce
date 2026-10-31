@@ -29,6 +29,9 @@ export const FLOOR_SYNC_KINDS = [
   // B-W2b-29: off-standard and indirect time started and ended on the floor (MES-156, MES-158; the tablet's time kept).
   'production.offStandard.start',
   'production.offStandard.end',
+  // B-W2b-35: a help call from the station and a step of one (design floor.help "offline: the call waits on this tablet").
+  'andon.call.send',
+  'andon.call.answer',
   // B-W2b-33: the signed-in worker's clock-in, clock-out or break kept offline with the tablet's time (MES-199).
   'people.clock.record',
 ] as const
@@ -59,6 +62,9 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   // B-W2b-29
   'production.offStandard.start': { kind: 'production.offStandard.start', permission: 'floor.work', numbers: null, what: 'Start off-standard or indirect time' },
   'production.offStandard.end': { kind: 'production.offStandard.end', permission: 'floor.work', numbers: null, what: 'End off-standard or indirect time' },
+  // B-W2b-35: every floor role calls (floor.work); the module checks again who may take the step (the station, or a responder).
+  'andon.call.send': { kind: 'andon.call.send', permission: 'floor.work', numbers: null, what: 'Call for help from the station' },
+  'andon.call.answer': { kind: 'andon.call.answer', permission: 'floor.work', numbers: null, what: 'Answer or close a help call' },
   // B-W2b-33
   'people.clock.record': { kind: 'people.clock.record', permission: 'floor.work', numbers: null, what: 'Clock in, clock out or a break' },
 } satisfies Record<FloorSyncKind, QueuedAction>)

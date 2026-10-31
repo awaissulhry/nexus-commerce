@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useT } from '../../../lib/i18n/provider'
+import { DEFAULT_TIME_ZONE } from '../../../lib/i18n/format'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { WithMessages } from '../../../record-panels/i18n'
 import {
@@ -17,8 +17,11 @@ import {
   type WorkOrderCounts,
   type WorkOrderRow,
 } from '../_shared/api'
-import { downloadText, useCoalesced, useLive } from '../_shared/hooks'
-import { abilitiesOf, liveTouches, readProblem, releaseRefusalCodes, viewFromAddress, viewQuery, workOrdersCsv, writeProblem, type ListView } from '../_shared/model'
+import { useCoalesced, useLive } from '../_shared/hooks'
+import { abilitiesOf, liveTouches, readProblem, releaseRefusalCodes, viewFromAddress, viewQuery, writeProblem, type ListView } from '../_shared/model'
+import { daysLate } from '@nexus/factory-domain/production/work-orders/machine'
+import { isRelativeDay, type RelativeDay } from '@nexus/factory-domain/views/quick/relative'
+import { modeOfAddress, type ListMode } from '../../../list-frame/w2b/model'
 import { linesOfStyle, NO_NEW_ORDER, openGridOf, stylesOf, type BulkReleaseModel, type NewWorkOrderModel, type WorkOrdersListModel } from './list-model'
 import { WorkOrdersListView } from './view/WorkOrdersListView'
 import { getReadiness, holdReasons, placeHold, type ReadinessRow } from './daily/api'
@@ -29,9 +32,14 @@ import { DAILY_NAMESPACE, dailyCan, dailyProblem, NO_DAILY, READINESS_STATUSES, 
  * the search (`?q=`), 50 a page with "Show more" (cursor), the tiles' counts, and keeps them live (workorder.* and
  * production.* events wait behind "N updates · Show": rows never move under the cursor). `?new=1` opens New work order.
  * `?new=1&order=<number>` opens it with that sales order chosen (the order studio's Make work orders).
- * Bulk: Export N (CSV, the loaded rows) and Release N (one release per draft, in turn, each with its version; the API
- * checks each one again and says what holds it).
+ * Bulk: Export N (the selected rows through the shared export engine, B-W2b-13), Edit N (due date and priority through
+ * the review, then Undo) and Release N (one release per draft, in turn, each with its version; the API checks each one
+ * again and says what holds it). B-W2b-13: `?mode=board|calendar|cards` (the list frame's modes) and `?due=<relative
+ * day>` (the quick filter; the API resolves the word with its today); the due date and priority edit in the grid.
  */
+const MODES: readonly ListMode[] = ['table', 'board', 'calendar', 'cards']
+/** Today in the site's zone (YYYY-MM-DD): the calendar's today and the days late after a save. */
+const romeDay = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: DEFAULT_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 export function WorkOrdersPage() {
   return (
     <WithMessages namespaces={['production', DAILY_NAMESPACE, 'lists']}>
@@ -41,7 +49,6 @@ export function WorkOrdersPage() {
 }
 
 function WorkOrdersContainer() {
-  const t = useT('production')
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -51,6 +58,9 @@ function WorkOrdersContainer() {
   const can = useMemo(() => abilitiesOf(session.permissions), [session.permissions])
   const view = viewFromAddress(params)
   const q = params?.get('q') ?? ''
+  const mode = modeOfAddress(params, MODES)
+  const dueWord = params?.get('due') ?? null
+  const due: RelativeDay | null = isRelativeDay(dueWord) ? dueWord : null
   const newAsked = params?.get('new') === '1'
   // `?new=1&order=<number>` (the sales order studio's "Make work orders"): the dialog opens with that order chosen.
   const autoPick = useRef<string | null>(newAsked ? (params?.get('order')?.trim() || null) : null)
@@ -71,24 +81,28 @@ function WorkOrdersContainer() {
   const [daily, setDaily] = useState<DailyModel>(() => NO_DAILY(dcan))
 
   const address = useCallback(
-    (next: { view?: ListView; q?: string; new?: boolean }) => {
+    (next: { view?: ListView; q?: string; new?: boolean; mode?: ListMode; due?: RelativeDay | null }) => {
       const query = new URLSearchParams()
       const nextView = next.view ?? view
       const nextQ = next.q ?? q
+      const nextMode = next.mode ?? mode
+      const nextDue = next.due === undefined ? due : next.due
       if (nextView !== 'open') query.set('view', nextView)
       if (nextQ.trim()) query.set('q', nextQ.trim())
+      if (nextDue) query.set('due', nextDue)
+      if (nextMode !== 'table') query.set('mode', nextMode)
       if (next.new) query.set('new', '1')
       const qs = query.toString()
       return `${pathname}${qs ? `?${qs}` : ''}`
     },
-    [pathname, view, q],
+    [pathname, view, q, mode, due],
   )
 
   const load = useCallback(async () => {
     const id = ++readId.current
     setRows((current) => ({ ...current, problem: null, items: current.items }))
     try {
-      const page = await listWorkOrders(api, viewQuery(view, q))
+      const page = await listWorkOrders(api, { ...viewQuery(view, q), due })
       if (id !== readId.current) return
       setRows({ items: page.workOrders, more: page.nextCursor !== null, problem: null })
       setCursor(page.nextCursor)
@@ -101,7 +115,7 @@ function WorkOrdersContainer() {
     countWorkOrders(api)
       .then((answer) => id === readId.current && setCounts(answer))
       .catch(() => id === readId.current && setCounts(null))
-  }, [api, view, q])
+  }, [api, view, q, due])
 
   useEffect(() => {
     setRows({ items: null, more: false, problem: null })
@@ -126,13 +140,13 @@ function WorkOrdersContainer() {
   const more = useCallback(async () => {
     if (!cursor) return
     try {
-      const page = await listWorkOrders(api, viewQuery(view, q, cursor))
+      const page = await listWorkOrders(api, { ...viewQuery(view, q, cursor), due })
       setRows((current) => ({ items: [...(current.items ?? []), ...page.workOrders.filter((row) => !current.items?.some((seen) => seen.id === row.id))], more: page.nextCursor !== null, problem: null }))
       setCursor(page.nextCursor)
     } catch (error) {
       setNotice({ tone: 'danger', words: { key: readProblem(error) } })
     }
-  }, [api, cursor, view, q])
+  }, [api, cursor, view, q, due])
 
   // Live: a work order changed somewhere → "N updates · Show" (the tiles follow at once: they never move the cursor).
   const recount = useCoalesced(() => {
@@ -219,14 +233,19 @@ function WorkOrdersContainer() {
     }
   }, [api, newOrder, prefix, router])
 
-  const exportRows = useCallback(
-    (ids: string[]) => {
-      const picked = (rows.items ?? []).filter((row) => ids.includes(row.id))
-      const header = ['number', 'batch', 'status', 'style', 'styleName', 'colourways', 'customer', 'orders', 'pieces', 'cut', 'bundled', 'sewn', 'finished', 'due', 'daysLate', 'priority', 'site'].map((column) => t(`csv.${column}`))
-      downloadText(`work-orders-${new Date().toISOString().slice(0, 10)}.csv`, workOrdersCsv(picked, { header, status: (status) => t(`status.${status}`) }))
-    },
-    [rows.items, t],
-  )
+  // B-W2b-13: a cell or Edit N saved — the row takes its new due date, priority and version (days late follow the due date).
+  const saved = useCallback((rowId: string, after: Readonly<Record<string, string | number | null>>, version: number) => {
+    setRows((current) => ({
+      ...current,
+      items:
+        current.items?.map((row) => {
+          if (row.id !== rowId) return row
+          const dueDate = 'due' in after ? ((after.due as string | null) ?? null) : row.dueDate
+          const priority = typeof after.priority === 'number' ? after.priority : row.priority
+          return { ...row, dueDate, priority, version, daysLate: daysLate(row.status, dueDate, romeDay()) }
+        }) ?? null,
+    }))
+  }, [])
 
   const runRelease = useCallback(async () => {
     if (!release || release.running) return
@@ -253,6 +272,9 @@ function WorkOrdersContainer() {
     can,
     view,
     q,
+    mode,
+    due,
+    today: romeDay(),
     rows,
     counts,
     asOf,
@@ -275,7 +297,9 @@ function WorkOrdersContainer() {
         onRetry: () => void load(),
         onShowUpdates: () => void load(),
         onOpen: (id) => router.push(`${prefix}/production/work-orders/${id}`),
-        onExport: exportRows,
+        onMode: (next) => router.replace(address({ mode: next })),
+        onDue: (next) => router.replace(address({ due: next })),
+        onSaved: saved,
         onReleaseMany: (ids) => {
           const picked = (rows.items ?? []).filter((row: WorkOrderRow) => ids.includes(row.id))
           setRelease({ rows: picked.map((row) => ({ id: row.id, number: row.number, styleCode: row.styleCode })), running: false, done: false, results: {} })

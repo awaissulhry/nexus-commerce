@@ -1696,6 +1696,7 @@
     "production_bundles": "Make bundles and print their tickets",
     "production_scan": "Report bundles done at an operation",
     "production_scan_correct": "Decide scan corrections from the floor",
+    "production_scan_override": "Override a held floor scan with your PIN (team leader)",
     "production_serials": "Print garment labels at the final operation",
     "quality_inspections_view": "See final inspections and release checks",
     "quality_inspections_record": "Record a final inspection",
@@ -1798,6 +1799,17 @@
     "production_offstandard_view": "See off-standard and indirect time blocks and their counts (no person in the lists)",
     "production_offstandard_codes": "Add and change off-standard and indirect time codes and their pay rules",
     "production_offstandard_approve": "Approve, reject, reopen and correct off-standard time blocks (never your own)",
+    "production_calls_view": "See help calls, their times per call and line, and who is called for each type (never per person)",
+    "production_calls_answer": "Answer help calls: seen, on the way, solved or cancelled, and what they led to",
+    "production_calls_manage": "Keep a site's help-call types and who answers them",
+    "people_shifts_view": "See the roster (who works which shift) and the planned overtime requests",
+    "people_shifts_manage": "Plan the roster of everyone: set shifts, assign, copy last week, publish",
+    "people_shifts_team": "Plan the roster of the teams you lead",
+    "people_overtime_manage": "Ask people for planned overtime, record a spoken answer, cancel a request",
+    "people_overtime_approve": "Approve planned overtime that people agreed to",
+    "production_bundles_view": "See where every bundle is, the stuck ones and the scan-pattern counts (never who)",
+    "production_bundles_findings": "Review scan-pattern findings (a dismissal needs a note)",
+    "production_bundles_who": "See who is behind one finding (only with the site's legal basis on; logged)",
     "people_attendance_view": "See attendance at your sites: clock-ins, clock-outs and breaks, the days and who is in now (where the attendance purpose is on)"
   }
 }
