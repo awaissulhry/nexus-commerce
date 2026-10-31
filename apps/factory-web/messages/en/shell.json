@@ -86,6 +86,9 @@
       "area": "Quality",
       "main": "Main",
       "inspections": "Inspections",
+      "holds": "Holds",
+      "settings": "Settings",
+      "defects": "Defects & dispositions",
       "problems": "Problems",
       "ncr": "Nonconformances",
       "complaints": "Complaints"

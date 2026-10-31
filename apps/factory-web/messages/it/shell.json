@@ -86,6 +86,9 @@
       "area": "Qualità",
       "main": "Principali",
       "inspections": "Ispezioni",
+      "holds": "Blocchi",
+      "settings": "Impostazioni",
+      "defects": "Difetti e destinazioni",
       "problems": "Problemi",
       "ncr": "Non conformità",
       "complaints": "Reclami"

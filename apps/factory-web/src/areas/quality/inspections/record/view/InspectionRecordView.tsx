@@ -10,8 +10,10 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { StepUpState } from '../../../_shared/hooks'
 import { evidenceAddress } from '../../../_shared/model'
 import { dash, Facts, NoticeBanner, QualityMessages, RecordFrame, Section, StepUpDialog } from '../../../_shared/parts'
-import type { FinalCell, Inspection } from '../../api'
+import type { DefectBody, FinalCell, Inspection } from '../../api'
+import { AssignDialog } from '../../view/AssignDialog'
 import {
+  assignedWords,
   checklistCounts,
   checklistGroups,
   recordAbilities,
@@ -23,7 +25,6 @@ import {
   statusOf,
   whereKey,
   whoKey,
-  type DefectDraft,
   type InspectionRecordModel,
   type PlanDraft,
   type RecordDialog,
@@ -31,7 +32,9 @@ import {
   type ReleaseDraft,
   type SignDraft,
 } from '../../model'
-import { CancelModal, DefectsModal, PlanModal, ReleaseModal, resultReasons, SignModal } from './dialogs'
+import { CancelModal, PlanModal, ReleaseModal, resultReasons, SignModal } from './dialogs'
+import { DefectsTab } from './DefectsTab'
+import '../../inspections.css'
 
 export interface InspectionRecordActions {
   onDialog?: (dialog: RecordDialog | null) => void
@@ -42,8 +45,17 @@ export interface InspectionRecordActions {
   onRelease?: () => void
   onPlanDraft?: (draft: PlanDraft) => void
   onSavePlan?: () => void
-  onDefectsDraft?: (lines: DefectDraft[]) => void
-  onSaveDefects?: () => void
+  // W2a (B-W2a-67): Defects & photos, Assign inspector, Place hold, Create NCR.
+  onLines?: (lines: readonly DefectBody[]) => void
+  onPhoto?: (index: number, photo: Blob) => void
+  onRetryDefects?: () => void
+  onDismissDefects?: () => void
+  onAssign?: () => void
+  onAssignValue?: (value: string) => void
+  onAssignSave?: () => void
+  onAssignClose?: () => void
+  onPlaceHold?: () => void
+  onRaiseNcr?: () => void
   onCancelReason?: (reason: string) => void
   onCancel?: () => void
   onReload?: () => void
@@ -53,7 +65,7 @@ export interface InspectionRecordActions {
   onStepUpCancel?: () => void
 }
 
-const TAB_KEYS: Record<RecordTab, string> = { checks: 'record.tab.checks', decision: 'record.tab.decision' }
+const TAB_KEYS: Record<RecordTab, string> = { checks: 'record.tab.checks', defects: 'record.tab.defects', decision: 'record.tab.decision' }
 
 /**
  * SCR-076 the inspection record (design quality.inspections "Inspection" record, 00 §2.2): the band (‹ Inspections, the
@@ -113,7 +125,14 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
         <Link href={`${base}?tab=decision`}>{t('record.releaseToShip')}</Link>
       </Button>
     ) : null
+  const assignHeldKey = !can.inspectionsRecord ? 'assign.held.noRight' : inspection.status !== 'OPEN' ? 'assign.held.notOpen' : null
+  const holdHeldKey = !can.holdsPlace ? 'held.noHoldPlace' : null
+  const ncrHeldKey = !can.ncrRaise ? 'raiseNcr.held.noRight' : null
   const menu: MenuItemDef[] = [
+    { id: 'assign', label: t('assign.menu'), onSelect: () => actions?.onAssign?.(), disabled: assignHeldKey !== null, description: assignHeldKey ? t(assignHeldKey) : undefined },
+    { id: 'hold', label: t('row.placeHold'), onSelect: () => actions?.onPlaceHold?.(), disabled: holdHeldKey !== null, description: holdHeldKey ? t(holdHeldKey) : undefined },
+    { id: 'ncr', label: t('row.createNcr'), onSelect: () => actions?.onRaiseNcr?.(), disabled: ncrHeldKey !== null, description: ncrHeldKey ? t(ncrHeldKey) : undefined },
+    { id: 'sep0', separator: true },
     ...(evidence
       ? [{ id: 'evidence', label: t('record.evidence'), href: evidence, target: '_blank' as const, icon: <ExternalLink size={14} aria-hidden /> }]
       : [{ id: 'evidence-none', label: t('record.evidence'), disabled: true, description: t('held.noBatch') }]),
@@ -128,6 +147,7 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
       <span className="fw-q-code">{read.workOrder.number}</span>
       {read.workOrder.batchNumber && <span className="fw-q-hint">· {t('record.batch', { batch: read.workOrder.batchNumber })}</span>}
       {style && <span className="fw-q-hint">· {style.code} {style.name}</span>}
+      {inspection.status === 'OPEN' && <span className="fw-q-hint">· {t(assignedWords(inspection.assigned, model.me, true).key, assignedWords(inspection.assigned, model.me, true).params)}</span>}
     </span>
   )
 
@@ -150,7 +170,7 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
           <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('record.more') }} items={menu} />
         </>
       }
-      tabs={(['checks', 'decision'] as const).map((tab) => ({ id: tab, label: t(TAB_KEYS[tab]) }))}
+      tabs={(['checks', 'defects', 'decision'] as const).map((tab) => ({ id: tab, label: t(TAB_KEYS[tab]) }))}
       active={model.tab}
       tabHref={(tab) => `${base}?tab=${tab}`}
     >
@@ -170,7 +190,28 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
         <Banner tone="neutral" title={t('record.locked', { where: t(whereKey(inspection.inspector, model.me)), date: formatDateTime(inspection.decidedAt, { locale }) })} />
       )}
       {inspection.status === 'CANCELLED' && <Banner tone="neutral" title={t('record.cancelledBanner')} />}
-      {model.tab === 'checks' ? <ChecksTab model={model} actions={actions} recordHeld={abilities.recordHeld} /> : <DecisionTab model={model} actions={actions} signHeld={abilities.signHeld} />}
+      {model.tab === 'checks' ? (
+        <ChecksTab model={model} actions={actions} recordHeld={abilities.recordHeld} />
+      ) : model.tab === 'defects' ? (
+        <DefectsTab
+          model={model.defects ?? { lines: [], saving: 'idle', library: { value: null, problem: null }, photos: { value: null, problem: null }, photoSrc: {} }}
+          cells={final?.cells ?? []}
+          sampleSize={inspection.plan.sampleSize}
+          held={abilities.recordHeld}
+          canRaise={can.ncrRaise}
+          dialog={dialog?.kind === 'pick' || dialog?.kind === 'zone' || dialog?.kind === 'photo' ? dialog : null}
+          actions={{
+            onLines: actions?.onLines,
+            onPhoto: actions?.onPhoto,
+            onRetry: actions?.onRetryDefects,
+            onDismiss: actions?.onDismissDefects,
+            onRaiseNcr: () => actions?.onRaiseNcr?.(),
+            onDialog: (next) => open(next),
+          }}
+        />
+      ) : (
+        <DecisionTab model={model} actions={actions} signHeld={abilities.signHeld} />
+      )}
 
       <SignModal
         open={dialog?.kind === 'sign'}
@@ -206,17 +247,6 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
         onSave={() => actions?.onSavePlan?.()}
         onClose={() => open(null)}
       />
-      <DefectsModal
-        open={dialog?.kind === 'defects'}
-        lines={model.defectsDraft ?? []}
-        cells={final?.cells ?? []}
-        sampleSize={inspection.plan.sampleSize}
-        busy={model.busy}
-        problem={dialog?.kind === 'defects' ? model.dialogProblem : null}
-        onLines={(lines) => actions?.onDefectsDraft?.(lines)}
-        onSave={() => actions?.onSaveDefects?.()}
-        onClose={() => open(null)}
-      />
       <CancelModal
         open={dialog?.kind === 'cancel'}
         reason={model.cancelReason ?? ''}
@@ -226,6 +256,7 @@ function Record({ model, actions, stepUp }: { model: InspectionRecordModel; acti
         onCancel={() => actions?.onCancel?.()}
         onClose={() => open(null)}
       />
+      <AssignDialog state={model.assign ?? null} onValue={(value) => actions?.onAssignValue?.(value)} onSave={() => actions?.onAssignSave?.()} onClose={() => actions?.onAssignClose?.()} />
       {stepUp && <StepUpDialog state={stepUp} onSubmit={(code) => actions?.onStepUpSubmit?.(code)} onCancel={() => actions?.onStepUpCancel?.()} />}
       {dialog?.kind === 'shortcuts' && <RecordKeys onClose={() => open(null)} />}
     </RecordFrame>
@@ -344,8 +375,8 @@ function ChecksTab({ model, actions, recordHeld }: { model: InspectionRecordMode
           title={t('defects.heading')}
           sub={t('defects.counts', { critical: inspection.counts.critical, major: inspection.counts.major, minor: inspection.counts.minor })}
           actions={
-            <Button size="sm" onClick={() => actions?.onDialog?.({ kind: 'defects' })} heldReason={recordHeld ? t(recordHeld) : null}>
-              {t('defects.edit')}
+            <Button size="sm" asChild>
+              <Link href={`${model.prefix}/quality/inspections/${encodeURIComponent(inspection.id)}?tab=defects`}>{t('defects.openTab')}</Link>
             </Button>
           }
         >

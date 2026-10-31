@@ -1,0 +1,240 @@
+/* Quality › Defects & dispositions (SCR-079): layout only, semantic tokens. The page fills the main area (no max-width). */
+.fw-df {
+  min-width: 0;
+}
+.fw-df-code {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-df-code.is-defect {
+  padding-inline-start: var(--nds-space-20);
+}
+.fw-df-cell {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+.fw-df-cell-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-df-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-link);
+  text-align: start;
+  cursor: pointer;
+}
+.fw-df-name.is-static {
+  color: var(--nds-text-strong);
+  cursor: default;
+}
+.fw-df-code.is-category .fw-df-name {
+  color: var(--nds-text-strong);
+}
+.fw-df-name:focus-visible {
+  outline: 2px solid rgb(var(--nds-focus-rgb));
+  outline-offset: 2px;
+}
+.fw-df-words {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-df-words.is-category {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-df-sub {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-df-data {
+  font-size: var(--nds-font-size-xs);
+  white-space: normal;
+}
+.fw-df-danger {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-danger-text);
+}
+.fw-df-refused {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--nds-radius-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}
+.fw-df-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--nds-radius-sm);
+  border: 1px solid var(--nds-border);
+}
+.fw-df-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  max-width: 320px;
+  flex: 1 1 200px;
+}
+.fw-df-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-df-lines {
+  margin: 0;
+  padding-inline-start: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+.fw-df-amount {
+  width: 110px;
+}
+.fw-df-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+}
+.fw-df-drawer-state {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.fw-df-drawer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+.fw-df-keys {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+  margin-inline-start: var(--nds-space-4);
+}
+.fw-df-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-block-start: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border);
+}
+.fw-df-block-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+.fw-df-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+.fw-df-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-df-picture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+.fw-df-picture-img {
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  align-self: flex-start;
+  border-radius: var(--nds-radius-md);
+  border: 1px solid var(--nds-border);
+}
+.fw-df-picture-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-12);
+  border: 1px dashed var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text-2);
+  background: var(--nds-surface-sunken);
+}
+.fw-df-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.fw-df-preview {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.fw-df-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-df-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+.fw-df-dialog-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  margin-inline-end: auto;
+}
+.fw-df-radios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-8);
+}
+.fw-df-radios.is-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+.fw-df-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+}
+.fw-df-keys-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.fw-df-keys-list > div {
+  display: flex;
+  gap: var(--nds-space-10);
+  align-items: baseline;
+}
+.fw-df-keys-list dt {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+  min-width: 72px;
+}
+.fw-df-keys-list dd {
+  margin: 0;
+}

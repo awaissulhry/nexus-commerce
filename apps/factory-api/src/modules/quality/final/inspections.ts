@@ -31,6 +31,7 @@ import { readCells, type LabelHeader } from '../../production/serials/store'
 import { scanProgressOf } from '../../production/scans/progress'
 import { holdOnInspection } from '../holds/checks'
 import { finalWorkOrder, inspectorOf, mayOn, postedBy, signerOf, type Inspector } from './access'
+import { assertAssignable, assignedView, assigneeNames, assigneeOf, isAssigned, isAssignee, type Assignee } from './assign'
 import { identityOf, MakerRefusedError, makerCheck, type Identity } from './facts'
 import { makersOf, readDefects, readInspection, readWorkOrderInspections, type DefectRow, type InspectionRow, type Reader } from './store'
 
@@ -83,15 +84,31 @@ async function inspectionFor(caller: CommandCaller, inspectionId: string, permis
   return { inspection, header }
 }
 
-/** The caller is the inspection's inspector (the same worker or office user). */
-const isOwn = (context: Inspector, inspection: Pick<InspectionRow, 'inspectorWorkerId' | 'inspectorUserId'>): boolean => {
+/**
+ * The caller records and signs this inspection: its assignee when it is assigned (W2a, B-W2a-67: ./assign.ts), else its
+ * inspector (the worker or office user who opened it).
+ */
+const isOwn = (context: Inspector, inspection: Pick<InspectionRow, 'inspectorWorkerId' | 'inspectorUserId' | 'assignedInspectorId' | 'assignedInspectorWorkerId'>): boolean => {
   const signer = signerOf(context)
+  const assignee = assigneeOf(inspection)
+  if (isAssigned(assignee)) return isAssignee(assignee, signer)
   return (signer.workerId !== null && signer.workerId === inspection.inspectorWorkerId) || (signer.userId !== null && signer.userId === inspection.inspectorUserId)
 }
 
-/** Only its inspector records and signs an inspection (one inspector per inspection in W1; assigning is W2a). */
+/** Only its inspector — or, once assigned, its assignee — records and signs an inspection. */
 function assertOwnInspection(context: Inspector, inspection: InspectionRow) {
-  if (!isOwn(context, inspection)) throw new ForbiddenError('This inspection is recorded and signed by the inspector who opened it.')
+  if (isOwn(context, inspection)) return
+  throw new ForbiddenError(isAssigned(assigneeOf(inspection)) ? 'This inspection is assigned to another inspector: they record and sign it.' : 'This inspection is recorded and signed by the inspector who opened it.')
+}
+
+/**
+ * The inspector columns a write sets: the assignee who records it becomes its inspector (the signature and the four-eyes
+ * rules name who signs); nothing changes when the caller already is.
+ */
+function takeOver(context: Inspector, row: Pick<InspectionRow, 'inspectorWorkerId' | 'inspectorUserId'>): { inspectorWorkerId: string | null; inspectorUserId: string | null } | Record<string, never> {
+  const signer = signerOf(context)
+  if (signer.workerId === row.inspectorWorkerId && signer.userId === row.inspectorUserId) return {}
+  return { inspectorWorkerId: signer.workerId, inspectorUserId: signer.userId }
 }
 
 /** The caller as people (office: their own reads; floor: through the tenant's system view, which reads Worker.userId). */
@@ -113,7 +130,7 @@ const piecesOf = async (db: Reader, workOrderId: string) => (await readCells(db,
 
 // ---- the views -------------------------------------------------------------------------------------------------------------------
 
-const defectView = (row: DefectRow) => ({ id: row.id, defectClass: row.defectClass, code: row.code, description: row.description, quantity: row.quantity, workOrderSizeId: row.workOrderSizeId, note: row.note })
+const defectView = (row: DefectRow) => ({ id: row.id, defectClass: row.defectClass, code: row.code, defectCodeId: row.defectCodeId, zone: row.zone, description: row.description, quantity: row.quantity, workOrderSizeId: row.workOrderSizeId, note: row.note })
 
 export const checklistAnswers = (value: unknown): ChecklistAnswer[] =>
   Array.isArray(value)
@@ -131,7 +148,7 @@ export const planOf = (row: InspectionRow): SamplingPlan => ({
 })
 
 /** One inspection as every screen shows it: its plan, checklist, defects, the result now (computed) and the decision. */
-export function inspectionView(row: InspectionRow, defects: readonly DefectRow[], context: { readonly number: string; readonly seq: number }) {
+export function inspectionView(row: InspectionRow, defects: readonly DefectRow[], context: { readonly number: string; readonly seq: number; readonly names?: ReadonlyMap<string, string> }) {
   const plan = planOf(row)
   const checklist = checklistAnswers(row.checklist)
   const computed = computedResult({ counts: defectCounts(defects), plan, checklist })
@@ -153,6 +170,8 @@ export function inspectionView(row: InspectionRow, defects: readonly DefectRow[]
     overridden: row.overrideReason !== null,
     overrideReason: row.overrideReason,
     inspector: { kind: row.inspectorWorkerId ? ('FLOOR' as const) : ('OFFICE' as const), workerId: row.inspectorWorkerId, userId: row.inspectorUserId },
+    /** W2a: who it is assigned to (inside one inspection a worker is named). */
+    assigned: assignedView(row, context.names, true),
     notMakerStatement: row.notMakerStatement,
     decidedAt: row.decidedAt ? toUtcIso(row.decidedAt) : null,
     signatureSha256: row.signatureSha256,
@@ -168,7 +187,7 @@ export async function seqOf(db: Reader, inspection: Pick<InspectionRow, 'id' | '
 }
 
 async function viewOf(db: Reader, row: InspectionRow, number: string) {
-  return inspectionView(row, await readDefects(db, [row.id]), { number, seq: await seqOf(db, row) })
+  return inspectionView(row, await readDefects(db, [row.id]), { number, seq: await seqOf(db, row), names: await assigneeNames(db, [row]) })
 }
 
 // ---- open --------------------------------------------------------------------------------------------------------------------------
@@ -192,6 +211,9 @@ export async function qualityNumber(tools: CommandTools, kind: 'INSPECTION' | 'R
 export interface OpenBody extends SamplingPlan {
   readonly workOrderId: string
   readonly note?: string | null | undefined
+  /** W2a: the office assigns it at once (never a maker; ./assign.ts). */
+  readonly assigneeId?: string | null | undefined
+  readonly assigneeWorkerId?: string | null | undefined
 }
 
 export async function openInspection(caller: CommandCaller, body: OpenBody, idempotencyKey: string | undefined) {
@@ -199,8 +221,11 @@ export async function openInspection(caller: CommandCaller, body: OpenBody, idem
   const header = await finalWorkOrder(caller, body.workOrderId, QUALITY_INSPECTIONS_RECORD)
   if (context.audience === 'floor') await assertFloorReady(caller, header.siteId)
   const identity = await callerIdentity(caller)
+  const assignee: Assignee = { userId: body.assigneeId ?? null, workerId: body.assigneeWorkerId ?? null }
+  if (isAssigned(assignee) && context.audience !== 'office') throw new ForbiddenError('The office assigns an inspection to its inspector; the floor does not.')
   const { result } = await command(caller, { name: 'quality.inspection.open', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
+    if (isAssigned(assignee) && context.audience === 'office') await assertAssignable(tx, context, assignee, header, now)
     // B-W2a-F1 hook (quality/holds checks.ts): a work order ON_HOLD, in its hold's words (wave 5's Inspection_awaits_hold).
     const held = await holdOnInspection(tx, tools.context, { workOrderId: header.id })
     if (held) throw new InvalidStateError(held)
@@ -229,6 +254,8 @@ export async function openInspection(caller: CommandCaller, body: OpenBody, idem
         acceptMinor: body.acceptMinor,
         inspectorWorkerId: signer.workerId,
         inspectorUserId: signer.userId,
+        assignedInspectorId: assignee.userId,
+        assignedInspectorWorkerId: assignee.workerId,
         note: body.note?.trim() || null,
         createdAt: now,
         updatedAt: now,
@@ -236,7 +263,7 @@ export async function openInspection(caller: CommandCaller, body: OpenBody, idem
       },
       select: { id: true, version: true },
     })
-    tools.audit({ recordType: 'Inspection', recordId: id, companyId: header.companyId, siteId: header.siteId, after: { ...body, number, workOrderId: header.id, status: 'OPEN', inspector: postedBy(context) } })
+    tools.audit({ recordType: 'Inspection', recordId: id, companyId: header.companyId, siteId: header.siteId, after: { ...body, number, workOrderId: header.id, status: 'OPEN', inspector: postedBy(context), ...(isAssigned(assignee) ? { assigned: assignee } : {}) } })
     tools.emit({ type: 'quality.inspection_opened', subject: id, companyId: header.companyId, siteId: header.siteId, payload: { inspectionId: id, inspectionNumber: number, workOrderId: header.id, number: header.number, lotSize: body.lotSize, postedBy: postedBy(context) } })
     return { id: row.id }
   })
@@ -288,6 +315,7 @@ export async function updateInspection(caller: CommandCaller, inspectionId: stri
       ...(body.checklist ? { checklist: checklistOf(body.checklist) } : {}),
       ...(body.note !== undefined ? { note: body.note?.trim() || null } : {}),
       ...(body.notMakerStatement !== undefined ? { notMakerStatement: body.notMakerStatement } : {}),
+      ...takeOver(context, before),
       version: { increment: 1 },
       updatedAt: now,
     }
@@ -303,6 +331,28 @@ export interface DefectsBody {
   readonly defects: readonly DefectLine[]
 }
 
+/**
+ * W2a (B-W2a-67; QHS-001): a line picked from the library names an ACTIVE defect (not a category) and carries its code
+ * (the …_quality_plant_w2a_guards defect library guard holds the same).
+ */
+async function libraryProblems(tx: CommandTx, lines: readonly DefectLine[], existing: readonly DefectRow[]): Promise<Issue[]> {
+  const ids = [...new Set(lines.map((line) => line.defectCodeId).filter((id): id is string => typeof id === 'string'))]
+  if (ids.length === 0) return []
+  const library = new Map((await tx.defectCode.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, parentId: true, active: true } })).map((row) => [row.id, row]))
+  const problems: Issue[] = []
+  lines.forEach((line, index) => {
+    if (!line.defectCodeId) return
+    const found = library.get(line.defectCodeId)
+    const at = `defects/${index}/defectCodeId`
+    if (!found) problems.push({ path: at, message: 'Not a defect of the library.' })
+    else if (found.parentId === null) problems.push({ path: at, message: `${found.code} is a category: pick one of its defects.` })
+    else if (found.code !== line.code) problems.push({ path: `defects/${index}/code`, message: `The library names this defect ${found.code}.` })
+    // A retired defect stays on the lines that already name it (only a new pick is refused).
+    else if (!found.active && !existing.some((row) => row.defectClass === line.defectClass && row.code === line.code && row.defectCodeId === line.defectCodeId)) problems.push({ path: at, message: `${found.code} is retired: it is no longer picked.` })
+  })
+  return problems
+}
+
 export async function putDefects(caller: CommandCaller, inspectionId: string, body: DefectsBody, idempotencyKey: string | undefined) {
   const context = inspectorOf(caller)
   const { inspection, header } = await inspectionFor(caller, inspectionId, QUALITY_INSPECTIONS_RECORD)
@@ -311,15 +361,15 @@ export async function putDefects(caller: CommandCaller, inspectionId: string, bo
     const { tx, now } = tools
     const current = await lockInspection(tx, inspection.id, body.version)
     const cells = await readCells(tx, header.id)
-    const problems = defectProblems(body.defects, { sampleSize: current.sampleSize, cellIds: new Set(cells.map((cell) => cell.id)) })
-    if (problems.length > 0) throw invalid('The defects are not valid.', problems)
     const existing = await readDefects(tx, [current.id])
+    const problems = [...defectProblems(body.defects, { sampleSize: current.sampleSize, cellIds: new Set(cells.map((cell) => cell.id)) }), ...(await libraryProblems(tx, body.defects, existing))]
+    if (problems.length > 0) throw invalid('The defects are not valid.', problems)
     const key = (line: Pick<DefectLine, 'defectClass' | 'code'>) => `${line.defectClass}|${line.code}`
     const wanted = new Map(body.defects.map((line) => [key(line), line]))
     for (const row of existing) if (!wanted.has(key(row))) await tx.inspectionDefect.delete({ where: { id: row.id }, select: { id: true } })
     for (const line of body.defects) {
       const row = existing.find((entry) => key(entry) === key(line))
-      const data = { quantity: line.quantity, workOrderSizeId: line.workOrderSizeId ?? null, description: line.description?.trim() || null, note: line.note?.trim() || null }
+      const data = { quantity: line.quantity, workOrderSizeId: line.workOrderSizeId ?? null, description: line.description?.trim() || null, note: line.note?.trim() || null, defectCodeId: line.defectCodeId ?? null, zone: line.zone?.trim() || null }
       if (row) await tx.inspectionDefect.update({ where: { id: row.id }, data: { ...data, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
       else
         await tx.inspectionDefect.create({
@@ -327,7 +377,7 @@ export async function putDefects(caller: CommandCaller, inspectionId: string, bo
           select: { id: true },
         })
     }
-    await tx.inspection.update({ where: { id: current.id }, data: { version: { increment: 1 }, updatedAt: now }, select: { id: true } })
+    await tx.inspection.update({ where: { id: current.id }, data: { ...takeOver(context, current), version: { increment: 1 }, updatedAt: now }, select: { id: true } })
     tools.audit({ recordType: 'Inspection', recordId: current.id, companyId: header.companyId, siteId: header.siteId, before: { defects: existing.map(defectView) }, after: { defects: body.defects } })
     return { id: current.id }
   })
@@ -382,7 +432,7 @@ export async function decideInspection(caller: CommandCaller, inspectionId: stri
     const signature = signatureOf({ inspectionId: current.id, workOrderId: current.workOrderId, status, computed: again.result, counts, plan: planOf(current), checklist, overrideReason, notMakerStatement: statement, signer: signerOf(context), at: toUtcIso(now) })
     const decided = await tx.inspection.update({
       where: { id: current.id },
-      data: { status, checklist, decidedAt: now, signatureSha256: signature, overrideReason, notMakerStatement: statement, ...(body.note !== undefined ? { note: body.note?.trim() || null } : {}), version: { increment: 1 }, updatedAt: now },
+      data: { status, checklist, decidedAt: now, signatureSha256: signature, overrideReason, notMakerStatement: statement, ...(body.note !== undefined ? { note: body.note?.trim() || null } : {}), ...takeOver(context, current), version: { increment: 1 }, updatedAt: now },
       select: { computedResult: true },
     })
     if (decided.computedResult !== again.result) throw new ConflictError('The computed result differs from the rules: reload the inspection.')
@@ -415,7 +465,7 @@ export async function cancelInspection(caller: CommandCaller, inspectionId: stri
   if (problem) throw invalid('Say why the inspection is cancelled.', [problem])
   const { result } = await command(caller, { name: 'quality.inspection.cancel', idempotencyKey, input: body }, async (tools) => {
     const current = await lockInspection(tools.tx, inspection.id, body.version)
-    await tools.tx.inspection.update({ where: { id: current.id }, data: { status: 'CANCELLED', version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
+    await tools.tx.inspection.update({ where: { id: current.id }, data: { status: 'CANCELLED', ...takeOver(context, current), version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ recordType: 'Inspection', recordId: current.id, companyId: header.companyId, siteId: header.siteId, before: { status: 'OPEN' }, after: { status: 'CANCELLED' }, reason: body.reason.trim() })
     tools.emit({ type: 'quality.inspection_cancelled', subject: current.id, companyId: header.companyId, siteId: header.siteId, payload: { inspectionId: current.id, workOrderId: header.id, number: header.number } })
     return { id: current.id }

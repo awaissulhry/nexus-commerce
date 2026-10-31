@@ -290,7 +290,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Main',
         labelIt: 'Principali',
         hideLabel: true,
-        pages: [{ id: 'quality.inspections', title: 'Inspections', titleIt: 'Ispezioni', wave: 'W1', href: '/quality/inspections' }],
+        pages: [
+          { id: 'quality.inspections', title: 'Inspections', titleIt: 'Ispezioni', wave: 'W1', href: '/quality/inspections' },
+          // W2a: B-W2a-67 Holds (SCR-078).
+          { id: 'quality.holds', title: 'Holds', titleIt: 'Blocchi', wave: 'W2a', href: '/quality/holds' },
+        ],
       },
       // W2a: B-W2a-68 Nonconformances (SCR-144, SCR-145) and B-W2a-65 Complaints (SCR-113 W2a part).
       {
@@ -301,6 +305,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'quality.ncr', title: 'Nonconformances', titleIt: 'Non conformità', wave: 'W2a', href: '/quality/ncr' },
           { id: 'quality.complaints', title: 'Complaints', titleIt: 'Reclami', wave: 'W2a', href: '/quality/complaints' },
         ],
+      },
+      // W2a: B-W2a-67 Defects & dispositions (SCR-079). After Problems (the tree's order).
+      {
+        label: 'Settings',
+        labelIt: 'Impostazioni',
+        hideLabel: false,
+        pages: [{ id: 'quality.defects', title: 'Defects & dispositions', titleIt: 'Difetti e destinazioni', wave: 'W2a', href: '/quality/defects' }],
       },
     ],
   },

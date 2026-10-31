@@ -1,0 +1,449 @@
+{
+  "approval": {
+    "amount": "goods over the value rule",
+    "none": "Never",
+    "noneSeen": "Not by class (a value rule may apply: needs cost access)",
+    "severity": {
+      "CRITICAL": "Critical NCRs",
+      "MAJOR": "Major or critical NCRs",
+      "MINOR": "Every NCR",
+      "none": "No class rule"
+    }
+  },
+  "bulk": {
+    "activate_one": "Set {count} active",
+    "activate_other": "Set {count} active",
+    "deactivate_one": "Set {count} inactive",
+    "deactivate_other": "Set {count} inactive",
+    "export_one": "Export {count}",
+    "export_other": "Export {count}",
+    "restore_one": "Restore {count}",
+    "restore_other": "Restore {count}",
+    "retire_one": "Retire {count}",
+    "retire_other": "Retire {count}"
+  },
+  "col": {
+    "actions": "Actions",
+    "approval": "Needs approval",
+    "code": "Code",
+    "en": "English",
+    "it": "Italian",
+    "outcome": "Decides",
+    "picture": "Picture",
+    "reinspection": "Inspected again",
+    "severity": "Default class",
+    "severityOf": "Default class of {code}",
+    "stages": "Applies at",
+    "status": "Status",
+    "stockAction": "Stock action",
+    "used": "Used",
+    "zone": "Garment zone"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "loading": "Reading…",
+    "retry": "Try again"
+  },
+  "csv": {
+    "category": "Category",
+    "code": "Code",
+    "en": "English",
+    "it": "Italian",
+    "needsDetail": "Asks for a note",
+    "no": "no",
+    "outcome": "Decides",
+    "reinspection": "Inspected again",
+    "severity": "Default class",
+    "stages": "Applies at",
+    "status": "Status",
+    "stockAction": "Stock action",
+    "used": "Used",
+    "yes": "yes",
+    "zone": "Garment zone"
+  },
+  "delete": {
+    "body": "{code} ({words}) is not used on any inspection or NCR. Deleting it cannot be undone; retiring keeps it.",
+    "confirm": "Delete",
+    "title": "Delete {code}?"
+  },
+  "detail": {
+    "off": "Asks for nothing more",
+    "on": "Asks for a note or a photo"
+  },
+  "dialog": {
+    "saveKey": "adds it"
+  },
+  "disp": {
+    "amountFrom": "or from",
+    "amountHidden": "Amount rule hidden: needs cost access.",
+    "amountIs": "or goods worth {amount} or more",
+    "amountOf": "Approval from this value of the goods for {code}",
+    "approvalSeverityOf": "Approval rule by class of {code}",
+    "count_one": "{count} code",
+    "count_other": "{count} codes",
+    "empty": {
+      "body_one": "Add the {count} standard code (use as is, rework, repair, regrade, return to the supplier, quarantine, scrap) or your own.",
+      "body_other": "Add the {count} standard codes (use as is, rework, repair, regrade, return to the supplier, quarantine, scrap) or your own.",
+      "title": "No disposition codes yet"
+    },
+    "failed": "The disposition codes could not be read",
+    "fixed": "Never changes",
+    "footnote": "A used code keeps what it decides: to change the outcome, the stock move or the follow-up, set it inactive and add a new code.",
+    "reinspectHeld": "Goods used as they are are not inspected again.",
+    "reinspectOf": "{code}: inspected again before release",
+    "table": "Disposition codes and the stock action of each",
+    "title": "Disposition codes"
+  },
+  "done": {
+    "activated_one": "{count} code set active.",
+    "activated_other": "{count} codes set active.",
+    "added": "{code} added: give it a picture and a zone here.",
+    "addedCategory": "Category {code} added: add its defects.",
+    "addedDisposition": "Disposition {code} added.",
+    "deactivated_one": "{count} code set inactive: it stays on its decisions.",
+    "deactivated_other": "{count} codes set inactive: they stay on their decisions.",
+    "deleted": "{code} deleted.",
+    "restored_one": "{count} code restored: back in the pickers.",
+    "restored_other": "{count} codes restored: back in the pickers.",
+    "retired_one": "{count} code retired: it stays on its records and left the pickers.",
+    "retired_other": "{count} codes retired: they stay on their records and left the pickers.",
+    "standard_one": "{count} standard code added.",
+    "standard_other": "{count} standard codes added.",
+    "starter_one": "{count} code of the starter set added.",
+    "starter_other": "{count} codes of the starter set added."
+  },
+  "drawer": {
+    "categorySub_one": "A category of {count} defect",
+    "categorySub_other": "A category of {count} defects",
+    "close": "Close",
+    "defectSub": "A defect of {category}",
+    "detail": "Asks for a note or a photo",
+    "detailHint": "For \"Other\" and vague codes: the inspector says more.",
+    "detailOf": "{code} asks for a note or a photo",
+    "first": "This is the first code of the list.",
+    "last": "This is the last code of the list.",
+    "look": "Icon and colour",
+    "lookHint": "The floor's tile: the icon carries the meaning, the colour tells tiles apart.",
+    "missing": "This code is not in the library (deleted, or another company's address).",
+    "missingTitle": "Code not found",
+    "next": "Next code",
+    "order": "Order",
+    "orderHint": "Lower numbers come first in the pickers.",
+    "orderLabel": "Position",
+    "picture": "Example picture",
+    "pictureHint": "What the defect looks like, shown beside the code when an inspector picks it.",
+    "previous": "Previous code",
+    "severity": "Default class",
+    "severityHint": "The class an inspector starts from; critical means a safety or compliance failure, never accepted.",
+    "stages": "Stages it applies to",
+    "stagesEvery": "None picked: it applies at every stage.",
+    "stagesSome": "It is offered only at the stages picked.",
+    "words": "Names",
+    "wordsHint": "Saved when you leave a field. Other floor languages show here once they have words.",
+    "zone": "Where on the garment",
+    "zoneHint": "The zone it is usually found in (the heat map counts by it).",
+    "zoneOf": "Where on the garment {code} is found"
+  },
+  "followUp": {
+    "REPAIR_ORDER": "opens a repair",
+    "REWORK_ORDER": "opens a rework order",
+    "SUPPLIER_CLAIM": "opens a supplier claim",
+    "none": "Opens nothing else"
+  },
+  "head": {
+    "addDefect": "Add defect",
+    "addDisposition": "Add disposition",
+    "export": "Export this tab (CSV)",
+    "import": "Import library",
+    "importHeld": "Comes later (W2b): there is no import of the library yet.",
+    "introDefects": "The defect codes inspectors pick on the floor and in the office: two levels with pictures, a default class, where on the garment and when they apply.",
+    "introDispositions": "What a decision on a nonconformance does: each code says which stock move it posts and which record it opens.",
+    "more": "More actions"
+  },
+  "held": {
+    "allActive": "Every ticked code is active already.",
+    "allActiveDisp": "Every ticked code is active already.",
+    "allInactive": "Every ticked code is inactive already.",
+    "allRetired": "Every ticked code is retired already.",
+    "busy": "Wait: the last change is still being saved.",
+    "categoryHasDefects_one": "This category has {count} defect: delete it first, or retire the category.",
+    "categoryHasDefects_other": "This category has {count} defects: delete them first, or retire the category.",
+    "categoryRetired": "This category is retired: restore it first, or its new defects would not reach the pickers.",
+    "noManage": "Changing the library needs quality.defects.manage over every company: the codes are the whole group's.",
+    "noUpload": "Uploading a picture needs the permission files.upload.",
+    "pickRows": "Tick the codes first.",
+    "reading": "Wait: the page is still reading.",
+    "used_one": "Used on {count} record: retire it instead (it stays on it).",
+    "used_other": "Used on {count} records: retire it instead (it stays on them)."
+  },
+  "keys": {
+    "add": "Add defect",
+    "addDisposition": "Add disposition",
+    "next": "Next code (in the drawer)",
+    "open": "Open the code in its drawer",
+    "previous": "Previous code (in the drawer)",
+    "save": "Add, in a dialog",
+    "title": "Keyboard shortcuts"
+  },
+  "library": {
+    "clear": "Show every code",
+    "countReading": "Reading…",
+    "count_one": "{count} defect in {categories} categories",
+    "count_other": "{count} defects in {categories} categories",
+    "empty": {
+      "body_one": "Start from the leather-apparel starter set ({count} code) or add the first defect.",
+      "body_other": "Start from the leather-apparel starter set ({count} codes) or add the first defect.",
+      "title": "No defect codes yet"
+    },
+    "failed": "The library could not be read",
+    "none": "No code matches this search or view.",
+    "rows": "Rows: {view}",
+    "rowsHeading": "Show",
+    "search": "Search code or words",
+    "table": "Defect library: categories and their defects",
+    "title": "Defect library",
+    "view": {
+      "active": "Active codes",
+      "all": "Every code",
+      "retired": "Retired codes"
+    }
+  },
+  "move": {
+    "ADJUSTMENT": "Posts an adjustment out of stock (the goods go back to the supplier)",
+    "ISSUE": "Posts an issue to the work order that uses them",
+    "SCRAP": "Posts a scrap move out of stock",
+    "TRANSFER": "Posts a transfer to another place of the site",
+    "none": "Moves no stock"
+  },
+  "new": {
+    "category": "Category",
+    "code": "Code",
+    "codeHint": "2 to 40 capital letters, digits, hyphens and underscores, starting with a letter (SEAM-OPEN). It never changes.",
+    "codeHintCategory": "2 to 40 capital letters, digits, hyphens and underscores, starting with a letter (SEAM). It never changes.",
+    "create": "Add defect",
+    "createCategory": "Add category",
+    "kind": "What to add",
+    "kindCategory": "A new category",
+    "kindCategoryHint": "A group of defects (seams, leather, labels…); it has no class itself.",
+    "kindDefect": "A defect",
+    "kindDefectHint": "Filed under a category, with a default class.",
+    "noCategory": "No active category yet: add a category first.",
+    "pickCategory": "Pick a category",
+    "title": "Add defect",
+    "titleCategory": "Add category",
+    "zone": "Where on the garment the new defect is found"
+  },
+  "newDisp": {
+    "amountHint": "In the company's currency (120,50); empty: no value rule. An unknown value asks for approval.",
+    "approvalAmount": "Approval from a value",
+    "approvalHint": "A decision with this code on an NCR of this class or worse waits for another person's approval.",
+    "approvalSeverity": "Approval by class",
+    "codeHint": "2 to 40 capital letters, digits and underscores, starting with a letter (SCRAP_HIDE). It never changes.",
+    "create": "Add disposition",
+    "fixed": "What it decides, its stock move and its follow-up never change once it is saved: decisions keep them.",
+    "followUp": "Record it opens",
+    "move": "Stock move",
+    "onlyOne": "The only one this outcome allows.",
+    "outcome": "What it decides",
+    "title": "Add disposition"
+  },
+  "noAccess": {
+    "body": "It needs the permission quality.defects.view. An administrator gives it with a role (Quality inspector, Production manager, Floor supervisor).",
+    "title": "You cannot open Defects & dispositions"
+  },
+  "outcome": {
+    "QUARANTINE": "Quarantine",
+    "REGRADE": "Regrade",
+    "REPAIR": "Repair",
+    "RETURN_TO_SUPPLIER": "Return to the supplier",
+    "REWORK": "Rework",
+    "SCRAP": "Scrap",
+    "USE_AS_IS": "Use as is"
+  },
+  "outcomeHint": {
+    "QUARANTINE": "Moved to a quarantine place of the site.",
+    "REGRADE": "Moved to a second-quality place.",
+    "REPAIR": "A repair, then inspected again.",
+    "RETURN_TO_SUPPLIER": "A supplier claim and the goods out of stock.",
+    "REWORK": "A rework order, then inspected again.",
+    "SCRAP": "Scrapped out of stock.",
+    "USE_AS_IS": "Accepted as it is: no stock move, nothing else opens (minor only)."
+  },
+  "photo": {
+    "label": "Photo of the defect {code}",
+    "title": "Photo of {code}"
+  },
+  "picture": {
+    "alt": "Example of {code}",
+    "failed": "The picture could not be uploaded: try again.",
+    "has": "Has a picture",
+    "none": "No picture",
+    "noneYet": "No picture yet: the floor picks by the icon and the words.",
+    "nothingToRemove": "It has no picture.",
+    "reading": "Reading the picture…",
+    "remove": "Take the picture off",
+    "replace": "Replace the picture",
+    "take": "Take a photo",
+    "upload": "Upload a picture",
+    "uploading": "Uploading the picture…",
+    "wrongType": "Pick a JPEG, PNG or WebP picture."
+  },
+  "problem": {
+    "amount": "Type an amount like 120 or 120,50 (empty: no value rule).",
+    "approvalAmount": "The value is an amount from 0 in the company's currency.",
+    "approvalSeverity": "Pick a class, or no class rule.",
+    "categoryDetail": "Only a defect asks for a note.",
+    "categoryHasDefects": "This category has defects: delete them first, or retire it.",
+    "categorySeverity": "A category has no class: its defects have one each.",
+    "categoryZone": "A category has no zone: its defects have one each.",
+    "code": "A code is 2 to 40 capital letters, digits, hyphens and underscores, starting with a letter.",
+    "codeTaken": "This code is taken: pick another.",
+    "codeTakenRetired": "A retired code has this code: restore it instead, or pick another.",
+    "colour": "Pick one of the colours offered.",
+    "conflict": "This clashes with what is stored: read the page again.",
+    "failed": "Something went wrong: try again.",
+    "followUp": "This outcome does not open that record.",
+    "forbidden": "You may not change the library (quality.defects.manage over every company).",
+    "gone": "This code is no longer in the library.",
+    "icon": "Pick one of the icons offered.",
+    "inUse": "This code is used: retire it instead (it stays on its records).",
+    "invalid": "The change was refused as it is.",
+    "labelEn": "Give the English words.",
+    "labelIt": "Give the Italian words.",
+    "language": "Those words are not valid for that language.",
+    "libraryFull": "The library holds at most 500 codes: retire or delete some first.",
+    "needsDetail": "Only a defect asks for a note.",
+    "noCost": "The value rule needs cost access.",
+    "offline": "No answer from the server: we do not know whether it was saved. Try again.",
+    "outcome": "Pick what the code decides.",
+    "parentId": "File the defect under a category of the library.",
+    "picture": "The picture is not ready: upload it again.",
+    "pictureFileId": "The picture is not ready: upload it again.",
+    "read": "The server did not answer as expected.",
+    "readForbidden": "You may not read this (quality.defects.view).",
+    "reinspectUseAsIs": "Goods used as they are are not inspected again.",
+    "reinspection": "Goods used as they are are not inspected again.",
+    "severity": "Pick the default class: critical, major or minor.",
+    "signedOut": "You are signed out: sign in again.",
+    "sortOrder": "The position is a whole number from 0.",
+    "stages": "Pick stages of the factory.",
+    "stale": "Someone changed this code meanwhile: it was read again; make your change once more.",
+    "stockMoveReason": "This outcome does not allow that stock move.",
+    "tooLong": "At most 80 characters.",
+    "zone": "Pick a zone of the garment map."
+  },
+  "readOnly": {
+    "title": "You can read the library, not change it"
+  },
+  "reinspection": {
+    "off": "No",
+    "on": "Yes",
+    "yes": "inspected again before release"
+  },
+  "retire": {
+    "category_one": "Category {code}: its {count} defect leaves the pickers with it.",
+    "category_other": "Category {code}: its {count} defects leave the pickers with it.",
+    "confirm_one": "Retire {count}",
+    "confirm_other": "Retire {count}",
+    "restore": "A retired code can be restored at any time.",
+    "title_one": "Retire {count} code?",
+    "title_other": "Retire {count} codes?",
+    "unused": "{code} is not used yet: it leaves the pickers (it could also be deleted).",
+    "used_one": "{code} is used on {count} inspection or NCR; it stays on it and leaves the pickers.",
+    "used_other": "{code} is used on {count} inspections or NCRs; it stays on them and leaves the pickers."
+  },
+  "row": {
+    "activate": "Set active",
+    "addUnder": "Add a defect to this category",
+    "categoryOf_one": "Category · {count} defect",
+    "categoryOf_other": "Category · {count} defects",
+    "copyCode": "Copy code",
+    "deactivate": "Set inactive",
+    "delete": "Delete",
+    "lookWords": "Tile: {look}",
+    "menu": "Actions for {code}",
+    "open": "Open",
+    "openNamed": "Open {code}",
+    "restore": "Restore",
+    "retire": "Retire"
+  },
+  "severity": {
+    "CRITICAL": "Critical",
+    "MAJOR": "Major",
+    "MINOR": "Minor",
+    "category": "Per defect",
+    "none": "No class",
+    "pick": "Pick a class"
+  },
+  "stage": {
+    "AUDIT": "Audit",
+    "CUSTOMER": "Customer",
+    "CUTTING": "Cutting",
+    "FINAL": "Final",
+    "INCOMING": "Incoming",
+    "IN_LINE": "In-line",
+    "PACKING": "Packing",
+    "STOCK": "Stock"
+  },
+  "stages": {
+    "every": "Every stage"
+  },
+  "standard": {
+    "add_one": "Add the {count} standard code",
+    "add_other": "Add the {count} standard codes",
+    "body": "Use as is, rework, repair, regrade, return to the supplier, quarantine and scrap, each with its stock action. Only what is missing is added.",
+    "title_one": "Add the standard disposition codes: {count} missing",
+    "title_other": "Add the standard disposition codes: {count} missing"
+  },
+  "starter": {
+    "add": "Add the starter set",
+    "body": "Open seam, skipped stitch, puckering, shade difference, scar or brand on the hide, grain crack, loose grain, colour rub-off, misaligned zip, missing armour pocket, wrong or missing label, stain, needle holes. Only what the library does not have is added.",
+    "title_one": "Start from the leather-apparel starter set: {count} code missing",
+    "title_other": "Start from the leather-apparel starter set: {count} codes missing"
+  },
+  "status": {
+    "activateOf": "Set {code} active",
+    "active": "Active",
+    "deactivateOf": "Set {code} inactive",
+    "inactive": "Inactive",
+    "restoreOf": "Restore {code}",
+    "retireOf": "Retire {code}",
+    "retired": "Retired"
+  },
+  "tab": {
+    "causes": "Causes",
+    "defects": "Defects",
+    "dispositions": "Dispositions",
+    "grades": "Leather grades",
+    "label": "Sections of Defects & dispositions",
+    "later": "Comes later",
+    "severity": "Severity"
+  },
+  "used": {
+    "count_one": "Used on {count}",
+    "count_other": "Used on {count}",
+    "decisions_one": "{count} decision",
+    "decisions_other": "{count} decisions",
+    "none": "Not used"
+  },
+  "zone": {
+    "category": "Per defect",
+    "none": "No zone"
+  },
+  "zoneMap": {
+    "clear": "Clear the zone",
+    "elsewhere": "Not on the sketch:",
+    "figure": {
+      "back": "Jacket, back",
+      "front": "Jacket, front",
+      "trousers": "Trousers, front"
+    },
+    "hint": "Tap a zone; on the keyboard the arrows move between zones and Enter picks. Left and right are the wearer's.",
+    "list": "Or pick from the list",
+    "none": "No zone",
+    "nonePicked": "No zone picked",
+    "nothingToClear": "No zone is picked.",
+    "picked": "Zone: {zone}"
+  }
+}
