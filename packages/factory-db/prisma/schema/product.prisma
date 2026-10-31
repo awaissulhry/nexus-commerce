@@ -426,6 +426,8 @@ model Style {
   salesOrderLines     SalesOrderLine[]
   // production.prisma: the work orders that make it.
   workOrders          WorkOrder[]
+  // W2b pay.prisma (schema wave 6/7): the piece-rate tables of its own.
+  pieceRateTables     PieceRateTable[]
   // quality.prisma: the PPE register's entries about it.
   ppeRegisterEntries  PpeRegisterEntry[]
   // W2a ncr.prisma: the nonconformances about it.
@@ -733,6 +735,8 @@ model Operation {
   routing RoutingOperation[]
   // W2b skills.prisma (wave 4/7): the skills about it.
   skills  Skill[]
+  // W2b pay.prisma (schema wave 6/7): the piece rates that pay it.
+  pieceRateEntries PieceRateEntry[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])
