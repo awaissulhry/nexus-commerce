@@ -18,10 +18,14 @@ import {
   saveFreightRuleContract,
   removeLineContract,
   updateShipmentContract,
+  setFreightCostContract,
+  getCarrierReturnContract,
+  receiveCarrierReturnContract,
 } from './contract'
+import { getCarrierReturn, receiveCarrierReturn } from './carrier-return'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { listBackorders, orderBackorder } from './backorder'
-import { getFreightRule, saveFreightRule, setFreight } from './freight'
+import { getFreightRule, saveFreightRule, setFreight, setFreightCost } from './freight'
 import { manifest } from './manifest'
 import { packingList, packingLists } from './packing-list'
 import { readyToShip } from './ready'
@@ -74,4 +78,16 @@ export default defineRoutes('shipping.shipments', manifest, async (app) => {
   app.get('/shipping/sites/:siteId/freight-rule', { schema: getFreightRuleContract }, async (request) => getFreightRule(request, request.params.siteId))
 
   app.put('/shipping/sites/:siteId/freight-rule', { schema: saveFreightRuleContract }, async (request) => saveFreightRule(request, request.params.siteId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-19: shipping follow-ups.
+  app.put('/shipping/shipments/:shipmentId/freight-cost', { schema: setFreightCostContract }, async (request) => {
+    if (request.body.freightCost === undefined) throw new ValidationError('Give the freight cost (minor units), or null to clear it.', [{ path: 'body/freightCost', message: 'Required (null: clear it).' }])
+    return setFreightCost(request, request.params.shipmentId, { version: request.body.version, freightCost: request.body.freightCost, currency: request.body.currency }, idempotencyKeyFrom(request))
+  })
+
+  app.get('/shipping/shipments/:shipmentId/carrier-return', { schema: getCarrierReturnContract }, async (request) => getCarrierReturn(request, request.params.shipmentId))
+
+  app.post('/shipping/shipments/:shipmentId/carrier-return', { schema: receiveCarrierReturnContract }, async (request, reply) =>
+    reply.code(201).send(await receiveCarrierReturn(request, request.params.shipmentId, request.body, idempotencyKeyFrom(request))),
+  )
 })

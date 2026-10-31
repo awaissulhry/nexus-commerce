@@ -3,6 +3,8 @@ import { businessDate, defineContract, id, input, instant, output } from '@nexus
 import { DDT_FREIGHT, DDT_REASONS, DOCUMENT_LANGUAGES, REFERENCE_KINDS } from '@nexus/factory-domain/documents/model'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { DDT_SOURCE_TYPES, MAX_OTHER_GOODS } from '@nexus/factory-domain/shipping/ddt/sources'
+import { TRANSPORT_MODES } from '@nexus/factory-domain/shipping/shipments/transport'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { fileView, presignedView } from '../../../platform/files/contract'
 import { oneShipment, statusSchema, transportBySchema } from '../views'
 
@@ -51,6 +53,10 @@ const ddtRequest = input({
   internalNote: z.string().trim().max(2000).nullish(),
   /** The goods leave now: the shipment moves PACKED → SHIPPED in the same command (needs shipping.manage too). */
   ship: z.boolean().optional(),
+  /** B-W2b-19 (Intrastat): the mode of transport the DDT keeps; default the shipment's (null: not recorded). */
+  transportMode: z.enum(TRANSPORT_MODES).nullish(),
+  /** B-W2a-F8 with B-W2b-19: with `ship`, why the garments' moves out of finished goods go into a SOFT-locked month. */
+  periodLockOverride: periodLockOverride.optional(),
 })
 
 const address = output({ line1: z.string(), line2: z.string().nullable().optional(), postalCode: z.string(), city: z.string(), province: z.string().nullable().optional(), country: z.string() })
@@ -118,6 +124,10 @@ export const ddtSchema = output({
   cancellation: output({ id: id(), reason: z.string(), cancelledAt: instant(), createdById: id().nullable() }).nullable(),
   /** The stored PDF (FISCAL_ARCHIVE); null while it is not stored. */
   fileId: id().nullable(),
+  /** B-W2b-19: the language it was issued (and is re-printed) in; null: issued before W2b (its party's or order's then). */
+  language: z.string().nullable(),
+  /** B-W2b-19 (Intrastat): the mode of transport it was issued with; null: not recorded. */
+  transportMode: z.enum(TRANSPORT_MODES).nullable(),
 })
 
 const shipmentState = output({ id: id(), number: z.string(), status: statusSchema, version: z.number().int() })
@@ -153,7 +163,12 @@ export const issueContract = defineContract({
   },
 })
 
-export const shipContract = defineContract({ params: shipmentParams, body: input({ version }), response: { 200: oneShipment } })
+export const shipContract = defineContract({
+  params: shipmentParams,
+  // B-W2a-F8 with B-W2b-19: the garments' moves out of finished goods honour the month locks.
+  body: input({ version, periodLockOverride: periodLockOverride.optional() }),
+  response: { 200: oneShipment },
+})
 
 export const listDdtsContract = defineContract({
   querystring: input({
@@ -255,6 +270,8 @@ export const sourceRequest = input({
   remarks: z.string().trim().max(1000).nullish(),
   /** For the office only; never printed. */
   internalNote: z.string().trim().max(2000).nullish(),
+  /** B-W2b-19 (Intrastat): the mode of transport the DDT keeps (null: not recorded). */
+  transportMode: z.enum(TRANSPORT_MODES).nullish(),
 })
 
 const sourceLine = output({

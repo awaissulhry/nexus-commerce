@@ -3,7 +3,7 @@ import { fitsDecimal, isCurrencyCode, isMinorUnits, type MinorUnits } from '../c
 import { BUSINESS_TIME_ZONE, businessDayStart, isBusinessDate, parseInstant, toUtcIso } from '../core/time'
 import { parseDecimal } from '../tax/decimal'
 import { formatDate, formatDateTime, formatDecimal, formatMoney, formatPercent, formatQuantity, formatUnitPrice } from './format'
-import { DOCUMENT_WORDS, type DocumentWords } from './i18n'
+import { DOCUMENT_WORDS, ddtPartyHeading, type DocumentWords } from './i18n'
 import { DOCUMENT_LAYOUTS, type ColumnKey, type LayoutColumn } from './layouts'
 import { addressLine, legalFooter, legalLines, legalName, legalProblems } from './legal'
 import {
@@ -315,7 +315,9 @@ function facts(input: DocumentInput, words: DocumentWords): ComposedFact[] {
 
 function blocks(input: DocumentInput, words: DocumentWords): ComposedBlock[] {
   const language = input.language
-  const result: ComposedBlock[] = [{ heading: words.headings.party[input.type], lines: partyLines(input.party, input.type, words, language) }]
+  // W2b (B-W2b-19): a DDT's party is the "cessionario" only when the goods are sold to it (i18n ddtPartyHeading).
+  const heading = input.type === 'DDT' ? ddtPartyHeading(words, input.transport!.reason) : words.headings.party[input.type]
+  const result: ComposedBlock[] = [{ heading, lines: partyLines(input.party, input.type, words, language) }]
   if (input.type === 'PURCHASE_ORDER' && input.deliverTo) result.push({ heading: words.headings.deliverTo, lines: namedAddress(input.deliverTo, language) })
   if (input.type === 'DDT') {
     const transport = input.transport!

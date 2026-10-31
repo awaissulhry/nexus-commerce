@@ -150,6 +150,8 @@ export const DDT_SELECT = {
   internalNote: true,
   issuedAt: true,
   createdById: true,
+  language: true,
+  transportMode: true,
   shipment: { select: { number: true, status: true, salesOrderId: true } },
   cancellations: { select: { id: true, reason: true, cancelledAt: true, createdById: true }, orderBy: [{ cancelledAt: 'asc' }, { id: 'asc' }], take: 1 },
 } as const satisfies Prisma.DdtSelect
@@ -304,6 +306,9 @@ export function ddtView(row: DdtRow, fileId: string | null) {
     createdById: row.createdById,
     cancellation: cancellation ? { id: cancellation.id, reason: cancellation.reason, cancelledAt: toUtcIso(cancellation.cancelledAt), createdById: cancellation.createdById } : null,
     fileId,
+    // B-W2b-19: the language it was issued in (null: issued before W2b) and its mode of transport (Intrastat).
+    language: row.language,
+    transportMode: row.transportMode,
   }
 }
 
