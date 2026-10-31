@@ -62,7 +62,8 @@
     "Shipment": "A shipment",
     "LabResult": "A lab result (Cr VI)",
     "Nonconformance": "A nonconformance (NCR)",
-    "Complaint": "A customer complaint"
+    "Complaint": "A customer complaint",
+    "ReturnAuthorisation": "A customer return (RMA)"
   },
   "list": {
     "table": "PPE register entries",
