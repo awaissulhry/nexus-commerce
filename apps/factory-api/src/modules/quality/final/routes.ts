@@ -5,6 +5,8 @@ import { requireFloorStepUp } from '../../../platform/auth/floor/step-up'
 import { requireStepUp } from '../../../platform/auth/office/account'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import {
+  assignContract,
+  benchHoldContract,
   benchWorkOrdersContract,
   cancelInspectionContract,
   decideInspectionContract,
@@ -12,6 +14,7 @@ import {
   getInspectionContract,
   getReleaseContract,
   getRuleContract,
+  inspectorsContract,
   listInspectionsContract,
   listReleasesContract,
   openInspectionContract,
@@ -22,7 +25,9 @@ import {
   updateInspectionContract,
   workOrderFinalContract,
 } from './contract'
+import { assignInspections, listInspectors } from './assign'
 import { benchWorkOrders } from './bench'
+import { holdAtBench } from './bench-hold'
 import { evidenceTrail } from './evidence'
 import { cancelInspection, decideInspection, getInspection, openInspection, putDefects, updateInspection } from './inspections'
 import { listInspections } from './lists'
@@ -46,9 +51,17 @@ export default defineRoutes('quality.final', manifest, async (app) => {
 
   app.get('/quality/final/work-orders/:workOrderId', { schema: workOrderFinalContract }, async (request) => workOrderFinal(request, request.params.workOrderId))
 
-  app.get('/quality/inspections', { schema: listInspectionsContract }, async (request) =>
-    listInspections(request, { ...request.query, onHold: flag(request.query.onHold), waitingRelease: flag(request.query.waitingRelease) }),
+  app.post('/quality/final/work-orders/:workOrderId/hold', { schema: benchHoldContract }, async (request, reply) =>
+    reply.code(201).send(await holdAtBench(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request))),
   )
+
+  app.get('/quality/inspections', { schema: listInspectionsContract }, async (request) =>
+    listInspections(request, { ...request.query, onHold: flag(request.query.onHold), waitingRelease: flag(request.query.waitingRelease), failedUndecided: flag(request.query.failedUndecided) }),
+  )
+
+  app.get('/quality/inspections/inspectors', { schema: inspectorsContract }, async (request) => listInspectors(request, request.query))
+
+  app.post('/quality/inspections/assign', { schema: assignContract }, async (request) => assignInspections(request, request.body, idempotencyKeyFrom(request)))
 
   app.post('/quality/inspections', { schema: openInspectionContract }, async (request, reply) => reply.code(201).send(await openInspection(request, request.body, idempotencyKeyFrom(request))))
 

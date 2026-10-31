@@ -98,8 +98,26 @@ export const designScreen = defineDesignScreen<OperationViewModel>({
     {
       id: 'scrap-rework',
       label: '1 scrap and 1 rework (reason-first)',
+      model: model(counts({ counts: SCRAP_REWORK })),
+      note: 'The counters after a scrap and a rework reason: Good balanced itself to 18. Finish · 18 good.',
+    },
+    {
+      id: 'scrap-picker',
+      label: 'Scrap opens the reason picker (SCR-091)',
       model: model(counts({ counts: SCRAP_REWORK, open: 'scrap' })),
-      note: 'Each tap on a reason adds one piece with that reason and takes it from Good; −1 takes it back. Finish · 18 good.',
+      note: 'W2a: Scrap opens the illustrated reason picker (B-W2a-74): what it is for and the running count, then icon tiles. Each tap adds one piece with that reason and takes it from Good; − on the tile takes it back. Done goes back to the counts; Finish · 18 good stays one tap away (scan → Scrap → tile → Finish). Esc = Done.',
+    },
+    {
+      id: 'rework-picker',
+      label: 'Rework opens the reason picker',
+      model: model(counts({ counts: SCRAP_REWORK, open: 'rework' })),
+      note: 'The rework reasons the same way; the pieces reach the office\'s Production › Scrap & rework list with their reason.',
+    },
+    {
+      id: 'picker-at-most',
+      label: 'Reason picker: every piece has a reason',
+      model: model(counts({ counts: { scrap: { LEATHER_FLAW: 19 }, rework: { RESTITCH: 1 }, typedGood: null }, open: 'scrap', problem: 'atMost' })),
+      note: 'A tap past the bundle\'s pieces is refused in words; nothing is counted.',
     },
     {
       id: 'above',
@@ -134,6 +152,12 @@ export const designScreen = defineDesignScreen<OperationViewModel>({
       label: 'Correction: new counts and why',
       model: model({ kind: 'correct', target: TARGETS[0]!, counts: { scrap: {}, rework: {}, typedGood: 20 }, open: null, reason: 'found', reasons: REASONS }),
       note: 'The same pads; a reason; Send. The original report stays until the team leader decides (c.c. art. 2101).',
+    },
+    {
+      id: 'correct-picker',
+      label: 'Correction: scrap reasons in the picker',
+      model: model({ kind: 'correct', target: TARGETS[0]!, counts: { scrap: { STAIN: 1 }, rework: {}, typedGood: null }, open: 'scrap', reason: 'found', reasons: REASONS }),
+      note: 'Scrap in a correction opens the same reason picker; Done goes back to the new counts and the reason.',
     },
     { id: 'asked', label: 'Correction sent: waiting', model: model({ kind: 'asked', target: TARGETS[0]!, ticks: 'recorded' }) },
     {

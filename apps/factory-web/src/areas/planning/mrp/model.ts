@@ -1,7 +1,7 @@
 import { decimalValue, type BuyingCan, type Loaded, type Phrase } from '../../_shared/buying/model'
 import type { SiteOption, SupplierOption } from '../../_shared/buying/api'
 import type { LiveState } from '../../_shared/buying/hooks'
-import type { Drafted, Explain, OpenDraft, Plan, PlanLine, PlanRun, SetAsideReason, StockLine } from './api'
+import type { Drafted, Explain, OpenDraft, Plan, PlanLine, PlanRun, SendCard, SendOutcome, SetAsideReason, Shortage, Shortages, StockLine } from './api'
 
 /**
  * What to buy & make (SCR-055) — the screen's rules, pure: the saved views (the tiles are some of them), which lines a
@@ -10,7 +10,10 @@ import type { Drafted, Explain, OpenDraft, Plan, PlanLine, PlanRun, SetAsideReas
  * counted by reason, and the CSV of the selected lines.
  */
 
-export const PLAN_VIEWS = ['open', 'toBuy', 'late', 'make', 'held', 'inDraft', 'ordered', 'setAside', 'leather', 'all'] as const
+export const PLAN_VIEWS = ['open', 'toBuy', 'late', 'make', 'held', 'inDraft', 'ordered', 'setAside', 'leather', 'all', 'shortWo'] as const
+
+/** The MRP every day words (B-W2a-70: Short on open work orders, the pegging tree, Send n): `messages/<locale>/planning-mrp.json`. */
+export const MRP_NAMESPACE = 'planning-mrp'
 export type PlanView = (typeof PLAN_VIEWS)[number]
 
 export function viewOf(value: string | null | undefined): PlanView {
@@ -43,6 +46,9 @@ export function inView(line: PlanLine, view: PlanView): boolean {
       return line.item.kind === 'LEATHER'
     case 'all':
       return true
+    case 'shortWo':
+      // B-W2a-70: the work orders short of material are a list of their own (GET /planning/shortages).
+      return false
   }
 }
 
@@ -162,6 +168,50 @@ export function planState(plan: Plan | null): 'none' | 'done' | 'running' | 'fai
   return plan.run ? 'done' : 'none'
 }
 
+// ---- B-W2a-70: short on open work orders (design planning.mrp sec:short-wo) -------------------------------------------------
+
+/** A shortage row's id (a work order and a material of it). */
+export const shortageId = (row: Shortage): string => `${row.workOrder.id}:${row.material.itemId}:${row.material.itemColourId ?? '-'}`
+
+/** The work orders the shortage list names (the tile counts work orders, not materials). */
+export const shortWorkOrders = (shortages: Shortages | null): number => (shortages ? new Set(shortages.rows.map((row) => row.workOrder.id)).size : 0)
+
+/** The plan's lines a set of shortage rows can buy (their BUY fix names an open line of the plan shown). */
+export function buyLinesOf(rows: readonly Shortage[], lines: readonly PlanLine[]): string[] {
+  const ids = new Set(rows.flatMap((row) => row.fixes.filter((fix) => fix.kind === 'BUY' && fix.requirementId).map((fix) => fix.requirementId!)))
+  return draftable(lines.filter((line) => ids.has(line.id))).map((line) => line.id)
+}
+
+/** Why a shortage's fix is held (a key of planning-mrp), or null. */
+export function fixHeld(fix: Shortage['fixes'][number], lines: readonly PlanLine[], can: Pick<BuyingCan, 'poManage' | 'poView'> & { planFirm: boolean }): string | null {
+  if (fix.kind === 'EXPEDITE') return can.poView ? null : 'held.noPoView'
+  const line = fix.requirementId ? lines.find((entry) => entry.id === fix.requirementId) : undefined
+  if (!line) return 'held.lineGone'
+  if (fix.kind === 'BUY') return can.poManage ? (draftable([line]).length > 0 ? null : 'held.lineNotOpen') : 'held.noPurchasingRequests'
+  return can.planFirm ? (line.firm ? null : 'held.notFirm') : 'held.noFirm'
+}
+
+/** Why moving a firm order to this day is held (a key of planning-mrp), or null: a day from today, earlier than now. */
+export function moveFirmProblem(line: PlanLine | null, date: string, today: string): string | null {
+  if (!line?.firm) return 'held.notFirm'
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'move.pickDate'
+  if (date < today) return 'move.past'
+  if (date === line.firm.date) return 'move.same'
+  return null
+}
+
+// ---- B-W2a-70: Send n (design planning.mrp pop:draft-result, "review and send them one after another") -----------------------
+
+export interface SendStep {
+  cards: SendCard[] | null
+  problem: string | null
+  busy: boolean
+  outcomes: SendOutcome[] | null
+}
+
+/** The cards that can go now (ready, with their version). */
+export const sendable = (cards: readonly SendCard[] | null): { id: string; version: number }[] => (cards ?? []).filter((card) => card.ready && card.version !== null).map((card) => ({ id: card.id, version: card.version! }))
+
 // ---- the page's model --------------------------------------------------------------------------------------------------
 
 export interface DraftDialog {
@@ -178,6 +228,8 @@ export interface DraftDialog {
   busy: boolean
   problem: Phrase | null
   result: Drafted | null
+  /** B-W2a-70: the drafts' Send n step, once asked for. */
+  send?: SendStep | null
 }
 
 export type PlanDialog =
@@ -186,6 +238,8 @@ export type PlanDialog =
   | { kind: 'history'; runs: PlanRun[] | null; problem: string | null }
   | { kind: 'explainer' }
   | { kind: 'keys' }
+  /** B-W2a-70: move a firm planned order earlier (MOVE_FIRM, from Short on open work orders). */
+  | { kind: 'moveFirm'; requirementId: string; date: string; busy: boolean; problem: string | null }
 
 /** A notice after a write, with an Undo when the write can be put back. */
 export interface PlanNotice {
@@ -215,6 +269,12 @@ export interface PlanModel {
   dialog: PlanDialog | null
   /** The Why drawer: the line (`?line=`) and its explanation. */
   why: { lineId: string; explain: Loaded<Explain> } | null
+  /** B-W2a-70: the work orders short of material now (GET /planning/shortages); null before the first read. */
+  shortages?: Loaded<Shortages> | null
+  /** The site's today (`YYYY-MM-DD`): a firm order is never moved before it. */
+  today?: string
+  /** planning.firm (B-W2a-22): may move a firm planned order. */
+  canFirm?: boolean
   /** Design cases: preset selection, focused row, keys panel. */
   selected?: readonly string[]
   focusRow?: number
@@ -248,4 +308,11 @@ export interface PlanActions {
     onCreate?: () => void
   }
   setAside?: { onReason?: (reason: SetAsideReason) => void; onNote?: (note: string) => void; onConfirm?: () => void }
+  /** B-W2a-70: Short on open work orders. */
+  onRetryShortages?: () => void
+  onMoveFirm?: (requirementId: string) => void
+  moveFirm?: { onDate?: (date: string) => void; onConfirm?: () => void }
+  /** B-W2a-70: the drafts made, reviewed and sent (Send n). */
+  onSendDrafts?: () => void
+  onSendConfirm?: () => void
 }

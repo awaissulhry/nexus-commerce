@@ -10,7 +10,9 @@
       "approvals": "Approvazioni",
       "tasks": "Le mie attività",
       "notifications": "Notifiche",
-      "mailToSort": "Posta da smistare"
+      "mailToSort": "Posta da smistare",
+      "insights": "Analisi",
+      "alerts": "Avvisi"
     },
     "products": {
       "area": "Prodotti",
@@ -50,7 +52,9 @@
       "maintenance": "Manutenzione",
       "requests": "Richieste di intervento",
       "jobs": "Interventi",
-      "machines": "Macchine e attrezzature"
+      "machines": "Macchine e attrezzature",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni stabilimento"
     },
     "admin": {
       "area": "Sistema",
@@ -66,6 +70,7 @@
       "platform": "Piattaforma",
       "documents": "Documenti e numerazioni",
       "languages": "Lingue e formati",
+      "automation": "Approvazioni, automazioni e IA",
       "audit": "Registro attività",
       "connections": "Connessioni e API",
       "data": "Dati",
@@ -90,7 +95,11 @@
       "area": "Qualità",
       "main": "Principali",
       "inspections": "Ispezioni",
+      "holds": "Blocchi",
+      "settings": "Impostazioni",
+      "defects": "Difetti e destinazioni",
       "problems": "Problemi",
+      "ncr": "Non conformità",
       "complaints": "Reclami"
     },
     "compliance": {
@@ -123,6 +132,8 @@
       "mrp": "Cosa comprare e produrre",
       "board": "Tabellone di pianificazione",
       "allocation": "Linee e terzisti",
+      "capacity": "Capacità e carico",
+      "exceptions": "Eccezioni",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni pianificazione"
     },

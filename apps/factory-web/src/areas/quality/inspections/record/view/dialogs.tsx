@@ -1,22 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
-import { Banner, Field, Listbox, Modal } from '@nexus/ui/components'
+import { Banner, Field, Modal } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Kbd, RadioCard, Textarea } from '@nexus/ui/primitives'
-import { DEFECT_CLASSES } from '@nexus/factory-domain/quality/final/rules'
 import { useT } from '../../../../../lib/i18n/provider'
 import { CheckList, Facts } from '../../../_shared/parts'
 import type { FinalCell, Inspection } from '../../api'
 import {
-  defectsProblems,
   isSerialCell,
   planProblems,
   releaseProblems,
   resultNow,
   secondPersonKeys,
   signProblems,
-  type DefectDraft,
   type PlanDraft,
   type ReleaseDraft,
   type SignDraft,
@@ -152,19 +148,29 @@ export function SignModal({
           <legend>
             <strong>{t('sign.decision')}</strong>
           </legend>
-          {(['PASS', 'FAIL'] as const).map((result) => {
-            const isComputed = result === computed.result
-            const neverPass = result === 'PASS' && !isComputed && !computed.byCountsOnly
+          {(['ACCEPT', 'CONDITIONAL', 'REJECT'] as const).map((choice) => {
+            // Accept: PASS as computed. Conditional (W2a): PASS against a computed FAIL by the acceptance numbers only —
+            // the written reason, and its release needs a second person (four eyes, Owner answer Q1). Reject: FAIL.
+            const result = choice === 'REJECT' ? 'FAIL' : 'PASS'
+            const checked = draft.result === result && (choice === 'REJECT' || (choice === 'ACCEPT') === (computed.result === 'PASS'))
+            const heldKey =
+              choice === 'ACCEPT' && computed.result !== 'PASS'
+                ? 'sign.held.acceptFail'
+                : choice === 'CONDITIONAL' && computed.result === 'PASS'
+                  ? 'sign.held.conditionalPass'
+                  : choice === 'CONDITIONAL' && !computed.byCountsOnly
+                    ? 'sign.problem.passOverHard'
+                    : null
             return (
               <RadioCard
-                key={result}
+                key={choice}
                 name="decision"
-                checked={draft.result === result}
-                selected={draft.result === result}
-                disabled={neverPass}
+                checked={checked}
+                selected={checked}
+                disabled={heldKey !== null}
                 onChange={() => onDraft({ ...draft, result })}
-                title={t(`sign.result.${result}`)}
-                description={isComputed ? t('sign.asComputed') : neverPass ? t('sign.problem.passOverHard') : t('sign.override')}
+                title={t(`sign.choice.${choice}`)}
+                description={heldKey ? t(heldKey) : t(`sign.choiceHint.${choice}${choice === 'REJECT' && computed.result === 'PASS' ? '_override' : ''}`)}
               />
             )
           })}
@@ -359,90 +365,6 @@ export function PlanModal({ open, draft, busy, problem, onDraft, onSave, onClose
           {field('acceptMinor', t('new.acceptMinor'), t('new.acceptHint'))}
         </div>
         <p className="fw-q-hint">{t('new.tablesLater')}</p>
-        {problem && <Banner tone="danger" title={t(problem)} />}
-      </div>
-    </Modal>
-  )
-}
-
-// ---- the defects found (one line per class and code) -------------------------------------------------------------------------------
-
-export function DefectsModal({
-  open,
-  lines,
-  cells,
-  sampleSize,
-  busy,
-  problem,
-  onLines,
-  onSave,
-  onClose,
-}: {
-  open: boolean
-  lines: readonly DefectDraft[]
-  cells: readonly FinalCell[]
-  sampleSize: number
-  busy?: boolean
-  problem?: string | null
-  onLines: (lines: DefectDraft[]) => void
-  onSave: () => void
-  onClose: () => void
-}) {
-  const t = useT('quality')
-  const problems = defectsProblems(lines, sampleSize)
-  const held = busy ? t('common.working') : problems.length > 0 ? t(problems[0]!) : null
-  useSubmitKey(open, () => {
-    if (!held) onSave()
-  })
-  const set = (index: number, change: Partial<DefectDraft>) => onLines(lines.map((line, at) => (at === index ? { ...line, ...change } : line)))
-  const classes = DEFECT_CLASSES.map((value) => ({ value, label: t(`defects.class.${value}`) }))
-  const cellOptions = [{ value: '', label: t('defects.anyCell') }, ...cells.map((cell) => ({ value: cell.workOrderSizeId, label: `${cell.colourwayCode} ${cell.size}` }))]
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={t('defects.title')}
-      subtitle={t('defects.subtitle', { sample: sampleSize })}
-      size="xl"
-      footer={
-        <>
-          <Button size="sm" onClick={() => onLines([...lines, { defectClass: 'MINOR', code: '', quantity: '1', workOrderSizeId: null, note: '' }])}>
-            <Plus size={14} aria-hidden /> {t('defects.add')}
-          </Button>
-          <span className="grow" />
-          <Button onClick={onClose}>{t('common.cancel')}</Button>
-          <Button variant="primary" onClick={onSave} heldReason={held}>
-            {t('defects.save')}
-          </Button>
-        </>
-      }
-    >
-      <div className="fw-q-form">
-        {lines.length === 0 && <p className="fw-q-hint">{t('defects.none')}</p>}
-        {lines.map((line, index) => (
-          <fieldset key={index} className="fw-q-defect">
-            <legend className="fw-q-hint">{t('defects.line', { n: index + 1 })}</legend>
-            <Field label={t('defects.classLabel')}>
-              <Listbox size="sm" options={classes} value={line.defectClass} onChange={(value) => set(index, { defectClass: value as DefectDraft['defectClass'] })} ariaLabel={t('defects.classLabel')} />
-            </Field>
-            <Field label={t('defects.code')} hint={t('defects.codeHint')}>
-              <Input size="sm" value={line.code} onChange={(event) => set(index, { code: event.target.value.toUpperCase() })} />
-            </Field>
-            <Field label={t('defects.quantity')}>
-              <Input size="sm" inputMode="numeric" value={line.quantity} onChange={(event) => set(index, { quantity: event.target.value })} />
-            </Field>
-            <Field label={t('defects.cell')}>
-              <Listbox size="sm" options={cellOptions} value={line.workOrderSizeId ?? ''} onChange={(value) => set(index, { workOrderSizeId: value || null })} ariaLabel={t('defects.cell')} />
-            </Field>
-            <Field label={t('defects.note')}>
-              <Input size="sm" value={line.note} onChange={(event) => set(index, { note: event.target.value })} />
-            </Field>
-            <Button size="sm" variant="quiet" aria-label={t('defects.remove', { n: index + 1 })} onClick={() => onLines(lines.filter((_, at) => at !== index))}>
-              <Trash2 size={14} aria-hidden />
-            </Button>
-          </fieldset>
-        ))}
-        {problems.length > 0 && lines.length > 0 && <Problems keys={problems} />}
         {problem && <Banner tone="danger" title={t(problem)} />}
       </div>
     </Modal>

@@ -10,7 +10,9 @@
       "approvals": "Approvals",
       "tasks": "My tasks",
       "notifications": "Notifications",
-      "mailToSort": "Mail to sort"
+      "mailToSort": "Mail to sort",
+      "insights": "Insights",
+      "alerts": "Alerts"
     },
     "products": {
       "area": "Products",
@@ -50,7 +52,9 @@
       "maintenance": "Maintenance",
       "requests": "Machine requests",
       "jobs": "Maintenance jobs",
-      "machines": "Machines & tools"
+      "machines": "Machines & tools",
+      "settingsGroup": "Settings",
+      "settings": "Plant settings"
     },
     "admin": {
       "area": "Admin",
@@ -66,6 +70,7 @@
       "platform": "Platform",
       "documents": "Documents & numbering",
       "languages": "Languages & formats",
+      "automation": "Approvals, automation & AI",
       "audit": "Audit log",
       "connections": "Connections & API",
       "data": "Data",
@@ -90,7 +95,11 @@
       "area": "Quality",
       "main": "Main",
       "inspections": "Inspections",
+      "holds": "Holds",
+      "settings": "Settings",
+      "defects": "Defects & dispositions",
       "problems": "Problems",
+      "ncr": "Nonconformances",
       "complaints": "Complaints"
     },
     "compliance": {
@@ -123,6 +132,8 @@
       "mrp": "What to buy & make",
       "board": "Planning board",
       "allocation": "Lines & subcontractors",
+      "capacity": "Capacity & load",
+      "exceptions": "Exceptions",
       "settingsGroup": "Settings",
       "settings": "Planning settings"
     },

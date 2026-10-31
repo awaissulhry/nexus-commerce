@@ -193,6 +193,8 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       const quantity = cells.reduce((total: number, cell) => total + (whole(cell?.quantity) ?? (Array.isArray(cell?.quantities) ? sumOf((cell.quantities as unknown[]).map((n) => ({ quantity: n }))) : 0)), 0)
       return { code: text(p.ticketCode), ...(quantity > 0 ? { quantity } : {}), ...(workOrderId ? { workOrderId } : {}) }
     }
+    case 'plant.report':
+      return { code: text(p.assetNumber, 40) ?? text(p.machineId, 40) }
   }
 }
 

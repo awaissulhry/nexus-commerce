@@ -51,7 +51,7 @@ describe('check-event-contract', () => {
     expect(guard()).toMatchObject({ status: 0 })
     expect(guard(tree()).status).toBe(0)
     const ok = guard(tree({ [MODULE]: quotesEvents(quoteSent), [CATALOGUE]: assembled, [EMITTER]: emitting("{ type: 'quote.faxed', subject: 'q', payload: {} }") }))
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(345 declared event version\(s\), 429 literal emit/) })
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(346 declared event version\(s\), 430 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([
@@ -79,6 +79,21 @@ describe('check-event-contract', () => {
     ],
     ['a type that is not a literal', { [MODULE]: quotesEvents("  defineEvent({ type: TYPE, context: 'quotes', description: 'x', payload: z.strictObject({}) }),"), [CATALOGUE]: assembled }, /must be a string literal/],
     ['a version that is not a whole number', { [MODULE]: quotesEvents("  defineEvent({ type: 'quote.faxed', version: 0, context: 'quotes', description: 'x', payload: z.strictObject({}) }),"), [CATALOGUE]: assembled }, /whole number literal from 1/],
+    // B-W2a-F5: a live rule that reaches the floor names the floor permission a floor viewer needs.
+    [
+      'a live rule that reaches the floor without a floor permission (floor: true)',
+      { [MODULE]: quotesEvents("  defineEvent({ type: 'quote.faxed', context: 'quotes', description: 'x', payload: z.strictObject({}), live: { permission: 'quotes.view', floor: true } }),"), [CATALOGUE]: assembled },
+      /quotes\/events.ts:5 {2}live.floor must name the floor permission a floor viewer needs, as a string literal .* not true/,
+    ],
+    [
+      'floor: true in a live rule constant of the events file',
+      {
+        [MODULE]: "import { z } from 'zod'\nimport { defineEvent } from '../events/define'\n\nconst live = { permission: 'quotes.view', floor: true, fields: [] } as const\n\nexport const events = [\n  defineEvent({ type: 'quote.faxed', context: 'quotes', description: 'x', payload: z.strictObject({}), live }),\n] as const\n",
+        [CATALOGUE]: assembled,
+      },
+      /quotes\/events.ts:4 {2}live.floor must name the floor permission/,
+    ],
+    ['a floor permission that is not a literal', { [MODULE]: quotesEvents("  defineEvent({ type: 'quote.faxed', context: 'quotes', description: 'x', payload: z.strictObject({}), live: { permission: 'quotes.view', floor: WHO } }),"), [CATALOGUE]: assembled }, /not WHO/],
     ['an outbox row written outside platform/outbox', { [EMITTER]: 'export const sneak = (tx: any) => tx.outboxEvent.createMany({ data: [] })\n' }, /outboxEvent.createMany\(\) outside platform\/outbox/],
     ['an outbox update outside platform/outbox', { [EMITTER]: 'export const sneak = (tx: any) => tx.outboxEvent.updateMany({ where: {}, data: {} })\n' }, /outboxEvent.updateMany\(\) outside platform\/outbox/],
     ['outbox SQL outside platform/outbox', { [EMITTER]: 'export const sneak = (tx: any) => tx.$executeRaw`UPDATE "OutboxEvent" SET status = \'PUBLISHED\'`\n' }, /SQL UPDATE "OutboxEvent" outside platform\/outbox/],

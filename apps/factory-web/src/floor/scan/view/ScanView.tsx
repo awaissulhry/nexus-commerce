@@ -1,15 +1,15 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Boxes, CircleAlert, CircleSlash, House, Layers, MapPin, Package, ScanLine, ScanSearch, Scissors, Tag, WifiOff } from 'lucide-react'
+import { Boxes, CircleAlert, CircleSlash, House, Layers, Lock, MapPin, OctagonX, Package, ScanLine, ScanSearch, Scissors, Tag, WifiOff, Wrench } from 'lucide-react'
 import { FloorActionBar, FloorList, FloorListRow, ScanInput, type CameraScanner, type FloorActions, type FloorTone } from '@nexus/ui/floor'
-import { formatDate, formatNumber, formatTime } from '../../../lib/i18n/format'
+import { formatDate, formatDateTime, formatNumber, formatTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import type { Translate } from '../../../lib/i18n/messages'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../frame/view/FloorFrameView'
 import { FloorFacts, type FloorFact } from '../../frame/view/FloorFacts'
 import { FloorState } from '../../frame/view/FloorState'
-import type { HideCard, LabelType, LocationCard, ScanResult, WorkOrderCard } from '../scan-model'
+import type { CardType, HideCard, LabelType, LocationCard, MachineCard, ScanResult, WorkOrderCard } from '../scan-model'
 
 /**
  * SCR-024 — scan anything (design floor.scan; PLT-126, PLT-155, PLT-243, SCM-273, MES-016, MES-074): one big field for
@@ -22,7 +22,7 @@ import type { HideCard, LabelType, LocationCard, ScanResult, WorkOrderCard } fro
 
 export interface RecentScan {
   code: string
-  type: LabelType | null
+  type: CardType | null
   /** When it was scanned (ISO). */
   at: string
 }
@@ -39,9 +39,11 @@ export interface ScanViewModel {
   held?: boolean
   /** The person may open Cut a hide (SCR-094): a hide's card and a work order's card open it with the code. */
   canCut?: boolean
+  /** The person may report a machine problem (SCR-179, plant.report): a machine's card opens it with the tag. */
+  canReport?: boolean
 }
 
-export type ScanAction = { type: 'scan'; code: string } | { type: 'clear' } | { type: 'home' } | { type: 'cut'; code: string }
+export type ScanAction = { type: 'scan'; code: string } | { type: 'clear' } | { type: 'home' } | { type: 'cut'; code: string } | { type: 'report'; code: string }
 
 export interface ScanViewProps {
   model: ScanViewModel
@@ -60,6 +62,9 @@ export const LABEL_ICON: Readonly<Record<LabelType, ReactNode>> = {
   location: <MapPin />,
   workOrder: <ScanSearch />,
 }
+
+/** A card's icon: its label type's, or a machine's (B-W2a-73: a machine tag is a free code, no label type). */
+const CARD_ICON: Readonly<Record<CardType, ReactNode>> = { ...LABEL_ICON, machine: <Wrench /> }
 
 /** A status word from the API's value (`status.<group>.<VALUE>`), else the value as sent. */
 export function statusWord(t: Translate, group: string, value: string): string {
@@ -83,6 +88,9 @@ export function ScanView({ model, onAction, onFrame, camera }: ScanViewProps) {
     if (result.kind === 'hide') actions = model.canCut ? [scanAnother, cut(t('scan.action.cut'), <Scissors />, result.code)] : [scanAnother]
     else if (result.kind === 'workOrder') actions = model.canCut ? [scanAnother, cut(t('scan.action.workOrder'), <ScanSearch />, result.number)] : [scanAnother]
     else if (result.kind === 'location') actions = [scanAnother, coming(t('scan.action.move'), <MapPin />)]
+    // B-W2a-73: a machine's card opens the machine problem with its tag (SCR-179); a retired one reports nothing.
+    else if (result.kind === 'machine')
+      actions = model.canReport ? [scanAnother, { label: t('scan.action.report'), icon: <Wrench />, onPress: () => send({ type: 'report', code: result.code }), heldReason: result.status === 'RETIRED' ? t('scan.machine.retired') : null }] : [scanAnother]
     else actions = [{ label: t('frame.home'), icon: <House />, onPress: () => send({ type: 'home' }) }, scanAnother]
   }
 
@@ -117,7 +125,7 @@ export function ScanView({ model, onAction, onFrame, camera }: ScanViewProps) {
               {model.recent.map((scan, index) => (
                 <FloorListRow
                   key={`${scan.code}-${index}`}
-                  icon={scan.type ? LABEL_ICON[scan.type] : <CircleSlash />}
+                  icon={scan.type ? CARD_ICON[scan.type] : <CircleSlash />}
                   tone={scan.type ? 'neutral' : 'warning'}
                   title={<span className="fw-floor-code">{scan.code}</span>}
                   meta={scan.type ? t(`label.${scan.type}`) : t('scan.recentNothing')}
@@ -140,6 +148,8 @@ function ResultCard({ result, t, locale, timeZone }: { result: ScanResult; t: Tr
       return <WorkOrderFacts card={result} t={t} locale={locale} timeZone={timeZone} />
     case 'location':
       return <LocationFacts card={result} t={t} />
+    case 'machine':
+      return <MachineFacts card={result} t={t} locale={locale} timeZone={timeZone} />
     case 'notOnFloor':
       return (
         <FloorState tone="info" icon={LABEL_ICON[result.type]} title={t('scan.notOnFloor.title', { type: t(`label.${result.type}`) })} text={t('scan.notOnFloor.body')}>
@@ -159,12 +169,12 @@ function ResultCard({ result, t, locale, timeZone }: { result: ScanResult; t: Tr
   }
 }
 
-function Card({ type, code, status, statusTone, facts, flags, t }: { type: LabelType; code: string; status?: string; statusTone?: FloorTone; facts: FloorFact[]; flags?: ReactNode; t: Translate }) {
+function Card({ type, code, status, statusTone, facts, flags, t }: { type: CardType; code: string; status?: string; statusTone?: FloorTone; facts: FloorFact[]; flags?: ReactNode; t: Translate }) {
   return (
     <section className="fw-floor-card" aria-labelledby="fw-floor-card-code">
       <header className="fw-floor-card-head">
         <span className="fw-floor-card-icon" aria-hidden="true">
-          {LABEL_ICON[type]}
+          {CARD_ICON[type]}
         </span>
         <span className="fw-floor-card-title">
           <span className="fw-floor-card-type">{t(`label.${type}`)}</span>
@@ -264,6 +274,40 @@ function LocationFacts({ card, t }: { card: LocationCard; t: Translate }) {
       facts={[
         { label: t('scan.fact.name'), value: card.name },
         { label: t('scan.fact.path'), value: card.path.join(' › ') },
+      ]}
+    />
+  )
+}
+
+/** A machine (B-W2a-73; design floor.scan "Machine (W2a): status and open job"): its state, where it is, its open job. */
+function MachineFacts({ card, t, locale, timeZone }: { card: MachineCard; t: Translate; locale: 'it' | 'en'; timeZone?: string }) {
+  const tone: FloorTone = card.status === 'RUNNING' ? 'success' : card.status === 'DOWN' ? 'warning' : card.status === 'DO_NOT_USE' ? 'danger' : card.status === 'UNDER_MAINTENANCE' ? 'info' : 'neutral'
+  const flag = card.status === 'DO_NOT_USE' ? (card.locked ? 'locked' : 'doNotUse') : card.status === 'RETIRED' ? 'retired' : null
+  return (
+    <Card
+      type="machine"
+      code={card.code}
+      status={statusWord(t, 'machine', card.locked && card.status === 'DO_NOT_USE' ? 'LOCKED' : card.status)}
+      statusTone={tone}
+      t={t}
+      flags={
+        flag ? (
+          <p className="fw-floor-notice" data-tone={flag === 'retired' ? 'warning' : 'danger'} role="note">
+            <span className="fw-floor-inline-icon" aria-hidden="true">
+              {flag === 'locked' ? <Lock /> : <OctagonX />}
+            </span>
+            {t(`scan.machine.${flag}`)}
+          </p>
+        ) : null
+      }
+      facts={[
+        { label: t('scan.fact.machineType'), value: locale === 'it' ? card.type.labelIt : card.type.labelEn },
+        { label: t('scan.fact.makeModel'), value: card.makeModel ?? '—' },
+        { label: t('scan.fact.station'), value: card.station ?? '—' },
+        { label: t('scan.fact.line'), value: card.line ?? '—' },
+        { label: t('scan.fact.since'), value: formatDateTime(card.statusSince, { locale, timeZone }) },
+        { label: t('scan.fact.openJob'), value: card.openJob ? `${card.openJob.number} · ${statusWord(t, 'job', card.openJob.status)}` : t('scan.fact.noJob') },
+        { label: t('scan.fact.openRequests'), value: formatNumber(card.openRequests, locale) },
       ]}
     />
   )

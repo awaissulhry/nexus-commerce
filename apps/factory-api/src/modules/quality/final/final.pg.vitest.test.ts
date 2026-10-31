@@ -12,6 +12,7 @@ import { seed as seedNumbering } from '../../../../../../packages/factory-db/see
 import { seed as seedPrivacy } from '../../../../../../packages/factory-db/seed/privacy'
 import { seed as seedProduction } from '../../../../../../packages/factory-db/seed/production'
 import { seed as seedQuality, type QualitySeed } from '../../../../../../packages/factory-db/seed/quality'
+import { seed as seedReasons } from '../../../../../../packages/factory-db/seed/reasons'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
@@ -86,6 +87,9 @@ const SESSIONS: Record<string, SessionContext> = {
   companyB: office(A.tenant, [grant(VIEW, [A.companyB])]),
   otherParty: office(A.tenant, [grant(VIEW, 'all', [newId()])]),
   otherTenant: office(B.tenant, [grant(VIEW)]),
+  // B-W2a-67: the defect library's keeper and a person who places holds.
+  library: office(A.tenant, [grant(['quality.defects.view', 'quality.defects.manage'])]),
+  holder: office(A.tenant, [grant(['quality.holds.view', 'quality.holds.place', 'quality.inspections.view'])]),
 }
 
 type Json = Record<string, any>
@@ -284,6 +288,8 @@ beforeAll(async () => {
   }
   await seedFiles({ db: h.database, namespace: ns.a })
   quality = await seedQuality({ db: h.database, namespace: ns.a })
+  // B-W2a-75: the HOLD reasons the bench's Hold lot picks from.
+  await seedReasons({ db: h.database, namespace: ns.a })
   await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE provider = 'R2'`)
   await h.database.withScope({ audience: 'office', tenantId: A.tenant, actorId: newId() }, async (client) =>
     applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }),
@@ -809,5 +815,163 @@ describe('the database holds the rules too, for every login', () => {
       )
     await expect(row(null, null)).rejects.toThrow(/names exactly one releaser/)
     await expect(row(inspector1.id, A.operatorA1)).rejects.toThrow(/names exactly one releaser/)
+  })
+})
+
+// ---- B-W2a-75: Hold lot at the bench ------------------------------------------------------------------------------------------------
+
+describe('Hold lot at the bench (design floor.final "Hold lot": a reason, and an NCR)', () => {
+  it('holds the work order with a HOLD reason and raises the NCR that decides it, in one command, once; the bench sees it; the placer never releases it', async () => {
+    const workOrderId = WO.failed.id
+    const RECORD: Permission[] = [...FLOOR, 'quality.inspections.record']
+    SESSIONS.benchHold = { ...floor(A.qc), grants: [{ permissions: RECORD, companies: [A.companyA], sites: [A.siteA1], parties: 'all' }] }
+    SESSIONS.benchView = floor(A.qc)
+    SESSIONS.benchElsewhere = { audience: 'floor', tenantId: A.tenant, actorId: A.operatorA1, siteId: newId(), deviceId: A.qc, grants: [{ permissions: RECORD, companies: [A.companyA], sites: 'all', parties: 'all' }] }
+    SESSIONS.officeRecorder = office(A.tenant, [grant(['quality.inspections.view', 'quality.inspections.record', 'quality.holds.place'])])
+    const url = `/quality/final/work-orders/${workOrderId}/hold`
+    expect((await ok('benchHold', 'GET', `/quality/final/work-orders/${workOrderId}`)).holds).toEqual([])
+
+    // Refused before anything is written: no key, an unknown reason, OTHER without its note, an inspection of another work order.
+    const unkeyed = await call('benchHold', 'POST', url, { reasonCode: 'QUALITY_CHECK', quantity: 2 })
+    expect(unkeyed.statusCode, unkeyed.body).toBe(400)
+    expect(pathsOf(await refused('benchHold', 'POST', url, { reasonCode: 'NO_SUCH_REASON', quantity: 2 }, 400))).toEqual(['body/reasonCode'])
+    expect(pathsOf(await refused('benchHold', 'POST', url, { reasonCode: 'OTHER', quantity: 2 }, 400))).toEqual(['body/reasonNote'])
+    const otherInspection = (await admin<{ id: string }>('SELECT id::text FROM "Inspection" WHERE "workOrderId" = $1 LIMIT 1', [WO.bench.id]))[0]!.id
+    await refused('benchHold', 'POST', url, { reasonCode: 'QUALITY_CHECK', quantity: 2, inspectionId: otherInspection }, 404)
+    // Not the bench's: the office (its own Holds page), a tablet without the right, another site's tablet.
+    await refused('officeRecorder', 'POST', url, { reasonCode: 'QUALITY_CHECK', quantity: 2 }, 403)
+    await refused('benchView', 'POST', url, { reasonCode: 'QUALITY_CHECK', quantity: 2 }, 403)
+    await refused('benchElsewhere', 'POST', url, { reasonCode: 'QUALITY_CHECK', quantity: 2 }, 404)
+    expect(await admin('SELECT 1 FROM "QualityHold" WHERE $1::uuid = ANY("subjectIds")', [workOrderId])).toEqual([])
+
+    const before = (await admin<{ status: string }>('SELECT status::text AS status FROM "WorkOrder" WHERE id = $1', [workOrderId]))[0]!.status
+    const key = freshKey()
+    const first = await call('benchHold', 'POST', url, { reasonCode: 'QUALITY_CHECK', reasonNote: 'Seams look loose on two jackets', quantity: 2 }, key)
+    expect(first.statusCode, first.body).toBe(201)
+    const held = first.json()
+    expect(held).toMatchObject({
+      hold: { reasonCode: 'QUALITY_CHECK', reasonEn: 'Quality check', reasonIt: 'Verifica qualità', reasonNote: 'Seams look loose on two jackets', placedBy: 'WORKER', ncrNumber: held.ncr.number },
+      workOrderHeld: before !== 'COMPLETED',
+      replayed: false,
+    })
+    expect(held.ncr.number).toMatch(/^NCR-/)
+    // A resend with the same key answers the same hold and NCR: nothing twice.
+    const again = await call('benchHold', 'POST', url, { reasonCode: 'QUALITY_CHECK', reasonNote: 'Seams look loose on two jackets', quantity: 2 }, key)
+    expect(again.statusCode, again.body).toBe(201)
+    expect(again.json()).toMatchObject({ hold: { id: held.hold.id }, ncr: held.ncr, replayed: true })
+    expect(await admin('SELECT id::text FROM "QualityHold" WHERE $1::uuid = ANY("subjectIds")', [workOrderId])).toEqual([{ id: held.hold.id }])
+
+    // The hold: placed by the worker (never an office user), from the bench, decided by the NCR.
+    expect(await admin('SELECT "placedById"::text AS "user", "placedByWorkerId"::text AS worker, "ncrId"::text AS ncr, "subjectType"::text AS type, status::text AS status FROM "QualityHold" WHERE id = $1', [held.hold.id])).toEqual([
+      { user: null, worker: A.operatorA1, ncr: held.ncr.id, type: 'WorkOrder', status: 'ACTIVE' },
+    ])
+    expect(await admin('SELECT status::text AS status FROM "WorkOrder" WHERE id = $1', [workOrderId])).toEqual([{ status: before === 'COMPLETED' ? 'COMPLETED' : 'ON_HOLD' }])
+    // The NCR: found at the final inspection by the worker, MAJOR, the garments held; its first containment is the hold, done.
+    expect(
+      await admin(
+        'SELECT source::text AS source, "foundAt"::text AS "foundAt", severity::text AS severity, "quantityAffected"::text AS quantity, uom::text AS uom, "foundById"::text AS "foundBy", "foundByWorkerId"::text AS worker, "createdById"::text AS "createdBy", "workOrderId"::text AS wo FROM "Nonconformance" WHERE id = $1',
+        [held.ncr.id],
+      ),
+    ).toEqual([{ source: 'INSPECTION', foundAt: 'FINAL', severity: 'MAJOR', quantity: '2.0000', uom: 'PCS', foundBy: null, worker: A.operatorA1, createdBy: null, wo: workOrderId }])
+    expect(await admin('SELECT kind::text AS kind, status::text AS status, "recordId"::text AS hold FROM "NcrContainmentAction" WHERE "ncrId" = $1', [held.ncr.id])).toEqual([{ kind: 'HOLD_STOCK', status: 'DONE', hold: held.hold.id }])
+    // The ledger names the tablet and the worker.
+    const audit = await admin<{ after: Json }>('SELECT after FROM "AuditLog" WHERE action = \'quality.benchHold\' AND "recordId" = $1', [held.hold.id])
+    expect(audit).toHaveLength(1)
+    expect(audit[0]!.after).toMatchObject({ workOrderId, ncrId: held.ncr.id, deviceId: A.qc, workerId: A.operatorA1 })
+
+    // The bench and the office see the hold on the work order's final state; a release waits for quality, in words.
+    const bench = await ok('benchView', 'GET', `/quality/final/work-orders/${workOrderId}`)
+    expect(bench.holds).toEqual([expect.objectContaining({ id: held.hold.id, reasonCode: 'QUALITY_CHECK', placedBy: 'WORKER', ncrNumber: held.ncr.number })])
+    expect((await ok('viewer', 'GET', `/quality/final/work-orders/${workOrderId}`)).holds.map((hold: Json) => hold.id)).toEqual([held.hold.id])
+    expect(keysOf(bench.holds).filter((name) => MONEY.test(name) || /worker|user|name$/i.test(name))).toEqual([])
+    // The worker who placed it (the maker's office user is linked to them) never releases it.
+    const detail = await as(maker.browser, 'GET', `/quality/holds/${held.hold.id}`)
+    expect(detail.release.checks).toContainEqual(expect.objectContaining({ key: 'NOT_PLACER', ok: false }))
+    expect(detail.release.releasable).toBe(false)
+  })
+})
+
+// ---- B-W2a-67: assigning an inspector, defects from the library, failed - not decided ---------------------------------------------
+
+describe('inspections every day (B-W2a-67; design qi-assign, ins-defects, qi-metrics)', () => {
+  it('the office assigns an open inspection to an inspector who made none of the garments; the assignee records and signs it', async () => {
+    // The picker: the office people who record inspections at the site, each with the work orders they made.
+    const picker = await as(inspector1.browser, 'GET', `/quality/inspections/inspectors?siteId=${A.siteA1}&workOrderIds=${WO.override.id}`)
+    const byId = new Map((picker.inspectors as Json[]).map((entry) => [entry.id, entry]))
+    expect(byId.get(inspector1.id)).toMatchObject({ kind: 'USER', me: true, made: [] })
+    expect(byId.get(inspector2.id)).toMatchObject({ kind: 'USER', me: false, made: [] })
+    expect(byId.get(maker.id)).toMatchObject({ kind: 'USER', made: [WO.override.number] })
+    expect(picker.inspectors[0].id).toBe(inspector1.id)
+    expect(picker.floorListed).toBe(false)
+    await as(supervisor.browser, 'GET', `/quality/inspections/inspectors?siteId=${A.siteA1}`, undefined, 403)
+
+    const opened = (await as(inspector1.browser, 'POST', '/quality/inspections', { workOrderId: WO.override.id, lotSize: 1, sampleSize: 1, ...PLAN }, 201)).inspection
+    expect(opened.assigned).toBeNull()
+    // A maker is refused in words; nothing is assigned.
+    const toMaker = await inspector1.browser.post('/quality/inspections/assign', { inspections: [{ id: opened.id, version: opened.version }], assigneeId: maker.id })
+    expect(toMaker.status, JSON.stringify(toMaker.body)).toBe(409)
+    expect(toMaker.body.error.issues).toEqual([{ path: 'inspections/0', message: expect.stringMatching(/Made garments of work order .*another inspector, who made none of them, inspects it\.$/) }])
+    // A decided inspection is never assigned; a stale version is a conflict.
+    const decided = await inspector1.browser.post('/quality/inspections/assign', { inspections: [{ id: mainInspection.id, version: mainInspection.version }], assigneeId: inspector2.id })
+    expect(decided.status).toBe(409)
+    expect(decided.body.error.issues[0]).toMatchObject({ path: 'inspections/0', message: expect.stringMatching(/is passed: only an open inspection is assigned\.$/) })
+    expect((await inspector1.browser.post('/quality/inspections/assign', { inspections: [{ id: opened.id, version: opened.version + 5 }], assigneeId: inspector2.id })).status).toBe(409)
+
+    const assigned = await as(inspector1.browser, 'POST', '/quality/inspections/assign', { inspections: [{ id: opened.id, version: opened.version }], assigneeId: inspector2.id })
+    expect(assigned.inspections).toEqual([{ id: opened.id, version: opened.version + 1, assigned: { kind: 'USER', userId: inspector2.id, workerId: null, name: 'inspector two' } }])
+    // The same assignee again changes nothing: the answer as it stands, no write, no second event (a no-op is no command).
+    expect((await as(inspector1.browser, 'POST', '/quality/inspections/assign', { inspections: [{ id: opened.id, version: opened.version + 1 }], assigneeId: inspector2.id })).inspections[0]).toMatchObject({ version: opened.version + 1 })
+    expect(await admin('SELECT payload FROM "OutboxEvent" WHERE type = $1 AND subject = $2', ['quality.inspection_assigned', opened.id])).toEqual([{ payload: { inspectionId: opened.id, workOrderId: WO.override.id, number: WO.override.number, assigned: true } }])
+    expect(await admin('SELECT action FROM "AuditLog" WHERE "recordId" = $1 AND action = $2', [opened.id, 'quality.inspection.assign'])).toHaveLength(1)
+    // The opener no longer records it; the assignee does, and becomes its inspector.
+    expect((await as(inspector1.browser, 'GET', `/quality/inspections/${opened.id}`)).yours).toBe(false)
+    expect((await inspector1.browser.send('PATCH' as 'POST', `/quality/inspections/${opened.id}`, { version: opened.version + 1, checklist: [{ code: 'CE_MARK', ok: true }] })).status).toBe(403)
+    const recorded = (await as(inspector2.browser, 'PATCH', `/quality/inspections/${opened.id}`, { version: opened.version + 1, checklist: [{ code: 'CE_MARK', ok: true }] })).inspection
+    expect(recorded).toMatchObject({ inspector: { kind: 'OFFICE', userId: inspector2.id }, assigned: { userId: inspector2.id } })
+    // The list names the office assignee; `assigned=me` keeps the caller's.
+    const mine = (await as(inspector2.browser, 'GET', '/quality/inspections?assigned=me')).inspections as Json[]
+    expect(mine.map((row) => row.id)).toContain(opened.id)
+    expect(mine.find((row) => row.id === opened.id)).toMatchObject({ assigned: { kind: 'USER', name: 'inspector two' }, version: recorded.version })
+    expect(((await as(inspector1.browser, 'GET', '/quality/inspections?assigned=me')).inspections as Json[]).map((row) => row.id)).not.toContain(opened.id)
+    // Cleared: open to whoever opened it again (it is inspector two's now, who recorded it).
+    const cleared = await as(inspector1.browser, 'POST', '/quality/inspections/assign', { inspections: [{ id: opened.id, version: recorded.version }], assigneeId: null })
+    expect(cleared.inspections[0].assigned).toBeNull()
+    expect((await as(inspector2.browser, 'GET', `/quality/inspections/${opened.id}`)).yours).toBe(true)
+    // At opening: the office may assign it at once (never to a maker).
+    const atOnce = (await as(inspector1.browser, 'POST', '/quality/inspections', { workOrderId: WO.override.id, lotSize: 1, sampleSize: 1, ...PLAN, assigneeId: inspector2.id }, 201)).inspection
+    expect(atOnce.assigned).toMatchObject({ kind: 'USER', userId: inspector2.id })
+    expect((await inspector1.browser.post('/quality/inspections', { workOrderId: WO.override.id, lotSize: 1, sampleSize: 1, ...PLAN, assigneeId: maker.id })).status).toBe(409)
+    // The floor never assigns (an office route).
+    expect((await call('qc', 'POST', '/quality/inspections/assign', { inspections: [{ id: atOnce.id, version: atOnce.version }], assigneeId: null }, freshKey())).statusCode).toBe(403)
+  })
+
+  it('a defect picked from the library carries its code and garment zone; a category, a wrong code or zone are refused', async () => {
+    const category = (await ok('library', 'POST', '/quality/defects', { code: 'SEAM', labelIt: 'Cuciture', labelEn: 'Seams' }, 201)).defect
+    const defect = (await ok('library', 'POST', '/quality/defects', { code: 'STITCH-SKIP', parentId: category.id, labelIt: 'Punto saltato', labelEn: 'Skipped stitch', severity: 'MINOR', zone: 'SLEEVE_L' }, 201)).defect
+    const opened = (await as(inspector1.browser, 'POST', '/quality/inspections', { workOrderId: WO.override.id, lotSize: 2, sampleSize: 2, ...PLAN }, 201)).inspection
+    const put = (defects: Json[]) => inspector1.browser.send('PUT' as 'POST', `/quality/inspections/${opened.id}/defects`, { version: opened.version, defects })
+    expect(pathsOf((await put([{ defectClass: 'MINOR', code: 'SEAM', quantity: 1, defectCodeId: category.id }])).body.error)).toEqual(['body/defects/0/defectCodeId'])
+    expect(pathsOf((await put([{ defectClass: 'MINOR', code: 'STITCH-OTHER', quantity: 1, defectCodeId: defect.id }])).body.error)).toEqual(['body/defects/0/code'])
+    expect(pathsOf((await put([{ defectClass: 'MINOR', code: 'STITCH-SKIP', quantity: 1, defectCodeId: defect.id, zone: 'NOSE' }])).body.error)).toEqual(['body/defects/0/zone'])
+    const recorded = (await as(inspector1.browser, 'PUT', `/quality/inspections/${opened.id}/defects`, { version: opened.version, defects: [{ defectClass: 'MINOR', code: 'STITCH-SKIP', quantity: 1, defectCodeId: defect.id, zone: 'SLEEVE_R', workOrderSizeId: cellOf('override') }] })).inspection
+    expect(recorded.defects).toEqual([expect.objectContaining({ code: 'STITCH-SKIP', defectCodeId: defect.id, zone: 'SLEEVE_R', quantity: 1 })])
+    // A retired defect stays on the line that names it, and leaves the pickers.
+    await ok('library', 'PATCH', `/quality/defects/${defect.id}`, { version: defect.version, active: false })
+    const kept = (await as(inspector1.browser, 'PUT', `/quality/inspections/${opened.id}/defects`, { version: recorded.version, defects: [{ defectClass: 'MINOR', code: 'STITCH-SKIP', quantity: 2, defectCodeId: defect.id, zone: 'SLEEVE_R' }] })).inspection
+    expect(kept.defects[0]).toMatchObject({ quantity: 2, defectCodeId: defect.id })
+    expect(pathsOf((await inspector1.browser.send('PUT' as 'POST', `/quality/inspections/${opened.id}/defects`, { version: kept.version, defects: [{ defectClass: 'MAJOR', code: 'STITCH-SKIP', quantity: 1, defectCodeId: defect.id }] })).body.error)).toEqual(['body/defects/0/defectCodeId'])
+  })
+
+  it('"Failed - not decided": a failed inspection without a hold or an NCR from it, until someone decides', async () => {
+    const failed = (await admin<{ id: string }>(`SELECT id::text FROM "Inspection" WHERE "workOrderId" = $1 AND status = 'FAILED'`, [WO.failed.id]))[0]!.id
+    const undecided = (await ok('viewer', 'GET', '/quality/inspections?failedUndecided=true')).inspections as Json[]
+    expect(undecided.find((row) => row.id === failed)).toMatchObject({ status: 'FAILED', undecided: true, holds: 0, ncrs: 0, onHold: true })
+    expect(undecided.every((row) => row.status === 'FAILED' && row.undecided)).toBe(true)
+    // A hold placed from it decides it for this tile.
+    await seedReasons({ db: h.database, namespace: ns.a })
+    await ok('holder', 'POST', '/quality/holds', { subjectType: 'WorkOrder', subjectIds: [WO.failed.id], reasonCode: 'QUALITY_CHECK', sourceType: 'Inspection', sourceId: failed }, 201)
+    expect(((await ok('viewer', 'GET', '/quality/inspections?failedUndecided=true')).inspections as Json[]).map((row) => row.id)).not.toContain(failed)
+    const row = ((await ok('viewer', 'GET', `/quality/inspections?workOrderId=${WO.failed.id}`)).inspections as Json[]).find((entry) => entry.id === failed)
+    expect(row).toMatchObject({ holds: 1, undecided: false })
   })
 })

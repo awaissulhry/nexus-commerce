@@ -312,6 +312,34 @@ export async function testRule(caller: CommandCaller, id: string, body: { readon
   })
 }
 
+/**
+ * GET /alerts/rules/choices (B-W2a-78, the rule dialog): the office roles a rule may tell (every one: a rule names the role,
+ * never a person) and the places the reader may keep rules for — everywhere, a whole company, or sites of it (`mayManage`,
+ * the same check as the save). Active companies and sites only.
+ */
+export async function ruleChoices(caller: CommandCaller) {
+  const context = officeOf(caller)
+  const actor = actorOf(context)
+  return caller.withClient(async (db) => {
+    const roles = await db.role.findMany({ where: { audience: 'OFFICE' }, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: 200, select: { id: true, name: true, key: true } })
+    const companies = await db.company.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: [{ code: 'asc' }, { id: 'asc' }],
+      take: 200,
+      select: { id: true, tradeName: true, legalName: true, sites: { where: { status: 'ACTIVE' }, orderBy: [{ code: 'asc' }, { id: 'asc' }], select: { id: true, name: true } } },
+    })
+    return {
+      roles,
+      everywhere: mayManage(actor, { companyId: null, siteId: null }),
+      companies: companies.flatMap((company) => {
+        const wholeCompany = mayManage(actor, { companyId: company.id, siteId: null })
+        const sites = company.sites.filter((site) => mayManage(actor, { companyId: company.id, siteId: site.id }))
+        return wholeCompany || sites.length > 0 ? [{ id: company.id, name: company.tradeName ?? company.legalName, wholeCompany, sites }] : []
+      }),
+    }
+  })
+}
+
 /** GET /alerts/rules/:id/timers: a DATE rule's timers, the waiting ones first (at most 100). */
 export async function ruleTimers(caller: CommandCaller, id: string) {
   const context = officeOf(caller)

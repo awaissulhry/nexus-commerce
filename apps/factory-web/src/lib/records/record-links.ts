@@ -29,6 +29,11 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Quality › Inspections (SCR-076); a release is reviewed in its DetailModal on the list (design §2.3).
   Inspection: '/quality/inspections/[id]',
   QualityRelease: '/quality/inspections?open=[id]',
+  // B-W2a-67: a hold is reviewed in its DetailModal on Quality › Holds (SCR-078, design §2.3); a library code in its drawer (SCR-079).
+  QualityHold: '/quality/holds?open=[id]',
+  DefectCode: '/quality/defects?open=[id]',
+  // B-W2a-68: Quality › Nonconformances (SCR-145): an NCR's record (problem, containment, disposition, linked, activity).
+  Nonconformance: '/quality/ncr/[id]',
   // Quality › Complaints (SCR-113 W2a part, B-W2a-65): a complaint's record (a new one is triaged from the list's DetailModal).
   Complaint: '/quality/complaints/[id]',
   // Warehouse › Lots & traceability (SCR-201): a lot's stock, trace and moves; its tests, documents and release stay in
@@ -67,6 +72,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   IntegrationAccount: '/admin/connections/[id]',
   // Home › My tasks (SCR-233, B-W2a-40): a task opens in its DetailModal on the list.
   Task: '/home/tasks?open=[id]',
+  // Home › Alerts (SCR-234, B-W2a-78): an exception rule's alert opens in its DetailModal on the list (Today's RULE_ALERT
+  // row and the bell's `alert:` anchor follow).
+  Alert: '/home/alerts?open=[id]',
   // B-W2a-53 Plant › Maintenance: a machine (SCR-150), a maintenance job (SCR-149); a request opens in its DetailModal on
   // the queue (SCR-148).
   Machine: '/plant/machines/[id]',
@@ -98,6 +106,8 @@ export const ATTENTION_PAGES: Readonly<Record<string, string>> = Object.freeze({
 /** An API list route → the web page that shows it (with the same query). */
 export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/email/inbound': '/home/mail-to-sort',
+  // B-W2a-78: the alerts (`?tile=`, `?severity=`, `?kind=`, `?q=` as the API reads them; `ruleKind` is the page's `kind`).
+  '/alerts': '/home/alerts',
   '/parties': '/sales/customers',
   // The quote list (SCR-034) reads `status` and `q` as the API does; the approvals queue (SCR-030) reads `view`.
   '/sales/quotes': '/sales/quotes',
@@ -113,9 +123,14 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/production/work-orders': '/production/work-orders',
   // The pages read the API's own filters from the address (`?onHold=true`, `?waitingRelease=true`, `?status=OPEN`).
   '/quality/inspections': '/quality/inspections',
+  // B-W2a-68: the NCR list and board (SCR-144; `?view=`, `?q=`, `?site=`, `?mode=board`, New NCR `?new=1&from=&id=`).
+  '/quality/ncr': '/quality/ncr',
   // B-W2a-65: the complaints list reads `?view=`, `?q=` and the API's own filters (`?partyId=`, `?salesOrderId=`, …).
   '/quality/complaints': '/quality/complaints',
   '/quality/lots': '/compliance/tests',
+  // B-W2a-67: the holds (the page reads the API's own filters: `?status=`, `?overdue=true`, `?system=true`, `?quarantine=`, `?ownerId=me`).
+  '/quality/holds': '/quality/holds',
+  '/quality/defects': '/quality/defects',
   '/compliance/register': '/compliance/register',
   // The invoice list reads the API's own filters from the address (`?status=REJECTED`, `?docType=TD04`).
   '/invoicing/invoices': '/finance/invoices',
@@ -151,6 +166,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-45: the schedule's board and the allocation board.
   '/planning/schedule': '/planning/board',
   '/planning/allocation': '/planning/allocation',
+  // B-W2a-70: capacity per lane and bucket (SCR-123, `?site=` `?from=` `?to=` `?bucket=`) and the exception queue (SCR-125).
+  '/planning/capacity': '/planning/capacity',
+  '/planning/exceptions': '/planning/exceptions',
   // B-W2a-59: the planning settings of the sites (SCR-124, SCR-127).
   '/planning/settings': '/planning/settings',
   // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).

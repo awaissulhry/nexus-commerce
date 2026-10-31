@@ -141,11 +141,6 @@
   "undo": {
     "done": "Annullato: {what}"
   },
-  "reasons": {
-    "scrap": "Perché scarto? Ogni tocco aggiunge un pezzo",
-    "rework": "Perché da rifare? Ogni tocco aggiunge un pezzo",
-    "remove": "Uno in meno: {reason}"
-  },
   "pad": {
     "less": "Meno",
     "more": "Più",

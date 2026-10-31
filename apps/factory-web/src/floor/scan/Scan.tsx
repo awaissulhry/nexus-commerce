@@ -8,6 +8,7 @@ import { lookupHide, lookupLocation, lookupWorkOrder } from '../api'
 import { zxingCamera } from '../camera'
 import { useFloor } from '../FloorApp'
 import { useFloorKeys } from '../keys'
+import { lookupMachine } from '../tasks/machine/api'
 import { TASK_ROUTES } from '../tasks/routes'
 import { planScan, readScan, resultCode, resultType, type Lookup, type ScanResult } from './scan-model'
 import { ScanView, type RecentScan } from './view/ScanView'
@@ -66,7 +67,7 @@ export function FloorScan() {
           setLoading(null)
         }
       }
-      feedback(found.kind === 'hide' || found.kind === 'workOrder' || found.kind === 'location' ? 'success' : found.kind === 'notOnFloor' ? 'warning' : 'error')
+      feedback(found.kind === 'hide' || found.kind === 'workOrder' || found.kind === 'location' || found.kind === 'machine' ? 'success' : found.kind === 'notOnFloor' ? 'warning' : 'error')
       setResult(found)
       setRecent((current) => [{ code: resultCode(found) || read.code, type: resultType(found), at: new Date().toISOString() }, ...current].slice(0, MAX_RECENT))
     },
@@ -81,6 +82,8 @@ export function FloorScan() {
         return lookupWorkOrder(api, code)
       case 'location':
         return lookupLocation(api, me!.site.id, code)
+      case 'machine':
+        return lookupMachine(api, code)
     }
   }
 
@@ -97,13 +100,15 @@ export function FloorScan() {
   if (!me) return null
   return (
     <ScanView
-      model={{ frame, result, loading, recent, held: me.notice.blocksScans, canCut: me.permissions.includes('production.cut') && !me.notice.blocksScans }}
+      model={{ frame, result, loading, recent, held: me.notice.blocksScans, canCut: me.permissions.includes('production.cut') && !me.notice.blocksScans, canReport: me.permissions.includes('plant.report') }}
       onFrame={onFrame}
       onAction={(action) => {
         if (action.type === 'scan') return void look(action.code)
         if (action.type === 'clear') return setResult(null)
         if (action.type === 'home') return router.push('/floor')
         if (action.type === 'cut') return store.openWith(TASK_ROUTES.cut, action.code)
+        // B-W2a-73: a machine's card opens the machine problem with its tag (never held by the notice: a safety report).
+        if (action.type === 'report') return store.openWith(TASK_ROUTES.machine, action.code)
       }}
       camera={zxingCamera}
     />

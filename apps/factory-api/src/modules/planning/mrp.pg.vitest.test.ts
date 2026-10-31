@@ -386,3 +386,52 @@ describe('walls (A1 §2.2): tenant, company, audience', () => {
     expect(text).not.toMatch(/unitPrice|unitCost|amount|EUR/)
   })
 })
+
+describe('held stock in the Why drawer and the unusable-stock view (B-W2a-70, the lead follow-up of #985)', () => {
+  /** A quality hold placed at the table (made up), by SQL: the holds module's tests cover its own routes. */
+  async function placeHold(subjectType: 'Lot' | 'Hide', subjectIds: readonly string[]): Promise<string> {
+    const holdId = newId()
+    await admin(
+      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById")
+       VALUES ($1, $2, $3, $4, $5, $6::uuid[], 'QUALITY_CHECK', 'A shade difference seen at the table (made up).', '2026-11-21T09:00:00Z', $7, $7)`,
+      [holdId, A.tenant, A.companyA, A.siteA1, subjectType, [...subjectIds], A.actor],
+    )
+    return holdId
+  }
+  const liftHold = (holdId: string) =>
+    admin(`UPDATE "QualityHold" SET status = 'RELEASED', "releasedAt" = now(), "releasedById" = $2, "releaseNote" = 'Shade checked (made up).', "releaseSignatureSha256" = 'made-up-signature', version = version + 1 WHERE id = $1`, [holdId, newId()])
+
+  it('a held hide and a held lot are held there as in the run, each with its hold and reason; lifting gives them back', async () => {
+    const { lotId, code: hideCode } = (await admin<{ lotId: string; code: string }>(`SELECT "lotId", code FROM "Hide" WHERE id = $1`, [A.hide2]))[0]!
+    const lotCode = (await admin<{ code: string }>(`SELECT code FROM "Lot" WHERE id = $1`, [lotId]))[0]!.code
+    const black = lineOf(await latest(), A.leather, A.leatherBLK)
+    const before = await ok('viewer', 'GET', `/planning/requirements/${black.id}`)
+    expect(before.now.usableStock).toBe('51.8000')
+    expect((before.now.stock as Json[]).find((entry) => entry.lot?.id === lotId)).toMatchObject({ reason: null, held: false, hide: null, hold: null })
+
+    // A hold of the hide alone: its stock leaves the usable stock and is listed as that hide, on its real lot, with the hold.
+    const hideHold = await placeHold('Hide', [A.hide2])
+    const held = await ok('viewer', 'GET', `/planning/requirements/${black.id}`)
+    expect(held.now).toMatchObject({ usableStock: '0.0000', changedSinceRun: true })
+    const heldLine = (held.now.stock as Json[]).find((entry) => entry.hide?.id === A.hide2)
+    expect(heldLine).toMatchObject({ reason: 'QUALITY_HOLD', held: true, quantity: '51.8000', hides: 1, lot: { id: lotId, code: lotCode }, hide: { id: A.hide2, code: hideCode }, hold: { id: hideHold, subjectType: 'Hide', reasonCode: 'QUALITY_CHECK', placedAt: '2026-11-21T09:00:00.000Z' } })
+    expect(typeof heldLine!.hold.reasonIt).toBe('string')
+    expect(heldLine!.words).toMatch(/^on quality hold \(.+, since 2026-11-21\)$/)
+    expect(JSON.stringify(held)).not.toContain('quality-hold:')
+    const unusable = await ok('viewer', 'GET', `/planning/unusable-stock?siteId=${A.siteA1}&itemId=${A.leather}`)
+    expect((unusable.lines as Json[]).find((entry) => entry.hide?.id === A.hide2)).toMatchObject({ reason: 'QUALITY_HOLD', held: true, lot: { id: lotId }, hold: { id: hideHold, subjectType: 'Hide' } })
+    await liftHold(hideHold)
+
+    // A hold of the whole lot: the lot's line is held with the lot's hold (its own status stays RELEASED).
+    const lotHold = await placeHold('Lot', [lotId])
+    const onLot = await ok('viewer', 'GET', `/planning/requirements/${black.id}`)
+    expect(onLot.now.usableStock).toBe('0.0000')
+    expect((onLot.now.stock as Json[]).find((entry) => entry.lot?.id === lotId)).toMatchObject({ reason: 'QUALITY_HOLD', held: true, hide: null, lot: { qualityStatus: 'RELEASED' }, hold: { id: lotHold, subjectType: 'Lot', reasonCode: 'QUALITY_CHECK' } })
+    expect((await ok('viewer', 'GET', `/planning/unusable-stock?siteId=${A.siteA1}`)).lines.find((entry: Json) => entry.lot?.id === lotId)).toMatchObject({ reason: 'QUALITY_HOLD', hold: { id: lotHold } })
+    await liftHold(lotHold)
+
+    const after = await ok('viewer', 'GET', `/planning/requirements/${black.id}`)
+    expect(after.now).toMatchObject({ usableStock: '51.8000', changedSinceRun: false })
+    expect((await ok('viewer', 'GET', `/planning/unusable-stock?siteId=${A.siteA1}&itemId=${A.leather}`)).lines.find((entry: Json) => entry.lot?.id === lotId)).toBeUndefined()
+  })
+})

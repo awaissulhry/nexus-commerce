@@ -1,0 +1,193 @@
+{
+  "kind": {
+    "ORDER_LATE_RISK": "Ordini a rischio di ritardo",
+    "HOLD_TOO_LONG": "Blocchi che durano troppo",
+    "MATERIAL_SHORT": "Materiale mancante per ordini di lavoro rilasciati",
+    "APPROVAL_OVERDUE": "Approvazioni in ritardo",
+    "PO_NOT_CONFIRMED": "Ordini di acquisto non confermati",
+    "CERTIFICATE_EXPIRING": "Certificati in scadenza",
+    "INVOICE_DEADLINE": "Merce spedita vicina alla scadenza di fatturazione"
+  },
+  "when": {
+    "ORDER_LATE_RISK": "Quando un ordine è promesso entro {daysBeforePromise} e non è pronto, o è in ritardo",
+    "HOLD_TOO_LONG": "Quando qualcosa resta bloccato più di {hours}",
+    "MATERIAL_SHORT": "Quando manca materiale per un ordine di lavoro rilasciato",
+    "APPROVAL_OVERDUE": "Quando un'approvazione aspetta più di {hours}",
+    "PO_NOT_CONFIRMED": "Quando un ordine di acquisto non è confermato entro l'ora chiesta al fornitore (senza un'ora: {days} dopo l'invio)",
+    "CERTIFICATE_EXPIRING": "{daysBefore} prima che un certificato scada",
+    "INVOICE_DEADLINE": "{daysBefore} prima della scadenza per fatturare la merce di un DDT"
+  },
+  "sentence": {
+    "full": "{when} {place}, avvisa {recipient} con {channels} {cooldown}.",
+    "nowhere": "{when}, avvisa {recipient} con {channels} {cooldown}.",
+    "label": "La regola in una frase: cambia le parti al loro posto"
+  },
+  "place": {
+    "everywhere": "ovunque",
+    "at": "a",
+    "atCompany": "in tutta la società {name}",
+    "atSite": "a {site} ({company})",
+    "atPlace": "a {name}"
+  },
+  "recipient": {
+    "none": "nessuno per ruolo"
+  },
+  "channels": {
+    "bell": "la campanella",
+    "both": "la campanella e l'e-mail"
+  },
+  "unit": {
+    "hoursShort": "{count} h",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "workingDays_one": "{count} giorno lavorativo",
+    "workingDays_other": "{count} giorni lavorativi"
+  },
+  "unitWord": {
+    "hours": "h",
+    "days_one": "giorno",
+    "days_other": "giorni",
+    "workingDays_one": "giorno lavorativo",
+    "workingDays_other": "giorni lavorativi"
+  },
+  "field": {
+    "daysBeforePromise": "Giorni prima della data promessa",
+    "hours": "Ore",
+    "days": "Giorni dopo l'invio",
+    "daysBefore": "Giorni prima della data",
+    "dayKind": "Giorni di calendario o lavorativi",
+    "place": "Dove guarda",
+    "recipient": "Chi viene avvisato",
+    "channels": "Come viene avvisato",
+    "cooldown": "Quante volte al massimo"
+  },
+  "problem": {
+    "range": "Un numero intero da {min} a {max}.",
+    "failed": "Non è stato possibile leggere le regole. Riprova.",
+    "forbidden": "Non puoi vedere queste regole.",
+    "gone": "Questa regola non c'è più.",
+    "offline": "Nessuna risposta da Nexus: controlla la connessione e riprova."
+  },
+  "severity": {
+    "INFO": "Informazione",
+    "WARNING": "Attenzione",
+    "CRITICAL": "Critico"
+  },
+  "state": {
+    "on": "Attiva",
+    "off": "Spenta"
+  },
+  "goesTo": {
+    "at": "{role} a {place}",
+    "everywhere": "{role}, ovunque"
+  },
+  "dialog": {
+    "title": "Regola: {kind}",
+    "newTitle": "Nuova regola",
+    "reading": "Regola",
+    "builtIn": "Regola di serie: si può spegnere, non togliere.",
+    "kind": "Cosa controlla",
+    "onLabel": "Regola attiva",
+    "offHint": "Spenta, non solleva nulla di nuovo; i suoi avvisi aperti restano da risolvere e i timer in attesa di una regola a data vengono annullati.",
+    "severity": "Gravità",
+    "sentence": "La regola",
+    "emailHint": "L'e-mail non parte subito: le persone ricevono gli avvisi per e-mail solo nel riepilogo giornaliero che attivano nelle loro preferenze di notifica.",
+    "unsaved_one": "{count} modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate",
+    "cancel": "Annulla",
+    "save": "Salva regola",
+    "create": "Aggiungi regola",
+    "noKinds": "Qui non c'è altro che una regola possa controllare."
+  },
+  "test": {
+    "title": "Prova questi numeri",
+    "go": "Prova ora",
+    "running": "Prova in corso…",
+    "found_one": "Ora troverebbe {count} record",
+    "found_other": "Ora troverebbe {count} record",
+    "foundAtLeast_one": "Ora troverebbe almeno {count} record",
+    "foundAtLeast_other": "Ora troverebbe almeno {count} record",
+    "fired_one": "ha sollevato {count} avviso negli ultimi 7 giorni",
+    "fired_other": "ha sollevato {count} avvisi negli ultimi 7 giorni",
+    "sample": "Record che troverebbe",
+    "honest": "Contati sui record come sono adesso: Nexus non conserva una copia di com'erano la settimana scorsa.",
+    "newRule": "Contati sui record come sono adesso, con questi numeri e questo luogo.",
+    "noRuleOfKind": "Non c'è ancora una regola di questo tipo visibile su cui provare."
+  },
+  "timers": {
+    "title": "Timer",
+    "titleCount_one": "Timer: {count} in attesa",
+    "titleCount_other": "Timer: {count} in attesa",
+    "next": "Il prossimo scatta il {date}.",
+    "none": "Nessun timer di questa regola per ora: il prossimo controllo imposta quelli che servono.",
+    "record": "Record",
+    "firesAt": "scatta il {date}",
+    "firedAt": "scattato il {date}",
+    "status": {
+      "PENDING": "In attesa",
+      "FIRED": "Scattato",
+      "CANCELLED": "Annullato"
+    },
+    "cancel": {
+      "MOVED": "La data che guarda è cambiata: è stato impostato un nuovo timer.",
+      "GONE": "Il record non ne ha più bisogno.",
+      "RULE_OFF": "La regola è stata spenta.",
+      "RULE_CHANGED": "I numeri o il luogo della regola sono cambiati.",
+      "other": "Annullato."
+    }
+  },
+  "held": {
+    "readOnly": "Puoi vedere questa regola ma non cambiarla: per tenere le regole serve il permesso di gestire le regole degli avvisi in quel luogo.",
+    "offline": "Offline — cambiala quando torni online.",
+    "busy": "Salvataggio…",
+    "noChange": "Non hai ancora cambiato nulla.",
+    "problems": "Correggi prima i numeri.",
+    "noKind": "Scegli prima cosa controlla.",
+    "choices": "Luoghi e ruoli sono ancora in lettura.",
+    "noAdd": "Non puoi aggiungere regole: serve il permesso di gestire le regole degli avvisi."
+  },
+  "refusal": {
+    "noBell": "Una regola di avviso avvisa sempre con la campanella: l'e-mail da sola non viene inviata.",
+    "siteNeedsCompany": "Uno stabilimento si indica solo con la sua società.",
+    "unchanged": "Niente da cambiare: la regola è già così.",
+    "changed": "Qualcuno ha cambiato questa regola nel frattempo: è stata riletta — rifai la tua modifica.",
+    "numbers": "I numeri non vanno bene per questa regola.",
+    "role": "Scegli un ruolo d'ufficio.",
+    "place": "Quella società o quello stabilimento non c'è più.",
+    "invalid": "La regola è stata rifiutata così com'è.",
+    "forbidden": "Non puoi tenere le regole di quel luogo.",
+    "gone": "Questa regola non c'è più.",
+    "offline": "Nessuna risposta da Nexus: non è stato salvato nulla. Riprova.",
+    "failed": "Non è stato possibile salvare la regola. Riprova."
+  },
+  "retry": "Riprova",
+  "notice": {
+    "saved": "Regola salvata.",
+    "created": "Regola aggiunta: il prossimo controllo (entro cinque minuti) la applica.",
+    "switchedOn": "Regola attivata.",
+    "switchedOff": "Regola spenta: i suoi avvisi aperti restano da risolvere."
+  },
+  "list": {
+    "col": {
+      "sentence": "Regola",
+      "threshold": "Soglia",
+      "goesTo": "A chi va",
+      "cooldown": "Quante volte",
+      "timers": "Timer",
+      "lastFired": "Ultimo scatto",
+      "fired7Days": "In 7 giorni",
+      "state": "Stato"
+    },
+    "builtIn": "di serie",
+    "openAlerts_one": "{count} avviso aperto",
+    "openAlerts_other": "{count} avvisi aperti",
+    "switch": "Regola attiva: {rule}",
+    "never": "Mai",
+    "waiting_one": "{count} in attesa",
+    "waiting_other": "{count} in attesa",
+    "add": "Aggiungi regola",
+    "count_one": "{count} regola",
+    "count_other": "{count} regole",
+    "waitingNext": "{waiting} · prossimo {date}"
+  }
+}

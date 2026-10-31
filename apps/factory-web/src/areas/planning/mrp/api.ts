@@ -2,9 +2,10 @@ import { z } from 'zod'
 import { BRIDGE_STEPS } from '@nexus/factory-domain/planning/explain'
 import { DECISIONS, RUN_STATUSES, SET_ASIDE_REASONS } from '@nexus/factory-domain/planning/decisions'
 import { REQUIREMENT_ACTIONS, WARNING_CODES } from '@nexus/factory-domain/planning/explode'
+import { PEGGING_DEMAND_KINDS, PEGGING_SUPPLY_KINDS } from '@nexus/factory-domain/planning/pegging/pegging'
 import { CR_VI_STATUSES, NOT_COUNTED_REASONS } from '@nexus/factory-domain/planning/usable'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
-import { PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
+import { PURCHASE_ORDER_STATUSES, SEND_CHECK_CODES } from '@nexus/factory-domain/purchasing/orders'
 import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
 
@@ -82,6 +83,11 @@ export const lineSchema = z.object({
   purchaseOrderLineId: z.string().nullable(),
   purchaseOrder: z.object({ id: z.string(), number: z.string(), status: z.enum(PURCHASE_ORDER_STATUSES) }).nullable(),
   decidedAt: z.string().nullable(),
+  /** B-W2a-22: the line's firm planned order (B-W2a-70 moves it); absent from an older answer. */
+  firm: z
+    .object({ quantity: z.string(), uom, baseQuantity: z.string(), date: z.string(), supplier: named.nullable(), firmedAt: z.string(), carried: z.boolean() })
+    .nullable()
+    .optional(),
   unitCost: z.string().nullable().optional(),
   expectedAmount: z.number().nullable().optional(),
   currency: z.string(),
@@ -132,14 +138,44 @@ const stockLineSchema = z.object({
   hides: z.number(),
   reason: z.enum(NOT_COUNTED_REASONS).nullable(),
   held: z.boolean(),
+  /** B-W2a-70: a hide held on its own, and the ACTIVE quality hold that holds the stock (its reason in both languages). */
+  hide: z.object({ id: z.string(), code: z.string() }).nullable().optional(),
+  hold: z.object({ id: z.string(), subjectType: z.enum(['Lot', 'Hide']), reasonCode: z.string(), reasonIt: z.string(), reasonEn: z.string(), placedAt: z.string() }).nullable().optional(),
 })
 export type StockLine = z.infer<typeof stockLineSchema>
+
+// ---- B-W2a-70: pegging (PLN-071) ----------------------------------------------------------------------------------------
+
+const pegSupplySchema = z.object({
+  seq: z.number(),
+  kind: z.enum(PEGGING_SUPPLY_KINDS),
+  quantity: z.string(),
+  date: z.string().nullable(),
+  reservation: z.object({ id: z.string(), kind: z.string(), lot: z.object({ id: z.string(), code: z.string() }).nullable(), hide: z.object({ id: z.string(), code: z.string() }).nullable() }).nullable(),
+  purchaseOrder: z.object({ id: z.string(), number: z.string(), status: z.string(), lineId: z.string(), seq: z.number() }).nullable(),
+  firm: z.boolean(),
+})
+export const pegDemandSchema = z.object({
+  requirementId: z.string(),
+  kind: z.enum(PEGGING_DEMAND_KINDS),
+  order: z.object({ id: z.string(), number: z.string() }).nullable(),
+  orderLine: z.object({ id: z.string(), seq: z.number() }).nullable(),
+  size: z.string().nullable(),
+  workOrder: z.object({ id: z.string(), number: z.string(), status: z.string() }).nullable(),
+  demandDate: z.string(),
+  quantity: z.string(),
+  planned: z.string(),
+  supplies: z.array(pegSupplySchema),
+})
+export type PegDemand = z.infer<typeof pegDemandSchema>
 
 const explainSchema = z.object({
   run: runSchema,
   line: lineSchema,
   bridge: z.array(z.object({ step: z.enum(BRIDGE_STEPS), quantity: z.string(), uom })),
   rounding: z.array(z.object({ rule: z.enum(['WHOLE_UNITS', 'MINIMUM', 'MULTIPLE']), quantity: z.string() })),
+  /** B-W2a-22: which supply covers which order line, size and work order (the pegging tree; empty for a W1 run). */
+  pegging: z.array(pegDemandSchema).optional().default([]),
   now: z.object({
     usableStock: z.string(),
     heldStock: z.string(),
@@ -218,4 +254,59 @@ export type OpenDraft = z.infer<typeof draftRowSchema>
 /** The open drafts at the site (a supplier's newest one takes the plan's lines unless the person asks for a new one). */
 export async function openDrafts(api: ApiClient, siteId: string, signal?: AbortSignal): Promise<OpenDraft[]> {
   return (await api.get('/purchasing/orders', { query: { status: 'DRAFT', siteId, limit: 200 }, schema: z.object({ orders: z.array(draftRowSchema) }), signal })).orders
+}
+
+// ---- B-W2a-70: short on open work orders (PLN-085), a firm order moved, Send n (B-W2a-52) -----------------------------------
+
+export const SHORTAGE_FIXES = ['BUY', 'EXPEDITE', 'MOVE_FIRM'] as const
+
+const shortageSchema = z.object({
+  workOrder: z.object({ id: z.string(), number: z.string(), status: z.string(), kind: z.string(), dueDate: z.string().nullable(), startedAt: z.string().nullable(), style: named }),
+  material: z.object({ itemId: z.string(), itemColourId: z.string().nullable(), label: z.string(), uom }),
+  word: z.enum(['NOT_ENOUGH', 'DELAYED']),
+  short: z.string(),
+  neededBy: z.string(),
+  expected: z.object({ date: z.string(), purchaseOrderNumber: z.string() }).nullable(),
+  fixes: z.array(z.object({ kind: z.enum(SHORTAGE_FIXES), requirementId: z.string().nullable(), purchaseOrder: z.object({ id: z.string(), number: z.string(), lineId: z.string(), dueDate: z.string() }).nullable() })),
+})
+export type Shortage = z.infer<typeof shortageSchema>
+const shortagesSchema = z.object({ siteId: z.string(), asOf: z.string(), latestRunId: z.string().nullable(), rows: z.array(shortageSchema) })
+export type Shortages = z.infer<typeof shortagesSchema>
+
+/** Open and planned work orders missing material, computed now from the live plan, each with its fixes. */
+export function getShortages(api: ApiClient, siteId: string, signal?: AbortSignal): Promise<Shortages> {
+  return api.get('/planning/shortages', { query: { siteId }, schema: shortagesSchema, signal })
+}
+
+/** A line's firm planned order set again (MOVE_FIRM: the same quantity, an earlier date), with the line's version. */
+export async function firmLine(api: ApiClient, requirementId: string, body: { version: number; quantity: string; date: string; supplierId?: string }): Promise<PlanLine> {
+  return (await api.post(`/planning/requirements/${encodeURIComponent(requirementId)}/firm`, { body, schema: z.object({ line: lineSchema, replayed: z.boolean() }), idempotencyKey: newIdempotencyKey() })).line
+}
+
+const refusedSchema = z.object({ code: z.string(), message: z.string(), issues: z.array(z.object({ path: z.string(), message: z.string() })) })
+const sendCardSchema = z.object({
+  id: z.string(),
+  number: z.string().nullable(),
+  partyId: z.string().nullable(),
+  status: z.enum(PURCHASE_ORDER_STATUSES).nullable(),
+  version: z.number().nullable(),
+  ready: z.boolean(),
+  checks: z.array(z.object({ code: z.enum(SEND_CHECK_CODES), severity: z.enum(['BLOCKS', 'WARNING']), path: z.string(), message: z.string() })),
+  recipient: z.object({ contactId: z.string(), name: z.string(), email: z.string().nullable() }).nullable(),
+  confirmBy: z.string().nullable(),
+  refused: refusedSchema.nullable(),
+})
+export type SendCard = z.infer<typeof sendCardSchema>
+
+/** Send n (B-W2a-52): each draft's checks, recipient and confirm-by, before anything is sent. */
+export async function sendChecks(api: ApiClient, orderIds: readonly string[]): Promise<SendCard[]> {
+  return (await api.post('/purchasing/orders/send-checks', { body: { orderIds }, schema: z.object({ ready: z.number(), cards: z.array(sendCardSchema) }) })).cards
+}
+
+const sendOutcomeSchema = z.object({ id: z.string(), number: z.string().nullable(), outcome: z.enum(['SENT', 'REFUSED']), refused: refusedSchema.nullable() })
+export type SendOutcome = z.infer<typeof sendOutcomeSchema>
+
+/** Each order its own send (its mail, its confirm link); a refused one keeps its reason. Nothing is sent twice for one key. */
+export async function sendMany(api: ApiClient, orders: readonly { id: string; version: number }[]): Promise<SendOutcome[]> {
+  return (await api.post('/purchasing/orders/send-many', { body: { orders }, schema: z.object({ sent: z.number(), refused: z.number(), outcomes: z.array(sendOutcomeSchema) }), idempotencyKey: newIdempotencyKey() })).outcomes
 }

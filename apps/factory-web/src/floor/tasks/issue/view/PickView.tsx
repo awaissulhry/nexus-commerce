@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Check, CircleAlert, CircleSlash, ClipboardList, Package, PackageCheck, Scissors, ScanLine, Undo2, X } from 'lucide-react'
+import { Check, CircleAlert, CircleSlash, ClipboardList, Package, PackageCheck, PackageMinus, Scissors, ScanLine, Undo2, X } from 'lucide-react'
 import { FloorActionBar, FloorList, FloorListRow, QuantityPad, ScanInput, qtyHeldReason, type CameraScanner, type FloorAction, type FloorActions } from '@nexus/ui/floor'
 import { formatDate, formatNumber, formatTime } from '../../../../lib/i18n/format'
 import type { Translate } from '../../../../lib/i18n/messages'
@@ -10,7 +10,9 @@ import { FloorFrameView, type FrameAction, type FrameModel } from '../../../fram
 import { FloorState } from '../../../frame/view/FloorState'
 import type { TaskProblem } from '../../shared/task-api'
 import { HeldLine, ListFooter, ProblemState, TaskCard, TaskLine, Ticks, UndoStrip } from '../../shared/view/TaskParts'
-import { coveredCount, ISSUE_REFUSAL_WORDS, lineName, num, undoStock, type PadBounds, type PickLine, type PickList, type PickWorkOrderRow } from '../model'
+import { coveredCount, ISSUE_REFUSAL_WORDS, lineName, num, SCREEN_REFUSALS, undoStock, type PadBounds, type PickLine, type PickList, type PickWorkOrderRow } from '../model'
+import { returnRows } from '../returns'
+import { returnStep, type PickReturnModel, type ReturnAction } from './ReturnStep'
 import '../issue.css'
 
 /**
@@ -21,6 +23,9 @@ import '../issue.css'
  * more than is on hand or still needed: an over-issue is the office's). Undo the last issue in one tap. Issuing needs the
  * network (it is not one of the queue's actions): offline the scan is held and says so, and the last pick list read
  * stays on screen as this tablet's copy, with its time. No money anywhere.
+ *
+ * W2a (B-W2a-75, SCM-216): Return unused, the list's secondary action — what the work order holds goes back to stock (a
+ * cut hide as a remnant with its area and a new tag): ./ReturnStep.tsx.
  */
 
 export interface PickPad {
@@ -40,7 +45,7 @@ export interface PickViewModel {
   online: boolean
   /** The worker notice holds scans. */
   held?: boolean
-  stage: 'choose' | 'list' | 'noPermission'
+  stage: 'choose' | 'list' | 'return' | 'noPermission'
   /** choose: the site's work orders to pick for; null while they are read. */
   workOrders?: readonly PickWorkOrderRow[] | null
   /** What is on screen is this tablet's copy (no network): when it was read. */
@@ -56,6 +61,8 @@ export interface PickViewModel {
   problem?: { readonly problem: TaskProblem; readonly code: string | null } | null
   /** The site's time zone. */
   timeZone?: string
+  /** B-W2a-75: the Return unused step. */
+  ret?: PickReturnModel | null
 }
 
 export type PickAction =
@@ -69,6 +76,8 @@ export type PickAction =
   | { type: 'done' }
   | { type: 'dismiss' }
   | { type: 'retry' }
+  | { type: 'returnOpen' }
+  | ReturnAction
 
 export interface PickViewProps {
   model: PickViewModel
@@ -77,7 +86,7 @@ export interface PickViewProps {
   camera?: CameraScanner
 }
 
-const KNOWN = new Set<string>(ISSUE_REFUSAL_WORDS)
+const KNOWN = new Set<string>([...ISSUE_REFUSAL_WORDS, ...SCREEN_REFUSALS])
 
 /** A unit's short name (`unit.FT2` → "ft²"), else its code. */
 export function unitWord(t: Translate, uom: string): string {
@@ -116,6 +125,8 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
     body = <ProblemState problem={problem} code={code} words={(refusal) => refusalWords(t, refusal)} />
     const scanAnother: FloorAction = { label: shared('action.scanAnother'), icon: <ScanLine />, onPress: () => send({ type: 'dismiss' }) }
     actions = problem.kind === 'unavailable' || problem.kind === 'offline' ? [scanAnother, { label: shared('action.retry'), icon: <Undo2 />, onPress: () => send({ type: 'retry' }) }] : [scanAnother]
+  } else if (model.stage === 'return' && model.ret) {
+    ;({ body, actions } = returnStep({ ret: model.ret, online: model.online, locale, t, shared, floor, send, words: (code) => refusalWords(t, code), camera }))
   } else if (model.stage === 'choose') {
     body = (
       <div className="fw-floor-stack">
@@ -193,7 +204,11 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
           },
         ]
       } else {
-        actions = [{ label: t('action.done'), icon: <Check />, onPress: () => send({ type: 'done' }) }]
+        const returnable = returnRows(list).length
+        actions = [
+          { label: t('return.open'), icon: <PackageMinus />, onPress: () => send({ type: 'returnOpen' }), heldReason: offlineHeld ?? (returnable === 0 ? t('return.nothing') : null) },
+          { label: t('action.done'), icon: <Check />, onPress: () => send({ type: 'done' }) },
+        ]
       }
       body = (
         <div className="fw-floor-stack">

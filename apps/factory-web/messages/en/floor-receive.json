@@ -72,7 +72,7 @@
     "openLines_other": "lines to come",
     "supplier": "Supplier",
     "ddt": "Delivery note",
-    "ddtNone": "Not scanned",
+    "ddtNone": "Not given",
     "dock": "Goods in",
     "noDock": "No goods-in dock: ask the office",
     "requested": "Asked for",
@@ -383,5 +383,48 @@
     "ROLL": "rolls",
     "CONE": "cones",
     "BOX": "boxes"
+  },
+  "ddt": {
+    "title": "Delivery note",
+    "noNumber": "No number",
+    "done": "Done",
+    "open": {
+      "add": "Delivery note: number, date, photo",
+      "change": "Delivery note: {what}"
+    },
+    "number": {
+      "title": "The supplier's number",
+      "scan": "Scan the delivery note's code",
+      "hint": "Scan its barcode, type it, or use the number pad.",
+      "pad": "Number (digits)",
+      "empty": "Type the delivery note's number",
+      "kept": "Number {number}, as scanned or typed.",
+      "clear": "Clear the number"
+    },
+    "date": {
+      "title": "Its date",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "another": "Another day",
+      "none": "Not given"
+    },
+    "photo": {
+      "title": "Photo of the delivery note",
+      "take": "Take a photo",
+      "retake": "Take it again",
+      "remove": "Remove the photo",
+      "after": "The photo goes with the receipt when the delivery is posted.",
+      "fact": "Photo",
+      "kept": "On this tablet, sent with the receipt",
+      "none": "None",
+      "short": "photo",
+      "alt": "Photo of delivery note {number}",
+      "retry": "Send the photo again",
+      "send": {
+        "sending": "Sending the delivery note photo…",
+        "sent": "Delivery note photo sent with the receipt.",
+        "failed": "The delivery note photo was not sent."
+      }
+    }
   }
 }

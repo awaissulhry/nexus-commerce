@@ -1,0 +1,224 @@
+{
+  "page": {
+    "asOf": "As of {time}",
+    "site": "Site",
+    "siteOne": "Site {site}",
+    "from": "From",
+    "to": "To",
+    "bucket": "Buckets",
+    "board": "Open planning board",
+    "more": "More actions",
+    "export": "Export this view (CSV)",
+    "print": "Print",
+    "settings": "Capacity settings (Planning settings)",
+    "keys": "Keyboard shortcuts",
+    "printHead": "Capacity & load · {site} · {from} – {to} · by {bucket}",
+    "noSites": "This company has no site you plan at.",
+    "withoutLine_one": "{count} open work order is on no line yet: its minutes book only its work centres.",
+    "withoutLine_other": "{count} open work orders are on no line yet: their minutes book only their work centres."
+  },
+  "bucket": {
+    "DAY": "Day",
+    "WEEK": "Week",
+    "MONTH": "Month",
+    "week": "Wk {week} · {range}"
+  },
+  "live": {
+    "connecting": "Connecting to live updates…",
+    "live": "Live",
+    "offline": "Offline: the numbers are not updated by themselves"
+  },
+  "noAccess": {
+    "title": "Capacity & load is not open to your role",
+    "body": "Your role cannot read the plan (planning.view). Ask an administrator if you need it."
+  },
+  "keys": {
+    "cell": "Open the orders of the lane this week",
+    "walk": "Previous / next cell in the orders"
+  },
+  "tile": {
+    "title": "Capacity at a glance",
+    "over": "Lanes over 100% this week",
+    "free": "Free minutes in the next 4 weeks",
+    "most": "Most loaded lane this week",
+    "minutes": "{minutes} min",
+    "mostValue": "{lane} · {pct}%",
+    "hint": {
+      "over": "lines and work centres booked above what they have",
+      "free": "on the lines; {minutes} min on the work centres",
+      "most": "the highest load from Monday to Sunday"
+    }
+  },
+  "col": {
+    "lane": "Lane",
+    "bucketTip": "Booked of available standard minutes in {bucket}",
+    "overall": "Whole period",
+    "overallOf": "{lane}, the whole period",
+    "end": "Efficiency · people · shifts"
+  },
+  "kind": {
+    "LINE": "Line",
+    "WORK_CENTRE": "Work centre"
+  },
+  "lane": {
+    "toBoard": "Open {lane} on the planning board (new window)",
+    "efficiency": "{efficiency}% efficiency ({source})",
+    "efficiencyShort": "{efficiency}% efficiency",
+    "peopleShort": {
+      "LINE_one": "{people} person",
+      "LINE_other": "{people} people",
+      "WORK_CENTRE_one": "{people} station",
+      "WORK_CENTRE_other": "{people} stations"
+    },
+    "source": {
+      "LANE": "this lane",
+      "SITE": "the site",
+      "DEFAULT": "the default"
+    },
+    "people": {
+      "LINE_one": "{people} person ({source})",
+      "LINE_other": "{people} people ({source})",
+      "WORK_CENTRE_one": "{people} station ({source})",
+      "WORK_CENTRE_other": "{people} stations ({source})"
+    },
+    "peopleSource": {
+      "CAPACITY": "set in Planning settings",
+      "STATIONS": "its active stations"
+    },
+    "pattern": "{name}",
+    "patternDefault": "Default shifts (no calendar)",
+    "pastDue": "{minutes} min past due, in no bucket",
+    "undated": "{minutes} min with no due date",
+    "held_one": "{count} work order on hold books nothing",
+    "held_other": "{count} work orders on hold book nothing"
+  },
+  "cell": {
+    "title": "{lane} · {bucket}",
+    "open": "{what}: open the orders booked here",
+    "days": "From {from} to {to}",
+    "gone": "This cell is not in the period shown",
+    "prev": "Previous cell",
+    "next": "Next cell",
+    "first": "This is the first cell of the table.",
+    "last": "This is the last cell of the table.",
+    "board": "Open on board",
+    "orders": "Orders booked in these days",
+    "noOrders": "No open work order books this lane in these days.",
+    "col": {
+      "workOrder": "Work order",
+      "operation": "Operation",
+      "pieces": "Garments to do",
+      "minutes": "Minutes",
+      "share": "Share",
+      "placed": "Placed by"
+    },
+    "minutes": "{minutes} min",
+    "placedSlot": "the board, from {time}",
+    "placedDue": "its due date, {date} (not on the board yet)",
+    "placedDueNone": "its due date (not on the board yet)",
+    "noPerson": "Minutes per work order and operation, never per person."
+  },
+  "how": {
+    "trigger": "How the capacity of {what} is made: {how}",
+    "title": "How this capacity is made — {what}",
+    "titleShort": "How this capacity is made",
+    "formula": {
+      "people_one": "{people} person × {minutes} min × {efficiency}% efficiency × {days} days = {available} min",
+      "people_other": "{people} people × {minutes} min × {efficiency}% efficiency × {days} days = {available} min",
+      "stations_one": "{people} station × {minutes} min × {efficiency}% efficiency × {days} days = {available} min",
+      "stations_other": "{people} stations × {minutes} min × {efficiency}% efficiency × {days} days = {available} min"
+    },
+    "formulaVaried": {
+      "people_one": "{people} person × {minutes} working min over {days} days × {efficiency}% efficiency = {available} min",
+      "people_other": "{people} people × {minutes} working min over {days} days × {efficiency}% efficiency = {available} min",
+      "stations_one": "{people} station × {minutes} working min over {days} days × {efficiency}% efficiency = {available} min",
+      "stations_other": "{people} stations × {minutes} working min over {days} days × {efficiency}% efficiency = {available} min"
+    },
+    "noDays": "No working day in these days: nothing is available.",
+    "noPeople": "No people set and no active station: nothing is available.",
+    "noStations": "No units set and no active station: nothing is available.",
+    "closed": "Closed: {days}.",
+    "closedReason": {
+      "HOLIDAY": "holiday",
+      "CLOSURE": "closure"
+    },
+    "noShift": "No shift on: {days}.",
+    "efficiency": {
+      "LANE": "Efficiency {efficiency}%: set for this lane.",
+      "SITE": "Efficiency {efficiency}%: the site’s default.",
+      "DEFAULT": "Efficiency {efficiency}%: nothing set, the planning default."
+    },
+    "people": {
+      "LINE": {
+        "CAPACITY_one": "{people} person: set in Planning settings.",
+        "CAPACITY_other": "{people} people: set in Planning settings.",
+        "STATIONS_one": "{people} person: one per active station (none set).",
+        "STATIONS_other": "{people} people: one per active station (none set)."
+      },
+      "WORK_CENTRE": {
+        "CAPACITY_one": "{people} unit: set in Planning settings.",
+        "CAPACITY_other": "{people} units: set in Planning settings.",
+        "STATIONS_one": "{people} station: its active stations (none set).",
+        "STATIONS_other": "{people} stations: its active stations (none set)."
+      }
+    },
+    "bookedBoard": "Booked: {booked} min, all placed on the planning board.",
+    "bookedDue": "Booked: {booked} min — {board} min placed on the board, {due} min at their due date.",
+    "nothingBooked": "Nothing booked in these days.",
+    "calendar": "Open the calendar {name}",
+    "noCalendar": "No calendar: the planning default days and shifts."
+  },
+  "list": {
+    "label": "Load against capacity",
+    "count_one": "{count} lane",
+    "count_other": "{count} lanes",
+    "note": "Standard minutes per line and work centre, from the frozen routings of the released work orders; never per person."
+  },
+  "bulk": {
+    "board_one": "Open {count} on the board",
+    "board_other": "Open {count} on the board",
+    "export_one": "Export {count}",
+    "export_other": "Export {count}"
+  },
+  "empty": {
+    "title": "No lanes on this site yet",
+    "body": "Lines and work centres with their people and efficiency are set in Planning settings.",
+    "settings": "Planning settings",
+    "tileTitle": "No lane matches the tile",
+    "tile": {
+      "over": "No lane is over 100% this week.",
+      "free": "No lane has free minutes in this period.",
+      "most": "Nothing is booked this week."
+    }
+  },
+  "common": {
+    "retry": "Try again",
+    "clearFilters": "Show every lane"
+  },
+  "error": {
+    "title": "Couldn’t load load against capacity",
+    "periodTitle": "This period cannot be shown",
+    "failed": "The answer did not come. Try again in a moment.",
+    "forbidden": "Your role cannot read the plan of this site.",
+    "offline": "No connection to the factory server.",
+    "period": "The period was not accepted: pick at most two years, the last day after the first.",
+    "gone": "This lane or bucket is not in the period shown.",
+    "noSite": "There is no site to plan in this company."
+  },
+  "period": {
+    "backwards": "The last day is before the first.",
+    "tooLong": "At most two years (735 days) at a time."
+  },
+  "csv": {
+    "lane": "Lane",
+    "kind": "Kind",
+    "bucket": "Bucket",
+    "from": "From",
+    "to": "To",
+    "available": "Available (min)",
+    "booked": "Booked (min)",
+    "load": "Load (%)",
+    "efficiency": "Efficiency (%)",
+    "people": "People or stations"
+  }
+}

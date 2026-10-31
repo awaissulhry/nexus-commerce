@@ -4,6 +4,11 @@ import { postProblemOf, type OrderLine, type OrderToReceive } from './api'
 import {
   addHide,
   addLot,
+  DDT_DAYS,
+  ddtDays,
+  ddtDigits,
+  ddtFromPad,
+  ddtNumberOf,
   deliverySummary,
   differenceOf,
   emptyDelivery,
@@ -276,6 +281,23 @@ describe('the body the API takes', () => {
     expect(JSON.stringify(body)).not.toMatch(/price|cost|amount/i)
     expect(lineIdAtBodyIndex(order, delivery, 1)).toBe('l20')
     expect(receiveBody(order, delivery, { printerId: null, language: 'en' })).not.toHaveProperty('printerId')
+    // B-W2a-75: the delivery note's date goes with the number (none given: not sent).
+    expect(body).not.toHaveProperty('supplierDdtDate')
+    expect(receiveBody(order, { ...delivery, ddtDate: '2026-10-29' }, { printerId: null, language: 'it' })).toMatchObject({ supplierDdtNumber: 'DDT 7', supplierDdtDate: '2026-10-29' })
+  })
+
+  it('B-W2a-75: the delivery note step — date tiles count back from the site\'s day; the pad types digits only', () => {
+    expect(ddtDays('2026-11-02', 4)).toEqual(['2026-11-02', '2026-11-01', '2026-10-31', '2026-10-30'])
+    expect(ddtDays('2026-03-01')).toHaveLength(DDT_DAYS)
+    expect(ddtDays('2026-03-01')[1]).toBe('2026-02-28')
+    expect(ddtDigits('4512')).toBe(4512)
+    expect(ddtDigits('4512/26')).toBeNull()
+    expect(ddtDigits(null)).toBeNull()
+    expect(ddtFromPad(88123)).toBe('88123')
+    expect(ddtFromPad(null)).toBeNull()
+    expect(ddtNumberOf('  DDT 7  ')).toBe('DDT 7')
+    expect(ddtNumberOf('   ')).toBeNull()
+    expect(ddtNumberOf('x'.repeat(80))).toHaveLength(60)
   })
 
   it('reads which lines a refusal names: a difference reason, or another line problem', () => {
