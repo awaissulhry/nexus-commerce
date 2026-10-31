@@ -298,6 +298,7 @@
       "done": {
         "matched": "Fatto il {when}: il foglio coincideva con ciò che è caricato.",
         "nothing": "Fatto il {when}: niente da caricare.",
+        "nothingWhy": "Fatto il {when}: niente da caricare ({reason}).",
         "changed": "Fatto il {when}, ma non coincide più: qualcosa è cambiato da allora."
       },
       "markDone": "Fatto",

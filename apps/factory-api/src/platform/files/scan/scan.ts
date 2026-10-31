@@ -2,11 +2,12 @@ import type { Prisma } from '@nexus/factory-db'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { command, StaleVersionError, type CommandCaller } from '../../../core/command'
-import { GatewayCallFailed, GatewayRefusal } from '../../gateway/gateway'
+import { gatewayAccount, GatewayCallFailed, GatewayRefusal } from '../../gateway/gateway'
+import { processGateway } from '../../gateway/service'
 import type { FileView } from '../contract'
 import { viewOf } from '../files'
 import type { FilesRuntime } from '../service'
-import { ScannerUnavailableError, type VirusScanner } from './port'
+import { ScannerUnavailableError, type ScanVerdict, type VirusScanner } from './port'
 import { retryChange, verdictChange, waitsForScan, type ScanStatus } from './rules'
 
 /**
@@ -116,6 +117,36 @@ async function record(caller: CommandCaller, row: ScanRow, verdict: Awaited<Retu
 }
 
 /**
+ * B-W2b-24 (B-W2a-42 gap; B-W2b-03 IntegrationProvider CLAMAV): the tenant's virus-scan account, when it has one — the
+ * file's company's, else a tenant-wide one (no company). With one, every scan goes through the gateway (platform/gateway):
+ * ONE IntegrationCall ledger row per scan for the tenant (operation `files.scan`; what was asked: the file's id, size and
+ * the engine; the answer: the verdict and the engine, never the bytes), its kill switch (a PAUSED or DISABLED account holds
+ * the file, as a scanner that does not answer), its circuit and rate limit, and the account's health for the Connections
+ * page and the INTEGRATION_FAILING rule. Without one (none is created until the Owner's spend yes: GATE-SPEND) the process
+ * scanner is called as before, unledgered.
+ */
+async function scannerAccountOf(caller: CommandCaller, companyId: string | null): Promise<string | null> {
+  const rows = await caller.withClient((client) =>
+    client.integrationAccount.findMany({
+      where: { provider: 'CLAMAV', OR: [{ companyId: null }, ...(companyId ? [{ companyId }] : [])] },
+      select: { id: true, companyId: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: 20,
+    }),
+  )
+  return (rows.find((row) => row.companyId !== null) ?? rows[0])?.id ?? null
+}
+
+async function ledgeredScan(caller: CommandCaller, accountId: string, scanner: VirusScanner, row: Pick<ScanRow, 'id' | 'sizeBytes'>, bytes: Buffer): Promise<ScanVerdict> {
+  // One attempt: a scan the scanner did not answer stays held, and the person's Try again or the sweep scans it later.
+  return processGateway().call(gatewayAccount(caller, accountId), { name: 'files.scan', idempotent: true, maxAttempts: 1, request: { fileId: row.id, sizeBytes: row.sizeBytes, engine: scanner.kind } }, async (call) => {
+    const verdict = await scanner.scan(bytes)
+    call.answer({ response: { verdict: verdict.verdict, engine: verdict.engine } })
+    return verdict
+  })
+}
+
+/**
  * Scans a file that waits for its scan (PENDING, or FAILED: tried again) and records the verdict. Returns the file as it
  * is now, and what happened.
  */
@@ -134,9 +165,10 @@ export async function scanFile(files: FilesRuntime, scanner: VirusScanner, calle
   if (!bytes) return { file: viewOf(row), outcome: 'store_unavailable' }
   let verdict: Awaited<ReturnType<VirusScanner['scan']>>
   try {
-    verdict = await scanner.scan(bytes)
+    const accountId = await scannerAccountOf(caller, row.companyId)
+    verdict = accountId === null ? await scanner.scan(bytes) : await ledgeredScan(caller, accountId, scanner, row, bytes)
   } catch (error) {
-    if (error instanceof ScannerUnavailableError) return { file: viewOf(row), outcome: 'scanner_unavailable' }
+    if (error instanceof ScannerUnavailableError || error instanceof GatewayRefusal || error instanceof GatewayCallFailed) return { file: viewOf(row), outcome: 'scanner_unavailable' }
     throw error
   }
   return { file: await record(caller, row, verdict), outcome: 'scanned' }

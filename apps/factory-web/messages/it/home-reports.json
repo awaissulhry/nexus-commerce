@@ -38,12 +38,12 @@
     "col": {
       "report": "Report",
       "area": "Area",
-      "last": "Ultima apertura",
+      "last": "Mia ultima esecuzione",
       "schedule": "Per e-mail",
       "formats": "Formati",
       "rights": "I tuoi permessi"
     },
-    "never": "Mai (su questo dispositivo)",
+    "never": "Non ancora",
     "mailed": "Ti arriva per e-mail",
     "mailable": "Si può ricevere per e-mail",
     "notScheduled": "Non programmato",

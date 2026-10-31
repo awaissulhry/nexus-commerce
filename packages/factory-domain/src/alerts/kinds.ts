@@ -9,6 +9,9 @@ import { ORDERS_VIEW } from '../sales/orders/permissions'
 import { QUOTES_VIEW } from '../sales/quotes/permissions'
 import type { TimerKind } from '../timers/rules'
 
+/** B-W2b-24: seeing a connection (auth/permissions/catalogue INTEGRATIONS_VIEW; named here so the catalogue is not imported). */
+const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
+
 /**
  * The kinds of exception rule (B-W2a-33; ANA-036 exception rules, PLT-100 time-based triggers; design home.alerts
  * "Rules": "order at risk of being late · hold longer than 24 h · material short for a released order · certificate
@@ -25,12 +28,13 @@ import type { TimerKind } from '../timers/rules'
  *               the record no longer has the date in its window (renewed, invoiced).
  *
  * The kinds ship as BUILT-IN rules for every tenant (switched on, the design's "the factory's exceptions ship ready"),
- * each telling the holders of one system role. Not built here (design built-ins, gaps for later steps): "integration
- * failing" (the connections' health, B-W2a-36). Kinds are upper case text in the database, so a new one needs no
- * migration.
+ * each telling the holders of one system role. B-W2b-24 adds the design's last built-in, "integration failing" (the
+ * connections' health: the gateway's lastOkAt / lastErrorAt of each account). Kinds are upper case text in the database,
+ * so a new one needs no migration.
  */
 
-export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE'] as const
+// B-W2b-24: INTEGRATION_FAILING (the design's last built-in), from the connections' health.
+export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING'] as const
 export type RuleKind = (typeof RULE_KINDS)[number]
 export const isRuleKind = (value: unknown): value is RuleKind => typeof value === 'string' && (RULE_KINDS as readonly string[]).includes(value)
 
@@ -183,6 +187,18 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     builtIn: { name: { en: 'Invoice deadline coming', it: 'Scadenza di fatturazione vicina' }, threshold: { daysBefore: 3, workingDays: true }, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'finance' },
     label: { en: 'Shipped goods near their invoice deadline', it: 'Merce spedita vicina alla scadenza di fatturazione' },
     timer: 'INVOICE_DEADLINE',
+    recheck: [],
+  }),
+  INTEGRATION_FAILING: spec({
+    kind: 'INTEGRATION_FAILING',
+    trigger: 'CONDITION',
+    recordType: 'IntegrationAccount',
+    view: INTEGRATIONS_VIEW,
+    // B-W2b-24: an ACTIVE connection whose last call failed after its last success, and no call has worked for this many
+    // hours (never one: since its first failure). A paused or disabled one is a person's choice, not a failure.
+    threshold: z.strictObject({ hours: whole(1, 168).default(1) }),
+    builtIn: { name: { en: 'Connection failing', it: 'Collegamento in errore' }, threshold: { hours: 1 }, severity: 'CRITICAL', cooldownMinutes: 1440, recipientRole: 'admin' },
+    label: { en: 'Connections failing', it: 'Collegamenti in errore' },
     recheck: [],
   }),
 })

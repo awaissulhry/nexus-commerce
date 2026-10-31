@@ -8,7 +8,7 @@ import { useLocale } from '../../../lib/i18n/provider'
 import { useOfficeApi } from '../../../lib/session/context'
 import { ListToolsContext, type ListToolsTransport, type WorkingLayout } from '../../../list-frame/tools/transport'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
-import { createView, exportFileAddress, listExports, listViews, readExport, removeView, startExport, updateView } from './api'
+import { createView, exportFileAddress, listExports, listViews, readExport, removeView, setPersonalDefault, startExport, updateView } from './api'
 
 /**
  * The Office's list tools (B-W2a-23): mounted once by the Office shell, so every list frame of every Office page has
@@ -71,6 +71,7 @@ export function ListToolsProvider({ children }: { children?: ReactNode }) {
       createView: (listKey, draft, key) => createView(api, listKey, draft, key),
       updateView: (view, change, key) => updateView(api, view, change, key),
       removeView: (view) => removeView(api, view),
+      setPersonalDefault: (view, on, key) => setPersonalDefault(api, view, on, key),
       startExport: (ask, key) => startExport(api, ask, locale, key),
       readExport: (jobId) => readExport(api, jobId),
       listExports: (listKey) => listExports(api, listKey),

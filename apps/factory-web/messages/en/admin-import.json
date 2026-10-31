@@ -298,6 +298,7 @@
       "done": {
         "matched": "Done on {when}: the sheet matched what is loaded.",
         "nothing": "Done on {when}: nothing to load.",
+        "nothingWhy": "Done on {when}: nothing to load ({reason}).",
         "changed": "Done on {when}, but it no longer matches: something changed since."
       },
       "markDone": "Done",

@@ -167,7 +167,8 @@ export async function sendingIdentity(tx: CommandTx, companyId: string | null, i
 /** The suppressed addresses among these (PLT-149). */
 export async function suppressedAmong(tx: CommandTx, addresses: readonly string[]): Promise<Set<string>> {
   if (addresses.length === 0) return new Set()
-  const rows = await tx.suppression.findMany({ where: { address: { in: [...addresses] } }, select: { address: true } })
+  // B-W2b-24: only a block in force (a lifted one keeps its address: mail may go to it again).
+  const rows = await tx.suppression.findMany({ where: { address: { in: [...addresses] }, liftedAt: null }, select: { address: true } })
   return new Set(rows.map((row) => row.address))
 }
 

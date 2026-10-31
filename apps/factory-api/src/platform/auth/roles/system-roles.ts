@@ -91,12 +91,14 @@ const contentOfRow = (row: SystemRoleContent): SystemRoleContent => ({
 export async function applySystemRoleChanges(tx: FactoryClient | CommandTx, changes: readonly SystemRoleChange[], at: { now: Date; actorId: string }): Promise<void> {
   for (const change of changes) {
     const data = { ...change.after, permissions: [...change.after.permissions], grains: [...change.after.grains] }
+    // B-W2b-24: since when it asks for two-factor, on the sync's own clock (the audit row's time), as every write path does.
+    const raised = change.after.requireMfa && change.before?.requireMfa !== true
     if (change.kind === 'created') {
       // A template's audience never changes, so it is set once, when its system role is made.
       const audience = templateOf(change.key)?.audience === 'floor' ? 'FLOOR' : 'OFFICE'
-      await tx.role.create({ data: { id: change.roleId, key: change.key, system: true, audience, ...data, createdAt: at.now, createdById: at.actorId } })
+      await tx.role.create({ data: { id: change.roleId, key: change.key, system: true, audience, ...data, requireMfaSince: change.after.requireMfa ? at.now : null, createdAt: at.now, createdById: at.actorId } })
     } else {
-      await tx.role.update({ where: { id: change.roleId }, data: { ...data, version: { increment: 1 } } })
+      await tx.role.update({ where: { id: change.roleId }, data: { ...data, ...(raised ? { requireMfaSince: at.now } : {}), version: { increment: 1 } } })
     }
   }
 }

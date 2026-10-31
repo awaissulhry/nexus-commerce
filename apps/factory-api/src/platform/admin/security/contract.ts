@@ -83,6 +83,8 @@ export const twoFactorRoleView = output({
   name: z.string(),
   system: z.boolean(),
   requireMfa: z.boolean(),
+  /** B-W2b-24: since when it asks (UTC); null when it does not ask, or asked from before the time was kept. */
+  requireMfaSince: instant().nullable(),
   /** Why it cannot be turned off: floor, money (sees costs or margins), template (the ready-made role asks it); null: it can. */
   lock: z.enum(['floor', 'money', 'template']).nullable(),
   /** The ready-made template asks it (a ready-made role never asks less). */

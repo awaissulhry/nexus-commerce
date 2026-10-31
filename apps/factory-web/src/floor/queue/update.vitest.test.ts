@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { QueueItem } from './model'
-import { DeviceReporter, readBattery, REPORT_EVERY_MS, reportDue, type DeviceState } from './report'
+import { DeviceReporter, readBattery, readNetwork, REPORT_EVERY_MS, reportDue, type DeviceState } from './report'
 import { AppUpdater, queuedCount, updateStep } from './update'
 
 /**
@@ -117,5 +117,29 @@ describe('the device report', () => {
 
   it('says no battery where the browser does not tell it', async () => {
     expect(await readBattery()).toEqual({ percent: null, charging: null })
+  })
+
+  it('B-W2b-24: says the network only as the browser names it (Wi-Fi, cable, mobile data, another), else nothing', () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+    const withType = (type: unknown) => Object.defineProperty(globalThis, 'navigator', { value: { connection: type === undefined ? undefined : { type } }, configurable: true })
+    try {
+      withType('wifi')
+      expect(readNetwork()).toBe('WIFI')
+      withType('ethernet')
+      expect(readNetwork()).toBe('ETHERNET')
+      withType('cellular')
+      expect(readNetwork()).toBe('CELLULAR')
+      withType('bluetooth')
+      expect(readNetwork()).toBe('OTHER')
+      withType('unknown')
+      expect(readNetwork()).toBeNull()
+      withType('none')
+      expect(readNetwork()).toBeNull()
+      withType(undefined)
+      expect(readNetwork()).toBeNull()
+    } finally {
+      if (original) Object.defineProperty(globalThis, 'navigator', original)
+      else delete (globalThis as { navigator?: unknown }).navigator
+    }
   })
 })
