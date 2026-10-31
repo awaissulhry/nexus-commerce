@@ -15,7 +15,8 @@ import { ApiError } from '../../core/errors'
 import { downloadFile, systemCallerOf } from '../files/files'
 import { processFiles } from '../files/service'
 import type { ExportJobView, RequestExportBody } from './contract'
-import { exportFormatsFor, processExportSources } from './registry'
+import { exportFormatsFor, exportSourceOf } from './registry'
+import { reimportAdapterOf, reimportColumns } from './reimport'
 import type { AnyExportSource } from './source'
 
 /**
@@ -25,8 +26,13 @@ import type { AnyExportSource } from './source'
  * headings, the file's title and language, the saved view's name. `omittedColumns` names the columns left out by the
  * person's rights: the file says so above its header.
  *
- * ExportJob.viewId stays null: the reference to SavedView is Restrict and a job is never deleted (nor its viewId
- * changed), so a view once exported could never be removed; the view's NAME is kept in the query instead.
+ * ExportJob.viewId stays null: the screen names the view it exported by its NAME (kept in the query); since W2b the key
+ * is ON DELETE SET NULL (B-W2b-03), so a later step may record the view's id too.
+ *
+ * W2b (B-W2b-11): the source may refuse the person in words beyond its permission (a report they may not run); a
+ * "Full file for re-import" takes the IMPORTER's columns, not the screen's (./reimport.ts), the money ones only with
+ * their grain; the job says when its link was e-mailed (emailedAt, ./mail.ts) and, while it runs, its total
+ * (rowCount: the count before the run, factory-domain views/export/progress.ts).
  */
 
 /** What the job keeps of the request (ExportJob.query). */
@@ -55,6 +61,7 @@ export const JOB = {
   finishedAt: true,
   failureReason: true,
   expiresAt: true,
+  emailedAt: true,
   version: true,
   createdAt: true,
   file: { select: { id: true, originalName: true, sizeBytes: true, status: true } },
@@ -94,6 +101,7 @@ export function jobViewOf(row: JobRow): ExportJobView {
     startedAt: row.startedAt ? toUtcIso(row.startedAt) : null,
     finishedAt: row.finishedAt ? toUtcIso(row.finishedAt) : null,
     expiresAt: row.expiresAt ? toUtcIso(row.expiresAt) : null,
+    emailedAt: row.emailedAt ? toUtcIso(row.emailedAt) : null,
     version: row.version,
   }
 }
@@ -106,7 +114,7 @@ function officeOf(caller: CommandCaller): OfficeContext {
 }
 
 export function sourceOf(listKey: string): AnyExportSource {
-  const source = processExportSources().get(listKey)
+  const source = exportSourceOf(listKey)
   if (!source) throw new NotFoundError('This list has no export.')
   return source
 }
@@ -146,15 +154,26 @@ export async function requestExport(caller: CommandCaller, body: RequestExportBo
   if (!exportFormatsFor(body.listKey).includes(body.format)) throw new ValidationError('This list does not export to that format.', [{ path: 'body/format', message: body.format }])
   if (!can(actor, VIEWS_EXPORT, companyId ? { companyId } : {})) throw new ForbiddenError('Exporting a list needs views.export.')
   if (!can(actor, source.permission, companyId ? { companyId } : {})) throw new ForbiddenError('You may not see this list.')
+  const refusal = source.refusal?.(actor) ?? null
+  if (refusal) throw new ForbiddenError(refusal)
   const address = viewQuery(body.query)
   const params = paramsOf(source, address)
-  const picked = pickColumns(source.columns, body.columns, heldGrains(actor))
+  let picked: { readonly columns: readonly AskedColumn[]; readonly omitted: readonly AskedColumn[] }
+  let asked: AskedColumn[]
+  if (body.format === 'XLSX_REIMPORT') {
+    // The importer's layout, whatever the screen shows: the file must read back through the import.
+    const { layout, omitted } = reimportColumns(reimportAdapterOf(source), heldGrains(actor))
+    picked = { columns: layout.columns.map((column) => ({ key: column.name, label: column.label })), omitted }
+    asked = [...picked.columns, ...picked.omitted].map(({ key, label }) => ({ key, label }))
+  } else {
+    picked = pickColumns(source.columns, body.columns, heldGrains(actor))
+    asked = [...picked.columns, ...picked.omitted].map(({ key, label }) => ({ key, label }))
+    const order = new Map(body.columns.map((column, index) => [column.key, index]))
+    asked.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0))
+  }
   if (picked.columns.length === 0) {
     throw new ValidationError(picked.omitted.length > 0 ? 'Every column of this view needs a right you do not hold: nothing to write.' : 'No column of this view can be written to a file.', [{ path: 'body/columns', message: 'no column' }])
   }
-  const asked: AskedColumn[] = [...picked.columns, ...picked.omitted].map(({ key, label }) => ({ key, label }))
-  const order = new Map(body.columns.map((column, index) => [column.key, index]))
-  asked.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0))
   const query: ExportQuery = { address, params, columns: asked, title: body.title, locale: body.locale, viewName: body.viewName ?? null }
   const { result } = await command(caller, { name: 'exports.request', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools

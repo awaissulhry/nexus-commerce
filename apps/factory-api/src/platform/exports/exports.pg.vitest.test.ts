@@ -11,6 +11,11 @@ import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import { cell } from '@nexus/factory-domain/imports/cells'
+import { mapHeaders } from '@nexus/factory-domain/imports/headers'
+import { defineImporter } from '@nexus/factory-domain/imports/importer'
+import { parseRow } from '@nexus/factory-domain/imports/plan'
+import { periodFilter } from '@nexus/factory-domain/insights/reports/definition'
 import { localFileStore } from '../../adapters/local-files/local'
 import { buildApp } from '../../core/app'
 import { callerFor, type CommandCaller } from '../../core/command'
@@ -22,9 +27,13 @@ import { systemContext } from '../outbox/system'
 import { testRedis, type TestRedis } from '../outbox/testing'
 import { createSecretsService } from '../secrets/envelope'
 import { localKeyProvider } from '../secrets/local'
+import { defineReport } from '../../modules/insights/reports/report'
+import { useReports } from '../../modules/insights/reports/registry'
+import { defineImportAdapter, processImporters, useImporters } from '../imports/registry'
+import { readSheet } from '../imports/sheet'
 import { expireExports } from './expire'
 import { useExportSources } from './registry'
-import { defineExportSource } from './source'
+import { defineExportSource, type ExportSource } from './source'
 import { EXPORT_SOURCES } from './sources'
 import { runExport } from './worker'
 
@@ -37,6 +46,11 @@ import { runExport } from './worker'
  * The list is made up for this test only: "test.companies" over the Company table, its share capital standing in for a
  * money column of the cost grain; the real sources (sales orders, purchase orders, work orders) are read once each on
  * an empty tenant, through their modules' own reads. Run with `node scripts/factory/run-pg-tests.mjs platform/exports`.
+ *
+ * W2b (B-W2b-11): the count before the run (the total on the job while it runs; a view too large refused before the
+ * first row; a one-page list read once), the full file for re-import (a made-up importer over the same companies: the
+ * file reads back through it UNCHANGED), and a report as a source (made-up reports over the companies: XLSX, the
+ * small-group rule, the report's own refusals).
  */
 
 let db: MigratedDatabase
@@ -58,9 +72,9 @@ const ownerB = newId()
 
 type Company = { id: string; code: string; legalName: string; shareCapital: { toString(): string } | null }
 
-const switches = { reads: 0, failWith: null as Error | null }
+const switches = { reads: 0, failWith: null as Error | null, many: 0, onRead: null as ((from: number) => Promise<void>) | null }
 
-const companies = defineExportSource<{ prefix: string | null }, Company>({
+const companiesSpec: ExportSource<{ prefix: string | null }, Company> = {
   listKey: 'test.companies',
   permission: 'companies.view',
   query: (address) => ({ prefix: address.get('code')?.toUpperCase() ?? null }),
@@ -85,11 +99,93 @@ const companies = defineExportSource<{ prefix: string | null }, Company>({
     capital: { grain: 'cost', value: (row) => (row.shareCapital === null ? null : { minor: Math.round(Number(row.shareCapital.toString()) * 100), currency: 'EUR' }) },
   },
   words: { it: { 'kind.DEMO': 'Prova' }, en: { 'kind.DEMO': 'Demo' } },
+}
+const companies = defineExportSource(companiesSpec)
+
+/** In memory: `switches.many` rows, for the count (a one-page list, a list too large) and the total seen while it runs. */
+const many = defineExportSource<Record<string, never>, { n: number }>({
+  listKey: 'test.many',
+  permission: 'companies.view',
+  query: () => ({}),
+  async read(_caller, _query, cursor, limit) {
+    switches.reads++
+    const from = cursor === null ? 0 : Number(cursor)
+    if (switches.onRead) await switches.onRead(from)
+    const rows = Array.from({ length: Math.max(0, Math.min(limit, switches.many - from)) }, (_, index) => ({ n: from + index }))
+    return { rows, next: from + limit < switches.many ? String(from + limit) : null }
+  },
+  columns: { n: { value: (row) => row.n } },
 })
+
+/** A made-up importer of the same companies: its key the code, the share capital of the cost grain. */
+const companiesImporter = defineImporter({
+  key: 'test.companies',
+  label: 'Test companies',
+  columns: {
+    code: { label: 'Code', aliases: ['codice'], required: true, type: cell.code({ upper: true }) },
+    name: { label: 'Legal name', aliases: ['ragione sociale'], type: cell.text({ max: 200 }) },
+    capital: { label: 'Share capital', aliases: ['capitale'], type: cell.decimal({ scale: 2 }), grain: 'cost' },
+  },
+  keyColumns: ['code'],
+})
+const companiesAdapter = defineImportAdapter({
+  importer: companiesImporter,
+  permission: 'companies.manage',
+  viewPermission: 'companies.view',
+  async load(client, keys) {
+    const rows = await client.company.findMany({ where: { code: { in: keys.map((key) => String(key.code)) } }, select: { id: true, code: true, legalName: true, shareCapital: true } })
+    return rows.map((row) => ({ id: row.id, values: { code: row.code, name: row.legalName, capital: row.shareCapital === null ? null : row.shareCapital.toString() } }))
+  },
+  async write() {
+    throw new Error('never written by these tests')
+  },
+})
+const reimportable = defineExportSource<{ prefix: string | null }, Company>({
+  ...companiesSpec,
+  listKey: 'test.reimport',
+  reimport: { importer: 'test.companies', key: (row) => ({ code: row.code }) },
+})
+
+/** Made-up reports over the companies: rows with a code, an amount of the cost grain and a people figure (5 or fewer). */
+const capitalReport = defineReport({
+  key: 'finance.test-capital',
+  area: 'finance',
+  title: 'Test capital',
+  question: 'Which made-up companies hold which capital?',
+  permission: 'companies.view',
+  needs: null,
+  columns: [
+    { key: 'code', label: 'Code', kind: 'text' },
+    { key: 'state', label: 'State', kind: 'code', codes: ['OPEN', 'LATE'] },
+    { key: 'capital', label: 'Capital', kind: 'money', grain: 'cost', sum: true },
+    { key: 'efficiency', label: 'Efficiency', kind: 'percent', people: true },
+  ],
+  filters: [periodFilter(['THIS_WEEK', 'LAST_WEEK'], null)],
+  groupBy: null,
+  sources: 'Companies (made up).',
+  definition: 'Every made-up company whose code starts with DEMO000.',
+  numbers: [],
+  mail: null,
+  formats: ['CSV', 'PDF'],
+  async read(run) {
+    const rows = await run.caller.withClient((client) => client.company.findMany({ where: { code: { startsWith: 'DEMO000' } }, orderBy: { code: 'asc' }, select: { id: true, code: true, shareCapital: true } }))
+    return {
+      complete: true,
+      rows: rows.map((row, index) => ({
+        id: row.id,
+        record: null,
+        currency: 'EUR',
+        people: index === 0 ? 3 : 8,
+        cells: { code: row.code, state: index % 2 === 0 ? 'OPEN' : 'LATE', capital: row.shareCapital === null ? null : Math.round(Number(row.shareCapital.toString()) * 100), efficiency: '87.5' },
+      })),
+    }
+  },
+})
+const costReport = defineReport({ ...capitalReport, key: 'finance.test-cost', title: 'Test cost', needs: 'cost' })
 
 // ---- sessions (the route's grants) and the people's live roles (the worker's) -----------------------------------------
 
-const ALL: Permission[] = ['views.export', 'companies.view', 'files.read', 'workorders.view', 'orders.view', 'purchasing.view', 'money.cost', 'money.price']
+const ALL: Permission[] = ['views.export', 'companies.view', 'files.read', 'workorders.view', 'orders.view', 'purchasing.view', 'home.reports.view', 'money.cost', 'money.price']
 const grant = (permissions: readonly Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const session = (tenantId: string, actorId: string, permissions: readonly Permission[]): SessionContext => ({ audience: 'office', tenantId, actorId, companyId: tenantId === tenantA ? companyA : companyB, grants: [grant(permissions)] })
 const SESSIONS: Record<string, SessionContext> = {
@@ -153,7 +249,7 @@ beforeAll(async () => {
   // 450 made-up companies in tenant A: more than two pages of the list (200 a page).
   const values = Array.from({ length: 450 }, (_, index) => `('${newId()}', '${tenantA}', 'DEMO${String(index).padStart(4, '0')}', 'Demo ${index}; "Figli" S.r.l.', ${index % 2 === 0 ? 'NULL' : `${index}.25`})`)
   await admin(`INSERT INTO "Company" (id, "tenantId", code, "legalName", "shareCapital") VALUES ${values.join(', ')}`)
-  const all = ['views.export', 'companies.view', 'files.read', 'workorders.view', 'orders.view', 'purchasing.view']
+  const all = ['views.export', 'companies.view', 'files.read', 'workorders.view', 'orders.view', 'purchasing.view', 'home.reports.view']
   await person(owner, tenantA, 'owner@example.com', all, ['cost', 'price'])
   await person(nocost, tenantA, 'nocost@example.com', all, ['price'])
   await person(leaver, tenantA, 'leaver@example.com', all, ['cost'])
@@ -162,7 +258,9 @@ beforeAll(async () => {
   const gateway = createGateway({ environment: 'test', redis: connection, prefix: redis.prefix, secrets, sleep: async () => {}, log: { info() {}, warn() {}, error() {} } })
   files = createFilesRuntime({ gateway, local: localFileStore({ root: localRoot, environment: 'test' }) })
   useFiles(files)
-  useExportSources([companies, ...EXPORT_SOURCES])
+  useExportSources([companies, many, reimportable, ...EXPORT_SOURCES])
+  useImporters([...processImporters().list(), companiesAdapter])
+  useReports([capitalReport, costReport])
   app = await buildApp(
     { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
     {
@@ -175,6 +273,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   useExportSources(undefined)
+  useImporters(undefined)
+  useReports(undefined)
   useFiles(undefined)
   await app?.close()
   await redis?.cleanup()
@@ -186,6 +286,8 @@ afterAll(async () => {
 beforeEach(async () => {
   switches.reads = 0
   switches.failWith = null
+  switches.many = 0
+  switches.onRead = null
   // Each test starts with no export running (the limit of three at once).
   await admin(`UPDATE "ExportJob" SET status = 'FAILED', "finishedAt" = now(), "failureReason" = 'test reset' WHERE status = 'QUEUED'`)
   await admin(`UPDATE "ExportJob" SET status = 'FAILED', "finishedAt" = now(), "failureReason" = 'test reset' WHERE status = 'RUNNING'`)
@@ -236,7 +338,10 @@ describe('the worker writes the file (as the person, with their live rights)', (
   it('reads every page as the screen does, writes the CSV in Italian and keeps it as a file of the job', async () => {
     const { job: asked } = await ask('owner', { query: 'code=DEMO' })
     expect(await runExport(system(), asked.id, { files })).toBe('done')
-    expect(switches.reads).toBe(3)
+    // Counted first (three pages), then read and written (three pages).
+    expect(switches.reads).toBe(6)
+    const [counted] = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'exports.count'`, [asked.id])
+    expect(counted?.after).toEqual({ rowCount: 450 })
     const done = await job(asked.id)
     expect(done).toMatchObject({ status: 'DONE', rowsDone: 450, rowCount: 450, file: { name: 'aziende-di-prova-' + done.finishedAt.slice(0, 10) + '.csv' } })
     expect(Date.parse(done.expiresAt) - Date.parse(done.finishedAt)).toBe(7 * 86_400_000)
@@ -311,6 +416,117 @@ describe('the worker writes the file (as the person, with their live rights)', (
       expect(await job(asked.id)).toMatchObject({ status: 'DONE', rowCount: 0 })
       expect((await bytesOf(asked.id)).toString('utf8').slice(1).split('\r\n')[0], listKey).toBe(`Numero;${columns[1].label}`)
     }
+  })
+})
+
+describe('the count before the run (PLT-184: job progress with a total)', () => {
+  it('keeps the total on the job before the first row is written; a one-page list is read once', async () => {
+    switches.many = 450
+    const { job: asked } = await ask('owner', { listKey: 'test.many', columns: [{ key: 'n', label: 'N' }] })
+    const seen: (number | null)[] = []
+    switches.onRead = async (from) => {
+      if (from !== 200) return
+      const [row] = await admin<{ rowCount: number | null }>('SELECT "rowCount" FROM "ExportJob" WHERE id = $1', [asked.id])
+      seen.push(row!.rowCount)
+    }
+    expect(await runExport(system(), asked.id, { files })).toBe('done')
+    // The second page while counting (no total yet), then while writing (the total is there).
+    expect(seen).toEqual([null, 450])
+    expect(switches.reads).toBe(6)
+    expect(await job(asked.id)).toMatchObject({ status: 'DONE', rowsDone: 450, rowCount: 450 })
+
+    switches.onRead = null
+    switches.reads = 0
+    switches.many = 10
+    const small = (await ask('owner', { listKey: 'test.many', columns: [{ key: 'n', label: 'N' }] })).job
+    expect(await runExport(system(), small.id, { files })).toBe('done')
+    expect(switches.reads).toBe(1)
+    expect(await job(small.id)).toMatchObject({ status: 'DONE', rowCount: 10 })
+  })
+
+  it('refuses a view above the most rows a file holds before it writes a row', async () => {
+    switches.many = 50_001
+    const { job: asked } = await ask('owner', { listKey: 'test.many', columns: [{ key: 'n', label: 'N' }] })
+    expect(await runExport(system(), asked.id, { files })).toBe('failed')
+    expect(await job(asked.id)).toMatchObject({ status: 'FAILED', failureReason: 'This view has more than 50,000 rows: narrow it with a filter and export it again.', rowsDone: 0, file: null })
+    // Counting stopped at the first page past the limit; nothing was read for the file.
+    expect(switches.reads).toBe(251)
+    expect(await admin('SELECT id FROM "StoredFile" WHERE "recordId" = $1', [asked.id])).toEqual([])
+  })
+})
+
+describe('the full file for re-import (the importer’s layout)', () => {
+  it('writes the importer’s columns, whatever the screen shows; the file reads back through the importer unchanged', async () => {
+    const { job: asked } = await ask('owner', { listKey: 'test.reimport', format: 'XLSX_REIMPORT', query: 'code=DEMO000', columns: [{ key: 'name', label: 'Ragione sociale' }] })
+    expect(asked.columns).toEqual([{ key: 'code', label: 'Code' }, { key: 'name', label: 'Legal name' }, { key: 'capital', label: 'Share capital' }])
+    expect(await runExport(system(), asked.id, { files })).toBe('done')
+    const done = await job(asked.id)
+    expect(done).toMatchObject({ status: 'DONE', rowCount: 10, file: { name: expect.stringMatching(/^aziende-di-prova-reimport-\d{4}-\d{2}-\d{2}\.xlsx$/) } })
+    const bytes = await bytesOf(asked.id)
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load(bytes as unknown as ArrayBuffer)
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Test companies', 'Colonne'])
+    const sheet = workbook.worksheets[0]!
+    expect(sheet.getRow(1).values).toEqual([undefined, 'Code', 'Legal name', 'Share capital'])
+    expect(sheet.getRow(2).values).toEqual([undefined, 'DEMO0000', 'Demo 0; "Figli" S.r.l.'])
+    expect(sheet.getRow(3).values).toEqual([undefined, 'DEMO0001', 'Demo 1; "Figli" S.r.l.', 1.25])
+    // Back through the import, in either number format: every row UNCHANGED.
+    const read = await readSheet(bytes, { contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', maxRows: 1000 })
+    const mapping = mapHeaders(companiesImporter.columns, read.headers).columns
+    expect(mapping.map((column) => column.column)).toEqual(['code', 'name', 'capital'])
+    for (const numberFormat of ['it', 'en'] as const) {
+      const parsed = read.rows.map((row) => parseRow(companiesImporter, mapping, row, { numberFormat }))
+      expect(parsed.flatMap((row) => row.errors)).toEqual([])
+      const existing = await system().withClient((client) => companiesAdapter.load(client as never, parsed.map((row) => ({ code: row.values.code! })), { companyId: null }))
+      const plans = parsed.map((row) => companiesImporter.plan(row.values, existing.find((record) => record.values.code === row.values.code) ?? null))
+      expect(plans, numberFormat).toEqual(Array.from({ length: 10 }, () => ({ action: 'UNCHANGED' })))
+    }
+  })
+
+  it('leaves out a money column without its grain and names it on the second sheet, never above the header', async () => {
+    const { job: asked } = await ask('nocost', { listKey: 'test.reimport', format: 'XLSX_REIMPORT', query: 'code=DEMO0001', locale: 'en' })
+    expect(asked.omitted).toEqual([{ key: 'capital', label: 'Share capital' }])
+    expect(await runExport(system(), asked.id, { files })).toBe('done')
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load((await bytesOf(asked.id, 'nocost')) as unknown as ArrayBuffer)
+    expect(workbook.worksheets[0]!.getRow(1).values).toEqual([undefined, 'Code', 'Legal name'])
+    const help: string[] = []
+    workbook.worksheets[1]!.eachRow((row) => help.push(String(row.getCell(1).value ?? '')))
+    expect(workbook.worksheets[1]!.name).toBe('Columns')
+    expect(help).toContain('Columns left out by your rights: Share capital')
+  })
+})
+
+describe('a report as a source (XLSX of a report)', () => {
+  const columns = [
+    { key: 'code', label: 'Codice' },
+    { key: 'state', label: 'Stato' },
+    { key: 'capital', label: 'Capitale' },
+    { key: 'efficiency', label: 'Efficienza' },
+  ]
+
+  it('writes the run as the Results tab shows it: codes in words, amounts with their grain, people figures of small groups blanked', async () => {
+    const { job: asked } = await ask('owner', { listKey: 'home.reports.finance.test-capital', format: 'XLSX', query: 'period=THIS_WEEK&tab=results&group=none', columns, title: 'Capitale di prova' })
+    expect(await runExport(system(), asked.id, { files })).toBe('done')
+    expect(await job(asked.id)).toMatchObject({ status: 'DONE', rowCount: 10 })
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load((await bytesOf(asked.id)) as unknown as ArrayBuffer)
+    const sheet = workbook.worksheets[0]!
+    expect(sheet.getRow(1).values).toEqual([undefined, 'Codice', 'Stato', 'Capitale (EUR)', 'Efficienza'])
+    // The first company's figure is made by 3 people: blanked (Statuto dei Lavoratori art. 4).
+    expect(sheet.getRow(2).values).toEqual([undefined, 'DEMO0000', 'Aperta'])
+    expect(sheet.getRow(3).values).toEqual([undefined, 'DEMO0001', 'In ritardo', 1.25, 87.5])
+  })
+
+  it('refuses a report the person may not run, a filter value it does not know, a report that does not exist; leaves out a grain', async () => {
+    const needs = await call('nocost', 'POST', '/exports', { listKey: 'home.reports.finance.test-cost', format: 'XLSX', query: '', columns, title: 'X', locale: 'en' })
+    expect(needs.statusCode, needs.body).toBe(403)
+    expect(needs.json().error.message).toBe('This report needs cost rights.')
+    expect((await call('owner', 'POST', '/exports', { listKey: 'home.reports.finance.test-capital', format: 'XLSX', query: 'period=NEVER', columns, title: 'X', locale: 'en' })).statusCode).toBe(400)
+    expect((await call('owner', 'POST', '/exports', { listKey: 'home.reports.finance.nothing-here', format: 'XLSX', query: '', columns, title: 'X', locale: 'en' })).statusCode).toBe(404)
+    expect((await call('owner', 'POST', '/exports', { listKey: 'home.reports.finance.test-capital', format: 'XLSX_REIMPORT', query: '', columns, title: 'X', locale: 'en' })).statusCode).toBe(400)
+    const { job: asked } = await ask('nocost', { listKey: 'home.reports.finance.test-capital', format: 'CSV', query: '', columns, title: 'X', locale: 'en' })
+    expect(asked.omitted).toEqual([{ key: 'capital', label: 'Capitale' }])
   })
 })
 
