@@ -43,7 +43,9 @@ export function liveMessageFor(envelope: EventEnvelope, definition: EventDefinit
  *   - an event without a live rule: nothing;
  *   - office: only when can(viewer, rule.permission, { company, site }) (a user limited to some companies or sites sees
  *     only theirs);
- *   - floor: only an event the rule shows on the floor, about the device's own site, and with the permission;
+ *   - floor: only an event the rule shows on the floor (`rule.floor`), about the device's own site, and only when
+ *     can(viewer, rule.floor, { company, site }): the rule's FLOOR permission, one floor roles hold (B-W2a-F5), never
+ *     the office permission (no floor role holds planning.view or quality.holds.view, so asking it closed every tablet);
  *   - any other audience (partner, link, platform, system): nothing (the portal's live feed comes with the portal).
  * The fields are taken again from the API's own catalogue (never trusted from the message) and money never passes.
  */
@@ -55,10 +57,12 @@ export function liveViewFor(message: LiveMessage, viewer: Actor, catalogue: Even
   const record = { tenantId: message.tenantId, companyId: message.companyId, siteId: message.siteId }
   if (viewer.audience === 'floor') {
     if (!rule.floor || !viewer.siteId || message.siteId !== viewer.siteId) return null
-  } else if (viewer.audience !== 'office') {
+    if (!can(viewer, rule.floor, record)) return null
+  } else if (viewer.audience === 'office') {
+    if (!can(viewer, rule.permission, record)) return null
+  } else {
     return null
   }
-  if (!can(viewer, rule.permission, record)) return null
   const { tenantId: _tenant, fields, ...rest } = message
   return { ...rest, fields: liveFields(definition, fields) }
 }

@@ -8,7 +8,10 @@
  *   1. declarations (packages/factory-domain/src): every `defineEvent({ … })` sits in `src/<module>/events.ts`; its
  *      `type` is a string literal `<module>.<event>`, its `version` (when given) a whole number from 1, its `context`
  *      the module's folder name, and its `payload` a schema, written `z.strictObject(…)` (every declared type has a
- *      strict payload schema). One type and version is declared once;
+ *      strict payload schema). One type and version is declared once. A live rule that reaches the floor names the
+ *      floor permission a floor viewer needs as a string literal (`floor: 'floor.work'`, B-W2a-F5): `floor: true`,
+ *      `false` or any other value is refused, so a tablet is never asked an office read no floor role holds (defineEvent
+ *      checks at import that the permission is one floor roles may hold);
  *   2. assembly: `src/events/catalogue.ts` imports every `src/<module>/events.ts` (`from '../<module>/events'`), so a
  *      declared event is in the catalogue the writer checks;
  *   3. emits (apps/factory-api/src): every `emit({ type: '…', … })` with a literal type names a declared type, and its
@@ -73,10 +76,25 @@ function visit(node, each) {
 // --- 1. declarations ----------------------------------------------------------------------------------------------
 const declared = new Map() // `${type}@${version}` -> where
 const declaredTypes = new Set()
+/**
+ * A live rule's object literal: a defineEvent's `live: { … }`, or a constant of the events file spread into one or used
+ * as one (`const scanLive = { permission, floor, fields }`, `live: scanLive`, `live: { ...scanLive, fields }`).
+ */
+const named = (object, name) => object.properties.some((entry) => (ts.isPropertyAssignment(entry) || ts.isShorthandPropertyAssignment(entry)) && ts.isIdentifier(entry.name) && entry.name.text === name)
+const isRuleShaped = (object) => named(object, 'permission') || (object.properties.some(ts.isSpreadAssignment) && named(object, 'floor'))
 for (const file of codeFiles(DOMAIN)) {
   const source = parse(file)
   const rel = posix(relative(DOMAIN, file))
   const home = /^([a-z][a-z0-9-]*)\/events\.ts$/.exec(rel)
+  const liveRules = new Set()
+  if (home && home[1] !== 'events') {
+    // Constants that hold a live rule (`const live = { permission: …, floor: …, fields: … } as const`).
+    visit(source, (node) => {
+      if (!ts.isVariableDeclaration(node) || !node.initializer) return
+      const value = unwrap(node.initializer)
+      if (value && ts.isObjectLiteralExpression(value) && isRuleShaped(value)) liveRules.add(value)
+    })
+  }
   visit(source, (node) => {
     if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== 'defineEvent') return
     const where = at(source, node)
@@ -117,11 +135,24 @@ for (const file of codeFiles(DOMAIN)) {
     } else if (!ts.isCallExpression(payloadValue) || payloadValue.expression.getText(source) !== 'z.strictObject') {
       violations.push(`${where}  ${typeValue.text}: the payload schema must be written z.strictObject({ … }) (strict: an unknown key fails)`)
     }
+    const live = property(spec, 'live')
+    const liveValue = live && unwrap(live.initializer)
+    if (liveValue && ts.isObjectLiteralExpression(liveValue)) liveRules.add(liveValue)
     const key = `${typeValue.text}@${versionValue}`
     if (declared.has(key)) violations.push(`${where}  ${typeValue.text} version ${versionValue} is declared twice (also ${declared.get(key)})`)
     else declared.set(key, where)
     declaredTypes.add(typeValue.text)
   })
+  for (const rule of liveRules) {
+    const floor = property(rule, 'floor')
+    if (!floor) continue
+    const value = unwrap(floor.initializer)
+    if (!value || !ts.isStringLiteralLike(value) || !/^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/.test(value.text)) {
+      violations.push(
+        `${at(source, floor)}  live.floor must name the floor permission a floor viewer needs, as a string literal (floor: 'floor.work', or one the floor shares such as 'production.cut'), not ${floor.initializer.getText(source)}: a tablet is never asked the office read`,
+      )
+    }
+  }
 }
 
 // --- 2. assembly --------------------------------------------------------------------------------------------------
