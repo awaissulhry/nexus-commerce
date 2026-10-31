@@ -83,7 +83,7 @@ export interface MoveDraft {
   readonly reference?: string | null
   /** Why: required for ADJUSTMENT, COUNT, SCRAP and a reversal. */
   readonly note?: string | null
-  /** B-W2b-15: the code of the reason list the move was made for (WRITE_OFF, ADJUSTMENT, the floor's SCRAP list…). */
+  /** B-W2b-14/15: the code of the reason list the move was made for (WRITE_OFF, ADJUSTMENT, the floor's SCRAP list, a SUPPLIER_RETURN's CLAIM code…), no spaces. */
   readonly reasonCode?: string | null
   readonly reversalOfId?: string | null
   /** When it happened (a floor scan: the device's time). Default the command's time. */

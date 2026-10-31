@@ -1,7 +1,7 @@
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
-import { ageDays, claimActions, CLAIM_REASON_LIST, linesValue, readClaimReason } from '@nexus/factory-domain/purchasing/claims/rules'
+import { ageDays, claimActions, CLAIM_REASON_LIST, claimReasonOf, linesValue } from '@nexus/factory-domain/purchasing/claims/rules'
 import { dayOf, quantityText, type Reader } from '../store'
 import { nameOf } from '../subcontracting/store'
 import { factsOf, readLines, type ClaimRow, type LineRow } from './store'
@@ -16,13 +16,16 @@ import { factsOf, readLines, type ClaimRow, type LineRow } from './store'
 const byId = <Row extends { id: string }>(rows: readonly Row[]): Map<string, Row> => new Map(rows.map((row) => [row.id, row]))
 const unique = (values: readonly (string | null)[]): string[] => [...new Set(values.filter((value): value is string => value !== null))]
 
-/** The reason as the screens show it: the CLAIM code with its words in both languages, and the person's note. */
-async function reasonsOf(db: Reader, claims: readonly Pick<ClaimRow, 'reason'>[]) {
-  const codes = unique(claims.map((claim) => readClaimReason(claim.reason).code))
+/**
+ * The reason as the screens show it: the CLAIM code with its words in both languages, and the person's note (B-W2b-14:
+ * the reasonCode column; a claim made before W2b leads its reason text with the code).
+ */
+async function reasonsOf(db: Reader, claims: readonly Pick<ClaimRow, 'reason' | 'reasonCode'>[]) {
+  const codes = unique(claims.map((claim) => claimReasonOf(claim).code))
   const rows = codes.length === 0 ? [] : await db.reasonCode.findMany({ where: { list: CLAIM_REASON_LIST, code: { in: codes } }, select: { code: true, labelIt: true, labelEn: true } })
   const labels = new Map(rows.map((row) => [row.code, row]))
-  return (text: string) => {
-    const { code, note } = readClaimReason(text)
+  return (claim: Pick<ClaimRow, 'reason' | 'reasonCode'>) => {
+    const { code, note } = claimReasonOf(claim)
     const label = code ? labels.get(code) : undefined
     return { code, labelEn: label?.labelEn ?? null, labelIt: label?.labelIt ?? null, note }
   }
@@ -52,7 +55,7 @@ export async function claimSummaries(db: Reader, claims: readonly ClaimRow[], no
       site: { id: claim.siteId, code: site?.code ?? '' },
       supplier: { id: claim.partyId, code: party?.code ?? '', name: party ? nameOf(party) : '' },
       foundAt: claim.foundAt,
-      reason: reason(claim.reason),
+      reason: reason(claim),
       remedy: claim.remedy,
       lots: unique(own.map((line) => line.lotId)).map((id) => ({ id, code: lots.get(id)?.code ?? '' })),
       materials: unique(own.map((line) => line.itemId)).map((id) => ({ id, code: items.get(id)?.code ?? '', name: items.get(id)?.name ?? '' })),
@@ -85,7 +88,7 @@ export async function claimDetailOf(db: Reader, claim: ClaimRow, now: Date) {
   const items = byId(await db.item.findMany({ where: { id: { in: unique(lines.map((line) => line.itemId)) } }, select: { id: true, code: true, name: true, baseUom: true, tracking: true } }))
   const colours = byId(await db.itemColour.findMany({ where: { id: { in: unique(lines.map((line) => line.itemColourId)) } }, select: { id: true, code: true, name: true } }))
   const lots = byId(await db.lot.findMany({ where: { id: { in: unique(lines.map((line) => line.lotId)) } }, select: { id: true, code: true, qualityStatus: true } }))
-  const hides = byId(await db.hide.findMany({ where: { id: { in: unique(lines.map((line) => line.hideId)) } }, select: { id: true, code: true } }))
+  const hides = byId(await db.hide.findMany({ where: { id: { in: unique(lines.map((line) => line.hideId)) } }, select: { id: true, code: true, state: true } }))
   const discrepancies = byId(await db.receiptDiscrepancy.findMany({ where: { id: { in: unique(lines.map((line) => line.discrepancyId)) } }, select: { id: true, seq: true, kind: true, status: true, receiptId: true } }))
   const moves = byId(await db.stockMove.findMany({ where: { id: { in: unique(lines.map((line) => line.moveId)) } }, select: { id: true, occurredAt: true, quantity: true, uom: true, fromLocationId: true, reason: true } }))
   const locations = byId(await db.location.findMany({ where: { id: { in: unique([...moves.values()].map((move) => move.fromLocationId)) } }, select: { id: true, code: true, name: true } }))
@@ -112,6 +115,7 @@ export async function claimDetailOf(db: Reader, claim: ClaimRow, now: Date) {
   const peopleIds = unique([claim.createdById, claim.sentById])
   const people = peopleIds.length === 0 ? [] : await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true } })
   const value = linesValue(lines)
+  const evidence = await evidenceOf(db, claim, lines)
 
   return {
     ...summary!,
@@ -137,7 +141,8 @@ export async function claimDetailOf(db: Reader, claim: ClaimRow, now: Date) {
         item: { id: line.itemId, code: item?.code ?? '', name: item?.name ?? '', baseUom: item?.baseUom ?? line.uom, tracking: item?.tracking ?? 'NONE' },
         colour: line.itemColourId ? { id: line.itemColourId, code: colours.get(line.itemColourId)?.code ?? '', name: colours.get(line.itemColourId)?.name ?? '' } : null,
         lot: line.lotId ? { id: line.lotId, code: lots.get(line.lotId)?.code ?? '', qualityStatus: lots.get(line.lotId)?.qualityStatus ?? '' } : null,
-        hide: line.hideId ? { id: line.hideId, code: hides.get(line.hideId)?.code ?? '' } : null,
+        // B-W2b-14: its state (RETURNED once it went back to the supplier whole).
+        hide: line.hideId ? { id: line.hideId, code: hides.get(line.hideId)?.code ?? '', state: hides.get(line.hideId)?.state ?? null } : null,
         discrepancy: discrepancy ? { id: discrepancy.id, seq: discrepancy.seq, kind: discrepancy.kind, status: discrepancy.status, receiptId: discrepancy.receiptId } : null,
         receiptLineId: line.receiptLineId,
         quantity: quantityText(line.quantity),
@@ -170,6 +175,42 @@ export async function claimDetailOf(db: Reader, claim: ClaimRow, now: Date) {
       difference: null,
     },
     actions: claimActions(factsOf(claim, lines)),
+    ...evidence,
+    people: [...people.map((person) => ({ id: person.id, name: person.displayName })), ...evidence.people].filter((person, index, all) => all.findIndex((other) => other.id === person.id) === index),
+  }
+}
+
+/**
+ * B-W2b-14 (SCM-135; design rec "Claim": photos, the claim letter, the supplier): the claim's own photos (PHOTO files of
+ * the SupplierClaim, category CLAIM_PHOTO), the photos of the receipt discrepancies its lines pursue (they stay the
+ * discrepancy's), the claim letter's versions (GeneratedDocument CLAIM_LETTER, the newest first: the current one) and
+ * the supplier's contact a claim goes to first (QUALITY, then ORDERS) with the NCR it came from.
+ */
+async function evidenceOf(db: Reader, claim: ClaimRow, lines: readonly LineRow[]) {
+  const fileSelect = { id: true, recordId: true, originalName: true, contentType: true, sizeBytes: true, status: true, version: true, createdAt: true, createdById: true } as const
+  const photos = await db.storedFile.findMany({ where: { recordType: 'SupplierClaim', recordId: claim.id, kind: 'PHOTO', status: { not: 'DELETED' } }, select: fileSelect, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+  const discrepancyIds = unique(lines.map((line) => line.discrepancyId))
+  const seqs = discrepancyIds.length === 0 ? new Map<string, number>() : new Map((await db.receiptDiscrepancy.findMany({ where: { id: { in: discrepancyIds } }, select: { id: true, seq: true } })).map((row) => [row.id, row.seq]))
+  const discrepancyPhotos =
+    discrepancyIds.length === 0 ? [] : await db.storedFile.findMany({ where: { recordType: 'ReceiptDiscrepancy', recordId: { in: discrepancyIds }, kind: 'PHOTO', status: { not: 'DELETED' } }, select: fileSelect, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+  const letters = await db.generatedDocument.findMany({
+    where: { recordType: 'SupplierClaim', recordId: claim.id, kind: 'CLAIM_LETTER' },
+    select: { id: true, version: true, language: true, number: true, fileId: true, createdAt: true, createdById: true },
+    orderBy: { version: 'desc' },
+  })
+  const contacts = await db.partyContact.findMany({ where: { partyId: claim.partyId, status: 'ACTIVE', email: { not: null } }, select: { id: true, name: true, email: true, roles: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] })
+  const rank = (roles: readonly string[]) => (roles.includes('QUALITY') ? 0 : roles.includes('ORDERS') ? 1 : 2)
+  const contact = [...contacts].sort((a, b) => rank(a.roles) - rank(b.roles))[0] ?? null
+  const ncr = claim.ncrId ? await db.nonconformance.findUnique({ where: { id: claim.ncrId }, select: { id: true, number: true } }) : null
+  const peopleIds = unique([...photos.map((file) => file.createdById), ...letters.map((letter) => letter.createdById)])
+  const people = peopleIds.length === 0 ? [] : await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true } })
+  const file = (row: (typeof photos)[number]) => ({ id: row.id, originalName: row.originalName, contentType: row.contentType, sizeBytes: row.sizeBytes, status: row.status, version: row.version, createdAt: toUtcIso(row.createdAt), createdById: row.createdById })
+  return {
+    photos: photos.map(file),
+    discrepancyPhotos: discrepancyPhotos.map((row) => ({ ...file(row), discrepancyId: row.recordId, discrepancySeq: seqs.get(row.recordId) ?? null })),
+    letters: letters.map((letter) => ({ id: letter.id, version: letter.version, language: letter.language, number: letter.number, fileId: letter.fileId, createdAt: toUtcIso(letter.createdAt), createdById: letter.createdById })),
+    supplierContact: contact ? { id: contact.id, name: contact.name, email: contact.email!, roles: [...contact.roles] } : null,
+    ncr,
     people: people.map((person) => ({ id: person.id, name: person.displayName })),
   }
 }

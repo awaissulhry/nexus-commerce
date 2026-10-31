@@ -368,7 +368,7 @@ describe('goods back to a supplier (RETURN; SCM-134)', () => {
     expect(error.message).toBe('The supplier claim SEED-CLM-0001 is DRAFT: its goods go back once it is SENT or ACCEPTED. The supplier claim SEED-CLM-0001 keeps the goods (a claim for credit or replacement): only a RETURN claim sends goods back.')
   })
 
-  it("issues a RETURN claim's DDT; its line names it; after a cancel the line keeps the old one (set once) and the replacement names the line", async () => {
+  it("issues a RETURN claim's DDT; its line names it; after a cancel the line follows the replacement that names it (B-W2b-14)", async () => {
     const claim = await returnClaim('CLM-T-0001')
     S.claim = claim.id
     S.claimLine = claim.line
@@ -380,8 +380,8 @@ describe('goods back to a supplier (RETURN; SCM-134)', () => {
     expect(await ddtOf()).toBe(issued.ddt.id)
     await ok('warehouse', 'POST', `/shipping/ddts/${issued.ddt.id}/cancel`, { reason: 'Wrong carrier' })
     const replacement = await ok('warehouse', 'POST', sourceUrl('SupplierClaim', claim.id), TYPED, 201)
-    expect(replacement).toMatchObject({ claimLinesKeepingOldDdt: [claim.line], ddt: { lines: [expect.objectContaining({ sourceLineId: claim.line })] } })
-    expect(await ddtOf()).toBe(issued.ddt.id)
+    expect(replacement).toMatchObject({ claimLinesKeepingOldDdt: [], ddt: { lines: [expect.objectContaining({ sourceLineId: claim.line })] } })
+    expect(await ddtOf()).toBe(replacement.ddt.id)
   })
 
   it('two issues of one claim at the same time: one DDT, one number; the second finds the line travelling (400)', async () => {

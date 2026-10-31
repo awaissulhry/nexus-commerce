@@ -127,6 +127,12 @@ function SendDialog({ claim, model, actions, draft }: Props & { draft: SendDraft
           <Field label={t('send.message', { language: t(`language.${check.language}`) })} hint={t('send.messageHint')}>
             <Textarea rows={7} maxLength={4000} value={draft.message} onChange={(event) => set({ message: event.target.value })} />
           </Field>
+          {/* B-W2b-14 (Z1:08): the claim letter (PDF, no price) goes with the mail, or why not. */}
+          {check.letter.attached ? (
+            <p className="fw-by-hint">{t('send.letterAttached', { photos: claim.photos.length })}</p>
+          ) : (
+            <Banner tone="info" title={t(check.letter.problems.some((problem) => problem.path.includes('filesRead')) ? 'send.letterNoFiles' : 'send.letterNoLetterhead')} />
+          )}
           <p className="fw-by-hint">{t('send.noPrice')}</p>
         </div>
       )}
@@ -248,10 +254,19 @@ function ReturnedDialog({ model, actions, dialog }: Props & { dialog: Extract<Cl
   )
 }
 
-function SimpleDialog({ claim, model, actions, dialog }: Props & { dialog: Extract<ClaimDialog, { kind: 'close' | 'cancel' | 'removeLines' }> }) {
+function SimpleDialog({ claim, model, actions, dialog }: Props & { dialog: Extract<ClaimDialog, { kind: 'close' | 'cancel' | 'removeLines' | 'removePhoto' }> }) {
   const t = useT('purchasing-claims')
   const held = simpleHeld(dialog, claim, model.can)
   const heldWords = held ? say(t, held) : null
+  if (dialog.kind === 'removePhoto') {
+    // B-W2b-14: a draft's photo taken by mistake.
+    const index = claim.photos.findIndex((photo) => photo.id === dialog.fileId)
+    return (
+      <Frame model={model} actions={actions} tone="danger" title={t('evidence.removeTitle', { n: index + 1 })} held={heldWords} label={t('evidence.removeConfirm')}>
+        <p className="fw-by-text">{t('evidence.removeBody', { name: claim.photos[index]?.originalName ?? '—' })}</p>
+      </Frame>
+    )
+  }
   if (dialog.kind === 'close') {
     return (
       <Frame model={model} actions={actions} title={t('close.title', { number: claim.number })} held={heldWords} label={t('close.confirm')}>

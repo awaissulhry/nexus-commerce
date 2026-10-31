@@ -11,8 +11,9 @@ import { Dec } from '../../tax/decimal'
  *             found bad at cutting) and asks for a credit or a replacement. DRAFT while it is prepared → SENT (to the
  *             supplier, waiting for its answer) → ACCEPTED or REJECTED → CLOSED (settled, or given up); REJECTED → SENT
  *             again with more evidence; a DRAFT is CANCELLED. The …_supply_w2a_guards trigger holds the same moves.
- *   reason    a code of the tenant's CLAIM reason list leads the claim's reason text (`QUALITY: holes near the belly`):
- *             the table keeps the text only (a schema follow-up may add a column, as for discrepancies).
+ *   reason    a code of the tenant's CLAIM reason list (B-W2b-14: its own column SupplierClaim.reasonCode, fixed once
+ *             sent) and the person's words in `reason` (the code itself when there are none: the column is required).
+ *             W2a wrote the code at the head of the text (`QUALITY: holes near the belly`): `claimReasonOf` reads both.
  *   lines     what the claim is about: a lot, a hide or untracked material, how much (in its unit and the item's base
  *             unit), the discrepancy of a receipt it pursues; what is in them is fixed once the claim is sent. A RETURN
  *             line goes back once: its stock move out and its return DDT are each set once.
@@ -48,7 +49,7 @@ export const OPEN_CLAIM_STATUSES: readonly ClaimStatus[] = Object.freeze(['DRAFT
 export const RETURN_STATUSES: readonly ClaimStatus[] = Object.freeze(['SENT', 'ACCEPTED'])
 
 export const SEQ_STEP = 10
-export const CLAIM_LIMITS = Object.freeze({ lines: 100, recipients: 10, reasonNote: 500, answer: 2000, note: 1000 })
+export const CLAIM_LIMITS = Object.freeze({ lines: 100, recipients: 10, reasonNote: 500, answer: 2000, note: 1000, photos: 20 })
 
 const MOVES: Readonly<Record<ClaimStatus, readonly ClaimStatus[]>> = {
   DRAFT: ['SENT', 'CANCELLED'],
@@ -91,6 +92,25 @@ export function readClaimReason(text: string): { readonly code: string | null; r
   if (!CODE.test(head)) return { code: null, note: text.trim() || null }
   const note = at === -1 ? '' : text.slice(at + 1).trim()
   return { code: head, note: note === '' ? null : note }
+}
+
+/**
+ * The claim's reason as written (B-W2b-14): the code in its own column, the person's words in `reason` — the code itself
+ * when there are none (the column is required and never blank).
+ */
+export function claimReasonColumns(code: string, note: string | null | undefined): { readonly reasonCode: string; readonly reason: string } {
+  const words = note?.trim() ?? ''
+  return { reasonCode: code, reason: words === '' ? code : words }
+}
+
+/**
+ * A stored claim's reason read back: the reasonCode column and the words in `reason` (none when it holds only the code);
+ * a claim made before W2b (no column value): the code at the head of the text (readClaimReason).
+ */
+export function claimReasonOf(row: { readonly reasonCode: string | null; readonly reason: string }): { readonly code: string | null; readonly note: string | null } {
+  if (row.reasonCode === null) return readClaimReason(row.reason)
+  const words = row.reason.trim()
+  return { code: row.reasonCode, note: words === '' || words === row.reasonCode ? null : words }
 }
 
 /** The CLAIM reason code a person chose, checked against the tenant's list (paths under `prefix`). */
@@ -164,6 +184,17 @@ export function returnProblems(facts: ClaimFacts, lineIds?: readonly string[]): 
   if (chosen.length === 0) return [`Every line of claim ${facts.number} went back already.`]
   const gone = chosen.filter((line) => line.moved)
   return gone.length === 0 ? [] : [`${gone.length === 1 ? `Line ${gone[0]!.seq} went` : `Lines ${gone.map((line) => line.seq).join(', ')} went`} back already.`]
+}
+
+/**
+ * Photos of what is wrong (B-W2b-14; design purchasing.claims rec "Claim" photos): added while the claim is not settled
+ * (a rejected claim goes again with more evidence), at most CLAIM_LIMITS.photos; removed only while it is a draft (once
+ * sent, the supplier may have seen them in the claim letter's count).
+ */
+export function photoProblems(facts: Pick<ClaimFacts, 'number' | 'status'>, what: 'add' | 'remove', held = 0): string[] {
+  if (what === 'remove') return facts.status === 'DRAFT' ? [] : [`${named(facts)}; its photos are removed only while it is a draft.`]
+  if (facts.status === 'CLOSED' || facts.status === 'CANCELLED') return [`${named(facts)}; it takes no more photos.`]
+  return held >= CLAIM_LIMITS.photos ? [`Claim ${facts.number} holds ${CLAIM_LIMITS.photos} photos already.`] : []
 }
 
 export const CLAIM_ACTIONS = ['edit', 'send', 'answer', 'close', 'cancel', 'returnGoods'] as const

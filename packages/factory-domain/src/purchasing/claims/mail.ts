@@ -37,6 +37,8 @@ export interface ClaimMailInput {
   readonly recipientName: string | null
   /** The office's own words in place of the standard text. */
   readonly message: string | null
+  /** B-W2b-14: the claim letter (PDF) goes with the mail; the standard text says so. */
+  readonly letterAttached?: boolean | undefined
 }
 
 function lineText(line: ClaimMailLine, it: boolean): string {
@@ -83,9 +85,10 @@ export function claimMail(input: ClaimMailInput): { readonly subject: string; re
           : 'We ask you for a credit note for these goods.'
         : null
   const reply = it ? `Vi preghiamo di rispondere a questo messaggio citando il reclamo ${input.number}.` : `Please reply to this message quoting claim ${input.number}.`
+  const letter = input.letterAttached ? (it ? `In allegato la lettera di reclamo ${input.number} (PDF).` : `The claim letter ${input.number} (PDF) is attached.`) : null
   const lines = input.lines.map((line) => lineText(line, it)).join('\n')
   return {
     subject,
-    body: [greeting, opening, lines, why, ask, reply, it ? 'Cordiali saluti' : 'Kind regards'].filter((part): part is string => Boolean(part)).join('\n\n'),
+    body: [greeting, opening, lines, why, ask, letter, reply, it ? 'Cordiali saluti' : 'Kind regards'].filter((part): part is string => Boolean(part)).join('\n\n'),
   }
 }

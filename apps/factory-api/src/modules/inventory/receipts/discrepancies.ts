@@ -8,11 +8,10 @@ import {
   DISCREPANCY_LIMITS,
   DISCREPANCY_REASON_LIST,
   discrepancyEditProblem,
-  discrepancyNote,
   discrepancyQuantityProblems,
+  discrepancyReasonOf,
   kindAndReason,
   nextDiscrepancySeq,
-  readDiscrepancyNote,
   settleProblems,
   type DiscrepancyKind,
   type DiscrepancyStatus,
@@ -38,8 +37,10 @@ import { byId, ids, readItems, type Reader, type ReceiptRow } from './store'
  *
  * Every write is ONE command() (audit, Idempotency-Key): a new one under the receipt's advisory lock
  * `factory.receipt-discrepancy|company|receipt` (its number 10, 20 … and the per-receipt limit), a change, a removal and
- * a settle on the discrepancy's version (the record guard). Its reason code leads the note (`DAMAGED: …`): the list's
- * active codes are checked inside the command (platform/reasons). Photos: ./photos.ts. The report to the supplier:
+ * a settle on the discrepancy's version (the record guard). Its reason code is its own column (B-W2b-14: the W2b
+ * reasonCode, set and changed only while OPEN, like what was found; W2a led the note with it: a discrepancy recorded
+ * before W2b is still read that way), the note the receiver's words: the list's active codes are checked inside the
+ * command (platform/reasons). Photos: ./photos.ts. The report to the supplier:
  * ./report.ts. A supplier claim (B-W2a-44) points at a discrepancy through SupplierClaimLine.discrepancyId: the view
  * names those claims. Event `inventory.receipt_discrepancy_changed`. No price, no cost anywhere.
  */
@@ -54,6 +55,8 @@ export const DISCREPANCY_COLUMNS = {
   receiptLineId: true,
   supplierId: true,
   kind: true,
+  // B-W2b-14: the DISCREPANCY reason code as data.
+  reasonCode: true,
   quantity: true,
   uom: true,
   note: true,
@@ -114,7 +117,7 @@ function viewOf(
     readonly claims: Map<string, { id: string; number: string; status: string }>
   },
 ) {
-  const { reasonCode, note } = readDiscrepancyNote(row.note, new Set(facts.words.keys()))
+  const { reasonCode, note } = discrepancyReasonOf(row, new Set(facts.words.keys()))
   const reason = reasonCode ? facts.words.get(reasonCode) : undefined
   const line = row.receiptLineId ? facts.lines.find((entry) => entry.id === row.receiptLineId) : undefined
   const item = line ? facts.items.get(line.itemId) : undefined
@@ -176,7 +179,7 @@ async function planned(tx: CommandTx, receipt: ReceiptRow, body: DiscrepancyBody
   const problems: Issue[] = []
   const active = await activeReasonCodes(tx, DISCREPANCY_REASON_LIST)
   const known = new Set((await reasonWords(tx, DISCREPANCY_REASON_LIST)).keys())
-  const before = current ? readDiscrepancyNote(current.note, known) : { reasonCode: null, note: null }
+  const before = current ? discrepancyReasonOf(current, known) : { reasonCode: null, note: null }
   // A change keeps what it does not name (a reason no longer active may stay, it was valid when recorded).
   const reasonCode = body.reasonCode !== undefined ? body.reasonCode : before.reasonCode
   const kept = current !== null && body.reasonCode === undefined && reasonCode !== null && !active.has(reasonCode)
@@ -197,7 +200,8 @@ async function planned(tx: CommandTx, receipt: ReceiptRow, body: DiscrepancyBody
       if (dimensionOf(uom) !== 'ITEM' && baseFactor(uom, units) === null) problems.push({ path: 'body/uom', message: `${item.code} is not counted in ${uom}: use its base unit ${item.baseUom} or a unit it converts.` })
     }
   }
-  const stored = 'problems' in resolved && resolved.problems ? null : discrepancyNote((resolved as { reasonCode: string | null }).reasonCode, note)
+  // The receiver's words only (B-W2b-14: the code has its own column).
+  const stored = note?.trim() ? note.trim() : null
   if (stored !== null && stored.length > DISCREPANCY_LIMITS.note) problems.push({ path: 'body/note', message: `At most ${DISCREPANCY_LIMITS.note} characters.` })
   if (problems.length > 0 || resolved.problems) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'The discrepancy is not complete.', problems)
   return { kind: resolved.kind, reasonCode: resolved.reasonCode, receiptLineId: line?.id ?? null, quantity: quantity === null || quantity === undefined || quantity.trim() === '' ? null : quantity.trim(), uom: uom ?? null, note: stored }
@@ -229,7 +233,7 @@ export async function recordDiscrepancy(caller: CommandCaller, receiptId: string
     const id = newId()
     const seq = nextDiscrepancySeq(taken.map((row) => row.seq))
     await tx.receiptDiscrepancy.create({
-      data: { id, siteId: receipt.siteId, receiptId: receipt.id, seq, receiptLineId: values.receiptLineId, supplierId: receipt.supplierId, kind: values.kind, quantity: values.quantity, uom: values.uom, note: values.note, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
+      data: { id, siteId: receipt.siteId, receiptId: receipt.id, seq, receiptLineId: values.receiptLineId, supplierId: receipt.supplierId, kind: values.kind, reasonCode: values.reasonCode, quantity: values.quantity, uom: values.uom, note: values.note, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
       select: { id: true },
     })
     tools.audit({ action: 'inventory.discrepancyRecorded', recordType: DISCREPANCY_RECORD, recordId: id, companyId: receipt.companyId, siteId: receipt.siteId, after: { receiptId: receipt.id, seq, ...values, status: 'OPEN' } })
@@ -260,15 +264,15 @@ export async function changeDiscrepancy(caller: CommandCaller, receiptId: string
       const problem = discrepancyEditProblem(current.status, 'change')
       if (problem) throw new InvalidStateError(problem)
       const values = await planned(tx, receipt, change, current)
-      await tx.receiptDiscrepancy.update({ where: { id: row.id }, data: { kind: values.kind, receiptLineId: values.receiptLineId, quantity: values.quantity, uom: values.uom, note: values.note }, select: { id: true } })
+      await tx.receiptDiscrepancy.update({ where: { id: row.id }, data: { kind: values.kind, reasonCode: values.reasonCode, receiptLineId: values.receiptLineId, quantity: values.quantity, uom: values.uom, note: values.note }, select: { id: true } })
       tools.audit({
         action: 'inventory.discrepancyChanged',
         recordType: DISCREPANCY_RECORD,
         recordId: row.id,
         companyId: receipt.companyId,
         siteId: receipt.siteId,
-        before: { kind: current.kind, receiptLineId: current.receiptLineId, quantity: current.quantity?.toString() ?? null, uom: current.uom, note: current.note },
-        after: { kind: values.kind, receiptLineId: values.receiptLineId, quantity: values.quantity, uom: values.uom, note: values.note },
+        before: { kind: current.kind, reasonCode: current.reasonCode, receiptLineId: current.receiptLineId, quantity: current.quantity?.toString() ?? null, uom: current.uom, note: current.note },
+        after: { kind: values.kind, reasonCode: values.reasonCode, receiptLineId: values.receiptLineId, quantity: values.quantity, uom: values.uom, note: values.note },
       })
       emitChange(tools, receipt, { id: row.id, seq: current.seq, kind: values.kind, status: current.status }, 'CHANGED')
       return { discrepancy: (await discrepancyViews(tx, receipt.id, [row.id]))[0]! }
@@ -292,7 +296,7 @@ export async function removeDiscrepancy(caller: CommandCaller, receiptId: string
       const photos = await tx.storedFile.count({ where: { recordType: DISCREPANCY_RECORD, recordId: row.id, status: { not: 'DELETED' } } })
       if (photos > 0) throw new InvalidStateError(`Discrepancy ${current.seq} has ${photos === 1 ? 'a photo' : `${photos} photos`}: delete ${photos === 1 ? 'it' : 'them'} first, or close the discrepancy with why it is not pursued.`)
       await tx.receiptDiscrepancy.delete({ where: { id: row.id }, select: { id: true } })
-      tools.audit({ action: 'inventory.discrepancyRemoved', recordType: DISCREPANCY_RECORD, recordId: row.id, companyId: receipt.companyId, siteId: receipt.siteId, before: { receiptId: receipt.id, seq: current.seq, kind: current.kind, status: current.status, note: current.note } })
+      tools.audit({ action: 'inventory.discrepancyRemoved', recordType: DISCREPANCY_RECORD, recordId: row.id, companyId: receipt.companyId, siteId: receipt.siteId, before: { receiptId: receipt.id, seq: current.seq, kind: current.kind, reasonCode: current.reasonCode, status: current.status, note: current.note } })
       emitChange(tools, receipt, { id: row.id, seq: current.seq, kind: current.kind, status: 'REMOVED' }, 'REMOVED')
       return { removed: { id: row.id, seq: current.seq } }
     },
