@@ -79,6 +79,9 @@ export interface MoveDraft {
   readonly receiptLineId?: string | null
   /** W2b (B-W2b-19): a SHIPMENT move names the shipment line its garments leave with (and only it: the trigger). */
   readonly shipmentLineId?: string | null
+  /** W2b (B-W2b-16): a CUSTOMER_RETURN move names the return line its goods came back on, and that line's customer. */
+  readonly returnLineId?: string | null
+  readonly returnPartyId?: string | null
   readonly workOrderId?: string | null
   readonly reference?: string | null
   /** Why: required for ADJUSTMENT, COUNT, SCRAP and a reversal. */
@@ -324,6 +327,7 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
       baseQuantity: row.baseQuantity,
       receiptLineId: row.receiptLineId,
       ...(row.shipmentLineId ? { shipmentLineId: row.shipmentLineId } : {}),
+      ...(row.returnLineId ? { returnLineId: row.returnLineId, returnPartyId: row.returnPartyId } : {}),
       workOrderId: row.workOrderId,
       reference: row.reference,
       note: row.note,
@@ -537,6 +541,7 @@ function rowOf(move: KeyedDraft, index: number, facts: Facts, context: StockCont
     baseQuantity: quantityText(move.baseQuantity ?? move.quantity),
     receiptLineId: move.receiptLineId ?? null,
     ...(move.shipmentLineId ? { shipmentLineId: move.shipmentLineId } : {}),
+    ...(move.returnLineId ? { returnLineId: move.returnLineId, returnPartyId: move.returnPartyId ?? null } : {}),
     workOrderId: move.workOrderId ?? null,
     reference: move.reference?.trim() || null,
     note: move.note?.trim() || null,

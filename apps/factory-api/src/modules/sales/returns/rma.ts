@@ -24,7 +24,7 @@ import { mayOn, officeOf, officeReturn } from './access'
 import { policyOf } from './policy'
 import { openSafetyEntries, type SafetyEntry } from './register'
 import { lockSold, returnableRows, soldKeyOf, type ReturnableRow, type SoldKey } from './returnable'
-import { asDay, dayOf, LINE_COLUMNS, readRecordFacts, readRma, returnView, RMA_COLUMNS, type LineRow, type Reader, type ReturnView, type RmaRow } from './store'
+import { asDay, closeWarningsFor, dayOf, LINE_COLUMNS, liveRepairsByLine, readRecordFacts, readRma, returnView, RMA_COLUMNS, type LineRow, type Reader, type ReturnView, type RmaRow } from './store'
 
 /**
  * The RMA itself (B-W2a-43; SAL-333, SAL-335, SAL-340, SAL-362; design returns.new, rma.lines, returns.close): make it
@@ -606,13 +606,10 @@ export async function closeReturn(caller: CommandCaller, returnId: string, body:
     const lines = await tx.returnLine.findMany({ where: { returnId: rma.id }, select: LINE_COLUMNS, orderBy: { seq: 'asc' } })
     const undecided = lines.filter((line) => line.receivedQuantity > 0 && line.disposition === null)
     if (undecided.length > 0) throw new InvalidStateError(`Decide every received line first (line${undecided.length === 1 ? '' : 's'} ${undecided.map((line) => line.seq).join(', ')}).`)
-    const warnings: Issue[] = []
-    const replace = lines.filter((line) => line.disposition === 'REPLACE' && line.replacementLineId === null)
-    if (replace.length > 0) warnings.push({ path: 'replacementOrder', message: `Lines ${replace.map((line) => line.seq).join(', ')} are decided Replace and no replacement order was made.` })
-    const back = lines.filter((line) => line.disposition === 'RETURN_UNCHANGED' || line.goodsOutcome === 'BACK_TO_CUSTOMER')
-    if (back.length > 0 && (await tx.ddt.count({ where: { sourceType: 'ReturnAuthorisation', sourceId: rma.id, cancellations: { none: {} } } })) === 0) {
-      warnings.push({ path: 'ddt', message: `Lines ${back.map((line) => line.seq).join(', ')} go back unchanged and no return DDT is issued yet (it can still be issued after the close).` })
-    }
+    // B-W2b-16: the same warnings the record shows before the click (factory-domain closeWarningsOf), now also the
+    // lines decided Repair without a repair order for every garment received.
+    const liveDdt = (await tx.ddt.count({ where: { sourceType: 'ReturnAuthorisation', sourceId: rma.id, cancellations: { none: {} } } })) > 0
+    const warnings: Issue[] = closeWarningsFor(lines, await liveRepairsByLine(tx, lines.map((line) => line.id)), liveDdt).map((warning) => ({ path: warning.path, message: warning.message }))
     await touchReturn(tools, rma, { status: 'CLOSED', closedAt: tools.now, statusReason: reason })
     tools.audit({ recordType: 'ReturnAuthorisation', recordId: rma.id, companyId: rma.companyId, siteId: rma.siteId, before: { status: rma.status }, after: { status: 'CLOSED', closedAt: toUtcIso(tools.now), received: lines.reduce((sum, line) => sum + line.receivedQuantity, 0) }, reason })
     tools.emit({ type: 'return.status_changed', subject: rma.id, companyId: rma.companyId, siteId: rma.siteId, payload: { returnId: rma.id, number: rma.number, from: rma.status as ReturnStatus, to: 'CLOSED' } })

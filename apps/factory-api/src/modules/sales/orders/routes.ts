@@ -1,5 +1,7 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
+import { requireStepUp } from '../../../platform/auth/office/account'
+import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { copyOrderAsQuoteContract } from '../quotes/contract'
 import { copyOrderAsQuote } from '../quotes/duplicate'
 import { applyAmendment, listAmendments, previewAmendment } from './amend'
@@ -18,13 +20,15 @@ import {
   reopenLinesContract,
   scheduleContract,
   stepRequestContract,
+  waiveDepositRequestContract,
+  waiveStepContract,
 } from './daily-contract'
 import { cancelCheck } from './impact'
 import { manifest } from './manifest'
 import { createManualOrder, nextOrderNumber, previewManualOrder } from './manual'
 import { cancelOrder, changePromise, closeOrder, markReady, officeOrder } from './moves'
 import { getOrder, listOrders, makeOrder, orderBoard } from './orders'
-import { getSchedule, requestStep } from './schedule'
+import { getSchedule, requestStep, waiveDeposit } from './schedule'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A2 SCR-038, SCR-039): the
@@ -83,6 +87,14 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   // B-W2a-F2: the office opens a before-shipping step (its deposit request).
   app.post('/sales/orders/:orderId/schedule/:milestoneId/request', { schema: stepRequestContract }, async (request, reply) =>
     reply.code(201).send(await requestStep(request, request.params.orderId, request.params.milestoneId, request.body, idempotencyKeyFrom(request))),
+  )
+
+  // B-W2b-16: the owner waives a deposit or a step before shipping (the step-up after the route's other checks).
+  app.post('/sales/orders/:orderId/schedule/:milestoneId/waive', { schema: waiveStepContract }, async (request) =>
+    waiveDeposit(request, request.params.orderId, { milestoneId: request.params.milestoneId }, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)),
+  )
+  app.post('/sales/orders/:orderId/deposit-requests/:requestId/waive', { schema: waiveDepositRequestContract }, async (request) =>
+    waiveDeposit(request, request.params.orderId, { requestId: request.params.requestId }, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)),
   )
 
   app.post('/sales/orders/:orderId/copy-as-quote', { schema: copyOrderAsQuoteContract }, async (request, reply) => {

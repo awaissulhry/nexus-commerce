@@ -13,6 +13,7 @@ import {
   SAFETY_STATES,
 } from '@nexus/factory-domain/sales/repairs/rules'
 import {
+  CLOSE_WARNING_CODES,
   FREIGHT_PAYERS,
   GOODS_OUTCOMES,
   PARCEL_CONDITIONS,
@@ -262,6 +263,8 @@ export const returnSchema = z.object({
   }),
   tracking: z.array(z.object({ step: z.enum(TRACKING_STEPS), state: z.enum(STEP_STATES), at: z.string().nullable() })),
   actions: z.array(z.object({ action: z.enum(RETURN_ACTIONS), allowed: z.boolean() })),
+  /** B-W2b-16: what a close would leave behind (said in the close dialog before the click; the API's words are English). */
+  closeWarnings: z.array(z.object({ code: z.enum(CLOSE_WARNING_CODES), seqs: z.array(z.number()), lineIds: z.array(z.string()) })).default([]),
   policy: policyView.extend({ freightPaidByNow: z.enum(['CUSTOMER', 'COMPANY']).nullable() }),
   version: z.number(),
   createdAt: z.string(),
@@ -362,6 +365,10 @@ export interface LinePatch {
   serial?: string | null
   batchNumber?: string | null
 }
+
+/** B-W2b-16: Add lines on an open RMA (before the goods arrive): picked from what may come back, never above what is left. */
+export const addReturnLines = (api: ApiClient, rma: Versioned, lines: NewReturnLine[], idempotencyKey: string) =>
+  api.post(`/sales/returns/${seg(rma.id)}/lines`, { body: { version: rma.version, lines }, schema: z.object({ return: returnSchema, lineIds: z.array(z.string()) }), idempotencyKey })
 
 export const changeReturnLine = (api: ApiClient, rma: Versioned, lineId: string, patch: LinePatch) =>
   api.request('PATCH', `/sales/returns/${seg(rma.id)}/lines/${seg(lineId)}`, { body: { version: rma.version, ...patch }, schema: oneReturn, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.return)
@@ -548,6 +555,10 @@ export const repairSchema = z.object({
   receivedAt: z.string().nullable(),
   inboundDdt: z.object({ number: z.string(), date: z.string().nullable() }).nullable(),
   workOrder: z.object({ id: z.string(), number: z.string(), status: z.string() }).nullable(),
+  /** B-W2b-16: the work orders of earlier rounds (a rework after the repair went back into repair gets its own). */
+  earlierWorkOrders: z.array(z.object({ id: z.string(), number: z.string(), status: z.string() })).default([]),
+  /** B-W2b-16: back into repair after it was repaired: a new repair work order may follow a done one. */
+  reworkRound: z.boolean().default(false),
   repairedAt: z.string().nullable(),
   safety: z.object({
     required: z.boolean(),

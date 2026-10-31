@@ -12,7 +12,8 @@
     "forOrder": "Order {order} (quote {quote})",
     "kind": "Kind",
     "kindPct": "{kind}, {pct} of the total",
-    "due": "Due by"
+    "due": "Due by",
+    "forOrderOnly": "Order {order}"
   },
   "bank": {
     "title": "Pay by bank transfer",

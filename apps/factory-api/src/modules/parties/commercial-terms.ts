@@ -10,7 +10,8 @@ import type { PriceListKind } from '@nexus/factory-domain/sales/pricelists/price
 import { commercialTermsProblems, depositOf, instalmentsOf, invoiceTypePreset, termsSummary, type InvoiceTiming } from '@nexus/factory-domain/sales/terms/terms'
 import { command, type CommandCaller, type CommandTx } from '../../core/command'
 import type { OfficeContext } from '../../core/context'
-import { listProblemFor } from '../sales/pricelists/lists'
+import { givePriceListInCommand } from '../sales/pricelists/assignments'
+import { listCodesOf, listProblemFor } from '../sales/pricelists/lists'
 import { LIST_COLUMNS, mayOnList } from '../sales/pricelists/store'
 import { officeContextOf, type Reader } from '../sales/quotes/store'
 import { termsForParty } from '../sales/terms/terms'
@@ -44,6 +45,7 @@ const COLUMNS = {
   preferredCarrierCode: true,
   minimumOrderAmount: true,
   version: true,
+  createdAt: true,
 } as const satisfies Prisma.PartySelect
 type TermsPartyRow = Prisma.PartyGetPayload<{ select: typeof COLUMNS }>
 
@@ -199,6 +201,11 @@ export async function updateCommercialTerms(caller: CommandCaller, partyId: stri
           })()
       const found = await issue
       if (found) throw new ValidationError(found.message, [found])
+    }
+    // B-W2b-16: the customer's list history follows its list (from today; one change per day).
+    if (changed.includes('priceListId')) {
+      const codes = await listCodesOf(tx, [before.priceListId, next.priceListId].filter((id): id is string => id !== null))
+      await givePriceListInCommand(tools, { id: row.id, code: row.code, priceListId: before.priceListId, createdAt: row.createdAt }, next.priceListId, (id) => codes.get(id) ?? id)
     }
     if (changed.length > 0) {
       await tx.party.update({

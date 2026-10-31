@@ -352,7 +352,8 @@ function WorkTab({ model, held, run }: { model: RepairModel; held: (action: Repa
           </div>
           <p className="fw-q-hint">{t('work.estimateLater')}</p>
         </Section>
-        <Section title={t('work.workOrder')} sub={t('work.workOrderSub')} actions={!repair.workOrder || repair.workOrder.status === 'CANCELLED' ? actionButton('makeWorkOrder') : undefined}>
+        {/* B-W2b-16: back into repair after it was repaired, the rework gets its own work order once the last one is done. */}
+        <Section title={t('work.workOrder')} sub={t('work.workOrderSub')} actions={!repair.workOrder || repair.workOrder.status === 'CANCELLED' || repair.reworkRound ? actionButton('makeWorkOrder') : undefined}>
           {repair.workOrder ? (
             <p>
               <Link className="fw-q-link fw-q-code" href={`${prefix}/production/work-orders/${encodeURIComponent(repair.workOrder.id)}`}>
@@ -362,6 +363,22 @@ function WorkTab({ model, held, run }: { model: RepairModel; held: (action: Repa
             </p>
           ) : (
             <p className="fw-q-hint">{t('work.noWorkOrder')}</p>
+          )}
+          {repair.reworkRound && repair.workOrder && ['COMPLETED', 'CLOSED'].includes(repair.workOrder.status) && <p className="fw-q-hint">{t('work.rework')}</p>}
+          {repair.earlierWorkOrders.length > 0 && (
+            <>
+              <p className="fw-q-hint">{t('work.earlier')}</p>
+              <ul className="fw-q-lines">
+                {repair.earlierWorkOrders.map((order) => (
+                  <li key={order.id}>
+                    <Link className="fw-q-link fw-q-code" href={`${prefix}/production/work-orders/${encodeURIComponent(order.id)}`}>
+                      {order.number}
+                    </Link>{' '}
+                    <span className="fw-q-hint">{t(`woStatus.${order.status}`)}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </Section>
       </div>

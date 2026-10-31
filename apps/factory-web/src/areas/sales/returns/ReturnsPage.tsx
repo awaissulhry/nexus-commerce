@@ -424,7 +424,11 @@ function ReturnsContainer() {
         onNewRepairClose: () => setNewRepair(null),
         onClose: (row) => {
           closeKey.current = newIdempotencyKey()
-          setClose({ id: row.id, number: row.number, reason: '', note: '', busy: false, problem: null, warnings: null })
+          // B-W2b-16: what the close would leave behind is read from the record and said before the click.
+          setClose({ id: row.id, number: row.number, reason: '', note: '', busy: false, problem: null, warnings: null, pending: null })
+          void getReturn(api, row.id)
+            .then((rma) => setClose((current) => (current && current.id === row.id ? { ...current, pending: rma.closeWarnings } : current)))
+            .catch(() => setClose((current) => (current && current.id === row.id ? { ...current, pending: [] } : current)))
         },
         onCloseDraft: (patch) => setClose((current) => (current ? { ...current, ...patch } : current)),
         onCloseSubmit: () => void submitClose(),

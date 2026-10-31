@@ -32,6 +32,7 @@ import type { RmaActions, RmaModel, RmaTab } from '../../view-model'
 import { CloseReturnModal } from '../../view/CloseReturnModal'
 import { NewRepairModal } from '../../view/NewRepairModal'
 import { InstantText, isPageKey, MilestoneTracker, Money, RepairStagePill, ReturnsMessages, ReturnStatusPill, say, useDayWords, useWords } from '../../view/parts'
+import { AddLinesModal } from './AddLinesModal'
 import { RmaDialogs } from './RmaDialogs'
 
 /**
@@ -189,6 +190,7 @@ function RmaRecord({ model, actions, panels }: { model: RmaModel; actions?: RmaA
       <RmaDialogs model={model} actions={actions} />
       {model.close && <CloseReturnModal model={model.close} actions={actions} />}
       {model.newRepair && <NewRepairModal model={model.newRepair} prefix={prefix} actions={actions} />}
+      {model.addLines && <AddLinesModal model={model} add={model.addLines} actions={actions} />}
     </>
   )
 }
@@ -301,7 +303,14 @@ function LinesTab({ model, actions }: { model: RmaModel; actions?: RmaActions })
   return (
     <div className="fw-q-stack">
       {!editable && editHeld && <Banner tone="info" title={t('lines.readOnly', { why: say(t, editHeld) })} />}
-      {editable && <p className="fw-q-hint">{t('lines.editHint')}</p>}
+      {/* B-W2b-16: more lines on an open return, picked from what the customer may still send back. */}
+      <div className="fw-rr-lines-head">
+        {editable && <p className="fw-q-hint">{t('lines.editHint')}</p>}
+        <span className="grow" />
+        <Button size="sm" heldReason={editHeld ? say(t, editHeld) : null} onClick={() => actions?.onAddLinesOpen?.()}>
+          {t('addLines.open')}
+        </Button>
+      </div>
       <ListFrame<ReturnLine>
         label={t('lines.table')}
         rows={rma.lines}

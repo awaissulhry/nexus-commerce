@@ -572,19 +572,21 @@ describe('the sales settings: the quote rules of the tenant and of a company (SA
   })
 
   it("a company's own row wins for its quotes; a stale version is a 409; the database holds the ranges for every login", async () => {
-    const saved = (await ok('financeA', 'PUT', settingsUrl, { companyId: companyA, marginFloorPct: '12.5', discountLimitPct: '20', defaultValidityDays: 14, defaultDepositPct: null })).settings
-    expect(saved).toMatchObject({ id: companyA, companyId: companyA, marginFloorPct: '12.5', defaultDepositPct: null, version: 1 })
-    expect((await ok('finance', 'GET', `${settingsUrl}?companyId=${companyA}`)).settings).toMatchObject({ tenant: { id: tenant }, company: { id: companyA }, inForce: { marginFloorPct: '12.5', source: 'COMPANY' } })
+    // B-W2b-16: a company's own rules stricter than the tenant's save at once (a looser one, a raised limit, asks for a
+    // fresh step-up: modules/sales/orders/followups.pg covers it with a real sign-in).
+    const saved = (await ok('financeA', 'PUT', settingsUrl, { companyId: companyA, marginFloorPct: '30', discountLimitPct: '5', defaultValidityDays: 14, defaultDepositPct: null })).settings
+    expect(saved).toMatchObject({ id: companyA, companyId: companyA, marginFloorPct: '30', defaultDepositPct: null, version: 1 })
+    expect((await ok('finance', 'GET', `${settingsUrl}?companyId=${companyA}`)).settings).toMatchObject({ tenant: { id: tenant }, company: { id: companyA }, inForce: { marginFloorPct: '30', source: 'COMPANY' } })
     expect((await ok('finance', 'GET', `${settingsUrl}?companyId=${companyB}`)).settings.inForce).toMatchObject({ marginFloorPct: '25', source: 'TENANT' })
-    // The draft's next change is checked against the company's rules: 380 is over a 12.5 % floor.
+    // The draft's next change is checked against the company's rules: 380 (23.41 %) is under a 30 % floor.
     await act('boss', '/recompute')
-    expect(quote.approval).toMatchObject({ needed: false, marginFloorPct: '12.5' })
-    expect(quote.current.marginFloorPct).toBe('12.5')
+    expect(quote.approval).toMatchObject({ needed: true, marginFloorPct: '30' })
+    expect(quote.current.marginFloorPct).toBe('30')
     const fresh = (await ok('boss', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
     expect(fresh.current).toMatchObject({ validUntil: addDays(TODAY, 14), depositPct: null, depositKind: null })
 
-    expect((await ok('financeA', 'PUT', settingsUrl, { companyId: companyA, marginFloorPct: '15', discountLimitPct: '20', defaultValidityDays: 14, defaultDepositPct: null, version: 1 })).settings).toMatchObject({ marginFloorPct: '15', version: 2 })
-    expect((await refused('financeA', 'PUT', settingsUrl, { companyId: companyA, marginFloorPct: '18', discountLimitPct: '20', defaultValidityDays: 14, defaultDepositPct: null, version: 1 }, 409)).message).toContain('it is now at version 2')
+    expect((await ok('financeA', 'PUT', settingsUrl, { companyId: companyA, marginFloorPct: '35', discountLimitPct: '5', defaultValidityDays: 14, defaultDepositPct: null, version: 1 })).settings).toMatchObject({ marginFloorPct: '35', version: 2 })
+    expect((await refused('financeA', 'PUT', settingsUrl, { companyId: companyA, marginFloorPct: '40', discountLimitPct: '5', defaultValidityDays: 14, defaultDepositPct: null, version: 1 }, 409)).message).toContain('it is now at version 2')
     await expect(admin('UPDATE "SalesSettings" SET "marginFloorPct" = 101 WHERE id = $1', [companyA])).rejects.toThrow(/margin floor of the sales settings .* is 0 to 100 percent/)
     await expect(admin('UPDATE "SalesSettings" SET "defaultValidityDays" = 0 WHERE id = $1', [companyA])).rejects.toThrow(/1 to 365 days/)
     await expect(admin('DELETE FROM "SalesSettings" WHERE id = $1', [companyA])).rejects.toThrow(/changed, never deleted/)

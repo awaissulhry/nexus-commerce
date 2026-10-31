@@ -187,11 +187,12 @@ export const V2_ENTRIES: PriceEntry[] = [
 export const withoutCost = (entries: readonly PriceEntry[]): PriceEntry[] => entries.map(({ standardCost: _cost, ...rest }) => rest as PriceEntry)
 export const withoutMoney = (entries: readonly PriceEntry[]): PriceEntry[] => entries.map(({ standardCost: _cost, unitPrice: _price, marginPct: _margin, belowFloor: _floor, ...rest }) => rest as PriceEntry)
 
-export const CUSTOMERS: PriceListDetail['customers'] = [{ id: uid('6110', 1), code: 'MODA-DEMO', legalName: 'Moda Demo S.r.l.', status: 'ACTIVE', companyId: null, version: 5 }]
+// B-W2b-16: "From" — since when each customer has the list (its history row; one given before W2b: its audit day; unknown).
+export const CUSTOMERS: PriceListDetail['customers'] = [{ id: uid('6110', 1), code: 'MODA-DEMO', legalName: 'Moda Demo S.r.l.', status: 'ACTIVE', companyId: null, version: 5, from: '2026-10-01', fromSource: 'ROW' }]
 export const GROUP_CUSTOMERS: PriceListDetail['customers'] = [
-  { id: uid('6110', 2), code: 'DEALER-ESEMPIO', legalName: 'Esempio Moto Ricambi S.n.c.', status: 'ACTIVE', companyId: null, version: 2 },
-  { id: uid('6110', 3), code: 'DEALER-PROVA', legalName: 'Prova Racing S.r.l.', status: 'ACTIVE', companyId: null, version: 3 },
-  { id: uid('6110', 4), code: 'DEALER-DEMO', legalName: 'Demo Bikers di Rossi', status: 'BLOCKED', companyId: null, version: 7 },
+  { id: uid('6110', 2), code: 'DEALER-ESEMPIO', legalName: 'Esempio Moto Ricambi S.n.c.', status: 'ACTIVE', companyId: null, version: 2, from: '2026-09-15', fromSource: 'ROW' },
+  { id: uid('6110', 3), code: 'DEALER-PROVA', legalName: 'Prova Racing S.r.l.', status: 'ACTIVE', companyId: null, version: 3, from: '2026-06-03', fromSource: 'AUDIT' },
+  { id: uid('6110', 4), code: 'DEALER-DEMO', legalName: 'Demo Bikers di Rossi', status: 'BLOCKED', companyId: null, version: 7, from: null, fromSource: null },
 ]
 
 export const DETAIL: PriceListDetail = {
