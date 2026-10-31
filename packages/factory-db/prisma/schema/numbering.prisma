@@ -54,6 +54,8 @@ model NumberSeries {
   invoices    Invoice[]
   // accounting.prisma (W2a wave 7/7): the accounting exports numbered from it.
   accountingExports AccountingExport[]
+  // pay.prisma (W2b wave 6/7): the payroll exports numbered from it.
+  payrollExports    PayrollExport[]
 
   @@unique([tenantId, companyId, kind, code, scopeKey])
   // The target of the allocations' tenant- and company-safe reference.
@@ -110,6 +112,8 @@ enum NumberKind {
   /// W2b wave 2: a quality hold's number (HLD-…; holds.prisma QualityHold.number). A floor document kind: the bench
   /// numbers the hold it places.
   HOLD
+  /// W2b wave 6: a payroll export's number (PAY-…; pay.prisma PayrollExport.number).
+  PAYROLL_EXPORT
 }
 
 enum NumberReset {

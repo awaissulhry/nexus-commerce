@@ -9,17 +9,21 @@ import { Button, Pill } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import type { ListCustomer, PriceListDetail } from '../../api'
 import { customersHeld } from '../../model'
+import { formatDate } from '../../../../../lib/i18n/format'
+import { useLocale } from '../../../../../lib/i18n/provider'
 import { useWords } from '../../parts'
 import type { PriceListRecordActions, PriceListRecordModel } from '../record-model'
 
 /**
  * Customers (design pricelist.customers: who gets this list as their default): each customer priced from it, a real
  * link to its record (Tax & terms › Commercial terms is where one customer's list is changed too); Add customers and,
- * over the rows picked, Remove N — both need pricelists.manage and parties.manage (the API checks each customer). The
- * design's "From" column has no source yet (gap: the customer's list carries no dated history; its audit row has the time).
+ * over the rows picked, Remove N — both need pricelists.manage and parties.manage (the API checks each customer).
+ * B-W2b-16: "From" = since when the customer has the list (its history row; for a list given before W2b, the day of the
+ * audit row that gave it, marked as such; unknown: —).
  */
 export function CustomersTab({ list, model, actions }: { list: PriceListDetail; model: PriceListRecordModel; actions?: PriceListRecordActions }) {
   const t = useWords()
+  const locale = useLocale()
   const held = customersHeld(list, model.can)
   const heldText = held ? t(held) : model.busy ? t('held.busy') : null
   const picked = list.customers.filter((customer) => model.selectedCustomers.includes(customer.id))
@@ -35,12 +39,20 @@ export function CustomersTab({ list, model, actions }: { list: PriceListDetail; 
         </span>
       ) : null
     const StatusCell = ({ data }: ICellRendererParams<ListCustomer>) => (data ? <Pill tone={data.status === 'ACTIVE' ? 'success' : data.status === 'BLOCKED' ? 'danger' : 'neutral'}>{t(`partyStatus.${data.status}`)}</Pill> : null)
+    const FromCell = ({ data }: ICellRendererParams<ListCustomer>) =>
+      data ? (
+        <span className="fw-pl-cell">
+          <span>{data.from ? formatDate(`${data.from}T12:00:00Z`, { locale }) : '—'}</span>
+          {data.fromSource === 'AUDIT' && <span className="fw-pl-sub">{t('customers.fromAudit')}</span>}
+        </span>
+      ) : null
     return [
       { colId: 'name', headerName: t('customers.col.customer'), minWidth: 220, flex: 2, cellRenderer: NameCell, valueGetter: (params) => params.data?.legalName ?? '' },
       { colId: 'code', headerName: t('customers.col.code'), field: 'code', minWidth: 120, flex: 1 },
       { colId: 'status', headerName: t('customers.col.status'), minWidth: 120, flex: 1, cellRenderer: StatusCell, valueGetter: (params) => params.data?.status ?? '' },
+      { colId: 'from', headerName: t('customers.col.from'), minWidth: 130, flex: 1, cellRenderer: FromCell, valueGetter: (params) => params.data?.from ?? '' },
     ]
-  }, [t, model.prefix])
+  }, [t, locale, model.prefix])
 
   return (
     <div className="fw-pl-stack">

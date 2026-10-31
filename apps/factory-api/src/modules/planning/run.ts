@@ -123,6 +123,10 @@ async function work(tools: CommandTools, site: SiteRow, note: string | null, tri
                 firmSupplierId: line.action === 'BUY' ? carried.supplierId : null,
                 firmedAt: carried.firmedAt,
                 firmedById: carried.firmedById,
+                // B-W2b-20: the line it carries (the DB keeps a carried line firm at insert; it may be made planned
+                // again later, keeping this as its history). Only of the same action: when the site's parameters
+                // switched make or buy since, the DB's rule (same material, colour and action) does not hold.
+                ...(carried.action === line.action ? { firmCarriedFromId: carried.requirementId } : {}),
               }
             : {}),
           createdAt: now,

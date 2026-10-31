@@ -104,7 +104,11 @@ afterAll(async () => {
 
 describe('the index (worker side)', () => {
   it('loads one indexer per record type from the folder, each following declared events', () => {
-    expect(indexers.map((indexer) => indexer.recordType).sort()).toEqual(['Complaint', 'GoodsReceipt', 'Hide', 'Invoice', 'Item', 'Lot', 'Party', 'PurchaseOrder', 'Quote', 'RepairOrder', 'ReturnAuthorisation', 'SalesOrder', 'Shipment', 'Style', 'SupplierClaim', 'WorkOrder'])
+    expect(indexers.map((indexer) => indexer.recordType).sort()).toEqual([
+      ...['Complaint', 'GoodsReceipt', 'Hide', 'Invoice', 'Item', 'Lot', 'Party', 'PurchaseOrder', 'Quote', 'RepairOrder', 'ReturnAuthorisation', 'SalesOrder', 'Shipment', 'Style', 'SupplierClaim', 'WorkOrder'],
+      // B-W2b-23: every other W1 and W2a record type (indexers/every-record.pg.vitest.test.ts).
+      ...['Certificate', 'Ddt', 'Inspection', 'LabelTemplate', 'Location', 'Machine', 'MaintenanceJob', 'Nonconformance', 'Operation', 'Payment', 'PpeRegisterEntry', 'QualityHold', 'SizeScale', 'StockCount', 'SubcontractOrder', 'SupplierInvoice'],
+    ].sort())
     const handlers = searchHandlers(indexers)
     expect(handlers.map((handler) => handler.name)).toEqual([INDEX_HANDLER, REBUILD_HANDLER])
     expect(handlers[0]!.events).toEqual(expect.arrayContaining(['sales_order.created', 'party.updated', 'inventory.receipt_posted']))

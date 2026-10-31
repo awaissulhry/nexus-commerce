@@ -1,6 +1,41 @@
 'use client'
 
-import { Boxes, ClipboardList, Contact, FileText, Layers, PackageCheck, Receipt, Ruler, Scissors, ShoppingCart, Shirt, Truck, Wrench, type LucideIcon } from 'lucide-react'
+import {
+  BadgeCheck,
+  Bandage,
+  Banknote,
+  Boxes,
+  ChartBarIncreasing,
+  ClipboardCheck,
+  ClipboardList,
+  Cog,
+  Contact,
+  Factory,
+  FileOutput,
+  FileText,
+  Hammer,
+  Layers,
+  ListChecks,
+  MapPin,
+  MessageSquareWarning,
+  OctagonPause,
+  PackageCheck,
+  PackageX,
+  Receipt,
+  ReceiptText,
+  Ruler,
+  Scissors,
+  ShieldAlert,
+  ShoppingCart,
+  Shirt,
+  Tag,
+  TriangleAlert,
+  Truck,
+  Undo2,
+  Workflow,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react'
 
 /** The icon of a record type in the search's rows (the palette's Records group, the All results page). */
 const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
@@ -16,6 +51,27 @@ const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
   GoodsReceipt: PackageCheck,
   Shipment: Truck,
   Invoice: FileText,
+  // B-W2a-83's four, and B-W2b-23's: every other W1 and W2a record type.
+  ReturnAuthorisation: Undo2,
+  RepairOrder: Bandage,
+  Complaint: MessageSquareWarning,
+  SupplierClaim: PackageX,
+  Payment: Banknote,
+  SupplierInvoice: ReceiptText,
+  Inspection: ClipboardCheck,
+  QualityHold: OctagonPause,
+  Nonconformance: TriangleAlert,
+  Certificate: BadgeCheck,
+  LabelTemplate: Tag,
+  PpeRegisterEntry: ShieldAlert,
+  StockCount: ListChecks,
+  Location: MapPin,
+  Ddt: FileOutput,
+  SubcontractOrder: Factory,
+  Operation: Workflow,
+  SizeScale: ChartBarIncreasing,
+  Machine: Cog,
+  MaintenanceJob: Hammer,
 })
 
 export function RecordTypeIcon({ type, size = 16 }: { type: string; size?: number }) {

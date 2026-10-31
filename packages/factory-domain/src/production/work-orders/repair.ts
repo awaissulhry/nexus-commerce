@@ -37,8 +37,13 @@ export function repairStageProblem(number: string, stage: string): string | null
   return `Repair ${number} is ${stage}: it gets no repair work order any more.`
 }
 
-export function liveWorkOrderProblem(number: string, workOrder: { readonly number: string; readonly status: string } | null): string | null {
+/**
+ * `reworkRound` (B-W2b-16): the repair went back into repair after it was repaired (sales/repairs `reworkRoundOf`): a
+ * DONE (COMPLETED or CLOSED) work order then no longer stops a new one, which becomes the repair's work order.
+ */
+export function liveWorkOrderProblem(number: string, workOrder: { readonly number: string; readonly status: string } | null, reworkRound = false): string | null {
   if (!workOrder || workOrder.status === 'CANCELLED') return null
+  if (reworkRound && (workOrder.status === 'COMPLETED' || workOrder.status === 'CLOSED')) return null
   return `Repair ${number} already has repair work order ${workOrder.number} (${workOrder.status}); cancel it first to make another.`
 }
 

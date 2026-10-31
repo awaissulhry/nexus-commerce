@@ -3,7 +3,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
-import { ORDERS_MANAGE } from '@nexus/factory-domain/sales/orders/permissions'
+import { ORDERS_MANAGE, ORDERS_WAIVE } from '@nexus/factory-domain/sales/orders/permissions'
 import { MILESTONE_WORDS, paymentScheduleOf, remadeSchedule, stepRequestFor, type PlannedMilestone, type StoredMilestone } from '@nexus/factory-domain/sales/orders/schedule'
 import { instalmentsOf } from '@nexus/factory-domain/sales/terms/terms'
 import type { CustomerTaxProfile } from '@nexus/factory-domain/tax/vat-treatment'
@@ -134,6 +134,13 @@ async function createStepRequest(tools: CommandTools, order: StepOrder, step: Pi
     recordId: id,
     companyId: order.companyId,
     after: { orderId: order.id, milestoneId, stepKind: step.kind, kind: draft.kind, depositPct: draft.depositPct, currency: draft.currency, amount: markMoney('price', draft.amount), dueDate: draft.dueDate, fiscalDocument: draft.fiscalDocument, fiscalRule: draft.fiscalRule, reason: draft.reason, status: 'OPEN' },
+  })
+  // B-W2b-16: a request made on the order has its own event (deposit_request.created needs a quote version).
+  tools.emit({
+    type: 'deposit_request.created_for_order',
+    subject: id,
+    companyId: order.companyId,
+    payload: { depositRequestId: id, orderId: order.id, number: order.number, partyId: order.partyId, stepKind: 'BEFORE_SHIPPING', fiscalDocument: draft.fiscalDocument, dueDate: draft.dueDate },
   })
   return id
 }
@@ -366,4 +373,94 @@ export async function requestStep(caller: CommandCaller, orderId: string, milest
     return { requestId }
   })
   return { ...(await getSchedule(caller, order.id)), depositRequestId: result.requestId }
+}
+
+// ---- the owner waives a deposit or a step before shipping (B-W2b-16) ----------------------------------------------------
+
+export interface WaiveBody {
+  /** The step's version (a step), or the request's (a deposit request without a step). */
+  readonly version: number
+  /** Why it is waived (stays on the step and the request). */
+  readonly reason: string
+}
+
+/** What can be waived: an advance (the deposit, a balance before shipping), not a step that falls due with the invoice. */
+const WAIVABLE_KINDS = ['DEPOSIT', 'BEFORE_SHIPPING'] as const
+
+/**
+ * orders.waive (+ a fresh step-up; design orders.depositRequest "Waive… (Owner)", quote.docs.deposit "Waive (Owner,
+ * reason)"; B-W2a-F2's gap "no waive route for a step or a balance request"): the customer need not pay an advance. A
+ * deposit or a before-shipping step (`target.milestoneId`), or a deposit request no step names (an order made before the
+ * payment schedule, `target.requestId`). ONE command: the request's money lock FIRST (a payment holds it, then needs the
+ * order's row for its TD02: the same order as the amendment's `lockStepRequests`), then the order's row, the step or the
+ * request at its version; what payments placed on the request read under the lock: nothing (a part-paid request is
+ * refused in words: the rest is billed on the goods' invoice); the step OPEN → WAIVED and its OPEN request → WAIVED, both
+ * with the reason (statusNote; the database wants it). A waived deposit lets production start (the release's deposit
+ * gate takes PAID or WAIVED); a waived balance is billed on the goods' invoice. Events sales_order.schedule_changed
+ * WAIVED (a step) and deposit_request.waived (a request); audit rows on the order and the request.
+ */
+export async function waiveDeposit(
+  caller: CommandCaller,
+  orderId: string,
+  target: { readonly milestoneId: string } | { readonly requestId: string },
+  body: WaiveBody,
+  stepUp: () => void | Promise<void>,
+  idempotencyKey?: string,
+) {
+  const order = await officeOrder(caller, orderId, ORDERS_WAIVE)
+  const reason = body.reason.trim()
+  if (reason.length < 3 || reason.length > 500) throw new ValidationError('Say why it is waived.', [{ path: 'body/reason', message: 'Say why the customer need not pay it in advance (it stays on the step and the request).' }])
+  await stepUp()
+  const { result } = await command(caller, { name: 'orders.waiveDeposit', idempotencyKey, input: { orderId, ...target, ...body } }, async (tools) => {
+    const { tx, now } = tools
+    const stepColumns = { ...MILESTONE_COLUMNS, companyId: true, partyId: true } as const
+    const seenStep = 'milestoneId' in target ? (isUuid(target.milestoneId) ? await tx.salesOrderMilestone.findFirst({ where: { id: target.milestoneId, orderId: order.id }, select: stepColumns }) : null) : null
+    if ('milestoneId' in target && !seenStep) throw new NotFoundError('Payment schedule step not found on this order.')
+    const requestId = 'requestId' in target ? target.requestId : (seenStep?.depositRequestId ?? null)
+    // The request's money lock before the order's row (a payment takes them in that order).
+    if (requestId !== null && isUuid(requestId)) await lockAll(tx, tools.context, 'deposit', [requestId])
+    const locked = await lockOrder(tx, order.id)
+    const request = requestId !== null && isUuid(requestId) ? await tx.depositRequest.findFirst({ where: { id: requestId, orderId: order.id }, select: { id: true, status: true, version: true } }) : null
+    if ('requestId' in target && !request) throw new NotFoundError('Deposit request not found on this order.')
+    const step = seenStep ? await tx.salesOrderMilestone.findUniqueOrThrow({ where: { id: seenStep.id }, select: stepColumns }) : null
+    const steps = step ? [step] : await tx.salesOrderMilestone.findMany({ where: { orderId: order.id, depositRequestId: request!.id, status: 'OPEN' }, select: stepColumns })
+    const versioned = step ?? request!
+    if (versioned.version !== body.version) throw new StaleVersionError(step ? 'SalesOrderMilestone' : 'DepositRequest', versioned.id, versioned.version, body.version)
+    if (locked.status === 'CANCELLED' || locked.status === 'CLOSED') throw new InvalidStateError(`Order ${order.number} is ${locked.status.toLowerCase()}: nothing on it is waived any more.`)
+    for (const entry of steps) {
+      if (!(WAIVABLE_KINDS as readonly string[]).includes(entry.kind)) {
+        throw new InvalidStateError(`This step of order ${order.number} falls due with the invoice of the shipped goods (${MILESTONE_WORDS[entry.kind].toLowerCase()}): it is billed there, so there is no advance to waive.`)
+      }
+      if (entry.status !== 'OPEN') throw new InvalidStateError(`This step of order ${order.number} is ${entry.status.toLowerCase()}: there is nothing to waive.`)
+    }
+    if (request && request.status !== 'OPEN' && steps.length === 0) throw new InvalidStateError(`The deposit request is ${request.status.toLowerCase()}: there is nothing to waive.`)
+    const paid = request ? ((await paidOnRequests(tx, [request.id])).get(request.id) ?? 0) : 0
+    if (paid !== 0) {
+      throw new InvalidStateError(`Money is already placed on this deposit request: it is not waived (the rest is billed on the goods' invoice, or take the allocation back in Finance first).`)
+    }
+    const note = `Waived: ${reason}`
+    for (const entry of steps) {
+      await tx.salesOrderMilestone.update({ where: { id: entry.id }, data: { status: 'WAIVED', statusNote: note, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+    }
+    let waivedRequest: string | null = null
+    if (request && request.status === 'OPEN') {
+      await tx.depositRequest.update({ where: { id: request.id }, data: { status: 'WAIVED', statusNote: note, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+      waivedRequest = request.id
+      tools.audit({ action: 'orders.waiveDeposit', recordType: 'DepositRequest', recordId: request.id, companyId: order.companyId, before: { status: 'OPEN' }, after: { status: 'WAIVED', orderId: order.id, milestoneIds: steps.map((entry) => entry.id) }, reason })
+      tools.emit({ type: 'deposit_request.waived', subject: request.id, companyId: order.companyId, payload: { depositRequestId: request.id, orderId: order.id, number: order.number, partyId: order.partyId, milestoneIds: steps.map((entry) => entry.id) } })
+    }
+    await tx.salesOrder.update({ where: { id: order.id }, data: { updatedAt: now, version: { increment: 1 } }, select: { id: true } })
+    tools.audit({
+      action: 'orders.waiveStep',
+      recordType: 'SalesOrder',
+      recordId: order.id,
+      companyId: order.companyId,
+      before: { steps: steps.map((entry) => ({ milestoneId: entry.id, kind: entry.kind, status: 'OPEN' })), depositRequestId: request?.id ?? null },
+      after: { steps: steps.map((entry) => ({ milestoneId: entry.id, kind: entry.kind, status: 'WAIVED', amount: markMoney('price', entry.amount) })), depositRequestId: waivedRequest },
+      reason,
+    })
+    if (steps.length > 0) tools.emit({ type: 'sales_order.schedule_changed', subject: order.id, companyId: order.companyId, payload: { orderId: order.id, number: order.number, change: 'WAIVED', milestoneIds: steps.map((entry) => entry.id) } })
+    return { milestoneIds: steps.map((entry) => entry.id), depositRequestId: waivedRequest }
+  })
+  return { ...(await getSchedule(caller, order.id)), waived: result }
 }

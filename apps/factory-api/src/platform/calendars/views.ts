@@ -32,6 +32,8 @@ export const CALENDAR = {
   workingWeekdays: true,
   shiftPatternId: true,
   status: true,
+  // B-W2b-20: a supplier's own time zone (B-W2b-03's column).
+  timeZone: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -113,6 +115,7 @@ export async function calendarViews(client: Client, rows: readonly CalendarRow[]
       workingWeekdays: [...row.workingWeekdays],
       shiftPattern: row.shiftPatternId ? (patterns.get(row.shiftPatternId) ?? null) : null,
       status: row.status,
+      timeZone: row.timeZone,
       exceptions: exceptions.get(row.id) ?? 0,
       version: row.version,
       createdAt: toUtcIso(row.createdAt),

@@ -57,6 +57,8 @@ model PrivacyNotice {
   staffAcks  StaffNoticeAck[]
   // W2b people.prisma (wave 4/7): the legal gates switched on with this notice.
   peopleLegalGates PeopleLegalGate[]
+  // W2b pay.prisma (wave 6/7): the legal switches of piece pay that name it as the worker notice.
+  piecePaySwitches PiecePaySwitch[]
 
   @@unique([tenantId, companyId, kind, versionNo])
   @@unique([tenantId, companyId, kind, label])
@@ -138,6 +140,8 @@ model PrivacyDpia {
   file    StoredFile? @relation("PrivacyDpiaFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2b people.prisma (wave 4/7): the legal gates it covers.
   peopleLegalGates PeopleLegalGate[]
+  // W2b pay.prisma (wave 6/7): the legal switches of piece pay that name it.
+  piecePaySwitches PiecePaySwitch[]
 
   @@unique([tenantId, companyId, versionNo])
   @@unique([tenantId, id])

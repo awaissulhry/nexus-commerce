@@ -1,6 +1,6 @@
 import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { StyleDetail, StyleRow, VersionsAnswer } from '../../quotes/api'
-import type { AmendmentsAnswer, AmendPreview, CancelCheck, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
+import type { AmendmentsAnswer, AmendPreview, CancelCheck, CancelReason, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
 import type { DraftLine } from '../daily-model'
 import type { MarginTabModel } from './margin/model'
 import type { LiveState, StepUpState } from '../hooks'
@@ -112,8 +112,10 @@ export interface OrderRecordModel {
   scheduleSteps?: ScheduleStepsModel
   /** Design cases: what the panels show (the page mounts the live panels instead). */
   panelsPreview?: RecordPanelsViewModel
+  /** B-W2b-16: the CANCEL reasons (the code a close of lines names; the words of a closed line's code); null: not read. */
+  cancelReasons?: readonly CancelReason[] | null
   /** Design cases: what a dialog holds typed. */
-  draft?: { date?: string; reason?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
+  draft?: { date?: string; reason?: string; reasonCode?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
 }
 
 export interface PaymentInput {
@@ -154,7 +156,7 @@ export interface OrderRecordActions {
   onComposerPick?: (styleId: string | null) => void
   onComposerToggle?: (colourwayId: string) => void
   onComposerAdd?: () => void
-  onCloseLines?: (lineIds: string[], reason: string) => void
+  onCloseLines?: (lineIds: string[], reason: string, reasonCode: string) => void
   onReopenLines?: (lineIds: string[], reason: string) => void
   onCancelOrder?: (reason: string, typed: string) => void
   onCopyAsQuote?: () => void

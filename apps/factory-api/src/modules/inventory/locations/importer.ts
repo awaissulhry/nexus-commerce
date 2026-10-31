@@ -9,6 +9,7 @@ import type { CommandTx } from '../../../core/command'
 // W2b (B-W2b-25): the Workshop column (load, check, write).
 import { checkWorkshops, workshopCodesOf, workshopForWrite } from '../../../platform/imports/importers/locations-workshop'
 import type { ImportAdapter, ImportScope } from '../../../platform/imports/registry'
+import { locationChanged } from './locations'
 
 /**
  * The locations import's adapter (factory-domain inventory/locations/importer.ts; platform/imports): finds a row's
@@ -79,7 +80,7 @@ export const locationsImportAdapter: ImportAdapter = Object.freeze({
       }
       const partyId = workshopCode === undefined ? null : await workshopForWrite(tx, workshopCode, site, String(row.key.code))
       const parentCode = text(values.parent)
-      await tx.location.create({
+      const made = await tx.location.create({
         data: {
           id,
           companyId: site.companyId,
@@ -93,12 +94,13 @@ export const locationsImportAdapter: ImportAdapter = Object.freeze({
           updatedAt: now,
           createdById: context.audience === 'office' ? context.actorId : null,
         },
-        select: { id: true },
+        select: { id: true, companyId: true, siteId: true, code: true, status: true },
       })
       audit({ action: 'inventory.importLocation', recordType: 'Location', recordId: id, companyId: site.companyId, siteId: site.id, after: markValues(locationsImporter, values) })
+      locationChanged(tools.emit, made, 'CREATED')
       return { recordId: id }
     }
-    const current = await tx.location.findUniqueOrThrow({ where: { id: row.recordId! }, select: { id: true, companyId: true, siteId: true } })
+    const current = await tx.location.findUniqueOrThrow({ where: { id: row.recordId! }, select: { id: true, companyId: true, siteId: true, code: true, status: true } })
     const parentCode = text(values.parent)
     await tx.location.update({
       where: { id: current.id },
@@ -119,6 +121,7 @@ export const locationsImportAdapter: ImportAdapter = Object.freeze({
       before: markValues(locationsImporter, row.before),
       after: markValues(locationsImporter, values),
     })
+    locationChanged(tools.emit, current, 'EDITED')
     return { recordId: current.id }
   },
 } satisfies ImportAdapter)

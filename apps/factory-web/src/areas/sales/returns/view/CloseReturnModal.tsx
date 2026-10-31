@@ -9,9 +9,10 @@ import { say, useWords } from './parts'
 
 /**
  * Close return (design sales.returns/pop:returns.close; row ⋯ and the record): the finish reason (required; SAL-360's own
- * list is a later row, so the chosen words are kept as the close reason), a note, Close (⌘↵). After the close the API's
- * warnings are said (lines to replace without the replacement order, unchanged goods without their return DDT). "Unused
- * reserved parts returned to stock" is Later.
+ * list is a later row, so the chosen words are kept as the close reason), a note, Close (⌘↵). B-W2b-16: what the close
+ * would leave behind is said BEFORE the click (the record's closeWarnings: lines to replace without the replacement order,
+ * unchanged goods without their return DDT, lines decided Repair without a repair order); after the close the API's count
+ * is said. "Unused reserved parts returned to stock" is Later.
  */
 export function CloseReturnModal({ model, actions }: { model: CloseModel; actions?: CloseActions }) {
   const t = useWords()
@@ -67,6 +68,20 @@ export function CloseReturnModal({ model, actions }: { model: CloseModel; action
         ) : (
           <>
             <p className="fw-q-hint">{t('close.body')}</p>
+            {model.pending === null ? (
+              <p className="fw-q-loading" role="status">
+                <Spinner size={12} /> {t('close.checking')}
+              </p>
+            ) : model.pending && model.pending.length > 0 ? (
+              <Banner tone="warning" title={t('close.pendingTitle', { count: model.pending.length })}>
+                <ul className="fw-q-lines">
+                  {model.pending.map((warning) => (
+                    <li key={warning.code}>{t(`close.warn.${warning.code}`, { lines: warning.seqs.join(', '), count: warning.seqs.length })}</li>
+                  ))}
+                </ul>
+                {t('close.pendingBody')}
+              </Banner>
+            ) : null}
             <Field label={t('close.reason')} required htmlFor={ids.reason}>
               <Listbox
                 id={ids.reason}

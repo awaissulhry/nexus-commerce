@@ -31,6 +31,9 @@ import {
   newRepairBody,
   newReturnBody,
   newReturnProblems,
+  addLinesBody,
+  addLinesProblems,
+  takenOf,
   outsideWindow,
   previewProblemWords,
   queryOf,
@@ -283,5 +286,20 @@ describe('every design case draws in both languages with no key left on screen',
     expect(render(listScreen as DesignScreen<unknown>, warehouse.model, 'en')).not.toMatch(/€\s?\d|\d\s?€/)
     const credit = recordScreen.cases.find((item) => item.id === 'rma-credit-no-grain')!
     expect(render(recordScreen as DesignScreen<unknown>, credit.model, 'en')).not.toMatch(/€\s?\d|\d\s?€/)
+  })
+})
+
+describe('B-W2b-16: Add lines on an open return', () => {
+  const rma = { ...RMA_AUTHORISED, lines: [{ ...RMA_AUTHORISED.lines[0]!, invoiceLineId: RETURNABLE[0]!.invoiceLineId }] }
+  it('marks the lines already on it, checks pieces and reasons, sends only the new lines', () => {
+    const taken = takenOf(rma)
+    expect(taken[RETURNABLE[0]!.invoiceLineId!]).toBe(rma.lines[0]!.seq)
+    const pants = RETURNABLE[1]!.invoiceLineId!
+    expect(addLinesProblems({}, RETURNABLE, taken).map((words) => words.key)).toEqual(['newReturn.problem.lines'])
+    expect(addLinesProblems({ [pants]: { quantity: '9', reasonCode: '', note: '' } }, RETURNABLE, taken).map((words) => words.key)).toEqual(['refusal.aboveSoldMax', 'newReturn.problem.reason'])
+    expect(addLinesProblems({ [pants]: { quantity: '2', reasonCode: 'WRONG_SIZE', note: ' Too tight ' } }, RETURNABLE, taken)).toEqual([])
+    // A line already on the return is never sent again, even when something was typed for it.
+    const body = addLinesBody({ [pants]: { quantity: '2', reasonCode: 'WRONG_SIZE', note: ' Too tight ' }, [RETURNABLE[0]!.invoiceLineId!]: { quantity: '1', reasonCode: 'DEFECT', note: '' } }, RETURNABLE, taken)
+    expect(body).toEqual([{ invoiceLineId: pants, quantity: 2, reasonCode: 'WRONG_SIZE', reasonNote: 'Too tight', batchNumber: null }])
   })
 })

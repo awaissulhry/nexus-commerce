@@ -349,7 +349,8 @@
     "col": {
       "customer": "Cliente",
       "code": "Codice",
-      "status": "Stato"
+      "status": "Stato",
+      "from": "Dal"
     },
     "bulk": {
       "remove_one": "Togli {count}",
@@ -372,7 +373,8 @@
     "addGo_one": "Dallo a {count} cliente",
     "addGo_other": "Dallo a {count} clienti",
     "held": {
-      "pick": "Scegli prima un cliente"
+      "pick": "Scegli prima un cliente",
+      "fromLater": "Da oggi o da un giorno precedente, non successivo"
     },
     "removeTitle_one": "Togli il listino a {count} cliente",
     "removeTitle_other": "Togli il listino a {count} clienti",
@@ -381,7 +383,12 @@
     "added_other": "Listino dato a {count} clienti.",
     "removed_one": "Listino tolto a {count} cliente.",
     "removed_other": "Listino tolto a {count} clienti.",
-    "refused": "Non modificato: un cliente di un'altra azienda, archiviato, in un'altra valuta, o che il tuo ruolo non può modificare."
+    "refused": "Non modificato: un cliente di un'altra azienda, archiviato, in un'altra valuta, o che il tuo ruolo non può modificare.",
+    "from": "Dal",
+    "fromHint": "Il giorno da cui i clienti hanno questo listino: oggi o un giorno precedente.",
+    "fromToday": "Oggi",
+    "fromAudit": "assegnato prima che se ne tenesse lo storico",
+    "refusedDay": "Non modificato: il listino di un cliente cambia al massimo una volta al giorno (lo storico tiene un listino per giorno). Riprova domani."
   },
   "versions": {
     "intro": "Ogni versione ha le sue date; i preventivi aperti tengono la versione con cui sono stati prezzati.",

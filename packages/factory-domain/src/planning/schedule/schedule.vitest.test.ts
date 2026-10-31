@@ -6,6 +6,7 @@ import { allocationProblems, mainPiecesOf, moveAllocation, type Allocation } fro
 import { scheduleWorkOrder, trayOrder, type ScheduleOperation } from './backward'
 import { dispatchOrder, dispatchState } from './dispatch'
 import { PLANNING_SCHEDULE_PERMISSIONS } from './permissions'
+import { PUBLISH_HOLDS, refusalCodeOf, refusalIssue, SCHEDULE_REFUSALS, ScheduleRefusal, SKIP_CODES } from './refusals'
 import { diffWords, laneOfSlot, planDiff, slotInputProblems, type DiffSlot } from './slots'
 import { after, before, endBy, minutesBetween, startFrom, whenWords, workingMinutesFor, type Span } from './time'
 
@@ -167,5 +168,26 @@ describe('declared', () => {
     // A production manager reads the board (planning.view) and changes nothing on it.
     expect(templateOf('production_manager')!.permissions).not.toContain('planning.schedule.manage')
     expect(EVENT_CATALOGUE.types()).toEqual(expect.arrayContaining(['planning.schedule_changed', 'planning.schedule_published']))
+  })
+})
+
+describe('stable codes for the board\'s refusals and held publishes (B-W2b-20)', () => {
+  it('a refusal is a 409 with its code in an issue `refusal/<CODE>`, after its other issues', () => {
+    const error = new ScheduleRefusal('OVERLOAD', 'Line 1 would be at 145%.', [{ path: 'over/2026-11-18', message: '1,450 of 1,000 min' }])
+    expect(error.code).toBe('conflict')
+    expect(error.refusal).toBe('OVERLOAD')
+    expect(error.issues).toEqual([{ path: 'over/2026-11-18', message: '1,450 of 1,000 min' }, { path: 'refusal/OVERLOAD', message: 'OVERLOAD' }])
+    expect(refusalCodeOf(error.issues)).toBe('OVERLOAD')
+    expect(refusalCodeOf([{ path: 'body/version', message: 'x' }])).toBeNull()
+    expect(refusalCodeOf([{ path: 'refusal/NOT_A_CODE', message: 'x' }])).toBeNull()
+    expect(refusalIssue('MOVED_BY', 'Moved by Marco')).toEqual({ path: 'refusal/MOVED_BY', message: 'Moved by Marco' })
+  })
+
+  it('codes are unique and cover what the web read from sentences (B-W2a-45 refusalOf)', () => {
+    for (const list of [SCHEDULE_REFUSALS, PUBLISH_HOLDS, SKIP_CODES]) expect(new Set(list).size).toBe(list.length)
+    for (const code of ['LANE_DOES_NOT', 'ALREADY_ON_BOARD', 'PART_THERE', 'NOT_OPEN', 'LANE_ARCHIVED', 'NO_WORKING_TIME', 'PART_LANE', 'OPERATION_DONE', 'NOTHING_TO_PLACE', 'NOTHING_CHANGED', 'MOVED_BY', 'OVERLOAD', 'PLAN_CHANGED']) {
+      expect(SCHEDULE_REFUSALS).toContain(code)
+    }
+    expect(PUBLISH_HOLDS).toEqual(['NOTHING_CHANGED', 'NOTHING_ON_DAYS', 'NO_PERMISSION', 'RANGE_NOT_VALID'])
   })
 })

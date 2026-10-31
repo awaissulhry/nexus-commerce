@@ -34,6 +34,10 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
     { order: 'PO-2026-00012', tanneryNumber: 'T-4471', area: '5.20', unit: 'M2', grade: 'A' },
     { order: 'PO-2026-00012', tanneryNumber: 'T-4472', area: '4.85', unit: 'M2', grade: 'B' },
   ],
+  'planning.itemParameters': [
+    { site: 'A1', item: 'LEA-100', colour: '*', method: 'ORDERS', source: 'BUY', supplier: 'FOR-001', safetyLeadTimeDays: '2' },
+    { site: 'A1', item: 'THR-40', colour: 'NER', method: 'REORDER_POINT', reorderPoint: '24', lotSize: '48', orderMultiple: '12', buyLeadTimeDays: '7' },
+  ],
 })
 
 /** The examples of one importer for one number format: `formatted` when they are written for it already. */

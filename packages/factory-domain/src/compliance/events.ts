@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
 import { CHANGE_KINDS, REVIEW_STATUSES } from './type-changes/rules'
+// B-W2b-23: a certificate's state.
+import { CERTIFICATE_STATUSES } from './certificates/rules'
 
 /**
  * The compliance module's events (plan A1 §3.4; QHS-103, QHS-105, PRD-283). apps/factory-api's
@@ -27,6 +29,10 @@ import { CHANGE_KINDS, REVIEW_STATUSES } from './type-changes/rules'
  * `compliance.type_change_found` (a released revision changes what a covering certificate's type examination saw: a
  * review opened, the revision's class label held) and `compliance.type_change_decided` (told, approved, refused, not
  * needed). Ids, numbers, days and kinds only; live for compliance.certificates.view.
+ *
+ * W2b (B-W2b-23), modules/compliance/certificates: `compliance.certificate_changed` once per certificate a person types in
+ * (a draft), draft edited, or moves (registered, suspended, reinstated, withdrawn). The search index follows it with the
+ * expiry and renewal events above; live for compliance.certificates.view.
  */
 const day = () => z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const labelTemplate = {
@@ -78,6 +84,19 @@ export const events = [
       previousStatus: z.enum(['VALID', 'SUSPENDED']),
     }),
     live: { permission: 'compliance.certificates.view', fields: ['certificateId', 'number'] },
+  }),
+  // B-W2b-23: what a person does to a certificate (the search index follows it).
+  defineEvent({
+    type: 'compliance.certificate_changed',
+    context: 'compliance',
+    description: "A certificate was typed in from the notified body's document (a draft), its draft was edited, or a person registered, suspended, reinstated or withdrew it.",
+    payload: z.strictObject({
+      certificateId: z.uuid(),
+      number: z.string(),
+      status: z.enum(CERTIFICATE_STATUSES),
+      change: z.enum(['CREATED', 'EDITED', 'ISSUED', 'SUSPENDED', 'REINSTATED', 'WITHDRAWN']),
+    }),
+    live: { permission: 'compliance.certificates.view', fields: ['certificateId', 'number', 'status', 'change'] },
   }),
   defineEvent({
     type: 'compliance.label_template_saved',

@@ -73,6 +73,8 @@ export function LinesTab({ order, model, actions }: { order: Order; model: Order
                   {line.closedShort && (
                     <span className="fw-so-closed">
                       <Tag tone="warning">{t('lines.closedShort', { count: line.closedShort.quantity })}</Tag>
+                      {/* B-W2b-16: the close's CANCEL reason code, in words (the code itself when the list is not read). */}
+                      {line.closedShort.reasonCode && <span className="fw-so-hint">{reasonWords(line.closedShort.reasonCode, model.cancelReasons ?? null, locale)}</span>}
                       {line.closedShort.reason && <span className="fw-so-hint">{line.closedShort.reason}</span>}
                     </span>
                   )}
@@ -290,4 +292,10 @@ export function RecordChain({ order, model }: { order: Order; model: OrderRecord
       </ol>
     </Card>
   )
+}
+
+/** B-W2b-16: a CANCEL reason code in the person's language (the code itself when the list was not read). */
+function reasonWords(code: string, reasons: readonly { code: string; labelIt: string; labelEn: string }[] | null, locale: string): string {
+  const found = reasons?.find((entry) => entry.code === code)
+  return found ? (locale === 'it' ? found.labelIt : found.labelEn) : code
 }

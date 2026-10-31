@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
 import { Banner, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Pill, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, Pill, Select, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
@@ -172,8 +172,11 @@ export function CloseLinesDialog({ order, model, actions }: { order: Order; mode
   const open = closableLines(order)
   const [chosen, setChosen] = useState<string[]>(model.draft?.lineIds ?? open.map((entry) => entry.line.id))
   const [reason, setReason] = useState(model.draft?.reason ?? '')
+  // B-W2b-16: why, as a code of the CANCEL list (the words stay beside it).
+  const [reasonCode, setReasonCode] = useState(model.draft?.reasonCode ?? '')
+  const locale = useLocale()
   const answer = model.closedLines
-  const problem = closeChoiceProblem(order, chosen, reason)
+  const problem = closeChoiceProblem(order, chosen, reason, reasonCode, model.cancelReasons ?? null)
   const held = model.busy ? t('held.busy') : problem ? t(problem.key) : null
   const stillMade = inWorkOrdersOf(order, chosen)
   const pieces = open.filter((entry) => chosen.includes(entry.line.id)).reduce((sum, entry) => sum + entry.left, 0)
@@ -188,7 +191,7 @@ export function CloseLinesDialog({ order, model, actions }: { order: Order; mode
     </div>
   ) : undefined
   return (
-    <Frame title={t('closeLines.title', { number: order.number })} held={held} go={() => actions?.onCloseLines?.(chosen.length === open.length ? [] : chosen, reason.trim())} goLabel={model.busy ? t('common.working') : t('closeLines.go', { count: chosen.length })} onClose={close(actions)} problem={<DialogProblem model={model} />} done={done}>
+    <Frame title={t('closeLines.title', { number: order.number })} held={held} go={() => actions?.onCloseLines?.(chosen.length === open.length ? [] : chosen, reason.trim(), reasonCode)} goLabel={model.busy ? t('common.working') : t('closeLines.go', { count: chosen.length })} onClose={close(actions)} problem={<DialogProblem model={model} />} done={done}>
       <p className="fw-so-hint">{t('closeLines.body')}</p>
       <fieldset className="fw-so-choices">
         <legend className="fw-so-legend">{t('closeLines.lines')}</legend>
@@ -211,6 +214,16 @@ export function CloseLinesDialog({ order, model, actions }: { order: Order; mode
       </fieldset>
       {chosen.length > 0 && <p className="fw-so-hint">{t('closeLines.pieces', { count: pieces })}</p>}
       {stillMade > 0 && <Banner tone="warning" title={t('closeLines.inWorkOrders', { count: stillMade })} />}
+      <Field label={t('closeLines.reasonCode')} hint={model.cancelReasons === null || model.cancelReasons === undefined ? t('closeLines.reasonCodeNone') : undefined} required>
+        <Select value={reasonCode} disabled={!model.cancelReasons || model.cancelReasons.length === 0} onChange={(event) => setReasonCode(event.target.value)} aria-label={t('closeLines.reasonCode')}>
+          <option value="">{t('closeLines.pickReasonCode')}</option>
+          {(model.cancelReasons ?? []).map((entry) => (
+            <option key={entry.code} value={entry.code}>
+              {locale === 'it' ? entry.labelIt : entry.labelEn}
+            </option>
+          ))}
+        </Select>
+      </Field>
       <Field label={t('closeLines.reason')} hint={t('closeLines.reasonHint')}>
         <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={1000} />
       </Field>
