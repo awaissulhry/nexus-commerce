@@ -225,6 +225,7 @@
     "bundles": "Bundles",
     "operations": "Operations & WIP",
     "quality": "Quality",
+    "labour": "Labour & cost",
     "activity": "Activity",
     "problems_one": "{count} check holds the release",
     "problems_other": "{count} checks hold the release"

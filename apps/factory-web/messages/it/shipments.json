@@ -26,7 +26,8 @@
     "DELIVERED": "Consegnate",
     "RETURNED": "Rese",
     "CANCELLED": "Annullate",
-    "all": "Tutte le spedizioni"
+    "all": "Tutte le spedizioni",
+    "evidence": "Prove UE da archiviare"
   },
   "tile": {
     "toPack": "Da imballare",
@@ -113,7 +114,9 @@
     "weight": "Peso kg",
     "ddt": "DDT",
     "tracking": "Tracking",
-    "shipped": "Partita il"
+    "shipped": "Partita il",
+    "freight": "Trasporto addebitato",
+    "currency": "Valuta"
   },
   "col": {
     "number": "Spedizione",
@@ -126,7 +129,8 @@
     "ddt": "DDT",
     "tracking": "Tracking",
     "when": "Partenza entro",
-    "more": "Altro"
+    "more": "Altro",
+    "freight": "Trasporto addebitato"
   },
   "list": {
     "updated": "Aggiornato alle {time}",
@@ -173,11 +177,18 @@
     "empty": {
       "title": "Ancora nessuna spedizione",
       "body": "Una spedizione si pianifica dai capi che la qualità ha rilasciato per un ordine."
+    },
+    "freightOpen": "Da decidere",
+    "evidence": {
+      "AWAITED": "Prova UE attesa",
+      "PARTIAL": "Prova UE parziale"
     }
   },
   "bulk": {
     "export_one": "Esporta {count} (CSV)",
-    "export_other": "Esporta {count} (CSV)"
+    "export_other": "Esporta {count} (CSV)",
+    "printDdts_one": "Stampa {count} DDT",
+    "printDdts_other": "Stampa {count} DDT"
   },
   "cutoff": {
     "label": "Orari limite dei corrieri oggi",
@@ -271,7 +282,26 @@
     "parcelFull": "Contiene capi: spostali prima",
     "nothingToAttach": "Tutto ciò che è in archivio è allegato",
     "noRecipients": "Il cliente non ha un contatto ordini o qualità con un'e-mail",
-    "cancelledShipment": "La spedizione è annullata"
+    "cancelledShipment": "La spedizione è annullata",
+    "noFreight": "Serve il permesso di modificare il trasporto addebitato",
+    "noPrice": "Serve la visibilità dei prezzi: l'importo si vede solo a chi vede i prezzi",
+    "freightCancelled": "La spedizione è annullata: il trasporto non cambia più",
+    "noVoid": "Serve il permesso di annullare le etichette",
+    "voidLeft": "La merce è partita: un'etichetta si annulla solo prima della partenza",
+    "voidCollected_one": "Il corriere ha già il collo etichettato: chiedi al corriere di fermarlo o renderlo",
+    "voidCollected_other": "Il corriere ha già tutti i colli etichettati: chiedi al corriere di fermarli o renderli",
+    "noPrintDdt": "Serve il permesso di imballare (stampa i documenti delle spedizioni)",
+    "noDdtSelected": "Nessuna delle spedizioni scelte ha un DDT valido",
+    "noEvidence": "Serve il permesso di archiviare le prove del trasporto",
+    "noUpload": "Serve il permesso di caricare file",
+    "evidenceNotLeft": "Si decide e si archivia dopo la partenza della merce",
+    "evidenceNotNeeded": "Questa spedizione non richiede prove del trasporto",
+    "evidenceComplete": "Le prove sono complete",
+    "evidenceShort": "Servono due documenti, uno dei quali di trasporto",
+    "evidenceOpen": "Le prove non sono complete",
+    "evidenceReopenFirst": "Riapri prima le prove",
+    "evidencePapers_one": "C'è {count} documento in archivio: una spedizione con documenti resta da provare",
+    "evidencePapers_other": "Ci sono {count} documenti in archivio: una spedizione con documenti resta da provare"
   },
   "step": {
     "pack": "Segna come imballata",
@@ -286,7 +316,8 @@
     "unpack": "Disfa l'imballo",
     "cancel": "Annulla spedizione",
     "openOrder": "Apri ordine {number}",
-    "copyNumber": "Copia il numero"
+    "copyNumber": "Copia il numero",
+    "pack": "Documenti per l'autista (nuova scheda)"
   },
   "tab": {
     "lines": "Righe e colli",
@@ -294,7 +325,9 @@
     "carrier": "Corriere ed etichetta",
     "tracking": "Tracking e consegna",
     "activity": "Attività",
-    "problem": "C'è qualcosa da fare qui"
+    "problem": "C'è qualcosa da fare qui",
+    "export": "Estero",
+    "invoice": "Fattura"
   },
   "record": {
     "back": "Spedizioni",
@@ -466,8 +499,8 @@
       "vat": "P. IVA {vat}",
       "net": "netto {value} kg",
       "carrier": "Vettore: {name}",
-      "goods_one": "{lines} riga · {pieces} capi",
-      "goods_other": "{lines} righe · {pieces} capi",
+      "goods_one": "{lines} riga · capi: {pieces}",
+      "goods_other": "{lines} righe · capi: {pieces}",
       "lines_one": "{count} riga di merce",
       "lines_other": "{count} righe di merce",
       "batch": "lotto {batch}",
@@ -583,7 +616,8 @@
     "pdf": "PDF",
     "downloadOf": "Scarica l'etichetta del collo {seq}",
     "labelsHidden": "Lo stato di stampa è visibile a chi imballa.",
-    "noPrinter": "Questo stabilimento non ha una stampante di etichette: le etichette si stampano dal loro PDF."
+    "noPrinter": "Questo stabilimento non ha una stampante di etichette: le etichette si stampano dal loro PDF.",
+    "labelsMore": "Altro per le etichette"
   },
   "tracking": {
     "title": "Tracking",
@@ -637,7 +671,16 @@
     },
     "check": "Controlla di nuovo",
     "go": "Emetti DDT {number}",
-    "goShip": "Emetti DDT {number} e consegna"
+    "goShip": "Emetti DDT {number} e consegna",
+    "reasonHint": {
+      "SALE": "Merce venduta al cliente (la causale abituale).",
+      "RETURN_FROM_WORK": "Merce del cliente che torna dopo la nostra lavorazione.",
+      "ON_APPROVAL": "Merce che il cliente può tenere o rendere (conto visione).",
+      "REPAIR": "Merce che va o torna da una riparazione.",
+      "SAMPLE": "Campioni per il cliente, non venduti.",
+      "OTHER": "Scrivi la causale qui sotto: si stampa come scritta."
+    },
+    "otherReasons": "Il conto lavorazione e i resi a un fornitore viaggiano con il DDT del loro documento (Conto lavoro, il reclamo al fornitore), mai su una spedizione a un cliente."
   },
   "annul": {
     "title": "Annulla DDT {number}",
@@ -753,7 +796,16 @@
     "delivery": "Consegna salvata.",
     "labelsPrinted": "Etichette inviate alla stampante.",
     "shipped": "Consegnata al vettore: la merce è partita.",
-    "cancelled": "Spedizione annullata."
+    "cancelled": "Spedizione annullata.",
+    "packingListVersion": "Packing list {number} creata (versione {version}): la stampa la postazione di imballo.",
+    "packingListSame": "Nulla è cambiato dalla versione {version}: la packing list {number} è lo stesso file.",
+    "freightRule": "Il trasporto torna alla regola del sito.",
+    "freightTyped": "Trasporto addebitato salvato.",
+    "paperFiled": "Documento archiviato con la spedizione.",
+    "evidenceComplete": "Prove del trasporto segnate come complete.",
+    "evidenceReopened": "Prove del trasporto riaperte.",
+    "evidenceNeeded": "La spedizione ora richiede le prove del trasporto.",
+    "evidenceNotNeeded": "La spedizione non richiede prove del trasporto."
   },
   "problem": {
     "read": {
@@ -789,5 +841,338 @@
     "empty_other": "i colli {parcels} riempiti o tolti (sono vuoti)",
     "serials_one": "{count} matricola letta",
     "serials_other": "{count} matricole lette"
+  },
+  "void": {
+    "action_one": "Annulla {count} etichetta…",
+    "action_other": "Annulla {count} etichette…",
+    "title": "Annulla le etichette",
+    "parcels": "Etichette da annullare",
+    "all_one": "Il corriere annulla l'etichetta dell'unico collo etichettato della spedizione.",
+    "all_other": "Annullare un collo annulla tutti i {count} colli della spedizione: il corriere annulla ogni etichetta.",
+    "fee": "Il costo dell'etichetta torna solo entro la finestra del corriere: decide il corriere, non noi.",
+    "after": "I colli si possono modificare di nuovo; compra nuove etichette prima della partenza.",
+    "kept_one": "Il corriere ha già il collo {parcels}: la sua etichetta resta (chiedi al corriere di fermarlo o renderlo).",
+    "kept_other": "Il corriere ha già i colli {parcels}: le loro etichette restano (chiedi al corriere di fermarli o renderli).",
+    "reason": "Motivo",
+    "reasonHint": "Peso sbagliato, servizio sbagliato, nuovo indirizzo… resta nella storia della spedizione.",
+    "go_one": "Annulla {count} etichetta",
+    "go_other": "Annulla {count} etichette",
+    "held": {
+      "reason": "Scrivi il motivo (almeno 3 lettere)"
+    },
+    "busy": "Chiedo al corriere…",
+    "done_one": "{count} etichetta annullata.",
+    "done_other": "{count} etichette annullate.",
+    "partial": "Alcune etichette restano: vedi ogni collo.",
+    "next": "Ricompra le etichette quando i colli sono giusti.",
+    "outcome": {
+      "CANCELLED": "Collo {seq}: annullata dal corriere.",
+      "QUEUED": "Collo {seq}: il corriere conferma l'annullamento più tardi.",
+      "NOT_SENT": "Collo {seq}: mai inviata al corriere, tolta qui.",
+      "kept": "Collo {seq}: l'etichetta resta."
+    }
+  },
+  "charge": {
+    "cardTitle": "Trasporto addebitato",
+    "title": "Trasporto addebitato al cliente",
+    "state": {
+      "byHand": "Scritto a mano",
+      "byRule": "Da regola del sito",
+      "open": "Non ancora deciso"
+    },
+    "now": "Addebitato ora",
+    "notDecided": "Non ancora deciso",
+    "hidden": "Visibile a chi vede i prezzi",
+    "hiddenNote": "Il trasporto è un prezzo: l'importo si vede solo a chi vede i prezzi.",
+    "rule": "La regola del sito dà",
+    "ruleNone": "Nessun importo: scrivilo a mano",
+    "why": "Perché",
+    "currency": "Valuta",
+    "whenLeaves": "La regola del sito lo fissa alla partenza della merce; scrivilo ora per addebitare un altro importo.",
+    "beforeLeft": "Scritto a mano resta com'è; la fattura lo legge quando viene emessa.",
+    "afterLeft": "Cambia ancora finché la spedizione non è annullata; la fattura lo legge quando viene emessa.",
+    "change": "Modifica trasporto",
+    "amount": "Importo ({currency})",
+    "amountHint": "0 non addebita il trasporto. Nella valuta dell'ordine.",
+    "backToRule": "Torna alla regola del sito (togli l'importo scritto)",
+    "invoiceNote": "La fattura lo addebita come riga di trasporto (Amministrazione).",
+    "go": "Addebita {amount}",
+    "goRule": "Torna alla regola",
+    "held": {
+      "amount": "Scrivi un importo, es. 12,50",
+      "none": "Scrivi un importo"
+    },
+    "basis": {
+      "NO_SETTINGS": "Il sito non ha impostazioni di spedizione, quindi nessuna regola: scrivi il trasporto a mano.",
+      "CUSTOMER_COLLECTS": "Il cliente ritira la merce: nessun trasporto addebitato.",
+      "BUYER_INCOTERM": "Le condizioni del cliente lasciano il trasporto al cliente: nessun trasporto addebitato.",
+      "NO_PRICE": "Nulla nell'ordine ha un prezzo (un ordine di sostituzione): nessun trasporto addebitato.",
+      "OTHER_CURRENCY": "L'ordine è in un'altra valuta rispetto alla regola del sito: scrivi il trasporto a mano.",
+      "RULE_NONE": "Il sito non addebita il trasporto di base.",
+      "FREE_FROM": "L'ordine raggiunge il valore di porto franco del sito: il trasporto è gratuito.",
+      "PER_SHIPMENT": "La regola del sito addebita un importo per spedizione.",
+      "PER_PARCEL_one": "La regola del sito addebita un importo per collo ({parcels} collo).",
+      "PER_PARCEL_other": "La regola del sito addebita un importo per ciascuno dei {parcels} colli.",
+      "NO_PARCELS": "La regola del sito addebita per collo e la spedizione non ha ancora colli."
+    }
+  },
+  "invoice": {
+    "title": "Fattura",
+    "fromDdt": "L'amministrazione fattura questa merce dal DDT {number} (Amministrazione › Fatture, Spedito non fatturato): numero, stato SDI e totale sono sulla fattura.",
+    "noDdt": "Ancora nessun DDT: la fattura segue il DDT.",
+    "noDdtNeeded": "L'amministrazione fattura questa merce dalla spedizione (Amministrazione › Fatture).",
+    "freightLine": "Il trasporto addebitato qui sopra è la riga di trasporto della fattura.",
+    "open": "Apri Amministrazione › Fatture"
+  },
+  "backorder": {
+    "title": "L'ordine su questa spedizione",
+    "partialTag": "Spedizione parziale",
+    "completeTag": "Completa l'ordine",
+    "complete": "Questa spedizione completa l'ordine: nulla resta in arretrato.",
+    "completeShort_one": "Questa spedizione completa l'ordine; {closed} capo è stato chiuso in difetto e non parte mai.",
+    "completeShort_other": "Questa spedizione completa l'ordine; {closed} capi sono stati chiusi in difetto e non partono mai.",
+    "partialBoth_one": "{count} capo dell'ordine resta in arretrato — pronti per la prossima spedizione: {ready}; ancora da produrre o rilasciare: {making}.",
+    "partialBoth_other": "{count} capi dell'ordine restano in arretrato — pronti per la prossima spedizione: {ready}; ancora da produrre o rilasciare: {making}.",
+    "partialReady_one": "{count} capo dell'ordine resta in arretrato, rilasciato e pronto per la prossima spedizione.",
+    "partialReady_other": "{count} capi dell'ordine restano in arretrato — pronti per la prossima spedizione: {ready}.",
+    "partialMaking_one": "{count} capo dell'ordine resta in arretrato, ancora da produrre o rilasciare.",
+    "partialMaking_other": "{count} capi dell'ordine restano in arretrato, ancora da produrre o rilasciare.",
+    "promise": "promessa il {date}",
+    "line": "Riga {seq}",
+    "lineLabel": "Riga d'ordine {seq} {style} per taglia",
+    "closed": "Chiusa in difetto",
+    "closedWhy": "Chiusa in difetto: {reason}",
+    "col": {
+      "garments": "Capi",
+      "total": "Totale"
+    },
+    "measure": {
+      "ordered": "Ordinati",
+      "released": "Rilasciati",
+      "shippedBefore": "Già spediti",
+      "otherOpen": "Su altre spedizioni",
+      "thisShipment": "Questa spedizione",
+      "left": "Ancora da spedire"
+    },
+    "others": "Altre spedizioni dell'ordine:"
+  },
+  "printDdts": {
+    "title_one": "Stampa {count} DDT",
+    "title_other": "Stampa {count} DDT",
+    "subtitle_one": "{count} spedizione scelta",
+    "subtitle_other": "{count} spedizioni scelte",
+    "what": "Ogni DDT valido va alla stampante documenti del suo sito (Corrieri e spedizioni), una stampa ciascuno:",
+    "printer": "Un sito senza stampante documenti è indicato per spedizione; il PDF del suo DDT si scarica dalla spedizione.",
+    "skipped_one": "{numbers} non ha ancora un DDT valido: saltata.",
+    "skipped_other": "{numbers} non hanno ancora un DDT valido: saltate.",
+    "go_one": "Stampa {count} DDT",
+    "go_other": "Stampa {count} DDT",
+    "busy": "Invio alle stampanti…",
+    "done_one": "{count} DDT inviato alla sua stampante.",
+    "done_other": "{count} DDT inviati alle loro stampanti.",
+    "ddt": "DDT {number}",
+    "state": {
+      "queued": "In coda",
+      "refused": "Non stampato",
+      "skipped": "Saltato"
+    },
+    "why": {
+      "queued": "la stampa è in coda.",
+      "noPrinter": "il suo sito non ha una stampante documenti: impostala in Corrieri e spedizioni.",
+      "state": "il PDF del DDT non è ancora archiviato, o la stampante ora non accetta stampe.",
+      "forbidden": "il tuo ruolo non stampa in quel sito.",
+      "notFound": "non esiste più.",
+      "internal": "qualcosa è andato storto: riprova.",
+      "cancelled": "la spedizione è annullata.",
+      "noDdt": "ancora nessun DDT valido."
+    }
+  },
+  "other": {
+    "title": "Altri documenti",
+    "printAll": "Stampa tutto",
+    "name": "Packing list {number}",
+    "version": "versione {version}",
+    "contents_one": "{count} capo, colli: {parcels}",
+    "contents_other": "{count} capi, colli: {parcels}",
+    "current": "Attuale",
+    "older": "Precedente",
+    "download": "Scarica la packing list {number}",
+    "none": "Ancora nessuna packing list: creala dai colli (Righe e colli).",
+    "noneCancelled": "Nessuna packing list.",
+    "note": "Una packing list si rifà quando i colli cambiano; ogni versione tiene il suo numero. Stampa tutto apre i documenti per l'autista in una nuova scheda."
+  },
+  "pack": {
+    "title": "Documenti per l'autista · {number}",
+    "back": "‹ Spedizione {number}",
+    "meta": "{company} · letto {at}",
+    "how": "Stampa invia questo foglio e ogni documento spuntato in una volta, ogni pagina su un foglio. Non viene creato un unico file PDF del pacco: il PDF di ogni documento è sulla spedizione.",
+    "print_one": "Stampa il foglio e {count} documento",
+    "print_other": "Stampa il foglio e {count} documenti",
+    "held": {
+      "reading": "Lettura dei documenti",
+      "files": "I documenti sono ancora in lettura"
+    },
+    "reading": "Lettura della spedizione…",
+    "readingDocuments": "Lettura dei documenti…",
+    "noAccess": "Il tuo ruolo non vede le spedizioni (shipping.view).",
+    "noFiles": "Il tuo ruolo non legge i file: si stampa solo il foglio.",
+    "cancelled": "La spedizione è annullata: nulla parte con questi documenti.",
+    "sheet": "Il foglio per l'autista",
+    "sheetTitle": "Spedizione {number}",
+    "field": {
+      "sender": "Mittente",
+      "recipient": "Destinatario",
+      "destination": "Consegna a",
+      "carrier": "Corriere",
+      "ddt": "DDT",
+      "start": "Inizio trasporto",
+      "parcels": "Colli",
+      "order": "Ordine"
+    },
+    "ddtOf": "{number} del {date}",
+    "noDdt": "Non ancora emesso: la merce non parte senza",
+    "ddtNotNeeded": "Non serve",
+    "notWeighed": "non tutti pesati",
+    "parcelsLabel": "I colli con i loro numeri di tracking",
+    "inThePack": "Nel pacco documenti",
+    "missing": {
+      "ddt": "Non ancora emesso.",
+      "ddtPdf": "Il suo PDF non è ancora archiviato: ristampalo dalla spedizione.",
+      "packingList": "Ancora nessuna packing list: creala dai colli.",
+      "travel": "Non in archivio: la merce non parte senza.",
+      "noFiles": "Si stampa con il permesso di leggere i file."
+    },
+    "fileFailed": "Non si è potuto leggere: apri la spedizione e scaricalo.",
+    "sign": {
+      "driver": "Autista (nome e firma)",
+      "collected": "Ritirato il (data e ora)",
+      "warehouse": "Consegnato da"
+    },
+    "drawing": "Disegno le pagine…",
+    "drawFailed": "Questo PDF non si è potuto disegnare: stampalo dalla spedizione.",
+    "page": "{document}, pagina {page} di {pages}"
+  },
+  "evidence": {
+    "title": "Prove del trasporto intra-UE",
+    "status": {
+      "NOT_NEEDED": "Non serve",
+      "AWAITED": "Attesa",
+      "PARTIAL": "Parziale",
+      "COMPLETE": "Completa"
+    },
+    "need": {
+      "sale": "Una cessione non imponibile verso un altro Stato UE ({country}): conserva la prova che la merce vi è arrivata (art. 41 DL 331/1993).",
+      "byOffice": "L'ufficio ha indicato che questa spedizione richiede la prova dell'arrivo della merce in {country}.",
+      "italy": "Non serve: consegnata in Italia.",
+      "none": "Non serve: non è una cessione non imponibile verso un altro Stato UE.",
+      "whenLeaves": "Una cessione non imponibile verso {country}: la prova è attesa dalla partenza della merce.",
+      "later": "Si decide alla partenza della merce: serve solo per una cessione non imponibile verso un altro Stato UE.",
+      "title": {
+        "needed": "Questa spedizione richiede le prove",
+        "notNeeded": "Questa spedizione non richiede prove"
+      },
+      "what": {
+        "needed": "La spedizione resta in attesa finché i documenti sono in archivio e una persona li segna come completi.",
+        "notNeeded": "La spedizione non attende più documenti di trasporto. Usalo solo se la vendita non è una cessione non imponibile verso un altro Stato UE."
+      },
+      "hint": {
+        "needed": "Es. l'ordine è diventato non imponibile dopo la partenza; resta nella storia della spedizione.",
+        "notNeeded": "Es. la merce è rimasta in Italia; resta nella storia della spedizione."
+      },
+      "go": {
+        "needed": "Richiede le prove",
+        "notNeeded": "Non le richiede"
+      }
+    },
+    "missing": {
+      "none": "Ancora nulla in archivio: due documenti di parti indipendenti tra loro, uno dei quali di trasporto.",
+      "transport_one": "{count} documento in archivio, non di trasporto: aggiungi un CMR firmato, la fattura del corriere o la sua prova di consegna.",
+      "transport_other": "{count} documenti in archivio, nessuno di trasporto: aggiungi un CMR firmato, la fattura del corriere o la sua prova di consegna.",
+      "second_one": "{count} documento in archivio: ne serve un secondo di un'altra parte indipendente.",
+      "second_other": "{count} documenti in archivio: ne serve un altro di un'altra parte indipendente.",
+      "check": "I documenti in archivio possono bastare: una persona li controlla e segna le prove come complete."
+    },
+    "kind": {
+      "CMR": "CMR firmato",
+      "CARRIER_INVOICE": "Fattura del corriere",
+      "POD": "Prova di consegna",
+      "OTHER": "Altro documento"
+    },
+    "kindHint": {
+      "CMR": "La lettera di vettura firmata dal destinatario alla consegna.",
+      "CARRIER_INVOICE": "La fattura del corriere per questo trasporto.",
+      "POD": "La prova di consegna del corriere (firma, ora, luogo).",
+      "OTHER": "Un documento di assicurazione, banca o autorità su questo trasporto."
+    },
+    "papers": {
+      "label": "Documenti in archivio",
+      "none": {
+        "title": "Nessun documento in archivio",
+        "body": "Archivia la prova di consegna del corriere, il CMR firmato o la fattura del corriere."
+      },
+      "filed": "archiviato {when}",
+      "notAvailable": "non disponibile",
+      "download": "Scarica {name}"
+    },
+    "completeSince": "Completa dal {date}.",
+    "note": "Nota",
+    "law": "Art. 45-bis Reg. (UE) 282/2011: due documenti non contraddittori di parti indipendenti tra loro, da noi e dall'acquirente — due documenti di trasporto (CMR firmato, fattura del corriere, prova di consegna), o uno con un documento di assicurazione, banca o autorità. Conservati 10 anni.",
+    "more": "Altro per le prove",
+    "action": {
+      "file": "Archivia un documento",
+      "complete": "Segna come completa",
+      "reopen": "Riapri…",
+      "needed": "Richiede le prove…",
+      "notNeeded": "Non richiede prove…"
+    },
+    "file": {
+      "title": "Archivia un documento di trasporto",
+      "kind": "Tipo di documento",
+      "hint": "PDF o una foto (JPEG, PNG), fino a 25 MB.",
+      "ready": "Pronto da archiviare · {size}",
+      "another": "Scegline un altro",
+      "held": "Scegli il file",
+      "go": "Archivia il documento",
+      "kept": "Conservato 10 anni con la spedizione.",
+      "busy": "Invio del file…",
+      "empty": "Il file è vuoto.",
+      "size": "Più grande di 25 MB.",
+      "type": "Non è un PDF né una foto."
+    },
+    "complete": {
+      "title": "Segna le prove come complete",
+      "what_one": "{count} documento in archivio:",
+      "what_other": "{count} documenti in archivio:",
+      "check": "Controlla che i documenti vengano da parti indipendenti tra loro, da noi e dall'acquirente, e che non si contraddicano.",
+      "note": "Nota (cosa c'è in archivio)",
+      "noteHint": "Facoltativa; resta con le prove.",
+      "go": "Segna come completa"
+    },
+    "reopen": {
+      "title": "Riapri le prove",
+      "what": "Un documento si è rivelato sbagliato: le prove tornano parziali (o attese senza documenti).",
+      "go": "Riapri"
+    },
+    "reason": {
+      "label": "Motivo",
+      "held": "Scrivi il motivo (almeno 3 lettere)"
+    }
+  },
+  "export": {
+    "title": "Documenti export",
+    "destination": "Destinazione",
+    "shipTo": "Spedire a",
+    "class": {
+      "italy": "Italia",
+      "eu": "Un altro Stato UE ({country})",
+      "outside": "Fuori dall'UE ({country})",
+      "unknown": "Non nota"
+    },
+    "what": {
+      "italy": "Non serve: consegnata in Italia.",
+      "eu": "Dentro l'UE non servono documenti doganali; una cessione non imponibile conserva le sue prove del trasporto (sopra).",
+      "outside": "La merce che esce dall'UE richiede i documenti di esportazione e la prova dell'uscita (art. 8 DPR 633/72).",
+      "unknown": "L'indirizzo di consegna non ha un paese."
+    }
   }
 }

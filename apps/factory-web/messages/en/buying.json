@@ -742,7 +742,6 @@
       "receive": "Receive goods"
     },
     "cancelHeld": {
-      "contract": "The supplier confirmed: it is a contract now, not cancelled here.",
       "received": "Goods were received: the order is closed, never cancelled.",
       "proposed": "Accept or refuse the supplier’s changes first.",
       "cancelled": "Cancelled already."

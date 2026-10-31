@@ -22,3 +22,8 @@ export type ReleaseChecklist = z.infer<typeof releaseCheckSchema>['checklist']
 
 export const releaseCheck = async (api: ApiClient, lotId: string, signal?: AbortSignal): Promise<ReleaseChecklist> =>
   (await api.get(`/quality/lots/${encodeURIComponent(lotId)}/release-check`, { schema: releaseCheckSchema, signal })).checklist
+
+/** B-W2a-64 (Release N lots): the checklist with the lot's state and version (the release is sent at the version read). */
+export type ReleaseCheckOf = z.infer<typeof releaseCheckSchema>
+export const releaseCheckOf = (api: ApiClient, lotId: string, signal?: AbortSignal): Promise<ReleaseCheckOf> =>
+  api.get(`/quality/lots/${encodeURIComponent(lotId)}/release-check`, { schema: releaseCheckSchema, signal })

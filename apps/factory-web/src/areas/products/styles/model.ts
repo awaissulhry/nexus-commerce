@@ -46,6 +46,8 @@ export interface StyleAbilities {
   importsApply: boolean
   /** W2a: the base price list's prices beside the styles (pricelists.view; the figures still need their grain). */
   prices: boolean
+  /** W2a: make a task on the style for Compliance (Changes that may need the notified body). */
+  tellCompliance: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): StyleAbilities {
@@ -70,6 +72,8 @@ export function abilitiesOf(permissions: readonly string[]): StyleAbilities {
     imports: has('imports.run') && has('files.upload'),
     importsApply: has('imports.apply'),
     prices: has('pricelists.view'),
+    // W2a (B-W2a-66): "Tell Compliance" makes a task on the style (tasks.manage, and threads.post on a record).
+    tellCompliance: has('tasks.manage') && has('threads.post'),
   }
 }
 

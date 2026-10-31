@@ -35,6 +35,8 @@ import { CertificateFields, CheckGarmentDialog } from '../../view/dialogs'
 import { CertMessages, dateLocale, LeftTag, ShortcutsDialog, StatusPill, useDay, useProblemWords } from '../../view/parts'
 import { certificateHref } from '../../view/CertificatesListView'
 import { AddCoverageDialog, EndCoverageDialog, RegisterDialog, StatusDialog, useRegisterLines } from './dialogs'
+import type { RenewalsActions } from '../../renewals/use-renewals'
+import { RenewalsTab } from '../../renewals/view/RenewalsTab'
 
 export interface CertificateRecordActions {
   onDialog?: (dialog: RecordDialog | null) => void
@@ -71,6 +73,8 @@ export interface CertificateRecordActions {
   onCheckClearStyle?: () => void
   onCheckPatch?: (patch: Partial<Pick<CheckModel, 'colourwayId' | 'size' | 'date'>>) => void
   onCheckRun?: () => void
+  /** W2a (B-W2a-66): the Renewals tab. */
+  renewals?: RenewalsActions
 }
 
 /**
@@ -118,6 +122,8 @@ function Ready({ certificate, model, actions, panels, back }: { certificate: Cer
   const manageHeld = can.manage ? null : t('held.manage')
   const tabs = [
     { id: 'coverage', label: t('tab.coverage'), count: certificate.coverage.filter((entry) => entry.status === 'ACTIVE').length },
+    // W2a: the changes to the approved type still waiting (null while unread: nothing drawn).
+    { id: 'renewals', label: t('tab.renewals'), count: model.renewals?.reviews.value ? model.renewals.reviews.value.filter((review) => review.status === 'OPEN' || review.status === 'NOTIFIED').length : null },
     { id: 'body', label: t('tab.body') },
     { id: 'files', label: t('tab.files'), count: model.files?.value ? model.files.value.filter((file) => file.status === 'AVAILABLE').length : null },
     { id: 'activity', label: t('tab.activity') },
@@ -162,6 +168,7 @@ function Ready({ certificate, model, actions, panels, back }: { certificate: Cer
     ...(certificate.nextStatuses.includes('WITHDRAWN') ? [{ id: 'withdraw', label: t('action.withdraw'), tone: 'danger' as const, onSelect: () => actions?.onDialog?.({ kind: 'status', move: 'withdraw' }), ...held(can.manage) }] : []),
     ...(certificate.status === 'SUSPENDED' ? [{ id: 'reinstate', label: t('action.reinstate'), onSelect: () => actions?.onDialog?.({ kind: 'status', move: 'reinstate' }), ...held(can.manage) }] : []),
     ...(certificate.status !== 'DRAFT' ? [{ id: 'check', label: t('check.open'), onSelect: () => actions?.onDialog?.({ kind: 'check' }) }] : []),
+    ...(certificate.status === 'VALID' || certificate.status === 'SUSPENDED' ? [{ id: 'renew', label: t('row.renew'), href: certificateHref(model.prefix, certificate.id, 'tab=renewals&act=renew'), ...held(can.manage) }] : []),
     { id: 'files', label: t('action.files'), href: certificateHref(model.prefix, certificate.id, 'tab=files') },
     { id: 'copy', label: t('action.copyNumber'), onSelect: () => actions?.onCopy?.(certificate.number) },
     { id: 'sep', separator: true },
@@ -196,6 +203,8 @@ function Ready({ certificate, model, actions, panels, back }: { certificate: Cer
     switch (model.tab as RecordTab) {
       case 'coverage':
         return <CoverageTab certificate={certificate} model={model} actions={actions} />
+      case 'renewals':
+        return model.renewals ? <RenewalsTab model={model.renewals} can={can} prefix={model.prefix} actions={actions?.renewals} /> : null
       case 'body':
         return <BodyTab certificate={certificate} model={model} />
       case 'files':

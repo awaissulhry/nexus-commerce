@@ -7,7 +7,8 @@
     "held": {
       "noAdjust": "Your role may not adjust stock.",
       "pickOne": "Select one row (or press a on a row): Adjust works on one stock row at a time.",
-      "severalHides": "This row holds several hides: adjust one hide (Rows ▾ Leather, or the Hides page)."
+      "severalHides": "This row holds several hides: adjust one hide (Rows ▾ Leather, or the Hides page).",
+      "pastDate": "Stock as of a past date cannot be changed."
     },
     "importOpening": "Import opening stock",
     "exportView": "Export this view (CSV)",
@@ -24,7 +25,8 @@
     "tile": {
       "quarantine": "Lots in quarantine",
       "crvi": "Lots waiting for the Cr VI result",
-      "blocked": "Lots blocked or rejected"
+      "blocked": "Lots blocked or rejected",
+      "reserved": "Reserved"
     },
     "removeChip": "Remove the filter “{chip}”",
     "tableLabel": "Stock",
@@ -38,7 +40,8 @@
       "onHand": "On hand",
       "held": "On hold",
       "available": "Available",
-      "actions": "Actions"
+      "actions": "Actions",
+      "reserved": "Reserved"
     },
     "noLot": "No lot",
     "noQuality": "No quality step",
@@ -74,7 +77,9 @@
       "quarantine_other": "{count} lots are in quarantine and wait for quality’s release.",
       "truncated": "Too many rows for one answer: pick a site or a view to see them all.",
       "unvalued_one": "{count} move is not valued yet: the values here leave it out.",
-      "unvalued_other": "{count} moves are not valued yet: the values here leave them out."
+      "unvalued_other": "{count} moves are not valued yet: the values here leave them out.",
+      "overReserved_one": "{count} material has more reserved than there is: release or move a reservation.",
+      "overReserved_other": "{count} materials have more reserved than there is: release or move a reservation."
     },
     "csv": {
       "material": "Material",
@@ -92,7 +97,39 @@
       "available": "Available",
       "unitCost": "Unit cost",
       "value": "Value",
-      "currency": "Currency"
+      "currency": "Currency",
+      "reserved": "Reserved"
+    },
+    "tileRows_one": "{count} row",
+    "tileRows_other": "{count} rows",
+    "reservations_one": "{count} reservation",
+    "reservations_other": "{count} reservations",
+    "overReserved": "over-reserved: more is reserved than is here",
+    "onHold": "On hold",
+    "heldBy": "On hold: {reason} · since {day}",
+    "holdRow": "Put on hold…",
+    "holdLots_one": "Put {count} lot on hold",
+    "holdLots_other": "Put {count} lots on hold",
+    "reservedTotals": "reserved {totals}",
+    "valued": "Valued stock list as of {day} (PDF, opens a new tab)",
+    "asOf": {
+      "open": "Stock as of a date…",
+      "pill": "As of {day}",
+      "paused": "live updates off for a past date",
+      "notice": "Showing stock as of {day} {time} — read-only",
+      "noticeBody": "Nothing can be changed here. Held, reserved and available are not kept for past days, so they show —.",
+      "backToNow": "Back to now",
+      "notKept": "Not kept for past days",
+      "empty": "No stock on {day}"
+    },
+    "phone": {
+      "select": "Select",
+      "done": "Done",
+      "selectAll": "Select all rows",
+      "selected_one": "{count} selected",
+      "selected_other": "{count} selected",
+      "selectOne": "Select {material} at {place}",
+      "nothingToSelect": "There is nothing to select."
     }
   },
   "adj": {
@@ -176,21 +213,22 @@
       "lot": "Lot {code}",
       "hide": "Hide {code}",
       "location": "Place {code}",
-      "reason": "Reason: {reason}"
+      "reason": "Reason: {reason}",
+      "writeOffs": "Write-offs only"
     },
     "tile": {
       "adjustments": "Adjustments",
-      "scraps": "Scraps",
       "counts": "Count differences",
       "reversals": "Reversals",
-      "unvalued": "Moves not valued yet"
+      "unvalued": "Moves not valued yet",
+      "writeOffs": "Write-offs"
     },
     "tileHint": {
       "adjustments": "last 7 days",
-      "scraps": "last 30 days",
       "counts": "last 30 days",
       "reversals": "last 30 days",
-      "unvalued": "their value is missing from the totals"
+      "unvalued": "their value is missing from the totals",
+      "writeOffs": "last 30 days"
     },
     "col": {
       "when": "When",
@@ -232,7 +270,13 @@
       "adjustSeveral_one": "This stock lies in {count} place: adjust it from Stock, one row at a time.",
       "adjustSeveral_other": "This stock lies in {count} places (or several hides): adjust it from Stock, one row at a time.",
       "adjustNone": "Nothing of this stock is on hand: adjust from a place in Stock.",
-      "adjustFailed": "The stock to adjust couldn't be read. Try again."
+      "adjustFailed": "The stock to adjust couldn't be read. Try again.",
+      "writeOffNone": "Nothing of this stock is on hand: there is nothing to write off.",
+      "writeOffHides_one": "This leather is {count} hide: write it off from Hides › Scrap.",
+      "writeOffHides_other": "This leather is {count} hides: scrap them from Hides (select them, Scrap…), or open Movements from one hide.",
+      "writeOffSeveral_one": "This stock lies in {count} place: write it off from Stock, one row at a time.",
+      "writeOffSeveral_other": "This stock lies in {count} places: open Movements from one place (a stock row) to write it off.",
+      "writeOffFailed": "The stock to write off couldn't be read. Try again."
     },
     "why": {
       "title": "Why is it this number",
@@ -281,7 +325,8 @@
       "notValued": "Not valued (a transfer, no cost basis, or a floor move not valued yet).",
       "reversal": "Reversal",
       "reverses": "This move reverses",
-      "reversedBy": "Reversed by"
+      "reversedBy": "Reversed by",
+      "writeOff": "Written off as"
     },
     "csv": {
       "when": "Happened",
@@ -306,7 +351,12 @@
       "method": "Valued",
       "value": "Value",
       "currency": "Currency"
-    }
+    },
+    "search": "Search the ledger: material, lot, hide, place, document, note",
+    "countOf_one": "{loaded} of {count} move loaded · more as you scroll",
+    "countOf_other": "{loaded} of {count} moves loaded · more as you scroll",
+    "writeOff": "Write-off · {reason}",
+    "writeOffOpen": "Write off…"
   },
   "rev": {
     "title": "Reverse this move",

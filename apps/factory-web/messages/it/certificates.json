@@ -101,13 +101,17 @@
       "covers": "Copre",
       "valid": "Validità",
       "status": "Stato",
-      "actions": "Azioni"
+      "actions": "Azioni",
+      "changes": "Modifica in attesa"
     },
     "class": "classe {class}",
     "level": "livello {class}",
     "covers_one": "{count} modello o parte",
     "covers_other": "{count} modelli o parti",
-    "validRange": "{from} – {to}"
+    "validRange": "{from} – {to}",
+    "changesNone": "Nessuna",
+    "changesWaiting_one": "{count} in attesa",
+    "changesWaiting_other": "{count} in attesa"
   },
   "row": {
     "menu": "Azioni per {number}",
@@ -115,7 +119,8 @@
     "openNewTab": "Apri in una nuova scheda",
     "coverage": "Copertura",
     "check": "Verifica un capo con questo certificato",
-    "copy": "Copia numero"
+    "copy": "Copia numero",
+    "renew": "Avvia il rinnovo"
   },
   "noAccess": {
     "title": "Non per il tuo ruolo",
@@ -127,7 +132,8 @@
     "expiring": "In scadenza entro 180 giorni",
     "suspended": "Sospesi o ritirati",
     "drafts": "Bozze non registrate",
-    "expired": "Scaduti"
+    "expired": "Scaduti",
+    "changes": "Modifiche in attesa dell'organismo notificato"
   },
   "tile": {
     "valid": "Validi",
@@ -315,7 +321,8 @@
     "coverage": "Copertura",
     "body": "Organismo notificato",
     "files": "File",
-    "activity": "Attività"
+    "activity": "Attività",
+    "renewals": "Rinnovi"
   },
   "action": {
     "register": "Registra…",
@@ -594,5 +601,256 @@
     "register": "Registra (una bozza)",
     "thread": "La conversazione accanto alla scheda",
     "help": "Tutte le scorciatoie"
+  },
+  "ren": {
+    "title": "Validità e rinnovo",
+    "intro": "Al massimo cinque anni (Reg. (UE) 2016/425 Allegato V). Il riesame si chiede all'organismo notificato da {opens} a {closes} mesi prima dell'ultimo giorno di validità; gli avvisi arrivano 180, 90 e 30 giorni prima.",
+    "failed": "Non è stato possibile leggere il rinnovo",
+    "more": "Altri passi del rinnovo",
+    "bar": {
+      "label": "Valido dal {from} al {to}; oggi {today}; sono segnati la finestra di rinnovo e gli avvisi.",
+      "today": "Oggi, {date}",
+      "stage": "{days} giorni prima della fine: {date}"
+    },
+    "window": {
+      "BEFORE": "La finestra di rinnovo si apre il {opens} e si chiude il {closes} (il certificato scade il {date}).",
+      "OPEN": "La finestra di rinnovo è aperta: chiedere all'organismo notificato entro il {closes} (aperta dal {opens}; il certificato scade il {date}).",
+      "CLOSED": "La finestra di rinnovo si è chiusa il {closes}: il certificato scade il {date}. Se una domanda tardiva è ancora accolta lo decide l'organismo notificato.",
+      "ENDED": "Il certificato è scaduto il {date}: un rinnovo è un nuovo certificato dell'organismo notificato.",
+      "law": "Da 12 a 6 mesi prima della fine, come PRD-283 legge il Reg. (UE) 2016/425 Allegato V; valgono le date del vostro organismo notificato."
+    },
+    "stages": {
+      "title": "Avvisi di scadenza",
+      "none": "Nessuna regola segue la scadenza di questo certificato: gli avvisi sono spenti per la sua azienda.",
+      "where": "Gli avvisi sono regole di eccezione: giorni, destinatari e spegnimento si impostano nelle regole degli avvisi."
+    },
+    "stage": {
+      "name": "{days} giorni prima della fine",
+      "on": "il {date}",
+      "onWorking": "il {date} (giorni lavorativi)",
+      "tells": "avvisa {role} con la campanella",
+      "tellsNobody": "non avvisa nessun ruolo",
+      "builtIn": "di serie",
+      "firedQuiet": "scattato il {date}; un avviso precedente era ancora aperto",
+      "cancelled": "fermato: nessun avviso da questa regola ora",
+      "state": {
+        "off": "Spento",
+        "waiting": "In attesa",
+        "fired": "Scattato",
+        "cancelled": "Fermato",
+        "notSet": "Non ancora impostato"
+      },
+      "alert": {
+        "OPEN_one": "avviso aperto dal {date}, {count} persona avvisata",
+        "OPEN_other": "avviso aperto dal {date}, {count} persone avvisate",
+        "ACKNOWLEDGED_one": "avviso visto, emesso il {date}, {count} persona avvisata",
+        "ACKNOWLEDGED_other": "avviso visto, emesso il {date}, {count} persone avvisate",
+        "RESOLVED_one": "avviso emesso il {date} e risolto, {count} persona avvisata",
+        "RESOLVED_other": "avviso emesso il {date} e risolto, {count} persone avvisate"
+      }
+    },
+    "renewal": {
+      "title": "Il rinnovo",
+      "notStarted": "Non avviato. Avvia il rinnovo crea un'attività con i passi consueti per l'organismo notificato.",
+      "none": "Questo certificato non vale più: uno nuovo si aggiunge come nuovo certificato.",
+      "started": "Avviato",
+      "startedBy": "{date} da {name}",
+      "task": "Attività",
+      "taskState": "{title}: {state}, {done} di {total} passi fatti, per {assignee}",
+      "taskHidden": "La sua attività non è visibile per te.",
+      "due": "Domanda entro",
+      "applied": "Domanda inviata",
+      "appliedOn": "{date}, riferimento {reference}",
+      "appliedLate": "{date}, riferimento {reference} (dopo la finestra)",
+      "notApplied": "Non ancora registrata",
+      "nobody": "Ancora nessuno",
+      "steps": "I passi dell'attività",
+      "stepDone": "fatto il {date} da {name}",
+      "stepIsDone": "Fatto:",
+      "stepIsOpen": "Da fare:",
+      "renewedBy": "Rinnovato da {number}, valido {from} – {to}: per questo non arrivano più avvisi.",
+      "openSuccessor": "Apri il nuovo certificato",
+      "renews": "Questo certificato rinnova",
+      "notCarried_one": "{count} modello coperto da questo certificato non è ancora coperto dal nuovo",
+      "notCarried_other": "{count} modelli coperti da questo certificato non sono ancora coperti dal nuovo",
+      "notCarriedFix": "Aggiungere la loro copertura sul nuovo certificato (scheda Copertura), altrimenti il controllo li rifiuta quando questo scade."
+    },
+    "task": {
+      "OPEN": "aperta",
+      "DONE": "fatta",
+      "CANCELLED": "annullata"
+    },
+    "log": {
+      "title": "Cosa è stato fatto",
+      "STARTED": "{date}: rinnovo avviato da {name} (domanda entro il {detail})",
+      "APPLIED": "{date}: domanda all'organismo notificato registrata da {name} (inviata il {detail})",
+      "RENEWED": "{date}: {detail} collegato come rinnovo da {name}"
+    },
+    "start": {
+      "open": "Avvia il rinnovo",
+      "title": "Avvia il rinnovo di {number}",
+      "what": "Un'attività su questo certificato con i passi consueti, con scadenza il {closes}, ultimo giorno della finestra (aperta dal {opens}).",
+      "assignee": "Per",
+      "me": "Me",
+      "peopleFailed": "Non è stato possibile leggere chi può riceverla: l'attività è tua.",
+      "language": "Lingua dell'attività",
+      "it": "Italiano",
+      "en": "Inglese",
+      "preview": "L'attività come verrà creata",
+      "due": "scadenza {date}",
+      "bodyList": "I passi consueti: ciò che chiede l'organismo notificato (campioni, prove, costi) è il suo elenco e vale quello.",
+      "nothingSent": "Da qui non si invia nulla all'organismo notificato.",
+      "confirm": "Avvia il rinnovo"
+    },
+    "applied": {
+      "open": "Registra la domanda",
+      "title": "La domanda per {number}",
+      "what": "Il giorno in cui la domanda di riesame è partita verso {body}. Si scrive qui: da qui non si invia nulla.",
+      "day": "Inviata il",
+      "reference": "Riferimento dell'organismo notificato",
+      "referenceHint": "Se ne ha dato uno.",
+      "late": "Questo giorno è fuori dalla finestra ({opens} – {closes}): viene registrato; l'organismo notificato decide se la accetta ancora.",
+      "note": "Nota",
+      "confirm": "Registra la domanda"
+    },
+    "link": {
+      "open": "Collega il nuovo certificato",
+      "title": "Il rinnovo di {number}",
+      "what": "Il nuovo certificato dell'organismo notificato, una volta registrato: lo stesso titolare, valido da un giorno successivo. Il collegamento si imposta una volta e non cambia più.",
+      "pick": "Nuovo certificato",
+      "choose": "Scegli…",
+      "none": "Nessun certificato registrato può ancora rinnovare questo",
+      "noneFix": "Aggiungere il nuovo certificato (Certificati › Aggiungi certificato) con il suo PDF e registrarlo; compare qui.",
+      "until": "valido fino al {date}",
+      "from": "valido {from} – {to}",
+      "after": "Dopo il collegamento gli avvisi di questo certificato si fermano; i suoi capi restano coperti fino al suo ultimo giorno di validità.",
+      "confirm": "Collega come rinnovo"
+    },
+    "changes": {
+      "title": "Modifiche al tipo approvato",
+      "intro": "Modifiche di pelle esterna, spessore, modello di protezione, cuciture o fodera di un modello coperto dopo l'esame del tipo di questo certificato (Reg. (UE) 2016/425 Allegato V 7.2). La nuova revisione non stampa l'etichetta con la classe finché non è registrata la risposta dell'organismo notificato.",
+      "heldBanner_one": "{count} revisione non stampa l'etichetta con la classe finché non è registrata la risposta dell'organismo notificato.",
+      "heldBanner_other": "{count} revisioni non stampano l'etichetta con la classe finché non è registrata la risposta dell'organismo notificato.",
+      "count_one": "{count} modifica",
+      "count_other": "{count} modifiche",
+      "failed": "Non è stato possibile leggere le modifiche",
+      "empty": "Nessuna modifica dal rilascio",
+      "emptyBody": "Qui compare una revisione rilasciata di un modello coperto che cambia il tipo approvato.",
+      "revision": "Revisione {revision} (confrontata con la {compared})",
+      "to": "diventa",
+      "more_one": "+ {count} altra modifica",
+      "more_other": "+ {count} altre modifiche",
+      "labelHeld": "La sua etichetta con la classe è bloccata",
+      "told": "Comunicata il {date}",
+      "answered": "Risposta il {date}, {reference}",
+      "noFile": "Nessun file di risposta",
+      "files_one": "{count} file",
+      "files_other": "{count} file",
+      "menu": "Azioni per {code} revisione {revision}",
+      "col": {
+        "revision": "Revisione del modello",
+        "change": "Cosa è cambiato",
+        "needed": "Organismo notificato",
+        "status": "Stato",
+        "file": "File di risposta",
+        "actions": "Azioni"
+      },
+      "revisionOnly": "Revisione {revision} (il confronto non è registrato)"
+    },
+    "needed": {
+      "OPEN": "Da decidere: comunicarla o non necessaria",
+      "NOTIFIED": "Si attende la sua risposta",
+      "APPROVED": "Approvata come integrazione",
+      "REFUSED": "Rifiutata: serve un nuovo esame",
+      "NOT_NEEDED": "Non necessaria"
+    },
+    "status": {
+      "OPEN": "In attesa",
+      "NOTIFIED": "Comunicata all'organismo",
+      "APPROVED": "Integrazione approvata",
+      "REFUSED": "Rifiutata",
+      "NOT_NEEDED": "Non necessaria"
+    },
+    "kind": {
+      "OUTER_LEATHER": "Pelle esterna",
+      "THICKNESS": "Spessore",
+      "PROTECTOR": "Modello di protezione",
+      "SEAMS": "Cuciture",
+      "LINING": "Fodera",
+      "OTHER": "Altro"
+    },
+    "verb": {
+      "notify": "Comunica all'organismo notificato…",
+      "notNeeded": "Non necessaria…",
+      "answer": "Registra la risposta…",
+      "none": "Niente da fare"
+    },
+    "notify": {
+      "title": "{code} revisione {revision}: comunica all'organismo notificato",
+      "what": "Registra che l'organismo notificato {body} è stato informato di questa modifica al tipo approvato di {number}. Si scrive qui: da qui non si invia nulla.",
+      "note": "Come è stato informato",
+      "nothingSent": "Da qui non si invia nulla all'organismo notificato. L'etichetta con la classe resta bloccata finché non è registrata la sua risposta.",
+      "confirm": "Registra come comunicata"
+    },
+    "notNeeded": {
+      "title": "{code} revisione {revision}: non necessaria",
+      "what": "La modifica non tocca ciò che l'esame del tipo di {number} ha coperto: l'organismo notificato non viene informato e l'etichetta con la classe si stampa di nuovo.",
+      "reason": "Perché",
+      "reasonHint": "Conservato con il fascicolo tecnico; l'organismo notificato può chiederlo.",
+      "confirm": "Decidi: non necessaria"
+    },
+    "answer": {
+      "title": "{code} revisione {revision}: la risposta dell'organismo notificato",
+      "what": "Registra la risposta dell'organismo notificato {body} su questa modifica a {number}, con la sua lettera.",
+      "decision": "La risposta",
+      "APPROVED": "Approvata",
+      "REFUSED": "Rifiutata",
+      "day": "Risposta il",
+      "reference": "Il suo riferimento (numero dell'integrazione)",
+      "file": "La risposta (PDF)",
+      "fileHint": "La lettera dell'organismo notificato o l'integrazione al certificato.",
+      "filed": "In archivio: {name}",
+      "note": "Nota",
+      "confirm": "Registra la risposta"
+    },
+    "decision": {
+      "kept": "Conservato 10 anni dopo l'ultimo giorno di validità del certificato con la documentazione tecnica (Reg. (UE) 2016/425 art. 8(3))."
+    },
+    "held": {
+      "renewed": "Già rinnovato: il nuovo certificato è collegato.",
+      "notRenewable": "Si rinnova solo un certificato valido o sospeso.",
+      "notLinkable": "Si rinnova solo un certificato registrato.",
+      "started": "Il rinnovo è avviato: la sua attività è ancora aperta.",
+      "noCandidate": "Non c'è ancora un certificato registrato dello stesso titolare, valido da un giorno successivo.",
+      "pick": "Scegliere il nuovo certificato.",
+      "day": "Scegliere il giorno.",
+      "future": "Il giorno non è ancora arrivato.",
+      "beforeTold": "La risposta non può arrivare prima della comunicazione all'organismo notificato.",
+      "reason": "Dire perché.",
+      "file": "Scegliere la risposta dell'organismo notificato (PDF).",
+      "upload": "Il tuo ruolo non carica file (files.upload)."
+    },
+    "write": {
+      "refused": "Il passo del rinnovo è stato rifiutato."
+    },
+    "done": {
+      "exported_one": "Esportata {count} modifica (CSV).",
+      "exported_other": "Esportate {count} modifiche (CSV)."
+    },
+    "csv": {
+      "style": "Modello",
+      "revision": "Revisione",
+      "compared": "Confrontata con",
+      "kind": "Cosa",
+      "before": "Prima",
+      "after": "Dopo",
+      "status": "Stato",
+      "answered": "Risposta",
+      "reference": "Riferimento"
+    },
+    "answerMeans": {
+      "APPROVED": "La modifica è un'integrazione al certificato: l'etichetta con la classe si stampa di nuovo.",
+      "REFUSED": "La revisione modificata richiede un nuovo esame del tipo: la sua etichetta con la classe resta bloccata."
+    }
   }
 }

@@ -67,16 +67,18 @@ import { PartyRecordView } from './view/PartyRecordView'
  */
 /** A side's own Tax & terms card (Customers: Commercial terms, B-W2a-49): drawn with the party read, and how to read it again. */
 export type TermsSlot = (party: Party, reload: () => void) => ReactNode
+/** B-W2a-69: a supplier's Items & prices tab (Purchasing's Approved sources), drawn with the party read. */
+export type ItemsSlot = (party: Party, reload: () => void) => ReactNode
 
-export function PartyRecord({ side, partyId, terms }: { side: Side; partyId: string; terms?: TermsSlot }) {
+export function PartyRecord({ side, partyId, terms, items }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot }) {
   return (
     <WithMessages namespaces={['parties']}>
-      <PartyRecordContainer side={side} partyId={partyId} terms={terms} />
+      <PartyRecordContainer side={side} partyId={partyId} terms={terms} items={items} />
     </WithMessages>
   )
 }
 
-function PartyRecordContainer({ side, partyId, terms }: { side: Side; partyId: string; terms?: TermsSlot }) {
+function PartyRecordContainer({ side, partyId, terms, items }: { side: Side; partyId: string; terms?: TermsSlot; items?: ItemsSlot }) {
   const config = SIDES[side]
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -334,6 +336,7 @@ function PartyRecordContainer({ side, partyId, terms }: { side: Side; partyId: s
       panels={panels}
       documents={documents}
       terms={party && terms ? terms(party, () => void load()) : null}
+      items={party && items ? items(party, () => void load()) : null}
       actions={{
         onRetry: () => {
           setProblem(null)

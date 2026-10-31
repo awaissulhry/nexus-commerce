@@ -88,14 +88,14 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
       // B-W2a-70: Capacity & load and Exceptions read with planning.view too.
       ['planning', ['planning-mrp', 'planning-board', 'planning-capacity', 'planning-allocation', 'planning-exceptions', 'planning-settings-page']],
       // B-W2a-56: Subcontract orders read with purchasing.view too; B-W2a-63: Returns & claims too.
-      ['purchasing', ['purchasing-orders', 'purchasing-subcontracting', 'purchasing-claims']],
+      ['purchasing', ['purchasing-requests', 'purchasing-orders', 'purchasing-subcontracting', 'purchasing-claims']],
       ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts', 'warehouse-picking']],
       ['finance', ['finance-reports-page']],
     ])
     // The warehouse role reads the orders it receives against (and the parties: Customers and Suppliers), not the plan.
     expect(ids(officeNavFor(permissionCheck(['purchasing.view', 'inventory.stock.view', 'parties.view'])))).toEqual([
       ['sales', ['sales-customers']],
-      ['purchasing', ['purchasing-suppliers', 'purchasing-orders', 'purchasing-subcontracting', 'purchasing-claims']],
+      ['purchasing', ['purchasing-suppliers', 'purchasing-requests', 'purchasing-orders', 'purchasing-subcontracting', 'purchasing-claims']],
       ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts', 'warehouse-picking']],
       // B-W2a-51: Finance › Reports › Finance reports (the stock valuation) reads inventory.stock.view.
       ['finance', ['finance-reports-page']],

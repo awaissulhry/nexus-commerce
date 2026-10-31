@@ -109,6 +109,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/planning/settings': 'planning.view', // GET /planning/settings (B-W2a-59)
       '/purchasing/suppliers': 'parties.view', // GET /parties
       '/purchasing/orders': 'purchasing.view', // GET /purchasing/orders
+      '/purchasing/requests': 'purchasing.view', // GET /purchasing/requests (B-W2a-69)
       '/purchasing/subcontracting': 'purchasing.view', // GET /purchasing/subcontracting/orders (B-W2a-56)
       '/purchasing/claims': 'purchasing.view', // GET /purchasing/claims (B-W2a-63)
       '/warehouse/stock': 'inventory.stock.view', // GET /inventory/stock
@@ -135,6 +136,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/compliance/register': 'compliance.register.view', // GET /compliance/register
       '/finance/invoices': 'invoices.view', // GET /invoicing/invoices
       '/finance/payments': 'payments.view', // GET /payments
+      '/finance/costing': 'costing.view', // GET /costing/work-orders (B-W2a-72)
+      '/finance/margins': 'costing.view', // GET /costing/margins (B-W2a-72)
       '/finance/accounting': 'accounting.view', // GET /accounting/exports (B-W2a-51)
       '/finance/reports': 'inventory.stock.view', // GET /costing/valuation (B-W2a-51)
       '/finance/settings': 'invoices.view', // GET /invoicing/settings

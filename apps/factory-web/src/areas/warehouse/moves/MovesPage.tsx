@@ -8,11 +8,15 @@ import { formatDateTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { downloadText, useLive } from '../../_shared/buying/hooks'
+import { pickerReasons, type PickerReason } from '../../_shared/reasons/api'
 import { explainFigure, ledgerCounts, ledgerMove, listLocations, readLedger, reverseMove, stockOverview, type Explain, type LedgerCounts, type LedgerRow, type MoveDetail } from '../../_shared/stock/api'
 import { csvOf, readProblem, stockCan, TIME_ZONE } from '../../_shared/stock/model'
 import { StockMessages } from '../../_shared/stock/parts'
 import { useAdjust } from '../stock/adjust/useAdjust'
-import type { SiteChoice } from '../stock/model'
+import { listHolds } from '../stock/daily/api'
+import { DAILY_NAMESPACE, holdOfRow, holdsBySubject } from '../stock/daily/model'
+import { useWriteOff } from '../stock/daily/useWriteOff'
+import { dailyCan, type SiteChoice } from '../stock/model'
 import { explainsFigure, ledgerQueryOf, movesAddressOf, movesQueryString, reverseProblemKey, type Loaded, type MovesAddress, type MovesPageModel, type ReverseModel } from './model'
 import { MovesView } from './view/MovesView'
 
@@ -25,10 +29,15 @@ const PAGE = 500
  * (`GET /inventory/stock/explain`); the move in its detail (`?open=`, `GET /inventory/ledger/:id`); a reversal posted
  * with ONE Idempotency-Key per dialog; Adjust stock through the shared dialog. Live inventory.moved → "N new moves ·
  * Show" (rows never insert under the reader).
+ *
+ * B-W2a-64: the text search (`?q=`) and the write-offs filter (`?writeOffs=yes`) go to the ledger's read, whose first page
+ * also says how many moves the filter holds; the WRITE_OFF reasons' words name a write-off's reason on its row; Write
+ * off… opens the shared dialog on the address's stock key at one place (a single hide whole), with the lot's or hide's
+ * quality hold read first (held stock is refused in words).
  */
 export function MovesPage() {
   return (
-    <StockMessages extra={['warehouse-stock']}>
+    <StockMessages extra={['warehouse-stock', DAILY_NAMESPACE]}>
       <MovesContainer />
     </StockMessages>
   )
@@ -45,12 +54,15 @@ function MovesContainer() {
   const params = useSearchParams()
   const prefix = pathname.replace(/\/warehouse\/moves\/?$/, '')
   const can = useMemo(() => stockCan(session.permissions), [session.permissions])
+  const daily = useMemo(() => dailyCan(session.permissions), [session.permissions])
   const address = useMemo(() => movesAddressOf(params), [params])
   const listKey = useMemo(() => movesQueryString({ ...address, open: null }), [address])
 
   const [rows, setRows] = useState<LedgerRow[] | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const [closing, setClosing] = useState<string | null>(null)
+  const [rowCount, setRowCount] = useState<number | null>(null)
+  const [writeOffReasons, setWriteOffReasons] = useState<PickerReason[]>([])
   const [problem, setProblem] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [counts, setCounts] = useState<LedgerCounts | null>(null)
@@ -97,6 +109,7 @@ function MovesContainer() {
       setRows(page.moves)
       setCursor(page.nextCursor)
       setClosing(page.closing)
+      setRowCount(page.rowCount ?? null)
       setProblem(null)
       setAsOf(new Date().toISOString())
       setUpdates(0)
@@ -156,6 +169,65 @@ function MovesContainer() {
     setNotice({ tone: 'success', key: words.key, params: words.params })
     void load()
   })
+
+  // A write-off's reason in words on its row (the WRITE_OFF list, read once).
+  useEffect(() => {
+    if (!can.stockView) return
+    pickerReasons(api, ['WRITE_OFF'])
+      .then(setWriteOffReasons)
+      .catch(() => setWriteOffReasons([]))
+  }, [api, can.stockView])
+
+  const writeOff = useWriteOff(api, { withCost: can.cost, canPhoto: daily.filesUpload, canNcr: daily.ncrRaise, prefix }, () => void load())
+  const openWriteOff = writeOff.open
+
+  const startWriteOff = useCallback(async () => {
+    if (!address.site || !address.item || !can.scrap) return
+    try {
+      const answer = await stockOverview(api, { siteId: address.site, itemId: address.item, itemColourId: address.colour, lotId: address.lot, hideId: address.hide, locationId: address.location })
+      const places = [...new Set(answer.rows.map((row) => row.location.id))]
+      const first = answer.rows[0]
+      const hides = [...new Set(answer.rows.flatMap((row) => (row.hide ? [row.hide.id] : [])))]
+      const leather = first?.item.tracking === 'HIDE'
+      // One non-leather key at one place, or one hide (it goes whole, from wherever it lies); else from Stock or Hides.
+      if (!first || (leather ? hides.length !== 1 : places.length !== 1)) {
+        setNotice({ tone: 'danger', key: !first ? 'mv.notice.writeOffNone' : leather ? 'mv.notice.writeOffHides' : 'mv.notice.writeOffSeveral', params: { count: leather ? hides.length : places.length } })
+        return
+      }
+      const holds = daily.holdsView
+        ? holdsBySubject(
+            (
+              await Promise.all([
+                first.lot ? listHolds(api, { status: 'ACTIVE', subjectType: 'Lot', subjectId: first.lot.id }) : Promise.resolve({ holds: [] }),
+                first.hide ? listHolds(api, { status: 'ACTIVE', subjectType: 'Hide', subjectId: first.hide.id }) : Promise.resolve({ holds: [] }),
+              ])
+            ).flatMap((page) => page.holds),
+          )
+        : new Map()
+      const hold = holdOfRow(holds, { lotId: first.lot?.id ?? null, hideId: first.hide?.id ?? null })
+      const onHand = answer.rows.reduce((sum, row) => sum + Number(row.onHand), 0).toFixed(4)
+      const currency = answer.items.find((entry) => entry.itemId === first.item.id)?.currency ?? null
+      const value = answer.rows.reduce<number | null>((sum, row) => (sum === null || row.value === null || row.value === undefined ? null : sum + row.value), 0)
+      if (leather && first.hide && first.lot) {
+        openWriteOff({ kind: 'hides', siteId: first.siteId, hides: [{ id: first.hide.id, code: first.hide.code, lotId: first.lot.id, area: onHand, uom: first.item.baseUom, hold }], value: can.cost && value !== null && currency ? { amount: value, currency } : null })
+        return
+      }
+      openWriteOff({
+        kind: 'quantity',
+        siteId: first.siteId,
+        item: first.item,
+        colour: first.colour,
+        lot: first.lot ? { id: first.lot.id, code: first.lot.code } : null,
+        location: first.location,
+        onHand,
+        unitCost: can.cost ? (first.unitCost ?? null) : null,
+        currency: can.cost ? currency : null,
+        hold,
+      })
+    } catch (error) {
+      setNotice({ tone: 'danger', key: readProblem(error) === 'problem.offline' ? 'mv.notice.moreOffline' : 'mv.notice.writeOffFailed' })
+    }
+  }, [api, address, can.scrap, can.cost, daily.holdsView, openWriteOff])
 
   const startAdjust = useCallback(async () => {
     if (!address.site || !address.item) return
@@ -235,6 +307,7 @@ function MovesContainer() {
     loadingMore,
     done: rows !== null && cursor === null,
     closing,
+    rowCount,
     counts,
     explain,
     asOf,
@@ -245,12 +318,16 @@ function MovesContainer() {
     detail,
     reverse,
     adjust: adjust.model,
+    writeOff: writeOff.model,
+    writeOffReasons,
+    daily,
   }
 
   return (
     <MovesView
       model={model}
       adjustActions={adjust.actions}
+      writeOffActions={writeOff.actions}
       actions={{
         onAddress: go,
         onRetry: () => void load(),
@@ -265,6 +342,7 @@ function MovesContainer() {
         onReverseNote: (note) => setReverse((current) => (current ? { ...current, note, problem: null } : current)),
         onPostReverse: postReverse,
         onAdjust: () => void startAdjust(),
+        onWriteOff: () => void startWriteOff(),
         onExport: exportRows,
         onNotice: () => setNotice(null),
       }}

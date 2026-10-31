@@ -3,6 +3,8 @@ import type { CutRow, HideRecord, HideRow, HidesPage, LedgerRow, PrinterOption }
 import { at, COLOURS, DEVICES, hideRow, ITEMS, LOCATIONS, LOTS, named, PEOPLE, RECEIPTS, SITE, SUPPLIERS, uid, WORK_ORDERS, ledgerRow } from '../../../_shared/stock/fixtures'
 import type { MovesPart } from '../../lots/shared/parts'
 import type { PrintDialog } from '../model'
+import { holdFact } from '../../lots/demo/daily/fixtures'
+import type { HoldsBySubject } from '../../lots/shared/daily'
 
 /**
  * Made-up hides for the design cases of Hides (SCR-200, SCR-200-record): tags as this factory prints them (an invented
@@ -18,13 +20,16 @@ const suedeLot = { id: LOTS.suedeFail.id, code: LOTS.suedeFail.code, qualityStat
 
 const one = (n: number, over: Partial<HideRow> = {}): HideRow => hideRow(n, { code: tag(n), ...over })
 
+const forA = { reservationId: uid('7777', 1), version: 1, demand: { type: 'WorkOrder' as const, id: WORK_ORDERS.a.id, number: WORK_ORDERS.a.number, status: 'RELEASED' }, stale: false }
+const forB = { reservationId: uid('7777', 2), version: 2, demand: { type: 'WorkOrder' as const, id: WORK_ORDERS.b.id, number: WORK_ORDERS.b.number, status: 'COMPLETED' }, stale: true }
+
 export const HIDE_ROWS: HideRow[] = [
-  one(1),
+  one(1, { reservedFor: forA }),
   one(2, { location: named(LOCATIONS.binA2) }),
   one(3, { state: 'PARTLY_CUT', onHand: '0.0000', left: '23.3000', location: null }),
   one(4, { state: 'REMNANT', onHand: '6.1000', left: '6.1000', location: named(LOCATIONS.cutting), defects: 'Ritaglio dal fianco destro' }),
   one(5, { state: 'CONSUMED', onHand: '0.0000', left: '0.0000', location: null }),
-  one(6, { grade: 'B', defects: 'Due fori di zecca vicino alla schiena; vena sul collo' }),
+  one(6, { grade: 'B', defects: 'Due fori di zecca vicino alla schiena; vena sul collo', reservedFor: forB }),
   one(7, { lot: quarantineLot, shade: 'B', receivedAt: at(28, 10), location: named(LOCATIONS.quarantine) }),
   one(8, { lot: quarantineLot, shade: 'B', receivedAt: at(28, 10), location: named(LOCATIONS.quarantine) }),
   one(9, { lot: quarantineLot, shade: 'B', receivedAt: at(28, 10), location: named(LOCATIONS.quarantine), grade: 'C' }),
@@ -38,7 +43,11 @@ export const HIDE_COUNTS: HidesPage['counts'] = {
   remnant: { hides: 1, area: [{ uom: 'FT2', quantity: '6.1000' }] },
   quarantine: { hides: 3, area: [{ uom: 'FT2', quantity: '147.9000' }] },
   consumed: { hides: 1, area: [{ uom: 'FT2', quantity: '54.5000' }] },
+  reserved: { hides: 2, area: [{ uom: 'FT2', quantity: '102.3000' }] },
 }
+
+/** B-W2a-64: hide 2 is on hold by its own quality hold; the suede lot by a hold on the lot. */
+export const HIDE_HOLDS: HoldsBySubject = { [uid('8282', 2)]: holdFact(1, 'Hide'), [LOTS.suedeFail.id]: holdFact(2, 'Lot', 'SUSPECT_DEFECT') }
 export const HIDE_MATCHING: HidesPage['matching'] = { hides: 10, area: [{ uom: 'FT2', quantity: '333.0000' }, { uom: 'M2', quantity: '10.0000' }] }
 
 export const PRINTERS: PrinterOption[] = [

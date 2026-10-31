@@ -86,7 +86,7 @@ export interface DiscrepancyReport {
 
 const WORDS = {
   it: {
-    title: 'Rapporto di non conformità della consegna',
+    title: 'Segnalazione difformità della consegna',
     sample: 'ANTEPRIMA - non inviato',
     receipt: 'Nostro ricevimento',
     receivedOn: 'Ricevuto il',
@@ -104,7 +104,7 @@ const WORDS = {
     yourCode: 'vs. cod.',
     photos: (n: number) => (n === 1 ? '1 foto' : `${n} foto`),
     page: (page: number, pages: number) => `Pagina ${page} di ${pages}`,
-    file: 'Rapporto-non-conformita',
+    file: 'Segnalazione-difformita',
   },
   en: {
     title: 'Delivery discrepancy report',
@@ -191,10 +191,10 @@ export function discrepancyReport(input: DiscrepancyReportInput): DiscrepancyRep
 export function discrepancyReportMail(input: { readonly language: DocumentLanguage; readonly receiptNumber: string; readonly supplierDdtNumber: string | null; readonly count: number; readonly recipientName: string | null; readonly message: string | null }): { readonly subject: string; readonly body: string } {
   const it = input.language === 'it'
   const ddt = input.supplierDdtNumber ? (it ? ` (vs. DDT ${input.supplierDdtNumber})` : ` (your delivery note ${input.supplierDdtNumber})`) : ''
-  const subject = it ? `Non conformità della consegna ${input.receiptNumber}${ddt}` : `Delivery discrepancies ${input.receiptNumber}${ddt}`
+  const subject = it ? `Difformità della consegna ${input.receiptNumber}${ddt}` : `Delivery discrepancies ${input.receiptNumber}${ddt}`
   const greeting = input.recipientName ? (it ? `Gentile ${input.recipientName},` : `Dear ${input.recipientName},`) : it ? 'Buongiorno,' : 'Hello,'
   const standard = it
-    ? `in allegato il rapporto delle ${input.count === 1 ? 'non conformità riscontrata' : `${input.count} non conformità riscontrate`} alla consegna ${input.receiptNumber}${ddt}. Vi chiediamo di risponderci indicando come intendete procedere.`
+    ? `in allegato la segnalazione ${input.count === 1 ? 'della difformità riscontrata' : `delle ${input.count} difformità riscontrate`} alla consegna ${input.receiptNumber}${ddt}. Vi chiediamo di risponderci indicando come intendete procedere.`
     : `attached is the report of the ${input.count === 1 ? 'discrepancy' : `${input.count} discrepancies`} we found in the delivery ${input.receiptNumber}${ddt}. Please reply and tell us how you will settle ${input.count === 1 ? 'it' : 'them'}.`
   const own = input.message?.trim() ? input.message.trim() : null
   return { subject, body: [greeting, own ?? standard, it ? 'Cordiali saluti' : 'Kind regards'].join('\n\n') }

@@ -10,6 +10,7 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf, type RequestContext } from '../../../core/context'
 import { queueModuleLabel } from '../../../platform/print/jobs'
 import { bodyMeasuresOf, certificateGateFor } from '../certificates/gate'
+import { classLabelHoldFor } from '../type-changes/reviews'
 import { renderGarmentLabelPdf } from './pdf'
 import { factsOf, findStyle, labelStyleOf, officeOf, readTemplate, readVisibleStyle, TEMPLATE_SELECT, todayOf, type Reader, type StyleRow, type TemplateRow } from './store'
 
@@ -78,10 +79,12 @@ async function readCell(client: Reader, style: StyleRow, templateId: string, ask
   let certificate: CellCertificate | null = null
   if (colourway && size) {
     const answer = await certificateGateFor(client, { styleId: style.id, colourwayId: colourway.id, size: size.code }, ask.date)
+    // B-W2a-66 (PRD-285, Annex V 7.2): a change to the approved type holds the class label until the notified body's answer.
+    const held = answer.outcome === 'covered' && answer.certificate ? await classLabelHoldFor(client, revision?.id ?? null, answer.certificate.id) : null
     certificate = {
-      outcome: answer.outcome,
+      outcome: held ? 'refused' : answer.outcome,
       certificate: answer.certificate ? { id: answer.certificate.id, number: answer.certificate.number, standard: answer.certificate.standard, ppeClass: answer.certificate.ppeClass, validTo: answer.certificate.validTo } : null,
-      reasons: answer.reasons.map((reason) => reason.message),
+      reasons: held ? [held] : answer.reasons.map((reason) => reason.message),
       date: ask.date,
     }
   }

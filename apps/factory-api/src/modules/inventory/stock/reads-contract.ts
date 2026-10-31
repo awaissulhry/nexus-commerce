@@ -5,6 +5,7 @@ import { VALUATION_METHODS } from '@nexus/factory-domain/inventory/ledger/valuat
 import { LOT_QUALITY_STATUSES } from '@nexus/factory-domain/inventory/stock/overview'
 import { money } from '@nexus/factory-domain/money/marked'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
+import { reservationView } from '../reservations/contract'
 
 /**
  * The warehouse screens' reads (A2 SCR-060 stock, SCR-064 movements, the Hides and Lots & traceability pages; design
@@ -74,6 +75,11 @@ export const hideRow = output({
   location: named.nullable(),
   receivedAt: instant().nullable(),
   createdAt: instant(),
+  /**
+   * The ACTIVE reservation that holds this hide whole (B-W2a-64, design hd-grid "Reserved for (WO link)"): its demand, and
+   * `stale` when that demand is done (it holds nothing any more: a person releases it); null when none.
+   */
+  reservedFor: output({ reservationId: id(), version: z.number().int(), demand: reservationView.shape.demand, stale: z.boolean() }).nullable(),
 })
 export type HideRow = z.infer<typeof hideRow>
 
@@ -88,6 +94,8 @@ export const listHidesContract = defineContract({
     /** One state; `inStock` = FULL, PARTLY_CUT or REMNANT (the default view). */
     state: hideState.optional(),
     inStock: flag().optional(),
+    /** Only hides an ACTIVE reservation holds whole (B-W2a-64, the Reserved view). */
+    reserved: flag().optional(),
     /** The lot's quality status. */
     quality: quality.optional(),
     /** Hides whose stock lies at this location. */
@@ -107,7 +115,15 @@ export const listHidesContract = defineContract({
        * The tiles (SCM-258: hides and area side by side), over the caller's hides at the site asked (no other filter): the
        * area is what is left (`left`), but for consumed hides their measured area.
        */
-      counts: output({ full: stateCount, partlyCut: stateCount, remnant: stateCount, quarantine: stateCount, consumed: stateCount }),
+      counts: output({
+        full: stateCount,
+        partlyCut: stateCount,
+        remnant: stateCount,
+        quarantine: stateCount,
+        consumed: stateCount,
+        /** Hides in stock an ACTIVE reservation holds whole (B-W2a-64, the Reserved tile). */
+        reserved: stateCount,
+      }),
       /** The hides matching the filters: count and area left per unit. */
       matching: stateCount,
     }),

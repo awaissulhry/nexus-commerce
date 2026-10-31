@@ -9,12 +9,16 @@ import { listLocations, listLots, type LotCounts, type LotRow } from '../../../_
 import { csvOf, readProblem, stockCan, TIME_ZONE } from '../../../_shared/stock/model'
 import { exactLot, LOT_CSV_COLUMNS, lotQuery, lotViewOf, type LotsListModel, type LotView, type SiteChoice } from '../model'
 import { LotsMessages, useWords } from '../shared/parts'
+import { dailyCan } from '../shared/daily'
+import { useRelease } from '../release/useRelease'
+import { useTraceFind } from '../trace/useTraceFind'
 import { LotsListView } from './view/LotsListView'
 
 /**
  * `/w/<company>/warehouse/lots` (SCR-201): the view (`?view=`, or the API's own `?onHold=true` `?quality=` `?crVi=`), the
  * search (`?q=`: a typed or scanned lot code; one exact hit opens the lot) and the site (`?site=`) in the address; the lots
- * 50 a page with "Show more"; the tiles' counts; live inventory.* and lot.* events behind "N updates · Show".
+ * 50 a page with "Show more"; the tiles' counts; live inventory.* and lot.* events behind "N updates · Show". B-W2a-64:
+ * Release N lots (each lot's release check, then Compliance's release lot by lot) and the Trace dialog.
  */
 export function LotsPage() {
   return (
@@ -33,6 +37,7 @@ function LotsContainer() {
   const params = useSearchParams()
   const prefix = companyPrefix(session.company?.code ?? '')
   const can = useMemo(() => stockCan(session.permissions), [session.permissions])
+  const daily = useMemo(() => dailyCan(session.permissions), [session.permissions])
   const view = lotViewOf(params, can)
   const q = params?.get('q') ?? ''
   const siteId = params?.get('site') ?? null
@@ -152,7 +157,10 @@ function LotsContainer() {
     [rows.items, t],
   )
 
-  const model: LotsListModel = { prefix, can, view, q, sites, siteId, rows, counts, asOf, live, updates, timeZone: TIME_ZONE }
+  const release = useRelease(api, (count) => t('lt.rel.phraseWord', { count }), () => void load())
+  const find = useTraceFind(api, prefix)
+
+  const model: LotsListModel = { prefix, can, view, q, sites, siteId, rows, counts, asOf, live, updates, timeZone: TIME_ZONE, daily, release: release.model, find: find.model }
 
   return (
     <LotsListView
@@ -169,6 +177,10 @@ function LotsContainer() {
         onShowUpdates: () => void load(),
         onOpen: (id) => router.push(`${prefix}/warehouse/lots/${encodeURIComponent(id)}`),
         onExport: exportRows,
+        onRelease: (ids) => release.open((rows.items ?? []).filter((row) => ids.includes(row.id))),
+        release: release.actions,
+        onTrace: find.open,
+        find: find.actions,
       }}
     />
   )

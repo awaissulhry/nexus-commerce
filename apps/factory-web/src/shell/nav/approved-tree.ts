@@ -166,6 +166,8 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: true,
         pages: [
           { id: 'purchasing.suppliers', title: 'Suppliers', titleIt: 'Fornitori', wave: 'W1', href: '/purchasing/suppliers' },
+          // W2a: B-W2a-69 Requests to buy (SCR-236).
+          { id: 'purchasing.requests', title: 'Requests to buy', titleIt: "Richieste d'acquisto", wave: 'W2a', href: '/purchasing/requests' },
           { id: 'purchasing.orders', title: 'Purchase orders', titleIt: "Ordini d'acquisto", wave: 'W1', href: '/purchasing/orders' },
         ],
       },
@@ -336,6 +338,16 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'finance.invoices', title: 'Invoices', titleIt: 'Fatture', wave: 'W1', href: '/finance/invoices' },
           { id: 'finance.payments', title: 'Payments', titleIt: 'Incassi', wave: 'W1', href: '/finance/payments' },
+        ],
+      },
+      // W2a: B-W2a-72 Costing: Standard vs actual (SCR-154) and Margins (SCR-155).
+      {
+        label: 'Costing',
+        labelIt: 'Costi',
+        hideLabel: false,
+        pages: [
+          { id: 'finance.costing', title: 'Standard vs actual', titleIt: 'Costi standard ed effettivi', wave: 'W2a', href: '/finance/costing' },
+          { id: 'finance.margins', title: 'Margins', titleIt: 'Margini', wave: 'W2a', href: '/finance/margins' },
         ],
       },
       // W2a: B-W2a-51 Accounting export (SCR-156) and Finance reports (SCR-239: the stock valuation).

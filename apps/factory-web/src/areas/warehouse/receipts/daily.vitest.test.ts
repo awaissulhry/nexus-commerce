@@ -8,7 +8,7 @@ import { LOCALES } from '../../../lib/i18n/locales'
 import { CATALOGUE, createTranslator, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
 import { receipt } from './demo/fixtures'
-import { CHECK, CONTACTS, DISCREPANCIES, dailyCanOf, discrepancy, hideListSummary, REASONS } from './demo/daily/fixtures'
+import { CHECK, DISCREPANCIES, dailyCanOf, discrepancy, hideListSummary, REASONS, REQUEST_CHECK } from './demo/daily/fixtures'
 import {
   blankDiscrepancy,
   changeHeld,
@@ -38,16 +38,19 @@ import {
   reportIds,
   reportProblem,
   reportSendHeld,
+  requestBody,
   requestDraft,
   requestHeld,
-  requestLanguage,
-  requestText,
+  requestOpenHeld,
+  requestPreview,
+  requestProblem,
   settleHeld,
   settleMoves,
   takesDiscrepancies,
   typedQuantity,
   wantedDocuments,
   withCheck,
+  withRequestCheck,
 } from './daily-model'
 import { LOTS } from './demo/fixtures'
 import { receiptQuery, receiptViewOf, RECEIPT_TABS, RECEIPT_TILES, receiptTabOf } from './model'
@@ -75,9 +78,12 @@ const invalidAt = (path: string) => new ApiError('invalid', 400, 'invalid', 'ref
 
 describe('who may do what', () => {
   it('reads the W2a permissions of the real templates', () => {
-    expect(warehouse).toMatchObject({ manage: true, report: true, receive: true, claims: true, email: false, importRun: true })
-    expect(buyer).toMatchObject({ manage: true, report: true, receive: false, claims: true, email: true, parties: true, importRun: false })
-    expect(readOnly).toMatchObject({ manage: false, report: false, claims: false, email: false })
+    expect(warehouse).toMatchObject({ manage: true, report: true, receive: true, claims: true, request: true, importRun: true })
+    expect(buyer).toMatchObject({ manage: true, report: true, receive: false, claims: true, request: true, importRun: false })
+    expect(readOnly).toMatchObject({ manage: false, report: false, claims: false, request: false })
+    // B-W2a-F4: the request is its own permission, never email.send.
+    expect(dailyCan(['email.send', 'parties.view']).request).toBe(false)
+    expect(dailyCan(['inventory.receipts.documents.request']).request).toBe(true)
     expect(dailyCan([])).toMatchObject({ manage: false, upload: false, importApply: false })
   })
 
@@ -214,27 +220,47 @@ describe('Documents check and Request from supplier', () => {
     expect(wantedDocuments({ supplierDdtNumber: 'DDT-1', ddtPhotos: [] }, [{ ...LOTS[0]!, qualityStatus: 'RELEASED' }])).toEqual([])
   })
 
-  it('the text is in the supplier’s language, names the lots by the supplier’s own refs, and has no price', () => {
-    const wanted = wantedDocuments({ supplierDdtNumber: 'DDT-DEMO-562', ddtPhotos: [] }, LOTS)
-    const it = requestText('it', { number: 'GR-2026-0022', supplierDdtNumber: 'DDT-DEMO-562', ddtDay: '29/10/2026' }, wanted)
+  it('the preview is the standard text in the supplier’s language with the note; the body names contacts and documents only', () => {
+    const draft = { ...withRequestCheck(requestDraft(wantedDocuments({ supplierDdtNumber: null, ddtPhotos: [] }, LOTS)), REQUEST_CHECK), note: ' Entro lunedì. ' }
+    expect(draft.to).toEqual([REQUEST_CHECK.recipients[0]!.contactId])
+    expect(draft.language).toBe('it')
+    const it = requestPreview(draft, { number: 'GR-2026-0022', supplierDdtNumber: 'DDT-DEMO-562', supplierDdtDate: '2026-10-29' })
     expect(it.subject).toContain('DDT-DEMO-562')
     expect(it.body).toContain('cromo esavalente')
+    expect(it.body).toContain('del 29/10/2026')
     expect(it.body).toContain(LOTS[0]!.supplierLotRef!)
+    expect(it.body).toContain('Entro lunedì.')
     expect(it.body).not.toMatch(/€|EUR|prezz/i)
-    const en = requestText('en', { number: 'GR-2026-0022', supplierDdtNumber: null, ddtDay: null }, wanted)
+    const en = requestPreview({ ...draft, language: 'en', note: '' }, { number: 'GR-2026-0022', supplierDdtNumber: null, supplierDdtDate: null })
     expect(en.body).toContain('hexavalent chromium')
-    expect(requestLanguage([{ ...CONTACTS[0]!, language: 'en-GB' }], [CONTACTS[0]!.id])).toBe('en')
-    expect(requestLanguage(CONTACTS, [])).toBe('it')
+    expect(requestBody(draft)).toEqual({ contactIds: draft.to, documents: draft.asked, language: 'it', note: 'Entro lunedì.' })
+    expect(Object.keys(requestBody(draft)).sort()).toEqual(['contactIds', 'documents', 'language', 'note'])
   })
 
-  it('Send request is held without e-mail rights, contacts, a recipient or a document', () => {
+  it('Send request is held only without the new permission, a recipient or a document; the opener says why', () => {
     const wanted = wantedDocuments({ supplierDdtNumber: null, ddtPhotos: [] }, LOTS)
-    const draft = { ...requestDraft(wanted), contacts: { value: CONTACTS, problem: null }, to: [CONTACTS[0]!.id], subject: 'S', body: 'B' }
+    const draft = withRequestCheck(requestDraft(wanted), REQUEST_CHECK)
+    expect(requestHeld(draft, warehouse, false)).toBeNull()
     expect(requestHeld(draft, buyer, false)).toBeNull()
-    expect(requestHeld(draft, warehouse, false)?.key).toBe('held.noEmail')
-    expect(requestHeld({ ...draft, to: [] }, buyer, false)?.key).toBe('held.pickRecipient')
-    expect(requestHeld({ ...draft, asked: [] }, buyer, false)?.key).toBe('held.pickDocument')
-    expect(requestHeld({ ...draft, contacts: { value: null, problem: null } }, buyer, false)?.key).toBe('held.loading')
+    expect(requestHeld(draft, { ...warehouse, request: false }, false)?.key).toBe('held.noRequest')
+    expect(requestHeld({ ...draft, to: [] }, warehouse, false)?.key).toBe('held.pickRecipient')
+    expect(requestHeld({ ...draft, asked: [] }, warehouse, false)?.key).toBe('held.pickDocument')
+    expect(requestHeld(requestDraft(wanted), warehouse, false)?.key).toBe('held.loading')
+    expect(requestHeld(withRequestCheck(requestDraft(wanted), { ...REQUEST_CHECK, recipients: [] }), warehouse, false)?.key).toBe('report.problem.noContact')
+    expect(requestOpenHeld({ status: 'POSTED' }, wanted, warehouse)).toBeNull()
+    expect(requestOpenHeld({ status: 'POSTED' }, wanted, readOnly)?.key).toBe('held.noRequest')
+    expect(requestOpenHeld({ status: 'REVERSED' }, wanted, warehouse)?.key).toBe('held.requestClosed')
+    expect(requestOpenHeld({ status: 'POSTED' }, [], warehouse)?.key).toBe('held.nothingWanted')
+    expect(requestOpenHeld({ status: 'POSTED' }, null, warehouse)?.key).toBe('held.loading')
+  })
+
+  it('its refusals in our words', () => {
+    expect(requestProblem(invalidAt('body.contactIds.0')).key).toBe('refused.requestContact')
+    expect(requestProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'contactIds', message: 'x' }])).key).toBe('report.problem.noContact')
+    expect(requestProblem(invalidAt('body.documents.0')).key).toBe('refused.requestDocuments')
+    expect(requestProblem(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'documents', message: 'x' }])).key).toBe('refused.requestNothing')
+    expect(requestProblem(new ApiError('conflict', 409, 'invalid_state', 'x')).key).toBe('refused.requestClosed')
+    expect(requestProblem(invalidAt('body.note')).key).toBe('refused.requestNote')
   })
 
   it('a reversed receipt still takes discrepancies? no; an open or posted one does', () => {
@@ -280,7 +306,7 @@ describe('the catalogue', () => {
 
 const LEFT_KEY = /\b(?:common|held|problem|record|uom|kind|disc|discStatus|discStatusWords|docs|report|request|new|settle|remove|claim|hideList|photo|detail|refused|notice|tile|view|col|list|lines|lots|band|tab|contactRole|language|remedy|rc|po|imp)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 /** Permission names are said on purpose ("needs email.send"): not keys. */
-const PERMISSIONS = /\b(?:planning\.(?:view|run|decide)|purchasing\.(?:view|manage|send|claims\.manage|claims\.return)|inventory\.(?:stock\.view|receive|reverse|locations\.view|discrepancies\.manage|discrepancies\.report)|quality\.lots\.view|money\.cost|email\.send|parties\.view|files\.upload|imports\.run)\b/g
+const PERMISSIONS = /\b(?:planning\.(?:view|run|decide)|purchasing\.(?:view|manage|send|claims\.manage|claims\.return)|inventory\.(?:stock\.view|receive|reverse|locations\.view|discrepancies\.manage|discrepancies\.report|receipts\.documents\.request)|quality\.lots\.view|money\.cost|email\.send|parties\.view|files\.upload|imports\.run)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>

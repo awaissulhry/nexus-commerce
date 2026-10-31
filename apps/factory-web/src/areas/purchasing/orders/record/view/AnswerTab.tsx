@@ -8,6 +8,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { dayAt, quantity } from '../../../../_shared/buying/model'
 import type { PurchaseOrder, SupplierAnswer } from '../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../../model'
+import { RemindersCard, RevisionsCard } from './ChangesSections'
 import { PartState } from './OrderRecordView'
 
 /**
@@ -194,6 +195,10 @@ function Answer({ answer, order, model, actions }: { answer: SupplierAnswer; ord
           </div>
         </Card>
       </div>
+
+      {/* B-W2a-69: Sends › Reminders sent (and the confirm-by), Revisions (every version with its diff and answer). */}
+      {answer.answer !== 'NOT_SENT' && <RemindersCard order={order} model={model} actions={actions} />}
+      <RevisionsCard order={order} model={model} actions={actions} />
     </div>
   )
 }

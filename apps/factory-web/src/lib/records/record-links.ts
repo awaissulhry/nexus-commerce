@@ -120,6 +120,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-51: the accounting batches (`?status=`, `?year=`) and the stock valuation (`?asOf=`, `?site=`, `?category=`).
   '/accounting/exports': '/finance/accounting',
   '/costing/valuation': '/finance/reports',
+  // B-W2a-72: standard vs actual (`?rows=`, `?q=`, `?site=`, `?month=`, `?open=<work order>`) and the order margins (`?from=`, `?to=`, `?party=`, `?style=`, `?q=`, `?open=<order>`).
+  '/costing/work-orders': '/finance/costing',
+  '/costing/margins': '/finance/margins',
   // The shipments list (SCR-066) reads `?rows=` and `?q=` from the address.
   '/shipping/shipments': '/warehouse/shipments',
   // The PO list reads `status` (one state, as the API) and `waitingOver48h`; Receipts reads `status`, `view=expected`.
@@ -127,6 +130,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/inventory/receipts': '/warehouse/receipts',
   // B-W2a-56: the subcontract orders (the page reads `?view=`, `?q=`; `?show=stock` is the stock at the workshops).
   '/purchasing/subcontracting/orders': '/purchasing/subcontracting',
+  // B-W2a-69: Requests to buy (the page reads `?view=`, `?kind=`, `?site=`, `?q=`, `?group=`, `?open=`).
+  '/purchasing/requests': '/purchasing/requests',
   // B-W2a-63: the claims (the page reads `?view=`, `?status=`, `?kind=`, `?receipt=`, `?lot=`, `?q=`).
   '/purchasing/claims': '/purchasing/claims',
   // The stock screens read the API's own filters from the address.

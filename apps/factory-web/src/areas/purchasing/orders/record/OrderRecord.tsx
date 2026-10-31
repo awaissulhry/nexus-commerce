@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { newIdempotencyKey } from '../../../../lib/api/client'
-import { useT } from '../../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { downloadLink } from '../../../../record-panels/api'
 import { WithMessages } from '../../../../record-panels/i18n'
@@ -18,7 +18,15 @@ import {
   acceptProposal,
   addLine,
   cancelOrder,
+  changeOrder,
+  counterPropose,
   editLine,
+  endLines,
+  getReach,
+  getReminders,
+  getRevisions,
+  moveConfirmBy,
+  remind,
   getAnswer,
   getDocuments,
   getOrder,
@@ -34,10 +42,14 @@ import {
   updateOrder,
   type OrderDocuments,
   type OrderReceipt,
+  type OrderReminders,
+  type OrderRevisions,
   type PurchaseOrder,
+  type ReachAction,
   type SupplierAnswer,
 } from '../api'
 import { sendModelOf, tabOf, type LineDraft, type OrderDialog, type OrderRecordModel, type SendCheckState } from '../model'
+import { isDailyDialog, type SendExtra } from '../daily-model'
 import { detailsOf, OrderRecordView } from './view/OrderRecordView'
 
 const TIME_ZONE = 'Europe/Rome'
@@ -51,7 +63,7 @@ const TIME_ZONE = 'Europe/Rome'
  */
 export function OrderRecord({ orderId }: { orderId: string }) {
   return (
-    <WithMessages namespaces={['buying', 'lists', 'records', 'send']}>
+    <WithMessages namespaces={['buying', 'purchasing-orders', 'lists', 'records', 'send']}>
       <RecordContainer orderId={orderId} />
     </WithMessages>
   )
@@ -80,6 +92,7 @@ const NEW_LINE: LineDraft = {
 
 function RecordContainer({ orderId }: { orderId: string }) {
   const t = useT('buying')
+  const td = useT('purchasing-orders')
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -94,6 +107,13 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const [answer, setAnswer] = useState<Part<SupplierAnswer>>(PART_LOADING)
   const [receipts, setReceipts] = useState<Part<OrderReceipt[]> | null>(can.stockView ? PART_LOADING : null)
   const [documents, setDocuments] = useState<Part<OrderDocuments>>(PART_LOADING)
+  // B-W2a-69: the revisions (in the person's language: the draft's change words) and the reminders.
+  const locale = useLocale()
+  const [revisions, setRevisions] = useState<Part<OrderRevisions>>(PART_LOADING)
+  const [reminders, setReminders] = useState<Part<OrderReminders>>(PART_LOADING)
+  const [sendExtra, setSendExtra] = useState<SendExtra>({ confirmBy: '', changeNote: '' })
+  /** One Idempotency-Key per daily dialog (a retry of the same dialog is the same request). */
+  const dailyKey = useRef<string>(newIdempotencyKey())
   const [dialog, setDialog] = useState<OrderDialog | null>(null)
   const dialogRef = useRef<OrderDialog | null>(null)
   dialogRef.current = dialog
@@ -123,11 +143,17 @@ function RecordContainer({ orderId }: { orderId: string }) {
     getDocuments(api, orderId)
       .then((value) => setDocuments(part(value)))
       .catch((error: unknown) => setDocuments({ value: null, problem: readProblem(error) }))
+    getRevisions(api, orderId, locale)
+      .then((value) => setRevisions(part(value)))
+      .catch((error: unknown) => setRevisions({ value: null, problem: readProblem(error) }))
+    getReminders(api, orderId)
+      .then((value) => setReminders(part(value)))
+      .catch((error: unknown) => setReminders({ value: null, problem: readProblem(error) }))
     if (can.stockView)
       receiptsOf(api, orderId)
         .then((value) => setReceipts(part(value)))
         .catch((error: unknown) => setReceipts({ value: null, problem: readProblem(error) }))
-  }, [api, orderId, can.stockView])
+  }, [api, orderId, can.stockView, locale])
 
   const load = useCallback(async () => {
     try {
@@ -191,6 +217,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
 
   const openSend = useCallback(() => {
     setDialog({ kind: 'send' })
+    setSendExtra({ confirmBy: '', changeNote: '' })
     setSendResult(null)
     setSendProblem(null)
     sendKey.current = newIdempotencyKey()
@@ -216,13 +243,21 @@ function RecordContainer({ orderId }: { orderId: string }) {
     setSendProblem(null)
     try {
       const cc = parseCc(fields.cc).valid
-      const answer = await sendOrder(api, orderId, { version: loaded.version, ...(cc.length ? { cc } : {}), subject: fields.subject.trim() || null, message: fields.message.trim() || null }, sendKey.current ?? newIdempotencyKey())
+      // B-W2a-69: the confirm-by chosen (else the API's default: 48 h, longer by the supplier's closed days) and a later revision's note.
+      const confirmBy = sendExtra.confirmBy && sendExtra.confirmBy !== check.value.confirmBy ? sendExtra.confirmBy : null
+      const changeNote = loaded.revision > 1 && sendExtra.changeNote.trim() ? sendExtra.changeNote.trim() : null
+      const answer = await sendOrder(
+        api,
+        orderId,
+        { version: loaded.version, ...(cc.length ? { cc } : {}), subject: fields.subject.trim() || null, message: fields.message.trim() || null, ...(confirmBy ? { confirmBy } : {}), ...(changeNote ? { changeNote } : {}) },
+        sendKey.current ?? newIdempotencyKey(),
+      )
       setValue(answer.order)
       setSendResult({ delivery: answer.delivery, to: answer.sent.to, at: answer.sent.sentAt, linkUntil: answer.sent.link.expiresAt })
       loadParts()
     } catch (error) {
-      const words = writeProblem(error, (_paths, info) => (info.kind === 'conflict' ? phrase('po.send.refused') : null))
-      setSendProblem(t(words.key, words.params))
+      const words = writeProblem(error, (paths, info) => (paths.some((path) => path.includes('confirmBy')) ? phrase('purchasing-orders:send.confirmByRefused') : info.kind === 'conflict' ? phrase('po.send.refused') : null))
+      setSendProblem(words.key.startsWith('purchasing-orders:') ? td(words.key.slice('purchasing-orders:'.length), words.params) : t(words.key, words.params))
       sendKey.current = newIdempotencyKey()
       if (isApiError(error) && error.kind === 'conflict') {
         void load()
@@ -233,7 +268,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     } finally {
       setSending(false)
     }
-  }, [api, orderId, sending, check.status, fields, setValue, loadParts, load, t])
+  }, [api, orderId, sending, check, fields, sendExtra, setValue, loadParts, load, t, td])
 
   const recordHref = `${prefix}/purchasing/orders/${orderId}`
   const sendModel: DocumentSendModel | null =
@@ -407,17 +442,89 @@ function RecordContainer({ orderId }: { orderId: string }) {
     )
   }, [api, dialog, orderId, write])
 
-  const cancel = useCallback(async () => {
-    if (dialog?.kind !== 'cancel') return
+  // ---- B-W2a-69: the changes after the send ---------------------------------------------------------------------------------
+
+  /** The reach of a cancel or a close short, read into the open dialog (never drawn as allowed before it is there). */
+  const readReach = useCallback(
+    (action: ReachAction, lineIds: string[]) => {
+      getReach(api, orderId, action, lineIds)
+        .then((value) =>
+          setDialog((open) => (open && (open.kind === 'cancelOrder' || open.kind === 'endLines') ? { ...open, reach: { status: 'ready', value } } : open)),
+        )
+        .catch((error: unknown) => setDialog((open) => (open && (open.kind === 'cancelOrder' || open.kind === 'endLines') ? { ...open, reach: { status: 'error', problem: readProblem(error) } } : open)))
+    },
+    [api, orderId],
+  )
+
+  const openDaily = useCallback((next: OrderDialog) => {
+    dailyKey.current = newIdempotencyKey()
+    setDialogProblem(null)
+    setDialog(next)
+  }, [])
+
+  const openCancel = useCallback(() => {
+    openDaily({ kind: 'cancelOrder', reason: '', message: '', reach: { status: 'loading' } })
+    readReach('CANCEL_ORDER', [])
+  }, [openDaily, readReach])
+
+  const openEnd = useCallback(
+    (action: 'CANCEL_LINES' | 'CLOSE_SHORT', lineIds: string[]) => {
+      openDaily({ kind: 'endLines', action, lineIds, reason: '', message: '', reach: { status: 'loading' } })
+      readReach(action, lineIds)
+    },
+    [openDaily, readReach],
+  )
+
+  const dailyRefusal: Parameters<typeof writeProblem>[1] = (paths, info) => {
+    if (paths.some((path) => path.includes('confirmBy'))) return phrase('purchasing-orders:confirmBy.refused')
+    if (paths.some((path) => path.startsWith('body/reason'))) return phrase('po.cancel.reasonNeeded')
+    if (info.kind === 'conflict') return phrase('purchasing-orders:refused.changed')
+    return null
+  }
+
+  const confirmCancel = useCallback(async () => {
+    if (dialog?.kind !== 'cancelOrder') return
     const { reason, message } = dialog
     await write(
-      async () => {
-        const answer = await cancelOrder(api, orderId, { version: version(), reason: reason.trim(), message: message.trim() || null })
-        return answer.order
-      },
+      async () => (await cancelOrder(api, orderId, { version: version(), reason: reason.trim(), message: message.trim() || null })).order,
       phrase(current.current?.status === 'DRAFT' ? 'po.notice.cancelledDraft' : 'po.notice.cancelled'),
-      (_paths, info) => (info.kind === 'conflict' ? phrase('po.cancel.refused') : null),
+      dailyRefusal,
     )
+  }, [api, dialog, orderId, write])
+
+  const confirmEnd = useCallback(async () => {
+    if (dialog?.kind !== 'endLines') return
+    const { action, lineIds, reason, message } = dialog
+    const count = lineIds.length
+    await write(
+      async () => (await endLines(api, orderId, action === 'CLOSE_SHORT' ? 'close-short' : 'cancel', { version: version(), lineIds, reason: reason.trim(), message: message.trim() || null }, dailyKey.current)).order,
+      phrase(action === 'CLOSE_SHORT' ? 'purchasing-orders:notice.closedShort' : 'purchasing-orders:notice.linesCancelled', { count }),
+      dailyRefusal,
+    )
+  }, [api, dialog, orderId, write])
+
+  const startChange = useCallback(async () => {
+    if (dialog?.kind !== 'change' && dialog?.kind !== 'counter') return
+    const counter = dialog.kind === 'counter'
+    const note = dialog.note.trim() || null
+    await write(
+      async () => (counter ? (await counterPropose(api, orderId, { version: version(), note }, dailyKey.current)).order : (await changeOrder(api, orderId, { version: version(), note }, dailyKey.current)).order),
+      phrase(counter ? 'purchasing-orders:notice.countered' : 'purchasing-orders:notice.changed', { revision: (current.current?.revision ?? 1) + 1 }),
+      dailyRefusal,
+    )
+    router.replace(`${recordHref}?tab=lines`)
+  }, [api, dialog, orderId, write, router, recordHref])
+
+  const moveDeadline = useCallback(async () => {
+    if (dialog?.kind !== 'confirmBy' || !dialog.confirmBy) return
+    const confirmBy = dialog.confirmBy
+    await write(async () => moveConfirmBy(api, orderId, version(), confirmBy), phrase('purchasing-orders:notice.confirmByMoved'), dailyRefusal)
+  }, [api, dialog, orderId, write])
+
+  const remindNow = useCallback(async () => {
+    if (dialog?.kind !== 'remind') return
+    const message = dialog.message.trim() || null
+    await write(async () => (await remind(api, orderId, { version: version(), message }, dailyKey.current)).order, phrase('purchasing-orders:notice.reminded', { email: current.current?.contact?.email ?? '' }), dailyRefusal)
   }, [api, dialog, orderId, write])
 
   const accept = useCallback(async () => {
@@ -451,9 +558,11 @@ function RecordContainer({ orderId }: { orderId: string }) {
     [api],
   )
 
-  // ?tab=lines&edit=details (a send check's Fix link): the details dialog, once the order is there.
+  // ?tab=lines&edit=details (a send check's Fix link): the details dialog, once the order is there; ?cancel=1 (the list's
+  // row verb Cancel): the cancel dialog with its reach.
   useEffect(() => {
     if (params?.get('edit') === 'details' && order.status === 'ready' && !dialog) setDialog({ kind: 'details', draft: detailsOf(order.value) })
+    if (params?.get('cancel') === '1' && order.status === 'ready' && !dialog) openCancel()
   }, [params, order.status])
 
   const model: OrderRecordModel = {
@@ -464,6 +573,11 @@ function RecordContainer({ orderId }: { orderId: string }) {
     answer,
     receipts,
     documents,
+    revisions,
+    reminders,
+    sendExtra: dialog?.kind === 'send' ? sendExtra : null,
+    sendFacts: dialog?.kind === 'send' && check.status === 'ready' ? { confirmBy: check.value.confirmBy ?? null, changes: check.value.changes ?? null } : null,
+    now: new Date().toISOString(),
     send: sendModel,
     previewHref: can.cost && order.status === 'ready' && order.value.status === 'DRAFT' ? previewHref(orderId) : null,
     live,
@@ -494,7 +608,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
           setDialogProblem(null)
           if (next?.kind === 'send') openSend()
           else setDialog(next)
-          if (next === null && params?.get('edit')) router.replace(`${recordHref}?tab=${tab}`)
+          if (next === null && (params?.get('edit') || params?.get('cancel'))) router.replace(`${recordHref}?tab=${tab}`)
+          if (next && isDailyDialog(next) && (!dialog || dialog.kind !== next.kind)) dailyKey.current = newIdempotencyKey()
           if (next?.kind === 'review' && !answer.value) loadParts()
         },
         onDismissNotice: () => setNotice(null),
@@ -505,7 +620,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
           onNewLink: () => setDialog({ kind: 'newLink', message: '' }),
         },
         onNewLink: () => void newLink(),
-        onCancel: () => void cancel(),
         onAccept: () => void accept(),
         onRefuse: () => void refuse(),
         onSaveDetails: () => void saveDetails(),
@@ -526,6 +640,18 @@ function RecordContainer({ orderId }: { orderId: string }) {
         onSupplierView: openSupplierView,
         onDownload: (fileId) => void download(fileId),
         onRetryPart: () => loadParts(),
+        daily: {
+          onSendExtra: setSendExtra,
+          onChange: () => void startChange(),
+          onCounter: () => void startChange(),
+          onCancelOrder: openCancel,
+          onConfirmCancel: () => void confirmCancel(),
+          onEndLines: openEnd,
+          onConfirmEnd: () => void confirmEnd(),
+          onConfirmBy: () => void moveDeadline(),
+          onRemind: () => void remindNow(),
+          onOpenRevision: (fileId) => void download(fileId),
+        },
       }}
     />
   )

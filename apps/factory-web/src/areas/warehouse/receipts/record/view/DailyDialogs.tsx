@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import { Camera, CheckCircle2, ExternalLink, Trash2 } from 'lucide-react'
 import { DISCREPANCY_KINDS, DISCREPANCY_LIMITS, type DiscrepancyKind } from '@nexus/factory-domain/inventory/receipts/discrepancies'
+import { DOCUMENT_REQUEST_LIMITS } from '@nexus/factory-domain/inventory/receipts/document-request'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { Banner, Field, Modal } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
@@ -27,6 +28,7 @@ import {
   recipientsOf,
   reportSendHeld,
   requestHeld,
+  requestPreview,
   settleHeld,
   type DiscrepancyDraft,
   type Say,
@@ -467,7 +469,7 @@ function RequestDialog({ receipt, daily, actions, dialog }: Props & { dialog: Ex
   const draft = dialog.draft
   const set = (next: Partial<typeof draft>) => actions?.onDialog?.({ kind: 'request', draft: { ...draft, ...next } })
   const held = words(t, requestHeld(draft, daily.can, daily.busy))
-  const contacts = draft.contacts.value
+  const check = draft.check.value
   const wanted = draft.wanted.map((entry) => ({ key: entry.key, label: entry.lot ? `${t(`docs.ask.${entry.ask}`)} · ${t('docs.lotOf', { code: entry.lot.code, ref: entry.lot.supplierLotRef ?? '—', dye: entry.lot.dyeBatch ?? '—' })}` : t(`docs.ask.${entry.ask}`) }))
   if (draft.sentTo) {
     return (
@@ -479,11 +481,12 @@ function RequestDialog({ receipt, daily, actions, dialog }: Props & { dialog: Ex
       </Modal>
     )
   }
+  const preview = check ? requestPreview(draft, receipt) : null
   return (
     <Frame title={t('request.title')} subtitle={t('request.subtitle', { supplier: receipt.supplier.name, number: receipt.number })} held={held} label={t('request.send')} onConfirm={() => actions?.onRequest?.()} daily={daily} actions={actions} size="lg">
-      {draft.contacts.problem ? (
-        <Banner tone="danger" title={t('request.contactsFailed')} />
-      ) : !contacts ? (
+      {draft.check.problem ? (
+        <Banner tone="danger" title={t('request.contactsFailed')} action={<Button size="sm" onClick={() => set({ check: { value: null, problem: null } })}>{t('common.retry')}</Button>} />
+      ) : !check || !preview ? (
         <p className="fw-by-hint" role="status">
           <Spinner size={14} /> {t('request.loading')}
         </p>
@@ -501,34 +504,40 @@ function RequestDialog({ receipt, daily, actions, dialog }: Props & { dialog: Ex
           </fieldset>
           <fieldset className="fw-rcd-fieldset">
             <legend className="fw-by-h3">{t('report.to')}</legend>
-            {contacts.length === 0 ? (
+            {check.recipients.length === 0 ? (
               <p className="fw-by-hint">{t('report.problem.noContact')}</p>
             ) : (
-              <ul className="fw-rcd-checks">
-                {contacts.map((contact) => (
-                  <li key={contact.id}>
-                    <Checkbox
-                      checked={draft.to.includes(contact.id)}
-                      onChange={(event) => set({ to: event.target.checked ? [...draft.to, contact.id] : draft.to.filter((id) => id !== contact.id) })}
-                      label={t('report.recipient', { name: contact.name, email: contact.email ?? '—', roles: contact.roles.map((role) => t(`contactRole.${role}`)).join(', ') || '—' })}
-                    />
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="fw-rcd-checks">
+                  {check.recipients.map((recipient) => (
+                    <li key={recipient.contactId}>
+                      <Checkbox
+                        checked={draft.to.includes(recipient.contactId)}
+                        onChange={(event) => set({ to: event.target.checked ? [...draft.to, recipient.contactId] : draft.to.filter((id) => id !== recipient.contactId) })}
+                        label={t('report.recipient', { name: recipient.name, email: recipient.email, roles: recipient.roles.map((role) => t(`contactRole.${role}`)).join(', ') || '—' })}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                <p className="fw-by-hint">{t('request.toHint')}</p>
+              </>
             )}
           </fieldset>
           <Field label={t('report.language')} hint={t('request.languageHint')}>
             <span className="fw-by-inline" role="radiogroup" aria-label={t('report.language')}>
               {(['it', 'en'] as const).map((language) => (
-                <Radio key={language} name="request-language" checked={draft.language === language} onChange={() => set({ language, edited: draft.edited })} label={t(`language.${language}`)} />
+                <Radio key={language} name="request-language" checked={draft.language === language} onChange={() => set({ language })} label={t(`language.${language}`)} />
               ))}
             </span>
           </Field>
-          <Field label={t('report.subject')} required>
-            <Input size="sm" maxLength={200} value={draft.subject} onChange={(event) => set({ subject: event.target.value, edited: true })} />
+          <Field label={t('request.note')} hint={t('request.noteHint', { max: DOCUMENT_REQUEST_LIMITS.note })}>
+            <Textarea rows={3} maxLength={DOCUMENT_REQUEST_LIMITS.note} value={draft.note} onChange={(event) => set({ note: event.target.value })} />
           </Field>
-          <Field label={t('request.body')} required hint={t('request.bodyHint')}>
-            <Textarea rows={9} maxLength={4000} value={draft.body} onChange={(event) => set({ body: event.target.value, edited: true })} />
+          <Field label={t('report.subject')}>
+            <Input size="sm" readOnly value={preview.subject} />
+          </Field>
+          <Field label={t('request.preview')} hint={t('request.previewHint')}>
+            <Textarea rows={10} readOnly value={preview.body} />
           </Field>
           <p className="fw-by-hint">{t('request.what')}</p>
         </>

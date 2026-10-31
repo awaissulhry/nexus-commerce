@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useT } from '../../../../lib/i18n/provider'
+import { newIdempotencyKey } from '../../../../lib/api/client'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { findSuppliers, listSites, type SiteOption } from '../../../_shared/buying/api'
 import { downloadText, useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { buyingCan, csvOf, phrase, readProblem, writeProblem } from '../../../_shared/buying/model'
-import { createOrder, listOrders, type OrderRow, type OrderSummary } from '../api'
-import { NO_NEW_ORDER, orderQuery, orderViewOf, type NewOrderModel, type OrdersListModel, type OrderView } from '../model'
+import { createOrder, listOrders, sendChecks, sendMany, type OrderRow, type OrderSummary } from '../api'
+import { sendManyBody } from '../daily-model'
+import { NO_NEW_ORDER, orderQuery, orderViewOf, type NewOrderModel, type OrdersListModel, type OrderView, type SendManyModel } from '../model'
 import { OrdersListView } from './view/OrdersListView'
 
 /**
@@ -20,7 +22,7 @@ import { OrdersListView } from './view/OrdersListView'
  */
 export function OrdersPage() {
   return (
-    <WithMessages namespaces={['buying', 'lists']}>
+    <WithMessages namespaces={['buying', 'purchasing-orders', 'lists']}>
       <OrdersContainer />
     </WithMessages>
   )
@@ -47,6 +49,9 @@ function OrdersContainer() {
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<OrdersListModel['notice']>(null)
   const [newOrder, setNewOrder] = useState<NewOrderModel | null>(null)
+  // B-W2a-69: Send n (one key per dialog: a retry of the same dialog is the same sends).
+  const [sendManyState, setSendMany] = useState<SendManyModel | null>(null)
+  const sendManyKey = useRef(newIdempotencyKey())
   const readId = useRef(0)
 
   const address = useCallback(
@@ -177,7 +182,45 @@ function OrdersContainer() {
     [rows.items, can.cost, sites, t],
   )
 
-  const model: OrdersListModel = { prefix, can, view, q, rows, summary, sites, asOf, live, updates, notice, newOrder }
+  const readCards = useCallback(
+    (orderIds: string[]) => {
+      setSendMany((current) => (current ? { ...current, cards: { status: 'loading' }, problem: null } : current))
+      sendChecks(api, orderIds)
+        .then((cards) => setSendMany((current) => (current && current.orderIds === orderIds ? { ...current, cards: { status: 'ready', value: cards } } : current)))
+        .catch((error: unknown) => setSendMany((current) => (current && current.orderIds === orderIds ? { ...current, cards: { status: 'error', problem: readProblem(error) } } : current)))
+    },
+    [api],
+  )
+
+  const openSendMany = useCallback(
+    (orderIds: string[] | null) => {
+      if (!orderIds || orderIds.length === 0) {
+        setSendMany(null)
+        return
+      }
+      sendManyKey.current = newIdempotencyKey()
+      setSendMany({ orderIds, cards: { status: 'loading' }, confirmBy: {}, message: '', sending: false, outcomes: null, problem: null })
+      readCards(orderIds)
+    },
+    [readCards],
+  )
+
+  const sendAll = useCallback(async () => {
+    const dialog = sendManyState
+    if (!dialog || dialog.sending || dialog.cards.status !== 'ready') return
+    const orders = sendManyBody(dialog.cards.value, dialog.confirmBy)
+    if (orders.length === 0) return
+    setSendMany({ ...dialog, sending: true, problem: null })
+    try {
+      const outcomes = await sendMany(api, { orders, message: dialog.message.trim() || null }, sendManyKey.current)
+      setSendMany((current) => (current ? { ...current, sending: false, outcomes } : current))
+      void load()
+    } catch (error) {
+      setSendMany((current) => (current ? { ...current, sending: false, problem: writeProblem(error) } : current))
+    }
+  }, [api, sendManyState, load])
+
+  const model: OrdersListModel = { prefix, can, view, q, rows, summary, sites, asOf, live, updates, notice, newOrder, sendMany: sendManyState }
 
   return (
     <OrdersListView
@@ -191,6 +234,15 @@ function OrdersContainer() {
         onExport: exportRows,
         onOpen: (id) => router.push(`${prefix}/purchasing/orders/${id}`),
         onDismissNotice: () => setNotice(null),
+        onSendMany: openSendMany,
+        sendMany: {
+          onConfirmBy: (orderId, confirmBy) => setSendMany((current) => (current ? { ...current, confirmBy: { ...current.confirmBy, [orderId]: confirmBy } } : current)),
+          onMessage: (message) => setSendMany((current) => (current ? { ...current, message } : current)),
+          onSend: () => void sendAll(),
+          onRetry: () => {
+            if (sendManyState) readCards(sendManyState.orderIds)
+          },
+        },
         onNew: (open) => {
           if (open) openNew()
           else {
