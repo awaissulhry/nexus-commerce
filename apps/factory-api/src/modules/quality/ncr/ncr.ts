@@ -303,7 +303,7 @@ async function openRegister(tools: CommandTools, row: NcrRow, description: strin
     source: { type: NCR_RECORD, id: row.id },
   })
   const linked = await tools.tx.ncrLink.findFirst({ where: { ncrId: row.id, recordType: 'PpeRegisterEntry', recordId: opened.entryId }, select: { id: true } })
-  if (!linked) await tools.tx.ncrLink.create({ data: { id: newId(), siteId: row.siteId, ncrId: row.id, recordType: 'PpeRegisterEntry', recordId: opened.entryId, note: null, createdAt: tools.now, createdById: contextOf(tools).actorId }, select: { id: true } })
+  if (!linked) await tools.tx.ncrLink.create({ data: { id: newId(), siteId: row.siteId, ncrId: row.id, recordType: 'PpeRegisterEntry', recordId: opened.entryId, note: null, createdAt: tools.now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null }, select: { id: true } })
   return { id: opened.entryId, reference: opened.reference, opened: opened.opened }
 }
 
@@ -319,155 +319,171 @@ export interface RaiseBody extends NcrContent {
 const take = <Key extends keyof Prefill & keyof RaiseBody>(body: RaiseBody, prefill: Prefill | null, key: Key): NonNullable<RaiseBody[Key]> | NonNullable<Prefill[Key]> | null =>
   (body[key] !== undefined ? body[key] : (prefill?.[key] ?? null)) as never
 
+/**
+ * Who raises an NCR inside a command: the office person (their id, their rights at the site), or — B-W2a-75, the
+ * inspection bench's Hold lot (quality/final/bench-hold.ts) — a system command after the floor's own checks (no office
+ * person: `actorId` null; the finder is the worker the source names).
+ */
+export interface NcrRaiser {
+  readonly actorId: string | null
+  readonly may: (permission: Permission, row: { readonly companyId: string; readonly siteId: string }) => boolean
+}
+
 /** POST /quality/ncr: raise an NCR, by hand or from a record (its prefill fills what the body leaves out). */
 export async function raiseNcr(caller: CommandCaller, body: RaiseBody, idempotencyKey?: string) {
   const context = officeOf(caller)
   const { result } = await command(caller, { name: 'quality.raiseNcr', idempotencyKey, input: body }, async (tools) => {
-    const { tx, now } = tools
-    const prefill = body.from ? await prefillFrom(tx, body.from.recordType, body.from.recordId) : null
-    if (body.from && !prefill) throw new NotFoundError(`${typeWords(body.from.recordType).replace(/^./, (first) => first.toUpperCase())} not found.`)
-    if (prefill?.problem) throw new ConflictError(prefill.problem)
-    if (prefill?.siteId && body.siteId && prefill.siteId !== body.siteId) refuse([{ path: 'siteId', message: `${prefill.label} is at another site.` }], 'The record is at another site.')
-    const siteId = prefill?.siteId ?? body.siteId
-    if (!siteId) refuse([{ path: 'siteId', message: 'Name the site where the problem is handled.' }], 'Name the site.')
-    const site = isUuid(siteId) ? await tx.site.findUnique({ where: { id: siteId }, select: { id: true, companyId: true } }) : null
-    if (!site || (prefill?.companyId && prefill.companyId !== site.companyId)) refuse([{ path: 'siteId', message: 'Not a site you can see.' }], 'The site is not found.')
-    if (!may(context, QUALITY_NCR_RAISE, { companyId: site!.companyId, siteId: site!.id })) throw new ForbiddenError('You raise NCRs only at the sites your role reaches.')
-
-    // A record's own time is kept unless it is after now (a device clock ahead): then now.
-    const foundOn = body.foundOn ? new Date(body.foundOn) : prefill?.foundOn && prefill.foundOn.getTime() < now.getTime() ? prefill.foundOn : now
-    const named = await resolveReferences(
-      tx,
-      site!,
-      {
-        defectCodeId: take(body, prefill, 'defectCodeId'),
-        severity: take(body, prefill, 'severity'),
-        styleId: take(body, prefill, 'styleId'),
-        colourwayId: take(body, prefill, 'colourwayId'),
-        workOrderId: take(body, prefill, 'workOrderId'),
-        itemId: take(body, prefill, 'itemId'),
-        lotId: take(body, prefill, 'lotId'),
-        supplierId: take(body, prefill, 'supplierId'),
-        foundById: body.foundById !== undefined || body.foundByWorkerId !== undefined ? (body.foundById ?? null) : (prefill?.foundById ?? (prefill?.foundByWorkerId ? null : context.actorId)),
-        foundByWorkerId: body.foundById !== undefined || body.foundByWorkerId !== undefined ? (body.foundByWorkerId ?? null) : (prefill?.foundByWorkerId ?? null),
-        ownerId: body.ownerId ?? null,
-      },
-      () => true,
-      context.actorId,
-    )
-    const draft = {
-      title: body.title ?? prefill?.title ?? undefined,
-      description: take(body, prefill, 'description'),
-      quantityAffected: body.quantityAffected ?? prefill?.quantityAffected ?? undefined,
-      quantitySuspect: body.quantitySuspect !== undefined ? body.quantitySuspect : null,
-      zone: take(body, prefill, 'zone'),
-      size: take(body, prefill, 'size'),
-      serial: take(body, prefill, 'serial'),
-      foundOn,
-    }
-    const problems = ncrDraftProblems(draft, true, now)
-    if (!named.severity) problems.push({ path: 'severity', message: 'How serious it is: critical, major or minor.' })
-    if (problems.length > 0) refuse(problems, 'The NCR is not complete.')
-    if (body.containmentDueAt && new Date(body.containmentDueAt).getTime() < foundOn.getTime()) refuse([{ path: 'containmentDueAt', message: 'The containment is due after the problem was found.' }], 'The containment due time is before the problem.')
-
-    const id = newId()
-    const issued = await allocateNumber(tools, { companyId: site!.companyId, kind: 'NCR' }, { type: NCR_RECORD, id })
-    const data: Prisma.NonconformanceUncheckedCreateInput = {
-      id,
-      companyId: site!.companyId,
-      siteId: site!.id,
-      number: issued.formatted,
-      title: draft.title!.trim(),
-      description: draft.description?.trim() || null,
-      source: body.source ?? prefill?.source ?? 'OTHER',
-      sourceType: prefill ? prefill.fromType : null,
-      sourceId: prefill ? prefill.fromId : null,
-      foundAt: body.foundAt ?? prefill?.foundAt ?? 'IN_LINE',
-      foundOn,
-      foundById: named.foundById,
-      foundByWorkerId: named.foundByWorkerId,
-      quantityAffected: draft.quantityAffected!,
-      quantitySuspect: draft.quantitySuspect,
-      uom: body.uom ?? prefill?.uom ?? 'PCS',
-      defectCodeId: named.defectCodeId,
-      severity: named.severity!,
-      zone: draft.zone,
-      styleId: named.styleId,
-      colourwayId: named.colourwayId,
-      size: draft.size?.trim() || null,
-      serial: draft.serial?.trim() || null,
-      workOrderId: named.workOrderId,
-      itemId: named.itemId,
-      lotId: named.lotId,
-      supplierId: named.supplierId,
-      ownerId: named.ownerId,
-      containmentDueAt: body.containmentDueAt !== undefined ? (body.containmentDueAt ? new Date(body.containmentDueAt) : null) : new Date(foundOn.getTime() + DEFAULT_CONTAINMENT_HOURS * 3_600_000),
-      createdAt: now,
-      updatedAt: now,
-      createdById: context.actorId,
-    }
-    const row = await tx.nonconformance.create({ data, select: NCR_COLUMNS })
-    const scope = SCOPE_FIELDS(row)
-    tools.audit({ action: 'quality.raiseNcr', recordType: NCR_RECORD, recordId: id, ...scope, after: { ...data, createdAt: undefined, updatedAt: undefined } })
-
-    // Its links: the source's records, then the ones named (each a record the caller sees, of the NCR's company).
-    const links: { recordType: string; recordId: string; note: string | null }[] = [...(prefill?.links ?? [])]
-    for (const [index, link] of (body.links ?? []).entries()) {
-      const target = await linkTarget(tx, link.recordType, link.recordId)
-      if (!target || (target.companyId !== null && target.companyId !== row.companyId)) refuse([{ path: `links/${index}/recordId`, message: `Not a ${typeWords(link.recordType)} of the NCR's company.` }], 'A linked record is not found.')
-      links.push({ recordType: link.recordType, recordId: link.recordId, note: link.note?.trim() || null })
-    }
-    const seen = new Set<string>()
-    for (const link of links) {
-      const key = `${link.recordType}|${link.recordId}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      await tx.ncrLink.create({ data: { id: newId(), siteId: row.siteId, ncrId: id, recordType: link.recordType, recordId: link.recordId, note: link.note, createdAt: now, createdById: context.actorId }, select: { id: true } })
-    }
-
-    // Raised from a hold: the NCR decides it, and its first containment action is that hold, done.
-    for (const [index, holdId] of (prefill?.holdIds ?? []).entries()) {
-      const hold = await tx.qualityHold.update({ where: { id: holdId }, data: { ncrId: id, version: { increment: 1 }, updatedAt: now }, select: { id: true, subjectType: true, subjectIds: true, reasonCode: true } })
-      tools.audit({ action: 'quality.decideHoldInNcr', recordType: 'QualityHold', recordId: hold.id, ...scope, before: { ncrId: null }, after: { ncrId: id } })
-      const actionId = newId()
-      await tx.ncrContainmentAction.create({
-        data: {
-          id: actionId,
-          siteId: row.siteId,
-          ncrId: id,
-          seq: index + 1,
-          kind: 'HOLD_STOCK',
-          ownerId: named.ownerId,
-          status: 'DONE',
-          doneAt: now,
-          doneById: context.actorId,
-          evidenceNote: `The goods are on hold (${hold.reasonCode.toLowerCase().replace(/_/g, ' ')}): ${hold.subjectIds.length} ${hold.subjectType === 'GarmentSerial' ? 'garment serial' : hold.subjectType.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}${hold.subjectIds.length === 1 ? '' : 's'}.`,
-          recordType: 'QualityHold',
-          recordId: hold.id,
-          createdAt: now,
-          updatedAt: now,
-          createdById: context.actorId,
-        },
-        select: { id: true },
-      })
-    }
-
-    // A PPE nonconformity that may present a risk goes to the PPE register.
-    const style = row.styleId ? await tx.style.findUnique({ where: { id: row.styleId }, select: { ppeCategory: true } }) : null
-    const ppe = style !== null && style.ppeCategory !== 'NOT_PPE'
-    const wanted = body.register ?? opensRegisterEntry({ ppe, severity: row.severity as DefectClass, foundAt: row.foundAt as QualityStage, source: row.source as NcrSource })
-    if (body.register && !ppe) refuse([{ path: 'register', message: 'The PPE register keeps PPE: the NCR names no PPE style.' }], 'No PPE style.')
-    const entry = wanted ? await openRegister(tools, row, null) : null
-
-    tools.emit({
-      type: 'ncr.created',
-      subject: id,
-      ...scope,
-      payload: { ncrId: id, number: row.number, source: row.source as NcrSource, sourceType: row.sourceType, sourceId: row.sourceId, severity: row.severity as DefectClass, workOrderId: row.workOrderId, lotId: row.lotId, holdIds: [...(prefill?.holdIds ?? [])], registerEntryId: entry?.id ?? null },
-    })
+    const id = await raiseNcrInCommand(tools, body, { actorId: context.actorId, may: (permission, row) => may(context, permission, row) })
     return answerOf(tools, id)
   })
   return result
+}
+
+/** Raises the NCR inside the caller's command (the office route's, or a system's): answers its id. */
+export async function raiseNcrInCommand(tools: CommandTools, body: RaiseBody, raiser: NcrRaiser): Promise<string> {
+  const { tx, now } = tools
+  const prefill = body.from ? await prefillFrom(tx, body.from.recordType, body.from.recordId) : null
+  if (body.from && !prefill) throw new NotFoundError(`${typeWords(body.from.recordType).replace(/^./, (first) => first.toUpperCase())} not found.`)
+  if (prefill?.problem) throw new ConflictError(prefill.problem)
+  if (prefill?.siteId && body.siteId && prefill.siteId !== body.siteId) refuse([{ path: 'siteId', message: `${prefill.label} is at another site.` }], 'The record is at another site.')
+  const siteId = prefill?.siteId ?? body.siteId
+  if (!siteId) refuse([{ path: 'siteId', message: 'Name the site where the problem is handled.' }], 'Name the site.')
+  const site = isUuid(siteId) ? await tx.site.findUnique({ where: { id: siteId }, select: { id: true, companyId: true } }) : null
+  if (!site || (prefill?.companyId && prefill.companyId !== site.companyId)) refuse([{ path: 'siteId', message: 'Not a site you can see.' }], 'The site is not found.')
+  if (!raiser.may(QUALITY_NCR_RAISE, { companyId: site!.companyId, siteId: site!.id })) throw new ForbiddenError('You raise NCRs only at the sites your role reaches.')
+
+  // A record's own time is kept unless it is after now (a device clock ahead): then now.
+  const foundOn = body.foundOn ? new Date(body.foundOn) : prefill?.foundOn && prefill.foundOn.getTime() < now.getTime() ? prefill.foundOn : now
+  const named = await resolveReferences(
+    tx,
+    site!,
+    {
+      defectCodeId: take(body, prefill, 'defectCodeId'),
+      severity: take(body, prefill, 'severity'),
+      styleId: take(body, prefill, 'styleId'),
+      colourwayId: take(body, prefill, 'colourwayId'),
+      workOrderId: take(body, prefill, 'workOrderId'),
+      itemId: take(body, prefill, 'itemId'),
+      lotId: take(body, prefill, 'lotId'),
+      supplierId: take(body, prefill, 'supplierId'),
+      foundById: body.foundById !== undefined || body.foundByWorkerId !== undefined ? (body.foundById ?? null) : (prefill?.foundById ?? (prefill?.foundByWorkerId ? null : raiser.actorId)),
+      foundByWorkerId: body.foundById !== undefined || body.foundByWorkerId !== undefined ? (body.foundByWorkerId ?? null) : (prefill?.foundByWorkerId ?? null),
+      ownerId: body.ownerId ?? null,
+    },
+    () => true,
+    raiser.actorId ?? '',
+  )
+  const draft = {
+    title: body.title ?? prefill?.title ?? undefined,
+    description: take(body, prefill, 'description'),
+    quantityAffected: body.quantityAffected ?? prefill?.quantityAffected ?? undefined,
+    quantitySuspect: body.quantitySuspect !== undefined ? body.quantitySuspect : null,
+    zone: take(body, prefill, 'zone'),
+    size: take(body, prefill, 'size'),
+    serial: take(body, prefill, 'serial'),
+    foundOn,
+  }
+  const problems = ncrDraftProblems(draft, true, now)
+  if (!named.severity) problems.push({ path: 'severity', message: 'How serious it is: critical, major or minor.' })
+  if (problems.length > 0) refuse(problems, 'The NCR is not complete.')
+  if (body.containmentDueAt && new Date(body.containmentDueAt).getTime() < foundOn.getTime()) refuse([{ path: 'containmentDueAt', message: 'The containment is due after the problem was found.' }], 'The containment due time is before the problem.')
+
+  const id = newId()
+  const issued = await allocateNumber(tools, { companyId: site!.companyId, kind: 'NCR' }, { type: NCR_RECORD, id })
+  const data: Prisma.NonconformanceUncheckedCreateInput = {
+    id,
+    companyId: site!.companyId,
+    siteId: site!.id,
+    number: issued.formatted,
+    title: draft.title!.trim(),
+    description: draft.description?.trim() || null,
+    source: body.source ?? prefill?.source ?? 'OTHER',
+    sourceType: prefill ? prefill.fromType : null,
+    sourceId: prefill ? prefill.fromId : null,
+    foundAt: body.foundAt ?? prefill?.foundAt ?? 'IN_LINE',
+    foundOn,
+    foundById: named.foundById,
+    foundByWorkerId: named.foundByWorkerId,
+    quantityAffected: draft.quantityAffected!,
+    quantitySuspect: draft.quantitySuspect,
+    uom: body.uom ?? prefill?.uom ?? 'PCS',
+    defectCodeId: named.defectCodeId,
+    severity: named.severity!,
+    zone: draft.zone,
+    styleId: named.styleId,
+    colourwayId: named.colourwayId,
+    size: draft.size?.trim() || null,
+    serial: draft.serial?.trim() || null,
+    workOrderId: named.workOrderId,
+    itemId: named.itemId,
+    lotId: named.lotId,
+    supplierId: named.supplierId,
+    ownerId: named.ownerId,
+    containmentDueAt: body.containmentDueAt !== undefined ? (body.containmentDueAt ? new Date(body.containmentDueAt) : null) : new Date(foundOn.getTime() + DEFAULT_CONTAINMENT_HOURS * 3_600_000),
+    createdAt: now,
+    updatedAt: now,
+    createdById: raiser.actorId,
+  }
+  const row = await tx.nonconformance.create({ data, select: NCR_COLUMNS })
+  const scope = SCOPE_FIELDS(row)
+  tools.audit({ action: 'quality.raiseNcr', recordType: NCR_RECORD, recordId: id, ...scope, after: { ...data, createdAt: undefined, updatedAt: undefined } })
+
+  // Its links: the source's records, then the ones named (each a record the caller sees, of the NCR's company).
+  const links: { recordType: string; recordId: string; note: string | null }[] = [...(prefill?.links ?? [])]
+  for (const [index, link] of (body.links ?? []).entries()) {
+    const target = await linkTarget(tx, link.recordType, link.recordId)
+    if (!target || (target.companyId !== null && target.companyId !== row.companyId)) refuse([{ path: `links/${index}/recordId`, message: `Not a ${typeWords(link.recordType)} of the NCR's company.` }], 'A linked record is not found.')
+    links.push({ recordType: link.recordType, recordId: link.recordId, note: link.note?.trim() || null })
+  }
+  const seen = new Set<string>()
+  for (const link of links) {
+    const key = `${link.recordType}|${link.recordId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    await tx.ncrLink.create({ data: { id: newId(), siteId: row.siteId, ncrId: id, recordType: link.recordType, recordId: link.recordId, note: link.note, createdAt: now, createdById: raiser.actorId }, select: { id: true } })
+  }
+
+  // Raised from a hold: the NCR decides it, and its first containment action is that hold, done.
+  for (const [index, holdId] of (prefill?.holdIds ?? []).entries()) {
+    const hold = await tx.qualityHold.update({ where: { id: holdId }, data: { ncrId: id, version: { increment: 1 }, updatedAt: now }, select: { id: true, subjectType: true, subjectIds: true, reasonCode: true } })
+    tools.audit({ action: 'quality.decideHoldInNcr', recordType: 'QualityHold', recordId: hold.id, ...scope, before: { ncrId: null }, after: { ncrId: id } })
+    const actionId = newId()
+    await tx.ncrContainmentAction.create({
+      data: {
+        id: actionId,
+        siteId: row.siteId,
+        ncrId: id,
+        seq: index + 1,
+        kind: 'HOLD_STOCK',
+        ownerId: named.ownerId,
+        status: 'DONE',
+        doneAt: now,
+        doneById: raiser.actorId,
+        evidenceNote: `The goods are on hold (${hold.reasonCode.toLowerCase().replace(/_/g, ' ')}): ${hold.subjectIds.length} ${hold.subjectType === 'GarmentSerial' ? 'garment serial' : hold.subjectType.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}${hold.subjectIds.length === 1 ? '' : 's'}.`,
+        recordType: 'QualityHold',
+        recordId: hold.id,
+        createdAt: now,
+        updatedAt: now,
+        createdById: raiser.actorId,
+      },
+      select: { id: true },
+    })
+  }
+
+  // A PPE nonconformity that may present a risk goes to the PPE register.
+  const style = row.styleId ? await tx.style.findUnique({ where: { id: row.styleId }, select: { ppeCategory: true } }) : null
+  const ppe = style !== null && style.ppeCategory !== 'NOT_PPE'
+  const wanted = body.register ?? opensRegisterEntry({ ppe, severity: row.severity as DefectClass, foundAt: row.foundAt as QualityStage, source: row.source as NcrSource })
+  if (body.register && !ppe) refuse([{ path: 'register', message: 'The PPE register keeps PPE: the NCR names no PPE style.' }], 'No PPE style.')
+  const entry = wanted ? await openRegister(tools, row, null) : null
+
+  tools.emit({
+    type: 'ncr.created',
+    subject: id,
+    ...scope,
+    payload: { ncrId: id, number: row.number, source: row.source as NcrSource, sourceType: row.sourceType, sourceId: row.sourceId, severity: row.severity as DefectClass, workOrderId: row.workOrderId, lotId: row.lotId, holdIds: [...(prefill?.holdIds ?? [])], registerEntryId: entry?.id ?? null },
+  })
+  return id
 }
 
 // ---- change -------------------------------------------------------------------------------------------------------------
