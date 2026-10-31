@@ -1,0 +1,76 @@
+/*
+ * DS — SelectableCard (B-W2b-09). A card that is a button: the raised surface, a 2px primary frame and a "Selected"
+ * mark when picked (frame + tick + word, never colour alone), the focus ring on keyboard focus, the held look when it
+ * cannot be picked. Text roles only for words.
+ */
+.nds-selcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-12) var(--nds-space-14);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  font-size: var(--nds-font-size-sm);
+  text-align: start;
+  cursor: pointer;
+}
+.nds-selcard:hover {
+  border-color: var(--nds-border-strong);
+  background: var(--nds-surface-hover);
+}
+.nds-selcard:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+.nds-selcard.is-on {
+  border-color: var(--nds-primary);
+  box-shadow: inset 0 0 0 1px var(--nds-primary);
+  background: var(--nds-wash-primary);
+}
+.nds-selcard.is-held {
+  cursor: not-allowed;
+  color: var(--nds-text-2);
+  background: var(--nds-surface-sunken);
+}
+.nds-selcard-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.nds-selcard-title {
+  min-width: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.nds-selcard-aside {
+  flex: none;
+}
+.nds-selcard-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  color: var(--nds-text-2);
+}
+.nds-selcard-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-selcard-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--nds-selcard-min, 16rem)), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}

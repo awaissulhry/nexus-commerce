@@ -1,0 +1,132 @@
+/*
+ * DS — Waterfall (B-W2b-09). One row per step: the name (a link or a popover button), the bar on one scale with a 0
+ * line, the signed amount. Totals are solid neutral bars in bold; a good change is the success fill, a bad one the
+ * danger fill, a neutral one the muted fill — and every amount is written with its sign.
+ */
+.nds-waterfall {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-waterfall.is-held,
+.nds-waterfall.is-empty {
+  color: var(--nds-text-2);
+}
+.nds-waterfall-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 2fr) minmax(4rem, 3fr) minmax(5rem, max-content);
+  align-items: center;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-4) 0;
+}
+.nds-waterfall-row.is-total,
+.nds-waterfall-row.is-start {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-waterfall-row.is-total {
+  border-top: 1px solid var(--nds-border);
+  padding-top: var(--nds-space-6);
+}
+.nds-waterfall-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nds-waterfall-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nds-waterfall-note {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-normal);
+}
+.nds-waterfall-note.is-mismatch {
+  color: var(--nds-warning-text);
+}
+.nds-waterfall-link {
+  color: var(--nds-text-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nds-waterfall-link:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-xs);
+}
+.nds-waterfall-pop {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nds-text-link);
+  font: inherit;
+  text-align: start;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.nds-waterfall-pop:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-xs);
+}
+.nds-waterfall-track {
+  position: relative;
+  display: block;
+  height: var(--nds-space-14);
+}
+.nds-waterfall-zero {
+  position: absolute;
+  top: calc(var(--nds-space-2) * -1);
+  bottom: calc(var(--nds-space-2) * -1);
+  width: 0;
+  border-left: 1px solid var(--nds-border-strong);
+}
+.nds-waterfall-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: var(--nds-radius-xs);
+  background: var(--nds-text-3);
+}
+.nds-waterfall-row.tone-total .nds-waterfall-bar {
+  background: var(--nds-text-2);
+}
+.nds-waterfall-row.tone-up-good .nds-waterfall-bar,
+.nds-waterfall-row.tone-down-good .nds-waterfall-bar {
+  background: var(--nds-success);
+}
+.nds-waterfall-row.tone-up-bad .nds-waterfall-bar,
+.nds-waterfall-row.tone-down-bad .nds-waterfall-bar {
+  background: var(--nds-danger);
+}
+.nds-waterfall-amount {
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.nds-waterfall-row.tone-up-bad .nds-waterfall-amount,
+.nds-waterfall-row.tone-down-bad .nds-waterfall-amount {
+  color: var(--nds-danger-text);
+}
+.nds-waterfall-row.tone-up-good .nds-waterfall-amount,
+.nds-waterfall-row.tone-down-good .nds-waterfall-amount {
+  color: var(--nds-success-text);
+}
+
+@media (max-width: 479px) {
+  .nds-waterfall-row {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+  .nds-waterfall-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    height: var(--nds-space-10);
+  }
+}

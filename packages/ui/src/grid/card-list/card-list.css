@@ -1,0 +1,148 @@
+/*
+ * DS — GridCardList (B-W2b-09, D3). The list's toolbar (search, tools, Select), the count and sort, then one card per
+ * row: the box in select mode, the title link with its aside and ⋯, label: value lines. Fills the width; no sideways
+ * scroll at 360 px.
+ */
+.nds-cardlist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-cardlist-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.nds-cardlist-search {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.nds-cardlist-all {
+  flex: 1 1 auto;
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-cardlist-bulk {
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+.nds-cardlist-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}
+.nds-cardlist-count {
+  color: var(--nds-text-2);
+}
+.nds-cardlist-sort {
+  display: inline-flex;
+  min-width: 0;
+}
+.nds-cardlist-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-cardlist-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+.nds-cardlist-card.is-on {
+  border-color: var(--nds-primary);
+  box-shadow: inset 0 0 0 1px var(--nds-primary);
+  background: var(--nds-wash-primary);
+}
+.nds-cardlist-card:focus-within {
+  border-color: var(--nds-border-strong);
+}
+.nds-cardlist-card.is-skeleton {
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.nds-cardlist-box {
+  display: inline-flex;
+  flex: none;
+  padding-top: var(--nds-space-2);
+}
+.nds-cardlist-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.nds-cardlist-top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.nds-cardlist-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.nds-cardlist-link {
+  color: var(--nds-text-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nds-cardlist-link:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-xs);
+}
+.nds-cardlist-aside,
+.nds-cardlist-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+.nds-cardlist-sub {
+  min-width: 0;
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+.nds-cardlist-fields {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: var(--nds-space-2) var(--nds-space-10);
+  margin: 0;
+}
+.nds-cardlist-field {
+  display: contents;
+}
+.nds-cardlist-field dt {
+  color: var(--nds-text-2);
+}
+.nds-cardlist-field dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.nds-cardlist-state {
+  min-width: 0;
+}
+.nds-cardlist-more {
+  display: flex;
+  justify-content: center;
+}
