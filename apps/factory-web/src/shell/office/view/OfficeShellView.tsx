@@ -2,21 +2,26 @@
 
 import { forwardRef, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Bell, LogOut, Monitor, Moon, Search, Sun, UserRound } from 'lucide-react'
+import { ArrowLeft, Bell, LogOut, Monitor, Moon, Printer, Search, Sun, UserRound, X } from 'lucide-react'
 import { Banner, Menu, SearchTrigger } from '@nexus/ui/components'
 import { BottomBar } from '@nexus/ui/components/BottomBar/index'
 import { DetailHeader, WorkspaceSubheader, type WorkspaceSubheaderProps } from '@nexus/ui/patterns'
 import { AppRail, areaRailItems, areaSubNavGroups, findAreaNavPlace, type AreaNav, type RailLinkProps } from '@nexus/ui/patterns/shell/index'
 import '@nexus/ui/patterns/shell/app-rail.css'
-import { Kbd, ToolbarButton } from '@nexus/ui/primitives'
+import { Button, Kbd, ToolbarButton } from '@nexus/ui/primitives'
 import { useScopedT, useT } from '../../../lib/i18n/provider'
 import { companyPrefix } from '../../../lib/session/session'
 import { useTheme } from '../../../lib/theme/use-theme'
 import { bellWords, type BellState } from '../../../areas/home/notifications/model'
-import { officeCrumbs, palettePages, translateNav } from '../../nav/office-nav'
+import type { LiveState } from '../../live/bus'
+import { isWindowPage, OFFICE_PAGES, officeCrumbs, palettePages, translateNav } from '../../nav/office-nav'
 import type { PaletteRecords } from '../../palette/palette-model'
 import { CommandPaletteView } from '../../palette/view/CommandPaletteView'
+import { printAddressOf, viewHref, type PrintKind } from '../../print/print-model'
+import { PrintFrameView } from '../../print/view/PrintFrameView'
+import { scopeChip, scopeOf } from '../../scope/scope-model'
 import { CompanySwitcherView, type CompanySwitcherViewModel } from '../../switcher/view/CompanySwitcherView'
+import { areaTabHref, phoneNav, type LastPages } from '../phone-bar'
 import '../office-shell.css'
 
 /**
@@ -31,9 +36,17 @@ import '../office-shell.css'
  *    `DetailHeader`: the page as its title, the area › group as its meta — the crumbs). The button opens the area's
  *    pages as an overlay from the left, under the top bar and beside the rail; there is no permanent column. Enter
  *    opens it, Esc closes it and the focus goes back to the button; choosing a page closes it. The same on a phone;
- *  - on a phone (under 720 px) no rail: the DS `BottomBar` with the areas, More for the rest.
+ *  - on a phone (under 720 px) no rail: the DS `BottomBar` — B-W2b-05 (PLT-162): the person's own 4 tabs
+ *    (phone-bar.ts), each opening the area's page used last, and More (the DS sheet) with every other area.
+ * B-W2b-05 also: the band says the tab's live state and holds Print (the page's print view in a new tab, PLT-171); a
+ * WINDOW page (office-nav WINDOW_PAGES) is drawn in window mode — no rail, no Pages, no bottom bar: a slim bar with
+ * Back to Office, the page's name, the company and site, the live state and Close — and its navigation row opens it
+ * in a new tab; the PRINT view (`?print=1`) of any page is drawn by the print frame (shell/print).
  * Standard (office) density. The page itself is `children`, inside `<main id="main-content">`.
  */
+
+/** Which frame the page is drawn in (B-W2b-05). */
+export type OfficeFrame = 'office' | 'window' | 'print'
 
 export interface SystemBanner {
   id: string
@@ -47,6 +60,18 @@ export interface OfficeShellViewModel {
   nav: AreaNav
   /** The current page without `/w/<company>`. */
   path: string
+  /** B-W2b-05: the address terms (without `?`): the print view keeps them. */
+  query?: string
+  /** B-W2b-05: the frame (default the Office). */
+  frame?: OfficeFrame
+  /** B-W2b-05: what the band's Print opens (a record, a view), or null where the page is paper already. */
+  printKind?: PrintKind | null
+  /** B-W2b-05: when the print view was opened (UTC). */
+  printedAt?: string
+  /** B-W2b-05 (COL-077): the tab's live connection, said in the band (absent: not said, as in most design cases). */
+  live?: LiveState
+  /** B-W2b-05 (PLT-162): the page of each area the person used last (the phone's tabs open there). */
+  lastPages?: LastPages
   switcher: CompanySwitcherViewModel
   user: { displayName: string; email: string }
   /** The signed-in tenant's label tag (the palette refuses another factory's labels). */
@@ -118,6 +143,14 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
   const above = crumbs.slice(0, -1).map((crumb) => crumb.name).join(' › ')
   const count = (key: string) => model.counts?.[key]
   const pages = useMemo(() => palettePages(model.nav).map((page) => ({ ...page, href: `${prefix}${page.href}` })), [model.nav, prefix])
+  const frame = model.frame ?? 'office'
+  // B-W2b-05 (PLT-162): the person's own phone tabs; a tab opens the area's page used last.
+  const phone = useMemo(() => phoneNav(nav), [nav])
+  const tabHref = (address: string) => toHref(areaTabHref(nav, model.lastPages ?? {}, address))
+  const companyFree = (href: string) => (href.startsWith(`${prefix}/`) ? href.slice(prefix.length) : href === prefix ? '/' : href)
+  // A window may close itself only when it is the tab's first page (opened from a row, or by ⌘-click).
+  const [closable, setClosable] = useState(false)
+  useEffect(() => setClosable(window.history.length <= 1 || window.opener !== null), [])
 
   useEffect(() => {
     setChrome({ header: topBar.current, primaryNavigation: body.current?.querySelector<HTMLElement>('.h10-rail') ?? null })
@@ -142,11 +175,84 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
     event.preventDefault()
     onNavigate(href)
   }
+  // B-W2b-05 (nav row target): a window page's row opens it in a new tab on a plain click too (⌘-click does as always).
+  const openRow = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (!event.defaultPrevented && isPlainClick(event) && isWindowPage(companyFree(href))) {
+      event.preventDefault()
+      window.open(href, '_blank', 'noopener')
+      return
+    }
+    follow(event, href)
+  }
 
   const ThemeIcon = mode === 'light' ? Sun : mode === 'dark' ? Moon : Monitor
   const bell = model.bell ? bellWords(model.bell) : null
   const notificationsHref = toHref('/home/notifications')
   const searchLabel = t('topbar.searchLabel')
+  // B-W2b-05 (COL-077): the tab's live connection in words (design shell.frame h.status).
+  const liveStatus = model.live ? (
+    <span className={`fw-live fw-live-${model.live}`} role="status" aria-label={t(`live.${model.live}`)} title={t(`live.${model.live}`)}>
+      <span className="fw-live-dot" aria-hidden="true" />
+      <span className="fw-live-word">{t(`live.${model.live}`)}</span>
+    </span>
+  ) : undefined
+  // B-W2b-05 (PLT-171): the page's print view in a new tab (a real link: ⌘-click and middle-click work too).
+  const query = model.query ?? ''
+  const printAction = model.printKind ? (
+    <Button asChild size="sm" variant="quiet">
+      <a className="fw-band-print" href={toHref(printAddressOf(model.path, query, OFFICE_PAGES))} target="_blank" rel="noopener" aria-label={t(model.printKind === 'record' ? 'print.record' : 'print.view')}>
+        <Printer size={14} aria-hidden /> {t('print.print')}
+      </a>
+    </Button>
+  ) : undefined
+
+  if (frame === 'print') {
+    const company = model.switcher.companies.find((entry) => entry.code === model.switcher.company) ?? null
+    const site = scopeChip(scopeOf({ company: null, sites: model.switcher.sites, everySite: !model.switcher.limited, chosen: model.switcher.site }))
+    // A record without its own page yet (the panels route) is named by its label, as the panels name it.
+    const label = model.path.startsWith('/records/') ? new URLSearchParams(query).get('label') : null
+    const place = crumbs.length > 0 ? crumbs.map((crumb) => crumb.name).join(' › ') : (label ?? area?.label ?? t('print.page'))
+    return (
+      <PrintFrameView
+        model={{
+          kind: model.printKind ?? 'view',
+          company: company ? { name: company.name, code: company.code } : null,
+          site: site?.kind === 'site' ? { kind: 'site', name: site.name } : site ? { kind: 'all', limited: site.limited } : null,
+          place,
+          printedBy: model.user.displayName,
+          printedAt: model.printedAt ?? new Date(0).toISOString(),
+          backHref: viewHref(fullPath, query),
+        }}
+      >
+        {children}
+      </PrintFrameView>
+    )
+  }
+
+  if (frame === 'window') {
+    return (
+      <div className="fw-office fw-window">
+        <header ref={topBar} className="fw-topbar fw-window-bar" role="banner">
+          <Link href={toHref(area?.href ?? '/home')} className="fw-window-back" aria-label={t('window.back')} onClick={(event) => follow(event, toHref(area?.href ?? '/home'))}>
+            <ArrowLeft size={15} aria-hidden />
+            <span className="fw-window-back-word">{t('window.back')}</span>
+          </Link>
+          <h1 className="fw-window-title">{here}</h1>
+          <div className="fw-topbar-scope">
+            <CompanySwitcherView model={model.switcher} onSiteChange={onSiteChange} onNavigate={follow} />
+          </div>
+          <div className="fw-topbar-utility">
+            {liveStatus}
+            <ToolbarButton icon={<ThemeIcon size={16} />} label={t(`topbar.theme.${mode}`)} onClick={cycleTheme} />
+            {closable && <ToolbarButton icon={<X size={16} />} label={t('window.close')} onClick={() => window.close()} />}
+          </div>
+        </header>
+        <main id="main-content" tabIndex={-1} className="fw-office-main fw-window-main">
+          {children}
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="fw-office">
@@ -224,11 +330,11 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
                 navigationLabel={t('subnav.label', { area: area.label })}
                 title={area.label}
                 groups={areaSubNavGroups(area, { path: model.path, href: toHref, count })}
-                onNavigate={(event, item) => follow(event, item.href)}
+                onNavigate={(event, item) => openRow(event, item.href)}
                 navigationOpen={areaNavOpen}
                 onNavigationOpenChange={setAreaNavOpen}
                 header={
-                  <DetailHeader dense title={here} meta={above || undefined} />
+                  <DetailHeader dense title={here} meta={above || undefined} status={liveStatus} actions={printAction} />
                 }
               />
             </div>
@@ -240,10 +346,10 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
       </div>
 
       <BottomBar
-        nav={nav}
+        nav={phone}
         pathname={model.path}
         LinkComponent={ShellLink}
-        href={toHref}
+        href={tabHref}
         count={count}
         labels={{ navigation: t('bottomBar.navigation'), more: t('bottomBar.more'), count: (n) => t('bottomBar.count', { count: n }), currentInside: t('bottomBar.currentInside') }}
       />
@@ -251,7 +357,7 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
       <CommandPaletteView
         model={{ open: paletteOpen, query: model.paletteQuery ?? '', pages, tenantTag: model.tenantTag, records: model.paletteRecords ?? null }}
         onClose={() => setPaletteOpen(false)}
-        onOpenHref={(href, options) => (options?.newTab ? window.open(href, '_blank', 'noopener') : onNavigate?.(href))}
+        onOpenHref={(href, options) => (options?.newTab || isWindowPage(companyFree(href)) ? window.open(href, '_blank', 'noopener') : onNavigate?.(href))}
         onQuery={onPaletteQuery}
       />
     </div>

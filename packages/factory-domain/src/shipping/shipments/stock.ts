@@ -69,3 +69,73 @@ export const onShipmentsFromRelease = (onShipments: number, takenFromStock: numb
 
 /** The note a move out of finished goods carries (the ledger's "why"). */
 export const stockMoveNote = (shipmentNumber: string, label: string): string => `Shipped on ${shipmentNumber}: ${label} out of finished goods to the customer.`
+
+// ---- W2b (B-W2b-19): SHIPMENT moves name the shipment's line ----------------------------------------------------------
+
+/** One line of the shipment of a cell: its garments (a cell's garments may sit on several lines, one per parcel). */
+export interface CellLine {
+  readonly lineId: string
+  readonly garments: number
+}
+
+/** One SHIPMENT move: out of a place, for a line, so many garments. */
+export interface LineTake {
+  readonly lineId: string
+  readonly locationId: string
+  readonly quantity: number
+}
+
+/**
+ * A cell's take out of finished goods split over its shipment lines (B-W2b-19: a SHIPMENT move names its ShipmentLine):
+ * the places in their order, the lines in theirs, never more for a line than its garments. What is left of a line comes
+ * from the release (no move).
+ */
+export function splitTakeByLines(fromPlaces: readonly { readonly locationId: string; readonly quantity: number }[], lines: readonly CellLine[]): LineTake[] {
+  const left = lines.map((line) => ({ lineId: line.lineId, room: max0(line.garments) }))
+  const takes: LineTake[] = []
+  for (const place of fromPlaces) {
+    let wanted = max0(place.quantity)
+    for (const line of left) {
+      if (wanted === 0) break
+      const quantity = Math.min(wanted, line.room)
+      if (quantity === 0) continue
+      const last = takes[takes.length - 1]
+      if (last && last.lineId === line.lineId && last.locationId === place.locationId) takes[takes.length - 1] = { ...last, quantity: last.quantity + quantity }
+      else takes.push({ lineId: line.lineId, locationId: place.locationId, quantity })
+      line.room -= quantity
+      wanted -= quantity
+    }
+  }
+  return takes
+}
+
+// ---- W2b (B-W2b-19): a carrier-returned shipment back into finished goods (the B-W2a-48 gap) --------------------------
+
+/**
+ * A shipment the carrier brought back (RETURNED: Sendcloud's tracking says it went back to the sender) puts its
+ * garments back into finished goods once the warehouse has them: one move INTO a finished-goods place per cell, the
+ * cell's SKU's FINISHED item, the cell's work order, valued at the item's frozen standard as every finished garment
+ * that comes into stock (B-W2a-F7). Once per shipment. The garments stay on the returned shipment's lines (its history),
+ * so "Report finished to stock" never counts them twice: the moves are ADJUSTMENTs in (the ledger has no reason of its
+ * own for them), apart from PRODUCTION_RECEIPT and from the shipment's SHIPMENT moves out, marked by their key
+ * `shipping.carrierReturn:<shipment id>:<n>`; the cell's garments in stock count them in.
+ */
+export const CARRIER_RETURN_STATES = ['NOT_RETURNED', 'AWAITED', 'RECEIVED'] as const
+export type CarrierReturnState = (typeof CARRIER_RETURN_STATES)[number]
+
+/** Where a shipment's carrier return stands: not returned, returned and not received yet, received into stock. */
+export const carrierReturnState = (status: string, received: boolean): CarrierReturnState => (received ? 'RECEIVED' : status === 'RETURNED' ? 'AWAITED' : 'NOT_RETURNED')
+
+/** Why a shipment's garments cannot go back into finished goods now (empty: they can). */
+export function carrierReturnProblems(facts: { readonly number: string; readonly status: string; readonly received: boolean; readonly garments: number }): string[] {
+  if (facts.received) return [`${facts.number}'s garments are back in finished goods already.`]
+  if (facts.status !== 'RETURNED') {
+    return [`${facts.number} is ${facts.status}: its garments go back into finished goods once the carrier brought it back (RETURNED: the carrier's tracking says so).`]
+  }
+  if (facts.garments <= 0) return [`${facts.number} has no garments to put back.`]
+  return []
+}
+
+/** The note of a carrier return's move (the ledger's "why"). */
+export const carrierReturnNote = (shipmentNumber: string, label: string, note: string | null): string =>
+  `Carrier return of ${shipmentNumber}: ${label} back into finished goods.${note ? ` ${note}` : ''}`

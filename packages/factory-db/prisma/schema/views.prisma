@@ -25,6 +25,10 @@ model SavedView {
   roleId      String?           @db.Uuid
   /// The role's default view of the list: a ROLE view, one per list, role and company (views.manage).
   roleDefault Boolean           @default(false)
+  /// W2b (B-W2b-03; B-W2a-23): its owner's own default view of the list ("my default"), whoever else sees it; one per
+  /// owner, list and company (a partial unique index, …_followups_platform_w2b_guards). It opens the list for its owner
+  /// before any role default.
+  isPersonalDefault Boolean     @default(false)
   /// The company it is for; null: every company the reader sees.
   companyId   String?           @db.Uuid
   /// What it keeps, as the list frame reads it: { filters?, columns?, sort?, mode?, density?, groupBy? }, only what
@@ -66,7 +70,8 @@ model ExportJob {
   companyId      String?      @db.Uuid
   /// The office user who asked for it: the file is theirs.
   requestedById  String       @db.Uuid
-  /// The list (its page id) and the saved view it was made from, if any.
+  /// The list (its page id) and the saved view it was made from, if any (W2b: cleared when that view is deleted; it
+  /// never names another view).
   listKey        String
   viewId         String?      @db.Uuid
   format         ExportFormat
@@ -93,8 +98,10 @@ model ExportJob {
   updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
 
   requestedBy User        @relation(fields: [tenantId, requestedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
-  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
-  view        SavedView?  @relation(fields: [tenantId, viewId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (B-W2b-03): deleting the view clears viewId only. Prisma's SetNull would clear tenantId too, so the
+  // …_followups_platform_w2b_guards migration makes the key ON DELETE SET NULL ("viewId") (PostgreSQL 15+); Prisma warns
+  // about SetNull over the required tenantId, which that column list answers.
+  view        SavedView?  @relation(fields: [tenantId, viewId], references: [tenantId, id], onDelete: SetNull, onUpdate: Restrict)
   file        StoredFile? @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   // A person's exports, newest first.

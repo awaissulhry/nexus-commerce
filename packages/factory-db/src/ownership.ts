@@ -24,6 +24,13 @@ import type { SchemaModel } from './schema-models'
  * money-looking column; `/// @internal` for an office-only note), and every partner access to its table must list it in
  * hiddenColumns, so the column grants leave it out. A price column (`@grain price`) stays readable: the party scope
  * keeps the partner to its own documents, and the API drops prices for a link whose purpose shows none.
+ *
+ * Personal data (W2b, features PLT-207 "personal-data field tagging", PLT-209 "purpose tags on worker data"): a model
+ * that holds data about one person lists it in `personal`: `subject`, the column that names the person (the model's own
+ * `id` for Employee, `employeeId` elsewhere; with `via`, a reference to a model whose own subject is the person), and
+ * `columns`, each personal column with the purposes it may be used for (PERSONAL_PURPOSES). The privacy export and
+ * erasure read the map (`personalDataOf`), and the tags drive field security: the partner role never reads a personal
+ * column, and the floor reads one only for a purpose its tools serve (production, attendance, safety); hide the others.
  */
 
 /** The doc tags that put a column behind the partner wall, with why. */
@@ -47,11 +54,43 @@ export function partnerWalledColumns(model: SchemaModel): { readonly column: str
 
 export type ModelKind = 'tenant' | 'platform'
 
+/**
+ * The purposes personal data may be used for (PLT-209), each with the rule it rests on. A personal column lists one or
+ * more; a use outside them needs a new purpose, decided by a person, never a quiet reuse.
+ */
+export const PERSONAL_PURPOSES = {
+  /** Running the employment: who the person is, their contract, company, site, line, team, role (GDPR art. 6(1)(b), art. 88). */
+  EMPLOYMENT: 'employment',
+  /** Working time and presence: clock-in, attendance, the LUL calendar (Statuto dei Lavoratori art. 4 c.2; D.Lgs. 66/2003). */
+  ATTENDANCE: 'attendance',
+  /** One person's work figures (Statuto art. 4 c.1: a union agreement or the Ispettorato's authorisation). */
+  PERFORMANCE: 'performance',
+  /** Pay and the payroll: piece rates, earnings, the export to the labour consultant (c.c. arts. 2099-2101). */
+  PAY: 'pay',
+  /** Health and safety at work: skills, training, machine authorisations; never health data (D.Lgs. 81/2008). */
+  SAFETY: 'safety',
+  /** Traceability of what was made and by whom on the floor (MES-278; the worker notice). */
+  PRODUCTION: 'production',
+} as const
+export type PersonalPurpose = keyof typeof PERSONAL_PURPOSES
+/** The purposes of the floor's tools: a personal column the floor role reads carries one of them. */
+export const FLOOR_PURPOSES: readonly PersonalPurpose[] = ['PRODUCTION', 'ATTENDANCE', 'SAFETY']
+
+/** Which person a model's rows are about, and its personal columns with their purposes. */
+export interface PersonalData {
+  /** The column that names the person: the model's id (Employee), or a reference such as employeeId. */
+  readonly subject: string
+  /** The model `subject` references, when the person is that model's subject (a leaver step's case). */
+  readonly via?: string
+  readonly columns: Readonly<Record<string, readonly PersonalPurpose[]>>
+}
+
 export interface ModelOwnership {
   readonly about?: string
   readonly kind: ModelKind
   readonly keyColumns?: Readonly<Record<string, string>>
   readonly access: Readonly<Record<string, RoleAccess>>
+  readonly personal?: PersonalData
 }
 
 /** One `ownership/<module>.json` file as read: its name and its parsed (not yet checked) content. */
@@ -81,7 +120,8 @@ export class OwnershipError extends Error {
   }
 }
 
-const MODEL_KEYS = new Set(['about', 'kind', 'keyColumns', 'access'])
+const MODEL_KEYS = new Set(['about', 'kind', 'keyColumns', 'access', 'personal'])
+const PERSONAL_KEYS = new Set(['subject', 'via', 'columns'])
 const ACCESS_KEYS = new Set(['privileges', 'scopedBy', 'hiddenColumns', 'onlyValues'])
 const PRIVILEGES: readonly Privilege[] = ['select', 'insert', 'update', 'delete']
 
@@ -125,6 +165,17 @@ export function policyInputs(models: readonly SchemaModel[], files: readonly Own
   return build(models, entries)
 }
 
+/** One model's personal data, for the privacy export and erasure (PLT-207). */
+export interface PersonalDataEntry extends PersonalData {
+  readonly model: string
+  readonly table: string
+}
+
+/** Every model that holds personal data, with its subject and tagged columns. Throws like `policyInputs`. */
+export function personalDataOf(models: readonly SchemaModel[], files: readonly OwnershipFile[]): PersonalDataEntry[] {
+  return classifiedModels(models, files).flatMap(({ model, ownership }) => (ownership.personal ? [{ model: model.name, table: model.table, ...ownership.personal }] : []))
+}
+
 /** Every model with its checked classification (the generated isolation tests use it). Throws like `policyInputs`. */
 export function classifiedModels(models: readonly SchemaModel[], files: readonly OwnershipFile[]): { model: SchemaModel; ownership: ModelOwnership }[] {
   const { problems, entries } = validate(models, files)
@@ -165,10 +216,15 @@ function validate(models: readonly SchemaModel[], files: readonly OwnershipFile[
         continue
       }
       if (model.file !== `${module}.prisma`) problems.push(`${at} is defined in prisma/schema/${model.file}; classify it in ownership/${model.file.replace(/\.prisma$/, '.json')}`)
-      const found = checkModel(at, model, entry)
+      const found = [...checkModel(at, model, entry), ...checkPersonal(at, model, entry)]
       problems.push(...found)
       if (found.length === 0) entries.set(name, entry as unknown as ModelOwnership)
     }
+  }
+  // A subject reached through another model needs that model's own subject.
+  for (const [name, entry] of entries) {
+    const via = entry.personal?.via
+    if (via !== undefined && !entries.get(via)?.personal) problems.push(`ownership/${classifiedIn.get(name)}: ${name}: personal.via names ${via}, which lists no personal data of its own (its subject is the person)`)
   }
   for (const model of models) {
     if (!classifiedIn.has(model.name)) {
@@ -268,6 +324,46 @@ function checkModel(at: string, model: SchemaModel, entry: unknown): string[] {
     }
   }
   if (kind === 'platform' && !Object.hasOwn(access, PLATFORM_ROLE)) problems.push(`${at}: a platform model is for factory_platform; list it in access`)
+  return problems
+}
+
+/** The `personal` entry: the subject column, the tagged columns and their purposes, and what the tags allow. */
+function checkPersonal(at: string, model: SchemaModel, entry: unknown): string[] {
+  if (!isObject(entry) || entry.personal === undefined) return []
+  const where = `${at}: personal`
+  const personal = entry.personal
+  if (!isObject(personal)) return [`${where} must be an object { subject, via?, columns }`]
+  const problems: string[] = []
+  for (const key of Object.keys(personal)) if (!PERSONAL_KEYS.has(key)) problems.push(`${where}: unknown key "${key}"`)
+  const subject = model.fields.find((field) => !field.relation && field.column === personal.subject)
+  if (!subject || subject.type !== 'String' || subject.nativeType !== 'Uuid') problems.push(`${where}: subject ${String(personal.subject)} is not a uuid column of ${model.name} (the column that names the person)`)
+  if (personal.via !== undefined && (typeof personal.via !== 'string' || personal.via === model.name)) problems.push(`${where}: via must name another model`)
+  const columns = personal.columns
+  if (!isObject(columns) || Object.keys(columns).length === 0) return [...problems, `${where}: columns must tag at least one column with its purposes`]
+  const access = isObject(entry.access) ? entry.access : {}
+  const hiddenFrom = (role: string): Set<string> | undefined => {
+    const grant = access[role]
+    if (!isObject(grant)) return undefined
+    return new Set(Array.isArray(grant.hiddenColumns) ? (grant.hiddenColumns as string[]) : [])
+  }
+  const partnerHidden = hiddenFrom(PARTNER_ROLE)
+  const floorHidden = hiddenFrom(FLOOR_ROLE)
+  for (const [column, purposes] of Object.entries(columns)) {
+    if (!model.columns.includes(column)) {
+      problems.push(`${where}: ${column} is not a column of ${model.name}`)
+      continue
+    }
+    if (column === personal.subject) problems.push(`${where}: ${column} is the subject; tag the other columns`)
+    if (!Array.isArray(purposes) || purposes.length === 0 || purposes.some((purpose) => !Object.hasOwn(PERSONAL_PURPOSES, purpose as string))) {
+      problems.push(`${where}: ${column} must list one or more purposes of ${Object.keys(PERSONAL_PURPOSES).join(', ')}`)
+      continue
+    }
+    if (new Set(purposes).size !== purposes.length) problems.push(`${where}: ${column} lists a purpose twice`)
+    if (partnerHidden && !partnerHidden.has(column)) problems.push(`${where}: ${column} is personal data; the partner role never reads it (add it to its hiddenColumns)`)
+    if (floorHidden && !floorHidden.has(column) && !(purposes as string[]).some((purpose) => (FLOOR_PURPOSES as readonly string[]).includes(purpose))) {
+      problems.push(`${where}: the floor reads ${column}, whose purposes (${(purposes as string[]).join(', ')}) are none of the floor's (${FLOOR_PURPOSES.join(', ')}); hide it from the floor or name the purpose`)
+    }
+  }
   return problems
 }
 

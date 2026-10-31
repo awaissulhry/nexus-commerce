@@ -431,6 +431,8 @@ const reverseAnswer = output({
   register: output({ opened: z.boolean(), entryId: id().nullable(), reference: z.string().nullable(), shippedGoods: z.boolean().nullable(), words: z.string() }),
   release: releaseOut,
   words: z.string(),
+  /** B-W2b-10: the cell's garments that left finished goods with the reversal (a report taken back whole: the rest put back), and what is left to take out by hand. */
+  finishedGoods: output({ takenOut: z.number().int(), putBack: z.number().int(), left: z.number().int(), moveIds: z.array(id()), words: z.string() }),
 })
 
 export const reverseContract = defineContract({

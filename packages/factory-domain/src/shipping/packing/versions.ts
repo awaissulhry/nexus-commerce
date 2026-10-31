@@ -8,6 +8,11 @@ import type { DocumentLanguage } from '../../documents/model'
  * numbered `<shipment number>/<n>` from version 2 on. The list says which version matches the shipment as it is now
  * (`current`); an older one is kept (the shipment's history) but no longer what is in the parcels. Pure rules; the API
  * stores the PDF (platform/documents) and records each version with its fingerprint.
+ *
+ * W2b (B-W2b-19): each version is a GeneratedDocument row (kind PACKING_LIST; version unique per shipment, append-only),
+ * so the newest row is always the current packing list: the newest version's contents and language print its file
+ * again (no row); contents that go back to an older version's in its language make a new version that reuses that
+ * version's file (and its printed number); anything else is a new version with a new file.
  */
 
 export interface PackedContents {
@@ -37,13 +42,26 @@ export interface PackingListVersion {
   readonly language: DocumentLanguage
 }
 
-/** The next print: the version that already has these contents in this language, or a new one after the highest. */
-export function nextPackingList<Version extends PackingListVersion>(versions: readonly Version[], fingerprint: string, language: DocumentLanguage): { readonly reuse: Version | null; readonly version: number } {
-  const same = versions.find((entry) => entry.fingerprint === fingerprint && entry.language === language)
-  if (same) return { reuse: same, version: same.version }
-  const sameContents = versions.find((entry) => entry.fingerprint === fingerprint)
-  if (sameContents) return { reuse: null, version: sameContents.version }
-  return { reuse: null, version: versions.reduce((highest, entry) => Math.max(highest, entry.version), 0) + 1 }
+/**
+ * The next print (W2b: versions as rows). `again`: the newest version has these contents in this language (its file
+ * prints again, no new version). Otherwise a new version after the highest: `reuse` is an older version with these
+ * contents in this language (its file and number are printed again as the new version), else null (a new file).
+ */
+export function nextPackingList<Version extends PackingListVersion>(
+  versions: readonly Version[],
+  fingerprint: string,
+  language: DocumentLanguage,
+): { readonly again: Version | null; readonly reuse: Version | null; readonly version: number } {
+  const newest = versions.reduce<Version | null>((found, entry) => (found === null || entry.version > found.version ? entry : found), null)
+  if (newest && newest.fingerprint === fingerprint && newest.language === language) return { again: newest, reuse: null, version: newest.version }
+  const older = [...versions].sort((a, b) => b.version - a.version).find((entry) => entry.fingerprint === fingerprint && entry.language === language) ?? null
+  return { again: null, reuse: older, version: (newest?.version ?? 0) + 1 }
+}
+
+/** Which version is current: the newest, while its contents are the shipment's now and the shipment is not cancelled. */
+export function currentPackingList<Version extends PackingListVersion>(versions: readonly Version[], fingerprintNow: string, status: string): Version | null {
+  const newest = versions.reduce<Version | null>((found, entry) => (found === null || entry.version > found.version ? entry : found), null)
+  return newest && newest.fingerprint === fingerprintNow && status !== 'CANCELLED' ? newest : null
 }
 
 /** The number a version prints: the shipment's number, then `/<n>` from version 2 on. */

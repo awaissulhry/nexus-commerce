@@ -20,6 +20,11 @@ export interface RememberedScope {
   company: string
   /** Site id; null = all sites. */
   site: string | null
+  /**
+   * B-W2b-05 (design shell.scope sec:defaults "Start page: Today (default) / a saved view I pick"): the company-free
+   * address an office entry opens for this person (a list page with `?savedView=`); absent or null = Today.
+   */
+  start?: string | null
 }
 
 type Memory = Array<[string, RememberedScope]>
@@ -28,8 +33,9 @@ const keyOf = (person: Person) => `${person.tenantId}:${person.userId}`
 
 function isScope(value: unknown): value is RememberedScope {
   if (typeof value !== 'object' || value === null) return false
-  const { company, site } = value as Record<string, unknown>
-  return typeof company === 'string' && company !== '' && (site === null || typeof site === 'string')
+  const { company, site, start } = value as Record<string, unknown>
+  const startOk = start === undefined || start === null || (typeof start === 'string' && start.startsWith('/') && !start.startsWith('//'))
+  return typeof company === 'string' && company !== '' && (site === null || typeof site === 'string') && startOk
 }
 
 /** The cookie's entries, newest first; anything unreadable is dropped, never an error. */
@@ -44,12 +50,22 @@ export function readScopeMemory(raw: string | null | undefined): Memory {
   }
 }
 
-/** The cookie's new value after `person` worked in `scope`: their entry first, others kept, the oldest past the cap dropped. */
+/**
+ * The cookie's new value after `person` worked in `scope`: their entry first, others kept, the oldest past the cap
+ * dropped. Their start page is kept unless `scope.start` says another (null: back to Today).
+ */
 export function rememberScope(raw: string | null | undefined, person: Person, scope: RememberedScope): string {
   const key = keyOf(person)
-  const rest = readScopeMemory(raw).filter(([entry]) => entry !== key)
-  const next: Memory = [[key, { company: scope.company, site: scope.site }] as [string, RememberedScope], ...rest].slice(0, MAX_PEOPLE)
+  const memory = readScopeMemory(raw)
+  const start = scope.start !== undefined ? scope.start : (memory.find(([entry]) => entry === key)?.[1].start ?? null)
+  const rest = memory.filter(([entry]) => entry !== key)
+  const next: Memory = [[key, { company: scope.company, site: scope.site, ...(start ? { start } : {}) }] as [string, RememberedScope], ...rest].slice(0, MAX_PEOPLE)
   return JSON.stringify(next)
+}
+
+/** B-W2b-05: the start page this person chose (a company-free address), or null for Today. */
+export function recallStart(raw: string | null | undefined, person: Person): string | null {
+  return readScopeMemory(raw).find(([entry]) => entry === keyOf(person))?.[1].start ?? null
 }
 
 /**

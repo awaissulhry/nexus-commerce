@@ -67,10 +67,14 @@ describe('switching company is a navigation (the company is in the address, PLT-
   })
 
   it('names the current company and site, and whether there is anything to switch', () => {
-    const state = { companies: [{ id: '1', code: 'DEMO', name: 'Demo' }], company: 'DEMO', sites: [{ id: 's', name: 'North' }], site: 's', path: '/' }
+    const state = { companies: [{ id: '1', code: 'DEMO', name: 'Demo' }], company: 'DEMO', sites: [{ id: 's', name: 'North' }, { id: 't', name: 'South' }], site: 's', path: '/' }
     expect(currentCompany(state)?.name).toBe('Demo')
     expect(currentSite(state)?.name).toBe('North')
     expect(currentSite({ ...state, site: null })).toBeNull()
     expect(switcherHasChoices(state)).toEqual({ companies: false, sites: true })
+    // B-W2b-05: one site is the site the person works in — nothing to choose.
+    const one = { ...state, sites: [{ id: 's', name: 'North' }], site: null }
+    expect(currentSite(one)?.name).toBe('North')
+    expect(switcherHasChoices(one)).toEqual({ companies: false, sites: false })
   })
 })

@@ -180,6 +180,79 @@
   outline: none;
 }
 
+/* ── B-W2b-05: the tab's live state in the band (and in a window's bar) ───────────────────────────────────────────── */
+.fw-live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+  white-space: nowrap;
+}
+
+.fw-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-text-muted);
+  flex: 0 0 auto;
+}
+
+.fw-live-live .fw-live-dot {
+  background: var(--nds-success);
+}
+
+.fw-live-offline {
+  color: var(--nds-warning-text);
+}
+
+.fw-live-offline .fw-live-dot {
+  background: var(--nds-warning);
+}
+
+.fw-topbar .fw-live {
+  color: var(--nds-topbar-fg);
+}
+
+/* ── B-W2b-05: window mode (a page in its own window: no rail, no Pages, no bottom bar) ───────────────────────────── */
+.fw-window-bar {
+  gap: var(--nds-space-8);
+  padding-inline-start: var(--nds-space-12);
+}
+
+.fw-window-back {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-topbar-fg-strong);
+  text-decoration: none;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-window-back:hover {
+  text-decoration: underline;
+}
+
+.fw-window-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  align-self: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-topbar-fg-strong);
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-window-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
 /* ── phone: no rail, the bottom bar instead ────────────────────────────────────────────────────────────────────── */
 @media (max-width: 719px) {
   .fw-office-body {
@@ -230,5 +303,21 @@
 
   .fw-office-main {
     padding: var(--nds-space-12) var(--nds-space-16) calc(64px + env(safe-area-inset-bottom) + var(--nds-space-16));
+  }
+
+  /* B-W2b-05: a window has no bottom bar; its bar's words give way to their icons. The page band stays one title on a
+     phone: the live state and Print are desktop and tablet parts of the band. */
+  .fw-window-main {
+    padding-bottom: calc(env(safe-area-inset-bottom) + var(--nds-space-16));
+  }
+
+  .fw-window-back-word,
+  .fw-live-word {
+    display: none;
+  }
+
+  .fw-office-subheader .fw-live,
+  .fw-office-subheader .fw-band-print {
+    display: none;
   }
 }
