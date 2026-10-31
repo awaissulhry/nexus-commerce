@@ -49,8 +49,9 @@ const e3 = idOf('people:employee:A1:3')
 const eb1 = idOf('people:employee:B1:1')
 const PIN = '583014'
 const badges = { operator: newBadgeCode(), lead: newBadgeCode(), b1: newBadgeCode() }
-const tablets = { kiosk: newId(), sew: newId(), lead: newId(), b1: newId() }
-const tokens: Record<keyof typeof tablets, string> = { kiosk: '', sew: '', lead: '', b1: '' }
+const tablets = { kiosk: newId(), sew: newId(), lead: newId(), b1: newId(), board: newId(), phone: newId() }
+const tokens: Record<keyof typeof tablets, string> = { kiosk: '', sew: '', lead: '', b1: '', board: '', phone: '' }
+const lineL1 = idOf('site:A1:line:L1')
 
 type Json = Record<string, any>
 const admin = async <Row = Json>(sql: string, values: unknown[] = []): Promise<Row[]> => (await h.db.admin.query(sql, values)).rows as Row[]
@@ -82,6 +83,8 @@ let kiosk: Browser
 let sew: Browser
 let leadTablet: Browser
 let b1: Browser
+let board: Browser
+let phone: Browser
 
 beforeAll(async () => {
   h = await startHarness('people_clock')
@@ -98,6 +101,11 @@ beforeAll(async () => {
   await device(tablets.sew, companyA, siteA1, sew1, 'Sewing tablet 1', 'sew')
   await device(tablets.lead, companyA, siteA1, null, 'Lead tablet', 'lead')
   await device(tablets.b1, companyB, siteB1, null, 'B1 kiosk', 'b1')
+  // B-W2b-52 device modes: A1's line board (DISPLAY) and the made-up team leader's own phone (PHONE).
+  await device(tablets.board, companyA, siteA1, null, 'Line 1 board', 'board')
+  await admin(`UPDATE "Device" SET mode = 'DISPLAY', "lineId" = $2 WHERE id = $1`, [tablets.board, lineL1])
+  await device(tablets.phone, companyA, siteA1, null, 'Lead phone', 'phone')
+  await admin(`UPDATE "Device" SET mode = 'PHONE', kind = 'HANDHELD', "personalWorkerId" = $2 WHERE id = $1`, [tablets.phone, lead])
   const pinHash = await hashPin(PIN, h.auth.pins, { logN: 12, r: 8, p: 1 })
   for (const [worker, code] of [[operator, badges.operator], [lead, badges.lead], [b1Operator, badges.b1]] as const) {
     await admin('UPDATE "Worker" SET "pinHash" = $2, "failedPinAttempts" = 0, "pinLockedUntil" = NULL WHERE id = $1', [worker, pinHash])
@@ -107,6 +115,8 @@ beforeAll(async () => {
   sew = await tablet('sew')
   leadTablet = await tablet('lead')
   b1 = await tablet('b1')
+  board = await tablet('board')
+  phone = await tablet('phone')
 }, 600_000)
 
 afterAll(async () => {
@@ -190,6 +200,19 @@ describe('clocking at the kiosk: a badge, or a name and PIN (MES-223, MES-239; n
     expect(scan.body).toMatchObject({ event: { kind: 'IN', source: 'NAME_PIN', flags: ['FORGOT_BADGE'], flagged: true }, clock: { state: 'IN', person: { workerId: lead, employeeId: e2 } } })
     expect((await admin('SELECT "failedPinAttempts" FROM "Worker" WHERE id = $1', [lead]))[0]!.failedPinAttempts).toBe(0)
     expect((await outbox('attendance.clock_event', e2))[0]!.payload).toMatchObject({ source: 'NAME_PIN', flagged: true })
+  })
+
+  it('follows the device modes (B-W2b-52): nobody clocks on a line board; a personal phone clocks only its own person', async () => {
+    const onBoard = await board.post('/people/clock/scan', { clientEventId: evt('board'), badgeCode: badges.operator })
+    expect(onBoard.status, JSON.stringify(onBoard.body)).toBe(403)
+    expect(onBoard.body.error.message).toContain('line board')
+    const otherOnPhone = await phone.post('/people/clock/scan', { clientEventId: evt('phone-other'), badgeCode: badges.operator })
+    expect(otherOnPhone.status, JSON.stringify(otherOnPhone.body)).toBe(403)
+    expect(otherOnPhone.body.error.message).toContain('one person')
+    expect((await fromTablets(e1)).filter((row) => row.deviceId === tablets.board || row.deviceId === tablets.phone)).toHaveLength(0)
+    // Its own person passes the mode and reaches the clock's own rules (breaks are fixed here: refused in words).
+    const own = await phone.post('/people/clock/scan', { clientEventId: evt('phone-own'), badgeCode: badges.lead, action: 'BREAK_OUT' })
+    expect(issuesOf(own.body)).toEqual(['refusal/BREAKS_FIXED', 'fix'])
   })
 
   it('never keeps a badge code or a PIN in a receipt, an audit row or an event', async () => {

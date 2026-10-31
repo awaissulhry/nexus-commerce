@@ -153,6 +153,8 @@ describe('shifts, breaks and minutes (MES-224)', () => {
     expect(cell).toMatchObject({ label: 'Morning', source: 'ROSTER', breakMinutes: 15, startsAt: at('2026-10-30T05:00:00Z'), endsAt: at('2026-10-30T13:00:00Z') })
     expect(cell!.breaks).toEqual([{ label: 'Break', startsAt: at('2026-10-30T09:00:00Z'), endsAt: at('2026-10-30T09:15:00Z') }])
     expect(shiftsOfDay({ date: '2026-10-30', timeZone: ROME, roster: { ...roster, kind: 'OFF', startMinute: null, endMinute: null }, defaultSegments: segments })).toEqual([])
+    // The planner's default shift (B-W2b-32) keeps its source.
+    expect(shiftsOfDay({ date: '2026-10-30', timeZone: ROME, roster: { ...roster, source: 'DEFAULT' }, defaultSegments: null })[0]?.source).toBe('DEFAULT')
     const [day] = shiftsOfDay({ date: '2026-10-30', timeZone: ROME, roster: null, defaultSegments: segments })
     expect(day).toMatchObject({ label: 'Day', source: 'DEFAULT', breakMinutes: 60, startsAt: at('2026-10-30T07:00:00Z'), endsAt: at('2026-10-30T16:00:00Z') })
     expect(shiftsOfDay({ date: '2026-10-31', timeZone: ROME, roster: null, defaultSegments: segments })).toEqual([])

@@ -355,8 +355,10 @@ export interface ShiftWindow {
   readonly source: 'ROSTER' | 'DEFAULT'
 }
 
-/** A day's roster cell as the rules need it (B-W2b-07 RosterEntry, PUBLISHED). */
+/** A day's planned shift as the rules need it (B-W2b-32's planner: the published roster cell, else the default shift). */
 export interface RosterDay {
+  /** ROSTER: a published roster cell (the default); DEFAULT: the planner's default shift of the day. */
+  readonly source?: 'ROSTER' | 'DEFAULT' | undefined
   readonly kind: 'WORK' | 'OFF'
   readonly shiftLabel: string | null
   readonly startMinute: number | null
@@ -382,7 +384,7 @@ export function shiftsOfDay(input: { readonly date: BusinessDate; readonly timeZ
       .filter((segment) => segment.weekday === weekday && segment.kind === 'BREAK' && segment.startMinute >= start && segment.endMinute <= end)
       .sort((a, b) => a.startMinute - b.startMinute)
       .map((segment) => ({ label: segment.label, startsAt: at(segment.startMinute), endsAt: at(segment.endMinute) }))
-    return [{ label: roster.shiftLabel, date, startsAt: at(start), endsAt: at(end), breaks, breakMinutes: roster.breakMinutes, source: 'ROSTER' }]
+    return [{ label: roster.shiftLabel, date, startsAt: at(start), endsAt: at(end), breaks, breakMinutes: roster.breakMinutes, source: roster.source ?? 'ROSTER' }]
   }
   if (!input.defaultSegments) return []
   return shiftsOf(input.defaultSegments, weekday).map((shift) => ({

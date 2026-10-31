@@ -1,8 +1,9 @@
-import type { Prisma } from '@nexus/factory-db'
-import type { Segment } from '@nexus/factory-domain/calendars/patterns'
-import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
+import type { FactoryClient, Prisma } from '@nexus/factory-db'
+import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { CLOCK_RULES, daysAround, LAW_BREAK_RULE, shiftsOfDay, type BreakRule, type ClockFact, type ClockFlag, type ClockKind, type ClockSource, type ShiftWindow } from '@nexus/factory-domain/people/clock/rules'
 import type { CommandTx } from '../../../core/command'
+// B-W2b-32: the roster is read through THE planner of People › Shifts.
+import { patternsById, peopleFacts, planningFor } from '../shifts/planner'
 
 /**
  * What the clock reads (B-W2b-33). Every read names its columns. The floor's own scope reads its site's clock events,
@@ -10,14 +11,10 @@ import type { CommandTx } from '../../../core/command'
  * cell, else the person's default shift pattern) and the break rule are read as the tenant's system caller or in the
  * office scope: the floor reads no shift pattern and no person's default shift.
  *
- * The roster is read here straight from RosterEntry (B-W2b-07's table) while B-W2b-32's roster reader is not on main:
- * a PUBLISHED cell wins, a DRAFT one is not the plan yet (the person's default shift counts).
+ * The shift comes from B-W2b-32's planner (`planningFor`, published rows only): a DRAFT cell is not the plan yet.
  */
 
-export type Reader = Pick<
-  CommandTx,
-  'clockEvent' | 'worker' | 'employee' | 'peopleSettings' | 'site' | 'attendanceMonthClose' | 'rosterEntry' | 'shiftSegment' | 'workingTimeRule' | 'floorSession' | 'device'
->
+export type Reader = Pick<CommandTx, 'clockEvent' | 'worker' | 'employee' | 'peopleSettings' | 'site' | 'attendanceMonthClose' | 'workingTimeRule' | 'floorSession' | 'device'>
 
 export const EVENT_SELECT = {
   id: true,
@@ -111,32 +108,47 @@ export async function sessionWayOf(db: Pick<Reader, 'device' | 'floorSession'>, 
   return session.badgeId ? 'BADGE' : 'NAME'
 }
 
-const dayValue = (day: BusinessDate): Date => new Date(`${day}T00:00:00.000Z`)
-
 /**
  * A person's shifts on the days that can hold `at` (the day before, for a night shift, and that day), in the site's
- * time zone: the published roster cell of each day, else the person's default pattern (office or system scope).
+ * time zone, through B-W2b-32's planner (`planningFor`, published rows only: what the worker reads on the floor): the
+ * roster cell (ROSTER), else the default shift (DEFAULT: the person's default pattern, else their line's calendar
+ * pattern; a day the calendar closes is OFF). The breaks are placed from the shift's pattern. Where the person's own
+ * default pattern has several shifts that weekday (the planner names none), each of them is a candidate: the clock-in's
+ * time picks one. Office or system scope (the floor reads no pattern and no person's default shift).
  */
-export async function shiftsAround(db: Pick<Reader, 'rosterEntry' | 'employee' | 'shiftSegment'>, employeeId: string, at: Date, timeZone: string): Promise<ShiftWindow[]> {
+export async function shiftsAround(db: FactoryClient | CommandTx, employeeId: string, at: Date, timeZone: string): Promise<ShiftWindow[]> {
   const days = daysAround(at, timeZone)
-  const [cells, employee] = await Promise.all([
-    db.rosterEntry.findMany({
-      where: { employeeId, status: 'PUBLISHED', date: { in: days.map(dayValue) } },
-      select: { date: true, kind: true, shiftLabel: true, startMinute: true, endMinute: true, breakMinutes: true, shiftPatternId: true },
-    }),
-    db.employee.findUnique({ where: { id: employeeId }, select: { defaultShiftPatternId: true } }),
-  ])
-  const patternIds = [...new Set([...cells.map((cell) => cell.shiftPatternId), employee?.defaultShiftPatternId ?? null].filter((id): id is string => id !== null))]
-  const segments = patternIds.length === 0 ? [] : await db.shiftSegment.findMany({ where: { patternId: { in: patternIds } }, select: { patternId: true, weekday: true, kind: true, label: true, startMinute: true, endMinute: true } })
-  const ofPattern = (patternId: string | null): Segment[] | null =>
-    patternId ? segments.filter((segment) => segment.patternId === patternId).map(({ weekday, kind, label, startMinute, endMinute }) => ({ weekday, kind: kind as Segment['kind'], label, startMinute, endMinute })) : null
-  const defaultSegments = ofPattern(employee?.defaultShiftPatternId ?? null)
+  const people = await peopleFacts(db, { id: employeeId })
+  const person = people[0]
+  if (!person) return []
+  const planning = await planningFor(db, people, { from: days[0], to: days[1] }, { publishedOnly: true })
+  const cells = planning.cells.get(employeeId)
+  const several = person.defaultShiftPatternId !== null && days.some((date) => cells?.get(date)?.issue === 'SEVERAL_SHIFTS')
+  const patternIds = days.map((date) => cells?.get(date)?.value).map((value) => (value?.kind === 'WORK' ? value.patternId : null))
+  const patterns = await patternsById(db, [...patternIds, several ? person.defaultShiftPatternId : null])
   return days.flatMap((date) => {
-    const cell = cells.find((row) => businessDate(row.date, 'UTC') === date)
-    const roster = cell
-      ? { kind: cell.kind as 'WORK' | 'OFF', shiftLabel: cell.shiftLabel, startMinute: cell.startMinute, endMinute: cell.endMinute, breakMinutes: cell.breakMinutes, patternSegments: ofPattern(cell.shiftPatternId) }
-      : null
-    return shiftsOfDay({ date, timeZone, roster, defaultSegments })
+    const cell = cells?.get(date)
+    if (cell?.value?.kind === 'WORK') {
+      const { shift, patternId } = cell.value
+      return shiftsOfDay({
+        date,
+        timeZone,
+        roster: {
+          kind: 'WORK',
+          shiftLabel: shift.label,
+          startMinute: shift.startMinute,
+          endMinute: shift.endMinute,
+          breakMinutes: shift.breakMinutes,
+          patternSegments: patternId ? (patterns.get(patternId)?.segments ?? null) : null,
+          source: cell.source === 'ROSTER' ? 'ROSTER' : 'DEFAULT',
+        },
+        defaultSegments: null,
+      })
+    }
+    if (cell?.issue === 'SEVERAL_SHIFTS' && person.defaultShiftPatternId) {
+      return shiftsOfDay({ date, timeZone, roster: null, defaultSegments: patterns.get(person.defaultShiftPatternId)?.segments ?? null })
+    }
+    return []
   })
 }
 

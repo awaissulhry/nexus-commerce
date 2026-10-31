@@ -36,6 +36,7 @@ import { command, type CommandCaller, type CommandTools, type CommandTx } from '
 import type { FloorContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { requireDevice } from '../../../platform/auth/floor/device'
+import { refuseByMode } from '../../../platform/auth/floor/sign-in'
 import { floorContext } from '../../../platform/auth/floor/store'
 import { assertCsrf } from '../../../platform/auth/sessions/cookies'
 import type { OfficeAuth } from '../../../platform/auth/sessions/office-auth'
@@ -44,7 +45,7 @@ import { endRunningBlock } from '../../production/offstandard/writes'
 import { gateClosedError, legalGateFor } from '../privacy/gate'
 import { asContext, floorOf, refuse, requireAttendanceGate, systemOf } from './access'
 import type { FloorClockBody, QueuedClockBody, ScanClockBody } from './contract'
-import { claimPin, proveClocker } from './credentials'
+import { proveClocker } from './credentials'
 import {
   breakRuleFor,
   clockSettingsOf,
@@ -191,8 +192,8 @@ export interface Recording {
   /** Online: the tablet's clock when tapped (the server's time counts). */
   readonly deviceTime: Date | null
   readonly fixedBreaks: boolean
-  /** NAME at the tablet: the PIN hash claimed again inside the command. */
-  readonly pinHash: string | null
+  /** A PIN proved at the tablet: claimed again inside the command (B-W2b-52's `claimProved`); null otherwise. */
+  readonly claim: ((tx: CommandTx, now: Date) => Promise<void>) | null
 }
 
 export interface Recorded {
@@ -262,7 +263,7 @@ export async function recordClock(caller: CommandCaller, rec: Recording, idempot
       { name: 'people.clock', idempotencyKey, input, ...(rec.offline ? { deviceTime: rec.offline.deviceTime } : rec.deviceTime ? { deviceTime: rec.deviceTime } : {}) },
       async (tools) => {
         await lockPerson(tools.tx, context.tenantId, person.employee.id)
-        if (rec.pinHash) await claimPin(tools.tx, person.worker.id, rec.pinHash, tools.now)
+        if (rec.claim) await rec.claim(tools.tx, tools.now)
         let action: ClockAction
         let occurredAt: Date
         if (rec.offline) {
@@ -348,7 +349,7 @@ export async function floorClock(caller: CommandCaller, body: FloorClockBody) {
   const settings = await caller.withClient((db) => clockSettingsOf(db, person.site.companyId))
   const recorded = await recordClock(
     caller,
-    { person, context, clientEventId: body.clientEventId, way, action: body.action ?? null, offline: null, deviceTime: parseInstant(body.deviceTime), fixedBreaks: settings.fixedBreaks, pinHash: null },
+    { person, context, clientEventId: body.clientEventId, way, action: body.action ?? null, offline: null, deviceTime: parseInstant(body.deviceTime), fixedBreaks: settings.fixedBreaks, claim: null },
     keyOf(context.deviceId, body.clientEventId),
   )
   return { created: !recorded.replayed && !recorded.repeated, answer: await answerOf(caller, person, recorded, null) }
@@ -358,12 +359,15 @@ export async function floorClock(caller: CommandCaller, body: FloorClockBody) {
 
 /**
  * POST /people/clock/scan (public: the device token and the CSRF double submit): a badge, or a name and PIN, clocks at
- * the tablet, signed in or not. The gate first (nothing of a person is read while it is off), then the person, then
- * the action in the person's own floor command (the person is the actor; the device on the audit row).
+ * the tablet, signed in or not. The device's mode first (B-W2b-52: never on a line board; a phone only its person), the
+ * gate next (nothing of a person is read while it is off), then the person, then the action in the person's own floor
+ * command (the person is the actor; the device on the audit row).
  */
 export async function scanClock(auth: OfficeAuth, request: FastifyRequest, body: ScanClockBody) {
   assertCsrf(request)
   const place = await requireDevice(auth, request)
+  // B-W2b-52: nobody clocks on a line board (before anything else is read); a phone only its own person (after the proof).
+  refuseByMode(place, null)
   const offlineAt = body.occurredAt ? parseInstant(body.occurredAt) : null
   if (offlineAt && body.workerId !== undefined) {
     throw new ValidationError('Clocking by name needs the network: the PIN is never kept on the tablet.', [{ path: 'occurredAt', message: 'A name and PIN are sent online only.' }])
@@ -388,7 +392,7 @@ export async function scanClock(auth: OfficeAuth, request: FastifyRequest, body:
   }
   const recorded = await recordClock(
     caller,
-    { person, context, clientEventId: body.clientEventId, way: proved.way, action: body.action ?? null, offline, deviceTime: parseInstant(body.deviceTime), fixedBreaks: settings.fixedBreaks, pinHash: proved.pinHash },
+    { person, context, clientEventId: body.clientEventId, way: proved.way, action: body.action ?? null, offline, deviceTime: parseInstant(body.deviceTime), fixedBreaks: settings.fixedBreaks, claim: proved.claim },
     keyOf(place.device.id, body.clientEventId),
   )
   return { created: !recorded.replayed && !recorded.repeated, answer: await answerOf(caller, person, recorded, offline) }
@@ -415,7 +419,7 @@ export async function clockFromQueue(caller: CommandCaller, body: QueuedClockBod
   const sent = sentAt ? parseInstant(sentAt) : null
   const recorded = await recordClock(
     caller,
-    { person, context, clientEventId: body.clientEventId, way, action: body.action, offline: { deviceTime, skewSeconds: sent ? clockCheck(sent, now).skewSeconds : null }, deviceTime: null, fixedBreaks: true, pinHash: null },
+    { person, context, clientEventId: body.clientEventId, way, action: body.action, offline: { deviceTime, skewSeconds: sent ? clockCheck(sent, now).skewSeconds : null }, deviceTime: null, fixedBreaks: true, claim: null },
     key,
   )
   return { id: recorded.event.id, replayed: recorded.replayed }
