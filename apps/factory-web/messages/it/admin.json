@@ -1538,7 +1538,8 @@
     "accounting": "Contabilità",
     "security": "Sicurezza e stato del sistema",
     "receivables": "Crediti e solleciti",
-    "payables": "Fatture fornitori"
+    "payables": "Fatture fornitori",
+    "people": "Persone"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1784,6 +1785,12 @@
     "quality_complaints_log": "Registrare un reclamo del cliente",
     "quality_complaints_manage": "Smistare, seguire e chiudere i reclami dei clienti",
     "quality_complaints_acknowledge": "Prendere atto dell'allerta di un reclamo di sicurezza (il titolare)",
-    "numbering_override": "Digitare il numero di un documento migrato (mai una serie fiscale; doppioni rifiutati, motivo conservato)"
+    "numbering_override": "Digitare il numero di un documento migrato (mai una serie fiscale; doppioni rifiutati, motivo conservato)",
+    "people_view": "Vedere dipendenti, squadre, prestiti ad altre linee e passi di uscita (mai paghe, presenze o salute)",
+    "people_team_view": "Vedere le squadre che guidi o di cui fai parte (La mia squadra)",
+    "people_employees_manage": "Aggiungere, modificare, collegare e importare i dipendenti",
+    "people_teams_manage": "Aggiungere, modificare e archiviare le squadre, nominare il capo squadra e spostare le persone",
+    "people_loans_manage": "Prestare persone a un'altra linea per ore o giorni",
+    "people_leavers_manage": "Avviare, spuntare e annullare i passi di uscita di una persona"
   }
 }

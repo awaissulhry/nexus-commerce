@@ -121,6 +121,15 @@ async function checkUser(client: FactoryClient | CommandTx, context: OfficeConte
   if (!user || user.status === 'DEACTIVATED') throw new ValidationError('No current user of the tenant has this id.', [{ path: 'userId', message: 'Expected a user of the tenant.' }])
 }
 
+/** B-W2b-26: the account a linked worker names agrees with its employee record's (when the record names one). */
+async function checkEmployeeAccount(tx: CommandTx, workerId: string, userId: string): Promise<void> {
+  const worker = await tx.worker.findUnique({ where: { id: workerId }, select: { employee: { select: { userId: true } } } })
+  const recordAccount = worker?.employee?.userId ?? null
+  if (recordAccount !== null && recordAccount !== userId) {
+    throw new ConflictError("This worker's employee record names another office account: one person has one account (change it on the employee record in People first).")
+  }
+}
+
 export async function listWorkers(auth: OfficeAuth, request: FastifyRequest, query: { siteId?: string | undefined }) {
   const context = officeContextOf(request)
   const scope = scopeWhere(actorOf(context), WORKERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkerWhereInput
@@ -176,6 +185,9 @@ export async function editWorker(auth: OfficeAuth, request: FastifyRequest, work
   try {
     const { result } = await auth.command(context, { name: 'workers.edit', input: body, record: { type: 'Worker', id: workerId, expectedVersion: body.version } }, async ({ tx, now, audit }) => {
       if (changes.userId) await checkUser(tx, context, changes.userId)
+      // B-W2b-26: a worker linked to an employee record names that record's office account (one person, one account);
+      // answered here in words, before the database refuses it at the commit.
+      if (changes.userId) await checkEmployeeAccount(tx, workerId, changes.userId)
       await tx.worker.updateMany({ where: { id: workerId }, data: changes })
       const previous = Object.fromEntries(Object.keys(changes).map((key) => [key, before[key as keyof typeof changes]]))
       audit({ recordType: 'Worker', recordId: workerId, companyId: before.companyId, siteId: before.siteId, before: previous, after: changes })
