@@ -95,6 +95,11 @@ model StoredFile {
   supplierInvoiceXmlOf  SupplierInvoice[]      @relation("SupplierInvoiceXml")
   supplierInvoicePdfOf  SupplierInvoice[]      @relation("SupplierInvoicePdf")
   accountingExportFiles AccountingExportFile[] @relation("AccountingExportFile")
+  // W2b pay.prisma (wave 6/7): the rate sheets, signed rate receipts, worker statements and payroll export files it is.
+  ratePublicationSheets     RatePublication[]     @relation("RatePublicationSheet")
+  rateAcknowledgementPapers RateAcknowledgement[] @relation("RateAcknowledgementPaper")
+  workerStatementFiles      WorkerStatement[]     @relation("WorkerStatementFile")
+  payrollExportFiles        PayrollExportFile[]   @relation("PayrollExportFile")
   // quality.prisma: the lab results it is the report of, the lot documents it is.
   labResults     LabResult[]
   lotDocuments   LotDocument[]

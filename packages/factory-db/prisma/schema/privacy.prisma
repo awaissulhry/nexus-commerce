@@ -55,6 +55,8 @@ model PrivacyNotice {
   // production.prisma: the floor workers' acknowledgements of this version.
   workerAcks WorkerNoticeAck[]
   staffAcks  StaffNoticeAck[]
+  // W2b pay.prisma (wave 6/7): the legal switches of piece pay that name it as the worker notice.
+  piecePaySwitches PiecePaySwitch[]
 
   @@unique([tenantId, companyId, kind, versionNo])
   @@unique([tenantId, companyId, kind, label])
@@ -134,6 +136,8 @@ model PrivacyDpia {
 
   company Company     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   file    StoredFile? @relation("PrivacyDpiaFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b pay.prisma (wave 6/7): the legal switches of piece pay that name it.
+  piecePaySwitches PiecePaySwitch[]
 
   @@unique([tenantId, companyId, versionNo])
   @@unique([tenantId, id])

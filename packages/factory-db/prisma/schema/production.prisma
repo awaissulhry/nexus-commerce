@@ -599,6 +599,9 @@ model OperationScan {
   // W2a cost-ledger.prisma (wave 7/7): the labour (or scrap) it posted to its work order's cost ledger.
   /// @not-money the relation to the cost ledger (the rows carry the grain)
   costEntries        WorkOrderCostEntry[]
+  // W2b pay.prisma (schema wave 6/7): the earnings it paid and its holds (not clocked in).
+  earningsEntries    EarningsEntry[]
+  heldScans          HeldScan[]
   worker      Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   station     Station?           @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device      Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)

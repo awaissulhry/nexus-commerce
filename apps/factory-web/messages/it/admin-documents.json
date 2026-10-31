@@ -259,7 +259,8 @@
       "COUNT": "Inventario",
       "NCR": "Non conformità",
       "MAINTENANCE_JOB": "Intervento di manutenzione",
-      "ACCOUNTING_EXPORT": "Esportazione contabile"
+      "ACCOUNTING_EXPORT": "Esportazione contabile",
+      "PAYROLL_EXPORT": "Esportazione paghe"
     },
     "record": {
       "Invoice": "Fattura",

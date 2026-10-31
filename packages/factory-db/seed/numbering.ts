@@ -84,6 +84,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // W2a wave 7: accounting exports are numbered from it (apps/factory-api modules/accounting): without one, an export
       // cannot be made. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:ACCOUNTING_EXPORT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'ACCOUNTING_EXPORT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'EXP-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b wave 6: payroll exports are numbered from it (apps/factory-api modules/people/payroll, B-W2b-54): without one,
+      // an export cannot be made. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:PAYROLL_EXPORT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'PAYROLL_EXPORT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'PAY-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

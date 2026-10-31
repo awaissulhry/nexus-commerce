@@ -1,0 +1,900 @@
+// Piece pay and the payroll export (W2b plan §6 schema wave 6/7, B-W2b-08; features MES-148, MES-253…MES-262,
+// MES-264, MES-266, MES-267…MES-274, MES-304; design people.piecerates "Legal switch", "Rate table", "Scheme", "Pay
+// periods", "Earnings ledger", "Held scans", people.payroll "Exports", the five wizard steps, people.employees "Pay &
+// piece rates", floor.myday "Statement for the period"): piece-rate tables in versions with their entries, their
+// publication to the workers with a receipt per worker, the incentive schemes, the legal switch of each site, the
+// monthly pay periods, the append-only earnings ledger, scans held because the worker was not clocked in, the worker
+// statements, the payroll export layouts, the exports and their files, and the code mapping to the payroll provider's
+// codes. apps/factory-api's modules/people (B-W2b-34 rates and the switch, B-W2b-38 schemes, B-W2b-43 earnings and
+// periods, B-W2b-54 payroll export) writes them, always through command(); the screens are B-W2b-62 and B-W2b-63.
+//
+// The law (GATE-PIECE-PAY, GATE-LABOUR, GATE-PAYROLL; none of it is settled, so nothing is assumed):
+//   - Piece work (cottimo) is allowed only where the CCNL allows it (c.c. art. 2100); its rates are communicated to the
+//     workers in writing before they apply, and a worker gets a statement of the pieces and pay of each period (c.c.
+//     art. 2101). So a rate version leaves DRAFT only after a publication of it dated on or before its first day, every
+//     worker's reading of a publication is a receipt (RateAcknowledgement), and a period locks only with an approved
+//     statement for every worker paid in it.
+//   - Pay per piece is a figure about one person's work: Statuto dei Lavoratori art. 4 c.1 (a union agreement or the
+//     Ispettorato's authorisation) and a DPIA (GDPR art. 35) come first. So each site has a legal switch, OFF by
+//     default, that turns ON only with its preconditions on record (the CCNL article, the worker notice, the DPIA, the
+//     labour consultant's agreement, a scheme, and the site's recorded legal basis for naming workers in floor records),
+//     and the ledger refuses a piece-pay figure dated outside the site's ON window. Nothing here is computed while OFF.
+//   - Waiting that is not the worker's doing does not cut pay (MES-148, c.c. art. 2100): a scheme pays it at the
+//     average or the guaranteed rate; there is no "unpaid" choice for waiting.
+//   - The payroll provider's file layout (Zucchetti or another) is DATA the tenant uploads (PayrollExportLayout), never a
+//     vendor format in this public code; the generic CSV is a layout row too.
+//
+// Money (plan A1 §2.6): every rate and amount is `@grain wages` (the W0 grain for piece rates and earnings,
+// factory-domain auth/grains; the W2b plan calls it "pay"): HR and the worker only. No floor or partner role reads a
+// money column of this file; a worker's own figures reach the floor through the API (B-W2b-68, after the PIN again),
+// never through the floor role's grants.
+//
+// Personal data (GDPR arts. 4, 5(1)(c)): the pay tables hold a worker's id, never a name (the name lives only on
+// floor-auth's Worker, the one place to erase or pseudonymise it); the personal columns carry `/// @personal piece-pay`
+// (the purpose) for the privacy export and erase (B-W2b-27). No per-person figure in a list, filter, group or total
+// (Owner answer W1, F2): the API's rule; these tables keep one person's figures in their own rows, office only.
+//
+// People tables of W2b schema waves 4/5/7 (Employee, AttendanceDay, OffStandardEntry, LabourEdit…) are not on main yet:
+// a link to one is `…RecordType` + `…RecordId` (no foreign key); the worker is floor-auth's Worker (Worker.employeeCode is
+// the payroll's employee code until Employee lands).
+//
+// Who sees what (ownership/pay.json): the office reads and writes (the API asks the people permissions of B-W2b-34,
+// -38, -43, -54 and the wages grain); the floor reads the publications of its site and records a worker's reading of
+// one (nothing else here: no rate, no figure); portal, link and platform sessions read nothing. EarningsEntry and
+// RateAcknowledgement are append-only. Nothing else is deleted but a DRAFT rate version's entries, a DRAFT rate version
+// with no publication, a DRAFT scheme, and the files of a DRAFT export (the …_pay_w2b_guards triggers).
+
+/// A piece-rate table (MES-254; design people.piecerates "Rate table"): the rates of one site, for one style or for
+/// every style (styleId null), optionally for one line. Its rates live in versions; archived, never deleted.
+model PieceRateTable {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String       @db.Uuid
+  siteId      String       @db.Uuid
+  /// Short code, unique on the site.
+  code        String
+  name        String
+  /// The style its rates are for; null: the site's general rates (an operation's rate whatever the style).
+  styleId     String?      @db.Uuid
+  /// The line it is for, on the same site; null: every line of the site.
+  lineId      String?      @db.Uuid
+  /// ISO 4217: the currency of every rate of its versions.
+  currency    String       @default("EUR")
+  status      MasterStatus @default(ACTIVE)
+  note        String?
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  site     Site               @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  style    Style?             @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  line     Line?              @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  versions PieceRateVersion[]
+
+  @@unique([tenantId, siteId, code])
+  // The target of its versions' references: a table of the same company and site.
+  @@unique([tenantId, companyId, siteId, id])
+}
+
+/// One version of a piece-rate table (MES-254, MES-262; c.c. art. 2101): its rates from a first day, maybe to a last
+/// day, with why it changed. DRAFT while it is written; it leaves DRAFT only once a publication of it to the workers is
+/// dated on or before its first day (rates are told before they apply), as PROVISIONAL (a trial until trialEndsOn, MES-262)
+/// or PUBLISHED; a provisional version is confirmed (PUBLISHED) after its trial or replaced; a later version SUPERSEDES
+/// it (its last day set). From PROVISIONAL on its rates never change: a new rate is a new version with a reason.
+model PieceRateVersion {
+  id            String                 @id @db.Uuid
+  tenantId      String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String                 @db.Uuid
+  siteId        String                 @db.Uuid
+  tableId       String                 @db.Uuid
+  /// 1, 2, 3 … per table, in the order they were made.
+  versionNo     Int
+  /// Why the rates changed (design "Why changed"; c.c. art. 2101: rates change when the conditions of the work change).
+  changeReason  PieceRateChangeReason
+  changeNote    String?
+  /// The first day (Europe/Rome) its rates pay, and the last (null: open; set once, when a later version follows).
+  effectiveFrom DateTime               @db.Date
+  effectiveTo   DateTime?              @db.Date
+  /// Published as provisional, with the last day of its trial (MES-262): both or neither.
+  provisional   Boolean                @default(false)
+  trialEndsOn   DateTime?              @db.Date
+  /// DRAFT → PROVISIONAL | PUBLISHED (after a publication) → SUPERSEDED; PROVISIONAL → PUBLISHED (confirmed); DRAFT →
+  /// CANCELLED. SUPERSEDED and CANCELLED are final.
+  status        PieceRateVersionStatus @default(DRAFT)
+  /// Set exactly when a provisional version is confirmed (PROVISIONAL → PUBLISHED), and kept.
+  confirmedAt   DateTime?              @db.Timestamptz(3)
+  confirmedById String?                @db.Uuid
+  /// Set exactly from SUPERSEDED on.
+  supersededAt  DateTime?              @db.Timestamptz(3)
+  /// Set exactly when CANCELLED (a draft abandoned), and why.
+  cancelledAt   DateTime?              @db.Timestamptz(3)
+  cancelReason  String?
+  version       Int                    @default(1)
+  createdAt     DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?                @db.Uuid
+
+  table           PieceRateTable        @relation(fields: [tenantId, companyId, siteId, tableId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  entries         PieceRateEntry[]
+  publications    RatePublication[]
+  acknowledgements RateAcknowledgement[]
+
+  @@unique([tenantId, tableId, versionNo])
+  // The targets of its entries', publications' and receipts' references: a version of the same (company and) site.
+  @@unique([tenantId, siteId, id])
+  @@unique([tenantId, companyId, siteId, id])
+}
+
+/// Why a piece-rate version was made.
+enum PieceRateChangeReason {
+  /// The first rates of a style or an operation.
+  NEW
+  /// The working method changed.
+  METHOD_CHANGED
+  /// The machine or equipment changed.
+  EQUIPMENT_CHANGED
+  /// A rate was wrong.
+  CORRECTION
+}
+
+/// The life of a piece-rate version (factory-domain people/piecerates, B-W2b-34).
+enum PieceRateVersionStatus {
+  DRAFT
+  /// Published and in force on trial until trialEndsOn (MES-262).
+  PROVISIONAL
+  /// Published and in force, definitive.
+  PUBLISHED
+  /// A later version took over from the day after effectiveTo.
+  SUPERSEDED
+  CANCELLED
+}
+
+/// One rate of a version (MES-254; design "Rate table"): an operation of the library, for a size band, paid per piece.
+/// SMV_RATE: the standard minutes (SMV) times the rate per minute, rounded to six decimals; FIXED: a rate per piece as
+/// typed. Written only while its version is a DRAFT.
+model PieceRateEntry {
+  id              String          @id @db.Uuid
+  tenantId        String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String          @db.Uuid
+  versionId       String          @db.Uuid
+  /// The operation of the library (Products › Operations) the rate pays: the floor scans its routing steps.
+  operationId     String          @db.Uuid
+  /// The sizes it is for, as the site names its bands ("ALL", "XS-M", "L-3XL"); unique per version and operation.
+  sizeBand        String          @default("ALL")
+  basis           PieceRateBasis
+  /// The standard minutes per piece: required (above 0) for SMV_RATE, optional for FIXED.
+  standardMinutes Decimal?        @db.Decimal(10, 3)
+  /// SMV_RATE only: the pay of one standard minute, 0 or more.
+  /// @grain wages
+  ratePerMinute   Decimal?        @db.Decimal(18, 6)
+  /// The pay of one piece, 0 or more, in the table's currency (SMV_RATE: standardMinutes × ratePerMinute, rounded).
+  /// @grain wages
+  ratePerPiece    Decimal         @db.Decimal(18, 6)
+  note            String?
+  version         Int             @default(1)
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?         @db.Uuid
+
+  rateVersion PieceRateVersion @relation(fields: [tenantId, siteId, versionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation   Operation        @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  earnings    EarningsEntry[]
+
+  @@unique([tenantId, versionId, operationId, sizeBand])
+  // The target of the earnings entries' reference: a rate of the entry's site.
+  @@unique([tenantId, siteId, id])
+}
+
+/// How a rate per piece is made.
+enum PieceRateBasis {
+  /// Standard minutes × the rate per minute.
+  SMV_RATE
+  /// A rate per piece as typed.
+  FIXED
+}
+
+/// A publication of a rate version to workers of its site (MES-255; c.c. art. 2101 c.3; design "Publish rates"): to
+/// which workers (and which line), on the floor (My day) and/or as a printed sheet, by whom and when. A wrong one is
+/// WITHDRAWN while its version is still a DRAFT; otherwise it stands (the receipts name it). Never deleted.
+model RatePublication {
+  id            String                  @id @db.Uuid
+  tenantId      String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String                  @db.Uuid
+  siteId        String                  @db.Uuid
+  versionId     String                  @db.Uuid
+  /// The line it was published on, of the same site; null: the site.
+  lineId        String?                 @db.Uuid
+  /// The workers it was published to: ACTIVE workers of the site, at least one, each once (checked when it is made).
+  /// @personal piece-pay
+  workerIds     String[]                @db.Uuid
+  /// Shown on the floor (My day, the worker reads and the reading is recorded).
+  onFloor       Boolean                 @default(true)
+  /// Printed as a sheet (the notice board, a paper copy to sign).
+  printed       Boolean                 @default(false)
+  /// The printed rate sheet (a StoredFile of the publication), once made.
+  sheetFileId   String?                 @db.Uuid
+  /// PUBLISHED → WITHDRAWN (final; only while its version is a DRAFT).
+  status        RatePublicationStatus   @default(PUBLISHED)
+  publishedAt   DateTime                @db.Timestamptz(3)
+  publishedById String                  @db.Uuid
+  /// Set exactly when WITHDRAWN, by whom and why.
+  withdrawnAt   DateTime?               @db.Timestamptz(3)
+  withdrawnById String?                 @db.Uuid
+  withdrawReason String?
+  version       Int                     @default(1)
+  createdAt     DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?                 @db.Uuid
+
+  rateVersion      PieceRateVersion      @relation(fields: [tenantId, companyId, siteId, versionId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  line             Line?                 @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  sheetFile        StoredFile?           @relation("RatePublicationSheet", fields: [tenantId, sheetFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  acknowledgements RateAcknowledgement[]
+
+  // The target of the receipts' reference: a publication of the receipt's site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, versionId])
+}
+
+enum RatePublicationStatus {
+  PUBLISHED
+  WITHDRAWN
+}
+
+/// A worker's receipt of a rate publication (MES-255; c.c. art. 2101 c.3; design AckTracker "Read by n of m", the
+/// employee's "Rates published and read"): which publication and version, which worker, when, on which device, or on a
+/// signed paper copy the office recorded. Proof the worker was told the rates; a missing receipt never stops pay.
+/// Never changed or removed (the …_pay_w2b_guards triggers, for every login).
+/// @append-only
+model RateAcknowledgement {
+  id            String             @id @db.Uuid
+  tenantId      String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId        String             @db.Uuid
+  publicationId String             @db.Uuid
+  /// The publication's version.
+  versionId     String             @db.Uuid
+  /// One of the publication's workers.
+  /// @personal piece-pay
+  workerId      String             @db.Uuid
+  channel       RateAckChannel
+  /// DEVICE: the floor device the worker read it on, its clock, and its id for the event (unique per device: a resent
+  /// receipt is recorded once).
+  deviceId      String?            @db.Uuid
+  deviceTime    DateTime?          @db.Timestamptz(3)
+  clientEventId String?
+  /// PAPER: the scan of the signed copy, when there is one (a StoredFile of the publication).
+  paperFileId   String?            @db.Uuid
+  serverTime    DateTime           @default(now()) @db.Timestamptz(3)
+  createdById   String?            @db.Uuid
+
+  publication RatePublication  @relation(fields: [tenantId, siteId, publicationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  rateVersion PieceRateVersion @relation(fields: [tenantId, siteId, versionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker      Worker           @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  device      Device?          @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  paperFile   StoredFile?      @relation("RateAcknowledgementPaper", fields: [tenantId, paperFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, deviceId, clientEventId])
+  // "Read by n of m" and the employee's list.
+  @@index([tenantId, publicationId, workerId])
+  @@index([tenantId, workerId])
+}
+
+/// How a worker acknowledged a rate publication.
+enum RateAckChannel {
+  /// On a floor device, signed in.
+  DEVICE
+  /// On paper, signed; the office recorded it.
+  PAPER
+}
+
+/// An incentive scheme (MES-253, MES-257, MES-258, MES-259, MES-264, MES-148; design people.piecerates "Scheme"): how
+/// pay is computed for a company or one of its lines from a first day: the kind of scheme, the guaranteed pay a worker's
+/// piece pay is made up to, the team split, how rework, scrap and waiting are paid, and whether scans pay only while the
+/// worker is clocked in. DRAFT while it is set; ACTIVE from validFrom (frozen but its last day, set once); RETIRED when a
+/// later one took over. Two ACTIVE schemes of a company and line never overlap. The figures are the labour
+/// consultant's and the CCNL's (GATE-PIECE-PAY): nothing here is a default of the law.
+model IncentiveScheme {
+  id                     String                @id @db.Uuid
+  tenantId               String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId              String                @db.Uuid
+  /// A line of the company and its site; both null: the company's scheme (a line's own wins on that line).
+  siteId                 String?               @db.Uuid
+  lineId                 String?               @db.Uuid
+  name                   String
+  kind                   IncentiveKind
+  /// STANDARD_MINUTE_BONUS: the efficiency (percent of standard minutes earned over minutes present) above which the
+  /// bonus pays, above 0 and at most 200.
+  efficiencyThresholdPct Decimal?              @db.Decimal(7, 4)
+  /// Where the guaranteed pay comes from, and its rate per hour present (both before ACTIVE): the make-up (MES-257)
+  /// tops a period's piece pay up to it.
+  guaranteedBasis        GuaranteedPayBasis    @default(UNDECIDED)
+  /// @grain wages
+  guaranteedHourlyRate   Decimal?              @db.Decimal(18, 6)
+  /// A trainee's guaranteed rate per hour, when trainees have their own.
+  /// @grain wages
+  traineeHourlyRate      Decimal?              @db.Decimal(18, 6)
+  /// TEAM_INCENTIVE: how a team's earnings are split among its members (MES-259).
+  teamSplit              TeamSplitBasis?
+  /// Rework and scrap that were the worker's own fault (MES-258): unpaid, or paid at ownFaultRatePct percent of the rate.
+  reworkOwnFault         OwnFaultPay           @default(UNPAID)
+  scrapOwnFault          OwnFaultPay           @default(UNPAID)
+  /// REDUCED_RATE: the percent of the rate paid (above 0, below 100) for rework and scrap of the worker's own fault.
+  ownFaultRatePct        Decimal?              @db.Decimal(7, 4)
+  /// Rework and scrap caused by others, and waiting that is not the worker's doing (MES-148; c.c. art. 2100): paid at
+  /// the worker's average rate or at the guaranteed rate; never unpaid.
+  othersFaultPay         PaidTimeRate          @default(AVERAGE)
+  waitingPay             PaidTimeRate          @default(AVERAGE)
+  /// A scan pays only while the worker is clocked in (MES-264); a scan taken otherwise is held (HeldScan).
+  payOnlyWhileClockedIn  Boolean               @default(true)
+  /// ISO 4217.
+  currency               String                @default("EUR")
+  /// The first day (Europe/Rome) it applies, and the last (null: open; set once when a later scheme follows).
+  validFrom              DateTime              @db.Date
+  validTo                DateTime?             @db.Date
+  /// DRAFT → ACTIVE → RETIRED; a DRAFT may be deleted.
+  status                 IncentiveSchemeStatus @default(DRAFT)
+  activatedAt            DateTime?             @db.Timestamptz(3)
+  activatedById          String?               @db.Uuid
+  note                   String?
+  version                Int                   @default(1)
+  createdAt              DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById            String?               @db.Uuid
+
+  company  Company          @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  line     Line?            @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  switches PiecePaySwitch[]
+
+  // The target of the legal switch's reference: a scheme of the switch's company.
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, validFrom])
+}
+
+/// The kind of incentive scheme (design "Scheme").
+enum IncentiveKind {
+  /// Pure piece rate: pieces × the rate of their operation.
+  PIECE_RATE
+  /// A bonus for the standard minutes earned above an efficiency threshold.
+  STANDARD_MINUTE_BONUS
+  /// The team's pieces paid to the team and split among its members.
+  TEAM_INCENTIVE
+}
+
+/// Where a scheme's guaranteed pay comes from.
+enum GuaranteedPayBasis {
+  /// Not given yet (the labour consultant's answer, GATE-PIECE-PAY): the scheme cannot be ACTIVE.
+  UNDECIDED
+  /// The CCNL's minimum for the worker's level (the rate typed from it).
+  CCNL_MINIMUM
+  /// An hourly rate agreed with the workers' representatives.
+  AGREED_HOURLY
+}
+
+/// How a team's earnings are split.
+enum TeamSplitBasis {
+  /// In proportion to each member's hours present.
+  HOURS_PRESENT
+  /// In proportion to each member's skill weight.
+  SKILL_WEIGHT
+}
+
+/// How rework or scrap of the worker's own fault is paid.
+enum OwnFaultPay {
+  UNPAID
+  /// At ownFaultRatePct percent of the rate.
+  REDUCED_RATE
+  FULL_RATE
+}
+
+/// The rate time not spent on pieces is paid at (it is always paid).
+enum PaidTimeRate {
+  /// The worker's average earnings per minute in the period.
+  AVERAGE
+  /// The scheme's guaranteed rate per hour.
+  GUARANTEED
+}
+
+enum IncentiveSchemeStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+/// The legal switch of piece pay at one site (design people.piecerates "Legal switch"; GATE-PIECE-PAY, GATE-LABOUR): OFF
+/// by default. Its preconditions are recorded here (the CCNL and its article allowing piece work, c.c. art. 2100; the
+/// worker notice that covers piece pay, Statuto art. 4 c.3 and GDPR art. 13; the stored DPIA, GDPR art. 35; the labour
+/// consultant's agreement; the scheme) or read where they live (the site's legal basis for naming workers in floor
+/// records, production.prisma ProductionSettings, Statuto art. 4 c.1). It turns ON from a day not before the day it is
+/// turned on, only with all of them; the earnings ledger then accepts piece-pay figures dated from that day until the day
+/// it is turned off (onFrom … offFrom, the latest window; the earlier ones are kept in earlierWindows). While ON its
+/// preconditions never change. The site's row has the site's own id (as ProductionSettings); never deleted.
+model PiecePaySwitch {
+  /// The site's own id (`siteId`): a site has at most one row, and it is read by the site's id.
+  id                 String         @id @db.Uuid
+  tenantId           String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId          String         @db.Uuid
+  siteId             String         @db.Uuid
+  /// OFF ⇄ ON.
+  state              PiecePayState  @default(OFF)
+  /// The CCNL that applies and its article that allows piece work (c.c. art. 2100), as the labour consultant names them.
+  ccnlName           String?
+  ccnlArticle        String?
+  /// The company's WORKER_FLOOR notice version that tells the workers about piece pay (privacy.prisma; PUBLISHED to
+  /// turn ON).
+  workerNoticeId     String?        @db.Uuid
+  /// The company's DPIA that covers piece pay (privacy.prisma; STORED to turn ON).
+  dpiaId             String?        @db.Uuid
+  /// The labour consultant who agreed the scheme, the make-up and the statement, and on which day.
+  consultantName     String?
+  consultantAgreedOn DateTime?      @db.Date
+  /// The scheme piece pay starts with: ACTIVE, of the company, on the day it turns ON (the company's or a line's of
+  /// this site).
+  schemeId           String?        @db.Uuid
+  preconditionsNote  String?
+  /// The latest window: the first day piece pay counts, who turned it on and when (kept while OFF afterwards).
+  onFrom             DateTime?      @db.Date
+  switchedOnAt       DateTime?      @db.Timestamptz(3)
+  switchedOnById     String?        @db.Uuid
+  /// The first day it no longer counts, who turned it off, when and why: set exactly while OFF after a window.
+  offFrom            DateTime?      @db.Date
+  switchedOffAt      DateTime?      @db.Timestamptz(3)
+  switchedOffById    String?        @db.Uuid
+  offReason          String?
+  /// The earlier windows, oldest first: [{ "from": "YYYY-MM-DD", "to": "YYYY-MM-DD" }] (to: the first day it no longer
+  /// counted); the window just closed is appended when it is turned on again (the trigger checks it), so work of an
+  /// earlier window can still be paid late.
+  earlierWindows     Json           @default("[]")
+  version            Int            @default(1)
+  createdAt          DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?        @db.Uuid
+
+  site         Site             @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  workerNotice PrivacyNotice?   @relation(fields: [tenantId, companyId, workerNoticeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  dpia         PrivacyDpia?     @relation(fields: [tenantId, dpiaId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  scheme       IncentiveScheme? @relation(fields: [tenantId, companyId, schemeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId])
+}
+
+enum PiecePayState {
+  OFF
+  ON
+}
+
+/// A month of piece pay for a company (MES-260; design "Pay periods"): OPEN while entries accrue → PREVIEW (the run
+/// computed make-up and team splits; run again at will) → REVIEW (leads and HR check the statements; back to PREVIEW
+/// for a fix) → LOCKED (typed confirm): final. A period locks only with no scan still held and an APPROVED statement for
+/// every worker paid in it (c.c. art. 2101); after the lock a change is a new entry in a later period that names it.
+model PayPeriod {
+  id               String          @id @db.Uuid
+  tenantId         String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String          @db.Uuid
+  /// The month (Europe/Rome days): its first day and its last day.
+  periodStart      DateTime        @db.Date
+  periodEnd        DateTime        @db.Date
+  status           PayPeriodStatus @default(OPEN)
+  /// The latest run (set from PREVIEW on).
+  previewedAt      DateTime?       @db.Timestamptz(3)
+  previewedById    String?         @db.Uuid
+  /// When the review began, and who began it (exactly while REVIEW or LOCKED).
+  reviewStartedAt  DateTime?       @db.Timestamptz(3)
+  reviewStartedById String?        @db.Uuid
+  /// Set exactly when LOCKED.
+  lockedAt         DateTime?       @db.Timestamptz(3)
+  lockedById       String?         @db.Uuid
+  lockNote         String?
+  version          Int             @default(1)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?         @db.Uuid
+
+  company           Company           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  entries           EarningsEntry[]   @relation("EarningsEntryPeriod")
+  correctionEntries EarningsEntry[]   @relation("EarningsEntryCorrectsPeriod")
+  heldScans         HeldScan[]
+  statements        WorkerStatement[]
+  payrollExports    PayrollExport[]
+
+  // One period per company and month (the end in the key too, so the generated isolation tests' copy, moved a thousand
+  // years, stays a whole month).
+  @@unique([tenantId, companyId, periodStart, periodEnd])
+  // The target of the references from its entries, held scans, statements and exports.
+  @@unique([tenantId, companyId, id])
+}
+
+enum PayPeriodStatus {
+  OPEN
+  PREVIEW
+  REVIEW
+  LOCKED
+}
+
+/// One line of the earnings ledger (MES-256; design "Earnings ledger"): a worker's pay for one scan (SCAN), their share
+/// of a team's scan (TEAM_SPLIT), the period's make-up to guaranteed pay (MAKE_UP), paid time off standard such as
+/// waiting (OFF_STANDARD, MES-148), or an adjustment with its reason; in the pay period it is paid in, dated by the day
+/// of the work. Never changed or removed (the …_pay_w2b_guards triggers, for every login): a correction is a reversal
+/// (`reversalOfId`, the opposite amount, at most one) and a new entry; work of a LOCKED period is paid in a later one that
+/// names it (`correctsPeriodId`). One entry per event (`idempotencyKey`, unique: `scan:<scanId>`, `team:<scanId>:<worker>`,
+/// `makeup:<periodId>:<worker>`, `offstd:<id>` …). A held scan never pays until it is counted; a piece-pay figure is
+/// refused outside the site's legal switch window.
+/// @append-only
+model EarningsEntry {
+  id               String       @id @db.Uuid
+  tenantId         String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String       @db.Uuid
+  siteId           String       @db.Uuid
+  /// The period it is paid in (not LOCKED when written).
+  payPeriodId      String       @db.Uuid
+  /// @personal piece-pay
+  workerId         String       @db.Uuid
+  /// The day of the work (Europe/Rome): inside the period's month, or inside the month of the LOCKED period it corrects.
+  workDate         DateTime     @db.Date
+  kind             EarningsKind
+  /// SCAN, TEAM_SPLIT: the operation scan (a REPORT or CORRECTION standing, of the entry's site; SCAN: the worker's own).
+  operationScanId  String?      @db.Uuid
+  /// SCAN, TEAM_SPLIT: the rate it was paid at (a published version in force on the work day, the scan's operation).
+  rateEntryId      String?      @db.Uuid
+  /// SCAN, TEAM_SPLIT: the pieces paid; MAKE_UP, OFF_STANDARD: the minutes paid. A reversal: the opposite.
+  pieces           Int?
+  minutes          Decimal?     @db.Decimal(10, 3)
+  /// The rate applied: per piece (SCAN, TEAM_SPLIT) or per minute (MAKE_UP, OFF_STANDARD).
+  /// @grain wages
+  rate             Decimal?     @db.Decimal(18, 6)
+  /// TEAM_SPLIT: the worker's share of the team's pay for the scan, percent (above 0, at most 100).
+  sharePct         Decimal?     @db.Decimal(7, 4)
+  /// Minor units of `currency`: 0 or more for a SCAN, TEAM_SPLIT, MAKE_UP or OFF_STANDARD entry; any sign for an
+  /// ADJUSTMENT; the opposite of the entry a reversal reverses.
+  /// @grain wages
+  amount           Int
+  /// ISO 4217.
+  currency         String       @default("EUR")
+  /// A scan that was held and then counted (HeldScan COUNTED of the same scan).
+  heldScanId       String?      @db.Uuid
+  /// OFF_STANDARD and records of other people tables (W2b waves 5/7: OffStandardEntry, LabourEdit, AttendanceDay):
+  /// the record's model name and id, together.
+  sourceType       String?
+  sourceId         String?      @db.Uuid
+  /// The LOCKED period of the company whose month holds workDate, when workDate is outside this entry's period.
+  correctsPeriodId String?      @db.Uuid
+  /// A reversal: the entry it reverses (same worker and kind; not a reversal; reversed once).
+  reversalOfId     String?      @db.Uuid
+  /// Why (required for a reversal and an ADJUSTMENT).
+  reason           String?
+  /// One entry per event (see above), unique in the tenant.
+  idempotencyKey   String
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  createdById      String?      @db.Uuid
+
+  site           Site             @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  payPeriod      PayPeriod        @relation("EarningsEntryPeriod", fields: [tenantId, companyId, payPeriodId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker         Worker           @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  operationScan  OperationScan?   @relation(fields: [tenantId, siteId, operationScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  rateEntry      PieceRateEntry?  @relation(fields: [tenantId, siteId, rateEntryId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  heldScan       HeldScan?        @relation(fields: [tenantId, siteId, heldScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  correctsPeriod PayPeriod?       @relation("EarningsEntryCorrectsPeriod", fields: [tenantId, companyId, correctsPeriodId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversalOf     EarningsEntry?   @relation("EarningsEntryReversal", fields: [tenantId, siteId, reversalOfId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversedBy     EarningsEntry[]  @relation("EarningsEntryReversal")
+
+  @@unique([tenantId, idempotencyKey])
+  // The target of a reversal's reference: an entry of the same site.
+  @@unique([tenantId, siteId, id])
+  // A worker's statement and the period's checks.
+  @@index([tenantId, payPeriodId, workerId])
+  @@index([tenantId, operationScanId])
+}
+
+/// What an earnings entry pays.
+enum EarningsKind {
+  /// One scan's pieces at their rate.
+  SCAN
+  /// The worker's share of a team's scan (MES-259).
+  TEAM_SPLIT
+  /// The period's top-up to guaranteed pay (MES-257).
+  MAKE_UP
+  /// Paid time off standard: waiting, rework or scrap caused by others (MES-148, MES-258).
+  OFF_STANDARD
+  /// A correction typed by HR, with its reason.
+  ADJUSTMENT
+}
+
+/// A scan held because the worker was not clocked in when they took it (MES-264; design "Held scans"): it pays nothing
+/// until HR counts it (the attendance was fixed: the record of the fix named) or decides not to pay it (with the reason).
+/// One key per scan (`held:<scanId>`). Decided once; never deleted.
+model HeldScan {
+  id              String           @id @db.Uuid
+  tenantId        String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId       String           @db.Uuid
+  siteId          String           @db.Uuid
+  /// The period of the scan's day.
+  payPeriodId     String           @db.Uuid
+  /// The scan's worker.
+  /// @personal piece-pay
+  workerId        String           @db.Uuid
+  operationScanId String           @db.Uuid
+  reason          HeldScanReason
+  heldAt          DateTime         @db.Timestamptz(3)
+  /// OPEN → COUNTED | NOT_PAID (final).
+  status          HeldScanStatus   @default(OPEN)
+  /// Set exactly once decided: when, by whom.
+  resolvedAt      DateTime?        @db.Timestamptz(3)
+  resolvedById    String?          @db.Uuid
+  /// NOT_PAID: why (required); COUNTED: a note.
+  resolutionNote  String?
+  /// COUNTED: the record whose fix lets it count (W2b wave 5: the AttendanceDay or the clock correction), together.
+  fixRecordType   String?
+  fixRecordId     String?          @db.Uuid
+  /// `held:<scanId>`, unique in the tenant.
+  key             String
+  version         Int              @default(1)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?          @db.Uuid
+
+  site          Site            @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  payPeriod     PayPeriod       @relation(fields: [tenantId, companyId, payPeriodId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker        Worker          @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  operationScan OperationScan   @relation(fields: [tenantId, siteId, operationScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  earnings      EarningsEntry[]
+
+  @@unique([tenantId, key])
+  // The target of the earnings entries' reference: a held scan of the entry's site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, payPeriodId, status])
+  @@index([tenantId, operationScanId])
+}
+
+/// Why a scan was held.
+enum HeldScanReason {
+  /// The worker had not clocked in (or had clocked out).
+  NOT_CLOCKED_IN
+  /// The worker was on a break.
+  ON_BREAK
+}
+
+enum HeldScanStatus {
+  OPEN
+  COUNTED
+  NOT_PAID
+}
+
+/// A worker's statement of a pay period (MES-261; c.c. art. 2101 c.3; design "Worker statement", floor.myday
+/// "Statement for the period"): the pieces per operation, minutes, rates, earnings and make-up, as a snapshot when it is
+/// approved, and its PDF. DRAFT while reviewed → APPROVED → SUPERSEDED by a later revision (figures changed before the
+/// lock); once its period is LOCKED it never changes (but its PDF, named once). The database does not hold "one live
+/// statement per worker and period" (the generated isolation tests insert a copy): the API does, under a lock.
+model WorkerStatement {
+  id             String                @id @db.Uuid
+  tenantId       String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId      String                @db.Uuid
+  siteId         String                @db.Uuid
+  payPeriodId    String                @db.Uuid
+  /// @personal piece-pay
+  workerId       String                @db.Uuid
+  /// 1, 2, 3 … per worker and period (a later revision supersedes an earlier one).
+  revision       Int                   @default(1)
+  status         WorkerStatementStatus @default(DRAFT)
+  /// The statement's lines: [{ operationCode, operationName, pieces, minutes, rate, amount }] and the make-up, held scans
+  /// and disputes; required to approve.
+  /// @grain wages
+  /// @personal piece-pay
+  summary        Json?
+  /// Minor units of `currency`: the period's earnings (any sign: corrections) and make-up (0 or more); required to approve.
+  /// @grain wages
+  earningsAmount Int?
+  /// @grain wages
+  makeUpAmount   Int?
+  /// ISO 4217.
+  currency       String                @default("EUR")
+  /// The statement's PDF (a StoredFile of the statement), named once.
+  fileId         String?               @db.Uuid
+  /// Set exactly from APPROVED on (kept when superseded).
+  approvedAt     DateTime?             @db.Timestamptz(3)
+  approvedById   String?               @db.Uuid
+  /// Set exactly when SUPERSEDED.
+  supersededAt   DateTime?             @db.Timestamptz(3)
+  version        Int                   @default(1)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?               @db.Uuid
+
+  site      Site        @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  payPeriod PayPeriod   @relation(fields: [tenantId, companyId, payPeriodId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker    Worker      @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  file      StoredFile? @relation("WorkerStatementFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, payPeriodId, workerId, revision])
+  @@index([tenantId, workerId])
+}
+
+enum WorkerStatementStatus {
+  DRAFT
+  APPROVED
+  SUPERSEDED
+}
+
+/// A payroll file layout (MES-268, MES-270; design people.payroll "Format", "CSV columns"; GATE-PAYROLL): DATA, never a
+/// vendor format in the code. A generic CSV or spreadsheet layout, or the labour consultant's payroll software's import
+/// layout (Zucchetti or another) typed from their sample: its columns (order, header, width, number and date format) and
+/// file options. Archived, never deleted; an export keeps a snapshot of the layout it used.
+model PayrollExportLayout {
+  id          String            @id @db.Uuid
+  tenantId    String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String            @db.Uuid
+  /// Unique per company ("Generic CSV", the consultant's name for it).
+  name        String
+  format      PayrollFileFormat
+  /// The payroll software it is for, as the consultant names it; null: generic.
+  provider    String?
+  /// { "columns": [{ "key": "employeeCode", "header"?: "Matricola", "width"?: 8, "format"?: "…" }, …], "delimiter"?,
+  /// "decimalSeparator"?, "dateFormat"?, "encoding"?, "headerRow"? }: at least one column, each with a key; FIXED_WIDTH:
+  /// each with a whole width above 0.
+  definition  Json
+  status      MasterStatus      @default(ACTIVE)
+  note        String?
+  version     Int               @default(1)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?           @db.Uuid
+
+  company Company         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  exports PayrollExport[]
+
+  @@unique([tenantId, companyId, name])
+  // The target of the exports' reference: a layout of the export's company.
+  @@unique([tenantId, companyId, id])
+}
+
+/// The shape of a payroll file.
+enum PayrollFileFormat {
+  /// Delimited text (CSV and the like).
+  DELIMITED
+  /// A spreadsheet (XLSX).
+  SPREADSHEET
+  /// Fixed-width text records (the import layouts of payroll software).
+  FIXED_WIDTH
+}
+
+/// A monthly payroll export for the labour consultant (MES-267, MES-272, MES-273, MES-274; design people.payroll
+/// "Exports" and the wizard): one company and month, the layout it used (a snapshot), the checks before export, the
+/// values it sent per employee code, and its files. A DRAFT is EXPORTED with its number from the company's
+/// PAYROLL_EXPORT series once every blocking check passed (and its pay period, when piece pay is in it, is LOCKED), or
+/// CANCELLED; an exported one never changes: a later change is a correction export (revision 2, 3 …) that names the one
+/// it corrects (one first export per company and month: a partial unique index). Sent by an expiring link (links.prisma
+/// OneOffLink, recordType "PayrollExport"; no column here).
+model PayrollExport {
+  id             String              @id @db.Uuid
+  tenantId       String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId      String              @db.Uuid
+  /// The month (Europe/Rome days): its first day and its last day.
+  periodStart    DateTime            @db.Date
+  periodEnd      DateTime            @db.Date
+  /// The company's pay period of the month, when piece pay is in the export.
+  payPeriodId    String?             @db.Uuid
+  layoutId       String              @db.Uuid
+  /// The layout's format and definition as used: { "format": …, "definition": { … } }.
+  layoutSnapshot Json
+  /// 1 for the first export of the month; a correction is its corrected export's revision + 1.
+  revision       Int                 @default(1)
+  /// A correction: the EXPORTED export of the same company and month it corrects.
+  correctionOfId String?             @db.Uuid
+  /// Set exactly from EXPORTED on: the company's PAYROLL_EXPORT series and the number it gave (PAY-2026-0001).
+  numberSeriesId String?             @db.Uuid
+  number         String?
+  /// DRAFT → EXPORTED | CANCELLED. EXPORTED and CANCELLED are final.
+  status         PayrollExportStatus @default(DRAFT)
+  /// The checks before export (design "2 · Checks"): [{ "code": "EMPLOYEE_CODES", "blocking": true, "passed": true,
+  /// "count"?: 0 }]; to export, every blocking one passed (a warning may stand).
+  checks         Json                @default("[]")
+  /// The values it sends, per employee code (design "4 · Preview"; a correction shows from → to against them):
+  /// [{ "employeeCode": "…", "code": "ORD", "quantity"?: "…", "amount"?: 0 }].
+  /// @grain wages
+  /// @personal piece-pay
+  values         Json                @default("[]")
+  /// Set exactly from EXPORTED on: who made it, and when.
+  exportedAt     DateTime?           @db.Timestamptz(3)
+  exportedById   String?             @db.Uuid
+  /// Set exactly when CANCELLED (a draft abandoned), and why.
+  cancelledAt    DateTime?           @db.Timestamptz(3)
+  cancelReason   String?
+  note           String?
+  version        Int                 @default(1)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?             @db.Uuid
+
+  company      Company             @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  payPeriod    PayPeriod?          @relation(fields: [tenantId, companyId, payPeriodId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  layout       PayrollExportLayout @relation(fields: [tenantId, companyId, layoutId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  numberSeries NumberSeries?       @relation(fields: [tenantId, companyId, numberSeriesId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  correctionOf PayrollExport?      @relation("PayrollExportCorrection", fields: [tenantId, companyId, correctionOfId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  correctedBy  PayrollExport[]     @relation("PayrollExportCorrection")
+  files        PayrollExportFile[]
+
+  @@unique([tenantId, companyId, number])
+  // The targets of the references from its files and its corrections.
+  @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, periodStart])
+}
+
+enum PayrollExportStatus {
+  DRAFT
+  EXPORTED
+  CANCELLED
+}
+
+/// One file of a payroll export (design "5 · Export and send", "Export summary (PDF)"): the data file in the layout or the
+/// summary PDF for the consultant's check, a StoredFile of the export (recordType "PayrollExport"), its format and rows.
+/// Added while the export is a DRAFT; never changed or removed after.
+model PayrollExportFile {
+  id          String                @id @db.Uuid
+  tenantId    String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  exportId    String                @db.Uuid
+  /// 1, 2, 3 … in the export.
+  seq         Int
+  kind        PayrollExportFileKind
+  fileId      String                @db.Uuid
+  /// CSV, XLSX, TXT or PDF.
+  format      String
+  /// The data rows it holds (0 for a month with nothing to send).
+  rowCount    Int                   @default(0)
+  createdAt   DateTime              @default(now()) @db.Timestamptz(3)
+  createdById String?               @db.Uuid
+
+  export PayrollExport @relation(fields: [tenantId, exportId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  file   StoredFile    @relation("PayrollExportFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, exportId, seq])
+}
+
+/// What a payroll export file is.
+enum PayrollExportFileKind {
+  /// The data file, in the export's layout.
+  DATA
+  /// The summary for the consultant's check (totals per employee).
+  SUMMARY
+}
+
+/// One code of the mapping to the payroll provider's codes (MES-271; design "3 · Code mapping"): one of our hour types,
+/// absence codes (W2b wave 5's AbsenceCode.code) or earning types, its meaning, and the provider's code (voce or
+/// causale); null: not mapped yet (the export's check lists it). Per company; archived, never deleted.
+model PayrollCodeMapping {
+  id           String          @id @db.Uuid
+  tenantId     String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String          @db.Uuid
+  kind         PayrollCodeKind
+  /// Our code ("ORD", "OT25", "NIGHT", an absence code, "PIECE", "MAKE_UP" …), unique per company and kind.
+  ourCode      String
+  meaning      String
+  /// The provider's code; null: not mapped.
+  providerCode String?
+  status       MasterStatus    @default(ACTIVE)
+  version      Int             @default(1)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?         @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, companyId, kind, ourCode])
+}
+
+/// What a mapped code is.
+enum PayrollCodeKind {
+  /// An hour type: ordinary, overtime by class, night, holiday.
+  HOUR
+  /// An absence code (holiday, ROL, sickness …).
+  ABSENCE
+  /// An earning type: piece pay, make-up, team incentive, off-standard.
+  EARNING
+}

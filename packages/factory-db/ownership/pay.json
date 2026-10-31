@@ -1,0 +1,127 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/pay.prisma (rules: src/ownership.ts; roles: src/roles.ts). HR keeps the piece-rate tables, their versions and rates, publishes them to the workers and records paper receipts, sets the incentive schemes, records the legal switch's preconditions and turns it on or off, runs, reviews and locks the pay periods, resolves held scans, approves statements, keeps the payroll layouts and the code mapping, and makes the payroll exports, through apps/factory-api's modules/people (B-W2b-34, -38, -43, -54), always through command(); the worker and scheduler write the earnings ledger and the held scans in the tenant's system context (the office role); the API keeps staff to the companies and sites their grants reach, asks the people permissions and the wages grain, and never lists, filters, groups or totals one person's figures (Owner answers W1, F2). The floor (factory_floor_runtime) works on its OWN site only and sees no rate and no figure: it reads the rate publications of its site and records a worker's reading of one (RateAcknowledgement, channel DEVICE); a worker's own earnings and statement reach the floor through the API (B-W2b-68), never through these grants. Portal, link and platform sessions read nothing here. Every rate and amount is `@grain wages`; the personal columns carry `@personal piece-pay`. EarningsEntry and RateAcknowledgement are append-only (`@append-only`; the …_pay_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Deleted only: a DRAFT rate version's entries, a DRAFT rate version with no publication, a DRAFT scheme, the files of a DRAFT export; everything else is archived, withdrawn, cancelled, superseded or kept. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PieceRateTable": {
+      "about": "HR keeps a site's piece-rate tables (one style's or the site's general rates, optionally per line); archived, never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PieceRateVersion": {
+      "about": "HR writes a version of a table as a DRAFT, makes it PROVISIONAL or PUBLISHED once it was published to the workers before its first day, confirms a provisional one, supersedes it with a later one, or cancels or deletes a draft. Office only (no rate on the floor).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "PieceRateEntry": {
+      "about": "HR writes the rates of a DRAFT version (operation x size band, per piece or SMV x rate per minute); they never change after. Office only (wages grain).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "RatePublication": {
+      "about": "HR publishes a version to workers of its site (on the floor and/or printed), names its printed sheet, or withdraws a publication of a version still in DRAFT. The floor reads its site's publications to show a worker what to read (no rate here), not who in the office made them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["publishedById", "withdrawnById", "createdById"] }
+      }
+    },
+    "RateAcknowledgement": {
+      "about": "A worker's receipt of a publication: the floor records the signed-in worker's reading on its device (its OWN site); HR records a signed paper copy. Append-only: nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "IncentiveScheme": {
+      "about": "HR sets a company's or a line's incentive scheme as a DRAFT, activates it from a day (closing the previous one), retires it, or deletes a draft. Office only (wages grain).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "PiecePaySwitch": {
+      "about": "HR records a site's piece-pay preconditions and turns the legal switch on (all of them on record, step-up) or off; OFF by default; never deleted. Office only (the floor reads no legal basis).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PayPeriod": {
+      "about": "HR opens a company's month, runs its preview, starts the review and locks it (typed confirm); never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "EarningsEntry": {
+      "about": "The worker (system context) and HR append earnings: one per paid scan, team share, make-up, off-standard time or adjustment; corrections are reversals and new entries. Append-only; office only (wages grain, one person's figures).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "HeldScan": {
+      "about": "The worker (system context) holds a scan taken while its worker was not clocked in; HR counts it (the attendance fixed) or decides not to pay it; never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "WorkerStatement": {
+      "about": "HR prepares, approves and supersedes a worker's statement of a period and names its PDF; frozen once its period is locked; never deleted. Office only (the worker's own statement reaches the floor through the API).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PayrollExportLayout": {
+      "about": "HR keeps the payroll file layouts as data (the generic CSV, the consultant's layout typed from their sample); archived, never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PayrollExport": {
+      "about": "HR prepares a month's export, exports it with its number once its checks pass, cancels a draft, or makes a correction export; an exported one never changes. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PayrollExportFile": {
+      "about": "The export job records each file of a DRAFT export (and removes them when it runs again); the files of an exported one never change. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "delete"] }
+      }
+    },
+    "PayrollCodeMapping": {
+      "about": "HR maps our hour, absence and earning codes to the payroll provider's; archived, never deleted. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}
