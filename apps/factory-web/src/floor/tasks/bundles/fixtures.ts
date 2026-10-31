@@ -208,7 +208,7 @@ export const designScreen = defineDesignScreen<BundlesViewModel>({
       ),
       note: 'The banner counts it in red; Waiting to send has the fix.',
     },
-    { id: 'bundle-card', label: 'A bundle scanned', model: model(bundle()), note: 'Facts, its operations with ticks, the ticket as it printed. Reprint (main) and Void.' },
+    { id: 'bundle-card', label: 'A bundle scanned', model: model(bundle()), note: 'Facts, its operations with ticks, the ticket as it printed. Reprint (main) and Split (W2a) in the bar; Void in the card (rare, final, before any scan).' },
     { id: 'reprint', label: 'Reprint: why a new ticket?', model: model(bundle({ stage: 'reprint' })), note: 'One tap on a reason prints the new ticket.' },
     {
       id: 'reprinted',
@@ -229,7 +229,36 @@ export const designScreen = defineDesignScreen<BundlesViewModel>({
       label: 'An old (replaced) ticket scanned',
       model: model(bundle({ card: card({ code: bn(160), scanned: bn(123), replacedCodes: [bn(123)], refusal: { code: 'REPLACED', message: 'Replaced.' }, ticket: content(bn(160), '50', 10) }) })),
     },
-    { id: 'held-offline', label: 'Offline: reprint and void wait', model: offline(bundle({ asOf: '2026-10-29T08:20:00.000Z' }), 2), note: 'The tablet\'s copy of the bundle with its time; reprint and void need the network.' },
+    { id: 'held-offline', label: 'Offline: reprint, void and split wait', model: offline(bundle({ asOf: '2026-10-29T08:20:00.000Z' }), 2), note: 'The tablet\'s copy of the bundle with its time; reprint, void and split need the network (held with the reason).' },
+    // ---- B-W2a-75: split a bundle (design floor.bundles "Split a bundle", MES-071) ----
+    {
+      id: 'split',
+      label: 'Split: how many come off, and why',
+      model: model(bundle({ card: card({ scans: 2, operations: OPERATIONS.map((operation, index) => ({ ...operation, done: index < 2 })) }), stage: 'split', split: { quantity: 3, reason: 'REWORK', live: 10 } })),
+      note: 'The pad (1 to the garments in it − 1: at least one stays) and why in the floor\'s one reason picker (SCR-091, pick mode: rework, recut, hold; what it is about and the choice first). One tap splits them off into a new bundle and prints its ticket; the genealogy stays.',
+    },
+    { id: 'split-empty', label: 'Split: nothing typed yet', model: model(bundle({ stage: 'split', split: { quantity: null, reason: null, live: 10 } })), note: 'The main action says what it waits for.' },
+    { id: 'split-why', label: 'Split: how many typed, why not yet', model: model(bundle({ stage: 'split', split: { quantity: 3, reason: null, live: 10 } })), note: 'The main action waits for a reason ("Choose a reason first"), as every floor picker\'s Done.' },
+    { id: 'split-offline', label: 'Split: the network went', model: offline(bundle({ stage: 'split', split: { quantity: 3, reason: 'RECUT', live: 10 } }), 0), note: 'The reasons stay in view, held with the reason (a split needs the network), as the main action.' },
+    { id: 'split-reading', label: 'Split: reading the bundle', model: model(bundle({ stage: 'split', split: { quantity: null, reason: null, live: null, reading: true } })), note: 'The garments still in it (as cut, less earlier splits) are read from the work order first.' },
+    { id: 'split-one', label: 'Split: one garment left in it', model: model(bundle({ card: card({ quantity: 4, live: 1 }), stage: 'split', split: { quantity: null, reason: null, live: 1 } })), note: 'Three were split off before: nothing more can come off.' },
+    {
+      id: 'split-done',
+      label: 'Split off: the new ticket',
+      model: model(
+        bundle({
+          card: card({ scans: 2, live: 7, operations: OPERATIONS.map((operation, index) => ({ ...operation, done: index < 2 })) }),
+          done: { kind: 'split', parentCode: bn(123), quantity: 3, reason: 'REWORK', live: 7, ticket: ticket('b-170', bn(170), '50', 3, { print: { kind: 'job', job: job('SENT', { scanId: bn(170) }) } }) },
+        }),
+      ),
+      note: 'The child bundle\'s ticket with its print state (Retry when it fails); the card says how many stay in the parent.',
+    },
+    {
+      id: 'split-refused',
+      label: 'Split refused: work order on hold',
+      model: model(bundle({ stage: 'split', split: { quantity: 3, reason: 'HOLD', live: 10 }, problem: { kind: 'refused', code: 'WORK_ORDER_ON_HOLD', message: 'Work order WO-DEMO-0042 is on hold.', fix: null } })),
+      note: 'The API\'s refusal in the screen\'s words; the pad stays as typed.',
+    },
     {
       id: 'refused',
       label: 'Refused: bundle scanned already',

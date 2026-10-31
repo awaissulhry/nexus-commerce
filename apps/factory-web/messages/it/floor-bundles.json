@@ -38,7 +38,9 @@
     "colour": "Colore",
     "size": "Taglia",
     "scans": "Scansioni finora",
-    "replaced": "Cartellini precedenti (sostituiti)"
+    "replaced": "Cartellini precedenti (sostituiti)",
+    "live": "Ancora nel fascio",
+    "liveValue": "{live} di {quantity}"
   },
   "proposal": {
     "type": "Ordine di lavoro",
@@ -149,8 +151,9 @@
     "reprint": "Ristampa",
     "void": "Annulla fascio",
     "held": {
-      "network": "Ristampa e annullamento hanno bisogno della rete: aspettano che torni."
-    }
+      "network": "Ristampa, annullamento e divisione hanno bisogno della rete: aspettano che torni."
+    },
+    "split": "Dividi"
   },
   "reprint": {
     "title": "Perché un cartellino nuovo?",
@@ -224,6 +227,48 @@
     "REPLACED": {
       "message": "Questo cartellino è stato sostituito da uno nuovo.",
       "fix": "Scansiona il cartellino nuovo."
+    },
+    "SPLIT_TOO_MANY": {
+      "message": "Sono più capi di quanti se ne possono dividere: almeno uno resta nel fascio.",
+      "fix": "Scrivi meno capi."
+    },
+    "WORK_ORDER_ON_HOLD": {
+      "message": "L'ordine di lavoro è bloccato: i suoi fasci cambiano quando la qualità toglie il blocco.",
+      "fix": "Metti da parte il fascio e chiedi al capo squadra."
     }
+  },
+  "split": {
+    "title": "Dividi alcuni capi dal fascio",
+    "body_one": "In questo fascio c'è {count} capo. Quanti passano in un fascio nuovo con il suo cartellino? Almeno uno resta.",
+    "body_other": "In questo fascio ci sono {count} capi. Quanti passano in un fascio nuovo con il suo cartellino? Almeno uno resta.",
+    "bodyReading": "Quanti passano in un fascio nuovo con il suo cartellino? Almeno uno resta.",
+    "pad": {
+      "label": "Capi che passano al fascio nuovo"
+    },
+    "reason": {
+      "REWORK": {
+        "label": "Rilavorazione",
+        "hint": "Tornano indietro per essere sistemati"
+      },
+      "RECUT": {
+        "label": "Ritaglio",
+        "hint": "Pezzi da tagliare di nuovo"
+      },
+      "HOLD": {
+        "label": "Blocco",
+        "hint": "Messi da parte per la qualità"
+      }
+    },
+    "genealogy": "Il fascio nuovo tiene la sua storia: stesso ordine di lavoro, stessa taglia e stesse pelli di questo.",
+    "confirm_one": "Dividi {count} · stampa cartellino",
+    "confirm_other": "Dividi {count} · stampa cartellino",
+    "confirmNone": "Dividi · stampa cartellino",
+    "held": {
+      "reading": "Lettura del fascio: un momento",
+      "one": "Nel fascio c'è un solo capo: non si può dividere.",
+      "quantity": "Scrivi quanti capi passano: da 1 a {max}"
+    },
+    "done_one": "{count} capo diviso da {parent} nel fascio nuovo {code} ({reason}). In {parent} restano {live}.",
+    "done_other": "{count} capi divisi da {parent} nel fascio nuovo {code} ({reason}). In {parent} restano {live}."
   }
 }

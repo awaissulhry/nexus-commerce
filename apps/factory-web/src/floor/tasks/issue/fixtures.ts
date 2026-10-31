@@ -2,7 +2,9 @@ import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { DEMO_SITE, onFloor, signedInFrame } from '../../frame/fixtures'
 import { padBounds, type PickLine, type PickList, type PickWorkOrderRow } from './model'
+import { returnRows } from './returns'
 import { PickView, type PickViewModel } from './view/PickView'
+import type { PickReturnModel, ReturnTag } from './view/ReturnStep'
 
 /**
  * SCR-093's cases (design floor.pick): for which work order, what it needs, the scan that issues (a hide whole, a lot on
@@ -46,7 +48,7 @@ const leather: PickLine = {
     more: 4,
   },
   held: [{ reason: 'CR_VI_PENDING', lotCode: 'LOT-DEMO-0009', onHand: '204.1000', hides: 4 }],
-  atWorkOrder: [{ lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-0', hideCode: hide(4208), quantity: '51.1000' }],
+  atWorkOrder: [{ lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-0', hideCode: hide(4208), quantity: '51.1000', cut: '0.0000', returnable: '51.1000' }],
 }
 const lining: PickLine = {
   key: 'item-lining:col-black',
@@ -113,7 +115,7 @@ const afterHide: PickList = {
   lines: [{ ...leather, issued: '208.6000', toIssue: '201.4000', usable: { ...leather.usable, onHand: '260.2000', candidates: leather.usable.candidates.slice(1) } }, lining, protector, thread],
   undo: { issueId: 'iss-1', itemId: 'item-leather', itemColourId: 'col-black', lotId: 'lot-7', hideId: 'h-1', baseQuantity: '52.4000', occurredAt: '2026-10-29T08:12:00.000Z' },
 }
-const withHeldHide: PickList = { ...afterHide, lines: [{ ...afterHide.lines[0]!, atWorkOrder: [...leather.atWorkOrder, { lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-1', hideCode: hide(4211), quantity: '52.4000' }] }, lining, protector, thread] }
+const withHeldHide: PickList = { ...afterHide, lines: [{ ...afterHide.lines[0]!, atWorkOrder: [...leather.atWorkOrder, { lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-1', hideCode: hide(4211), quantity: '52.4000', cut: '0.0000', returnable: '52.4000' }] }, lining, protector, thread] }
 
 const base = (extra: Partial<PickViewModel> = {}): PickViewModel => ({ frame: frame(), online: true, stage: 'list', list, ...extra })
 const pad = (line: PickLine, code: string, onHand: number, value?: number) => {
@@ -121,6 +123,21 @@ const pad = (line: PickLine, code: string, onHand: number, value?: number) => {
   return { code, lineKey: line.key, value: value ?? bounds.suggested, bounds, uom: line.baseUom }
 }
 const shortLining: PickLine = { ...lining, usable: { onHand: '8.0000', candidates: [{ ...lining.usable.candidates[0]!, onHand: '8.0000' }], more: 0 } }
+
+// ---- B-W2a-75: Return unused (design floor.pick sec "return"; SCM-216) ----
+const cutHide = { lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-0', hideCode: hide(4208), quantity: '51.1000', cut: '32.5000', returnable: '18.6000' }
+const wholeHide = { lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-1', hideCode: hide(4211), quantity: '52.4000', cut: '0.0000', returnable: '52.4000' }
+const liningLot = { lotId: 'lot-31', lotCode: LOT, hideId: null, hideCode: null, quantity: '96.0000', cut: '0.0000', returnable: '12.0000' }
+const withReturns: PickList = { ...list, lines: [{ ...leather, atWorkOrder: [cutHide, wholeHide] }, { ...lining, issued: '96.0000', toIssue: '0.0000', covered: true, atWorkOrder: [liningLot] }, protector, thread] }
+const RETURN_ROWS = returnRows(withReturns)
+const PLACES = [
+  { id: 'loc-1', code: 'A1-STORE-01', name: 'Scaffale pelli 1 (demo)' },
+  { id: 'loc-2', code: 'A1-STORE-02', name: 'Scaffale pelli 2 (demo)' },
+  { id: 'loc-3', code: 'A2-ROLL-03', name: 'Rotoli fodere (demo)' },
+]
+const ret = (extra: Partial<PickReturnModel> = {}): PickReturnModel => ({ workOrder: list.workOrder.number, rows: RETURN_ROWS, picked: null, places: PLACES, placeId: null, ...extra })
+const returning = (extra: Partial<PickReturnModel> = {}, model: Partial<PickViewModel> = {}): PickViewModel => base({ list: withReturns, stage: 'return', ret: ret(extra), ...model })
+const remnantDone = (tag: ReturnTag | null) => ({ row: RETURN_ROWS[0]!, quantity: 18.6, place: 'A1-STORE-01', as: 'remnant' as const, tag })
 
 export const designScreen = defineDesignScreen<PickViewModel>({
   screen: 'SCR-093',
@@ -167,5 +184,48 @@ export const designScreen = defineDesignScreen<PickViewModel>({
     { id: 'error', label: 'Server not answering', model: { frame: frame(), online: true, stage: 'choose', workOrders: [], problem: { problem: { kind: 'unavailable' }, code: null } } },
     { id: 'no-permission', label: 'No permission', model: { frame: frame(), online: true, stage: 'noPermission' }, note: 'A person without inventory.issue (the tile is not shown to them either): fail closed.' },
     { id: 'notice-held', label: 'Scans held by the worker notice', model: { frame: frame(), online: true, stage: 'choose', workOrders, held: true } },
+    // ---- B-W2a-75: Return unused (W2a; design floor.pick "Secondary: Return unused", sec "return") ----
+    { id: 'pick-list-returns', label: 'Return unused, beside Done', model: base({ list: withReturns }), note: 'W2a: the secondary action opens Return unused (held with the reason when nothing can come back or offline).' },
+    {
+      id: 'return-list',
+      label: 'Return unused: what can come back',
+      model: returning(),
+      note: 'What the work order holds less what was cut: a cut hide (its remnant), a whole hide, a lot\'s rest. Scan its tag or tap a row.',
+    },
+    {
+      id: 'return-remnant',
+      label: 'A cut hide: the remnant\'s area, where it goes',
+      model: returning({ picked: { rowKey: RETURN_ROWS[0]!.key, value: 18.6 }, placeId: 'loc-1' }),
+      note: 'The pad starts at all that can come back (area as issued less cut); measure and type the remnant. The store place, then Return.',
+    },
+    { id: 'return-whole', label: 'A hide nothing was cut from', model: returning({ picked: { rowKey: RETURN_ROWS[1]!.key, value: 52.4 }, placeId: 'loc-2' }), note: '"The whole hide" in one tap: it comes back whole, no new tag.' },
+    { id: 'return-lot', label: 'A lot\'s rest', model: returning({ picked: { rowKey: RETURN_ROWS[2]!.key, value: 12 }, placeId: null }), note: 'Held until a place is picked.' },
+    { id: 'return-places-loading', label: 'Reading the store places', model: returning({ picked: { rowKey: RETURN_ROWS[0]!.key, value: 18.6 }, places: null }) },
+    { id: 'return-places-held', label: 'The store places not readable', model: returning({ picked: { rowKey: RETURN_ROWS[0]!.key, value: 18.6 }, places: null, placesHeld: 'noPermission' }) },
+    {
+      id: 'return-refused',
+      label: 'Refused: more than it holds',
+      model: returning({ picked: { rowKey: RETURN_ROWS[0]!.key, value: 18.6 }, placeId: 'loc-1', problem: { problem: { kind: 'refused', code: 'MORE_THAN_AT_WORK_ORDER', message: 'More than the work order holds.', fix: null }, code: hide(4208) } }),
+      note: 'Another tablet returned part of it meanwhile: the API refuses in words; the pad stays as typed.',
+    },
+    { id: 'return-unknown', label: 'A code it does not hold', model: returning({ problem: { problem: { kind: 'refused', code: 'NOT_AT_WORK_ORDER', message: 'Not held.', fix: null }, code: hide(4999) } }) },
+    { id: 'return-empty', label: 'Nothing can come back', model: returning({ rows: [] }) },
+    { id: 'return-offline', label: 'Offline: returning waits', model: returning({}, { frame: frame({ online: false }), online: false, asOf: AS_OF }), note: 'Returning is not one of the queue\'s actions: held with the reason.' },
+    {
+      id: 'return-done-print',
+      label: 'Back as a remnant: print its new tag',
+      model: returning({ done: remnantDone({ kind: 'printer', printer: { kind: 'site', id: 'p-1', name: 'Etichette magazzino (demo)' }, picked: 'p-1' }) }),
+      note: '"Label reprint": the HIDE tag with the new area, on the station\'s printer (else the site\'s only one).',
+    },
+    { id: 'return-done-printing', label: 'The new tag on its way', model: returning({ done: remnantDone({ kind: 'job', printer: 'Etichette magazzino (demo)', status: 'SENT', detail: null }) }) },
+    { id: 'return-done-failed', label: 'The new tag did not print', model: returning({ done: remnantDone({ kind: 'job', printer: 'Etichette magazzino (demo)', status: 'FAILED', detail: 'Rotolo finito (demo)' }) }) },
+    {
+      id: 'return-done-choose',
+      label: 'Two printers: pick one',
+      model: returning({ done: remnantDone({ kind: 'printer', printer: { kind: 'choose', printers: [{ id: 'p-1', name: 'Etichette magazzino (demo)' }, { id: 'p-2', name: 'Etichette taglio (demo)' }] }, picked: null }) }),
+    },
+    { id: 'return-done-no-printer', label: 'No label printer', model: returning({ done: remnantDone({ kind: 'printer', printer: { kind: 'none' }, picked: null }) }), note: 'Said plainly: write the new area on the tag.' },
+    { id: 'return-done-old-tag', label: 'An older tag code', model: returning({ done: remnantDone({ kind: 'notOurs' }) }) },
+    { id: 'return-done-lot', label: 'A lot back to stock', model: returning({ done: { row: RETURN_ROWS[2]!, quantity: 12, place: 'A2-ROLL-03', as: 'part', tag: null } }), note: 'A lot keeps its label.' },
   ],
 })

@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { isApiError, issuePath } from '../../../lib/api/errors'
+import { presignedSchema } from '../../../record-panels/api'
+import { putToStore, sha256Hex } from '../../../record-panels/store'
 import { floorRead, floorWrite, seg, taskProblemOf, type TaskOutcome, type TaskProblem } from '../shared/task-api'
 
 /**
@@ -228,6 +230,8 @@ export function postProblemOf(error: unknown): PostProblem {
 export interface ReceiveBody {
   readonly version: number
   readonly supplierDdtNumber?: string | null
+  /** B-W2a-75: the delivery note's date (YYYY-MM-DD). */
+  readonly supplierDdtDate?: string | null
   readonly lines: readonly unknown[]
   readonly printerId?: string | null
   readonly language?: 'it' | 'en'
@@ -277,3 +281,30 @@ export function retryTag(api: ApiClient, jobId: string, version: number): Promis
     idempotencyKey: newIdempotencyKey(),
   }).then((answer) => (answer.ok ? { ok: true, value: answer.value.job } : answer))
 }
+
+// ---- the delivery note's photo (B-W2a-75 on B-W2a-31's route: a PHOTO of the receipt, OFFICE + FLOOR at the site) ----
+
+const ddtUpload = z.object({ file: z.object({ id: z.string() }), upload: presignedSchema })
+
+/**
+ * The supplier's delivery note photo, after the receipt is posted: announced (its size, type and SHA-256), its bytes PUT
+ * straight to the store with the presigned request, then confirmed. The floor may not write files itself: the API writes
+ * it as the site's (inventory.receive at the device's site). Each step keeps no state here: a failure says so and the
+ * screen offers Retry.
+ */
+export async function uploadDdtPhoto(api: ApiClient, receiptId: string, photo: Blob, name: string): Promise<TaskOutcome<{ fileId: string }>> {
+  try {
+    const bytes = await photo.arrayBuffer()
+    const announced = await floorWrite(api, 'POST', `/inventory/receipts/${seg(receiptId)}/ddt-photos`, {
+      body: { originalName: name, contentType: photo.type || 'image/jpeg', sizeBytes: bytes.byteLength, sha256: await sha256Hex(bytes) },
+      schema: ddtUpload,
+    })
+    if (!announced.ok) return announced
+    await putToStore(announced.value.upload, bytes)
+    const completed = await floorWrite(api, 'POST', `/inventory/receipts/${seg(receiptId)}/ddt-photos/${seg(announced.value.file.id)}/complete`, { schema: z.object({ file: z.object({ id: z.string() }) }) })
+    return completed.ok ? { ok: true, value: { fileId: completed.value.file.id } } : completed
+  } catch {
+    return { ok: false, problem: { kind: 'unavailable' } }
+  }
+}
+

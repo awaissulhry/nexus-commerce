@@ -21,8 +21,8 @@ import type { OrderDetailView } from './views'
 /**
  * Kit out (B-W2a-25; SCM-140; design purchasing.subcontracting "Kit sent", floor.kits "Send a kit"): our material goes
  * to the workshop and stays ours (SCM-141: the workshop's stock location is one of our site's), the pieces go out, and
- * the DDT for work on our behalf (conto lavorazione, B-W2a-17's DDT for other reasons) travels with them. Office only;
- * the floor's screen (B-W2a-76) needs a floor route of its own (see the step notes).
+ * the DDT for work on our behalf (conto lavorazione, B-W2a-17's DDT for other reasons) travels with them. The office
+ * here; the floor's kit task (B-W2a-76, floor.ts) runs `sendKitAs` after its own checks.
  *
  *   send     ONE command on the order (its version bump holds the row): the order ISSUED, AT_WORKSHOP or
  *            PARTLY_RECEIVED for a released or running work order; each PLANNED kit line named gets its lot and hide
@@ -79,6 +79,25 @@ export async function sendKit(files: FilesRuntime, caller: CommandCaller, orderI
   if (input.ddt && !can(actorOf(context), SHIPPING_DDT_ISSUE, { companyId: seen.companyId, siteId: seen.siteId })) {
     throw new ForbiddenError("Issuing the kit's DDT needs the permission to issue DDTs (shipping.ddt.issue); send without one, or ask the warehouse.")
   }
+  return sendKitAs(files, { caller, printer: caller }, seen, input, idempotencyKey, onPdfError)
+}
+
+/**
+ * B-W2a-76: the send itself, once the caller's access is checked (the office above; the floor's kit task, floor.ts, runs
+ * it as the tenant's system caller after checking the device's site and the floor permission, and prints with a caller
+ * that may store the PDF). `floor` names the tablet and its worker in the audit row (inside the one record).
+ */
+export async function sendKitAs(
+  files: FilesRuntime,
+  callers: { readonly caller: CommandCaller; readonly printer: CommandCaller },
+  seen: Pick<OrderRow, 'id' | 'companyId'>,
+  input: SendInput,
+  idempotencyKey?: string,
+  onPdfError?: (error: unknown) => void,
+  floor?: { readonly deviceId: string; readonly operatorId: string },
+): Promise<SendAnswer> {
+  const { caller } = callers
+  const orderId = seen.id
   if (input.lines.length === 0 && input.pieces.length === 0 && input.bundles.length === 0) throw refuse([{ path: 'body/lines', message: 'Name the kit lines, pieces or bundles that go out.' }])
   const company = input.ddt ? await companyLegalOf(caller, seen.companyId) : null
   const { result } = await command(
@@ -193,6 +212,7 @@ export async function sendKit(files: FilesRuntime, caller: CommandCaller, orderI
           lines: lines.map(({ row, goods, from }, index) => ({ lineId: row.id, seq: row.seq, itemId: goods.item.id, lotId: goods.lotId, hideId: goods.hideId, quantity: goods.quantity, uom: goods.uom, fromLocationId: from.id, moveId: posted[index]!.id })),
           pieces: [...out.entries()].map(([operationId, pieces]) => ({ operationId, pieces })),
           bundles: bundles.map((bundle) => ({ bundleId: bundle.id, code: bundle.code, quantity: bundle.quantity, part: bundle.part })),
+          ...(floor ? { floor } : {}),
         },
       })
 
@@ -227,7 +247,7 @@ export async function sendKit(files: FilesRuntime, caller: CommandCaller, orderI
     },
   )
   if (!result.ddt) return { ...result, ddt: null }
-  const printed = await printSourceDdt(files, caller, result.ddt.id, onPdfError)
+  const printed = await printSourceDdt(files, callers.printer, result.ddt.id, onPdfError)
   return { ...result, ddt: { ...result.ddt, file: printed.file, pdfProblem: printed.pdfProblem } }
 }
 

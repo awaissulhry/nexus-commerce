@@ -1,11 +1,13 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowLeft, Check, CircleAlert, CircleSlash, ClipboardList, Layers, LogOut, Package, PackageCheck, PackagePlus, Printer, RotateCcw, ScanLine, ShieldAlert, Tag, Truck, X } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Camera, Check, CircleAlert, CircleSlash, ClipboardList, FileText, Layers, LogOut, Package, PackageCheck, PackagePlus, Printer, RotateCcw, ScanLine, ShieldAlert, Tag, Trash2, Truck, X } from 'lucide-react'
+import type { CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
 import { Modal } from '@nexus/ui/components'
 import { LabelPreview, type LabelLayout, type LabelPrintState } from '@nexus/ui/components/LabelPreview/index'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, QuantityPad, ScanInput, qtyHeldReason, type CameraScanner, type FloorAction, type FloorActions, type FloorTone } from '@nexus/ui/floor'
 import { formatDate, formatNumber, formatTime, type FormatPlace } from '../../../../lib/i18n/format'
+import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import type { Translate } from '../../../../lib/i18n/messages'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../../frame/view/FloorFrameView'
@@ -15,6 +17,8 @@ import { HeldLine, ListFooter, ProblemState, TaskCard, TaskLine, Ticks, UndoStri
 import type { ExpectedOrder, FloorReceipt, OrderLine, OrderToReceive, ReceiptNote, ReprintReason } from '../api'
 import {
   AREA_BOUNDS,
+  ddtDays,
+  ddtDigits,
   DEFECT_CODES,
   deliverySummary,
   differenceOf,
@@ -42,6 +46,7 @@ import {
   type QuantityForm,
   type TagState,
 } from '../model'
+import { DdtPhoto } from './DdtPhoto'
 import '../receive.css'
 
 /**
@@ -55,9 +60,26 @@ import '../receive.css'
  * quality releases. Finish the delivery posts it in ONE call (online only: the receipt, its lots and the hide tags take
  * their numbers from the office), then the hide tags print on the station's label printer, each with its print state,
  * Retry and Reprint. No money anywhere; nobody's output is shown.
+ *
+ * W2a (B-W2a-75; design floor.receive sec "ddt", SCM-115): the supplier's delivery note — its number (scanned, typed, or on
+ * the number pad), its date (today, yesterday, another day of the week) and a photo (the DS photo capture) — on its own
+ * step from the lines; the number and the date go with the receipt, the photo is sent as the receipt's photo once it is
+ * posted (Retry when it fails). Missing documents are the office's to ask (B-W2a-F4), never the floor's.
  */
 
-export type ReceiveStage = 'scan' | 'lines' | 'line' | 'finish' | 'done' | 'noPermission'
+export type ReceiveStage = 'scan' | 'lines' | 'line' | 'ddt' | 'finish' | 'done' | 'noPermission'
+
+/** B-W2a-75: the delivery note step's state on this tablet (the number and the date live in the delivery). */
+export interface DdtModel {
+  /** The site's day (YYYY-MM-DD): the date tiles count back from it. */
+  readonly today: string
+  /** "Another day" is open: the days of the week before yesterday. */
+  readonly moreDays: boolean
+  /** The camera (or a file) is open. */
+  readonly camera: boolean
+  /** The photo kept on this tablet until the receipt is posted. */
+  readonly photo: { readonly url: string } | null
+}
 
 export interface ReceiveViewModel {
   frame: FrameModel
@@ -98,6 +120,10 @@ export interface ReceiveViewModel {
   /** A refused line of the last post (its seq), shown on the finish step. */
   refusedSeq?: number | null
   timeZone?: string
+  /** B-W2a-75: the delivery note step. */
+  ddt?: DdtModel | null
+  /** B-W2a-75, done: the delivery note photo's sending after the post. */
+  photoSend?: 'sending' | 'sent' | 'failed' | null
 }
 
 export type ReceiveAction =
@@ -134,6 +160,16 @@ export type ReceiveAction =
   | { type: 'back' }
   | { type: 'dismiss' }
   | { type: 'retry' }
+  | { type: 'ddt' }
+  | { type: 'ddtPad'; value: number | null }
+  | { type: 'ddtClearNumber' }
+  | { type: 'ddtDate'; date: string | null }
+  | { type: 'ddtMoreDays' }
+  | { type: 'ddtCamera'; open: boolean }
+  | { type: 'ddtPhoto'; photo: CapturedPhoto }
+  | { type: 'ddtPhotoRemove' }
+  | { type: 'ddtDone' }
+  | { type: 'photoRetry' }
 
 export interface ReceiveViewProps {
   model: ReceiveViewModel
@@ -306,8 +342,10 @@ export function ReceiveView({ model, onAction, onFrame, camera }: ReceiveViewPro
       scanField,
       offlineHeld,
     }))
+  } else if (model.stage === 'ddt') {
+    ;({ body, actions } = ddtStep(model, t, send, { scanField, place }))
   } else if (model.stage === 'finish') {
-    ;({ body, actions } = finishStep(model, t, send, { amount, offlineHeld }))
+    ;({ body, actions } = finishStep(model, t, send, { amount, offlineHeld, day }))
   } else if (model.stage === 'line' && model.lineId) {
     const line = model.order.lines.find((entry) => entry.id === model.lineId)
     if (!line) body = <FloorState tone="info" icon={<ClipboardList />} title={t('lines.loading')} busy />
@@ -372,7 +410,7 @@ function orderCard(order: OrderToReceive, delivery: Delivery, t: Translate, extr
         { label: t('card.supplier'), value: order.order.supplier.name },
         {
           label: t('card.ddt'),
-          value: delivery.ddtNumber ?? t('card.ddtNone'),
+          value: ddtText(delivery, t, extra.day),
         },
         {
           label: t('card.dock'),
@@ -436,6 +474,9 @@ function linesStep(
         </TaskLine>
       ) : null}
       {ui.scanField(t('lines.ddt.label'), delivery.ddtNumber ? t('lines.ddt.again', { code: delivery.ddtNumber }) : t('lines.ddt.hint'))}
+      <FloorButton size="lg" variant="secondary" block icon={<FileText />} onClick={() => send({ type: 'ddt' })}>
+        {delivery.ddtNumber || delivery.ddtDate || model.ddt?.photo ? t('ddt.open.change', { what: ddtSummary(delivery, model.ddt ?? null, t, ui.day) }) : t('ddt.open.add')}
+      </FloorButton>
       <section className="fw-floor-stack" aria-labelledby="fw-receive-lines">
         <h2 id="fw-receive-lines" className="fw-floor-subtitle">
           {t('lines.title')}
@@ -889,6 +930,7 @@ function finishStep(
   ui: {
     amount: (value: number, uom: string, decimals?: number) => string
     offlineHeld: string | null
+    day: (value: string | null) => string
   },
 ): Step {
   const order = model.order!
@@ -929,8 +971,9 @@ function finishStep(
           { label: t('finish.over'), value: String(summary.over) },
           {
             label: t('card.ddt'),
-            value: delivery.ddtNumber ?? t('card.ddtNone'),
+            value: ddtText(delivery, t, ui.day),
           },
+          { label: t('ddt.photo.fact'), value: model.ddt?.photo ? t('ddt.photo.kept') : t('ddt.photo.none') },
         ]}
       />
       {summary.held > 0 ? (
@@ -1132,7 +1175,7 @@ function doneStep(
           { label: t('card.supplier'), value: receipt.order.supplier.name },
           {
             label: t('card.ddt'),
-            value: receipt.supplierDdtNumber ?? t('card.ddtNone'),
+            value: receipt.supplierDdtNumber ? (receipt.supplierDdtDate ? `${receipt.supplierDdtNumber} · ${formatDate(`${receipt.supplierDdtDate}T12:00:00Z`, ui.place)}` : receipt.supplierDdtNumber) : t('card.ddtNone'),
           },
           {
             label: t('done.at'),
@@ -1145,6 +1188,18 @@ function doneStep(
           </p>
         }
       />
+      {model.photoSend ? (
+        <div className="fw-receive-chips">
+          <TaskLine tone={model.photoSend === 'failed' ? 'danger' : model.photoSend === 'sent' ? 'success' : 'info'} icon={<Camera />}>
+            {t(`ddt.photo.send.${model.photoSend}`)}
+          </TaskLine>
+          {model.photoSend === 'failed' ? (
+            <FloorButton size="md" variant="secondary" icon={<RotateCcw />} heldReason={ui.offlineHeld} onClick={() => send({ type: 'photoRetry' })}>
+              {t('ddt.photo.retry')}
+            </FloorButton>
+          ) : null}
+        </div>
+      ) : null}
       {receipt.hides.length > 0 ? (
         <section className="fw-floor-stack" aria-labelledby="fw-receive-tags">
           <h2 id="fw-receive-tags" className="fw-floor-section-title">
@@ -1301,3 +1356,128 @@ function doneStep(
   )
   return { body, actions }
 }
+
+// ---- the supplier's delivery note (B-W2a-75; design floor.receive sec "ddt"; SCM-115) --------------------------------------
+
+/** "4512/26 · 30 ott 2026", the number alone, or "no delivery note". */
+function ddtText(delivery: Pick<Delivery, 'ddtNumber' | 'ddtDate'>, t: Translate, day: (value: string | null) => string): string {
+  if (!delivery.ddtNumber && !delivery.ddtDate) return t('card.ddtNone')
+  return [delivery.ddtNumber ?? t('ddt.noNumber'), delivery.ddtDate ? day(delivery.ddtDate) : null].filter(Boolean).join(' · ')
+}
+
+function ddtSummary(delivery: Pick<Delivery, 'ddtNumber' | 'ddtDate'>, ddt: DdtModel | null, t: Translate, day: (value: string | null) => string): string {
+  return [delivery.ddtNumber ?? t('ddt.noNumber'), delivery.ddtDate ? day(delivery.ddtDate) : null, ddt?.photo ? t('ddt.photo.short') : null].filter(Boolean).join(' · ')
+}
+
+function ddtStep(
+  model: ReceiveViewModel,
+  t: Translate,
+  send: Send,
+  ui: {
+    scanField: (label: string, hint: string, extra?: { disabled?: boolean; keepFocus?: boolean }) => ReactNode
+    place: FormatPlace
+  },
+): Step {
+  const order = model.order!
+  const delivery = model.delivery!
+  const ddt = model.ddt ?? { today: new Date().toISOString().slice(0, 10), moreDays: false, camera: false, photo: null }
+  const days = ddtDays(ddt.today)
+  // A calendar day as a tile's words ("ven 24 ott"): the day itself, never shifted by a time zone.
+  const dayWords = (date: string) => new Intl.DateTimeFormat(INTL_LOCALE[ui.place.locale], { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${date}T12:00:00Z`))
+  const tile = (date: string, label: string) => (
+    <FloorButton key={date} size="lg" block variant={delivery.ddtDate === date ? 'primary' : 'secondary'} aria-pressed={delivery.ddtDate === date} icon={<CalendarDays />} onClick={() => send({ type: 'ddtDate', date: delivery.ddtDate === date ? null : date })}>
+      {label}
+    </FloorButton>
+  )
+  const digits = ddtDigits(delivery.ddtNumber)
+  const actions: FloorActions = [
+    { label: t('action.toLines'), icon: <ArrowLeft />, onPress: () => send({ type: 'lines' }) },
+    { label: t('ddt.done'), icon: <Check />, onPress: () => send({ type: 'ddtDone' }) },
+  ]
+  const body = (
+    <div className="fw-floor-stack">
+      <TaskCard
+        icon={<FileText />}
+        type={t('ddt.title')}
+        code={delivery.ddtNumber ?? t('ddt.noNumber')}
+        status={order.order.supplier.name}
+        facts={[
+          { label: t('card.order'), value: order.order.number },
+          { label: t('ddt.date.title'), value: delivery.ddtDate ? formatDate(`${delivery.ddtDate}T12:00:00Z`, ui.place) : t('ddt.date.none') },
+          { label: t('ddt.photo.fact'), value: ddt.photo ? t('ddt.photo.kept') : t('ddt.photo.none') },
+        ]}
+      />
+      <div className="fw-task-split">
+        <section className="fw-floor-stack" aria-labelledby="fw-receive-ddt-number">
+          <h2 id="fw-receive-ddt-number" className="fw-floor-section-title">
+            {t('ddt.number.title')}
+          </h2>
+          {ui.scanField(t('ddt.number.scan'), t('ddt.number.hint'), { keepFocus: false })}
+          <QuantityPad
+            label={t('ddt.number.pad')}
+            value={digits}
+            onChange={(value) => send({ type: 'ddtPad', value })}
+            min={0}
+            max={999_999_999_999}
+            decimals={0}
+            decrementLabel={t('pad.minus')}
+            incrementLabel={t('pad.plus')}
+            clearLabel={t('pad.clear')}
+            backLabel={t('pad.back')}
+            emptyLabel={t('ddt.number.empty')}
+            rangeLabel={() => t('ddt.number.empty')}
+            message={delivery.ddtNumber && digits === null ? t('ddt.number.kept', { number: delivery.ddtNumber }) : undefined}
+            messageTone="info"
+          />
+          {delivery.ddtNumber ? (
+            <FloorButton size="md" variant="quiet" icon={<X />} onClick={() => send({ type: 'ddtClearNumber' })}>
+              {t('ddt.number.clear')}
+            </FloorButton>
+          ) : null}
+        </section>
+        <div className="fw-floor-stack">
+          <section className="fw-floor-stack" aria-labelledby="fw-receive-ddt-date">
+            <h2 id="fw-receive-ddt-date" className="fw-floor-section-title">
+              {t('ddt.date.title')}
+            </h2>
+            <div className="fw-task-reasons" role="group" aria-labelledby="fw-receive-ddt-date">
+              {tile(days[0]!, t('ddt.date.today'))}
+              {tile(days[1]!, t('ddt.date.yesterday'))}
+              <FloorButton size="lg" block variant="secondary" aria-expanded={ddt.moreDays} icon={<CalendarDays />} onClick={() => send({ type: 'ddtMoreDays' })}>
+                {t('ddt.date.another')}
+              </FloorButton>
+              {ddt.moreDays || (delivery.ddtDate !== null && days.indexOf(delivery.ddtDate) > 1) ? days.slice(2).map((date) => tile(date, dayWords(date))) : null}
+            </div>
+          </section>
+          <section className="fw-floor-stack" aria-labelledby="fw-receive-ddt-photo">
+            <h2 id="fw-receive-ddt-photo" className="fw-floor-section-title">
+              {t('ddt.photo.title')}
+            </h2>
+            {ddt.camera ? (
+              <DdtPhoto label={t('ddt.photo.title')} onCapture={(photo) => send({ type: 'ddtPhoto', photo })} onCancel={() => send({ type: 'ddtCamera', open: false })} />
+            ) : ddt.photo ? (
+              <>
+                <img className="fw-receive-ddt-photo" src={ddt.photo.url} alt={t('ddt.photo.alt', { number: delivery.ddtNumber ?? t('ddt.noNumber') })} />
+                <div className="fw-receive-chips">
+                  <FloorButton size="md" variant="secondary" icon={<Camera />} onClick={() => send({ type: 'ddtCamera', open: true })}>
+                    {t('ddt.photo.retake')}
+                  </FloorButton>
+                  <FloorButton size="md" variant="quiet" icon={<Trash2 />} onClick={() => send({ type: 'ddtPhotoRemove' })}>
+                    {t('ddt.photo.remove')}
+                  </FloorButton>
+                </div>
+              </>
+            ) : (
+              <FloorButton size="lg" variant="secondary" block icon={<Camera />} onClick={() => send({ type: 'ddtCamera', open: true })}>
+                {t('ddt.photo.take')}
+              </FloorButton>
+            )}
+            <p className="fw-floor-muted">{t('ddt.photo.after')}</p>
+          </section>
+        </div>
+      </div>
+    </div>
+  )
+  return { body, actions }
+}
+

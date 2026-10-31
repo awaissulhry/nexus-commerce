@@ -12,7 +12,9 @@ import { FloorFrameView, type FrameAction, type FrameModel } from '../../../fram
 import { FloorState } from '../../../frame/view/FloorState'
 import type { TaskProblem } from '../../shared/task-api'
 import { HeldLine, ListFooter, PinSign, ProblemState, ReasonGrid, TaskCard, TaskLine, type PinProblem } from '../../shared/view/TaskParts'
-import { CHECKLIST_GROUPS, groupsDone, groupState, itemsOf, openOf, reasonsOf, type Answer, type Check, type ChecklistGroup, type Plan, type PlanField, type ReleaseHeld } from '../model'
+import type { PickerList } from '../../reasons/model'
+import { ReasonPickerBody, useDoneHeld, type ReasonPickerModel } from '../../reasons/view/ReasonPicker'
+import { CHECKLIST_GROUPS, groupsDone, groupState, itemsOf, openOf, reasonsOf, type Answer, type Check, type ChecklistGroup, type HoldHeld, type Plan, type PlanField, type ReleaseHeld } from '../model'
 import '../final.css'
 
 /**
@@ -24,6 +26,13 @@ import '../final.css'
  * the release per colour and size (the PIN again when the window has passed) and the garment labels when they are what
  * holds it. Inspections and releases need the network (their numbers come from the office at once): offline every write
  * waits, with the reason, and the last work order read stays on screen with its time. No money, never another person.
+ *
+ * W2a (B-W2a-75; design floor.final sec "release": "Hold lot (secondary): a reason, and an NCR"; pop "final.hold"): Hold lot
+ * is the secondary action of the work order, the checklist and the release — a reason tile of the tenant's HOLD list (the
+ * floor's one reason picker, SCR-091; "Other" asks a written note: held on the floor, quality places it), then ONE call
+ * holds the work order's garments and raises the nonconformance that decides it ("Packing is blocked until quality
+ * decides"). The work order's holds stay on its screen (why, since when, the NCR); quality releases them in the office,
+ * never the worker who held them. Online only.
  */
 
 export interface BenchRowModel {
@@ -73,6 +82,30 @@ export interface OrderModel {
   open: { label: string; yours: boolean } | null
   /** The work order's main action for this person. */
   main: 'continue' | 'start' | 'release' | 'othersOpen' | 'maker' | null
+  /** B-W2a-75: its ACTIVE quality holds, oldest first: why (the screen's language), since when, the NCR deciding it. */
+  holds: HoldLineModel[]
+  /** What holds Hold lot for this person (null: it may run). */
+  holdHeld: HoldHeld
+}
+
+export interface HoldLineModel {
+  id: string
+  reason: string
+  since: string
+  ncr: string | null
+}
+
+/** B-W2a-75: the Hold lot dialog (pop "final.hold"): the reason tiles, the pick, the call on its way or refused. */
+export interface HoldDialogModel {
+  /** The work order held ("WO-… · batch"), what the picker says it is about. */
+  subject: string
+  /** The tenant's HOLD reasons for the floor's one reason picker (B-W2a-F6): read, being read, failed, offline. */
+  reasons: PickerList
+  picked: string | null
+  busy?: boolean
+  problem?: TaskProblem | null
+  /** The garments held (the NCR's quantity). */
+  quantity: number
 }
 
 export interface InspectionModel {
@@ -98,8 +131,8 @@ export type FinalStep =
   | { kind: 'pick'; rows: BenchRowModel[]; scanned?: { code: string; why: 'notFound' | 'notReady'; status?: string } | null }
   | { kind: 'gate'; order: OrderModel }
   | { kind: 'plan'; order: OrderModel; plan: Plan; field: PlanField | null; maxLot: number }
-  | { kind: 'checklist'; order: OrderModel; inspection: InspectionModel; group: ChecklistGroup; failing: string | null; hold: { open: boolean; reason: string | null } }
-  | { kind: 'sign'; order: OrderModel; inspection: InspectionModel; result: 'PASS' | 'FAIL'; hold: string | null; statement: boolean }
+  | { kind: 'checklist'; order: OrderModel; inspection: InspectionModel; group: ChecklistGroup; failing: string | null }
+  | { kind: 'sign'; order: OrderModel; inspection: InspectionModel; result: 'PASS' | 'FAIL'; statement: boolean }
   | { kind: 'release'; order: OrderModel; cell: CellModel; quantity: number; signing: boolean; refused: Check[] }
   | { kind: 'labels'; order: OrderModel; cell: CellModel; jobs: JobModel[]; refused: string | null }
   | { kind: 'done'; order: OrderModel; cell: string; quantity: number; releaseNumber: string | null; secondPerson: boolean }
@@ -121,6 +154,10 @@ export interface FinalViewModel {
   /** A refused write, said on the step (not a full screen): the screen's words for it. */
   notice?: TaskProblem | null
   timeZone?: string
+  /** B-W2a-75: the Hold lot dialog, open. */
+  hold?: HoldDialogModel | null
+  /** B-W2a-75: the lot was just held here: its reason and NCR. */
+  held?: { reason: string; ncr: string } | null
 }
 
 export type FinalAction =
@@ -143,6 +180,7 @@ export type FinalAction =
   | { type: 'pin'; pin: string }
   | { type: 'hold'; open: boolean }
   | { type: 'hold-reason'; reason: string }
+  | { type: 'hold-reasons-retry' }
   | { type: 'hold-confirm' }
   | { type: 'release'; cellId: string }
   | { type: 'release-quantity'; value: number | null }
@@ -158,8 +196,6 @@ export interface FinalViewProps {
   onFrame?: (action: FrameAction) => void
   camera?: CameraScanner
 }
-
-export const HOLD_REASONS = ['DEFECTS', 'LABELS', 'ARMOUR', 'DOCUMENTS', 'OTHER'] as const
 
 const GROUP_ICON: Readonly<Record<ChecklistGroup, ReactNode>> = { LABELS: <Tag />, GARMENT: <ClipboardCheck />, ARMOUR: <ShieldCheck />, PACKAGING: <PackageCheck /> }
 
@@ -212,6 +248,12 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
   let bar: FloorActions | null = null
 
   const asOf = model.asOf ? <TaskLine tone="info" icon={<CircleMinus />}>{tt('asOf', { time: time(model.asOf) })}</TaskLine> : null
+  /** B-W2a-75: Hold lot, the secondary action (held with the reason: no right, on hold already, no network). */
+  const holdOf = (order: OrderModel): FloorAction => ({ label: t('hold.action'), icon: <Ban />, variant: 'danger', onPress: () => send({ type: 'hold', open: true }), heldReason: order.holdHeld ? t(`hold.held.${order.holdHeld}`) : model.busy ? t('busy') : null })
+  const dialog = model.hold
+  const holdPicker: ReasonPickerModel | null = dialog ? { purpose: 'hold', subject: dialog.subject, reasons: dialog.reasons.reasons, state: dialog.reasons.state, asOf: dialog.reasons.asOf, value: dialog.picked } : null
+  const holdReasonHeld = useDoneHeld(holdPicker ?? { purpose: 'hold', value: null })
+  const dialogHeld = dialog ? (offlineHeld ?? (dialog.busy ? t('busy') : holdReasonHeld)) : null
   const notice = model.notice ? <NoticeLine problem={model.notice} t={t} tt={tt} /> : null
 
   switch (step.kind) {
@@ -307,6 +349,12 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
       body = (
         <>
           <OrderStrip order={order} t={t} />
+          {model.held ? (
+            <TaskLine tone="success" icon={<Ban />}>
+              {t('hold.done', { reason: model.held.reason, ncr: model.held.ncr })}
+            </TaskLine>
+          ) : null}
+          <HoldLines order={order} t={t} time={time} />
           <OrderCard order={order} t={t} />
           {order.made ? (
             <TaskLine tone="danger" icon={<UserRoundX />}>
@@ -336,11 +384,13 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
         </>
       )
       const main = order.main
+      const holdAction = holdOf(order)
       bar = actions([
         back,
+        holdAction,
         main === 'release' ? null : { label: main ? mainLabel[main] : t('gate.start'), icon: <ClipboardCheck />, onPress: () => send({ type: 'start' }), heldReason: heldOf(main) },
       ])
-      if (main === 'release') bar = actions([back, { label: t('gate.toRelease'), icon: <PackageCheck />, onPress: () => send({ type: 'start' }), heldReason: model.online ? null : t('offline.held') }])
+      if (main === 'release') bar = actions([back, holdAction, { label: t('gate.toRelease'), icon: <PackageCheck />, onPress: () => send({ type: 'start' }), heldReason: model.online ? null : order.holds.length > 0 ? t('hold.releaseWaits') : null }])
       break
     }
 
@@ -453,25 +503,11 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
           </section>
           <ResultLine inspection={inspection} t={t} />
           {offlineHeld ? <HeldLine text={offlineHeld} /> : null}
-          <Modal open={step.hold.open} onClose={() => send({ type: 'hold', open: false })} title={t('hold.title')} size="sm" className="fw-floor-dialog">
-            <div className="fw-floor-dialog-body">
-              <p className="fw-floor-dialog-line">{t('hold.body')}</p>
-              <ReasonGrid label={t('hold.reasons')} reasons={HOLD_REASONS.map((reason) => ({ code: reason, label: t(`hold.reason.${reason}`), count: step.hold.reason === reason ? 1 : 0 }))} onPick={(reason) => send({ type: 'hold-reason', reason })} />
-              <div className="fw-floor-dialog-actions">
-                <FloorButton size="lg" variant="secondary" icon={<X />} onClick={() => send({ type: 'hold', open: false })}>
-                  {t('hold.cancel')}
-                </FloorButton>
-                <FloorButton size="lg" variant="danger" icon={<Ban />} heldReason={step.hold.reason ? held : t('hold.pickReason')} onClick={() => send({ type: 'hold-confirm' })}>
-                  {t('hold.confirm')}
-                </FloorButton>
-              </div>
-            </div>
-          </Modal>
         </>
       )
       bar = actions([
         step.failing ? { ...back, label: t('checklist.cancelFail'), onPress: () => send({ type: 'fail-item', code: null }) } : back,
-        { label: t('hold.action'), icon: <Ban />, variant: 'danger', onPress: () => send({ type: 'hold', open: true }), heldReason: complete ? held : t('hold.notComplete') },
+        holdOf(step.order),
         complete && !unanswered
           ? { label: t('checklist.sign', { result: t(`result.${inspection.result}`) }), icon: <Lock />, onPress: () => send({ type: 'sign' }), heldReason: held }
           : { label: t('checklist.groupPasses'), icon: <CheckIcon />, onPress: () => send({ type: 'pass-group' }), heldReason: held ?? (unanswered ? null : t('checklist.groupAnswered')) },
@@ -498,15 +534,14 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
             </TaskLine>
           ) : (
             <PinSign
-              title={step.hold ? t('sign.titleHold') : t('sign.title', { result: t(`result.${step.result}`) })}
-              meaning={step.hold ? t('sign.meaningHold') : step.result === 'PASS' ? t('sign.meaningPass') : t('sign.meaningFail')}
+              title={t('sign.title', { result: t(`result.${step.result}`) })}
+              meaning={step.result === 'PASS' ? t('sign.meaningPass') : t('sign.meaningFail')}
               summary={
                 <ul className="fw-final-summary">
                   <li>{inspection.label}</li>
                   <li>{t('sign.plan', { lot: inspection.plan.lotSize, sample: inspection.plan.sampleSize })}</li>
                   <li>{t('sign.checks', { passed, total: inspection.checklist.length })}</li>
                   <li>{inspection.defects.length > 0 ? t('sign.defects', { count: inspection.defects.reduce((sum, line) => sum + line.quantity, 0) }) : t('sign.noDefects')}</li>
-                  {step.hold ? <li>{t('sign.holdReason', { reason: t(`hold.reason.${step.hold}`) })}</li> : null}
                 </ul>
               }
               onPin={(pin) => send({ type: 'pin', pin })}
@@ -537,10 +572,18 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
               { label: t('fact.labels'), value: String(cell.labelsPrinted) },
             ]}
           />
+          <HoldLines order={step.order} t={t} time={time} />
           {cell.secondPerson.length > 0 ? (
             <TaskLine tone="info" icon={<ShieldCheck />}>
               {t('release.secondPerson', { why: cell.secondPerson.map((reason) => t(`secondPerson.${reason}`)).join('; ') })}
             </TaskLine>
+          ) : null}
+          {cell.printLabels ? (
+            <div className="fw-floor-row-actions">
+              <FloorButton size="md" variant="secondary" icon={<Printer />} heldReason={offlineHeld} onClick={() => send({ type: 'labels', cellId: cell.id })}>
+                {t('labels.action')}
+              </FloorButton>
+            </div>
           ) : null}
           {step.refused.length > 0 ? (
             <section className="fw-floor-stack" aria-labelledby="fw-final-refused" role="alert">
@@ -580,7 +623,7 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
       )
       bar = actions([
         back,
-        cell.printLabels ? { label: t('labels.action'), icon: <Printer />, variant: 'secondary', onPress: () => send({ type: 'labels', cellId: cell.id }) } : null,
+        step.signing ? null : holdOf(step.order),
         step.signing
           ? null
           : { label: t('release.confirm', { count: step.quantity }), icon: <PackageCheck />, onPress: () => send({ type: 'release-confirm' }), heldReason: offlineHeld ?? (model.busy ? t('busy') : cell.held && cell.held !== 'offline' ? t(`held.${cell.held}`) : null) },
@@ -648,6 +691,47 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
         {body}
         {step.kind !== 'sign' && step.kind !== 'release' && step.kind !== 'labels' ? notice : null}
       </div>
+      <Modal
+        open={Boolean(dialog)}
+        onClose={() => send({ type: 'hold', open: false })}
+        title={t('hold.title')}
+        size="lg"
+        className="fw-floor-dialog"
+        footer={
+          dialog ? (
+            <div className="fw-floor-dialog-actions">
+              {/* Enter = Cancel (design final.hold): the safe action has the focus. */}
+              <FloorButton size="lg" variant="secondary" icon={<X />} autoFocus onClick={() => send({ type: 'hold', open: false })}>
+                {t('hold.cancel')}
+              </FloorButton>
+              <FloorButton size="lg" variant="danger" icon={<Ban />} heldReason={dialogHeld} onClick={() => send({ type: 'hold-confirm' })}>
+                {t('hold.confirm')}
+              </FloorButton>
+            </div>
+          ) : undefined
+        }
+      >
+        {dialog ? (
+          <div className="fw-floor-dialog-body">
+            <p className="fw-floor-dialog-line">
+              <strong>{t('hold.body')}</strong>
+            </p>
+            <p className="fw-floor-dialog-line fw-floor-muted">{t('hold.ncr', { count: dialog.quantity })}</p>
+            {holdPicker ? (
+              <ReasonPickerBody
+                model={holdPicker}
+                onAction={(action) => {
+                  if (action.type === 'pick') send({ type: 'hold-reason', reason: action.id })
+                  else if (action.type === 'retry') send({ type: 'hold-reasons-retry' })
+                }}
+                timeZone={model.timeZone}
+              />
+            ) : null}
+            {dialog.problem ? <NoticeLine problem={dialog.problem} t={t} tt={tt} /> : null}
+            {offlineHeld ? <HeldLine text={offlineHeld} /> : null}
+          </div>
+        ) : null}
+      </Modal>
     </FloorFrameView>
   )
 }
@@ -716,6 +800,20 @@ function CellCard({ cell, t, send, online }: { cell: CellModel; t: Translate; se
         </FloorButton>
       </div>
     </section>
+  )
+}
+
+/** B-W2a-75: the work order's holds — why, since when, the NCR deciding it — and what waits for quality. */
+function HoldLines({ order, t, time }: { order: OrderModel; t: Translate; time: (value: string) => string }) {
+  if (order.holds.length === 0) return null
+  return (
+    <>
+      {order.holds.map((hold) => (
+        <TaskLine key={hold.id} tone="danger" icon={<Ban />} alert>
+          {hold.ncr ? t('hold.line', { reason: hold.reason, since: time(hold.since), ncr: hold.ncr }) : t('hold.lineNoNcr', { reason: hold.reason, since: time(hold.since) })}
+        </TaskLine>
+      ))}
+    </>
   )
 }
 

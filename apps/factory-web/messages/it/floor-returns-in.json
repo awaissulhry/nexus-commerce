@@ -1,0 +1,225 @@
+{
+  "title": "Ricevi un reso",
+  "card": {
+    "type": "Reso",
+    "customerRef": "Riferimento del cliente",
+    "lines": "Righe",
+    "linesValue": "{received} di {count} ricevute",
+    "dueBy": "Merce attesa entro"
+  },
+  "status": {
+    "REQUESTED": "Richiesto",
+    "AUTHORISED": "Autorizzato",
+    "RECEIVED": "Merce ricevuta",
+    "INSPECTED": "Ispezionato",
+    "CLOSED": "Chiuso",
+    "REJECTED": "Rifiutato",
+    "CANCELLED": "Annullato"
+  },
+  "noPermission": {
+    "title": "Ricevere i resi non è il tuo compito qui",
+    "body": "Il tuo ruolo non riceve i resi dei clienti in questo stabilimento. Chiedi al tuo capo squadra."
+  },
+  "action": {
+    "back": "Indietro",
+    "toLines": "Righe",
+    "receive": "Ricevi",
+    "countAll": "Tutto l'atteso",
+    "toGrade": "Valuta",
+    "toRoute": "Dove va",
+    "confirmGrade": "Conferma il giudizio",
+    "finish": "Fine",
+    "next": "Reso successivo"
+  },
+  "photo": {
+    "parcelTitle": "Foto del collo",
+    "lineTitle": "Foto del capo",
+    "parcelHint": "Fotografa solo il collo e i prodotti: niente persone nella foto.",
+    "lineHint": "Fotografa solo il capo; segna il danno con una freccia o un cerchio.",
+    "full": "Al massimo {count} foto qui",
+    "failed_one": "{count} foto non è arrivata in ufficio: la registrazione resta; l'ufficio può aggiungerla.",
+    "failed_other": "{count} foto non sono arrivate in ufficio: la registrazione resta; l'ufficio può aggiungerle."
+  },
+  "offline": {
+    "short": "Serve la rete",
+    "scan": "Niente rete: per aprire un reso serve l'ufficio. Metti da parte il collo finché la rete torna.",
+    "receive": "Niente rete: puoi contare i capi; Ricevi aspetta la rete."
+  },
+  "scan": {
+    "loading": "Cerco il reso…",
+    "label": "Scansiona il reso",
+    "hint": "Il foglio RMA nella scatola, o l'etichetta della scatola.",
+    "where": "Apri il collo alla banchina: il suo numero RMA apre il reso giusto."
+  },
+  "condition": {
+    "INTACT": "Scatola integra",
+    "DAMAGED": "Scatola danneggiata",
+    "OPENED": "Aperta",
+    "hint": {
+      "INTACT": "Chiusa e senza danni",
+      "DAMAGED": "Schiacciata, strappata o bagnata",
+      "OPENED": "Nastro tagliato o mancante"
+    }
+  },
+  "parcel": {
+    "question": "Come è arrivato il collo?",
+    "parcels": "Colli",
+    "photo": "Scatta una foto",
+    "photos_one": "{count} foto scattata",
+    "photos_other": "{count} foto scattate",
+    "noPhotos": "Ancora nessuna foto",
+    "removePhoto": "Togli la foto {n}",
+    "ddtLabel": "DDT del cliente",
+    "ddtHint": "Scansiona il numero del DDT del cliente, se c'è.",
+    "ddtKept": "DDT {code} tenuto per il ricevimento.",
+    "ddtClear": "Togli il numero del DDT"
+  },
+  "pad": {
+    "less": "Meno",
+    "more": "Più",
+    "clear": "Cancella",
+    "back": "Elimina",
+    "empty": "Scrivi un numero",
+    "range": "Da {min} a {max}"
+  },
+  "held": {
+    "condition": "Prima di' come è arrivato il collo",
+    "busy": "Invio…",
+    "nothing": "Prima conta almeno un capo",
+    "grade": "Prima scegli un giudizio",
+    "place": "Prima scansiona il posto"
+  },
+  "lines": {
+    "inParcel_one": "pezzo in questo collo",
+    "inParcel_other": "pezzi in questo collo",
+    "allIn": {
+      "title": "Sono arrivati tutti i capi",
+      "grade": "Non si attende altro: valuta quello che è arrivato.",
+      "body": "Su questo reso non si attende altro."
+    },
+    "scanLabel": "Scansiona un capo",
+    "scanHint": "La sua etichetta di matricola o di lotto: conta uno sulla sua riga.",
+    "title": "Cosa si attende",
+    "count_one": "{count} riga attende merce",
+    "count_other": "{count} righe attendono merce",
+    "partial": "Quello che non arriva ora resta atteso sul reso.",
+    "last": "Riga {seq}: {counted} di {expected}",
+    "takeOff": "Togli uno"
+  },
+  "line": {
+    "number": "Riga {seq}",
+    "serial": "Matricola {code}",
+    "batch": "Lotto {code}",
+    "ppe": "Capo di protezione",
+    "complete": "Tutti qui",
+    "partly": "{count} arrivati prima",
+    "waiting": "Atteso",
+    "countLabel": "{counted} di {expected} in questo collo",
+    "full": "Ogni pezzo atteso è contato"
+  },
+  "keys": {
+    "count": "Conta uno in più sulla riga"
+  },
+  "grade": {
+    "NEW": "Nuovo",
+    "LIKE_NEW": "Come nuovo",
+    "GOOD": "Buono",
+    "DAMAGED": "Danneggiato",
+    "UNUSABLE": "Inutilizzabile",
+    "hint": {
+      "NEW": "Mai indossato, con cartellini",
+      "LIKE_NEW": "Indossato una volta, senza segni",
+      "GOOD": "Usato, piccoli segni",
+      "DAMAGED": "Da riparare",
+      "UNUSABLE": "Non riparabile"
+    },
+    "noPermission": {
+      "title": "Valutare spetta all'ispettore",
+      "body": "Il tuo ruolo riceve i resi ma non li valuta: metti la merce al posto di ispezione."
+    },
+    "none": {
+      "title": "Nessun capo da valutare",
+      "body": "Ogni capo ricevuto è valutato."
+    },
+    "garment": "Capo · riga {seq}",
+    "pieces_one": "pezzo",
+    "pieces_other": "pezzi",
+    "reason": "Perché è tornato",
+    "serial": "Matricola",
+    "batch": "Lotto",
+    "return": "Reso",
+    "question": "In che stato è?",
+    "suggested": "Suggerito dalla politica dei resi: {outcome}",
+    "officeDecides": "L'ufficio decide cosa farne.",
+    "pickFirst": "Scegli la casella che descrive il capo.",
+    "photo": "Foto del capo",
+    "photos_one": "{count} foto con il giudizio",
+    "photos_other": "{count} foto con il giudizio",
+    "noPhotos": "Nessuna foto (facoltativa)",
+    "waiting_one": "{count} capo attende il giudizio",
+    "waiting_other": "{count} capi attendono il giudizio"
+  },
+  "outcome": {
+    "RESTOCK": "di nuovo a magazzino",
+    "SECOND_QUALITY": "seconda scelta",
+    "QUARANTINE": "quarantena",
+    "REPAIR": "riparazione",
+    "SCRAP": "scarto",
+    "BACK_TO_CUSTOMER": "di nuovo al cliente"
+  },
+  "restockHeld": {
+    "safety": "Un capo di protezione reso per un difetto torna sul mercato solo dopo una verifica di sicurezza: riparazione, quarantena o scarto.",
+    "usedPpe": "Un capo di protezione usato non torna mai a magazzino come nuovo.",
+    "notNew": "Solo un capo nuovo o come nuovo torna a magazzino come nuovo."
+  },
+  "route": {
+    "type": "Dove va",
+    "noPlace": "Nessun posto indicato",
+    "confirmed": "Messo a posto",
+    "toConfirm": "Scansiona per confermare",
+    "name": "Posto",
+    "return": "Reso",
+    "why": "Perché qui",
+    "inspection": "Attende la decisione dell'ufficio",
+    "scanLabel": "Scansiona il posto",
+    "scanHint": "L'etichetta di {code}.",
+    "noPlaceBody": "Questo stabilimento non ha un posto di ispezione: chiedi al responsabile del magazzino dove attendono i resi.",
+    "placed": "La merce è in {code}.",
+    "noLabel": "Dal tablet non si stampa ancora un'etichetta: tieni il foglio RMA con la merce."
+  },
+  "done": {
+    "title": "Reso {number} ricevuto",
+    "body": "{pieces} pezzi ricevuti, {graded} capi valutati su questo tablet.",
+    "office": "Il servizio clienti lo vede ora e decide l'esito."
+  },
+  "refusal": {
+    "NOT_OPEN": {
+      "message": "Nessun reso aperto con questo codice.",
+      "fix": "Metti da parte il collo e avvisa il servizio clienti."
+    },
+    "CHANGED": {
+      "message": "Il reso è cambiato nel frattempo.",
+      "fix": "È stato riletto: controlla le righe e invia di nuovo."
+    },
+    "FULL": {
+      "message": "Ogni pezzo di questa riga è contato.",
+      "fix": "Un capo in più dell'atteso va da parte: avvisa il servizio clienti."
+    },
+    "NO_LINE": {
+      "message": "Questa etichetta non è su questo reso.",
+      "fix": "Controlla l'etichetta del capo, oppure mettilo da parte e avvisa il servizio clienti."
+    },
+    "GRADED": {
+      "message": "Questo capo è già valutato.",
+      "fix": "Scansiona il capo successivo."
+    },
+    "PLACE": {
+      "message": "Questo non è il posto per questa merce.",
+      "fix": "Scansiona l'etichetta del posto indicato."
+    },
+    "BADGE": {
+      "message": "Questo badge non apre questo tablet.",
+      "fix": "Chiedi al tuo capo squadra."
+    }
+  }
+}

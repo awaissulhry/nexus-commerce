@@ -1,27 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CHECKLIST_CODES, checklistProblems, planProblems } from '@nexus/factory-domain/quality/final/rules'
 import { designScreen } from './fixtures'
-import {
-  checklistComplete,
-  FAIL_REASONS,
-  failItem,
-  groupsDone,
-  groupState,
-  labelsToPrint,
-  mainAction,
-  nextGroup,
-  noteOf,
-  passGroup,
-  passItem,
-  reasonOfNote,
-  releaseHeld,
-  suggestedLot,
-  suggestedPlan,
-  withDefect,
-  withoutDefect,
-  withPlanValue,
-  type Check,
-} from './model'
+import { checklistComplete, FAIL_REASONS, failItem, groupsDone, groupState, labelsToPrint, mainAction, nextGroup, noteOf, passGroup, passItem, reasonOfNote, releaseHeld, suggestedLot, suggestedPlan, withDefect, withoutDefect, withPlanValue, type Check, holdHeld, holdQuantity } from './model'
 
 /** SCR-097's rules without a screen: the checklist taps, the suggested plan, the defect of a failed check, the release's holds. */
 
@@ -115,5 +95,20 @@ describe('the design cases', () => {
     const ids = designScreen.cases.map((item) => item.id)
     for (const id of ['pick', 'empty', 'gate-green', 'gate-red', 'checklist', 'failed-check', 'sign', 'pin-wrong', 'pin-locked', 'release', 'release-refused', 'maker', 'second-person', 'statement', 'labels', 'released', 'hold', 'offline', 'error', 'no-permission', 'view-only'])
       expect(ids).toContain(id)
+  })
+})
+
+describe('Hold lot at the bench (B-W2a-75; design floor.final "Hold lot": a reason, and an NCR)', () => {
+  it('is held for a role that does not record, a lot on hold already, then without the network', () => {
+    expect(holdHeld({ online: true, mayRecord: true, holds: 0 })).toBeNull()
+    expect(holdHeld({ online: true, mayRecord: false, holds: 0 })).toBe('noRight')
+    expect(holdHeld({ online: false, mayRecord: true, holds: 1 })).toBe('already')
+    expect(holdHeld({ online: false, mayRecord: true, holds: 0 })).toBe('offline')
+  })
+
+  it('holds the open inspection\'s lot, else the finished garments not yet released (at least one)', () => {
+    expect(holdQuantity({ lotSize: 24 }, { finished: 48, released: 0, pieces: 48 })).toBe(24)
+    expect(holdQuantity(null, { finished: 48, released: 12, pieces: 48 })).toBe(36)
+    expect(holdQuantity(null, { finished: null, released: 0, pieces: 10 })).toBe(1)
   })
 })

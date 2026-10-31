@@ -217,34 +217,32 @@
   "hold": {
     "action": "Blocca il lotto",
     "title": "Bloccare questo lotto?",
-    "body": "Il collaudo è firmato NON SUPERATO: l'imballo è bloccato finché decide la qualità.",
-    "reasons": "Perché",
-    "reason": {
-      "DEFECTS": "Difetti trovati sui capi",
-      "LABELS": "Etichette sbagliate o mancanti",
-      "ARMOUR": "Protezioni sbagliate o mancanti",
-      "DOCUMENTS": "Documenti mancanti",
-      "OTHER": "Un altro motivo: decide la qualità"
-    },
-    "pickReason": "Prima scegli un motivo.",
-    "notComplete": "Prima rispondi a ogni controllo.",
+    "body": "L'imballo è bloccato finché decide la qualità.",
+    "ncr_one": "{count} capo va in blocco qualità, e si apre una non conformità che la qualità decide.",
+    "ncr_other": "{count} capi vanno in blocco qualità, e si apre una non conformità che la qualità decide.",
     "cancel": "Annulla",
-    "confirm": "Blocca"
+    "confirm": "Blocca",
+    "done": "Bloccato: {reason} · {ncr}. L'imballo è bloccato finché decide la qualità.",
+    "line": "Bloccato dalle {since}: {reason} · {ncr}. Rilascio e imballo aspettano la qualità.",
+    "lineNoNcr": "Bloccato dalle {since}: {reason}. Rilascio e imballo aspettano la qualità.",
+    "releaseWaits": "Bloccato: il rilascio aspetta la qualità",
+    "held": {
+      "offline": "Il blocco ha bisogno della rete: aspetta che torni.",
+      "noRight": "Il tuo ruolo non fa collaudi: chiedi al collaudatore o alla qualità.",
+      "already": "Già bloccato: decide la qualità."
+    }
   },
   "sign": {
     "title": "Firma il risultato: {result}",
-    "titleHold": "Firma: blocca il lotto",
     "meaningPass": "Con il tuo PIN confermi di aver collaudato questi capi e che il risultato è SUPERATO.",
     "meaningFail": "Con il tuo PIN confermi di aver collaudato questi capi e che il risultato è NON SUPERATO: non vengono rilasciati.",
-    "meaningHold": "Con il tuo PIN firmi il collaudo NON SUPERATO e blocchi il lotto: l'imballo è bloccato finché decide la qualità.",
     "statement": "Non ho prodotto questi capi",
     "tickFirst": "Questo stabilimento registra le postazioni, non le persone: segna \"Non ho prodotto questi capi\" prima di firmare.",
     "plan": "Lotto {lot} · campione {sample}",
     "checks": "{passed} di {total} controlli ok",
     "defects_one": "{count} difetto registrato",
     "defects_other": "{count} difetti registrati",
-    "noDefects": "Nessun difetto registrato",
-    "holdReason": "Bloccato: {reason}"
+    "noDefects": "Nessun difetto registrato"
   },
   "release": {
     "cell": "Colore e taglia",

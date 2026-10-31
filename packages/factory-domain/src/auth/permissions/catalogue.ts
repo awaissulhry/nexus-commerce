@@ -6,6 +6,8 @@ import { REGISTER_PERMISSIONS } from '../../compliance/register/permissions'
 import { COSTING_DEFINITIONS, COSTING_PERMISSIONS } from '../../costing/permissions'
 import { FLOOR_SYNC_DEFINITIONS, FLOOR_SYNC_PERMISSIONS } from '../../floor-sync/permissions'
 import { HOME_DEFINITIONS, HOME_PERMISSIONS } from '../../insights/permissions'
+// B-W2a-79: the report library (home.reports.view).
+import { HOME_REPORTS_DEFINITIONS, HOME_REPORTS_PERMISSIONS } from '../../insights/reports/permissions'
 import { TASKS_DEFINITIONS, TASKS_PERMISSIONS } from '../../tasks/permissions'
 // B-W2a-33: exception rules and stored alerts.
 import { ALERTS_DEFINITIONS, ALERTS_PERMISSIONS } from '../../alerts/permissions'
@@ -31,6 +33,8 @@ import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing
 import { PURCHASING_SOURCES_DEFINITIONS, PURCHASING_SOURCES_PERMISSIONS } from '../../purchasing/sources/permissions'
 // B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
 import { PURCHASING_SUBCONTRACT_DEFINITIONS, PURCHASING_SUBCONTRACT_PERMISSIONS } from '../../purchasing/subcontracting/permissions'
+// B-W2a-76: the floor's share of subcontracting.
+import { PURCHASING_SUBCONTRACT_FLOOR_PERMISSIONS } from '../../purchasing/subcontracting/permissions'
 // B-W2a-44: supplier claims and returns to the supplier (purchasing.claims.manage | return).
 import { PURCHASING_CLAIMS_DEFINITIONS, PURCHASING_CLAIMS_PERMISSIONS } from '../../purchasing/claims/permissions'
 import { QUALITY_FINAL_DEFINITIONS, QUALITY_FINAL_FLOOR_PERMISSIONS, QUALITY_FINAL_PERMISSIONS } from '../../quality/final/permissions'
@@ -412,6 +416,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_LAB_DEFINITIONS,
   QUALITY_FINAL_DEFINITIONS,
   HOME_DEFINITIONS,
+  // B-W2a-79: the report library.
+  HOME_REPORTS_DEFINITIONS,
   FLOOR_SYNC_DEFINITIONS,
   CALENDARS_DEFINITIONS,
   // B-W2a-10: approved sources (purchasing.sources.manage).
@@ -481,7 +487,9 @@ export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PR
   // B-W2a-35: report a machine problem at the station (H1: anyone); the technician's jobs and the sign-safe with the PIN.
   ...PLANT_FLOOR_PERMISSIONS,
   // B-W2a-43: the dock receives a customer return and grades it (never a price, a credit or a decision).
-  ...SALES_RETURNS_FLOOR_PERMISSIONS])
+  ...SALES_RETURNS_FLOOR_PERMISSIONS,
+  // B-W2a-76: the warehouse tablet sends a subcontract kit (with its DDT) and receives the goods back (never a fee).
+  ...PURCHASING_SUBCONTRACT_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
 for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...INVENTORY_RESERVATION_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...PRODUCTION_BUNDLES_PERMISSIONS, ...PRODUCTION_SCANS_PERMISSIONS, ...PRODUCTION_SERIALS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS, ...QUALITY_LAB_PERMISSIONS, ...QUALITY_FINAL_PERMISSIONS, ...HOME_PERMISSIONS, ...FLOOR_SYNC_PERMISSIONS, ...CALENDARS_PERMISSIONS, ...INVENTORY_COUNTS_PERMISSIONS, ...PURCHASING_SOURCES_PERMISSIONS, ...PRODUCTION_REWORK_PERMISSIONS, ...PRODUCTION_SCRAP_PERMISSIONS]) {
@@ -541,6 +549,8 @@ for (const name of RECEIVABLES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(
 for (const name of PAYABLES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-65: customer complaints.
 for (const name of QUALITY_COMPLAINTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-79: the report library.
+for (const name of HOME_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

@@ -12,9 +12,12 @@ import { AsOfMemory, codeKey } from '../shared/as-of'
 import { floorStepUp, steppedUp } from '../shared/step-up'
 import type { TaskProblem } from '../shared/task-api'
 import type { PinProblem } from '../shared/view/TaskParts'
+import { listBeforeRead, readListReasons } from '../reasons/api'
+import type { PickerList } from '../reasons/model'
 import {
   decide,
   freshKey,
+  holdLot,
   listBench,
   openInspection,
   printLabels,
@@ -25,6 +28,7 @@ import {
   recordChecklist,
   releaseCell,
   retryJob,
+  type BenchHold,
   type BenchRow,
   type FinalState,
   type InspectionRead,
@@ -35,6 +39,8 @@ import {
   failItem,
   FAIL_REASONS,
   groupState,
+  holdHeld,
+  holdQuantity,
   labelsToPrint,
   mainAction,
   nextGroup,
@@ -54,7 +60,7 @@ import {
   type Plan,
   type PlanField,
 } from './model'
-import { FinalView, type BenchRowModel, type CellModel, type FinalAction, type FinalStep, type InspectionModel, type JobModel, type OrderModel } from './view/FinalView'
+import { FinalView, type BenchRowModel, type CellModel, type FinalAction, type FinalStep, type HoldDialogModel, type InspectionModel, type JobModel, type OrderModel } from './view/FinalView'
 
 /**
  * The live SCR-097 (`/floor/final`): the inspection bench. It reads the site's work orders to inspect (or the one a
@@ -69,8 +75,8 @@ type Stage =
   | { kind: 'pick' }
   | { kind: 'gate' }
   | { kind: 'plan'; plan: Plan; field: PlanField | null; key: string }
-  | { kind: 'checklist'; group: ChecklistGroup; failing: string | null; hold: { open: boolean; reason: string | null } }
-  | { kind: 'sign'; result: 'PASS' | 'FAIL'; hold: string | null; statement: boolean; key: string }
+  | { kind: 'checklist'; group: ChecklistGroup; failing: string | null }
+  | { kind: 'sign'; result: 'PASS' | 'FAIL'; statement: boolean; key: string }
   | { kind: 'release'; cellId: string; quantity: number; signing: boolean; refused: Check[]; key: string }
   | { kind: 'labels'; cellId: string; jobs: PrintJob[]; refused: string | null; key: string; from: 'gate' | 'release' }
   | { kind: 'done'; cell: string; quantity: number; releaseNumber: string | null; secondPerson: boolean }
@@ -84,6 +90,8 @@ interface Loaded {
 
 const memory = new AsOfMemory<Loaded>(30)
 const listMemory = new AsOfMemory<BenchRow[]>(1)
+/** B-W2a-75: Hold lot asks why from the tenant's HOLD list, in the floor's one reason picker (B-W2a-F6). */
+const HOLD_LISTS = ['HOLD'] as const
 const POLL_MS = 3_000
 
 export function FloorFinal() {
@@ -92,7 +100,7 @@ export function FloorFinal() {
   const feedback = useConfirmFeedback()
   const t = useT('floor-final')
   const { frame, onFrame } = store.frame('tile.final', { showHome: true })
-  const { api, me, online, sessionEnded } = store
+  const { api, me, online, sessionEnded, locale } = store
   const permissions = useMemo(() => new Set(me?.permissions ?? []), [me?.permissions])
   const can = { view: permissions.has('quality.inspections.view'), record: permissions.has('quality.inspections.record'), release: permissions.has('quality.garments.release'), labels: permissions.has('production.serials') }
 
@@ -106,6 +114,10 @@ export function FloorFinal() {
   const [busy, setBusy] = useState(false)
   const [pin, setPin] = useState<PinProblem>(null)
   const [until, setUntil] = useState<string | null>(null)
+  // B-W2a-75: the Hold lot dialog (its reasons, the pick, the call's key) and the line after a hold placed here.
+  const [hold, setHold] = useState<{ picked: string | null; busy: boolean; problem: TaskProblem | null; key: string } | null>(null)
+  const [reasons, setReasons] = useState<PickerList>(() => listBeforeRead(HOLD_LISTS))
+  const [held, setHeld] = useState<{ reason: string; ncr: string } | null>(null)
   const taken = useRef(false)
 
   const fresh = () => steppedUp(until, new Date()) || steppedUp(me?.session.stepUpUntil, new Date())
@@ -273,7 +285,6 @@ export function FloorFinal() {
     if (!inspection) return
     setBusy(true)
     setNotice(null)
-    const overrideReason = signing.hold && inspection.computed.result === 'PASS' ? t(`hold.reason.${signing.hold}`) : null
     const answer = await decide(
       api,
       inspection.id,
@@ -282,7 +293,6 @@ export function FloorFinal() {
         result: signing.result,
         checklist: inspection.checklist,
         ...(loaded?.read?.statementNeeded ? { notMakerStatement: signing.statement } : {}),
-        ...(overrideReason ? { overrideReason } : {}),
       },
       signing.key,
     )
@@ -322,6 +332,40 @@ export function FloorFinal() {
     }
     setStage({ ...release, signing: false })
     setNotice(answer.problem)
+  }
+
+  // ---- Hold lot (B-W2a-75): a reason tile, then ONE call holds the work order's garments and raises the NCR ----
+
+  /** The HOLD reasons for the picker: what this tablet kept at once, then the office's answer (or why not). */
+  const readHoldReasons = async () => {
+    setReasons(listBeforeRead(HOLD_LISTS))
+    const answer = await readListReasons(api, HOLD_LISTS, online)
+    if (answer.signedOut) return void sessionEnded()
+    setReasons(answer.list)
+  }
+
+  const openHold = async () => {
+    if (!loaded || !online) return
+    setHold({ picked: null, busy: false, problem: null, key: freshKey() })
+    await readHoldReasons()
+  }
+
+  const confirmHold = async () => {
+    if (!hold || !hold.picked || hold.busy || !loaded || !online) return
+    const open = loaded.read?.inspection.status === 'OPEN' ? loaded.read.inspection : null
+    const current = hold
+    setHold({ ...current, busy: true, problem: null })
+    const answer = await holdLot(api, loaded.row.id, { reasonCode: current.picked!, quantity: holdQuantity(open ? { lotSize: open.plan.lotSize } : null, loaded.row), inspectionId: open?.id ?? null }, current.key)
+    if (!answer.ok) {
+      ended(answer)
+      feedback('error')
+      return setHold({ ...current, busy: false, problem: answer.problem, key: answer.problem.kind === 'offline' || answer.problem.kind === 'unavailable' ? current.key : freshKey() })
+    }
+    feedback('success')
+    setHold(null)
+    setHeld({ reason: reasonWord(answer.value.hold, locale), ncr: answer.value.ncr.number })
+    await reload()
+    setStage({ kind: 'gate' })
   }
 
   const onPin = async (value: string) => {
@@ -370,6 +414,7 @@ export function FloorFinal() {
         return router.push('/floor')
       case 'gate':
       case 'done':
+        setHeld(null)
         setStage({ kind: stage.kind === 'done' ? 'gate' : 'pick' })
         if (stage.kind === 'gate') void loadList()
         return
@@ -379,7 +424,7 @@ export function FloorFinal() {
         if (stage.failing) return setStage({ ...stage, failing: null })
         return setStage({ kind: 'gate' })
       case 'sign':
-        return setStage({ kind: 'checklist', group: inspection ? nextGroup(inspection.checklist) : 'LABELS', failing: null, hold: { open: false, reason: null } })
+        return setStage({ kind: 'checklist', group: inspection ? nextGroup(inspection.checklist) : 'LABELS', failing: null })
       case 'release':
         return stage.signing ? setStage({ ...stage, signing: false }) : setStage({ kind: 'gate' })
       case 'labels':
@@ -389,7 +434,7 @@ export function FloorFinal() {
 
   const releasableOf = (cellId: string) => Math.max(1, loaded?.final.cells.find((cell) => cell.workOrderSizeId === cellId)?.releasable ?? 1)
 
-  const order = loaded ? orderModel(loaded, { online, can }) : null
+  const order = loaded ? orderModel(loaded, { online, can, locale }) : null
 
   const onAction = async (action: FinalAction) => {
     switch (action.type) {
@@ -414,7 +459,7 @@ export function FloorFinal() {
         return void loadList()
       case 'start': {
         if (!order || !loaded) return
-        if (order.main === 'continue' && inspection) return setStage({ kind: 'checklist', group: nextGroup(inspection.checklist), failing: null, hold: { open: false, reason: null } })
+        if (order.main === 'continue' && inspection) return setStage({ kind: 'checklist', group: nextGroup(inspection.checklist), failing: null })
         if (order.main === 'start') return setStage({ kind: 'plan', plan: suggestedPlan(suggestedLot(loaded.row)), field: null, key: freshKey() })
         if (order.main === 'release') {
           const cell = order.cells.find((entry) => entry.held === null) ?? order.cells.find((entry) => entry.releasable > 0)
@@ -443,7 +488,7 @@ export function FloorFinal() {
         memory.keep(loaded.row.id, next)
         setLoaded(next)
         feedback('success')
-        return setStage({ kind: 'checklist', group: 'LABELS', failing: null, hold: { open: false, reason: null } })
+        return setStage({ kind: 'checklist', group: 'LABELS', failing: null })
       }
       case 'group':
         return stage.kind === 'checklist' ? setStage({ ...stage, group: action.group, failing: null }) : undefined
@@ -472,7 +517,7 @@ export function FloorFinal() {
       }
       case 'sign': {
         if (!inspection || !checklistComplete(inspection.checklist)) return
-        const signing: Extract<Stage, { kind: 'sign' }> = { kind: 'sign', result: inspection.computed.result, hold: null, statement: inspection.notMakerStatement, key: freshKey() }
+        const signing: Extract<Stage, { kind: 'sign' }> = { kind: 'sign', result: inspection.computed.result, statement: inspection.notMakerStatement, key: freshKey() }
         setStage(signing)
         if (fresh() && !loaded?.read?.statementNeeded) await runDecide(signing)
         return
@@ -482,16 +527,14 @@ export function FloorFinal() {
       case 'pin':
         return onPin(action.pin)
       case 'hold':
-        return stage.kind === 'checklist' ? setStage({ ...stage, hold: { open: action.open, reason: action.open ? stage.hold.reason : null } }) : undefined
+        if (!action.open) return setHold(null)
+        return void openHold()
       case 'hold-reason':
-        return stage.kind === 'checklist' ? setStage({ ...stage, hold: { open: true, reason: action.reason } }) : undefined
-      case 'hold-confirm': {
-        if (stage.kind !== 'checklist' || !stage.hold.reason || !inspection) return
-        const signing: Extract<Stage, { kind: 'sign' }> = { kind: 'sign', result: 'FAIL', hold: stage.hold.reason, statement: inspection.notMakerStatement, key: freshKey() }
-        setStage(signing)
-        if (fresh() && !loaded?.read?.statementNeeded) await runDecide(signing)
-        return
-      }
+        return setHold((current) => (current ? { ...current, picked: action.reason, problem: null } : current))
+      case 'hold-reasons-retry':
+        return void readHoldReasons()
+      case 'hold-confirm':
+        return void confirmHold()
       case 'release': {
         const cell = order?.cells.find((entry) => entry.id === action.cellId)
         if (!cell || cell.held) return
@@ -530,7 +573,7 @@ export function FloorFinal() {
       case 'plan':
         return stage.field ? null : { type: 'open-inspection' }
       case 'checklist':
-        if (stage.failing || stage.hold.open || !inspection) return null
+        if (stage.failing || hold || !inspection) return null
         return checklistComplete(inspection.checklist) ? { type: 'sign' } : { type: 'pass-group' }
       case 'release':
         return stage.signing ? null : { type: 'release-confirm' }
@@ -544,6 +587,18 @@ export function FloorFinal() {
 
   if (!me) return null
 
+  const holdDialog: HoldDialogModel | null =
+    hold && loaded
+      ? {
+          subject: loaded.row.batchNumber ? `${loaded.row.number} · ${loaded.row.batchNumber}` : loaded.row.number,
+          reasons,
+          picked: hold.picked,
+          busy: hold.busy,
+          problem: hold.problem,
+          quantity: holdQuantity(loaded.read?.inspection.status === 'OPEN' ? { lotSize: loaded.read.inspection.plan.lotSize } : null, loaded.row),
+        }
+      : null
+
   const step: FinalStep = !can.view
     ? { kind: 'noPermission' }
     : problem
@@ -556,7 +611,7 @@ export function FloorFinal() {
 
   return (
     <FinalView
-      model={{ frame, online, can: { record: can.record, release: can.release, labels: can.labels }, step, asOf, busy, pin, notice }}
+      model={{ frame, online, can: { record: can.record, release: can.release, labels: can.labels }, step, asOf, busy, pin, notice, hold: holdDialog, held }}
       onFrame={onFrame}
       onAction={(action) => void onAction(action)}
       camera={zxingCamera}
@@ -578,7 +633,7 @@ const benchRowModel = (row: BenchRow): BenchRowModel => ({
   open: row.openInspectionId !== null,
 })
 
-export function orderModel(loaded: Loaded, context: { online: boolean; can: { record: boolean; release: boolean; labels: boolean } }): OrderModel {
+export function orderModel(loaded: Loaded, context: { online: boolean; can: { record: boolean; release: boolean; labels: boolean }; locale?: 'it' | 'en' }): OrderModel {
   const { row, final, read } = loaded
   const made = final.maker.made
   const cells: CellModel[] = final.cells.map((cell) => ({
@@ -611,8 +666,13 @@ export function orderModel(loaded: Loaded, context: { online: boolean; can: { re
     inspections: final.inspections.map((entry) => ({ label: entry.label, status: entry.status })),
     open: openInspection ? { label: openInspection.label, yours: read?.yours ?? false } : null,
     main: mainAction({ open: openInspection ? { yours: read?.yours ?? false } : null, passed, made }, context.can),
+    holds: final.holds.map((hold) => ({ id: hold.id, reason: reasonWord(hold, context.locale ?? 'it'), since: hold.placedAt, ncr: hold.ncrNumber })),
+    holdHeld: holdHeld({ online: context.online, mayRecord: context.can.record, holds: final.holds.length }),
   }
 }
+
+/** A hold's reason in the screen's language (the API sends both). */
+const reasonWord = (hold: Pick<BenchHold, 'reasonIt' | 'reasonEn'>, locale: 'it' | 'en'): string => (locale === 'en' ? hold.reasonEn : hold.reasonIt)
 
 export function inspectionModel(read: InspectionRead): InspectionModel {
   const { inspection } = read
@@ -638,9 +698,9 @@ function stepOf(stage: Stage, order: OrderModel, loaded: Loaded): FinalStep {
     case 'plan':
       return { kind: 'plan', order, plan: stage.plan, field: stage.field, maxLot: Math.max(1, Math.min(loaded.row.pieces, loaded.row.finished ?? 0)) }
     case 'checklist':
-      return loaded.read ? { kind: 'checklist', order, inspection: inspectionModel(loaded.read), group: stage.group, failing: stage.failing, hold: stage.hold } : { kind: 'gate', order }
+      return loaded.read ? { kind: 'checklist', order, inspection: inspectionModel(loaded.read), group: stage.group, failing: stage.failing } : { kind: 'gate', order }
     case 'sign':
-      return loaded.read ? { kind: 'sign', order, inspection: inspectionModel(loaded.read), result: stage.result, hold: stage.hold, statement: stage.statement } : { kind: 'gate', order }
+      return loaded.read ? { kind: 'sign', order, inspection: inspectionModel(loaded.read), result: stage.result, statement: stage.statement } : { kind: 'gate', order }
     case 'release': {
       const cell = cellOf(stage.cellId)
       return cell ? { kind: 'release', order, cell, quantity: stage.quantity, signing: stage.signing, refused: stage.refused } : { kind: 'gate', order }

@@ -1687,6 +1687,7 @@
     "quality_garments_release": "Release inspected garments for shipping",
     "quality_garments_reverse": "Take released garments back before they ship",
     "home_view": "See Today",
+    "home_reports_view": "Run the standard reports (each shows only what your other rights reach)",
     "tasks_manage": "Make tasks on records and assign them",
     "floorsync_view": "See refused actions from floor tablets",
     "floorsync_discard": "Discard a refused floor tablet action",

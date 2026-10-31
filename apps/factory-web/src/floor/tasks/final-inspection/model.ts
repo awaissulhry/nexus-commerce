@@ -221,3 +221,20 @@ export function mainAction(situation: Situation, can: { readonly record: boolean
   if (!can.record) return null
   return situation.made ? 'maker' : 'start'
 }
+
+// ---- Hold lot at the bench (B-W2a-75; design floor.final "Hold lot (secondary): a reason, and an NCR") ----------------------
+
+/** What holds Hold lot for this person, first match: no network, no right to record, the lot is on hold already. */
+export type HoldHeld = 'offline' | 'noRight' | 'already' | null
+
+export function holdHeld(input: { readonly online: boolean; readonly mayRecord: boolean; readonly holds: number }): HoldHeld {
+  if (!input.mayRecord) return 'noRight'
+  if (input.holds > 0) return 'already'
+  if (!input.online) return 'offline'
+  return null
+}
+
+/** The garments held (the NCR's quantity): the open inspection's lot, else the finished garments not yet released. */
+export function holdQuantity(open: { readonly lotSize: number } | null, order: { readonly finished: number | null; readonly released: number; readonly pieces: number }): number {
+  return open ? Math.max(1, open.lotSize) : suggestedLot(order)
+}

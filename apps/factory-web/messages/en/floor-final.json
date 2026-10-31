@@ -217,34 +217,32 @@
   "hold": {
     "action": "Hold lot",
     "title": "Hold this lot?",
-    "body": "The inspection is signed FAILED: packing is blocked until quality decides.",
-    "reasons": "Why",
-    "reason": {
-      "DEFECTS": "Defects found on the garments",
-      "LABELS": "Labels wrong or missing",
-      "ARMOUR": "Armour wrong or missing",
-      "DOCUMENTS": "Documents missing",
-      "OTHER": "Another reason: quality decides"
-    },
-    "pickReason": "Pick a reason first.",
-    "notComplete": "Answer every check first.",
+    "body": "Packing is blocked until quality decides.",
+    "ncr_one": "{count} garment goes on quality hold, and a nonconformance opens for quality to decide.",
+    "ncr_other": "{count} garments go on quality hold, and a nonconformance opens for quality to decide.",
     "cancel": "Cancel",
-    "confirm": "Hold"
+    "confirm": "Hold",
+    "done": "On hold: {reason} · {ncr}. Packing is blocked until quality decides.",
+    "line": "On hold since {since}: {reason} · {ncr}. Releasing and packing wait for quality.",
+    "lineNoNcr": "On hold since {since}: {reason}. Releasing and packing wait for quality.",
+    "releaseWaits": "On hold: releasing waits for quality",
+    "held": {
+      "offline": "Holding needs the network: it waits until it is back.",
+      "noRight": "Your role does not inspect: ask the inspector or quality.",
+      "already": "On hold already: quality decides."
+    }
   },
   "sign": {
     "title": "Sign the result: {result}",
-    "titleHold": "Sign: hold the lot",
     "meaningPass": "With your PIN you confirm you inspected these garments and the result is PASS.",
     "meaningFail": "With your PIN you confirm you inspected these garments and the result is FAIL: they are not released.",
-    "meaningHold": "With your PIN you sign the inspection FAILED and hold the lot: packing is blocked until quality decides.",
     "statement": "I did not make these goods",
     "tickFirst": "This site records stations, not people: tick \"I did not make these goods\" before you sign.",
     "plan": "Lot {lot} · sample {sample}",
     "checks": "{passed} of {total} checks passed",
     "defects_one": "{count} defect recorded",
     "defects_other": "{count} defects recorded",
-    "noDefects": "No defect recorded",
-    "holdReason": "Held: {reason}"
+    "noDefects": "No defect recorded"
   },
   "release": {
     "cell": "Colour and size",

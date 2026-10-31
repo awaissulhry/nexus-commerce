@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { ROLE_TEMPLATES } from '../auth/roles/templates'
 import { createCatalogue, EVENT_CATALOGUE, EVENT_DEFINITIONS, EventPayloadError, UndeclaredEventError } from './catalogue'
 import { defineEvent } from './define'
 
@@ -58,5 +59,22 @@ describe('EVENT_CATALOGUE', () => {
       .filter((entry) => entry.isDirectory() && existsSync(join(src, entry.name, 'events.ts')))
       .map((entry) => entry.name)
     for (const module of modules) expect(catalogueSource, `src/${module}/events.ts`).toContain(`from '../${module}/events'`)
+  })
+
+  // B-W2a-F5: a live rule's floor permission is one a floor role really holds, so the floor events reach a tablet.
+  it('names, on every rule that reaches the floor, a permission a floor role template holds', () => {
+    const heldOnTheFloor = new Set(ROLE_TEMPLATES.filter((template) => template.audience === 'floor').flatMap((template) => template.permissions))
+    const floorRules = EVENT_CATALOGUE.definitions.filter((definition) => definition.live?.floor)
+    expect(floorRules.length).toBeGreaterThan(0)
+    for (const definition of floorRules) expect(heldOnTheFloor.has(definition.live!.floor!), `${definition.type}: ${definition.live!.floor}`).toBe(true)
+  })
+
+  it('sends My work and the station screens what they listen to (floor.work; the machine card plant.report)', () => {
+    const floorOf = (type: string) => EVENT_CATALOGUE.find(type, 1)?.live?.floor
+    for (const type of ['planning.schedule_published', 'production.scan_recorded', 'quality.hold_placed', 'quality.hold_released', 'workorder.status_changed']) {
+      expect(floorOf(type), type).toBe('floor.work')
+    }
+    expect(floorOf('machine.status_changed')).toBe('plant.report')
+    expect(floorOf('quality.inspection_decided')).toBe('quality.inspections.view')
   })
 })

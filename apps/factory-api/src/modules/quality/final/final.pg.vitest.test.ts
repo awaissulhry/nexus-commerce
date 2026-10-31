@@ -288,6 +288,8 @@ beforeAll(async () => {
   }
   await seedFiles({ db: h.database, namespace: ns.a })
   quality = await seedQuality({ db: h.database, namespace: ns.a })
+  // B-W2a-75: the HOLD reasons the bench's Hold lot picks from.
+  await seedReasons({ db: h.database, namespace: ns.a })
   await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE provider = 'R2'`)
   await h.database.withScope({ audience: 'office', tenantId: A.tenant, actorId: newId() }, async (client) =>
     applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }),
@@ -813,6 +815,79 @@ describe('the database holds the rules too, for every login', () => {
       )
     await expect(row(null, null)).rejects.toThrow(/names exactly one releaser/)
     await expect(row(inspector1.id, A.operatorA1)).rejects.toThrow(/names exactly one releaser/)
+  })
+})
+
+// ---- B-W2a-75: Hold lot at the bench ------------------------------------------------------------------------------------------------
+
+describe('Hold lot at the bench (design floor.final "Hold lot": a reason, and an NCR)', () => {
+  it('holds the work order with a HOLD reason and raises the NCR that decides it, in one command, once; the bench sees it; the placer never releases it', async () => {
+    const workOrderId = WO.failed.id
+    const RECORD: Permission[] = [...FLOOR, 'quality.inspections.record']
+    SESSIONS.benchHold = { ...floor(A.qc), grants: [{ permissions: RECORD, companies: [A.companyA], sites: [A.siteA1], parties: 'all' }] }
+    SESSIONS.benchView = floor(A.qc)
+    SESSIONS.benchElsewhere = { audience: 'floor', tenantId: A.tenant, actorId: A.operatorA1, siteId: newId(), deviceId: A.qc, grants: [{ permissions: RECORD, companies: [A.companyA], sites: 'all', parties: 'all' }] }
+    SESSIONS.officeRecorder = office(A.tenant, [grant(['quality.inspections.view', 'quality.inspections.record', 'quality.holds.place'])])
+    const url = `/quality/final/work-orders/${workOrderId}/hold`
+    expect((await ok('benchHold', 'GET', `/quality/final/work-orders/${workOrderId}`)).holds).toEqual([])
+
+    // Refused before anything is written: no key, an unknown reason, OTHER without its note, an inspection of another work order.
+    const unkeyed = await call('benchHold', 'POST', url, { reasonCode: 'QUALITY_CHECK', quantity: 2 })
+    expect(unkeyed.statusCode, unkeyed.body).toBe(400)
+    expect(pathsOf(await refused('benchHold', 'POST', url, { reasonCode: 'NO_SUCH_REASON', quantity: 2 }, 400))).toEqual(['body/reasonCode'])
+    expect(pathsOf(await refused('benchHold', 'POST', url, { reasonCode: 'OTHER', quantity: 2 }, 400))).toEqual(['body/reasonNote'])
+    const otherInspection = (await admin<{ id: string }>('SELECT id::text FROM "Inspection" WHERE "workOrderId" = $1 LIMIT 1', [WO.bench.id]))[0]!.id
+    await refused('benchHold', 'POST', url, { reasonCode: 'QUALITY_CHECK', quantity: 2, inspectionId: otherInspection }, 404)
+    // Not the bench's: the office (its own Holds page), a tablet without the right, another site's tablet.
+    await refused('officeRecorder', 'POST', url, { reasonCode: 'QUALITY_CHECK', quantity: 2 }, 403)
+    await refused('benchView', 'POST', url, { reasonCode: 'QUALITY_CHECK', quantity: 2 }, 403)
+    await refused('benchElsewhere', 'POST', url, { reasonCode: 'QUALITY_CHECK', quantity: 2 }, 404)
+    expect(await admin('SELECT 1 FROM "QualityHold" WHERE $1::uuid = ANY("subjectIds")', [workOrderId])).toEqual([])
+
+    const before = (await admin<{ status: string }>('SELECT status::text AS status FROM "WorkOrder" WHERE id = $1', [workOrderId]))[0]!.status
+    const key = freshKey()
+    const first = await call('benchHold', 'POST', url, { reasonCode: 'QUALITY_CHECK', reasonNote: 'Seams look loose on two jackets', quantity: 2 }, key)
+    expect(first.statusCode, first.body).toBe(201)
+    const held = first.json()
+    expect(held).toMatchObject({
+      hold: { reasonCode: 'QUALITY_CHECK', reasonEn: 'Quality check', reasonIt: 'Verifica qualità', reasonNote: 'Seams look loose on two jackets', placedBy: 'WORKER', ncrNumber: held.ncr.number },
+      workOrderHeld: before !== 'COMPLETED',
+      replayed: false,
+    })
+    expect(held.ncr.number).toMatch(/^NCR-/)
+    // A resend with the same key answers the same hold and NCR: nothing twice.
+    const again = await call('benchHold', 'POST', url, { reasonCode: 'QUALITY_CHECK', reasonNote: 'Seams look loose on two jackets', quantity: 2 }, key)
+    expect(again.statusCode, again.body).toBe(201)
+    expect(again.json()).toMatchObject({ hold: { id: held.hold.id }, ncr: held.ncr, replayed: true })
+    expect(await admin('SELECT id::text FROM "QualityHold" WHERE $1::uuid = ANY("subjectIds")', [workOrderId])).toEqual([{ id: held.hold.id }])
+
+    // The hold: placed by the worker (never an office user), from the bench, decided by the NCR.
+    expect(await admin('SELECT "placedById"::text AS "user", "placedByWorkerId"::text AS worker, "ncrId"::text AS ncr, "subjectType"::text AS type, status::text AS status FROM "QualityHold" WHERE id = $1', [held.hold.id])).toEqual([
+      { user: null, worker: A.operatorA1, ncr: held.ncr.id, type: 'WorkOrder', status: 'ACTIVE' },
+    ])
+    expect(await admin('SELECT status::text AS status FROM "WorkOrder" WHERE id = $1', [workOrderId])).toEqual([{ status: before === 'COMPLETED' ? 'COMPLETED' : 'ON_HOLD' }])
+    // The NCR: found at the final inspection by the worker, MAJOR, the garments held; its first containment is the hold, done.
+    expect(
+      await admin(
+        'SELECT source::text AS source, "foundAt"::text AS "foundAt", severity::text AS severity, "quantityAffected"::text AS quantity, uom::text AS uom, "foundById"::text AS "foundBy", "foundByWorkerId"::text AS worker, "createdById"::text AS "createdBy", "workOrderId"::text AS wo FROM "Nonconformance" WHERE id = $1',
+        [held.ncr.id],
+      ),
+    ).toEqual([{ source: 'INSPECTION', foundAt: 'FINAL', severity: 'MAJOR', quantity: '2.0000', uom: 'PCS', foundBy: null, worker: A.operatorA1, createdBy: null, wo: workOrderId }])
+    expect(await admin('SELECT kind::text AS kind, status::text AS status, "recordId"::text AS hold FROM "NcrContainmentAction" WHERE "ncrId" = $1', [held.ncr.id])).toEqual([{ kind: 'HOLD_STOCK', status: 'DONE', hold: held.hold.id }])
+    // The ledger names the tablet and the worker.
+    const audit = await admin<{ after: Json }>('SELECT after FROM "AuditLog" WHERE action = \'quality.benchHold\' AND "recordId" = $1', [held.hold.id])
+    expect(audit).toHaveLength(1)
+    expect(audit[0]!.after).toMatchObject({ workOrderId, ncrId: held.ncr.id, deviceId: A.qc, workerId: A.operatorA1 })
+
+    // The bench and the office see the hold on the work order's final state; a release waits for quality, in words.
+    const bench = await ok('benchView', 'GET', `/quality/final/work-orders/${workOrderId}`)
+    expect(bench.holds).toEqual([expect.objectContaining({ id: held.hold.id, reasonCode: 'QUALITY_CHECK', placedBy: 'WORKER', ncrNumber: held.ncr.number })])
+    expect((await ok('viewer', 'GET', `/quality/final/work-orders/${workOrderId}`)).holds.map((hold: Json) => hold.id)).toEqual([held.hold.id])
+    expect(keysOf(bench.holds).filter((name) => MONEY.test(name) || /worker|user|name$/i.test(name))).toEqual([])
+    // The worker who placed it (the maker's office user is linked to them) never releases it.
+    const detail = await as(maker.browser, 'GET', `/quality/holds/${held.hold.id}`)
+    expect(detail.release.checks).toContainEqual(expect.objectContaining({ key: 'NOT_PLACER', ok: false }))
+    expect(detail.release.releasable).toBe(false)
   })
 })
 

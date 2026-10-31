@@ -1,11 +1,11 @@
-import { Bell, CheckCheck, Home, Inbox, ListTodo, Sun } from 'lucide-react'
+import { BarChart3, Bell, BellRing, CheckCheck, Home, Inbox, ListTodo, Sun } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
  * Home (design 01 area 1 "Home"; A2 §1.4 "Home"). Labels are message keys (`shell:` = messages/<locale>/shell.json).
  * Main (no label on screen), in the tree's order: Today (SCR-029, B-W1-52), Approvals (SCR-030, B-W1-21: quote approvals in
- * W1), My tasks (SCR-233, B-W2a-40), Notifications (SCR-005, B-W2a-40), Mail to sort (SCR-019, B-W0-31). The Insights
- * group comes with its pages (W2a/W2b).
+ * W1), My tasks (SCR-233, B-W2a-40), Notifications (SCR-005, B-W2a-40), Mail to sort (SCR-019, B-W0-31). Insights:
+ * Alerts (SCR-234, B-W2a-78); its other pages come with their steps (W2a/W2b).
  */
 export const officeArea: OfficeAreaNav = {
   order: 1,
@@ -32,6 +32,17 @@ export const officeArea: OfficeAreaNav = {
           { id: 'home-notifications', label: 'shell:nav.home.notifications', href: '/home/notifications', icon: Bell, permission: 'home.view' },
           // SCR-019 (B-W0-31): received mail no record took. Sales, buyers and the owner.
           { id: 'home-mail-to-sort', label: 'shell:nav.home.mailToSort', href: '/home/mail-to-sort', icon: Inbox, permission: 'email.triage' },
+        ],
+      },
+      // B-W2a-79 + B-W2a-78: Insights (design 01 "Insights · Analisi") › Reports (SCR-104: the report library, each report obeying
+      // the person's data permissions) and Alerts (SCR-234: the open alerts of the records I may see, and the exception rules).
+      // Dashboards and the KPI library (W2b) join this group.
+      {
+        id: 'home-insights',
+        label: 'shell:nav.home.insights',
+        items: [
+          { id: 'home-reports', label: 'shell:nav.home.reports', href: '/home/reports', icon: BarChart3, permission: 'home.reports.view' },
+          { id: 'home-alerts', label: 'shell:nav.home.alerts', href: '/home/alerts', icon: BellRing, permission: 'alerts.view' },
         ],
       },
     ],

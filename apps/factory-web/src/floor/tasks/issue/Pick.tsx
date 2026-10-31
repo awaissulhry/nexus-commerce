@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { newIdempotencyKey } from '../../../lib/api/client'
+import { formatNumber } from '../../../lib/i18n/format'
 import { useT } from '../../../lib/i18n/provider'
 import { zxingCamera } from '../../camera'
 import { useFloor } from '../../FloorApp'
@@ -11,9 +12,11 @@ import { useFloorKeys } from '../../keys'
 import { readScan } from '../../scan/scan-model'
 import { AsOfMemory, codeKey } from '../shared/as-of'
 import type { TaskProblem } from '../shared/task-api'
-import { fetchPickList, fetchPickWorkOrders, issueStock, undoLastIssue } from './api'
+import { fetchLabelPrinters, fetchPickList, fetchPickWorkOrders, fetchReturnPlaces, issueStock, printRemnantTag, readTagJob, retryTagJob, returnUnused, undoLastIssue, type ReturnPlace, type TagJob } from './api'
 import { num, padBounds, quantityText, stockOfScan, undoStock, withLine, type PickList, type PickWorkOrderRow } from './model'
-import { PickView, type PickAction, type PickLast, type PickPad } from './view/PickView'
+import { comesBackAs, remnantLabel, returnBody, returnBounds, returnOfScan, returnRows, tagPrinterOf, type ReturnRow } from './returns'
+import { PickView, unitWord, type PickAction, type PickLast, type PickPad } from './view/PickView'
+import type { PickReturnModel, ReturnTag } from './view/ReturnStep'
 
 /**
  * The live SCR-093 (`/floor/pick`): for which work order (its traveller scanned here or on Home, or a row of the site's
@@ -27,8 +30,24 @@ import { PickView, type PickAction, type PickLast, type PickPad } from './view/P
 // The lists read on this tablet during the visit (offline they stay on screen with their time; nothing is stored).
 const WORK_ORDERS = new AsOfMemory<PickWorkOrderRow[]>(8)
 const LISTS = new AsOfMemory<PickList>(40)
+/** B-W2a-75: the site's storage places, read once a visit for Return unused. */
+const PLACES = new AsOfMemory<ReturnPlace[]>(4)
+const TAG_POLL_MS = 3_000
+const TAG_POLL_TRIES = 40
 
-type Stage = 'choose' | 'list'
+type Stage = 'choose' | 'list' | 'return'
+
+/** B-W2a-75: the Return unused step as the container keeps it (the view's model is built from it and the pick list). */
+interface ReturnState {
+  readonly picked: { readonly rowKey: string; readonly value: number | null } | null
+  readonly places: readonly ReturnPlace[] | null
+  readonly placesHeld: 'noPermission' | 'unavailable' | null
+  readonly placeId: string | null
+  readonly busy: boolean
+  readonly problem: { readonly problem: TaskProblem; readonly code: string | null } | null
+  readonly key: string
+  readonly done: { readonly row: ReturnRow; readonly quantity: number; readonly place: string; readonly as: 'whole' | 'remnant' | 'part'; readonly tag: ReturnTag | null; readonly job: TagJob | null; readonly tagKey: string } | null
+}
 
 export function FloorPick() {
   const store = useFloor()
@@ -36,7 +55,7 @@ export function FloorPick() {
   const feedback = useConfirmFeedback()
   const t = useT('floor-issue')
   const { frame, onFrame } = store.frame('tile.pick', { showHome: true })
-  const { me, api, online, sessionEnded } = store
+  const { me, api, online, sessionEnded, locale } = store
   const siteId = me?.site.id ?? ''
   const may = Boolean(me?.permissions.includes('inventory.issue'))
 
@@ -49,6 +68,7 @@ export function FloorPick() {
   const [last, setLast] = useState<PickLast | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [problem, setProblem] = useState<{ problem: TaskProblem; code: string | null } | null>(null)
+  const [ret, setRet] = useState<ReturnState | null>(null)
   const started = useRef(false)
 
   const fail = useCallback(
@@ -137,6 +157,16 @@ export function FloorPick() {
     [api],
   )
 
+  // B-W2a-75: what the work order holds that may come back, and one of them picked for Return unused.
+  const rows = useMemo(() => (list ? returnRows(list) : []), [list])
+  const pickReturn = useCallback(
+    (row: ReturnRow) => {
+      feedback('success')
+      setRet((current) => (current ? { ...current, picked: { rowKey: row.key, value: returnBounds(row).suggested }, problem: null, key: newIdempotencyKey() } : current))
+    },
+    [feedback],
+  )
+
   const issue = useCallback(
     async (current: PickList, code: string, quantity?: { value: number; decimals: number }) => {
       setBusy(code)
@@ -173,6 +203,13 @@ export function FloorPick() {
         return
       }
       setProblem(null)
+      if (stage === 'return' && list && ret) {
+        if (ret.done || !navigator.onLine) return void feedback('warning')
+        const row = returnOfScan(rows, read)
+        if (row) return pickReturn(row)
+        feedback('warning')
+        return setRet({ ...ret, problem: { problem: { kind: 'refused', code: 'NOT_AT_WORK_ORDER', message: t('refusal.NOT_AT_WORK_ORDER.message'), fix: t('refusal.NOT_AT_WORK_ORDER.fix') }, code: read.code } })
+      }
       if (stage === 'choose' || !list) return openNumber(read.code)
       if (!navigator.onLine) {
         feedback('warning')
@@ -187,7 +224,7 @@ export function FloorPick() {
       }
       return issue(list, stock.code)
     },
-    [fail, feedback, issue, list, me, openNumber, stage, store, t],
+    [fail, feedback, issue, list, me, openNumber, pickReturn, ret, rows, stage, store, t],
   )
 
   const undo = useCallback(async () => {
@@ -202,8 +239,124 @@ export function FloorPick() {
     await refresh(list.workOrder.id)
   }, [api, fail, feedback, list, refresh])
 
+  // ---- Return unused (B-W2a-75): pick what comes back, how much, where; then a remnant's new tag ----
+
+  const openReturn = useCallback(async () => {
+    if (!list || !navigator.onLine) return
+    setPad(null)
+    setLast(null)
+    setProblem(null)
+    setStage('return')
+    const kept = PLACES.get(siteId)?.value ?? null
+    setRet({ picked: null, places: kept, placesHeld: null, placeId: kept?.length === 1 ? kept[0]!.id : null, busy: false, problem: null, key: newIdempotencyKey(), done: null })
+    if (kept) return
+    const answer = await fetchReturnPlaces(api, siteId)
+    if (!answer.ok && answer.problem.kind === 'signedOut') return void sessionEnded()
+    if (answer.ok) PLACES.keep(siteId, answer.value)
+    setRet((current) =>
+      current
+        ? answer.ok
+          ? { ...current, places: answer.value, placeId: current.placeId ?? (answer.value.length === 1 ? answer.value[0]!.id : null) }
+          : { ...current, placesHeld: answer.problem.kind === 'forbidden' ? 'noPermission' : 'unavailable' }
+        : current,
+    )
+  }, [api, list, sessionEnded, siteId])
+
+  /** A remnant's new tag: whether this app prints it here, and where. */
+  const resolveTag = useCallback(
+    async (row: ReturnRow, as: 'whole' | 'remnant' | 'part'): Promise<ReturnTag | null> => {
+      if (row.kind !== 'hide' || as !== 'remnant' || !me) return null
+      const read = readScan(row.code, me.scanTag)
+      if (read.kind !== 'label' || read.type !== 'hide') return { kind: 'notOurs' }
+      if (!me.permissions.includes('print.labels')) return { kind: 'noRight' }
+      const answer = await fetchLabelPrinters(api, siteId, store.device?.device.station?.id ?? null)
+      if (!answer.ok) return { kind: 'printer', printer: { kind: 'none' }, picked: null }
+      const printer = tagPrinterOf(answer.value.printers, answer.value.stationPrinterId)
+      return { kind: 'printer', printer, picked: printer.kind === 'station' || printer.kind === 'site' ? printer.id : null }
+    },
+    [api, me, siteId, store.device],
+  )
+
+  const confirmReturn = useCallback(async () => {
+    if (!list || !ret?.picked || ret.busy || !navigator.onLine) return
+    const row = rows.find((entry) => entry.key === ret.picked!.rowKey)
+    const value = ret.picked.value
+    const place = ret.places?.find((entry) => entry.id === ret.placeId)
+    if (!row || value === null || !place) return
+    const bounds = returnBounds(row)
+    if (value < bounds.min || value > bounds.max) return
+    setRet({ ...ret, busy: true, problem: null })
+    const answer = await returnUnused(api, list.workOrder.id, returnBody(row, value, bounds.decimals, place.id, new Date().toISOString()), ret.key)
+    if (!answer.ok) {
+      if (answer.problem.kind === 'signedOut') return void sessionEnded()
+      feedback('error')
+      return setRet({ ...ret, busy: false, problem: { problem: answer.problem, code: row.code }, key: newIdempotencyKey() })
+    }
+    feedback('success')
+    const as = answer.value.hideState === 'REMNANT' ? 'remnant' : comesBackAs(row, value)
+    const tag: ReturnTag | null = row.kind === 'hide' && as === 'remnant' ? { kind: 'looking' } : null
+    setRet({ ...ret, busy: false, problem: null, done: { row, quantity: value, place: place.code, as, tag, job: null, tagKey: newIdempotencyKey() } })
+    void refresh(list.workOrder.id)
+    if (tag) {
+      const resolved = await resolveTag(row, as)
+      setRet((current) => (current?.done ? { ...current, done: { ...current.done, tag: resolved } } : current))
+    }
+  }, [api, feedback, list, refresh, resolveTag, ret, rows, sessionEnded])
+
+  const printTag = useCallback(async () => {
+    const done = ret?.done
+    if (!done || done.tag?.kind !== 'printer' || done.tag.busy || !navigator.onLine) return
+    const printerId = done.tag.printer.kind === 'station' || done.tag.printer.kind === 'site' ? done.tag.printer.id : done.tag.picked
+    const printerName = done.tag.printer.kind === 'choose' ? (done.tag.printer.printers.find((printer) => printer.id === printerId)?.name ?? '') : done.tag.printer.kind === 'none' ? '' : done.tag.printer.name
+    if (!printerId || !('hideId' in done.row.stock)) return
+    const tagState = done.tag
+    setRet({ ...ret!, done: { ...done, tag: { ...tagState, busy: true, problem: null } } })
+    const area = `${formatNumber(done.quantity, locale, { maximumFractionDigits: 2 })} ${unitWord(t, done.row.uom)}`
+    const answer = await printRemnantTag(api, { printerId, hideId: done.row.stock.hideId, label: remnantLabel(done.row, area, locale === 'en' ? 'en' : 'it') }, done.tagKey)
+    if (!answer.ok) {
+      if (answer.problem.kind === 'signedOut') return void sessionEnded()
+      feedback('error')
+      return setRet((current) => (current?.done ? { ...current, done: { ...current.done, tag: { ...tagState, busy: false, problem: answer.problem }, tagKey: newIdempotencyKey() } } : current))
+    }
+    feedback('success')
+    setRet((current) => (current?.done ? { ...current, done: { ...current.done, job: answer.value, tag: { kind: 'job', printer: printerName, status: answer.value.status, detail: answer.value.lastError } } } : current))
+  }, [api, feedback, locale, ret, sessionEnded, t])
+
+  const retryTag = useCallback(async () => {
+    const done = ret?.done
+    if (!done?.job || done.tag?.kind !== 'job' || done.job.status !== 'FAILED' || !navigator.onLine) return
+    const tagState = done.tag
+    setRet({ ...ret!, done: { ...done, tag: { ...tagState, retrying: true } } })
+    const answer = await retryTagJob(api, done.job, newIdempotencyKey())
+    setRet((current) =>
+      current?.done ? { ...current, done: { ...current.done, ...(answer.ok ? { job: answer.value } : {}), tag: answer.ok ? { ...tagState, status: answer.value.status, detail: answer.value.lastError, retrying: false } : { ...tagState, retrying: false } } } : current,
+    )
+    feedback(answer.ok ? 'success' : 'error')
+  }, [api, feedback, ret])
+
+  // The new tag on its way: its job read again every few seconds until it printed or failed.
+  const tagJobId = ret?.done?.job && (ret.done.job.status === 'QUEUED' || ret.done.job.status === 'SENT') ? ret.done.job.id : null
+  useEffect(() => {
+    if (!tagJobId || !online) return
+    let tries = 0
+    const timer = window.setInterval(async () => {
+      tries += 1
+      if (tries > TAG_POLL_TRIES) return window.clearInterval(timer)
+      const answer = await readTagJob(api, tagJobId)
+      if (!answer.ok) return
+      setRet((current) => (current?.done?.job?.id === tagJobId && current.done.tag?.kind === 'job' ? { ...current, done: { ...current.done, job: answer.value, tag: { ...current.done.tag, status: answer.value.status, detail: answer.value.lastError } } } : current))
+    }, TAG_POLL_MS)
+    return () => window.clearInterval(timer)
+  }, [api, online, tagJobId])
+
+  const backFromReturn = useCallback(() => {
+    setRet(null)
+    setStage('list')
+  }, [])
+
   const done = useCallback(() => {
     setStage('choose')
+    setRet(null)
     setList(null)
     setPad(null)
     setLast(null)
@@ -257,14 +410,69 @@ export function FloorPick() {
         return setProblem(null)
       case 'retry':
         setProblem(null)
-        if (stage === 'list' && list) return void openList(list.workOrder.id, list.workOrder.number)
+        if ((stage === 'list' || stage === 'return') && list) return void openList(list.workOrder.id, list.workOrder.number)
         return void loadWorkOrders()
+      case 'returnOpen':
+        return void openReturn()
+      case 'returnScan':
+        return void onScan(action.code)
+      case 'returnPick': {
+        const row = rows.find((entry) => entry.key === action.rowKey)
+        if (row && navigator.onLine) pickReturn(row)
+        return
+      }
+      case 'returnValue':
+        return setRet((current) => (current?.picked ? { ...current, picked: { ...current.picked, value: action.value } } : current))
+      case 'returnPlace':
+        return setRet((current) => (current ? { ...current, placeId: action.placeId } : current))
+      case 'returnConfirm':
+        return void confirmReturn()
+      case 'returnUnpick':
+        return setRet((current) => (current ? { ...current, picked: null, problem: null } : current))
+      case 'returnAnother':
+        return setRet((current) => (current ? { ...current, picked: null, problem: null, done: null, key: newIdempotencyKey() } : current))
+      case 'returnBack':
+        return backFromReturn()
+      case 'tagPrinter':
+        return setRet((current) => (current?.done?.tag?.kind === 'printer' ? { ...current, done: { ...current.done, tag: { ...current.done.tag, picked: action.printerId } } } : current))
+      case 'tagPrint':
+        return void printTag()
+      case 'tagRetry':
+        return void retryTag()
     }
   }
 
+  const returnModel: PickReturnModel | null =
+    stage === 'return' && ret && list
+      ? { workOrder: list.workOrder.number, rows, picked: ret.picked, places: ret.places, placesHeld: ret.placesHeld, placeId: ret.placeId, busy: ret.busy, problem: ret.problem, done: ret.done ? { row: ret.done.row, quantity: ret.done.quantity, place: ret.done.place, as: ret.done.as, tag: ret.done.tag } : null }
+      : null
+  const tagReady = ret?.done?.tag?.kind === 'printer' && ret.done.tag.printer.kind !== 'none'
+
   useFloorKeys({
-    enter: problem ? () => onAction({ type: 'dismiss' }) : pad ? () => onAction({ type: 'issue' }) : stage === 'list' ? done : null,
-    escape: problem ? () => onAction({ type: 'dismiss' }) : pad ? () => setPad(null) : stage === 'list' ? done : () => router.push('/floor'),
+    enter: problem
+      ? () => onAction({ type: 'dismiss' })
+      : stage === 'return'
+        ? ret?.done
+          ? () => onAction({ type: tagReady ? 'tagPrint' : 'returnAnother' })
+          : ret?.picked
+            ? () => onAction({ type: 'returnConfirm' })
+            : null
+        : pad
+          ? () => onAction({ type: 'issue' })
+          : stage === 'list'
+            ? done
+            : null,
+    escape: problem
+      ? () => onAction({ type: 'dismiss' })
+      : stage === 'return'
+        ? ret?.picked && !ret.done
+          ? () => onAction({ type: 'returnUnpick' })
+          : backFromReturn
+        : pad
+          ? () => setPad(null)
+          : stage === 'list'
+            ? done
+            : () => router.push('/floor'),
   })
 
   if (!me) return null
@@ -283,6 +491,7 @@ export function FloorPick() {
         last,
         busy,
         problem,
+        ret: returnModel,
       }}
       onFrame={onFrame}
       onAction={onAction}

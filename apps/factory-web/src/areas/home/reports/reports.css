@@ -1,0 +1,170 @@
+/*
+ * Home › Reports (SCR-104) LAYOUT: the library, a report's band and tabs, the filter row, the totals and the print page.
+ * The controls are the design system's; this file only places them, with semantic tokens (no colours of its own). No
+ * page max-width (Owner rule 2026-10-29): the page fills the shell's main area.
+ */
+.fw-rep,
+.fw-rep-stack,
+.fw-rep-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-rep-section {
+  gap: var(--nds-space-10, var(--nds-space-8));
+}
+
+.fw-rep-band,
+.fw-rep-meta,
+.fw-rep-head--row,
+.fw-rep-actions,
+.fw-rep-chips,
+.fw-rep-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rep-head--row {
+  justify-content: space-between;
+}
+
+.fw-rep-recband {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-rep-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-rep-h {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-lg);
+  font-weight: 600;
+}
+
+.fw-rep-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-rep-muted[role='status'],
+span.fw-rep-muted[role='status'] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-rep-question {
+  color: var(--nds-text-2, var(--nds-text-muted));
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rep-link {
+  color: var(--nds-text-link);
+}
+
+.fw-rep-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2, 2px);
+  min-width: 0;
+  padding: var(--nds-space-4) 0;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.fw-rep-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rep-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-rep-filter {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--nds-space-2, 2px);
+  min-width: 10rem;
+}
+
+.fw-rep-filter-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs, var(--nds-font-size-sm));
+}
+
+.fw-rep-applied {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-rep-line {
+  display: block;
+}
+
+.fw-rep-foot {
+  margin-top: var(--nds-space-2, 2px);
+}
+
+/* ---- the print page ---- */
+.fw-rep-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-rep-print-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-rep-print-title {
+  margin: 0;
+  font-size: var(--nds-font-size-xl, var(--nds-font-size-lg));
+  font-weight: 600;
+}
+
+.fw-rep-print-button {
+  align-self: flex-start;
+  margin-top: var(--nds-space-8);
+}
+
+.fw-rep-print-totals {
+  margin: 0;
+  font-weight: 600;
+}
+
+@media print {
+  .fw-topbar,
+  .h10-rail,
+  .fw-office-subheader,
+  .nds-bottombar,
+  .fw-system-banner,
+  .fw-rep-print-button {
+    display: none !important;
+  }
+
+  .fw-rep-print tr {
+    break-inside: avoid;
+  }
+}

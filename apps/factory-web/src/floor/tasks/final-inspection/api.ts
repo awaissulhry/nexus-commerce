@@ -37,6 +37,19 @@ const benchAnswer = z.object({ workOrders: z.array(benchRowSchema) })
 
 const check = z.object({ code: z.enum(RELEASE_CHECKS), state: z.enum(CHECK_STATES), message: z.string(), fix: z.string().nullable() })
 
+/** A quality hold of the work order as the bench shows it (B-W2a-75): why (both languages), since when, the NCR deciding it. */
+export const benchHoldSchema = z.object({
+  id: z.string(),
+  reasonCode: z.string(),
+  reasonIt: z.string(),
+  reasonEn: z.string(),
+  reasonNote: z.string().nullable(),
+  placedAt: z.string(),
+  placedBy: z.enum(['USER', 'WORKER', 'SYSTEM']),
+  ncrNumber: z.string().nullable(),
+})
+export type BenchHold = z.infer<typeof benchHoldSchema>
+
 export const finalStateSchema = z.object({
   workOrder: z.object({ id: z.string(), number: z.string(), status: z.string(), batchNumber: z.string().nullable(), companyId: z.string(), siteId: z.string() }),
   inspectionId: z.string().nullable(),
@@ -59,6 +72,8 @@ export const finalStateSchema = z.object({
   maker: z.object({ made: z.boolean(), words: z.string() }),
   documents: z.array(z.object({ code: z.string(), message: z.string() })),
   rule: z.object({ rule: z.enum(FOUR_EYES_RULES), source: z.string(), words: z.string(), customerListed: z.boolean() }),
+  /** B-W2a-75: the work order's ACTIVE quality holds (releasing and packing wait for quality). */
+  holds: z.array(benchHoldSchema).default([]),
 })
 export type FinalState = z.infer<typeof finalStateSchema>
 
@@ -151,3 +166,13 @@ export const printLabels = (api: ApiClient, workOrderId: string, cellId: string,
 export const readJob = (api: ApiClient, jobId: string) => floorRead(api, `/print/jobs/${seg(jobId)}`, { schema: z.object({ job: printJobSchema }) })
 
 export const retryJob = (api: ApiClient, job: Pick<PrintJob, 'id' | 'version'>) => write(api, 'POST', `/print/jobs/${seg(job.id)}/retry`, { version: job.version }, z.object({ job: printJobSchema }), freshKey())
+
+// ---- Hold lot at the bench (B-W2a-75; design floor.final "Hold lot": a reason, and an NCR) --------------------------------------
+
+const holdAnswer = z.object({ hold: benchHoldSchema, workOrderHeld: z.boolean(), ncr: z.object({ id: z.string(), number: z.string() }), replayed: z.boolean() })
+export type HeldAtBench = z.infer<typeof holdAnswer>
+
+/** Holds the work order's garments with a reason and raises the NCR that decides it (ONE call; keep `key` for a resend). */
+export const holdLot = (api: ApiClient, workOrderId: string, body: { reasonCode: string; quantity: number; inspectionId?: string | null }, key: string) =>
+  write(api, 'POST', `/quality/final/work-orders/${seg(workOrderId)}/hold`, body, holdAnswer, key)
+

@@ -1,0 +1,147 @@
+{
+  "approval": {
+    "discount": "Limite di sconto",
+    "discountHint": "Sconto massimo sul prezzo di listino, da 0 a 100",
+    "failed": "Impossibile caricare le regole di approvazione",
+    "later": "Limiti di importo, articoli speciali, chi approva e catene di approvazione arriveranno più avanti.",
+    "margin": "Soglia di margine",
+    "marginHint": "Percentuale sull’importo netto, da 0 a 100",
+    "marginNoGrain": "Mostrata solo con il permesso margini",
+    "sub": "Quando un preventivo ha bisogno di un approvatore prima dell’invio.",
+    "title": "Regole di approvazione dei preventivi"
+  },
+  "card": {
+    "apply": "Applica le modifiche",
+    "discard": "Annulla modifiche",
+    "edit": "Modifica",
+    "editBar": "Modifica di questa scheda",
+    "fixFirst_one": "Prima sistema {count} campo",
+    "fixFirst_other": "Prima sistema {count} campi",
+    "readOnly": "Sola lettura: {why}",
+    "unsaved": "Modifiche non salvate · ⌘S applica"
+  },
+  "changed": {
+    "reload": "Ricarica",
+    "title": "Modificato da qualcun altro mentre lavoravi."
+  },
+  "done": {
+    "approval": "Regole di approvazione applicate.",
+    "own": "{code} ora ha impostazioni vendite proprie.",
+    "policy": "Politica dei resi applicata.",
+    "quote": "Valori predefiniti applicati."
+  },
+  "freight": {
+    "BY_CAUSE": "Secondo la causa (noi quando è nostra)",
+    "COMPANY": "Noi",
+    "CUSTOMER": "Il cliente"
+  },
+  "held": {
+    "group": "Le impostazioni del gruppo le cambia solo un ruolo su tutte le società.",
+    "manage": "Per cambiare le impostazioni vendite serve il permesso “Impostare le regole dei preventivi” (amministrazione).",
+    "margin": "La soglia di margine fa parte delle regole dei preventivi: salvarle richiede il permesso margini.",
+    "offline": "Non in linea: aspetta la connessione.",
+    "otherCard": "Prima applica o annulla la scheda che stai modificando.",
+    "quotesView": "Per vedere le regole dei preventivi serve il permesso preventivi.",
+    "returnsView": "Per vedere la politica dei resi serve il permesso resi."
+  },
+  "intro": "Con cosa parte un nuovo preventivo e quando serve un approvatore, la politica dei resi e i motivi, e le serie da cui si numerano i documenti di vendita.",
+  "noAccess": {
+    "body": "Per vederle serve il permesso preventivi o il permesso resi. Lo hanno i ruoli vendite e amministrazione; un amministratore può darli in Sistema › Ruoli e permessi.",
+    "title": "Non hai accesso alle impostazioni vendite"
+  },
+  "numbering": {
+    "failed": "Impossibile caricare le serie",
+    "groupScope": "Le serie appartengono a una società: scegli Questa società per vederle.",
+    "kind": {
+      "QUOTE": "Preventivi",
+      "REPAIR": "Riparazioni",
+      "RETURN": "Resi (RMA)",
+      "SALES_ORDER": "Ordini"
+    },
+    "link": "Sistema › Documenti e numerazioni",
+    "missing": "Nessuna serie: i documenti di questo tipo non si possono numerare",
+    "next": "{code} · prossimo {next}",
+    "noRight": "Per vedere le serie serve il permesso numerazione.",
+    "none": "Ancora nessuna serie",
+    "sub": "Le serie di preventivi, ordini, RMA e riparazioni stanno in Sistema › Documenti e numerazioni.",
+    "title": "Numerazione"
+  },
+  "offline": {
+    "body": "Applica resta in attesa finché la connessione torna.",
+    "title": "Non in linea — le modifiche restano su questa pagina"
+  },
+  "pct": "{value} %",
+  "policy": {
+    "conditions": "Condizioni",
+    "conditionsHint": "A parole: in che stato deve tornare la merce",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "due": "Merce da rendere entro",
+    "dueHint": "Giorni dall’autorizzazione",
+    "failed": "Impossibile caricare la politica dei resi",
+    "fee": "Trattenuta di rientro",
+    "feeHint": "Percentuale; registrata ora, applicata agli accrediti più avanti (tolta quando la causa è nostra)",
+    "follows": "Questa società segue la politica dei resi del gruppo",
+    "followsBody": "Cambia la politica del gruppo (Tutto il gruppo), oppure dai prima a questa società impostazioni vendite proprie: poi terrà i suoi valori.",
+    "freight": "Trasporto a carico di",
+    "later": "Il controllo della finestra alla richiesta e la trattenuta sulla nota di credito arriveranno più avanti.",
+    "notSet": "Non impostato",
+    "own": "Dai a questa società impostazioni proprie",
+    "sub": "Finestra, scadenza, trasporto e condizioni; poi i codici motivo.",
+    "title": "Politica dei resi e motivi",
+    "toReasons": "Motivi di reso e di annullamento",
+    "window": "Finestra di reso dalla consegna",
+    "windowHint": "Giorni; una richiesta oltre è un avviso, mai un rifiuto"
+  },
+  "problem": {
+    "days": "Giorni interi da 1 a 365, o vuoto.",
+    "deposit": "Una percentuale sopra 0 e fino a 100, o vuoto per nessuno.",
+    "long": "Al massimo 2000 caratteri.",
+    "pct": "Una percentuale da 0 a 100, fino a due decimali.",
+    "validity": "Giorni interi da 1 a 365."
+  },
+  "quote": {
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "deposit": "Acconto",
+    "depositHint": "Percentuale del totale lordo chiesta all’accettazione; vuoto: nessuno",
+    "failed": "Impossibile caricare i valori predefiniti",
+    "later": "Offerta ferma, testi delle condizioni per paese e lingua del documento arriveranno più avanti.",
+    "noDeposit": "Nessuno",
+    "sub": "Con cosa parte un nuovo preventivo.",
+    "title": "Valori predefiniti dei preventivi",
+    "validity": "Validità",
+    "validityHint": "Giorni di validità di un nuovo preventivo, da 1 a 365"
+  },
+  "reasons": {
+    "noRight": "Per vedere gli elenchi dei motivi serve il permesso motivi.",
+    "none": "Nessun elenco di motivi qui.",
+    "sub": "I codici motivo tra cui scelgono una riga di reso e un annullamento, in ogni lingua.",
+    "title": "Motivi di reso e di annullamento"
+  },
+  "refusal": {
+    "followsGroup": "Questa società segue le impostazioni vendite del gruppo: prima dagliene di proprie.",
+    "forbidden": "Il tuo ruolo non può cambiare queste impostazioni.",
+    "invalid": "Rifiutato così com’è: controlla i campi.",
+    "stale": "Qualcuno ha cambiato queste impostazioni nel frattempo: sono state rilette."
+  },
+  "rule": {
+    "sentence": "Un preventivo richiede approvazione quando il margine è sotto il {margin} % o lo sconto di una riga supera il {discount} %.",
+    "sentenceNoMargin": "Un preventivo richiede approvazione quando lo sconto di una riga supera il {discount} %, o il margine è sotto la soglia."
+  },
+  "scope": {
+    "company": "Questa società ({code})",
+    "companyHint": "I suoi valori; un campo che non imposta segue quello del gruppo.",
+    "companyNone": "Questa società",
+    "group": "Tutto il gruppo",
+    "groupHint": "Per ogni società senza impostazioni proprie. Le cambia solo un ruolo su tutte le società.",
+    "label": "Impostazioni di"
+  },
+  "source": {
+    "companyDefault": "Ancora nessun valore: valgono quelli standard.",
+    "companyFollows": "Questa società segue i valori del gruppo.",
+    "companyOwn": "I valori propri di questa società.",
+    "groupDefault": "Ancora nessun valore del gruppo: valgono quelli standard.",
+    "groupOwn": "I valori propri del gruppo."
+  }
+}

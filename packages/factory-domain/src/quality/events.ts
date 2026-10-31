@@ -129,7 +129,7 @@ export const events = [
     description: "A final inspection of a work order's finished garments was opened (at the bench or in the office).",
     // number: the work order's; inspectionNumber: the inspection's own (its company's INSPECTION series).
     payload: z.strictObject({ inspectionId: z.uuid(), inspectionNumber: z.string(), workOrderId: z.uuid(), number: z.string(), lotSize: z.number().int(), postedBy: z.enum(['FLOOR', 'OFFICE']) }),
-    live: { permission: 'quality.inspections.view', floor: true, fields: ['inspectionId', 'inspectionNumber', 'workOrderId', 'number'] },
+    live: { permission: 'quality.inspections.view', floor: 'quality.inspections.view', fields: ['inspectionId', 'inspectionNumber', 'workOrderId', 'number'] },
   }),
   defineEvent({
     type: 'quality.inspection_decided',
@@ -144,14 +144,14 @@ export const events = [
       overridden: z.boolean(),
       postedBy: z.enum(['FLOOR', 'OFFICE']),
     }),
-    live: { permission: 'quality.inspections.view', floor: true, fields: ['inspectionId', 'workOrderId', 'number', 'status'] },
+    live: { permission: 'quality.inspections.view', floor: 'quality.inspections.view', fields: ['inspectionId', 'workOrderId', 'number', 'status'] },
   }),
   defineEvent({
     type: 'quality.inspection_cancelled',
     context: 'quality',
     description: 'An open final inspection was abandoned (started by mistake), with the reason.',
     payload: z.strictObject({ inspectionId: z.uuid(), workOrderId: z.uuid(), number: z.string() }),
-    live: { permission: 'quality.inspections.view', floor: true, fields: ['inspectionId', 'workOrderId', 'number'] },
+    live: { permission: 'quality.inspections.view', floor: 'quality.inspections.view', fields: ['inspectionId', 'workOrderId', 'number'] },
   }),
   defineEvent({
     type: 'quality.garments_released',
@@ -170,7 +170,7 @@ export const events = [
       secondPersonReasons: z.array(z.enum(SECOND_PERSON_REASONS)),
       postedBy: z.enum(['FLOOR', 'OFFICE']),
     }),
-    live: { permission: 'quality.inspections.view', floor: true, fields: ['releaseId', 'releaseNumber', 'workOrderId', 'number', 'workOrderSizeId'] },
+    live: { permission: 'quality.inspections.view', floor: 'quality.inspections.view', fields: ['releaseId', 'releaseNumber', 'workOrderId', 'number', 'workOrderSizeId'] },
   }),
   defineEvent({
     type: 'quality.release_reversed',
@@ -188,7 +188,7 @@ export const events = [
       serialsTo: z.enum(SERIALS_TO).nullable(),
       registerEntryId: z.uuid().nullable(),
     }),
-    live: { permission: 'quality.inspections.view', floor: true, fields: ['reversalId', 'releaseId', 'workOrderId', 'number', 'workOrderSizeId'] },
+    live: { permission: 'quality.inspections.view', floor: 'quality.inspections.view', fields: ['reversalId', 'releaseId', 'workOrderId', 'number', 'workOrderSizeId'] },
   }),
   defineEvent({
     type: 'quality.release_rule_changed',
@@ -234,7 +234,7 @@ export const events = [
       quarantine: z.enum(HOLD_QUARANTINE),
       workOrdersHeld: z.array(z.uuid()),
     }),
-    live: { permission: 'quality.holds.view', floor: true, fields: ['holdId', 'subjectType', 'subjectIds', 'workOrdersHeld'] },
+    live: { permission: 'quality.holds.view', floor: 'floor.work', fields: ['holdId', 'subjectType', 'subjectIds', 'workOrdersHeld'] },
   }),
   defineEvent({
     type: 'quality.hold_released',
@@ -246,7 +246,7 @@ export const events = [
       subjectIds: z.array(z.uuid()).min(1).max(100),
       workOrdersLifted: z.array(z.uuid()),
     }),
-    live: { permission: 'quality.holds.view', floor: true, fields: ['holdId', 'subjectType', 'subjectIds', 'workOrdersLifted'] },
+    live: { permission: 'quality.holds.view', floor: 'floor.work', fields: ['holdId', 'subjectType', 'subjectIds', 'workOrdersLifted'] },
   }),
   defineEvent({
     type: 'quality.hold_changed',

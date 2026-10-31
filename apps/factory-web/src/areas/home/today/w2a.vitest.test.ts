@@ -142,12 +142,12 @@ describe('my own rows: Done (e) and Snooze (h); an alert the reader may snooze: 
 })
 
 describe('where a W2a row opens', () => {
-  it('my task on My tasks; an exception rule’s alert in its review here until Home › Alerts is built', () => {
+  it('my task on My tasks; an exception rule’s alert in its popup on Home › Alerts (B-W2a-78)', () => {
     const base: Omit<TodayItem, 'key' | 'kind' | 'state' | 'category' | 'record'> = { severity: 'HIGH', severityWord: '', group: 'NOW', companyId: 'c1', siteId: null, partyId: null, sentence: '', why: '', blocks: null, words: { sentence: { key: 'x', params: {} }, why: { key: 'x', params: {} }, blocks: null }, sentenceFigure: null, due: null, since: '2026-10-29T09:00:00.000Z', ageDays: 0, decide: 'OPEN', figures: null, condition: 'c'.repeat(32), actions: { version: 0, verbs: [], assigned: null, acknowledged: null } }
     const task = queueItem({ ...base, key: 'TASK_DUE:t1', kind: 'TASK_DUE', state: 'TODAY', category: 'TASK', record: { type: 'Task', id: 't1', label: 'Call' } }, '/w/DEMO')
     expect(task.href).toBe('/w/DEMO/home/tasks?open=t1')
     const alert = queueItem({ ...base, key: 'RULE_ALERT:a1', kind: 'RULE_ALERT', state: 'OPEN', category: 'ALERT', record: { type: 'Alert', id: 'a1', label: 'SO-1' } }, '/w/DEMO')
-    expect(alert.href).toBe('/w/DEMO/home/today?open=RULE_ALERT%3Aa1')
+    expect(alert.href).toBe('/w/DEMO/home/alerts?open=a1')
   })
 })
 
