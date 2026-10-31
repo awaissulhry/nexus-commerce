@@ -22,6 +22,8 @@ import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTools, CommandTx } from '../../../core/command'
 import { honourPeriodLocks, lockDayOf } from '../../accounting/period-guard'
 import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
+// B-W2b-22: the one valuation of a finished garment (its company's frozen standard in force on the day).
+import { standardCostFor } from '../finished/post'
 import { postedBy, stockContextOf, type StockContext } from './access'
 
 /**
@@ -573,7 +575,7 @@ function insufficient(found: readonly Shortfall[], facts: Facts, at: (index: num
 
 // ---- valuation in the command -------------------------------------------------------------------------------------------
 
-type ValuedMove = Pick<MoveRow, 'id' | 'companyId' | 'siteId' | 'itemId' | 'lotId' | 'fromLocationId' | 'toLocationId' | 'baseQuantity' | 'reversalOfId'>
+type ValuedMove = Pick<MoveRow, 'id' | 'companyId' | 'siteId' | 'itemId' | 'lotId' | 'fromLocationId' | 'toLocationId' | 'baseQuantity' | 'reversalOfId'> & { readonly occurredAt?: Date }
 
 /**
  * Values the moves that enter or leave the site's stock (office and system callers only), in the caller's command:
@@ -649,12 +651,23 @@ export async function valueMovesInCommand(
     valued.add(move.id)
     return row
   }
+  // B-W2b-22 (B-W2a-F7's open end): an item without Item.standardCost — a FINISHED garment — moved by hand (a write-off, an
+  // adjustment, a count) is valued at its company's FROZEN standard in force on the move's day (standardCostFor, the one
+  // valuation of a finished garment), when it has one; else it stays unvalued until a freeze in its period values it.
+  type Dated = { readonly companyId: string; readonly itemId: string; readonly lotId: string | null; readonly occurredAt?: Date }
+  const frozenKey = (move: Dated) => `${move.companyId}|${move.itemId}|${lockDayOf(move.occurredAt!)}`
+  const frozen = new Map<string, string | null>()
+  for (const move of [...changing.filter(({ cost }) => !cost).map(({ move }): Dated => move), ...originals.values()]) {
+    const item = items.get(move.itemId)
+    if (move.lotId || !move.occurredAt || !item || (item.standardCost !== null && item.standardCost !== undefined) || frozen.has(frozenKey(move))) continue
+    frozen.set(frozenKey(move), (await standardCostFor(tx, move.companyId, move.itemId, lockDayOf(move.occurredAt)))?.unitCost ?? null)
+  }
   const basisOf = (move: ValuedMove, explicit: MoveDraft['cost'], reversed: { readonly method: ValuationMethod; readonly unitCost: string } | undefined) =>
     costBasis({
       explicit,
       reversed: reversed ?? null,
       lotCost: move.lotId ? lotUnitCost(lotValuations.get(`${move.siteId}|${move.lotId}`) ?? []) : null,
-      standardCost: items.get(move.itemId)?.standardCost?.toString() ?? null,
+      standardCost: items.get(move.itemId)?.standardCost?.toString() ?? (move.occurredAt ? (frozen.get(frozenKey(move)) ?? null) : null),
     })
 
   const rows: ReturnType<typeof value>[] = []

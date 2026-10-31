@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { explanationProblems, intrastatCheck, paymentsPlacedCheck, periodEndedCheck, storedChecks, totalsAddUp, yearEndCheck } from './checks'
-import { intrastatFileRows, intrastatRowOf, isEuSale, type IntrastatLineFacts } from './intrastat'
+import { intrastatCells, intrastatDocuments, intrastatFileRows, intrastatRowOf, isEuSale, type IntrastatLineFacts } from './intrastat'
 import { buyerOfBillTo, fileRows, paymentDocument, salesJournalDocument, type SalesInvoiceFacts } from './journals'
 import { canonicalJson, differenceOf, fingerprint, heldDocuments, parseManifest, type ExportDocument } from './manifest'
 import { packageProblems } from './packages'
@@ -198,6 +198,26 @@ describe('Intrastat rows and file (LOG-098, LOG-100)', () => {
     expect(file).toHaveLength(2)
     expect(file[0]).toMatchObject({ destinationCountry: 'DE', value: 630000, netMassKg: '27.750', supplementaryUnits: '15', documents: ['FT-2026-00010', 'FT-2026-00011'] })
     expect(file[1]).toMatchObject({ destinationCountry: 'FR', value: 504000 })
+  })
+
+  it('B-W2b-22: reads the recorded mode of transport — its Intrastat code in the file, a mode of its own a file row of its own', () => {
+    const road = intrastatRowOf(euLine({ transportMode: 'ROAD' }))
+    expect(road.transportMode).toBe('ROAD')
+    const air = intrastatRowOf(euLine({ transportMode: 'AIR', line: { ...euLine().line, id: 'l3' } }))
+    const unknown = intrastatRowOf(euLine({ line: { ...euLine().line, id: 'l4' } }))
+    expect(unknown.transportMode).toBeNull()
+    const file = intrastatFileRows([road, air, unknown])
+    expect(file.map((row) => row.transportMode).sort()).toEqual(['AIR', 'ROAD', null].sort())
+    // The file's 7th cell: the code (ROAD 3, AIR 4), blank when not recorded.
+    expect(intrastatCells(file.find((row) => row.transportMode === 'ROAD')!)[6]).toBe('3')
+    expect(intrastatCells(file.find((row) => row.transportMode === 'AIR')!)[6]).toBe('4')
+    expect(intrastatCells(file.find((row) => row.transportMode === null)!)[6]).toBeNull()
+    // A row with no mode keeps the fingerprint it had before the mode was read (no false "changed since"); a mode changes it.
+    const versions = new Map([[road.invoiceId, 2]])
+    const plain = intrastatRowOf(euLine())
+    const w2a = fingerprint([[plain.lineId, plain.partnerVatId, plain.destinationCountry, plain.cnCode, plain.originCountry, plain.value, plain.currency, plain.netMassKg, plain.supplementaryUnits, plain.nature, plain.deliveryTerms]])
+    expect(intrastatDocuments([plain], versions)[0]!.hash).toBe(w2a)
+    expect(intrastatDocuments([road], versions)[0]!.hash).not.toBe(w2a)
   })
 })
 
