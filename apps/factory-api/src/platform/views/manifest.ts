@@ -11,4 +11,8 @@ export const manifest = defineManifest({
   'GET /views/:viewId': { audiences: ['office'], permission: SIGNED_IN, scope: 'tenant' },
   'PATCH /views/:viewId': { audiences: ['office'], permission: 'views.save', scope: 'record' },
   'DELETE /views/:viewId': { audiences: ['office'], permission: 'views.save', scope: 'record' },
+  // B-W2b-13 (bulk/): bulk edit with preview and inline edit; the handler asks the list's own write permission over the
+  // screen's company and each row's command asks it again over the row (the apply takes an Idempotency-Key).
+  'POST /views/bulk/preview': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
+  'POST /views/bulk/apply': { audiences: ['office'], permission: SIGNED_IN, scope: 'record' },
 })

@@ -43,6 +43,8 @@ export interface ExportQuery {
   readonly title: string
   readonly locale: ExportLocale
   readonly viewName: string | null
+  /** B-W2b-13: only these rows of the view (the selection row's Export N); null: every row. */
+  readonly ids: readonly string[] | null
 }
 
 export const JOB = {
@@ -78,6 +80,7 @@ export function queryOf(row: Pick<JobRow, 'query'>): ExportQuery {
     title: typeof value.title === 'string' ? value.title : '',
     locale: value.locale === 'en' ? 'en' : 'it',
     viewName: typeof value.viewName === 'string' ? value.viewName : null,
+    ids: Array.isArray(value.ids) ? value.ids.filter((id): id is string => typeof id === 'string') : null,
   }
 }
 
@@ -102,6 +105,7 @@ export function jobViewOf(row: JobRow): ExportJobView {
     finishedAt: row.finishedAt ? toUtcIso(row.finishedAt) : null,
     expiresAt: row.expiresAt ? toUtcIso(row.expiresAt) : null,
     emailedAt: row.emailedAt ? toUtcIso(row.emailedAt) : null,
+    selected: query.ids ? query.ids.length : null,
     version: row.version,
   }
 }
@@ -174,7 +178,7 @@ export async function requestExport(caller: CommandCaller, body: RequestExportBo
   if (picked.columns.length === 0) {
     throw new ValidationError(picked.omitted.length > 0 ? 'Every column of this view needs a right you do not hold: nothing to write.' : 'No column of this view can be written to a file.', [{ path: 'body/columns', message: 'no column' }])
   }
-  const query: ExportQuery = { address, params, columns: asked, title: body.title, locale: body.locale, viewName: body.viewName ?? null }
+  const query: ExportQuery = { address, params, columns: asked, title: body.title, locale: body.locale, viewName: body.viewName ?? null, ids: body.ids ?? null }
   const { result } = await command(caller, { name: 'exports.request', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
     // Inside the work: a repeated Idempotency-Key answers before this check.
@@ -201,7 +205,7 @@ export async function requestExport(caller: CommandCaller, body: RequestExportBo
       recordType: 'ExportJob',
       recordId: id,
       companyId,
-      after: { listKey: body.listKey, format: body.format, title: body.title, address, columns: picked.columns.map((column) => column.key), omittedColumns: picked.omitted.map((column) => column.key), viewName: body.viewName ?? null, status: 'QUEUED' },
+      after: { listKey: body.listKey, format: body.format, title: body.title, address, columns: picked.columns.map((column) => column.key), omittedColumns: picked.omitted.map((column) => column.key), viewName: body.viewName ?? null, ...(body.ids ? { selectedRows: body.ids.length } : {}), status: 'QUEUED' },
     })
     tools.emit({ type: 'export.requested', subject: id, companyId, payload: { jobId: id, listKey: body.listKey, format: body.format, requestedById: context.actorId } })
     return jobViewOf(row)

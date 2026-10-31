@@ -3,6 +3,9 @@ import type { OpenLines, OrderOption, ReleaseCheckCode, WorkOrderCounts, WorkOrd
 import type { ListView, Phrase, ProductionCan } from '../_shared/model'
 import type { ReadinessRow } from './daily/api'
 import type { DailyActions, DailyModel } from './daily/model'
+import type { BulkValue } from '@nexus/factory-domain/views/bulk/rules'
+import type { RelativeDay } from '@nexus/factory-domain/views/quick/relative'
+import type { ListMode } from '../../../list-frame/w2b/model'
 
 /** SCR-069 — the work orders list's view model (WorkOrdersListView draws it and fetches nothing). */
 export interface WorkOrdersListModel {
@@ -11,6 +14,11 @@ export interface WorkOrdersListModel {
   can: ProductionCan
   view: ListView
   q: string
+  /** B-W2b-13: Table · Board · Calendar · Cards (`?mode=`) and the due quick filter (`?due=this-week`), both address terms. */
+  mode?: ListMode
+  due?: RelativeDay | null
+  /** The site's day (the calendar's today). */
+  today?: string
   rows: { items: WorkOrderRow[] | null; more: boolean; problem: string | null }
   /** The tiles' counts; null while unread or when the read failed (the tiles say "—"). */
   counts: WorkOrderCounts | null
@@ -39,7 +47,10 @@ export interface WorkOrdersListActions {
   onRetry?: () => void
   onShowUpdates?: () => void
   onOpen?: (id: string) => void
-  onExport?: (ids: string[]) => void
+  /** B-W2b-13: the mode switch, the due quick filter, a cell or Edit N saved (the row's new values and version). */
+  onMode?: (mode: ListMode) => void
+  onDue?: (due: RelativeDay | null) => void
+  onSaved?: (id: string, after: Readonly<Record<string, BulkValue>>, version: number) => void
   onReleaseMany?: (ids: string[]) => void
   onRunRelease?: () => void
   onCloseRelease?: () => void

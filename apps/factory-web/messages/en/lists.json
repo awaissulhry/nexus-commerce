@@ -17,7 +17,9 @@
     "open": "Open the row",
     "select": "Select the row (Space too)",
     "range": "Select every row up to this one",
-    "help": "All shortcuts"
+    "help": "All shortcuts",
+    "edit": "Edit the cell (or start typing; Enter saves, Esc leaves it)",
+    "paste": "Paste a column of values from a sheet"
   },
   "lab": {
     "title": "List frame",
@@ -168,7 +170,7 @@
       "rows_one": "{rows} row written so far",
       "rows_other": "{rows} rows written so far",
       "rowsOf": "{rows} of {total} rows",
-      "note": "You can close this window: the export goes on. The file waits for you under Export › My recent exports for {days} days.",
+      "note": "You can close this window: the export goes on. A long export is e-mailed to you with a link, and the file waits under Export › My recent exports for {days} days.",
       "omitted": "Left out by your rights: {columns}",
       "fromView": "From the view “{name}”",
       "fileName": "File",
@@ -187,8 +189,11 @@
         "tooMany": "This view has more than 50,000 rows: narrow it with a filter and export it again.",
         "tooLarge": "The file would be larger than 25 MB: narrow the view or show fewer columns, and export it again.",
         "stopped": "The export stopped before the end: export the list again.",
-        "other": "The export could not be written: export the list again."
-      }
+        "other": "The export could not be written: export the list again.",
+        "selected": "None of the selected rows is in this view any more: export the view instead."
+      },
+      "selected_one": "Only the {count} selected row",
+      "selected_other": "Only the {count} selected rows"
     },
     "problem": {
       "nameTaken": "There is already a view with this name on this list: choose another name.",
@@ -221,15 +226,149 @@
         "status": "Status",
         "promised": "Promised",
         "net": "Net",
-        "more": "More"
+        "more": "More",
+        "priority": "Priority"
       },
       "status": {
         "CONFIRMED": "Confirmed",
         "IN_PRODUCTION": "In production",
         "READY": "Ready",
         "SHIPPED": "Shipped"
-      }
+      },
+      "held": {
+        "shipped": "Shipped orders keep their promised day and priority",
+        "noRight": "Changing orders needs the right to manage them",
+        "ship": "Shipping needs a shipment: open the order",
+        "ready": "An order is ready only when its work orders are done"
+      },
+      "noun_one": "order",
+      "noun_other": "orders",
+      "quick": {
+        "mine": "Followed by me",
+        "promised": "Promised"
+      },
+      "withheldNet": "needs price rights"
     },
-    "customiseItem": "Customise columns…"
+    "customiseItem": "Customise columns…",
+    "freezeFirst": "Freeze “{column}” at the left edge",
+    "freezeHint": "It stays in view while the rows scroll sideways",
+    "withheld": "Hidden by your rights",
+    "withheldItem": "Hidden: {reason}"
+  },
+  "quick": {
+    "trigger": "Quick filters",
+    "triggerOn_one": "Quick filters · {count}",
+    "triggerOn_other": "Quick filters · {count}",
+    "label": "Quick filters of this list",
+    "chips": "Quick filters on",
+    "clear": "Clear the quick filters",
+    "remove": "Remove the filter: {filter}",
+    "chipDate": "{filter}: {day}",
+    "day": {
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "this-week": "This week",
+      "next-week": "Next week",
+      "last-week": "Last week",
+      "next-7-days": "Next 7 days",
+      "last-7-days": "Last 7 days",
+      "this-month": "This month",
+      "last-30-days": "Last 30 days",
+      "overdue": "Overdue"
+    }
+  },
+  "edit": {
+    "cellHint": "Edit: F2, a double click or start typing; it saves by itself",
+    "unknown": "No answer from Nexus Factory: it may or may not be saved. Check the row, then retry.",
+    "problem": {
+      "required": "A value is needed.",
+      "date": "Not a day: type it as dd/mm/yyyy.",
+      "integer": "A whole number is needed.",
+      "min": "At least {min}.",
+      "max": "At most {max}.",
+      "long": "Too long.",
+      "choice": "Not one of the choices."
+    },
+    "refusal": {
+      "held": "Not changed: in its present state this field stays as it is.",
+      "stale": "Not changed: someone changed it since you saw it. Look again, then retry.",
+      "missing": "Not changed: it is not there any more, or not in your sites.",
+      "forbidden": "Not changed: you may not change it.",
+      "invalid": "Not changed: its own rules refused this value.",
+      "failed": "Not changed: something went wrong. Retry."
+    }
+  },
+  "bulk": {
+    "edit_one": "Edit {count}",
+    "edit_other": "Edit {count}",
+    "title_one": "Edit {count} {noun}",
+    "title_other": "Edit {count} {noun}",
+    "subtitle": "Choose the fields to change: the next step shows old → new for each row before anything is saved.",
+    "change": "Change {field}",
+    "newValue": "New {field}",
+    "emptyHint": "Leave it empty to take the value away.",
+    "choose": "Choose…",
+    "fieldHeld_one": "{count} selected row keeps this field: {reason}",
+    "fieldHeld_other": "{count} selected rows keep this field: {reason}",
+    "heldNoField": "Choose a field to change first",
+    "heldProblem": "Fix the value first",
+    "heldNoTools": "Editing many rows is not available here",
+    "heldTooMany": "Edit up to {max} at once",
+    "cancel": "Cancel",
+    "review_one": "Review {count} change",
+    "review_other": "Review {count} changes",
+    "reviewTitle_one": "Review: edit {count} {noun}",
+    "reviewTitle_other": "Review: edit {count} {noun}",
+    "summary": "Nexus Factory only: each row is saved through its own change, with the version shown here. Nothing is sent outside.",
+    "save_one": "Change {count} {noun}",
+    "save_other": "Change {count} {noun}",
+    "unchanged_one": "{count} row already has these values: it stays as it is.",
+    "unchanged_other": "{count} rows already have these values: they stay as they are.",
+    "refusedTitle_one": "{count} row will not change:",
+    "refusedTitle_other": "{count} rows will not change:",
+    "metric": {
+      "changing": "Will change",
+      "unchanged": "Already so",
+      "refused": "Will not change"
+    },
+    "resultSaved": "Saved",
+    "resultUndone": "Put back",
+    "verbUndone": "put back"
+  },
+  "exportSelected": {
+    "label_one": "Export {count}",
+    "label_other": "Export {count}",
+    "as": {
+      "CSV": "The selected rows (CSV)",
+      "XLSX": "The selected rows (Excel)"
+    },
+    "heldTooMany": "Export up to {max} selected rows at once, or export the whole view from Export ▾"
+  },
+  "modes": {
+    "label": "Show the rows as",
+    "table": "Table",
+    "board": "Board",
+    "cards": "Cards",
+    "calendar": "Calendar"
+  },
+  "calendarMode": {
+    "label": "{list} by {date}",
+    "kindRows": "Has rows",
+    "kindNone": "No row",
+    "count_one": "{count} row",
+    "count_other": "{count} rows",
+    "andMore": "+{count} more",
+    "dayLabel": "The rows of the day chosen",
+    "dayTitle_one": "{day} · {count} row",
+    "dayTitle_other": "{day} · {count} rows",
+    "dayEmpty": "No row on this day.",
+    "pick": "Choose a day in the calendar to see its rows (arrows, then Enter).",
+    "readOnly": "The {date} is changed from the row itself here.",
+    "undated_one": "{count} row without a {date}",
+    "undated_other": "{count} rows without a {date}",
+    "moveLabel": "Move {name}: new {date}",
+    "move": "Move",
+    "moving": "Moving…",
+    "pickDay": "Pick another day first"
   }
 }

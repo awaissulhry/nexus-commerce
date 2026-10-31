@@ -17,7 +17,9 @@
     "open": "Apri la riga",
     "select": "Seleziona la riga (anche Spazio)",
     "range": "Seleziona tutte le righe fino a questa",
-    "help": "Tutte le scorciatoie"
+    "help": "Tutte le scorciatoie",
+    "edit": "Modifica la cella (o inizia a scrivere; Invio salva, Esc annulla)",
+    "paste": "Incolla una colonna di valori da un foglio"
   },
   "lab": {
     "title": "Cornice degli elenchi",
@@ -168,7 +170,7 @@
       "rows_one": "{rows} riga scritta finora",
       "rows_other": "{rows} righe scritte finora",
       "rowsOf": "{rows} di {total} righe",
-      "note": "Puoi chiudere questa finestra: l'esportazione continua. Il file ti aspetta in Esporta › Le mie esportazioni recenti per {days} giorni.",
+      "note": "Puoi chiudere questa finestra: l'esportazione continua. Un'esportazione lunga ti arriva per e-mail con un link, e il file ti aspetta in Esporta › Le mie esportazioni recenti per {days} giorni.",
       "omitted": "Escluse dai tuoi permessi: {columns}",
       "fromView": "Dalla vista «{name}»",
       "fileName": "File",
@@ -187,8 +189,11 @@
         "tooMany": "Questa vista ha più di 50.000 righe: restringila con un filtro ed esportala di nuovo.",
         "tooLarge": "Il file supererebbe i 25 MB: restringi la vista o mostra meno colonne, ed esportala di nuovo.",
         "stopped": "L'esportazione si è fermata prima della fine: esporta di nuovo l'elenco.",
-        "other": "Non è stato possibile scrivere l'esportazione: esporta di nuovo l'elenco."
-      }
+        "other": "Non è stato possibile scrivere l'esportazione: esporta di nuovo l'elenco.",
+        "selected": "Nessuna delle righe selezionate è più in questa vista: esporta invece l'intera vista."
+      },
+      "selected_one": "Solo la riga selezionata ({count})",
+      "selected_other": "Solo le {count} righe selezionate"
     },
     "problem": {
       "nameTaken": "C'è già una vista con questo nome su questo elenco: scegli un altro nome.",
@@ -221,15 +226,149 @@
         "status": "Stato",
         "promised": "Promesso",
         "net": "Netto",
-        "more": "Altro"
+        "more": "Altro",
+        "priority": "Priorità"
       },
       "status": {
         "CONFIRMED": "Confermato",
         "IN_PRODUCTION": "In produzione",
         "READY": "Pronto",
         "SHIPPED": "Spedito"
-      }
+      },
+      "held": {
+        "shipped": "Gli ordini spediti tengono giorno promesso e priorità",
+        "noRight": "Per cambiare gli ordini serve il permesso di gestirli",
+        "ship": "Per spedire serve una spedizione: apri l’ordine",
+        "ready": "Un ordine è pronto solo quando i suoi ordini di lavoro sono finiti"
+      },
+      "noun_one": "ordine",
+      "noun_other": "ordini",
+      "quick": {
+        "mine": "Seguiti da me",
+        "promised": "Promesso"
+      },
+      "withheldNet": "servono i permessi sui prezzi"
     },
-    "customiseItem": "Personalizza colonne…"
+    "customiseItem": "Personalizza colonne…",
+    "freezeFirst": "Blocca «{column}» a sinistra",
+    "freezeHint": "Resta in vista mentre le righe scorrono di lato",
+    "withheld": "Nascoste dai tuoi permessi",
+    "withheldItem": "Nascosta: {reason}"
+  },
+  "quick": {
+    "trigger": "Filtri rapidi",
+    "triggerOn_one": "Filtri rapidi · {count}",
+    "triggerOn_other": "Filtri rapidi · {count}",
+    "label": "Filtri rapidi di questo elenco",
+    "chips": "Filtri rapidi attivi",
+    "clear": "Togli i filtri rapidi",
+    "remove": "Togli il filtro: {filter}",
+    "chipDate": "{filter}: {day}",
+    "day": {
+      "today": "Oggi",
+      "tomorrow": "Domani",
+      "this-week": "Questa settimana",
+      "next-week": "La settimana prossima",
+      "last-week": "La settimana scorsa",
+      "next-7-days": "Prossimi 7 giorni",
+      "last-7-days": "Ultimi 7 giorni",
+      "this-month": "Questo mese",
+      "last-30-days": "Ultimi 30 giorni",
+      "overdue": "Scaduti"
+    }
+  },
+  "edit": {
+    "cellHint": "Modifica: F2, doppio clic o inizia a scrivere; si salva da sola",
+    "unknown": "Nexus Factory non ha risposto: potrebbe essere salvata o no. Controlla la riga, poi riprova.",
+    "problem": {
+      "required": "Serve un valore.",
+      "date": "Non è un giorno: scrivilo come gg/mm/aaaa.",
+      "integer": "Serve un numero intero.",
+      "min": "Almeno {min}.",
+      "max": "Al massimo {max}.",
+      "long": "Troppo lungo.",
+      "choice": "Non è una delle scelte."
+    },
+    "refusal": {
+      "held": "Non cambiata: nel suo stato attuale questo campo resta com’è.",
+      "stale": "Non cambiata: qualcuno l’ha modificata dopo che l’hai vista. Guarda di nuovo, poi riprova.",
+      "missing": "Non cambiata: non c’è più, o non è nei tuoi siti.",
+      "forbidden": "Non cambiata: non puoi modificarla.",
+      "invalid": "Non cambiata: le sue regole hanno rifiutato questo valore.",
+      "failed": "Non cambiata: qualcosa è andato storto. Riprova."
+    }
+  },
+  "bulk": {
+    "edit_one": "Modifica {count}",
+    "edit_other": "Modifica {count}",
+    "title_one": "Modifica {count} {noun}",
+    "title_other": "Modifica {count} {noun}",
+    "subtitle": "Scegli i campi da cambiare: il passo successivo mostra vecchio → nuovo per ogni riga prima di salvare.",
+    "change": "Cambia {field}",
+    "newValue": "Nuovo valore: {field}",
+    "emptyHint": "Lascialo vuoto per togliere il valore.",
+    "choose": "Scegli…",
+    "fieldHeld_one": "{count} riga selezionata tiene questo campo: {reason}",
+    "fieldHeld_other": "{count} righe selezionate tengono questo campo: {reason}",
+    "heldNoField": "Scegli prima un campo da cambiare",
+    "heldProblem": "Correggi prima il valore",
+    "heldNoTools": "Qui non si possono modificare più righe insieme",
+    "heldTooMany": "Modifica al massimo {max} righe alla volta",
+    "cancel": "Annulla",
+    "review_one": "Controlla {count} modifica",
+    "review_other": "Controlla {count} modifiche",
+    "reviewTitle_one": "Controlla: modifica {count} {noun}",
+    "reviewTitle_other": "Controlla: modifica {count} {noun}",
+    "summary": "Solo in Nexus Factory: ogni riga si salva con la sua modifica, con la versione mostrata qui. Non si invia nulla fuori.",
+    "save_one": "Cambia {count} {noun}",
+    "save_other": "Cambia {count} {noun}",
+    "unchanged_one": "{count} riga ha già questi valori: resta com’è.",
+    "unchanged_other": "{count} righe hanno già questi valori: restano come sono.",
+    "refusedTitle_one": "{count} riga non cambierà:",
+    "refusedTitle_other": "{count} righe non cambieranno:",
+    "metric": {
+      "changing": "Cambieranno",
+      "unchanged": "Già così",
+      "refused": "Non cambieranno"
+    },
+    "resultSaved": "Salvata",
+    "resultUndone": "Rimessa com’era",
+    "verbUndone": "rimesse com’erano"
+  },
+  "exportSelected": {
+    "label_one": "Esporta {count}",
+    "label_other": "Esporta {count}",
+    "as": {
+      "CSV": "Le righe selezionate (CSV)",
+      "XLSX": "Le righe selezionate (Excel)"
+    },
+    "heldTooMany": "Esporta al massimo {max} righe selezionate alla volta, oppure l'intera vista da Esporta ▾"
+  },
+  "modes": {
+    "label": "Mostra le righe come",
+    "table": "Tabella",
+    "board": "Bacheca",
+    "cards": "Schede",
+    "calendar": "Calendario"
+  },
+  "calendarMode": {
+    "label": "{list} per {date}",
+    "kindRows": "Con righe",
+    "kindNone": "Nessuna riga",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "andMore": "+{count} altre",
+    "dayLabel": "Le righe del giorno scelto",
+    "dayTitle_one": "{day} · {count} riga",
+    "dayTitle_other": "{day} · {count} righe",
+    "dayEmpty": "Nessuna riga in questo giorno.",
+    "pick": "Scegli un giorno nel calendario per vederne le righe (frecce, poi Invio).",
+    "readOnly": "Qui la {date} si cambia dalla riga stessa.",
+    "undated_one": "{count} riga senza {date}",
+    "undated_other": "{count} righe senza {date}",
+    "moveLabel": "Sposta {name}: nuova {date}",
+    "move": "Sposta",
+    "moving": "Spostamento…",
+    "pickDay": "Scegli prima un altro giorno"
   }
 }

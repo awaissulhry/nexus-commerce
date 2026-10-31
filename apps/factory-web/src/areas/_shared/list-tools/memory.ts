@@ -1,4 +1,5 @@
 import { normaliseState } from '@nexus/factory-domain/views/state'
+import { missingRow, previewRow, type BulkResult, type BulkRowFacts } from '@nexus/factory-domain/views/bulk/rules'
 import { ToolsError, type ExportJob, type ListToolsTransport, type SavedView, type ToolsDesignState, type ViewsAnswer, type WorkingLayout } from '../../../list-frame/tools/transport'
 
 /**
@@ -18,6 +19,13 @@ export interface MemoryToolsModel {
   readonly design?: ToolsDesignState
   /** The rows a made-up export writes (its progress counts to them). */
   readonly exportRows?: number
+  /**
+   * B-W2b-13: the rows a bulk edit (or a cell) reads and writes, as the API's bulk target holds them (made-up; the
+   * store changes them as the gallery edits). Absent: a bulk edit is refused as offline.
+   */
+  readonly bulk?: readonly BulkRowFacts[]
+  /** B-W2b-13: every bulk write is refused (a design case of a failed save). */
+  readonly bulkFails?: boolean
 }
 
 export interface MemoryStore {
@@ -26,6 +34,7 @@ export interface MemoryStore {
   layouts: Map<string, WorkingLayout>
   linked: { view: string | null; export: string | null }
   next: number
+  bulk: Map<string, BulkRowFacts>
 }
 
 export function memoryStore(model: MemoryToolsModel): MemoryStore {
@@ -35,10 +44,13 @@ export function memoryStore(model: MemoryToolsModel): MemoryStore {
     layouts: new Map(model.layout && model.pageKey ? [[model.pageKey, model.layout]] : []),
     linked: { view: model.linked?.view ?? null, export: model.linked?.export ?? null },
     next: 1,
+    bulk: new Map((model.bulk ?? []).map((row) => [row.id, row])),
   }
 }
 
 const NEVER = new Promise<never>(() => undefined)
+/** A made-up answer takes a moment, as the API does (the save marks and the review's reading state show). */
+const pause = () => new Promise<void>((resolve) => setTimeout(resolve, 350))
 
 /** The transport over a store; `query` is the page's address terms, `onAddress` changes them. */
 export function memoryTransport(model: MemoryToolsModel, store: MemoryStore, query: string, onAddress: (query: string) => void): ListToolsTransport {
@@ -101,6 +113,7 @@ export function memoryTransport(model: MemoryToolsModel, store: MemoryStore, que
         startedAt: null,
         finishedAt: null,
         expiresAt: null,
+        selected: ask.ids ? ask.ids.length : null,
       }
       store.jobs = [job, ...store.jobs]
       return job
@@ -109,7 +122,7 @@ export function memoryTransport(model: MemoryToolsModel, store: MemoryStore, que
       const job = store.jobs.find((entry) => entry.id === jobId)
       if (!job) throw new ToolsError('notFound')
       if (job.status !== 'QUEUED' && job.status !== 'RUNNING') return job
-      const total = model.exportRows ?? 1240
+      const total = job.selected ?? model.exportRows ?? 1240
       const done = Math.min(total, job.rowsDone + 400)
       const next: ExportJob =
         done >= total && job.status === 'RUNNING'
@@ -128,5 +141,27 @@ export function memoryTransport(model: MemoryToolsModel, store: MemoryStore, que
     },
     newKey: () => id('dddd'),
     ...(model.design ? { design: model.design } : {}),
+    bulkPreview: async (ask) => {
+      if (!model.bulk) throw new ToolsError('offline')
+      await pause()
+      return ask.ids.map((rowId) => {
+        const row = store.bulk.get(rowId)
+        return row ? previewRow(row, ask.changes) : missingRow(rowId)
+      })
+    },
+    bulkApply: async (ask) => {
+      if (!model.bulk) throw new ToolsError('offline')
+      await pause()
+      return ask.rows.map((asked): BulkResult => {
+        const row = store.bulk.get(asked.id)
+        if (!row) return { id: asked.id, label: '', ok: false, refusal: { code: 'missing' }, before: {}, after: {}, version: 0 }
+        const before = Object.fromEntries(Object.keys(asked.changes).map((field) => [field, row.values[field] ?? null]))
+        const refusal = model.bulkFails ? { code: 'failed' as const } : row.version !== asked.version ? { code: 'stale' as const } : (previewRow(row, asked.changes).refusal ?? null)
+        if (refusal) return { id: row.id, label: row.label, ok: false, refusal, before, after: before, version: row.version }
+        const next: BulkRowFacts = { ...row, version: row.version + 1, values: { ...row.values, ...asked.changes } }
+        store.bulk.set(row.id, next)
+        return { id: row.id, label: row.label, ok: true, refusal: null, before, after: { ...asked.changes }, version: next.version }
+      })
+    },
   }
 }

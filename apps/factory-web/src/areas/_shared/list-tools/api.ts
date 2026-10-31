@@ -2,9 +2,10 @@ import { z } from 'zod'
 import { EXPORT_FORMATS, EXPORT_STATUSES } from '@nexus/factory-domain/views/exports'
 import { VIEW_AUDIENCES } from '@nexus/factory-domain/views/rules'
 import { DENSITIES } from '@nexus/factory-domain/views/state'
+import { BULK_REFUSALS } from '@nexus/factory-domain/views/bulk/rules'
 import type { ApiClient } from '../../../lib/api/client'
 import { isApiError, issuePath } from '../../../lib/api/errors'
-import { ToolsError, type ExportAsk, type ExportJob, type SavedView, type ToolsProblem, type ViewDraft, type ViewsAnswer } from '../../../list-frame/tools/transport'
+import { ToolsError, type BulkApplyAsk, type BulkPreviewAsk, type ExportAsk, type ExportJob, type SavedView, type ToolsProblem, type ViewDraft, type ViewsAnswer } from '../../../list-frame/tools/transport'
 
 /**
  * Every call of the list tools (B-W2a-23; apps/factory-api platform/views and platform/exports), with the answer's shape
@@ -59,9 +60,39 @@ export const exportJobSchema = z.object({
   startedAt: z.string().nullable(),
   finishedAt: z.string().nullable(),
   expiresAt: z.string().nullable(),
+  /** B-W2b-13: how many selected rows were asked (null: the whole view). */
+  selected: z.number().nullable().optional(),
 })
 
 const presigned = z.object({ url: z.string() })
+
+// B-W2b-13 (PLT-182, PLT-166): platform/views/bulk — a bulk edit's preview and its write (also one cell, and Undo).
+const bulkValue = z.union([z.string(), z.number(), z.null()])
+const refusal = z.object({ code: z.enum(BULK_REFUSALS), field: z.string().nullable().optional(), status: z.string().nullable().optional() })
+export const bulkPreviewSchema = z.object({
+  rows: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      version: z.number(),
+      changes: z.array(z.object({ field: z.string(), now: bulkValue, next: bulkValue })),
+      refusal: refusal.nullable(),
+    }),
+  ),
+})
+export const bulkApplySchema = z.object({
+  results: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      ok: z.boolean(),
+      refusal: refusal.nullable(),
+      before: z.record(z.string(), bulkValue),
+      after: z.record(z.string(), bulkValue),
+      version: z.number(),
+    }),
+  ),
+})
 const SHARING = ['body/roleId', 'body/audience', 'body/roleDefault']
 
 /** The tools' problem of an API error (a 409's kind from what it refuses; a 400 on the sharing is the sharing's). */
@@ -110,6 +141,11 @@ export const startExport = (api: ApiClient, ask: ExportAsk, locale: 'it' | 'en',
   wrap(api.post('/exports', { body: { ...ask, locale }, idempotencyKey, schema: z.object({ job: exportJobSchema }) }).then((answer) => answer.job), 'export')
 export const readExport = (api: ApiClient, jobId: string): Promise<ExportJob> => wrap(api.get(`/exports/${seg(jobId)}`, { schema: z.object({ job: exportJobSchema }) }).then((answer) => answer.job), 'export')
 export const listExports = (api: ApiClient, listKey: string): Promise<readonly ExportJob[]> => wrap(api.get('/exports', { query: { listKey }, schema: z.object({ jobs: z.array(exportJobSchema) }) }).then((answer) => answer.jobs), 'export')
+
+export const previewBulk = (api: ApiClient, ask: BulkPreviewAsk) =>
+  wrap(api.post('/views/bulk/preview', { body: { listKey: ask.listKey, ids: ask.ids, changes: ask.changes }, schema: bulkPreviewSchema }).then((answer) => answer.rows))
+export const applyBulk = (api: ApiClient, ask: BulkApplyAsk, idempotencyKey: string) =>
+  wrap(api.post('/views/bulk/apply', { body: { listKey: ask.listKey, rows: ask.rows, ...(ask.undo ? { undo: true } : {}) }, idempotencyKey, schema: bulkApplySchema }).then((answer) => answer.results))
 
 /** The file of a finished export: its presigned GET (60 s, an attachment), under the web's `/api` when the store is local. */
 export async function exportFileAddress(api: ApiClient, jobId: string): Promise<string> {
