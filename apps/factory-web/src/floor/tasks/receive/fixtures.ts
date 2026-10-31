@@ -228,7 +228,7 @@ const receipt = (states: readonly (TagJob['status'] | 'none')[], printer: boolea
   status: 'POSTED',
   receivedAt: '2026-10-30T08:14:00.000Z',
   supplierDdtNumber: '4512/26',
-  supplierDdtDate: null,
+  supplierDdtDate: '2026-10-30',
   order: { ...order.order, status: 'PARTLY_RECEIVED', version: 6 },
   lines: [
     {
@@ -390,6 +390,14 @@ const done = (states: readonly (TagJob['status'] | 'none')[], extra: Partial<Rec
     selectedHideId: 'hide-1',
     ...extra,
   })
+
+// ---- B-W2a-75: the supplier's delivery note (number, date, photo) ----
+const TODAY = '2026-10-30'
+const YESTERDAY = '2026-10-29'
+/** A made-up drawing of a delivery note (never a real photo). */
+const DDT_DRAWING = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200"><rect width="320" height="200" fill="#f4f1ea"/><rect x="16" y="16" width="120" height="14" fill="#9a958a"/><rect x="16" y="44" width="288" height="6" fill="#c9c4b8"/><rect x="16" y="58" width="260" height="6" fill="#c9c4b8"/><rect x="16" y="72" width="280" height="6" fill="#c9c4b8"/><rect x="16" y="150" width="96" height="30" fill="#5a564d"/><text x="200" y="30" font-family="sans-serif" font-size="14" fill="#5a564d">DDT DEMO</text></svg>')}`
+const ddtModel = (extra: Partial<NonNullable<ReceiveViewModel['ddt']>> = {}): NonNullable<ReceiveViewModel['ddt']> => ({ today: TODAY, moreDays: false, camera: false, photo: null, ...extra })
+const ddtStage = (delivery: Partial<Delivery>, ddt: Partial<NonNullable<ReceiveViewModel['ddt']>> = {}): ReceiveViewModel => base({ stage: 'ddt', delivery: { ...start, ...delivery }, ddt: ddtModel(ddt) })
 
 const problem = (code: string, shown: string | null = 'PO-DEMO-0101'): ReceiveViewModel['problem'] => ({
   problem: { kind: 'refused', code, message: code, fix: null },
@@ -669,5 +677,26 @@ export const designScreen = defineDesignScreen<ReceiveViewModel>({
       label: 'Leave a delivery with entries',
       model: base({ delivery: withAll, leaveAsk: true }),
     },
+    // ---- B-W2a-75: the supplier's delivery note (design floor.receive sec "ddt"; SCM-115) ----
+    {
+      id: 'ddt',
+      label: 'Delivery note: number and date',
+      model: ddtStage({ ddtNumber: '4512/26', ddtDate: TODAY }),
+      note: 'The number as scanned on the lines step (the pad types a number of digits only; a scan or the keyboard any other), the date as a tile (today, yesterday, another day of the week), a photo. All optional: the office asks a supplier for what is missing.',
+    },
+    { id: 'ddt-empty', label: 'Delivery note: nothing given yet', model: ddtStage({ ddtNumber: null }), note: 'The lines step offers "Delivery note: number, date, photo".' },
+    { id: 'ddt-digits', label: 'A number of digits, yesterday, with a photo', model: ddtStage({ ddtNumber: '88123', ddtDate: YESTERDAY }, { photo: { url: DDT_DRAWING } }), note: 'The pad shows the digits; the photo stays on this tablet until the post.' },
+    { id: 'ddt-another-day', label: 'Another day of the week', model: ddtStage({ ddtNumber: '4512/26', ddtDate: '2026-10-27' }, { moreDays: true }) },
+    { id: 'ddt-camera', label: 'Taking the photo', model: ddtStage({ ddtNumber: '4512/26', ddtDate: TODAY }, { camera: true }), note: 'The DS photo capture: the camera or a file, no markup (a document), faces kept out.' },
+    {
+      id: 'lines-ddt',
+      label: 'Lines with the delivery note given',
+      model: base({ delivery: { ...withAll, ddtDate: TODAY }, ddt: ddtModel({ photo: { url: DDT_DRAWING } }) }),
+      note: 'The button says what is given; the order card shows number and date.',
+    },
+    { id: 'finish-ddt', label: 'Finish: number, date and photo', model: base({ stage: 'finish', delivery: { ...withAll, ddtDate: TODAY }, ddt: ddtModel({ photo: { url: DDT_DRAWING } }) }) },
+    { id: 'done-photo-sending', label: 'Posted: the photo on its way', model: done(['SENT', 'QUEUED', 'QUEUED'], { photoSend: 'sending' }) },
+    { id: 'done-photo-sent', label: 'Posted: the photo sent', model: done(['PRINTED', 'PRINTED', 'PRINTED'], { photoSend: 'sent' }) },
+    { id: 'done-photo-failed', label: 'Posted: the photo not sent', model: done(['PRINTED', 'PRINTED', 'PRINTED'], { photoSend: 'failed' }), note: 'The receipt stands; Send the photo again tries once more.' },
   ],
 })

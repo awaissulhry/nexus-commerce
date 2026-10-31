@@ -5,6 +5,7 @@ import { requireFloorStepUp } from '../../../platform/auth/floor/step-up'
 import { requireStepUp } from '../../../platform/auth/office/account'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import {
+  benchHoldContract,
   benchWorkOrdersContract,
   cancelInspectionContract,
   decideInspectionContract,
@@ -23,6 +24,7 @@ import {
   workOrderFinalContract,
 } from './contract'
 import { benchWorkOrders } from './bench'
+import { holdAtBench } from './bench-hold'
 import { evidenceTrail } from './evidence'
 import { cancelInspection, decideInspection, getInspection, openInspection, putDefects, updateInspection } from './inspections'
 import { listInspections } from './lists'
@@ -45,6 +47,10 @@ export default defineRoutes('quality.final', manifest, async (app) => {
   app.get('/quality/final/work-orders', { schema: benchWorkOrdersContract }, async (request) => benchWorkOrders(request, request.query))
 
   app.get('/quality/final/work-orders/:workOrderId', { schema: workOrderFinalContract }, async (request) => workOrderFinal(request, request.params.workOrderId))
+
+  app.post('/quality/final/work-orders/:workOrderId/hold', { schema: benchHoldContract }, async (request, reply) =>
+    reply.code(201).send(await holdAtBench(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request))),
+  )
 
   app.get('/quality/inspections', { schema: listInspectionsContract }, async (request) =>
     listInspections(request, { ...request.query, onHold: flag(request.query.onHold), waitingRelease: flag(request.query.waitingRelease) }),

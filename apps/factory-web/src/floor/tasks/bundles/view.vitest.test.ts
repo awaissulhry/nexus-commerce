@@ -40,10 +40,26 @@ describe('SCR-095 Bundles & tickets', () => {
     expect(html).not.toContain('Printed<')
   })
 
-  it('a replaced ticket names the new code; reprint and void wait for the network offline', () => {
+  it('a replaced ticket names the new code; reprint, void and split wait for the network offline', () => {
     expect(render('replaced-scanned')).toMatch(/was replaced by BN-/)
-    expect(render('held-offline')).toContain('Reprint and void need the network')
+    expect(render('held-offline')).toContain('Reprint, void and split need the network')
     expect(render('refused')).toContain('a bundle is voided only before any scan')
+  })
+
+  it('B-W2a-75: splits garments off with the pad and a reason tile, then shows the new ticket and what stays', () => {
+    const split = render('split')
+    expect(split).toContain('10 garments are in this bundle')
+    expect(split).toContain('Split off 3 · print ticket')
+    for (const word of ['Rework', 'Recut', 'Hold']) expect(split).toContain(word)
+    expect(render('split', 'it')).toContain('Dividi 3 · stampa cartellino')
+    expect(render('split-empty')).toContain('Type how many come off: 1 to 9')
+    expect(render('split-one')).toContain('Only one garment is in it: nothing can come off.')
+    const done = render('split-done')
+    expect(done).toMatch(/3 garments split off BN-[^ ]+ into new bundle BN-[^ ]+ \(Rework\)\. 7 stay in BN-/)
+    expect(done).toContain('Sent to the printer')
+    expect(render('split-refused')).toContain('The work order is on hold')
+    // The card's bar: Back, Split, Reprint (main); Void sits in the card.
+    expect(render('bundle-card')).toMatch(/Split<\/span><\/button><button[^>]*is-main[^>]*>.*Reprint/)
   })
 
   it('a role without bundles sees why', () => {
