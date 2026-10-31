@@ -195,7 +195,7 @@ export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 
 export const QUALITY_TONE: Readonly<Record<QualityStatus, Tone>> = { QUARANTINE: 'warning', RELEASED: 'success', BLOCKED: 'danger', REJECTED: 'neutral' }
 export const CR_VI_TONE: Readonly<Record<CrViStatus, Tone>> = { NOT_REQUIRED: 'neutral', PENDING: 'warning', PASS: 'success', FAIL: 'danger' }
-export const HIDE_TONE: Readonly<Record<HideState, Tone>> = { FULL: 'success', PARTLY_CUT: 'info', REMNANT: 'info', CONSUMED: 'neutral', SCRAPPED: 'neutral' }
+export const HIDE_TONE: Readonly<Record<HideState, Tone>> = { FULL: 'success', PARTLY_CUT: 'info', REMNANT: 'info', CONSUMED: 'neutral', SCRAPPED: 'neutral', RETURNED: 'neutral' }
 export const REASON_TONE: Readonly<Record<MoveReason, Tone>> = {
   OPENING: 'neutral',
   RECEIPT: 'success',
@@ -207,6 +207,10 @@ export const REASON_TONE: Readonly<Record<MoveReason, Tone>> = {
   SCRAP: 'danger',
   // W2a wave 5: finished garments of a work order into finished-goods stock.
   PRODUCTION_RECEIPT: 'success',
+  // W2b (B-W2b-01): goods back from a customer, goods back to a supplier, garments leaving with a shipment.
+  CUSTOMER_RETURN: 'success',
+  SUPPLIER_RETURN: 'warning',
+  SHIPMENT: 'info',
 }
 export const LOCATION_KIND_ORDER: readonly LocationKind[] = ['WAREHOUSE', 'ZONE', 'BIN', 'RECEIVING', 'QUARANTINE', 'PRODUCTION', 'SHIPPING']
 

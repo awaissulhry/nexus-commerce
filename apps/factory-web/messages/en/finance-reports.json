@@ -191,7 +191,10 @@
     "ADJUSTMENT": "Adjustment",
     "COUNT": "Count difference",
     "SCRAP": "Scrap",
-    "PRODUCTION_RECEIPT": "Finished goods from a work order"
+    "PRODUCTION_RECEIPT": "Finished goods from a work order",
+    "CUSTOMER_RETURN": "Customer return",
+    "SUPPLIER_RETURN": "Return to supplier",
+    "SHIPMENT": "Shipment"
   },
   "print": {
     "title": "Stock valuation · {company} · as at {day}",

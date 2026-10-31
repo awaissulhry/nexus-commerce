@@ -40,7 +40,13 @@
 // shipments, lines, parcels, DDTs and their cancellations, packs (lines and parcels of a DRAFT shipment; DRAFT ⇄
 // PACKED), and never reads a freight figure; a portal or link session (DOCUMENT_VIEW) reads its OWN party's shipments
 // (with the freight charged to it), lines, parcels, DDTs, cancellations and tracking, never an internal note nor who in
-// the office wrote a row. No table here has a cost, margin or wages column; the freight figures are prices.
+// the office wrote a row. The freight charged is a price; W2b's freight cost is a cost (office only).
+//
+// W2b (schema wave 1/7, B-W2b-01; the B-W2a-17, -39, -48 notes): a shipment records how its freight charge was decided
+// (the site's rule or typed by the office), what the carrier charged us (the freight cost: a cost, office only) and its
+// mode of transport for Intrastat; a DDT keeps the language it was printed in and its mode of transport. Garments leave
+// finished-goods stock as SHIPMENT moves naming the shipment line (inventory.prisma); a shipment's evidence files carry
+// their category (files.prisma); its packing-list versions are GeneratedDocument rows (gendocs.prisma).
 
 /// Who carries the goods (trasporto a cura del; DPR 472/1996), as factory-domain documents DDT_TRANSPORT_BY.
 enum TransportBy {
@@ -99,6 +105,35 @@ model ShippingSettings {
   documentPrinter    Printer?            @relation("ShippingDocumentPrinter", fields: [tenantId, companyId, siteId, documentPrinterId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, siteId])
+}
+
+/// The mode of transport (W2b, B-W2a-39; Intrastat: the transport mode codes of the Intrastat declaration, Reg. (EU)
+/// 2019/2152 and its implementing rules), with its code.
+enum TransportMode {
+  /// 1: by sea.
+  SEA
+  /// 2: by rail.
+  RAIL
+  /// 3: by road.
+  ROAD
+  /// 4: by air.
+  AIR
+  /// 5: by post.
+  POST
+  /// 7: by fixed transport installation.
+  FIXED_INSTALLATION
+  /// 8: by inland waterway.
+  INLAND_WATERWAY
+  /// 9: by own propulsion.
+  OWN_PROPULSION
+}
+
+/// How a shipment's freight charge was decided (W2b, B-W2a-48).
+enum FreightBasis {
+  /// The site's freight rule gave it (ShippingSettings.freightRule).
+  RULE
+  /// Typed by the office.
+  MANUAL
 }
 
 /// How a site charges freight by default (W2a, LOG-105).
@@ -178,6 +213,18 @@ model Shipment {
   /// What is on file and what is missing, for the office only.
   /// @internal
   transportEvidenceNote      String?
+  /// W2b (B-W2a-48): how the freight charged was decided; set only with a freight charge (a charge set before W2b has
+  /// none).
+  freightBasis               FreightBasis?
+  /// W2b (B-W2a-29, -48): what the carrier charged us for it (its invoice), in minor units of `freightCostCurrency`, 0
+  /// or more; both or neither; still set after the goods left (the invoice comes later), until the shipment is
+  /// cancelled. A cost: office only.
+  /// @grain cost
+  freightCost                Int?
+  /// @not-money the ISO 4217 currency of the freight cost (hidden with it from the floor and portal sessions)
+  freightCostCurrency        String?
+  /// W2b (B-W2a-39): the mode of transport (Intrastat); still set after the goods left.
+  transportMode              TransportMode?
   version              Int            @default(1)
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -241,9 +288,13 @@ model ShipmentLine {
   workOrderSize  WorkOrderSize   @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   salesOrderLine SalesOrderLine  @relation(fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   serials        GarmentSerial[]
+  // W2b inventory.prisma (B-W2b-01): the SHIPMENT moves that took its garments out of finished goods.
+  stockMoves     StockMove[]
 
   // The target of the serials' reference: a line of the serial's cell.
   @@unique([tenantId, siteId, workOrderSizeId, id])
+  // W2b: the target of the SHIPMENT moves' reference: a line of the move's site.
+  @@unique([tenantId, siteId, id])
   @@index([tenantId, shipmentId])
   // The shipped garments per cell (only released ones ship).
   @@index([tenantId, workOrderSizeId])
@@ -318,6 +369,10 @@ model Ddt {
   reason         DdtReason
   reasonText     String?
   transportBy    TransportBy
+  /// W2b (B-W2a-17, -39): the language it was printed in (ISO 639-1, two lower-case letters: a re-print takes it, not the
+  /// party's language at print time), and the mode of transport (Intrastat); set when it is issued, never changed.
+  language       String?
+  transportMode  TransportMode?
   /// The carrier's identity when a carrier carries it: { name, address?, vatNumber? }.
   carrier        Json?
   /// The start of the transport (data e ora di inizio trasporto).

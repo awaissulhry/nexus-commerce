@@ -1,0 +1,69 @@
+// Generated documents (W2b schema wave 1/7, B-W2b-01; the B-W2a-25, -43, -44, -48 notes; features LOG-062 packing list,
+// SCM-135 the claim letter, SCM-138 the job sheet, SAL-346 the RMA sheet): every version of a document the factory
+// makes for one of its records and keeps as a file: the packing lists of a shipment, the letter of a supplier claim, the
+// job sheet of a subcontract order or a maintenance job, the RMA sheet of a return. Until W2b these were audit rows
+// (`shipping.packingListVersion`) or print pages; later W2b steps write the rows (B-W2b-14 claim letter, B-W2b-16 RMA
+// sheet, B-W2b-19 packing lists), always through command().
+//
+// One row per version: what was printed (the kind, its language and layout, the number printed on it, a SHA-256
+// fingerprint of its contents) and the stored PDF (StoredFile, a file of the same record). Versions count up per record
+// and kind; contents that go back to an earlier version are a new version (reusing that version's file when the
+// fingerprint is the same), so the newest version is always the current one. Never changed or removed (append-only, for
+// every login: the …_followups_stock_w2b_guards triggers); the record is named by type and id (it may be of any later
+// wave's table), checked by the trigger to be of the document's company and site.
+//
+// Who sees what (ownership/gendocs.json): the office reads and writes; the floor of the record's site reads the rows (its
+// packing station prints the current packing list; the file itself has its own audiences); portal and link sessions
+// read none (a customer portal reads its documents through their files, W2b-3).
+
+/// One version of a document made for one record (W2b, B-W2b-01): the kind, version, language, layout, number, the
+/// fingerprint of its contents and its stored file.
+/// @append-only
+model GeneratedDocument {
+  id          String                @id @db.Uuid
+  tenantId    String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The record's company and site.
+  companyId   String                @db.Uuid
+  siteId      String                @db.Uuid
+  /// The record it was made for: Shipment (PACKING_LIST), SupplierClaim (CLAIM_LETTER), SubcontractOrder or
+  /// MaintenanceJob (JOB_SHEET), ReturnAuthorisation (RMA_SHEET).
+  recordType  String
+  recordId    String                @db.Uuid
+  kind        GeneratedDocumentKind
+  /// 1, 2, 3 … per record and kind (unique), the newest the current one.
+  version     Int
+  /// SHA-256 of what it shows (lower-case hex; factory-domain's contents key of the kind): the same contents, the same
+  /// fingerprint.
+  fingerprint String
+  /// The language it was printed in (ISO 639-1, two lower-case letters) and the layout it used (the document template's
+  /// name; null: the standard one).
+  language    String
+  layout      String?
+  /// The number printed on it, when it carries one (the shipment's number on its packing list).
+  number      String?
+  /// The PDF: a file of the same record (StoredFile recordType and recordId).
+  fileId      String                @db.Uuid
+  createdAt   DateTime              @default(now()) @db.Timestamptz(3)
+  /// Who made it (null: the system, a document made by a handler).
+  createdById String?               @db.Uuid
+
+  site Site       @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  file StoredFile @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, recordId, kind, version])
+  // A record's documents (the record's Documents tab).
+  @@index([tenantId, recordType, recordId])
+}
+
+/// What a generated document is (additive: a new kind is a migration).
+enum GeneratedDocumentKind {
+  /// A shipment's packing list (LOG-062): what each parcel holds.
+  PACKING_LIST
+  /// The letter of a supplier claim (SCM-135): what is wrong, with the remedy asked (no price, C2).
+  CLAIM_LETTER
+  /// The job sheet of a subcontract order (SCM-138: printed and sent with the kit) or of a maintenance job (for the
+  /// technician).
+  JOB_SHEET
+  /// The RMA sheet of a return (SAL-346): its scannable number for the parcel.
+  RMA_SHEET
+}

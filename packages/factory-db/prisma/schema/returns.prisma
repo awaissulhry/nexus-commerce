@@ -179,6 +179,8 @@ model ReturnLine {
   receipt         ReturnReceipt?      @relation(fields: [tenantId, siteId, returnId, receiptId], references: [tenantId, siteId, returnId, id], onDelete: Restrict, onUpdate: Restrict)
   replacementLine SalesOrderLine?     @relation("ReturnLineReplacement", fields: [tenantId, partyId, replacementLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   repairOrders    RepairOrder[]
+  // W2b inventory.prisma (B-W2b-01): the CUSTOMER_RETURN moves that put its goods into stock.
+  stockMoves      StockMove[]
   // W2a money.prisma (wave 7/7): the credit note lines that credit it.
   creditLines     InvoiceLine[]   @relation("InvoiceLineReturnLine")
 
