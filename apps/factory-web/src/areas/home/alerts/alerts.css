@@ -1,0 +1,130 @@
+/*
+ * Home › Alerts (SCR-234) LAYOUT: the band, the tiles, the open alerts' cells, the rules, the popup and its dialogs. The
+ * page fills the shell's main area (no max-width: Owner rule 2026-10-29); controls are the design system's; semantic
+ * tokens only.
+ */
+.fw-alerts,
+.fw-alerts-section,
+.fw-alerts-popup,
+.fw-alerts-popup-part,
+.fw-alerts-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-alerts {
+  gap: var(--nds-space-20);
+}
+
+.fw-alerts-section,
+.fw-alerts-popup-part {
+  gap: var(--nds-space-8);
+}
+
+.fw-alerts-rules {
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-alerts-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-alerts-status,
+.fw-alerts-actions,
+.fw-alerts-tools,
+.fw-alerts-buttons,
+.fw-alerts-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-alerts-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-alerts-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-alerts-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-alerts-text {
+  margin: 0;
+}
+
+.fw-alerts-what {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-alerts-unknown {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-alerts-severity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-weight: 600;
+}
+.fw-alerts-severity.is-danger {
+  color: var(--nds-danger-text);
+}
+.fw-alerts-severity.is-warning {
+  color: var(--nds-warning-text);
+}
+.fw-alerts-severity.is-info {
+  color: var(--nds-info-text);
+}
+
+.fw-alerts-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.fw-alerts-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-alerts-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-alerts-record {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-alerts-keys,
+.fw-alerts-similar {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}

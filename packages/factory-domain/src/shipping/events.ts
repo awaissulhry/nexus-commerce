@@ -58,7 +58,7 @@ export const events = [
     context: 'shipping',
     description: "A shipment's lines, parcels, serials, details or status changed (the packing screens refresh it).",
     payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), status, change: z.enum(PACKING_CHANGES) }),
-    live: { permission: 'shipping.pack', floor: true, fields: ['shipmentId', 'number', 'status', 'change'] },
+    live: { permission: 'shipping.pack', floor: 'shipping.pack', fields: ['shipmentId', 'number', 'status', 'change'] },
   }),
   defineEvent({
     type: 'shipping.settings_saved',
@@ -86,14 +86,14 @@ export const events = [
     context: 'shipping',
     description: "Carrier labels were bought for parcels of a shipment through the company's Sendcloud account.",
     payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), bought: z.number().int().min(0), failed: z.number().int().min(0) }),
-    live: { permission: 'shipping.pack', floor: true, fields: ['shipmentId', 'number', 'bought', 'failed'] },
+    live: { permission: 'shipping.pack', floor: 'shipping.pack', fields: ['shipmentId', 'number', 'bought', 'failed'] },
   }),
   defineEvent({
     type: 'shipment.label_voided',
     context: 'shipping',
     description: "A parcel's carrier label was voided before the goods left (cancelled at the carrier, or queued there).",
     payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), parcelId: z.uuid(), seq: z.number().int().min(1), queued: z.boolean() }),
-    live: { permission: 'shipping.pack', floor: true, fields: ['shipmentId', 'number', 'parcelId', 'seq'] },
+    live: { permission: 'shipping.pack', floor: 'shipping.pack', fields: ['shipmentId', 'number', 'parcelId', 'seq'] },
   }),
   defineEvent({
     type: 'shipment.tracking_recorded',

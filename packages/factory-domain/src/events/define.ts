@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { FACTORY_PERMISSIONS, FLOOR_AREA, FLOOR_SHARED_PERMISSIONS } from '../auth/permissions/catalogue'
 import { isPermission, type Permission } from '../core/permissions'
 
 /**
@@ -25,8 +26,11 @@ import { isPermission, type Permission } from '../core/permissions'
  *
  * Live screens (A1 §3.5): with a `live` rule the event becomes a small "record changed" message on the screens of the
  * users who hold `permission` for the event's company and site (can()). `fields` are payload keys copied into that
- * message (never a money field: the definition is refused); `floor: true` also sends it to the floor devices of the
- * event's site. Without a rule the event never reaches a screen.
+ * message (never a money field: the definition is refused). `floor` names the FLOOR permission a floor device's session
+ * needs to receive it too, only for an event about the device's own site (B-W2a-F5): a permission floor roles hold
+ * (`floor.work`, or one the floor shares with the office such as `production.cut`, `plant.report`), never an office read
+ * no floor role holds; `floor: true` is refused. Without `floor` the event never reaches a tablet; without a rule it
+ * never reaches a screen.
  */
 
 /** `<module>.<event>`, lower case, words joined by dots or underscores: `quote.sent`, `invoice.sdi_status_changed`. */
@@ -43,14 +47,25 @@ export class EventDefinitionError extends Error {
   override name = 'EventDefinitionError'
 }
 
-/** How an event shows on live screens (A1 §3.5). */
+/** How an event shows on live screens (A1 §3.5), as a module declares it. */
 export interface LiveRule {
-  /** The permission a viewer needs, checked with can() against the event's company and site. */
+  /** The permission an OFFICE viewer needs, checked with can() against the event's company and site. */
   readonly permission: Permission
-  /** The floor devices of the event's site receive it too (only events about that site). Default false. */
-  readonly floor?: boolean
+  /**
+   * The floor permission a FLOOR viewer needs (can() against the event's company and site; only events about the
+   * device's own site): one floor roles hold (isFloorPermission), never the office read. Default none: the floor never
+   * receives it.
+   */
+  readonly floor?: Permission
   /** Payload keys copied into the live message. Never a money field. Default none. */
   readonly fields?: readonly string[]
+}
+
+/** A declared live rule (the definition's `live`): `floor` is null when no tablet receives it. */
+export interface LiveRuleDefinition {
+  readonly permission: Permission
+  readonly floor: Permission | null
+  readonly fields: readonly string[]
 }
 
 /** A payload schema: a strict zod object. */
@@ -66,7 +81,7 @@ export interface EventDefinition<Type extends string = string, Payload extends P
   readonly description: string
   readonly payload: Payload
   /** How it shows on live screens; null: never. */
-  readonly live: LiveRule | null
+  readonly live: LiveRuleDefinition | null
 }
 
 export interface EventSpec<Type extends string, Payload extends PayloadSchema> {
@@ -82,6 +97,16 @@ export interface EventSpec<Type extends string, Payload extends PayloadSchema> {
 /** True for a key that names money (`unitPrice`, `totalMinor`, `costPerM2` …). */
 export function isMoneyField(key: string): boolean {
   return MONEY.test(key)
+}
+
+/**
+ * True for a permission a floor role may hold (auth/roles/templates.ts audienceProblems): one of the floor area
+ * (`floor.work`, `floor.lead`) or one the floor shares with the office (FLOOR_SHARED_PERMISSIONS). The only kind a live
+ * rule's `floor` may name: an office read no floor role holds would never reach a tablet.
+ */
+export function isFloorPermission(value: unknown): value is Permission {
+  if (!isPermission(value)) return false
+  return FACTORY_PERMISSIONS.get(value)?.area === FLOOR_AREA || FLOOR_SHARED_PERMISSIONS.includes(value)
 }
 
 /** True when the schema is a zod object that refuses unknown keys (`z.strictObject`). */
@@ -104,7 +129,11 @@ export function defineEvent<const Type extends string, Payload extends PayloadSc
   const live = spec?.live
   if (live !== undefined) {
     if (!isPermission(live.permission)) problems.push('live.permission is not <module>.<action>')
-    if (live.floor !== undefined && typeof live.floor !== 'boolean') problems.push('live.floor is not true or false')
+    if (live.floor !== undefined && !isFloorPermission(live.floor)) {
+      problems.push(
+        `live.floor ${JSON.stringify(live.floor)} is not a floor permission: name the permission a floor role holds that the station needs (floor.work, or one shared with the floor such as production.cut or plant.report), never true or an office read`,
+      )
+    }
     const keys = isStrictObject(spec.payload) ? Object.keys(spec.payload.shape) : []
     for (const field of live.fields ?? []) {
       if (!keys.includes(field)) problems.push(`live field ${JSON.stringify(field)} is not a payload key`)
@@ -119,7 +148,7 @@ export function defineEvent<const Type extends string, Payload extends PayloadSc
     context: spec.context,
     description: spec.description,
     payload: spec.payload,
-    live: live === undefined ? null : Object.freeze({ permission: live.permission, floor: live.floor ?? false, fields: Object.freeze([...(live.fields ?? [])]) }),
+    live: live === undefined ? null : Object.freeze({ permission: live.permission, floor: live.floor ?? null, fields: Object.freeze([...(live.fields ?? [])]) }),
   })
 }
 

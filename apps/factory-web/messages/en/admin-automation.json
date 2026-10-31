@@ -1,0 +1,65 @@
+{
+  "refused": {
+    "title": "Not yours to open",
+    "body": "This page needs the right to see alert rules. Ask an administrator if your work needs it."
+  },
+  "band": {
+    "label": "Approvals, automation & AI",
+    "reading": "Reading…",
+    "more": "More",
+    "runLog": "Run log",
+    "aiOff": "Turn all AI off",
+    "keys": "Keyboard shortcuts",
+    "new": "New rule"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline"
+  },
+  "later": {
+    "W2b": "Comes in the next wave (W2b).",
+    "W3": "Comes later (W3)."
+  },
+  "views": {
+    "label": "Rule lists",
+    "approvals": "Approval rules",
+    "timers": "Reminders & timers",
+    "automation": "Automation",
+    "runs": "Run log",
+    "ai": "AI",
+    "later": "Approval rules come in the next wave: until then quotes use the margin floor of the sales settings. Automation rules, their run log and AI agents come later (W3)."
+  },
+  "timers": {
+    "title": "Reminders & timers",
+    "label": "Date rules",
+    "body": "Rules that fire relative to a date: each record gets one timer that waits for its day, then raises the alert. A rule names a role, never a person.",
+    "empty": "No date rules yet.",
+    "emptyBody": "The built-in ones (certificate expiring, invoice deadline) are made by the first check after a company starts."
+  },
+  "module": {
+    "title": "Reminders the modules keep",
+    "none": "No module keeps reminders of its own yet.",
+    "PAYMENT_REMINDER": {
+      "title": "Payment reminders",
+      "body": "The reminder ladder of each company's invoices, kept in Finance: a person sends each reminder, and the automatic ones stay off until the Owner switches them on for the company."
+    },
+    "other": {
+      "title": "Another module's reminder",
+      "body": "Kept by its own module: its page shows and changes it."
+    }
+  },
+  "dismiss": "Dismiss",
+  "keysTitle": "Keyboard shortcuts",
+  "keys": {
+    "new": "New rule",
+    "views": "Switch the list",
+    "save": "Save the rule (in its dialog)",
+    "close": "Close"
+  },
+  "why": {
+    "noManage": "Adding and changing rules needs the right to manage alert rules.",
+    "offline": "Offline — change it when back online.",
+    "reading": "The rules are still being read."
+  }
+}

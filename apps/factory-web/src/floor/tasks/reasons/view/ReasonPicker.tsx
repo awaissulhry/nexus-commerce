@@ -3,12 +3,14 @@
 import type { KeyboardEvent, ReactNode } from 'react'
 import {
   ArrowLeft,
+  Ban,
   Check,
   CircleDot,
   CircleHelp,
   CloudOff,
   Cog,
   Droplets,
+  Hand,
   ListEnd,
   Pause,
   RotateCcw,
@@ -18,8 +20,10 @@ import {
   Shield,
   Sparkles,
   Spline,
+  Split,
   SquareSplitHorizontal,
   TriangleAlert,
+  Undo2,
   Unlink,
   Wrench,
 } from 'lucide-react'
@@ -33,17 +37,18 @@ import { useReasonWords } from '../../../../lib/ds-words/reason-grid'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../../frame/view/FloorFrameView'
 import { FloorState } from '../../../frame/view/FloorState'
 import { TaskCard, TaskLine } from '../../shared/view/TaskParts'
-import { countedOf, doneHeld, MODE_OF, pickedOf, tilesOf, wordOf, type IconKey, type PickerPurpose, type PickerReason, type PickerState, type StandardIcon } from '../model'
+import { countedOf, doneHeld, MODE_OF, NOTE_IN_OFFICE, pickedOf, tilesOf, wordOf, type IconKey, type PickerPurpose, type PickerReason, type PickerState, type StandardIcon } from '../model'
 import '../reasons.css'
 
 /**
  * SCR-091 — the floor's reason picker (design floor.reasons; MES-125, QHS-007; the DS icon reason grid, gap D20):
  * "What this is for" first ("Scrap · B-000123 · Op 30 Collar" and the running count), then the reasons as big tiles —
  * icon or example photo, a colour, the word in the worker's language — nine a page, "More reasons" for the rest. Pick one
- * (pause, put last) or count (scrap, rework, defects: each tap adds one, − on the tile takes one off). Tap = pick, no long
- * press; arrows move, Enter or Space picks, Esc is Back (the host's keys). ONE picker for every floor reason: a host
- * (Operation, My work, a later floor step) draws `ReasonPickerBody` inside its own frame with its own action bar, or the
- * whole `ReasonPickerView`. Fetches nothing; the host loads the reasons and keeps the counts.
+ * (pause, put last, split, hold, reject) or count (scrap, rework, defects: each tap adds one, − on the tile takes one off).
+ * Tap = pick, no long press; arrows move, Enter or Space picks, Esc is Back (the host's keys). ONE picker for every floor
+ * reason: a host (Operation, My work, Bundles' split, the bench's Hold lot dialog, Kits' Receive back) draws
+ * `ReasonPickerBody` inside its own frame or dialog with its own action bar, or the whole `ReasonPickerView`. Fetches
+ * nothing; the host loads the reasons (`readListReasons`) and keeps the counts.
  */
 
 export interface ReasonPickerModel {
@@ -65,6 +70,8 @@ export interface ReasonPickerModel {
   problem?: 'atMost' | null
   /** The host takes a photo after Done for a reason that asks for more ("Other"). */
   withPhotos?: boolean
+  /** Why no tile may be picked now (the host's call needs the network), or null. */
+  heldReason?: string | null
 }
 
 export type ReasonPickerAction = { type: 'pick'; id: string } | { type: 'count'; id: string; delta: 1 | -1 } | { type: 'retry' }
@@ -82,6 +89,7 @@ const STANDARD: Readonly<Record<StandardIcon, ReactNode>> = {
   clean: <Sparkles />,
   scrap: <TriangleAlert />,
   rework: <Wrench />,
+  hand: <Hand />,
   help: <CircleHelp />,
   dot: <CircleDot />,
 }
@@ -105,6 +113,9 @@ export const PURPOSE_ICON: Readonly<Record<PickerPurpose, ReactNode>> = {
   pause: <Pause />,
   putLast: <ListEnd />,
   defect: <SearchCheck />,
+  split: <Split />,
+  hold: <Ban />,
+  reject: <Undo2 />,
 }
 
 export function ReasonPickerBody({ model, onAction, onBack, timeZone }: { model: ReasonPickerModel; onAction?: (action: ReasonPickerAction) => void; /** Esc = Back (design floor.reasons), also while a tile has the focus. */ onBack?: () => void; timeZone?: string }) {
@@ -114,8 +125,17 @@ export function ReasonPickerBody({ model, onAction, onBack, timeZone }: { model:
   const send = (action: ReasonPickerAction) => onAction?.(action)
   const mode = MODE_OF[model.purpose]
   const state = model.state ?? 'ready'
-  const tiles = tilesOf(model.reasons, locale, { withPhotos: model.withPhotos })
-  const gridTiles: ReasonTile[] = tiles.map((tile) => ({ id: tile.id, label: tile.label, icon: glyphOf(tile.icon), photo: tile.photo ?? undefined, tone: tile.tone, photoNeeded: tile.photoNeeded }))
+  const tiles = tilesOf(model.reasons, locale, { withPhotos: model.withPhotos, held: model.heldReason ?? null, noteHeld: NOTE_IN_OFFICE.has(model.purpose) ? t(`noteHeld.${model.purpose}`) : null })
+  const gridTiles: ReasonTile[] = tiles.map((tile) => ({
+    id: tile.id,
+    label: tile.label,
+    hint: tile.hint ?? undefined,
+    icon: glyphOf(tile.icon),
+    photo: tile.photo ?? undefined,
+    tone: tile.tone,
+    photoNeeded: tile.photoNeeded,
+    heldReason: tile.heldReason,
+  }))
   const counts = model.counts ?? {}
   const counted = countedOf(counts)
   const picked = pickedOf(model.reasons, model.value)

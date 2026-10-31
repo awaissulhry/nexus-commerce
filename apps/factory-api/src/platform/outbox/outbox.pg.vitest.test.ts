@@ -38,14 +38,14 @@ const siteRenamed = defineEvent({
   context: 'sites',
   description: 'A site was renamed (test event).',
   payload: z.strictObject({ siteId: z.string(), name: z.string() }),
-  live: { permission: 'sites.read', floor: true, fields: ['name'] },
+  live: { permission: 'sites.read', floor: 'floor.work', fields: ['name'] },
 })
 const quotePriced = defineEvent({
   type: 'quote.priced',
   context: 'sales',
   description: 'A quote was priced (test event with a money field).',
   payload: z.strictObject({ quoteId: z.string(), totalMinor: z.number().int() }),
-  live: { permission: 'sites.read', floor: true, fields: ['quoteId'] },
+  live: { permission: 'sites.read', floor: 'floor.work', fields: ['quoteId'] },
 })
 const CATALOGUE = createCatalogue([siteRenamed, quotePriced])
 const SETTINGS: CommandSettings = { ...COMMAND_SETTINGS, clock: fixedClock(NOW), writeEvents: outboxWriter(CATALOGUE) }

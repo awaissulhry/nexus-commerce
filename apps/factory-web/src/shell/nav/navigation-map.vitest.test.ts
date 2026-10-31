@@ -93,10 +93,14 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/tasks': 'home.view', // GET /tasks (B-W2a-40)
       '/home/notifications': 'home.view', // GET /notifications (B-W2a-40)
       '/home/mail-to-sort': 'email.triage', // GET /email/inbound
+      '/home/reports': 'home.reports.view', // GET /reports (B-W2a-79)
+      '/home/alerts': 'alerts.view', // GET /alerts (B-W2a-78)
       '/sales/customers': 'parties.view', // GET /parties
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
       '/sales/orders': 'orders.view', // GET /sales/orders
       '/sales/price-lists': 'pricelists.view', // GET /sales/price-lists (B-W2a-49)
+      '/sales/returns': 'sales.returns.view', // GET /sales/returns (+ GET /sales/repairs with sales.repairs.view) (B-W2a-77)
+      '/sales/settings': 'quotes.view', // GET /sales/settings (B-W2a-77)
       '/products/styles': 'product.styles.view', // GET /product/styles
       '/products/materials': 'product.materials.view', // GET /product/materials
       '/products/operations': 'product.routing.view', // GET /product/operations
@@ -157,6 +161,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/admin/security': 'security.view', // GET /admin/security (B-W2a-36)
       '/admin/documents': 'numbering.view', // GET /numbering/series
       '/admin/languages': 'companies.view',
+      '/admin/automation': 'alerts.rules.manage', // GET /alerts/rules/:id/timers, the rules kept (B-W2a-78)
       '/admin/connections': 'integrations.view', // GET /integrations/accounts
       '/admin/import': 'imports.view', // GET /imports
       '/admin/audit': 'audit.read', // GET /audit
@@ -202,10 +207,15 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/tasks',
       '/home/notifications',
       '/home/mail-to-sort',
+      // B-W2a-79 + B-W2a-78: Home › Insights › Reports, Alerts.
+      '/home/reports',
+      '/home/alerts',
       '/sales/customers',
       '/sales/quotes',
       '/sales/orders',
+      '/sales/returns',
       '/sales/price-lists',
+      '/sales/settings',
     ])
     // A role's rows keep the full map's order.
     const order = rows(OFFICE_NAV).map((row) => row.href)

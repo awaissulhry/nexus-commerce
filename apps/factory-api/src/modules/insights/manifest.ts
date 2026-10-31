@@ -22,4 +22,11 @@ export const manifest = defineManifest({
   'POST /home/today/rows/:key/snooze': { audiences: ['office'], permission: 'home.view', scope: 'record' },
   'POST /home/waiting-on-others/:key/nudge': { audiences: ['office'], permission: 'home.view', scope: 'record' },
   'GET /home/coming-up': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  // B-W2a-79 (reports/): My numbers reach with home.view (each number asks its list's permission and grain); the report
+  // library and its reports with home.reports.view (each report asks its list's permission, and its grain: `record`).
+  'GET /home/numbers': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'GET /reports': { audiences: ['office'], permission: 'home.reports.view', scope: 'record' },
+  'GET /reports/:key': { audiences: ['office'], permission: 'home.reports.view', scope: 'record' },
+  'GET /reports/:key/results': { audiences: ['office'], permission: 'home.reports.view', scope: 'record' },
+  'GET /reports/:key/schedule': { audiences: ['office'], permission: 'home.reports.view', scope: 'record' },
 })

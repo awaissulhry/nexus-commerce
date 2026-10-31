@@ -19,6 +19,8 @@ import {
 } from '@nexus/factory-domain/insights/words'
 import { mentionWords, personalPhrase, taskDueWords } from '@nexus/factory-domain/insights/personal'
 import { alertRowPhrase, alertWhyPhrase } from '@nexus/factory-domain/alerts/today'
+import type { KeyNumbers } from './numbers/api'
+import { OWNER_NUMBERS, PROBLEM_NUMBERS } from './numbers/demo'
 import { W2A_TILES, type ComingUpView, DEFAULT_LAYOUT, type FlowLensView, type HandledView, type PanelView, type QueueData, type QueueItem, type QuoteReview, type TodayItem, type TodayLayout, type TodayViewModel } from './model'
 import { TodayView } from './view/TodayView'
 
@@ -605,6 +607,22 @@ const w2a: TodayViewModel = {
   comingUp: { status: 'ready', data: COMING },
   alertRecords: {},
 }
+// B-W2a-79: My numbers (made-up figures in numbers/demo.ts).
+const w2a79 = (value: KeyNumbers | null, problem: string | null = null, explainOpen: string | null = null): TodayViewModel => ({ ...w2a, numbers: { value, problem, prefix: '/w/DEMO', explainOpen } })
+const W2A79_CASES: { id: string; label: string; model: TodayViewModel; note?: string }[] = [
+  {
+    id: 'numbers-owner',
+    label: 'W2a — My numbers, sales orders lens (owner)',
+    model: w2a79(OWNER_NUMBERS),
+    note: 'Five numbers for the lens the flow strip shows; Late orders above its target 0 and Shipped on time below 95 % (words and an icon, never colour alone); 8-week lines where the dates make one; ⓘ opens "How this number is made". The label opens the list behind it (else its report).',
+  },
+  { id: 'numbers-explain', label: 'W2a — How this number is made', model: w2a79(OWNER_NUMBERS, null, 'orders.shippedOnTime'), note: 'The ⓘ of "Shipped on time": definition, formula in words, source records, period and cut-off (site midnight), target and who set it; Open the report.' },
+  { id: 'numbers-planner', label: 'W2a — My numbers, work orders lens (planner)', model: { ...w2a79(OWNER_NUMBERS), lens: 'WORK_ORDERS' }, note: 'Counts only (no price or margin grain): work orders late, short of material, load next week, good garments of the last working day.' },
+  { id: 'numbers-problems', label: 'W2a — numbers that cannot be said now', model: w2a79(PROBLEM_NUMBERS), note: '"—" with the reason in the ⓘ: several currencies, not available now, no data yet; a number cut at a list limit says "at least".' },
+  { id: 'numbers-loading', label: 'W2a — My numbers loading', model: w2a79(null), note: '"—" per tile.' },
+  { id: 'numbers-error', label: 'W2a — My numbers could not be read', model: w2a79(null, 'error.offline'), note: 'Only that section fails, with Try again.' },
+  { id: 'numbers-none', label: 'W2a — no numbers for this role', model: w2a79({ ...OWNER_NUMBERS, lenses: [] }), note: 'The section is absent (never a locked box).' },
+]
 const W2A_CASES: { id: string; label: string; model: TodayViewModel; note?: string }[] = [
   {
     id: 'w2a-owner',
@@ -837,5 +855,6 @@ export const designScreen = defineDesignScreen<TodayViewModel>({
       note: 'The assignee sees "Assigned to you by Anna Prova"; mail to sort has no alert verbs (it is sorted in its review).',
     },
     ...W2A_CASES,
+    ...W2A79_CASES,
   ],
 })

@@ -169,14 +169,6 @@ export const retryJob = (api: ApiClient, job: Pick<PrintJob, 'id' | 'version'>) 
 
 // ---- Hold lot at the bench (B-W2a-75; design floor.final "Hold lot": a reason, and an NCR) --------------------------------------
 
-const reasonsAnswer = z.object({
-  reasons: z.array(z.object({ code: z.string(), labelIt: z.string(), labelEn: z.string(), labelI18n: z.record(z.string(), z.string()).default({}), icon: z.string().nullable(), colour: z.string().nullable(), needsDetail: z.boolean() })),
-})
-export type HoldReasonRow = z.infer<typeof reasonsAnswer>['reasons'][number]
-
-/** The tenant's active HOLD reasons in tile order (platform/reasons GET /reasons, signed in on the floor). */
-export const fetchHoldReasons = (api: ApiClient) => floorRead(api, '/reasons', { query: { list: 'HOLD' }, schema: reasonsAnswer })
-
 const holdAnswer = z.object({ hold: benchHoldSchema, workOrderHeld: z.boolean(), ncr: z.object({ id: z.string(), number: z.string() }), replayed: z.boolean() })
 export type HeldAtBench = z.infer<typeof holdAnswer>
 

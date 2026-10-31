@@ -57,6 +57,16 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'home.mail', title: 'Mail to sort', titleIt: 'Posta da smistare', wave: 'W0', href: '/home/mail-to-sort' },
         ],
       },
+      // W2a: B-W2a-79 Reports (SCR-104) and B-W2a-78 Alerts (SCR-234). Dashboards and the KPI library (W2b) join with their steps.
+      {
+        label: 'Insights',
+        labelIt: 'Analisi',
+        hideLabel: false,
+        pages: [
+          { id: 'home.reports', title: 'Reports', titleIt: 'Report', wave: 'W2a', href: '/home/reports' },
+          { id: 'home.alerts', title: 'Alerts', titleIt: 'Avvisi', wave: 'W2a', href: '/home/alerts' },
+        ],
+      },
     ],
   },
   {
@@ -90,12 +100,26 @@ export const OFFICE: readonly TreeArea[] = [
           },
         ],
       },
-      // W2a: B-W2a-49 Price lists & contracts (SCR-106). After-sales (sales.returns) joins before it with its step.
+      // W2a: B-W2a-77 Returns & repairs (SCR-111, SCR-112).
+      {
+        label: 'After-sales',
+        labelIt: 'Post-vendita',
+        hideLabel: false,
+        pages: [{ id: 'sales.returns', title: 'Returns & repairs', titleIt: 'Resi e riparazioni', wave: 'W2a', href: '/sales/returns' }],
+      },
+      // W2a: B-W2a-49 Price lists & contracts (SCR-106).
       {
         label: 'Pricing',
         labelIt: 'Prezzi',
         hideLabel: false,
         pages: [{ id: 'sales.pricelists', title: 'Price lists & contracts', titleIt: 'Listini e contratti', wave: 'W2a', href: '/sales/price-lists' }],
+      },
+      // W2a: B-W2a-77 Sales settings (SCR-235).
+      {
+        label: 'Settings',
+        labelIt: 'Impostazioni',
+        hideLabel: false,
+        pages: [{ id: 'sales.settings', title: 'Sales settings', titleIt: 'Impostazioni vendite', wave: 'W2a', href: '/sales/settings' }],
       },
     ],
   },
@@ -469,6 +493,8 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'admin.documents', title: 'Documents & numbering', titleIt: 'Documenti e numerazioni', wave: 'W0', href: '/admin/documents' },
           { id: 'admin.languages', title: 'Languages & formats', titleIt: 'Lingue e formati', wave: 'W0', href: '/admin/languages' },
+          // W2a: B-W2a-78 Approvals, automation & AI (SCR-167, the Reminders & timers part). Fields & lists (W2b) joins before it.
+          { id: 'admin.automation', title: 'Approvals, automation & AI', titleIt: 'Approvazioni, automazioni e IA', wave: 'W2a', href: '/admin/automation' },
           { id: 'admin.connections', title: 'Connections & API', titleIt: 'Connessioni e API', wave: 'W0', href: '/admin/connections' },
         ],
       },

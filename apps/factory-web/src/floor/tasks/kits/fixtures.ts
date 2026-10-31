@@ -1,6 +1,7 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { DEMO_SITE, onFloor, signedInFrame } from '../../frame/fixtures'
-import type { KitBundle, KitLine, KitOrder, KitRow, RejectReason } from './api'
+import { fromListReason, type PickerList } from '../reasons/model'
+import type { KitBundle, KitLine, KitOrder, KitRow } from './api'
 import { bringBack, emptyBack, emptyDdt, emptyKit, rejectBack, setReturn, tickAll, toggleBundle, toggleLine, type BackDraft } from './model'
 import { KitsView, type KitsViewModel } from './view/KitsView'
 
@@ -82,11 +83,16 @@ const out: KitOrder = {
   ddts: [{ id: 'ddt-1', number: '146/2026', documentDate: '2026-10-31', cancelled: false, pdf: true }],
   actions: { send: null, receive: null },
 }
-const reasons: RejectReason[] = [
-  { id: 'r1', code: 'OPEN_SEAM', labelIt: 'Cucitura aperta', labelEn: 'Open seam', labelI18n: {}, icon: null, colour: null, needsDetail: false },
-  { id: 'r2', code: 'WRONG_STITCH', labelIt: 'Punto sbagliato', labelEn: 'Wrong stitch', labelI18n: {}, icon: null, colour: null, needsDetail: false },
-  { id: 'r3', code: 'STAIN', labelIt: 'Macchia', labelEn: 'Stain', labelI18n: {}, icon: null, colour: null, needsDetail: false },
-]
+// The REWORK list in the floor's one reason picker (B-W2a-F6): the office's codes, in its order.
+const reasons: PickerList = {
+  state: 'ready',
+  asOf: null,
+  reasons: [
+    fromListReason({ id: 'r1', list: 'REWORK', code: 'OPEN_SEAM', labelIt: 'Cucitura aperta', labelEn: 'Open seam', labelI18n: {}, icon: null, colour: null, needsDetail: false, sortOrder: 10 }),
+    fromListReason({ id: 'r2', list: 'REWORK', code: 'WRONG_STITCH', labelIt: 'Punto sbagliato', labelEn: 'Wrong stitch', labelI18n: {}, icon: null, colour: null, needsDetail: false, sortOrder: 20 }),
+    fromListReason({ id: 'r3', list: 'REWORK', code: 'STAIN', labelIt: 'Macchia', labelEn: 'Stain', labelI18n: {}, icon: null, colour: null, needsDetail: false, sortOrder: 30 }),
+  ],
+}
 const scanned: BackDraft = bringBack(out, bringBack(out, emptyBack(), 'bn-1'), 'bn-2')
 const rejected: BackDraft = { ...rejectBack(out, scanned, 'bn-2', 1, 'defective', 'OPEN_SEAM'), ddtNumber: 'DDT-TERZ-77' }
 const withMaterial: BackDraft = setReturn(rejected, out.kitLines[0]!, 2.5, store.id)
@@ -131,9 +137,11 @@ export const designScreen = defineDesignScreen<KitsViewModel>({
     { id: 'sent-missing', label: 'DDT issued, PDF not stored', model: base({ stage: 'sent', order: out, sent: { number: '146/2026', pdf: 'missing' } }) },
     { id: 'back', label: 'Receive back', model: backBase({}), note: 'Scan each bundle (no tap): its garments still out come back good. Rows per bundle and size: out / back / rejected.' },
     { id: 'back-scanned', label: 'Two bundles back, one rejected', model: backBase({ back: rejected }) },
-    { id: 'back-reject', label: 'Reject garments of a bundle', model: backBase({ back: scanned, reject: { bundleId: 'bn-2', kind: 'defective', count: 1, reason: 'OPEN_SEAM' } }) },
-    { id: 'back-scrapped', label: 'Scrapped at the workshop', model: backBase({ back: scanned, reject: { bundleId: 'bn-1', kind: 'scrapped', count: 1, reason: null } }), note: 'The reason is asked before Confirm.' },
-    { id: 'back-no-reasons', label: 'Reasons not readable', model: backBase({ back: scanned, reasons: null, reject: { bundleId: 'bn-2', kind: 'defective', count: 1, reason: null } }) },
+    { id: 'back-reject', label: 'Reject garments of a bundle', model: backBase({ back: scanned, reject: { bundleId: 'bn-2', kind: 'defective', count: 1, reason: 'OPEN_SEAM' } }), note: 'Why, in the floor\'s one reason picker (SCR-091, pick mode) over the office\'s REWORK list: what it is about, the choice, the tiles.' },
+    { id: 'back-scrapped', label: 'Scrapped at the workshop', model: backBase({ back: scanned, reject: { bundleId: 'bn-1', kind: 'scrapped', count: 1, reason: null } }), note: 'The reason is asked before Confirm ("Choose a reason first").' },
+    { id: 'back-reasons-loading', label: 'Reading the reasons', model: backBase({ back: scanned, reasons: { state: 'loading', reasons: [], asOf: null }, reject: { bundleId: 'bn-2', kind: 'defective', count: 1, reason: null } }) },
+    { id: 'back-no-reasons', label: 'Reasons not readable', model: backBase({ back: scanned, reasons: { state: 'error', reasons: [], asOf: null }, reject: { bundleId: 'bn-2', kind: 'defective', count: 1, reason: null } }), note: 'The picker\'s failed state with Try again; meanwhile the rejection goes without a reason (Confirm does not wait).' },
+    { id: 'back-reasons-none', label: 'No rework reasons set', model: backBase({ back: scanned, reasons: { state: 'ready', reasons: [], asOf: null }, reject: { bundleId: 'bn-2', kind: 'defective', count: 1, reason: null } }), note: 'The office keeps no REWORK reasons: the picker says whom to ask; the rejection goes without one.' },
     { id: 'back-material', label: 'Material back', model: backBase({ back: rejected, material: { lineId: 'kl-10', quantity: 2.5, toLocationId: store.id } }), note: 'By quantity, to the place it left from unless another is picked.' },
     { id: 'back-with-material', label: 'Bundles and material on the receipt', model: backBase({ back: withMaterial }) },
     { id: 'back-reason-held', label: 'Finish held: a reason missing', model: backBase({ back: noReason }) },

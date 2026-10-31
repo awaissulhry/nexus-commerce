@@ -12,8 +12,9 @@ import { FloorFrameView, type FrameAction, type FrameModel } from '../../../fram
 import { FloorState } from '../../../frame/view/FloorState'
 import type { TaskProblem } from '../../shared/task-api'
 import { HeldLine, ListFooter, PinSign, ProblemState, ReasonGrid, TaskCard, TaskLine, type PinProblem } from '../../shared/view/TaskParts'
+import type { PickerList } from '../../reasons/model'
+import { ReasonPickerBody, useDoneHeld, type ReasonPickerModel } from '../../reasons/view/ReasonPicker'
 import { CHECKLIST_GROUPS, groupsDone, groupState, itemsOf, openOf, reasonsOf, type Answer, type Check, type ChecklistGroup, type HoldHeld, type Plan, type PlanField, type ReleaseHeld } from '../model'
-import { HoldReasons, type HoldReasonModel } from './HoldReasons'
 import '../final.css'
 
 /**
@@ -27,10 +28,11 @@ import '../final.css'
  * waits, with the reason, and the last work order read stays on screen with its time. No money, never another person.
  *
  * W2a (B-W2a-75; design floor.final sec "release": "Hold lot (secondary): a reason, and an NCR"; pop "final.hold"): Hold lot
- * is the secondary action of the work order, the checklist and the release — a reason tile of the tenant's HOLD list, then
- * ONE call holds the work order's garments and raises the nonconformance that decides it ("Packing is blocked until
- * quality decides"). The work order's holds stay on its screen (why, since when, the NCR); quality releases them in the
- * office, never the worker who held them. Online only.
+ * is the secondary action of the work order, the checklist and the release — a reason tile of the tenant's HOLD list (the
+ * floor's one reason picker, SCR-091; "Other" asks a written note: held on the floor, quality places it), then ONE call
+ * holds the work order's garments and raises the nonconformance that decides it ("Packing is blocked until quality
+ * decides"). The work order's holds stay on its screen (why, since when, the NCR); quality releases them in the office,
+ * never the worker who held them. Online only.
  */
 
 export interface BenchRowModel {
@@ -95,10 +97,10 @@ export interface HoldLineModel {
 
 /** B-W2a-75: the Hold lot dialog (pop "final.hold"): the reason tiles, the pick, the call on its way or refused. */
 export interface HoldDialogModel {
-  /** The tenant's HOLD reasons; null while they are read. */
-  reasons: HoldReasonModel[] | null
-  /** The reasons could not be read. */
-  reasonsFailed?: boolean
+  /** The work order held ("WO-… · batch"), what the picker says it is about. */
+  subject: string
+  /** The tenant's HOLD reasons for the floor's one reason picker (B-W2a-F6): read, being read, failed, offline. */
+  reasons: PickerList
   picked: string | null
   busy?: boolean
   problem?: TaskProblem | null
@@ -178,6 +180,7 @@ export type FinalAction =
   | { type: 'pin'; pin: string }
   | { type: 'hold'; open: boolean }
   | { type: 'hold-reason'; reason: string }
+  | { type: 'hold-reasons-retry' }
   | { type: 'hold-confirm' }
   | { type: 'release'; cellId: string }
   | { type: 'release-quantity'; value: number | null }
@@ -248,7 +251,9 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
   /** B-W2a-75: Hold lot, the secondary action (held with the reason: no right, on hold already, no network). */
   const holdOf = (order: OrderModel): FloorAction => ({ label: t('hold.action'), icon: <Ban />, variant: 'danger', onPress: () => send({ type: 'hold', open: true }), heldReason: order.holdHeld ? t(`hold.held.${order.holdHeld}`) : model.busy ? t('busy') : null })
   const dialog = model.hold
-  const dialogHeld = dialog ? (offlineHeld ?? (dialog.busy ? t('busy') : dialog.picked ? null : t('hold.pickReason'))) : null
+  const holdPicker: ReasonPickerModel | null = dialog ? { purpose: 'hold', subject: dialog.subject, reasons: dialog.reasons.reasons, state: dialog.reasons.state, asOf: dialog.reasons.asOf, value: dialog.picked } : null
+  const holdReasonHeld = useDoneHeld(holdPicker ?? { purpose: 'hold', value: null })
+  const dialogHeld = dialog ? (offlineHeld ?? (dialog.busy ? t('busy') : holdReasonHeld)) : null
   const notice = model.notice ? <NoticeLine problem={model.notice} t={t} tt={tt} /> : null
 
   switch (step.kind) {
@@ -712,17 +717,16 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
               <strong>{t('hold.body')}</strong>
             </p>
             <p className="fw-floor-dialog-line fw-floor-muted">{t('hold.ncr', { count: dialog.quantity })}</p>
-            {dialog.reasons === null ? (
-              dialog.reasonsFailed ? (
-                <HeldLine text={t('hold.reasonsFailed')} />
-              ) : (
-                <p className="fw-floor-muted" aria-busy="true">
-                  {t('hold.reasonsLoading')}
-                </p>
-              )
-            ) : (
-              <HoldReasons label={t('hold.reasons')} reasons={dialog.reasons} value={dialog.picked} onChange={(reason) => send({ type: 'hold-reason', reason })} />
-            )}
+            {holdPicker ? (
+              <ReasonPickerBody
+                model={holdPicker}
+                onAction={(action) => {
+                  if (action.type === 'pick') send({ type: 'hold-reason', reason: action.id })
+                  else if (action.type === 'retry') send({ type: 'hold-reasons-retry' })
+                }}
+                timeZone={model.timeZone}
+              />
+            ) : null}
             {dialog.problem ? <NoticeLine problem={dialog.problem} t={t} tt={tt} /> : null}
             {offlineHeld ? <HeldLine text={offlineHeld} /> : null}
           </div>

@@ -273,6 +273,29 @@ describe('the alerts (home.alerts)', () => {
     expect((await call('outsider', 'GET', `/alerts/${so2.id}`)).status).toBe(404)
   })
 
+  it('B-W2a-78: who an alert may be given to — the same check as the assign; the dialog\'s roles and places', async () => {
+    const so2 = await alertOf('ORDER_LATE_RISK', ids.so2)
+    const people = (await ok('planner', 'GET', `/alerts/${so2.id}/assignees`)).people as Json[]
+    const named = people.map((person) => person.id)
+    // Who sees the order at company A and handles alerts there; never the quality inspector (no orders.view), the planner
+    // of company B only, or the read-only person (no alerts.handle).
+    expect(named).toEqual(expect.arrayContaining([PEOPLE.owner, PEOPLE.planner, PEOPLE.finance]))
+    for (const outside of [PEOPLE.quality, PEOPLE.outsider, PEOPLE.reader]) expect(named).not.toContain(outside)
+    expect(people.find((person) => person.id === PEOPLE.planner)).toEqual({ id: PEOPLE.planner, name: 'Person planner', me: true })
+    expect((await call('reader', 'GET', `/alerts/${so2.id}/assignees`)).status).toBe(403)
+    expect((await call('outsider', 'GET', `/alerts/${so2.id}/assignees`)).status).toBe(404)
+    // The list's "Site" column: the order's company by name (an order has no site).
+    const company = await one<{ name: string }>(`SELECT coalesce("tradeName", "legalName") AS name FROM "Company" WHERE id = $1`, [companyA])
+    expect((await ok('planner', 'GET', `/alerts/${so2.id}`)).alert.placeLabel).toBe(company.name)
+    // The rule dialog: every office role, and the places the reader may keep rules for (the owner: everywhere).
+    const choices = await ok('owner', 'GET', '/alerts/rules/choices')
+    const plannerRole = (await one<{ id: string }>(`SELECT id FROM "Role" WHERE "tenantId" = $1 AND key = 'planner'`, [T])).id
+    expect(choices.roles as Json[]).toContainEqual({ id: plannerRole, name: expect.any(String), key: 'planner' })
+    expect(choices.everywhere).toBe(true)
+    expect((choices.companies as Json[]).filter((company) => [companyA, companyB].includes(company.id)).map((company) => company.wholeCompany)).toEqual([true, true])
+    expect((await call('planner', 'GET', '/alerts/rules/choices')).status).toBe(403)
+  })
+
   it('acknowledge, assign, snooze, resolve with a note: each in its history with the same actor and time; refusals in words', async () => {
     let so2 = (await ok('planner', 'GET', `/alerts/${(await alertOf('ORDER_LATE_RISK', ids.so2)).id}`)).alert
     const acked = (await ok('planner', 'POST', `/alerts/${so2.id}/acknowledge`, { version: so2.version })).alert

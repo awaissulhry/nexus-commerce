@@ -12,8 +12,9 @@ import { FloorFrameView, type FrameAction, type FrameModel } from '../../../fram
 import { FloorState } from '../../../frame/view/FloorState'
 import type { TaskProblem } from '../../shared/task-api'
 import { HeldLine, ListFooter, ProblemState, TaskCard, TaskLine, Ticks, type TickState } from '../../shared/view/TaskParts'
+import { fromFixedReason } from '../../reasons/model'
+import { ReasonPickerBody, useDoneHeld, type ReasonPickerModel } from '../../reasons/view/ReasonPicker'
 import { MAX_BUNDLE_SIZE, MAX_BUNDLES_PER_TAP, MIN_BUNDLE_SIZE, REPRINT_REASONS, SPLIT_REASONS, splitMax, ticketLayout, VOID_REASONS, type ReprintReason, type SplitReason, type TicketContent, type TicketPrint, type VoidReason } from '../model'
-import { SplitReasons } from './SplitReasons'
 import { TicketQr } from './TicketQr'
 import '../bundles.css'
 
@@ -28,7 +29,8 @@ import '../bundles.css'
  *             their print state (queued, sent, printed, failed with Retry)
  *   bundle    a scanned ticket: its facts, its operations with ticks, Reprint (a reason), Void (a confirm and a reason)
  *             and — W2a, B-W2a-75 (MES-071) — Split: how many garments come off (the pad, at least one stays) and why
- *             (rework, recut, hold: the DS reason grid) into a child bundle with its own ticket; the genealogy stays
+ *             (rework, recut, hold: the floor's one reason picker, SCR-091) into a child bundle with its own ticket; the
+ *             genealogy stays
  *
  * Making a bundle is saved on this tablet first and works offline (its ticket numbered from the tablet's own block; it
  * prints on the station's printer when the office records it). Reprint, void and split need the network: held with the
@@ -193,6 +195,18 @@ export function BundlesView({ model, onAction, onFrame, camera }: BundlesViewPro
   const { step } = model
   const time = (value: string) => formatTime(value, { locale, timeZone: model.timeZone })
   const number = (value: number) => formatNumber(value, locale)
+  // B-W2a-F6: why garments come off a bundle is asked by the floor's one reason picker (purpose split, the API's three codes).
+  const splitStep = step.kind === 'bundle' && step.stage === 'split' ? step : null
+  const splitPicker: ReasonPickerModel | null = splitStep
+    ? {
+        purpose: 'split',
+        subject: splitStep.card.code,
+        reasons: SPLIT_REASONS.map((reason, index) => fromFixedReason({ list: 'SPLIT', code: reason, label: t(`split.reason.${reason}.label`), hint: t(`split.reason.${reason}.hint`), sortOrder: (index + 1) * 10 })),
+        value: splitStep.split?.reason ?? null,
+        heldReason: model.online ? null : t('card.held.network'),
+      }
+    : null
+  const splitReasonHeld = useDoneHeld(splitPicker ?? { purpose: 'split', value: null })
 
   const scanField = (hint: string, disabled = false) => (
     <ScanInput
@@ -433,7 +447,7 @@ export function BundlesView({ model, onAction, onFrame, camera }: BundlesViewPro
       const splitTop = splitLive === null ? Math.max(0, card.quantity - 1) : splitMax(splitLive)
       const splitHeld = split
         ? (networkHeld ??
-          (split.reading ? t('split.held.reading') : splitTop < 1 ? t('split.held.one') : step.busy ? t('busy') : split.quantity === null || split.quantity < 1 || split.quantity > splitTop ? t('split.held.quantity', { max: splitTop }) : split.reason === null ? t('split.held.reason') : null))
+          (split.reading ? t('split.held.reading') : splitTop < 1 ? t('split.held.one') : step.busy ? t('busy') : split.quantity === null || split.quantity < 1 || split.quantity > splitTop ? t('split.held.quantity', { max: splitTop }) : splitReasonHeld))
         : null
       body = (
         <div className="fw-floor-stack">
@@ -557,13 +571,16 @@ export function BundlesView({ model, onAction, onFrame, camera }: BundlesViewPro
                       autoFocus
                     />
                   )}
-                  <SplitReasons
-                    label={t('split.reason.label')}
-                    words={Object.fromEntries(SPLIT_REASONS.map((reason) => [reason, { label: t(`split.reason.${reason}.label`), hint: t(`split.reason.${reason}.hint`) }])) as Record<SplitReason, { label: string; hint: string }>}
-                    value={split.reason}
-                    onChange={(reason) => send({ type: 'splitReason', reason })}
-                    heldReason={networkHeld}
-                  />
+                  {splitPicker ? (
+                    <ReasonPickerBody
+                      model={splitPicker}
+                      onAction={(action) => {
+                        if (action.type === 'pick') send({ type: 'splitReason', reason: action.id as SplitReason })
+                      }}
+                      onBack={() => send({ type: 'cancel' })}
+                      timeZone={model.timeZone}
+                    />
+                  ) : null}
                   <p className="fw-floor-muted">{t('split.genealogy')}</p>
                   {networkHeld ? <HeldLine text={networkHeld} /> : null}
                 </section>

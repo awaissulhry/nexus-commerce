@@ -9,8 +9,10 @@ import { zxingCamera } from '../../camera'
 import { useFloor } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { readScan } from '../../scan/scan-model'
+import { listBeforeRead, readListReasons } from '../reasons/api'
+import { listOffers, type PickerList } from '../reasons/model'
 import type { TaskProblem } from '../shared/task-api'
-import { ddtPdfLink, fetchKit, fetchKits, fetchRejectReasons, receiveBack, sendKit, type KitMode, type KitOrder, type KitRow, type RejectReason } from './api'
+import { ddtPdfLink, fetchKit, fetchKits, receiveBack, sendKit, type KitMode, type KitOrder, type KitRow } from './api'
 import {
   backHeld,
   bringBack,
@@ -47,6 +49,8 @@ import { KitsView, type KitsAction } from './view/KitsView'
 
 const SEND_STATUSES = new Set(['ISSUED', 'AT_WORKSHOP', 'PARTLY_RECEIVED'])
 const RECEIVE_STATUSES = new Set(['AT_WORKSHOP', 'PARTLY_RECEIVED'])
+/** The reasons a rejected bundle may carry: the operation screen's REWORK list, in the floor's one reason picker (B-W2a-F6). */
+const REJECT_LISTS = ['REWORK'] as const
 
 export function FloorKits() {
   const store = useFloor()
@@ -66,7 +70,7 @@ export function FloorKits() {
   const [back, setBack] = useState<BackDraft>(emptyBack())
   const [reject, setReject] = useState<{ bundleId: string; kind: RejectKind; count: number | null; reason: string | null } | null>(null)
   const [material, setMaterial] = useState<{ lineId: string; quantity: number | null; toLocationId: string | null } | null>(null)
-  const [reasons, setReasons] = useState<RejectReason[] | null>(null)
+  const [reasons, setReasons] = useState<PickerList | null>(null)
   const [received, setReceived] = useState<{ good: number; defective: number; scrapped: number; returned: number } | null>(null)
   const [busy, setBusy] = useState<'read' | 'send' | 'receive' | null>(null)
   const [problem, setProblem] = useState<{ problem: TaskProblem; code: string | null } | null>(null)
@@ -109,6 +113,14 @@ export function FloorKits() {
     [api, fail],
   )
 
+  /** The REWORK reasons for the picker: what this tablet kept at once, then the office's answer (or why not). */
+  const loadReasons = useCallback(async () => {
+    setReasons(listBeforeRead(REJECT_LISTS))
+    const answer = await readListReasons(api, REJECT_LISTS, navigator.onLine)
+    if (answer.signedOut) return void sessionEnded()
+    setReasons(answer.list)
+  }, [api, sessionEnded])
+
   const pickMode = useCallback(
     (which: KitMode) => {
       if ((which === 'send' && !may.send) || (which === 'receive' && !may.receive)) return void feedback('warning')
@@ -116,9 +128,9 @@ export function FloorKits() {
       setMode(which)
       setStage('pick')
       void loadOrders(which)
-      if (which === 'receive' && reasons === null) void fetchRejectReasons(api).then((answer) => setReasons(answer.ok ? answer.value : []))
+      if (which === 'receive' && reasons?.state !== 'ready') void loadReasons()
     },
-    [api, clearOrder, feedback, loadOrders, may.receive, may.send, reasons],
+    [clearOrder, feedback, loadOrders, loadReasons, may.receive, may.send, reasons],
   )
 
   const openOrder = useCallback(
@@ -201,7 +213,7 @@ export function FloorKits() {
 
   const doReceive = useCallback(async () => {
     if (!order || busy) return
-    if (!navigator.onLine || backHeld(order, back, (reasons?.length ?? 0) > 0)) return void feedback('warning')
+    if (!navigator.onLine || backHeld(order, back, listOffers(reasons))) return void feedback('warning')
     const body = receiveBody(order, back)
     const text = JSON.stringify(body)
     if (writeKey.current?.body !== text) writeKey.current = { body: text, key: newIdempotencyKey() }
@@ -370,9 +382,11 @@ export function FloorKits() {
         return setReject((before) => (before ? { ...before, count: action.value } : before))
       case 'rejectReason':
         return setReject((before) => (before ? { ...before, reason: action.reason } : before))
+      case 'rejectReasonsRetry':
+        return void loadReasons()
       case 'confirmReject': {
         if (!order || !reject || reject.count === null) return void feedback('warning')
-        if (reject.count > 0 && (reasons?.length ?? 0) > 0 && !reject.reason) return void feedback('warning')
+        if (reject.count > 0 && listOffers(reasons) && !reject.reason) return void feedback('warning')
         feedback('success')
         setBack((before) => rejectBack(order, before, reject.bundleId, reject.count ?? 0, reject.kind, reject.reason))
         return setReject(null)
