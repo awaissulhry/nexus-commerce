@@ -131,6 +131,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   through `src/areas/_shared/rules/` (catalogue `rules`): `use-rules.ts` (THE hook: list, switch, number, the dialog's choices
   / dry run / timers / save), `view/RuleSentence.tsx` (the NEW part: a rule as one sentence with its parts as fields; its words
   equal factory-domain `ruleSentence`, held by a test), `view/RuleDialog.tsx`, `view/RulesList.tsx`, `demo.ts` (made-up rules).
+- B-W2b-05 shell foundations: `src/shell/scope/` (`useOfficeScope()` = the top bar's company and site: `siteId` for the
+  API, `allSites` → `siteColumn(...)` + `<ScopeSiteChip model={scope} />` "Site from the top bar"; the sites are
+  `me.sites`, the person's reach; a switch re-reads the pages that put `scope.siteId` in their reads; `start/` = My
+  profile's "Where I work" start page, kept in the scope cookie), `src/shell/live/` (ONE live connection per tab:
+  `useLiveBus` / `useLiveChanges`; never `new EventSource` in a screen), `src/shell/print/` (`?print=1` on any office
+  address = its print view; `usePrintMode()`; the band's Print opens a page's own `<page>/print` when it has one),
+  window pages = `WINDOW_PAGES` in shell/nav/office-nav.ts (window frame, their row opens a new tab), the phone's tabs
+  per person (`shell/office/phone-bar.ts`).
 - `src/lib/records/record-links.ts` — where a record opens: its own page once built (`RECORD_PAGES`, one line per record
   page; list pages in `LIST_PAGES`), else the record panel route `/w/<company>/records/<type>/<id>` (SCR-006 panels).
   Home › Today (`src/areas/home/today/`, SCR-029) and its lists open records through it.
@@ -228,11 +236,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `shell:`-style message keys; each row's `permission` is the one its page's API needs). The rail, sub-sidebar, crumbs,
   phone bottom bar and palette all read it; `officeNavFor(can)` filters it per person. A permission not yet declared in
   factory-domain must be in `PENDING_PERMISSIONS` (shell/nav/office-nav.ts) until its step declares it. `order` and the
-  words are the approved tree's (`shell/nav/approved-tree.ts`, its W0/W1 part: Admin is "Sistema" in Italian, Finance
-  "Amministrazione"); `shell/nav/navigation-map.vitest.test.ts` walks it against the rail, every overlay, the palette,
-  RECORD_PAGES/LIST_PAGES, the floor tiles and scan router, the link registry (`links/_nav/link-types.ts`: purpose ×
-  record type → link task page, else the link frame) and every "Area › Page" pointer in the catalogues. A page that
-  ships adds its tree entry there.
+  words are the approved tree's (`shell/nav/approved-tree.ts`, its W0–W2a part, checked whole by B-W2a-83: Admin is
+  "Sistema" in Italian, Finance "Amministrazione", Plant 12 right above Admin 13); `shell/nav/navigation-map.vitest.test.ts`
+  walks it against the rail, every overlay, the palette, RECORD_PAGES/LIST_PAGES (and every searchable record type's
+  page), the floor tiles per mode and permission (the build's differences from the tree named there) and scan router, the
+  link registry (`links/_nav/link-types.ts`: purpose × record type → link task page, else the link frame) and every "Area
+  › Page" pointer in the catalogues. A page that ships adds its tree entry there.
 - Views never import each other (`check-view-boundaries`): Office (`app/(office)`, `shell/{office,nav,switcher,palette}`,
   `areas`), Links (`app/(links)`, `shell/links`), Floor, Portal. Share through `src/lib`. No `@nexus/factory-db`.
 - UI text: `messages/<locale>/<area>.json` (it, en), found by themselves; every key in both languages with the same

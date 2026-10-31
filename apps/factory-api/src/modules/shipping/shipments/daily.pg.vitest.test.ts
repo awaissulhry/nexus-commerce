@@ -89,6 +89,8 @@ const SESSIONS: Record<string, SessionContext> = {
   sales: office(A.tenant, [grant(['orders.view', 'orders.manage'])]),
   quality: office(A.tenant, [grant(TRAVEL_DOCUMENT_PERMISSIONS)]),
   warehouseB: office(B.tenant, [grant([...SHIPPING, 'files.read'])]),
+  /** Finance's standards (B-W2a-21): the shipped garment's frozen standard (B-W2a-F7). */
+  costing: office(A.tenant, [grant(['costing.view', 'costing.standards.manage', 'money.cost'])]),
   plannerB: office(B.tenant, [grant(['workorders.view', 'workorders.manage'])]),
 }
 
@@ -110,6 +112,18 @@ async function refused(session: string, method: Method, url: string, payload: un
   return response.json().error
 }
 const key = () => `daily-ship-${run}-${++keys}`
+/** A write past the database's guards (the seed's facts only: never what the test then proves). */
+async function force(sql: string, values: unknown[] = []): Promise<void> {
+  await admin('SET session_replication_role = replica')
+  try {
+    await admin(sql, values)
+  } finally {
+    await admin('SET session_replication_role = DEFAULT')
+  }
+}
+/** The value the stock ledger gave a move (none: not valued). */
+const valuationOf = async (moveId: string) => (await admin<{ method: string; unitCost: string; valueAmount: number }>(`SELECT method::text, "unitCost"::text AS "unitCost", "valueAmount" FROM "StockValuation" WHERE "moveId" = $1`, [moveId]))[0] ?? null
+const fromStockMove = async (shipmentId: string) => (await admin<{ id: string }>(`SELECT id FROM "StockMove" WHERE "idempotencyKey" = $1`, [`shipping.fromStock:${shipmentId}:1`]))[0]!.id
 
 async function addAccount(tenantId: string, companyId: string): Promise<string> {
   const id = newId()
@@ -431,5 +445,40 @@ describe('what a shipment may take of its order (tenant B: LOG-004 with SAL-210)
     const { workOrder } = await ok('plannerB', 'POST', '/production/work-orders/repairs', { repairOrderId: returnsB.repairId, routingSeqs: [20] }, 201)
     const repair = await refused('warehouseB', 'POST', '/shipping/shipments', { salesOrderId: qb().production.salesOrderId, lines: [{ workOrderSizeId: workOrder.cells[0].id, quantity: 1 }] }, 400)
     expect(repair.issues).toEqual([{ path: 'body/lines/0/workOrderSizeId', message: `${workOrder.number} is a repair work order: its garment goes back with the repair's DDT, never on a shipment of the order.` }])
+  })
+})
+
+describe('a garment shipped from finished goods leaves at its frozen standard (B-W2a-F7)', () => {
+  let standard: Json
+
+  it('a standard frozen after SB left values its move out of finished goods, with the receipt before it', async () => {
+    const out = await fromStockMove(S.sb!)
+    // SB left before any standard of the garment existed: no value yet.
+    expect(await valuationOf(out)).toBeNull()
+    const made = await ok('costing', 'POST', '/costing/standards', { companyId: A.companyA, itemId: scheduleA.finishedItemId, validFrom: `${businessDate(new Date()).slice(0, 7)}-01`, materialCost: '210.000000', labourCost: '80.000000', note: 'Season standard of the black 52 (made up).' }, 201)
+    const frozen = await ok('costing', 'POST', `/costing/standards/${made.standard.id}/freeze`, { version: made.standard.version })
+    // The receipt into finished goods (its work order's completion posted) and SB's move out of it.
+    expect(frozen.valued).toMatchObject({ moves: 2, workOrders: [{ id: wo1() }], skipped: [] })
+    // Out of stock: the value is signed (290.00 a garment leaves).
+    expect(await valuationOf(out)).toMatchObject({ method: 'STANDARD_COST', valueAmount: -29_000 })
+    expect(Number((await valuationOf(out))!.unitCost)).toBe(290)
+    standard = frozen.standard
+  })
+
+  it('a garment shipped after the freeze carries the standard at once', async () => {
+    // One more BLK 52 released (made up: the seeded reversal of WO-0001's second release taken back), into finished goods.
+    await force(`DELETE FROM "QualityReleaseReversal" WHERE "workOrderSizeId" = $1`, [blk52()])
+    const report = await ok('production', 'POST', `/production/work-orders/${wo1()}/finished`, { cells: [{ cellId: blk52(), quantity: 1 }] }, 201)
+    expect(await valuationOf(report.report.moveIds[0])).toMatchObject({ method: 'STANDARD_COST', valueAmount: 29_000 })
+    const sc = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: so2(), lines: [{ workOrderSizeId: blk52(), quantity: 1 }] }, 201)).shipment
+    const parcelId = (await ok('warehouse', 'POST', `/shipping/packing/${sc.id}/parcels`, { grossWeightKg: '2.4' }, 201)).parcelId
+    const line = (await ok('warehouse', 'GET', `/shipping/shipments/${sc.id}`)).shipment.lines[0]
+    await ok('warehouse', 'PUT', `/shipping/packing/${sc.id}/lines/${line.id}/parcel`, { parcelId })
+    expect((await ok('warehouse', 'POST', `/shipping/packing/${sc.id}/pack`, {})).shipment.status).toBe('PACKED')
+    expect((await ok('warehouse', 'POST', `/shipping/shipments/${sc.id}/ddt`, { ship: true }, 201)).shipment.status).toBe('SHIPPED')
+    // Out of finished goods at the standard in force today (inventory/finished/post.ts standardCostFor).
+    const out = await fromStockMove(sc.id)
+    expect(await valuationOf(out)).toMatchObject({ method: 'STANDARD_COST', valueAmount: -29_000 })
+    expect(Number((await valuationOf(out))!.unitCost)).toBe(Number(standard.unitCost))
   })
 })

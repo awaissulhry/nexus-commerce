@@ -107,6 +107,8 @@ model Company {
   threads             Thread[]
   // imports.prisma: the company's imports.
   importJobs          ImportJob[]
+  // W2b imports.prisma: the steps of its first load marked done.
+  firstLoadSteps      FirstLoadStep[]
   // parties.prisma: the parties of this company only (tenant-wide ones have none), and the VIES checks it requested.
   parties             Party[]
   viesChecks          ViesCheck[]
@@ -142,6 +144,12 @@ model Company {
   paymentReminders     PaymentReminder[]
   receivablesSettings  ReceivablesSettings[]
   supplierInvoices     SupplierInvoice[]
+  // W2b supply.prisma, payables.prisma (schema wave 2/7): its purchasing and payables settings, the files of several
+  // supplier invoices and the SDI deliveries waiting in its inbox.
+  purchasingSettings   PurchasingSettings[]
+  payablesSettings     PayablesSettings[]
+  supplierInvoiceFiles SupplierInvoiceFile[]
+  sdiInboxItems        SdiInboxItem[]
   /// @not-money the relation to its standard costs (the rows carry the grain)
   standardCosts        StandardCost[]
   accountingExports    AccountingExport[]
@@ -152,6 +160,9 @@ model Company {
   costingSettings      CostingSettings[]
   // sales.prisma: the company's sales settings (its margin floor, discount limit, validity and deposit).
   salesSettings        SalesSettings[]
+  // W2b people.prisma, skills.prisma (wave 4/7): its people settings and its own skills (tenant-wide ones have none).
+  peopleSettings       PeopleSettings[]
+  skills               Skill[]
   // privacy.prisma: its privacy notices, DPIAs and record of processing activities.
   privacyNotices       PrivacyNotice[]
   privacyDpias         PrivacyDpia[]
@@ -215,6 +226,12 @@ model Site {
   devices       Device[]
   workers       Worker[]
   floorSettings FloorSettings[]
+  // W2b _core.prisma, people.prisma (wave 4/7): its areas, the people who work at it, its teams and the legal gate of
+  // each purpose of people data.
+  orgAreas         OrgArea[]
+  employees        Employee[]
+  teams            Team[]
+  peopleLegalGates PeopleLegalGate[]
   // threads.prisma: the threads of the site's records.
   threads       Thread[]
   // print.prisma: the site's printers.
@@ -266,6 +283,8 @@ model Site {
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]
   ddts               Ddt[]
+  // W2b gendocs.prisma (B-W2b-01): the documents generated for its records (packing lists, claim letters, job sheets).
+  generatedDocuments GeneratedDocument[]
   // returns.prisma: the returns coming back to it and the repairs it makes.
   returnAuthorisations ReturnAuthorisation[]
   repairOrders         RepairOrder[]
@@ -299,6 +318,32 @@ enum SiteKind {
   OFFICE
 }
 
+/// W2b (wave 4/7; PLT-005 "site > area > line > station"): an area of a site (a hall, a department, a floor of the
+/// building) that groups its lines in the org tree, in the People pages' "Who is in now" and on the line views. Archived,
+/// never deleted while an active line is in it.
+model OrgArea {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String       @db.Uuid
+  siteId      String       @db.Uuid
+  /// Short code, unique on the site.
+  code        String
+  name        String
+  sortOrder   Int          @default(0)
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  site  Site   @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines Line[]
+
+  @@unique([tenantId, siteId, code])
+  // The target of the lines' tenant- and site-safe references.
+  @@unique([tenantId, siteId, id])
+}
+
 /// A production line of a site (a sewing line, a cutting room, a finishing cell). Its stations sit on it.
 model Line {
   id          String       @id @db.Uuid
@@ -308,6 +353,8 @@ model Line {
   /// Short code, unique on the site.
   code        String
   name        String
+  /// W2b (wave 4/7): the area of its site it is in (the org tree site > area > line); null: none yet.
+  areaId      String?      @db.Uuid
   status      MasterStatus @default(ACTIVE)
   version     Int          @default(1)
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
@@ -315,7 +362,14 @@ model Line {
   createdById String?      @db.Uuid
 
   site     Site      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  area     OrgArea?  @relation(fields: [tenantId, siteId, areaId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   stations Station[]
+  // W2b people.prisma (wave 4/7): the people whose home line it is, the teams on it, the loans from and to it.
+  homeEmployees Employee[] @relation("EmployeeHomeLine")
+  teams         Team[]
+  loansFrom     LineLoan[] @relation("LineLoanFrom")
+  loansTo       LineLoan[] @relation("LineLoanTo")
   // W2a planning.prisma: its planned efficiency and people (one row, the line's id).
   capacity LineCapacity[]
   // calendar.prisma: its calendar.
@@ -328,6 +382,7 @@ model Line {
 
   @@unique([tenantId, siteId, code])
   @@unique([tenantId, siteId, id])
+  @@index([tenantId, areaId])
 }
 
 /// A kind of work on a site with its own capacity (cutting, sewing, inspection…). Routing operations run at a work

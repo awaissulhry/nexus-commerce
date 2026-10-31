@@ -1,0 +1,14 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/kits.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office and the floor of the work order's site keep a work order's kit (where its picked material is staged, marked complete or opened again) through apps/factory-api's modules/inventory (B-W2b-15), always through command() (the floor through floorCommand); the API keeps staff to the sites their grants reach. Portal and link sessions read none. Nobody deletes a kit (the …_followups_stock_w2b_guards trigger). No money here. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "WorkOrderKit": {
+      "about": "The office and the floor of the work order's site stage a work order's kit at a place and mark it complete (or open it again). Nobody deletes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

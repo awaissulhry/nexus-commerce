@@ -19,6 +19,7 @@ import { heldByQualityHolds } from '../../quality/holds/stock'
 import { pdfFileIdsOf } from '../../shipping/ddt/store'
 import { quantityText, type Reader } from '../store'
 import { sendKitAs } from './kit'
+import { bundlesSentOf } from './receive-back'
 import { receiveBackAs, type ReceiveInput } from './receive'
 import { ORDER_COLUMNS, readOrder, type OrderRow } from './store'
 import { orderDetailOf, storedReceipts } from './views'
@@ -151,10 +152,10 @@ async function balancesOf(db: Reader, siteId: string, itemIds: readonly string[]
   return found.filter((balance) => balance.onHand.greaterThan(0))
 }
 
-/** Bundles the order's sends named (the send's audit rows), each once. */
+/** Bundles the order's sends named, each once: W2b's SubcontractBundle rows (B-W2b-10), and the send's audit rows before them. */
 async function bundlesSent(db: Reader, orderId: string): Promise<Set<string>> {
   const rows = await db.auditLog.findMany({ where: { recordType: 'SubcontractOrder', recordId: orderId, action: SEND_ACTION }, select: { after: true } })
-  const sent = new Set<string>()
+  const sent = await bundlesSentOf(db, orderId)
   for (const row of rows) {
     const after = row.after as { bundles?: unknown } | null
     for (const entry of Array.isArray(after?.bundles) ? after.bundles : []) {

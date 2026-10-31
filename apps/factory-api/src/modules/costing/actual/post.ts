@@ -65,6 +65,14 @@ import {
  * Lock order: the work order's costing lock (one poster at a time), then the method's row when it locks.
  */
 
+/**
+ * The scans a subcontract receipt line wrote (B-W2b-10): its REPORT names the line; a CORRECTION adding a later receipt
+ * carries the line's device-free client scan id (factory-domain production/scans/outside receiptLineClientId).
+ */
+function outsideScans(rows: readonly { readonly id: string; readonly clientScanId: string; readonly subcontractReceiptLineId: string | null }[]): Set<string> {
+  return new Set(rows.filter((row) => row.subcontractReceiptLineId !== null || row.clientScanId.startsWith('receipt-line:')).map((row) => row.id))
+}
+
 /** Which sources to read: undefined reads every one (a catch-up); a list reads those ids only (an event's). */
 export interface PostScope {
   readonly moveIds?: readonly string[]
@@ -156,12 +164,15 @@ export async function planCosts(db: Reader, workOrder: CostedWorkOrder, scope: P
   // ---- scans ------------------------------------------------------------------------------------------------------------
   if (scope === undefined || scope.scanIds !== undefined) {
     const only = scope?.scanIds ? [...scope.scanIds] : null
-    const SCAN = { id: true, kind: true, correctsId: true, goodQuantity: true, scrapQuantity: true, serverTime: true, workOrderOperationId: true, bundleId: true, reason: true } as const
+    const SCAN = { id: true, kind: true, correctsId: true, goodQuantity: true, scrapQuantity: true, serverTime: true, workOrderOperationId: true, bundleId: true, reason: true, subcontractReceiptLineId: true, clientScanId: true } as const
     const scans = await db.operationScan.findMany({ where: { workOrderId: workOrder.id, ...(only ? { id: { in: only } } : {}) }, select: SCAN, orderBy: [{ serverTime: 'asc' }, { id: 'asc' }] })
     // The scans an UNDO or CORRECTION in the list voids, and the voiders of the listed ones.
     const named = await db.operationScan.findMany({ where: { id: { in: unique(scans.map((scan) => scan.correctsId)).filter((id) => !scans.some((scan) => scan.id === id)) } }, select: SCAN })
     const voiders = await db.operationScan.findMany({ where: { correctsId: { in: [...scans, ...named].map((scan) => scan.id) } }, select: SCAN })
     const voidedBy = new Map(voiders.map((scan) => [scan.correctsId!, scan]))
+    // W2b (B-W2b-10): an outside operation reported from a subcontract receipt line (and a correction of such a report)
+    // is the workshop's work: no labour (its fee is the SUBCONTRACT entry); its scrap is recorded as any scan's.
+    const outside = outsideScans([...named, ...scans, ...voiders])
     const reports = [...named, ...scans].filter((scan) => scan.kind === 'REPORT' || scan.kind === 'CORRECTION')
     const operations = new Map(
       (await db.workOrderOperation.findMany({ where: { workOrderId: workOrder.id }, select: { id: true, seq: true, code: true, standardMinutes: true, workCentreId: true } })).map((row) => [row.id, row]),
@@ -180,7 +191,7 @@ export async function planCosts(db: Reader, workOrder: CostedWorkOrder, scope: P
       const labour = byKey.get(entryKeys.scan(scan.id))
       if (voider) {
         if (labour) reverse(labour, voider.serverTime, why, { key: entryKeys.reversal(labour.id), operationScanId: voider.id })
-      } else if (!labour && scan.goodQuantity > 0 && operation) {
+      } else if (!labour && scan.goodQuantity > 0 && operation && !outside.has(scan.id)) {
         const kind = centres.get(operation.workCentreId)
         const day = romeDay(scan.serverTime)
         const rate = kind ? pickRate(rates, kind, workOrder.companyId, day) : null

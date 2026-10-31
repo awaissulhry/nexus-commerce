@@ -55,11 +55,14 @@ const grant = (permissions: Permission[], parties: Grant['parties'] = 'all'): Gr
 const office = (tenantId: string, grants: Grant[], actorId: string = newId()): SessionContext => ({ audience: 'office', tenantId, actorId, grants })
 const CLERK = newId()
 const APPROVER = newId()
+const ACCEPTER = newId()
 const SESSIONS: Record<string, SessionContext> = {
   /** Finance's registering hand: registers, maps, disputes; sees costs. */
   clerk: office(A.tenant, [grant(['payables.view', 'payables.manage', 'payables.differences.accept', 'payables.approve', 'money.cost', 'files.read', 'files.upload', 'threads.read', 'threads.post'])], CLERK),
   /** Another finance person: approves and pays. */
   approver: office(A.tenant, [grant(['payables.view', 'payables.approve', 'payables.pay', 'payables.manage', 'money.cost', 'threads.read'])], APPROVER),
+  /** A finance person who accepts differences and approves (four eyes: never what they accepted). */
+  accepter: office(A.tenant, [grant(['payables.view', 'payables.differences.accept', 'payables.approve', 'money.cost'])], ACCEPTER),
   /** The buyer: maps lines, accepts differences, never approves. */
   buyer: office(A.tenant, [grant(['payables.view', 'payables.manage', 'payables.differences.accept', 'money.cost', 'purchasing.view', 'purchasing.claims.manage'])]),
   /** Reads without the cost grain: no amount, no price, no XML. */
@@ -269,6 +272,35 @@ describe('differences: accepted in words, or disputed (design Match "Accept diff
     expect(invoice).toMatchObject({ status: 'DISPUTED', dispute: { reason: expect.stringContaining('Billed twice') } })
     ;({ invoice } = await ok('clerk', 'POST', url(invoiceId, '/reopen'), { version: invoice.version }))
     expect(invoice.status).toBe('RECEIVED')
+  })
+})
+
+describe('four eyes on an SDI invoice (B-W2a-F7): who mapped or matched it, or accepted its difference, never approves it', () => {
+  it('the clerk maps the line SDI left unmapped and another person accepts the wait for the goods: neither approves; a third person does', async () => {
+    // The supplier's own article code, no order named: nothing to suggest, the line waits for a person.
+    deliver({ number: 'P2-2026-0601', lines: [{ description: 'Pelle bovina nera', quantity: '10', uom: 'FT2', unitPrice: '4.20', itemCode: 'P2-PELLE-NERA' }] })
+    const pickup = await ok('clerk', 'POST', '/payables/sdi/pickup', { companyId: A.company })
+    const invoiceId = pickup.recorded.find((row: Json) => row.number === 'P2-2026-0601').invoiceId
+    let { invoice } = await ok('clerk', 'GET', url(invoiceId))
+    expect(invoice).toMatchObject({ source: 'SDI', registeredBy: null, matchStatus: 'PENDING', lines: [{ kind: 'GOODS', purchaseOrderLine: null }] })
+    ;({ invoice } = await ok('clerk', 'PATCH', url(invoiceId, `/lines/${invoice.lines[0].id}`), { version: invoice.version, purchaseOrderLineId: inventory.supply.leatherLineId }))
+    // The 105 ft² received are billed by 2026/0412: this one waits for the goods, and the accepter pays ahead in words.
+    expect(invoice.matchStatus).toBe('WAITING_GOODS')
+    const waiting = invoice.matches.find((row: Json) => !row.withinTolerance)
+    ;({ invoice } = await ok('accepter', 'POST', url(invoiceId, `/matches/${waiting.id}/accept`), { version: invoice.version, note: 'The rest of the hides arrives next week: agreed to pay now.' }))
+    expect(invoice).toMatchObject({ matchStatus: 'DIFFERENCES', approval: { ready: false, problems: [{ code: 'OWN_ACCEPTANCE' }] } })
+    // The mapper is refused in words; the record says it before they try; the bulk approve answers it per row.
+    const mapper = await refused('clerk', 'POST', url(invoiceId, '/approve'), { version: invoice.version }, 409)
+    expect(mapper.issues).toEqual([{ path: 'refusal/OWN_MAPPING', message: 'You mapped or matched its lines, so someone else approves it.' }])
+    expect((await ok('clerk', 'GET', url(invoiceId))).invoice.approval).toMatchObject({ ready: false, problems: [{ code: 'OWN_MAPPING', message: 'You mapped or matched its lines, so someone else approves it.' }] })
+    const bulk = await ok('clerk', 'POST', '/payables/invoices/approve', { items: [{ id: invoiceId, version: invoice.version }] })
+    expect(bulk).toMatchObject({ approved: 0, refused: 1, results: [{ id: invoiceId, approved: false, refusals: [{ code: 'OWN_MAPPING', message: 'You mapped or matched its lines, so someone else approves it.' }] }] })
+    const accepter = await refused('accepter', 'POST', url(invoiceId, '/approve'), { version: invoice.version }, 409)
+    expect(accepter.issues).toEqual([{ path: 'refusal/OWN_ACCEPTANCE', message: 'You accepted one of its differences, so someone else approves it.' }])
+    // A third person, who did neither, approves it.
+    expect((await ok('approver', 'GET', url(invoiceId))).invoice.approval).toMatchObject({ ready: true, problems: [] })
+    ;({ invoice } = await ok('approver', 'POST', url(invoiceId, '/approve'), { version: invoice.version, note: 'Paid ahead of the hides, as agreed.' }))
+    expect(invoice).toMatchObject({ status: 'APPROVED', approval: { approvedBy: { id: APPROVER } } })
   })
 })
 

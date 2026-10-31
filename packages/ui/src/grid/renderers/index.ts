@@ -105,6 +105,7 @@ export {
 } from './MatrixCellViews'
 
 export { CellSaveMark, type CellSaveMarkProps } from './CellSaveMark'
+export { CELL_SAVE_MARK_LABELS, type CellSaveMarkLabels } from './CellSaveMarkLabels' // B-W2b-04
 export { intentMeta, factMeta, verdictMeta, presenceVerdict, presenceLine, PRESENCE_INTENTS, CHANNEL_FACTS, PRESENCE_VERDICTS, type Presence, type PresenceIntent, type ChannelFact, type PresenceVerdict, type PresenceMeta } from './presence'
 export { listingStatusMeta, LISTING_STATUSES, type ListingStatusMeta } from './listingStatus'
 // Sheet publish parity (2026-10-02) — the ONE publish status vocabulary, and the "Last publish" cell and its card.

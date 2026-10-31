@@ -1,8 +1,9 @@
+import { businessDate } from '@nexus/factory-domain/core/time'
 import { locatedKeyOf } from '@nexus/factory-domain/inventory/ledger/moves'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { cellInStock, stockMoveNote, takeFromStock, type StockCell, type StockTake } from '@nexus/factory-domain/shipping/shipments/stock'
 import type { CommandTools, CommandTx } from '../../../core/command'
-import { finishedPlaces, PRODUCTION_RECEIPT, type Reader } from '../../inventory/finished/post'
+import { finishedPlaces, PRODUCTION_RECEIPT, standardCostFor, type Reader } from '../../inventory/finished/post'
 import { postMoves, readBalances, type MoveDraft } from '../../inventory/ledger/post-moves'
 import { lockReservations } from '../../inventory/reservations/store'
 import { tenantOf } from '../cells'
@@ -17,7 +18,9 @@ import type { ShipmentHeader } from '../store'
  *   the move     reason ADJUSTMENT (the ledger has no SHIPMENT reason yet: a schema need), out of the finished-goods
  *                place, the cell's SKU's FINISHED item, whole garments, the cell's work order (the batch), reference the
  *                shipment's number, the note in words, key `shipping.fromStock:<shipment id>:<n>` (what marks it as a
- *                shipment's move: `takenFromStockByCell` reads them back)
+ *                shipment's move: `takenFromStockByCell` reads them back); valued as the garment came in (B-W2a-F7):
+ *                the item's FROZEN standard cost of the shipment's company in force today (inventory/finished/post.ts
+ *                standardCostFor); no standard yet: unvalued until finance freezes one, whose freeze values it
  *   locks        the items' reservation locks (as a write-off), then postMoves' own stock locks; the shipment's row and
  *                its cells' shipping locks are already held by the leaving command
  *   the rest     garments that never went into stock, or are no longer there, leave straight from the release
@@ -158,7 +161,7 @@ export interface StockTaken {
  * of finished goods as far as its work order has them there, and answers what came from stock and what from the
  * release, cell by cell.
  */
-export async function takeFromFinishedGoodsInCommand(tools: CommandTools, shipment: Pick<ShipmentHeader, 'id' | 'number' | 'siteId'>, cells: readonly ShippedCell[]): Promise<StockTaken> {
+export async function takeFromFinishedGoodsInCommand(tools: CommandTools, shipment: Pick<ShipmentHeader, 'id' | 'number' | 'siteId' | 'companyId'>, cells: readonly ShippedCell[]): Promise<StockTaken> {
   const { tx } = tools
   const items = await itemsOf(tx, cells)
   const stocked = cells.filter((cell) => items.has(cell.cellId))
@@ -195,8 +198,14 @@ export async function takeFromFinishedGoodsInCommand(tools: CommandTools, shipme
     takes.push(take!)
   }
 
+  // B-W2a-F7: each garment leaves at its frozen standard, as a production receipt and a restocked return come in.
+  const day = businessDate(tools.now)
+  const costOf = new Map<string, MoveDraft['cost']>()
+  for (const itemId of itemIds) costOf.set(itemId, await standardCostFor(tx, shipment.companyId, itemId, day))
+
   const drafts: MoveDraft[] = takes.flatMap((take) => {
     const cell = cells.find((entry) => entry.cellId === take.cellId)!
+    const cost = costOf.get(items.get(take.cellId)!) ?? null
     return take.fromPlaces.map((place) => ({
       siteId: shipment.siteId,
       reason: 'ADJUSTMENT' as const,
@@ -211,6 +220,7 @@ export async function takeFromFinishedGoodsInCommand(tools: CommandTools, shipme
       workOrderId: cell.workOrderId,
       reference: shipment.number,
       note: stockMoveNote(shipment.number, take.label),
+      ...(cost ? { cost } : {}),
     }))
   })
   const posted = drafts.length > 0 ? await postMoves(tools, drafts, { key: `${FROM_STOCK_KEY}:${shipment.id}`, issuePath: () => 'shipment' }) : []

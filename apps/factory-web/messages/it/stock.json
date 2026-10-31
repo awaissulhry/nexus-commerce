@@ -70,7 +70,10 @@
     "ADJUSTMENT": "Rettifica",
     "COUNT": "Differenza inventario",
     "SCRAP": "Scarto",
-    "PRODUCTION_RECEIPT": "Carico prodotto finito"
+    "PRODUCTION_RECEIPT": "Carico prodotto finito",
+    "CUSTOMER_RETURN": "Reso da cliente",
+    "SUPPLIER_RETURN": "Reso a fornitore",
+    "SHIPMENT": "Spedizione"
   },
   "quality": {
     "QUARANTINE": "Quarantena",
@@ -96,7 +99,8 @@
     "PARTLY_CUT": "Tagliata in parte",
     "REMNANT": "Ritaglio",
     "CONSUMED": "Consumata",
-    "SCRAPPED": "Scartata"
+    "SCRAPPED": "Scartata",
+    "RETURNED": "Resa al fornitore"
   },
   "locationKind": {
     "WAREHOUSE": "Magazzino",

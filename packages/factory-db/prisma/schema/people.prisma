@@ -1,0 +1,419 @@
+// People (W2b schema wave 4/7; B-W2b-06; features MES-208, MES-209, MES-210, MES-211, MES-214, PLT-005, PLT-020,
+// PLT-207, PLT-209, ANA-075, MES-225, MES-227, MES-249, MES-281, MES-282; design people.employees, people.settings,
+// admin.privacy "People data rules"). The employees of a company (staff, floor workers and agency workers: one record
+// per person, linked to their floor sign-in and their office account), the teams of a site with their leads and members,
+// loans to another line, the leaver steps, the company's people settings (how clock events become hours, the minimum
+// group size, who sees one person's figures) and the legal gate of each site and purpose. skills.prisma holds the
+// skills, the levels people hold and the machines they may operate. apps/factory-api's modules/people writes them
+// (B-W2b-26 employees and teams, B-W2b-27 privacy, B-W2b-39 skills), always through command().
+//
+// Data minimisation (GDPR art. 5(1)(c); the employee record's "What we do not keep"): a person is a name, the name shown
+// on the floor, the payroll's employee code, a contract kind, a company, site, line, team, role and department, a
+// language and the start and end dates. No address, tax code, IBAN, date of birth, photo, health data or biometrics
+// (GDPR art. 9; the Garante): the payroll provider and the company doctor keep them. Every personal column is tagged in
+// ownership/people.json ("personal": the person it is about and its purposes, PLT-207, PLT-209), which the privacy
+// export and erasure read.
+//
+// Statuto dei Lavoratori art. 4 (Owner answers W1, F2, H3): nothing here is a figure about one person's work. One
+// person's figures (attendance, efficiency, earnings: the time, floor and pay schemas) are read only through the legal
+// gate of their site and purpose (PeopleLegalGate, OFF until a person records the basis: GATE-LABOUR), by the worker and
+// the roles the company names (PeopleSettings.figureRoleKeys, H3: HR), never in a list, filter, group or total, and
+// groups smaller than the minimum size are never shown (ANA-075).
+//
+// Who sees what (ownership/people.json): the office reads and writes. The floor of a site reads its employees (without
+// their names, codes, dates, contract or account: Worker carries the floor name), its teams and members, the loans to
+// its lines and the people settings; never the legal gate (W1-36: the floor reads no legal basis). Portal and link
+// sessions read nothing here.
+
+/// A person who works for a company (MES-208, MES-211): an employee, an agency worker or an external, on the floor, in
+/// the office or both. One record per person: their floor sign-in points at it (Worker.employeeId, one worker per site)
+/// and so does their office account (userId). Lifecycle (design people.employees): Starting (ACTIVE, the start date
+/// ahead), Active, Leaving (an OPEN leaver case), Left (LEFT). Never deleted: a leaver is LEFT and keeps their name on
+/// the history.
+model Employee {
+  id                    String            @id @db.Uuid
+  tenantId              String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId             String            @db.Uuid
+  /// The site the person works at; a move takes their skills and machine authorisations with them.
+  siteId                String            @db.Uuid
+  /// The payroll's employee number (matricola), as in the payroll file and on the floor worker; unique in the tenant
+  /// when set (the payroll export holds a person without one).
+  employeeCode          String?
+  firstName             String
+  lastName              String
+  /// The name shown on the floor and on the badge (often a first name and an initial).
+  displayName           String
+  kind                  EmployeeKind      @default(EMPLOYEE)
+  /// The agency that employs an AGENCY worker (MES-211): an organisation of the company, or tenant-wide. Exactly with
+  /// AGENCY.
+  agencyPartyId         String?           @db.Uuid
+  /// The language of the floor screens and the documents (ISO 639-1).
+  locale                String            @default("it")
+  /// The first working day, and the last one when it is known (required for an agency worker: the contract's end).
+  startDate             DateTime          @db.Date
+  endDate               DateTime?         @db.Date
+  department            String?
+  /// The role (mansione) as the company calls it; its role risk sheet comes with Plant › Risk assessment (W2b-2).
+  jobRole               String?
+  /// The line the person normally works on, on their site.
+  homeLineId            String?           @db.Uuid
+  contract              EmployeeContract?
+  /// The contracted minutes a week (2400 = 40 hours), above 0 and at most 4800.
+  weeklyMinutes         Int?
+  /// The shift pattern the person normally works (Planning's patterns, the roster's default).
+  defaultShiftPatternId String?           @db.Uuid
+  /// The person's office account, if they have one; one employee per account.
+  userId                String?           @db.Uuid
+  status                EmployeeStatus    @default(ACTIVE)
+  version               Int               @default(1)
+  createdAt             DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?           @db.Uuid
+
+  site                Site                   @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId (and siteId).
+  agency              Party?                 @relation("EmployeeAgency", fields: [tenantId, agencyPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  homeLine            Line?                  @relation("EmployeeHomeLine", fields: [tenantId, siteId, homeLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  defaultShiftPattern ShiftPattern?          @relation(fields: [tenantId, defaultShiftPatternId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  user                User?                  @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // floor-auth.prisma: the person's floor sign-in, one per site at most.
+  workers             Worker[]
+  teamMemberships     TeamMember[]
+  lineLoans           LineLoan[]
+  leaverCases         LeaverCase[]
+  // skills.prisma: the skills the person holds, the trainees they signed off as the trainer, the machines they may
+  // operate.
+  skills              EmployeeSkill[]        @relation("EmployeeSkillHolder")
+  trainedSkills       EmployeeSkill[]        @relation("EmployeeSkillTrainer")
+  machineAuthorisations MachineAuthorisation[]
+  // W2b time.prisma (wave 5/7): the person's roster, overtime answers, clock events, attendance days and their anomalies,
+  // absences, overtime worked, timesheets and corrections of closed days.
+  rosterEntries         RosterEntry[]
+  overtimeAgreements    OvertimeAgreement[]
+  clockEvents           ClockEvent[]
+  attendanceDays        AttendanceDay[]
+  attendanceAnomalies   AttendanceAnomaly[]
+  absenceEntries        AbsenceEntry[]
+  overtimeEntries       OvertimeEntry[]
+  timesheetApprovals    TimesheetApproval[]
+  attendanceCorrections AttendanceCorrection[]
+
+  @@unique([tenantId, employeeCode])
+  @@unique([tenantId, userId])
+  // The targets of the tenant-, company- and site-safe references from the person's rows.
+  @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, siteId])
+  @@index([tenantId, homeLineId])
+}
+
+/// What kind of worker a person is (design people.employees "Type"; a home worker, MES-212, is Later).
+enum EmployeeKind {
+  /// Employed by the company.
+  EMPLOYEE
+  /// Employed by an agency and placed with the company (somministrazione, D.Lgs. 81/2015): the agency is named and the
+  /// contract's end is known.
+  AGENCY
+  /// Works for the company without being employed by it (a consultant, a trainee from a school).
+  EXTERNAL
+}
+
+/// The life of an employee record. Starting and Leaving are read from the start date and the open leaver case.
+enum EmployeeStatus {
+  ACTIVE
+  /// Left the company: the end date has passed; kept for the history, never deleted. A rehire makes it ACTIVE again.
+  LEFT
+}
+
+enum EmployeeContract {
+  FULL_TIME
+  PART_TIME
+}
+
+/// A team on a site (MES-210, PLT-020): usually the crew of one line with its lead; also a group of the site to assign
+/// work to and mention (office, maintenance). A person is in one team at a time (TeamMember). Archived, never deleted.
+model Team {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String       @db.Uuid
+  siteId      String       @db.Uuid
+  /// The line it works on, on its site; null: a team of the site.
+  lineId      String?      @db.Uuid
+  /// Short code, unique on the site.
+  code        String
+  name        String
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  site    Site         @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  line    Line?        @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  members TeamMember[]
+  loans   LineLoan[]
+
+  @@unique([tenantId, siteId, code])
+  // The target of the members' and loans' tenant- and site-safe references.
+  @@unique([tenantId, siteId, id])
+}
+
+/// A person in a team, from a day to a day (MES-210): the history of who was in which team when, and its lead. A person
+/// is in one team at a time and a team has one lead at a time (partial unique indexes over the rows with no end). A move
+/// ends the row (until) and starts another; a row that has not begun before today may be deleted (a mistake), an older
+/// one is only ended.
+model TeamMember {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The team's site.
+  siteId      String    @db.Uuid
+  teamId      String    @db.Uuid
+  /// A person of the team's company.
+  employeeId  String    @db.Uuid
+  /// The team's lead (design "Set lead").
+  isLead      Boolean   @default(false)
+  /// The first day in the team, and the last one (null: still in it).
+  since       DateTime  @db.Date
+  until       DateTime? @db.Date
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?   @db.Uuid
+
+  team     Team     @relation(fields: [tenantId, siteId, teamId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee Employee @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, teamId])
+  @@index([tenantId, employeeId])
+}
+
+/// A person lent to another line of their site for some hours or days (MES-210; design "Loan to another line"): from
+/// their home line to a line (and a team on it), from a time to a time, with the reason and who decided it. Two loans of
+/// one person never overlap. A loan that has not begun may be deleted; one under way only ends earlier or later.
+model LineLoan {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The site of the lines (a loan stays on one site).
+  siteId      String   @db.Uuid
+  /// A person of the line's company.
+  employeeId  String   @db.Uuid
+  /// The line the person comes from (their home line at the time), if any.
+  fromLineId  String?  @db.Uuid
+  toLineId    String   @db.Uuid
+  /// The team on the line they join, if any.
+  toTeamId    String?  @db.Uuid
+  /// From when to when (today's hours, or whole days). Unique per person: two loans never overlap.
+  startsAt    DateTime @db.Timestamptz(3)
+  endsAt      DateTime @db.Timestamptz(3)
+  reason      String
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  employee Employee @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  fromLine Line?    @relation("LineLoanFrom", fields: [tenantId, siteId, fromLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  toLine   Line     @relation("LineLoanTo", fields: [tenantId, siteId, toLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  toTeam   Team?    @relation(fields: [tenantId, siteId, toTeamId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, employeeId, startsAt])
+  @@unique([tenantId, employeeId, endsAt])
+  @@index([tenantId, siteId, toLineId])
+}
+
+/// A person leaving, step by step (MES-214; design "Leavers in progress", "Start leaver steps"): the last working day,
+/// who started it, and its steps (LeaverStep). OPEN → DONE (every step done or skipped) | CANCELLED (until the last day,
+/// with the reason); DONE and CANCELLED are final. One OPEN case per person (partial unique index). Never deleted.
+model LeaverCase {
+  id             String           @id @db.Uuid
+  tenantId       String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  employeeId     String           @db.Uuid
+  /// The last working day; it moves while the case is OPEN.
+  lastWorkingDay DateTime         @db.Date
+  status         LeaverCaseStatus @default(OPEN)
+  startedAt      DateTime         @db.Timestamptz(3)
+  startedById    String           @db.Uuid
+  /// Every step done or skipped: when, and who closed it (null: the system, when the last automatic step ticked).
+  closedAt       DateTime?        @db.Timestamptz(3)
+  closedById     String?          @db.Uuid
+  /// Cancelled (the person stays), until the last day: when, who and why.
+  cancelledAt    DateTime?        @db.Timestamptz(3)
+  cancelledById  String?          @db.Uuid
+  cancelReason   String?
+  version        Int              @default(1)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?          @db.Uuid
+
+  employee Employee     @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  steps    LeaverStep[]
+
+  // The target of the steps' tenant-safe references.
+  @@unique([tenantId, id])
+  @@index([tenantId, employeeId])
+}
+
+enum LeaverCaseStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+/// One step of a leaver case (MES-214): its kind, its place in the list, whether the system ticks it (badge off,
+/// sessions ended, access ended, shifts cleared, flagged on the payroll export) or a person does (badge and PPE back,
+/// open work handed over, the end-of-employment visit), when it is due, and where it is done (a record of another area,
+/// by recordType + recordId: the payroll export that carried the last pay, a maintenance job handed over). OPEN → DONE |
+/// SKIPPED (a person, with the reason); reopened while the case is OPEN. Written only while the case is OPEN.
+model LeaverStep {
+  id          String           @id @db.Uuid
+  tenantId    String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  caseId      String           @db.Uuid
+  kind        LeaverStepKind
+  /// Its place in the case's list, from 1 (unique per case; one step of each kind is the API's rule).
+  seq         Int
+  /// The system ticks it when the thing is done; a person ticks the others.
+  automatic   Boolean          @default(false)
+  /// The day it is due (badge off on the last day; shifts cleared after it), if any.
+  dueOn       DateTime?        @db.Date
+  status      LeaverStepStatus @default(OPEN)
+  /// Done or skipped: when, and who (null on a step the system ticked).
+  doneAt      DateTime?        @db.Timestamptz(3)
+  doneById    String?          @db.Uuid
+  /// Why a person skipped it (SKIPPED only).
+  skipReason  String?
+  /// Where it was done, when that is a record (a PayrollExport, a MaintenanceJob, a Bundle …); both or neither.
+  recordType  String?
+  recordId    String?          @db.Uuid
+  version     Int              @default(1)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?          @db.Uuid
+
+  leaverCase LeaverCase @relation(fields: [tenantId, caseId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, caseId, seq])
+}
+
+/// The steps a leaver case lists (design people.employees "Leavers in progress"; coverage wave4.05).
+enum LeaverStepKind {
+  /// The badge stops working at the end of the last day (automatic).
+  BADGE_OFF
+  /// The badge is handed back.
+  BADGE_RETURNED
+  /// Every floor session of the person is ended (automatic).
+  SESSIONS_ENDED
+  /// The office account is deactivated (automatic, when the person has one).
+  ACCESS_ENDED
+  /// Open work handed over: bundles in their hands, maintenance jobs assigned to them.
+  WORK_HANDED_OVER
+  /// The person's personal protective equipment is handed back (W2b-2 PPE issue).
+  PPE_RETURNED
+  /// Removed from the roster after the last day (automatic).
+  SHIFTS_CLEARED
+  /// Flagged on the next payroll export: the last pay goes to the labour consultant (automatic).
+  PAYROLL_FLAGGED
+  /// The end-of-employment visit, when the company doctor's health plan says so (D.Lgs. 81/2008 art. 41).
+  EXIT_VISIT
+}
+
+enum LeaverStepStatus {
+  OPEN
+  DONE
+  /// Not needed for this person (a person decided, with the reason).
+  SKIPPED
+}
+
+/// A company's people settings (design people.settings; MES-225, MES-227, ANA-075, H3): how clock events become hours
+/// (early clock-in, lateness grace, the overtime unit, rounding, automatic clock-out, fixed breaks), the minimum group
+/// size of any people figure, and the office roles that see one person's figures besides the worker. The row has the
+/// company's id; no row: the defaults below. Absence codes and working-time limits are the time schema's (B-W2b-07).
+model PeopleSettings {
+  /// The company's id: a company has at most one row, read by its id.
+  id                         String   @id @db.Uuid
+  tenantId                   String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId                  String   @db.Uuid
+  /// A clock-in before the shift starts counts from the shift's start ("05:52 for a 06:00 shift counts from 06:00").
+  earlyClockInFromShiftStart Boolean  @default(true)
+  /// A clock-in this many minutes late still counts from the shift's start, 0 to 60.
+  lateGraceMinutes           Int      @default(0)
+  /// Overtime counts in whole units of this many minutes, 1 to 60.
+  overtimeUnitMinutes        Int      @default(15)
+  /// Clock events are rounded to 0 (none), 5 or 15 minutes.
+  roundingMinutes            Int      @default(0)
+  /// An open clock-in is closed this many minutes after the shift's end (MES-227), 0 to 720; null: never (the day is
+  /// flagged instead).
+  autoClockOutAfterMinutes   Int?
+  /// Breaks come from the shift pattern and are not clocked; false: people clock out and in for a break.
+  fixedBreaks                Boolean  @default(true)
+  /// The smallest group any people figure (a total, an average, a chart of a team or a line) may show, 3 or more
+  /// (ANA-075): a smaller group is never shown.
+  minimumGroupSize           Int      @default(3)
+  /// The office roles (Role.key, e.g. "hr") that see one person's figures besides the worker (Owner answer H3: HR),
+  /// where the site's legal gate for the purpose is open. Empty: nobody but the worker. Widening it asks a step-up.
+  figureRoleKeys             String[] @default([])
+  version                    Int      @default(1)
+  createdAt                  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById                String?  @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}
+
+/// The legal gate of one site for one purpose of people data (GATE-LABOUR; plan §2 and §12; features PLT-209, MES-249,
+/// MES-282): a row with no end means the purpose is switched ON at the site, with the basis on record. No row in force:
+/// OFF, the safe default, so a site starts closed. ATTENDANCE (clock-in, attendance days, the LUL calendar: Statuto
+/// art. 4 c.2, the notice under c.3) and PERFORMANCE (one person's work figures: art. 4 c.1, a union agreement or the
+/// Ispettorato's authorisation) are separate purposes, each with its own basis, worker notice and impact assessment.
+/// Switching off ends the row (when, who, why); the rows are the history of every decision. One row in force per site
+/// and purpose (partial unique index). Never deleted.
+model PeopleLegalGate {
+  id                String          @id @db.Uuid
+  tenantId          String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId         String          @db.Uuid
+  siteId            String          @db.Uuid
+  purpose           PeoplePurpose
+  /// The legal basis on record, and its reference (the agreement with the RSU/RSA, the Ispettorato's authorisation, or
+  /// counsel's written opinion that neither is needed).
+  basis             MonitoringBasis
+  basisReference    String
+  /// The recorded basis lets the person's team lead see their figures too (PERFORMANCE only; design people.settings
+  /// "only when the recorded legal basis covers leads").
+  basisCoversLeads  Boolean         @default(false)
+  /// Leads see one person's figures at this site (worker + lead + HR); false: worker + HR. Only where the basis covers
+  /// leads; widening asks a step-up, narrowing never does.
+  leadsSeeFigures   Boolean         @default(false)
+  /// The worker notice that tells the workers about this purpose (the company's WORKER_FLOOR notice in force when it was
+  /// switched on), and the impact assessment that covers it (GDPR arts. 13, 35).
+  noticeId          String          @db.Uuid
+  dpiaId            String          @db.Uuid
+  /// Switched on: when and by whom (a step-up of the office).
+  switchedOnAt      DateTime        @db.Timestamptz(3)
+  switchedOnById    String          @db.Uuid
+  /// Switched off: when, who and why; all three or none. Final.
+  switchedOffAt     DateTime?       @db.Timestamptz(3)
+  switchedOffById   String?         @db.Uuid
+  switchOffReason   String?
+  version           Int             @default(1)
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?         @db.Uuid
+
+  site   Site          @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  notice PrivacyNotice @relation(fields: [tenantId, companyId, noticeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  dpia   PrivacyDpia   @relation(fields: [tenantId, dpiaId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId, purpose])
+}
+
+/// The purposes of people data that need a legal gate per site (Statuto art. 4; plan §12 "two purposes in one gate").
+enum PeoplePurpose {
+  /// Working time and presence: clock-in, attendance days, the LUL calendar (art. 4 c.2; the notice under c.3; DPIA).
+  ATTENDANCE
+  /// One person's work figures: efficiency, labour records, My day (art. 4 c.1: agreement or authorisation; DPIA).
+  PERFORMANCE
+}

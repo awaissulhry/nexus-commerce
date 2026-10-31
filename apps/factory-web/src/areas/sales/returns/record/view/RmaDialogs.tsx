@@ -14,9 +14,9 @@ import { say, useWords } from '../../view/parts'
 /**
  * The RMA record's dialogs (SCR-112): Receive goods (the office's counter receipt: parcels, their state, the customer's
  * DDT, the pieces per line — never more than each still expects), Grade (the received lines' grade, cause and words: the
- * inspection of B-W2a-43, in the office), Make replacement order, Make credit note (Finance's draft, from the decided
- * credits), Issue return DDT (unchanged goods back to the customer: preview first, then issue) and Cancel. Each primary
- * button is held with its reason; the API's refusals in our words.
+ * inspection of B-W2a-43, in the office), Make replacement order, Issue return DDT (unchanged goods back to the customer:
+ * preview first, then issue) and Cancel. Each primary button is held with its reason; the API's refusals in our words.
+ * A credit note is made only in Finance (one edit path): the Replacement & credit tab links there.
  */
 export function RmaDialogs({ model, actions }: { model: RmaModel; actions?: RmaActions }) {
   const dialog = model.dialog
@@ -28,8 +28,6 @@ export function RmaDialogs({ model, actions }: { model: RmaModel; actions?: RmaA
       return <GradeDialog model={model} dialog={dialog} actions={actions} />
     case 'replacement':
       return <SimpleDialog model={model} actions={actions} title="replacement.title" body="replacement.body" submit="replacement.submit" note={dialog.note} onNote={(note) => actions?.onDialog?.({ kind: 'replacement', note })} />
-    case 'credit':
-      return <SimpleDialog model={model} actions={actions} title="credit.makeTitle" body="credit.makeBody" submit="credit.make" />
     case 'cancel':
       return <SimpleDialog model={model} actions={actions} title="cancel.title" body="cancel.body" submit="cancel.submit" note={dialog.reason} noteLabel="cancel.reason" noteRequired onNote={(reason) => actions?.onDialog?.({ kind: 'cancel', reason })} />
     case 'ddt':

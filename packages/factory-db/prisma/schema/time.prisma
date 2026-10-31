@@ -30,13 +30,14 @@
 //
 // Personal data with its own purpose (GDPR art. 5(1)(b); Statuto dei Lavoratori art. 4 c.2: attendance tools need the
 // worker notice and the DPIA, not a union agreement): every row is about one person, named by `employeeId` (and, for a
-// floor event, the site's `workerId`), tagged `@purpose attendance`. No biometric data (GDPR art. 9; the Garante): a
-// badge or a name and PIN only. No figure about a person goes into a list, a filter, a group or a total of another
-// purpose (Owner answer F2): the API reads these rows behind the legal gate (B-W2b-27) and the People permissions.
+// floor event, the site's `workerId`); ownership/time.json tags each personal column ATTENDANCE. No biometric data
+// (GDPR art. 9; the Garante): a badge or a name and PIN only. No figure about a person goes into a list, a filter, a
+// group or a total of another purpose (Owner answer F2): the API reads these rows behind the legal gate (B-W2b-27) and
+// the People permissions.
 //
-// The person: `employeeId` names an Employee of the People schema (B-W2b-06, people.prisma), which is not on main while
-// this step builds: no foreign key here yet. The merge after B-W2b-06 adds `employee Employee @relation(…)` on each
-// table (the merge recipe in this step's notes).
+// The person: `employeeId` names an Employee of the People schema (B-W2b-06, people.prisma), by a foreign key that also
+// holds the row's company (an employment belongs to one company): a person of another company is refused. An
+// overtime answer names the person by tenant (its request carries the company).
 //
 // Who sees what (ownership/time.json): the office (HR and the leads, through the API's permissions) reads and writes;
 // the floor of a site records its clock events and reads them, reads its published roster and the overtime it is asked,
@@ -51,8 +52,7 @@ model RosterEntry {
   companyId      String            @db.Uuid
   /// The site where the person works that day (their own, or the site of a loan).
   siteId         String            @db.Uuid
-  /// The person (an Employee of people.prisma).
-  /// @purpose attendance
+  /// The person (an Employee of people.prisma, of the row's company).
   employeeId     String            @db.Uuid
   date           DateTime          @db.Date
   kind           RosterEntryKind
@@ -79,6 +79,8 @@ model RosterEntry {
   site         Site          @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   shiftPattern ShiftPattern? @relation(fields: [tenantId, shiftPatternId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The person (people.prisma); a person of the row's company (an employment is one company's).
+  employee     Employee      @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, employeeId, date])
   // The roster of a site over a range (the sheet, the floor's own shifts).
@@ -166,14 +168,12 @@ model OvertimeAgreement {
   siteId       String                 @db.Uuid
   requestId    String                 @db.Uuid
   /// The person asked (an Employee of people.prisma).
-  /// @purpose attendance
   employeeId   String                 @db.Uuid
   answer       OvertimeAnswer         @default(PENDING)
   /// AGREED and DECLINED: when, and how the answer came.
   answeredAt   DateTime?              @db.Timestamptz(3)
   answeredVia  OvertimeAnswerChannel?
   /// FLOOR: the worker who answered (the site's Worker record of the person) and the tablet.
-  /// @purpose attendance
   workerId     String?                @db.Uuid
   deviceId     String?                @db.Uuid
   /// OFFICE: the user who recorded the spoken answer.
@@ -183,10 +183,12 @@ model OvertimeAgreement {
   updatedAt    DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
   createdById  String?                @db.Uuid
 
-  request OvertimeRequest @relation(fields: [tenantId, siteId, requestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  request  OvertimeRequest @relation(fields: [tenantId, siteId, requestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
-  worker  Worker?         @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
-  device  Device?         @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker   Worker?         @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device   Device?         @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The person asked (people.prisma).
+  employee Employee        @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   // No unique key on (request, person): the generated isolation tests insert a copy of a row (ids kept); the API keeps
   // one answer per person and request.
@@ -216,11 +218,9 @@ model ClockEvent {
   companyId     String           @db.Uuid
   /// The site where it was recorded (a MANUAL one: the person's site that day).
   siteId        String           @db.Uuid
-  /// The person (an Employee of people.prisma).
-  /// @purpose attendance
+  /// The person (an Employee of people.prisma, of the row's company).
   employeeId    String           @db.Uuid
   /// BADGE, NAME_PIN, OFFLINE: the floor worker who clocked (the site's Worker record of the person) and the tablet.
-  /// @purpose attendance
   workerId      String?          @db.Uuid
   deviceId      String?          @db.Uuid
   kind          ClockEventKind
@@ -257,6 +257,8 @@ model ClockEvent {
   voids     ClockEvent?         @relation("ClockEventVoid", fields: [tenantId, employeeId, voidsEventId], references: [tenantId, employeeId, id], onDelete: Restrict, onUpdate: Restrict)
   voidedBy  ClockEvent[]        @relation("ClockEventVoid")
   anomalies AttendanceAnomaly[]
+  // The person (people.prisma); a person of the row's company (an employment is one company's).
+  employee  Employee            @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, deviceId, clientEventId])
   // An event is voided once.
@@ -305,8 +307,7 @@ model AttendanceDay {
   companyId          String              @db.Uuid
   /// The site the person worked at that day.
   siteId             String              @db.Uuid
-  /// The person (an Employee of people.prisma).
-  /// @purpose attendance
+  /// The person (an Employee of people.prisma, of the row's company).
   employeeId         String              @db.Uuid
   date               DateTime            @db.Date
   status             AttendanceDayStatus @default(OPEN)
@@ -350,6 +351,8 @@ model AttendanceDay {
   monthClose  AttendanceMonthClose?  @relation(fields: [tenantId, companyId, monthCloseId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   anomalies   AttendanceAnomaly[]
   corrections AttendanceCorrection[]
+  // The person (people.prisma); a person of the row's company (an employment is one company's).
+  employee    Employee               @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, employeeId, date])
   // The target of the anomalies' and corrections' references: a day of the same person.
@@ -375,7 +378,6 @@ model AttendanceAnomaly {
   /// The day's company.
   companyId         String                @db.Uuid
   /// The person (an Employee of people.prisma), the day's.
-  /// @purpose attendance
   employeeId        String                @db.Uuid
   dayId             String                @db.Uuid
   kind              AttendanceAnomalyKind
@@ -405,6 +407,8 @@ model AttendanceAnomaly {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and employeeId.
   clockEvent      ClockEvent?      @relation(fields: [tenantId, employeeId, clockEventId], references: [tenantId, employeeId, id], onDelete: Restrict, onUpdate: Restrict)
   workingTimeRule WorkingTimeRule? @relation(fields: [tenantId, workingTimeRuleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The person (people.prisma); a person of the row's company (an employment is one company's).
+  employee        Employee         @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, dayId])
   // The open anomalies of a company (the tiles, the month close).
@@ -497,8 +501,7 @@ model AbsenceEntry {
   id          String   @id @db.Uuid
   tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   companyId   String   @db.Uuid
-  /// The person (an Employee of people.prisma).
-  /// @purpose attendance
+  /// The person (an Employee of people.prisma, of the row's company).
   employeeId  String   @db.Uuid
   date        DateTime @db.Date
   /// An ACTIVE code, tenant-wide or of this company.
@@ -506,15 +509,16 @@ model AbsenceEntry {
   /// Minutes absent that day (1-1440; a whole day: the planned shift's working minutes).
   minutes     Int
   /// The backing document's reference when the code needs one (a certificate's protocol number); never its content.
-  /// @purpose attendance
   documentRef String?
   version     Int      @default(1)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
   createdById String?  @db.Uuid
 
-  company Company     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
-  code    AbsenceCode @relation(fields: [tenantId, codeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  company  Company     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  code     AbsenceCode @relation(fields: [tenantId, codeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The person (people.prisma); a person of the row's company (an employment is one company's).
+  employee Employee    @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, employeeId, date, codeId])
   @@index([tenantId, companyId, date])
@@ -528,8 +532,7 @@ model OvertimeEntry {
   tenantId     String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   companyId    String              @db.Uuid
   siteId       String              @db.Uuid
-  /// The person (an Employee of people.prisma).
-  /// @purpose attendance
+  /// The person (an Employee of people.prisma, of the row's company).
   employeeId   String              @db.Uuid
   date         DateTime            @db.Date
   kind         OvertimeClass
@@ -548,9 +551,11 @@ model OvertimeEntry {
   updatedAt    DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
   createdById  String?             @db.Uuid
 
-  site    Site             @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  site     Site             @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
-  request OvertimeRequest? @relation(fields: [tenantId, siteId, requestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  request  OvertimeRequest? @relation(fields: [tenantId, siteId, requestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The person (people.prisma); a person of the row's company (an employment is one company's).
+  employee Employee         @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, employeeId, date, kind])
   @@index([tenantId, companyId, date])
@@ -578,8 +583,7 @@ model TimesheetApproval {
   id               String          @id @db.Uuid
   tenantId         String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   companyId        String          @db.Uuid
-  /// The person (an Employee of people.prisma).
-  /// @purpose attendance
+  /// The person (an Employee of people.prisma, of the row's company).
   employeeId       String          @db.Uuid
   /// The period's first and last day, inside one calendar month (the month, or a week of it).
   periodStart      DateTime        @db.Date
@@ -600,7 +604,9 @@ model TimesheetApproval {
   updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
   createdById      String?         @db.Uuid
 
-  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  company  Company  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The person (people.prisma); a person of the row's company (an employment is one company's).
+  employee Employee @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, employeeId, periodStart, periodEnd])
   @@index([tenantId, companyId, periodStart])
@@ -666,7 +672,6 @@ model AttendanceCorrection {
   /// The day's company.
   companyId     String                   @db.Uuid
   /// The person (an Employee of people.prisma), the day's.
-  /// @purpose attendance
   employeeId    String                   @db.Uuid
   /// The CLOSED day it corrects, and the month close that closed it.
   dayId         String                   @db.Uuid
@@ -685,6 +690,8 @@ model AttendanceCorrection {
   monthClose  AttendanceMonthClose @relation(fields: [tenantId, companyId, monthCloseId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   absenceCode AbsenceCode?         @relation(fields: [tenantId, absenceCodeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The person (people.prisma); a person of the row's company (an employment is one company's).
+  employee    Employee             @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, dayId])
   @@index([tenantId, companyId, createdAt])

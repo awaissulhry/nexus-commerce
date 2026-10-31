@@ -32,6 +32,14 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
       }
+    },
+    "PartyPriceListAssignment": {
+      "about": "W2b (B-W2b-03): the office gives a customer a price list from a day (the pricelists and terms modules, with Party.priceListId in the same command), ends the open one when another list is given, and reads them for the price list's Customers tab ('From'). Never deleted (the …_followups_platform_w2b_guards trigger). Office only, like the lists (the party key is named for a W2b portal that may read a customer's own).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
     }
   }
 }

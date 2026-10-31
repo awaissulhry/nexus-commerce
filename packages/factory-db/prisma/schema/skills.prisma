@@ -1,0 +1,143 @@
+// Skills and machine authorisations (W2b schema wave 4/7; B-W2b-06; features MES-241, MES-244, MES-246, MES-024;
+// design people.skills "Matrix", "Sign off a trainee", "Authorise a machine", people.employees › Skills & training).
+// The skills of the tenant (an operation of the library, a class of machine, or a general skill), the level each person
+// holds with their trainee period and its sign-off, and the classes of machine each person may operate. apps/factory-api's
+// modules/people/skills writes them (B-W2b-39: the matrix, trainees, authorisations, the qualification check on assign
+// and on start), always through command(). Safety training and its courses come with W2b-2 (QHS-241, QHS-242).
+//
+// A person decides (MES-281; D.Lgs. 152/1997 art. 1-bis): a level is a person's judgement, never computed: every level
+// names who assessed it and when, and a changed level names its assessor again. Nothing here is a figure about one
+// person's work, and the matrix never sums people into a score (design "no column sums people into a score": AI Act,
+// Statuto art. 4). Every personal column is tagged in ownership/skills.json.
+//
+// Who sees what (ownership/skills.json): the office reads and writes. The floor of a site reads the skills and its
+// people's levels and authorisations (the qualification check when work starts, the trainee mark), never who assessed or
+// removed them and why. Portal and link sessions read nothing here.
+
+/// A skill of the tenant (MES-241): one operation of the library (sewing a sleeve), one class of machine (a walking-foot
+/// machine), or a general skill (pattern reading); its words per language. Levels are SkillLevel. Archived, never deleted.
+model Skill {
+  id             String       @id @db.Uuid
+  tenantId       String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide (A1 §2.1).
+  companyId      String?      @db.Uuid
+  /// Short code, unique in the tenant; never changes.
+  code           String
+  name           String
+  /// The name per locale, the floor languages included.
+  nameI18n       Json         @default("{}")
+  kind           SkillKind
+  /// The operation (kind OPERATION) or the class of machine (kind MACHINE) it is about; neither for a GENERAL skill.
+  operationId    String?      @db.Uuid
+  machineClassId String?      @db.Uuid
+  sortOrder      Int          @default(0)
+  status         MasterStatus @default(ACTIVE)
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?      @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company      Company?        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation    Operation?      @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  machineClass MachineClass?   @relation(fields: [tenantId, machineClassId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  holders      EmployeeSkill[]
+
+  @@unique([tenantId, code])
+  // The target of the levels' tenant-safe references.
+  @@unique([tenantId, id])
+}
+
+/// What a skill is about.
+enum SkillKind {
+  OPERATION
+  MACHINE
+  GENERAL
+}
+
+/// The level of a skill (design SkillLevelCell: Learning / Can do / Expert / Trainer).
+enum SkillLevel {
+  LEARNING
+  CAN_DO
+  EXPERT
+  /// Can do it and teach it: may sign off a trainee.
+  TRAINER
+}
+
+/// The level one person holds in one skill (MES-241, MES-244): since when, who assessed it and when (a person decides),
+/// the trainee period (until a day, MES-244: trainee pay and efficiency rules apply until the sign-off) and its sign-off
+/// (when, who, the trainer). One row in force per person and skill (partial unique index over the rows not removed); a
+/// skill no longer held is removed (when, who, why), never deleted. The row's site is the person's: it follows them when
+/// they move (ON UPDATE CASCADE), so the floor of their site reads it.
+model EmployeeSkill {
+  id                String     @id @db.Uuid
+  tenantId          String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The person's site (kept equal to theirs by the reference).
+  siteId            String     @db.Uuid
+  employeeId        String     @db.Uuid
+  skillId           String     @db.Uuid
+  level             SkillLevel
+  /// The day the person holds this level from.
+  since             DateTime   @db.Date
+  /// Who set the level and when: a person's judgement, never computed (MES-281).
+  assessedAt        DateTime   @db.Timestamptz(3)
+  assessedById      String     @db.Uuid
+  /// A trainee until this day (MES-244), unless signed off before; null: not a trainee.
+  traineeUntil      DateTime?  @db.Date
+  /// The trainee signed off: the day, who signed (a lead or HR) and the trainer (a person of the company); the day and
+  /// who, or none. Set once.
+  signedOffOn       DateTime?  @db.Date
+  signedOffById     String?    @db.Uuid
+  trainerEmployeeId String?    @db.Uuid
+  /// No longer held: when, who and why; all three or none. Final.
+  removedAt         DateTime?  @db.Timestamptz(3)
+  removedById       String?    @db.Uuid
+  removeReason      String?
+  version           Int        @default(1)
+  createdAt         DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?    @db.Uuid
+
+  employee Employee  @relation("EmployeeSkillHolder", fields: [tenantId, siteId, employeeId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Cascade)
+  skill    Skill     @relation(fields: [tenantId, skillId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  trainer  Employee? @relation("EmployeeSkillTrainer", fields: [tenantId, trainerEmployeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, skillId])
+  @@index([tenantId, siteId])
+}
+
+/// One person may operate one class of machine (MES-246; design "Authorise a machine": "Can sign in on clicking presses
+/// from today"): from a day, until a day (or open), who authorised it. The floor checks it when the person signs in at a
+/// machine of the class or starts work on it (B-W2b-39). One authorisation in force per person and class (partial unique
+/// index over the rows not revoked); revoked (when, who, why), never deleted. The row's site is the person's (ON UPDATE
+/// CASCADE). Required training and fitness (yes / no only) come with W2b-2.
+model MachineAuthorisation {
+  id             String    @id @db.Uuid
+  tenantId       String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The person's site (kept equal to theirs by the reference).
+  siteId         String    @db.Uuid
+  employeeId     String    @db.Uuid
+  machineClassId String    @db.Uuid
+  /// From this day, until that day (null: open).
+  authorisedOn   DateTime  @db.Date
+  validUntil     DateTime? @db.Date
+  /// Who authorised it (a person of the office: a lead, the safety officer, HR).
+  authorisedById String    @db.Uuid
+  /// Revoked: when, who and why; all three or none. Final.
+  revokedAt      DateTime? @db.Timestamptz(3)
+  revokedById    String?   @db.Uuid
+  revokeReason   String?
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?   @db.Uuid
+
+  employee     Employee     @relation(fields: [tenantId, siteId, employeeId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Cascade)
+  machineClass MachineClass @relation(fields: [tenantId, machineClassId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, machineClassId])
+  @@index([tenantId, siteId])
+}

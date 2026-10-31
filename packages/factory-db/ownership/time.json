@@ -1,5 +1,5 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/time.prisma (rules: src/ownership.ts; roles: src/roles.ts). Time and attendance is personal data with one purpose, ATTENDANCE (GDPR art. 5(1)(b); Statuto dei Lavoratori art. 4 c.2): every row is about one person (employeeId, tagged @purpose attendance in the schema). The office (apps/factory-api's People steps B-W2b-32, -33, -37, -42, -48: HR, and the leads for their own team, through the API's permissions and the legal gate of B-W2b-27) reads and writes, always through command(). The floor of a site (factory_floor_runtime, scoped by its site) records its clock events and reads them (the worker's own time today, the offline queue's repeats), reads its PUBLISHED roster rows and the overtime it is asked, records a worker's own answer to an ask (FLOOR only; the …_time_w2b_guards triggers refuse any other change from the floor), and reads which months are closed (the clock-event trigger refuses an event dated in a closed month), never a month's file or who closed it. Attendance days, anomalies, absences, overtime entries, timesheets, corrections, absence codes and working-time limits are the office's only. Portal and link sessions (factory_partner_runtime) and the platform role read nothing here. ClockEvent and AttendanceCorrection are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Nothing else is deleted but a roster cell, a person taken off an ask, an absence and an overtime entry being recomputed, while their month is open (and an OPEN month close abandoned). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/time.prisma (rules: src/ownership.ts; roles: src/roles.ts). Time and attendance is personal data with one purpose, ATTENDANCE (GDPR art. 5(1)(b); Statuto dei Lavoratori art. 4 c.2): every row of a personal table is about one person: its `personal` entry names the subject (employeeId) and tags each personal column with the purpose ATTENDANCE (the privacy export and erasure read them, and the floor reads only ATTENDANCE-tagged columns); OvertimeRequest, AbsenceCode, AttendanceMonthClose and WorkingTimeRule name no person. The office (apps/factory-api's People steps B-W2b-32, -33, -37, -42, -48: HR, and the leads for their own team, through the API's permissions and the legal gate of B-W2b-27) reads and writes, always through command(). The floor of a site (factory_floor_runtime, scoped by its site) records its clock events and reads them (the worker's own time today, the offline queue's repeats), reads its PUBLISHED roster rows and the overtime it is asked, records a worker's own answer to an ask (FLOOR only; the …_time_w2b_guards triggers refuse any other change from the floor), and reads which months are closed (the clock-event trigger refuses an event dated in a closed month), never a month's file or who closed it. Attendance days, anomalies, absences, overtime entries, timesheets, corrections, absence codes and working-time limits are the office's only. Portal and link sessions (factory_partner_runtime) and the platform role read nothing here. ClockEvent and AttendanceCorrection are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Nothing else is deleted but a roster cell, a person taken off an ask, an absence and an overtime entry being recomputed, while their month is open (and an OPEN month close abandoned). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "RosterEntry": {
       "about": "The office sets one person's shift (or day off) per day on the roster sheet, copies a week, publishes it and takes a cell back to the default; nothing changes in a closed month. The floor of the site reads its PUBLISHED rows only (a worker's own shifts, the next break).",
@@ -8,6 +8,18 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
         "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "onlyValues": { "status": ["PUBLISHED"] }, "hiddenColumns": ["note", "publishedById", "createdById"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "date": ["ATTENDANCE"],
+          "kind": ["ATTENDANCE"],
+          "shiftLabel": ["ATTENDANCE"],
+          "startMinute": ["ATTENDANCE"],
+          "endMinute": ["ATTENDANCE"],
+          "breakMinutes": ["ATTENDANCE"],
+          "note": ["ATTENDANCE"]
+        }
       }
     },
     "OvertimeRequest": {
@@ -26,6 +38,15 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
         "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "answer": ["ATTENDANCE"],
+          "answeredAt": ["ATTENDANCE"],
+          "answeredVia": ["ATTENDANCE"],
+          "workerId": ["ATTENDANCE"]
+        }
       }
     },
     "ClockEvent": {
@@ -35,6 +56,19 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert"] },
         "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "workerId": ["ATTENDANCE"],
+          "kind": ["ATTENDANCE"],
+          "source": ["ATTENDANCE"],
+          "occurredAt": ["ATTENDANCE"],
+          "deviceTime": ["ATTENDANCE"],
+          "flags": ["ATTENDANCE"],
+          "reason": ["ATTENDANCE"],
+          "offSite": ["ATTENDANCE"]
+        }
       }
     },
     "AttendanceDay": {
@@ -43,6 +77,22 @@
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "date": ["ATTENDANCE"],
+          "firstInAt": ["ATTENDANCE"],
+          "lastOutAt": ["ATTENDANCE"],
+          "presentMinutes": ["ATTENDANCE"],
+          "breakMinutes": ["ATTENDANCE"],
+          "ordinaryMinutes": ["ATTENDANCE"],
+          "overtimeMinutes": ["ATTENDANCE"],
+          "nightMinutes": ["ATTENDANCE"],
+          "holidayMinutes": ["ATTENDANCE"],
+          "absenceMinutes": ["ATTENDANCE"],
+          "manual": ["ATTENDANCE"]
+        }
       }
     },
     "AttendanceAnomaly": {
@@ -51,6 +101,14 @@
       "keyColumns": { "tenant": "tenantId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "kind": ["ATTENDANCE"],
+          "detail": ["ATTENDANCE"],
+          "resolutionNote": ["ATTENDANCE"]
+        }
       }
     },
     "AbsenceCode": {
@@ -67,6 +125,15 @@
       "keyColumns": { "tenant": "tenantId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "date": ["ATTENDANCE"],
+          "codeId": ["ATTENDANCE"],
+          "minutes": ["ATTENDANCE"],
+          "documentRef": ["ATTENDANCE"]
+        }
       }
     },
     "OvertimeEntry": {
@@ -75,6 +142,15 @@
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "date": ["ATTENDANCE"],
+          "kind": ["ATTENDANCE"],
+          "minutes": ["ATTENDANCE"],
+          "rejectReason": ["ATTENDANCE"]
+        }
       }
     },
     "TimesheetApproval": {
@@ -83,6 +159,12 @@
       "keyColumns": { "tenant": "tenantId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "returnReason": ["ATTENDANCE"]
+        }
       }
     },
     "AttendanceMonthClose": {
@@ -100,6 +182,15 @@
       "keyColumns": { "tenant": "tenantId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "kind": ["ATTENDANCE"],
+          "minutesBefore": ["ATTENDANCE"],
+          "minutesAfter": ["ATTENDANCE"],
+          "reason": ["ATTENDANCE"]
+        }
       }
     },
     "WorkingTimeRule": {

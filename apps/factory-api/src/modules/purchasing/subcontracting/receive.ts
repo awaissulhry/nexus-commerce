@@ -11,6 +11,8 @@ import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contra
 import { kitGoods, actFacts, detailInCommand } from './orders'
 import { officeOrder, readLocationRow, readOrder, sizesOf } from './store'
 import { RECEIPT_ACTION, receiptViews, storedReceipts, type OrderDetailView } from './views'
+import type { OutsideReport } from '../../production/scans/outside'
+import { lockForOutsideReports, recordReceiptInCommand, reportReceiptInCommand } from './receive-back'
 
 /**
  * Receive back (B-W2a-25; SCM-142; design purchasing.subcontracting "Received back", floor.kits "Receive back"): what
@@ -25,13 +27,15 @@ import { RECEIPT_ACTION, receiptViews, storedReceipts, type OrderDetailView } fr
  *             every operation has all its pieces back, else PARTLY_RECEIVED.
  *   material  each line a TRANSFER out of the workshop's location into a location of the site (ONE postMoves batch: 409
  *             before anything is written when the workshop's location lacks it); also once the order is RECEIVED.
- *   record    the receipt is the command's audit row (action purchasing.subcontract.receiveBack: when, lines per
- *             operation and bundle, the moves, the workshop's DDT, the note): the record's "Received back" reads it.
+ *   record    W2b (B-W2b-10, receive-back.ts): a SubcontractReceipt with its lines per operation and bundle (the
+ *             workshop's DDT, the moves, the note); the audit row (action purchasing.subcontract.receiveBack) is kept
+ *             too, and receipts recorded before W2b are read from it.
  *   cost      the workshop's fee for the pieces back good is posted to the work order's cost ledger in the same command
  *             (cost-source.ts through costing's postCostsInCommand; it waits in words when it cannot post).
  *
- * The OperationScan REPORTs at the outside operation (so the next operation of the bundle may be scanned) are the floor's
- * (B-W2a-76): an office command takes no scan (the scan subject is a signed-in worker or the station).
+ * W2b (B-W2b-10): each bundle that came back is reported at its outside operation in the same command (production/scans
+ * outside.ts): a REPORT naming the receipt line, no worker, station or device, so the next operation takes the bundle;
+ * the answer's `outside` says per line which scan it wrote, or why none.
  */
 
 const refuse = (problems: readonly Issue[]) => new ValidationError(problems.length === 1 ? problems[0]!.message : 'The receipt is not valid as it stands.', problems)
@@ -48,7 +52,7 @@ export interface ReceiveInput {
   readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
-export type ReceiveAnswer = { order: OrderDetailView; receipt: OrderDetailView['receipts'][number]; ledger: { posted: number; waiting: string[] } }
+export type ReceiveAnswer = { order: OrderDetailView; receipt: OrderDetailView['receipts'][number]; ledger: { posted: number; waiting: string[] }; outside: OutsideReport[] }
 
 /** purchasing.subcontract.receive: goods back from the workshop. */
 export async function receiveBack(caller: CommandCaller, orderId: string, input: ReceiveInput, idempotencyKey?: string): Promise<ReceiveAnswer> {
@@ -68,6 +72,8 @@ export async function receiveBackAs(caller: CommandCaller, orderId: string, inpu
     { name: 'purchasing.subcontract.receive', idempotencyKey, input: { orderId, ...input }, record: { type: 'SubcontractOrder', id: orderId, expectedVersion: input.version } },
     async (tools) => {
       const order = (await readOrder(tools.tx, orderId))!
+      // B-W2b-10 hook (receive-back.ts): the work order's scan lock before any stock move when bundles come back.
+      await lockForOutsideReports(tools, order, input.lines)
       const { operations, facts } = await actFacts(tools.tx, order)
       const piecesBack = input.lines.length > 0
       const problems = receiveProblems(facts, piecesBack)
@@ -164,6 +170,18 @@ export async function receiveBackAs(caller: CommandCaller, orderId: string, inpu
       if (to !== order.status) await tools.tx.subcontractOrder.update({ where: { id: orderId }, data: { status: to }, select: { id: true } })
 
       const receiptId = newId()
+      // B-W2b-10 hook (receive-back.ts): the receipt and its lines as records, and each bundle reported at its outside
+      // operation (the scan names the receipt line, never a worker or station).
+      const stored = await recordReceiptInCommand(tools, order, {
+        receiptId,
+        receivedAt,
+        lines: recorded.map((line) => ({ operationId: line.operationId, bundleId: line.bundleId, good: line.good, defective: line.defective, scrapped: line.scrapped, reason: line.reason })),
+        returnMoveIds: posted.map((move) => move.id),
+        supplierDdt: input.supplierDdt ?? null,
+        note: blankToNull(input.note),
+        deviceId: floor?.deviceId ?? null,
+      })
+      const outside = await reportReceiptInCommand(tools, order, operations, stored)
       const totals = [...perOperation.values()].reduce((sum, back) => ({ good: sum.good + back.good, defective: sum.defective + back.defective, scrapped: sum.scrapped + back.scrapped }), { good: 0, defective: 0, scrapped: 0 })
       tools.audit({
         action: RECEIPT_ACTION,
@@ -211,6 +229,7 @@ export async function receiveBackAs(caller: CommandCaller, orderId: string, inpu
         order: { ...detail, receipts: [...detail.receipts, receipt!] },
         receipt: receipt!,
         ledger: { posted: cost.posted.filter((entry) => entry.kind === 'SUBCONTRACT').length, waiting: cost.waiting.filter((entry) => entry.sourceType === 'SubcontractOrder').map((entry) => entry.words) },
+        outside,
       }
     },
   )

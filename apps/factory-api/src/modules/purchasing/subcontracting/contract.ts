@@ -7,6 +7,7 @@ import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { KIT_LINE_STATUSES, KIT_STATES, MAX_KIT_LINES, MAX_LINES_PER_ACT, MAX_OPERATIONS, SUBCONTRACT_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/subcontracting/rules'
 import { fileView } from '../../../platform/files/contract'
 import { sourceRequest } from '../../shipping/ddt/contract'
+import { outsideReport } from '../../production/scans/contract'
 
 /**
  * The subcontract orders' contracts (B-W2a-25; SCM-138, SCM-140, SCM-141, SCM-142; design purchasing.subcontracting
@@ -405,6 +406,8 @@ export const receiveContract = defineContract({
       receipt: receiptView,
       /** The workshop's fee for the pieces back good on the work order's cost ledger: entries posted now, or why it waits. */
       ledger: output({ posted: z.number().int(), waiting: z.array(z.string()) }),
+      /** B-W2b-10: each line at its outside operation: the scan that reported the bundle (naming the receipt line), or why not. */
+      outside: z.array(outsideReport),
     }),
   },
 })

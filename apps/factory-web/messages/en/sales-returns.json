@@ -59,10 +59,8 @@
     "later": "Later",
     "laterFee": "The restocking or handling fee (dropped when the cause is ours) is recorded in the policy but not taken yet.",
     "laterWithout": "Credit without a return, within the approval limit, comes later.",
-    "make": "Make credit note",
-    "makeBody": "A draft credit note per invoice, from the lines decided with a credit. Finance checks and issues it.",
+    "makeInFinance": "Make it in Finance",
     "makeReplacement": "Make replacement order",
-    "makeTitle": "Make credit note for {number}",
     "noRepairs": "No repair order from this return.",
     "noReplacement": "No replacement order.",
     "none": "No credit note yet.",
@@ -87,8 +85,8 @@
       "OTHER_COMPANY": "invoiced by another company",
       "OVER_CREDITABLE": "more than its invoice can still credit"
     },
-    "toCredit_one": "Make credit note would draft {count} note now.",
-    "toCredit_other": "Make credit note would draft {count} notes now."
+    "toCredit_one": "{count} credit note can be drafted in Finance now.",
+    "toCredit_other": "{count} credit notes can be drafted in Finance now."
   },
   "csv": {
     "credit": "Credit (net)",
@@ -200,8 +198,6 @@
     "checkPassed": "Safety check of {number} signed: passed.",
     "copied": "Copied",
     "created": "{number} is made and authorised.",
-    "creditNotes_one": "{count} credit note drafted for Finance.",
-    "creditNotes_other": "{count} credit notes drafted for Finance.",
     "ddt": "Return DDT {number} issued.",
     "decided_one": "{count} line decided.",
     "decided_other": "{count} lines decided.",

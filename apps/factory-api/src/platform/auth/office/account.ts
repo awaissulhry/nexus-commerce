@@ -8,7 +8,7 @@ import type { Locale } from '@nexus/factory-domain/email/rules'
 import { requireContext, type OfficeContext } from '../../../core/context'
 import { staffNoticeState } from '../../privacy/read'
 import { officeSessionOf, type OfficeSession } from '../sessions/authenticator'
-import { heldRoles } from '../roles/access'
+import { heldRoles, type HeldAssignment } from '../roles/access'
 import { mfaRequired, mfaSatisfied } from '../sessions/grants'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { endSessions, STEP_UP_VALID_MS } from '../sessions/session-store'
@@ -51,31 +51,54 @@ const companyView = (company: { id: string; code: string; legalName: string; tra
 })
 
 /** The active companies a person's live roles reach (any role: two-factor not yet proved still lists them). */
-async function companiesOf(client: FactoryClient, userId: string, now: Date) {
-  const held = await heldRoles(client, userId, now)
+async function companiesOf(client: FactoryClient, held: readonly HeldAssignment[]) {
   if (held.length === 0) return []
   const every = held.some((assignment) => assignment.scope.allCompanies)
   const ids = [...new Set(held.flatMap((assignment) => assignment.scope.companyIds))]
   return client.company.findMany({ where: { status: 'ACTIVE', ...(every ? {} : { id: { in: ids } }) }, orderBy: [{ code: 'asc' }], select: COMPANY_VIEW })
 }
 
+const SITE_VIEW = { id: true, code: true, name: true } as const
+
+/**
+ * B-W2b-05 (PLT-008): the active sites of the screen's company that the person's live roles reach, for the top bar's
+ * company and site switcher. Every site of the company when an assignment that reaches the company has no site limit
+ * (`allSites`), else the sites those assignments name. Any role counts, as for the companies: the switcher only offers
+ * what the grants reach, and the API checks every read against the grants themselves.
+ */
+async function sitesOf(client: FactoryClient, held: readonly HeldAssignment[], companyId: string) {
+  const reaching = held.filter((assignment) => assignment.scope.allCompanies || assignment.scope.companyIds.includes(companyId))
+  if (reaching.length === 0) return { sites: [], allSites: false }
+  const allSites = reaching.some((assignment) => assignment.scope.siteIds.length === 0)
+  const ids = [...new Set(reaching.flatMap((assignment) => assignment.scope.siteIds))]
+  const sites = await client.site.findMany({ where: { companyId, status: 'ACTIVE', ...(allSites ? {} : { id: { in: ids } }) }, orderBy: [{ code: 'asc' }], select: SITE_VIEW })
+  return { sites, allSites }
+}
+
 export async function me(auth: OfficeAuth, request: FastifyRequest) {
   const context = officeContextOf(request)
   const session = officeSessionOf(request)
-  const { tenant, company, companies, user, staffNotice } = await request.withClient(async (client) => ({
-    tenant: await client.tenant.findUniqueOrThrow({ where: { id: context.tenantId }, select: { id: true, slug: true, name: true } }),
-    company: context.companyId ? await client.company.findUnique({ where: { id: context.companyId }, select: COMPANY_VIEW }) : null,
-    companies: await companiesOf(client, context.actorId, auth.clock.now()),
-    user: await client.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { recoveryCodeHashes: true } }),
-    // The screen's company's staff notice in force (B-W1-36): the web shows it once per version (GET /privacy/staff-notice).
-    staffNotice: await staffNoticeState(client, context.companyId, context.actorId),
-  }))
+  const { tenant, company, companies, place, user, staffNotice } = await request.withClient(async (client) => {
+    const held = await heldRoles(client, context.actorId, auth.clock.now())
+    return {
+      tenant: await client.tenant.findUniqueOrThrow({ where: { id: context.tenantId }, select: { id: true, slug: true, name: true } }),
+      company: context.companyId ? await client.company.findUnique({ where: { id: context.companyId }, select: COMPANY_VIEW }) : null,
+      companies: await companiesOf(client, held),
+      // B-W2b-05: the screen company's sites this person reaches (the top bar's switcher).
+      place: context.companyId ? await sitesOf(client, held, context.companyId) : { sites: [], allSites: false },
+      user: await client.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { recoveryCodeHashes: true } }),
+      // The screen's company's staff notice in force (B-W1-36): the web shows it once per version (GET /privacy/staff-notice).
+      staffNotice: await staffNoticeState(client, context.companyId, context.actorId),
+    }
+  })
   const until = stepUpUntil(session)
   return {
     user: { id: context.actorId, email: session.user.email, displayName: session.user.displayName, locale: session.user.locale },
     tenant,
     company: company ? companyView(company) : null,
     companies: companies.map(companyView),
+    sites: place.sites,
+    allSites: place.allSites,
     session: {
       id: session.id,
       createdAt: toUtcIso(session.createdAt),

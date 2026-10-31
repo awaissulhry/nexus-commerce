@@ -11,6 +11,9 @@ export const officeMeSchema = z.object({
   company: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable(),
   /** The active companies the person's live roles reach, by code (before two-factor is proved too). */
   companies: z.array(z.object({ id: z.string(), code: z.string(), name: z.string() })).default([]),
+  /** B-W2b-05: the screen company's active sites the person's roles reach (the top bar's switcher), and whether that is every site. */
+  sites: z.array(z.object({ id: z.string(), code: z.string(), name: z.string() })).optional(),
+  allSites: z.boolean().optional(),
   session: z.object({
     id: z.string(),
     createdAt: z.string(),

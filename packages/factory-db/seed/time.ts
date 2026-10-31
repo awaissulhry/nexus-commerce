@@ -26,6 +26,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedCalendar } from './calendar'
 import { seed as seedFiles } from './files'
 import { seed as seedFloorAuth } from './floor-auth'
+import { seed as seedPeople } from './people'
 
 /**
  * The time and attendance seed (W2b schema wave 5/7), per tenant of seed/_core.ts. Plant A1 (company A) has a week of
@@ -55,8 +56,8 @@ import { seed as seedFloorAuth } from './floor-auth'
  *                  closed, the timesheet approved by the lead then HR, the LUL calendar sealed; two corrections of the
  *                  29th (an early leave typed on the wrong day, then put back). October's close is OPEN (being made).
  *
- * The person: these rows name an Employee of the People schema (B-W2b-06, not on main while this step builds) by the
- * People seed's own ids for the same workers (E1, E2, EB1), so the foreign keys its merge adds hold on the seeded rows.
+ * The person: these rows name the People seed's employees of the same workers (E1, E2, EB1; seed/people.ts), each of
+ * the row's company (the foreign key holds the company too).
  *
  * The generated isolation tests (src/isolation.pg.vitest.test.ts) copy the FIRST row of each table by id and insert the
  * copy: so the first roster cell, request (a DRAFT), answer (PENDING), clock event (a badge clock-in at A1, in an open
@@ -166,11 +167,13 @@ export interface TimeSeed {
 
 export async function seed(context: SeedContext): Promise<TimeSeed> {
   const { db, namespace } = context
-  // The CLI runs the seeds in name order (_core, auth … floor-auth … threads, time); run what this one builds on: the
-  // shift patterns (calendar, with the parties), the workers and tablets (floor-auth), the file store (files).
+  // The CLI runs the seeds in name order (_core, auth … floor-auth … people … threads, time); run what this one builds
+  // on: the shift patterns (calendar, with the parties), the workers and tablets (floor-auth), the file store (files),
+  // the people (People schema: the employees of the seeded workers).
   await seedCalendar(context)
   await seedFloorAuth(context)
   await seedFiles(context)
+  const people = await seedPeople(context)
   const id = (key: string): string => seedUuid(namespace, key)
   const firstId = (key: string): string => `00000000${id(key).slice(8)}`
   const lastId = (key: string): string => `ffffffff${id(key).slice(8)}`
@@ -185,11 +188,8 @@ export async function seed(context: SeedContext): Promise<TimeSeed> {
   const pattern = { twoShifts: id('calendar:pattern:2T'), oneShift: id('calendar:pattern:1T') }
   const worker = { operator: id('worker:A1:operator'), lead: id('worker:A1:lead'), b1Operator: id('worker:B1:operator') }
   const device = { A1: id('device:A1:cutting'), B1: id('device:B1:cutting') }
-  /**
-   * The Employees of the seeded workers, with the People seed's ids (B-W2b-06, seed/people.ts: E1 is A1's operator, E2
-   * A1's lead, EB1 B1's operator; its Worker.employeeId links them), so the foreign keys added at the merge hold.
-   */
-  const employees = { operator: firstId('people:employee:A1:1'), lead: id('people:employee:A1:2'), b1Operator: id('people:employee:B1:1') }
+  /** The Employees of the seeded workers (seed/people.ts: E1 is A1's operator, E2 A1's lead, EB1 B1's operator). */
+  const employees = { operator: people.employeeIds.e1, lead: people.employeeIds.e2, b1Operator: people.employeeIds.eb1 }
   const office = { audience: 'office' as const, tenantId, actorId }
   const floorOf = (siteId: string, workerId: string) => ({ audience: 'floor' as const, tenantId, actorId: workerId, siteId })
   const stamp = (when: Date, by: string | null = actorId) => ({ createdAt: when, updatedAt: when, createdById: by })

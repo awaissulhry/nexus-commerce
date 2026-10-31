@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { parseLiveData } from '../../../record-panels/live'
+import { useLiveBus } from '../../../shell/live/use-live'
 import type { LiveChange } from '../../../record-panels/model'
 import type { LiveState, RecordTab } from './model'
 
@@ -62,37 +62,8 @@ export function useThreadDock(key: string, activityTab = 'activity') {
  * screen reads everything again). A message is a hint: the screen reads the part again.
  */
 export function useLive(onChange: (change: LiveChange) => void, onReconnect: () => void): LiveState {
-  const [state, setState] = useState<LiveState>('connecting')
-  const handlers = useRef({ onChange, onReconnect })
-  handlers.current = { onChange, onReconnect }
-  useEffect(() => {
-    if (typeof EventSource === 'undefined') {
-      setState('offline')
-      return
-    }
-    const source = new EventSource('/api/live')
-    let readyOnce = false
-    const onReady = () => {
-      setState('live')
-      if (readyOnce) handlers.current.onReconnect()
-      readyOnce = true
-    }
-    const onMessage = (event: MessageEvent<string>) => {
-      const change = parseLiveData(event.data)
-      if (change) handlers.current.onChange(change)
-    }
-    const onError = () => setState(source.readyState === EventSource.CLOSED ? 'offline' : 'connecting')
-    source.addEventListener('ready', onReady)
-    source.addEventListener('change', onMessage as EventListener)
-    source.addEventListener('error', onError)
-    return () => {
-      source.removeEventListener('ready', onReady)
-      source.removeEventListener('change', onMessage as EventListener)
-      source.removeEventListener('error', onError)
-      source.close()
-    }
-  }, [])
-  return state
+  // B-W2b-05: the tab's ONE live connection (shell/live/bus.ts), shared with the bell and every other screen.
+  return useLiveBus({ onChange, onReconnect })
 }
 
 /** A parties' event (`party.*`), and the party it is about. */

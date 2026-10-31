@@ -1,5 +1,5 @@
 import type { Prisma } from '../src/generated/prisma/client'
-import { DdtFreight, DdtReason, ShipmentStatus, TrackingSource, TrackingStatus, TransportBy } from '../src/generated/prisma/enums'
+import { DdtFreight, DdtReason, ShipmentStatus, TrackingSource, TrackingStatus, TransportBy, TransportMode } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedNumbering } from './numbering'
 import { seed as seedQuality, type QualitySeed } from './quality'
@@ -14,7 +14,9 @@ import { seed as seedQuality, type QualitySeed } from './quality'
  *               floor, PACKED; carrier labels bought (made-up tracking numbers); DDT 143/2026 issued from company A's
  *               DDT series, then cancelled (the goods' appearance was wrong) and replaced by DDT 144/2026, which keeps
  *               the series without a gap (their NumberAllocation rows, the series moved to 145); SHIPPED; tracking:
- *               both labels created, then in transit.
+ *               both labels created, then in transit. W2b (B-W2b-01): its DDTs keep the language they were printed in
+ *               (Italian) and the mode of transport (road); it left by road, and the carrier's cost (18.50 EUR, a cost
+ *               the office alone reads) is on it.
  *   SH-0002     a DRAFT shipment of SEED-SO-0003's serial-tracked jacket: one of WO-0003's two released garments, one
  *               parcel, being packed (its serial is packed before it is PACKED).
  *
@@ -203,6 +205,8 @@ export async function seed(context: SeedContext): Promise<ShippingSeed> {
     documentDate: DDT_DATE,
     reason: DdtReason.SALE,
     transportBy: TransportBy.CARRIER,
+    language: 'it',
+    transportMode: TransportMode.ROAD,
     carrier: { name: carrier.carrierName, address: { line1: 'Via Corriere 3', postalCode: '00000', city: 'Seedport', country: 'IT' }, vatNumber: 'IT00000000000' },
     startAt: T.start,
     appearance,
@@ -252,7 +256,7 @@ export async function seed(context: SeedContext): Promise<ShippingSeed> {
     client.$transaction(async (tx) => {
       const leaving = await tx.shipment.updateMany({
         where: { id: shipmentId, status: ShipmentStatus.PACKED },
-        data: { status: ShipmentStatus.SHIPPED, shippedAt: T.pickedUp, updatedAt: T.pickedUp },
+        data: { status: ShipmentStatus.SHIPPED, shippedAt: T.pickedUp, updatedAt: T.pickedUp, transportMode: TransportMode.ROAD, freightCost: 1_850, freightCostCurrency: 'EUR' },
       })
       if (leaving.count === 0) return
       await tx.trackingEvent.create({

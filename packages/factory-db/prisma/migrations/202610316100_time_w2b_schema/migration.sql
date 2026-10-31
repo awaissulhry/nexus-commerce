@@ -470,6 +470,9 @@ ALTER TABLE "RosterEntry" ADD CONSTRAINT "RosterEntry_tenantId_companyId_siteId_
 ALTER TABLE "RosterEntry" ADD CONSTRAINT "RosterEntry_tenantId_shiftPatternId_fkey" FOREIGN KEY ("tenantId", "shiftPatternId") REFERENCES "ShiftPattern"("tenantId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
+ALTER TABLE "RosterEntry" ADD CONSTRAINT "RosterEntry_tenantId_companyId_employeeId_fkey" FOREIGN KEY ("tenantId", "companyId", "employeeId") REFERENCES "Employee"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
 ALTER TABLE "OvertimeRequest" ADD CONSTRAINT "OvertimeRequest_tenantId_companyId_siteId_fkey" FOREIGN KEY ("tenantId", "companyId", "siteId") REFERENCES "Site"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
@@ -485,6 +488,9 @@ ALTER TABLE "OvertimeAgreement" ADD CONSTRAINT "OvertimeAgreement_tenantId_siteI
 ALTER TABLE "OvertimeAgreement" ADD CONSTRAINT "OvertimeAgreement_tenantId_siteId_deviceId_fkey" FOREIGN KEY ("tenantId", "siteId", "deviceId") REFERENCES "Device"("tenantId", "siteId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
+ALTER TABLE "OvertimeAgreement" ADD CONSTRAINT "OvertimeAgreement_tenantId_employeeId_fkey" FOREIGN KEY ("tenantId", "employeeId") REFERENCES "Employee"("tenantId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
 ALTER TABLE "ClockEvent" ADD CONSTRAINT "ClockEvent_tenantId_companyId_siteId_fkey" FOREIGN KEY ("tenantId", "companyId", "siteId") REFERENCES "Site"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
@@ -497,10 +503,16 @@ ALTER TABLE "ClockEvent" ADD CONSTRAINT "ClockEvent_tenantId_siteId_deviceId_fke
 ALTER TABLE "ClockEvent" ADD CONSTRAINT "ClockEvent_tenantId_employeeId_voidsEventId_fkey" FOREIGN KEY ("tenantId", "employeeId", "voidsEventId") REFERENCES "ClockEvent"("tenantId", "employeeId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
+ALTER TABLE "ClockEvent" ADD CONSTRAINT "ClockEvent_tenantId_companyId_employeeId_fkey" FOREIGN KEY ("tenantId", "companyId", "employeeId") REFERENCES "Employee"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
 ALTER TABLE "AttendanceDay" ADD CONSTRAINT "AttendanceDay_tenantId_companyId_siteId_fkey" FOREIGN KEY ("tenantId", "companyId", "siteId") REFERENCES "Site"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
 ALTER TABLE "AttendanceDay" ADD CONSTRAINT "AttendanceDay_tenantId_companyId_monthCloseId_fkey" FOREIGN KEY ("tenantId", "companyId", "monthCloseId") REFERENCES "AttendanceMonthClose"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
+ALTER TABLE "AttendanceDay" ADD CONSTRAINT "AttendanceDay_tenantId_companyId_employeeId_fkey" FOREIGN KEY ("tenantId", "companyId", "employeeId") REFERENCES "Employee"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
 ALTER TABLE "AttendanceAnomaly" ADD CONSTRAINT "AttendanceAnomaly_tenantId_employeeId_dayId_fkey" FOREIGN KEY ("tenantId", "employeeId", "dayId") REFERENCES "AttendanceDay"("tenantId", "employeeId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
@@ -512,6 +524,9 @@ ALTER TABLE "AttendanceAnomaly" ADD CONSTRAINT "AttendanceAnomaly_tenantId_emplo
 ALTER TABLE "AttendanceAnomaly" ADD CONSTRAINT "AttendanceAnomaly_tenantId_workingTimeRuleId_fkey" FOREIGN KEY ("tenantId", "workingTimeRuleId") REFERENCES "WorkingTimeRule"("tenantId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
+ALTER TABLE "AttendanceAnomaly" ADD CONSTRAINT "AttendanceAnomaly_tenantId_companyId_employeeId_fkey" FOREIGN KEY ("tenantId", "companyId", "employeeId") REFERENCES "Employee"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
 ALTER TABLE "AbsenceCode" ADD CONSTRAINT "AbsenceCode_tenantId_companyId_fkey" FOREIGN KEY ("tenantId", "companyId") REFERENCES "Company"("tenantId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
@@ -521,13 +536,22 @@ ALTER TABLE "AbsenceEntry" ADD CONSTRAINT "AbsenceEntry_tenantId_companyId_fkey"
 ALTER TABLE "AbsenceEntry" ADD CONSTRAINT "AbsenceEntry_tenantId_codeId_fkey" FOREIGN KEY ("tenantId", "codeId") REFERENCES "AbsenceCode"("tenantId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
+ALTER TABLE "AbsenceEntry" ADD CONSTRAINT "AbsenceEntry_tenantId_companyId_employeeId_fkey" FOREIGN KEY ("tenantId", "companyId", "employeeId") REFERENCES "Employee"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
 ALTER TABLE "OvertimeEntry" ADD CONSTRAINT "OvertimeEntry_tenantId_companyId_siteId_fkey" FOREIGN KEY ("tenantId", "companyId", "siteId") REFERENCES "Site"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
 ALTER TABLE "OvertimeEntry" ADD CONSTRAINT "OvertimeEntry_tenantId_siteId_requestId_fkey" FOREIGN KEY ("tenantId", "siteId", "requestId") REFERENCES "OvertimeRequest"("tenantId", "siteId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
+ALTER TABLE "OvertimeEntry" ADD CONSTRAINT "OvertimeEntry_tenantId_companyId_employeeId_fkey" FOREIGN KEY ("tenantId", "companyId", "employeeId") REFERENCES "Employee"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
 ALTER TABLE "TimesheetApproval" ADD CONSTRAINT "TimesheetApproval_tenantId_companyId_fkey" FOREIGN KEY ("tenantId", "companyId") REFERENCES "Company"("tenantId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
+ALTER TABLE "TimesheetApproval" ADD CONSTRAINT "TimesheetApproval_tenantId_companyId_employeeId_fkey" FOREIGN KEY ("tenantId", "companyId", "employeeId") REFERENCES "Employee"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
 ALTER TABLE "AttendanceMonthClose" ADD CONSTRAINT "AttendanceMonthClose_tenantId_companyId_fkey" FOREIGN KEY ("tenantId", "companyId") REFERENCES "Company"("tenantId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
@@ -543,6 +567,9 @@ ALTER TABLE "AttendanceCorrection" ADD CONSTRAINT "AttendanceCorrection_tenantId
 
 -- AddForeignKey
 ALTER TABLE "AttendanceCorrection" ADD CONSTRAINT "AttendanceCorrection_tenantId_absenceCodeId_fkey" FOREIGN KEY ("tenantId", "absenceCodeId") REFERENCES "AbsenceCode"("tenantId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
+ALTER TABLE "AttendanceCorrection" ADD CONSTRAINT "AttendanceCorrection_tenantId_companyId_employeeId_fkey" FOREIGN KEY ("tenantId", "companyId", "employeeId") REFERENCES "Employee"("tenantId", "companyId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
 ALTER TABLE "WorkingTimeRule" ADD CONSTRAINT "WorkingTimeRule_tenantId_companyId_fkey" FOREIGN KEY ("tenantId", "companyId") REFERENCES "Company"("tenantId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;

@@ -59,10 +59,8 @@
     "later": "Più avanti",
     "laterFee": "La trattenuta di rientro (tolta quando la causa è nostra) è registrata nella politica ma non ancora applicata.",
     "laterWithout": "L’accredito senza reso, entro il limite di approvazione, arriverà più avanti.",
-    "make": "Crea nota di credito",
-    "makeBody": "Una nota di credito in bozza per fattura, dalle righe decise con accredito. L’amministrazione la controlla e la emette.",
+    "makeInFinance": "Creala in Amministrazione",
     "makeReplacement": "Crea ordine di sostituzione",
-    "makeTitle": "Crea nota di credito per {number}",
     "noRepairs": "Nessun ordine di riparazione da questo reso.",
     "noReplacement": "Nessun ordine di sostituzione.",
     "none": "Ancora nessuna nota di credito.",
@@ -87,8 +85,8 @@
       "OTHER_COMPANY": "fatturata da un’altra società",
       "OVER_CREDITABLE": "più di quanto la sua fattura possa ancora stornare"
     },
-    "toCredit_one": "Crea nota di credito ne preparerebbe {count} ora.",
-    "toCredit_other": "Crea nota di credito ne preparerebbe {count} ora."
+    "toCredit_one": "In Amministrazione si può preparare {count} nota di credito ora.",
+    "toCredit_other": "In Amministrazione si possono preparare {count} note di credito ora."
   },
   "csv": {
     "credit": "Accredito (netto)",
@@ -200,8 +198,6 @@
     "checkPassed": "Controllo di sicurezza di {number} firmato: superato.",
     "copied": "Copiato",
     "created": "{number} è creato e autorizzato.",
-    "creditNotes_one": "{count} nota di credito in bozza per l’amministrazione.",
-    "creditNotes_other": "{count} note di credito in bozza per l’amministrazione.",
     "ddt": "DDT di reso {number} emesso.",
     "decided_one": "{count} riga decisa.",
     "decided_other": "{count} righe decise.",

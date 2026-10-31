@@ -4,7 +4,7 @@ import { seed as seedAuth } from '../seed/auth'
 import { seed as seedCore, type CoreSeed } from '../seed/_core'
 import { seed as seedTime, type TimeSeed } from '../seed/time'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
-import { classifiedModels } from './ownership'
+import { classifiedModels, personalDataOf } from './ownership'
 import { FLOOR_ROLE, PARTNER_ROLE, RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
@@ -98,8 +98,25 @@ const remove = (scope: FactoryScope, table: string, id: string) => run(scope, `D
 const now = () => new Date().toISOString()
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
 const tag = () => randomUUID().slice(0, 8)
-/** A person the seeds do not know (a fresh Employee id), so a test's rows never meet the seeded ones. */
-const person = () => randomUUID()
+/** People the seeds do not know (made-up Employees of company A at plant A1, and of company B at B1), so a test's rows
+ * never meet the seeded ones: each call takes the next one. */
+const poolA: string[] = []
+const poolB: string[] = []
+const person = (): string => poolA.pop() as string
+const personB = (): string => poolB.pop() as string
+async function makePeople(count: number, companyId: string, siteId: string, into: string[]): Promise<void> {
+  await as(office(), (client) =>
+    client.$transaction(async (tx) => {
+      for (let index = 0; index < count; index++) {
+        const id = randomUUID()
+        await tx.$executeRawUnsafe(
+          ...insertSql('Employee', { id, companyId, siteId, firstName: 'Test', lastName: `Person ${index}`, displayName: `Test ${index}`, startDate: '2026-01-05' }),
+        )
+        into.push(id)
+      }
+    }),
+  )
+}
 
 beforeAll(async () => {
   db = await migratedDatabase('timew2b')
@@ -107,6 +124,8 @@ beforeAll(async () => {
   a = await seedCore({ db: factory, namespace: NS })
   await seedAuth({ db: factory, namespace: NS })
   time = await seedTime({ db: factory, namespace: NS })
+  await makePeople(40, A.companyA, A.siteA, poolA)
+  await makePeople(5, A.companyB, A.siteB, poolB)
 }, 120_000)
 
 afterAll(async () => {
@@ -207,6 +226,13 @@ describe('the seeds and the walls', () => {
     expect(columns.filter((column) => /finger|face|biometric|photo|retina|iris|template|geo|gps|latitude/i.test(String(column.c)))).toEqual([])
     const personal = TABLES.filter((table) => !['OvertimeRequest', 'AbsenceCode', 'AttendanceMonthClose', 'WorkingTimeRule'].includes(table))
     for (const table of personal) expect(columns.some((column) => column.t === table && column.c === 'employeeId'), table).toBe(true)
+    // The privacy export and erasure find them: each personal table's subject is the person, every tag ATTENDANCE.
+    const tagged = personalDataOf(loadSchema(), loadOwnership()).filter((entry) => (TABLES as readonly string[]).includes(entry.model))
+    expect(tagged.map((entry) => entry.model).sort()).toEqual([...personal].sort())
+    for (const entry of tagged) {
+      expect(entry.subject, entry.model).toBe('employeeId')
+      expect(new Set(Object.values(entry.columns).flat()), entry.model).toEqual(new Set(['ATTENDANCE']))
+    }
   })
 
   it('a tablet reads its own site’s published roster and the asks from ASKED on, and which months are closed but not their file', async () => {
@@ -430,6 +456,9 @@ describe('attendance days and anomalies', () => {
     await expect(insert(office(), 'AttendanceDay', dayRow({ presentMinutes: 1500 }))).rejects.toThrow(/0 to 1440/)
     await expect(insert(office(), 'AttendanceDay', dayRow({ plannedStartMinute: 360 }))).rejects.toThrow(/planned shift/)
     await expect(insert(office(), 'AttendanceDay', dayRow({ firstInAt: '2026-10-20T15:00:00Z', lastOutAt: '2026-10-20T05:00:00Z' }))).rejects.toThrow(/not after its last clock-out/)
+    // The person is an Employee of the row's company (an employment is one company's).
+    await expect(insert(office(), 'AttendanceDay', dayRow({ employeeId: personB() }))).rejects.toThrow(/foreign key/)
+    await expect(insert(office(), 'AttendanceDay', dayRow({ employeeId: randomUUID() }))).rejects.toThrow(/foreign key/)
     expect(await insert(office(), 'AttendanceDay', dayRow({ plannedLabel: 'Morning', plannedStartMinute: 360, plannedEndMinute: 840, plannedMinutes: 465 }))).toBe(1)
   })
 
@@ -540,7 +569,7 @@ describe('absences, overtime entries and timesheets', () => {
 
 describe('the month close', () => {
   it('closes only once every day is closed by it, nothing open or waiting; then nothing is written into the month again; the LUL calendar is sealed once', async () => {
-    const employeeId = person()
+    const employeeId = personB()
     const close = { id: randomUUID(), companyId: A.companyB, month: '2026-08-01' }
     const closeId = close.id
     await expect(insert(office(), 'AttendanceMonthClose', { ...close, month: '2026-08-02' })).rejects.toThrow(/by its first day/)
@@ -563,7 +592,7 @@ describe('the month close', () => {
     // Nothing is written into a closed month: a clock event, a day, an absence, overtime, a roster cell, a timesheet.
     await expect(insert(office(), 'ClockEvent', officeEvent({ companyId: A.companyB, siteId: A.siteB, employeeId, occurredAt: '2026-08-03T08:00:00.000Z' }))).rejects.toThrow(/closed month/)
     await expect(update(office(), 'AttendanceDay', day.id, { presentMinutes: 470 })).rejects.toThrow(/is CLOSED \(its month is closed\)/)
-    await expect(insert(office(), 'AttendanceDay', { ...day, id: randomUUID(), employeeId: person(), status: 'OPEN', date: '2026-08-02' })).rejects.toThrow(/closed month/)
+    await expect(insert(office(), 'AttendanceDay', { ...day, id: randomUUID(), employeeId: personB(), status: 'OPEN', date: '2026-08-02' })).rejects.toThrow(/closed month/)
     await expect(insert(office(), 'AbsenceEntry', { id: randomUUID(), companyId: A.companyB, employeeId, date: '2026-08-02', codeId: time.absenceCodeIds.FER, minutes: 480 })).rejects.toThrow(/closed month/)
     await expect(update(office(), 'OvertimeEntry', overtime.id, { status: 'PENDING', approvedAt: null, approvedById: null })).rejects.toThrow(/closed month/)
     await expect(insert(office(), 'RosterEntry', { id: randomUUID(), companyId: A.companyB, siteId: A.siteB, employeeId, date: '2026-08-03', kind: 'OFF' })).rejects.toThrow(/closed month/)
