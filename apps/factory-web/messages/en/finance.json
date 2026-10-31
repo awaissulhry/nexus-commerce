@@ -349,6 +349,8 @@
     "workingOnly": "Issuing…"
   },
   "item": {
+    "balance": "Balance before shipping of order {order}",
+    "balanceNoOrder": "Balance before shipping",
     "deposit": "Deposit of order {order}",
     "depositNoOrder": "Deposit",
     "invoice": "Invoice {number}"
@@ -468,7 +470,7 @@
     "left": "Left to place",
     "loading": "Reading the customer’s open items…",
     "none": {
-      "body": "The money stays on the payment, to place when an invoice comes.",
+      "body": "Nothing to place it on: the money becomes the customer’s credit balance, to place when an invoice comes or to refund.",
       "title": "Nothing open for this customer"
     },
     "problem": {
@@ -543,7 +545,10 @@
     "N7": "VAT paid in another EU state"
   },
   "notice": {
+    "balanceRefundDue": "The credit balance refund is recorded: it waits under Refunds to make.",
+    "balanceRefunded": "The credit balance refund is recorded as made.",
     "bankSaved": "The bank account is saved.",
+    "carried": "The over-paid part is the customer’s credit balance now.",
     "created": "The draft invoice is made.",
     "deductionRemoved": "The deduction is removed.",
     "detailsSaved": "The text and the due date are saved.",
@@ -554,7 +559,15 @@
     "issuedSendFailed": "Invoice {number} is issued, but the send to SDI did not go: see the SDI tab and send it again.",
     "issuedSent": "Invoice {number} is issued and sent to SDI.",
     "linesSaved": "The lines are saved; the totals and the checks are read again.",
+    "methodChosen": "The costing method is chosen. It locks with the first cost posted under it.",
     "placed": "The payment is placed.",
+    "refundDue": "Refund of {amount} to {customer} recorded: it waits under Refunds to make.",
+    "refundMoved": {
+      "cancel": "The refund is cancelled: the customer keeps the credit.",
+      "paid": "The refund is marked made.",
+      "void": "The refund is voided: the money is owed to the customer again."
+    },
+    "refundPaid": "Refund of {amount} to {customer} recorded as made.",
     "resent": "Sent to SDI again with the same number and date.",
     "sent": "Sent to SDI: its answer comes by itself.",
     "takenBack": "The placement is taken back.",
@@ -577,6 +590,7 @@
   "payRows": {
     "all": "All payments",
     "received": "Received",
+    "refunds": "Refunds",
     "voided": "Voided"
   },
   "payTile": {
@@ -764,7 +778,7 @@
     "issueTd02": "Issue the deposit invoice (TD02) now",
     "issueTd02Hint": "The deposit is paid in full: its deposit invoice is issued in the same step (a fresh code).",
     "issueTd02Off": "The deposit invoice waits: issue it later from the deposit.",
-    "leftOnAccount": "{amount} stays on the payment.",
+    "leftOnAccount": "{amount} stays as the customer’s credit balance.",
     "method": "Method",
     "next": "Next: where it goes",
     "noCustomer": "No customer with that name.",
@@ -785,7 +799,7 @@
     "receivedOn": "Received on",
     "reference": "Bank reference (CRO or TRN)",
     "referenceHint": "As on the bank statement",
-    "restOnAccount": "{amount} stays on the payment, to place later.",
+    "restOnAccount": "{amount} stays as the customer’s credit balance, to place later or to refund.",
     "searching": "Searching…",
     "td02ByFinance": "The deposit invoice is issued by finance.",
     "td02FilesPending": "Deposit invoice {number} is issued; its files are being made.",
@@ -1152,6 +1166,7 @@
     },
     "sentence": {
       "bank": "The bank account is printed on every invoice: type the code from your authenticator app.",
+      "costing": "Choosing the costing method for this company is the accountant’s decision: type the code from your authenticator app.",
       "fix": "Correcting a rejected invoice and sending it again: type the code from your authenticator app.",
       "issue": "Issuing an invoice gives it its number for good: type the code from your authenticator app.",
       "sdi": "Sending an invoice to SDI makes it legal: type the code from your authenticator app.",

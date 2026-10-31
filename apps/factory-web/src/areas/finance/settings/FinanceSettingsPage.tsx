@@ -10,7 +10,13 @@ import { getBankDetails, getFinanceSettings, saveBankDetails, type BankDetails, 
 import { isStepUpCancelled, useStepUp } from '../_shared/hooks'
 import { abilitiesOf, readProblem, writeProblem } from '../_shared/model'
 import type { Loaded, Part } from '../invoices/record/record-model'
+import { useCoalesced, useLive } from '../_shared/hooks'
+import { chooseMethod, readMethod, type DecidedMethod, type MethodState } from './costing/api'
+import { chooseProblem, costingAbilitiesOf, costingTouched } from './costing/model'
 import type { BankInput, FinanceSettingsModel } from './settings-model'
+import { createTerms, listTerms, moveTerms, updateTerms, type PaymentTerms } from './terms/api'
+import { fieldsOf, patchOf, rulesChanged, termsAbilitiesOf, termsStatusOf, termsTouched, termsWriteProblem, type TermsDraft, type TermsRows } from './terms/model'
+import type { TermsSectionModel } from './terms/view/TermsSection'
 import { FinanceSettingsView } from './view/FinanceSettingsView'
 
 /**
@@ -20,7 +26,7 @@ import { FinanceSettingsView } from './view/FinanceSettingsView'
  */
 export function FinanceSettingsPage() {
   return (
-    <WithMessages namespaces={['finance']}>
+    <WithMessages namespaces={['finance', 'finance-daily', 'finance-costing', 'lists']}>
       <SettingsContainer />
     </WithMessages>
   )
@@ -40,6 +46,55 @@ function SettingsContainer() {
   const [notice, setNotice] = useState<FinanceSettingsModel['notice']>(null)
   const [bankProblem, setBankProblem] = useState<FinanceSettingsModel['bankProblem']>(null)
   const { stepUp, guard, ensureFresh, submitStepUp, cancelStepUp } = useStepUp(api)
+  // B-W2a-80: the payment terms library and the costing method of the company shown.
+  const termsCan = useMemo(() => termsAbilitiesOf(session.permissions), [session.permissions])
+  const costingCan = useMemo(() => costingAbilitiesOf(session.permissions), [session.permissions])
+  const [termsRows, setTermsRows] = useState<TermsRows>('active')
+  const [terms, setTerms] = useState<{ value: PaymentTerms[] | null; problem: string | null }>({ value: null, problem: null })
+  const [termsDialog, setTermsDialog] = useState<TermsSectionModel['dialog']>(null)
+  const [termsProblem, setTermsProblem] = useState<TermsSectionModel['dialogProblem']>(null)
+  const [termsNotice, setTermsNotice] = useState<TermsSectionModel['notice']>(null)
+  const [method, setMethod] = useState<{ value: MethodState | null; problem: string | null; forbidden?: boolean }>({ value: null, problem: null })
+  const [choosing, setChoosing] = useState<DecidedMethod | null>(null)
+  const [methodProblem, setMethodProblem] = useState<FinanceSettingsModel['bankProblem']>(null)
+
+  const readTermsList = useCallback(async () => {
+    if (!termsCan.view) return
+    setTerms((current) => ({ value: current.value, problem: null }))
+    try {
+      setTerms({ value: await listTerms(api, companyId, termsStatusOf(termsRows)), problem: null })
+    } catch (error) {
+      setTerms({ value: null, problem: readProblem(error) })
+    }
+  }, [api, companyId, termsCan.view, termsRows])
+
+  const readCosting = useCallback(async () => {
+    if (!costingCan.view || !companyId) return
+    setMethod({ value: null, problem: null })
+    try {
+      setMethod({ value: await readMethod(api, companyId), problem: null })
+    } catch (error) {
+      if (isApiError(error) && error.kind === 'forbidden') setMethod({ value: null, problem: null, forbidden: true })
+      else setMethod({ value: null, problem: readProblem(error) })
+    }
+  }, [api, companyId, costingCan.view])
+
+  useEffect(() => {
+    void readTermsList()
+  }, [readTermsList])
+  useEffect(() => {
+    void readCosting()
+  }, [readCosting])
+  const reread = useCoalesced(() => {
+    void readTermsList()
+    void readCosting()
+  }, 800)
+  useLive(
+    (change) => {
+      if (termsTouched(change) || costingTouched(change)) reread()
+    },
+    () => reread(),
+  )
 
   const load = useCallback(async () => {
     try {
@@ -97,7 +152,80 @@ function SettingsContainer() {
     [api, bank, busy, companyId, ensureFresh, guard, readBank],
   )
 
-  const model: FinanceSettingsModel = { prefix, can, settings, companyId, bank, editingBank, busy, notice, bankProblem, stepUp }
+  const saveTerms = async (dialog: NonNullable<TermsSectionModel['dialog']>, draft: TermsDraft) => {
+    if (busy) return
+    setBusy(true)
+    setTermsProblem(null)
+    const key = newIdempotencyKey()
+    const changed = dialog.mode === 'edit' ? rulesChanged(dialog.terms, draft) : true
+    try {
+      const saved = dialog.mode === 'edit' ? await updateTerms(api, dialog.terms, patchOf(dialog.terms, draft), key) : await createTerms(api, { ...fieldsOf(draft), companyId }, key)
+      setTermsDialog(null)
+      setTermsNotice({ tone: 'success', words: { key: dialog.mode === 'edit' ? 'terms.saved' : 'terms.created', params: { code: saved.code } } })
+      void readTermsList()
+    } catch (error) {
+      const words = termsWriteProblem(error, changed)
+      setTermsProblem(words)
+      if (words.reload) void readTermsList()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const moveMany = async (rows: PaymentTerms[], move: 'archive' | 'reactivate') => {
+    if (busy || rows.length === 0) return
+    setBusy(true)
+    let done = 0
+    let refused = 0
+    for (const row of rows) {
+      try {
+        await moveTerms(api, row, move, newIdempotencyKey())
+        done += 1
+      } catch {
+        refused += 1
+      }
+    }
+    setBusy(false)
+    setTermsNotice(refused === 0 ? { tone: 'success', words: { key: `terms.moved.${move}`, params: { count: done } } } : { tone: 'danger', words: { key: 'terms.movedSome', params: { done, refused } } })
+    void readTermsList()
+  }
+
+  const choose = async (input: { method: DecidedMethod; reason: string }) => {
+    const current = method.value
+    if (busy || !companyId || !current) return
+    setBusy(true)
+    setMethodProblem(null)
+    const key = newIdempotencyKey()
+    try {
+      await ensureFresh('stepUp.sentence.costing')
+      const saved = await guard('stepUp.sentence.costing', () => chooseMethod(api, { companyId, method: input.method, version: current.from === 'COMPANY' ? current.version : null, reason: input.reason || null }, key))
+      setMethod({ value: saved, problem: null })
+      setChoosing(null)
+      setNotice({ tone: 'success', words: { key: 'notice.methodChosen' } })
+    } catch (error) {
+      if (isStepUpCancelled(error)) return
+      const words = chooseProblem(error)
+      setMethodProblem(words)
+      if (words.reload) void readCosting()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const model: FinanceSettingsModel = {
+    prefix,
+    can,
+    settings,
+    companyId,
+    bank,
+    editingBank,
+    busy,
+    notice,
+    bankProblem,
+    stepUp,
+    terms: termsCan.view ? { can: termsCan, rows: termsRows, terms: terms.value, problem: terms.problem, dialog: termsDialog, busy, dialogProblem: termsProblem, notice: termsNotice } : null,
+    costing: { can: costingCan, method, choosing, busy, problem: methodProblem },
+  }
   return (
     <FinanceSettingsView
       key={`${companyId ?? ''}-${bank?.value?.version ?? 0}-${editingBank ? 'edit' : 'read'}`}
@@ -117,6 +245,25 @@ function SettingsContainer() {
         onDismissNotice: () => setNotice(null),
         onStepUpSubmit: (code) => void submitStepUp(code),
         onStepUpCancel: cancelStepUp,
+        terms: {
+          onRows: (next) => setTermsRows(next),
+          onRetry: () => void readTermsList(),
+          onDialog: (next) => {
+            setTermsDialog(next)
+            setTermsProblem(null)
+          },
+          onSave: (dialog, draft) => void saveTerms(dialog, draft),
+          onMove: (rows, move) => void moveMany(rows, move),
+          onDismissNotice: () => setTermsNotice(null),
+        },
+        costing: {
+          onRetry: () => void readCosting(),
+          onPick: (next) => {
+            setChoosing(next)
+            setMethodProblem(null)
+          },
+          onChoose: (input) => void choose(input),
+        },
       }}
     />
   )

@@ -187,6 +187,7 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // Finance (SCR-080 … SCR-083): invoices and the invoice record, payments and the payment record, finance settings.
   '/finance/invoices',
   '/finance/invoices/[id]',
+  '/finance/invoices/[id]/xml', // B-W2a-80: the legal XML shown readable (SCR-081-xml, a new tab)
   '/finance/payments',
   '/finance/payments/[id]',
   '/finance/settings',

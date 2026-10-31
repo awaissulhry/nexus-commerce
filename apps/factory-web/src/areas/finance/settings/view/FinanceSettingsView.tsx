@@ -15,7 +15,9 @@ import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import type { CompanySettings } from '../../_shared/api'
 import { money } from '../../_shared/model'
 import { CheckList, PartState } from '../../_shared/parts'
+import { CostingCard } from '../costing/view/CostingCard'
 import { ibanGroups, ibanProblem, type FinanceSettingsActions, type FinanceSettingsModel } from '../settings-model'
+import { TermsSection } from '../terms/view/TermsSection'
 import '../../_shared/finance.css'
 
 export type { FinanceSettingsActions, FinanceSettingsModel } from '../settings-model'
@@ -48,7 +50,7 @@ const ACCOUNTANT_POINTS = ['foreignConsumer', 'resendDays', 'progressive'] as co
  */
 export function FinanceSettingsView({ model, actions }: { model: FinanceSettingsModel; actions?: FinanceSettingsActions }) {
   return (
-    <WithMessages namespaces={['finance']}>
+    <WithMessages namespaces={['finance', 'finance-daily', 'finance-costing', 'lists']}>
       <Settings model={model} actions={actions} />
     </WithMessages>
   )
@@ -140,12 +142,14 @@ function Settings({ model, actions }: { model: FinanceSettingsModel; actions?: F
         <SdiCard company={company} model={model} />
         <ArchiveCard company={company} />
         <SeriesCard company={company} model={model} />
-        <PaymentCard />
+        {model.terms ? null : <PaymentCard />}
       </div>
+      {model.terms && <TermsSection model={model.terms} actions={actions?.terms} />}
       <WordingCard />
       <div className="fw-fin-cards fw-fin-cards--two">
         <DepositCard />
         <AccountantCard />
+        {model.costing && <CostingCard model={model.costing} actions={actions?.costing} />}
       </div>
       <StepUpModal
         open={model.stepUp.open}

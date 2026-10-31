@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { canOf, CUSTOMER, DDT, inShell, LIST_ROWS, PARTIES, PREFIX, QUEUE, QUEUE_IN_DRAFT, TILE_COUNTS, TODAY, withoutPrices, type Role } from '../../_demo/fixtures'
+import { DEFERRED, DEFERRED_LATE, QUEUE_W2A, RETURN_CREDIT, RETURN_CREDITED, RETURN_ID } from '../daily/demo/fixtures'
 import type { InvoicesListModel } from './list-model'
 import { InvoicesListView } from './view/InvoicesListView'
 
@@ -78,6 +79,20 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'loading', label: 'Loading (the tiles say —, never 0)', model: base('finance', { list: { items: null, more: false, problem: null }, queue: { value: null, problem: null }, tiles: null, rejected: [], asOf: null, live: 'connecting' }) },
     { id: 'error', label: 'The reads failed (in words, Try again)', model: base('finance', { list: { items: null, more: false, problem: 'problem.read.unavailable' }, queue: { value: null, problem: 'problem.read.unavailable' }, tiles: null, rejected: [] }) },
     { id: 'keys', label: 'Finance · The keys panel (?)', model: base('finance', { helpOpen: true }) },
+    // B-W2a-80: invoices every day — the deferred invoices due, the countdown by the customer's preset, freight, a return's credit notes.
+    { id: 'w2a-deferred', label: 'W2a · Finance · Tile "Deferred invoices due by the 15th"; deadlines by the customer’s preset; freight', model: base('finance', { queue: { value: QUEUE_W2A, problem: null }, deferred: DEFERRED }), note: 'Moto Demo is invoiced per shipment (TD01, DDT date + 12 days); Squadra Fittizia once a month (TD24, the 15th of next month). Freight decided on one shipment, not yet on the other.' },
+    { id: 'w2a-deferred-filter', label: 'W2a · Finance · The tile pressed: only the DDTs a deferred invoice takes', model: base('finance', { queue: { value: QUEUE_W2A, problem: null }, deferred: DEFERRED, shippedView: 'deferred' }) },
+    { id: 'w2a-deferred-selected', label: 'W2a · Finance · Two DDTs of the monthly customer: "Create deferred invoice for 2 DDTs of …"', model: base('finance', { queue: { value: QUEUE_W2A, problem: null }, deferred: DEFERRED, shippedView: 'deferred', shippedSelected: latePair }) },
+    { id: 'w2a-deferred-dialog', label: 'W2a · Finance · The month’s deferred invoice (row ⋯ "Deferred invoice of October 2026")', model: base('finance', { queue: { value: QUEUE_W2A, problem: null }, deferred: DEFERRED, dialog: { kind: 'deferred', group: DEFERRED.groups[0]! } }) },
+    { id: 'w2a-deferred-refused', label: 'W2a · Finance · Refused: the month is in a draft already (said in the dialog)', model: base('finance', { queue: { value: QUEUE_W2A, problem: null }, deferred: DEFERRED, dialog: { kind: 'deferred', group: DEFERRED.groups[0]! }, dialogProblem: { key: 'problem.write.state' } }) },
+    { id: 'w2a-deferred-late', label: 'W2a · Finance · One due in 2 days, one late from September (the tile says so)', model: base('finance', { queue: { value: QUEUE_W2A, problem: null }, deferred: DEFERRED_LATE }) },
+    { id: 'w2a-deferred-none', label: 'W2a · Finance · The tile pressed with nothing due', model: base('finance', { queue: { value: QUEUE_W2A, problem: null }, deferred: { ...DEFERRED, counts: { groups: 0, open: 0, dueSoon: 0, late: 0 }, groups: [] }, shippedView: 'deferred' }) },
+    { id: 'w2a-deferred-sales', label: 'W2a · Sales · The month’s deferred invoice held: no right to make invoices', model: base('sales', { queue: { value: QUEUE_W2A, problem: null }, deferred: DEFERRED, dialog: { kind: 'deferred', group: DEFERRED.groups[0]! } }) },
+    { id: 'w2a-return-credit', label: 'W2a · Finance · Credit notes of a return (from its inspection: ?return=…): one per invoice, a line left out', model: base('finance', { dialog: { kind: 'returnCredit', returnId: RETURN_ID }, returnCredit: { value: RETURN_CREDIT, problem: null } }), note: 'Opened from Sales › Returns at /finance/invoices?return=<id>.' },
+    { id: 'w2a-return-credited', label: 'W2a · Finance · The return’s credit note is drafted already: nothing left (held with why)', model: base('finance', { dialog: { kind: 'returnCredit', returnId: RETURN_ID }, returnCredit: { value: RETURN_CREDITED, problem: null } }) },
+    { id: 'w2a-return-loading', label: 'W2a · Finance · Credit notes of a return: reading', model: base('finance', { dialog: { kind: 'returnCredit', returnId: RETURN_ID }, returnCredit: { value: null, problem: null } }) },
+    { id: 'w2a-return-error', label: 'W2a · Finance · Credit notes of a return: the read failed', model: base('finance', { dialog: { kind: 'returnCredit', returnId: RETURN_ID }, returnCredit: { value: null, problem: 'problem.read.unavailable' } }) },
+    { id: 'w2a-return-sales', label: 'W2a · Sales · Credit notes of a return: read-only, held', model: base('sales', { dialog: { kind: 'returnCredit', returnId: RETURN_ID }, returnCredit: { value: RETURN_CREDIT, problem: null } }) },
     { id: 'no-permission', label: 'No permission (invoices.view over this company)', model: base('sales', { list: { items: null, more: false, problem: 'problem.read.forbidden' }, queue: { value: null, problem: 'problem.read.forbidden' }, tiles: null, rejected: [] }) },
   ],
 })

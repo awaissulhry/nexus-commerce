@@ -12,6 +12,7 @@ import { hasRecordPage, recordAddress } from '../../../../../lib/records/record-
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import type { Invoice } from '../../../_shared/api'
 import { dayInstant } from '../../../_shared/model'
+import { xmlHref } from '../../daily/model'
 import type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
 
 /**
@@ -21,6 +22,7 @@ import type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
  */
 export function DocumentsTab({ invoice, model, actions }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions }) {
   const t = useT('finance')
+  const d = useT('finance-daily')
   const shell = useT('shell')
   const locale = useLocale()
   const related = model.related.value
@@ -60,9 +62,15 @@ export function DocumentsTab({ invoice, model, actions }: { invoice: Invoice; mo
                   </span>,
                   t('docs.xmlWhat'),
                   invoice.xmlFileId ? (
-                    <Button key="a" size="sm" variant="link" onClick={() => actions?.onDownload?.(invoice.xmlFileId!)}>
-                      {t('docs.download')}
-                    </Button>
+                    <span key="a" className="fw-fin-inline">
+                      {/* B-W2a-80 (design tab:xml): the legal file shown readable, in a new tab. */}
+                      <Link className="fw-fin-link" href={xmlHref(model.prefix, invoice.id)} target="_blank">
+                        {d('xml.view')}
+                      </Link>
+                      <Button size="sm" variant="link" onClick={() => actions?.onDownload?.(invoice.xmlFileId!)}>
+                        {t('docs.download')}
+                      </Button>
+                    </span>
                   ) : (
                     t('docs.notYet')
                   ),

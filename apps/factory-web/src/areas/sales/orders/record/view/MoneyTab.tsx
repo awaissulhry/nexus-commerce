@@ -14,6 +14,7 @@ import { isOverdue, MILESTONE_TONE } from '../../daily-model'
 import { dayInstant, depositInvoicesOf, depositSteps, linkHeld, paymentHeld, SDI_TONE, sdiSendHeld, stillToPay, type DepositStepState, type Tone } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
+import { OpenStepDialog, StepVerbs } from '../schedule/view/StepVerbs'
 
 const REQUEST_TONE: Record<DepositRequest['status'], Tone> = { OPEN: 'warning', PAID: 'success', WAIVED: 'neutral', CANCELLED: 'neutral' }
 const INVOICE_TONE: Record<string, Tone> = { DRAFT: 'neutral', ISSUED: 'info', SENT: 'info', DELIVERED: 'success', NOT_DELIVERABLE: 'warning', REJECTED: 'danger', ERROR: 'danger' }
@@ -44,7 +45,7 @@ export function MoneyTab({ order, model, actions }: { order: Order; model: Order
                 { label: t('money.gross'), value: money(order.grossAmount, currency, locale) },
                 { label: t('money.invoiced'), value: money(settlement?.invoicedAmount, currency, locale) },
                 { label: t('money.paid'), value: money(settlement?.paidAmount, currency, locale) },
-                { label: t('money.depositPaid'), value: money(requests.reduce((sum, request) => sum + (request.paidAmount ?? 0), 0), currency, locale) },
+                { label: t('money.depositPaid'), value: money(requests.filter((request) => request.stepKind !== 'BEFORE_SHIPPING').reduce((sum, request) => sum + (request.paidAmount ?? 0), 0), currency, locale) },
                 { label: t('money.balance'), value: money(settlement?.balanceDueAmount, currency, locale) },
               ]}
             />
@@ -75,7 +76,7 @@ export function MoneyTab({ order, model, actions }: { order: Order; model: Order
  * waived); steps an amendment replaced are counted under it. No steps: paid on invoice terms. Read-only here: the
  * reminder (B-W2a-55) and the payments are Finance's.
  */
-export function ScheduleCard({ model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export function ScheduleCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const locale = useLocale()
   const part = model.schedule
@@ -113,17 +114,23 @@ export function ScheduleCard({ model, actions }: { order: Order; model: OrderRec
                   <Pill tone={overdue ? 'danger' : MILESTONE_TONE[step.status]}>{overdue ? t('schedule.overdue') : t(`schedule.status.${step.status}`)}</Pill>
                 </span>
               ),
-              detail:
-                step.status === 'PAID' && step.paidAt
-                  ? t('schedule.paidOn', { date: formatDate(step.paidAt, { locale }) })
-                  : step.dueDate
-                    ? t(step.kind === 'DEPOSIT' ? 'schedule.dueDeposit' : 'schedule.due', { date: day(step.dueDate) })
-                    : t(`schedule.when.${step.kind}`),
+              detail: (
+                <span className="fw-so-inline">
+                  {step.status === 'PAID' && step.paidAt
+                    ? t('schedule.paidOn', { date: formatDate(step.paidAt, { locale }) })
+                    : step.dueDate
+                      ? t(step.kind === 'DEPOSIT' ? 'schedule.dueDeposit' : 'schedule.due', { date: day(step.dueDate) })
+                      : t(`schedule.when.${step.kind}`)}
+                  {/* B-W2a-80: Open for payment / Invoice this step (B-W2a-F2's note). */}
+                  {model.scheduleSteps && <StepVerbs step={step} order={order} model={model.scheduleSteps} actions={actions?.scheduleSteps} />}
+                </span>
+              ),
             }
           })}
         />
       )}
       {schedule.cancelled.length > 0 && <p className="fw-so-hint">{t('schedule.cancelled', { count: schedule.cancelled.length })}</p>}
+      {model.scheduleSteps?.opening && <OpenStepDialog step={model.scheduleSteps.opening} model={model.scheduleSteps} today={model.today} actions={actions?.scheduleSteps} />}
     </Card>
   )
 }

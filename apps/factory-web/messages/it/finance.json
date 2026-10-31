@@ -349,6 +349,8 @@
     "workingOnly": "Emissione in corso…"
   },
   "item": {
+    "balance": "Saldo prima della spedizione dell’ordine {order}",
+    "balanceNoOrder": "Saldo prima della spedizione",
     "deposit": "Acconto dell’ordine {order}",
     "depositNoOrder": "Acconto",
     "invoice": "Fattura {number}"
@@ -468,7 +470,7 @@
     "left": "Da collocare",
     "loading": "Lettura delle voci aperte del cliente…",
     "none": {
-      "body": "Il denaro resta sull’incasso, da collocare quando arriva una fattura.",
+      "body": "Nulla su cui imputarlo: il denaro diventa credito del cliente, da imputare quando arriva una fattura o da rimborsare.",
       "title": "Nulla di aperto per questo cliente"
     },
     "problem": {
@@ -543,7 +545,10 @@
     "N7": "IVA assolta in un altro Stato UE"
   },
   "notice": {
+    "balanceRefundDue": "Il rimborso del credito è registrato: resta in Rimborsi da fare.",
+    "balanceRefunded": "Il rimborso del credito è registrato come fatto.",
     "bankSaved": "Il conto bancario è salvato.",
+    "carried": "La parte pagata in più ora è credito del cliente.",
     "created": "La bozza di fattura è pronta.",
     "deductionRemoved": "La detrazione è stata tolta.",
     "detailsSaved": "Testo e scadenza sono salvati.",
@@ -554,7 +559,15 @@
     "issuedSendFailed": "La fattura {number} è emessa, ma l’invio allo SDI non è riuscito: vedi la scheda SDI e inviala di nuovo.",
     "issuedSent": "La fattura {number} è emessa e inviata allo SDI.",
     "linesSaved": "Le righe sono salvate; totali e controlli vengono riletti.",
+    "methodChosen": "Il metodo di costo è scelto. Si blocca con il primo costo registrato.",
     "placed": "L’incasso è collocato.",
+    "refundDue": "Rimborso di {amount} a {customer} registrato: resta in Rimborsi da fare.",
+    "refundMoved": {
+      "cancel": "Il rimborso è annullato: il cliente conserva il credito.",
+      "paid": "Il rimborso è segnato come fatto.",
+      "void": "Il rimborso è stornato: il denaro torna dovuto al cliente."
+    },
+    "refundPaid": "Rimborso di {amount} a {customer} registrato come fatto.",
     "resent": "Inviata di nuovo allo SDI con lo stesso numero e la stessa data.",
     "sent": "Inviata allo SDI: la risposta arriva da sola.",
     "takenBack": "Il collocamento è stato ripreso.",
@@ -577,6 +590,7 @@
   "payRows": {
     "all": "Tutti gli incassi",
     "received": "Ricevuti",
+    "refunds": "Rimborsi",
     "voided": "Annullati"
   },
   "payTile": {
@@ -764,7 +778,7 @@
     "issueTd02": "Emetti subito la fattura di acconto (TD02)",
     "issueTd02Hint": "L’acconto è pagato per intero: la fattura di acconto si emette nello stesso passaggio (un nuovo codice).",
     "issueTd02Off": "La fattura di acconto attende: emettila dopo dall’acconto.",
-    "leftOnAccount": "{amount} resta sull’incasso.",
+    "leftOnAccount": "{amount} resta come credito del cliente.",
     "method": "Metodo",
     "next": "Avanti: dove va",
     "noCustomer": "Nessun cliente con quel nome.",
@@ -785,7 +799,7 @@
     "receivedOn": "Ricevuto il",
     "reference": "Riferimento bancario (CRO o TRN)",
     "referenceHint": "Come nell’estratto conto",
-    "restOnAccount": "{amount} resta sull’incasso, da collocare dopo.",
+    "restOnAccount": "{amount} resta come credito del cliente, da imputare più avanti o da rimborsare.",
     "searching": "Ricerca in corso…",
     "td02ByFinance": "La fattura di acconto la emette l’amministrazione.",
     "td02FilesPending": "La fattura di acconto {number} è emessa; i file sono in preparazione.",
@@ -1152,6 +1166,7 @@
     },
     "sentence": {
       "bank": "Il conto bancario è stampato su ogni fattura: scrivi il codice della tua app di autenticazione.",
+      "costing": "La scelta del metodo di costo per questa società è una decisione del commercialista: scrivi il codice della tua app di autenticazione.",
       "fix": "Correggere una fattura scartata e reinviarla: scrivi il codice della tua app di autenticazione.",
       "issue": "Emettere una fattura le assegna il numero per sempre: scrivi il codice della tua app di autenticazione.",
       "sdi": "Inviare una fattura allo SDI la rende valida: scrivi il codice della tua app di autenticazione.",
