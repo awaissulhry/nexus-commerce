@@ -1,0 +1,257 @@
+{
+  "title": "Guasto macchina",
+  "loading": "Lettura delle macchine della postazione…",
+  "asOf": "Da questo tablet, alle {time}: la rete non c'è.",
+  "banner": {
+    "locked": "{machine} è da non usare (non sicura): non lavorarci finché un tecnico non la firma sicura.",
+    "doNotUse": "{machine} è messa fuori uso dall'ufficio: non lavorarci.",
+    "down": "{machine} è ferma: la manutenzione lo sa.",
+    "maintenance": "{machine} è in manutenzione.",
+    "blocked": "Tutte le macchine di questa postazione sono da non usare: la postazione non accetta scansioni finché una non viene firmata sicura."
+  },
+  "which": {
+    "scan": "Scansiona la targhetta della macchina",
+    "scanHint": "Il QR sulla macchina, oppure tocca una delle macchine della postazione qui sotto.",
+    "read": "Letto {code}",
+    "type": "Scrivi la matricola",
+    "reading": "Ricerca di {code}…",
+    "scanned": {
+      "notFound": "Nessuna macchina di questo stabilimento ha la targhetta {code}. Controlla la targhetta, oppure tocca la macchina qui sotto.",
+      "offline": "{code} non è su questo tablet e la rete non c'è. Tocca la macchina qui sotto, oppure riprova quando torna la rete.",
+      "unavailable": "Il server della fabbrica non risponde per {code}. Riprova tra un minuto."
+    },
+    "station": "Macchine della postazione · {station}",
+    "noStation": "Questo tablet non ha una postazione",
+    "none": "Nessuna macchina è registrata in questa postazione. Scansiona la targhetta della macchina.",
+    "noStationBody": "Scansiona la targhetta della macchina per segnalarne il guasto.",
+    "machines": "Macchine della postazione"
+  },
+  "camera": {
+    "start": "Fotocamera",
+    "stop": "Chiudi fotocamera",
+    "error": "La fotocamera non è partita. Consentila in Android, oppure usa lo scanner."
+  },
+  "held": {
+    "noReport": "Il tuo ruolo qui non segnala guasti. Chiedi al tuo caposquadra.",
+    "machineFirst": "Prima scansiona o tocca la macchina.",
+    "retired": "Questa macchina è dismessa: la sua targhetta non segnala più guasti.",
+    "busy": "Invio in corso…",
+    "pickOrWords": "Tocca cosa non va, oppure dillo in poche parole.",
+    "words": "Di' in poche parole cosa non va.",
+    "noWork": "Solo un tecnico della manutenzione lavora sugli interventi.",
+    "jobDone": "Questo intervento è chiuso.",
+    "notYours": "Questo intervento è assegnato a un altro tecnico: lo riassegna l'ufficio.",
+    "offline": "Serve la rete: riprova quando il tablet torna in linea.",
+    "whatDone": "Tocca cosa hai fatto.",
+    "after": "Tocca come è ora la macchina.",
+    "signFirst": "In funzione solo dopo che un tecnico ha firmato la macchina sicura.",
+    "noSign": "Solo un tecnico firma di nuovo sicura una macchina.",
+    "checked": "Di' cosa hai controllato.",
+    "photo": "Le foto dal tablet arriveranno più avanti: l'ufficio può aggiungerne una alla richiesta."
+  },
+  "status": {
+    "RUNNING": "In funzione",
+    "DOWN": "Ferma",
+    "UNDER_MAINTENANCE": "In manutenzione",
+    "DO_NOT_USE": "Da non usare",
+    "RETIRED": "Dismessa",
+    "LOCKED": "Bloccata (non sicura)"
+  },
+  "action": {
+    "myJobs": "I miei interventi",
+    "back": "Indietro",
+    "reportLock": "Blocca la macchina",
+    "reportRuns": "Va ancora",
+    "reportDown": "Macchina ferma",
+    "home": "Home",
+    "another": "Segnala un altro guasto",
+    "report": "Segnala un guasto",
+    "handBack": "Riconsegna",
+    "start": "Inizia il lavoro",
+    "wait": "Aspetta ricambi",
+    "reopen": "Riprendi il lavoro",
+    "signSafe": "Firma sicura",
+    "retry": "Riprova",
+    "reportAs": "Segnala come:"
+  },
+  "symptom": {
+    "title": "Cosa non va?",
+    "offline": "La rete non c'è: la segnalazione resta su questo tablet e parte quando torna.",
+    "words": "Poche parole",
+    "wordsOrPick": "Oppure dillo in poche parole",
+    "wordsHint": "Cosa vedi o senti. Mai il nome di una persona.",
+    "unsafe": "Non è sicura: bloccala",
+    "unsafeOn": "Segnata non sicura",
+    "unsafeBySymptom": "Questo sintomo blocca la macchina da solo.",
+    "photo": "Aggiungi una foto",
+    "unsafeBody": "{machine} sarà subito da non usare: nessuno potrà lavorarci finché un tecnico non la firma sicura.",
+    "locks": "Blocca la macchina",
+    "saysWords": "Dillo in poche parole",
+    "none": "Nessun sintomo è impostato per questa macchina: di' in poche parole cosa non va."
+  },
+  "sent": {
+    "title": "Segnalato: {machine}",
+    "titleUnsafe": "Segnalata non sicura: {machine}",
+    "sending": "Invio alla manutenzione in corso.",
+    "waits": "Salvato su questo tablet: la manutenzione lo saprà quando torna la rete. Se è urgente o pericoloso, avvisa subito il tuo caposquadra.",
+    "recorded": "La manutenzione l'ha ricevuto.",
+    "now": "La manutenzione l'ha ricevuto. {machine} ora è: {status}.",
+    "unsafeNext": "Non usare la macchina. Un tecnico la controlla e la firma sicura.",
+    "downNext": "La macchina risulta ferma finché la manutenzione non l'ha vista.",
+    "refusedTitle": "La manutenzione non ha potuto accettare questa segnalazione",
+    "refusedFix": "Apri la coda per vedere perché, poi segnala di nuovo."
+  },
+  "jobs": {
+    "title": "I miei interventi",
+    "empty": "Nessun intervento aperto",
+    "emptyBody": "Qui compaiono gli interventi assegnati a te o a nessuno, prima i più urgenti.",
+    "nobody": "Non ancora assegnato",
+    "waiting": "attesa {age}",
+    "count_one": "{count} intervento aperto",
+    "count_other": "{count} interventi aperti"
+  },
+  "priority": {
+    "P1": "Urgente",
+    "P2": "Presto",
+    "P3": "Quando c'è tempo"
+  },
+  "jobStatus": {
+    "NEW": "Nuovo",
+    "PLANNED": "Pianificato",
+    "IN_PROGRESS": "In corso",
+    "WAITING_PARTS": "In attesa di ricambi",
+    "HANDED_BACK": "Riconsegnato",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  },
+  "jobType": {
+    "CORRECTIVE": "Riparazione",
+    "PREVENTIVE": "Preventiva",
+    "INSPECTION": "Ispezione",
+    "IMPROVEMENT": "Miglioria",
+    "SAFETY": "Sicurezza"
+  },
+  "keys": {
+    "next": "Intervento successivo",
+    "open": "Apri l'intervento",
+    "back": "Indietro"
+  },
+  "done": {
+    "started": "{job} iniziato: {machine} risulta in manutenzione.",
+    "waiting": "{job} è in attesa di ricambi.",
+    "reopened": "{job} è di nuovo in corso.",
+    "signed": "{machine} è firmata sicura.",
+    "handedBack": "{job} riconsegnato: lo chiude l'ufficio.",
+    "tile": {
+      "adjusted": "Regolata",
+      "replaced": "Sostituito un pezzo",
+      "cleaned": "Pulita e lubrificata",
+      "other": "Altro"
+    }
+  },
+  "job": {
+    "notYours": "Questo intervento è assegnato a un altro tecnico: puoi leggerlo, lo riassegna l'ufficio.",
+    "locksTitle": "{machine} aspetta la firma di sicurezza di un tecnico",
+    "lock": "{symptom} · segnalato alle {time}",
+    "noSymptom": "Nessun sintomo scelto",
+    "type": "{number} · {type}",
+    "machineNow": "{machine} ora è: {status}.",
+    "overdue": "in ritardo",
+    "last": "Gli ultimi interventi sulla macchina",
+    "lastNone": "Nessun intervento precedente su questa macchina.",
+    "repeat": "{count} guasti negli ultimi 30 giorni: cerca la causa."
+  },
+  "handBack": {
+    "title": "Riconsegna {job} · {machine}",
+    "what": "Cosa hai fatto?",
+    "words": "Cosa hai fatto, in poche parole",
+    "wordsHint": "L'ufficio lo legge sull'intervento. Serve per Altro.",
+    "after": "Com'è ora la macchina?",
+    "retiredNote": "La macchina resta da non usare; l'ufficio la dismette quando chiude l'intervento."
+  },
+  "after": {
+    "RUNNING": "In funzione",
+    "DO_NOT_USE": "Da non usare",
+    "RETIRED": "Da dismettere"
+  },
+  "sign": {
+    "title": "Firma {machine} sicura",
+    "what": "{machine} · {symptom}",
+    "pinTitle": "Il tuo PIN firma {machine} sicura",
+    "meaning": "Confermi di aver controllato la macchina e che può essere usata di nuovo.",
+    "checked": "Cosa hai controllato?",
+    "checkedHint": "Per esempio: protezione rimontata e provata, impianto elettrico controllato.",
+    "after": "Com'è la macchina dopo il controllo?",
+    "law": "Una macchina segnalata non sicura si usa di nuovo solo dopo il controllo di un tecnico (D.Lgs. 81/2008 art. 71)."
+  },
+  "safeAfter": {
+    "RUNNING": "In funzione",
+    "UNDER_MAINTENANCE": "Ancora in manutenzione"
+  },
+  "fact": {
+    "makeModel": "Marca e modello",
+    "station": "Postazione",
+    "line": "Linea",
+    "symptom": "Sintomo",
+    "problem": "L'intervento",
+    "reporters": "Segnalato come",
+    "photos": "Foto",
+    "photosValue_one": "{count} foto: apri la richiesta in ufficio",
+    "photosValue_other": "{count} foto: apri la richiesta in ufficio",
+    "noPhotos": "Nessuna",
+    "priority": "Priorità",
+    "waiting": "In attesa da",
+    "where": "Dove",
+    "openJobs": "Interventi aperti",
+    "openRequests": "Guasti aperti"
+  },
+  "age": {
+    "minutes_one": "{count} min",
+    "minutes_other": "{count} min",
+    "hours": "{hours} h {minutes}",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni"
+  },
+  "refusal": {
+    "RETIRED": {
+      "message": "Questa macchina è dismessa: la sua targhetta non segnala più guasti.",
+      "fix": "Scansiona la macchina che ora è in postazione, oppure chiedi all'ufficio."
+    },
+    "SYMPTOM_INACTIVE": {
+      "message": "Questo sintomo non è più offerto.",
+      "fix": "Scegli un altro sintomo, oppure Altro con poche parole."
+    },
+    "SYMPTOM_OTHER_CLASS": {
+      "message": "Questo sintomo è per un altro tipo di macchina.",
+      "fix": "Scegli un sintomo mostrato per questa macchina."
+    },
+    "DETAIL_NEEDED": {
+      "message": "Di' in poche parole cosa non va.",
+      "fix": "Scrivi cosa vedi o senti, poi segnala di nuovo."
+    },
+    "NO_REPORTER": {
+      "message": "Questo tablet non sa dire chi segnala.",
+      "fix": "Chiedi all'ufficio di impostare la postazione di questo tablet."
+    },
+    "LOCKED_UNSAFE": {
+      "message": "La macchina è ancora bloccata come non sicura.",
+      "fix": "Prima un tecnico la firma sicura."
+    },
+    "NOT_UNSAFE": {
+      "message": "Questo guasto non è stato segnalato non sicuro: non c'è niente da firmare.",
+      "fix": "Torna all'intervento."
+    },
+    "SIGNED_ALREADY": {
+      "message": "Questo guasto è già firmato sicuro.",
+      "fix": "Torna all'intervento."
+    },
+    "MOVE_NOT_ALLOWED": {
+      "message": "L'intervento è cambiato nel frattempo: questo passo ora non è possibile.",
+      "fix": "Torna ai miei interventi e riaprilo."
+    },
+    "NOT_YOUR_JOB": {
+      "message": "Questo intervento è assegnato a un altro tecnico.",
+      "fix": "Lavora gli interventi assegnati a te o a nessuno; lo riassegna l'ufficio."
+    }
+  }
+}

@@ -1,0 +1,225 @@
+{
+  "title": "Receive a return",
+  "card": {
+    "type": "Return",
+    "customerRef": "Customer's reference",
+    "lines": "Lines",
+    "linesValue": "{received} of {count} received",
+    "dueBy": "Goods due by"
+  },
+  "status": {
+    "REQUESTED": "Requested",
+    "AUTHORISED": "Authorised",
+    "RECEIVED": "Goods received",
+    "INSPECTED": "Inspected",
+    "CLOSED": "Closed",
+    "REJECTED": "Rejected",
+    "CANCELLED": "Cancelled"
+  },
+  "noPermission": {
+    "title": "Receiving returns is not your job here",
+    "body": "Your role does not receive customer returns at this site. Ask your team leader."
+  },
+  "action": {
+    "back": "Back",
+    "toLines": "Lines",
+    "receive": "Receive",
+    "countAll": "All expected",
+    "toGrade": "Grade",
+    "toRoute": "Where it goes",
+    "confirmGrade": "Confirm grade",
+    "finish": "Finish",
+    "next": "Next return"
+  },
+  "photo": {
+    "parcelTitle": "Photo of the parcel",
+    "lineTitle": "Photo of the garment",
+    "parcelHint": "Photograph the parcel and the products only: keep people out of the picture.",
+    "lineHint": "Photograph the garment only; mark the damage with an arrow or a circle.",
+    "full": "{count} photos is the most here",
+    "failed_one": "{count} photo did not reach the office: the record stands; the office can add it.",
+    "failed_other": "{count} photos did not reach the office: the record stands; the office can add them."
+  },
+  "offline": {
+    "short": "Needs the network",
+    "scan": "No network: opening a return needs the office. Put the parcel aside until the network is back.",
+    "receive": "No network: you can count the garments; Receive waits for the network."
+  },
+  "scan": {
+    "loading": "Looking for the return…",
+    "label": "Scan the return",
+    "hint": "The RMA sheet in the box, or the box label.",
+    "where": "Open the parcel at the dock: its RMA number opens the right return."
+  },
+  "condition": {
+    "INTACT": "Box fine",
+    "DAMAGED": "Box damaged",
+    "OPENED": "Opened",
+    "hint": {
+      "INTACT": "Closed and undamaged",
+      "DAMAGED": "Crushed, torn or wet",
+      "OPENED": "Tape cut or missing"
+    }
+  },
+  "parcel": {
+    "question": "How did the parcel arrive?",
+    "parcels": "Parcels",
+    "photo": "Take a photo",
+    "photos_one": "{count} photo taken",
+    "photos_other": "{count} photos taken",
+    "noPhotos": "No photo yet",
+    "removePhoto": "Remove photo {n}",
+    "ddtLabel": "Customer's delivery note",
+    "ddtHint": "Scan the number on the customer's delivery note, if there is one.",
+    "ddtKept": "Delivery note {code} kept for the receipt.",
+    "ddtClear": "Remove the note's number"
+  },
+  "pad": {
+    "less": "Less",
+    "more": "More",
+    "clear": "Clear",
+    "back": "Delete",
+    "empty": "Type a number",
+    "range": "From {min} to {max}"
+  },
+  "held": {
+    "condition": "Say how the parcel arrived first",
+    "busy": "Sending…",
+    "nothing": "Count at least one garment first",
+    "grade": "Pick a grade first",
+    "place": "Scan the place first"
+  },
+  "lines": {
+    "inParcel_one": "piece in this parcel",
+    "inParcel_other": "pieces in this parcel",
+    "allIn": {
+      "title": "Every garment arrived",
+      "grade": "Nothing more is expected: grade what came.",
+      "body": "Nothing more is expected on this return."
+    },
+    "scanLabel": "Scan a garment",
+    "scanHint": "Its serial or batch label: it counts one on its line.",
+    "title": "What is expected",
+    "count_one": "{count} line waits for goods",
+    "count_other": "{count} lines wait for goods",
+    "partial": "What does not arrive now stays expected on the return.",
+    "last": "Line {seq}: {counted} of {expected}",
+    "takeOff": "Take one off"
+  },
+  "line": {
+    "number": "Line {seq}",
+    "serial": "Serial {code}",
+    "batch": "Batch {code}",
+    "ppe": "Protective garment",
+    "complete": "All here",
+    "partly": "{count} came before",
+    "waiting": "Expected",
+    "countLabel": "{counted} of {expected} in this parcel",
+    "full": "Every expected piece is counted"
+  },
+  "keys": {
+    "count": "Count one more on the row"
+  },
+  "grade": {
+    "NEW": "New",
+    "LIKE_NEW": "Like new",
+    "GOOD": "Good",
+    "DAMAGED": "Damaged",
+    "UNUSABLE": "Unusable",
+    "hint": {
+      "NEW": "Never worn, tags on",
+      "LIKE_NEW": "Worn once, no marks",
+      "GOOD": "Used, small marks",
+      "DAMAGED": "Needs a repair",
+      "UNUSABLE": "Cannot be repaired"
+    },
+    "noPermission": {
+      "title": "Grading is the inspector's",
+      "body": "Your role receives returns but does not grade them: put the goods at the inspection place."
+    },
+    "none": {
+      "title": "Nothing waits for a grade",
+      "body": "Every garment received is graded."
+    },
+    "garment": "Garment · line {seq}",
+    "pieces_one": "piece",
+    "pieces_other": "pieces",
+    "reason": "Why it came back",
+    "serial": "Serial",
+    "batch": "Batch",
+    "return": "Return",
+    "question": "What condition is it in?",
+    "suggested": "Suggested by the return policy: {outcome}",
+    "officeDecides": "The office decides what happens to it.",
+    "pickFirst": "Pick the tile that fits the garment.",
+    "photo": "Photo of the garment",
+    "photos_one": "{count} photo with the grade",
+    "photos_other": "{count} photos with the grade",
+    "noPhotos": "No photo (optional)",
+    "waiting_one": "{count} garment waits for its grade",
+    "waiting_other": "{count} garments wait for their grade"
+  },
+  "outcome": {
+    "RESTOCK": "back to stock",
+    "SECOND_QUALITY": "second quality",
+    "QUARANTINE": "quarantine",
+    "REPAIR": "repair",
+    "SCRAP": "scrap",
+    "BACK_TO_CUSTOMER": "back to the customer"
+  },
+  "restockHeld": {
+    "safety": "A protective garment returned for a defect goes back on the market only after a safety check: repair, quarantine or scrap.",
+    "usedPpe": "A used protective garment is never restocked as new.",
+    "notNew": "Only a new or like-new garment goes back to stock as new."
+  },
+  "route": {
+    "type": "Where it goes",
+    "noPlace": "No place set",
+    "confirmed": "Placed",
+    "toConfirm": "Scan to confirm",
+    "name": "Place",
+    "return": "Return",
+    "why": "Why here",
+    "inspection": "It waits for the office's decision",
+    "scanLabel": "Scan the place",
+    "scanHint": "The label of {code}.",
+    "noPlaceBody": "This site has no inspection place: ask the warehouse lead where returns wait.",
+    "placed": "The goods are at {code}.",
+    "noLabel": "No label prints from the tablet yet: keep the RMA sheet with the goods."
+  },
+  "done": {
+    "title": "Return {number} received",
+    "body": "{pieces} pieces received, {graded} garments graded on this tablet.",
+    "office": "Customer service sees it now and decides the outcome."
+  },
+  "refusal": {
+    "NOT_OPEN": {
+      "message": "No open return with this code.",
+      "fix": "Put the parcel aside and tell customer service."
+    },
+    "CHANGED": {
+      "message": "The return changed meanwhile.",
+      "fix": "It was read again: check the lines and send once more."
+    },
+    "FULL": {
+      "message": "Every piece of this line is counted.",
+      "fix": "A garment more than expected goes aside: tell customer service."
+    },
+    "NO_LINE": {
+      "message": "This label is not on this return.",
+      "fix": "Check the garment's label, or put it aside and tell customer service."
+    },
+    "GRADED": {
+      "message": "This garment is graded already.",
+      "fix": "Scan the next garment."
+    },
+    "PLACE": {
+      "message": "This is not the place for these goods.",
+      "fix": "Scan the label of the place shown."
+    },
+    "BADGE": {
+      "message": "This badge does not open this tablet.",
+      "fix": "Ask your team leader."
+    }
+  }
+}

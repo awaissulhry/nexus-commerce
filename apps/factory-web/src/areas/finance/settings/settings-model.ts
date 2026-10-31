@@ -2,6 +2,8 @@ import type { BankDetails, FinanceSettings } from '../_shared/api'
 import type { StepUpState } from '../_shared/hooks'
 import type { FinanceAbilities, Phrase } from '../_shared/model'
 import type { Loaded, Part } from '../invoices/record/record-model'
+import type { CostingCardActions, CostingCardModel } from './costing/view/CostingCard'
+import type { TermsSectionActions, TermsSectionModel } from './terms/view/TermsSection'
 
 /** SCR-083 — the finance settings' view model (FinanceSettingsView draws it and fetches nothing). */
 export interface FinanceSettingsModel {
@@ -18,6 +20,9 @@ export interface FinanceSettingsModel {
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
   bankProblem: Phrase | null
   stepUp: StepUpState
+  /** B-W2a-80: the payment terms library (design sec:terms) and the costing method (sec:costing); null: not drawn. */
+  terms?: TermsSectionModel | null
+  costing?: CostingCardModel | null
   /** Design cases: what the bank form holds typed. */
   draft?: { accountHolder?: string; iban?: string; bic?: string; bankName?: string }
 }
@@ -38,6 +43,9 @@ export interface FinanceSettingsActions {
   onDismissNotice?: () => void
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
+  /** B-W2a-80. */
+  terms?: TermsSectionActions
+  costing?: CostingCardActions
 }
 
 /** An IBAN as typed (spaces, lower case) as the API takes it; the problem as a message key, or null. */

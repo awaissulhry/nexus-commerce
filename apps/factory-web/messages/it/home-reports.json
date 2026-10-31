@@ -1,0 +1,775 @@
+{
+  "noAccess": {
+    "title": "Non puoi vedere la libreria dei report",
+    "body": "La libreria dei report richiede il permesso di eseguire i report. Chiedi all’amministratore un ruolo che lo comprenda."
+  },
+  "common": {
+    "retry": "Riprova",
+    "loading": "Caricamento in corso…"
+  },
+  "band": {
+    "label": "Stato della libreria"
+  },
+  "error": {
+    "read": "Il server non ha risposto come previsto. Riprova tra poco.",
+    "forbidden": "Il tuo ruolo non lo consente.",
+    "notFound": "Questo report non esiste.",
+    "invalid": "Un filtro nell’indirizzo non è tra quelli di questo report.",
+    "offline": "Il server non è raggiungibile. Controlla la connessione."
+  },
+  "library": {
+    "title": "Libreria dei report",
+    "intro": "Ogni report pronto, presentato come la domanda a cui risponde. Ognuno mostra solo ciò che il tuo ruolo può vedere.",
+    "updated": "Aggiornato alle {time}",
+    "count_one": "{count} report per te",
+    "count_other": "{count} report per te",
+    "shown_one": "{count} report",
+    "shown_other": "{count} report",
+    "search": "Cerca nella libreria",
+    "areas": "Aree",
+    "allAreas": "Tutte le aree",
+    "outside": "Fuori dal mio ruolo",
+    "failed": "Impossibile leggere la libreria",
+    "stale": "Impossibile rileggere la libreria",
+    "noMatch": "Nessun report corrisponde",
+    "noMatchBody": "Cambia la ricerca o l’area.",
+    "clear": "Azzera la ricerca",
+    "foot": "Un report legge i suoi dati quando lo apri, quindi è sempre aggiornato.",
+    "col": {
+      "report": "Report",
+      "area": "Area",
+      "last": "Ultima apertura",
+      "schedule": "Per e-mail",
+      "formats": "Formati",
+      "rights": "I tuoi permessi"
+    },
+    "never": "Mai (su questo dispositivo)",
+    "mailed": "Ti arriva per e-mail",
+    "mailable": "Si può ricevere per e-mail",
+    "notScheduled": "Non programmato",
+    "ready": "Puoi eseguirlo"
+  },
+  "state": {
+    "needsGrain": "Richiede i permessi su {grain}",
+    "noAccess": "Legge un elenco fuori dal tuo ruolo"
+  },
+  "grain": {
+    "price": "prezzi",
+    "cost": "costi",
+    "margin": "margini",
+    "wages": "retribuzioni"
+  },
+  "format": {
+    "CSV": "CSV",
+    "PDF": "PDF"
+  },
+  "area": {
+    "sales": "Vendite",
+    "planning": "Pianificazione",
+    "purchasing": "Acquisti",
+    "production": "Produzione",
+    "quality": "Qualità",
+    "compliance": "Conformità",
+    "finance": "Amministrazione"
+  },
+  "report": {
+    "back": "Report",
+    "noun": "Report",
+    "notFound": "Questo report non esiste",
+    "failed": "Impossibile leggere il report",
+    "print": "Stampa",
+    "export": "Esporta",
+    "exportCsv": "Questo risultato in CSV",
+    "exportPdf": "In PDF (pagina di stampa, nuova scheda)",
+    "compliance": {
+      "certificates-expiring": {
+        "title": "Certificati in scadenza",
+        "question": "Quali certificati scadono presto, e quanti modelli coprono?",
+        "definition": "Ogni certificato valido il cui ultimo giorno di validità cade da oggi alla fine del periodo, dal più vicino. I giorni rimasti sono 0 nell’ultimo giorno valido.",
+        "sources": "Certificati e ciò che coprono",
+        "col": {
+          "certificate": "Certificato",
+          "standard": "Norma",
+          "ppeClass": "Categoria DPI",
+          "notifiedBody": "Organismo notificato",
+          "validTo": "Valido fino al",
+          "daysToExpiry": "Giorni rimasti",
+          "coverage": "Modelli coperti"
+        },
+        "filter": {
+          "within": "Scade"
+        }
+      }
+    },
+    "finance": {
+      "overdue-receivables": {
+        "title": "Scaduto dei clienti",
+        "question": "Quali clienti ci devono denaro oltre la scadenza?",
+        "definition": "Ogni cliente con una fattura oltre la scadenza, per società e valuta, dal più scaduto. Aperto = quanto resta da pagare; scaduto = la parte oltre la scadenza; note di credito e pagamenti sono già detratti.",
+        "sources": "Fatture emesse, note di credito e pagamenti con le loro scadenze",
+        "col": {
+          "customer": "Cliente",
+          "company": "Società",
+          "invoices": "Fatture aperte",
+          "oldestDueDate": "Scadenza più vecchia",
+          "daysLate": "Giorni di ritardo",
+          "overdueAmount": "Scaduto",
+          "over90Amount": "Oltre 90 giorni",
+          "openAmount": "Aperto",
+          "remindersSent": "Solleciti inviati"
+        }
+      },
+      "stock-value": {
+        "title": "Valore del magazzino",
+        "question": "Quanto valgono al costo il magazzino e i semilavorati in corso?",
+        "definition": "Ogni riga di magazzino (articolo, colore, lotto) di ogni stabilimento con giacenza ora, e il costo finora registrato di ogni ordine di produzione aperto (semilavorati), sommati per stabilimento e categoria. Una riga non del tutto valorizzata ha movimenti che la valorizzazione non ha ancora potuto prezzare (Amministrazione › Report indica quali).",
+        "sources": "Movimenti di magazzino e la loro valorizzazione, costi degli ordini di produzione",
+        "col": {
+          "site": "Stabilimento",
+          "category": "Categoria",
+          "lines": "Righe di magazzino",
+          "notValued": "Righe non del tutto valorizzate",
+          "stockValue": "Valore al costo"
+        },
+        "filter": {
+          "site": "Stabilimento"
+        }
+      }
+    },
+    "planning": {
+      "shortages": {
+        "title": "Mancanze",
+        "question": "Quale materiale manca per i nostri ordini di produzione?",
+        "definition": "Ogni materiale che serve ancora a un ordine di produzione e che l’ultimo piano non riesce a coprire in tempo: Insufficiente (nessuna giacenza o ordine lo copre) o In ritardo (un ordine lo copre ma arriva dopo che serve). Per impostazione predefinita, ordini rilasciati o avviati.",
+        "sources": "L’ultima pianificazione di ogni stabilimento, ordini di produzione, magazzino e ordini di acquisto",
+        "col": {
+          "workOrder": "Ordine di produzione",
+          "style": "Modello",
+          "status": "Stato",
+          "site": "Stabilimento",
+          "material": "Materiale",
+          "problem": "Problema",
+          "short": "Mancante",
+          "neededBy": "Serve entro",
+          "expected": "Atteso",
+          "purchaseOrder": "Ordine di acquisto"
+        },
+        "filter": {
+          "site": "Stabilimento",
+          "workOrders": "Ordini di produzione"
+        },
+        "choice": {
+          "workOrders": {
+            "RELEASED": "Rilasciati o avviati",
+            "OPEN": "Tutti gli ordini aperti"
+          }
+        }
+      }
+    },
+    "production": {
+      "daily": {
+        "title": "Produzione giornaliera",
+        "question": "Cosa ha prodotto ogni linea nell’ultimo giorno lavorativo?",
+        "definition": "Uno stabilimento e un giorno (il primo stabilimento che vedi, se non ne scegli uno). Buoni = capi passati dall’ultima operazione della linea; scarti e rilavorazioni in qualsiasi sua operazione. Efficienza = minuti standard guadagnati ÷ (persone × minuti lavorativi della linea), nascosta per una linea con meno di 5 persone.",
+        "sources": "Scansioni di reparto, ordini di produzione, capacità delle linee e calendario dello stabilimento",
+        "col": {
+          "lane": "Linea o centro di lavoro",
+          "kind": "Tipo",
+          "good": "Buoni",
+          "scrap": "Scarti",
+          "rework": "Rilavorazioni",
+          "efficiencyPct": "Efficienza"
+        },
+        "filter": {
+          "site": "Stabilimento",
+          "day": "Giorno"
+        },
+        "choice": {
+          "day": {
+            "LAST_WORKING_DAY": "Ultimo giorno lavorativo",
+            "TODAY": "Oggi finora"
+          }
+        }
+      },
+      "scrap-by-reason": {
+        "title": "Scarti per causa",
+        "question": "Perché scartiamo i capi, e quanti?",
+        "definition": "Capi dichiarati scarto (o rilavorazione) in qualsiasi operazione nel periodo, per codice causa, dai più numerosi. Valore al costo = il materiale dei pezzi scartati al suo valore di magazzino. L’elenco legge al massimo 500 dichiarazioni per esecuzione.",
+        "sources": "Scansioni di scarto e rilavorazione, ordini di rilavorazione e i materiali usati",
+        "col": {
+          "reason": "Causa",
+          "code": "Codice",
+          "kind": "Tipo",
+          "pieces": "Capi",
+          "events": "Dichiarazioni",
+          "workOrders": "Ordini di produzione",
+          "scrapCost": "Valore al costo"
+        },
+        "filter": {
+          "site": "Stabilimento",
+          "period": "Periodo",
+          "kind": "Tipo"
+        },
+        "choice": {
+          "kind": {
+            "SCRAP": "Scarto",
+            "REWORK": "Rilavorazione"
+          }
+        }
+      },
+      "wip-by-stage": {
+        "title": "Semilavorati per fase",
+        "question": "Quanto lavoro è in corso in ogni fase?",
+        "definition": "Ogni ordine di produzione in bozza, rilasciato, in lavorazione o in sospeso. Capi = ordinati nelle sue celle; tagliati, cuciti e finiti = capi passati finora da quelle fasi (nessuno per una bozza). In ritardo = consegna prima di oggi.",
+        "sources": "Ordini di produzione, le loro celle e le scansioni di reparto",
+        "col": {
+          "workOrder": "Ordine di produzione",
+          "style": "Modello",
+          "site": "Stabilimento",
+          "status": "Fase",
+          "pieces": "Capi",
+          "cut": "Tagliati",
+          "sewn": "Cuciti",
+          "finished": "Finiti",
+          "dueDate": "Consegna",
+          "daysLate": "Giorni di ritardo"
+        },
+        "filter": {
+          "site": "Stabilimento",
+          "late": "Consegna"
+        },
+        "choice": {
+          "late": {
+            "LATE": "Solo in ritardo"
+          }
+        }
+      }
+    },
+    "purchasing": {
+      "receipts-due": {
+        "title": "Arrivi attesi",
+        "question": "Quali consegne aspettiamo dai fornitori, e quali sono in ritardo?",
+        "definition": "Ogni riga di un ordine di acquisto inviato, confermato, ricevuto in parte o modificato con merce ancora da arrivare. Atteso = la data confermata dal fornitore, altrimenti quella richiesta; in ritardo = attesa prima di oggi; questa settimana = da oggi a domenica.",
+        "sources": "Ordini di acquisto, le loro righe e le entrate merci",
+        "col": {
+          "order": "Ordine di acquisto",
+          "supplier": "Fornitore",
+          "site": "Stabilimento",
+          "item": "Materiale",
+          "colour": "Colore",
+          "expectedDate": "Atteso",
+          "dateFrom": "Data",
+          "state": "Quando",
+          "daysLate": "Giorni di ritardo",
+          "outstanding": "Da arrivare"
+        },
+        "filter": {
+          "site": "Stabilimento",
+          "state": "Quando"
+        },
+        "choice": {
+          "state": {
+            "LATE": "In ritardo",
+            "THIS_WEEK": "Questa settimana",
+            "LATER": "Più avanti"
+          }
+        }
+      }
+    },
+    "quality": {
+      "open-ncrs": {
+        "title": "Non conformità aperte",
+        "question": "Quali non conformità sono ancora aperte, e da quanto?",
+        "definition": "Ogni non conformità aperta, contenuta o decisa, dalla più recente. L’età conta i giorni interi da quando è stata rilevata; contenimento scaduto = il contenimento (o un’azione aperta) scadeva prima di adesso. Decisioni in attesa = disposizioni che attendono un’approvazione.",
+        "sources": "Non conformità, le loro azioni e disposizioni",
+        "col": {
+          "ncr": "NC",
+          "title": "Problema",
+          "stage": "Fase",
+          "severity": "Gravità",
+          "source": "Rilevata da",
+          "defect": "Difetto",
+          "foundOn": "Rilevata il",
+          "ageDays": "Età (giorni)",
+          "containment": "Contenimento",
+          "decisionsWaiting": "Decisioni in attesa"
+        },
+        "filter": {
+          "site": "Stabilimento",
+          "severity": "Gravità",
+          "overdue": "Contenimento"
+        },
+        "choice": {
+          "severity": {
+            "CRITICAL": "Critica",
+            "MAJOR": "Maggiore",
+            "MINOR": "Minore"
+          },
+          "overdue": {
+            "OVERDUE": "Solo scaduto"
+          }
+        }
+      }
+    },
+    "sales": {
+      "late-orders": {
+        "title": "Ordini in ritardo",
+        "question": "Quali ordini sono in ritardo rispetto alla data promessa?",
+        "definition": "Ordini confermati, in produzione, pronti da spedire o spediti in parte con una data promessa prima di oggi. I giorni di ritardo contano dalla data promessa a oggi.",
+        "sources": "Ordini di vendita",
+        "col": {
+          "order": "Ordine",
+          "customer": "Cliente",
+          "status": "Stato",
+          "promiseDate": "Promesso",
+          "daysLate": "Giorni di ritardo",
+          "units": "Capi",
+          "shipped": "Spediti",
+          "netAmount": "Imponibile"
+        }
+      },
+      "margin-by-order": {
+        "title": "Margine per ordine",
+        "question": "Che margine facciamo su ogni ordine?",
+        "definition": "Ogni ordine (esclusi gli annullati) con data ordine nel periodo. Margine quotato = imponibile meno il costo quotato; margine attuale = imponibile meno la stima attuale (ordini di produzione chiusi al costo effettivo, gli altri al maggiore tra piano ed effettivo); margine finora = il costo registrato fino a oggi. Un margine vuoto: nessun costo è ancora noto.",
+        "sources": "Ordini di vendita, le loro offerte, ordini di produzione e costi registrati",
+        "col": {
+          "order": "Ordine",
+          "customer": "Cliente",
+          "status": "Stato",
+          "orderDate": "Data ordine",
+          "netAmount": "Imponibile",
+          "estimateCost": "Costo attuale",
+          "quotedMarginPct": "Margine quotato",
+          "estimateMarginPct": "Margine attuale",
+          "actualMarginPct": "Margine finora",
+          "stage": "Costo"
+        },
+        "filter": {
+          "period": "Data ordine"
+        }
+      },
+      "open-orders": {
+        "title": "Ordini aperti",
+        "question": "Quali ordini sono aperti, e quando sono promessi?",
+        "definition": "Ogni ordine confermato, in produzione, pronto da spedire o spedito in parte, dal più recente. I giorni di ritardo contano dalla data promessa a oggi.",
+        "sources": "Ordini di vendita e le loro righe",
+        "col": {
+          "order": "Ordine",
+          "customer": "Cliente",
+          "status": "Stato",
+          "orderDate": "Data ordine",
+          "promiseDate": "Promesso",
+          "daysLate": "Giorni di ritardo",
+          "units": "Capi",
+          "shipped": "Spediti",
+          "netAmount": "Imponibile"
+        },
+        "filter": {
+          "status": "Stato",
+          "promise": "Promesso"
+        },
+        "choice": {
+          "status": {
+            "CONFIRMED": "Confermato",
+            "IN_PRODUCTION": "In produzione",
+            "READY": "Pronto da spedire",
+            "PARTLY_SHIPPED": "Spedito in parte"
+          }
+        }
+      },
+      "orders-in": {
+        "title": "Ordini acquisiti",
+        "question": "Quali ordini sono arrivati, e per quale importo?",
+        "definition": "Ogni ordine con data ordine nel periodo, dal più recente; gli ordini annullati sono esclusi. L’imponibile è al netto dell’IVA.",
+        "sources": "Ordini di vendita",
+        "col": {
+          "order": "Ordine",
+          "customer": "Cliente",
+          "status": "Stato",
+          "orderDate": "Data ordine",
+          "promiseDate": "Promesso",
+          "netAmount": "Imponibile"
+        },
+        "filter": {
+          "period": "Periodo"
+        }
+      },
+      "shipments-on-time": {
+        "title": "Spedito in tempo",
+        "question": "Quali spedizioni sono partite in tempo rispetto alla data promessa dell’ordine?",
+        "definition": "Ogni spedizione spedita o consegnata con data di spedizione nel periodo (giorni dello stabilimento). In tempo: spedita entro la data promessa dell’ordine; un ordine senza data promessa è indicato a parte e non conta né in un senso né nell’altro.",
+        "sources": "Spedizioni e i loro ordini di vendita",
+        "col": {
+          "shipment": "Spedizione",
+          "order": "Ordine",
+          "customer": "Cliente",
+          "shippedOn": "Spedita",
+          "promiseDate": "Promesso",
+          "onTime": "In tempo",
+          "daysLate": "Giorni di ritardo"
+        },
+        "filter": {
+          "period": "Periodo"
+        }
+      }
+    }
+  },
+  "tab": {
+    "label": "Schede del report",
+    "results": "Risultati",
+    "schedule": "Invio programmato",
+    "about": "Informazioni"
+  },
+  "held": {
+    "noAccess": "Questo report legge un elenco che il tuo ruolo non può leggere",
+    "noAccessBody": "La sua definizione è in Informazioni. Se ti serve, chiedi all’amministratore un ruolo che legga quell’elenco.",
+    "needsGrain": "Questo report richiede i permessi su {grain}",
+    "needsGrainBody": "Riguarda importi di {grain}, che il tuo ruolo non mostra. La sua definizione è in Informazioni.",
+    "reading": "Attendi la lettura del risultato",
+    "noRows": "Niente da esportare: il risultato non ha righe"
+  },
+  "filters": {
+    "label": "Cosa guarda questa esecuzione",
+    "allSites": "Tutti i miei stabilimenti",
+    "any": "Tutti",
+    "groupBy": "Raggruppa per",
+    "notGrouped": "Nessun raggruppamento",
+    "applied": "Applicato:",
+    "range": "dal {from} al {to}"
+  },
+  "period": {
+    "THIS_WEEK": "Questa settimana",
+    "LAST_WEEK": "La settimana scorsa",
+    "THIS_MONTH": "Questo mese",
+    "LAST_MONTH": "Il mese scorso",
+    "LAST_8_WEEKS": "Ultime 8 settimane",
+    "NEXT_7_DAYS": "Prossimi 7 giorni",
+    "NEXT_30_DAYS": "Prossimi 30 giorni",
+    "NEXT_90_DAYS": "Prossimi 90 giorni"
+  },
+  "rights": {
+    "title": "Cosa vedi",
+    "link": "I miei ruoli",
+    "leftOut": "Escluso per i tuoi permessi: {grains}.",
+    "smallGroups_one": "Nascosto: {count} gruppo con meno di 5 persone (i suoi dati sulle persone).",
+    "smallGroups_other": "Nascosti: {count} gruppi con meno di 5 persone (i loro dati sulle persone)."
+  },
+  "results": {
+    "asOf": "Dati delle {time}",
+    "reading": "Lettura…",
+    "failed": "Impossibile leggere il risultato",
+    "empty": "Nessuna riga con questi filtri.",
+    "emptyBody": "Cambia un filtro qui sopra per allargare la ricerca.",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "groups_one": "{count} gruppo su {rows} righe",
+    "groups_other": "{count} gruppi su {rows} righe",
+    "groupsLabel": "Gruppi per {column}",
+    "showRows": "Mostra le righe",
+    "groupNone": "Nessuno",
+    "rows": "Righe",
+    "totals": "Totali",
+    "currency": "Valuta",
+    "severalCurrencies": "Più valute",
+    "severalCurrenciesHint": "Gli importi in valute diverse non vengono sommati.",
+    "cut_one": "Solo {count} riga",
+    "cut_other": "Solo le prime {count} righe",
+    "cutBody": "Il report si è fermato qui: restringi i filtri per vedere il resto.",
+    "exportSelected_one": "Esporta {count} riga (CSV)",
+    "exportSelected_other": "Esporta {count} righe (CSV)",
+    "foot": "Letto all’apertura, con i tuoi permessi applicati. Una riga apre il suo documento."
+  },
+  "schedule": {
+    "title": "Chi lo riceve",
+    "failed": "Impossibile leggere la programmazione",
+    "none": "Non programmato",
+    "noneBody": "L’invio programmato di questo report arriverà più avanti. Nel frattempo stampalo o esportalo in CSV.",
+    "manage": "Modifica in Report produzione",
+    "nobody": "Ancora nessuno lo riceve per e-mail",
+    "nobodyBody": "Fattelo inviare ogni mattina da Report produzione.",
+    "col": {
+      "for": "Destinatario",
+      "site": "Stabilimento",
+      "when": "Quando",
+      "language": "Lingua",
+      "state": "Stato",
+      "last": "Ultimo invio"
+    },
+    "you": "{name} (tu)",
+    "when": "{time}, {days}",
+    "on": "Attivo",
+    "off": "Disattivato",
+    "neverSent": "Non ancora inviato",
+    "foot": "Ognuno riceve solo ciò che il proprio ruolo può vedere al momento dell’invio."
+  },
+  "language": {
+    "it": "Italiano",
+    "en": "Inglese"
+  },
+  "day": {
+    "1": "lun",
+    "2": "mar",
+    "3": "mer",
+    "4": "gio",
+    "5": "ven",
+    "6": "sab",
+    "7": "dom"
+  },
+  "about": {
+    "title": "Cosa conta",
+    "question": "Domanda",
+    "definition": "Come è costruito",
+    "sources": "Dati di origine",
+    "refresh": "Aggiornamento",
+    "refreshLive": "Letto all’apertura: sempre aggiornato",
+    "owner": "Responsabile",
+    "ownerPack": "Il pacchetto di report standard",
+    "formats": "Formati",
+    "numbers": "Numeri in Oggi",
+    "noNumbers": "Nessuno",
+    "leftOut": "Escluso per te",
+    "nothingLeftOut": "Niente: il tuo ruolo vede tutte le colonne",
+    "people": "Gruppi piccoli",
+    "peopleHidden": "I dati di un gruppo con meno di 5 persone sono nascosti.",
+    "noPeople": "Nessun dato sulle persone: solo conteggi per ordine, linea o documento.",
+    "kpiLater": "La libreria degli indicatori, con definizione e obiettivo di ogni numero, arriverà più avanti."
+  },
+  "print": {
+    "titleLoading": "Report",
+    "meta": "Letto il {at} · stampato da {person}",
+    "held": "Attendi la lettura del report",
+    "button": "Stampa o salva in PDF"
+  },
+  "numbers": {
+    "title": "I miei numeri",
+    "forLens": "per {lens}",
+    "updated": "aggiornati alle {time}",
+    "failed": "Impossibile leggere i tuoi numeri",
+    "explainOf": "Come è calcolato “{label}”",
+    "explainTitle": "Come è calcolato questo numero",
+    "atLeast": "Almeno questi: un elenco si è fermato al suo limite.",
+    "word": {
+      "ON_TARGET": "In linea con l’obiettivo",
+      "ABOVE_TARGET": "Sopra l’obiettivo",
+      "BELOW_TARGET": "Sotto l’obiettivo"
+    },
+    "noTarget": "Nessun obiettivo",
+    "targetAtMost": "Obiettivo {value}",
+    "targetAtLeast": "Obiettivo {value} o più",
+    "sparkLabel": "{label}, ultime 8 settimane",
+    "sparkEmpty": "Nessun dato nelle ultime 8 settimane",
+    "countedNow": "Contato ora; lo storico non è ancora conservato",
+    "explain": {
+      "definition": "Definizione",
+      "formula": "Formula",
+      "sources": "Dati di origine",
+      "period": "Periodo",
+      "cutOff": "Chiusura",
+      "target": "Obiettivo"
+    },
+    "cutOff": "I giorni vanno da mezzanotte a mezzanotte nello stabilimento (Europa/Roma); le settimane iniziano il lunedì.",
+    "setBy": "Fissato dal pacchetto di report standard (gli obiettivi diventeranno modificabili con la libreria degli indicatori).",
+    "openReport": "Apri il report",
+    "kpiLater": "La libreria degli indicatori arriverà più avanti.",
+    "noData": "Ancora nessun dato",
+    "mixed": "Gli importi in valute diverse non vengono sommati.",
+    "unavailable": "Non disponibile ora"
+  },
+  "lens": {
+    "ORDERS": "ordini di vendita",
+    "WORK_ORDERS": "ordini di produzione",
+    "PURCHASE_ORDERS": "ordini di acquisto",
+    "INVOICES": "fatture",
+    "LOTS": "lotti e qualità"
+  },
+  "code": {
+    "ASKED": "Richiesta",
+    "AUDIT": "Audit",
+    "BUNDLE": "Mazzetto",
+    "CLOSED": "Chiuso",
+    "COMPLAINT": "Reclamo",
+    "CONFIRMED": "Confermato",
+    "CONTAINED": "Contenuto",
+    "CRITICAL": "Critico",
+    "DECIDED": "Deciso",
+    "DELAYED": "In ritardo",
+    "DRAFT": "Bozza",
+    "FINAL": "Definitivo",
+    "FINISHED_GOODS": "Prodotti finiti",
+    "INSPECTION": "Ispezione",
+    "IN_PRODUCTION": "In produzione",
+    "IN_PROGRESS": "In lavorazione",
+    "LATE": "In ritardo",
+    "LATER": "Più avanti",
+    "LEATHER": "Pelle",
+    "LINE": "Linea",
+    "MAJOR": "Maggiore",
+    "MATERIALS": "Materiali",
+    "MINOR": "Minore",
+    "NOT_ENOUGH": "Insufficiente",
+    "NOT_STARTED": "Non iniziato",
+    "NO_PROMISE": "Senza data promessa",
+    "ON_HOLD": "In sospeso",
+    "ON_TIME": "In tempo",
+    "OPEN": "Aperta",
+    "OTHER": "Altro",
+    "OVERDUE": "Scaduto",
+    "PACKAGING": "Imballaggi",
+    "PARTLY_SHIPPED": "Spedito in parte",
+    "READY": "Pronto da spedire",
+    "RELEASED": "Rilasciato",
+    "RETURN": "Reso",
+    "REWORK": "Rilavorazione",
+    "SCRAP": "Scarto",
+    "SHIPPED": "Spedito",
+    "STARTED": "Iniziato",
+    "SUPPLIER": "Fornitore",
+    "THIS_WEEK": "Questa settimana",
+    "TRIMS": "Accessori",
+    "WIP": "Semilavorati in corso",
+    "WORK_CENTRE": "Centro di lavoro"
+  },
+  "number": {
+    "orders.inThisWeek": {
+      "label": "Ordini acquisiti questa settimana",
+      "definition": "L’imponibile degli ordini di vendita acquisiti questa settimana.",
+      "formula": "Somma dell’imponibile (al netto dell’IVA) di ogni ordine con data ordine in questa settimana, esclusi gli annullati.",
+      "sources": "Ordini di vendita",
+      "period": "Questa settimana, da lunedì a oggi; la linea mostra le ultime 8 settimane."
+    },
+    "orders.late": {
+      "label": "Ordini in ritardo",
+      "definition": "Ordini aperti con la data promessa superata.",
+      "formula": "Numero di ordini confermati, in produzione, pronti o spediti in parte con data promessa prima di oggi.",
+      "sources": "Ordini di vendita",
+      "period": "Adesso."
+    },
+    "orders.promisedThisWeek": {
+      "label": "Promessi questa settimana",
+      "definition": "Ordini aperti promessi al cliente per questa settimana.",
+      "formula": "Numero di ordini aperti con data promessa da lunedì a domenica di questa settimana.",
+      "sources": "Ordini di vendita",
+      "period": "Questa settimana, da lunedì a domenica."
+    },
+    "orders.shippedOnTime": {
+      "label": "Spedito in tempo",
+      "definition": "La quota di spedizioni partite entro la data promessa dell’ordine.",
+      "formula": "Spedizioni delle ultime 4 settimane partite entro la data promessa del loro ordine, divise per tutte le spedizioni di quelle settimane.",
+      "sources": "Spedizioni e i loro ordini di vendita",
+      "period": "Le ultime 4 settimane; la linea mostra ognuna delle ultime 8 settimane."
+    },
+    "orders.marginThisMonth": {
+      "label": "Margine del mese",
+      "definition": "Il margine medio degli ordini acquisiti questo mese, dalla stima attuale.",
+      "formula": "Media del margine % stimato degli ordini con data ordine in questo mese (esclusi quelli senza un costo noto).",
+      "sources": "Ordini di vendita, i loro ordini di produzione e i costi registrati",
+      "period": "Questo mese, dal primo a oggi."
+    },
+    "workorders.late": {
+      "label": "Ordini di produzione in ritardo",
+      "definition": "Ordini di produzione aperti oltre la data di consegna.",
+      "formula": "Numero di ordini di produzione in bozza, rilasciati, in lavorazione o in sospeso con consegna prima di oggi.",
+      "sources": "Ordini di produzione",
+      "period": "Adesso."
+    },
+    "planning.shortages": {
+      "label": "Senza materiale",
+      "definition": "Ordini di produzione rilasciati a cui manca un materiale necessario.",
+      "formula": "Numero di ordini rilasciati o avviati con almeno un materiale mancante o in arrivo dopo che serve, nell’ultimo piano.",
+      "sources": "L’ultima pianificazione, ordini di produzione e ordini di acquisto",
+      "period": "Adesso, secondo l’ultima pianificazione."
+    },
+    "planning.loadNextWeek": {
+      "label": "Carico della prossima settimana",
+      "definition": "Il lavoro prenotato della prossima settimana rispetto alla capacità di linee e centri di lavoro.",
+      "formula": "Minuti standard prenotati della prossima settimana divisi per i minuti disponibili (persone × minuti lavorativi × efficienza) di ogni linea e centro di lavoro.",
+      "sources": "Il tabellone di pianificazione, la capacità delle linee e i calendari degli stabilimenti",
+      "period": "La prossima settimana, da lunedì a domenica."
+    },
+    "production.goodLastDay": {
+      "label": "Capi buoni, ultimo giorno lavorativo",
+      "definition": "Capi usciti da linee e centri di lavoro nell’ultimo giorno lavorativo.",
+      "formula": "Capi buoni passati dall’ultima operazione di ogni linea, sommati su linee e centri di lavoro dei tuoi stabilimenti.",
+      "sources": "Scansioni di reparto, ordini di produzione e calendari degli stabilimenti",
+      "period": "L’ultimo giorno lavorativo del calendario di ogni stabilimento."
+    },
+    "purchasing.notConfirmed": {
+      "label": "Non confermati dopo 2 giorni",
+      "definition": "Ordini di acquisto inviati da più di 48 ore che il fornitore non ha confermato.",
+      "formula": "Numero di ordini di acquisto in Inviato con invio di oltre 48 ore fa.",
+      "sources": "Ordini di acquisto",
+      "period": "Adesso."
+    },
+    "purchasing.lateDeliveries": {
+      "label": "Consegne in ritardo",
+      "definition": "Ordini di acquisto con merce ancora da arrivare dopo la data confermata dal fornitore (o richiesta da noi).",
+      "formula": "Numero di ordini di acquisto aperti con una riga attesa (data confermata, altrimenti richiesta) prima di oggi e non del tutto ricevuta.",
+      "sources": "Ordini di acquisto ed entrate merci",
+      "period": "Adesso."
+    },
+    "purchasing.dueThisWeek": {
+      "label": "Consegne attese questa settimana",
+      "definition": "Ordini di acquisto con merce attesa da oggi a domenica.",
+      "formula": "Numero di ordini di acquisto aperti con una riga attesa questa settimana e non del tutto ricevuta.",
+      "sources": "Ordini di acquisto ed entrate merci",
+      "period": "Questa settimana, da oggi a domenica."
+    },
+    "finance.overdue": {
+      "label": "Scaduto dei clienti",
+      "definition": "Quanto i clienti ci devono oltre la scadenza.",
+      "formula": "Somma degli importi aperti delle fatture emesse con scadenza superata, al netto di note di credito e pagamenti.",
+      "sources": "Fatture, pagamenti e le loro scadenze",
+      "period": "Adesso."
+    },
+    "finance.sdiRefused": {
+      "label": "Scartate dallo SDI",
+      "definition": "Fatture scartate dal Sistema di Interscambio (SDI): vanno corrette e inviate di nuovo.",
+      "formula": "Numero di fatture in Scartata.",
+      "sources": "Fatture e le risposte dello SDI",
+      "period": "Adesso."
+    },
+    "finance.invoicedThisWeek": {
+      "label": "Fatturato della settimana",
+      "definition": "L’imponibile fatturato questa settimana.",
+      "formula": "Somma degli imponibili delle fatture emesse questa settimana, al netto delle note di credito.",
+      "sources": "Fatture e note di credito",
+      "period": "Questa settimana, da lunedì a oggi; la linea mostra le ultime 8 settimane."
+    },
+    "finance.stockValue": {
+      "label": "Valore del magazzino",
+      "definition": "Quanto valgono al costo il magazzino e i semilavorati in corso.",
+      "formula": "Somma del valore di ogni movimento di magazzino fino a ora (pelle, materiali, accessori, imballaggi, prodotti finiti) più i costi dei semilavorati in corso.",
+      "sources": "Movimenti di magazzino e la loro valorizzazione, costi degli ordini di produzione",
+      "period": "Adesso."
+    },
+    "quality.lotsOnHold": {
+      "label": "Lotti bloccati",
+      "definition": "Lotti ricevuti che non si possono ancora usare: in quarantena o bloccati.",
+      "formula": "Numero di lotti in Quarantena o Bloccato.",
+      "sources": "Lotti e le loro decisioni di qualità",
+      "period": "Adesso."
+    },
+    "quality.ncrOverdue": {
+      "label": "Contenimento scaduto",
+      "definition": "Non conformità aperte con il contenimento oltre la scadenza.",
+      "formula": "Numero di non conformità ancora aperte con il contenimento (o un’azione aperta) in scadenza prima di adesso.",
+      "sources": "Non conformità",
+      "period": "Adesso."
+    },
+    "quality.ncrOpen": {
+      "label": "Non conformità aperte",
+      "definition": "Non conformità non ancora chiuse.",
+      "formula": "Numero di non conformità aperte, contenute o decise.",
+      "sources": "Non conformità",
+      "period": "Adesso."
+    },
+    "compliance.certificatesExpiring": {
+      "label": "Certificati in scadenza entro 90 giorni",
+      "definition": "Certificati validi che scadono nei prossimi 90 giorni.",
+      "formula": "Numero di certificati in Valido con ultimo giorno di validità da oggi a 90 giorni da oggi.",
+      "sources": "Certificati",
+      "period": "Da oggi a 90 giorni da oggi."
+    }
+  }
+}

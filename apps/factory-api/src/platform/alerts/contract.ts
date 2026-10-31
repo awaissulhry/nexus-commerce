@@ -30,6 +30,8 @@ export const alertView = output({
   companyId: id().nullable(),
   siteId: id().nullable(),
   partyId: id().nullable(),
+  /** B-W2a-78: where it is — its site's name, else its company's; null for a record of every company. */
+  placeLabel: z.string().nullable(),
   /** What and why, in English; `words` for the reader's language. */
   sentence: z.string(),
   words: phrase,
@@ -128,6 +130,12 @@ export const bulkAcknowledgeContract = defineContract({
   response: { 200: output({ alerts: z.array(alertView) }) },
 })
 
+/** B-W2a-78 (the popup's Assign): the ACTIVE people the alert may be given to (they see its record and handle alerts there). */
+export const alertAssigneesContract = defineContract({
+  params: alertParams,
+  response: { 200: output({ people: z.array(person), /** False: more people than were read (by name). */ complete: z.boolean() }) },
+})
+
 // ---- rules -----------------------------------------------------------------------------------------------------------------
 
 const thresholdValue = z.record(z.string(), z.union([z.number(), z.boolean()]))
@@ -204,6 +212,21 @@ export const testRuleContract = defineContract({
       sample: z.array(output({ record: output({ type: z.string(), id: id(), label: z.string() }), sentence: z.string() })),
       /** Alerts the rule raised in the last 7 days, as it is now. */
       fired7Days: z.number().int(),
+    }),
+  },
+})
+
+/**
+ * B-W2a-78 (the rule dialog's place and recipient): the office roles a rule may tell, and the places the reader may keep
+ * rules for — everywhere (a grant over every company and site), a company, or a site of it.
+ */
+export const ruleChoicesContract = defineContract({
+  response: {
+    200: output({
+      /** `key`: the template's key of a system role (`planner`), so a new rule may default to its kind's built-in role. */
+      roles: z.array(output({ id: id(), name: z.string(), key: z.string() })),
+      everywhere: z.boolean(),
+      companies: z.array(output({ id: id(), name: z.string(), /** The whole company (else only the sites listed). */ wholeCompany: z.boolean(), sites: z.array(output({ id: id(), name: z.string() })) })),
     }),
   },
 })

@@ -1,0 +1,191 @@
+{
+  "title": "Symptoms on the floor",
+  "hint": "The icons operators pick, per machine class. A symptom that locks the machine marks it do-not-use at once, until a technician signs it safe.",
+  "table": "Symptoms",
+  "search": "Search code or words",
+  "new": "New symptom",
+  "count": "{offered} offered · {off} not offered",
+  "close": "Close",
+  "classFilter": {
+    "label": "Machine class",
+    "all": "All symptoms",
+    "every": "For every machine"
+  },
+  "classHint_one": "A {class} station offers {count} symptom now: its own and those for every machine.",
+  "classHint_other": "A {class} station offers {count} symptoms now: its own and those for every machine.",
+  "col": {
+    "code": "Code",
+    "icon": "Icon",
+    "it": "Italian",
+    "en": "English",
+    "for": "For",
+    "unsafe": "Locks the machine",
+    "needsDetail": "Asks for words",
+    "active": "On the floor",
+    "used": "Used"
+  },
+  "for": {
+    "every": "Every machine",
+    "class": "{class}",
+    "retired": "{class} (retired type)",
+    "unknown": "A type no longer listed"
+  },
+  "unsafe": {
+    "on": "Locks",
+    "off": "No",
+    "label": "Reporting {code} locks the machine",
+    "ask": "Locks the machine at once",
+    "askHint": "Reporting it marks the machine do-not-use until a technician signs it safe (guard missing, electrical fault).",
+    "newTitle": "This symptom will lock the machine",
+    "newBody": "Every report of it stops the machine at once: the station takes no work on it until a technician checks it and signs it safe."
+  },
+  "detail": {
+    "on": "Yes",
+    "off": "No",
+    "label": "{code} asks for words",
+    "ask": "Asks for a few words",
+    "askHint": "An \"Other\" symptom: the report is sent only with a few words about what is wrong."
+  },
+  "active": {
+    "on": "Offered",
+    "off": "Not offered",
+    "label": "{code} is offered on the floor"
+  },
+  "used": {
+    "count_one": "{count} report",
+    "count_other": "{count} reports",
+    "hint_one": "{count} report names this symptom: it can be taken off the floor, never deleted.",
+    "hint_other": "{count} reports name this symptom: it can be taken off the floor, never deleted.",
+    "none": "No report names this symptom yet."
+  },
+  "icon": {
+    "none": "No icon",
+    "other": "An icon this version does not draw",
+    "power": "Power",
+    "volume": "Noise",
+    "droplet": "Drop",
+    "shield-off": "Guard off",
+    "scissors": "Scissors",
+    "needle": "Needle",
+    "hand": "Hand",
+    "zap": "Lightning",
+    "stamp": "Press",
+    "flame": "Flame",
+    "layers": "Layers",
+    "wind": "Air",
+    "printer": "Printer",
+    "activity": "Vibration"
+  },
+  "iconDialog": {
+    "change": "Icon of {code}: {icon}",
+    "title": "Icon · {code}",
+    "label": "Icon",
+    "hint": "Shown on the station's tile before the words.",
+    "done": "Done"
+  },
+  "mark": {
+    "saving": "Saving…",
+    "saved": "Saved"
+  },
+  "state": {
+    "forbiddenTitle": "You can't see the symptoms",
+    "errorTitle": "Couldn't load the symptoms",
+    "retry": "Try again",
+    "emptyTitle": "No symptom yet",
+    "emptyBody": "Add the starter set and change it to your words, or add the first symptom.",
+    "emptyBodyView": "Nobody has added a symptom yet: the stations can only describe a problem in words.",
+    "first": "Add the first symptom",
+    "noMatch": "No symptom matches",
+    "clear": "Show all symptoms"
+  },
+  "starter": {
+    "add_one": "Add {count} from the starter set",
+    "add_other": "Add {count} from the starter set"
+  },
+  "changed": {
+    "title": "Changed by someone else",
+    "body": "Another person changed the symptoms or the machine types since you opened them.",
+    "reload": "Reload"
+  },
+  "readOnly": {
+    "title": "You can view, not change",
+    "body": "The symptoms are the whole group's: keeping them needs the right to keep machines over every company."
+  },
+  "held": {
+    "busy": "Wait: the last change is still being saved",
+    "noCode": "Give it a code first",
+    "badCode": "A code is 2 to 40 capital letters, digits and underscores, starting with a letter",
+    "codeTaken": "The group already has this code",
+    "noWords": "Say the symptom in Italian and in English",
+    "allOffered": "Every symptom chosen is already offered",
+    "noneOffered": "Every symptom chosen is already off the floor",
+    "narrowed": "Show all symptoms, without a search, to move them: the order is the whole list's",
+    "atTop": "Already at the top",
+    "atBottom": "Already at the bottom",
+    "noManage": "Keeping the symptoms needs the right to keep machines over every company",
+    "loading": "The list is still loading"
+  },
+  "bulk": {
+    "off_one": "Stop offering {count}",
+    "off_other": "Stop offering {count}",
+    "on_one": "Offer {count} again",
+    "on_other": "Offer {count} again",
+    "up": "Move up",
+    "down": "Move down"
+  },
+  "keys": {
+    "new": "New symptom",
+    "edit": "Edit the words, switch, or open the icon",
+    "cancel": "Leave the cell without saving",
+    "title": "Keys of the symptom list"
+  },
+  "newDialog": {
+    "title": "New symptom",
+    "back": "Back",
+    "add": "Add symptom",
+    "intro": "The code and the machine type never change once added (reports keep them). The words are what operators read, each in their own language.",
+    "codeHint": "Capital letters, digits and underscores: BELT_SLIPS.",
+    "forHint": "A type's stations offer its own symptoms and those for every machine."
+  },
+  "unsafeOff": {
+    "title": "Stop locking the machine for \"{symptom}\"?",
+    "body": "A report of {code} will no longer mark the machine do-not-use at once: it only reaches maintenance, and the machine stays as it is.",
+    "still": "Anyone at the station can still mark a machine unsafe on the report itself; only a technician signs it safe again.",
+    "keep": "Keep it locking",
+    "stop": "Stop locking"
+  },
+  "problem": {
+    "tooLong": "At most 80 characters",
+    "labelIt": "Say the symptom in Italian: the Italian words are never empty",
+    "labelEn": "Say the symptom in English: the English words are never empty",
+    "codeTaken": "The group already has this code",
+    "codeTakenRetired": "The group already has this code, taken off the floor: offer it again instead of adding it",
+    "tooMany": "The group has the most symptoms it may keep: take some off the floor first",
+    "stale": "Someone changed this symptom since you read it: reload the list and try again",
+    "code": "A code is 2 to 40 capital letters, digits and underscores, starting with a letter",
+    "icon": "Pick one of the icons offered",
+    "classId": "This machine type is retired or unknown: pick another",
+    "invalid": "The change was refused as it is",
+    "forbidden": "You may not change the symptoms",
+    "gone": "This symptom is no longer in the list: reload it",
+    "signedOut": "You were signed out: sign in again",
+    "offline": "Nexus Factory can't be reached: the value before is put back; try again when the connection is back",
+    "failed": "Something went wrong: try again",
+    "read": "Nexus Factory didn't answer: try again",
+    "readForbidden": "Seeing the symptoms needs the right to see the plant."
+  },
+  "done": {
+    "on_one": "{count} symptom offered again: {codes}",
+    "on_other": "{count} symptoms offered again: {codes}",
+    "off_one": "{count} symptom taken off the floor: {codes}. Reports keep the code.",
+    "off_other": "{count} symptoms taken off the floor: {codes}. Reports keep the codes.",
+    "partly_one": "{count} of {of} changed, then one was refused: the list was read again.",
+    "partly_other": "{count} of {of} changed, then one was refused: the list was read again.",
+    "starter": "From the starter set: {symptoms} symptoms and {classes} machine types added.",
+    "created": "{code} added at the end of the list."
+  },
+  "noAccess": {
+    "title": "You can't see the plant settings",
+    "body": "Plant settings need the right to see the plant (plant.view)."
+  }
+}

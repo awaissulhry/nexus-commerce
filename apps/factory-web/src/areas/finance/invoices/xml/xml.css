@@ -1,0 +1,24 @@
+/* SCR-081-xml — the readable XML (B-W2a-80): layout only, semantic tokens. A section with tables takes the whole row. */
+.fw-fin-card--wide {
+  grid-column: 1 / -1;
+}
+
+.fw-fin-xml {
+  margin: 0;
+  padding: var(--nds-space-12);
+  max-height: min(75vh, 900px);
+  overflow: auto;
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.6;
+  white-space: pre;
+  color: var(--nds-text);
+  background: var(--nds-surface-sunken);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-fin-xml:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}

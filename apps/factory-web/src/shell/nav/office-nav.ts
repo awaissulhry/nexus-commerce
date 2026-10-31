@@ -105,6 +105,12 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/home/tasks',
   '/home/notifications',
   '/home/mail-to-sort',
+  // B-W2a-79: Reports (SCR-104), a report and its print tab.
+  '/home/reports',
+  '/home/reports/[key]',
+  '/home/reports/[key]/print',
+  // B-W2a-78: Home › Insights › Alerts (SCR-234).
+  '/home/alerts',
   '/records/[type]/[id]',
   '/sales/customers',
   '/sales/customers/[partyId]',
@@ -117,6 +123,11 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-49: Sales › Pricing › Price lists & contracts (SCR-106) and a price list.
   '/sales/price-lists',
   '/sales/price-lists/[listId]',
+  // B-W2a-77: Sales › After-sales › Returns & repairs (SCR-111), a return and a repair (SCR-112), Sales settings (SCR-235).
+  '/sales/returns',
+  '/sales/returns/[id]',
+  '/sales/returns/repairs/[id]',
+  '/sales/settings',
   '/purchasing/suppliers',
   '/purchasing/suppliers/[partyId]',
   // B-W1-30/31 part 2: Purchase orders (SCR-058) and the PO studio (SCR-059).
@@ -187,6 +198,7 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // Finance (SCR-080 … SCR-083): invoices and the invoice record, payments and the payment record, finance settings.
   '/finance/invoices',
   '/finance/invoices/[id]',
+  '/finance/invoices/[id]/xml', // B-W2a-80: the legal XML shown readable (SCR-081-xml, a new tab)
   '/finance/payments',
   '/finance/payments/[id]',
   '/finance/settings',
@@ -219,6 +231,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/admin/roles/[roleId]',
   // B-W2a-36: Security & health (SCR-166).
   '/admin/security',
+  // B-W2a-78: Approvals, automation & AI (SCR-167, W2a part: Reminders & timers).
+  '/admin/automation',
   // B-W0-28 Admin: Documents & numbering, Languages & formats, Connections & API (and a connection), Import & export,
   // Audit log.
   '/admin/documents',
@@ -266,6 +280,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/plant/machines',
   '/plant/machines/[id]',
   '/plant/machines/tags',
+  // B-W2a-73: Plant › Settings › Plant settings (SCR-241, its W2a section: the symptoms on the floor).
+  '/plant/settings',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */

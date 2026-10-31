@@ -90,7 +90,7 @@ export const events = [
       startsWorkOrder: z.boolean(),
       postedBy: z.enum(['OFFICE', 'FLOOR', 'SYSTEM']),
     }),
-    live: { permission: 'inventory.issue', floor: true, fields: ['workOrderId', 'number', 'itemId', 'lotId', 'hideId'] },
+    live: { permission: 'inventory.issue', floor: 'inventory.issue', fields: ['workOrderId', 'number', 'itemId', 'lotId', 'hideId'] },
   }),
   defineEvent({
     type: 'inventory.returned',
@@ -110,7 +110,7 @@ export const events = [
       hideState: z.enum(HIDE_STATES).nullable(),
       postedBy: z.enum(['OFFICE', 'FLOOR', 'SYSTEM']),
     }),
-    live: { permission: 'inventory.issue', floor: true, fields: ['workOrderId', 'number', 'itemId', 'lotId', 'hideId'] },
+    live: { permission: 'inventory.issue', floor: 'inventory.issue', fields: ['workOrderId', 'number', 'itemId', 'lotId', 'hideId'] },
   }),
   defineEvent({
     type: 'inventory.pick_reversed',
@@ -127,7 +127,7 @@ export const events = [
       moveIds: z.array(z.uuid()).min(1),
       postedBy: z.enum(['OFFICE', 'FLOOR', 'SYSTEM']),
     }),
-    live: { permission: 'inventory.issue', floor: true, fields: ['workOrderId', 'number', 'reversedId', 'of'] },
+    live: { permission: 'inventory.issue', floor: 'inventory.issue', fields: ['workOrderId', 'number', 'reversedId', 'of'] },
   }),
   defineEvent({
     type: 'inventory.receipt_posted',

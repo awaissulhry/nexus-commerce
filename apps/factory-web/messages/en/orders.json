@@ -983,7 +983,30 @@
     "dueDeposit": "Due {date} (the deposit request)",
     "paidOn": "Paid on {date}",
     "cancelled_one": "{count} earlier step was replaced when an amendment remade the schedule.",
-    "cancelled_other": "{count} earlier steps were replaced when an amendment remade the schedule."
+    "cancelled_other": "{count} earlier steps were replaced when an amendment remade the schedule.",
+    "verbs": {
+      "day": "Due on",
+      "held": {
+        "busy": "Working…",
+        "goodsLeft": "Goods have left already: the balance goes on the goods’ invoice.",
+        "noInvoice": "Invoicing a step needs the right to manage invoices.",
+        "noManage": "Opening a step needs the right to manage orders."
+      },
+      "invoice": "Invoice this step",
+      "open": "Open for payment",
+      "openBody": "Its payment request is made now: it is paid like the deposit, and its deposit invoice (TD02) follows the payment (DPR 633/1972 art. 6 c.4).",
+      "openGo": "Open for payment, due {date}",
+      "openTitle": "Open “{step}” for payment",
+      "opened": "The step is open for payment.",
+      "problem": {
+        "day": "Choose the day it falls due.",
+        "forbidden": "Your role may not do this.",
+        "moved": "The schedule changed meanwhile: read it again.",
+        "past": "Today or later.",
+        "state": "Not now: nothing paid waits for an invoice, or the step changed.",
+        "write": "It could not be done: try again."
+      }
+    }
   },
   "changes": {
     "title": "Amendments",

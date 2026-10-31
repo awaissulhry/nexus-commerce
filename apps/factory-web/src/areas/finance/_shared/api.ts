@@ -15,8 +15,11 @@ export const INVOICE_DOC_TYPES = ['TD01', 'TD02', 'TD04', 'TD24'] as const
 export type DocType = (typeof INVOICE_DOC_TYPES)[number]
 export const INVOICE_STATUSES = ['DRAFT', 'ISSUED', 'SENT', 'DELIVERED', 'NOT_DELIVERABLE', 'REJECTED', 'ERROR'] as const
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number]
-// CHARGE: W2a's accessory charge (factory-db InvoiceLineKind, wave 7/7); drawn as an ordinary line until its screen.
+// CHARGE: W2a's accessory charge (factory-db InvoiceLineKind, wave 7/7) with its kind (B-W2a-54; B-W2a-80 draws them).
 export const LINE_KINDS = ['GOODS', 'SERVICE', 'DEPOSIT_DEDUCTION', 'CHARGE'] as const
+/** What a charge line bills (factory-domain invoicing/charges CHARGE_KINDS). */
+export const CHARGE_KINDS = ['FREIGHT', 'PACKAGING', 'SAMPLES', 'FEE', 'OTHER'] as const
+export type ChargeKind = (typeof CHARGE_KINDS)[number]
 export const SDI_STATE_CODES = ['DRAFT', 'NOT_SENT', 'SENDING', 'AT_SDI', 'DELIVERED', 'NOT_DELIVERED', 'REJECTED', 'ERROR'] as const
 export type SdiStateCode = (typeof SDI_STATE_CODES)[number]
 export const SDI_NEXT_ACTIONS = ['ISSUE', 'SEND', 'WAIT', 'FIX_AND_RESEND', 'SEND_AGAIN', 'CHECK_COPY', 'NONE'] as const
@@ -111,8 +114,15 @@ export const invoiceLineSchema = z.object({
   size: z.string().nullable(),
   ddtId: z.string().nullable(),
   depositInvoiceId: z.string().nullable(),
+  /** B-W2a-54: a CHARGE line's kind; the schedule step a TD02 line bills. B-W2a-61: a credit note's line of a return. */
+  chargeKind: z.enum(CHARGE_KINDS).nullable().optional(),
+  milestoneId: z.string().nullable().optional(),
+  returnLineId: z.string().nullable().optional(),
 })
 export type InvoiceLine = z.infer<typeof invoiceLineSchema>
+
+/** B-W2a-54: a legal invoicing deadline (DPR 633/1972 art. 21 c.4) counted down; its words are the API's (never drawn). */
+const invoiceDeadlineSchema = z.object({ docType: z.enum(['TD01', 'TD24']), dueBy: z.string(), daysLeft: z.number(), state: z.enum(['OPEN', 'DUE_SOON', 'LATE']) })
 
 const vatEntrySchema = z.object({ rate: z.string().nullable(), nature: z.string().nullable(), legalRef: z.string().nullable(), taxable: z.number(), vat: z.number(), rounding: z.number() })
 const installmentSchema = z.object({ method: z.string(), amount: z.number().optional(), dueDate: z.string().nullable().optional(), iban: z.string().nullable().optional() })
@@ -151,6 +161,8 @@ export const invoiceSchema = z.object({
   creditedAmount: z.number().optional(),
   openAmount: z.number().optional(),
   refundDueAmount: z.number().optional(),
+  /** B-W2a-54: a DRAFT TD01/TD24 of shipped goods — the last day to issue it, counted down; else null. */
+  deadline: invoiceDeadlineSchema.nullable().optional(),
   lines: z.array(invoiceLineSchema),
   createdAt: instant,
   updatedAt: instant,
@@ -240,7 +252,9 @@ export function deleteDraft(api: ApiClient, id: string, version: number): Promis
 
 /** A line as the API takes it back (a draft's lines replaced, or a rejected invoice's correction). */
 export interface LineInput {
-  kind?: 'GOODS' | 'SERVICE'
+  kind?: 'GOODS' | 'SERVICE' | 'CHARGE'
+  /** B-W2a-54: what a CHARGE line bills (required on one, refused on any other). */
+  chargeKind?: ChargeKind | null
   description: string
   itemCode?: string | null
   quantity: string
@@ -363,6 +377,10 @@ export const queueDdtSchema = z.object({
   depositPaidAmount: z.number().optional(),
   drafts: z.array(z.string()),
   immediate: deadlineSchema,
+  /** B-W2a-54 (FIN-065): its deadline by the customer's preset (the day the timers count down to). */
+  deadline: deadlineSchema.optional(),
+  /** B-W2a-54 (FIN-060): its shipment's freight (amount null: not decided yet; absent without the price grain). */
+  freight: z.object({ amount: z.number().nullable().optional(), currency: z.string(), billed: z.boolean() }).optional(),
 })
 export type QueueDdt = z.infer<typeof queueDdtSchema>
 
@@ -374,6 +392,9 @@ export const queueSchema = z.object({
       companyId: z.string(),
       code: z.string(),
       legalName: z.string(),
+      /** B-W2a-54: how the customer is invoiced and the type its goods get by default. */
+      invoiceTiming: z.enum(['PER_SHIPMENT', 'MONTHLY']).optional(),
+      preset: shipType.optional(),
       valueAmount: z.number().optional(),
       oldestDate: z.string(),
       months: z.array(z.object({ month: z.string(), ddtIds: z.array(z.string()), suggested: shipType.nullable(), allowed: z.array(shipType), deadline: deadlineSchema.nullable() })),
@@ -433,6 +454,8 @@ export const paymentRowSchema = z.object({
   externalRef: z.string(),
   status: z.enum(PAYMENT_STATUSES),
   placedOn: placedSchema.default([]),
+  /** B-W2a-61: what its live refunds (due or paid) take of it. */
+  refunded: z.number().optional(),
   createdAt: instant,
 })
 export type PaymentRow = z.infer<typeof paymentRowSchema>
@@ -489,6 +512,9 @@ export const paymentSchema = z.object({
     }),
   ),
   placedOn: placedSchema.default([]),
+  /** B-W2a-61: what its live refunds take of it (a credit balance given back), and those refunds. */
+  refunded: z.number().optional(),
+  refunds: z.array(z.object({ id: z.string(), status: z.enum(['DUE', 'PAID', 'CANCELLED', 'VOIDED']), amount: z.number().optional(), dueDate: z.string().nullable(), paidOn: z.string().nullable() })).optional(),
   createdAt: instant,
   createdById: z.string().nullable(),
   people: z.array(z.object({ id: z.string(), name: z.string() })).default([]),
@@ -555,6 +581,8 @@ export const openItemSchema = z.object({
   number: z.string().nullable(),
   docType: z.string().nullable(),
   fiscalDocument: z.enum(['TD02', 'NONE']).nullable().default(null),
+  /** B-W2a-61: a deposit request's schedule step (B-W2a-F2: BEFORE_SHIPPING = the balance before shipping). */
+  stepKind: z.enum(['DEPOSIT', 'BEFORE_SHIPPING']).nullable().optional(),
   orderId: z.string().nullable(),
   orderNumber: z.string().nullable(),
   date: z.string(),
@@ -562,6 +590,10 @@ export const openItemSchema = z.object({
   currency: z.string(),
   amount: z.number().optional(),
   openAmount: z.number().optional(),
+  /** B-W2a-61: with a payment or an amount asked, what "Suggest" places on it (oldest first). */
+  suggestedAmount: z.number().optional(),
+  /** B-W2a-61: an invoice of an order whose deposit was paid on a request that issues no TD02: what that deposit holds. */
+  noInvoiceDepositAmount: z.number().nullable().optional(),
 })
 export type OpenItem = z.infer<typeof openItemSchema>
 

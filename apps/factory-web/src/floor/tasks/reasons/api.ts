@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { AsOfMemory, type Remembered } from '../shared/as-of'
 import { floorRead, type TaskOutcome } from '../shared/task-api'
-import { fromListReason, type ListReason, type PickerReason } from './model'
+import { fromListReason, type ListReason, type PickerList, type PickerReason } from './model'
 
 /**
  * SCR-091's read: the active reasons of one or more lists in tile order (`GET /reasons?list=…`, B-W2a-18: office AND
@@ -41,4 +41,27 @@ export async function fetchListReasons(api: ApiClient, lists: readonly string[])
 /** The reasons this tablet read last for the lists in this visit, with their as-of time; null when none. */
 export function keptListReasons(lists: readonly string[]): Remembered<readonly PickerReason[]> | null {
   return KEPT.get(keyOf(lists))
+}
+
+/** What the picker shows before a read answers: the reasons this tablet kept in this visit, else "loading". */
+export function listBeforeRead(lists: readonly string[]): PickerList {
+  const kept = keptListReasons(lists)
+  return kept ? { state: 'ready', reasons: kept.value, asOf: null } : { state: 'loading', reasons: [], asOf: null }
+}
+
+/**
+ * A host's read of its lists for the picker (Hold lot, Receive back, any later floor step): the office's answer, else what
+ * this tablet kept with its as-of time, else why not (offline, failed). `signedOut`: the session ended (the host signs out).
+ */
+export async function readListReasons(api: ApiClient, lists: readonly string[], online: boolean): Promise<{ list: PickerList; signedOut: boolean }> {
+  if (online) {
+    const answer = await fetchListReasons(api, lists)
+    if (answer.ok) return { list: { state: 'ready', reasons: answer.value, asOf: null }, signedOut: false }
+    const kept = keptListReasons(lists)
+    const signedOut = answer.problem.kind === 'signedOut'
+    if (kept) return { list: { state: 'ready', reasons: kept.value, asOf: kept.asOf }, signedOut }
+    return { list: { state: answer.problem.kind === 'offline' ? 'offline' : 'error', reasons: [], asOf: null }, signedOut }
+  }
+  const kept = keptListReasons(lists)
+  return { list: kept ? { state: 'ready', reasons: kept.value, asOf: kept.asOf } : { state: 'offline', reasons: [], asOf: null }, signedOut: false }
 }

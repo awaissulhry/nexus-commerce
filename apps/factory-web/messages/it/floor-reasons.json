@@ -5,14 +5,20 @@
     "rework": "Da rifare",
     "pause": "Pausa",
     "putLast": "Metti in fondo",
-    "defect": "Difetti"
+    "defect": "Difetti",
+    "split": "Dividi il fascio",
+    "hold": "Blocca il lotto",
+    "reject": "Rientro dal terzista"
   },
   "question": {
     "scrap": "Perché è scarto? Ogni tocco aggiunge un pezzo",
     "rework": "Perché da rifare? Ogni tocco aggiunge un pezzo",
     "pause": "Perché ti fermi?",
     "putLast": "Perché lo metti in fondo?",
-    "defect": "Quale difetto? Ogni tocco ne aggiunge uno"
+    "defect": "Quale difetto? Ogni tocco ne aggiunge uno",
+    "split": "Perché si dividono?",
+    "hold": "Perché lo blocchi?",
+    "reject": "Perché sono scartati?"
   },
   "counted": {
     "of": "contati su {of}",
@@ -43,5 +49,8 @@
   "doneHeld": {
     "choose": "Scegli prima un motivo",
     "notReady": "I motivi non sono ancora sullo schermo"
+  },
+  "noteHeld": {
+    "hold": "Questo motivo chiede una nota scritta: questo blocco lo mette la qualità in ufficio."
   }
 }

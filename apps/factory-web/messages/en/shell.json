@@ -10,7 +10,10 @@
       "approvals": "Approvals",
       "tasks": "My tasks",
       "notifications": "Notifications",
-      "mailToSort": "Mail to sort"
+      "mailToSort": "Mail to sort",
+      "insights": "Insights",
+      "reports": "Reports",
+      "alerts": "Alerts"
     },
     "products": {
       "area": "Products",
@@ -28,7 +31,11 @@
       "quotes": "Quotes",
       "orders": "Orders",
       "pricing": "Pricing",
-      "pricelists": "Price lists & contracts"
+      "pricelists": "Price lists & contracts",
+      "aftersales": "After-sales",
+      "returns": "Returns & repairs",
+      "settings": "Settings",
+      "salesSettings": "Sales settings"
     },
     "purchasing": {
       "area": "Purchasing",
@@ -46,7 +53,9 @@
       "maintenance": "Maintenance",
       "requests": "Machine requests",
       "jobs": "Maintenance jobs",
-      "machines": "Machines & tools"
+      "machines": "Machines & tools",
+      "settingsGroup": "Settings",
+      "settings": "Plant settings"
     },
     "admin": {
       "area": "Admin",
@@ -62,6 +71,7 @@
       "platform": "Platform",
       "documents": "Documents & numbering",
       "languages": "Languages & formats",
+      "automation": "Approvals, automation & AI",
       "audit": "Audit log",
       "connections": "Connections & API",
       "data": "Data",

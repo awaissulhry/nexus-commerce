@@ -1,0 +1,193 @@
+{
+  "kind": {
+    "ORDER_LATE_RISK": "Orders at risk of being late",
+    "HOLD_TOO_LONG": "Holds that last too long",
+    "MATERIAL_SHORT": "Material short for released work orders",
+    "APPROVAL_OVERDUE": "Approvals overdue",
+    "PO_NOT_CONFIRMED": "Purchase orders not confirmed",
+    "CERTIFICATE_EXPIRING": "Certificates expiring",
+    "INVOICE_DEADLINE": "Shipped goods near their invoice deadline"
+  },
+  "when": {
+    "ORDER_LATE_RISK": "When an order is promised within {daysBeforePromise} and is not ready, or is late",
+    "HOLD_TOO_LONG": "When goods are on hold longer than {hours}",
+    "MATERIAL_SHORT": "When material is short for a released work order",
+    "APPROVAL_OVERDUE": "When an approval waits longer than {hours}",
+    "PO_NOT_CONFIRMED": "When a purchase order is not confirmed by the time the supplier was asked to answer by (none asked: {days} after it was sent)",
+    "CERTIFICATE_EXPIRING": "{daysBefore} before a certificate expires",
+    "INVOICE_DEADLINE": "{daysBefore} before the deadline to invoice a DDT's goods"
+  },
+  "sentence": {
+    "full": "{when} {place}, tell {recipient} by {channels} {cooldown}.",
+    "nowhere": "{when}, tell {recipient} by {channels} {cooldown}.",
+    "label": "The rule as one sentence: change the parts in place"
+  },
+  "place": {
+    "everywhere": "everywhere",
+    "at": "at",
+    "atCompany": "at all of {name}",
+    "atSite": "at {site} ({company})",
+    "atPlace": "at {name}"
+  },
+  "recipient": {
+    "none": "nobody by role"
+  },
+  "channels": {
+    "bell": "the bell",
+    "both": "the bell and e-mail"
+  },
+  "unit": {
+    "hoursShort": "{count} h",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "workingDays_one": "{count} working day",
+    "workingDays_other": "{count} working days"
+  },
+  "unitWord": {
+    "hours": "h",
+    "days_one": "day",
+    "days_other": "days",
+    "workingDays_one": "working day",
+    "workingDays_other": "working days"
+  },
+  "field": {
+    "daysBeforePromise": "Days before the promise date",
+    "hours": "Hours",
+    "days": "Days after it was sent",
+    "daysBefore": "Days before the date",
+    "dayKind": "Calendar or working days",
+    "place": "Where it looks",
+    "recipient": "Who is told",
+    "channels": "How they are told",
+    "cooldown": "How often at most"
+  },
+  "problem": {
+    "range": "A whole number from {min} to {max}.",
+    "failed": "The rules could not be read. Try again.",
+    "forbidden": "You may not see these rules.",
+    "gone": "This rule is no longer there.",
+    "offline": "No answer from Nexus: check the connection and try again."
+  },
+  "severity": {
+    "INFO": "Info",
+    "WARNING": "Warning",
+    "CRITICAL": "Critical"
+  },
+  "state": {
+    "on": "On",
+    "off": "Off"
+  },
+  "goesTo": {
+    "at": "{role} at {place}",
+    "everywhere": "{role}, everywhere"
+  },
+  "dialog": {
+    "title": "Rule: {kind}",
+    "newTitle": "New rule",
+    "reading": "Rule",
+    "builtIn": "Built-in rule: it can be switched off, never removed.",
+    "kind": "What it watches",
+    "onLabel": "Rule switched on",
+    "offHint": "Switched off, it raises nothing new; its open alerts stay for people to resolve, and a date rule's waiting timers are cancelled.",
+    "severity": "Severity",
+    "sentence": "The rule",
+    "emailHint": "E-mail is not sent at once: people get alerts by e-mail only in the daily digest they turn on in their notification preferences.",
+    "unsaved_one": "{count} change not saved",
+    "unsaved_other": "{count} changes not saved",
+    "cancel": "Cancel",
+    "save": "Save rule",
+    "create": "Add rule",
+    "noKinds": "There is nothing more a rule can watch here."
+  },
+  "test": {
+    "title": "Try these numbers",
+    "go": "Test now",
+    "running": "Testing…",
+    "found_one": "Would find {count} record now",
+    "found_other": "Would find {count} records now",
+    "foundAtLeast_one": "Would find at least {count} record now",
+    "foundAtLeast_other": "Would find at least {count} records now",
+    "fired_one": "raised {count} alert in the last 7 days",
+    "fired_other": "raised {count} alerts in the last 7 days",
+    "sample": "Records it would find",
+    "honest": "Counted against the records as they are now: Nexus keeps no copy of how they were last week.",
+    "newRule": "Counted against the records as they are now, with these numbers and this place.",
+    "noRuleOfKind": "No rule of this kind is visible to test against yet."
+  },
+  "timers": {
+    "title": "Timers",
+    "titleCount_one": "Timers: {count} waiting",
+    "titleCount_other": "Timers: {count} waiting",
+    "next": "The next one fires on {date}.",
+    "none": "No timer of this rule yet: the next check sets the ones it needs.",
+    "record": "Record",
+    "firesAt": "fires on {date}",
+    "firedAt": "fired on {date}",
+    "status": {
+      "PENDING": "Waiting",
+      "FIRED": "Fired",
+      "CANCELLED": "Cancelled"
+    },
+    "cancel": {
+      "MOVED": "The date it watches moved: a new timer was set.",
+      "GONE": "The record no longer needs it.",
+      "RULE_OFF": "The rule was switched off.",
+      "RULE_CHANGED": "The rule's numbers or place changed.",
+      "other": "Cancelled."
+    }
+  },
+  "held": {
+    "readOnly": "You may see this rule but not change it: keeping rules needs the right to manage alert rules at its place.",
+    "offline": "Offline — change it when back online.",
+    "busy": "Saving…",
+    "noChange": "Nothing changed yet.",
+    "problems": "Fix the numbers first.",
+    "noKind": "Choose what it watches first.",
+    "choices": "The places and roles are still being read.",
+    "noAdd": "You may not add rules: keeping rules needs the right to manage alert rules."
+  },
+  "refusal": {
+    "noBell": "An alert rule always tells through the bell: e-mail alone is not sent.",
+    "siteNeedsCompany": "A site is named only with its company.",
+    "unchanged": "Nothing to change: the rule is like that already.",
+    "changed": "Someone changed this rule meanwhile: it was read again — make your change again.",
+    "numbers": "The numbers are not valid for this rule.",
+    "role": "Choose an office role.",
+    "place": "That company or site is not there any more.",
+    "invalid": "The rule was refused as it is.",
+    "forbidden": "You may not keep the rules of that place.",
+    "gone": "This rule is no longer there.",
+    "offline": "No answer from Nexus: nothing was saved. Try again.",
+    "failed": "The rule could not be saved. Try again."
+  },
+  "retry": "Try again",
+  "notice": {
+    "saved": "Rule saved.",
+    "created": "Rule added: the next check (within five minutes) applies it.",
+    "switchedOn": "Rule switched on.",
+    "switchedOff": "Rule switched off: its open alerts stay for people to resolve."
+  },
+  "list": {
+    "col": {
+      "sentence": "Rule",
+      "threshold": "Threshold",
+      "goesTo": "Goes to",
+      "cooldown": "How often",
+      "timers": "Timers",
+      "lastFired": "Last fired",
+      "fired7Days": "In 7 days",
+      "state": "State"
+    },
+    "builtIn": "built-in",
+    "openAlerts_one": "{count} open alert",
+    "openAlerts_other": "{count} open alerts",
+    "switch": "Rule on: {rule}",
+    "never": "Never",
+    "waiting_one": "{count} waiting",
+    "waiting_other": "{count} waiting",
+    "add": "Add rule",
+    "count_one": "{count} rule",
+    "count_other": "{count} rules",
+    "waitingNext": "{waiting} · next {date}"
+  }
+}

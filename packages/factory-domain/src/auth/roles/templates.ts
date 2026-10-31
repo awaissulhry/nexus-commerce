@@ -165,9 +165,20 @@ const RECEIPT_DOCUMENTS_ADDS: Readonly<Record<string, readonly Permission[]>> = 
   warehouse: ['inventory.receipts.documents.request'],
   buyer: ['inventory.receipts.documents.request'],
 })
+/**
+ * B-W2a-76 (design floor.kits; SCM-140, SCM-142): on the floor the warehouse tablet's operator and team leader send a
+ * subcontract kit (with its DDT for work on our behalf) and receive the goods back, bundle by bundle. Floor only: the
+ * office warehouse holds both already (B-W2a-25). Never a fee.
+ */
+const SUBCONTRACT_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  operator: ['purchasing.subcontract.kit', 'purchasing.subcontract.receive'],
+  team_leader: ['purchasing.subcontract.kit', 'purchasing.subcontract.receive'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
+  // B-W2a-76
+  ...(audience === 'floor' ? (SUBCONTRACT_FLOOR_ADDS[key] ?? []) : []),
   // B-W2a-61
   ...(audience === 'office' ? (REFUNDS_ADDS[key] ?? []) : []),
   // B-W2a-62
@@ -205,9 +216,16 @@ const REPORTS_TEMPLATES: Readonly<Record<string, readonly Permission[]>> = Objec
   floor_supervisor: ['production.reports.view', 'production.reports.subscribe'],
 })
 const reportsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (REPORTS_TEMPLATES[key] ?? []) : [])
+/**
+ * B-W2a-79 (the report library, ANA-029 / ANA-034; design home.reports): every office template that works with business
+ * records runs the standard reports; each report shows only what the person's other permissions and grains reach. The
+ * administrator sees no business data and gets none; the owner and read_only follow the registry. One line per template.
+ */
+const REPORT_LIBRARY_TEMPLATES: ReadonlySet<string> = new Set(['finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor'])
+const reportLibraryAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' && REPORT_LIBRARY_TEMPLATES.has(key) ? ['home.reports.view' as Permission] : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 

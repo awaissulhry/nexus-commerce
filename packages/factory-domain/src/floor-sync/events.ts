@@ -11,7 +11,7 @@ import { defineEvent } from '../events/define'
  *                                again) or discarded with a reason (DISCARDED): it leaves the open lists
  */
 
-const live = { permission: 'floorsync.view', floor: true, fields: ['refusedId', 'deviceId'] } as const
+const live = { permission: 'floorsync.view', floor: 'floor.work', fields: ['refusedId', 'deviceId'] } as const
 
 export const events = [
   defineEvent({

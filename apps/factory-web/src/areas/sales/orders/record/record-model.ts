@@ -5,6 +5,7 @@ import type { DraftLine } from '../daily-model'
 import type { MarginTabModel } from './margin/model'
 import type { LiveState, StepUpState } from '../hooks'
 import type { OrderAbilities, Phrase, RecordTab, SizeLayer } from '../model'
+import type { ScheduleStepsActions, ScheduleStepsModel } from './schedule/view/StepVerbs'
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -107,6 +108,8 @@ export interface OrderRecordModel {
   copied: CopyAnswer | null
   /** B-W2a-72: the Margin tab (the order's margin quoted → now → so far; margin grain only). */
   margin?: MarginTabModel
+  /** B-W2a-80: the schedule card's verbs (open a before-shipping step for payment, invoice a paid step). */
+  scheduleSteps?: ScheduleStepsModel
   /** Design cases: what the panels show (the page mounts the live panels instead). */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: what a dialog holds typed. */
@@ -122,6 +125,8 @@ export interface PaymentInput {
 }
 
 export interface OrderRecordActions {
+  /** B-W2a-80: the schedule card's verbs. */
+  scheduleSteps?: ScheduleStepsActions
   onRetry?: () => void
   onRetryPart?: (part: 'workOrders' | 'settlement' | 'sdi' | 'versions' | 'schedule' | 'amendments' | 'cancelCheck') => void
   onReload?: () => void

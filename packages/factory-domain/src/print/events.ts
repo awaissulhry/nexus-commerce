@@ -15,13 +15,13 @@ export const events = [
     context: 'print',
     description: 'A print job was queued for a printer; the worker hands it to the site\'s print relay.',
     payload: z.strictObject({ jobId: z.uuid(), printerId: z.uuid(), payloadKind: z.enum(['ZPL', 'PDF']) }),
-    live: { permission: 'print.view', floor: true, fields: ['jobId', 'printerId'] },
+    live: { permission: 'print.view', floor: 'print.view', fields: ['jobId', 'printerId'] },
   }),
   defineEvent({
     type: 'print.job_changed',
     context: 'print',
     description: 'A print job moved: handed to the relay, printed, or failed.',
     payload: z.strictObject({ jobId: z.uuid(), printerId: z.uuid(), status, attempts: z.number().int().min(0) }),
-    live: { permission: 'print.view', floor: true, fields: ['jobId', 'printerId', 'status'] },
+    live: { permission: 'print.view', floor: 'print.view', fields: ['jobId', 'printerId', 'status'] },
   }),
 ] as const

@@ -12,9 +12,10 @@ import { AsOfMemory, codeKey } from '../shared/as-of'
 import { floorStepUp, steppedUp } from '../shared/step-up'
 import type { TaskProblem } from '../shared/task-api'
 import type { PinProblem } from '../shared/view/TaskParts'
+import { listBeforeRead, readListReasons } from '../reasons/api'
+import type { PickerList } from '../reasons/model'
 import {
   decide,
-  fetchHoldReasons,
   freshKey,
   holdLot,
   listBench,
@@ -30,7 +31,6 @@ import {
   type BenchHold,
   type BenchRow,
   type FinalState,
-  type HoldReasonRow,
   type InspectionRead,
   type PrintJob,
 } from './api'
@@ -46,7 +46,6 @@ import {
   nextGroup,
   passGroup,
   passItem,
-  reasonTone,
   releaseHeld,
   suggestedLot,
   suggestedPlan,
@@ -62,7 +61,6 @@ import {
   type PlanField,
 } from './model'
 import { FinalView, type BenchRowModel, type CellModel, type FinalAction, type FinalStep, type HoldDialogModel, type InspectionModel, type JobModel, type OrderModel } from './view/FinalView'
-import type { HoldReasonModel } from './view/HoldReasons'
 
 /**
  * The live SCR-097 (`/floor/final`): the inspection bench. It reads the site's work orders to inspect (or the one a
@@ -92,8 +90,8 @@ interface Loaded {
 
 const memory = new AsOfMemory<Loaded>(30)
 const listMemory = new AsOfMemory<BenchRow[]>(1)
-/** B-W2a-75: the tenant's HOLD reasons, read once a visit. */
-let REASONS: HoldReasonRow[] | null = null
+/** B-W2a-75: Hold lot asks why from the tenant's HOLD list, in the floor's one reason picker (B-W2a-F6). */
+const HOLD_LISTS = ['HOLD'] as const
 const POLL_MS = 3_000
 
 export function FloorFinal() {
@@ -118,7 +116,7 @@ export function FloorFinal() {
   const [until, setUntil] = useState<string | null>(null)
   // B-W2a-75: the Hold lot dialog (its reasons, the pick, the call's key) and the line after a hold placed here.
   const [hold, setHold] = useState<{ picked: string | null; busy: boolean; problem: TaskProblem | null; key: string } | null>(null)
-  const [reasons, setReasons] = useState<HoldReasonRow[] | 'failed' | null>(REASONS)
+  const [reasons, setReasons] = useState<PickerList>(() => listBeforeRead(HOLD_LISTS))
   const [held, setHeld] = useState<{ reason: string; ncr: string } | null>(null)
   const taken = useRef(false)
 
@@ -338,18 +336,18 @@ export function FloorFinal() {
 
   // ---- Hold lot (B-W2a-75): a reason tile, then ONE call holds the work order's garments and raises the NCR ----
 
+  /** The HOLD reasons for the picker: what this tablet kept at once, then the office's answer (or why not). */
+  const readHoldReasons = async () => {
+    setReasons(listBeforeRead(HOLD_LISTS))
+    const answer = await readListReasons(api, HOLD_LISTS, online)
+    if (answer.signedOut) return void sessionEnded()
+    setReasons(answer.list)
+  }
+
   const openHold = async () => {
     if (!loaded || !online) return
     setHold({ picked: null, busy: false, problem: null, key: freshKey() })
-    if (REASONS) return
-    setReasons(null)
-    const answer = await fetchHoldReasons(api)
-    if (!answer.ok) {
-      ended(answer)
-      return setReasons('failed')
-    }
-    REASONS = answer.value.reasons
-    setReasons(answer.value.reasons)
+    await readHoldReasons()
   }
 
   const confirmHold = async () => {
@@ -533,6 +531,8 @@ export function FloorFinal() {
         return void openHold()
       case 'hold-reason':
         return setHold((current) => (current ? { ...current, picked: action.reason, problem: null } : current))
+      case 'hold-reasons-retry':
+        return void readHoldReasons()
       case 'hold-confirm':
         return void confirmHold()
       case 'release': {
@@ -590,8 +590,8 @@ export function FloorFinal() {
   const holdDialog: HoldDialogModel | null =
     hold && loaded
       ? {
-          reasons: Array.isArray(reasons) ? reasons.map((reason) => holdReasonModel(reason, locale, t)) : null,
-          reasonsFailed: reasons === 'failed',
+          subject: loaded.row.batchNumber ? `${loaded.row.number} · ${loaded.row.batchNumber}` : loaded.row.number,
+          reasons,
           picked: hold.picked,
           busy: hold.busy,
           problem: hold.problem,
@@ -673,11 +673,6 @@ export function orderModel(loaded: Loaded, context: { online: boolean; can: { re
 
 /** A hold's reason in the screen's language (the API sends both). */
 const reasonWord = (hold: Pick<BenchHold, 'reasonIt' | 'reasonEn'>, locale: 'it' | 'en'): string => (locale === 'en' ? hold.reasonEn : hold.reasonIt)
-
-/** A HOLD reason as the dialog's tile: its words, icon and tone; "Other" (a written note) is held on the floor with why. */
-function holdReasonModel(reason: HoldReasonRow, locale: 'it' | 'en', t: (key: string) => string): HoldReasonModel {
-  return { code: reason.code, label: locale === 'en' ? reason.labelEn : (reason.labelI18n.it ?? reason.labelIt), icon: reason.icon, tone: reasonTone(reason.colour), heldReason: reason.needsDetail ? t('hold.needsNote') : null }
-}
 
 export function inspectionModel(read: InspectionRead): InspectionModel {
   const { inspection } = read

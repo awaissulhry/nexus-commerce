@@ -246,7 +246,6 @@
       "label": "Garments that come off"
     },
     "reason": {
-      "label": "Why do they come off?",
       "REWORK": {
         "label": "Rework",
         "hint": "Back to be fixed"
@@ -267,8 +266,7 @@
     "held": {
       "reading": "Reading the bundle: a moment",
       "one": "Only one garment is in it: nothing can come off.",
-      "quantity": "Type how many come off: 1 to {max}",
-      "reason": "Pick why first"
+      "quantity": "Type how many come off: 1 to {max}"
     },
     "done_one": "{count} garment split off {parent} into new bundle {code} ({reason}). {live} stay in {parent}.",
     "done_other": "{count} garments split off {parent} into new bundle {code} ({reason}). {live} stay in {parent}."

@@ -246,7 +246,6 @@
       "label": "Capi che passano al fascio nuovo"
     },
     "reason": {
-      "label": "Perché si dividono?",
       "REWORK": {
         "label": "Rilavorazione",
         "hint": "Tornano indietro per essere sistemati"
@@ -267,8 +266,7 @@
     "held": {
       "reading": "Lettura del fascio: un momento",
       "one": "Nel fascio c'è un solo capo: non si può dividere.",
-      "quantity": "Scrivi quanti capi passano: da 1 a {max}",
-      "reason": "Prima scegli il perché"
+      "quantity": "Scrivi quanti capi passano: da 1 a {max}"
     },
     "done_one": "{count} capo diviso da {parent} nel fascio nuovo {code} ({reason}). In {parent} restano {live}.",
     "done_other": "{count} capi divisi da {parent} nel fascio nuovo {code} ({reason}). In {parent} restano {live}."

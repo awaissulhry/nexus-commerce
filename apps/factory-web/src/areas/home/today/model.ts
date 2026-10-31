@@ -1,3 +1,4 @@
+import type { KeyNumbersState } from './numbers/model'
 import { z } from 'zod'
 
 /**
@@ -324,6 +325,8 @@ export interface TodayViewModel {
   readonly tileSet?: readonly Tile[]
   /** Coming up (W2a; GET /home/coming-up): absent or null, the section is not drawn. */
   readonly comingUp?: Loaded<ComingUpView> | null
+  /** B-W2a-79 My numbers (GET /home/numbers; numbers/): absent or null, the section is not drawn. */
+  readonly numbers?: KeyNumbersState | null
   /** The read's clock (AsOf renders the same on the server and the client). */
   readonly now: number
   readonly live: LiveState
