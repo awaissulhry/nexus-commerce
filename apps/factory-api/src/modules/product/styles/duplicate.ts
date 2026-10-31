@@ -11,13 +11,20 @@ import {
   copiedRange,
   copyBomLines,
   copyNote,
+  copyNoteWords,
   copyRoutingSteps,
   COPY_PARTS,
+  leftOutNote,
   needsRevision,
+  offerReason,
+  offerReasonWords,
+  PART_NAME,
   PART_NOT_YET,
   sourceRevisionOf,
   type CopyablePart,
+  type CopyNote,
   type CopyPart,
+  type OfferReason,
 } from '@nexus/factory-domain/product/styles/copy'
 import { generatePlan } from '@nexus/factory-domain/product/styles/matrix'
 import { PRODUCT_STYLES_MANAGE } from '@nexus/factory-domain/product/styles/permissions'
@@ -63,8 +70,10 @@ import { codeConflict, codeTaken, columnsOf, readScaleSizes } from './styles'
  *
  * The copy is a new DRAFT style of the source's company with its own code and name, the source's identity, its ACTIVE
  * colourways and the parts picked; the BOM, routing and label land in the copy's revision 1, a DRAFT (never released).
- * It is linked to its source by the audit rows, the `style.duplicated` event and its first revision's change note (no
- * column holds the link: a schema follow-up if a screen must show it).
+ * It is linked to its source by Style.copiedFromStyleId and copiedFromRevisionId (W2b, B-W2b-25: written with the copy,
+ * the revision its parts came from; the style record's "Copied from"), the audit rows, the `style.duplicated` event and
+ * its first revision's change note. W2b (B-W2b-25): every reason of the offer and every note of the copy is also a code
+ * with its facts (factory-domain product/styles/copy OFFER_REASONS, COPY_NOTES), beside the English words.
  *
  * One command: the source style row FOR UPDATE (its draft's parts hold still while they are read), the code free, the
  * scale FOR SHARE, the new style, its colourways, revision 1 with the BOM lines, size quantities, colour cells and routing
@@ -73,7 +82,6 @@ import { codeConflict, codeTaken, columnsOf, readScaleSizes } from './styles'
  */
 
 const PART_PERMISSION: Readonly<Partial<Record<CopyablePart, Permission>>> = { BOM: PRODUCT_BOM_MANAGE, ROUTING: PRODUCT_ROUTING_MANAGE, LABELS: LABELS_MANAGE }
-const PART_NAME: Readonly<Record<CopyPart, string>> = { BOM: 'the BOM', ROUTING: 'the routing', MEASUREMENTS: 'the made-to-measure set-up', LABELS: 'the garment label', PICTURES: 'the pictures', OPTIONS: 'the options' }
 
 type Client = FactoryClient | CommandTx
 type SourceRevision = Prisma.StyleRevisionGetPayload<{ select: typeof SOURCE_REVISION_COLUMNS }>
@@ -84,50 +92,56 @@ interface PartOffer {
   readonly available: boolean
   readonly count: number | null
   readonly reason: string | null
+  readonly reasonCode: OfferReason['code'] | null
+  readonly reasonFacts: Omit<OfferReason, 'code'> | null
 }
 
 /** Each part, whether this person can copy it from this revision now, and why not (the dialog and the copy's check). */
 async function partOffers(client: Client, actor: Actor, source: StyleRowData, revision: SourceRevision | null): Promise<PartOffer[]> {
   const offers: PartOffer[] = []
-  const noRevision = `${source.code} has no revision yet.`
-  const may = (part: CopyablePart): string | null => {
+  const why = (code: OfferReason['code'], facts: Parameters<typeof offerReason>[2] = {}): OfferReason => offerReason(code, source.code, facts)
+  const may = (part: CopyablePart): OfferReason | null => {
     const permission = PART_PERMISSION[part]
-    return permission === undefined || mayWrite(actor, permission, source.companyId) ? null : `Copying ${PART_NAME[part]} needs ${permission}${source.companyId === null ? ' over every company' : ''}.`
+    return permission === undefined || mayWrite(actor, permission, source.companyId) ? null : why('NEEDS_PERMISSION', { permission, everyCompany: source.companyId === null })
+  }
+  const offer = (part: CopyPart, reason: OfferReason | null, count: number | null = null): PartOffer => {
+    const { code, ...facts } = reason ?? { code: null }
+    return { part, available: reason === null, count, reason: reason ? offerReasonWords(part, reason) : null, reasonCode: code, reasonFacts: reason ? (facts as Omit<OfferReason, 'code'>) : null }
   }
   for (const part of COPY_PARTS) {
-    const notYet = PART_NOT_YET[part]
-    if (notYet !== undefined) {
-      offers.push({ part, available: false, count: null, reason: notYet })
+    if (PART_NOT_YET[part] !== undefined) {
+      offers.push(offer(part, why('NOT_YET')))
       continue
     }
     const copyable = part as CopyablePart
     if (part === 'MEASUREMENTS') {
-      const reason = source.mtmAllowed ? null : `${source.code} is not made to measure.`
-      offers.push({ part, available: reason === null, count: null, reason })
+      offers.push(offer(part, source.mtmAllowed ? null : why('NOT_MADE_TO_MEASURE')))
       continue
     }
     if (revision === null) {
-      offers.push({ part, available: false, count: null, reason: noRevision })
+      offers.push(offer(part, why('NO_REVISION')))
       continue
     }
+    const at = { revision: revision.revision }
     if (part === 'BOM' || part === 'ROUTING') {
       const visible = can(actor, part === 'BOM' ? PRODUCT_BOM_VIEW : PRODUCT_ROUTING_VIEW, { companyId: source.companyId })
       const count = part === 'BOM' ? await client.bomLine.count({ where: { revisionId: revision.id } }) : await client.routingOperation.count({ where: { revisionId: revision.id } })
-      const reason = count === 0 ? `Revision ${revision.revision} has no ${part === 'BOM' ? 'BOM lines' : 'routing steps'}.` : may(copyable)
-      offers.push({ part, available: reason === null, count: visible ? count : null, reason })
+      const reason = count === 0 ? why(part === 'BOM' ? 'NO_BOM_LINES' : 'NO_ROUTING_STEPS', at) : may(copyable)
+      offers.push(offer(part, reason, visible ? count : null))
       continue
     }
     // LABELS: the revision's label, when it is a shared one that is not retired.
-    let reason: string | null
-    if (revision.labelTemplateId === null) reason = `Revision ${revision.revision} has no garment label.`
+    let reason: OfferReason | null
+    if (revision.labelTemplateId === null) reason = why('NO_LABEL', at)
     else {
       const label = await client.labelTemplate.findUnique({ where: { id: revision.labelTemplateId }, select: { code: true, revision: true, styleId: true, status: true } })
-      if (!label) reason = `Revision ${revision.revision} has no garment label.`
-      else if (label.styleId !== null) reason = `Label ${label.code} r${label.revision} is ${source.code}'s own label: make one for the copy in Compliance.`
-      else if (label.status === 'RETIRED') reason = `Label ${label.code} r${label.revision} is retired.`
+      const named = label ? { ...at, label: label.code, labelRevision: label.revision } : at
+      if (!label) reason = why('NO_LABEL', at)
+      else if (label.styleId !== null) reason = why('OWN_LABEL', named)
+      else if (label.status === 'RETIRED') reason = why('LABEL_RETIRED', named)
       else reason = may(copyable)
     }
-    offers.push({ part, available: reason === null, count: null, reason })
+    offers.push(offer(part, reason))
   }
   return offers
 }
@@ -199,13 +213,14 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
     const problems: Issue[] = [...(await brandProblems(tx, style.brandPartyId, companyId)), ...(await templateProblems(tx, style.measurementTemplateId, style, companyId))]
     if (problems.length > 0) throw invalid(problems)
 
-    const notes: string[] = []
-    if (range.dropped.length > 0) notes.push(`Size(s) ${range.dropped.join(', ')} are archived in the scale: the copy's range leaves them out.`)
+    const notes: CopyNote[] = []
+    if (range.dropped.length > 0) notes.push(leftOutNote('SIZES_ARCHIVED', { sizes: range.dropped }))
     const id = newId()
     const createdById = context.audience === 'office' ? context.actorId : null
     const stamp = { createdAt: now, updatedAt: now, createdById }
+    // W2b (B-W2b-25): the copy names its source and the revision its parts came from (the database sets them once).
     await tx.style.create({
-      data: { ...(columnsOf(style) as Prisma.StyleUncheckedCreateInput), id, companyId, garmentTracking: source.garmentTracking, ...stamp },
+      data: { ...(columnsOf(style) as Prisma.StyleUncheckedCreateInput), id, companyId, garmentTracking: source.garmentTracking, copiedFromStyleId: styleId, copiedFromRevisionId: revision?.id ?? null, ...stamp },
       select: { id: true },
     })
     tools.emit({ type: 'style.created', subject: id, companyId, payload: { styleId: id, code: style.code } })
@@ -213,12 +228,12 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
     // The ACTIVE colourways, each under a new id (the BOM's colourway lines and cells follow them).
     const colourways = (await tx.colourway.findMany({ where: { styleId }, select: COLOURWAY_COLUMNS, orderBy: [{ createdAt: 'asc' }, { code: 'asc' }] })).filter((entry) => entry.status === 'ACTIVE')
     const archived = await tx.colourway.count({ where: { styleId, status: 'ARCHIVED' } })
-    if (archived > 0) notes.push(`${archived} archived colourway(s) are not copied.`)
+    if (archived > 0) notes.push(leftOutNote('COLOURWAYS_ARCHIVED', { count: archived }))
     const colourwayMap = new Map<string, string>()
     const copiedColourways = []
     for (const [index, colourway] of colourways.entries()) {
       const keepColour = colourway.colourId !== null && (await colourProblems(tx, colourway.colourId, companyId, `colourways/${index}/colourId`)).length === 0
-      if (colourway.colourId !== null && !keepColour) notes.push(`Colourway ${colourway.code}: its library colour is archived or another company's; the copy has none.`)
+      if (colourway.colourId !== null && !keepColour) notes.push(leftOutNote('COLOUR_LEFT_OUT', { colourway: colourway.code }))
       const copyId = newId()
       colourwayMap.set(colourway.id, copyId)
       copiedColourways.push({ id: copyId, styleId: id, code: colourway.code, name: colourway.name, colourId: keepColour ? colourway.colourId : null, description: colourway.description, ...stamp })
@@ -247,7 +262,7 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
       tools.emit({ type: 'style.revision_created', subject: id, companyId, payload: { styleId: id, code: style.code, revisionId, revision: 1 } })
       if (parts.includes('BOM') && revision) {
         const copied = copyBomLines(await readLines(tx, revision.id), colourwayMap, range.sizes, newId)
-        if (copied.dropped > 0) notes.push(`${copied.dropped} BOM line(s) of archived colourways are not copied.`)
+        if (copied.dropped > 0) notes.push(leftOutNote('BOM_LINES_LEFT_OUT', { count: copied.dropped }))
         const lines = copied.lines
         bomLines = lines.length
         if (lines.length > 0) {
@@ -311,7 +326,7 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
       tools.audit({ recordType: 'StyleRevision', recordId: revisionRow.id, companyId, after: { styleId: id, revision: 1, status: 'DRAFT', changeNote: revisionRow.changeNote, copiedFrom: from, lines: bomLines, routingSteps, labelTemplateId: revisionRow.labelTemplateId } })
     }
     tools.emit({ type: 'style.duplicated', subject: id, companyId, payload: { styleId: id, code: style.code, sourceStyleId: styleId, sourceCode: source.code, sourceRevisionId: from.revisionId, parts } })
-    return { style: await styleViewInTx(tx, id), revision: revisionRow ? revisionViewOf(revisionRow) : null, copied, notes }
+    return { style: await styleViewInTx(tx, id), revision: revisionRow ? revisionViewOf(revisionRow) : null, copied, notes: notes.map(copyNoteWords), noteCodes: notes.map((note) => ({ ...note, sizes: [...note.sizes] })) }
   }).catch((error: unknown) => {
     if (isUniqueViolation(error)) throw codeConflict(body.code)
     throw error
