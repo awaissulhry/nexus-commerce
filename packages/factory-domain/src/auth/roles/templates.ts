@@ -182,6 +182,18 @@ const PAYABLES_SETTINGS_ADDS: Readonly<Record<string, readonly Permission[]>> = 
   finance: ['payables.settings'],
 })
 /**
+ * B-W2b-41 (bundles tracked; MES-074, MES-075, MES-168; design production.bundles): who sees where every bundle is, the
+ * stuck ones and the scan-pattern checks as counts (production.bundles.view), and who reviews a finding
+ * (production.bundles.findings: the production manager). Office only. No template opens the names behind a finding
+ * (production.bundles.who): the owner through every(), or a custom role the owner makes (Statuto art. 4).
+ */
+const BUNDLES_TRACKED_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.bundles.view', 'production.bundles.findings'],
+  floor_supervisor: ['production.bundles.view'],
+  planner: ['production.bundles.view'],
+  quality_inspector: ['production.bundles.view'],
+})
+/**
  * B-W2b-27 (privacy of people data; PLT-209, ANA-075, MES-249; design people.settings "Privacy of people data", admin.privacy
  * "People data rules"): the administrator (who keeps the privacy pack) and the production manager read the legal gate of
  * each site and purpose and the privacy settings. Switching a purpose on or off (people.privacy.manage) and opening one
@@ -226,6 +238,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (RECEIPT_DOCUMENTS_ADDS[key] ?? []) : []),
   // B-W2b-21
   ...(audience === 'office' ? (PAYABLES_SETTINGS_ADDS[key] ?? []) : []),
+  // B-W2b-41
+  ...(audience === 'office' ? (BUNDLES_TRACKED_ADDS[key] ?? []) : []),
   // B-W2b-27
   ...(audience === 'office' ? (PEOPLE_PRIVACY_ADDS[key] ?? []) : []),
   // B-W2b-35

@@ -32,6 +32,8 @@ import { holdOnBundles } from '../../quality/holds/checks'
 import { cutForBundles } from '../cutting/views'
 import { standardBundleSizeFor } from '../settings/bundle-size'
 import { floorRecordSubjectFor } from '../settings/subject'
+// W2b B-W2b-41: a voided bundle's coupons go with it.
+import { voidCouponsOf } from './coupons'
 import { asTenantSystem, withTicketCodes, type TicketCodes } from './codes'
 import {
   BUNDLE_COLUMNS,
@@ -569,7 +571,12 @@ export async function voidBundle(caller: CommandCaller, bundleId: string, body: 
     }
     await tx.bundle.update({ where: { id: bundle.id }, data: { status: 'VOID', voidedAt: tools.now, voidReason: reason, version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
     const scope = { companyId: workOrder.companyId, siteId: workOrder.siteId }
-    tools.audit({ recordType: 'Bundle', recordId: bundle.id, ...scope, before: { status: bundle.status }, after: { status: 'VOID', code: bundle.code, quantity: bundle.quantity }, reason })
+    // W2b B-W2b-41 (MES-067): its ACTIVE coupons are voided with it (a scan of one is refused: the bundle is VOID).
+    const coupons = await voidCouponsOf(tools, bundle.id, `Bundle ${bundle.code} voided: ${reason}`)
+    if (coupons.length > 0) {
+      tools.emit({ type: 'production.bundle_coupons_changed', subject: workOrder.id, ...scope, payload: { workOrderId: workOrder.id, number: workOrder.number, bundleId: bundle.id, change: 'VOIDED', couponIds: coupons, postedBy: postedBy(context) } })
+    }
+    tools.audit({ recordType: 'Bundle', recordId: bundle.id, ...scope, before: { status: bundle.status }, after: { status: 'VOID', code: bundle.code, quantity: bundle.quantity, couponsVoided: coupons }, reason })
     tools.audit({ recordType: 'WorkOrder', recordId: workOrder.id, ...scope, after: { bundleId: bundle.id, code: bundle.code, voided: true }, reason })
     tools.emit({
       type: 'production.bundle_voided',

@@ -1805,6 +1805,9 @@
     "people_shifts_manage": "Pianificare i turni di tutti: impostare turni, assegnare, copiare la settimana scorsa, pubblicare",
     "people_shifts_team": "Pianificare i turni delle squadre che guidi",
     "people_overtime_manage": "Chiedere lo straordinario programmato, registrare una risposta data a voce, annullare una richiesta",
-    "people_overtime_approve": "Approvare lo straordinario programmato che le persone hanno accettato"
+    "people_overtime_approve": "Approvare lo straordinario programmato che le persone hanno accettato",
+    "production_bundles_view": "Vedere dove si trova ogni fascio, quelli fermi e i conteggi delle anomalie di scansione (mai chi)",
+    "production_bundles_findings": "Esaminare le anomalie di scansione (per archiviarne una serve una nota)",
+    "production_bundles_who": "Vedere chi c'è dietro un'anomalia (solo con il presupposto legale della sede attivo; registrato)"
   }
 }

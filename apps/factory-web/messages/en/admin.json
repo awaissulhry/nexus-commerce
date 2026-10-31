@@ -1805,6 +1805,9 @@
     "people_shifts_manage": "Plan the roster of everyone: set shifts, assign, copy last week, publish",
     "people_shifts_team": "Plan the roster of the teams you lead",
     "people_overtime_manage": "Ask people for planned overtime, record a spoken answer, cancel a request",
-    "people_overtime_approve": "Approve planned overtime that people agreed to"
+    "people_overtime_approve": "Approve planned overtime that people agreed to",
+    "production_bundles_view": "See where every bundle is, the stuck ones and the scan-pattern counts (never who)",
+    "production_bundles_findings": "Review scan-pattern findings (a dismissal needs a note)",
+    "production_bundles_who": "See who is behind one finding (only with the site's legal basis on; logged)"
   }
 }
