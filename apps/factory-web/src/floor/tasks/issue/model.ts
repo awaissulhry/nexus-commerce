@@ -57,8 +57,8 @@ export interface PickLine {
   /** Usable stock of the site: how much, oldest first (at most 50 rows; `more` counts the rest). */
   readonly usable: { readonly onHand: string; readonly candidates: readonly PickCandidate[]; readonly more: number }
   readonly held: readonly PickHeld[]
-  /** What the work order holds per lot and hide (issued minus returned). */
-  readonly atWorkOrder: readonly { readonly lotId: string | null; readonly lotCode: string | null; readonly hideId: string | null; readonly hideCode: string | null; readonly quantity: string }[]
+  /** What the work order holds per lot and hide (issued minus returned); `returnable` = it less what was cut (B-W2a-75). */
+  readonly atWorkOrder: readonly { readonly lotId: string | null; readonly lotCode: string | null; readonly hideId: string | null; readonly hideCode: string | null; readonly quantity: string; readonly cut: string; readonly returnable: string }[]
 }
 
 export interface PickUndo {
@@ -201,7 +201,13 @@ export const ISSUE_REFUSAL_WORDS = [
   'OVER_ISSUE',
   'NOT_LAST_ACTION',
   'REVERSED_ALREADY',
+  // B-W2a-75: Return unused (the API's return refusals).
+  'MORE_THAN_AT_WORK_ORDER',
+  'NOTHING_AT_WORK_ORDER',
 ] as const
+
+/** B-W2a-75: the refusals the screen says on its own (no API code): a code Return unused does not find at the work order. */
+export const SCREEN_REFUSALS = ['NOT_AT_WORK_ORDER'] as const
 
 /**
  * ALREADY_ISSUED names the work order and the time it went to (no person): the API's own sentence is shown for it (it

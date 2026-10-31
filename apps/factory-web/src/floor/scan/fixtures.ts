@@ -1,7 +1,7 @@
 import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { defineDesignScreen } from '../../lib/design/design-screen'
 import { onFloor, signedInFrame } from '../frame/fixtures'
-import type { HideCard, WorkOrderCard } from './scan-model'
+import type { HideCard, MachineCard, WorkOrderCard } from './scan-model'
 import { ScanView, type RecentScan, type ScanViewModel } from './view/ScanView'
 
 /**
@@ -43,6 +43,21 @@ const workOrder: WorkOrderCard = {
   sizesLeft: ['NERO 48', 'NERO 50', 'NERO 52'],
   colourways: ['NERO', 'MARRONE'],
 }
+/** B-W2a-73: a made-up sewing machine of the Demo plant (its tag holds the asset number). */
+const machine: MachineCard = {
+  kind: 'machine',
+  id: 'machine-demo-sew-21',
+  code: 'DEMO-SEW-21',
+  type: { labelIt: 'Lineare', labelEn: 'Lockstitch', icon: 'needle' },
+  makeModel: 'Demotex DT-8700',
+  station: 'SEW-02 · Cucitura 2',
+  line: 'L1',
+  status: 'DOWN',
+  statusSince: '2026-10-29T08:12:00.000Z',
+  locked: false,
+  openJob: { number: 'MJ-DEMO-0044', status: 'NEW' },
+  openRequests: 1,
+}
 const recent: RecentScan[] = [
   { code: HIDE, type: 'hide', at: AT },
   { code: 'WO-DEMO-0001', type: 'workOrder', at: '2026-10-29T08:37:00.000Z' },
@@ -64,6 +79,10 @@ export const designScreen = defineDesignScreen<ScanViewModel>({
       model: scan({ ...hide, state: 'FULL', lot: { ...hide.lot, qualityStatus: 'QUARANTINE', crViStatus: 'PENDING', usable: false, words: null }, workOrders: [] }),
     },
     { id: 'work-order', label: 'A work order', model: scan(workOrder, { canCut: true }), note: 'Style, batch, due date, size run left to cut; "Open at cutting" opens Cut a hide for it. Never a price or a cost.' },
+    { id: 'machine', label: 'A machine (B-W2a-73): status and open job; Report a problem', model: scan(machine, { canReport: true }), note: 'A free code is also tried as a machine tag (plant.report). "Report a problem" opens Machine problem (SCR-179) with the machine.' },
+    { id: 'machine-locked', label: 'A machine locked as unsafe', model: scan({ ...machine, status: 'DO_NOT_USE', locked: true, openJob: { number: 'MJ-DEMO-0041', status: 'IN_PROGRESS' } }, { canReport: true }) },
+    { id: 'machine-running', label: 'A running machine with nothing open', model: scan({ ...machine, status: 'RUNNING', openJob: null, openRequests: 0 }, { canReport: true }) },
+    { id: 'machine-retired', label: 'A retired machine: Report held with the reason', model: scan({ ...machine, status: 'RETIRED', openJob: null, openRequests: 0 }, { canReport: true }) },
     { id: 'location', label: 'A location', model: scan({ kind: 'location', code: 'A1-STORE-01', name: 'Magazzino pelli', locationKind: 'BIN', path: ['A1-STORE', 'A1-STORE-01'] }) },
     { id: 'bundle', label: 'A bundle (not on the tablet yet)', model: scan({ kind: 'notOnFloor', type: 'bundle', code: BUNDLE }), note: 'The bundles step adds its card; until then the label is named, nothing pretends.' },
     { id: 'lot', label: 'A lot (not on the tablet yet)', model: scan({ kind: 'notOnFloor', type: 'lot', code: LOT }) },

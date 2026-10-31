@@ -193,6 +193,8 @@ export interface PlaceHoldInput {
   readonly askQuarantine?: boolean | undefined
   readonly quarantineLocationId?: string | null | undefined
   readonly note?: string | null | undefined
+  /** B-W2a-75: the floor worker who held it at the inspection bench (a system command after the floor's checks only). */
+  readonly placedByWorkerId?: string | null | undefined
 }
 
 export interface PlacedHold {
@@ -212,12 +214,14 @@ const SOURCE_SITES: Partial<Record<HoldSourceType, (tx: Reader, id: string) => P
 
 /**
  * Places a hold INSIDE the caller's command (the route's, or a system's: a failed inspection, a Cr VI fail …). The
- * placer is the office person of the context, else nobody (the system). Refusals in words at `body/<field>`.
+ * placer is the office person of the context, else the floor worker a system command names (the bench's Hold lot,
+ * quality/final/bench-hold.ts), else nobody (the system). Refusals in words at `body/<field>`.
  */
 export async function placeHoldInCommand(tools: CommandTools, input: PlaceHoldInput): Promise<PlacedHold> {
   const { tx, now, context } = tools
   if (context.audience !== 'office' && context.audience !== 'system') throw new ForbiddenError('Holds are placed in the office (or by the system).')
   const placedById = context.audience === 'office' ? context.actorId : null
+  const placedByWorkerId = context.audience === 'system' ? (input.placedByWorkerId ?? null) : null
   const problems: Issue[] = placeProblems(input, businessDate(now))
   if (problems.length > 0) refuse(problems, 'The hold is not valid.')
 
@@ -279,6 +283,7 @@ export async function placeHoldInCommand(tools: CommandTools, input: PlaceHoldIn
       sourceId: input.sourceId ?? null,
       placedAt: now,
       placedById,
+      placedByWorkerId,
       ownerId: input.ownerId ?? null,
       expectedReleaseOn: input.expectedReleaseOn ? new Date(`${input.expectedReleaseOn}T00:00:00.000Z`) : null,
       quarantine: quarantineLocationId ? 'ASKED' : 'NOT_NEEDED',

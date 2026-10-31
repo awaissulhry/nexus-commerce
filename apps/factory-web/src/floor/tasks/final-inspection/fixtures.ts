@@ -1,7 +1,8 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { onFloor, signedInFrame } from '../../frame/fixtures'
 import { failItem, passGroup, suggestedPlan, type Answer, type Check } from './model'
-import { FinalView, type CellModel, type FinalViewModel, type InspectionModel, type OrderModel } from './view/FinalView'
+import { FinalView, type CellModel, type FinalViewModel, type HoldDialogModel, type InspectionModel, type OrderModel } from './view/FinalView'
+import type { HoldReasonModel } from './view/HoldReasons'
 
 /**
  * SCR-097's cases: the inspection bench at tablet width, from the work orders to inspect to the release and its labels,
@@ -61,6 +62,8 @@ const order = (extra: Partial<OrderModel> = {}): OrderModel => ({
   inspections: [{ label: 'INS-D-2026-0007', status: 'PASSED' }],
   open: null,
   main: 'release',
+  holds: [],
+  holdHeld: null,
   ...extra,
 })
 
@@ -90,6 +93,22 @@ const ROWS = [
 ]
 
 const failedList = failItem(twoGroups, 'ZIPS', 'La cerniera non funziona (ZIP-FAULT)')
+
+// ---- B-W2a-75: Hold lot ----
+const HOLD_REASONS: HoldReasonModel[] = [
+  { code: 'QUALITY_CHECK', label: 'Verifica qualità', icon: 'shield', tone: 'primary', heldReason: null },
+  { code: 'MISSING_CERTIFICATE', label: 'Certificato mancante', icon: 'award', tone: 'warning', heldReason: null },
+  { code: 'CUSTOMER_REQUEST', label: 'Richiesta del cliente', icon: 'flag', tone: 'info', heldReason: null },
+  { code: 'SUPPLIER_CHECK', label: 'Verifica fornitore', icon: 'truck', tone: 'primary', heldReason: null },
+  { code: 'OTHER', label: 'Altro', icon: null, tone: 'neutral', heldReason: 'Altro chiede una nota scritta: questo blocco lo mette l\'ufficio.' },
+]
+const holdDialog = (extra: Partial<HoldDialogModel> = {}): HoldDialogModel => ({ reasons: HOLD_REASONS, picked: null, quantity: 48, ...extra })
+const heldOrder = order({
+  status: 'ON_HOLD',
+  holds: [{ id: 'hold-1', reason: 'Verifica qualità', since: '2026-10-31T08:12:00.000Z', ncr: 'NCR-D-2026-0004' }],
+  holdHeld: 'already',
+  cells: [cell('NERO 50', { held: 'checks' }), cell('NERO 52', { held: 'checks' })],
+})
 
 export const designScreen = defineDesignScreen<FinalViewModel>({
   screen: 'SCR-097',
@@ -127,28 +146,44 @@ export const designScreen = defineDesignScreen<FinalViewModel>({
     {
       id: 'checklist',
       label: 'Checklist, 2 of 4 groups',
-      model: base({ kind: 'checklist', order: openOrder, inspection: inspection(), group: 'ARMOUR', failing: null, hold: { open: false, reason: null } }),
+      model: base({ kind: 'checklist', order: openOrder, inspection: inspection(), group: 'ARMOUR', failing: null }),
       note: 'Each check Pass or Fail; "Group passes" answers the rest of the group in one tap after looking.',
     },
-    { id: 'fail-reason', label: 'A check fails: what is wrong', model: base({ kind: 'checklist', order: openOrder, inspection: inspection(), group: 'GARMENT', failing: 'ZIPS', hold: { open: false, reason: null } }) },
+    { id: 'fail-reason', label: 'A check fails: what is wrong', model: base({ kind: 'checklist', order: openOrder, inspection: inspection(), group: 'GARMENT', failing: 'ZIPS' }) },
     {
       id: 'failed-check',
       label: 'A failed check with its defect',
-      model: base({ kind: 'checklist', order: openOrder, inspection: inspection({ checklist: failedList, defects: [{ code: 'ZIP-FAULT', quantity: 1 }], result: 'FAIL' }), group: 'GARMENT', failing: null, hold: { open: false, reason: null } }),
+      model: base({ kind: 'checklist', order: openOrder, inspection: inspection({ checklist: failedList, defects: [{ code: 'ZIP-FAULT', quantity: 1 }], result: 'FAIL' }), group: 'GARMENT', failing: null }),
     },
+    // ---- B-W2a-75: Hold lot (design floor.final "Hold lot (secondary): a reason, and an NCR"; pop final.hold) ----
     {
       id: 'hold',
-      label: 'Hold the lot',
-      model: base({ kind: 'checklist', order: openOrder, inspection: inspection({ checklist: allPass() }), group: 'PACKAGING', failing: null, hold: { open: true, reason: 'DEFECTS' } }),
-      note: 'Hold = the inspection signed FAILED with the reason: packing is blocked until quality decides.',
+      label: 'Hold the lot: a reason tile',
+      model: base({ kind: 'checklist', order: openOrder, inspection: inspection({ checklist: allPass() }), group: 'PACKAGING', failing: null }, { hold: holdDialog({ picked: 'QUALITY_CHECK' }) }),
+      note: 'The tenant\'s HOLD reasons as the DS reason grid (Other asks a written note: the office places that hold). Hold places the quality hold on the work order and opens the NCR that decides it. Enter = Cancel.',
     },
-    { id: 'sign', label: 'Sign the result with the PIN', model: base({ kind: 'sign', order: openOrder, inspection: inspection({ checklist: allPass() }), result: 'PASS', hold: null, statement: false }) },
-    { id: 'pin-wrong', label: 'Wrong PIN', model: base({ kind: 'sign', order: openOrder, inspection: inspection({ checklist: allPass() }), result: 'PASS', hold: null, statement: false }, { pin: 'wrong' }) },
-    { id: 'pin-locked', label: 'PIN locked', model: base({ kind: 'sign', order: openOrder, inspection: inspection({ checklist: allPass() }), result: 'PASS', hold: null, statement: false }, { pin: 'locked' }) },
+    { id: 'hold-gate', label: 'Hold lot from the work order', model: base({ kind: 'gate', order: order() }, { hold: holdDialog() }), note: 'Hold lot is the secondary action of the work order, the checklist and the release.' },
+    { id: 'hold-loading', label: 'Hold: reading the reasons', model: base({ kind: 'gate', order: order() }, { hold: holdDialog({ reasons: null }) }) },
+    {
+      id: 'hold-refused',
+      label: 'Hold refused: the office closed the work order',
+      model: base({ kind: 'gate', order: order() }, { hold: holdDialog({ picked: 'QUALITY_CHECK', problem: { kind: 'conflict', message: 'Work order WO-DEMO-0042 is CLOSED: hold its garments (serials, shipments) instead.' } }) }),
+      note: 'Refused in words inside the dialog, never a 500; nothing is held.',
+    },
+    {
+      id: 'held',
+      label: 'Held: quality decides',
+      model: base({ kind: 'gate', order: heldOrder }, { held: { reason: 'Verifica qualità', ncr: 'NCR-D-2026-0004' } }),
+      note: 'The hold and its NCR on the work order\'s screen; Release and Hold lot are held with the reason; quality releases it in the office (never the worker who held it).',
+    },
+    { id: 'held-release', label: 'Release waits for quality', model: base({ kind: 'release', order: heldOrder, cell: cell('NERO 50', { held: 'checks' }), quantity: 24, signing: false, refused: [open('WORK_ORDER', 'Work order WO-DEMO-0042 is on hold (Quality check, since 31 Oct 2026).', 'Quality releases the hold in the office (Quality › Holds); then release the garments.')] }) },
+    { id: 'sign', label: 'Sign the result with the PIN', model: base({ kind: 'sign', order: openOrder, inspection: inspection({ checklist: allPass() }), result: 'PASS', statement: false }) },
+    { id: 'pin-wrong', label: 'Wrong PIN', model: base({ kind: 'sign', order: openOrder, inspection: inspection({ checklist: allPass() }), result: 'PASS', statement: false }, { pin: 'wrong' }) },
+    { id: 'pin-locked', label: 'PIN locked', model: base({ kind: 'sign', order: openOrder, inspection: inspection({ checklist: allPass() }), result: 'PASS', statement: false }, { pin: 'locked' }) },
     {
       id: 'statement',
       label: 'A site that records stations: the statement',
-      model: base({ kind: 'sign', order: openOrder, inspection: inspection({ checklist: allPass(), statementNeeded: true }), result: 'PASS', hold: null, statement: false }),
+      model: base({ kind: 'sign', order: openOrder, inspection: inspection({ checklist: allPass(), statementNeeded: true }), result: 'PASS', statement: false }),
       note: 'Where the floor records the station, not the worker, the tick "I did not make these goods" replaces the maker check (Q16 b).',
     },
     { id: 'release', label: 'Release one size', model: base({ kind: 'release', order: order(), cell: cell('NERO 50'), quantity: 24, signing: false, refused: [] }) },
@@ -207,7 +242,7 @@ export const designScreen = defineDesignScreen<FinalViewModel>({
       model: base({ kind: 'gate', order: order({ cells: [cell('NERO 50', { held: 'offline' }), cell('NERO 52', { held: 'offline' })] }) }, { online: false, asOf: '2026-10-29T09:41:00.000Z', frame: frame({ online: false }) }),
       note: 'Inspections and releases take their number from the office at once: never queued. The last read stays, with its time.',
     },
-    { id: 'offline-checklist', label: 'Offline in the checklist', model: base({ kind: 'checklist', order: openOrder, inspection: inspection(), group: 'ARMOUR', failing: null, hold: { open: false, reason: null } }, { online: false, frame: frame({ online: false }) }) },
+    { id: 'offline-checklist', label: 'Offline in the checklist', model: base({ kind: 'checklist', order: openOrder, inspection: inspection(), group: 'ARMOUR', failing: null }, { online: false, frame: frame({ online: false }) }) },
     { id: 'error', label: 'The office does not answer', model: base({ kind: 'problem', problem: { kind: 'unavailable' }, code: 'WO-DEMO-0042' }) },
     { id: 'no-permission', label: 'A role without final inspection', model: base({ kind: 'noPermission' }) },
     {

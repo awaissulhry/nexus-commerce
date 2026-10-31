@@ -260,6 +260,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/plant/machines',
   '/plant/machines/[id]',
   '/plant/machines/tags',
+  // B-W2a-73: Plant › Settings › Plant settings (SCR-241, its W2a section: the symptoms on the floor).
+  '/plant/settings',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */

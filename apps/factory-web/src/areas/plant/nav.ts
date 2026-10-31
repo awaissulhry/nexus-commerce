@@ -1,4 +1,4 @@
-import { BellRing, Cog, HardHat, Wrench } from 'lucide-react'
+import { BellRing, Cog, HardHat, SlidersHorizontal, Wrench } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -28,6 +28,12 @@ export const officeArea: OfficeAreaNav = {
           // SCR-150: the machine and equipment register (GET /plant/machines, plant.view).
           { id: 'plant-machines', label: 'shell:nav.plant.machines', href: '/plant/machines', icon: Cog, permission: 'plant.view' },
         ],
+      },
+      // B-W2a-73: Plant settings (SCR-241), its W2a section "Symptoms on the floor" (GET /plant/symptoms, plant.view).
+      {
+        id: 'plant-settings',
+        label: 'shell:nav.plant.settingsGroup',
+        items: [{ id: 'plant-settings', label: 'shell:nav.plant.settings', href: '/plant/settings', icon: SlidersHorizontal, permission: 'plant.view' }],
       },
     ],
   },

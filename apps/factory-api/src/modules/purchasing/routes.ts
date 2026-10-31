@@ -100,6 +100,9 @@ import { returnKitLine, sendKit } from './subcontracting/kit'
 import * as subcontracts from './subcontracting/orders'
 import { receiveBack } from './subcontracting/receive'
 import { subcontractorStock } from './subcontracting/stock'
+// B-W2a-76: the floor's subcontract kits (./subcontracting/floor).
+import { floorKitContract, floorKitDdtPdfContract, floorKitsContract, floorReceiveBackContract, floorSendKitContract } from './subcontracting/floor-contract'
+import { floorKit, floorKitDdtPdf, floorKits, floorReceiveBack, floorSendKit } from './subcontracting/floor'
 // B-W2a-44: supplier claims and returns to the supplier (./claims).
 import * as claims from './claims/claims'
 import {
@@ -277,6 +280,16 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/subcontracting/orders/:subcontractOrderId/receive', { schema: receiveSubcontractContract }, async (request, reply) =>
     reply.code(201).send(await receiveBack(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
   )
+  // B-W2a-76 (SCM-140, SCM-142; floor.kits SCR-181): the warehouse tablet's kit out and goods back, at its own site.
+  app.get('/purchasing/subcontracting/kits', { schema: floorKitsContract }, async (request) => floorKits(request, request.query))
+  app.get('/purchasing/subcontracting/kits/:subcontractOrderId', { schema: floorKitContract }, async (request) => floorKit(request, request.params.subcontractOrderId))
+  app.post('/purchasing/subcontracting/kits/:subcontractOrderId/send', { schema: floorSendKitContract }, async (request, reply) =>
+    reply.code(201).send(await floorSendKit(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.post('/purchasing/subcontracting/kits/:subcontractOrderId/receive', { schema: floorReceiveBackContract }, async (request, reply) =>
+    reply.code(201).send(await floorReceiveBack(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.get('/purchasing/subcontracting/kits/:subcontractOrderId/ddts/:ddtId/pdf', { schema: floorKitDdtPdfContract }, async (request) => floorKitDdtPdf(request, request.params.subcontractOrderId, request.params.ddtId))
 
   // B-W2a-44 (SCM-134): supplier claims and returns to the supplier.
   app.get('/purchasing/claims', { schema: listClaimsContract }, async (request) => claims.listClaims(request, request.query))

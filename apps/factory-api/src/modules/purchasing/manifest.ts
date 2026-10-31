@@ -1,4 +1,4 @@
-import { defineManifest, PUBLIC } from '../../core/manifest'
+import { defineManifest, PUBLIC, SIGNED_IN } from '../../core/manifest'
 
 /**
  * Purchase orders (B-W1-30; SCM-050, SCM-053, SCM-054, SCM-055, SCM-075; A2 SCR-058, SCR-059, SCR-037, SCR-055 "Draft PO"):
@@ -94,6 +94,13 @@ export const manifest = defineManifest({
   'POST /purchasing/subcontracting/orders/:subcontractOrderId/kit/send': { audiences: ['office'], permission: 'purchasing.subcontract.kit', scope: 'record' },
   'POST /purchasing/subcontracting/orders/:subcontractOrderId/kit/:lineId/return': { audiences: ['office'], permission: 'purchasing.subcontract.kit', scope: 'record' },
   'POST /purchasing/subcontracting/orders/:subcontractOrderId/receive': { audiences: ['office'], permission: 'purchasing.subcontract.receive', scope: 'record' },
+  // B-W2a-76: the warehouse tablet's subcontract kits, at the device's own site (floor only; the reads and the PDF need kit
+  // or receive, the handler asks which; send needs kit, receive needs receive). Never a fee.
+  'GET /purchasing/subcontracting/kits': { audiences: ['floor'], permission: SIGNED_IN, scope: 'record' },
+  'GET /purchasing/subcontracting/kits/:subcontractOrderId': { audiences: ['floor'], permission: SIGNED_IN, scope: 'record' },
+  'POST /purchasing/subcontracting/kits/:subcontractOrderId/send': { audiences: ['floor'], permission: 'purchasing.subcontract.kit', scope: 'record' },
+  'POST /purchasing/subcontracting/kits/:subcontractOrderId/receive': { audiences: ['floor'], permission: 'purchasing.subcontract.receive', scope: 'record' },
+  'GET /purchasing/subcontracting/kits/:subcontractOrderId/ddts/:ddtId/pdf': { audiences: ['floor'], permission: SIGNED_IN, scope: 'record' },
   // B-W2a-44 (SCM-134): supplier claims and returns to the supplier; read with purchasing.view, kept with
   // purchasing.claims.manage, the goods back with purchasing.claims.return (the return DDT also needs shipping.ddt.issue,
   // and "Return to supplier" in one go claims.manage too: both checked in the handler) (./claims).

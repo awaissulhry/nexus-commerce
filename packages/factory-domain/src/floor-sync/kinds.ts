@@ -24,6 +24,8 @@ export const FLOOR_SYNC_KINDS = [
   'production.cut.log',
   'production.cut.remnant',
   'production.bundles.make',
+  // B-W2a-73: a machine problem from the station (design floor.machine "offline: queued"; Owner answer H1).
+  'plant.report',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -48,6 +50,7 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'production.cut.log': { kind: 'production.cut.log', permission: 'production.cut', numbers: null, what: 'Log a cut on a hide' },
   'production.cut.remnant': { kind: 'production.cut.remnant', permission: 'production.cut', numbers: null, what: "Set a hide's remnant aside" },
   'production.bundles.make': { kind: 'production.bundles.make', permission: 'production.bundles', numbers: 'BUNDLE', what: 'Make a bundle and print its ticket' },
+  'plant.report': { kind: 'plant.report', permission: 'plant.report', numbers: null, what: 'Report a machine problem' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const
