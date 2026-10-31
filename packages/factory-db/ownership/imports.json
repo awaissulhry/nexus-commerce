@@ -16,6 +16,14 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] }
       }
+    },
+    "FirstLoadStep": {
+      "about": "W2b (B-W2b-03): the office marks a step of a company's first load done (the APPLIED import it matched, or nothing to load with the reason) and reads the steps for the guided first load; the API checks imports.apply and the importer's permission. Written once: no update or delete grant, and the …_followups_platform_w2b_guards trigger refuses both for every login.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
     }
   }
 }

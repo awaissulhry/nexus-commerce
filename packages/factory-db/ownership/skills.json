@@ -1,0 +1,71 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/skills.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the skills, the levels people hold (a person decides: every level names who assessed it), trainees and their sign-off, and the classes of machine people may operate, through apps/factory-api's modules/people/skills (B-W2b-39), always through command(). The floor (factory_floor_runtime) reads the skills, tenant-wide (words, nothing personal), and its site's people's levels and authorisations for the qualification check when work starts and the trainee mark, never who assessed, signed off, removed or revoked them, nor why. Portal and link sessions read nothing here. personal: the person each row is about and the purposes of each personal column (PLT-207, PLT-209). Nothing is deleted: skills archived, levels removed, authorisations revoked. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Skill": {
+      "about": "Office keeps the skills (an operation, a class of machine or a general skill); the floor reads them, tenant-wide.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "EmployeeSkill": {
+      "about": "Office (a lead or HR) sets the level a person holds, the trainee period and its sign-off, and removes a skill no longer held; the floor reads its site's people's levels (the qualification check, the trainee mark), never who decided or why.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": {
+          "privileges": ["select"],
+          "scopedBy": ["site"],
+          "hiddenColumns": [
+            "assessedById",
+            "signedOffById",
+            "trainerEmployeeId",
+            "removedById",
+            "removeReason",
+            "createdById"
+          ]
+        }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "skillId": ["EMPLOYMENT", "SAFETY", "PRODUCTION"],
+          "level": ["EMPLOYMENT", "SAFETY", "PRODUCTION"],
+          "since": ["EMPLOYMENT", "SAFETY", "PRODUCTION"],
+          "assessedAt": ["EMPLOYMENT", "SAFETY"],
+          "traineeUntil": ["EMPLOYMENT", "SAFETY", "PRODUCTION", "PAY"],
+          "signedOffOn": ["EMPLOYMENT", "SAFETY", "PRODUCTION", "PAY"],
+          "trainerEmployeeId": ["EMPLOYMENT", "SAFETY"],
+          "removedAt": ["EMPLOYMENT", "SAFETY"],
+          "removeReason": ["EMPLOYMENT"]
+        }
+      }
+    },
+    "MachineAuthorisation": {
+      "about": "Office authorises a person to operate a class of machine and revokes it; the floor reads its site's people's authorisations (signing in at a machine, starting work on it), never who decided or why.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": {
+          "privileges": ["select"],
+          "scopedBy": ["site"],
+          "hiddenColumns": ["authorisedById", "revokedById", "revokeReason", "createdById"]
+        }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "machineClassId": ["EMPLOYMENT", "SAFETY"],
+          "authorisedOn": ["EMPLOYMENT", "SAFETY"],
+          "validUntil": ["EMPLOYMENT", "SAFETY"],
+          "revokedAt": ["EMPLOYMENT", "SAFETY"],
+          "revokeReason": ["EMPLOYMENT", "SAFETY"]
+        }
+      }
+    }
+  }
+}

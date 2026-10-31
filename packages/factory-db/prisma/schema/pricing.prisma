@@ -101,6 +101,8 @@ model PriceList {
   versions     PriceListVersion[]
   // parties.prisma: the customers priced from it by default.
   parties      Party[]
+  // W2b: the customers it was given to, each from a day (the Customers tab).
+  assignments  PartyPriceListAssignment[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from its versions, the lists that fall back to it and the parties.
@@ -186,4 +188,38 @@ model PriceListEntry {
   colourway   Colourway?       @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, versionId, styleId])
+}
+
+/// W2b (B-W2b-03; design pricelist.customers "Customer or group · From"): one price list given to one customer from a
+/// day, to a day or open, so the Customers tab says since when each customer has the list (a GROUP list: one row per
+/// customer of the group). Party.priceListId stays the list a customer is priced from today; the pricelists and terms
+/// modules write the row and the Party in one command (giving another list ends the open row the day before). The rows
+/// of one customer never overlap (the …_followups_platform_w2b_guards trigger, the customer's row locked); the list is
+/// ACTIVE when given. A row keeps its customer, list and start; only its end moves (never before its start). Never
+/// deleted: the history of who had which list when.
+model PartyPriceListAssignment {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  partyId     String    @db.Uuid
+  /// @not-money a reference: the list given (its prices are PriceListEntry rows)
+  priceListId String    @db.Uuid
+  /// The first day it applies and the last (null: open), in the selling company's time zone.
+  validFrom   DateTime  @db.Date
+  validTo     DateTime? @db.Date
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Who gave it.
+  createdById String?   @db.Uuid
+
+  party     Party     @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// @not-money the relation to the list given
+  priceList PriceList @relation(fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One start and one end per customer: both follow from the rule that a customer's rows never overlap (the guard);
+  // as keys they also let the generated isolation tests copy a row out of the seeded dates.
+  @@unique([tenantId, partyId, validFrom])
+  @@unique([tenantId, partyId, validTo])
+  // A list's customers (the Customers tab).
+  @@index([tenantId, priceListId])
 }

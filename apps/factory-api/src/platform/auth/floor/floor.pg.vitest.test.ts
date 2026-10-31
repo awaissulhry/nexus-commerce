@@ -649,6 +649,8 @@ describe('Statuto dei Lavoratori art. 4 and GDPR art. 5(1)(c): minimal worker re
       [
         'companyId', 'createdAt', 'createdById', 'displayName', 'employeeCode', 'failedPinAttempts', 'id', 'locale', 'pinChangedAt', 'pinHash', 'pinLockedUntil',
         'pinMustChange', 'siteId', 'status', 'tenantId', 'updatedAt', 'userId', 'version',
+        // W2b people schema (B-W2b-06): the link to the person's employee record, nothing more about them.
+        'employeeId',
       ].sort(),
     )
     const listed = (await office.get(`/auth/floor/workers?siteId=${p1.id}`)).body.workers[0]

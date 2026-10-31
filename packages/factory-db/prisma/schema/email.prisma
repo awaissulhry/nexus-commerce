@@ -185,12 +185,22 @@ model Suppression {
   detail      String?
   /// The mail whose notification suppressed it, when it was ours.
   outboundId  String?           @db.Uuid
+  /// W2b (B-W2b-03; B-W2a-41's unblock): the block lifted by a person, when, who and why (all three or none). A lifted
+  /// row keeps its address and is never changed again; mail to the address goes out, and a later bounce blocks it
+  /// again in a new row. A reader of the blocks skips lifted rows. (B-W2a-41 moved a lifted row's address aside as
+  /// `~unblocked:<id>:<address>`; B-W2b-24 moves those rows to these columns.)
+  liftedAt    DateTime?         @db.Timestamptz(3)
+  liftedById  String?           @db.Uuid
+  liftReason  String?
   version     Int               @default(1)
   createdAt   DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
   createdById String?           @db.Uuid
 
-  @@unique([tenantId, address])
+  // One block in force per address: a partial unique index on (tenantId, address) WHERE liftedAt IS NULL (the
+  // …_followups_platform_w2b_guards migration). This key (an address lifted once at one time) lets lifted rows of an
+  // address stand beside its block in force.
+  @@unique([tenantId, address, liftedAt])
 }
 
 enum SuppressionReason {

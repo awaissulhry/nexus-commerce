@@ -21,11 +21,26 @@ export interface ScanReason {
   /** Tiles are shown in this order (lower first). */
   readonly sortOrder: number
   readonly active: boolean
+  /**
+   * W2b (B-W2b-10; MES-125: scrap reasons with pictures): the tile's look and words as the office keeps them on the
+   * ScrapReason row — the design system's tag icon and swatch (null: the standard look of the code), the words in the
+   * floor's other languages ({ "ro": "…" }), and "needs detail" ("Other": the floor adds a photo, the office a note).
+   * Left out where a reader does not need them (the scan rules).
+   */
+  readonly icon?: string | null | undefined
+  readonly colour?: string | null | undefined
+  readonly labelI18n?: Readonly<Record<string, string>> | undefined
+  readonly needsDetail?: boolean | undefined
 }
 
-const reason = (kind: DefectKind, sortOrder: number, code: string, it: string, en: string): ScanReason => Object.freeze({ kind, code, label: Object.freeze({ it, en }), sortOrder, active: true })
+const reason = (kind: DefectKind, sortOrder: number, code: string, it: string, en: string): ScanReason =>
+  Object.freeze({ kind, code, label: Object.freeze({ it, en }), sortOrder, active: true, icon: null, colour: null, labelI18n: Object.freeze({}), needsDetail: code === 'OTHER' })
 
-/** W1's list (made-up wording, no business data): seven scrap and six rework reasons, OTHER last in each. */
+/**
+ * W1's list (made-up wording, no business data): seven scrap and six rework reasons, OTHER last in each. W2b: OTHER needs
+ * detail (a photo on the floor, a note in the office: design floor.reasons "'Other' needs a photo"); no icon or colour (the
+ * floor draws each standard code's own look until the office picks one).
+ */
 export const W1_SCAN_REASONS: readonly ScanReason[] = Object.freeze([
   reason('SCRAP', 10, 'LEATHER_FLAW', 'Difetto della pelle', 'Leather flaw'),
   reason('SCRAP', 20, 'CUT_WRONG', 'Taglio sbagliato', 'Cut wrong'),

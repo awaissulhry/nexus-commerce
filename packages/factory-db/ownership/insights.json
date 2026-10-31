@@ -24,6 +24,14 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] }
       }
+    },
+    "ReportRun": {
+      "about": "W2b (B-W2b-03): the office adds one row when a person runs a report and reads the person's own rows ('last run by me'); never another person's (the API keeps each person to their own). Never changed (no update grant; the …_followups_platform_w2b_guards trigger refuses UPDATE for every login); deleted only by a retention rule (the privacy step's; none yet).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "delete"] }
+      }
     }
   }
 }
