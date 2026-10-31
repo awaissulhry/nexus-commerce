@@ -1,4 +1,4 @@
-import { Factory, FileText, ShoppingCart, Truck, Undo2 } from 'lucide-react'
+import { Factory, FileText, Inbox, ShoppingCart, Truck, Undo2 } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -22,6 +22,8 @@ export const officeArea: OfficeAreaNav = {
         noCrumb: true,
         items: [
           { id: 'purchasing-suppliers', label: 'shell:nav.purchasing.suppliers', href: '/purchasing/suppliers', icon: Truck, permission: 'parties.view' },
+          // B-W2a-69: Requests to buy (SCR-236; GET /purchasing/requests).
+          { id: 'purchasing-requests', label: 'shell:nav.purchasing.requests', href: '/purchasing/requests', icon: Inbox, permission: 'purchasing.view' },
           { id: 'purchasing-orders', label: 'shell:nav.purchasing.orders', href: '/purchasing/orders', icon: FileText, permission: 'purchasing.view' },
         ],
       },

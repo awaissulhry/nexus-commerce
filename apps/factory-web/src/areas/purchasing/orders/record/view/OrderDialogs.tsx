@@ -8,11 +8,12 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { dayAt, quantity } from '../../../../_shared/buying/model'
 import type { PurchaseOrder } from '../../api'
 import type { DetailsDraft, LineDraft, OrderRecordActions, OrderRecordModel } from '../../model'
+import { useSay } from './DailyDialogs'
 
 const dateLocale = (locale: string) => (locale === 'it' ? 'it-IT' : 'en-GB')
 
 /**
- * The PO studio's dialogs: Send a new link, Cancel (the reason, what the supplier is told, what the plan gets back),
+ * The PO studio's dialogs: Send a new link (Cancel and the other changes after the send: DailyDialogs.tsx),
  * Add / change a line (a material, its colour, quantity and unit, need date, the price with the cost grain, the leather
  * specs), Remove lines, Edit details, Review the supplier's proposed changes with Accept / Refuse, and What the supplier
  * sees (the price-free copy of the link page). Each refusal is said inside its dialog, in this app's words.
@@ -23,8 +24,6 @@ export function OrderDialogs({ order, model, actions }: { order: PurchaseOrder; 
   switch (dialog.kind) {
     case 'newLink':
       return <NewLink order={order} model={model} actions={actions} message={dialog.message} />
-    case 'cancel':
-      return <Cancel order={order} model={model} actions={actions} reason={dialog.reason} message={dialog.message} />
     case 'line':
       return <LineDialog order={order} model={model} actions={actions} draft={dialog.draft} />
     case 'removeLines':
@@ -37,6 +36,9 @@ export function OrderDialogs({ order, model, actions }: { order: PurchaseOrder; 
       return <Review order={order} model={model} actions={actions} />
     case 'supplierView':
       return <SupplierCopy order={order} model={model} actions={actions} />
+    default:
+      // B-W2a-69's daily dialogs (DailyDialogs.tsx).
+      return null
   }
 }
 
@@ -56,8 +58,8 @@ function Footer({ model, actions, label, held, tone, onConfirm }: { model: Order
 }
 
 function Problem({ model }: { model: OrderRecordModel }) {
-  const t = useT('buying')
-  return model.dialogProblem ? <Banner tone="danger" title={t(model.dialogProblem.key, model.dialogProblem.params)} /> : null
+  const say = useSay('buying')
+  return model.dialogProblem ? <Banner tone="danger" title={say(model.dialogProblem) ?? ''} /> : null
 }
 
 function NewLink({ order, model, actions, message }: { order: PurchaseOrder; model: OrderRecordModel; actions?: OrderRecordActions; message: string }) {
@@ -69,39 +71,6 @@ function NewLink({ order, model, actions, message }: { order: PurchaseOrder; mod
         <Field label={t('po.newLink.message')} hint={t('po.newLink.messageHint')}>
           <Textarea rows={4} maxLength={2000} value={message} onChange={(event) => actions?.onDialog?.({ kind: 'newLink', message: event.target.value })} />
         </Field>
-        <Problem model={model} />
-      </div>
-    </Modal>
-  )
-}
-
-function Cancel({ order, model, actions, reason, message }: { order: PurchaseOrder; model: OrderRecordModel; actions?: OrderRecordActions; reason: string; message: string }) {
-  const t = useT('buying')
-  const sent = order.status !== 'DRAFT'
-  const planned = order.lines.filter((line) => line.plan.length > 0).length
-  return (
-    <Modal
-      open
-      onClose={() => actions?.onDialog?.(null)}
-      title={t('po.cancel.title', { number: order.number })}
-      size="md"
-      footer={<Footer model={model} actions={actions} label={t('po.cancel.confirm')} tone="danger" held={reason.trim().length === 0 ? t('po.cancel.reasonNeeded') : null} onConfirm={() => actions?.onCancel?.()} />}
-    >
-      <div className="fw-by-dialog">
-        <ul className="fw-by-list">
-          <li>{t('po.cancel.reach', { count: order.lines.length })}</li>
-          {planned > 0 && <li>{t('po.cancel.plan', { count: planned })}</li>}
-          <li>{sent ? t('po.cancel.supplierTold', { supplier: order.supplier.name }) : t('po.cancel.draftOnly')}</li>
-          <li>{t('po.cancel.final')}</li>
-        </ul>
-        <Field label={t('po.cancel.reason')} required hint={t('po.cancel.reasonHint')}>
-          <Textarea rows={3} maxLength={500} value={reason} onChange={(event) => actions?.onDialog?.({ kind: 'cancel', reason: event.target.value, message })} />
-        </Field>
-        {sent && (
-          <Field label={t('po.cancel.message')} hint={t('po.cancel.messageHint')}>
-            <Textarea rows={3} maxLength={2000} value={message} onChange={(event) => actions?.onDialog?.({ kind: 'cancel', reason, message: event.target.value })} />
-          </Field>
-        )}
         <Problem model={model} />
       </div>
     </Modal>
@@ -300,6 +269,7 @@ function Details({ order, model, actions, draft }: { order: PurchaseOrder; model
 
 function Review({ order, model, actions }: { order: PurchaseOrder; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('buying')
+  const td = useT('purchasing-orders')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const dialog = model.dialog!
@@ -321,6 +291,10 @@ function Review({ order, model, actions }: { order: PurchaseOrder; model: OrderR
             </Button>
             <Button size="sm" heldReason={held} onClick={() => actions?.onDialog?.({ kind: 'refuse', note: '' })}>
               {t('po.answer.refuse')}
+            </Button>
+            {/* B-W2a-69: counter-propose = the next revision's draft from what was asked, to change and send. */}
+            <Button size="sm" heldReason={held} onClick={() => actions?.onDialog?.({ kind: 'counter', note: '' })}>
+              {td('counter.open')}
             </Button>
             <Button size="sm" variant="primary" heldReason={held} onClick={() => actions?.onDialog?.({ kind: 'accept', message: '' })}>
               {t('po.review.accept', { count: changed.length })}
@@ -370,6 +344,7 @@ function Review({ order, model, actions }: { order: PurchaseOrder; model: OrderR
             <ul className="fw-by-list">
               <li>{t('po.review.acceptMeans')}</li>
               <li>{t('po.review.refuseMeans')}</li>
+              <li>{td('counter.means', { revision: order.revision + 1 })}</li>
               <li>{t('po.review.planMeans')}</li>
             </ul>
           </>

@@ -22,6 +22,7 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { actorOf } from '../../../core/context'
 import { completeUpload, listFiles, requestUpload } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
+import { holdOnWriteOff } from '../../quality/holds/checks'
 import { readHides, readItems, readLots, readSiteStock } from '../issue/store'
 import { ReservationRefusedError } from '../reservations/reserve'
 import { demandWords, lockReservations, readDemands, readKeyFacts, reserveKeyOf, type ReserveKey } from '../reservations/store'
@@ -34,7 +35,8 @@ import { completeKeys, LEDGER_SELECT, postMoves, type MoveDraft } from './post-m
  * person's note, and afterwards its photos. Office, inventory.scrap at the site. ONE command():
  *
  *   the reason code (active; one that needs detail needs the note) → the lines (a hide whole from every location holding
- *   it; a lot or untracked material by quantity from one location) → the reserve lock of each item and colour (a hide an
+ *   it; a lot or untracked material by quantity from one location) → a lot or hide under an ACTIVE quality hold is refused
+ *   in words (409 `body/lines/<i>/refusal/QUALITY_HOLD`, B-W2a-64) → the reserve lock of each item and colour (a hide an
  *   ACTIVE reservation holds is refused in words: release it first) → postMoves: SCRAP moves, note `<CODE>: <note>`,
  *   keys `inventory.writeOff:<Idempotency-Key>:<n>`, valued in the command (the lot's cost, else the standard cost) →
  *   each hide SCRAPPED (final: the …_production_leftovers_guards trigger) → the write-off's audit row (record
@@ -121,6 +123,13 @@ export async function writeOff(caller: CommandCaller, body: WriteOffInput, idemp
         })
         lineOf.push(index)
       }
+    }
+
+    // B-W2a-64: stock under an ACTIVE quality hold (its lot or the hide) is quality's to decide: refused in words, before
+    // the reserve and stock locks (the hold locks come first everywhere).
+    for (const [index, draft] of drafts.entries()) {
+      const held = await holdOnWriteOff(tx, tools.context, { lotId: draft.lotId ?? null, hideId: draft.hideId ?? null })
+      if (held) throw new ReservationRefusedError(held, [{ path: prefixed(`lines/${lineOf[index]}/refusal/QUALITY_HOLD`), message: held }])
     }
 
     // The reserve lock of each item and colour, then: a hide an ACTIVE reservation holds is not written off.

@@ -142,14 +142,23 @@ const approvalOverdue: Find = async (tx, rule, now, only) => {
   return findings
 }
 
-/** PO_NOT_CONFIRMED: purchase orders still SENT (no answer) N days after they went out. */
+/**
+ * PO_NOT_CONFIRMED: purchase orders still SENT (no answer) past the time the supplier was asked to answer by — the order's
+ * CURRENT confirm-by (B-W2a-52 sets it at the send, the office may move it: the alert follows it, B-W2a-69). An order sent
+ * without a confirm-by (before B-W2a-52) is due the rule's N days after it went out.
+ */
 const poNotConfirmed: Find = async (tx, rule, now, only) => {
   const { days } = thresholdOf('PO_NOT_CONFIRMED', rule.threshold) as { days: number }
   const rows = await tx.purchaseOrder.findMany({
-    where: { ...idIn(only), ...placeWhere(rule), status: 'SENT', sentAt: { lte: new Date(now.getTime() - days * 24 * HOUR) } },
+    where: {
+      ...idIn(only),
+      ...placeWhere(rule),
+      status: 'SENT',
+      OR: [{ confirmBy: { lte: now } }, { confirmBy: null, sentAt: { lte: new Date(now.getTime() - days * 24 * HOUR) } }],
+    },
     orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
     take: FIND_LIMIT,
-    select: { id: true, number: true, companyId: true, siteId: true, partyId: true, sentAt: true },
+    select: { id: true, number: true, companyId: true, siteId: true, partyId: true, sentAt: true, confirmBy: true },
   })
   return rows
     .filter((row) => row.sentAt !== null)
@@ -158,18 +167,24 @@ const poNotConfirmed: Find = async (tx, rule, now, only) => {
       recordId: row.id,
       label: row.number,
       scope: { companyId: row.companyId, siteId: row.siteId, partyId: row.partyId },
-      facts: { days: Math.floor((now.getTime() - row.sentAt!.getTime()) / (24 * HOUR)), threshold: days, sentOn: businessDate(row.sentAt!) },
+      facts: {
+        days: Math.floor((now.getTime() - row.sentAt!.getTime()) / (24 * HOUR)),
+        threshold: days,
+        sentOn: businessDate(row.sentAt!),
+        // The deadline the alert followed (null: none was asked; the rule's days then).
+        confirmBy: row.confirmBy ? row.confirmBy.toISOString() : null,
+      },
     }))
 }
 
-/** CERTIFICATE_EXPIRING: VALID certificates whose last valid day comes within the rule's lead and the timers' horizon. */
+/** CERTIFICATE_EXPIRING: VALID certificates whose last valid day comes within the rule's lead and the timers' horizon; a renewed one (B-W2a-66: its successor linked) leaves the window. */
 const certificatesExpiring: Dated = async (tx, rule, now, only) => {
   const { daysBefore } = thresholdOf('CERTIFICATE_EXPIRING', rule.threshold) as { daysBefore: number }
   const today = businessDate(now)
   // A company's rule watches its certificates and the shared ones (no company).
   const company = rule.companyId ? { OR: [{ companyId: rule.companyId }, { companyId: null }] } : {}
   const rows = await tx.certificate.findMany({
-    where: { ...idIn(only), ...company, status: 'VALID', validTo: { gte: asDate(today), lte: asDate(plusCalendarDays(today, daysBefore + TIMER_HORIZON_DAYS)) } },
+    where: { ...idIn(only), ...company, status: 'VALID', successorId: null, validTo: { gte: asDate(today), lte: asDate(plusCalendarDays(today, daysBefore + TIMER_HORIZON_DAYS)) } },
     orderBy: [{ validTo: 'asc' }, { id: 'asc' }],
     take: FIND_LIMIT,
     select: { id: true, number: true, companyId: true, validTo: true },

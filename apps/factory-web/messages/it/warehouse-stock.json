@@ -7,7 +7,8 @@
     "held": {
       "noAdjust": "Il tuo ruolo non può rettificare la giacenza.",
       "pickOne": "Seleziona una riga (o premi a su una riga): la rettifica lavora su una riga di giacenza alla volta.",
-      "severalHides": "Questa riga contiene più pelli: rettifica una pelle (Righe ▾ Pelli, o la pagina Pelli)."
+      "severalHides": "Questa riga contiene più pelli: rettifica una pelle (Righe ▾ Pelli, o la pagina Pelli).",
+      "pastDate": "Le giacenze a una data passata non si modificano."
     },
     "importOpening": "Importa la giacenza iniziale",
     "exportView": "Esporta questa vista (CSV)",
@@ -24,7 +25,8 @@
     "tile": {
       "quarantine": "Lotti in quarantena",
       "crvi": "Lotti in attesa del risultato Cr VI",
-      "blocked": "Lotti bloccati o respinti"
+      "blocked": "Lotti bloccati o respinti",
+      "reserved": "Riservate"
     },
     "removeChip": "Togli il filtro “{chip}”",
     "tableLabel": "Giacenze",
@@ -38,7 +40,8 @@
       "onHand": "Giacenza",
       "held": "In sospeso",
       "available": "Disponibile",
-      "actions": "Azioni"
+      "actions": "Azioni",
+      "reserved": "Riservata"
     },
     "noLot": "Senza lotto",
     "noQuality": "Nessun controllo qualità",
@@ -74,7 +77,9 @@
       "quarantine_other": "{count} lotti sono in quarantena e attendono il rilascio della qualità.",
       "truncated": "Troppe righe per una sola risposta: scegli una sede o una vista per vederle tutte.",
       "unvalued_one": "{count} movimento non è ancora valorizzato: i valori qui non lo comprendono.",
-      "unvalued_other": "{count} movimenti non sono ancora valorizzati: i valori qui non li comprendono."
+      "unvalued_other": "{count} movimenti non sono ancora valorizzati: i valori qui non li comprendono.",
+      "overReserved_one": "{count} materiale ha più riservato di quanto ce n'è: libera o sposta una riserva.",
+      "overReserved_other": "{count} materiali hanno più riservato di quanto ce n'è: libera o sposta una riserva."
     },
     "csv": {
       "material": "Materiale",
@@ -92,7 +97,39 @@
       "available": "Disponibile",
       "unitCost": "Costo unitario",
       "value": "Valore",
-      "currency": "Valuta"
+      "currency": "Valuta",
+      "reserved": "Riservata"
+    },
+    "tileRows_one": "{count} riga",
+    "tileRows_other": "{count} righe",
+    "reservations_one": "{count} riserva",
+    "reservations_other": "{count} riserve",
+    "overReserved": "sovra-riservata: è riservato più di quanto c'è",
+    "onHold": "Blocco qualità",
+    "heldBy": "In blocco: {reason} · dal {day}",
+    "holdRow": "Metti in blocco…",
+    "holdLots_one": "Metti {count} lotto in blocco",
+    "holdLots_other": "Metti {count} lotti in blocco",
+    "reservedTotals": "riservato {totals}",
+    "valued": "Elenco valorizzato delle giacenze al {day} (PDF, si apre in una nuova scheda)",
+    "asOf": {
+      "open": "Giacenze a una data…",
+      "pill": "Al {day}",
+      "paused": "aggiornamenti in diretta spenti per una data passata",
+      "notice": "Giacenze al {day} ore {time} — sola lettura",
+      "noticeBody": "Qui non si modifica nulla. Bloccato, riservato e disponibile non sono conservati per i giorni passati, quindi mostrano —.",
+      "backToNow": "Torna ad adesso",
+      "notKept": "Non conservato per i giorni passati",
+      "empty": "Nessuna giacenza al {day}"
+    },
+    "phone": {
+      "select": "Seleziona",
+      "done": "Fine",
+      "selectAll": "Seleziona tutte le righe",
+      "selected_one": "{count} selezionata",
+      "selected_other": "{count} selezionate",
+      "selectOne": "Seleziona {material} in {place}",
+      "nothingToSelect": "Non c'è nulla da selezionare."
     }
   },
   "adj": {
@@ -176,21 +213,22 @@
       "lot": "Lotto {code}",
       "hide": "Pelle {code}",
       "location": "Ubicazione {code}",
-      "reason": "Causale: {reason}"
+      "reason": "Causale: {reason}",
+      "writeOffs": "Solo le perdite"
     },
     "tile": {
       "adjustments": "Rettifiche",
-      "scraps": "Scarti",
       "counts": "Differenze inventariali",
       "reversals": "Storni",
-      "unvalued": "Movimenti non ancora valorizzati"
+      "unvalued": "Movimenti non ancora valorizzati",
+      "writeOffs": "Perdite"
     },
     "tileHint": {
       "adjustments": "ultimi 7 giorni",
-      "scraps": "ultimi 30 giorni",
       "counts": "ultimi 30 giorni",
       "reversals": "ultimi 30 giorni",
-      "unvalued": "il loro valore manca dai totali"
+      "unvalued": "il loro valore manca dai totali",
+      "writeOffs": "ultimi 30 giorni"
     },
     "col": {
       "when": "Quando",
@@ -232,7 +270,13 @@
       "adjustSeveral_one": "Questa giacenza è in {count} ubicazione: rettificala da Giacenze, una riga alla volta.",
       "adjustSeveral_other": "Questa giacenza è in {count} ubicazioni (o in più pelli): rettificala da Giacenze, una riga alla volta.",
       "adjustNone": "Nulla di questa giacenza è presente: rettifica da un’ubicazione in Giacenze.",
-      "adjustFailed": "Non è stato possibile leggere la giacenza da rettificare. Riprova."
+      "adjustFailed": "Non è stato possibile leggere la giacenza da rettificare. Riprova.",
+      "writeOffNone": "Di questa merce non c'è giacenza: non c'è nulla da scaricare.",
+      "writeOffHides_one": "Questa pelle è {count} pelle: scaricala da Pelli › Rottama.",
+      "writeOffHides_other": "Questa pelle sono {count} pelli: rottamale da Pelli (selezionale, Rottama…), o apri Movimenti da una pelle.",
+      "writeOffSeveral_one": "Questa merce è in {count} posto: scaricala da Giacenze, una riga alla volta.",
+      "writeOffSeveral_other": "Questa merce è in {count} posti: apri Movimenti da un posto (una riga di Giacenze) per scaricarla.",
+      "writeOffFailed": "Non è stato possibile leggere la merce da scaricare. Riprova."
     },
     "why": {
       "title": "Perché è questo numero",
@@ -281,7 +325,8 @@
       "notValued": "Non valorizzato (un trasferimento, nessuna base di costo, o un movimento di reparto non ancora valorizzato).",
       "reversal": "Storno",
       "reverses": "Questo movimento storna",
-      "reversedBy": "Stornato da"
+      "reversedBy": "Stornato da",
+      "writeOff": "Scaricata come"
     },
     "csv": {
       "when": "Avvenuto",
@@ -306,7 +351,12 @@
       "method": "Valorizzato",
       "value": "Valore",
       "currency": "Valuta"
-    }
+    },
+    "search": "Cerca nel registro: materiale, lotto, pelle, posto, documento, nota",
+    "countOf_one": "{loaded} di {count} movimento caricati · altri scorrendo",
+    "countOf_other": "{loaded} di {count} movimenti caricati · altri scorrendo",
+    "writeOff": "Perdita · {reason}",
+    "writeOffOpen": "Scarica a perdita…"
   },
   "rev": {
     "title": "Storna questo movimento",

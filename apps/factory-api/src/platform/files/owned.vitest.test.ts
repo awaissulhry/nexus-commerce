@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { assertGenericPath, MODULE_OWNED_FILES, ownerOf } from './owned'
 
 describe('record types whose files only their module writes (owned.ts)', () => {
-  it('lists the compliance document, the parcel and the privacy notice and DPIA (every kind), the certificate, the lot and the opening-stock reports (CERTIFICATE) and the DDT (FISCAL_ARCHIVE)', () => {
-    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['Certificate', 'ComplianceDocument', 'Ddt', 'Lot', 'OpeningStock', 'Parcel', 'PrivacyDpia', 'PrivacyNotice'])
+  it('lists the compliance document, the parcel, the privacy notice and DPIA and the type-change review (every kind), the certificate, the lot and the opening-stock reports (CERTIFICATE) and the DDT (FISCAL_ARCHIVE)', () => {
+    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['Certificate', 'ComplianceDocument', 'Ddt', 'Lot', 'OpeningStock', 'Parcel', 'PrivacyDpia', 'PrivacyNotice', 'TypeChangeReview'])
     expect(ownerOf('OpeningStock', 'CERTIFICATE')).not.toBeNull()
     expect(ownerOf('OpeningStock', 'ATTACHMENT')).toBeNull()
     expect(ownerOf('PrivacyNotice', 'DOCUMENT')).not.toBeNull()
@@ -17,6 +17,7 @@ describe('record types whose files only their module writes (owned.ts)', () => {
     expect(ownerOf('ComplianceDocument', 'ATTACHMENT')).not.toBeNull()
     expect(ownerOf('Certificate', 'CERTIFICATE')).not.toBeNull()
     expect(ownerOf('Certificate', 'ATTACHMENT')).toBeNull()
+    expect(ownerOf('TypeChangeReview', 'DOCUMENT')).not.toBeNull()
     expect(ownerOf('Quote', 'DOCUMENT')).toBeNull()
     // Not an inherited property of a plain object.
     expect(ownerOf('constructor', 'DOCUMENT')).toBeNull()

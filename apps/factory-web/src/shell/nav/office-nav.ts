@@ -126,6 +126,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/purchasing/subcontracting',
   '/purchasing/subcontracting/[id]',
   '/purchasing/subcontracting/[id]/job-sheet',
+  // B-W2a-69: Requests to buy (SCR-236).
+  '/purchasing/requests',
   // B-W2a-63: Returns & claims (SCR-131) and a supplier claim.
   '/purchasing/claims',
   '/purchasing/claims/[id]',
@@ -212,6 +214,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/warehouse/hides/[id]',
   '/warehouse/lots',
   '/warehouse/lots/[id]',
+  // B-W2a-64: the trace of a record that is not a lot (SCR-201-trace, opened by the Trace dialog; no navigation row).
+  '/warehouse/lots/trace',
   '/warehouse/moves',
   '/warehouse/locations',
   '/warehouse/locations/[id]',

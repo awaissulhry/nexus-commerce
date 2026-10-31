@@ -1723,6 +1723,7 @@
     "views_export": "Esportare un elenco in CSV o Excel",
     "inventory_discrepancies_manage": "Registrare e chiudere le differenze di ricevimento",
     "inventory_discrepancies_report": "Inviare al fornitore il rapporto delle differenze",
+    "inventory_receipts_documents_request": "Chiedere al fornitore i documenti mancanti di un ricevimento",
     "search_rebuild": "Ricostruire l'indice di ricerca di tutto il gruppo",
     "planning_schedule_manage": "Pianificare il programma e assegnare il lavoro alle linee",
     "planning_schedule_publish": "Pubblicare il programma al reparto",

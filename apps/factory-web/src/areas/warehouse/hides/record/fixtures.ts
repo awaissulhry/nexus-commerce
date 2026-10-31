@@ -2,7 +2,9 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { canFor, inShell, NOW, PREFIX, PEOPLE, TIME_ZONE, type RoleCase } from '../../../_shared/stock/fixtures'
 import { part } from '../../lots/shared/model'
-import { HIDE_ROWS, hideMoves, hideRecordOf, printDialog, printedDialog } from '../demo/fixtures'
+import { HIDE_HOLDS, HIDE_ROWS, hideMoves, hideRecordOf, printDialog, printedDialog } from '../demo/fixtures'
+import { dailyFor, HOLD_REASONS, reserveDialog, writeOffDialog } from '../../lots/demo/daily/fixtures'
+import { reserveHides, scrapTarget } from '../../lots/shared/daily'
 import type { HideRecordModel, HideTab } from '../model'
 import { HideRecordView } from './view/HideRecordView'
 
@@ -11,7 +13,10 @@ import { HideRecordView } from './view/HideRecordView'
  * at the work order; its cuts with one entered twice and reversed), a full hide ready to cut, a remnant, a consumed hide
  * (read only), a hide of a lot in quarantine (held with the lot's reason), a hide of a lot whose Cr VI failed; the Cuts
  * tab at a site that records stations only and at one that names workers (inside this one record only); the Moves tab;
- * the tag's print dialog and its job; the states. Roles: Owner, Warehouse, Read-only, Sales (no inventory.stock.view).
+ * the tag's print dialog and its job; the states. B-W2a-64: a hide reserved for a work order (the next step links it),
+ * one whose reservation's work order is done (release it), one on hold by its own quality hold (the reason in words),
+ * Reserve and Scrap from the band (each held with its reason), their dialogs. Roles: Owner, Warehouse, Quality, Read-only,
+ * Sales (no inventory.stock.view).
  */
 
 interface HideCase {
@@ -21,11 +26,17 @@ interface HideCase {
 
 function hideCase(role: RoleCase, row = HIDE_ROWS[2]!, over: Partial<HideRecordModel> = {}, tab: HideTab = 'overview', record = hideRecordOf(row)): HideCase {
   const can = canFor(role)
+  const daily = dailyFor(role)
   return {
     role,
     record: {
       prefix: PREFIX,
       can,
+      daily,
+      holds: daily.holdsView ? HIDE_HOLDS : {},
+      holdReasons: HOLD_REASONS,
+      reserve: null,
+      writeOff: null,
       tab,
       record: can.stockView ? { status: 'ready', value: record } : { status: 'forbidden' },
       moves: part(hideMoves(row)),
@@ -43,7 +54,9 @@ function HideDesign({ model }: { model: HideCase }) {
   return inShell(`/warehouse/hides/${value?.hide.id ?? 'x'}`, createElement(HideRecordView, { model: model.record }), model.role)
 }
 
-const [full, , partly, remnant, consumed, , quarantined, , , failed] = HIDE_ROWS
+const [full, onHold, partly, remnant, consumed, staleRow, quarantined, , , failed] = HIDE_ROWS
+const reservedRow = HIDE_ROWS[0]!
+const freeFull = { ...full!, reservedFor: null }
 
 export const designScreen = defineDesignScreen<HideCase>({
   screen: 'SCR-200-record',
@@ -51,7 +64,13 @@ export const designScreen = defineDesignScreen<HideCase>({
   view: HideDesign,
   cases: [
     { id: 'partly-cut', label: 'Partly cut at the cutting table: the area bar (cut · at the work order)', model: hideCase('warehouse') },
-    { id: 'full', label: 'A full hide in stock: ready to cut', model: hideCase('warehouse', full) },
+    { id: 'full', label: 'A full hide in stock: ready to cut (Reserve and Scrap allowed)', model: hideCase('warehouse', freeFull) },
+    { id: 'reserved', label: 'B-W2a-64 — Reserved for WO-D-0031: the next step links the work order; Reserve held (reserved already)', model: hideCase('warehouse', reservedRow) },
+    { id: 'reserved-stale', label: 'B-W2a-64 — Reserved for a work order that is done: release it', model: hideCase('warehouse', staleRow) },
+    { id: 'on-hold', label: 'B-W2a-64 — On hold by its own quality hold: the reason in words, since when', model: hideCase('quality', onHold) },
+    { id: 'reserve-dialog', label: 'B-W2a-64 — Reserve this hide to a work order', model: hideCase('warehouse', freeFull, { reserve: reserveDialog(reserveHides([freeFull], {}, HOLD_REASONS, 'it')) }) },
+    { id: 'scrap-dialog', label: 'B-W2a-64 — Scrap this hide: the reason, a photo, the NCR option', model: hideCase('warehouse', freeFull, { writeOff: writeOffDialog(scrapTarget([freeFull], {}, null)) }) },
+    { id: 'scrap-held-hold', label: 'B-W2a-64 — Scrap of a hide on hold: held, quality decides it', model: hideCase('quality', onHold, { writeOff: writeOffDialog(scrapTarget([onHold!], HIDE_HOLDS, null)) }) },
     { id: 'remnant', label: 'A remnant back in stock', model: hideCase('owner', remnant) },
     { id: 'consumed', label: 'Consumed: read only (Banner)', model: hideCase('warehouse', consumed) },
     { id: 'quarantine', label: 'Its lot is in quarantine: held, waits for the Cr VI result', model: hideCase('warehouse', quarantined) },

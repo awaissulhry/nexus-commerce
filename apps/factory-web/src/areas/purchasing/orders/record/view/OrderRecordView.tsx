@@ -14,7 +14,9 @@ import { DocumentSendView } from '../../../../_shared/document-send/view/Documen
 import { dayAt } from '../../../../_shared/buying/model'
 import type { PurchaseOrder } from '../../api'
 import { cancelHeld, journeyIndex, nextStep, RECORD_TABS, STATUS_TONE, type OrderRecordActions, type OrderRecordModel, type OrderTab } from '../../model'
+import { changeHeld, confirmByHeld, remindHeld } from '../../daily-model'
 import { AnswerTab } from './AnswerTab'
+import { DailyDialogs, SendExtraFields, useSay } from './DailyDialogs'
 import { DocumentsTab, ReceiptsTab } from './ReceiptsDocsTabs'
 import { LinesTab } from './LinesTab'
 import { OrderDialogs } from './OrderDialogs'
@@ -42,7 +44,7 @@ export type { OrderRecordActions, OrderRecordModel } from '../../model'
  */
 export function OrderRecordView({ model, actions, panels }: { model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode }) {
   return (
-    <WithMessages namespaces={['buying', 'lists', 'records', 'send']}>
+    <WithMessages namespaces={['buying', 'purchasing-orders', 'lists', 'records', 'send']}>
       <OrderRecord model={model} actions={actions} panels={panels} />
     </WithMessages>
   )
@@ -97,6 +99,10 @@ function OrderRecord({ model, actions, panels }: { model: OrderRecordModel; acti
 
 function ReadyOrder({ order, model, actions, panels }: { order: PurchaseOrder; model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode }) {
   const t = useT('buying')
+  const td = useT('purchasing-orders')
+  const say = useSay()
+  const sayOwn = useSay('buying')
+  const change = changeHeld(order, model.can)
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const recordHref = `${model.prefix}/purchasing/orders/${order.id}`
@@ -173,8 +179,12 @@ function ReadyOrder({ order, model, actions, panels }: { order: PurchaseOrder; m
     { id: 'supplierView', label: t('po.record.supplierView'), onSelect: () => actions?.onSupplierView?.() },
     ...(order.status === 'DRAFT' && model.can.poManage ? [{ id: 'details', label: t('po.record.editDetails'), onSelect: () => actions?.onDialog?.({ kind: 'details', draft: detailsOf(order) }) }] : []),
     ...(order.status === 'SENT' && model.can.poSend ? [{ id: 'newLink', label: t('po.step.newLink'), onSelect: () => actions?.onDialog?.({ kind: 'newLink', message: '' }) }] : []),
+    // B-W2a-69: Change → the next revision's draft; the confirm-by; a reminder by hand.
+    ...(change === null ? [{ id: 'change', label: td('change.open', { revision: order.revision + 1 }), onSelect: () => actions?.onDialog?.({ kind: 'change', note: '' }) }] : []),
+    ...(confirmByHeld(order, model.can) === null ? [{ id: 'confirmBy', label: td('confirmBy.move'), onSelect: () => actions?.onDialog?.({ kind: 'confirmBy', confirmBy: order.confirmBy ?? '' }) }] : []),
+    ...(remindHeld(order, model.can) === null ? [{ id: 'remind', label: td('remind.open'), onSelect: () => actions?.onDialog?.({ kind: 'remind', message: '' }) }] : []),
     { id: 'copy', label: t('po.record.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(order.number).catch(() => undefined) },
-    ...(cancelReason === null ? [{ id: 'cancel', label: t('po.record.cancel'), tone: 'danger' as const, onSelect: () => actions?.onDialog?.({ kind: 'cancel', reason: '', message: '' }) }] : []),
+    ...(cancelReason === null ? [{ id: 'cancel', label: t('po.record.cancel'), tone: 'danger' as const, onSelect: () => actions?.daily?.onCancelOrder?.() }] : []),
   ]
 
   const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
@@ -248,7 +258,7 @@ function ReadyOrder({ order, model, actions, panels }: { order: PurchaseOrder; m
       {model.notice && (
         <Banner
           tone={model.notice.tone}
-          title={t(model.notice.words.key, model.notice.words.params)}
+          title={sayOwn(model.notice.words) ?? ''}
           action={
             <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
               {t('common.dismiss')}
@@ -270,7 +280,22 @@ function ReadyOrder({ order, model, actions, panels }: { order: PurchaseOrder; m
         />
       )}
       {!model.can.poManage && !model.can.poSend && <Banner tone="info" title={t('po.record.readOnly')} />}
-      {order.status !== 'DRAFT' && order.status !== 'CANCELLED' && model.can.poManage && order.status !== 'CHANGES_PROPOSED' && order.status !== 'DECLINED' && order.lines.length > 0 && model.tab === 'lines' && <Banner tone="info" title={t('po.record.frozen')} />}
+      {/* Sent: read-only; Change starts the next revision (B-W2a-69; design Lines "Sent: read-only; 'Change' starts revision 2"). */}
+      {['SENT', 'CONFIRMED', 'DECLINED', 'PARTLY_RECEIVED', 'RECEIVED'].includes(order.status) && order.lines.length > 0 && model.tab === 'lines' && (
+        <Banner
+          tone="info"
+          title={t('po.record.frozen')}
+          action={
+            ['SENT', 'CONFIRMED', 'DECLINED'].includes(order.status) ? (
+              <Button size="sm" heldReason={model.busy ? t('held.busy') : say(change)} onClick={() => actions?.onDialog?.({ kind: 'change', note: '' })}>
+                {td('change.open', { revision: order.revision + 1 })}
+              </Button>
+            ) : undefined
+          }
+        >
+          {['SENT', 'CONFIRMED', 'DECLINED'].includes(order.status) ? td('change.bannerHint', { revision: order.revision + 1 }) : td('change.bannerReceived')}
+        </Banner>
+      )}
 
       <div className={showDock ? 'fw-by-body has-dock' : 'fw-by-body'}>
         <div className="fw-by-main">
@@ -288,7 +313,15 @@ function ReadyOrder({ order, model, actions, panels }: { order: PurchaseOrder; m
       </div>
 
       <OrderDialogs order={order} model={model} actions={actions} />
-      {model.send && model.dialog?.kind === 'send' && <DocumentSendView open model={model.send} actions={{ onField: actions?.onSend?.onField, onSend: actions?.onSend?.onSend, onClose: () => actions?.onDialog?.(null), onRetryChecks: actions?.onSend?.onRetryChecks, onNewLink: actions?.onSend?.onNewLink }} />}
+      <DailyDialogs order={order} model={model} actions={actions} />
+      {model.send && model.dialog?.kind === 'send' && (
+        <DocumentSendView
+          open
+          model={model.send}
+          actions={{ onField: actions?.onSend?.onField, onSend: actions?.onSend?.onSend, onClose: () => actions?.onDialog?.(null), onRetryChecks: actions?.onSend?.onRetryChecks, onNewLink: actions?.onSend?.onNewLink }}
+          extra={model.send.result ? null : <SendExtraFields order={order} model={model} actions={actions} defaultConfirmBy={model.sendFacts?.confirmBy ?? null} changes={model.sendFacts?.changes ?? null} />}
+        />
+      )}
     </div>
   )
 }

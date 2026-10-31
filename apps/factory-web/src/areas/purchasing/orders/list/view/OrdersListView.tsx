@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Download, MoreHorizontal, Plus, Search, ShieldOff } from 'lucide-react'
+import { Download, Mail, MoreHorizontal, Plus, Search, ShieldOff } from 'lucide-react'
 import { Banner, Card, DateField, EmptyState, Field, Menu, MetricStrip, Modal } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select, Spinner, Tag } from '@nexus/ui/primitives'
@@ -13,8 +13,13 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { dayAt, money } from '../../../../_shared/buying/model'
 import type { OrderRow } from '../../api'
-import { confirmationPhrase, ORDER_TILES, ORDER_VIEWS, STATUS_TONE, type OrdersListActions, type OrdersListModel, type OrderView } from '../../model'
+import { cancelHeld, confirmationPhrase, ORDER_TILES, ORDER_VIEWS, STATUS_TONE, type OrdersListActions, type OrdersListModel, type OrderView } from '../../model'
+import { SendManyDialog } from './SendManyDialog'
 import '../../../../_shared/buying/buying.css'
+
+/** B-W2a-69's tiles and views: their words are in this step's catalogue (`purchasing-orders`). */
+const DAILY_IDS: ReadonlySet<string> = new Set(['dueThisWeek', 'deliveryLate', 'pastConfirmBy'])
+const DELIVERY_TONE = { LATE: 'danger', THIS_WEEK: 'warning', LATER: 'neutral' } as const
 
 export type { OrdersListActions, OrdersListModel } from '../../model'
 
@@ -28,7 +33,7 @@ export type { OrdersListActions, OrdersListModel } from '../../model'
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
-    <WithMessages namespaces={['buying', 'lists']}>
+    <WithMessages namespaces={['buying', 'purchasing-orders', 'lists']}>
       <OrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -36,6 +41,9 @@ export function OrdersListView({ model, actions }: { model: OrdersListModel; act
 
 function OrdersList({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   const t = useT('buying')
+  const td = useT('purchasing-orders')
+  const tileWords = (id: string) => (DAILY_IDS.has(id) ? td(`tile.${id}`) : t(`po.tile.${id}`))
+  const viewWords = (id: string) => (DAILY_IDS.has(id) ? td(`view.${id}`) : t(`po.view.${id}`))
   const lists = useT('lists')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -60,20 +68,30 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || model.newOrder || help) return
+      if (event.metaKey || event.ctrlKey || event.altKey || model.newOrder || model.sendMany || help) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]') || target.isContentEditable)) return
       if (event.key === 'c' && model.can.poManage) {
         event.preventDefault()
         actions?.onNew?.(true)
+      }
+      // B-W2a-69: s sends the selected drafts (x selects the focused row first).
+      if (event.key === 's' && model.can.poSend && pickedDrafts.length > 0) {
+        event.preventDefault()
+        actions?.onSendMany?.(pickedDrafts.map((row) => row.id))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const ownKeys: ListKey[] = [{ keys: ['c'], does: t('po.list.keyNew') }]
+  const ownKeys: ListKey[] = [
+    { keys: ['c'], does: t('po.list.keyNew') },
+    { keys: ['s'], does: td('list.keySend') },
+  ]
   const siteName = (id: string) => model.sites.find((site) => site.id === id)?.code ?? '—'
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
+  const pickedDrafts = picked.filter((row) => row.status === 'DRAFT')
+  const sendHeld = !model.can.poSend ? t('held.noSend') : model.live === 'offline' ? td('sendMany.held.offline') : pickedDrafts.length === 0 ? td('list.sendNoDraft') : null
 
   const columns = useMemo<ColDef<OrderRow>[]>(() => {
     const href = (row: OrderRow) => `${model.prefix}/purchasing/orders/${row.id}`
@@ -91,6 +109,14 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       if (!data) return null
       const words = confirmationPhrase(data, now)
       const text = t(words.key, words.params)
+      // B-W2a-69: a sent order says when the supplier is asked to answer by, or that the time passed.
+      if (data.status === 'SENT' && data.confirmBy)
+        return (
+          <span className="fw-by-cell">
+            <span className="fw-by-ellipsis">{text}</span>
+            <span className="fw-by-cell-sub">{Date.parse(data.confirmBy) <= now.getTime() ? td('list.pastConfirmBy', { time: formatDate(data.confirmBy, place) }) : td('list.answerBy', { time: formatDate(data.confirmBy, place) })}</span>
+          </span>
+        )
       return data.status === 'CHANGES_PROPOSED' ? (
         <Link className="fw-by-link" href={`${href(data)}?tab=answer`}>
           {text}
@@ -107,6 +133,21 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         </span>
       ) : null
     const ValueCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <span className="fw-by-num">{money(data.netAmount ?? null, data.currency, locale)}</span> : null)
+    const ExpectedCell = ({ data }: ICellRendererParams<OrderRow>) =>
+      data ? (
+        data.nextExpectedDate ? (
+          <span className="fw-by-cell">
+            <span>{formatDate(dayAt(data.nextExpectedDate), place)}</span>
+            {data.delivery && (
+              <span>
+                <Pill tone={DELIVERY_TONE[data.delivery]}>{td(`delivery.${data.delivery}`)}</Pill>
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="fw-by-cell-sub">—</span>
+        )
+      ) : null
     const MoreCell = ({ data }: ICellRendererParams<OrderRow>) =>
       data ? (
         <Menu
@@ -118,6 +159,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             { id: 'tab', label: t('common.openNewTab'), href: href(data), target: '_blank' },
             { id: 'answer', label: t('po.tab.answer'), href: `${href(data)}?tab=answer` },
             { id: 'receipts', label: t('po.tab.receipts'), href: `${href(data)}?tab=receipts` },
+            // B-W2a-69: row verbs Send (drafts) and Cancel (with its reach, on the record).
+            ...(data.status === 'DRAFT' && model.can.poSend ? [{ id: 'send', label: td('list.send'), onSelect: () => actions?.onSendMany?.([data.id]) }] : []),
+            ...(cancelHeld(data, model.can) === null ? [{ id: 'cancel', label: t('po.record.cancel'), tone: 'danger' as const, href: `${href(data)}?cancel=1` }] : []),
           ]}
         />
       ) : null
@@ -127,12 +171,13 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       { colId: 'status', headerName: t('po.col.status'), field: 'status', minWidth: 160, flex: 0.9, cellRenderer: StatusCell },
       { colId: 'confirmation', headerName: t('po.col.confirmation'), minWidth: 200, flex: 1.6, cellRenderer: ConfirmationCell },
       { colId: 'dates', headerName: t('po.col.need'), minWidth: 150, flex: 1.1, cellRenderer: DatesCell },
+      { colId: 'expected', headerName: td('list.colExpected'), minWidth: 130, flex: 0.9, cellRenderer: ExpectedCell },
       { colId: 'lines', headerName: t('po.col.lines'), field: 'lineCount', minWidth: 92, flex: 0.4, type: 'rightAligned' },
       ...(model.can.cost ? [{ colId: 'value', headerName: t('po.col.value'), minWidth: 110, flex: 0.8, type: 'rightAligned', cellRenderer: ValueCell } satisfies ColDef<OrderRow>] : []),
       { colId: 'site', headerName: t('po.col.site'), minWidth: 80, flex: 0.5, valueGetter: (params) => (params.data ? siteName(params.data.siteId) : '') },
       { colId: 'more', headerName: t('po.col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.can.cost, model.sites, now])
+  }, [t, td, locale, model.prefix, model.can.cost, model.can.poSend, model.can.poManage, model.sites, now])
 
   if (!model.can.poView) {
     return (
@@ -223,8 +268,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
 
       <MetricStrip
         metrics={ORDER_TILES.map((tile) => ({
-          label: t(`po.tile.${tile.id}`),
-          value: model.summary ? String(tile.count(model.summary)) : '—',
+          label: tileWords(tile.id),
+          value: model.summary ? (tile.count(model.summary) === null ? '—' : String(tile.count(model.summary))) : '—',
           onClick: () => actions?.onView?.(model.view === tile.view ? 'all' : tile.view),
           active: tileView === tile.view,
         }))}
@@ -254,7 +299,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           <Select size="sm" aria-label={t('po.list.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as OrderView)}>
             {ORDER_VIEWS.map((view) => (
               <option key={view} value={view}>
-                {t(`po.view.${view}`)}
+                {viewWords(view)}
               </option>
             ))}
           </Select>
@@ -263,9 +308,14 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           selected,
           onChange: setSelected,
           actions: (
-            <Button size="sm" aria-label={t('po.bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
-              <Download size={13} aria-hidden /> <SelectionLabel>{t('po.bulk.export', { count: picked.length })}</SelectionLabel>
-            </Button>
+            <>
+              <Button size="sm" variant="primary" heldReason={sendHeld} aria-label={td('list.sendN', { count: pickedDrafts.length })} aria-keyshortcuts="s" onClick={() => actions?.onSendMany?.(pickedDrafts.map((row) => row.id))}>
+                <Mail size={13} aria-hidden /> <SelectionLabel>{td('list.sendN', { count: pickedDrafts.length })}</SelectionLabel>
+              </Button>
+              <Button size="sm" aria-label={t('po.bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
+                <Download size={13} aria-hidden /> <SelectionLabel>{t('po.bulk.export', { count: picked.length })}</SelectionLabel>
+              </Button>
+            </>
           ),
         }}
         updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
@@ -276,9 +326,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         state={state}
         focusRow={model.focusRow}
       />
-      {model.view !== 'all' && <p className="fw-by-hint">{t('po.list.viewing', { view: t(`po.view.${model.view}`) })}</p>}
+      {model.view !== 'all' && <p className="fw-by-hint">{t('po.list.viewing', { view: viewWords(model.view) })}</p>}
 
       {model.newOrder && <NewOrderDialog model={model} actions={actions} />}
+      {model.sendMany && <SendManyDialog model={model} actions={actions} />}
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('common.shortcuts')} size="sm">
           <ul className="fw-by-list">

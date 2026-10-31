@@ -221,13 +221,14 @@ const row = (n: number, status: PoStatus, supplier: keyof typeof SUPPLIERS, over
 export const ORDER_ROWS: OrderRow[] = [
   row(9, 'DRAFT', 'tannery', { lineCount: 3, netAmount: 104_120, earliestNeedDate: '2026-11-10' }),
   row(8, 'DRAFT', 'protector', { lineCount: 1, netAmount: 23_400 }),
-  row(7, 'SENT', 'fabric', { sentAt: at(29, 8, 10), netAmount: 11_850 }),
-  row(6, 'SENT', 'tannery', { sentAt: at(25, 14, 0), netAmount: 16_800, earliestNeedDate: '2026-12-03' }),
-  row(5, 'CHANGES_PROPOSED', 'tannery', { netAmount: 88_200 }),
-  row(4, 'CONFIRMED', 'protector', { netAmount: 31_200, revision: 2 }),
-  row(3, 'PARTLY_RECEIVED', 'tannery'),
+  // B-W2a-69: the confirm-by of a sent order, the next expected day and where the deliveries stand.
+  row(7, 'SENT', 'fabric', { sentAt: at(29, 8, 10), netAmount: 11_850, confirmBy: at(31, 8, 10), nextExpectedDate: '2026-11-04', delivery: 'LATER' }),
+  row(6, 'SENT', 'tannery', { sentAt: at(25, 14, 0), netAmount: 16_800, earliestNeedDate: '2026-12-03', confirmBy: at(27, 14, 0), nextExpectedDate: '2026-12-03', delivery: 'LATER' }),
+  row(5, 'CHANGES_PROPOSED', 'tannery', { netAmount: 88_200, nextExpectedDate: '2026-11-20', delivery: 'LATER' }),
+  row(4, 'CONFIRMED', 'protector', { netAmount: 31_200, revision: 2, nextExpectedDate: '2026-10-31', delivery: 'THIS_WEEK' }),
+  row(3, 'PARTLY_RECEIVED', 'tannery', { nextExpectedDate: '2026-10-27', delivery: 'LATE' }),
   row(2, 'RECEIVED', 'fabric', { netAmount: 9_480 }),
   row(1, 'DECLINED', 'prospect', { netAmount: 44_100 }),
 ]
 
-export const ORDER_SUMMARY: OrderSummary = { drafts: 2, waiting: 2, notConfirmedAfter48h: 1, changesProposed: 1, declined: 1 }
+export const ORDER_SUMMARY: OrderSummary = { drafts: 2, waiting: 2, notConfirmedAfter48h: 1, changesProposed: 1, declined: 1, dueThisWeek: 1, late: 1, pastConfirmBy: 1 }

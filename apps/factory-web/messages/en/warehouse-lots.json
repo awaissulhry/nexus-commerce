@@ -83,20 +83,23 @@
       "remnants": "Remnants",
       "quarantine": "In quarantine",
       "consumed": "Consumed",
-      "all": "All hides"
+      "all": "All hides",
+      "reserved": "Reserved"
     },
     "tile": {
       "full": "Full",
       "partlyCut": "Partly cut",
       "remnant": "Remnants",
-      "quarantine": "In quarantine"
+      "quarantine": "In quarantine",
+      "reserved": "Reserved"
     },
     "tileHint": {
       "full": "{area} · never cut",
       "partlyCut": "{area} left to cut",
       "remnant": "{area} of offcuts in stock",
       "quarantine": "{area} · their lot waits for quality",
-      "unknown": "Area not known yet"
+      "unknown": "Area not known yet",
+      "reserved": "{area} · held whole for work orders"
     },
     "filter": {
       "lotId": "Lot",
@@ -118,7 +121,8 @@
       "place": "Where",
       "thickness": "Thickness",
       "defects": "Defects",
-      "received": "Received"
+      "received": "Received",
+      "reservedFor": "Reserved for"
     },
     "tannery": "Tannery no. {number}",
     "shade": "Shade {shade}",
@@ -151,7 +155,8 @@
       "location": "Place",
       "thickness": "Thickness mm",
       "defects": "Defects",
-      "received": "Received"
+      "received": "Received",
+      "reservedFor": "Reserved for"
     },
     "print": {
       "title_one": "Print {count} hide tag",
@@ -248,7 +253,10 @@
       "atWorkOrder": "At a work order: the cutting table works on it.",
       "held": "Held: {reason}",
       "consumed": "Consumed: nothing left to cut.",
-      "scrapped": "Scrapped: out of the stock."
+      "scrapped": "Scrapped: out of the stock.",
+      "onHold": "Held: {reason}",
+      "reserved": "Reserved for {demand}: issued only to it.",
+      "reservedStale": "Reserved for {demand}, which is done: release the reservation."
     },
     "cuts": {
       "totals_one": "Measured {measured} · cut {cut} in {count} cut · remnants {remnant}",
@@ -274,6 +282,30 @@
       "reversed": "Reversed by a later entry",
       "deviceTime": "Tablet clock {time}",
       "office": "Entered in the office"
+    },
+    "daily": {
+      "onHold": "On hold: {reason}",
+      "stale": "done: release it",
+      "forWorkOrder": "work order",
+      "forOrderLine": "order line",
+      "reserve_one": "Reserve {count} hide to a work order…",
+      "reserve_other": "Reserve {count} hides to a work order…",
+      "scrap_one": "Scrap {count} hide…",
+      "scrap_other": "Scrap {count} hides…",
+      "reserveOne": "Reserve to a work order…",
+      "scrapOne": "Scrap…",
+      "holdSince": "{what} since {date}: quality releases it.",
+      "holdOfHide": "A hold on this hide",
+      "holdOfLot": "A hold on its lot",
+      "openDemand": "Open {demand}",
+      "held": {
+        "noReserve": "Your role may not reserve stock (inventory.reserve).",
+        "pick": "Select the hides first.",
+        "oneSite": "Hides of one site at a time: pick a site first.",
+        "noScrap": "Your role may not scrap stock (inventory.scrap).",
+        "gone": "A selected hide has nothing in stock (used up, scrapped or at a work order): take it out of the selection.",
+        "reservedAlready": "Reserved already: release that reservation first."
+      }
     }
   },
   "lt": {
@@ -304,7 +336,7 @@
       "empty": "No lots yet",
       "emptyBody": "Lots are made when goods are received (or with the opening stock).",
       "receive": "Receive goods",
-      "decideWhere": "Releasing, blocking and rejecting a lot, and recording its Cr VI result, happen in Compliance › Tests & substances (row ⋯)."
+      "decideWhere": "Several lots that pass their checks are released here (select them: Release N lots); blocking, rejecting, a single release and the Cr VI result happen in Compliance › Tests & substances (row ⋯)."
     },
     "view": {
       "waiting": "Waiting for release (on hold)",
@@ -387,7 +419,8 @@
       "overview": "Overview",
       "trace": "Trace",
       "moves": "Moves",
-      "activity": "Activity"
+      "activity": "Activity",
+      "quality": "Quality status"
     },
     "movesLabel": "Moves of lot {code}",
     "release": {
@@ -474,7 +507,21 @@
       "nothing": "Nothing of it is in stock.",
       "hidesLine": "Hides: {inStock} in stock · {consumed} consumed · {scrapped} scrapped",
       "issued_one": "Issued to {count} work order: see Trace.",
-      "issued_other": "Issued to {count} work orders: see Trace."
+      "issued_other": "Issued to {count} work orders: see Trace.",
+      "reserved": "Reserved",
+      "available": "Available",
+      "atSite": "at the site",
+      "perSite": "Reservations hold the lot at the site, not a place: see the site row.",
+      "site": "The lot at {site}",
+      "figuresLoading": "Reading what is reserved…",
+      "figuresFailed": "What is reserved could not be read.",
+      "overReserved": "More of this lot is reserved than there is: release or move a reservation.",
+      "noReservations": "No work order has reserved this lot.",
+      "reservedFor_one": "Reserved for {count} demand",
+      "reservedFor_other": "Reserved for {count} demands",
+      "wholeHide": "hide {code}, whole",
+      "needed": "needed {date}",
+      "stale": "done: release it"
     },
     "side": {
       "title": "Quality status",
@@ -485,7 +532,8 @@
       "evidence": "Evidence",
       "testedOn": "Tested on {date}",
       "documents": "Documents",
-      "onHand": "On hand"
+      "onHand": "On hand",
+      "onHold": "On hold: {reason}"
     },
     "trace": {
       "cameFrom": "Came from",
@@ -512,7 +560,7 @@
       "shipmentsLabel": "Shipments of those work orders",
       "noShipments": "None of these work orders has shipped garments yet.",
       "unknownOrder": "A work order",
-      "far": "The trace goes as far as the records do: from a work order to its shipments and customers. Garments one by one (serials and batches) come with the trace tree later.",
+      "far": "The trace goes as far as the records do: from a work order to its shipments and customers. The trace tree below follows every link both ways, down to bundles and garments.",
       "col": {
         "order": "Work order",
         "batch": "Batch",
@@ -533,6 +581,251 @@
       "DELIVERED": "Delivered",
       "RETURNED": "Returned",
       "CANCELLED": "Cancelled"
+    },
+    "reject": {
+      "title": "Rejected, with stock still here: what happens to it?",
+      "body": "Send it back to the supplier (a claim with its return DDT and the credit expected) or write it off where it lies.",
+      "return": "Return to supplier…",
+      "writeOff": "Write off at {place} ({quantity})…",
+      "noScrap": "Your role may not write off stock (inventory.scrap)."
+    },
+    "quality": {
+      "status": "Status and decisions",
+      "where": "Release, block, reject and the Cr VI result are decided in Compliance › Tests & substances.",
+      "holdsTitle": "Holds and inspections",
+      "noRight": "Your role does not see quality holds (quality.holds.view).",
+      "inspections": "Incoming inspections of the lot come in a later release.",
+      "noHolds": "No holds",
+      "noHoldsBody": "No quality hold has named this lot or its hides.",
+      "group": {
+        "Lot": "On the lot: {count} ({active} active)",
+        "Hide": "On its hides: {count} ({active} active)"
+      },
+      "holdStatus": {
+        "ACTIVE": "Active",
+        "RELEASED": "Released",
+        "CLOSED": "Closed"
+      },
+      "since": "since {date}"
+    },
+    "find": {
+      "open": "Trace…",
+      "title": "Trace",
+      "subtitle": "Backward and forward, from any code.",
+      "field": "Scan or type a code",
+      "hint": "A garment serial, a batch or work order number, a bundle ticket, a hide tag, a lot, a shipment or DDT number.",
+      "go": "Trace",
+      "finding": "Looking it up…",
+      "heldEmpty": "Scan or type a code first.",
+      "none": "Nothing found for {code}.",
+      "unreadable": "{code} is not a label the trace takes (a place, a carton, or another factory's label).",
+      "failed": "The code could not be looked up.",
+      "several_one": "{code} names {count} record:",
+      "several_other": "{code} names {count} records: pick one.",
+      "matches": "Records found",
+      "kind": {
+        "LOT": "Lot",
+        "HIDE": "Hide",
+        "BUNDLE": "Bundle",
+        "WORK_ORDER": "Work order",
+        "SERIAL": "Garment",
+        "SHIPMENT": "Shipment"
+      },
+      "matchedBy": {
+        "LOT_CODE": "by the lot code",
+        "SUPPLIER_LOT": "by the supplier's lot",
+        "DYE_BATCH": "by the dye batch",
+        "HIDE_TAG": "by the hide tag",
+        "TANNERY_NUMBER": "by the tannery's number",
+        "BUNDLE_TICKET": "by the bundle ticket",
+        "OLD_BUNDLE_TICKET": "by an old bundle ticket",
+        "SERIAL": "by the garment serial",
+        "BATCH_NUMBER": "by the batch number",
+        "WORK_ORDER_NUMBER": "by the work order number",
+        "SHIPMENT_NUMBER": "by the shipment number",
+        "DDT_NUMBER": "by the DDT number"
+      }
+    },
+    "tracePage": {
+      "name": "Trace",
+      "title": "Trace · {kind} {code}",
+      "hint": "Where it came from and where it went, read from the records now (nothing is stored).",
+      "read": "Read at {time}",
+      "direction": "Direction",
+      "directions": {
+        "BOTH": "Both ways",
+        "BACKWARD": "Where it came from",
+        "FORWARD": "Where it went"
+      },
+      "loading": "Tracing…",
+      "notFound": "Nothing to trace here",
+      "notFoundBody": "The record does not exist, or belongs to a company or site you do not see.",
+      "nothing": "Nothing to trace",
+      "nothingBody": "Open the trace from a code: Trace… finds the record."
+    },
+    "tree": {
+      "title": "Trace tree",
+      "intro": "Backward and forward in one tree. What the records know only per work order or size says “may hold it”: a recall counts it too.",
+      "label": "Trace of {code}",
+      "levels": "Levels",
+      "count": {
+        "SUPPLIER_one": "{count} supplier",
+        "SUPPLIER_other": "{count} suppliers",
+        "RECEIPT_one": "{count} receipt",
+        "RECEIPT_other": "{count} receipts",
+        "LOT_one": "{count} lot",
+        "LOT_other": "{count} lots",
+        "HIDE_one": "{count} hide",
+        "HIDE_other": "{count} hides",
+        "SUBCONTRACT_one": "{count} subcontract order",
+        "SUBCONTRACT_other": "{count} subcontract orders",
+        "WORK_ORDER_one": "{count} work order",
+        "WORK_ORDER_other": "{count} work orders",
+        "CELL_one": "{count} size",
+        "CELL_other": "{count} sizes",
+        "BUNDLE_one": "{count} bundle",
+        "BUNDLE_other": "{count} bundles",
+        "SERIAL_one": "{count} garment",
+        "SERIAL_other": "{count} garments",
+        "SHIPMENT_one": "{count} shipment",
+        "SHIPMENT_other": "{count} shipments",
+        "CUSTOMER_one": "{count} customer",
+        "CUSTOMER_other": "{count} customers"
+      },
+      "possibleCount_one": "{count} may hold it",
+      "possibleCount_other": "{count} may hold it",
+      "gapTitle": {
+        "BROKEN": "Where the chain is broken",
+        "COARSE": "Where the records are coarse",
+        "IN_WORK": "Still in work"
+      },
+      "gap": {
+        "OPENING_STOCK": "{at} came in as opening stock: no receipt or supplier DDT is on record.",
+        "NO_SUPPLIER": "{at} names no supplier and no receipt: where it came from is not known.",
+        "NO_ISSUE": "Work order {at} has nothing issued or cut on record: its lots are not known.",
+        "BUNDLE_WITHOUT_CUTS": "Bundle {at} names no cut: its hides are known only for its work order (listed as may hold it).",
+        "SERIAL_WITHOUT_BUNDLE_one": "{count} garment of {at} got its serial before its bundle was known: known only for the work order.",
+        "SERIAL_WITHOUT_BUNDLE_other": "{count} garments of {at} got their serial before their bundle was known: known only for the work order.",
+        "LINE_WITHOUT_SERIALS_one": "{count} garment on shipment {at} has no serial on record: known only by its size.",
+        "LINE_WITHOUT_SERIALS_other": "{count} garments on shipment {at} have no serial on record: known only by their size.",
+        "BATCH_TRACKED": "The garments of {at} carry the batch number, not a serial: every shipment of the size may hold it.",
+        "ISSUED_BY_QUANTITY": "{at}: material issued by quantity is recorded for the whole work order, not per garment (may hold it).",
+        "SUBCONTRACT_RETURN": "Subcontract order {at}: what came back is not linked garment by garment; every garment of its work order may hold it.",
+        "ISSUED_NOT_CUT_one": "{at} is issued to {count} work order and not cut yet: the trace ends there for now.",
+        "ISSUED_NOT_CUT_other": "{at} is issued to {count} work orders and not cut yet: the trace ends there for now.",
+        "CUT_NOT_BUNDLED_one": "{count} cut of {at} is in no bundle yet: the pieces are still in the cutting room.",
+        "CUT_NOT_BUNDLED_other": "{count} cuts of {at} are in no bundle yet: the pieces are still in the cutting room.",
+        "SERIALS_COLLAPSED_one": "{count} serial is counted on its bundle and size: trace the work order or the bundle to see it.",
+        "SERIALS_COLLAPSED_other": "{count} serials are counted on their bundles and sizes: trace the work order or a bundle to see each one."
+      },
+      "restricted_one": "{count} record you may not see is counted, not shown ({permission}).",
+      "restricted_other": "{count} records you may not see are counted, not shown ({permission}).",
+      "affected_one": "Show only affected customers ({count} received)",
+      "affected_other": "Show only affected customers ({count} received)",
+      "noAffected": "No customer has received these goods.",
+      "empty": "Nothing to trace yet.",
+      "failed": "The trace could not be read.",
+      "cameFrom": "Came from ({count})",
+      "wentTo": "Went to ({count})",
+      "kind": {
+        "SUPPLIER": "Supplier",
+        "RECEIPT": "Receipt",
+        "LOT": "Lot",
+        "HIDE": "Hide",
+        "SUBCONTRACT": "Subcontract",
+        "WORK_ORDER": "Work order",
+        "CELL": "Size",
+        "BUNDLE": "Bundle",
+        "SERIAL": "Garment",
+        "SHIPMENT": "Shipment",
+        "CUSTOMER": "Customer"
+      },
+      "hidden": "not visible to you",
+      "possible": "may hold it",
+      "received": "received",
+      "onHold": "On hold: {reason}",
+      "partyHidden": "name not visible to you",
+      "ddt": "DDT {number}",
+      "onHand": "{quantity} on hand",
+      "batch": "batch {batch}",
+      "woStatus": {
+        "DRAFT": "draft",
+        "RELEASED": "released",
+        "IN_PROGRESS": "in progress",
+        "ON_HOLD": "on hold",
+        "COMPLETED": "completed",
+        "CLOSED": "closed",
+        "CANCELLED": "cancelled"
+      },
+      "garments_one": "{count} garment",
+      "garments_other": "{count} garments",
+      "serialStatus": {
+        "MADE": "made",
+        "RELEASED": "released",
+        "SHIPPED": "shipped",
+        "VOID": "void"
+      },
+      "key": {
+        "walk": "Walk the tree",
+        "open": "Open a level, or go into it",
+        "close": "Close a level, or go out of it",
+        "ends": "First and last line",
+        "enter": "Open the record"
+      }
+    },
+    "rel": {
+      "button_one": "Release {count} lot…",
+      "button_other": "Release {count} lots…",
+      "buttonNone": "Release…",
+      "title_one": "Release {count} lot",
+      "title_other": "Release {count} lots",
+      "subtitle": "{going} of {count} can be released now.",
+      "tableLabel": "The lots and their release checks",
+      "col": {
+        "state": "Can it go",
+        "why": "Why"
+      },
+      "can": "Can go",
+      "cannot": "Cannot",
+      "released": "Released",
+      "refused": "Refused",
+      "ready": "Every check passed: ready to release.",
+      "nowUsable": "Released: its stock is usable now.",
+      "why": {
+        "checking": "Reading its release check…",
+        "failed": "Its release check could not be read.",
+        "released": "Released already.",
+        "rejected": "Rejected: final.",
+        "blocked": "Blocked: unblock it in Tests & substances (another decision).",
+        "open_one": "{count} check open",
+        "open_other": "{count} checks open"
+      },
+      "reach_one": "{count} lot becomes usable: planning nets it and the floor may issue it.",
+      "reach_other": "{count} lots become usable: planning nets them and the floor may issue them.",
+      "reversal": "To undo: block the lot in Tests & substances.",
+      "note": "Decision note",
+      "noteHint": "Kept with each release.",
+      "phrase": "Type {phrase} to confirm",
+      "phraseWord_one": "RELEASE {count}",
+      "phraseWord_other": "RELEASE {count}",
+      "go_one": "Release {count} lot",
+      "go_other": "Release {count} lots",
+      "summary": "Released {released} of {count}.",
+      "held": {
+        "busy": "Releasing…",
+        "checking": "Reading the release checks…",
+        "none": "None of these lots can be released now.",
+        "phrase": "Type {phrase} first.",
+        "noRight": "Your role may not release lots (quality.lots.release).",
+        "pick": "Select the lots to release first."
+      },
+      "result": {
+        "changed": "It changed meanwhile (another decision, or a check reopened): read it again.",
+        "forbidden": "Your role may not release this lot.",
+        "refused": "Refused: a check is not met any more.",
+        "offline": "No connection: it was not released.",
+        "failed": "It was not released. Try again."
+      }
     }
   }
 }

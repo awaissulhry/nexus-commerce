@@ -6,9 +6,15 @@ import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { downloadText, useCoalesced, useLive } from '../../../_shared/buying/hooks'
-import { listHides, listLocations, type HideRow, type HidesPage as HidesAnswer } from '../../../_shared/stock/api'
+import { pickerReasons, type PickerReason } from '../../../_shared/reasons/api'
+import { listHides, listLocations, stockOverview, type HideRow, type HidesPage as HidesAnswer } from '../../../_shared/stock/api'
 import { csvOf, readProblem, stockCan, TIME_ZONE } from '../../../_shared/stock/model'
+import { listHolds } from '../../stock/daily/api'
+import { demandLabel, holdsBySubject } from '../../stock/daily/model'
+import { useReserve } from '../../stock/daily/useReserve'
+import { useWriteOff } from '../../stock/daily/useWriteOff'
 import type { SiteChoice } from '../../lots/model'
+import { dailyCan, hidesValue, reserveHides, scrapTarget, type HoldsBySubject } from '../../lots/shared/daily'
 import { LotsMessages, useWords } from '../../lots/shared/parts'
 import { exactHide, filtersOf, HIDE_CSV_COLUMNS, hideQuery, hideViewOf, type HideFilters, type HidesListModel, type HideView } from '../model'
 import { usePrintTags } from '../print/usePrintTags'
@@ -18,7 +24,10 @@ import { HidesListView } from './view/HidesListView'
  * `/w/<company>/warehouse/hides` (SCR-200): the view (`?view=`, or the API's own `?state=` `?quality=` `?inStock=`), the
  * search (`?q=`: a typed or scanned tag; one exact hit opens the hide), the site (`?site=`) and the narrowing filters
  * (`?lot=` `?grade=` `?shade=` `?location=`) in the address; the hides 50 a page with "Show more", the tiles and the
- * filter's two numbers; live inventory.* and production.cut_* events behind "N updates · Show"; Print N tags.
+ * filter's two numbers; live inventory.* and production.cut_* events behind "N updates · Show"; Print N tags. B-W2a-64:
+ * the site's ACTIVE quality holds and the HOLD reasons (quality.holds.view: a held hide says why), Reserve N hides to a
+ * work order and Scrap N hides (the shared every-day dialogs; with the cost grain the value leaving stock from the stock
+ * read of the hides' material).
  */
 export function HidesPage() {
   return (
@@ -40,6 +49,7 @@ function HidesContainer() {
   const params = useSearchParams()
   const prefix = companyPrefix(session.company?.code ?? '')
   const can = useMemo(() => stockCan(session.permissions), [session.permissions])
+  const daily = useMemo(() => dailyCan(session.permissions), [session.permissions])
   const view = hideViewOf(params)
   const q = params?.get('q') ?? ''
   const siteId = params?.get('site') ?? null
@@ -52,6 +62,8 @@ function HidesContainer() {
   const [sites, setSites] = useState<SiteChoice[]>([])
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
+  const [holds, setHolds] = useState<HoldsBySubject>({})
+  const [holdReasons, setHoldReasons] = useState<PickerReason[]>([])
   const readId = useRef(0)
   const searched = useRef(false)
   const rowsRef = useRef<readonly HideRow[]>([])
@@ -78,9 +90,24 @@ function HidesContainer() {
       .catch(() => setSites([]))
   }, [api, can.locationsView, session.company])
 
+  // B-W2a-64: why a held hide is held (its own or its lot's quality hold), in the reason's words.
+  const loadHolds = useCallback(() => {
+    if (!daily.holdsView) return
+    listHolds(api, { status: 'ACTIVE', siteId })
+      .then((answer) => setHolds(Object.fromEntries(holdsBySubject(answer.holds))))
+      .catch(() => setHolds({}))
+  }, [api, daily.holdsView, siteId])
+  useEffect(() => {
+    if (!daily.holdsView) return
+    pickerReasons(api, ['HOLD'])
+      .then(setHoldReasons)
+      .catch(() => setHoldReasons([]))
+  }, [api, daily.holdsView])
+
   const load = useCallback(async () => {
     if (!can.stockView) return
     const id = ++readId.current
+    loadHolds()
     try {
       const page = await listHides(api, hideQuery(view, q, siteId, filters))
       if (id !== readId.current) return
@@ -101,7 +128,7 @@ function HidesContainer() {
       setCounts(null)
       setMatching(null)
     }
-  }, [api, can.stockView, view, q, siteId, filters, prefix, router])
+  }, [api, can.stockView, view, q, siteId, filters, prefix, router, loadHolds])
 
   useEffect(() => {
     setRows({ items: null, more: false, problem: null })
@@ -134,6 +161,7 @@ function HidesContainer() {
         setUpdates((count) => count + 1)
         refreshCounts()
       }
+      if (change.type.startsWith('quality.hold')) loadHolds()
     },
     () => void load(),
     can.stockView,
@@ -142,6 +170,37 @@ function HidesContainer() {
   const unitWord = useCallback((uom: HideRow['areaUom']) => t(`stock:uom.${uom}`), [t])
   const hidesOf = useCallback((ids: readonly string[]) => rowsRef.current.filter((row) => ids.includes(row.id)), [])
   const print = usePrintTags(api, locale, unitWord, hidesOf)
+  const reserve = useReserve(api, { workOrders: daily.workOrders, timeZone: TIME_ZONE }, () => void load())
+  const writeOff = useWriteOff(api, { withCost: daily.cost, canPhoto: daily.filesUpload, canNcr: daily.ncrRaise, prefix }, () => void load())
+
+  const openReserve = useCallback(
+    (ids: readonly string[]) => {
+      const picked = hidesOf(ids)
+      if (picked.length === 0) return
+      reserve.open(picked[0]!.siteId, reserveHides(picked, holds, holdReasons, locale))
+    },
+    [hidesOf, reserve, holds, holdReasons, locale],
+  )
+
+  const openScrap = useCallback(
+    async (ids: readonly string[]) => {
+      const picked = hidesOf(ids)
+      if (picked.length === 0) return
+      let value: { amount: number; currency: string } | null = null
+      // With the cost grain the value leaving stock: the stock read of the hides' material (one per material), its rows of these hides.
+      const items = [...new Set(picked.map((row) => row.item.id))]
+      if (daily.cost && items.length === 1) {
+        try {
+          const answer = await stockOverview(api, { siteId: picked[0]!.siteId, itemId: items[0]! })
+          value = hidesValue(answer.rows, ids, answer.items.find((entry) => entry.itemId === items[0])?.currency ?? null)
+        } catch {
+          value = null
+        }
+      }
+      writeOff.open(scrapTarget(picked, holds, value))
+    },
+    [api, daily.cost, hidesOf, holds, writeOff],
+  )
 
   const exportRows = useCallback(
     (ids: readonly string[]) => {
@@ -167,13 +226,35 @@ function HidesContainer() {
         row.thicknessMm ?? '',
         row.defects ?? '',
         row.receivedAt ?? '',
+        row.reservedFor ? demandLabel(row.reservedFor.demand) : '',
       ])
       downloadText(`hides-${new Date().toISOString().slice(0, 10)}.csv`, csvOf(header, lines))
     },
     [rows.items, t],
   )
 
-  const model: HidesListModel = { prefix, can, view, q, filters, sites, siteId, rows, counts, matching, asOf, live, updates, timeZone: TIME_ZONE, print: print.dialog }
+  const model: HidesListModel = {
+    prefix,
+    can,
+    view,
+    q,
+    filters,
+    sites,
+    siteId,
+    rows,
+    counts,
+    matching,
+    asOf,
+    live,
+    updates,
+    timeZone: TIME_ZONE,
+    print: print.dialog,
+    daily,
+    holds,
+    holdReasons,
+    reserve: reserve.model,
+    writeOff: writeOff.model,
+  }
 
   return (
     <HidesListView
@@ -192,6 +273,10 @@ function HidesContainer() {
         onOpen: (id) => router.push(`${prefix}/warehouse/hides/${encodeURIComponent(id)}`),
         onExport: exportRows,
         print: print.actions,
+        onReserve: openReserve,
+        onScrap: (ids) => void openScrap(ids),
+        reserve: reserve.actions,
+        writeOff: writeOff.actions,
       }}
     />
   )

@@ -145,7 +145,8 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     trigger: 'CONDITION',
     recordType: 'PurchaseOrder',
     view: PURCHASING_VIEW,
-    // A purchase order still SENT (no answer from the supplier) this many days after it went out.
+    // A purchase order still SENT (no answer from the supplier) past its confirm-by time (B-W2a-52/69); one sent without a
+    // confirm-by: this many days after it went out.
     threshold: z.strictObject({ days: whole(1, 30).default(2) }),
     builtIn: { name: { en: 'Purchase order not confirmed', it: 'Ordine di acquisto non confermato' }, threshold: { days: 2 }, severity: 'INFO', cooldownMinutes: 1440, recipientRole: 'buyer' },
     label: { en: 'Purchase orders not confirmed', it: 'Ordini di acquisto non confermati' },
@@ -156,6 +157,8 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
       { event: 'purchase_order.cancelled', key: 'purchaseOrderId' },
       // B-W2a-52: a change makes the order a draft again (no longer waiting for the supplier).
       { event: 'purchase_order.revision_started', key: 'purchaseOrderId' },
+      // B-W2a-69: the alert follows the order's current confirm-by: a moved deadline is checked again at once.
+      { event: 'purchase_order.confirm_by_moved', key: 'purchaseOrderId' },
     ],
   }),
   CERTIFICATE_EXPIRING: spec({
