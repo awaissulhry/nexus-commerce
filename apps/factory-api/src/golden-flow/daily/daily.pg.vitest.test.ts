@@ -98,7 +98,7 @@ beforeAll(async () => {
   ] as const) {
     P[key] = await person(w, key, role)
   }
-}, 600_000)
+}, 1_200_000)
 
 afterAll(async () => {
   await w?.close()

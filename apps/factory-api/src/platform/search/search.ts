@@ -135,7 +135,8 @@ export async function searchRecords(caller: CommandCaller, params: SearchParams)
     const where = `${visible} AND ${sql.match}`
     const countValues = values.list.length
     const typed = params.type ? ` AND e."recordType" = ${values.add(params.type)}` : ''
-    const here = context.companyId ? `coalesce(e."companyId" = ${values.add(context.companyId)}::uuid, true)` : 'true'
+    // B-W2b-36: with no company chosen this term is left out (a bare `true DESC` is a constant ORDER BY: PostgreSQL refuses it).
+    const here = context.companyId ? `coalesce(e."companyId" = ${values.add(context.companyId)}::uuid, true) DESC, ` : ''
     const limit = values.add(params.limit)
     const offset = values.add(params.offset)
     const rows = await client.$queryRawUnsafe<Row[]>(
@@ -144,7 +145,7 @@ export async function searchRecords(caller: CommandCaller, params: SearchParams)
               e."indexedAt", (count(*) OVER ())::int AS "total"
          FROM "SearchEntry" e
         WHERE ${where}${typed}
-        ORDER BY ${sql.exact} DESC, ${sql.inside} DESC, ${sql.score} DESC, ${sql.position} ASC, ${here} DESC, e."indexedAt" DESC, e."id"
+        ORDER BY ${sql.exact} DESC, ${sql.inside} DESC, ${sql.score} DESC, ${sql.position} ASC, ${here}e."indexedAt" DESC, e."id"
         LIMIT ${limit}::int OFFSET ${offset}::int`,
       ...values.list,
     )

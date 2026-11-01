@@ -54,6 +54,8 @@ const SESSIONS: Record<string, SessionContext> = {
   // One customer only (a grant limited to party P1).
   partyP1: office(newId(), [grant(['orders.view', 'parties.view'], { parties: [id('party:P1')] })]),
   nobody: office(newId(), []),
+  // B-W2b-36: a session with no company chosen (no default company, no company asked).
+  noCompany: { audience: 'office', tenantId, actorId: newId(), grants: [grant(EVERY_VIEW)] },
   other: office(newId(), [grant(EVERY_VIEW)], otherTenant),
 }
 
@@ -228,6 +230,14 @@ describe('GET /search (the reader side)', () => {
     const accents = await search('owner', `q=${encodeURIComponent('SOCIETÀ')}`)
     expect(accents.results.map((row: Json) => row.recordId)).toContain(id('party:P1'))
     expect(accents.asOf).toEqual(expect.any(String))
+  })
+
+  it('answers a session with no company chosen too, with or without a type (B-W2b-36: never a 500)', async () => {
+    const all = await search('noCompany', 'q=seed-so-0001')
+    expect(all.results[0]).toMatchObject({ recordType: 'SalesOrder', recordId: id('sales:SO1'), match: 'number' })
+    const typed = await search('noCompany', 'q=seed&type=SalesOrder&limit=100')
+    expect(typed.results.length).toBeGreaterThan(0)
+    expect(typed.results.every((row: Json) => row.recordType === 'SalesOrder')).toBe(true)
   })
 
   it('counts per record type, filters by one type and pages', async () => {
