@@ -82,6 +82,8 @@ async function listFor(db: Reader, target: Target, now: Date) {
           number: true,
           status: true,
           priority: true,
+          // B-W2b-51 (MES-009): the rush flag (first in the list).
+          rush: true,
           dueDate: true,
           holdReason: true,
           style: { select: { code: true, name: true } },
@@ -145,10 +147,10 @@ async function listFor(db: Reader, target: Target, now: Date) {
     })
     const dueDate: BusinessDate | null = workOrder.dueDate ? dayOf(workOrder.dueDate) : null
     return {
-      key: { priority: workOrder.priority, dueDate, startAt: slot.startAt.getTime(), seq: operation.seq, workOrderNumber: workOrder.number },
+      key: { rush: workOrder.rush, priority: workOrder.priority, dueDate, startAt: slot.startAt.getTime(), seq: operation.seq, workOrderNumber: workOrder.number },
       view: {
         slotId: slot.id,
-        workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status, priority: workOrder.priority, rush: workOrder.priority > 0, dueDate, style: workOrder.style, holdReason: workOrder.holdReason },
+        workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status, priority: workOrder.priority, rush: workOrder.rush, dueDate, style: workOrder.style, holdReason: workOrder.holdReason },
         operation: { id: operation.id, seq: operation.seq, code: operation.code, name: operation.name },
         previous: previous ? { seq: previous.seq, code: previous.code, name: previous.name } : null,
         startAt: toUtcIso(slot.startAt),

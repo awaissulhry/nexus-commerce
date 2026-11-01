@@ -42,6 +42,19 @@ export interface BulkTarget<Row> {
   /** Why the person may not change this row at all (another site's: `{ code: 'forbidden' }`), or null. */
   rowHeld?(caller: CommandCaller, row: Row): BulkRefusal | null
   write(caller: CommandCaller, row: Row, changes: Readonly<Record<string, BulkValue>>, version: number, idempotencyKey: string | undefined): Promise<Row>
+  /** B-W2b-51: at most this many rows at once, when each row's read is heavy (a release check); default BULK_LIMITS.rows. */
+  readonly maxRows?: number
+}
+
+/**
+ * B-W2b-51: a target's write that the record's own command refused, with the refusal in the target's codes (a release
+ * the check holds: `{ code: 'held', reasons: ['CERTIFICATE'] }`); the engine answers it as it is.
+ */
+export class BulkRowRefused extends Error {
+  override name = 'BulkRowRefused'
+  constructor(readonly refusal: BulkRefusal) {
+    super(`Refused: ${refusal.code}.`)
+  }
 }
 
 /** A target with its row type erased, as the registry and the routes hold it. */

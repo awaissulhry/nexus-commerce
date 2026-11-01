@@ -6,8 +6,8 @@ import type { BusinessDate } from '../../core/time'
  * of the plan (Owner answer P3: the floor sees nothing of the working plan), one entry per operation the version puts
  * on the line or station, with where the work stands from the floor's own scans.
  *
- *   order      rush first (a higher work order priority), then the due date (none last), then the planned start, then
- *              the operation's sequence and the work order number.
+ *   order      rush first (the work order's rush flag, B-W2b-51 MES-009), then the higher priority, then the due date
+ *              (none last), then the planned start, then the operation's sequence and the work order number.
  *   state      DONE (every garment done there: good or scrapped), ON_HOLD (the work order is held: its reason), NOT_RELEASED
  *              (a draft), READY (the first operation, or garments waiting there that the operation before passed on),
  *              WAITING_FOR_PREVIOUS (nothing passed on to it yet: the operation before it is named).
@@ -44,6 +44,8 @@ export function dispatchState(facts: DispatchFacts): { state: DispatchState; wor
 }
 
 export interface DispatchOrderKey {
+  /** B-W2b-51: the work order's rush flag (absent: not rush). */
+  readonly rush?: boolean
   readonly priority: number
   readonly dueDate: BusinessDate | null
   readonly startAt: number
@@ -51,8 +53,9 @@ export interface DispatchOrderKey {
   readonly workOrderNumber: string
 }
 
-/** Rush first, then due date, then the planned start, then sequence. */
+/** Rush first, then the higher priority, then due date, then the planned start, then sequence. */
 export function dispatchOrder(a: DispatchOrderKey, b: DispatchOrderKey): number {
+  if ((a.rush ?? false) !== (b.rush ?? false)) return a.rush ? -1 : 1
   if (a.priority !== b.priority) return b.priority - a.priority
   const da = a.dueDate ?? '9999-12-31'
   const db = b.dueDate ?? '9999-12-31'
