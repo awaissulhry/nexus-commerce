@@ -114,6 +114,8 @@ import { PRODUCTION_CALLS_DEFINITIONS, PRODUCTION_CALLS_FLOOR_PERMISSIONS, PRODU
 import { PEOPLE_SHIFTS_DEFINITIONS, PEOPLE_SHIFTS_PERMISSIONS } from '../../people/shifts/permissions'
 // B-W2b-39: skills and machine authorisations (people.skills.view | manage, people.authorisations.manage).
 import { PEOPLE_SKILLS_DEFINITIONS, PEOPLE_SKILLS_PERMISSIONS } from '../../people/skills/permissions'
+// B-W2b-34: piece rates and the legal switch of piece pay (people.piecerates.view | manage | switch).
+import { PEOPLE_PIECERATES_DEFINITIONS, PEOPLE_PIECERATES_PERMISSIONS } from '../../people/piecerates/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -506,6 +508,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCTION_GUARDS_DEFINITIONS,
   // B-W2b-39: skills and machine authorisations.
   PEOPLE_SKILLS_DEFINITIONS,
+  // B-W2b-34: piece rates and the legal switch of piece pay.
+  PEOPLE_PIECERATES_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -613,6 +617,8 @@ for (const name of PEOPLE_SHIFTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of PRODUCTION_GUARDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-39: skills and machine authorisations.
 for (const name of PEOPLE_SKILLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-34: piece rates and the legal switch of piece pay.
+for (const name of PEOPLE_PIECERATES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

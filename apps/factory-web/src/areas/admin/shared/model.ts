@@ -7,7 +7,7 @@ import { isApiError } from '../../../lib/api/errors'
  * words never reach the screen (apps/factory-web CLAUDE.md): a refusal becomes a key here.
  */
 
-export const GRAINS = ['price', 'cost', 'margin', 'wages'] as const
+export const GRAINS = ['price', 'cost', 'margin', 'wages', 'pay'] as const
 export type Grain = (typeof GRAINS)[number]
 
 /** A read: null items while loading; a problem (a message key) when it failed. */
