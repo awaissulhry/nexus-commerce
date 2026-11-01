@@ -61,6 +61,8 @@ import {
 } from './store'
 // B-W2b-46 hook (modules/production/guards): the site's checks before a scan counts, the override, the lots at the operation.
 import { guardReportInCommand, recordGuardsInCommand, type ComponentInput, type VerifiedOverride } from './hooks/guards'
+// B-W2b-53 hook: scrap above the site's limit waits for the team leader (the answer's words).
+import { scrapWaitsInCommand, type ScrapWaits } from './hooks/scrap-limit'
 
 /**
  * The floor's scans (B-W1-42; MES-069, MES-090, MES-095, MES-096, MES-308; PLAN §4.7 stage 12-scans, risk 17; A1 §3.8;
@@ -166,6 +168,8 @@ export interface ScanView {
   readonly undoUntil: string | null
   /** B-W2b-10: an outside operation's REPORT names the subcontract receipt line that brought the bundle back. */
   readonly subcontractReceiptLineId: string | null
+  /** B-W2b-53: a floor REPORT whose scrap is above the site's limit (the answer when it was taken; null: no approval needed). */
+  readonly scrapWaits?: ScrapWaits | null
 }
 
 export function scanView(scan: ScanRow, operations: readonly OperationRow[], bundleCode: string, defects: readonly DefectLine[]): ScanView {
@@ -499,7 +503,8 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   tools.emit(scanEvent(workOrder, row, decision.operation.seq, 'FLOOR'))
   // B-W2b-46 hook: what the checks found, the override and the lots, kept and told.
   recordGuardsInCommand(tools, guard, { scan: row, workOrder, bundleId: locked.bundle.id, operation: decision.operation })
-  return scanView(row, operations, locked.bundle.code, work.lines)
+  // B-W2b-53 hook: the scrap above the site's limit waits for the team leader before it posts; the tablet is told.
+  return { ...scanView(row, operations, locked.bundle.code, work.lines), scrapWaits: await scrapWaitsInCommand(tools, workOrder.siteId, row.scrapQuantity) }
 }
 
 export function scanEvent(workOrder: Pick<ScanHeader, 'id' | 'number' | 'companyId' | 'siteId'>, scan: ScanRow, operationSeq: number, postedBy: 'FLOOR' | 'OFFICE' | 'SYSTEM') {

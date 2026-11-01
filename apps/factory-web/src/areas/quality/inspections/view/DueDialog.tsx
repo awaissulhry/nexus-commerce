@@ -2,8 +2,9 @@
 
 import { useEffect, useId, useState } from 'react'
 import { CalendarClock } from 'lucide-react'
-import { Banner, DateTimeField, Field, Modal } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { Button, Checkbox, Kbd } from '@nexus/ui/primitives'
+import { DateTimeField, Modal } from '../../../../lib/i18n/ds-parts'
 import { useDsLabels } from '../../../../lib/i18n/ds-labels'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../lib/i18n/provider'

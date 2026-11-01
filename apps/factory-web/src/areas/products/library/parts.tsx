@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useRef, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { FileX, ShieldOff } from 'lucide-react'
-import { Banner, Card, EmptyState, Modal, Tabs, type TabItem } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Tabs, type TabItem } from '@nexus/ui/components'
 import { DetailHeader } from '@nexus/ui/patterns'
 import { Button, Kbd, Skeleton, Spinner } from '@nexus/ui/primitives'
+import { EditModeBar, Modal } from '../../../lib/i18n/ds-parts'
 import { formatTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
@@ -262,46 +263,13 @@ export function SaveWords({ state, at }: { state: 'idle' | 'saving' | 'failed'; 
 }
 
 /**
- * The bar of a form with unsaved changes (explicit save): how many changes, Discard, Save; ⌘S / Ctrl+S saves (not while
- * held or busy); leaving the page asks first while changes wait. Composed here because the DS EditModeBar draws English
- * words of its own (Discard, "Save with") on Italian pages: a DS gap.
+ * The bar of a form with unsaved changes (explicit save) = the DS EditModeBar (B-W2b-18; composed here while its words
+ * were English only): how many changes, Discard, Save; ⌘S / Ctrl+S saves (not while held or busy); leaving the page
+ * asks first while changes wait.
  */
 export function SaveBar({ count, onDiscard, onSave, held, busy, saveLabel }: { count: number; onDiscard: () => void; onSave: () => void; held: string | null; busy: boolean; saveLabel: string }) {
   const t = useT('library')
-  const latest = useRef({ onSave, held, busy })
-  latest.current = { onSave, held, busy }
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 's') return
-      event.preventDefault()
-      if (!latest.current.held && !latest.current.busy) latest.current.onSave()
-    }
-    const onLeave = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ''
-    }
-    window.addEventListener('keydown', onKey)
-    window.addEventListener('beforeunload', onLeave)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      window.removeEventListener('beforeunload', onLeave)
-    }
-  }, [])
-  return (
-    <div className="fw-lib-savebar" role="region" aria-label={t('save.region')}>
-      <span className="fw-lib-hint">
-        {t('save.unsaved', { count })} · {t('save.shortcut')}
-      </span>
-      <span className="fw-lib-actions">
-        <Button size="sm" onClick={onDiscard} heldReason={busy ? t('held.busy') : null}>
-          {t('save.discard')}
-        </Button>
-        <Button size="sm" variant="primary" onClick={onSave} heldReason={held ?? (busy ? t('held.busy') : null)} aria-keyshortcuts="Meta+S Control+S">
-          {saveLabel}
-        </Button>
-      </span>
-    </div>
-  )
+  return <EditModeBar count={count} onDiscard={onDiscard} onApply={onSave} applyLabel={saveLabel} busy={busy} applyHeldReason={held ?? (busy ? t('held.busy') : null)} saveShortcut />
 }
 
 /** A form's field that the person may read but not change: the value as text (never a greyed input). */

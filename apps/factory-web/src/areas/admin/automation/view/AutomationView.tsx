@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { MoreHorizontal, Plus, Workflow } from 'lucide-react'
-import { AsOf, Banner, Card, EmptyState, Menu, Modal } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Menu } from '@nexus/ui/components'
 import { Button, InfoTip, SegmentedControl, Tag } from '@nexus/ui/primitives'
+import { AsOf, Modal } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { AlertRule } from '../../../_shared/rules/api'

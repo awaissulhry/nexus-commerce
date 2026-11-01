@@ -262,7 +262,7 @@ describe('every design case draws in both languages with no key left on screen',
       for (const method of VALUATION_METHODS) has(own, `mv.method.${method}`)
       for (const reason of STOCK_MOVE_REASONS) has(shared, `reason.${reason}`)
       for (const key of ['mv.notice.writeOffHides', 'mv.notice.writeOffSeveral', 'mv.countOf']) has(own, key, 2)
-      for (const key of ['st.notice.crVi', 'st.notice.crViFailed', 'st.notice.quarantine', 'st.notice.unvalued', 'st.notice.overReserved', 'st.notice.more', 'st.count', 'st.tileRows', 'st.reservations', 'st.holdLots', 'st.phone.selected', 'mv.countAll', 'mv.countLoaded', 'mv.notice.adjustSeveral']) has(own, key, 2)
+      for (const key of ['st.notice.crVi', 'st.notice.crViFailed', 'st.notice.quarantine', 'st.notice.unvalued', 'st.notice.overReserved', 'st.notice.more', 'st.count', 'st.tileRows', 'st.reservations', 'st.holdLots', 'mv.countAll', 'mv.countLoaded', 'mv.notice.adjustSeveral']) has(own, key, 2)
       expect(stockRow({ item: ITEMS.zip, location: named(LOCATIONS.binA2) }).onHand).toBe('0.0000')
     }
   })

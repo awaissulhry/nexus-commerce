@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Download, Image as ImageIcon, Inbox, MailQuestion, Paperclip, ShieldAlert } from 'lucide-react'
-import { Banner, EmptyState, Field, KeyValue, Modal, PressableRow } from '@nexus/ui/components'
-import { DetailModal } from '@nexus/ui/patterns'
+import { Banner, EmptyState, Field, KeyValue, PressableRow } from '@nexus/ui/components'
 import { Button, Input, RadioCard, SegmentedControl, Spinner, Tag } from '@nexus/ui/primitives'
+import { DetailModal, Modal } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'

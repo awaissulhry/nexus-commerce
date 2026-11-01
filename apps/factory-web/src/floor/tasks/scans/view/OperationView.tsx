@@ -2,8 +2,8 @@
 
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { ArrowLeft, Check, CircleAlert, CircleCheckBig, ClipboardPen, Clock, CloudOff, House, Layers, MessageSquareWarning, ScanLine, Send, ShieldOff, TriangleAlert, Wrench, X } from 'lucide-react'
-import { Modal } from '@nexus/ui/components'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, FloorTile, FloorTileGrid, QuantityPad, ScanInput, type CameraScanner, type FloorAction, type FloorActions } from '@nexus/ui/floor'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { formatNumber, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Translate } from '../../../../lib/i18n/messages'

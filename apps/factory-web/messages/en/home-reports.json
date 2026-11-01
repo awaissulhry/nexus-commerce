@@ -57,7 +57,8 @@
     "price": "price",
     "cost": "cost",
     "margin": "margin",
-    "wages": "wages"
+    "wages": "wages",
+    "pay": "pay"
   },
   "format": {
     "CSV": "CSV",

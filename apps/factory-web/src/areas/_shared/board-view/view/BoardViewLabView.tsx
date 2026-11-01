@@ -2,9 +2,10 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { FileWarning, FilterX, Lock } from 'lucide-react'
-import { EmptyState, Modal, ProgressBar } from '@nexus/ui/components'
+import { EmptyState, ProgressBar } from '@nexus/ui/components'
 import { Button, Tag } from '@nexus/ui/primitives'
 import { BoardView, type BoardCard, type BoardLane, type BoardMove, type BoardTone } from '@nexus/ui/grid/views/board/index'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE, type Locale } from '../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'

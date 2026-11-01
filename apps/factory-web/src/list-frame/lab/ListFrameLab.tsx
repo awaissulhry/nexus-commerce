@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Archive, Download, Search } from 'lucide-react'
-import { EmptyState, Modal } from '@nexus/ui/components'
+import { EmptyState } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill } from '@nexus/ui/primitives'
+import { Modal } from '../../lib/i18n/ds-parts'
 import { formatDate } from '../../lib/i18n/format'
 import { useLocale, useT } from '../../lib/i18n/provider'
 import { WithMessages } from '../../record-panels/i18n'

@@ -2,10 +2,10 @@
 
 import { Fragment, useMemo, type ReactNode } from 'react'
 import { Check, Search, X } from 'lucide-react'
-import { Banner, Card, EmptyState, Modal } from '@nexus/ui/components'
+import { Banner, Card, EmptyState } from '@nexus/ui/components'
 import { SelectionLabel } from '@nexus/ui/grid'
-import { StepUpModal } from '@nexus/ui/patterns'
 import { Button, Input, Kbd, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { Modal, StepUpModal } from '../../../../lib/i18n/ds-parts'
 import { formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { listKeys, type ListKey } from '../../../../list-frame/model'

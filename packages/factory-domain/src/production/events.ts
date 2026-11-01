@@ -12,6 +12,9 @@ import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
 import { BLOCK_ENDINGS, BLOCK_SOURCES, OFF_STANDARD_KINDS } from './offstandard/rules'
 // B-W2b-46: checks before a scan counts.
 import { GUARD_KINDS, OVERRIDE_REASON_CODES } from './guards/rules'
+// B-W2b-53: floor rules per site and scrap above the limit.
+import { DECIDED_ON, SCRAP_DECISIONS } from './scrap/approval'
+import { FLOOR_RULE_FIELDS, FLOOR_RULE_MODES } from './settings/floor-rules'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -24,6 +27,8 @@ import { GUARD_KINDS, OVERRIDE_REASON_CODES } from './guards/rules'
  *                                   (BASIS_RECORDED, BASIS_REPLACED) (B-W1-37; office screens)
  *   workorder.created               a DRAFT work order was made from sales order lines (B-W1-38)
  *   workorder.changed               a DRAFT's cells or revision, or a work order's due date, priority or note changed
+ *   workorder.priority_changed      B-W2b-51: a work order's priority or rush flag changed (MES-009; the dispatch lists
+ *                                   and the tablets of its site reorder: rush first)
  *   workorder.released              released with its frozen specification and batch number (the floor can start)
  *   workorder.status_changed        started, completed, closed or cancelled
  *   workorder.finished_to_stock     released garments of a work order went into finished-goods stock, all or part
@@ -61,6 +66,10 @@ import { GUARD_KINDS, OVERRIDE_REASON_CODES } from './guards/rules'
  *   production.scan_findings_found          B-W2b-41: the scan-pattern checks found patterns about bundles (MES-075)
  *   production.scan_finding_reviewed        B-W2b-41: one finding reviewed or dismissed
  *   production.bundle_rules_changed         B-W2b-41: a site's bundle code mode or stuck limit changed
+ *   production.floor_rules_changed          B-W2b-53: a site's floor checks changed (the quantity guard, the sequence,
+ *                                           the scrap approval limit); Floor rules & codes and the site's tablets re-read
+ *   production.scrap_over_limit_decided     B-W2b-53: a scan's scrap above the site's limit was approved (it posts) or
+ *                                           refused, by a team leader on the tablet or in the office (MES-128)
  */
 export const MONITORING_CHANGES = ['WIDENED', 'NARROWED', 'BASIS_RECORDED', 'BASIS_REPLACED'] as const
 
@@ -69,7 +78,8 @@ const subject = z.enum(SCAN_SUBJECTS)
 const live = { permission: 'workorders.view', fields: ['workOrderId', 'number'] } as const
 
 // B-W2a-12: 'steps', a repair DRAFT's routing steps (MES-019).
-export const WORK_ORDER_CHANGES = ['cells', 'revision', 'details', 'steps'] as const
+// B-W2b-51: 'split', a DRAFT gave cells to a new work order split from it (MES-010).
+export const WORK_ORDER_CHANGES = ['cells', 'revision', 'details', 'steps', 'split'] as const
 
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 const postedBy = () => z.enum(['OFFICE', 'FLOOR', 'SYSTEM'])
@@ -116,6 +126,8 @@ export const events = [
       pieces: z.number().int().min(0),
       /** B-W2a-12: a REPAIR work order's repair order (MES-019); absent for a size run. */
       repairOrderId: z.uuid().optional(),
+      /** B-W2b-51: the work order it was split from (MES-010); absent for one made from order lines. */
+      splitFromId: z.uuid().optional(),
     }),
     live: { ...live, fields: ['workOrderId', 'number', 'styleId'] },
   }),
@@ -125,6 +137,14 @@ export const events = [
     description: "A work order's cells or revision (while a DRAFT), or its due date, priority or note changed.",
     payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), changes: z.array(z.enum(WORK_ORDER_CHANGES)).min(1), cells: z.number().int().min(0), pieces: z.number().int().min(0) }),
     live,
+  }),
+  // B-W2b-51 (MES-009): the dispatch board, the tablet's My work and the planning board put a rush work order first.
+  defineEvent({
+    type: 'workorder.priority_changed',
+    context: 'production',
+    description: "A work order's priority or rush flag changed: the dispatch lists and the tablets of its site order their work again.",
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), siteId: z.uuid(), priority: z.number().int(), rush: z.boolean(), previousPriority: z.number().int(), previousRush: z.boolean() }),
+    live: { ...live, floor: 'floor.work', fields: ['workOrderId', 'number', 'rush'] },
   }),
   defineEvent({
     type: 'workorder.released',
@@ -692,5 +712,37 @@ export const events = [
       reasonCode: z.enum(OVERRIDE_REASON_CODES),
     }),
     live: guardLive,
+  }),
+  // B-W2b-53: floor rules per site (MES-294) and scrap above a site's limit (MES-128). Ids, modes, counts and states:
+  // no reason text, no person (who decided stays in the audit log).
+  defineEvent({
+    type: 'production.floor_rules_changed',
+    context: 'production',
+    description: "A site's floor checks changed: the quantity guard, the sequence (skipped operations) or the scrap approval limit.",
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      fields: z.array(z.enum(FLOOR_RULE_FIELDS)).min(1),
+      quantityGuard: z.enum(FLOOR_RULE_MODES),
+      skippedOperationRule: z.enum(FLOOR_RULE_MODES),
+      scrapApprovalLimit: z.number().int().min(1).nullable(),
+    }),
+    live: { permission: 'production.settings.view', floor: 'floor.work', fields: ['siteId', 'fields'] },
+  }),
+  defineEvent({
+    type: 'production.scrap_over_limit_decided',
+    context: 'production',
+    description: "A scan's scrap above its site's limit was approved (it posts: replacement, scrap of stock, cost) or refused (it does not), on the tablet or in the office.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      siteId: z.uuid(),
+      bundleId: z.uuid(),
+      scanId: z.uuid(),
+      decision: z.enum(SCRAP_DECISIONS),
+      scrapQuantity: z.number().int().min(1),
+      limit: z.number().int().min(1),
+      decidedOn: z.enum(DECIDED_ON),
+    }),
+    live: { permission: 'production.scrap.view', floor: 'floor.lead', fields: ['workOrderId', 'number', 'scanId'] },
   }),
 ] as const

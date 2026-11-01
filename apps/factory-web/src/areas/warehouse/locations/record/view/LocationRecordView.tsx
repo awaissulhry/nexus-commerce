@@ -354,9 +354,7 @@ function PlaceCard({ model, actions, location, parent, editable, parentHref, sit
             </div>
             {changes > 0 ? (
               <SaveBar
-                label={t('lc.save.region')}
-                text={t('lc.save.unsaved', { count: changes })}
-                discard={t('lc.save.discard')}
+                count={changes}
                 save={t('lc.save.save')}
                 held={busy ? t('lc.busy') : problem ? t(problem) : null}
                 busy={busy}

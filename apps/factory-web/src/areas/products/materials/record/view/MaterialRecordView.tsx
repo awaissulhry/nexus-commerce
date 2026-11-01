@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { Lock, MoreHorizontal, Plus } from 'lucide-react'
-import { Banner, Field, Menu, Modal, type MenuItemDef } from '@nexus/ui/components'
-import { Button, Pill, Tag, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field, Menu, type MenuItemDef } from '@nexus/ui/components'
+import { Button, Pill, Tag } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { isPageKey } from '../../../library/model'

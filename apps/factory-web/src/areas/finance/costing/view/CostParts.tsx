@@ -270,4 +270,4 @@ export function CostScrapAndWaiting({ detail, can }: { detail: WorkOrderCost; ca
   )
 }
 
-const WAITING_ORDER = ['NOT_VALUED', 'NO_RATE', 'CURRENCY', 'LOCKED', 'NO_SCAN'] as const
+const WAITING_ORDER = ['NOT_VALUED', 'NO_RATE', 'CURRENCY', 'LOCKED', 'NO_SCAN', 'SCRAP_APPROVAL'] as const

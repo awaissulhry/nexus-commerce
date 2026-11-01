@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp, Plus, RotateCcw, Search, Sparkles, XCircle } from 'lucide-react'
-import { Banner, EmptyState, Field, Modal } from '@nexus/ui/components'
-import { CellSaveMark, SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, ColorSwatchPicker, IconPicker, Input, Kbd, Pill, SegmentedControl, SWATCHES, TagGlyph, Toggle } from '@nexus/ui/primitives'
+import { Banner, EmptyState, Field } from '@nexus/ui/components'
+import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
+import { Button, Input, Kbd, Pill, SegmentedControl, SWATCHES, TagGlyph, Toggle } from '@nexus/ui/primitives'
+import { CellSaveMark, ColorSwatchPicker, IconPicker, Modal } from '../../../../lib/i18n/ds-parts'
 import type { ReasonList } from '@nexus/factory-domain/reasons/lists'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'

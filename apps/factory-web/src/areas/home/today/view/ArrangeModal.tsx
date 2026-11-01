@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@nexus/ui/patterns'
+import type { PreferencesColumnSpec, PreferencesValue } from '@nexus/ui/patterns'
 import { Select } from '@nexus/ui/primitives'
+import { PreferencesModal } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 import { PANEL_WIDTHS, sectionOrder, TODAY_SECTIONS, type PanelWidth, type TodayLayout, type TodaySection } from '../model'
 

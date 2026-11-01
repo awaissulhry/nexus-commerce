@@ -2,9 +2,10 @@
 
 import { useMemo } from 'react'
 import { MoreHorizontal, Undo2 } from 'lucide-react'
-import { Card, KeyValue, Menu, Modal, SummaryTable } from '@nexus/ui/components'
+import { Card, KeyValue, Menu, SummaryTable } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Pill, Tag } from '@nexus/ui/primitives'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'

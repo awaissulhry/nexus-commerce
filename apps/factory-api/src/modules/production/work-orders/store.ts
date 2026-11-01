@@ -51,6 +51,9 @@ export const HEADER = {
   holdReason: true,
   holdRecordType: true,
   holdRecordId: true,
+  // B-W2b-51 (MES-009, MES-010): the rush flag, and the work order it was split from.
+  rush: true,
+  splitFromId: true,
   version: true,
   createdAt: true,
   updatedAt: true,

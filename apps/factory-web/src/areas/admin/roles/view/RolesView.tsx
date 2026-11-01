@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Columns3, ShieldCheck } from 'lucide-react'
-import { Modal } from '@nexus/ui/components'
 import { Button, SegmentedControl } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { Role } from '../../shared/api'

@@ -157,13 +157,15 @@
       "price": "prezzi",
       "cost": "costi",
       "margin": "margini",
-      "wages": "paghe"
+      "wages": "paghe",
+      "pay": "cottimo"
     },
     "without": {
       "price": "Senza prezzi: prezzi di vendita e di acquisto, totali e fatture appaiono nascosti.",
       "cost": "Senza costi: costi di materiale e manodopera e schede costo appaiono nascosti.",
       "margin": "Senza margini: margini e avvisi \"sotto il minimo\" appaiono nascosti.",
-      "wages": "Senza paghe: tariffe della manodopera e importi di paga appaiono nascosti."
+      "wages": "Senza paghe: tariffe della manodopera e importi di paga appaiono nascosti.",
+      "pay": "Senza cottimo: tariffe a pezzo, guadagni e paga garantita appaiono nascosti (solo HR e il lavoratore)."
     }
   },
   "scope": {
@@ -1017,7 +1019,7 @@
     },
     "roles": {
       "title": "Ruoli di reparto",
-      "hint": "Cosa fanno sul tablet; al massimo vedono le paghe.",
+      "hint": "Cosa fanno sul tablet; al massimo vedono le paghe e il proprio cottimo.",
       "change": "Cambia ruoli",
       "dialog": "Ruoli di reparto di {name}",
       "stepUp": "Cambiare i ruoli di reparto chiede un codice nuovo."
@@ -1153,19 +1155,19 @@
       },
       "operator": {
         "name": "Operatore",
-        "description": "Lavora su una postazione con un dispositivo registrato; non vede importi."
+        "description": "Lavora su una postazione con un dispositivo registrato; vede solo il proprio cottimo (le tariffe pubblicate per lui)."
       },
       "cutting_operator": {
         "name": "Tagliatore",
-        "description": "Lavora a un tavolo di taglio con un dispositivo registrato; non vede importi."
+        "description": "Lavora a un tavolo di taglio con un dispositivo registrato; vede solo il proprio cottimo (le tariffe pubblicate per lui)."
       },
       "floor_inspector": {
         "name": "Collaudatore di reparto",
-        "description": "Controlla il lavoro a un banco di collaudo con un dispositivo registrato; non vede importi."
+        "description": "Controlla il lavoro a un banco di collaudo con un dispositivo registrato; vede solo il proprio cottimo (le tariffe pubblicate per lui)."
       },
       "team_leader": {
         "name": "Capo squadra",
-        "description": "Guida una squadra in reparto: lavora e vede le schermate del capo squadra dello stabilimento; non vede importi."
+        "description": "Guida una squadra in reparto: lavora e vede le schermate del capo squadra dello stabilimento; vede solo il proprio cottimo (le tariffe pubblicate per lui)."
       },
       "maintenance": {
         "name": "Manutenzione",
@@ -1213,7 +1215,7 @@
       },
       "floorNoCost": {
         "title": "Le sessioni di reparto non vedono mai costi, margini o prezzi",
-        "why": "Un tablet vede al massimo le paghe (A1 §3.11)."
+        "why": "Un tablet vede al massimo le paghe e il cottimo del lavoratore stesso (A1 §3.11)."
       },
       "partnerPrice": {
         "title": "Clienti e fornitori vedono al massimo i prezzi",
@@ -1714,6 +1716,7 @@
     "production_scrap_view": "Vedere scarti e rilavorazioni",
     "production_scrap": "Registrare scarti e chiedere sostituzioni",
     "production_scrap_approve": "Approvare riduzioni d'ordine",
+    "production_scrap_overLimit": "Approvare o rifiutare scarti oltre il limite del reparto",
     "production_reports_view": "Vedere il report giornaliero di produzione per linea, modello e taglia",
     "production_reports_subscribe": "Inviare il report di produzione ai colleghi",
     "production_cutting_view": "Vedere la resa del taglio",
@@ -1802,6 +1805,10 @@
     "production_offstandard_view": "Vedere i blocchi di tempo fuori standard e indiretto e i loro conteggi (nessuna persona negli elenchi)",
     "production_offstandard_codes": "Aggiungere e cambiare i codici di tempo fuori standard e indiretto e le loro regole di paga",
     "production_offstandard_approve": "Approvare, respingere, riaprire e correggere i blocchi di tempo fuori standard (mai i propri)",
+    "production_labour_view": "Vedere Manodopera e rettifiche: la coda, i giorni di linea e le modifiche ai dati di lavoro (nessuna persona negli elenchi)",
+    "production_labour_close": "Chiudere il giorno di una linea quando il tempo fuori standard è codificato e le anomalie sono risolte (i giorni chiusi vanno in paga)",
+    "production_labour_reopen": "Riaprire il giorno chiuso di una linea, con un motivo",
+    "production_labour_answer": "Rispondere alla contestazione di un lavoratore su un proprio dato, accolta o respinta (mai la propria)",
     "production_calls_view": "Vedere le chiamate di aiuto, i loro tempi per chiamata e linea e chi viene chiamato per ogni tipo (mai per persona)",
     "production_calls_answer": "Rispondere alle chiamate di aiuto: vista, in arrivo, risolta o annullata, e a cosa hanno portato",
     "production_calls_manage": "Gestire i tipi di chiamata di aiuto di un sito e chi risponde",
@@ -1812,6 +1819,10 @@
     "people_overtime_approve": "Approvare lo straordinario programmato che le persone hanno accettato",
     "production_bundles_view": "Vedere dove si trova ogni fascio, quelli fermi e i conteggi delle anomalie di scansione (mai chi)",
     "production_bundles_findings": "Esaminare le anomalie di scansione (per archiviarne una serve una nota)",
-    "production_bundles_who": "Vedere chi c'è dietro un'anomalia (solo con il presupposto legale della sede attivo; registrato)"
+    "production_bundles_who": "Vedere chi c'è dietro un'anomalia (solo con il presupposto legale della sede attivo; registrato)",
+    "people_piecerates_view": "Vedere le tabelle di cottimo, le loro versioni, chi le ha lette e l'interruttore legale del cottimo (le tariffe solo con il permesso sul cottimo)",
+    "people_piecerates_manage": "Creare nuove versioni delle tariffe di cottimo, pubblicarle ai lavoratori, metterle in vigore, confermare le tariffe provvisorie e registrare i presupposti del cottimo",
+    "people_piecerates_switch": "Avviare il cottimo in una sede quando ogni presupposto legale è registrato, o fermarlo",
+    "people_attendance_view": "Vedere le presenze delle tue sedi: entrate, uscite e pause, le giornate e chi è presente ora (dove la finalità presenze è attiva)"
   }
 }

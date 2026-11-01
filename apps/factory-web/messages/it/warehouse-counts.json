@@ -418,10 +418,8 @@
   },
   "check": {
     "state": {
-      "done": "fatto",
-      "open": "da fare",
-      "failed": "interrotto",
-      "skipped": "non serve ora"
+      "open": "Da fare",
+      "failed": "Interrotto"
     }
   },
   "valued": {
@@ -499,14 +497,7 @@
     "language": "Lingua dell'elenco",
     "it": "Italiano (libro degli inventari)",
     "en": "Inglese",
-    "type": "Digita il numero dell'inventario per confermare:",
-    "typeFirst": "Digita prima esattamente {number}.",
-    "state": {
-      "empty": "Maiuscole e trattini contano.",
-      "partial": "Continua a digitare.",
-      "mismatch": "Non corrisponde. Maiuscole e trattini contano.",
-      "match": "Corrisponde."
-    }
+    "typeFirst": "Digita prima esattamente {number}."
   },
   "found": {
     "open": "Merce trovata",

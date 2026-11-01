@@ -1,9 +1,10 @@
-import { ConflictError, DomainError, InvalidStateError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, DomainError, InvalidStateError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { workOrderMachine } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_RELEASE } from '@nexus/factory-domain/production/work-orders/permissions'
-import { releaseRefusal, type MaterialLine, type ReleaseChecklist } from '@nexus/factory-domain/production/work-orders/release'
+import { releaseRefusal, type MaterialLine, type ReleaseCheckCode, type ReleaseChecklist } from '@nexus/factory-domain/production/work-orders/release'
+import { beforeRelease, blockingCodes } from '@nexus/factory-domain/production/work-orders/bulk'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { allocateNumber } from '../../../platform/numbering/allocate'
@@ -14,8 +15,22 @@ import { workOrderView, type WorkOrderView } from './views'
 import { officeWorkOrder, onWorkOrder, todayNow, todayOfCommand } from './work-orders'
 import { readinessPart } from './release/blockers'
 
-/** B-W2a-46: a DRAFT, or a DRAFT put on hold (its release check shows the hold as a blocker). */
-const beforeRelease = (row: Pick<Header, 'status' | 'heldFromStatus'>): boolean => row.status === 'DRAFT' || (row.status === 'ON_HOLD' && row.heldFromStatus === 'DRAFT')
+/**
+ * B-W2b-51: the release refused by its check (409 invalid_state with every blocker, as before), carrying the codes of the
+ * checks that block it, so a bulk release says per row what holds it (MES-017).
+ */
+export class ReleaseBlockedError extends DomainError {
+  override name = 'ReleaseBlockedError'
+  constructor(
+    message: string,
+    issues: readonly Issue[],
+    readonly codes: readonly ReleaseCheckCode[],
+  ) {
+    super('invalid_state', message, issues)
+  }
+}
+
+// B-W2a-46: a DRAFT, or a DRAFT put on hold (its release check shows the hold as a blocker): factory-domain bulk.ts beforeRelease.
 
 /**
  * The release (B-W1-38; MES-005, MES-076; plan A1 §2.5 "Work order"; PLAN §4.7 stage 10-work-order "release WO (frozen
@@ -88,7 +103,7 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
     const facts = await readReleaseFacts(tx, await readBasics(tx, current), todayOfCommand(tools))
     const override = body.materialOverride ?? null
     const checklist = checklistOf(facts, override)
-    if (!checklist.releasable) throw new DomainError('invalid_state', releaseRefusal(current.number, checklist), checklist.blockers)
+    if (!checklist.releasable) throw new ReleaseBlockedError(releaseRefusal(current.number, checklist), checklist.blockers, blockingCodes(checklist.checks))
     assertTransition(workOrderMachine, current.status, 'RELEASED', { releaseBlockers: [] })
     const revision = facts.revision!
     const label = facts.label!

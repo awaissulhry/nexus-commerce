@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { Button, Input, SegmentedControl, Select, Spinner, TokenChip } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 import { languagesTyped, newLabelHeld, type LabelsCan, type NewLabelDraft } from '../model'
 import type { LabelsListActions, NewLabelModel } from '../view-model'

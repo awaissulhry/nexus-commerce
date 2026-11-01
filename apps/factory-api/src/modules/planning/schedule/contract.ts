@@ -132,7 +132,7 @@ export const workOrderView = output({
   status: z.string(),
   kind: z.string(),
   priority: z.number().int(),
-  /** A rush order (priority above 0): first in the dispatch lists. */
+  /** The work order's rush flag (B-W2b-51, MES-009): first in the dispatch lists. */
   rush: z.boolean(),
   version: z.number().int(),
   dueDate: businessDate().nullable(),
