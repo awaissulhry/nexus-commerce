@@ -189,7 +189,9 @@
     "LOCKED_one": "{count} event falls in a locked period.",
     "LOCKED_other": "{count} events fall in a locked period.",
     "NO_SCAN_one": "{count} rework has no scan to cost it from.",
-    "NO_SCAN_other": "{count} reworks have no scan to cost them from."
+    "NO_SCAN_other": "{count} reworks have no scan to cost them from.",
+    "SCRAP_APPROVAL_one": "{count} scan’s scrap waits for the team leader’s approval.",
+    "SCRAP_APPROVAL_other": "{count} scans’ scrap waits for the team leader’s approval."
   },
   "standards": {
     "title": "Standard cost per item",

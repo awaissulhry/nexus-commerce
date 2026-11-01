@@ -16,4 +16,13 @@ export const manifest = defineManifest({
   'POST /production/replacements/:replacementId/refuse': { audiences: ['office'], permission: 'production.scrap.approve', scope: 'record' },
   'POST /production/replacements/:replacementId/done': { audiences: ['office'], permission: 'production.scrap', scope: 'record' },
   'POST /production/replacements/:replacementId/cancel': { audiences: ['office'], permission: 'production.scrap', scope: 'record' },
+  // B-W2b-53 (MES-128): scrap above a site's limit — the office (production.scrap.view to read, production.scrap.overLimit to
+  // decide) and the team leader on the tablet (floor.lead at the device's site; approving signs with the PIN).
+  'GET /production/scrap/over-limit': { audiences: ['office'], permission: 'production.scrap.view', scope: 'record' },
+  'POST /production/scrap/over-limit/approve': { audiences: ['office'], permission: 'production.scrap.overLimit', scope: 'record' },
+  'POST /production/scrap/over-limit/:scanId/approve': { audiences: ['office'], permission: 'production.scrap.overLimit', scope: 'record' },
+  'POST /production/scrap/over-limit/:scanId/refuse': { audiences: ['office'], permission: 'production.scrap.overLimit', scope: 'record' },
+  'GET /production/scrap/floor/waiting': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
+  'POST /production/scrap/floor/waiting/:scanId/approve': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
+  'POST /production/scrap/floor/waiting/:scanId/refuse': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
 })

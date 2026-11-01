@@ -22,6 +22,8 @@ import {
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { scrapFactsOf, scrapMaterials } from '../../production/scrap/store'
+// B-W2b-53 (MES-128): scrap above a site's limit waits for the team leader's approval.
+import { scrapApprovalStatesOf } from '../../production/scrap/over-limit'
 // B-W2a-25: the subcontract source (a workshop's fee for the pieces back good).
 import { subcontractCostPlan } from '../../purchasing/subcontracting/cost-source'
 import { lockMethodInCommand, methodInForce } from '../method/method'
@@ -185,6 +187,8 @@ export async function planCosts(db: Reader, workOrder: CostedWorkOrder, scope: P
     const bundles = withScrap.length === 0 ? [] : await db.bundle.findMany({ where: { id: { in: unique(withScrap.map((scan) => scan.bundleId)) } }, select: { id: true, workOrderId: true, workOrderSizeId: true, part: true, cutLogIds: true } })
     const facts = bundles.length === 0 ? null : await scrapFactsOf(db, workOrder.id, bundles)
     const standards = facts ? await frozenStandards(db, [workOrder.companyId], [...facts.items.keys()]) : new Map()
+    // B-W2b-53 (MES-128): a scan's scrap above its site's limit posts only once the team leader approved it.
+    const approvals = withScrap.length === 0 ? new Map<string, string | null>() : await scrapApprovalStatesOf(db, withScrap.map((scan) => scan.id))
     for (const scan of reports) {
       const voider = voidedBy.get(scan.id)
       const operation = operations.get(scan.workOrderOperationId)
@@ -210,6 +214,12 @@ export async function planCosts(db: Reader, workOrder: CostedWorkOrder, scope: P
         continue
       }
       if (records.length > 0 || !facts) continue
+      // B-W2b-53: waiting scrap waits; refused scrap never posts (its counts are put right by a correction).
+      if (approvals.get(scan.id) === 'REFUSED') continue
+      if (approvals.get(scan.id) === 'WAITING') {
+        wait('SCRAP_APPROVAL', 'OperationScan', scan.id, "The garments it scrapped are above the site's limit for one scan: the scrap is recorded once the team leader approves it.")
+        continue
+      }
       const bundle = bundles.find((row) => row.id === scan.bundleId)
       const shares = bundle ? scrapMaterials(facts, bundle, scan.scrapQuantity) : []
       if (shares.some((share) => share.value === null)) {

@@ -23,10 +23,17 @@ export const PRODUCTION_SCRAP_DEFINITIONS = definePermissions('production', {
     risk: 'write',
     description: "Approve or refuse lowering an order's quantity by its scrapped garments (never one's own request; a refusal says why).",
   },
+  // B-W2b-53 (MES-128): scrap above a site's limit in one scan waits for a decision before it posts.
+  'scrap.overLimit': {
+    risk: 'write',
+    description:
+      "Approve or refuse a scan's scrap above its site's limit, in the office (the team leader decides on the tablet): approved, it posts (replacement, scrap of stock, cost); refused, it does not and the counts are corrected. Never the scrap of one's own scan.",
+  },
 })
 
 export const PRODUCTION_SCRAP_VIEW = 'production.scrap.view' satisfies Permission
 export const PRODUCTION_SCRAP = 'production.scrap' satisfies Permission
 export const PRODUCTION_SCRAP_APPROVE = 'production.scrap.approve' satisfies Permission
+export const PRODUCTION_SCRAP_OVER_LIMIT = 'production.scrap.overLimit' satisfies Permission
 
-export const PRODUCTION_SCRAP_PERMISSIONS: readonly Permission[] = Object.freeze([PRODUCTION_SCRAP_VIEW, PRODUCTION_SCRAP, PRODUCTION_SCRAP_APPROVE])
+export const PRODUCTION_SCRAP_PERMISSIONS: readonly Permission[] = Object.freeze([PRODUCTION_SCRAP_VIEW, PRODUCTION_SCRAP, PRODUCTION_SCRAP_APPROVE, PRODUCTION_SCRAP_OVER_LIMIT])
