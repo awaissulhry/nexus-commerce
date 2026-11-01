@@ -91,7 +91,7 @@ describe('custom roles', () => {
       { path: 'name', message: 'Expected 1 to 100 characters.' },
       { path: 'permissions/0', message: 'quotes.export is not a permission of the factory.' },
       { path: 'permissions/1', message: 'money.price is a money grain: list it in grains.' },
-      { path: 'grains/0', message: 'salary is not a money grain (price, cost, margin, wages).' },
+      { path: 'grains/0', message: 'salary is not a money grain (price, cost, margin, wages, pay).' },
       { path: 'requireMfa', message: 'A role that sees cost requires two-factor.' },
     ])
     expect(customKeyProblems('night_lead')).toEqual([])
@@ -172,9 +172,9 @@ describe('assignments and grants', () => {
 
 describe('money grains by audience', () => {
   const everyGrain = grantOf({ permissions: [], grains: [...GRAINS] }, everywhere)
-  it('caps what grants give: floor wages only, partner and link price only, platform none, system all', () => {
+  it('caps what grants give: floor wages and pay only (B-W2b-34), partner and link price only, platform none, system all', () => {
     const tenantId = '0195f5d0-0000-7000-8000-0000000000ff'
-    expect([...heldGrains({ audience: 'floor', tenantId, siteId: SITE, grants: [everyGrain] })]).toEqual(['wages'])
+    expect([...heldGrains({ audience: 'floor', tenantId, siteId: SITE, grants: [everyGrain] })]).toEqual(['wages', 'pay'])
     expect([...heldGrains({ audience: 'partner', tenantId, partyId: A, grants: [everyGrain] })]).toEqual(['price'])
     expect([...heldGrains({ audience: 'link', tenantId, partyId: A, grants: [everyGrain] })]).toEqual(['price'])
     expect([...heldGrains({ audience: 'platform', grants: [everyGrain] })]).toEqual([])

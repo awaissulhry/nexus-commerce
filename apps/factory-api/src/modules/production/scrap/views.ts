@@ -10,6 +10,8 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { readCellLabels, scrapFactsOf, scrapMaterials, type Reader, type ScrapFacts, type ScrapMaterial } from './store'
+// B-W2b-53 (MES-128): each scan's scrap approval, the waiting filter and tile.
+import { approvalsOf, officeWaiting, type ApprovalView } from './over-limit'
 
 /**
  * Scrap & rework, the office's read (B-W2a-13; MES-129, MES-130, MES-126; design production.scrap "Scrap tiles" and the
@@ -36,6 +38,8 @@ export interface ScrapQuery {
   readonly from?: Date | undefined
   readonly to?: Date | undefined
   readonly kind?: 'SCRAP' | 'REWORK' | undefined
+  /** B-W2b-53: only the scans whose scrap waits for the team leader's approval. */
+  readonly approval?: 'WAITING' | undefined
   readonly limit: number
 }
 
@@ -54,6 +58,8 @@ interface Row {
   readonly reasonCode: string
   readonly stationId: string | null
   readonly status: ReworkStatus | null
+  /** B-W2b-53: a scan's scrap above the site's limit (null: none needed, or a rework's). */
+  readonly approval: ApprovalView | null
 }
 
 /** GET /production/scrap: the newest rows first (at most `limit`), with the tiles of the same scope. */
@@ -65,6 +71,8 @@ export async function scrapList(caller: CommandCaller, query: ScrapQuery) {
   const filters = [query.siteId ? { siteId: query.siteId } : {}, query.workOrderId ? { workOrderId: query.workOrderId } : {}]
   return caller.withClient(async (db) => {
     const rows: Row[] = []
+    // B-W2b-53: the waiting filter narrows the scans to those whose scrap waits (no rework row waits for an approval).
+    const waitingIds = query.approval === 'WAITING' ? (await officeWaiting(db, scope as Prisma.WorkOrderWhereInput, filters)).map((entry) => entry.scan.id) : null
     if (query.kind !== 'REWORK') {
       // The scans that scrapped, standing (no later row voids them), with their scrap lines.
       const scans = await db.operationScan.findMany({
@@ -76,9 +84,10 @@ export async function scrapList(caller: CommandCaller, query: ScrapQuery) {
             { kind: { in: ['REPORT', 'CORRECTION'] }, scrapQuantity: { gt: 0 } },
             query.from ? { serverTime: { gte: query.from } } : {},
             query.to ? { serverTime: { lt: query.to } } : {},
+            waitingIds ? { id: { in: waitingIds } } : {},
           ],
         },
-        select: { id: true, siteId: true, workOrderId: true, bundleId: true, workOrderOperationId: true, stationId: true, serverTime: true },
+        select: { id: true, siteId: true, workOrderId: true, bundleId: true, workOrderOperationId: true, stationId: true, serverTime: true, kind: true, scrapQuantity: true, deviceId: true, subcontractReceiptLineId: true },
         orderBy: [{ serverTime: 'desc' }, { id: 'desc' }],
         take: query.limit,
       })
@@ -87,21 +96,22 @@ export async function scrapList(caller: CommandCaller, query: ScrapQuery) {
       const lines = await db.operationScanDefect.findMany({ where: { scanId: { in: standing.map((scan) => scan.id) }, kind: 'SCRAP' }, select: { scanId: true, reasonCode: true, quantity: true } })
       const companies = new Map((await db.workOrder.findMany({ where: { id: { in: unique(standing.map((scan) => scan.workOrderId)) } }, select: { id: true, companyId: true } })).map((row) => [row.id, row.companyId]))
       const cells = new Map((await db.bundle.findMany({ where: { id: { in: unique(standing.map((scan) => scan.bundleId)) } }, select: { id: true, workOrderSizeId: true } })).map((row) => [row.id, row.workOrderSizeId]))
+      const approvals = await approvalsOf(db, standing)
       for (const scan of standing) {
         for (const line of lines.filter((row) => row.scanId === scan.id)) {
-          rows.push({ id: `scan:${scan.id}:${line.reasonCode}`, kind: 'SCRAP', source: { type: 'SCAN', id: scan.id }, at: scan.serverTime, companyId: companies.get(scan.workOrderId) ?? '', siteId: scan.siteId, workOrderId: scan.workOrderId, bundleId: scan.bundleId, operationId: scan.workOrderOperationId, cellId: cells.get(scan.bundleId) ?? '', pieces: line.quantity, reasonCode: line.reasonCode, stationId: scan.stationId, status: null })
+          rows.push({ id: `scan:${scan.id}:${line.reasonCode}`, kind: 'SCRAP', source: { type: 'SCAN', id: scan.id }, at: scan.serverTime, companyId: companies.get(scan.workOrderId) ?? '', siteId: scan.siteId, workOrderId: scan.workOrderId, bundleId: scan.bundleId, operationId: scan.workOrderOperationId, cellId: cells.get(scan.bundleId) ?? '', pieces: line.quantity, reasonCode: line.reasonCode, stationId: scan.stationId, status: null, approval: approvals.get(scan.id) ?? null })
         }
       }
     }
-    // Rework orders (kind REWORK), and the scrap of finished ones (kind SCRAP).
-    const reworks = await db.reworkOrder.findMany({
+    // Rework orders (kind REWORK), and the scrap of finished ones (kind SCRAP); none waits for an approval (B-W2b-53).
+    const reworks = waitingIds ? [] : await db.reworkOrder.findMany({
       where: { AND: [scope as Prisma.ReworkOrderWhereInput, ...filters, query.from ? { createdAt: { gte: query.from } } : {}, query.to ? { createdAt: { lt: query.to } } : {}] },
       select: { id: true, companyId: true, siteId: true, workOrderId: true, workOrderSizeId: true, bundleId: true, foundAtOperationId: true, reworkAtOperationId: true, quantity: true, scrapQuantity: true, reasonCode: true, status: true, doneAt: true, createdAt: true },
       orderBy: { id: 'desc' },
       take: query.limit,
     })
     for (const rework of reworks) {
-      const base = { companyId: rework.companyId, siteId: rework.siteId, workOrderId: rework.workOrderId, bundleId: rework.bundleId, cellId: rework.workOrderSizeId, reasonCode: rework.reasonCode, stationId: null }
+      const base = { companyId: rework.companyId, siteId: rework.siteId, workOrderId: rework.workOrderId, bundleId: rework.bundleId, cellId: rework.workOrderSizeId, reasonCode: rework.reasonCode, stationId: null, approval: null }
       if (query.kind !== 'SCRAP') rows.push({ ...base, id: `rework:${rework.id}`, kind: 'REWORK', source: { type: 'REWORK', id: rework.id }, at: rework.createdAt, operationId: rework.foundAtOperationId ?? rework.reworkAtOperationId, pieces: rework.quantity, status: rework.status })
       if (query.kind !== 'REWORK' && rework.status === 'DONE' && rework.scrapQuantity > 0) {
         rows.push({ ...base, id: `rework-scrap:${rework.id}`, kind: 'SCRAP', source: { type: 'REWORK', id: rework.id }, at: rework.doneAt!, operationId: rework.reworkAtOperationId, pieces: rework.scrapQuantity, status: rework.status })
@@ -159,6 +169,7 @@ async function rowViews(db: Reader, rows: readonly Row[], withCost: boolean) {
         .filter((request) => (row.source.type === 'SCAN' ? request.sourceScanId === row.source.id : request.reworkOrderId === row.source.id))
         .map((request) => ({ id: request.id, kind: request.kind, status: request.status, quantity: request.quantity })),
       ...(withCost ? { value: asMoney('cost', value), currency: asMoney('cost', materials.find((material) => material.currency)?.currency ?? null) } : {}),
+      approval: row.approval,
     }
   })
 }
@@ -174,5 +185,7 @@ async function tilesOf(db: Reader, scope: object, filters: readonly object[]) {
     reworkOpen: await db.reworkOrder.count({ where: { AND: [scope as Prisma.ReworkOrderWhereInput, ...filters, { status: { in: ['OPEN', 'IN_PROGRESS'] } }] } }),
     recutsToCut: await db.replacementRequest.count({ where: { AND: [scope as Prisma.ReplacementRequestWhereInput, ...filters, { kind: 'RECUT', status: 'OPEN' }] } }),
     reductionsToApprove: await db.replacementRequest.count({ where: { AND: [scope as Prisma.ReplacementRequestWhereInput, ...filters, { kind: 'REDUCE', status: 'OPEN' }] } }),
+    // B-W2b-53 (MES-128): the scans whose scrap waits for the team leader's approval.
+    waitingApproval: (await officeWaiting(db, scope as Prisma.WorkOrderWhereInput, filters as Prisma.OperationScanWhereInput[])).length,
   }
 }

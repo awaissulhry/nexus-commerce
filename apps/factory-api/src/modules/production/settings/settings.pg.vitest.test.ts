@@ -368,9 +368,10 @@ describe('the walls', () => {
 describe('the floor reads its own site\'s subject, never the legal basis', () => {
   it('a signed-in worker reads the device site\'s scan subject and whether they acknowledged the notice', async () => {
     const a1 = await ok('floorA1', '/production/floor-rules')
-    expect(a1).toEqual({ siteId: A.siteA1, scanSubject: 'STATION', workerAcknowledged: true, standardBundleSize: 10 })
-    expect(await ok('floorA1Lead', '/production/floor-rules')).toEqual({ siteId: A.siteA1, scanSubject: 'STATION', workerAcknowledged: false, standardBundleSize: 10 })
-    expect(await ok('floorB1', '/production/floor-rules')).toEqual({ siteId: A.siteB1, scanSubject: 'WORKER', workerAcknowledged: false, standardBundleSize: 10 })
+    // B-W2b-53: the site's floor checks and the undo window come with it (the defaults here).
+    expect(a1).toEqual({ siteId: A.siteA1, scanSubject: 'STATION', workerAcknowledged: true, standardBundleSize: 10, checks: { quantityGuard: 'STRICT', skippedOperationRule: 'WARN', scrapApprovalLimit: null, bundleCodeMode: 'ONE_CODE' }, undoWindowSeconds: 120 })
+    expect(await ok('floorA1Lead', '/production/floor-rules')).toEqual({ siteId: A.siteA1, scanSubject: 'STATION', workerAcknowledged: false, standardBundleSize: 10, checks: { quantityGuard: 'STRICT', skippedOperationRule: 'WARN', scrapApprovalLimit: null, bundleCodeMode: 'ONE_CODE' }, undoWindowSeconds: 120 })
+    expect(await ok('floorB1', '/production/floor-rules')).toEqual({ siteId: A.siteB1, scanSubject: 'WORKER', workerAcknowledged: false, standardBundleSize: 10, checks: { quantityGuard: 'STRICT', skippedOperationRule: 'WARN', scrapApprovalLimit: null, bundleCodeMode: 'ONE_CODE' }, undoWindowSeconds: 120 })
     for (const body of [a1, await ok('floorB1', '/production/floor-rules')]) {
       expect(JSON.stringify(body)).not.toMatch(/RSU|INL|UNION_AGREEMENT|INL_AUTHORISATION|NOT_REQUIRED|reference|basis|recorded/i)
     }
@@ -432,7 +433,7 @@ describe('the standard bundle size (MES-065): the office sets it per site, audit
     expect(await auditRows(A.siteA1)).toHaveLength(rows.length)
     expect((await manager.browser.post(url, { standardBundleSize: 8, version: before.rules.version })).status).toBe(409)
     // The floor reads it (its one column of the row: never the basis).
-    expect(await ok('floorA1', '/production/floor-rules')).toEqual({ siteId: A.siteA1, scanSubject: 'STATION', workerAcknowledged: true, standardBundleSize: 12 })
+    expect(await ok('floorA1', '/production/floor-rules')).toEqual({ siteId: A.siteA1, scanSubject: 'STATION', workerAcknowledged: true, standardBundleSize: 12, checks: { quantityGuard: 'STRICT', skippedOperationRule: 'WARN', scrapApprovalLimit: null, bundleCodeMode: 'ONE_CODE' }, undoWindowSeconds: 120 })
     expect(await h.database.withScope({ audience: 'floor', tenantId: A.tenant, actorId: A.operator, siteId: A.siteA1 }, (client) => standardBundleSizeFor(client, A.siteA1))).toBe(12)
   })
 

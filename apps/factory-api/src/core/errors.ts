@@ -10,6 +10,7 @@ import { reportError } from '../observability/tracker'
  * with a stable code (`@nexus/factory-domain/core/errors` ERROR_CODES) and the status below. A domain error keeps its
  * own message; anything else gets the fixed message of its code. A stack trace, SQL, a driver message or a Prisma
  * message never reaches the caller: an unexpected error is logged with its request id and answered `internal_error`.
+ * A busy database (B-W2b-F2, `isBusyDatabaseError` below) is answered 503 `not_ready` "busy, try again" with Retry-After.
  */
 
 export const STATUS_OF: Readonly<Record<ErrorCode, number>> = {
@@ -83,6 +84,29 @@ export interface MappedError {
   readonly issues?: readonly Issue[]
   /** True when the error was not expected: it is logged at error level. */
   readonly unexpected: boolean
+  /** Seconds the caller waits before trying again (the Retry-After header). Only a busy database sets it. */
+  readonly retryAfterSeconds?: number
+}
+
+/** B-W2b-F2: the answer to a busy database, in words, and how long the caller waits before trying again. */
+export const BUSY_MESSAGE = 'The factory is busy. Try again in a moment.'
+export const BUSY_RETRY_AFTER_SECONDS = 3
+
+/**
+ * B-W2b-F2: Prisma's codes for a database that is busy right now, not for a wrong request. Under load a command's
+ * interactive transaction waits for a pool connection longer than its maxWait, or outlives its timeout (P2028
+ * "Transaction API error": unable to start in the given time, expired, already closed, not found); Prisma's own pool
+ * times out (P2024); PostgreSQL ends a transaction in a deadlock or a serialization failure, which Prisma says to retry
+ * (P2034); the server has no connection slot left (P2037, SQLSTATE 53300). Each is answered 503 `not_ready` with
+ * Retry-After, never 500: nothing was written (the transaction rolled back), and the same request can be sent again.
+ */
+const BUSY_PRISMA_CODES: ReadonlySet<string> = new Set(['P2024', 'P2028', 'P2034', 'P2037'])
+
+/** A Prisma request error (PrismaClientKnownRequestError, by name: the class is not exported here) with a busy code. */
+export function isBusyDatabaseError(error: unknown): boolean {
+  if (!(error instanceof Error) || error.name !== 'PrismaClientKnownRequestError') return false
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' && BUSY_PRISMA_CODES.has(code)
 }
 
 function validationIssues(error: unknown): Issue[] {
@@ -117,6 +141,9 @@ export function mapError(error: unknown): MappedError {
   }
   const closedMonth = hardPeriodLockRefusal(error)
   if (closedMonth) return closedMonth
+  if (isBusyDatabaseError(error)) {
+    return { status: STATUS_OF.not_ready, code: 'not_ready', message: BUSY_MESSAGE, unexpected: false, retryAfterSeconds: BUSY_RETRY_AFTER_SECONDS }
+  }
   if (hasZodFastifySchemaValidationErrors(error)) {
     const code: ErrorCode = 'validation_failed'
     return { status: STATUS_OF[code], code, message: MESSAGE_OF[code], issues: validationIssues(error), unexpected: false }
@@ -154,6 +181,10 @@ export function installErrorHandling(app: FastifyInstance): void {
       request.log.error({ err: error }, 'request failed')
       // B-W2a-42 (PLT-218): the redacted report; route pattern, never the URL.
       reportError(error, { route: request.routeOptions?.url ?? null, method: request.method, statusCode: mapped.status, requestId: String(request.id), ...contextFields(request) })
+    } else if (mapped.retryAfterSeconds !== undefined) {
+      // B-W2b-F2: a busy database is not a bug, but the operator must see it (with the error, never on the wire).
+      request.log.warn({ err: error, code: mapped.code, status: mapped.status }, 'database busy')
+      void reply.header('retry-after', String(mapped.retryAfterSeconds))
     } else {
       request.log.info({ code: mapped.code, status: mapped.status }, 'request refused')
     }

@@ -12,6 +12,11 @@ import {
   scrapStockContract,
 } from './contract'
 import { manifest } from './manifest'
+// B-W2b-53 (MES-128): scrap above a site's limit waits for the team leader's approval.
+import { approveManyOverLimitContract, approveOverLimitContract, floorWaitingContract, officeWaitingContract, refuseOverLimitContract } from './contract'
+import { floorDecide, floorWaiting, officeApproveMany, officeDecide, officeWaitingRows } from './over-limit'
+import { requireFloorStepUp } from '../../../platform/auth/floor/step-up'
+import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { askReplacement, changeReplacement, listReplacements, replacementRecord } from './replacements'
 import { scrapStock } from './stock'
 import { scrapList } from './views'
@@ -55,4 +60,28 @@ export default defineRoutes('production.scrap', manifest, async (app) => {
     const result = await changeReplacement(request, request.params.replacementId, 'cancel', request.body, idempotencyKeyFrom(request))
     return reply.code(result.replayed ? 200 : 201).send(result)
   })
+
+  // B-W2b-53 (MES-128): the office decides scrap above a site's limit (production.scrap.overLimit); the scrap list shows it.
+  app.get('/production/scrap/over-limit', { schema: officeWaitingContract }, async (request) => officeWaitingRows(request, request.query))
+
+  app.post('/production/scrap/over-limit/approve', { schema: approveManyOverLimitContract }, async (request) => officeApproveMany(request, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/production/scrap/over-limit/:scanId/approve', { schema: approveOverLimitContract }, async (request) =>
+    officeDecide(request, request.params.scanId, { decision: 'APPROVED', ...(request.body.note ? { note: request.body.note } : {}) }, idempotencyKeyFrom(request)),
+  )
+
+  app.post('/production/scrap/over-limit/:scanId/refuse', { schema: refuseOverLimitContract }, async (request) =>
+    officeDecide(request, request.params.scanId, { decision: 'REFUSED', reason: request.body.reason, ...(request.body.note ? { note: request.body.note } : {}) }, idempotencyKeyFrom(request)),
+  )
+
+  // B-W2b-53 (MES-128): the team leader on the tablet (floor.lead, the device's site); approving signs with the PIN.
+  app.get('/production/scrap/floor/waiting', { schema: floorWaitingContract }, async (request) => floorWaiting(request, request.query))
+
+  app.post('/production/scrap/floor/waiting/:scanId/approve', { schema: approveOverLimitContract }, async (request) =>
+    floorDecide(request, request.params.scanId, { decision: 'APPROVED', ...(request.body.note ? { note: request.body.note } : {}) }, { stepUp: () => requireFloorStepUp(officeAuthOf(app), request), idempotencyKey: idempotencyKeyFrom(request) }),
+  )
+
+  app.post('/production/scrap/floor/waiting/:scanId/refuse', { schema: refuseOverLimitContract }, async (request) =>
+    floorDecide(request, request.params.scanId, { decision: 'REFUSED', reason: request.body.reason, ...(request.body.note ? { note: request.body.note } : {}) }, { idempotencyKey: idempotencyKeyFrom(request) }),
+  )
 })

@@ -230,6 +230,17 @@ const CALLS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object
 const GUARDS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   team_leader: ['production.scan.override'],
 })
+/**
+ * B-W2b-34 (piece rates and the legal switch of piece pay; MES-254, MES-255, MES-262; design people.piecerates): the
+ * administrator and the production manager read the rate tables, who has read them and the legal switch, without a pay
+ * figure (neither holds the pay grain: operations and standard minutes only). Keeping the rates (people.piecerates.manage:
+ * typing a rate needs the pay grain) and starting piece pay (people.piecerates.switch, GATE-PIECE-PAY) are in no template:
+ * the Owner holds them through every office permission; an HR role gets them with the pay grain.
+ */
+const PEOPLE_PIECERATES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.piecerates.view'],
+  production_manager: ['people.piecerates.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -252,7 +263,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-35
   ...((audience === 'office' ? CALLS_ADDS : CALLS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-46
-  ...(audience === 'floor' ? (GUARDS_FLOOR_ADDS[key] ?? []) : [])]
+  ...(audience === 'floor' ? (GUARDS_FLOOR_ADDS[key] ?? []) : []),
+  // B-W2b-34
+  ...(audience === 'office' ? (PEOPLE_PIECERATES_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -321,6 +334,20 @@ const PEOPLE_SHIFTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Obje
 const peopleShiftsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (PEOPLE_SHIFTS_ADDS[key] ?? []) : [])
 
 /**
+ * B-W2b-39 (skills and machine authorisations; MES-241, MES-244, MES-246, MES-024; design people.skills): the
+ * administrator (the HR register's keeper until an HR template comes), the production manager and the floor supervisor
+ * (the leads: "1–4 set a level on a skill cell") read the matrix, set levels, give trainee periods, sign trainees off and
+ * authorise people on machines. Office only: the floor reads its people's levels through the qualification check. Owner
+ * and read-only take theirs from every(). One line per template.
+ */
+const SKILLS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.skills.view', 'people.skills.manage', 'people.authorisations.manage'],
+  production_manager: ['people.skills.view', 'people.skills.manage', 'people.authorisations.manage'],
+  floor_supervisor: ['people.skills.view', 'people.skills.manage', 'people.authorisations.manage'],
+})
+const skillsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (SKILLS_ADDS[key] ?? []) : [])
+
+/**
  * B-W2b-24 (PLT-125, design admin.documents popup `override`): type the number a migrated document had in the old system —
  * the administrator (who runs the go-live's first load) and finance (who keeps the number series). The owner and nobody
  * else through every(); never read_only, never a floor role. One line.
@@ -329,7 +356,7 @@ const NUMBERING_OVERRIDE_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'fin
 const numberingOverrideAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' && NUMBERING_OVERRIDE_TEMPLATES.has(key) ? ['numbering.override' as Permission] : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience), ...numberingOverrideAddedFor(key, audience), ...peopleAddedFor(key, audience), ...peopleShiftsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience), ...numberingOverrideAddedFor(key, audience), ...peopleAddedFor(key, audience), ...peopleShiftsAddedFor(key, audience), ...skillsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 
@@ -643,6 +670,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'production.scrap.view',
       'production.scrap',
       'production.scrap.approve',
+      // B-W2b-53 (MES-128): approves or refuses scrap above a site's limit in the office.
+      'production.scrap.overLimit',
       'production.cutting.view',
       'workorders.view',
       'workorders.manage',
@@ -662,6 +691,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'quality.defects.view',
       // B-W2b-29: off-standard and indirect time (MES-155 … MES-158): the codes of Floor rules & codes, the labour inbox's blocks.
       'production.offstandard.view', 'production.offstandard.codes', 'production.offstandard.approve',
+      // B-W2b-45: Labour & corrections (MES-201 … MES-206): the queue, line days closed and reopened, disputes answered.
+      'production.labour.view', 'production.labour.close', 'production.labour.reopen', 'production.labour.answer',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export',
     ],
@@ -687,8 +718,12 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'reasons.view',
       // B-W2a-26 (MES-008): puts work orders and bundles on hold; reads the defect library.
       'quality.holds.view', 'quality.holds.place', 'quality.defects.view',
+      // B-W2b-53 (MES-128): approves or refuses scrap above a site's limit from the Office.
+      'production.scrap.overLimit',
       // B-W2b-29: decides the floor's off-standard blocks (MES-157), as it decides scan corrections; never one's own.
       'production.offstandard.view', 'production.offstandard.approve',
+      // B-W2b-45: closes the lines' days and answers the workers' disputes as their lead (never their own); reopening is the manager's.
+      'production.labour.view', 'production.labour.close', 'production.labour.answer',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export'],
     grains: [],
@@ -710,27 +745,31 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
   }),
   floorTemplate('operator', {
     name: 'Operator',
-    description: 'Works at a station on an enrolled floor device; sees no money.',
+    description: 'Works at a station on an enrolled floor device; sees only their own pay (the piece rates published to them).',
     permissions: ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'inventory.receive', 'production.cut', 'production.bundles', 'production.scan', 'production.serials', 'shipping.pack', 'production.rework'],
-    grains: [],
+    // B-W2b-34: the pay grain for the worker's own records only (the floor routes never show another person's pay).
+    grains: ['pay'],
   }),
   floorTemplate('cutting_operator', {
     name: 'Cutting operator',
-    description: 'Works at a cutting table on an enrolled floor device; sees no money.',
+    description: 'Works at a cutting table on an enrolled floor device; sees only their own pay (the piece rates published to them).',
     permissions: ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'production.cut', 'production.bundles', 'production.scan'],
-    grains: [],
+    // B-W2b-34: the pay grain for the worker's own records only (the floor routes never show another person's pay).
+    grains: ['pay'],
   }),
   floorTemplate('floor_inspector', {
     name: 'Floor inspector',
-    description: 'Inspects work at an inspection bench on an enrolled floor device, and signs and releases the final inspection there with the PIN; sees no money.',
+    description: 'Inspects work at an inspection bench on an enrolled floor device, and signs and releases the final inspection there with the PIN; sees only their own pay (the piece rates published to them).',
     permissions: ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'production.scan', 'quality.inspections.view', 'quality.inspections.record', 'quality.garments.release', 'production.rework'],
-    grains: [],
+    // B-W2b-34: the pay grain for the worker's own records only (the floor routes never show another person's pay).
+    grains: ['pay'],
   }),
   floorTemplate('team_leader', {
     name: 'Team leader',
-    description: "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees no money.",
+    description: "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees only their own pay (the piece rates published to them).",
     permissions: ['floor.work', 'floor.lead', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'inventory.receive', 'production.cut', 'production.bundles', 'production.scan', 'production.serials', 'quality.inspections.view', 'shipping.pack', 'production.rework'],
-    grains: [],
+    // B-W2b-34: the pay grain for the worker's own records only (the floor routes never show another person's pay).
+    grains: ['pay'],
   }),
   // B-W2a-35 (the plant; Owner answer H1): the technician on the floor (maintenance mode).
   floorTemplate('technician', {
@@ -771,7 +810,8 @@ export function templateProblems(templates: readonly RoleTemplate[]): string[] {
 
 /**
  * What a role's audience forbids in its content: a floor role holds only `floor.*` permissions (and the few shared with
- * the floor), at most the wages grain and no two-factor rule; an office role holds no `floor.*` permission.
+ * the floor), at most the wages and pay grains (B-W2b-34: a worker's own pay) and no two-factor rule; an office role holds
+ * no `floor.*` permission.
  */
 export function audienceProblems(role: { readonly audience: RoleAudience } & Pick<RoleContent, 'permissions' | 'grains' | 'requireMfa'>): string[] {
   const floorPermission = (permission: string) => FACTORY_PERMISSIONS.get(permission)?.area === FLOOR_AREA
@@ -781,7 +821,7 @@ export function audienceProblems(role: { readonly audience: RoleAudience } & Pic
     for (const permission of role.permissions) {
       if (!floorPermission(permission) && !sharedWithFloor(permission)) problems.push(`a floor role holds only floor permissions, not ${permission}`)
     }
-    for (const grain of role.grains) if (grain !== 'wages') problems.push(`a floor role sees at most wages, not ${grain}`)
+    for (const grain of role.grains) if (grain !== 'wages' && grain !== 'pay') problems.push(`a floor role sees at most wages and pay, not ${grain}`)
     if (role.requireMfa) problems.push('a floor role cannot require two-factor')
     return problems
   }
