@@ -189,7 +189,9 @@
     "LOCKED_one": "{count} evento cade in un periodo bloccato.",
     "LOCKED_other": "{count} eventi cadono in un periodo bloccato.",
     "NO_SCAN_one": "{count} rilavorazione non ha una dichiarazione da cui calcolare il costo.",
-    "NO_SCAN_other": "{count} rilavorazioni non hanno una dichiarazione da cui calcolare il costo."
+    "NO_SCAN_other": "{count} rilavorazioni non hanno una dichiarazione da cui calcolare il costo.",
+    "SCRAP_APPROVAL_one": "{count} scarto oltre il limite attende l’approvazione del capo reparto.",
+    "SCRAP_APPROVAL_other": "{count} scarti oltre il limite attendono l’approvazione del capo reparto."
   },
   "standards": {
     "title": "Costo standard per articolo",

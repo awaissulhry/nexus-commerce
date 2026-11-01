@@ -13,7 +13,11 @@ import { definePermissions } from '../../auth/permissions/registry'
  */
 export const PRODUCTION_SETTINGS_DEFINITIONS = definePermissions('production', {
   'settings.view': { risk: 'read', description: "See each site's floor rules: whether floor records name the worker or the station, the legal basis on record, and how many workers have acknowledged the information notice." },
-  'settings.manage': { risk: 'write', description: "Change who a site's floor records name (naming workers again asks for a fresh code and a reason), record the legal basis, and see by name who has not acknowledged the notice." },
+  'settings.manage': {
+    risk: 'write',
+    description:
+      "Change who a site's floor records name (naming workers again asks for a fresh code and a reason), record the legal basis, see by name who has not acknowledged the notice, and change the site's floor checks (the quantity guard, the sequence, the scrap approval limit).",
+  },
 })
 
 export const PRODUCTION_SETTINGS_VIEW = 'production.settings.view' satisfies Permission

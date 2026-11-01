@@ -21,7 +21,8 @@ export const ENTRY_EVENTS = ['ISSUE', 'RETURN', 'STOCK_SCRAP', 'LABOUR', 'SCAN_S
 export type EntryEvent = (typeof ENTRY_EVENTS)[number]
 
 /** Why a source event has no entry yet (or cannot have one), in words beside the code. */
-export const WAITING_CODES = ['NOT_VALUED', 'NO_RATE', 'CURRENCY', 'LOCKED', 'NO_SCAN'] as const
+// B-W2b-53: SCRAP_APPROVAL, a scan's scrap above its site's limit waiting for the team leader (MES-128).
+export const WAITING_CODES = ['NOT_VALUED', 'NO_RATE', 'CURRENCY', 'LOCKED', 'NO_SCAN', 'SCRAP_APPROVAL'] as const
 export type WaitingCode = (typeof WAITING_CODES)[number]
 
 export const DOCUMENT_TYPES = ['StockMove', 'OperationScan', 'ReworkOrder', 'SubcontractOrder', 'SupplierInvoiceLine', 'WorkOrderCostEntry'] as const

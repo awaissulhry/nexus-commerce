@@ -670,6 +670,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'production.scrap.view',
       'production.scrap',
       'production.scrap.approve',
+      // B-W2b-53 (MES-128): approves or refuses scrap above a site's limit in the office.
+      'production.scrap.overLimit',
       'production.cutting.view',
       'workorders.view',
       'workorders.manage',
@@ -716,6 +718,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'reasons.view',
       // B-W2a-26 (MES-008): puts work orders and bundles on hold; reads the defect library.
       'quality.holds.view', 'quality.holds.place', 'quality.defects.view',
+      // B-W2b-53 (MES-128): approves or refuses scrap above a site's limit from the Office.
+      'production.scrap.overLimit',
       // B-W2b-29: decides the floor's off-standard blocks (MES-157), as it decides scan corrections; never one's own.
       'production.offstandard.view', 'production.offstandard.approve',
       // B-W2b-45: closes the lines' days and answers the workers' disputes as their lead (never their own); reopening is the manager's.
