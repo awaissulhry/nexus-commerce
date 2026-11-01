@@ -96,9 +96,14 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   AccountingExport: '/finance/accounting/files?export=[id]',
   // Production › Scrap & rework (SCR-140, B-W2a-60): a rework order opens in its row's detail on the list.
   ReworkOrder: '/production/scrap?open=rework:[id]',
+  // B-W2b-58: a help call opens in its DetailModal on Production › Help calls (SCR-142; the bell's call alerts).
+  HelpCall: '/production/calls?open=[id]',
   // Planning › Planning settings (SCR-124, B-W2a-59): a calendar opens on Calendars & shifts, a shift pattern in its editor.
   WorkCalendar: '/planning/settings?tab=calendars&cal=[id]',
   ShiftPattern: '/planning/settings?tab=calendars&pattern=[id]',
+  // B-W2b-55 People › Employees (SCR-085): an employee's record; a team opens on the Teams view of Employees.
+  Employee: '/people/employees/[id]',
+  Team: '/people/employees?view=teams&team=[id]',
 })
 
 /**
@@ -130,6 +135,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/compliance/certificates': '/compliance/certificates',
   '/compliance/labels': '/compliance/labels',
   '/production/work-orders': '/production/work-orders',
+  // B-W2b-58: the help calls (`?view=`, `?tile=`, `?kind=` as the API reads them).
+  '/production/calls': '/production/calls',
   // The pages read the API's own filters from the address (`?onHold=true`, `?waitingRelease=true`, `?status=OPEN`).
   '/quality/inspections': '/quality/inspections',
   // B-W2a-68: the NCR list and board (SCR-144; `?view=`, `?q=`, `?site=`, `?mode=board`, New NCR `?new=1&from=&id=`).
@@ -195,6 +202,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-60: the cuts across work orders (SCR-238, `?view=`, `?q=`) and scrap & rework (SCR-140, `?view=`, `?period=`).
   '/production/cutting/cuts': '/production/cutting',
   '/production/scrap': '/production/scrap',
+  // B-W2b-55: the HR register (SCR-084) reads `?tile=`, `?rows=`, `?q=` and `?view=teams`.
+  '/people/employees': '/people/employees',
 })
 
 export interface RecordRef {

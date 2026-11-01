@@ -814,6 +814,8 @@
       "floorBody": "No e-mail needed: a name, a site, a badge and a PIN."
     },
     "later": "Partner users come in W2b; AI agents in W3. Giving a role to many people, printing badges and resending invites in one go come later.",
+    "hrData": "HR data (team, line, contract, leaving) is kept in People › Employees: this page keeps the sign-in.",
+    "hrDataLink": "Open People › Employees",
     "worker": {
       "hint": "A floor worker signs in on a tablet with a badge and a PIN; no e-mail.",
       "minimal": "Only what the work needs (GDPR art. 5(1)(c)): no photo, birth date or national id.",
@@ -1826,6 +1828,10 @@
     "people_piecerates_view": "See the piece-rate tables, their versions, who has read them and the legal switch of piece pay (the rates only with the pay grain)",
     "people_piecerates_manage": "Make new versions of piece rates, publish them to the workers, put them in force, confirm provisional rates and record what piece pay rests on",
     "people_piecerates_switch": "Start piece pay at a site once every legal precondition is on record, or stop it",
-    "people_attendance_view": "See attendance at your sites: clock-ins, clock-outs and breaks, the days and who is in now (where the attendance purpose is on)"
+    "people_attendance_view": "See attendance at your sites: clock-ins, clock-outs and breaks, the days and who is in now (where the attendance purpose is on)",
+    "people_attendance_manage": "Enter and fix attendance days by hand, always with a reason (missing clock-in or clock-out, a duplicate voided, work outside the plant, an absence code); reopen an approved day",
+    "people_attendance_approve": "Approve attendance days with no anomaly left (never your own)",
+    "people_attendance_settings": "Keep the absence codes with the labour consultant's LUL code, and the rounding, grace and overtime rules",
+    "people_attendance_rollcall": "Open the roll call of a site: who is clocked in now, for an evacuation (every opening is recorded)"
   }
 }

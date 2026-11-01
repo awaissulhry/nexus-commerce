@@ -15,6 +15,8 @@ import { GUARD_KINDS, OVERRIDE_REASON_CODES } from './guards/rules'
 // B-W2b-53: floor rules per site and scrap above the limit.
 import { DECIDED_ON, SCRAP_DECISIONS } from './scrap/approval'
 import { FLOOR_RULE_FIELDS, FLOOR_RULE_MODES } from './settings/floor-rules'
+// B-W2b-40: operation timing on the tablet.
+import { TIMING_KINDS } from './terminal/rules'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -70,6 +72,10 @@ import { FLOOR_RULE_FIELDS, FLOOR_RULE_MODES } from './settings/floor-rules'
  *                                           the scrap approval limit); Floor rules & codes and the site's tablets re-read
  *   production.scrap_over_limit_decided     B-W2b-53: a scan's scrap above the site's limit was approved (it posts) or
  *                                           refused, by a team leader on the tablet or in the office (MES-128)
+ *   production.operation_timed              B-W2b-40: a bundle at an operation was started, paused (a reason code),
+ *                                           resumed, handed back or reported in part (pieces so far), on the floor or
+ *                                           by the system at clock-out (MES-087 … MES-094, MES-117); no person, no
+ *                                           station (a station can stand for one person), no minutes
  */
 export const MONITORING_CHANGES = ['WIDENED', 'NARROWED', 'BASIS_RECORDED', 'BASIS_REPLACED'] as const
 
@@ -744,5 +750,30 @@ export const events = [
       decidedOn: z.enum(DECIDED_ON),
     }),
     live: { permission: 'production.scrap.view', floor: 'floor.lead', fields: ['workOrderId', 'number', 'scanId'] },
+  }),
+  // ---- B-W2b-40: operation timing on the tablet (modules/production/terminal). Ids, the kind, a pause's reason code, the
+  // pieces so far and the team's size only: never a worker, a station or minutes (Statuto dei Lavoratori art. 4).
+  defineEvent({
+    type: 'production.operation_timed',
+    context: 'production',
+    description: "A bundle at an operation was started, paused with a reason, resumed, handed back unfinished or reported in part (the pieces done so far), on the tablet or by the system when its worker clocked out; the work order's timing and the tablet's open work refresh.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      siteId: z.uuid(),
+      bundleId: z.uuid(),
+      scanId: z.uuid(),
+      operationId: z.uuid(),
+      operationSeq: z.number().int(),
+      kind: z.enum(TIMING_KINDS),
+      /** PAUSE: the code of the PAUSE reason list (CLOCK_OUT: the system's, at clock-out). */
+      pauseReasonCode: z.string().nullable(),
+      /** PARTIAL: the pieces done so far; else 0. */
+      pieces: z.number().int().min(0),
+      /** A team operation's members on its START, RESUME or PARTIAL (0: one person, or a station). */
+      team: z.number().int().min(0),
+      postedBy: z.enum(['FLOOR', 'SYSTEM']),
+    }),
+    live: scanLive,
   }),
 ] as const

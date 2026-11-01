@@ -1,0 +1,343 @@
+{
+  "common": {
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "open": "Apri",
+    "clearFilters": "Togli i filtri",
+    "more": "Mostra altre",
+    "back": "Indietro"
+  },
+  "live": {
+    "connecting": "connessione…",
+    "live": "in diretta",
+    "offline": "offline: non si aggiorna"
+  },
+  "page": {
+    "noAccess": {
+      "title": "Il tuo ruolo non può vedere le chiamate di aiuto",
+      "body": "Il tuo ruolo non comprende “production.calls.view”. Chiedi a un amministratore se ti serve questa pagina."
+    },
+    "editRouting": "Modifica chi viene chiamato (Regole di reparto)",
+    "more": "Altre azioni",
+    "chart": "Chiamate per ora",
+    "ack": "Prendi in carico",
+    "ackN_one": "Prendi in carico {count} chiamata",
+    "ackN_other": "Prendi in carico {count} chiamate"
+  },
+  "tiles": {
+    "label": "Riquadri delle chiamate"
+  },
+  "tile": {
+    "OPEN": "Chiamate aperte",
+    "WAITING": "In attesa da oltre {minutes} minuti",
+    "ANSWERED_TODAY": "Prese in carico oggi",
+    "MEDIAN": "Tempo di risposta mediano oggi",
+    "medianHint": "Dall'invio alla presa visione, chiamate di oggi del sito: mai un dato di una persona."
+  },
+  "held": {
+    "noAnswer": "Il tuo ruolo non può rispondere alle chiamate di aiuto (production.calls.answer).",
+    "busy": "Salvataggio…",
+    "loading": "Caricamento della chiamata…",
+    "ackNone": "Seleziona le chiamate aperte che nessuno ha ancora visto.",
+    "ackNothing": "Nessuna delle chiamate selezionate attende la presa visione.",
+    "solveNothing": "Nessuna delle chiamate selezionate è aperta.",
+    "noSettings": "Il tuo ruolo non può aprire Regole di reparto (production.settings.view).",
+    "closed": "Questa chiamata è chiusa.",
+    "seenAlready": "Qualcuno ha già visto questa chiamata.",
+    "comingAlready": "Qualcuno sta già arrivando.",
+    "outcomeNamed": "Ciò a cui ha portato questa chiamata è già indicato.",
+    "noPlantJobs": "Per aprire un intervento di manutenzione servono plant.view e plant.jobs.manage.",
+    "code": "Scegli uno dei codici proposti.",
+    "noteLong": "Al massimo 500 caratteri.",
+    "reason": "Indica perché la chiamata viene annullata.",
+    "reasonLong": "Il motivo al massimo 500 caratteri.",
+    "machine": "Scegli prima la macchina.",
+    "problem": "Descrivi il problema.",
+    "problemLong": "Il problema al massimo 2000 caratteri."
+  },
+  "kind": {
+    "MACHINE": "Macchina",
+    "MATERIAL": "Materiale",
+    "QUALITY": "Qualità",
+    "SUPERVISOR": "Capo reparto",
+    "MAINTENANCE": "Manutenzione",
+    "OTHER": "Altro"
+  },
+  "status": {
+    "SENT": "Aperta",
+    "SEEN": "Presa in carico",
+    "ON_THE_WAY": "In arrivo",
+    "SOLVED": "Risolta",
+    "CANCELLED": "Annullata"
+  },
+  "chart": {
+    "title": "Chiamate per ora · {site}",
+    "titleNoSite": "Chiamate per ora",
+    "noSite": "Scegli un sito nella barra in alto per vedere le sue chiamate per ora.",
+    "label": "Chiamate di aiuto di oggi a {site}, per ora",
+    "byLabel": "Raggruppa le barre per",
+    "by": {
+      "kind": "Per tipo",
+      "line": "Per linea"
+    },
+    "calls": "Chiamate",
+    "sofar": "Chiamate finora oggi",
+    "noLine": "Nessuna linea",
+    "caption_one": "{count} chiamata oggi. Le postazioni la inviano con un tocco; nessuno è contato per nome.",
+    "caption_other": "{count} chiamate oggi. Le postazioni le inviano con un tocco; nessuno è contato per nome.",
+    "none": {
+      "title": "Nessuna chiamata oggi",
+      "body": "Quando una postazione chiama aiuto, la sua ora compare qui."
+    },
+    "responses": "Tempo di risposta per tipo (mediana)",
+    "answeredOf": "{answered} di {calls} viste",
+    "noAnswer": "non ancora vista",
+    "responsesHint": "Dall'invio alla presa visione, per tipo di chiamata oggi: il tempo di una chiamata, mai di una persona."
+  },
+  "routing": {
+    "title": "Chi viene chiamato",
+    "noSite": "Scegli un sito nella barra in alto per vedere chi viene chiamato.",
+    "none": {
+      "title": "Nessun tipo di chiamata in questo sito",
+      "body": "Aggiungili in Regole di reparto › Instradamento chiamate: ogni tipo va a una squadra."
+    },
+    "col": {
+      "type": "Tipo",
+      "group": "Gruppo",
+      "members": "Membri"
+    },
+    "leaders": "I capisquadra del sito",
+    "archived": "Squadra archiviata: nessuno viene avvisato",
+    "escalate": "Sollecito dopo {minutes} min",
+    "members_one": "{count} persona",
+    "members_other": "{count} persone",
+    "hint": "Una chiamata arriva subito alle notifiche e ai tablet del gruppo. Si modifica in Regole di reparto."
+  },
+  "col": {
+    "type": "Tipo",
+    "line": "Linea",
+    "station": "Postazione",
+    "work": "Ordine / fascio",
+    "opened": "Aperta",
+    "team": "Gruppo chiamato",
+    "status": "Stato",
+    "seenBy": "Presa in carico da",
+    "response": "Risposta",
+    "resolve": "Risoluzione",
+    "more": "Azioni"
+  },
+  "list": {
+    "label": "Chiamate di aiuto",
+    "title": "Chiamate di aiuto",
+    "count_one": "{count} chiamata",
+    "count_other": "{count} chiamate",
+    "search": "Cerca postazione, linea, ordine…",
+    "viewLabel": "Quali chiamate",
+    "kindLabel": "Tipo di chiamata",
+    "kindAll": "Tutti i tipi",
+    "noLine": "—",
+    "notYet": "non ancora",
+    "failed": "Impossibile leggere le chiamate",
+    "rowMenu": "Azioni per {type} a {station}",
+    "noMatch": {
+      "title": "Nessuna chiamata corrisponde",
+      "body": "Togli i filtri o la ricerca per vedere tutte le chiamate aperte."
+    },
+    "empty": {
+      "title": "Nessuna chiamata aperta ✓",
+      "body": "Ogni postazione ha ciò che le serve. Una nuova chiamata compare qui subito."
+    }
+  },
+  "view": {
+    "open": "Chiamate aperte",
+    "closed": "Chiamate chiuse",
+    "all": "Tutte le chiamate"
+  },
+  "bulk": {
+    "solve_one": "Segna {count} risolta",
+    "solve_other": "Segna {count} risolte"
+  },
+  "keys": {
+    "title": "Tasti",
+    "ack": "Prendi in carico la chiamata aperta",
+    "done": "Fatto: risolta, con il modo",
+    "next": "Chiamata successiva / precedente"
+  },
+  "person": {
+    "named": "{name}",
+    "worker": "Una persona del reparto",
+    "workerHidden": "Una persona del reparto (questo sito registra le postazioni, non le persone)",
+    "user": "Un utente dell'ufficio"
+  },
+  "dur": {
+    "s": "{s} s",
+    "m": "{m} min",
+    "ms": "{m} min {s} s",
+    "hm": "{h} h {m} min"
+  },
+  "open": {
+    "for": "aperta da {time}",
+    "lateHint": "In attesa da più di {minutes} minuti"
+  },
+  "waiting": {
+    "tag": "Attesa non conteggiata",
+    "hint": "Mentre la chiamata è aperta, il tempo della postazione va su un codice fuori standard: l'attesa non pesa mai su chi lavora.",
+    "banner": "L'attesa della postazione va su {code} ({status}) mentre la chiamata è aperta: non pesa mai su chi lavora.",
+    "status": {
+      "OPEN": "in corso",
+      "PENDING": "in attesa del caposquadra",
+      "APPROVED": "approvata",
+      "REJECTED": "rifiutata"
+    }
+  },
+  "detail": {
+    "title": "{type} · {line} · {station}",
+    "titleNoLine": "{type} · {station}",
+    "titleLoading": "Chiamata di aiuto",
+    "noun": "chiamata",
+    "notFound": "Questa chiamata non esiste, o è di un sito che il tuo ruolo non raggiunge.",
+    "job": "Apri un intervento di manutenzione",
+    "cancel": "Annulla chiamata",
+    "coming": "Sto arrivando",
+    "ack": "Prendi in carico",
+    "done": "Fatto",
+    "timeline": "Cosa è successo",
+    "facts": "La chiamata",
+    "type": "Tipo",
+    "where": "Dove",
+    "whereValue": "{station} · {line}",
+    "work": "Ordine di produzione",
+    "bundle": "Fascio {code}",
+    "team": "Gruppo chiamato",
+    "comingLabel": "Chi sta arrivando",
+    "caller": "Inviata da",
+    "callerHint": "Indicato perché le registrazioni di reparto di questo sito nominano chi lavora.",
+    "sent": "Inviata",
+    "response": "Tempo di risposta",
+    "onTheWay": "In arrivo dopo",
+    "resolve": "Tempo di risoluzione",
+    "note": "Le parole della postazione",
+    "resolution": "Come è stata risolta",
+    "outcome": "A cosa ha portato",
+    "noOutcome": "Ancora nulla",
+    "legal": "Questi sono i tempi di questa chiamata. I tempi di risposta non sono mai mostrati, raggruppati o sommati per persona."
+  },
+  "step": {
+    "SENT": "Inviata",
+    "SEEN": "Vista",
+    "ON_THE_WAY": "In arrivo",
+    "SOLVED": "Risolta",
+    "CANCELLED": "Annullata",
+    "sentBy": "Da {who} a {station}",
+    "sentFrom": "Dalla postazione {station}"
+  },
+  "coming": {
+    "SEEN": "{who} · {team} · l'ha vista",
+    "ON_THE_WAY": "{who} · {team} · in arrivo"
+  },
+  "resolution": {
+    "FIXED": "Riparato",
+    "BROUGHT": "Materiale portato",
+    "ADJUSTED": "Regolato",
+    "EXPLAINED": "Spiegato sul posto",
+    "REPLACED": "Pezzo sostituito",
+    "NOT_NEEDED": "Alla fine non serviva aiuto"
+  },
+  "outcome": {
+    "MaintenanceJob": "Un intervento di manutenzione",
+    "MaintenanceRequest": "Una richiesta per la macchina",
+    "Nonconformance": "Una non conformità (NC)",
+    "Task": "Un'attività"
+  },
+  "solve": {
+    "title": "Segna la chiamata risolta",
+    "titleN_one": "Segna {count} chiamata risolta",
+    "titleN_other": "Segna {count} chiamate risolte",
+    "body": "La postazione la vede risolta subito; i tempi della chiamata restano.",
+    "bodyN_one": "{count} chiamata riceve lo stesso codice e le stesse parole; una chiamata cambiata nel frattempo viene segnalata.",
+    "bodyN_other": "Le {count} chiamate ricevono lo stesso codice e le stesse parole; una chiamata cambiata nel frattempo viene segnalata.",
+    "code": "Come è stata risolta",
+    "codeHint": "Facoltativo: aiuta a capire di cosa trattano le chiamate.",
+    "noCode": "Non indicato",
+    "note": "Parole",
+    "noteHint": "Facoltative. Mai sul lavoro di una persona.",
+    "do": "Segna risolta",
+    "doN_one": "Segna {count} risolta",
+    "doN_other": "Segna {count} risolte"
+  },
+  "cancel": {
+    "title": "Annullare questa chiamata?",
+    "body": "La chiamata della postazione si chiude senza aiuto. La postazione può inviarne una nuova.",
+    "reason": "Perché",
+    "reasonHint": "Resta nel registro delle modifiche.",
+    "do": "Annulla chiamata"
+  },
+  "job": {
+    "title": "Apri un intervento di manutenzione",
+    "body": "Un intervento correttivo per la macchina di questa postazione; la chiamata lo indica poi come ciò a cui ha portato.",
+    "machine": "Macchina",
+    "pickMachine": "Scegli la macchina",
+    "machineOption": "{asset} · {kind} · {status}",
+    "noMachine": "Nessuna macchina è registrata in questa postazione.",
+    "toPlant": "Apri l'intervento da Stabilimento › Interventi di manutenzione",
+    "priority": "Priorità",
+    "P1": "P1 · subito",
+    "P2": "P2 · oggi",
+    "P3": "P3 · appena possibile",
+    "problem": "Problema",
+    "problemHint": "Ciò che il tecnico deve sapere. Nessun nome.",
+    "prefill": "Chiamata di aiuto dalla postazione {station} ({line}): {type}.",
+    "prefillNoLine": "Chiamata di aiuto dalla postazione {station}: {type}.",
+    "do": "Apri intervento"
+  },
+  "machine": {
+    "RUNNING": "in funzione",
+    "DOWN": "ferma",
+    "UNDER_MAINTENANCE": "in manutenzione",
+    "DO_NOT_USE": "non usare",
+    "RETIRED": "dismessa"
+  },
+  "announce": {
+    "raised": "Nuova chiamata di aiuto: {kind}"
+  },
+  "notice": {
+    "acked_one": "{count} chiamata presa in carico.",
+    "acked_other": "{count} chiamate prese in carico.",
+    "coming_one": "La postazione vede che stai arrivando.",
+    "coming_other": "Le postazioni vedono che stai arrivando.",
+    "solved_one": "{count} chiamata risolta.",
+    "solved_other": "{count} chiamate risolte.",
+    "cancelled_one": "La chiamata è annullata.",
+    "cancelled_other": "Le chiamate sono annullate.",
+    "partly": "{done} fatte, {refused} no: qualcuno le ha cambiate nel frattempo o sono chiuse. L'elenco è stato riletto.",
+    "job": "L'intervento {number} è aperto e collegato alla chiamata.",
+    "openJob": "Apri {number}"
+  },
+  "refusal": {
+    "SOLVED": "Questa chiamata è già risolta.",
+    "CANCELLED": "Questa chiamata è stata annullata.",
+    "ALREADY_SEEN": "Qualcuno ha già visto questa chiamata: di' che stai arrivando, o segnala risolta.",
+    "ALREADY_ON_THE_WAY": "Qualcuno sta già arrivando: rileggi la chiamata per vedere chi.",
+    "OUTCOME_NAMED": "Ciò a cui ha portato la chiamata è già indicato: apri quel record dalla chiamata.",
+    "KIND_FIXED": "Un tipo di chiamata mantiene il suo genere: disattivalo e aggiungine uno nuovo con l'altro genere.",
+    "CODE_TAKEN": "Il sito ha già un tipo di chiamata con questo codice.",
+    "CODE_NOT_LISTED": "Questo non è un codice attivo dei motivi di chiamata: aggiungilo prima lì.",
+    "TEAM_NOT_ACTIVE": "Questa squadra è archiviata o lavora in un altro sito.",
+    "WAITING_CODE": "L'attesa va su un codice fuori standard attivo dell'azienda.",
+    "TYPE_INACTIVE": "Questo tipo di chiamata è disattivato nel sito.",
+    "NOT_THIS_STATION": "Solo la postazione che l'ha inviata la chiude lì.",
+    "NO_STATION": "Il tablet non è in nessuna postazione.",
+    "OTHER_STATION": "Solo un caposquadra chiama per un'altra postazione."
+  },
+  "problem": {
+    "read": "Il server non ha risposto come previsto. Riprova.",
+    "write": "Non è stato salvato. Riprova.",
+    "changed": "La chiamata è cambiata nel frattempo: viene riletta.",
+    "forbidden": "Il tuo ruolo non può farlo in questo sito.",
+    "gone": "Questa chiamata non esiste più, o il tuo ruolo non raggiunge il suo sito.",
+    "invalid": "Qualcosa non è stato accettato. Controlla i campi e riprova.",
+    "offline": "Nessuna connessione al server. Riprova."
+  }
+}

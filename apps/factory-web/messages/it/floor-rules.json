@@ -9,7 +9,9 @@
     "tabs": "Parti delle regole di reparto",
     "tab": {
       "rules": "Regole di reparto",
-      "codes": "Codici causale"
+      "codes": "Codici causale",
+      "offstd": "Codici fuori standard",
+      "calls": "Instradamento chiamate"
     },
     "viewOnly": "Solo il responsabile di produzione o il titolare modifica queste regole.",
     "noAccess": {
@@ -117,7 +119,11 @@
       "basisReplaced": "La base giuridica è stata sostituita; la precedente resta nel registro delle modifiche.",
       "bundle": "La dimensione standard del fascio è salvata.",
       "saved": "Salvato.",
-      "unchanged": "Nulla è cambiato: le regole erano già così."
+      "unchanged": "Nulla è cambiato: le regole erano già così.",
+      "checks": "Le regole di reparto sono salvate: valgono dalla scansione successiva.",
+      "coupons": "I codici dei fasci sono salvati.",
+      "full_one": "{count} motivo aggiunto agli elenchi di reparto.",
+      "full_other": "{count} motivi aggiunti agli elenchi di reparto."
     },
     "elsewhere": {
       "title": "Modificate da qualcun altro nel frattempo",
@@ -164,18 +170,321 @@
       "value_other": "{count} capi per fascio",
       "mtm": "Un capo su misura è sempre uno per fascio."
     },
-    "fixed": {
-      "title": "Fisse in questa versione",
-      "undo": "Annulla sul tablet: {minutes} minuti dopo una dichiarazione, o fino alla scansione successiva.",
-      "bundleCode": "Un solo codice fascio, scansionato a ogni operazione.",
-      "idle": "Uscita dopo {minutes} minuti senza uso, salvo un altro tempo impostato per i tablet della sede.",
-      "clock": "Un orologio del tablet sfasato di oltre {minutes} minuti viene segnalato sul tablet.",
-      "offline": "Scansioni, tagli e fasci attendono sul tablet quando è offline e partono in ordine; ricevimenti, ispezioni, rilasci ed etichette capo richiedono la rete."
-    },
     "codes": {
       "noAccess": {
         "title": "Il tuo ruolo non può leggere i codici causale",
         "body": "Per leggerli serve “production.scan”, che hanno il responsabile di produzione e gli operatori."
+      }
+    },
+    "checks": {
+      "title": "Regole di reparto per sito",
+      "intro": "Cosa controlla un tablet quando una scansione viene registrata in questo sito. Una modifica vale dalla scansione successiva; le scansioni già fatte restano come sono.",
+      "introDefault": "Questo sito non ha ancora regole di reparto e segue quelle predefinite. Una modifica vale dalla scansione successiva.",
+      "sequence": {
+        "title": "Sequenza delle operazioni",
+        "FREE": {
+          "label": "Libera",
+          "body": "Le operazioni si possono registrare in qualsiasi ordine; una saltata non viene segnalata."
+        },
+        "WARN": {
+          "label": "Avvisa",
+          "body": "Un'operazione saltata è mostrata sul tablet; la scansione conta comunque."
+        },
+        "STRICT": {
+          "label": "Rigida",
+          "body": "Un'operazione obbligatoria saltata ferma la scansione finché il caposquadra non la lascia passare."
+        }
+      },
+      "quantity": {
+        "title": "Controllo delle quantità",
+        "FREE": {
+          "label": "Spento",
+          "body": "Non si controlla se passano più pezzi dell'operazione precedente."
+        },
+        "WARN": {
+          "label": "Avvisa",
+          "body": "Più pezzi dell'operazione precedente vengono mostrati; la scansione conta comunque."
+        },
+        "STRICT": {
+          "label": "Rigido",
+          "body": "Più pezzi dell'operazione precedente fermano la scansione finché il caposquadra non la lascia passare."
+        }
+      },
+      "scrap": {
+        "title": "Approvazione degli scarti",
+        "toggle": "Gli scarti oltre un limite attendono il caposquadra",
+        "on": "Oltre",
+        "off": "Non attende mai",
+        "suffix": "pezzi",
+        "less": "Uno in meno",
+        "more": "Uno in più",
+        "onHint_one": "Più di {count} pezzo di scarto in una scansione attende l'approvazione del caposquadra prima di essere registrato; la scansione conta subito.",
+        "onHint_other": "Più di {count} pezzi di scarto in una scansione attendono l'approvazione del caposquadra prima di essere registrati; la scansione conta subito.",
+        "offHint": "Gli scarti vengono registrati subito, qualunque sia la quantità.",
+        "noValue": "Un limite per valore (costo) non è ancora gestito: il limite è in pezzi."
+      },
+      "reason": "Perché (facoltativo)",
+      "reasonHint": "Resta nel registro delle modifiche.",
+      "limitRange": "Usa un numero intero di pezzi da 1 a 500, o spegni il limite.",
+      "reasonLong": "Il motivo al massimo 2000 caratteri.",
+      "read": {
+        "sequence": "Sequenza delle operazioni: {mode}",
+        "quantity": "Controllo delle quantità: {mode}",
+        "noLimit": "Gli scarti non attendono mai l'approvazione.",
+        "limit_one": "Gli scarti oltre {count} pezzo in una scansione attendono il caposquadra.",
+        "limit_other": "Gli scarti oltre {count} pezzi in una scansione attendono il caposquadra."
+      },
+      "same": {
+        "title": "Uguali in ogni sito, per ora",
+        "undo": "Annulla sul tablet: {seconds} secondi dopo una registrazione, o fino alla scansione successiva.",
+        "idle": "Uscita dopo {minutes} minuti senza uso (impostazioni dei tablet di questo sito).",
+        "clock": "Un orologio del tablet sfasato di oltre {minutes} minuti viene mostrato; oltre {hours} ore viene segnalato sulla registrazione.",
+        "offlineNone": "Offline: un tablet conserva ogni azione finché torna la rete; ricevimenti, controlli, rilasci ed etichette dei capi richiedono la rete. Ancora nessun limite in ore o azioni.",
+        "offline": "Offline: al massimo {hours} ore o {actions} azioni attendono su un tablet.",
+        "where": "L'uscita per inattività si cambia con i tablet del sito (Sistema › Dispositivi e stampanti); le altre regole per sito arrivano con una versione successiva."
+      }
+    },
+    "coupons": {
+      "title": "Codici dei fasci",
+      "intro": "Come gli operatori scansionano un fascio a ogni operazione.",
+      "ONE_CODE": {
+        "title": "Un codice per fascio",
+        "body": "Il cartellino del fascio si scansiona a ogni operazione; l'operazione viene dalla postazione."
+      },
+      "COUPON_PER_OPERATION": {
+        "title": "Un tagliando per operazione",
+        "body": "Ogni operazione ha il suo tagliando sul cartellino; scansionarlo registra quell'operazione. I tagliandi si stampano per gli ordini aperti."
+      },
+      "stuck": "Un fascio è fermo dopo",
+      "stuckHint": "Ore lavorative senza scansioni ({min}–{max}); un fascio fermo compare in Reparto ora e Fasci.",
+      "hours": "ore lavorative",
+      "less": "Un'ora in meno",
+      "more": "Un'ora in più",
+      "toCoupons": "D'ora in poi, i fasci degli ordini aperti ricevono i tagliandi quando vengono stampati; i cartellini già in reparto continuano a funzionare.",
+      "toOne": "D'ora in poi si scansiona solo il cartellino del fascio; i tagliandi già stampati non servono più.",
+      "stuckRange": "Usa un numero intero di ore lavorative da 1 a 720.",
+      "read": {
+        "stuck_one": "Un fascio senza scansioni per {count} ora lavorativa è fermo.",
+        "stuck_other": "Un fascio senza scansioni per {count} ore lavorative è fermo."
+      }
+    },
+    "full": {
+      "complete": "Ogni elenco di reparto ha il suo insieme completo di motivi.",
+      "held": "Solo chi gestisce gli elenchi dei motivi li aggiunge (reasons.manage in ogni azienda e sito).",
+      "title_one": "Gli elenchi completi di reparto: {count} motivo non ancora aggiunto",
+      "title_other": "Gli elenchi completi di reparto: {count} motivi non ancora aggiunti",
+      "add_one": "Aggiungi gli elenchi completi ({count} motivo)",
+      "add_other": "Aggiungi gli elenchi completi ({count} motivi)",
+      "part_one": "{list} {count}",
+      "part_other": "{list} {count}",
+      "list": {
+        "PAUSE": "Pausa",
+        "SCRAP": "Scarto",
+        "REWORK": "Rilavorazione",
+        "DOWNTIME": "Fermo",
+        "HELP_CALL": "Chiamate di aiuto",
+        "ADJUSTMENT": "Rettifiche",
+        "HOLD": "Blocchi",
+        "CANCEL": "Annullamenti"
+      }
+    },
+    "refusal": {
+      "KIND_FIXED": "Un codice mantiene il suo genere: creane uno nuovo dell'altro genere e disattiva questo.",
+      "BOOKED_BY_CALLS": "Un tipo di chiamata registra la sua attesa su questo codice: cambia prima l'instradamento di quel tipo.",
+      "CODE_TAKEN": "Questo codice esiste già.",
+      "CODE_NOT_LISTED": "Questo non è un codice attivo dei motivi di chiamata: aggiungilo prima in Codici causale.",
+      "TEAM_NOT_ACTIVE": "Questa squadra è archiviata o lavora in un altro sito: scegli una squadra attiva del sito, o i capisquadra.",
+      "WAITING_CODE": "L'attesa va su un codice fuori standard attivo dell'azienda."
+    },
+    "cells": {
+      "fallback": "Si mostrano le parole in inglese",
+      "it": "Italiano",
+      "en": "Inglese",
+      "tooLong": "Al massimo 80 caratteri.",
+      "needIt": "Scrivilo in italiano.",
+      "needEn": "Scrivilo in inglese.",
+      "keyNew": "Nuovo codice",
+      "keyEdit": "Modifica la cella",
+      "keyCancel": "Lascia la cella senza salvare",
+      "keysTitle": "Tasti",
+      "failed": "Impossibile leggere i codici",
+      "noMatch": "Nessun codice corrisponde alla ricerca.",
+      "clearSearch": "Cancella la ricerca",
+      "pickRows": "Seleziona prima delle righe.",
+      "allOff": "Le righe selezionate sono già inattive.",
+      "allOn": "Le righe selezionate sono già attive.",
+      "elsewhere": "Qualcun altro ha cambiato questi codici. Ricarica per vederli come sono ora.",
+      "count": "{active} attivi · {inactive} inattivi",
+      "countTypes": "{active} attivi · {inactive} spenti",
+      "search": "Cerca codice o parole",
+      "loading": "Caricamento…",
+      "back": "Indietro",
+      "bulkOff_one": "Disattiva {count}",
+      "bulkOff_other": "Disattiva {count}",
+      "bulkOn_one": "Attiva {count}",
+      "bulkOn_other": "Attiva {count}"
+    },
+    "off": {
+      "title": "Codici fuori standard",
+      "intro": "Codici per il tempo fuori dal lavoro standard (attesa, pulizia, formazione…), ognuno con la sua regola di paga. Gli operatori li scelgono sul tablet quando nessun fascio è in corso; l'attesa di una chiamata va su uno di essi.",
+      "noAccess": {
+        "title": "Il tuo ruolo non può vedere i codici fuori standard",
+        "body": "Per leggerli serve “production.offstandard.view”."
+      },
+      "ccnl": {
+        "title": "Regole di paga non verificate sul tuo CCNL",
+        "body": "Media dei guadagni, paga oraria base o non pagato è una tua scelta per codice: confermala con il tuo consulente del lavoro prima che la paga la usi."
+      },
+      "readOnly": {
+        "title": "Puoi guardare, non modificare",
+        "body": "Per gestire i codici serve “production.offstandard.codes” (il responsabile di produzione)."
+      },
+      "table": "Codici fuori standard",
+      "kind": {
+        "OFF_STANDARD": "Fuori standard",
+        "INDIRECT": "Indiretto"
+      },
+      "kindHint": {
+        "OFF_STANDARD": "Tempo perso dal lavoro standard (attesa, macchina ferma).",
+        "INDIRECT": "Lavoro non su un fascio (formazione, pulizia, riunioni)."
+      },
+      "col": {
+        "code": "Codice",
+        "payRule": "Regola di paga",
+        "needsApproval": "Approva il caposquadra",
+        "active": "Attivo",
+        "used": "Usato"
+      },
+      "pay": {
+        "AVERAGE": "Media dei guadagni",
+        "BASE": "Paga oraria base",
+        "UNPAID": "Non pagato"
+      },
+      "payHint": {
+        "AVERAGE": "Pagato come la media dei guadagni di chi lavora (CCNL da confermare).",
+        "BASE": "Pagato alla paga oraria base (CCNL da confermare).",
+        "UNPAID": "Non pagato (CCNL da confermare)."
+      },
+      "payFor": "Regola di paga di {code}",
+      "needsApproval": {
+        "on": "Approva",
+        "off": "Conta alla fine",
+        "label": "Il caposquadra approva {code}"
+      },
+      "active": {
+        "on": "Attivo",
+        "off": "Inattivo",
+        "label": "{code} attivo"
+      },
+      "used_one": "{count} blocco",
+      "used_other": "{count} blocchi",
+      "calls": "Chiamate: {types}",
+      "empty": {
+        "title": "Ancora nessun codice fuori standard",
+        "body": "Aggiungi il primo: attesa materiale, pulizia, formazione…",
+        "bodyView": "Li aggiunge il responsabile di produzione."
+      },
+      "held": {
+        "manage": "Per gestire i codici serve production.offstandard.codes."
+      },
+      "new": {
+        "button": "Nuovo codice",
+        "first": "Aggiungi il primo codice",
+        "title": "Nuovo codice fuori standard",
+        "intro": "Un codice si disattiva, non si cancella; il suo genere non cambia.",
+        "codeHint": "Lettere maiuscole, cifre e trattini bassi (WAIT_MATERIAL).",
+        "kind": "Genere",
+        "approvalHint": "Acceso: il caposquadra approva il tempo prima che la paga lo usi.",
+        "add": "Aggiungi codice",
+        "codeShape": "Usa da 2 a 40 lettere maiuscole, cifre e trattini bassi, iniziando con una lettera.",
+        "codeTaken": "Questo codice esiste già.",
+        "done": "{code} è aggiunto."
+      }
+    },
+    "route": {
+      "title": "Instradamento chiamate",
+      "titleAt": "Instradamento chiamate · {site}",
+      "intro": "Ogni tipo di chiamata va a un gruppo del sito: notifiche e tablet la ricevono subito. L'attesa può andare su un codice fuori standard, così non pesa mai su chi lavora.",
+      "hint": "I minuti di sollecito si salvano ora; il sollecito automatico arriva con una versione successiva.",
+      "noAccess": {
+        "title": "Il tuo ruolo non può vedere l'instradamento delle chiamate",
+        "body": "Per leggerlo serve “production.calls.view”."
+      },
+      "readOnly": {
+        "title": "Puoi guardare, non modificare",
+        "body": "Per gestire l'instradamento serve “production.calls.manage” (il responsabile di produzione)."
+      },
+      "noSite": "Nessun sito da mostrare.",
+      "noPeople": "Per scegliere una squadra serve people.view: il gruppo è mostrato com'è.",
+      "table": "Tipi di chiamata",
+      "kindFixed": "Un tipo mantiene il suo genere: le chiamate già inviate sono state instradate con esso.",
+      "kind": {
+        "MACHINE": "Macchina",
+        "MATERIAL": "Materiale",
+        "QUALITY": "Qualità",
+        "SUPERVISOR": "Capo reparto",
+        "MAINTENANCE": "Manutenzione",
+        "OTHER": "Altro"
+      },
+      "col": {
+        "type": "Tipo",
+        "kind": "Genere",
+        "group": "Gruppo chiamato",
+        "members": "Membri",
+        "escalate": "Sollecito dopo",
+        "waiting": "L'attesa va su",
+        "active": "Attivo",
+        "used": "Chiamate"
+      },
+      "groupFor": "Gruppo chiamato per {type}",
+      "leaders": "I capisquadra del sito",
+      "archivedTeam": "{name} (archiviata)",
+      "teamOption": "{name} · {line}",
+      "archived": "Archiviata",
+      "members_one": "{count} persona",
+      "members_other": "{count} persone",
+      "never": "Mai",
+      "minutes_one": "{count} minuto",
+      "minutes_other": "{count} minuti",
+      "minutesSuffix": "minuti",
+      "less": "Un minuto in meno",
+      "more": "Un minuto in più",
+      "escalateRange": "Sollecito dopo 1–240 minuti interi, o lascia vuoto per mai.",
+      "waitingFor": "L'attesa di {type} va su",
+      "notBooked": "Non registrata",
+      "activeFor": "{type} attivo",
+      "on": "Attivo",
+      "off": "Spento",
+      "used_one": "{count} finora · {open} aperte",
+      "used_other": "{count} finora · {open} aperte",
+      "keyNew": "Nuovo tipo",
+      "bulkOff_one": "Spegni {count}",
+      "bulkOff_other": "Spegni {count}",
+      "bulkOn_one": "Accendi {count}",
+      "bulkOn_other": "Accendi {count}",
+      "empty": {
+        "title": "Nessun tipo di chiamata in questo sito",
+        "body": "Aggiungi il primo: ognuno è un codice dei motivi di chiamata, inviato a un gruppo.",
+        "bodyView": "Li aggiunge il responsabile di produzione."
+      },
+      "held": {
+        "manage": "Per gestire l'instradamento serve production.calls.manage.",
+        "noCodes": "Ogni motivo di chiamata è già un tipo qui: aggiungi prima un motivo in Codici causale."
+      },
+      "new": {
+        "button": "Nuovo tipo",
+        "first": "Aggiungi il primo tipo",
+        "title": "Nuovo tipo di chiamata",
+        "intro": "Un tipo è un codice dei motivi di chiamata (parole, icona e colore sul tablet). Il suo genere non cambia.",
+        "code": "Motivo di chiamata",
+        "codeHint": "I motivi non ancora tipi in questo sito.",
+        "pickCode": "Scegli un motivo",
+        "pickKind": "Scegli il genere.",
+        "kindHint": "Macchina, materiale, qualità, capo reparto, manutenzione o altro: decide come la chiamata è mostrata e contata.",
+        "groupHint": "Una squadra del sito, o i capisquadra del sito.",
+        "escalateHint": "{min}–{max} minuti; vuoto: mai.",
+        "add": "Aggiungi tipo",
+        "done": "{code} è aggiunto all'instradamento."
       }
     }
   }
