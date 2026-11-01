@@ -13,7 +13,7 @@ import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 
 // ---- shared shapes ---------------------------------------------------------------------------------------------------
 
-export const GRAINS = ['price', 'cost', 'margin', 'wages'] as const
+export const GRAINS = ['price', 'cost', 'margin', 'wages', 'pay'] as const
 export type Grain = (typeof GRAINS)[number]
 export const MASTER_STATUSES = ['ACTIVE', 'ARCHIVED'] as const
 export type MasterStatus = (typeof MASTER_STATUSES)[number]

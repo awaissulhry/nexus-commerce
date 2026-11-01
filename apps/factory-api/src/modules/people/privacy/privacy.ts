@@ -27,6 +27,8 @@ import { command, type CommandCaller, type CommandTx } from '../../../core/comma
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { noticeInForce } from '../../../platform/privacy/read'
+// B-W2b-34: switching PERFORMANCE off stops piece pay at the site in the same command.
+import { stopPiecePayInCommand } from '../piecerates/switch'
 import { holdsFigureRole } from './access'
 import type { ChangeResult, SiteDetail } from './contract'
 import { gateRowInForce, GATE_SELECT, legalGateFor, legalGatesOf, recordedBasisOf, type GateRecord } from './gate'
@@ -45,6 +47,7 @@ import { privacySettingsFor } from './groups'
  *                DPIA are recorded on the gate (the DPIA record of the purpose), with the basis (ATTENDANCE: the body's;
  *                PERFORMANCE: the site's in Production › Settings); refused in words while anything is missing
  *   switch off   people.privacy.manage + a reason, never a step-up (narrowing is always allowed); the row is final
+ *                (B-W2b-34: switching PERFORMANCE off stops piece pay at the site in the same command, from today)
  *   leads        widening needs the recorded basis to cover leads, a reason and a step-up; narrowing never asks
  *   settings     the minimum group size and the roles that see one person's figures: lowering the size or naming
  *                another role is a widening (a reason and a step-up); raising or removing never asks
@@ -337,6 +340,7 @@ export async function switchOff(caller: CommandCaller, siteId: string, purpose: 
         throw new ConflictError(`This purpose was switched on with a later date (${toUtcIso(before.switchedOnAt)}); it can be switched off from then on.`)
       }
       // B-W2b-34: piece pay at this site needs the PERFORMANCE gate; its switch goes off here, in this same command.
+      const piecePayOffFrom = purpose === 'PERFORMANCE' ? await stopPiecePayInCommand(tools, site, { actorId: context.actorId, reason: `The legal gate for one person's work figures was switched off: ${body.reason.trim()}`, by: 'GATE_OFF', bumpVersion: true }) : null
       await tools.tx.peopleLegalGate.update({ where: { id: gate.id }, data: { switchedOffAt: tools.now, switchedOffById: context.actorId, switchOffReason: body.reason.trim() }, select: { id: true } })
       const after = (await tools.tx.peopleLegalGate.findUnique({ where: { id: gate.id }, select: GATE_SELECT }))!
       tools.audit({ action: 'people.switchOffPurpose', recordType: 'PeopleLegalGate', recordId: gate.id, companyId: site.companyId, siteId: site.id, before: gateAudit(before), after: gateAudit(after), reason: body.reason.trim() })
@@ -347,7 +351,8 @@ export async function switchOff(caller: CommandCaller, siteId: string, purpose: 
         siteId: site.id,
         payload: { gateId: gate.id, siteId: site.id, purpose, change: 'SWITCHED_OFF', open: false, leadsSeeFigures: false },
       })
-      return { ...(await siteDetailOf(tools.tx, site, tools.now)), change: 'SWITCHED_OFF' as const, changed: true, words: [CHANGE_WORDS.SWITCHED_OFF(purpose)] }
+      const piecePayWords = piecePayOffFrom ? [`Piece pay at this site stopped too, from ${piecePayOffFrom}: it rests on this gate. Pay earned before stays payable.`] : []
+      return { ...(await siteDetailOf(tools.tx, site, tools.now)), change: 'SWITCHED_OFF' as const, changed: true, words: [CHANGE_WORDS.SWITCHED_OFF(purpose), ...piecePayWords] }
     },
   )
   return result

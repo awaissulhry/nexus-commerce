@@ -8,12 +8,13 @@
  *   1. Contracts and schemas (apps/factory-api/src and packages/factory-domain/src, tests and testing/ folders aside):
  *      a property with a money-looking name in the object of `output({…})`, `input({…})`, `z.object({…})`,
  *      `z.strictObject({…})`, `z.looseObject({…})` or `.extend({…})` / `.safeExtend({…})` is a chain that starts with
- *      `money.price(…)`, `money.cost(…)`, `money.margin(…)` or `money.wages(…)` (factory-domain money/marked), or
+ *      `money.price(…)`, `money.cost(…)`, `money.margin(…)`, `money.wages(…)` or `money.pay(…)` (factory-domain
+ *      money/marked; pay: B-W2b-34's piece pay), or
  *      `notMoney(…)` for a name that only looks like money (`totalLines`).
  *   2. The audit rows of a command: a money-looking key of an object written inline as `before:` or `after:` of an
  *      `audit({…})` call holds `markMoney(grain, value)`, so the audit history shows it only with its grain.
  *   3. The Prisma schema (packages/factory-db/prisma/schema): a field with a money-looking name has a doc line
- *      `/// @grain price|cost|margin|wages` (or `/// @not-money <why>`) above it; the floor and partner column
+ *      `/// @grain price|cost|margin|wages|pay` (or `/// @not-money <why>`) above it; the floor and partner column
  *      grants (A1 §2.2) are decided from these.
  *
  * Run: node scripts/factory/check-money-grains.mjs [root] — the repository by default; another root (a test's copy)
@@ -31,7 +32,7 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'generated', 'testing', '__fi
 const TEST = /\.(test|spec)\.[cm]?tsx?$/
 // The same list as factory-domain money/marked.ts MONEY_NAME.
 const MONEY_NAME = /cost|margin|price|amount|total|wage/i
-const GRAINS = new Set(['price', 'cost', 'margin', 'wages'])
+const GRAINS = new Set(['price', 'cost', 'margin', 'wages', 'pay'])
 const OBJECT_BUILDERS = new Set(['output', 'input', 'object', 'strictObject', 'looseObject', 'extend', 'safeExtend'])
 
 const posix = (path) => path.split(sep).join('/')
@@ -117,7 +118,7 @@ function checkSource(file) {
           const value = ts.isPropertyAssignment(property) ? property.initializer : undefined
           if (!value || !isMarkedSchema(value)) {
             const { line } = source.getLineAndCharacterOfPosition(property.getStart(source))
-            report(file, line + 1, `rule 1: contract field "${key}" looks like money; mark it money.<price|cost|margin|wages>(…) (or notMoney(…))`)
+            report(file, line + 1, `rule 1: contract field "${key}" looks like money; mark it money.<price|cost|margin|wages|pay>(…) (or notMoney(…))`)
           }
         }
       }
@@ -147,10 +148,10 @@ function checkPrisma(file) {
       let doc = index - 1
       let marked = false
       while (doc >= 0 && /^\s*\/\/\//.test(lines[doc])) {
-        if (/^\s*\/\/\/\s*@grain\s+(price|cost|margin|wages)\b/.test(lines[doc]) || /^\s*\/\/\/\s*@not-money\s+\S/.test(lines[doc])) marked = true
+        if (/^\s*\/\/\/\s*@grain\s+(price|cost|margin|wages|pay)\b/.test(lines[doc]) || /^\s*\/\/\/\s*@not-money\s+\S/.test(lines[doc])) marked = true
         doc--
       }
-      if (!marked) report(file, index + 1, `rule 3: column "${field[1]}" looks like money; add /// @grain <price|cost|margin|wages> (or /// @not-money <why>) above it`)
+      if (!marked) report(file, index + 1, `rule 3: column "${field[1]}" looks like money; add /// @grain <price|cost|margin|wages|pay> (or /// @not-money <why>) above it`)
     }
   })
 }

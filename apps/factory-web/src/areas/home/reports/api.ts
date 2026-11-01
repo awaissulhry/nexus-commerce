@@ -15,7 +15,7 @@ export type LibraryState = (typeof LIBRARY_STATES)[number]
 export const COLUMN_KINDS = ['text', 'code', 'number', 'day', 'money', 'percent'] as const
 export type ColumnKind = (typeof COLUMN_KINDS)[number]
 export const FILTER_KINDS = ['period', 'site', 'choice'] as const
-export const GRAINS = ['price', 'cost', 'margin', 'wages'] as const
+export const GRAINS = ['price', 'cost', 'margin', 'wages', 'pay'] as const
 export type Grain = (typeof GRAINS)[number]
 export const REPORT_FORMATS = ['CSV', 'PDF'] as const
 

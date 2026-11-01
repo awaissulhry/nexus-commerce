@@ -10,6 +10,7 @@ import { isGrain, type Grain } from '../auth/grains/grains'
  *   money.cost(schema)    unit and standard costs, PO prices      the grain; the field is optional, because the
  *   money.margin(schema)  margin % and amounts                    serializer drops it for everyone else, and a
  *   money.wages(schema)   piece rates and earnings                request that sends it without the grain is refused
+ *   money.pay(schema)     piece pay (B-W2b-34): rates, earnings   (HR and the worker only)
  *
  *   notMoney(schema)      a field whose name looks like money but is not (`totalLines`), said explicitly
  *   markMoney(grain, v)   a money value inside free JSON (an audit row's before/after): `{ $money: grain, value }`
@@ -55,6 +56,7 @@ export const money = {
   cost: marker('cost'),
   margin: marker('margin'),
   wages: marker('wages'),
+  pay: marker('pay'),
 } as const
 
 /** A field whose name looks like money but carries none (the guard accepts it; the filter leaves it alone). */
