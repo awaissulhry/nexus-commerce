@@ -48,6 +48,22 @@
       "sourcingClaims": "Offerte e reclami",
       "claims": "Resi e reclami ai fornitori"
     },
+    "people": {
+      "area": "Persone",
+      "main": "Principali",
+      "employees": "Dipendenti",
+      "attendance": "Presenze",
+      "shifts": "Turni",
+      "skillsPay": "Competenze e paghe",
+      "skills": "Competenze e formazione",
+      "piecerates": "Cottimi",
+      "payroll": "Esportazione paghe",
+      "efficiency": "Efficienza",
+      "reportsGroup": "Report",
+      "reports": "Report persone",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni persone"
+    },
     "plant": {
       "area": "Stabilimento",
       "maintenance": "Manutenzione",

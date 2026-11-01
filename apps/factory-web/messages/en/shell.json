@@ -48,6 +48,22 @@
       "sourcingClaims": "Sourcing & claims",
       "claims": "Returns & claims"
     },
+    "people": {
+      "area": "People",
+      "main": "Main",
+      "employees": "Employees",
+      "attendance": "Attendance",
+      "shifts": "Shifts",
+      "skillsPay": "Skills & pay",
+      "skills": "Skills & training",
+      "piecerates": "Piece rates",
+      "payroll": "Payroll export",
+      "efficiency": "Efficiency",
+      "reportsGroup": "Reports",
+      "reports": "People reports",
+      "settingsGroup": "Settings",
+      "settings": "People settings"
+    },
     "plant": {
       "area": "Plant",
       "maintenance": "Maintenance",
