@@ -10,6 +10,9 @@ import { holds, type Actor, type Permission } from '../../core/permissions'
  *   cost     unit cost, standard cost, BOM cost, PO prices       hidden             hidden             hidden
  *   margin   margin %, margin amount, waterfall cost lines       hidden             hidden             hidden
  *   wages    piece rates, earnings (W2)                          hidden             own records only   hidden
+ *   pay      piece pay (W2b, B-W2b-34): rates per minute and     hidden             own records only   hidden
+ *            per piece, earnings, guaranteed pay; HR and the
+ *            worker only (no office template but the owner's)
  *
  * A grain travels in a session's grants as the permission `money.<grain>` (grainPermission): the grants come from
  * the role assignments, so `holds()` answers "does this caller see costs" like any other question, and a later step
@@ -22,7 +25,7 @@ import { holds, type Actor, type Permission } from '../../core/permissions'
  * and links steps' work; this is the API wall.
  */
 
-export const GRAINS = ['price', 'cost', 'margin', 'wages'] as const
+export const GRAINS = ['price', 'cost', 'margin', 'wages', 'pay'] as const
 export type Grain = (typeof GRAINS)[number]
 
 export function isGrain(value: unknown): value is Grain {
@@ -44,12 +47,13 @@ export const GRAIN_DESCRIPTIONS: Readonly<Record<Grain, string>> = {
   cost: 'See costs: unit and standard costs, bill-of-materials cost and purchase prices.',
   margin: 'See margins: margin percentages and amounts, and the cost lines of a price waterfall.',
   wages: 'See wages: piece rates and earnings.',
+  pay: "See piece pay: the rates per minute and per piece, earnings and guaranteed pay (HR and the worker; the floor sees a worker's own).",
 }
 
 /** The most each audience can see, whatever its grants say. */
 const AUDIENCE_GRAINS: Readonly<Record<Actor['audience'], readonly Grain[]>> = {
   office: GRAINS,
-  floor: ['wages'],
+  floor: ['wages', 'pay'],
   partner: ['price'],
   link: ['price'],
   platform: [],
