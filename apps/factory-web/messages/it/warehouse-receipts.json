@@ -161,11 +161,7 @@
   },
   "detail": {
     "title": "Difformità {seq} · {receipt}",
-    "position": "{n} di {count}",
-    "previous": "Precedente",
-    "next": "Successiva",
-    "first": "È la prima.",
-    "last": "È l’ultima.",
+    "noun": "difformità",
     "reason": "Motivo",
     "line": "Riga",
     "quantity": "Quantità",

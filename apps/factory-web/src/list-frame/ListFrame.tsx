@@ -125,7 +125,11 @@ export interface ListFrameProps<T> {
    */
   /** Table · Board · Calendar (· Cards with `cards`): the mode is the list's address term (`?mode=`), so a view keeps it. */
   modes?: ListModes<T> | null
-  /** The phone card list below 720 px (and the Cards mode): the list's own columns as DS GridCardList cards. */
+  /**
+   * The phone card list below 720 px (and the Cards mode): the list's own columns as DS GridCardList cards. ON for every
+   * list (B-W2b-18, the W2a gap Z17:02): leave it out for the defaults, give `fields` / `hrefOf` / `sort` to shape the
+   * cards, or `null` for a list that must stay a table on a phone.
+   */
   cards?: ListCards<T> | null
   /** Inline edit of simple fields (autosaved per cell with its save mark, version-checked; paste a range) and Edit N. */
   edit?: ListEdit<T> | null
@@ -187,9 +191,11 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
   // B-W2b-13: inline edit (the cells save through the list's bulk target), the modes, the bulk edit.
   const inline = useInlineEdit<T>({ edit: printing ? undefined : (edit ?? undefined), transport: listTools.transport, listKey: listTools.listKey, rowId, api: () => apiRef.current, t, markLabels: ds.cellSaveMark })
   const gridColumns = useMemo(() => inline.columns(listTools.columns), [inline.columns, listTools.columns])
-  const offered = offeredModes(modes, !!cards)
+  // B-W2b-18: the phone card list is on unless the list says `cards={null}`.
+  const cardsOn = cards !== null
+  const offered = offeredModes(modes, cardsOn)
   const mode = printing ? 'table' : modes && offered.includes(modes.mode) ? modes.mode : 'table'
-  const asCards = !printing && !!cards && (mode === 'cards' || (phone && mode === 'table'))
+  const asCards = !printing && cardsOn && (mode === 'cards' || (phone && mode === 'table'))
   const [bulkOpen, setBulkOpen] = useState(!!design?.bulk)
   // A card's ⋯: the list's trailing column pinned at the right (its row menu) is the card's actions unless the list says.
   const cardFields = useMemo(() => {
@@ -501,8 +507,12 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
       />
     ) : null
 
-  if (asCards && rows !== null) {
-    // The phone card list (PLT-170) and the Cards mode: the same rows, columns, search, filters and selection as cards.
+  // The long grid's next page on a phone: the cards have no scroll of their own to read it by, so they get "Show more".
+  const endlessMore = endless && !endless.done && rows ? { label: t('morePage'), onMore: endless.onNearEnd, held: endless.loading ? t('loading') : null } : null
+
+  if (asCards) {
+    // The phone card list (PLT-170) and the Cards mode: the same rows, columns, search, filters and selection as cards
+    // (skeleton cards while the first read runs).
     return (
       <div className="fw-list" ref={frameRef}>
         {chips}
@@ -527,7 +537,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
           {...(selection ? { selection: { selected, onChange: selection.onChange, actions: frameActions } } : {})}
           {...(isRowSelectable ? { isRowSelectable } : {})}
           state={state}
-          more={more ?? null}
+          more={more ?? endlessMore}
           labels={ds.cardList}
         />
         {bulk}

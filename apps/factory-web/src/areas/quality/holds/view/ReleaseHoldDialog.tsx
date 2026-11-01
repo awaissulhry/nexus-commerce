@@ -2,8 +2,9 @@
 
 import { useEffect } from 'react'
 import { ShieldCheck } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Kbd, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, Kbd, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 import { CheckList } from '../../_shared/parts'
 import type { Hold, HoldDetail } from '../api'

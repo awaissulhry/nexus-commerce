@@ -205,6 +205,17 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       return { code: text(p.typeId, 40) }
     case 'andon.call.answer':
       return { target: text(p.callId, 40) }
+    // B-W2b-33: which clock action (IN, OUT, BREAK_OUT, BREAK_IN); never who or when (the ledger keeps the tablet time).
+    case 'people.clock.record':
+      return { code: text(p.action, 20) }
+    // B-W2b-40: the bundle (its ticket or id); the pieces so far of a PARTIAL. Never who; a pause's reason stays in the ledger.
+    case 'production.scan.start':
+    case 'production.scan.pause':
+    case 'production.scan.resume':
+    case 'production.scan.handBack':
+      return { code: text(p.code) ?? text(p.bundleId) }
+    case 'production.scan.partial':
+      return { code: text(p.code) ?? text(p.bundleId), good: whole(p.pieces) ?? 0 }
   }
 }
 

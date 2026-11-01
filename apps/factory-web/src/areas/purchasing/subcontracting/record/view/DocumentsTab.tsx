@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { Eye, FileText, Printer, RotateCcw, XCircle } from 'lucide-react'
-import { Banner, Card, FileRow } from '@nexus/ui/components'
+import { Banner, Card } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { Button, Pill, Spinner } from '@nexus/ui/primitives'
+import { FileRow } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { pdfViewerLabels } from '../../../../../lib/pdf/labels'

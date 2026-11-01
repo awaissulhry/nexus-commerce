@@ -30,8 +30,10 @@ const day = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : 
 
 /** The REPORT and CORRECTION scans no later scan voids: the operations a bundle is done at. */
 function standingOperations(scans: readonly ScanRow[]): Set<string> {
-  const voided = new Set(scans.flatMap((scan) => (scan.correctsId ? [scan.correctsId] : [])))
-  return new Set(scans.filter((scan) => scan.kind !== 'UNDO' && !voided.has(scan.id)).map((scan) => scan.workOrderOperationId))
+  // W2b (B-W2b-40): only the count ledger stands; a timing row (START, PAUSE …) is no report.
+  const counts = scans.filter((scan) => scan.kind === 'REPORT' || scan.kind === 'UNDO' || scan.kind === 'CORRECTION')
+  const voided = new Set(counts.flatMap((scan) => (scan.correctsId ? [scan.correctsId] : [])))
+  return new Set(counts.filter((scan) => scan.kind !== 'UNDO' && !voided.has(scan.id)).map((scan) => scan.workOrderOperationId))
 }
 
 // ---- the work orders whose cut waits for bundles ----------------------------------------------------------------------------

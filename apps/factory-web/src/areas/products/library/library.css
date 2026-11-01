@@ -336,23 +336,6 @@
   font-size: var(--nds-font-size-sm);
 }
 
-/* The bar of a form with unsaved changes, kept in view at the bottom of the card while it scrolls. */
-.fw-lib-savebar {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nds-space-8);
-  margin-top: var(--nds-space-12);
-  padding: var(--nds-space-8) var(--nds-space-12);
-  border: 1px solid var(--nds-border);
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-surface-raised);
-}
-
 .fw-lib-readfield {
   display: flex;
   flex-direction: column;

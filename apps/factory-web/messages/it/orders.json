@@ -910,9 +910,6 @@
     "nothing": "Nient'altro viene toccato.",
     "reason": "Motivo",
     "reasonHint": "Resta sull'ordine e nella sua cronologia.",
-    "type": "Scrivi il numero d'ordine {number} per confermare",
-    "typeHint": "Contano maiuscole e trattini.",
-    "typeWrong": "Questo non è il numero dell'ordine.",
     "reversal": "Non si torna indietro: un ordine annullato resta com'è. Per ripartire, copialo come nuovo preventivo.",
     "go": "Annulla ordine",
     "held": {

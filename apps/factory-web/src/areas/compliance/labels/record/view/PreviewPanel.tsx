@@ -1,8 +1,9 @@
 'use client'
 
 import { ArrowDownToLine } from 'lucide-react'
-import { Banner, Card, DateField, Disclosure, EmptyState, Field } from '@nexus/ui/components'
+import { Banner, Card, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { Button, Input, Select, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { DateField } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { CheckList, type CheckLine } from '../../../../quality/_shared/parts'
 import type { LabelDetail, LabelIssue, PreviewAsk, Rendered } from '../../api'
@@ -182,7 +183,7 @@ export function ChecksList({ problems, warnings }: { problems: readonly LabelIss
       {notes.length > 0 && (
         <>
           <h3 className="fw-lb-h3">{t('checks.notesTitle')}</h3>
-          <CheckList label={t('checks.notesTitle')} checks={notes.map((row) => ({ id: row.id, state: 'UNKNOWN' as const, word: 'check.NOT_NEEDED', name: t(`family.${row.family}`), text: <CheckText family={row.family} message={row.message} /> }))} />
+          <CheckList label={t('checks.notesTitle')} checks={notes.map((row) => ({ id: row.id, state: 'WARNING' as const, name: t(`family.${row.family}`), text: <CheckText family={row.family} message={row.message} /> }))} />
         </>
       )}
     </div>

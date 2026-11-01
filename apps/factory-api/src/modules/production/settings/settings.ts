@@ -71,10 +71,10 @@ function floorContextOf(caller: CommandCaller): FloorContext {
   return context
 }
 
-const mayOn = (context: OfficeContext, permission: Permission, site: SiteView): boolean => can(actorOf(context), permission, { companyId: site.companyId, siteId: site.id })
+export const mayOn = (context: OfficeContext, permission: Permission, site: SiteView): boolean => can(actorOf(context), permission, { companyId: site.companyId, siteId: site.id })
 
-/** The site, when the caller may see its rules (else 404) and do `permission` on them (else 403). */
-async function siteOf(caller: CommandCaller, siteId: string, permission: Permission): Promise<{ context: OfficeContext; site: SiteView }> {
+/** The site, when the caller may see its rules (else 404) and do `permission` on them (else 403). B-W2b-53: floor-rules.ts uses it too. */
+export async function siteOf(caller: CommandCaller, siteId: string, permission: Permission): Promise<{ context: OfficeContext; site: SiteView }> {
   const context = officeContextOf(caller)
   const site = isUuid(siteId) ? await caller.withClient((client) => client.site.findUnique({ where: { id: siteId }, select: SITE_SELECT })) : null
   if (!site || !mayOn(context, PRODUCTION_SETTINGS_VIEW, site)) throw new NotFoundError('Site not found.')

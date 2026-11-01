@@ -4,7 +4,8 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
 import { Banner, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Pill, Select, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Button, Checkbox, Pill, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { ConfirmPhraseField, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
@@ -33,14 +34,14 @@ import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { DialogProblem, Frame } from './Dialogs'
 
 /**
- * The order studio's daily dialogs (B-W2a-50; the DS ReviewChangesModal, ActionConfirm and ConfirmPhraseField speak
+ * The order studio's daily dialogs (B-W2a-50; the DS ReviewChangesModal, ActionConfirm and ConfirmPhraseField spoke
  * English only, so these are composed from the DS Modal, SummaryTable, KeyValue and Banner, named here):
  *  - Review amendment (ReviewChangesModal, composed): the lines old → new by size, the money change (price), the reason,
  *    "the customer must accept again" when the net total changes; Apply with the order's version.
  *  - Close remaining lines / Reopen lines (ActionConfirm, composed): the lines and sizes that will not be made or
  *    shipped, the reason, the reversal.
- *  - Cancel order (ActionConfirm + ConfirmPhraseField, composed): the impact check — what stops it, what it changes, what
- *    it leaves behind — the reason, no reversal (copy it as a new quote), the order's number typed.
+ *  - Cancel order (ActionConfirm, composed): the impact check — what stops it, what it changes, what it leaves behind —
+ *    the reason, no reversal (copy it as a new quote), the order's number typed in the DS ConfirmPhraseField (B-W2b-18).
  *  - Copy as new quote, and the Changes tab's before → after (VersionCompare, composed).
  */
 
@@ -350,10 +351,8 @@ export function CancelDialog({ order, model, actions }: { order: Order; model: O
             <Field label={t('cancel.reason')} hint={t('cancel.reasonHint')}>
               <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={1000} />
             </Field>
-            {/* The DS ConfirmPhraseField speaks English only: the same check (the number as written), our words. */}
-            <Field label={t('cancel.type', { number: order.number })} hint={t('cancel.typeHint')} error={typed.trim() !== '' && typed.trim() !== order.number ? t('cancel.typeWrong') : undefined}>
-              <Input size="sm" value={typed} onChange={(event) => setTyped(event.target.value)} autoComplete="off" spellCheck={false} />
-            </Field>
+            {/* The DS ConfirmPhraseField (B-W2b-18): the number as written, its state in the person's language. */}
+            <ConfirmPhraseField phrase={order.number} value={typed} onChange={setTyped} />
           </>
         )}
         <p className="fw-so-hint">{t('cancel.reversal')}</p>

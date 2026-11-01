@@ -34,11 +34,16 @@ import { seed as seedProduction, type ProductionSeed } from './production'
  * figure, name and reference is MADE UP (no real CCNL rate, no real consultant, no real payroll code). The rows about one
  * person name them by employeeId: the operator is seed/people.ts's E1 (SEED-A1-1), the team leader E2.
  *
- *   legal switch  A1: ON from 2026-11-13 with its preconditions on record: a made-up CCNL and article, company A's worker
- *                 notice 2026-10 in force and its stored DPIA (seed/privacy.ts), a made-up labour consultant's agreement,
- *                 the company's ACTIVE scheme, A1's floor rules naming workers on a union agreement (seed/production.ts) and
- *                 A1's PERFORMANCE legal gate, switched on by this seed (a made-up union agreement; people.prisma
- *                 PeopleLegalGate; seed/people.ts's ATTENDANCE gate stays off).
+ *   legal switch  B-W2b-30 (the lead's decision, plan §2/§11: the build ships every people purpose OFF): the DEFAULT seed
+ *                 (the CLI, `seed(context)`) leaves piece pay and every people purpose OFF: A1's switch is OFF with its
+ *                 preconditions on record (a made-up CCNL and article, company A's worker notice 2026-10 in force and its
+ *                 stored DPIA (seed/privacy.ts), a made-up labour consultant's agreement, the company's ACTIVE scheme, A1's
+ *                 floor rules naming workers on a union agreement (seed/production.ts)), no PERFORMANCE gate is written
+ *                 (seed/people.ts's ATTENDANCE gate stays off), and the held scans, the ledger and the statement below are
+ *                 not written (they exist only while piece pay is on). A test that needs piece pay ON passes the explicit
+ *                 opt-in `seed(context, { piecePay: true })`: then A1's PERFORMANCE legal gate is switched on (a made-up
+ *                 union agreement; people.prisma PeopleLegalGate) and A1's switch is ON from 2026-11-13, and the ledger is
+ *                 written.
  *                 B1: OFF with nothing on record (it records the station only, so piece pay can never start there as it is).
  *                 A new site has no row: OFF by default.
  *   scheme        company A's pure piece rate from 2026-11-01, guaranteed 9.00 an hour (made up), own-fault rework and
@@ -49,11 +54,11 @@ import { seed as seedProduction, type ProductionSeed } from './production'
  *                 piece, packing 0.30 a piece (fixed); version 2 a provisional DRAFT from 2027-01-01 (method changed:
  *                 sewing 90 SMV × 0.12 = 10.80), trial until 2027-02-28.
  *   periods       company A's October 2026 LOCKED (nothing paid in it); November 2026 OPEN.
- *   ledger        the operator's standing sewing report of 2026-11-17 (2 pieces × 11.58 = 23.16): it was held (not
+ *   ledger        (opt-in only) the operator's standing sewing report of 2026-11-17 (2 pieces × 11.58 = 23.16): it was held (not
  *                 clocked in) and counted once the attendance was fixed, then paid; a made-up adjustment of 5.00 typed by
  *                 mistake and its reversal (corrections are new entries). The operator's undone mis-scan of the same
  *                 morning is held and still OPEN.
- *   statement     the operator's November statement, a DRAFT.
+ *   statement     (opt-in only) the operator's November statement, a DRAFT.
  *   payroll       the generic CSV layout (data, as every layout); five code mappings (two mapped to made-up provider codes,
  *                 three not yet); PAY-2026-0001, October 2026, EXPORTED with its empty data file and summary (the number
  *                 from the company's PAYROLL_EXPORT series, its NumberAllocation row written and the series moved to 2, as
@@ -130,13 +135,19 @@ const GENERIC_CSV = {
   headerRow: true,
 } as const
 
+/** B-W2b-30: the default seed leaves piece pay and every people purpose OFF; a test that needs them ON says so here. */
+export interface PaySeedOptions {
+  /** A1's PERFORMANCE gate and piece pay switched ON, the held scans, the ledger and the statement written. */
+  readonly piecePay?: boolean
+}
+
 export interface PaySeed {
   readonly production: ProductionSeed
   /** seed/people.ts's employees of A1's operator (E1) and team leader (E2). */
   readonly employeeIds: { readonly operator: string; readonly lead: string }
-  /** A1's PERFORMANCE legal gate this seed switched on (piece pay's precondition). */
+  /** A1's PERFORMANCE legal gate, switched on with `{ piecePay: true }` only (piece pay's precondition). */
   readonly performanceGateId: string
-  /** The legal switches: A1 ON, B1 OFF (each with its site's id). */
+  /** The legal switches (each with its site's id): A1 ON with `{ piecePay: true }`, else OFF; B1 OFF. */
   readonly switchIds: { readonly on: string; readonly off: string }
   /** Company A's ACTIVE scheme and A1 line's DRAFT one. */
   readonly schemeIds: { readonly active: string; readonly draft: string }
@@ -164,7 +175,7 @@ export interface PaySeed {
   readonly exportSeriesId: string
 }
 
-export async function seed(context: SeedContext): Promise<PaySeed> {
+export async function seed(context: SeedContext, options: PaySeedOptions = {}): Promise<PaySeed> {
   const { db, namespace } = context
   // The CLI runs the seeds in name order: run what this one builds on (all idempotent): the production seed (A1's floor
   // rules naming workers, SEED-JKT-02 and its work order, the operator's scans, the cutting tablet, the worker notice),
@@ -413,26 +424,10 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
     }),
   )
 
-  // --- the legal switches: A1 turned ON with its preconditions, B1 left OFF -------------------------------------------
+  // --- the legal switches: A1 OFF with its preconditions, B1 OFF; A1's gate and switch ON only with the opt-in ----------
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.piecePaySwitch.findUnique({ where: { id: switchIds.on }, select })) return
-      await tx.peopleLegalGate.create({
-        data: {
-          id: performanceGateId,
-          companyId: companyA,
-          siteId: siteA,
-          purpose: PeoplePurpose.PERFORMANCE,
-          basis: MonitoringBasis.UNION_AGREEMENT,
-          basisReference: 'SAMPLE - accordo RSU 2026/02 on piece rates (made up)',
-          noticeId: production.workerNoticeId,
-          dpiaId: privacy.dpiaId,
-          switchedOnAt: T.gateOn,
-          switchedOnById: actorId,
-          ...stamp(T.gateOn),
-        },
-        select,
-      })
       await tx.piecePaySwitch.createMany({
         data: [
           {
@@ -452,13 +447,39 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
           { id: switchIds.off, companyId: companyB, siteId: siteB, ...stamp(T.switchedOn) },
         ],
       })
-      await tx.piecePaySwitch.update({
-        where: { id: switchIds.on },
-        data: { state: PiecePayState.ON, onFrom: DAY.ratesFrom, switchedOnAt: T.switchedOn, switchedOnById: actorId, version: 2 },
-        select,
-      })
     }),
   )
+  if (options.piecePay) {
+    await db.withScope(office, (client) =>
+      client.$transaction(async (tx) => {
+        const a1 = await tx.piecePaySwitch.findUniqueOrThrow({ where: { id: switchIds.on }, select: { state: true, version: true } })
+        if (a1.state === PiecePayState.ON) return
+        if (!(await tx.peopleLegalGate.findUnique({ where: { id: performanceGateId }, select }))) {
+          await tx.peopleLegalGate.create({
+            data: {
+              id: performanceGateId,
+              companyId: companyA,
+              siteId: siteA,
+              purpose: PeoplePurpose.PERFORMANCE,
+              basis: MonitoringBasis.UNION_AGREEMENT,
+              basisReference: 'SAMPLE - accordo RSU 2026/02 on piece rates (made up)',
+              noticeId: production.workerNoticeId,
+              dpiaId: privacy.dpiaId,
+              switchedOnAt: T.gateOn,
+              switchedOnById: actorId,
+              ...stamp(T.gateOn),
+            },
+            select,
+          })
+        }
+        await tx.piecePaySwitch.update({
+          where: { id: switchIds.on },
+          data: { state: PiecePayState.ON, onFrom: DAY.ratesFrom, switchedOnAt: T.switchedOn, switchedOnById: actorId, version: a1.version + 1 },
+          select,
+        })
+      }),
+    )
+  }
 
   // --- pay periods: October locked (nothing paid in it), November open --------------------------------------------------
   await db.withScope(office, (client) =>
@@ -480,8 +501,8 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
     }),
   )
 
-  // --- held scans and the ledger --------------------------------------------------------------------------------------------
-  await db.withScope(office, (client) =>
+  // --- held scans and the ledger (piece pay ON only: the opt-in) -------------------------------------------------------------
+  if (options.piecePay) await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.heldScan.findUnique({ where: { id: heldScanIds.counted }, select })) return
       const [misScan, , report] = production.scanIds

@@ -2,9 +2,10 @@
 
 import type { ReactNode } from 'react'
 import { Search } from 'lucide-react'
-import { Banner, Field, Modal, phraseMatches } from '@nexus/ui/components'
+import { Banner, Field, phraseMatches } from '@nexus/ui/components'
 import { SizeGridEditor } from '@nexus/ui/grid'
-import { Button, Input, Select, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Button, Input, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { ConfirmPhraseField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { SubcontractOrder } from '../../api'
 import { addOperationHeld, kitLineHeld, sizesHeld, sizesOf, type RecordDialog, type SubcontractRecordActions, type SubcontractRecordModel } from '../record-model'
@@ -326,7 +327,6 @@ function AnnulDialog({ order, model, actions, dialog }: DialogProps & { dialog: 
   const t = useT('subcontract-order')
   const ddt = order.ddts.find((entry) => entry.id === dialog.ddtId)
   const number = ddt?.number ?? ''
-  const typedWrong = dialog.typed.trim() !== '' && !phraseMatches(dialog.typed, number)
   const held = dialog.reason.trim().length < 3 ? t('annul.held.reason') : !phraseMatches(dialog.typed, number) ? t('annul.held.phrase') : null
   const set = (next: Partial<Of<'annul'>>) => actions?.onDialog?.({ ...dialog, ...next })
   return (
@@ -339,9 +339,8 @@ function AnnulDialog({ order, model, actions, dialog }: DialogProps & { dialog: 
       <Field label={t('annul.reason')} required>
         <Textarea rows={2} maxLength={500} value={dialog.reason} onChange={(event) => set({ reason: event.target.value })} />
       </Field>
-      <Field label={t('annul.type', { number })} hint={t('annul.typeHint')} error={typedWrong ? t('annul.typeWrong') : undefined}>
-        <Input size="sm" autoComplete="off" spellCheck={false} value={dialog.typed} onChange={(event) => set({ typed: event.target.value })} />
-      </Field>
+      {/* The DS ConfirmPhraseField (B-W2b-18): the DDT's number as written, its state in the person's language. */}
+      <ConfirmPhraseField phrase={number} value={dialog.typed} onChange={(typed) => set({ typed })} />
     </Frame>
   )
 }

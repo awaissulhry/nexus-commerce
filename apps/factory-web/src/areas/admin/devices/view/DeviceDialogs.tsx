@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Banner, Countdown, Field, Modal, Stepper } from '@nexus/ui/components'
+import { Banner, Field, Stepper } from '@nexus/ui/components'
 import { phraseMatches } from '@nexus/ui/components'
 import { QrCode } from '@nexus/ui/components/QrCode/index'
 import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { Countdown, Modal } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 import { DEVICE_KINDS, PRINTER_KINDS, PRINTER_STATUSES, type Device, type DeviceKind, type Printer, type PrinterKind, type PrinterStatus } from '../../shared/api'
 import { enrolProblems, printerDraft, printerProblems, suggestDeviceName, type EnrolDraft, type EnrolModel, type PrinterDialog, type PrinterDraft, type SiteChoice } from '../model'

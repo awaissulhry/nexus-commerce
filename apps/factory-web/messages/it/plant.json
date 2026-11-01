@@ -229,11 +229,8 @@
   "detail": {
     "title": "Richiesta · {machine}",
     "titleUnknown": "Richiesta",
+    "noun": "richiesta",
     "notFound": "Questa richiesta non esiste o non puoi vederla.",
-    "prev": "Richiesta precedente",
-    "next": "Richiesta successiva",
-    "firstOne": "Questa è la prima richiesta della coda.",
-    "lastOne": "Questa è l’ultima richiesta della coda.",
     "signSafe": "Firma sicura",
     "acknowledge": "Prendi in carico",
     "close": "Chiudi senza intervento",
@@ -842,11 +839,7 @@
       "wrong": "Il codice è sbagliato o già usato: scrivi quello nuovo.",
       "locked": "Troppi tentativi: aspetta un momento.",
       "unavailable": "Non è stato possibile verificare il codice: riprova."
-    },
-    "code": "Codice dell’autenticatore",
-    "codeHint": "Le 6 cifre che l’app di autenticazione mostra ora.",
-    "checking": "Verifica del codice…",
-    "sixDigits": "Prima scrivi le 6 cifre."
+    }
   },
   "csv": {
     "reportedAt": "Segnalata",

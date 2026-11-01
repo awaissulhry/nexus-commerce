@@ -1,7 +1,8 @@
 'use client'
 
-import { Field, Modal } from '@nexus/ui/components'
+import { Field } from '@nexus/ui/components'
 import { Button, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import type { Person } from '../../api'
 import { NoticeLine, useNcrWords } from '../../parts'
 import type { ListDialog, NcrListActions } from '../view-model'

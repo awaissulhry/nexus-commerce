@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Bookmark, Search } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, Radio, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input, Radio, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { quantity, unitTotals } from '../../../_shared/stock/model'

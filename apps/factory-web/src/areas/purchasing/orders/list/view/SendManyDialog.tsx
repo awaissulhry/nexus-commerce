@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { CheckCircle2, Mail, XCircle } from 'lucide-react'
-import { Banner, Card, DateTimeField, Field, Modal } from '@nexus/ui/components'
-import { Button, Pill, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Banner, Card, Field } from '@nexus/ui/components'
+import { Button, Pill, Spinner, Tag } from '@nexus/ui/primitives'
+import { DateTimeField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { cardHeld, cardsBySupplier, outcomeWords, sendManyBody } from '../../daily-model'

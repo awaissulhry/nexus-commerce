@@ -5,7 +5,7 @@ import { ArrowLeft, Camera, CircleAlert, CircleHelp, ClipboardList, Cog, Hammer,
 import { Field } from '@nexus/ui/components'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, FloorTile, FloorTileGrid, ScanInput, type CameraScanner, type FloorAction, type FloorActions } from '@nexus/ui/floor'
 import { ReasonGrid, type ReasonTile } from '@nexus/ui/floor/ReasonGrid/index'
-import { Textarea } from '@nexus/ui/primitives'
+import { Textarea } from '../../../../lib/i18n/ds-parts'
 import { REASON_KIT_NAMESPACE, useReasonWords } from '../../../../lib/ds-words/reason-grid'
 import { formatDate, formatTime } from '../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'

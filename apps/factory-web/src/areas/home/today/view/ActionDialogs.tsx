@@ -2,8 +2,9 @@
 
 import { useEffect, useId, useState } from 'react'
 import { CheckCircle2, Eye, UserRound, UserX, XCircle } from 'lucide-react'
-import { Banner, Combobox, EmptyState, Field, Modal } from '@nexus/ui/components'
-import { Button, Kbd, Skeleton, Tag, Textarea } from '@nexus/ui/primitives'
+import { Banner, EmptyState, Field } from '@nexus/ui/components'
+import { Button, Kbd, Skeleton, Tag } from '@nexus/ui/primitives'
+import { Combobox, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { resolveNoteProblem, type Assignee, type HandledView, type Loaded, type QueueItem } from '../model'

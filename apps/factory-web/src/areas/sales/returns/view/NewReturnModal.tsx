@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useId, useMemo } from 'react'
-import { Banner, Combobox, DateField, EmptyState, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, EmptyState, Field } from '@nexus/ui/components'
+import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { Combobox, DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { newReturnProblems, previewProblemWords } from '../model'

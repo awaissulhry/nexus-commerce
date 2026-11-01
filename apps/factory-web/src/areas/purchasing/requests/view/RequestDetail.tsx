@@ -2,9 +2,10 @@
 
 import { useEffect } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ChevronUp, ExternalLink, FilePlus2 } from 'lucide-react'
-import { Banner, Card, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
+import { ExternalLink, FilePlus2 } from 'lucide-react'
+import { Banner, Card, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { Button, Pill, RadioCard, Spinner, Tag } from '@nexus/ui/primitives'
+import { DetailModal } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { dayAt, money, quantity, unitPrice } from '../../../_shared/buying/model'
@@ -13,7 +14,6 @@ import {
   draftHeld,
   historyPhrases,
   holdPhrase,
-  neighbours,
   nettingPhrases,
   orderHref,
   requestedByPhrase,
@@ -31,10 +31,10 @@ import {
 } from '../model'
 
 /**
- * The Request (design purchasing.requests pop:detail, a centred detail — the DS DetailModal's Prev / Next words are English
- * only, so this one has its own): the source, the netting in sentences from the numbers, what it is for (orders, work
- * orders) or what is already on order, the approved suppliers to pick from, the history; "Draft PO" (b) for this one
- * request; J / K walk the rows as the list shows them; the source record opens in a new tab.
+ * The Request (design purchasing.requests pop:detail, a centred detail = the DS DetailModal, B-W2b-18): the source, the
+ * netting in sentences from the numbers, what it is for (orders, work orders) or what is already on order, the approved
+ * suppliers to pick from, the history; "Draft PO" (b) for this one request; the DS Prev / Next (J / K) walk the rows as
+ * the list shows them; the source record opens in a new tab.
  */
 export function RequestDetailView({ model, ids, actions }: { model: RequestsModel; ids: readonly string[]; actions?: RequestsActions }) {
   const t = useT('purchasing-requests')
@@ -44,7 +44,6 @@ export function RequestDetailView({ model, ids, actions }: { model: RequestsMode
   const loaded = detail.detail.status === 'ready' ? detail.detail.value : null
   const listed = model.rows.items?.find((row) => row.id === detail.requestId) ?? null
   const request: BuyRequest | null = loaded?.request ?? listed
-  const walk = neighbours(ids, detail.requestId)
   const chosen = detail.supplierId
   const draftWhy = request ? draftHeld([request], model.can, model.offline) : null
 
@@ -53,13 +52,7 @@ export function RequestDetailView({ model, ids, actions }: { model: RequestsMode
       const target = event.target as HTMLElement | null
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="menu"], [role="listbox"]') || target.isContentEditable)) return
-      if ((event.key === 'j' || event.key === 'J') && walk.next) {
-        event.preventDefault()
-        actions?.onOpen?.(walk.next)
-      } else if ((event.key === 'k' || event.key === 'K') && walk.previous) {
-        event.preventDefault()
-        actions?.onOpen?.(walk.previous)
-      } else if (event.key === 'b' && request && !draftWhy) {
+      if (event.key === 'b' && request && !draftWhy) {
         event.preventDefault()
         actions?.detail?.onDraft?.()
       }
@@ -70,21 +63,15 @@ export function RequestDetailView({ model, ids, actions }: { model: RequestsMode
 
   const title = request ? t('detail.title', { material: request.item.code }) : t('detail.titleLoading')
   return (
-    <Modal
+    <DetailModal
       open
       onClose={() => actions?.onOpen?.(null)}
       title={title}
       subtitle={request ? `${request.item.name}${request.colour ? ` · ${request.colour.name}` : ''} · ${request.site.code}` : undefined}
-      size="detail"
+      // Prev / Next, their counter, J / K and the held ends are the DS DetailModal's (B-W2b-18): the rows as the list shows them.
+      nav={ids.includes(detail.requestId) ? { ids, current: detail.requestId, onGo: (id) => actions?.onOpen?.(id), noun: t('detail.noun') } : undefined}
       footer={
         <>
-          <span className="fw-by-hint">{walk.index >= 0 ? t('detail.position', { index: walk.index + 1, count: ids.length }) : ''}</span>
-          <Button size="sm" variant="quiet" heldReason={walk.previous ? null : t('detail.first')} onClick={() => walk.previous && actions?.onOpen?.(walk.previous)} aria-keyshortcuts="k">
-            <ChevronUp size={13} aria-hidden /> {t('detail.previous')}
-          </Button>
-          <Button size="sm" variant="quiet" heldReason={walk.next ? null : t('detail.last')} onClick={() => walk.next && actions?.onOpen?.(walk.next)} aria-keyshortcuts="j">
-            <ChevronDown size={13} aria-hidden /> {t('detail.next')}
-          </Button>
           <span className="grow" />
           {request && (
             <Button size="sm" asChild>
@@ -114,7 +101,7 @@ export function RequestDetailView({ model, ids, actions }: { model: RequestsMode
         {detail.detail.status === 'forbidden' && <Banner tone="danger" title={t('problem.forbidden')} />}
         {request && <RequestBody model={model} request={request} loaded={loaded} chosen={chosen} actions={actions} place={place} />}
       </div>
-    </Modal>
+    </DetailModal>
   )
 }
 

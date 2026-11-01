@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, type KeyboardEvent } from 'react'
-import { Banner, EmptyState, Field, Modal, Stepper } from '@nexus/ui/components'
+import { Banner, EmptyState, Field, Stepper } from '@nexus/ui/components'
 import { Button, Input, NumberStepper, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import { TRANSPORT_BY, type ReadyCell, type ReadyOrder, type TransportBy } from '../../api'
 import { newShipmentLines, newShipmentProblems, type ShippingAbilities } from '../../model'

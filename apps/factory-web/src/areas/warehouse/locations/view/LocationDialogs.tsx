@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { Button, Input, Select } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { normalizeLocationCode } from '@nexus/factory-domain/inventory/locations/rules'
 import { useT } from '../../../../lib/i18n/provider'
 import { LOCATION_KIND_LIST, type LocationKind, type LocationView } from '../../../_shared/stock/api'

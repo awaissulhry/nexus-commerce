@@ -667,7 +667,6 @@
       "title": "Trace tree",
       "intro": "Backward and forward in one tree. What the records know only per work order or size says “may hold it”: a recall counts it too.",
       "label": "Trace of {code}",
-      "levels": "Levels",
       "count": {
         "SUPPLIER_one": "{count} supplier",
         "SUPPLIER_other": "{count} suppliers",
@@ -692,8 +691,6 @@
         "CUSTOMER_one": "{count} customer",
         "CUSTOMER_other": "{count} customers"
       },
-      "possibleCount_one": "{count} may hold it",
-      "possibleCount_other": "{count} may hold it",
       "gapTitle": {
         "BROKEN": "Where the chain is broken",
         "COARSE": "Where the records are coarse",
@@ -741,7 +738,6 @@
         "CUSTOMER": "Customer"
       },
       "hidden": "not visible to you",
-      "possible": "may hold it",
       "received": "received",
       "onHold": "On hold: {reason}",
       "partyHidden": "name not visible to you",
@@ -764,13 +760,6 @@
         "RELEASED": "released",
         "SHIPPED": "shipped",
         "VOID": "void"
-      },
-      "key": {
-        "walk": "Walk the tree",
-        "open": "Open a level, or go into it",
-        "close": "Close a level, or go out of it",
-        "ends": "First and last line",
-        "enter": "Open the record"
       }
     },
     "rel": {

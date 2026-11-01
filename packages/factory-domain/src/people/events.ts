@@ -6,6 +6,10 @@ import { EMPLOYEE_KINDS } from './employees/rules'
 import { LEAVER_STEP_KINDS, LEAVER_STEP_STATUSES } from './leavers/rules'
 import { GATE_PURPOSES } from './privacy/purposes'
 import { SKILL_KINDS, SKILL_LEVELS } from './skills/rules'
+// B-W2b-34
+import { VERSION_STATUSES } from './piecerates/rates'
+// B-W2b-33: clock in and out.
+import { CLOCK_ACTIONS } from './clock/rules'
 
 /**
  * The people module's events (B-W2b-26 employees and teams; design people.employees "Live": employee.created / updated
@@ -49,6 +53,18 @@ import { SKILL_KINDS, SKILL_LEVELS } from './skills/rules'
  *
  * All three reach the office screens of people.skills.view holders; the floor receives none (a tablet checks when work
  * starts).
+ *
+ * B-W2b-33 (clock in and out), emitted by apps/factory-api modules/people/clock in the command that records the clock
+ * event (from the floor, a badge or a name and PIN, online or kept offline, or the automatic clock-out). Ids, kinds and
+ * sources only: no name, no time of a person (the record has it), no reason.
+ *
+ *   attendance.clock_event   a person clocked in, out, or started or ended a break (design people.attendance "Live":
+ *                            the day row and Who is in now; the worker's own tablet reads its clock again)
+ *   clock.out                a person clocked out (on the floor, kept offline, or by the automatic clock-out): the steps
+ *                            that stop work at clock-out listen to it (B-W2b-40 pauses the open operations, MES-117)
+ *
+ * attendance.clock_event reaches the office screens of people.attendance.view holders and the tablets of the site
+ * (floor.work; no person in the message: each tablet reads its own state again); clock.out reaches no screen.
  */
 
 export const SKILL_CHANGES = ['CREATED', 'EDITED', 'ARCHIVED', 'RESTORED'] as const
@@ -57,6 +73,11 @@ export const MACHINE_AUTHORISATION_CHANGES = ['AUTHORISED', 'VALIDITY_CHANGED', 
 
 export const LEGAL_GATE_CHANGES = ['SWITCHED_ON', 'SWITCHED_OFF', 'LEADS_WIDENED', 'LEADS_NARROWED'] as const
 export const PRIVACY_SETTINGS_CHANGES = ['WIDENED', 'NARROWED'] as const
+
+// B-W2b-34
+export const PIECE_RATE_TABLE_CHANGES = ['CREATED', 'EDITED', 'ARCHIVED'] as const
+export const PIECE_RATE_VERSION_CHANGES = ['CREATED', 'EDITED', 'RATES_SET', 'IN_FORCE', 'CONFIRMED', 'SUPERSEDED', 'CANCELLED'] as const
+export const PIECE_PAY_SWITCH_CHANGES = ['PRECONDITIONS_RECORDED', 'SWITCHED_ON', 'SWITCHED_OFF'] as const
 
 const by = z.enum(['OFFICE', 'SYSTEM', 'IMPORT'])
 
@@ -167,6 +188,80 @@ export const events = [
     description: 'A person was authorised on a class of machine, the last day of an authorisation moved, it was revoked, or an ended one was closed by a new authorisation.',
     payload: z.strictObject({ authorisationId: z.uuid(), employeeId: z.uuid(), machineClassId: z.uuid(), change: z.enum(MACHINE_AUTHORISATION_CHANGES) }),
     live: { permission: 'people.skills.view', fields: ['authorisationId', 'employeeId', 'machineClassId', 'change'] },
+  }),
+  // B-W2b-34: piece rates and the legal switch of piece pay (MES-254, MES-255, MES-262; c.c. arts. 2100-2101), emitted by
+  // apps/factory-api modules/people/piecerates in the command that makes the change. Ids, numbers, states and counts
+  // only: never a rate, an amount, a worker or a reason. They reach the office screens of people.piecerates.view holders
+  // (the rate table, "Read by n of m", the legal switch); the floor receives none (a worker reads their rates when they
+  // open them).
+  defineEvent({
+    type: 'piece_rate_table.changed',
+    context: 'people',
+    description: 'A piece-rate table of a site was added, changed or archived.',
+    payload: z.strictObject({ tableId: z.uuid(), siteId: z.uuid(), change: z.enum(PIECE_RATE_TABLE_CHANGES) }),
+    live: { permission: 'people.piecerates.view', fields: ['tableId', 'siteId', 'change'] },
+  }),
+  defineEvent({
+    type: 'piece_rate_version.changed',
+    context: 'people',
+    description: 'A version of piece rates was made, changed, put in force (provisional or confirmed), confirmed after its trial, superseded by a later one, or cancelled as a draft.',
+    payload: z.strictObject({ versionId: z.uuid(), tableId: z.uuid(), siteId: z.uuid(), versionNo: z.number().int().min(1), change: z.enum(PIECE_RATE_VERSION_CHANGES), status: z.enum(VERSION_STATUSES) }),
+    live: { permission: 'people.piecerates.view', fields: ['versionId', 'tableId', 'siteId', 'versionNo', 'change', 'status'] },
+  }),
+  defineEvent({
+    type: 'rate_publication.changed',
+    context: 'people',
+    description: 'A version of piece rates was published to workers of its site (on the floor, on paper or both), or a publication of a draft was withdrawn.',
+    payload: z.strictObject({ publicationId: z.uuid(), versionId: z.uuid(), siteId: z.uuid(), lineId: z.uuid().nullable(), change: z.enum(['PUBLISHED', 'WITHDRAWN']), workers: z.number().int().min(0) }),
+    live: { permission: 'people.piecerates.view', fields: ['publicationId', 'versionId', 'siteId', 'change', 'workers'] },
+  }),
+  defineEvent({
+    type: 'rate.read',
+    context: 'people',
+    description: "Workers acknowledged a publication of piece rates: on a floor device, or on a signed paper copy the office recorded (how many, never who): the 'Read by' counts.",
+    payload: z.strictObject({ publicationId: z.uuid(), versionId: z.uuid(), siteId: z.uuid(), channel: z.enum(['DEVICE', 'PAPER']), receipts: z.number().int().min(1) }),
+    live: { permission: 'people.piecerates.view', fields: ['publicationId', 'versionId', 'siteId', 'channel', 'receipts'] },
+  }),
+  defineEvent({
+    type: 'piece_pay.switched',
+    context: 'people',
+    description: "The legal switch of piece pay at a site: its preconditions recorded, piece pay started from a day, or stopped (by a person, or because the site's gate for one person's work figures was switched off).",
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      change: z.enum(PIECE_PAY_SWITCH_CHANGES),
+      state: z.enum(['OFF', 'ON']),
+      onFrom: z.iso.date().nullable(),
+      offFrom: z.iso.date().nullable(),
+      by: z.enum(['OFFICE', 'GATE_OFF']),
+    }),
+    live: { permission: 'people.piecerates.view', fields: ['siteId', 'change', 'state', 'onFrom', 'offFrom'] },
+  }),
+  // B-W2b-33: clock in and out.
+  defineEvent({
+    type: 'attendance.clock_event',
+    context: 'people',
+    description: 'A person clocked in or out, or started or ended a break: at a tablet with a badge or by name and PIN, kept offline with the tablet time, or by the automatic clock-out at the shift end.',
+    payload: z.strictObject({
+      clockEventId: z.uuid(),
+      siteId: z.uuid(),
+      employeeId: z.uuid(),
+      kind: z.enum(CLOCK_ACTIONS),
+      source: z.enum(['BADGE', 'NAME_PIN', 'OFFLINE', 'AUTO']),
+      flagged: z.boolean(),
+    }),
+    live: { permission: 'people.attendance.view', floor: 'floor.work', fields: ['clockEventId', 'siteId', 'kind'] },
+  }),
+  defineEvent({
+    type: 'clock.out',
+    context: 'people',
+    description: 'A person clocked out (on the floor, kept offline, or by the automatic clock-out): what stops at clock-out (open operations) listens to it.',
+    payload: z.strictObject({
+      clockEventId: z.uuid(),
+      siteId: z.uuid(),
+      employeeId: z.uuid(),
+      workerId: z.uuid().nullable(),
+      source: z.enum(['BADGE', 'NAME_PIN', 'OFFLINE', 'AUTO']),
+    }),
   }),
 ] as const
 

@@ -2,8 +2,9 @@
 
 import { Fragment, useRef, type ReactNode } from 'react'
 import { ClipboardCheck, Paperclip, Tag as TagIcon, Truck } from 'lucide-react'
-import { Banner, Disclosure, Modal } from '@nexus/ui/components'
+import { Banner, Disclosure } from '@nexus/ui/components'
 import { Button, Kbd, Pill, Tag } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { QualityMessages } from '../../../quality/_shared/parts'
