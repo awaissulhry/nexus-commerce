@@ -7,13 +7,14 @@ import { grantOf } from '../roles/roles'
  * the device's company and site only (a floor session is bound to its device's site, whatever the role says).
  *
  *   - Only FLOOR roles count (an office role of a worker's linked office user gives the floor nothing).
- *   - Money: a floor session sees at most `wages` (FLOOR_GRAINS); any other grain a role names is dropped here, before
+ *   - Money: a floor session sees at most `wages` and `pay` (FLOOR_GRAINS; pay: B-W2b-34, the worker's own published rates
+ *     and, with B-W2b-68, their own earnings); any other grain a role names is dropped here, before
  *     the API's own cap (heldGrains) and the database's column grants. Wages are "own records only": a later step
  *     checks each wage record with can() against the worker (W2, behind the legal switch).
  *   - A worker whose PIN must change holds nothing until they changed it.
  */
 
-export const FLOOR_GRAINS: readonly Grain[] = Object.freeze(['wages'])
+export const FLOOR_GRAINS: readonly Grain[] = Object.freeze(['wages', 'pay'])
 
 export interface FloorRole {
   readonly permissions: readonly string[]

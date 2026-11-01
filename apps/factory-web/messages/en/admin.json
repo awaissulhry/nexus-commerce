@@ -157,13 +157,15 @@
       "price": "price",
       "cost": "cost",
       "margin": "margin",
-      "wages": "wages"
+      "wages": "wages",
+      "pay": "pay"
     },
     "without": {
       "price": "Without prices: selling and purchase prices, totals and invoices show as hidden.",
       "cost": "Without costs: material and labour costs and cost sheets show as hidden.",
       "margin": "Without margins: margins and \"under the floor\" warnings show as hidden.",
-      "wages": "Without wages: labour rates and pay figures show as hidden."
+      "wages": "Without wages: labour rates and pay figures show as hidden.",
+      "pay": "Without pay: piece rates, earnings and guaranteed pay show as hidden (HR and the worker only)."
     }
   },
   "scope": {
@@ -1017,7 +1019,7 @@
     },
     "roles": {
       "title": "Floor roles",
-      "hint": "What they do on a tablet; at most wages of money.",
+      "hint": "What they do on a tablet; at most wages and their own pay of money.",
       "change": "Change roles",
       "dialog": "Floor roles of {name}",
       "stepUp": "Changing floor roles asks for a fresh code."
@@ -1153,19 +1155,19 @@
       },
       "operator": {
         "name": "Operator",
-        "description": "Works at a station on an enrolled floor device; sees no money."
+        "description": "Works at a station on an enrolled floor device; sees only their own pay (the piece rates published to them)."
       },
       "cutting_operator": {
         "name": "Cutting operator",
-        "description": "Works at a cutting table on an enrolled floor device; sees no money."
+        "description": "Works at a cutting table on an enrolled floor device; sees only their own pay (the piece rates published to them)."
       },
       "floor_inspector": {
         "name": "Floor inspector",
-        "description": "Inspects work at an inspection bench on an enrolled floor device; sees no money."
+        "description": "Inspects work at an inspection bench on an enrolled floor device; sees only their own pay (the piece rates published to them)."
       },
       "team_leader": {
         "name": "Team leader",
-        "description": "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees no money."
+        "description": "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees only their own pay (the piece rates published to them)."
       },
       "maintenance": {
         "name": "Maintenance",
@@ -1213,7 +1215,7 @@
       },
       "floorNoCost": {
         "title": "Floor sessions never see costs, margins or prices",
-        "why": "A tablet sees wages at most (A1 §3.11)."
+        "why": "A tablet sees wages and a worker's own pay at most (A1 §3.11)."
       },
       "partnerPrice": {
         "title": "Customers and suppliers see prices at most",
@@ -1797,9 +1799,16 @@
     "people_privacy_view": "See the legal gate of people data per site and purpose, and its impact assessment record",
     "people_privacy_manage": "Switch a purpose of people data on or off, set the minimum group size and the roles that see one person's figures",
     "people_figures_view": "See one person's work figures (only for a role named in the company's privacy settings, while the gate is on)",
+    "people_skills_view": "See the skills matrix: each person's level in each operation or machine, trainees and the machines they are authorised on (a qualification, never a score)",
+    "people_skills_manage": "Keep the skills, set people's levels, give trainee periods and sign trainees off",
+    "people_authorisations_manage": "Authorise people on a class of machine, change until when and revoke it",
     "production_offstandard_view": "See off-standard and indirect time blocks and their counts (no person in the lists)",
     "production_offstandard_codes": "Add and change off-standard and indirect time codes and their pay rules",
     "production_offstandard_approve": "Approve, reject, reopen and correct off-standard time blocks (never your own)",
+    "production_labour_view": "See Labour & corrections: the queue, line days and the changes to labour records (no person in the lists)",
+    "production_labour_close": "Close a line's day once its off-standard time is coded and its anomalies are cleared (closed days feed pay)",
+    "production_labour_reopen": "Reopen a closed line's day, with a reason",
+    "production_labour_answer": "Answer a worker's dispute of their own record, upheld or rejected (never your own)",
     "production_calls_view": "See help calls, their times per call and line, and who is called for each type (never per person)",
     "production_calls_answer": "Answer help calls: seen, on the way, solved or cancelled, and what they led to",
     "production_calls_manage": "Keep a site's help-call types and who answers them",
@@ -1810,6 +1819,10 @@
     "people_overtime_approve": "Approve planned overtime that people agreed to",
     "production_bundles_view": "See where every bundle is, the stuck ones and the scan-pattern counts (never who)",
     "production_bundles_findings": "Review scan-pattern findings (a dismissal needs a note)",
-    "production_bundles_who": "See who is behind one finding (only with the site's legal basis on; logged)"
+    "production_bundles_who": "See who is behind one finding (only with the site's legal basis on; logged)",
+    "people_piecerates_view": "See the piece-rate tables, their versions, who has read them and the legal switch of piece pay (the rates only with the pay grain)",
+    "people_piecerates_manage": "Make new versions of piece rates, publish them to the workers, put them in force, confirm provisional rates and record what piece pay rests on",
+    "people_piecerates_switch": "Start piece pay at a site once every legal precondition is on record, or stop it",
+    "people_attendance_view": "See attendance at your sites: clock-ins, clock-outs and breaks, the days and who is in now (where the attendance purpose is on)"
   }
 }
