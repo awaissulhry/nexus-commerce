@@ -15,6 +15,7 @@ import { dayAt, money } from '../../../../_shared/buying/model'
 import type { OrderRow } from '../../api'
 import { cancelHeld, confirmationPhrase, ORDER_TILES, ORDER_VIEWS, STATUS_TONE, type OrdersListActions, type OrdersListModel, type OrderView } from '../../model'
 import { SendManyDialog } from './SendManyDialog'
+import { DocumentNumberLine } from '../../../../admin/documents/override/view/DocumentNumberLine'
 import '../../../../_shared/buying/buying.css'
 
 /** B-W2a-69's tiles and views: their words are in this step's catalogue (`purchasing-orders`). */
@@ -422,19 +423,20 @@ function NewOrderDialog({ model, actions }: { model: OrdersListModel; actions?: 
             <DateField value={draft.requestedDate} onChange={(value) => actions?.newOrder?.onRequestedDate?.(value)} locale={locale === 'it' ? 'it-IT' : 'en-GB'} clearable clearLabel={t('common.clear')} />
           </Field>
         </div>
-        <KeyFacts supplierCurrency={supplier?.currency ?? null} />
+        {draft.number && <DocumentNumberLine model={draft.number} actions={actions?.newOrder?.number} />}
+        <KeyFacts supplierCurrency={supplier?.currency ?? null} numberShown={draft.number !== undefined} />
         {draft.problem && <Banner tone="danger" title={t(draft.problem.key, draft.problem.params)} />}
       </div>
     </Modal>
   )
 }
 
-function KeyFacts({ supplierCurrency }: { supplierCurrency: string | null }) {
+function KeyFacts({ supplierCurrency, numberShown = false }: { supplierCurrency: string | null; numberShown?: boolean }) {
   const t = useT('buying')
   return (
     <ul className="fw-by-list">
       <li>{supplierCurrency ? t('po.new.currency', { currency: supplierCurrency }) : t('po.new.currencyLater')}</li>
-      <li>{t('po.new.number')}</li>
+      {!numberShown && <li>{t('po.new.number')}</li>}
       <li>{t('po.new.afterCreate')}</li>
     </ul>
   )

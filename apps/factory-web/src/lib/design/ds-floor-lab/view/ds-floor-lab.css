@@ -1,0 +1,108 @@
+/* The floor and people parts lab (/design/ds-floor-parts, B-W2b-28): cards that fill the main area (no page max-width). */
+.fw-dfl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  padding: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-dfl-card {
+  min-width: 0;
+}
+
+.fw-dfl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
+  gap: var(--nds-space-24);
+  align-items: start;
+  min-width: 0;
+}
+
+/* The floor box: the floor tier's ground, as on a tablet. It stands in for the FloorFrame (floor screens draw inside
+   one): the kit's phone-width rules (a list row's status under its title) listen to that frame's container name. */
+.fw-dfl-floor {
+  padding: var(--nds-space-16);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-bg);
+  container: nds-floor-frame / inline-size;
+}
+
+.fw-dfl-span {
+  grid-column: 1 / -1;
+}
+
+.fw-dfl-part,
+.fw-dfl-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dfl-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-dfl-note {
+  margin: 0 0 var(--nds-space-8);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dfl-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-dfl-elapsed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-24);
+  align-items: flex-end;
+}
+
+.fw-dfl-summary,
+.fw-dfl-sentence {
+  margin: 0;
+}
+
+.fw-dfl-due {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-dfl-due > li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  padding-bottom: var(--nds-space-6);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-dfl-download {
+  align-self: flex-start;
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* The line-TV sample: the display tier, on the board's dark-or-light ground. */
+.fw-dfl-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+  justify-content: space-around;
+  padding: var(--nds-space-24);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-bg);
+}

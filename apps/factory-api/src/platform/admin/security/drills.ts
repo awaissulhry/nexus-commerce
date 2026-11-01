@@ -23,6 +23,7 @@ import { requireContext, type OfficeContext } from '../../../core/context'
 import type { OfficeAuth } from '../../auth/sessions/office-auth'
 import { completeUpload, requestUpload } from '../../files/files'
 import { processFiles } from '../../files/service'
+import { setTimerInCommand } from '../../timers/service'
 import type { DrillView, EvidenceBody, RecordDrillBody } from './contract'
 
 /**
@@ -175,28 +176,13 @@ export async function completeEvidence(request: FastifyRequest, fileId: string, 
   return { file: { id: done.id, originalName: done.originalName, status: done.status } }
 }
 
-/**
- * Moves the drill's reminder: the Tenant's PENDING RESTORE_DRILL_DUE timer is cancelled (its date moved) and a new one
- * set. B-W2a-33's timer service (platform/timers setTimerInCommand) does exactly this once it is merged; until then this
- * writes the same rows (one PENDING per record and key: the database's partial unique index) and the scheduler of that
- * step fires it.
- */
+/** Moves the drill's reminder: the Tenant's PENDING RESTORE_DRILL_DUE timer is cancelled (its date moved) and a new one set. */
 async function moveDrillTimer(tools: CommandTools, tenantId: string, drilledOn: string): Promise<void> {
-  const { tx, now, audit } = tools
+  // B-W2b-24: THE timer service (platform/timers): one PENDING RESTORE_DRILL_DUE timer on the tenant; another date cancels
+  // the old one (MOVED) and sets the new one, audited as timers.set / timers.cancel; platform/timers/restore-drill.ts tells
+  // the holders of security.view when it fires.
   const timer = drillTimerOf(drilledOn)
-  const pending = await tx.$queryRaw<{ id: string; version: number; dueAt: Date; fireAt: Date }[]>`SELECT id, version, "dueAt", "fireAt" FROM "DueTimer" WHERE "recordType" = 'Tenant' AND "recordId" = ${tenantId}::uuid AND "timerKey" = ${DRILL_TIMER_KEY} AND status = 'PENDING' FOR UPDATE`
-  const current = pending[0]
-  if (current && current.dueAt.getTime() === timer.dueAt.getTime() && current.fireAt.getTime() === timer.fireAt.getTime()) return
-  if (current) {
-    const reason = 'The date it watches moved: a new timer was set.'
-    await tx.dueTimer.updateMany({ where: { id: current.id, status: 'PENDING', version: current.version }, data: { status: 'CANCELLED', cancelledAt: now, cancelReason: reason, version: current.version + 1, updatedAt: now } })
-    audit({ action: 'timers.cancel', recordType: 'DueTimer', recordId: current.id, after: { timerKey: DRILL_TIMER_KEY, recordType: 'Tenant', recordId: tenantId, reason } })
-  }
-  const id = newId()
-  await tx.dueTimer.create({
-    data: { id, timerKey: DRILL_TIMER_KEY, recordType: 'Tenant', recordId: tenantId, recordLabel: null, dueAt: timer.dueAt, fireAt: timer.fireAt, payload: { dueOn: timer.dueOn }, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null },
-  })
-  audit({ action: 'timers.set', recordType: 'DueTimer', recordId: id, after: { timerKey: DRILL_TIMER_KEY, recordType: 'Tenant', recordId: tenantId, dueAt: toUtcIso(timer.dueAt), fireAt: toUtcIso(timer.fireAt) } })
+  await setTimerInCommand(tools, { record: { type: 'Tenant', id: tenantId }, timerKey: DRILL_TIMER_KEY, dueAt: timer.dueAt, fireAt: timer.fireAt, payload: { dueOn: timer.dueOn } })
 }
 
 export async function recordDrill(auth: OfficeAuth, request: FastifyRequest, body: RecordDrillBody, idempotencyKey: string | undefined) {

@@ -16,7 +16,8 @@ import '../reports.css'
 
 /**
  * SCR-104 — Home › Insights › Reports, the library (design home.reports `library`, ANA-029): every report of the standard
- * pack, said as the question it answers, grouped by area (the Area column and its chips), with when I last opened it,
+ * pack, said as the question it answers, grouped by area (the Area column and its chips), with when I last ran it (the
+ * server's run log, B-W2b-24),
  * whether it is e-mailed to me and its formats. A report needing a grain the person lacks stays listed ("Needs cost
  * rights"); one that reads a list outside the person's role is listed only on asking. One view model, nothing fetched.
  */
@@ -26,8 +27,6 @@ export interface LibraryModel {
   readonly prefix: string
   readonly address: LibraryAddress
   readonly library: { readonly value: Library | null; readonly problem: string | null }
-  /** When I opened each report last, in this browser. */
-  readonly lastOpened: Readonly<Record<string, string>>
 }
 
 export interface LibraryActions {
@@ -65,7 +64,7 @@ function LibraryScreen({ model, actions }: { model: LibraryModel; actions?: Libr
       ) : null
     const AreaCell = ({ data }: ICellRendererParams<LibraryReport>) => (data ? <Tag tone="neutral">{t(`area.${data.area}`)}</Tag> : null)
     const LastCell = ({ data }: ICellRendererParams<LibraryReport>) => {
-      const at = data ? model.lastOpened[data.key] : undefined
+      const at = data?.lastRunByMe ?? null
       return <span className={at ? '' : 'fw-rep-muted'}>{at ? formatDateTime(at, { locale }) : t('library.never')}</span>
     }
     const ScheduleCell = ({ data }: ICellRendererParams<LibraryReport>) =>
@@ -95,7 +94,7 @@ function LibraryScreen({ model, actions }: { model: LibraryModel; actions?: Libr
       { colId: 'formats', headerName: t('library.col.formats'), minWidth: 110, flex: 0.5, cellRenderer: FormatsCell },
       { colId: 'rights', headerName: t('library.col.rights'), minWidth: 170, flex: 0.9, cellRenderer: RightsCell },
     ]
-  }, [t, locale, model.prefix, model.lastOpened])
+  }, [t, locale, model.prefix])
 
   if (!model.can.view) {
     return (

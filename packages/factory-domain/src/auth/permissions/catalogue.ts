@@ -20,6 +20,8 @@ import { INVENTORY_RESERVATION_PERMISSIONS } from '../../inventory/reservations/
 import { INVOICES_DEFINITIONS, INVOICES_PERMISSIONS } from '../../invoicing/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
+// B-W2b-24: the controlled override of a migrated document's number (PLT-125).
+import { NUMBERING_OVERRIDE_DEFINITIONS, NUMBERING_OVERRIDE_PERMISSIONS } from '../../numbering/permissions'
 import { PARTIES_DEFINITIONS, PARTIES_PERMISSIONS } from '../../parties/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
@@ -39,6 +41,8 @@ import { PURCHASING_SUBCONTRACT_FLOOR_PERMISSIONS } from '../../purchasing/subco
 import { PURCHASING_CLAIMS_DEFINITIONS, PURCHASING_CLAIMS_PERMISSIONS } from '../../purchasing/claims/permissions'
 // B-W2b-14: the Owner's switch for automatic PO confirmation reminders (purchasing.reminders.switch, step-up).
 import { PURCHASING_REMINDERS_DEFINITIONS, PURCHASING_REMINDERS_PERMISSIONS } from '../../purchasing/reminders/permissions'
+// B-W2b-46: checks before a scan counts (the team leader's override on the tablet).
+import { PRODUCTION_GUARDS_DEFINITIONS, PRODUCTION_GUARDS_FLOOR_PERMISSIONS, PRODUCTION_GUARDS_PERMISSIONS } from '../../production/guards/permissions'
 import { QUALITY_FINAL_DEFINITIONS, QUALITY_FINAL_FLOOR_PERMISSIONS, QUALITY_FINAL_PERMISSIONS } from '../../quality/final/permissions'
 import { QUALITY_LAB_DEFINITIONS, QUALITY_LAB_PERMISSIONS } from '../../quality/lab/permissions'
 // B-W2a-26: the defect library and disposition codes (quality.defects.*), quality holds (quality.holds.*).
@@ -96,6 +100,20 @@ import { RECEIVABLES_DEFINITIONS, RECEIVABLES_PERMISSIONS } from '../../receivab
 import { PAYABLES_DEFINITIONS, PAYABLES_PERMISSIONS } from '../../payables/permissions'
 // B-W2a-65: customer complaints (quality.complaints.view | log | manage | acknowledge).
 import { QUALITY_COMPLAINTS_DEFINITIONS, QUALITY_COMPLAINTS_PERMISSIONS } from '../../quality/complaints/permissions'
+// B-W2b-26: people (employees, teams and loans, leaver steps).
+import { PEOPLE_EMPLOYEES_DEFINITIONS, PEOPLE_EMPLOYEES_PERMISSIONS } from '../../people/employees/permissions'
+import { PEOPLE_TEAMS_DEFINITIONS, PEOPLE_TEAMS_PERMISSIONS } from '../../people/teams/permissions'
+import { PEOPLE_LEAVERS_DEFINITIONS, PEOPLE_LEAVERS_PERMISSIONS } from '../../people/leavers/permissions'
+// B-W2b-27: privacy of people data (people.privacy.view | manage, people.figures.view).
+import { PEOPLE_PRIVACY_DEFINITIONS, PEOPLE_PRIVACY_PERMISSIONS } from '../../people/privacy/permissions'
+// B-W2b-29: off-standard and indirect time (production.offstandard.view | codes | approve).
+import { PRODUCTION_OFFSTANDARD_DEFINITIONS, PRODUCTION_OFFSTANDARD_PERMISSIONS } from '../../production/offstandard/permissions'
+// B-W2b-35: help calls (production.calls.view | answer | manage).
+import { PRODUCTION_CALLS_DEFINITIONS, PRODUCTION_CALLS_FLOOR_PERMISSIONS, PRODUCTION_CALLS_PERMISSIONS } from '../../production/calls/permissions'
+// B-W2b-32: shifts and overtime requests (people.shifts.view | manage | team, people.overtime.manage | approve).
+import { PEOPLE_SHIFTS_DEFINITIONS, PEOPLE_SHIFTS_PERMISSIONS } from '../../people/shifts/permissions'
+// B-W2b-39: skills and machine authorisations (people.skills.view | manage, people.authorisations.manage).
+import { PEOPLE_SKILLS_DEFINITIONS, PEOPLE_SKILLS_PERMISSIONS } from '../../people/skills/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -363,6 +381,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   ROLES_PERMISSIONS,
   AUDIT_PERMISSIONS,
   NUMBERING_DEFINITIONS,
+  // B-W2b-24: numbering.override (PLT-125).
+  NUMBERING_OVERRIDE_DEFINITIONS,
   FILES_DEFINITIONS,
   LINKS_PERMISSIONS,
   LINK_SESSION_PERMISSIONS,
@@ -470,6 +490,22 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_COMPLAINTS_DEFINITIONS,
   // B-W2b-14: the Owner's switch for automatic PO confirmation reminders.
   PURCHASING_REMINDERS_DEFINITIONS,
+  // B-W2b-26: people (people.view | team.view | employees.manage | teams.manage | loans.manage | leavers.manage).
+  PEOPLE_EMPLOYEES_DEFINITIONS,
+  PEOPLE_TEAMS_DEFINITIONS,
+  PEOPLE_LEAVERS_DEFINITIONS,
+  // B-W2b-27: privacy of people data.
+  PEOPLE_PRIVACY_DEFINITIONS,
+  // B-W2b-29: off-standard and indirect time.
+  PRODUCTION_OFFSTANDARD_DEFINITIONS,
+  // B-W2b-35: help calls (production.calls.view | answer | manage).
+  PRODUCTION_CALLS_DEFINITIONS,
+  // B-W2b-32: shifts and overtime requests.
+  PEOPLE_SHIFTS_DEFINITIONS,
+  // B-W2b-46: checks before a scan counts (production.scan.override).
+  PRODUCTION_GUARDS_DEFINITIONS,
+  // B-W2b-39: skills and machine authorisations.
+  PEOPLE_SKILLS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -493,7 +529,11 @@ export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PR
   // B-W2a-43: the dock receives a customer return and grades it (never a price, a credit or a decision).
   ...SALES_RETURNS_FLOOR_PERMISSIONS,
   // B-W2a-76: the warehouse tablet sends a subcontract kit (with its DDT) and receives the goods back (never a fee).
-  ...PURCHASING_SUBCONTRACT_FLOOR_PERMISSIONS])
+  ...PURCHASING_SUBCONTRACT_FLOOR_PERMISSIONS,
+  // B-W2b-35: the line's call states and answering help calls (the team leader's line view, a technician's tablet).
+  ...PRODUCTION_CALLS_FLOOR_PERMISSIONS,
+  // B-W2b-46: the team leader's override of a held scan, signed on the tablet with their PIN.
+  ...PRODUCTION_GUARDS_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
 for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...INVENTORY_RESERVATION_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...PRODUCTION_BUNDLES_PERMISSIONS, ...PRODUCTION_SCANS_PERMISSIONS, ...PRODUCTION_SERIALS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS, ...QUALITY_LAB_PERMISSIONS, ...QUALITY_FINAL_PERMISSIONS, ...HOME_PERMISSIONS, ...FLOOR_SYNC_PERMISSIONS, ...CALENDARS_PERMISSIONS, ...INVENTORY_COUNTS_PERMISSIONS, ...PURCHASING_SOURCES_PERMISSIONS, ...PRODUCTION_REWORK_PERMISSIONS, ...PRODUCTION_SCRAP_PERMISSIONS]) {
@@ -557,6 +597,22 @@ for (const name of QUALITY_COMPLAINTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 for (const name of HOME_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-14: the Owner's switch for automatic PO confirmation reminders.
 for (const name of PURCHASING_REMINDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-24: the controlled override of a migrated document's number.
+for (const name of NUMBERING_OVERRIDE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-26: people.
+for (const name of [...PEOPLE_EMPLOYEES_PERMISSIONS, ...PEOPLE_TEAMS_PERMISSIONS, ...PEOPLE_LEAVERS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-27: privacy of people data.
+for (const name of PEOPLE_PRIVACY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-29: off-standard and indirect time.
+for (const name of PRODUCTION_OFFSTANDARD_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-35: help calls.
+for (const name of PRODUCTION_CALLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-32: shifts and overtime requests.
+for (const name of PEOPLE_SHIFTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-46: checks before a scan counts.
+for (const name of PRODUCTION_GUARDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-39: skills and machine authorisations.
+for (const name of PEOPLE_SKILLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

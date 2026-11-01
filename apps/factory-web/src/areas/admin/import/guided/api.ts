@@ -38,7 +38,8 @@ export const firstLoadStepSchema = z.object({
   reconciliation: reconciliationSchema.nullable(),
   matches: z.boolean().nullable(),
   differences: z.array(issue),
-  done: z.object({ at: z.string(), byId: z.string().nullable(), nothing: z.boolean(), stillMatches: z.boolean().nullable() }).nullable(),
+  // B-W2b-24: the step's row (FirstLoadStep) also gives why there was nothing to load (null otherwise).
+  done: z.object({ at: z.string(), byId: z.string().nullable(), nothing: z.boolean(), reason: z.string().nullable().default(null), stillMatches: z.boolean().nullable() }).nullable(),
   canImport: z.boolean(),
   canMarkDone: z.boolean(),
 })

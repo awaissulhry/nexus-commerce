@@ -8,6 +8,10 @@ import { WORK_ORDER_STATUSES } from './work-orders/machine'
 import { SPLIT_REASONS } from './bundles/split'
 import { REWORK_STATUSES } from './rework/rules'
 import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
+// B-W2b-29: off-standard and indirect time.
+import { BLOCK_ENDINGS, BLOCK_SOURCES, OFF_STANDARD_KINDS } from './offstandard/rules'
+// B-W2b-46: checks before a scan counts.
+import { GUARD_KINDS, OVERRIDE_REASON_CODES } from './guards/rules'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -48,6 +52,15 @@ import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
  *   production.report_subscription_changed  B-W2a-38: someone subscribed to the daily production report by e-mail, or a
  *                                           subscription changed or was turned off (the report page's state refreshes)
  *   production.daily_report_sent            B-W2a-38: the scheduler e-mailed one person's daily production report
+ *   production.scan_guard_flagged           B-W2b-46: a report counted although a check found something (the site's
+ *                                           rule is WARN): the team leader is told (MES-097, MES-098); no person
+ *   production.scan_guard_overridden        B-W2b-46: a team leader overrode the checks that held a report, with their
+ *                                           PIN and a reason tile (MES-070, MES-097, MES-098); no person, no words
+ *   production.bundle_coupons_changed       B-W2b-41: a bundle's coupons printed, one reprinted or voided (MES-067)
+ *   production.bundle_stuck                 B-W2b-41: a bundle with no scan past its site's limit, once per wait (MES-168)
+ *   production.scan_findings_found          B-W2b-41: the scan-pattern checks found patterns about bundles (MES-075)
+ *   production.scan_finding_reviewed        B-W2b-41: one finding reviewed or dismissed
+ *   production.bundle_rules_changed         B-W2b-41: a site's bundle code mode or stuck limit changed
  */
 export const MONITORING_CHANGES = ['WIDENED', 'NARROWED', 'BASIS_RECORDED', 'BASIS_REPLACED'] as const
 
@@ -75,6 +88,11 @@ const labelLive = { permission: 'production.serials', floor: 'production.serials
 const reworkLive = { permission: 'production.rework', floor: 'production.rework', fields: ['workOrderId', 'number', 'reworkId'] } as const
 /** Scrap & rework in the office (production.scrap.view). */
 const scrapLive = { permission: 'production.scrap.view', fields: ['workOrderId', 'number'] } as const
+/** B-W2b-29: the labour inbox (production.offstandard.view) and the tablets of the event's site (floor.work). No person in a field. */
+const offStandardLive = { permission: 'production.offstandard.view', floor: 'floor.work', fields: ['blockId', 'siteId', 'lineId', 'status'] } as const
+// B-W2b-46.
+/** The checks the floor met: the office's leads and supervisors (production.scan.correct) and the team leaders' tablets (production.scan.override). */
+const guardLive = { permission: 'production.scan.correct', floor: 'production.scan.override', fields: ['workOrderId', 'number', 'bundleId', 'scanId'] } as const
 
 export const events = [
   defineEvent({
@@ -483,5 +501,196 @@ export const events = [
       emailOutboundId: z.uuid(),
       lanes: z.number().int().min(0),
     }),
+  }),
+  // B-W2b-41: bundles tracked (coupons per operation, stuck bundles, scan-pattern findings, the site's bundle codes). Ids,
+  // codes, counts and states only: never a person, never a station (a station can stand for one person), never a reason.
+  defineEvent({
+    type: 'production.bundle_coupons_changed',
+    context: 'production',
+    description: "A bundle's coupons changed (MES-067): coupons printed for its scanned operations, one reprinted with a new code (the old one is refused when scanned), or one voided.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      change: z.enum(['ISSUED', 'REPRINTED', 'VOIDED']),
+      couponIds: z.array(z.uuid()).min(1),
+      postedBy: postedBy(),
+    }),
+    live: bundleLive,
+  }),
+  defineEvent({
+    type: 'production.bundle_stuck',
+    context: 'production',
+    description: "A bundle has had no scan for longer than its site allows (MES-168): the floor-now board and the bundles list show it. Told once per wait: a new scan starts a new one.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      code: z.string(),
+      siteId: z.uuid(),
+      place: z.enum(['CUTTING', 'LINE']),
+      lastScanId: z.uuid().nullable(),
+      workingHours: z.number().min(0),
+      limitHours: z.number().int().min(1),
+    }),
+    live: { permission: 'production.bundles.view', fields: ['workOrderId', 'number', 'bundleId'] },
+  }),
+  defineEvent({
+    type: 'production.scan_findings_found',
+    context: 'production',
+    description: 'The scan-pattern checks found patterns about bundles at a site (MES-075): counts per kind, to talk about, never a score.',
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      findingIds: z.array(z.uuid()).min(1),
+      bunched: z.number().int().min(0),
+      movedNotScanned: z.number().int().min(0),
+      gapBelowStandard: z.number().int().min(0),
+    }),
+    live: { permission: 'production.bundles.view', fields: ['siteId'] },
+  }),
+  defineEvent({
+    type: 'production.scan_finding_reviewed',
+    context: 'production',
+    description: 'A scan-pattern finding about a bundle was reviewed or dismissed by the office.',
+    payload: z.strictObject({ findingId: z.uuid(), siteId: z.uuid(), bundleId: z.uuid(), status: z.enum(['REVIEWED', 'DISMISSED']) }),
+    live: { permission: 'production.bundles.view', fields: ['findingId', 'bundleId'] },
+  }),
+  defineEvent({
+    type: 'production.bundle_rules_changed',
+    context: 'production',
+    description: "A site's bundle rules changed: one bundle code or a coupon per operation (MES-067), and the hours after which a bundle with no scan is stuck (MES-168).",
+    payload: z.strictObject({ siteId: z.uuid(), bundleCodeMode: z.enum(['ONE_CODE', 'COUPON_PER_OPERATION']), stuckBundleHours: z.number().int().min(1) }),
+    live: { permission: 'production.settings.view', fields: ['siteId', 'bundleCodeMode'] },
+  }),
+  // B-W2b-29: off-standard and indirect time (MES-155 … MES-158; modules/production/offstandard). A block's ids, its line,
+  // station, code and state, its day and its minutes: never the worker, a name or a note (Statuto dei Lavoratori art. 4;
+  // the labour inbox and the tablets read the block again). A code's change carries its code only, never its words.
+  //   production.off_standard_code_changed   a company's off-standard or indirect code was added, edited, set inactive
+  //                                          or active again (the settings grid and the floor's tiles read the codes again)
+  //   production.off_standard_started        a block started on the floor: no bundle runs (MES-156, MES-158)
+  //   production.off_standard_ended          a block ended (the worker, a bundle scanned, another tile, the team leader,
+  //                                          the help call, the clock-out): waiting for approval or approved at once
+  //   production.off_standard_recorded       a block typed afterwards by the team leader or the office (ended already)
+  //   production.off_standard_decided        a waiting block was approved or rejected (MES-157), alone or with others
+  //   production.off_standard_changed        an ended block was corrected or a decided one reopened (MES-204: the labour
+  //                                          edit keeps before and after)
+  defineEvent({
+    type: 'production.off_standard_code_changed',
+    context: 'production',
+    description: "A company's off-standard or indirect code was added, edited, set inactive or active again.",
+    payload: z.strictObject({ companyId: z.uuid(), codeId: z.uuid(), code: z.string().min(1).max(40), change: z.enum(['CREATED', 'EDITED', 'DEACTIVATED', 'REACTIVATED']) }),
+    live: { permission: 'production.offstandard.view', fields: ['codeId', 'code', 'change'] },
+  }),
+  defineEvent({
+    type: 'production.off_standard_started',
+    context: 'production',
+    description: 'A block of off-standard or indirect time started on the floor, while no bundle runs.',
+    payload: z.strictObject({
+      blockId: z.uuid(),
+      siteId: z.uuid(),
+      lineId: z.uuid().nullable(),
+      stationId: z.uuid().nullable(),
+      codeId: z.uuid(),
+      code: z.string(),
+      kind: z.enum(OFF_STANDARD_KINDS),
+      source: z.enum(BLOCK_SOURCES),
+      workDate: z.iso.date(),
+      status: z.literal('OPEN'),
+    }),
+    live: offStandardLive,
+  }),
+  defineEvent({
+    type: 'production.off_standard_ended',
+    context: 'production',
+    description: 'A block of off-standard or indirect time ended: waiting for the team leader, or approved at once for a code that needs no approval.',
+    payload: z.strictObject({
+      blockId: z.uuid(),
+      siteId: z.uuid(),
+      lineId: z.uuid().nullable(),
+      stationId: z.uuid().nullable(),
+      codeId: z.uuid(),
+      code: z.string(),
+      kind: z.enum(OFF_STANDARD_KINDS),
+      endedBy: z.enum(BLOCK_ENDINGS),
+      workDate: z.iso.date(),
+      minutes: z.number().int().min(0),
+      status: z.enum(['PENDING', 'APPROVED']),
+    }),
+    live: offStandardLive,
+  }),
+  defineEvent({
+    type: 'production.off_standard_recorded',
+    context: 'production',
+    description: 'A block of off-standard or indirect time was typed afterwards by the team leader or the office.',
+    payload: z.strictObject({
+      blockId: z.uuid(),
+      siteId: z.uuid(),
+      lineId: z.uuid().nullable(),
+      stationId: z.uuid().nullable(),
+      codeId: z.uuid(),
+      code: z.string(),
+      kind: z.enum(OFF_STANDARD_KINDS),
+      workDate: z.iso.date(),
+      minutes: z.number().int().min(0),
+      status: z.enum(['PENDING', 'APPROVED']),
+    }),
+    live: offStandardLive,
+  }),
+  defineEvent({
+    type: 'production.off_standard_decided',
+    context: 'production',
+    description: 'A block of off-standard time waiting for the team leader was approved or rejected.',
+    payload: z.strictObject({
+      blockId: z.uuid(),
+      siteId: z.uuid(),
+      lineId: z.uuid().nullable(),
+      codeId: z.uuid(),
+      code: z.string(),
+      status: z.enum(['APPROVED', 'REJECTED']),
+      decidedOn: z.enum(['OFFICE', 'FLOOR']),
+      /** One of several blocks approved at once ("Approve 8 normal blocks"). */
+      bulk: z.boolean(),
+    }),
+    live: offStandardLive,
+  }),
+  defineEvent({
+    type: 'production.off_standard_changed',
+    context: 'production',
+    description: 'An ended block of off-standard time was corrected, or a decided one reopened, with its labour edit.',
+    payload: z.strictObject({
+      blockId: z.uuid(),
+      siteId: z.uuid(),
+      lineId: z.uuid().nullable(),
+      change: z.enum(['CORRECTED', 'REOPENED']),
+      /** The block's columns that changed (codeId, startedAt, endedAt, lineId, stationId, status). */
+      fields: z.array(z.string()).min(1),
+      status: z.enum(['PENDING', 'APPROVED', 'REJECTED']),
+    }),
+    live: offStandardLive,
+  }),
+  // ---- B-W2b-46: checks before a scan counts (modules/production/guards). Ids, kinds and the reason tile's code only.
+  defineEvent({
+    type: 'production.scan_guard_flagged',
+    context: 'production',
+    description: "A floor report counted although a check before it counts found something the site's rule only warns about (more garments than the operation before passed, a skipped required operation): the team leaders are told.",
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), bundleId: z.uuid(), scanId: z.uuid(), operationId: z.uuid(), operationSeq: z.number().int(), stationId: z.uuid().nullable(), guards: z.array(z.enum(GUARD_KINDS)).min(1) }),
+    live: guardLive,
+  }),
+  defineEvent({
+    type: 'production.scan_guard_overridden',
+    context: 'production',
+    description: "A team leader overrode the checks that held a floor report (more garments than the operation before passed, a skipped required operation, a bundle of another line) with their PIN and a reason; the report counted.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      scanId: z.uuid(),
+      operationId: z.uuid(),
+      operationSeq: z.number().int(),
+      stationId: z.uuid().nullable(),
+      guards: z.array(z.enum(GUARD_KINDS)).min(1),
+      reasonCode: z.enum(OVERRIDE_REASON_CODES),
+    }),
+    live: guardLive,
   }),
 ] as const

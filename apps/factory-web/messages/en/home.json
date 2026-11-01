@@ -510,6 +510,8 @@
       "alerts.CERTIFICATE_EXPIRING": "Certificate {label} expires on {dueDate} ({days} days left).",
       "alerts.INVOICE_DEADLINE": "The goods of DDT {label} must be invoiced by {dueDate} ({days} days left).",
       "alerts.INVOICE_DEADLINE.LATE": "The goods of DDT {label} were due to be invoiced by {dueDate}: {days} days late.",
+      "alerts.INTEGRATION_FAILING": "Connection {label} has not worked for {hours} hours: its last call failed.",
+      "alerts.INTEGRATION_FAILING.NEVER": "Connection {label} has never worked: no call has succeeded in the {hours} hours since it was set up.",
       "why.RULE_ALERT.assigned": "It is assigned to you.",
       "why.RULE_ALERT.recipient": "The rule \"{rule}\" tells you.",
       "alerts.UNKNOWN": "Alert on {label}."

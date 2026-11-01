@@ -234,6 +234,12 @@
       },
       "complaint": {
         "safety": "Safety complaint {record}: {title}. It is in the PPE register; the owner acknowledges it on the complaint"
+      },
+      "security": {
+        "drillDue": "The next restore drill is due on {title}: the last one that passed was on {record}"
+      },
+      "calls": {
+        "raised": "Help call from station {record}: {title}"
       }
     },
     "fallback": "News on {record}",

@@ -167,6 +167,7 @@ export function failureKey(reason: string | null): string {
   if (/more than [\d,.]+ rows/i.test(text)) return 'tools.job.why.tooMany'
   if (/larger than/i.test(text)) return 'tools.job.why.tooLarge'
   if (/stopped/i.test(text)) return 'tools.job.why.stopped'
+  if (/selected rows/i.test(text)) return 'tools.job.why.selected'
   return 'tools.job.why.other'
 }
 

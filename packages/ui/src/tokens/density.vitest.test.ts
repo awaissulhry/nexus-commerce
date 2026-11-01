@@ -7,7 +7,11 @@ import {
   DENSITIES,
   DENSITY_TOKENS,
   DEFAULT_DENSITY,
+  DISPLAY_DENSITY,
   densityAttrs,
+  displayDensityAttrs,
+  displayDensityCss,
+  displayDensityTokens,
   densityCss,
   densityTokens,
   isDensityName,
@@ -62,12 +66,21 @@ describe('density tiers — the tokens', () => {
     }
   })
 
-  it('emits :root + standard, then comfortable, then floor — each block the table of its tier', () => {
-    expect(cssDensityBlocks.map((b) => b.selector)).toEqual([":root, [data-density='standard']", "[data-density='comfortable']", "[data-density='floor']"])
+  it('emits :root + standard, then comfortable, then floor, then display (D26) — each block the table of its tier', () => {
+    expect(cssDensityBlocks.map((b) => b.selector)).toEqual([
+      ":root, [data-density='standard']",
+      "[data-density='comfortable']",
+      "[data-density='floor']",
+      "[data-density='display']",
+    ])
     cssDensityBlocks.forEach((b, i) => {
-      const d = DENSITIES[i]
-      expect(Object.fromEntries(b.vars.map((v) => [v.name, v.value]))).toEqual(Object.fromEntries(keys.map((k) => [DENSITY_TOKENS[k].css, densityCss[d][k]])))
+      const table = i < DENSITIES.length ? densityCss[DENSITIES[i]] : displayDensityCss
+      expect(Object.fromEntries(b.vars.map((v) => [v.name, v.value]))).toEqual(Object.fromEntries(keys.map((k) => [DENSITY_TOKENS[k].css, table[k]])))
     })
+  })
+
+  it('writes every display value (D26) as an existing token that holds exactly its number, or as that number in px', () => {
+    for (const k of keys) expect(resolveRoot(displayDensityCss[k]), `display.${k}`).toBe(`${displayDensityTokens[k]}px`)
   })
 
   it('the generated files carry the blocks AFTER .dark, so the existing blocks are untouched (npm run tokens:check holds the text)', () => {
@@ -124,9 +137,18 @@ describe('density tiers — the sizes', () => {
     }
   })
 
+  it('display (D26, the line TV): never smaller than floor, body at least 28 px, numerals at least 80 px, icons at least 40 px', () => {
+    const display = displayDensityTokens
+    for (const k of keys) expect(display[k], k).toBeGreaterThanOrEqual(floor[k])
+    expect(display.fontBody).toBeGreaterThanOrEqual(28)
+    expect(display.fontLabel).toBeGreaterThanOrEqual(22)
+    expect(display.fontNumeral).toBeGreaterThanOrEqual(80)
+    expect(display.icon).toBeGreaterThanOrEqual(40)
+  })
+
   it('every tier keeps its own order: small ≤ control ≤ primary, target ≤ small control, label ≤ body ≤ numeral', () => {
-    for (const d of DENSITIES) {
-      const t = densityTokens[d]
+    for (const t of [...DENSITIES.map((d) => densityTokens[d]), displayDensityTokens]) {
+      const d = t === displayDensityTokens ? 'display' : DENSITIES.find((x) => densityTokens[x] === t)
       expect(t.controlHSm, d).toBeLessThanOrEqual(t.controlH)
       expect(t.controlH, d).toBeLessThanOrEqual(t.controlHPrimary)
       expect(t.fontLabel, d).toBeLessThanOrEqual(t.fontBody)
@@ -137,9 +159,15 @@ describe('density tiers — the sizes', () => {
 })
 
 describe('density helpers', () => {
-  it('isDensityName accepts the three tiers only', () => {
+  it('isDensityName accepts the three tiers only (the display tier is not a working tier: D26)', () => {
     for (const d of DENSITIES) expect(isDensityName(d)).toBe(true)
-    for (const v of ['compact', 'spacious', 'Floor', '', null, 3, undefined]) expect(isDensityName(v)).toBe(false)
+    for (const v of ['compact', 'spacious', 'Floor', '', null, 3, undefined, 'display']) expect(isDensityName(v)).toBe(false)
+  })
+
+  it('displayDensityAttrs is the attribute the display block selects on (D26)', () => {
+    expect(DISPLAY_DENSITY).toBe('display')
+    expect(displayDensityAttrs()).toEqual({ 'data-density': 'display' })
+    expect(cssDensityBlocks.at(-1)?.selector).toBe(`[data-density='${displayDensityAttrs()['data-density']}']`)
   })
 
   it('densityAttrs is the attribute the CSS selects on', () => {

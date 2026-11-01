@@ -97,6 +97,9 @@ export const ACCOUNTS: IntegrationAccount[] = [
   account(5, { provider: 'VIES', code: 'vies', label: 'VAT check (fake)', mode: 'FAKE', status: 'PAUSED', lastOkAt: at(27, 11, 4), version: 4 }),
 ]
 
+/** B-W2b-24: a virus-scan account in test mode (made-up; none exists before the Owner's spend yes): read like any other. */
+export const SCANNER: IntegrationAccount = account(6, { provider: 'CLAMAV', code: 'virus-scan', label: 'Virus scan (fake)', mode: 'FAKE', lastOkAt: at(27, 15, 2), calls24h: { total: 14, failed: 0 } })
+
 export const LIVE_ONLY: IntegrationAccount[] = [ACCOUNTS[1]!, { ...ACCOUNTS[2]!, mode: 'LIVE', label: 'SDI Officina Demo', credentials: { saved: true, savedAt: at(5, 9), rotatedAt: null } }]
 
 const call = (n: number, minute: number, extra: Partial<IntegrationCall>): IntegrationCall => ({
@@ -298,6 +301,8 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'no-match', label: 'Search finds nothing', model: list({ query: 'payroll' }) },
     { id: 'live-only', label: 'Everything live: no test-mode note', model: list({ accounts: loaded(LIVE_ONLY), mail: { ...MAIL, identities: loaded([IDENTITY_READY]) } }) },
     { id: 'empty', label: 'No service connected yet', model: list({ accounts: loaded([]), mail: { ...MAIL, identities: loaded([]), sesAccounts: [] } }), note: 'Every service shows "Not connected"; the mail domain says to connect e-mail first.' },
+    // B-W2b-24: the virus scanner and error tracking are listed only when an account exists (they wait for the Owner's spend yes).
+    { id: 'scanner-account', label: 'A virus-scan account in test mode', model: list({ accounts: loaded([...ACCOUNTS, SCANNER]) }), note: 'B-W2b-24: CLAMAV / ERROR_TRACKING read without failing the page; no "Not connected" row for them (GATE-SPEND).' },
     { id: 'connect', label: 'Connect a service: the catalogue', model: list({ connect: true }), note: 'Honest: connecting from this page comes later (no route adds an account yet); Nexus support connects it, test mode first.' },
     { id: 'pause-confirm', label: 'Pause a service: confirm', model: list({ confirm: { accountId: ACCOUNTS[3]!.id, pause: true } }) },
     { id: 'resume-confirm', label: 'Resume a paused service', model: list({ confirm: { accountId: ACCOUNTS[4]!.id, pause: false } }) },

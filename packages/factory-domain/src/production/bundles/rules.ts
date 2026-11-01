@@ -71,6 +71,14 @@ export const BUNDLE_REFUSALS = [
   'SPLIT_TOO_MANY',
   'WORK_ORDER_ON_HOLD',
   'IN_REWORK',
+  // W2b B-W2b-41 (coupons.ts, sets.ts; MES-067, MES-078): coupons while the site scans one code, nothing left to print,
+  // a coupon voided already; bundles of one set from different shades, a bundle cut from two shades, bundles of two cells.
+  'COUPONS_OFF',
+  'NOTHING_TO_COUPON',
+  'COUPON_VOIDED',
+  'SHADE_MISMATCH',
+  'MIXED_SHADES',
+  'NOT_ONE_SET',
 ] as const
 export type BundleRefusalCode = (typeof BUNDLE_REFUSALS)[number]
 

@@ -1,6 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import type { FloorSessionEndReason } from '@nexus/factory-db'
 import { normalizeBadgeCode, badgeCodeHash } from '@nexus/factory-domain/auth/floor/badge'
+import { CREW } from '@nexus/factory-domain/auth/floor/crew'
+import { speechLang } from '@nexus/factory-domain/auth/floor/literacy'
+import { signInRefusal } from '@nexus/factory-domain/auth/floor/modes'
 import { hashPin, isPinLocked, pinLockUntil, pinProblems, verifyPin } from '@nexus/factory-domain/auth/floor/pin'
 import { idleEndAt, sessionEndsAt, sessionState } from '@nexus/factory-domain/auth/floor/session'
 import { ConflictError, ForbiddenError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
@@ -15,7 +18,9 @@ import type { OfficeAuth } from '../sessions/office-auth'
 import { floorSessionOf } from './authenticator'
 import { clearFloorCookie, deviceCookieOf, floorCookieOf, setDeviceCookie, setFloorCookie } from './cookies'
 import type { FloorCredentials } from './contract'
-import { requireDevice, STATION_SELECT, stationRef, type DeviceRequest } from './device'
+import { arriveOnCrew, crewViewOf, type Started } from './crew-arrive'
+import { readOpenCrew, settleCrew } from './crew-store'
+import { modeRulesOf, requireDevice, shownLine, STATION_SELECT, stationRef, type DeviceRequest } from './device'
 import { floorStepUpUntil } from './step-up'
 import { badgeOnlySignIn, endSessions, floorCommand, floorContext, liveDevice, SESSION_SELECT, siteScope, siteTiming, type FloorDevice } from './store'
 import { floorHash, mintSessionToken, parseSessionToken, parseSiteToken } from './tokens'
@@ -47,6 +52,11 @@ import { floorHash, mintSessionToken, parseSessionToken, parseSiteToken } from '
  *             nothing).
  *   step-up   the signed-in worker proves their PIN again (POST /floor/step-up): `pinVerifiedAt` = now; a wrong PIN
  *             counts towards the lockout as at sign-in; a locked worker gets a 403 (never a 401: they stay signed in).
+ *   modes     B-W2b-52 (MES-181, MES-186): nobody signs in on a line board (403 before any PIN is checked); only its
+ *             person on a personal phone (403 after the proof: a wrong PIN still counts).
+ *   crews     B-W2b-52 (PLT-059): on a station tablet with an open crew (crew-arrive.ts), a sign-in or a switch makes a
+ *             member still in the active one (their own session takes the new token) or adds the person to the crew;
+ *             nobody's session ends. A sign-in while a member is active stays a 409 (switch instead), as without a crew.
  * Every write is one floor command with its audit row (audience FLOOR, the device and its site on the row); a token,
  * a badge code and a PIN never reach a command's input, result, audit row or log.
  */
@@ -96,7 +106,7 @@ export async function recordWrongPin(auth: OfficeAuth, request: FastifyRequest, 
 
 const pinRequired = (message: string) => new ValidationError(message, [{ path: 'pin', message: 'Required.' }])
 
-interface Proved {
+export interface Proved {
   readonly candidate: Candidate
   readonly pinHash: string
   readonly rehash: string | null
@@ -108,7 +118,7 @@ interface Proved {
  * Checks the credentials: the worker, or a 401 after the wrong PIN was counted. Without a PIN: a 400 for a sign-in by
  * name or at a site that wants the PIN (decided before the badge is looked up), else the badge alone.
  */
-async function provedWorker(auth: OfficeAuth, request: FastifyRequest, place: DeviceRequest, body: FloorCredentials, actorId: string): Promise<Proved> {
+export async function provedWorker(auth: OfficeAuth, request: FastifyRequest, place: DeviceRequest, body: FloorCredentials, actorId: string): Promise<Proved> {
   if ((body.badgeCode === undefined) === (body.workerId === undefined)) {
     throw new ValidationError('Scan a badge or pick your name, then enter your PIN.', [{ path: 'badgeCode', message: 'Send a badge code or a worker id, not both.' }])
   }
@@ -137,17 +147,26 @@ async function provedWorker(auth: OfficeAuth, request: FastifyRequest, place: De
   return { candidate, pinHash: worker.pinHash, rehash: check.needsRehash ? await hashPin(pin, auth.pins) : null, pinVerified: true }
 }
 
+/**
+ * Inside the sign-in's (or a crew route's) command: the proved worker is still active, with the same PIN, not locked
+ * meanwhile; a proved PIN clears the count of wrong ones (and re-hashes an older hash); a badge alone leaves the count as
+ * it is (else a badge could clear wrong PINs between guesses) and the site must still allow it; the badge is still active.
+ */
+export async function claimProved(tx: CommandTx, device: Pick<FloorDevice, 'siteId'>, proved: Proved, now: Date): Promise<void> {
+  const { worker, badgeId } = proved.candidate
+  const still = { id: worker.id, status: 'ACTIVE' as const, pinHash: proved.pinHash, OR: [{ pinLockedUntil: null }, { pinLockedUntil: { lte: now } }] }
+  if (proved.pinVerified) {
+    const claimed = await tx.worker.updateMany({ where: still, data: { failedPinAttempts: 0, pinLockedUntil: null, ...(proved.rehash ? { pinHash: proved.rehash } : {}) } })
+    if (claimed.count !== 1) throw wrongCredentials()
+  } else {
+    if ((await tx.worker.count({ where: still })) !== 1) throw wrongCredentials()
+    if (!(await badgeOnlySignIn(tx, device.siteId))) throw pinRequired('Enter your PIN: this site signs in with a badge and a PIN.')
+  }
+  if (badgeId !== null && (await tx.badge.count({ where: { id: badgeId, status: 'ACTIVE' } })) !== 1) throw wrongCredentials()
+}
+
 /** The reason an expired session is closed with. */
 const expiredReason = (state: ReturnType<typeof sessionState>): FloorSessionEndReason => (state === 'shift_end' ? 'SHIFT_END' : 'IDLE')
-
-interface Started {
-  readonly sessionId: string
-  readonly startedAt: string
-  readonly idleExpiresAt: string
-  readonly endsAt: string
-  readonly idleMinutes: number
-  readonly stepUpUntil: string | null
-}
 
 /**
  * The sign-in command: claims the worker (still active, same PIN, not locked meanwhile), re-checks the badge, locks the
@@ -166,22 +185,16 @@ async function startSession(
   const { worker, badgeId } = proved.candidate
   const name = mode === 'switch' ? 'floor.switchOperator' : 'floor.signIn'
   const { result } = await floorCommand(auth, floorContext(request, device, worker.id), { name, input: { workerId: worker.id, badgeId } }, async ({ tx, now, audit }) => {
-    const still = { id: worker.id, status: 'ACTIVE' as const, pinHash: proved.pinHash, OR: [{ pinLockedUntil: null }, { pinLockedUntil: { lte: now } }] }
-    if (proved.pinVerified) {
-      // A proved PIN clears the count of wrong ones.
-      const claimed = await tx.worker.updateMany({ where: still, data: { failedPinAttempts: 0, pinLockedUntil: null, ...(proved.rehash ? { pinHash: proved.rehash } : {}) } })
-      if (claimed.count !== 1) throw wrongCredentials()
-    } else {
-      // A badge alone proves no PIN: it leaves the count as it is (else a badge could clear wrong PINs between guesses),
-      // and the site must still allow it now.
-      if ((await tx.worker.count({ where: still })) !== 1) throw wrongCredentials()
-      if (!(await badgeOnlySignIn(tx, device.siteId))) throw pinRequired('Enter your PIN: this site signs in with a badge and a PIN.')
-    }
-    if (badgeId !== null && (await tx.badge.count({ where: { id: badgeId, status: 'ACTIVE' } })) !== 1) throw wrongCredentials()
+    await claimProved(tx, device, proved, now)
 
     const locked = await tx.$queryRaw<{ currentSessionId: string | null }[]>`
       SELECT "currentSessionId"::text AS "currentSessionId" FROM "Device" WHERE "id" = ${device.id}::uuid AND "status" = 'ACTIVE' FOR UPDATE`
     if (locked.length !== 1) throw new UnauthenticatedError('This device was revoked.')
+    // B-W2b-52 (PLT-059): a tablet with an open crew: the person becomes its active member (or joins it); nobody's session ends.
+    const settled = await settleCrew(tx, device.id, now)
+    if (settled.crew) {
+      return arriveOnCrew({ tx, now, audit, device, crew: settled.crew, worker, badgeId, pinVerified: proved.pinVerified, token, join: mode === 'switch' ? 'always' : 'when-nobody-active' })
+    }
     const currentId = locked[0]!.currentSessionId
     if (currentId !== null) await settleCurrent(tx, currentId, worker.id, mode, now, audit)
 
@@ -206,7 +219,7 @@ async function startSession(
       },
       select: { id: true },
     })
-    await tx.device.updateMany({ where: { id: device.id }, data: { currentSessionId: sessionId, lastSeenAt: now } })
+    await tx.device.updateMany({ where: { id: device.id }, data: { currentSessionId: sessionId, inUseSince: now, lastSeenAt: now } })
     audit({ recordType: 'FloorSession', recordId: sessionId, after: { workerId: worker.id, deviceId: device.id, method: badgeId ? 'badge' : 'name', pin: proved.pinVerified, endsAt: toUtcIso(endsAt) } })
     const stepUpUntil = floorStepUpUntil(pinVerifiedAt)
     return {
@@ -247,7 +260,7 @@ async function settleCurrent(
   audit({ action: 'floor.endSession', recordType: 'FloorSession', recordId: currentId, after: { endReason: reason } })
 }
 
-async function answerStarted(auth: OfficeAuth, reply: FastifyReply, place: DeviceRequest, proved: Proved, token: string, started: Started) {
+export async function answerStarted(auth: OfficeAuth, reply: FastifyReply, place: DeviceRequest, proved: Proved, token: string, started: Started) {
   const { worker: signedIn } = proved.candidate
   const notice = await auth.database.withScope({ audience: 'floor', tenantId: place.device.tenantId, siteId: place.device.siteId, actorId: signedIn.id }, (client) =>
     workerNoticeGate(client, place.device.siteId, signedIn.id),
@@ -266,10 +279,18 @@ async function answerStarted(auth: OfficeAuth, reply: FastifyReply, place: Devic
   }
 }
 
+/** B-W2b-52: nobody signs in on a line board (before any PIN work); only its person on a phone (after the proof). */
+export function refuseByMode(place: DeviceRequest, workerId: string | null): void {
+  const refusal = signInRefusal(place.device, workerId)
+  if (refusal) throw new ForbiddenError(refusal.message)
+}
+
 export async function floorSignIn(auth: OfficeAuth, request: FastifyRequest, reply: FastifyReply, body: FloorCredentials) {
   assertCsrf(request)
   const place = await requireDevice(auth, request)
+  refuseByMode(place, null)
   const proved = await provedWorker(auth, request, place, body, place.device.id)
+  refuseByMode(place, proved.candidate.worker.id)
   const token = mintSessionToken()
   const started = await startSession(auth, request, place, proved, token, 'sign-in')
   return answerStarted(auth, reply, place, proved, token, started)
@@ -279,7 +300,9 @@ export async function switchOperator(auth: OfficeAuth, request: FastifyRequest, 
   const session = floorSessionOf(request)
   const place = await requireDevice(auth, request)
   if (place.device.id !== session.device.id) throw new UnauthenticatedError()
+  refuseByMode(place, null)
   const proved = await provedWorker(auth, request, place, body, session.workerId)
+  refuseByMode(place, proved.candidate.worker.id)
   const token = mintSessionToken()
   const started = await startSession(auth, request, place, proved, token, 'switch')
   return answerStarted(auth, reply, place, proved, token, started)
@@ -310,20 +333,26 @@ export async function floorSignOut(auth: OfficeAuth, request: FastifyRequest, re
   return { status: 'signed_out' as const }
 }
 
-export async function floorMe(request: FastifyRequest) {
+export async function floorMe(auth: OfficeAuth, request: FastifyRequest) {
   const context = requireContext(request)
   const session = floorSessionOf(request)
   const { device } = session
-  const { site, station, notice, timing } = await request.withClient(async (client) => ({
+  const { site, station, notice, timing, line, crew } = await request.withClient(async (client) => ({
     site: await client.site.findUniqueOrThrow({ where: { id: device.siteId }, select: { id: true, code: true, name: true } }),
     station: device.stationId ? await client.station.findUnique({ where: { id: device.stationId }, select: STATION_SELECT }) : null,
     notice: await workerNoticeGate(client, device.siteId, session.workerId),
     timing: await siteTiming(client, device.siteId),
+    line: await shownLine(client, device),
+    crew: await readOpenCrew(client, device.id),
   }))
   const stepUpUntil = floorStepUpUntil(session.pinVerifiedAt)
   return {
     worker: { id: session.workerId, displayName: session.worker.displayName, locale: session.worker.locale },
-    device: { id: device.id, name: device.name, station: stationRef(station) },
+    device: { id: device.id, name: device.name, station: stationRef(station), mode: device.mode },
+    rules: modeRulesOf(device.mode),
+    line,
+    crew: crewViewOf(crew, auth.clock.now(), CREW.maxMembers),
+    speech: { lang: speechLang(session.worker.locale) },
     site,
     scanTag: tenantTag(device.tenantId),
     session: {

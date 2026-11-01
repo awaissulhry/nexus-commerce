@@ -8,15 +8,14 @@ import { recordAddress } from '../../../lib/records/record-links'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { getAbout, getResults, getSchedule, type ReportAbout, type ReportResults, type ReportSchedule, type ResultRow } from './api'
-import { csvName, csvOf, knownFilters, markOpened, readProblem, reportAddressOf, reportHref, reportsCanOf, type ReportAddress } from './model'
-import { safeStorage } from './ReportsPage'
+import { csvName, csvOf, knownFilters, readProblem, reportAddressOf, reportHref, reportsCanOf, type ReportAddress } from './model'
 import { ReportView } from './view/ReportView'
 
 /**
  * `/w/<company>/home/reports/<key>?tab=results|schedule|about&<filters>&group=` (SCR-104, a report): reads what the report
  * counts (GET /reports/:key), then the run of the address's filters (GET …/results) or its schedule (GET …/schedule).
  * Filters and grouping live in the address; a row opens its record; Export ▾ › CSV writes the rows the person sees (the
- * API sent only what their rights reach); "last opened by me" is remembered in this browser.
+ * API sent only what their rights reach); each run is logged on the server for "last run by me" (B-W2b-24).
  */
 export function ReportPage() {
   const api = useOfficeApi()
@@ -60,7 +59,6 @@ export function ReportPage() {
       if (asked.current !== runKey) return
       setResults({ value, problem: null, reading: false })
       setSelected([])
-      markOpened(safeStorage(), key, value.asOf)
     } catch (error) {
       if (asked.current === runKey) setResults((value) => ({ value: value.value, problem: readProblem(error), reading: false }))
     }

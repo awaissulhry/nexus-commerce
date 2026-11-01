@@ -44,6 +44,10 @@
       "title": "Solleciti di pagamento",
       "body": "La scala dei solleciti delle fatture di ogni società, tenuta in Amministrazione: ogni sollecito lo invia una persona, e quelli automatici restano spenti finché il titolare non li attiva per la società."
     },
+    "RESTORE_DRILL_DUE": {
+      "title": "Prova di ripristino",
+      "body": "Tenuto in Sistema › Sicurezza e stato del sistema: 14 giorni prima della scadenza della prossima prova di ripristino, chi vede quella pagina riceve un avviso nella campanella. Registrare una prova superata lo sposta."
+    },
     "other": {
       "title": "Promemoria di un altro modulo",
       "body": "Tenuto dal suo modulo: la sua pagina lo mostra e lo cambia."

@@ -10,11 +10,14 @@ import {
   listBlocksContract,
   listSeriesContract,
   myBlocksContract,
+  overrideCheckContract,
+  previewContract,
   reserveBlockContract,
   setStartContract,
   topUpContract,
 } from './contract'
 import { manifest } from './manifest'
+import { checkOverride, previewNumber } from './override'
 import { closeBlock, listBlocks, myBlocks, reserveBlock, topUpBlocks } from './scan-ids'
 import { advanceSeries, closeSeries, createSeries, listSeries, seriesAllocations, setSeriesStart } from './series'
 
@@ -75,4 +78,8 @@ export default defineRoutes('numbering', manifest, async (app) => {
   app.get('/numbering/floor/blocks', { schema: myBlocksContract }, async (request) => myBlocks(request))
 
   app.post('/numbering/floor/blocks/top-up', { schema: topUpContract }, async (request) => topUpBlocks(request, request.body.kinds, idempotencyKeyFrom(request)))
+
+  // B-W2b-24 (PLT-125): the number preview, and the check of a migrated document's typed number (read only).
+  app.get('/numbering/preview', { schema: previewContract }, async (request) => previewNumber(request, request.query))
+  app.post('/numbering/override/check', { schema: overrideCheckContract }, async (request) => checkOverride(request, request.body))
 })

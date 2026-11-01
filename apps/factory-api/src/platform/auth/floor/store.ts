@@ -1,12 +1,14 @@
 import type { FastifyRequest } from 'fastify'
 import type { FactoryClient, FactoryDatabase, FactoryScope, FloorSessionEndReason, Prisma } from '@nexus/factory-db'
 import { floorGrants, type FloorRole } from '@nexus/factory-domain/auth/floor/grants'
+import type { DeviceMode } from '@nexus/factory-domain/auth/floor/modes'
 import { defaultTiming, sessionState, type FloorTiming } from '@nexus/factory-domain/auth/floor/session'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant } from '@nexus/factory-domain/core/permissions'
 import { callerFor, COMMAND_SETTINGS, runCommand, type CommandOutcome, type CommandSpec, type CommandTools, type CommandTx } from '../../../core/command'
 import type { FloorContext } from '../../../core/context'
 import type { Clock } from '../../../core/time'
+import { leaveCrewsOf } from './crew-store'
 import { matchesHash, type SiteToken } from './tokens'
 
 /**
@@ -35,6 +37,10 @@ export interface FloorDevice {
   readonly kind: string
   readonly currentSessionId: string | null
   readonly lastSeenAt: Date | null
+  /** B-W2b-52 (MES-181, MES-186): what it is for, the line it shows (LINE, DISPLAY) and the one worker of a PHONE. */
+  readonly mode: DeviceMode
+  readonly lineId: string | null
+  readonly personalWorkerId: string | null
 }
 
 const DEVICE_SELECT = {
@@ -47,6 +53,9 @@ const DEVICE_SELECT = {
   tokenHash: true,
   currentSessionId: true,
   lastSeenAt: true,
+  mode: true,
+  lineId: true,
+  personalWorkerId: true,
   site: { select: { status: true } },
 } as const
 
@@ -69,6 +78,9 @@ export async function liveDevice(client: FactoryClient | CommandTx, token: SiteT
     kind: row.kind,
     currentSessionId: row.currentSessionId,
     lastSeenAt: row.lastSeenAt,
+    mode: row.mode,
+    lineId: row.lineId,
+    personalWorkerId: row.personalWorkerId,
   }
 }
 
@@ -135,7 +147,10 @@ export async function endSessions(tx: CommandTx, where: Prisma.FloorSessionWhere
   const ids = open.map((row) => row.id)
   if (ids.length === 0) return []
   await tx.floorSession.updateMany({ where: { id: { in: ids }, endedAt: null }, data: { endedAt: now, endReason: reason } })
-  await tx.device.updateMany({ where: { currentSessionId: { in: ids } }, data: { currentSessionId: null } })
+  // B-W2b-24: in use since — cleared with the session on every path that ends one (sign-out, idle, revoke, a new sign-in).
+  await tx.device.updateMany({ where: { currentSessionId: { in: ids } }, data: { currentSessionId: null, inUseSince: null } })
+  // B-W2b-52 (PLT-059): a crew member whose session ended has left the crew; a crew whose last member left ends.
+  await leaveCrewsOf(tx, ids, reason, now)
   return ids
 }
 

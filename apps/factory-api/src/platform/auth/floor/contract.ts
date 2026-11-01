@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import { KIOSK_HOME_TESTS } from '@nexus/factory-domain/auth/floor/kiosk'
+import { FLOOR_TONES } from '@nexus/factory-domain/auth/floor/literacy'
+import { DEVICE_MODES } from '@nexus/factory-domain/auth/floor/modes'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { workerNoticeGateView } from '../../privacy/contract'
 
@@ -23,6 +26,36 @@ export const WORK_CENTRE_KINDS = ['CUTTING', 'SEWING', 'ASSEMBLY', 'FINISHING', 
 /** The device's station, with the kind of its work centre. */
 const stationRef = output({ id: id(), code: z.string(), name: z.string(), workCentreKind: z.enum(WORK_CENTRE_KINDS) })
 const workerRef = output({ id: id(), displayName: z.string(), locale: z.string() })
+// ---- B-W2b-52: modes (MES-181, MES-186), crews (PLT-059), the kiosk check (PLT-227), icon and tone first (MES-188) ----
+export { DEVICE_MODES }
+/** Icon and tone first (MES-188): a design-system icon id and a semantic tone; the screen says the word. */
+const look = output({ icon: z.string(), tone: z.enum(FLOOR_TONES) })
+/** The line a LINE or DISPLAY device shows (its own or its station's), or a station tablet's station's line. */
+const lineRef = output({ id: id(), code: z.string(), name: z.string() })
+/** What the device's mode means for the tablet (factory-domain auth/floor/modes MODE_RULES). */
+const modeRules = output({
+  /** Who signs in: anyone of the site, only the phone's person, or nobody (a line board). */
+  signIn: z.enum(['ANYONE', 'ONE_PERSON', 'NOBODY']),
+  /** Where the tablet goes first: Home after a sign-in, the Line view after a sign-in, or the line board without one. */
+  landing: z.enum(['HOME', 'LINE_VIEW', 'LINE_BOARD']),
+  /** Several workers may sign in, one active (station tablets only). */
+  crew: z.boolean(),
+  /** The kiosk lock guide applies (never a person's own phone). */
+  kiosk: z.boolean(),
+  look,
+})
+/** The language the device's voice reads the screen in (BCP 47; the DS ReadAloudButton draws nothing without a voice). */
+const speech = output({ lang: z.string() })
+/** One worker signed in on a crew tablet: a chip of the crew strip (their own name on their own tablet; never a list elsewhere). */
+const crewMember = output({ workerId: id(), displayName: z.string(), locale: z.string(), active: z.boolean(), joinedAt: instant(), look })
+export const crewView = output({
+  id: id(),
+  startedAt: instant(),
+  /** Workers signed in at once, at most. */
+  max: z.number().int(),
+  /** Who is signed in on the crew, by joining; exactly one active while someone proved it is them since the last leave. */
+  members: z.array(crewMember),
+})
 const sessionTimes = output({
   startedAt: instant(),
   idleExpiresAt: instant(),
@@ -39,7 +72,12 @@ const sessionTimes = output({
 // ---- the floor (an enrolled device) ----
 
 export const deviceInfo = output({
-  device: output({ id: id(), name: z.string(), kind: z.enum(DEVICE_KINDS), station: stationRef.nullable() }),
+  device: output({ id: id(), name: z.string(), kind: z.enum(DEVICE_KINDS), station: stationRef.nullable(), mode: z.enum(DEVICE_MODES) }),
+  /** B-W2b-52: what the mode means for this tablet, and the line it shows (null: none). */
+  rules: modeRules,
+  line: lineRef.nullable(),
+  /** B-W2b-52 (MES-188): the voice language of the screen's language while nobody is signed in. */
+  speech,
   site: named,
   /** The tenant's language: the screen's language while nobody is signed in (PLT-062). */
   defaultLocale: z.string(),
@@ -47,7 +85,10 @@ export const deviceInfo = output({
   signIn: output({ badgeOnly: z.boolean() }),
   /** Someone is signed in on this device now. */
   operatorSignedIn: z.boolean(),
-  /** The site's active workers who have a PIN: the names for a sign-in by name and PIN (PLT-058). */
+  /**
+   * The site's active workers who have a PIN: the names for a sign-in by name and PIN (PLT-058). B-W2b-52: a phone's
+   * roster is its one person; a line board's is empty (nobody signs in on it).
+   */
   roster: z.array(workerRef),
 })
 
@@ -57,6 +98,9 @@ export const enrolDeviceContract = defineContract({
 })
 
 export const deviceContract = defineContract({ response: { 200: deviceInfo } })
+
+/** B-W2b-24 (design admin.devices Status "Network"): the networks a tablet may say it is on (DeviceNetwork). */
+export const DEVICE_NETWORKS = ['WIFI', 'ETHERNET', 'CELLULAR', 'OTHER'] as const
 
 /**
  * B-W2a-42 (PLT-241; design admin.devices "Battery", "App version", "actions waiting to sync"): what the tablet says of
@@ -69,6 +113,8 @@ export const reportDeviceStateContract = defineContract({
     batteryPercent: z.number().int().min(0).max(100).nullable(),
     batteryCharging: z.boolean().nullable(),
     queuedActions: z.number().int().min(0).max(100_000),
+    /** B-W2b-24: the tablet's network as the browser says it (navigator.connection.type); null or left out: it did not say. */
+    network: z.enum(DEVICE_NETWORKS).nullable().optional(),
   }),
   response: { 200: output({ reportedAt: instant(), appUpdated: z.boolean() }) },
 })
@@ -98,7 +144,12 @@ export const floorMeContract = defineContract({
   response: {
     200: output({
       worker: workerRef,
-      device: output({ id: id(), name: z.string(), station: stationRef.nullable() }),
+      device: output({ id: id(), name: z.string(), station: stationRef.nullable(), mode: z.enum(DEVICE_MODES) }),
+      /** B-W2b-52: what the mode means, the line it shows, the crew strip (null: one operator) and the person's voice language. */
+      rules: modeRules,
+      line: lineRef.nullable(),
+      crew: crewView.nullable(),
+      speech,
       site: named,
       /** The tenant tag of this factory's label codes (factory-domain numbering/scan-id): a label of another is refused. */
       scanTag: z.string(),
@@ -113,6 +164,37 @@ export const floorMeContract = defineContract({
 export const changePinContract = defineContract({
   body: input({ currentPin: pin, newPin: pin }),
   response: { 200: output({ status: z.literal('changed') }) },
+})
+
+/**
+ * B-W2b-52 (PLT-059): crew mode on a station tablet. GET: the open crew (null: one operator) and whether the tablet takes a
+ * crew. join: the next person's badge (or name and PIN) from a signed-in tablet: they join and become the active one.
+ * switch: a member proves it is them (badge, or PIN): they become the active one. leave: the active one signs out of the
+ * crew. end: everyone signs out. Join and switch answer as a sign-in does, with the crew.
+ */
+export const crewContract = defineContract({ response: { 200: output({ crew: crewView.nullable(), allowed: z.boolean() }) } })
+const crewSignedIn = output({
+  status: z.literal('signed_in'),
+  worker: workerRef,
+  session: sessionTimes,
+  pinMustChange: z.boolean(),
+  notice: workerNoticeGateView,
+  crew: crewView,
+})
+export const crewJoinContract = defineContract({ body: credentials, response: { 200: crewSignedIn } })
+export const crewSwitchContract = defineContract({ body: credentials, response: { 200: crewSignedIn } })
+export const crewLeaveContract = defineContract({ response: { 200: output({ status: z.literal('left'), crew: crewView.nullable() }) } })
+export const crewEndContract = defineContract({ response: { 200: output({ status: z.literal('ended') }) } })
+
+/**
+ * B-W2b-52 (PLT-227): the kiosk lock guide's honest check, reported by the tablet (signed in or not): what it could check
+ * itself (full screen, installed; null: its browser does not say) and what the person said after pressing Home. Kept on
+ * the device's history; the answer is the check in rows, never "locked" (Android does not tell a web app it is pinned).
+ */
+const kioskRow = output({ id: z.enum(['fullScreen', 'installed', 'pinned']), state: z.enum(['ok', 'no', 'unknown']), source: z.enum(['TABLET', 'PERSON', 'NOBODY']), look })
+export const kioskCheckContract = defineContract({
+  body: input({ fullScreen: z.boolean().nullable(), installed: z.boolean().nullable(), homeTest: z.enum(KIOSK_HOME_TESTS) }),
+  response: { 200: output({ checkedAt: instant(), applies: z.boolean(), rows: z.array(kioskRow), lockedKnown: z.literal(false), looksLocked: z.boolean() }) },
 })
 
 /** The signed-in worker proves their PIN again: signing acts and My day open until `stepUpUntil`. */
@@ -141,6 +223,19 @@ export const deviceView = output({
   revokedAt: instant().nullable(),
   /** Someone is signed in on it now (never who: the registry is not a presence board). */
   inUse: z.boolean(),
+  /** B-W2b-24: since when it is in use (the session's start; null when nobody is signed in). Never who. */
+  inUseSince: instant().nullable(),
+  /** B-W2b-24: the network the tablet last said it was on (null: it never said, or its browser does not tell). */
+  network: z.enum(DEVICE_NETWORKS).nullable(),
+  /**
+   * B-W2b-52 (MES-181, MES-186): what it is for, the line it shows (LINE, DISPLAY; null: its station's) and the worker a
+   * PHONE is for (an id: the name only inside the device's record, never in this list).
+   */
+  mode: z.enum(DEVICE_MODES),
+  lineId: id().nullable(),
+  personalWorkerId: id().nullable(),
+  /** B-W2b-52 (PLT-227): the tablet's last kiosk check, as it reported it (null: never). Never "locked". */
+  kiosk: output({ checkedAt: instant(), fullScreen: z.boolean().nullable(), installed: z.boolean().nullable(), homeTest: z.enum(KIOSK_HOME_TESTS), looksLocked: z.boolean() }).nullable(),
   version: z.number().int(),
 })
 export type DeviceView = z.infer<typeof deviceView>
@@ -157,7 +252,16 @@ export const listDevicesContract = defineContract({
 })
 
 export const createDeviceContract = defineContract({
-  body: input({ siteId: id(), stationId: id().optional(), name: z.string().trim().min(1).max(100), kind: z.enum(DEVICE_KINDS).optional() }),
+  body: input({
+    siteId: id(),
+    stationId: id().optional(),
+    name: z.string().trim().min(1).max(100),
+    kind: z.enum(DEVICE_KINDS).optional(),
+    /** B-W2b-52: what it is for (default STATION), the line a LINE or DISPLAY device shows, the worker a PHONE is for. */
+    mode: z.enum(DEVICE_MODES).optional(),
+    lineId: id().optional(),
+    personalWorkerId: id().optional(),
+  }),
   response: { 200: output({ device: deviceView, enrolment: enrolmentView.nullable() }) },
 })
 
@@ -168,7 +272,15 @@ export const renewEnrolmentContract = defineContract({
 
 export const editDeviceContract = defineContract({
   params: input({ deviceId: id() }),
-  body: input({ version, name: z.string().trim().min(1).max(100).optional(), stationId: id().nullable().optional() }),
+  body: input({
+    version,
+    name: z.string().trim().min(1).max(100).optional(),
+    stationId: id().nullable().optional(),
+    /** B-W2b-52: a new mode, line or person (while nobody is signed in on the device). */
+    mode: z.enum(DEVICE_MODES).optional(),
+    lineId: id().nullable().optional(),
+    personalWorkerId: id().nullable().optional(),
+  }),
   response: { 200: deviceView },
 })
 

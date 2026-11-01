@@ -62,7 +62,8 @@
     "Shipment": "Una spedizione",
     "LabResult": "Un risultato di laboratorio (Cr VI)",
     "Nonconformance": "Una non conformità (NCR)",
-    "Complaint": "Un reclamo del cliente"
+    "Complaint": "Un reclamo del cliente",
+    "ReturnAuthorisation": "Un reso del cliente (RMA)"
   },
   "list": {
     "table": "Voci del registro DPI",

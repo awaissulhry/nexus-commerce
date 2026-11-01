@@ -191,6 +191,7 @@ const role = (n: number, key: string, name: string, extra: Partial<Role>): Role 
   name,
   description: null,
   requireMfa: false,
+  requireMfaSince: null,
   permissions: [],
   grains: [],
   system: true,
@@ -203,7 +204,7 @@ const role = (n: number, key: string, name: string, extra: Partial<Role>): Role 
   ...extra,
 })
 export const ROLES: Role[] = [
-  role(1, 'owner', 'Owner', { description: 'Everything, in every company, including every money figure.', requireMfa: true, grains: ['price', 'cost', 'margin', 'wages'], permissions: CATALOGUE.permissions.filter((p) => p.area !== 'floor').map((p) => p.name), holders: 1 }),
+  role(1, 'owner', 'Owner', { description: 'Everything, in every company, including every money figure.', requireMfa: true, requireMfaSince: '2026-09-01T07:30:00.000Z', grains: ['price', 'cost', 'margin', 'wages'], permissions: CATALOGUE.permissions.filter((p) => p.area !== 'floor').map((p) => p.name), holders: 1 }),
   role(2, 'admin', 'Administrator', { description: 'People, roles and the audit log; sees no money.', requireMfa: true, permissions: perms('companies.view', 'companies.manage', 'sites.view', 'sites.manage', 'users.view', 'users.invite', 'users.suspend', 'users.deactivate', 'roles.view', 'roles.assign', 'devices.view', 'devices.manage', 'workers.view', 'workers.credentials'), holders: 1 }),
   role(3, 'sales', 'Sales', { description: 'Customers, quotes and orders; sees selling prices, not costs or margins.', grains: ['price'], permissions: perms('quotes.view', 'quotes.manage', 'orders.view'), holders: 3 }),
   role(4, 'planner', 'Planner', { description: 'Plans work orders and capacity; sees no money.', permissions: perms('orders.view', 'workorders.view', 'workorders.manage', 'workorders.release'), holders: 2 }),

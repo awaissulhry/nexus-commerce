@@ -1,0 +1,45 @@
+/*
+ * DS — DueCell (B-W2b-28). The words carry the meaning; the tone adds to them. Colours are the TEXT roles
+ * (`--nds-<tone>-text`, measured on the surface the cell sits on), overdue also on `--nds-danger-soft`. Never colour
+ * alone: an icon per tone and the words.
+ */
+.nds-duecell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  max-width: 100%;
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-medium);
+  white-space: nowrap;
+}
+.nds-duecell-icon {
+  flex-shrink: 0;
+  width: 1.1em;
+  height: 1.1em;
+}
+.nds-duecell-words {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nds-duecell[data-tone='overdue'] {
+  padding: 0 var(--nds-space-6);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-duecell[data-tone='needed'] {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-duecell[data-tone='soon'] {
+  color: var(--nds-warning-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-duecell[data-tone='valid'] .nds-duecell-icon {
+  color: var(--nds-success-text);
+}
+.nds-duecell[data-tone='done'],
+.nds-duecell[data-tone='none'] {
+  color: var(--nds-text-2);
+}

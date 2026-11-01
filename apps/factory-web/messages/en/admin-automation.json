@@ -44,6 +44,10 @@
       "title": "Payment reminders",
       "body": "The reminder ladder of each company's invoices, kept in Finance: a person sends each reminder, and the automatic ones stay off until the Owner switches them on for the company."
     },
+    "RESTORE_DRILL_DUE": {
+      "title": "Restore drill",
+      "body": "Kept on Admin › Security & health: 14 days before the next restore drill is due, the people who see Security & health are told in the bell. Recording a drill that passes moves it."
+    },
     "other": {
       "title": "Another module's reminder",
       "body": "Kept by its own module: its page shows and changes it."

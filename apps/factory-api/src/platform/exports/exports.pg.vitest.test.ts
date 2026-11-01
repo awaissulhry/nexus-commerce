@@ -455,6 +455,33 @@ describe('the count before the run (PLT-184: job progress with a total)', () => 
   })
 })
 
+describe('the selected rows only (B-W2b-13, Z16:02: the selection row’s Export N)', () => {
+  it('writes the view’s rows whose id was selected, their number the total (no count read); none left in the view → failed in words', async () => {
+    const picked = await admin<{ id: string; code: string }>(`SELECT id, code FROM "Company" WHERE code IN ('DEMO0003', 'DEMO0420') ORDER BY code`)
+    const { job: asked } = await ask('owner', { query: 'code=DEMO', ids: picked.map((row) => row.id) })
+    expect(asked).toMatchObject({ status: 'QUEUED', selected: 2 })
+    const [row] = await admin<{ query: Json }>('SELECT query FROM "ExportJob" WHERE id = $1', [asked.id])
+    expect(row!.query.ids).toEqual(picked.map((entry) => entry.id))
+    expect(await runExport(system(), asked.id, { files })).toBe('done')
+    // Three pages read once for the file; nothing read to count.
+    expect(switches.reads).toBe(3)
+    const [counted] = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'exports.count'`, [asked.id])
+    expect(counted?.after).toEqual({ rowCount: 2 })
+    expect(await job(asked.id)).toMatchObject({ status: 'DONE', rowsDone: 2, rowCount: 2, selected: 2 })
+    const lines = (await bytesOf(asked.id)).toString('utf8').slice(1).split('\r\n')
+    expect(lines.map((line) => line.split(';')[0])).toEqual(['Codice', 'DEMO0003', 'DEMO0420', ''])
+
+    // A filter that leaves none of them in the view.
+    const gone = (await ask('owner', { query: 'code=DEMO01', ids: picked.map((entry) => entry.id) })).job
+    expect(await runExport(system(), gone.id, { files })).toBe('failed')
+    expect(await job(gone.id)).toMatchObject({ status: 'FAILED', failureReason: 'None of the selected rows is in this view any more: export the view instead.', file: null, selected: 2 })
+    // The whole view says no selection; a selection above the limit or twice the same row is refused.
+    expect((await ask('owner', { query: 'code=DEMO04' })).job.selected).toBeNull()
+    expect((await call('owner', 'POST', '/exports', { listKey: 'test.companies', format: 'CSV', query: '', columns: COLUMNS, title: 'X', locale: 'it', ids: [picked[0]!.id, picked[0]!.id] })).statusCode).toBe(400)
+    expect((await call('owner', 'POST', '/exports', { listKey: 'test.companies', format: 'CSV', query: '', columns: COLUMNS, title: 'X', locale: 'it', ids: Array.from({ length: 501 }, () => newId()) })).statusCode).toBe(400)
+  })
+})
+
 describe('the full file for re-import (the importer’s layout)', () => {
   it('writes the importer’s columns, whatever the screen shows; the file reads back through the importer unchanged', async () => {
     const { job: asked } = await ask('owner', { listKey: 'test.reimport', format: 'XLSX_REIMPORT', query: 'code=DEMO000', columns: [{ key: 'name', label: 'Ragione sociale' }] })

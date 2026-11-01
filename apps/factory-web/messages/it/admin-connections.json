@@ -44,6 +44,16 @@
         "name": "Controllo partita IVA (VIES)",
         "for": "Controlla le partite IVA UE di clienti e fornitori presso la Commissione europea.",
         "how": "Uno per tutte le società."
+      },
+      "CLAMAV": {
+        "name": "Antivirus (ClamAV)",
+        "for": "Controlla ogni file caricato prima che qualcuno possa aprirlo; un file non ancora controllato resta bloccato.",
+        "how": "Uno per tutte le aziende. Non è ancora attivo: aspetta il sì del titolare con il suo costo; fino ad allora i file caricati non vengono controllati."
+      },
+      "ERROR_TRACKING": {
+        "name": "Segnalazione errori (UE)",
+        "for": "Avvisa l'assistenza Nexus degli errori imprevisti, dopo aver tolto dati personali e importi.",
+        "how": "Uno per tutte le aziende. Non è ancora attivo: aspetta il sì del titolare con il suo costo e l'accordo con il responsabile del trattamento."
       }
     },
     "laterService": {
