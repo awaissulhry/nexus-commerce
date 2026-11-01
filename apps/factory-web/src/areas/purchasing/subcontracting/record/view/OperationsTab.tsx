@@ -2,9 +2,10 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { Grid3x3, Plus, Trash2 } from 'lucide-react'
-import { Banner, Card, DateField, EmptyState, Field, KeyValue } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Field, KeyValue } from '@nexus/ui/components'
 import { SizeGridView, type SizeGridCopy } from '@nexus/ui/grid'
-import { Button, Input, Textarea } from '@nexus/ui/primitives'
+import { Button, Input } from '@nexus/ui/primitives'
+import { DateField, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { dayAt, money, unitPrice } from '../../../../_shared/buying/model'

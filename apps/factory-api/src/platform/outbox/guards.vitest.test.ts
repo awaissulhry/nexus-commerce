@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import { SLOW_TEST_TIMEOUT_MS } from '../../testing/timeouts'
 
 // scripts/factory/check-event-contract.mjs and check-cron-clustered.mjs, proven on plants: each test copies the source
 // folders a guard reads into a temporary root, plants one change, and runs the guard on it.
@@ -44,14 +45,14 @@ const assembled = (text: string) => text.replace("import type { EventDefinition 
 const EMITTER = 'apps/factory-api/src/modules/quotes/service.ts'
 const emitting = (event: string) => `export async function send(tools: { emit(event: unknown): void }) {\n  tools.emit(${event})\n}\n`
 
-describe('check-event-contract', () => {
+describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   const guard = (root?: string) => run('check-event-contract.mjs', root)
 
   it('passes on the repository, on an untouched copy, and with a declared, assembled and emitted event', () => {
     expect(guard()).toMatchObject({ status: 0 })
     expect(guard(tree()).status).toBe(0)
     const ok = guard(tree({ [MODULE]: quotesEvents(quoteSent), [CATALOGUE]: assembled, [EMITTER]: emitting("{ type: 'quote.faxed', subject: 'q', payload: {} }") }))
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(415 declared event version\(s\), 552 literal emit/) })
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(419 declared event version\(s\), 556 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([
@@ -118,7 +119,7 @@ describe('check-event-contract', () => {
   })
 })
 
-describe('check-cron-clustered', () => {
+describe('check-cron-clustered', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   const guard = (root?: string) => run('check-cron-clustered.mjs', root)
   const MODULE_JOBS = 'apps/factory-api/src/modules/quotes/jobs.ts'
 

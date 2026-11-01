@@ -1,7 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { WorkCentreKind } from '@nexus/factory-domain/product/routing/operations'
-import type { ScanFact, ScanOperation } from '@nexus/factory-domain/production/scans/rules'
+import { SCAN_KINDS, type ScanFact, type ScanOperation } from '@nexus/factory-domain/production/scans/rules'
 import type { CommandTx } from '../../../core/command'
 
 /**
@@ -80,15 +80,20 @@ export const SCAN_COLUMNS = {
 export type ScanRow = Prisma.OperationScanGetPayload<{ select: typeof SCAN_COLUMNS }> & ScanFact
 
 const ORDER = [{ serverTime: 'asc' }, { id: 'asc' }] as const satisfies Prisma.OperationScanOrderByWithRelationInput[]
+/**
+ * W2b (B-W2b-40): the count ledger only. OperationScan also holds the timing of an operation (START, PAUSE, RESUME,
+ * HAND_BACK, PARTIAL: modules/production/terminal), which these reads leave out — a timing row is no report.
+ */
+const COUNTS = { kind: { in: [...SCAN_KINDS] } } as const satisfies Prisma.OperationScanWhereInput
 
 /** Every scan of the bundle, oldest first. */
 export async function readBundleScans(db: Reader, bundleId: string): Promise<ScanRow[]> {
-  return (await db.operationScan.findMany({ where: { bundleId }, select: SCAN_COLUMNS, orderBy: [...ORDER] })) as ScanRow[]
+  return (await db.operationScan.findMany({ where: { bundleId, ...COUNTS }, select: SCAN_COLUMNS, orderBy: [...ORDER] })) as ScanRow[]
 }
 
 /** Every scan of the work order, oldest first. */
 export async function readWorkOrderScans(db: Reader, workOrderId: string): Promise<ScanRow[]> {
-  return (await db.operationScan.findMany({ where: { workOrderId }, select: SCAN_COLUMNS, orderBy: [...ORDER] })) as ScanRow[]
+  return (await db.operationScan.findMany({ where: { workOrderId, ...COUNTS }, select: SCAN_COLUMNS, orderBy: [...ORDER] })) as ScanRow[]
 }
 
 export async function readScan(db: Reader, scanId: string): Promise<ScanRow | null> {
@@ -103,14 +108,14 @@ export async function readScanByClient(db: Reader, deviceId: string, clientScanI
 
 /** The newest scan the device wrote (by server time, then id), or null: "the next action" ends an undo. */
 export async function latestOnDevice(db: Reader, deviceId: string): Promise<string | null> {
-  const row = await db.operationScan.findFirst({ where: { deviceId }, select: { id: true }, orderBy: [{ serverTime: 'desc' }, { id: 'desc' }] })
+  const row = await db.operationScan.findFirst({ where: { deviceId, ...COUNTS }, select: { id: true }, orderBy: [{ serverTime: 'desc' }, { id: 'desc' }] })
   return row?.id ?? null
 }
 
 /** The scans of these workers (WORKER site) or this station (STATION site) since an instant, newest first. */
 export async function readOwnScans(db: Reader, where: { readonly siteId: string; readonly workerId?: string; readonly stationId?: string; readonly since: Date }, take = 100): Promise<ScanRow[]> {
   const subject = where.workerId ? { workerId: where.workerId } : { stationId: where.stationId!, workerId: null }
-  return (await db.operationScan.findMany({ where: { siteId: where.siteId, ...subject, serverTime: { gte: where.since } }, select: SCAN_COLUMNS, orderBy: [{ serverTime: 'desc' }, { id: 'desc' }], take })) as ScanRow[]
+  return (await db.operationScan.findMany({ where: { siteId: where.siteId, ...subject, ...COUNTS, serverTime: { gte: where.since } }, select: SCAN_COLUMNS, orderBy: [{ serverTime: 'desc' }, { id: 'desc' }], take })) as ScanRow[]
 }
 
 export interface StationRow {

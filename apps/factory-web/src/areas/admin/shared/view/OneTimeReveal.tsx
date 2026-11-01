@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { Modal } from '@nexus/ui/components'
 import { QrCode } from '@nexus/ui/components/QrCode/index'
 import { Banner } from '@nexus/ui/components'
 import { Button, Checkbox } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 
 export interface RevealModel {

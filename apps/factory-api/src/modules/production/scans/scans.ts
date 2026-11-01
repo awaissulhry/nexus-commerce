@@ -63,6 +63,8 @@ import {
 import { guardReportInCommand, recordGuardsInCommand, type ComponentInput, type VerifiedOverride } from './hooks/guards'
 // B-W2b-53 hook: scrap above the site's limit waits for the team leader (the answer's words).
 import { scrapWaitsInCommand, type ScrapWaits } from './hooks/scrap-limit'
+// B-W2b-40 hook (modules/production/terminal; MES-094): a report that ends a team's stretch names the team.
+import { timingAfterReportInCommand } from './hooks/timing'
 
 /**
  * The floor's scans (B-W1-42; MES-069, MES-090, MES-095, MES-096, MES-308; PLAN §4.7 stage 12-scans, risk 17; A1 §3.8;
@@ -496,6 +498,8 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   await resolveRefusals(tx, tools.now, { deviceId: context.deviceId, clientScanId: work.input.clientScanId, scanId: id })
   // W2b B-W2b-29 hook (offstandard/writes.ts; MES-156): scanning a bundle returns to standard work — the subject's running off-standard block ends at the scan.
   await endRunningBlock(tools, { tenantId: context.tenantId, siteId: workOrder.siteId, subject, at: believedTime(work.deviceTime, tools.now), endedBy: 'SCAN' })
+  // B-W2b-40 hook (hooks/timing.ts; MES-094, F3): the report ends the running stretch (the database's rule); its team is named on it.
+  await timingAfterReportInCommand(tools, { scanId: id, siteId: workOrder.siteId, bundleId: locked.bundle.id, workOrderOperationId: decision.operation.id, subject, createdById: subject.workerId ? context.actorId : null })
   const row = (await readScan(tx, id))!
   const after = { workOrderId: workOrder.id, bundleId: locked.bundle.id, operationId: decision.operation.id, operationSeq: decision.operation.seq, goodQuantity: row.goodQuantity, scrapQuantity: row.scrapQuantity, reworkQuantity: row.reworkQuantity, cap: guard.cap, workerId: row.workerId, stationId: row.stationId, clientScanId: row.clientScanId }
   tools.audit({ action: 'production.reportScan', recordType: 'OperationScan', recordId: id, companyId: workOrder.companyId, siteId: workOrder.siteId, after, ...(row.reason ? { reason: row.reason } : {}) })

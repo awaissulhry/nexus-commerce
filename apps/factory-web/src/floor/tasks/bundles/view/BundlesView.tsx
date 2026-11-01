@@ -2,9 +2,9 @@
 
 import type { ReactNode } from 'react'
 import { ArrowLeft, Ban, CircleAlert, CircleCheck, CircleDashed, Hash, Layers, Minus, Plus, Printer, RotateCcw, ScanLine, ShieldOff, Split, Tag, Trash2, X } from 'lucide-react'
-import { Modal } from '@nexus/ui/components'
 import { LabelPreview, type LabelPrintState } from '@nexus/ui/components/LabelPreview/index'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, QuantityPad, ScanInput, qtyHeldReason, type CameraScanner, type FloorAction, type FloorActions } from '@nexus/ui/floor'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { formatNumber, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Translate } from '../../../../lib/i18n/messages'

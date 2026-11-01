@@ -184,14 +184,6 @@ export function barsOf(groups: readonly (CustomerGroup | StyleGroup)[]): Bar[] {
   )
 }
 
-/** A bar's width in % of the widest one (0 for a negative or unknown margin; the text says the number). */
-export function barWidth(pct: string | null, bars: readonly Bar[]): number {
-  const most = Math.max(0, ...bars.map((bar) => (bar.pct === null ? 0 : Number(bar.pct))))
-  const value = pct === null ? 0 : Number(pct)
-  if (!Number.isFinite(value) || value <= 0 || most <= 0) return 0
-  return Math.round((value / most) * 1000) / 10
-}
-
 // ---- CSV ------------------------------------------------------------------------------------------------------------------
 
 export interface CsvWords {

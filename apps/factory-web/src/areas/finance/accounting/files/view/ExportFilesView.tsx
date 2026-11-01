@@ -1,8 +1,9 @@
 'use client'
 
 import { Download } from 'lucide-react'
-import { Banner, Card, EmptyState, FileRow, KeyValue } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, KeyValue } from '@nexus/ui/components'
 import { Button, Pill, Spinner } from '@nexus/ui/primitives'
+import { FileRow } from '../../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'

@@ -164,10 +164,6 @@
       "reload": "Ricarica"
     },
     "save": {
-      "region": "Modifiche non salvate",
-      "unsaved_one": "{count} modifica non salvata",
-      "unsaved_other": "{count} modifiche non salvate",
-      "discard": "Annulla modifiche",
       "save": "Salva",
       "saved": "Tutte le modifiche salvate · {time}",
       "allSaved": "Nessuna modifica da salvare."

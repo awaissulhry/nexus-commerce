@@ -1,7 +1,8 @@
 'use client'
 
-import { Card, Field, Modal } from '@nexus/ui/components'
-import { Button, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Card, Field } from '@nexus/ui/components'
+import { Button, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { CheckList } from '../../_shared/parts'
 import type { StageCheckKey } from '../api'
 import type { Say } from '../model'

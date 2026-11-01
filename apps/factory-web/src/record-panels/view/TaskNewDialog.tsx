@@ -2,8 +2,9 @@
 
 import { useEffect, useId, useState, type KeyboardEvent } from 'react'
 import { Plus } from 'lucide-react'
-import { Banner, DateField, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, Select, Skeleton, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input, Select, Skeleton } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../lib/i18n/locales'
 import { useLocale, useT } from '../../lib/i18n/provider'
 import { WithMessages } from '../i18n'

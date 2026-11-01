@@ -219,12 +219,8 @@
   },
   "detail": {
     "title": "Request · {material}",
+    "noun": "request",
     "titleLoading": "Request",
-    "position": "{index} of {count}",
-    "previous": "Previous",
-    "next": "Next",
-    "first": "This is the first request",
-    "last": "This is the last request",
     "source": "Source record",
     "draft": "Draft PO",
     "failed": "Couldn’t load the request",

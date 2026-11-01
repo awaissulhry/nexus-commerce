@@ -43,7 +43,10 @@ const T = {
   inTransit: new Date('2026-11-24T17:30:00.000Z'),
   draft: new Date('2026-11-25T08:00:00.000Z'),
 } as const
-const DDT_DATE = new Date('2026-11-24T00:00:00.000Z')
+// B-W2b-30: the DDTs' date (and the series' last issued date) is in the past, before any invoice of them, so a fresh
+// seed issues the TD24 draft of DDT 144 (FatturaPA: no DDT dated after its invoice) and, with the holds seed's DDT 145
+// dated the same day, today's DDTs of the series. Their issue and transport times stay in the November story above.
+const DDT_DATE = new Date('2026-10-30T00:00:00.000Z')
 const YEAR = '2026'
 
 export interface ShippingSeed {

@@ -910,9 +910,6 @@
     "nothing": "Nothing else is touched.",
     "reason": "Reason",
     "reasonHint": "It stays on the order and in its history.",
-    "type": "Type the order number {number} to confirm",
-    "typeHint": "Capital letters and dashes count.",
-    "typeWrong": "This is not the order's number.",
     "reversal": "There is no way back: a cancelled order stays as it is. To start again, copy it as a new quote.",
     "go": "Cancel order",
     "held": {

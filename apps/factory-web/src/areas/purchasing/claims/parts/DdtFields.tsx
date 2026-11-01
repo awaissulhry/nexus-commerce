@@ -1,7 +1,8 @@
 'use client'
 
 import { Field } from '@nexus/ui/components'
-import { Input, Select, Textarea } from '@nexus/ui/primitives'
+import { Input, Select } from '@nexus/ui/primitives'
+import { Textarea } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 import { TRANSPORT_BY, type TransportBy } from '../api'
 import type { DdtDraft } from '../model'

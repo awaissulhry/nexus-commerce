@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { Banner, Field, FileDropzone, JobProgress, KeyValue, MetricStrip, Modal, Stepper, SummaryTable } from '@nexus/ui/components'
+import { Banner, Field, KeyValue, MetricStrip, Stepper, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Pill, RadioCard, Select, Skeleton, Tag } from '@nexus/ui/primitives'
+import { FileDropzone, JobProgress, Modal } from '../../../../lib/i18n/ds-parts'
 import { formatNumber } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { IMPORT_MAX_BYTES, NUMBER_FORMATS, type ImportJob, type Importer, type ImportRow } from '../api'

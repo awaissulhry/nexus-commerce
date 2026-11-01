@@ -1,7 +1,8 @@
 'use client'
 
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { LabelDetail, LabelIssue } from '../../api'

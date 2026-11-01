@@ -87,6 +87,8 @@ export interface ListQuery {
   readonly q?: string | undefined
   /** B-W2b-13 (PLT-167): due on the days a relative word covers from today (a saved view keeps the word). */
   readonly due?: RelativeDay | undefined
+  /** B-W2b-51 (MES-009): rush work orders only (true), or none of them (false). */
+  readonly rush?: boolean | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
@@ -110,6 +112,7 @@ function listWhere(context: ReturnType<typeof officeContextOf>, query: Omit<List
       query.salesOrderId ? { sizes: { some: { salesOrderLine: { orderId: query.salesOrderId } } } } : {},
       query.late ? { status: { in: [...OPEN_STATUSES] }, dueDate: { lt: asDay(today) } } : {},
       query.due ? dueWhere(relativeRange(query.due, today)) : {},
+      query.rush !== undefined ? { rush: query.rush } : {},
       q
         ? {
             OR: [
@@ -145,6 +148,8 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
         siteId: true,
         dueDate: true,
         priority: true,
+        rush: true,
+        splitFrom: { select: { id: true, number: true } },
         releasedAt: true,
         createdAt: true,
         site: { select: { code: true } },
@@ -187,6 +192,8 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
         dueDate,
         daysLate: daysLate(row.status, dueDate, today),
         priority: row.priority,
+        rush: row.rush,
+        splitFrom: row.splitFrom,
         releasedAt: row.releasedAt ? toUtcIso(row.releasedAt) : null,
         createdAt: toUtcIso(row.createdAt),
       }
@@ -249,7 +256,7 @@ export async function openLines(caller: CommandCaller, salesOrderId: string) {
 }
 
 /** The number the next work order of the company gets (the only active WORK_ORDER series), or null. */
-async function numberPreview(db: Reader, companyId: string): Promise<string | null> {
+export async function numberPreview(db: Reader, companyId: string): Promise<string | null> {
   const series = await db.numberSeries.findMany({ where: { companyId, kind: 'WORK_ORDER', status: 'ACTIVE' }, select: { pattern: true, nextValue: true, scopeKey: true }, orderBy: { scopeKey: 'desc' } })
   const newest = series[0]
   if (!newest || new Set(series.map((row) => row.pattern)).size > 1) return null
@@ -286,15 +293,25 @@ function assertCells(requests: readonly (CellRequest & { index: number })[], lin
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These cells cannot be made on this work order.', problems)
 }
 
-const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
+export const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
 
-const changedEvent = (tools: CommandTools, workOrder: Pick<Header, 'id' | 'number' | 'companyId' | 'siteId'>, changes: ('cells' | 'revision' | 'details')[], cells: { quantity: number }[]) =>
+export const changedEvent = (tools: CommandTools, workOrder: Pick<Header, 'id' | 'number' | 'companyId' | 'siteId'>, changes: ('cells' | 'revision' | 'details' | 'split')[], cells: { quantity: number }[]) =>
   tools.emit({
     type: 'workorder.changed',
     subject: workOrder.id,
     companyId: workOrder.companyId,
     siteId: workOrder.siteId,
     payload: { workOrderId: workOrder.id, number: workOrder.number, changes, cells: cells.length, pieces: cells.reduce((sum, cell) => sum + cell.quantity, 0) },
+  })
+
+/** B-W2b-51 (MES-009): a work order's priority or rush flag changed (the floor's lists reorder). */
+export const priorityEvent = (tools: CommandTools, before: Pick<Header, 'id' | 'number' | 'companyId' | 'siteId' | 'priority' | 'rush'>, after: Pick<Header, 'priority' | 'rush'>) =>
+  tools.emit({
+    type: 'workorder.priority_changed',
+    subject: before.id,
+    companyId: before.companyId,
+    siteId: before.siteId,
+    payload: { workOrderId: before.id, number: before.number, siteId: before.siteId, priority: after.priority, rush: after.rush, previousPriority: before.priority, previousRush: before.rush },
   })
 
 // ---- create -------------------------------------------------------------------------------------------------------------
@@ -304,6 +321,8 @@ export interface CreateInput {
   readonly styleRevisionId?: string | undefined
   readonly dueDate?: BusinessDate | undefined
   readonly priority?: number | undefined
+  /** B-W2b-51 (MES-009): made as a rush work order. */
+  readonly rush?: boolean | undefined
   readonly note?: string | null | undefined
   readonly lines: readonly { readonly salesOrderLineId: string; readonly sizes?: readonly { readonly size: string; readonly quantity: number }[] | undefined }[]
 }
@@ -398,6 +417,7 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
         styleRevisionId: revisionId,
         dueDate: dueDate ? asDay(dueDate) : null,
         priority,
+        rush: body.rush ?? false,
         note: blankToNull(body.note),
         createdById: actorIdOf(tools),
       },
@@ -423,6 +443,7 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
         styleRevisionId: revisionId,
         dueDate,
         priority,
+        rush: body.rush ?? false,
         cells: rows.map((row) => ({ id: row.id, salesOrderLineId: row.salesOrderLineId, colourwayId: row.colourwayId, size: row.size, quantity: row.quantity })),
       },
     })
@@ -432,7 +453,7 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
   return result
 }
 
-const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
+export const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
 
 // ---- a draft's cells ------------------------------------------------------------------------------------------------------
 
@@ -537,12 +558,14 @@ export interface UpdateInput {
   readonly version?: number | undefined
   readonly dueDate?: BusinessDate | null | undefined
   readonly priority?: number | undefined
+  /** B-W2b-51 (MES-009): the rush flag. */
+  readonly rush?: boolean | undefined
   readonly note?: string | null | undefined
   readonly styleRevisionId?: string | undefined
 }
 
 /**
- * workorders.manage: the due date and priority (until CLOSED or CANCELLED), the note (always), and the revision while
+ * workorders.manage: the due date, priority and rush flag (until CLOSED or CANCELLED), the note (always), and the revision while
  * a DRAFT (a revision of its style, not OBSOLETE, the one its lines fix if they fix one; its stored draft spec, if any,
  * is removed first: the release writes it from the revision — refused while the planning board books one of its
  * operations, B-W2a-F3).
@@ -553,7 +576,7 @@ export async function updateWorkOrder(caller: CommandCaller, workOrderId: string
     const { tx } = tools
     const current = (await readWorkOrder(tx, workOrder.id))!
     const final = current.status === 'CLOSED' || current.status === 'CANCELLED'
-    if (final && (body.dueDate !== undefined || body.priority !== undefined)) throw new InvalidStateError(`Work order ${current.number} is ${current.status}; only its note changes.`)
+    if (final && (body.dueDate !== undefined || body.priority !== undefined || body.rush !== undefined)) throw new InvalidStateError(`Work order ${current.number} is ${current.status}; only its note changes.`)
     const changes: ('revision' | 'details')[] = []
     const data: Prisma.WorkOrderUncheckedUpdateInput = {}
     let cleared: { operations: number; materials: number } | null = null
@@ -577,11 +600,12 @@ export async function updateWorkOrder(caller: CommandCaller, workOrderId: string
     }
     if (body.dueDate !== undefined) data.dueDate = body.dueDate === null ? null : asDay(body.dueDate)
     if (body.priority !== undefined) data.priority = body.priority
+    if (body.rush !== undefined) data.rush = body.rush
     if (body.note !== undefined) data.note = blankToNull(body.note)
-    if (body.dueDate !== undefined || body.priority !== undefined || body.note !== undefined) changes.push('details')
-    if (changes.length === 0) throw new ValidationError('Nothing to change.', [{ path: 'body', message: 'Send a due date, priority, note or revision.' }])
+    if (body.dueDate !== undefined || body.priority !== undefined || body.rush !== undefined || body.note !== undefined) changes.push('details')
+    if (changes.length === 0) throw new ValidationError('Nothing to change.', [{ path: 'body', message: 'Send a due date, priority, rush flag, note or revision.' }])
     await tx.workOrder.update({ where: { id: current.id }, data, select: { id: true } })
-    const before = { styleRevisionId: current.styleRevisionId, dueDate: dayOrNull(current.dueDate), priority: current.priority, note: current.note }
+    const before = { styleRevisionId: current.styleRevisionId, dueDate: dayOrNull(current.dueDate), priority: current.priority, rush: current.rush, note: current.note }
     const after = (await readWorkOrder(tx, current.id))!
     tools.audit({
       recordType: 'WorkOrder',
@@ -589,10 +613,12 @@ export async function updateWorkOrder(caller: CommandCaller, workOrderId: string
       companyId: current.companyId,
       siteId: current.siteId,
       before,
-      after: { styleRevisionId: after.styleRevisionId, dueDate: dayOrNull(after.dueDate), priority: after.priority, note: after.note, ...(cleared ? { draftSpecCleared: cleared } : {}) },
+      after: { styleRevisionId: after.styleRevisionId, dueDate: dayOrNull(after.dueDate), priority: after.priority, rush: after.rush, note: after.note, ...(cleared ? { draftSpecCleared: cleared } : {}) },
     })
     const cells = await tx.workOrderSize.findMany({ where: { workOrderId: current.id }, select: { quantity: true } })
     changedEvent(tools, current, changes, cells)
+    // B-W2b-51 (MES-009): the dispatch lists and the tablets of its site reorder (rush first).
+    if (after.priority !== current.priority || after.rush !== current.rush) priorityEvent(tools, current, after)
     return { workOrder: await workOrderView(tx, after, todayOfCommand(tools)) }
   })
 }

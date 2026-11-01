@@ -180,6 +180,9 @@ afterAll(async () => {
 }, 60_000)
 
 const OCTOBER = ['SALES_JOURNAL', 'PURCHASES_JOURNAL', 'PAYMENTS', 'INTRASTAT']
+// B-W2b-30: the shipping seed dates DDT 144/2026 on 30 October; its goods are on the money seed's TD24 DRAFT, so October's
+// "every shipment invoiced" check fails and each October export explains it.
+const SEED_DDT_EXPLAINED = { code: 'SHIPMENTS_INVOICED', explanation: 'DDT 144/2026 of 30 October is on a TD24 draft, issued in November.' }
 let first: Json
 
 describe('the months and the wizard (design finance.accounting 1 · Period … 4 · Review)', () => {
@@ -237,7 +240,7 @@ describe('the months and the wizard (design finance.accounting 1 · Period … 4
 describe('the first export of a month (FIN-046 numbered batch)', () => {
   it('is refused while a failing check is not explained, for a W2b package, the year-end pack in October and a grain not held', async () => {
     const body = { companyId: ids.companyA, month: '2026-10', packages: OCTOBER }
-    expect(await problemOf(call('finance', 'POST', '/accounting/exports', body), 400)).toEqual(['body/explanations/PERIOD_ENDED'])
+    expect(await problemOf(call('finance', 'POST', '/accounting/exports', body), 400)).toEqual(['body/explanations/PERIOD_ENDED', 'body/explanations/SHIPMENTS_INVOICED'])
     expect(await problemOf(call('finance', 'POST', '/accounting/exports', { ...body, packages: ['VAT_REGISTERS'] }), 409)).toEqual(['problem/PACKAGE_W2B'])
     expect(await problemOf(call('finance', 'POST', '/accounting/exports', { ...body, packages: ['YEAR_END_STOCK'] }), 409)).toEqual(['problem/YEAR_END_NOT_THIS_PERIOD'])
     expect((await call('pricesOnly', 'POST', '/accounting/exports', body)).statusCode).toBe(403)
@@ -248,7 +251,7 @@ describe('the first export of a month (FIN-046 numbered batch)', () => {
 
   it('makes EXP-2026-0002 with its files, replaces the draft, and answers a repeat from its receipt', async () => {
     const idempotencyKey = idem()
-    const body = { companyId: ids.companyA, month: '2026-10', packages: OCTOBER, explanations: [{ code: 'PERIOD_ENDED', explanation: 'Exported on the last working day for the VAT advance; a re-export brings the 31st.' }], note: 'October.' }
+    const body = { companyId: ids.companyA, month: '2026-10', packages: OCTOBER, explanations: [{ code: 'PERIOD_ENDED', explanation: 'Exported on the last working day for the VAT advance; a re-export brings the 31st.' }, SEED_DDT_EXPLAINED], note: 'October.' }
     first = (await ok(call('finance', 'POST', '/accounting/exports', body, idempotencyKey), 201)).export
     expect(first).toMatchObject({ number: 'EXP-2026-0002', status: 'EXPORTED', layout: 'DEFAULT', supersedes: null, madeBy: { name: 'Fiona Neri' }, exportedBy: { name: 'Fiona Neri' }, changedSince: { count: 0 } })
     expect(first.files.map((file: Json) => [file.seq, file.package, file.format, file.rowCount])).toEqual([
@@ -302,7 +305,7 @@ describe('the first export of a month (FIN-046 numbered batch)', () => {
 
 describe('the re-export: only the changes (never twice)', () => {
   it('is refused when nothing changed; a payment of 31 October goes alone in EXP-2026-0003', async () => {
-    const body = { companyId: ids.companyA, month: '2026-10', packages: OCTOBER, supersedesId: first.id, explanations: [{ code: 'PERIOD_ENDED', explanation: 'Still the same day.' }] }
+    const body = { companyId: ids.companyA, month: '2026-10', packages: OCTOBER, supersedesId: first.id, explanations: [{ code: 'PERIOD_ENDED', explanation: 'Still the same day.' }, SEED_DDT_EXPLAINED] }
     expect(await problemOf(call('finance', 'POST', '/accounting/exports', body), 409)).toEqual(['problem/NOTHING_CHANGED'])
     await admin(
       `INSERT INTO "Payment" (id, "tenantId", "companyId", "partyId", amount, currency, "receivedOn", "externalRef", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, 12000, 'EUR', '2026-10-31', 'SEED-TRN-LATE-0001', $5, $5)`,
@@ -311,7 +314,7 @@ describe('the re-export: only the changes (never twice)', () => {
     const history = await ok(call('finance', 'GET', `/accounting/exports?companyId=${ids.companyA}&year=2026`))
     expect(history.rows.find((row: Json) => row.id === first.id).changedSince).toMatchObject({ count: 1 })
     clock.at = new Date('2026-11-03T09:00:00.000Z')
-    const second = (await ok(call('finance', 'POST', '/accounting/exports', { ...body, explanations: [{ code: 'PAYMENTS_PLACED', explanation: 'The late transfer is placed in November.' }] }), 201)).export
+    const second = (await ok(call('finance', 'POST', '/accounting/exports', { ...body, explanations: [{ code: 'PAYMENTS_PLACED', explanation: 'The late transfer is placed in November.' }, SEED_DDT_EXPLAINED] }), 201)).export
     expect(second).toMatchObject({ number: 'EXP-2026-0003', supersedes: { id: first.id, number: 'EXP-2026-0002' }, packages: ['PAYMENTS'] })
     expect(second.files.map((file: Json) => [file.package, file.rowCount])).toEqual([['PAYMENTS', 1]])
     expect(second.manifest).toEqual([expect.objectContaining({ recordType: 'Payment', number: 'SEED-TRN-LATE-0001', change: 'NEW' })])

@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Banner, DateField, Field, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
+import { Banner, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { Button, CheckboxCard, Input, RadioCard, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { DateField, Modal } from '../../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { percent, unitPrice } from '../../../quotes/model'

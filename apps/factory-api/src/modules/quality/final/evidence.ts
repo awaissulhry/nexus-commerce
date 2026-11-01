@@ -106,7 +106,8 @@ export async function evidenceTrail(caller: CommandCaller, query: EvidenceQuery)
     })
     const hides = new Map((await db.hide.findMany({ where: { id: { in: [...new Set(cuts.map((cut) => cut.hideId))] } }, select: { id: true, code: true } })).map((row) => [row.id, row.code]))
     const scans = await db.operationScan.findMany({
-      where: { workOrderId: header.id, ...(subject.serial ? { bundleId: { in: bundles.map((bundle) => bundle.id) } } : {}) },
+      // W2b (B-W2b-40): the count ledger only — the timing of an operation (START, PAUSE …) is labour, not proof of the garment.
+      where: { workOrderId: header.id, kind: { in: ['REPORT', 'UNDO', 'CORRECTION'] }, ...(subject.serial ? { bundleId: { in: bundles.map((bundle) => bundle.id) } } : {}) },
       select: { id: true, bundleId: true, workOrderOperationId: true, kind: true, goodQuantity: true, scrapQuantity: true, reworkQuantity: true, workerId: true, stationId: true, deviceId: true, serverTime: true, correctsId: true },
       orderBy: [{ serverTime: 'asc' }, { id: 'asc' }],
     })

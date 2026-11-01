@@ -219,12 +219,8 @@
   },
   "detail": {
     "title": "Richiesta · {material}",
+    "noun": "richiesta",
     "titleLoading": "Richiesta",
-    "position": "{index} di {count}",
-    "previous": "Precedente",
-    "next": "Successiva",
-    "first": "È la prima richiesta",
-    "last": "È l’ultima richiesta",
     "source": "Record di origine",
     "draft": "Crea ordine",
     "failed": "Impossibile caricare la richiesta",

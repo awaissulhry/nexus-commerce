@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Field, Modal } from '@nexus/ui/components'
-import { Button, Textarea } from '@nexus/ui/primitives'
+import { Field } from '@nexus/ui/components'
+import { Button } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import type { QuoteDetail } from '../../api'
 import { decideHeld, pendingRequest } from '../../model'

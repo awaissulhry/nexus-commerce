@@ -156,29 +156,6 @@ div.fw-pk-sheet-place {
   padding-left: var(--nds-space-16);
 }
 
-.fw-pk-check {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.fw-pk-check li {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--nds-space-6);
-}
-
-.fw-pk-check li.ok svg {
-  color: var(--nds-success);
-}
-
-.fw-pk-check li.open svg {
-  color: var(--nds-text-muted);
-}
-
 /* ---- the paper ---- */
 .fw-pk-print {
   display: flex;

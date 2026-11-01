@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { Button, Input, RadioCard, Select, Toggle } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { ITEM_SOURCINGS, ITEM_TRACKINGS, TANNAGES } from '@nexus/factory-domain/product/materials/rules'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { LibraryCan } from '../../library/model'

@@ -15,7 +15,7 @@ import { RECORD_TABS as WORK_ORDER_TABS } from '../../production/_shared/model'
 import { getMargins, getOrderMargin, SALES_ORDER_STATUSES, WATERFALL_REASONS } from './api'
 import { asSeenBy, DETAIL_1043, MARGINS, ROWS } from './demo/fixtures'
 import { designScreen as marginsScreen } from './fixtures'
-import { addressOf, barsOf, barWidth, bridgeOf, changeTone, marginsCanOf, marginsCsv, marginsHref, marginsQueryOf, pointsBetween, showsMargin, waterfallOf } from './model'
+import { addressOf, barsOf, bridgeOf, changeTone, marginsCanOf, marginsCsv, marginsHref, marginsQueryOf, pointsBetween, showsMargin, waterfallOf } from './model'
 
 /**
  * Finance › Costing › Margins (SCR-155), the sales order's Margin tab (SCR-039 w2a-margin cases) and the orders list's
@@ -78,12 +78,9 @@ describe('the figures', () => {
     expect(steps.at(-2)!.to).toBe(DETAIL_1043.estimateMargin)
   })
 
-  it('bars by customer and style, widths to the widest; points and tones', () => {
+  it('bars by customer and style (the DS BarList draws them); points and tones', () => {
     const bars = barsOf(MARGINS.byCustomer)
     expect(bars.map((bar) => bar.label)).toEqual(['Moto Demo S.r.l.', 'Pista Demo S.p.A.', 'Club Demo'])
-    expect(barWidth('40.0000', bars)).toBe(100)
-    expect(barWidth(null, bars)).toBe(0)
-    expect(barWidth('-3.0000', bars)).toBe(0)
     expect(pointsBetween('43.0000', '40.1667')).toBe(-2.8)
     expect(changeTone(-34000)).toBe('danger')
     expect(changeTone(0)).toBe('neutral')

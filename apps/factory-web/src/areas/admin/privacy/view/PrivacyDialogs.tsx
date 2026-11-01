@@ -1,8 +1,9 @@
 'use client'
 
 import { ExternalLink, FilePlus2, Trash2 } from 'lucide-react'
-import { Banner, Field, FileDropzone, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Pill, Select, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
+import { Button, Checkbox, Input, Pill, Select } from '@nexus/ui/primitives'
+import { FileDropzone, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Activity, Notice, NoticeAcks, NoticeKind } from '../api'

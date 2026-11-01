@@ -418,10 +418,8 @@
   },
   "check": {
     "state": {
-      "done": "done",
-      "open": "to do",
-      "failed": "stopped",
-      "skipped": "not needed now"
+      "open": "To do",
+      "failed": "Stopped"
     }
   },
   "valued": {
@@ -499,14 +497,7 @@
     "language": "Language of the list",
     "it": "Italian (the inventory book)",
     "en": "English",
-    "type": "Type the inventory's number to confirm:",
-    "typeFirst": "Type {number} exactly first.",
-    "state": {
-      "empty": "Capital letters and dashes count.",
-      "partial": "Keep typing.",
-      "mismatch": "Does not match. Capital letters and dashes count.",
-      "match": "Matches."
-    }
+    "typeFirst": "Type {number} exactly first."
   },
   "found": {
     "open": "Found stock",
