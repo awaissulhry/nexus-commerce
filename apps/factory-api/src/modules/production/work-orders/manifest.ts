@@ -27,4 +27,9 @@ export const manifest = defineManifest({
   'GET /production/work-orders/repair-options': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'POST /production/work-orders/repairs': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
   'PUT /production/work-orders/:workOrderId/repair-steps': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
+  // B-W2b-51 (MES-010, MES-014): split a DRAFT (preview and split), and the travellers (PDF).
+  'POST /production/work-orders/:workOrderId/split/preview': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
+  'POST /production/work-orders/:workOrderId/split': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
+  'GET /production/work-orders/travellers': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  'GET /production/work-orders/:workOrderId/traveller': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
 })

@@ -7,7 +7,7 @@ import { isPermission, type Permission } from '@nexus/factory-domain/core/permis
 import { assertTransition, type Machine } from '@nexus/factory-domain/state/machine'
 import { outboxWriter } from '../platform/outbox/writer'
 import { SYSTEM_ACTOR_ID, withContextClient, type RequestContext } from './context'
-import { ApiError } from './errors'
+import { ApiError, isBusyDatabaseError } from './errors'
 import { serverClock, type Clock } from './time'
 
 /**
@@ -194,7 +194,7 @@ export interface CommandSettings {
   readonly writeEvents: EventWriter
   /** How long a receipt answers repeats (then a purge may delete it). */
   readonly receiptTtlMs: number
-  /** Prisma's interactive-transaction limits. */
+  /** Prisma's interactive-transaction limits: the wait for a pool connection, and the longest the transaction runs. */
   readonly maxWaitMs: number
   readonly timeoutMs: number
 }
@@ -202,12 +202,19 @@ export interface CommandSettings {
 /** 30 days: a floor device may resend its queue after days offline (A1 §3.8). */
 export const RECEIPT_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
+/**
+ * B-W2b-F2: room for a command on a loaded machine: 10 s for a connection, 15 s to run (were 5 s and 10 s). Past either
+ * limit Prisma rolls the transaction back and the API answers 503 "busy, try again" (core/errors.ts), never 500.
+ * Why not more: the browser reaches the API through the web's `/api` rewrite, which Next.js cuts after 30 s with a
+ * plain 500 of its own. Both limits together (25 s) leave the route's reads before and after its command inside that,
+ * so a busy database still reaches the person as the API's 503. A command that needs longer passes its own timeoutMs.
+ */
 export const COMMAND_SETTINGS: CommandSettings = Object.freeze({
   clock: serverClock,
   writeEvents: outboxWriter(),
   receiptTtlMs: RECEIPT_TTL_MS,
-  maxWaitMs: 5_000,
-  timeoutMs: 10_000,
+  maxWaitMs: 10_000,
+  timeoutMs: 15_000,
 })
 
 /** The edit-conflict guard's refusal (COL-078): the record changed since the caller read it. */
@@ -580,7 +587,9 @@ export async function runCommand<Result, State extends string = string, Facts = 
       ),
     )
   } catch (error) {
-    if (key === null || error instanceof IdempotencyKeyReusedError) throw error
+    // B-W2b-F2: a busy database answers at once (503 "busy, try again", core/errors.ts) without waiting for one more
+    // connection to look for a receipt; this command wrote nothing, and its repeat finds the receipt if one was written.
+    if (key === null || error instanceof IdempotencyKeyReusedError || isBusyDatabaseError(error)) throw error
     // A repeat that raced the first request: both missed the receipt, the first committed, this one failed (on the
     // version, a unique key or the receipt). Answer from the first one's receipt.
     let stored: StoredReceipt | null

@@ -5,6 +5,8 @@ import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { REWORK_STATUSES } from '@nexus/factory-domain/production/rework/rules'
 import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from '@nexus/factory-domain/production/scrap/rules'
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
+// B-W2b-53 (MES-128): scrap above a site's limit waits for the team leader's approval.
+import { DECIDED_ON, NOTE_MAX, SCRAP_APPROVAL_STATES, SCRAP_REFUSAL_REASONS } from '@nexus/factory-domain/production/scrap/approval'
 
 /**
  * Scrap and its replacement (B-W2a-13; MES-129, MES-130; design production.scrap). Quantities of garments are whole
@@ -120,6 +122,19 @@ export const replacementRecordContract = defineContract({
 
 // ---- the scrap list -------------------------------------------------------------------------------------------------------------
 
+/** B-W2b-53 (MES-128): a scan's scrap above the limit in force when it was taken; null on a row that needs no approval. */
+const approvalView = output({
+  state: z.enum(SCRAP_APPROVAL_STATES),
+  /** The limit in force when the scan was taken (pieces). */
+  limit: z.number().int().nullable(),
+  decidedAt: instant().nullable(),
+  /** Where it was decided: by a team leader on the tablet, or in the office (who: the audit log). */
+  decidedOn: z.enum(DECIDED_ON).nullable(),
+  /** REFUSED: the reason tile. */
+  reason: z.enum(SCRAP_REFUSAL_REASONS).nullable(),
+  note: z.string().nullable(),
+})
+
 const material = output({
   lotId: id(),
   lotCode: z.string(),
@@ -140,6 +155,8 @@ export const scrapListContract = defineContract({
     from: z.iso.datetime({ offset: true }).transform((value) => new Date(value)).optional(),
     to: z.iso.datetime({ offset: true }).transform((value) => new Date(value)).optional(),
     kind: z.enum(['SCRAP', 'REWORK']).optional(),
+    /** B-W2b-53: only the scans whose scrap waits for the team leader's approval (the tile's filter). */
+    approval: z.enum(['WAITING']).optional(),
     limit: z.coerce.number().int().min(1).max(500).default(100),
   }),
   response: {
@@ -169,6 +186,8 @@ export const scrapListContract = defineContract({
           /** The value of its leather (cost grain; null when a hide's issue has no value yet). */
           value: money.cost(amountMinor().nullable()),
           currency: money.cost(currency().nullable()),
+          /** B-W2b-53 (MES-128): a scan's scrap above the site's limit (null: no approval needed, or not a scan's scrap). */
+          approval: approvalView.nullable(),
         }),
       ),
       tiles: output({
@@ -177,6 +196,8 @@ export const scrapListContract = defineContract({
         reworkOpen: z.number().int(),
         recutsToCut: z.number().int(),
         reductionsToApprove: z.number().int(),
+        /** B-W2b-53 (MES-128): scans whose scrap waits for the team leader's approval (over the limit). */
+        waitingApproval: z.number().int(),
       }),
     }),
   },
@@ -226,6 +247,75 @@ export const scrapStockContract = defineContract({
       }),
       /** Keys the scrap leaves reserved beyond their stock, in words (never a silent refusal). */
       overReserved: z.array(output({ itemId: id(), itemColourId: id().nullable(), /** A hide reserved whole that holds less now; null: the material and colour at the site. */ hideId: id().nullable(), available: z.string(), reserved: quantity(), words: z.string() })),
+    }),
+  },
+})
+
+// ---- B-W2b-53: scrap above a site's limit (MES-128) -----------------------------------------------------------------------------
+
+const refusalTile = output({ code: z.enum(SCRAP_REFUSAL_REASONS), labelIt: z.string(), labelEn: z.string(), icon: z.string(), colour: z.string(), needsDetail: z.boolean() })
+
+/** One scan waiting for the team leader: per station, line, bundle and operation; counts and reasons, never a person, no money. */
+const waitingRow = {
+  scanId: id(),
+  at: instant(),
+  siteId: id(),
+  workOrder: output({ id: id(), number: z.string(), status: z.enum(WORK_ORDER_STATUSES) }),
+  bundle: output({ id: id(), code: z.string() }),
+  operation: output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string() }),
+  station: output({ id: id(), code: z.string() }).nullable(),
+  line: output({ id: id(), code: z.string() }).nullable(),
+  goodQuantity: z.number().int(),
+  scrapQuantity: z.number().int(),
+  reworkQuantity: z.number().int(),
+  /** The scrap reasons of the scan (tile words in Italian, English and the floor's other languages). */
+  reasons: z.array(output({ code: z.string(), quantity: z.number().int(), labelIt: z.string(), labelEn: z.string(), labelI18n: z.record(z.string(), z.string()), icon: z.string().nullable(), colour: z.string().nullable() })),
+  approval: approvalView,
+}
+
+export const officeWaitingContract = defineContract({
+  querystring: input({ siteId: id().optional(), workOrderId: id().optional() }),
+  response: { 200: output({ rows: z.array(output(waitingRow)), refusalTiles: z.array(refusalTile) }) },
+})
+
+export const floorWaitingContract = defineContract({
+  querystring: input({ lineId: id().optional() }),
+  response: {
+    200: output({
+      /** Oldest first. `own`: the team leader took this scan (another person decides it). */
+      rows: z.array(output({ ...waitingRow, own: z.boolean() })),
+      refusalTiles: z.array(refusalTile),
+    }),
+  },
+})
+
+const decisionAnswer = output({ scanId: id(), workOrderId: id(), bundleId: id(), approval: approvalView, words: z.string() })
+const scanParams = input({ scanId: id() })
+const note = z.string().trim().min(1).max(NOTE_MAX).optional()
+
+export const approveOverLimitContract = defineContract({
+  params: scanParams,
+  body: input({ note }),
+  response: { 200: decisionAnswer },
+})
+
+export const refuseOverLimitContract = defineContract({
+  params: scanParams,
+  body: input({
+    /** The reason tile (OTHER also needs the note). */
+    reason: z.enum(SCRAP_REFUSAL_REASONS),
+    note,
+  }),
+  response: { 200: decisionAnswer },
+})
+
+export const approveManyOverLimitContract = defineContract({
+  body: input({ scanIds: z.array(id()).min(1).max(50), note }),
+  response: {
+    200: output({
+      approved: z.array(id()),
+      /** Not approved, each with why (decided already, the approver's own scan, no longer waiting …). */
+      held: z.array(output({ scanId: id(), code: z.string(), message: z.string() })),
     }),
   },
 })

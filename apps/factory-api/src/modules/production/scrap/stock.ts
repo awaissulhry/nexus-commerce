@@ -14,6 +14,8 @@ import { readHides, readLots, readSiteStock } from '../../inventory/issue/store'
 import { completeKeys, postMoves, type MoveDraft } from '../../inventory/ledger/post-moves'
 import { ReservationRefusedError } from '../../inventory/reservations/reserve'
 import { demandWords, lockReservations, readDemands, readKeyFacts, reserveKeyOf, type ReserveKey } from '../../inventory/reservations/store'
+// B-W2b-53 (MES-128): held scrap posts no stock.
+import { OverLimitRefusedError, scrapPostingHeld } from './over-limit'
 
 /**
  * Scrap posts stock by lot (B-W2a-13; MES-129; design production.scrap "lot and area leaving stock", Movements "SCRAP
@@ -90,6 +92,9 @@ export async function scrapStock(caller: CommandCaller, body: ScrapStockInput, i
     if (body.sourceScanId && !(await tx.operationScan.findFirst({ where: { id: body.sourceScanId, workOrderId: workOrder.id }, select: { id: true } }))) {
       throw new ValidationError('That scan is not of this work order.', [{ path: 'body/sourceScanId', message: 'A scan of this work order.' }])
     }
+    // B-W2b-53 (MES-128): a scan's scrap above the site's limit posts no stock before the team leader approved it.
+    const held = body.sourceScanId ? await scrapPostingHeld(tx, body.sourceScanId) : null
+    if (held) throw new OverLimitRefusedError({ code: held.state === 'WAITING' ? 'SCRAP_WAITS_APPROVAL' : 'SCRAP_REFUSED', message: held.words })
     if (body.reworkOrderId && !(await tx.reworkOrder.findFirst({ where: { id: body.reworkOrderId, workOrderId: workOrder.id }, select: { id: true } }))) {
       throw new ValidationError('That rework is not of this work order.', [{ path: 'body/reworkOrderId', message: 'A rework of this work order.' }])
     }

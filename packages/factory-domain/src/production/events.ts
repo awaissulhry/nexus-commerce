@@ -10,6 +10,11 @@ import { REWORK_STATUSES } from './rework/rules'
 import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
 // B-W2b-29: off-standard and indirect time.
 import { BLOCK_ENDINGS, BLOCK_SOURCES, OFF_STANDARD_KINDS } from './offstandard/rules'
+// B-W2b-46: checks before a scan counts.
+import { GUARD_KINDS, OVERRIDE_REASON_CODES } from './guards/rules'
+// B-W2b-53: floor rules per site and scrap above the limit.
+import { DECIDED_ON, SCRAP_DECISIONS } from './scrap/approval'
+import { FLOOR_RULE_FIELDS, FLOOR_RULE_MODES } from './settings/floor-rules'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -22,6 +27,8 @@ import { BLOCK_ENDINGS, BLOCK_SOURCES, OFF_STANDARD_KINDS } from './offstandard/
  *                                   (BASIS_RECORDED, BASIS_REPLACED) (B-W1-37; office screens)
  *   workorder.created               a DRAFT work order was made from sales order lines (B-W1-38)
  *   workorder.changed               a DRAFT's cells or revision, or a work order's due date, priority or note changed
+ *   workorder.priority_changed      B-W2b-51: a work order's priority or rush flag changed (MES-009; the dispatch lists
+ *                                   and the tablets of its site reorder: rush first)
  *   workorder.released              released with its frozen specification and batch number (the floor can start)
  *   workorder.status_changed        started, completed, closed or cancelled
  *   workorder.finished_to_stock     released garments of a work order went into finished-goods stock, all or part
@@ -50,6 +57,19 @@ import { BLOCK_ENDINGS, BLOCK_SOURCES, OFF_STANDARD_KINDS } from './offstandard/
  *   production.report_subscription_changed  B-W2a-38: someone subscribed to the daily production report by e-mail, or a
  *                                           subscription changed or was turned off (the report page's state refreshes)
  *   production.daily_report_sent            B-W2a-38: the scheduler e-mailed one person's daily production report
+ *   production.scan_guard_flagged           B-W2b-46: a report counted although a check found something (the site's
+ *                                           rule is WARN): the team leader is told (MES-097, MES-098); no person
+ *   production.scan_guard_overridden        B-W2b-46: a team leader overrode the checks that held a report, with their
+ *                                           PIN and a reason tile (MES-070, MES-097, MES-098); no person, no words
+ *   production.bundle_coupons_changed       B-W2b-41: a bundle's coupons printed, one reprinted or voided (MES-067)
+ *   production.bundle_stuck                 B-W2b-41: a bundle with no scan past its site's limit, once per wait (MES-168)
+ *   production.scan_findings_found          B-W2b-41: the scan-pattern checks found patterns about bundles (MES-075)
+ *   production.scan_finding_reviewed        B-W2b-41: one finding reviewed or dismissed
+ *   production.bundle_rules_changed         B-W2b-41: a site's bundle code mode or stuck limit changed
+ *   production.floor_rules_changed          B-W2b-53: a site's floor checks changed (the quantity guard, the sequence,
+ *                                           the scrap approval limit); Floor rules & codes and the site's tablets re-read
+ *   production.scrap_over_limit_decided     B-W2b-53: a scan's scrap above the site's limit was approved (it posts) or
+ *                                           refused, by a team leader on the tablet or in the office (MES-128)
  */
 export const MONITORING_CHANGES = ['WIDENED', 'NARROWED', 'BASIS_RECORDED', 'BASIS_REPLACED'] as const
 
@@ -58,7 +78,8 @@ const subject = z.enum(SCAN_SUBJECTS)
 const live = { permission: 'workorders.view', fields: ['workOrderId', 'number'] } as const
 
 // B-W2a-12: 'steps', a repair DRAFT's routing steps (MES-019).
-export const WORK_ORDER_CHANGES = ['cells', 'revision', 'details', 'steps'] as const
+// B-W2b-51: 'split', a DRAFT gave cells to a new work order split from it (MES-010).
+export const WORK_ORDER_CHANGES = ['cells', 'revision', 'details', 'steps', 'split'] as const
 
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 const postedBy = () => z.enum(['OFFICE', 'FLOOR', 'SYSTEM'])
@@ -79,6 +100,9 @@ const reworkLive = { permission: 'production.rework', floor: 'production.rework'
 const scrapLive = { permission: 'production.scrap.view', fields: ['workOrderId', 'number'] } as const
 /** B-W2b-29: the labour inbox (production.offstandard.view) and the tablets of the event's site (floor.work). No person in a field. */
 const offStandardLive = { permission: 'production.offstandard.view', floor: 'floor.work', fields: ['blockId', 'siteId', 'lineId', 'status'] } as const
+// B-W2b-46.
+/** The checks the floor met: the office's leads and supervisors (production.scan.correct) and the team leaders' tablets (production.scan.override). */
+const guardLive = { permission: 'production.scan.correct', floor: 'production.scan.override', fields: ['workOrderId', 'number', 'bundleId', 'scanId'] } as const
 
 export const events = [
   defineEvent({
@@ -102,6 +126,8 @@ export const events = [
       pieces: z.number().int().min(0),
       /** B-W2a-12: a REPAIR work order's repair order (MES-019); absent for a size run. */
       repairOrderId: z.uuid().optional(),
+      /** B-W2b-51: the work order it was split from (MES-010); absent for one made from order lines. */
+      splitFromId: z.uuid().optional(),
     }),
     live: { ...live, fields: ['workOrderId', 'number', 'styleId'] },
   }),
@@ -111,6 +137,14 @@ export const events = [
     description: "A work order's cells or revision (while a DRAFT), or its due date, priority or note changed.",
     payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), changes: z.array(z.enum(WORK_ORDER_CHANGES)).min(1), cells: z.number().int().min(0), pieces: z.number().int().min(0) }),
     live,
+  }),
+  // B-W2b-51 (MES-009): the dispatch board, the tablet's My work and the planning board put a rush work order first.
+  defineEvent({
+    type: 'workorder.priority_changed',
+    context: 'production',
+    description: "A work order's priority or rush flag changed: the dispatch lists and the tablets of its site order their work again.",
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), siteId: z.uuid(), priority: z.number().int(), rush: z.boolean(), previousPriority: z.number().int(), previousRush: z.boolean() }),
+    live: { ...live, floor: 'floor.work', fields: ['workOrderId', 'number', 'rush'] },
   }),
   defineEvent({
     type: 'workorder.released',
@@ -488,6 +522,66 @@ export const events = [
       lanes: z.number().int().min(0),
     }),
   }),
+  // B-W2b-41: bundles tracked (coupons per operation, stuck bundles, scan-pattern findings, the site's bundle codes). Ids,
+  // codes, counts and states only: never a person, never a station (a station can stand for one person), never a reason.
+  defineEvent({
+    type: 'production.bundle_coupons_changed',
+    context: 'production',
+    description: "A bundle's coupons changed (MES-067): coupons printed for its scanned operations, one reprinted with a new code (the old one is refused when scanned), or one voided.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      change: z.enum(['ISSUED', 'REPRINTED', 'VOIDED']),
+      couponIds: z.array(z.uuid()).min(1),
+      postedBy: postedBy(),
+    }),
+    live: bundleLive,
+  }),
+  defineEvent({
+    type: 'production.bundle_stuck',
+    context: 'production',
+    description: "A bundle has had no scan for longer than its site allows (MES-168): the floor-now board and the bundles list show it. Told once per wait: a new scan starts a new one.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      code: z.string(),
+      siteId: z.uuid(),
+      place: z.enum(['CUTTING', 'LINE']),
+      lastScanId: z.uuid().nullable(),
+      workingHours: z.number().min(0),
+      limitHours: z.number().int().min(1),
+    }),
+    live: { permission: 'production.bundles.view', fields: ['workOrderId', 'number', 'bundleId'] },
+  }),
+  defineEvent({
+    type: 'production.scan_findings_found',
+    context: 'production',
+    description: 'The scan-pattern checks found patterns about bundles at a site (MES-075): counts per kind, to talk about, never a score.',
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      findingIds: z.array(z.uuid()).min(1),
+      bunched: z.number().int().min(0),
+      movedNotScanned: z.number().int().min(0),
+      gapBelowStandard: z.number().int().min(0),
+    }),
+    live: { permission: 'production.bundles.view', fields: ['siteId'] },
+  }),
+  defineEvent({
+    type: 'production.scan_finding_reviewed',
+    context: 'production',
+    description: 'A scan-pattern finding about a bundle was reviewed or dismissed by the office.',
+    payload: z.strictObject({ findingId: z.uuid(), siteId: z.uuid(), bundleId: z.uuid(), status: z.enum(['REVIEWED', 'DISMISSED']) }),
+    live: { permission: 'production.bundles.view', fields: ['findingId', 'bundleId'] },
+  }),
+  defineEvent({
+    type: 'production.bundle_rules_changed',
+    context: 'production',
+    description: "A site's bundle rules changed: one bundle code or a coupon per operation (MES-067), and the hours after which a bundle with no scan is stuck (MES-168).",
+    payload: z.strictObject({ siteId: z.uuid(), bundleCodeMode: z.enum(['ONE_CODE', 'COUPON_PER_OPERATION']), stuckBundleHours: z.number().int().min(1) }),
+    live: { permission: 'production.settings.view', fields: ['siteId', 'bundleCodeMode'] },
+  }),
   // B-W2b-29: off-standard and indirect time (MES-155 … MES-158; modules/production/offstandard). A block's ids, its line,
   // station, code and state, its day and its minutes: never the worker, a name or a note (Statuto dei Lavoratori art. 4;
   // the labour inbox and the tablets read the block again). A code's change carries its code only, never its words.
@@ -593,5 +687,62 @@ export const events = [
       status: z.enum(['PENDING', 'APPROVED', 'REJECTED']),
     }),
     live: offStandardLive,
+  }),
+  // ---- B-W2b-46: checks before a scan counts (modules/production/guards). Ids, kinds and the reason tile's code only.
+  defineEvent({
+    type: 'production.scan_guard_flagged',
+    context: 'production',
+    description: "A floor report counted although a check before it counts found something the site's rule only warns about (more garments than the operation before passed, a skipped required operation): the team leaders are told.",
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), bundleId: z.uuid(), scanId: z.uuid(), operationId: z.uuid(), operationSeq: z.number().int(), stationId: z.uuid().nullable(), guards: z.array(z.enum(GUARD_KINDS)).min(1) }),
+    live: guardLive,
+  }),
+  defineEvent({
+    type: 'production.scan_guard_overridden',
+    context: 'production',
+    description: "A team leader overrode the checks that held a floor report (more garments than the operation before passed, a skipped required operation, a bundle of another line) with their PIN and a reason; the report counted.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      scanId: z.uuid(),
+      operationId: z.uuid(),
+      operationSeq: z.number().int(),
+      stationId: z.uuid().nullable(),
+      guards: z.array(z.enum(GUARD_KINDS)).min(1),
+      reasonCode: z.enum(OVERRIDE_REASON_CODES),
+    }),
+    live: guardLive,
+  }),
+  // B-W2b-53: floor rules per site (MES-294) and scrap above a site's limit (MES-128). Ids, modes, counts and states:
+  // no reason text, no person (who decided stays in the audit log).
+  defineEvent({
+    type: 'production.floor_rules_changed',
+    context: 'production',
+    description: "A site's floor checks changed: the quantity guard, the sequence (skipped operations) or the scrap approval limit.",
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      fields: z.array(z.enum(FLOOR_RULE_FIELDS)).min(1),
+      quantityGuard: z.enum(FLOOR_RULE_MODES),
+      skippedOperationRule: z.enum(FLOOR_RULE_MODES),
+      scrapApprovalLimit: z.number().int().min(1).nullable(),
+    }),
+    live: { permission: 'production.settings.view', floor: 'floor.work', fields: ['siteId', 'fields'] },
+  }),
+  defineEvent({
+    type: 'production.scrap_over_limit_decided',
+    context: 'production',
+    description: "A scan's scrap above its site's limit was approved (it posts: replacement, scrap of stock, cost) or refused (it does not), on the tablet or in the office.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      siteId: z.uuid(),
+      bundleId: z.uuid(),
+      scanId: z.uuid(),
+      decision: z.enum(SCRAP_DECISIONS),
+      scrapQuantity: z.number().int().min(1),
+      limit: z.number().int().min(1),
+      decidedOn: z.enum(DECIDED_ON),
+    }),
+    live: { permission: 'production.scrap.view', floor: 'floor.lead', fields: ['workOrderId', 'number', 'scanId'] },
   }),
 ] as const

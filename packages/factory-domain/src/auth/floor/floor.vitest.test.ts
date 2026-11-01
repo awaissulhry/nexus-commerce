@@ -196,13 +196,14 @@ describe('the floor machines', () => {
 })
 
 describe('floor roles and their grants', () => {
-  it('floor templates hold only floor permissions, no money and no two-factor; office templates hold no floor permission', () => {
+  it('floor templates hold only floor permissions, no money but their own pay (B-W2b-34) and no two-factor; office templates hold no floor permission', () => {
     expect(templateProblems(ROLE_TEMPLATES)).toEqual([])
     const floor = ROLE_TEMPLATES.filter((entry) => entry.audience === 'floor')
     expect(floor.map((entry) => entry.key)).toEqual(['operator', 'cutting_operator', 'floor_inspector', 'team_leader', /* B-W2a-35 */ 'technician'])
     for (const entry of floor) {
       expect(entry.requireMfa).toBe(false)
-      expect(entry.grains).toEqual([])
+      // B-W2b-34: the pay grain for the worker's own records (the rates published to them); the technician is not paid by the piece.
+      expect(entry.grains).toEqual(entry.key === 'technician' ? [] : ['pay'])
       // floor.* only, and the few office permissions shared with the floor (printing labels at the device's site).
       expect(entry.permissions.every((name) => name.startsWith('floor.') || (FLOOR_SHARED_PERMISSIONS as readonly string[]).includes(name))).toBe(true)
       expect(entry.permissions).toEqual(expect.arrayContaining(['print.labels', 'print.view']))
@@ -210,19 +211,20 @@ describe('floor roles and their grants', () => {
     for (const entry of ROLE_TEMPLATES.filter((item) => item.audience === 'office')) {
       expect(entry.permissions.some((name) => name.startsWith('floor.')), entry.key).toBe(false)
     }
-    expect(templateOf('team_leader')?.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.receive', 'inventory.transfer', /* B-W2a-35 */ 'plant.report', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.rework', 'production.scan', 'production.serials', /* B-W2a-76 */ 'purchasing.subcontract.kit', 'purchasing.subcontract.receive', 'quality.inspections.view', /* B-W2a-43 */ 'sales.returns.receive', 'shipping.pack'])
+    expect(templateOf('team_leader')?.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.receive', 'inventory.transfer', /* B-W2a-35 */ 'plant.report', 'print.labels', 'print.view', 'production.bundles', /* B-W2b-35 */ 'production.calls.answer', 'production.calls.view', 'production.cut', 'production.rework', 'production.scan', /* B-W2b-46 */ 'production.scan.override', 'production.serials', /* B-W2a-76 */ 'purchasing.subcontract.kit', 'purchasing.subcontract.receive', 'quality.inspections.view', /* B-W2a-43 */ 'sales.returns.receive', 'shipping.pack'])
     expect(templateOf('floor_inspector')?.permissions).toEqual(expect.arrayContaining(['quality.inspections.record', 'quality.garments.release']))
     expect(templateOf('floor_inspector')?.permissions).not.toContain('quality.garments.reverse')
     expect(templateOf('admin')?.permissions).toEqual(expect.arrayContaining(['devices.manage', 'devices.revoke', 'workers.manage', 'workers.credentials']))
   })
 
-  it('finds a floor role that names an office permission, a grain other than wages, or two-factor', () => {
+  it('finds a floor role that names an office permission, a grain other than wages and pay, or two-factor', () => {
     expect(audienceProblems({ audience: 'floor', permissions: ['users.view'], grains: ['cost'], requireMfa: true })).toEqual([
       'a floor role holds only floor permissions, not users.view',
-      'a floor role sees at most wages, not cost',
+      'a floor role sees at most wages and pay, not cost',
       'a floor role cannot require two-factor',
     ])
     expect(audienceProblems({ audience: 'floor', permissions: ['floor.work'], grains: ['wages'], requireMfa: false })).toEqual([])
+    expect(audienceProblems({ audience: 'floor', permissions: ['floor.work'], grains: ['pay'], requireMfa: false })).toEqual([])
     expect(audienceProblems({ audience: 'floor', permissions: ['floor.work', 'print.view', 'print.labels'], grains: [], requireMfa: false })).toEqual([])
     expect(audienceProblems({ audience: 'floor', permissions: ['print.manage', 'print.documents', 'files.read'], grains: [], requireMfa: false })).toEqual([
       'a floor role holds only floor permissions, not print.manage',
@@ -234,7 +236,7 @@ describe('floor roles and their grants', () => {
     expect(FACTORY_PERMISSIONS.get('floor.work')?.area).toBe('floor')
   })
 
-  it('gives one grant per role over the device company and site, and at most wages', () => {
+  it('gives one grant per role over the device company and site, and at most wages and pay', () => {
     const grants = floorGrants(
       [
         { permissions: ['floor.work'], grains: [] },
@@ -246,7 +248,7 @@ describe('floor roles and their grants', () => {
       { permissions: ['floor.work'], companies: [COMPANY], sites: [SITE], parties: 'all' },
       { permissions: ['floor.lead', 'money.wages'], companies: [COMPANY], sites: [SITE], parties: 'all' },
     ])
-    expect(FLOOR_GRAINS).toEqual(['wages'])
+    expect(FLOOR_GRAINS).toEqual(['wages', 'pay'])
     const actor = { audience: 'floor' as const, tenantId: COMPANY, siteId: SITE, grants }
     expect([...heldGrains(actor)]).toEqual(['wages'])
   })

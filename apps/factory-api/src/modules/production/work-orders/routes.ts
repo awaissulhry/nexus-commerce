@@ -10,12 +10,17 @@ import { createRepairWorkOrder, repairOptions, setRepairSteps } from './repairs'
 import { createRepairContract, repairOptionsContract, repairStepsContract } from './contract'
 import { listReadinessContract } from './release/contract'
 import { listReadiness } from './release/readiness'
+// B-W2b-51: split a work order (MES-010) and its travellers (MES-014).
+import { splitContract, splitPreviewContract, travellerContract, travellersContract } from './contract'
+import { previewSplit, splitWorkOrder } from './split'
+import { inlineDisposition, travellerPdf, travellersPdf } from './traveller'
 
 /**
  * Work orders from sales order lines with a frozen specification (B-W1-38; MES-001, MES-002, MES-005, MES-007,
  * MES-305; A2 SCR-069, SCR-070): the list and record, a DRAFT and its cells and details, the release check and the
  * release, start / complete / close / cancel, and the frozen spec against today's master. Made-to-measure work orders
- * come later (B-W1-17/18): a made-to-measure line is refused (409).
+ * come later (B-W1-17/18): a made-to-measure line is refused (409). B-W2b-51: the rush flag (create, PATCH, list), split a
+ * DRAFT (preview and split), the travellers (PDF with a QR); the bulk release is the list frame's (platform/views/bulk).
  */
 export default defineRoutes('production.work-orders', manifest, async (app) => {
   app.get('/production/work-orders', { schema: listContract }, async (request) => listWorkOrders(request, request.query))
@@ -55,4 +60,20 @@ export default defineRoutes('production.work-orders', manifest, async (app) => {
   app.post('/production/work-orders/repairs', { schema: createRepairContract }, async (request, reply) => reply.code(201).send(await createRepairWorkOrder(request, request.body, idempotencyKeyFrom(request))))
 
   app.put('/production/work-orders/:workOrderId/repair-steps', { schema: repairStepsContract }, async (request) => setRepairSteps(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-51 (MES-010): split a DRAFT in two — what each side keeps and gets, then the split.
+  app.post('/production/work-orders/:workOrderId/split/preview', { schema: splitPreviewContract }, async (request) => previewSplit(request, request.params.workOrderId, request.body))
+
+  app.post('/production/work-orders/:workOrderId/split', { schema: splitContract }, async (request, reply) => reply.code(201).send(await splitWorkOrder(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request))))
+
+  // B-W2b-51 (MES-014): the traveller PDF with its QR code, of one work order or of several.
+  app.get('/production/work-orders/travellers', { schema: travellersContract }, async (request, reply) => {
+    const { pdf, fileName } = await travellersPdf(request, request.query.ids, request.query.language)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
+
+  app.get('/production/work-orders/:workOrderId/traveller', { schema: travellerContract }, async (request, reply) => {
+    const { pdf, fileName } = await travellerPdf(request, request.params.workOrderId, request.query.language)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
 })

@@ -27,9 +27,11 @@ import { command, type CommandCaller, type CommandTx } from '../../../core/comma
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { noticeInForce } from '../../../platform/privacy/read'
+// B-W2b-34: switching PERFORMANCE off stops piece pay at the site in the same command.
+import { stopPiecePayInCommand } from '../piecerates/switch'
 import { holdsFigureRole } from './access'
 import type { ChangeResult, SiteDetail } from './contract'
-import { GATE_SELECT, legalGateFor, legalGatesOf, recordedBasisOf, type GateRecord } from './gate'
+import { gateRowInForce, GATE_SELECT, legalGateFor, legalGatesOf, recordedBasisOf, type GateRecord } from './gate'
 import { privacySettingsFor } from './groups'
 
 /**
@@ -45,6 +47,7 @@ import { privacySettingsFor } from './groups'
  *                DPIA are recorded on the gate (the DPIA record of the purpose), with the basis (ATTENDANCE: the body's;
  *                PERFORMANCE: the site's in Production › Settings); refused in words while anything is missing
  *   switch off   people.privacy.manage + a reason, never a step-up (narrowing is always allowed); the row is final
+ *                (B-W2b-34: switching PERFORMANCE off stops piece pay at the site in the same command, from today)
  *   leads        widening needs the recorded basis to cover leads, a reason and a step-up; narrowing never asks
  *   settings     the minimum group size and the roles that see one person's figures: lowering the size or naming
  *                another role is a widening (a reason and a step-up); raising or removing never asks
@@ -266,8 +269,8 @@ export interface SwitchOnBody {
 export async function switchOn(caller: CommandCaller, siteId: string, purpose: GatePurpose, body: SwitchOnBody, options: { readonly stepUp: () => void; readonly idempotencyKey?: string | undefined }): Promise<ChangeResult> {
   const { context, site } = await siteOf(caller, siteId, PEOPLE_PRIVACY_MANAGE)
   const now = serverClock.now()
-  const { facts, current } = await caller.withClient(async (client) => ({ facts: await gateFactsFor(client, site, purpose, now), current: await legalGateFor(client, site.id, purpose) }))
-  if (current.open) throw new ConflictError(`This purpose is on at this site already (since ${toUtcIso(current.gate!.switchedOnAt)}); switch it off first to record another basis.`)
+  const { facts, current } = await caller.withClient(async (client) => ({ facts: await gateFactsFor(client, site, purpose, now), current: { gate: await gateRowInForce(client, site.id, purpose) } }))
+  if (current.gate) throw new ConflictError(`This purpose is on at this site already (since ${toUtcIso(current.gate!.switchedOnAt)}); switch it off first to record another basis.`)
   refuse(switchOnProblems({ facts, basis: body.basis, basisCoversLeads: body.basisCoversLeads, leadsSeeFigures: body.leadsSeeFigures, reason: body.reason }), 'This purpose cannot be switched on yet.')
   options.stepUp()
   const { result } = await command(caller, { name: 'people.switchOnPurpose', idempotencyKey: options.idempotencyKey, input: { siteId: site.id, purpose, ...body } }, async (tools) => {
@@ -316,7 +319,7 @@ export async function switchOn(caller: CommandCaller, siteId: string, purpose: G
 
 /** The gate in force of a site and purpose, at the version the caller read (404 when off, 409 when stale). */
 async function gateInForce(caller: CommandCaller, site: SiteRow, purpose: GatePurpose): Promise<GateRecord> {
-  const { gate } = await caller.withClient((client) => legalGateFor(client, site.id, purpose))
+  const gate = await caller.withClient((client) => gateRowInForce(client, site.id, purpose))
   if (!gate) throw new NotFoundError('This purpose is switched off at this site.')
   return gate
 }
@@ -337,6 +340,7 @@ export async function switchOff(caller: CommandCaller, siteId: string, purpose: 
         throw new ConflictError(`This purpose was switched on with a later date (${toUtcIso(before.switchedOnAt)}); it can be switched off from then on.`)
       }
       // B-W2b-34: piece pay at this site needs the PERFORMANCE gate; its switch goes off here, in this same command.
+      const piecePayOffFrom = purpose === 'PERFORMANCE' ? await stopPiecePayInCommand(tools, site, { actorId: context.actorId, reason: `The legal gate for one person's work figures was switched off: ${body.reason.trim()}`, by: 'GATE_OFF', bumpVersion: true }) : null
       await tools.tx.peopleLegalGate.update({ where: { id: gate.id }, data: { switchedOffAt: tools.now, switchedOffById: context.actorId, switchOffReason: body.reason.trim() }, select: { id: true } })
       const after = (await tools.tx.peopleLegalGate.findUnique({ where: { id: gate.id }, select: GATE_SELECT }))!
       tools.audit({ action: 'people.switchOffPurpose', recordType: 'PeopleLegalGate', recordId: gate.id, companyId: site.companyId, siteId: site.id, before: gateAudit(before), after: gateAudit(after), reason: body.reason.trim() })
@@ -347,7 +351,8 @@ export async function switchOff(caller: CommandCaller, siteId: string, purpose: 
         siteId: site.id,
         payload: { gateId: gate.id, siteId: site.id, purpose, change: 'SWITCHED_OFF', open: false, leadsSeeFigures: false },
       })
-      return { ...(await siteDetailOf(tools.tx, site, tools.now)), change: 'SWITCHED_OFF' as const, changed: true, words: [CHANGE_WORDS.SWITCHED_OFF(purpose)] }
+      const piecePayWords = piecePayOffFrom ? [`Piece pay at this site stopped too, from ${piecePayOffFrom}: it rests on this gate. Pay earned before stays payable.`] : []
+      return { ...(await siteDetailOf(tools.tx, site, tools.now)), change: 'SWITCHED_OFF' as const, changed: true, words: [CHANGE_WORDS.SWITCHED_OFF(purpose), ...piecePayWords] }
     },
   )
   return result
@@ -365,7 +370,7 @@ export async function changeLeads(
   options: { readonly stepUp: () => void; readonly idempotencyKey?: string | undefined },
 ): Promise<ChangeResult> {
   const { site } = await siteOf(caller, siteId, PEOPLE_PRIVACY_MANAGE)
-  const { gate } = await caller.withClient((client) => legalGateFor(client, site.id, purpose))
+  const gate = await caller.withClient((client) => gateRowInForce(client, site.id, purpose))
   refuse(leadsChangeProblems({ gate: gate ? { ...gate, purpose: gate.purpose as GatePurpose, basis: gate.basis as MonitoringBasis } : null, leadsSeeFigures: body.leadsSeeFigures, reason: body.reason }), 'Leads cannot change this way.')
   const change = leadsChangeOf(gate!.leadsSeeFigures, body.leadsSeeFigures)
   if (change === 'NONE') return { ...(await caller.withClient((client) => siteDetailOf(client, site, serverClock.now()))), change: null, changed: false, words: [] }

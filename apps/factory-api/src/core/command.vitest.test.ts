@@ -106,3 +106,36 @@ describe('types', () => {
     await expect(COMMAND_SETTINGS.writeEvents({} as never, [{ type: 'site.renamed', version: 1 } as never])).rejects.toThrow(/not declared in the event catalogue/)
   })
 })
+
+describe('a busy database (B-W2b-F2)', () => {
+  it('gives a command 10 s for a connection and 15 s to run: inside the web proxy\'s 30 s, with room for the route\'s reads', () => {
+    expect(COMMAND_SETTINGS).toMatchObject({ maxWaitMs: 10_000, timeoutMs: 15_000 })
+    expect(COMMAND_SETTINGS.maxWaitMs + COMMAND_SETTINGS.timeoutMs).toBeLessThanOrEqual(25_000)
+  })
+
+  it('answers a keyed command\'s busy failure at once, without a second connection for the receipt', async () => {
+    const busy = Object.assign(new Error('Transaction API error: Unable to start a transaction in the given time.'), { name: 'PrismaClientKnownRequestError', code: 'P2028' })
+    let calls = 0
+    const caller: CommandCaller = {
+      factoryContext: office,
+      withClient: async () => {
+        calls++
+        throw busy
+      },
+    }
+    await expect(runCommand(caller, spec({}, { idempotencyKey: 'busy-key-0001' }), async () => null, COMMAND_SETTINGS)).rejects.toBe(busy)
+    expect(calls).toBe(1)
+    // Any other failure of a keyed command still looks for the first request's receipt.
+    const other = new Error('a unique key')
+    calls = 0
+    const looking: CommandCaller = {
+      factoryContext: office,
+      withClient: async () => {
+        calls++
+        throw other
+      },
+    }
+    await expect(runCommand(looking, spec({}, { idempotencyKey: 'busy-key-0002' }), async () => null, COMMAND_SETTINGS)).rejects.toBe(other)
+    expect(calls).toBe(2)
+  })
+})

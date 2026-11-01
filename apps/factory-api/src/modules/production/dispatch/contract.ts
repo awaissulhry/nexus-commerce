@@ -18,7 +18,7 @@ const entryView = output({
     number: z.string(),
     status: z.string(),
     priority: z.number().int(),
-    /** Rush (priority above 0): first in the list, with an icon and a word on the floor. */
+    /** The work order's rush flag (B-W2b-51, MES-009): first in the list, with an icon and a word on the floor. */
     rush: z.boolean(),
     dueDate: businessDate().nullable(),
     style: output({ code: z.string(), name: z.string() }),

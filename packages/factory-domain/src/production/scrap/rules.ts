@@ -46,6 +46,9 @@ export const REPLACEMENT_REFUSALS = [
   'NOT_A_RECUT',
   'NOT_A_REDUCE',
   'CUT_NOT_OF_CELL',
+  // B-W2b-53 (MES-128): a scan's scrap above the site's limit posts only once the team leader approved it.
+  'SCRAP_WAITS_APPROVAL',
+  'SCRAP_REFUSED',
 ] as const
 export type ReplacementRefusalCode = (typeof REPLACEMENT_REFUSALS)[number]
 
@@ -63,7 +66,13 @@ export interface AskFacts {
   readonly quantity: number
   readonly part: string | null
   /** What scrapped them (a scan with scrap, a rework DONE with scrap): how many it scrapped, and how many open or done requests of it replace already. */
-  readonly source: { readonly what: string; readonly scrapped: number; readonly replaced: number } | null
+  readonly source: {
+    readonly what: string
+    readonly scrapped: number
+    readonly replaced: number
+    /** B-W2b-53 (MES-128): a scan's scrap above the limit waiting for the team leader, or refused by them (else null). */
+    readonly heldBy?: { readonly state: 'WAITING' | 'REFUSED'; readonly words: string } | null | undefined
+  } | null
 }
 
 /** Why the replacement may not be asked, or null. */
@@ -80,6 +89,7 @@ export function askRefusal(facts: AskFacts): ReplacementRefusal | null {
   }
   if (facts.source) {
     if (facts.source.scrapped < 1) return { code: 'NO_SCRAP', message: `${facts.source.what} scrapped nothing.` }
+    if (facts.source.heldBy) return { code: facts.source.heldBy.state === 'WAITING' ? 'SCRAP_WAITS_APPROVAL' : 'SCRAP_REFUSED', message: facts.source.heldBy.words }
     const left = facts.source.scrapped - facts.source.replaced
     if (facts.quantity > left) {
       return {
