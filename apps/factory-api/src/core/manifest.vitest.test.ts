@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import { SLOW_TEST_TIMEOUT_MS } from '../testing/timeouts'
 import { CORE_MANIFEST, defineManifest, entryProblems, ManifestRegistry, PUBLIC, SIGNED_IN, type RouteManifestEntry } from './manifest'
 
 const GUARD = fileURLToPath(new URL('../../../../scripts/factory/check-route-manifest.mjs', import.meta.url))
@@ -66,7 +67,7 @@ describe('manifest entries', () => {
   })
 })
 
-describe('scripts/factory/check-route-manifest.mjs', () => {
+describe('scripts/factory/check-route-manifest.mjs', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   const folders: string[] = []
   afterEach(() => {
     for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true })

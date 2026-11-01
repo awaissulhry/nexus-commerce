@@ -5,6 +5,8 @@ import { creditNoteHandlers } from '../../../modules/invoicing/credit-note/handl
 import { payablesHandlers } from '../../../modules/payables/sdi'
 // B-W2b-15: a done work order's reservations released by the system.
 import { releaseOnWorkOrderDoneHandler } from '../../../modules/inventory/reservations/system-release'
+// B-W2b-40: a clock-out pauses the person's running work.
+import { pauseAtClockOutHandler } from '../../../modules/production/terminal/clock-out'
 // B-W2b-37: attendance.clock_event → that person's attendance day computed again.
 import { attendanceHandlers } from '../../../modules/people/attendance/jobs'
 import { ladderHandlers } from '../../../modules/receivables/ladder'
@@ -35,6 +37,7 @@ const W2A_LISTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['W2A_61_HANDLERS', ['creditNoteHandlers']],
   ['W2A_62_HANDLERS', ['payablesHandlers']],
   ['W2B_15_HANDLERS', ['releaseOnWorkOrderDoneHandler']],
+  ['W2B_40_HANDLERS', ['pauseAtClockOutHandler']],
   ['W2B_37_HANDLERS', ['attendanceHandlers']],
 ]
 
@@ -45,7 +48,7 @@ export async function searchIndexers(): Promise<readonly SearchIndexer[]> {
 
 /** Every handler the worker runs: W1's HANDLERS, then the W2a lists, as background.ts hands them to startEventWorkers. */
 export function everyHandler(indexers: readonly SearchIndexer[]): readonly EventHandler[] {
-  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), ...attendanceHandlers()]
+  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers()]
 }
 
 /** background.ts starts exactly W1's HANDLERS and the W2a lists above: a list or factory a step adds fails the day until it runs here too. */

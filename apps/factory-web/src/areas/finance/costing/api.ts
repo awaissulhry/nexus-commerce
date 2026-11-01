@@ -21,7 +21,8 @@ export type CostingMethod = (typeof COSTING_METHODS)[number]
 export const ENTRY_EVENTS = ['ISSUE', 'RETURN', 'STOCK_SCRAP', 'LABOUR', 'SCAN_SCRAP', 'REWORK_SCRAP', 'COMPLETION', 'OVERHEAD', 'SUBCONTRACT', 'ADJUSTMENT', 'REVERSAL'] as const
 export type EntryEvent = (typeof ENTRY_EVENTS)[number]
 /** Why a source event has no entry yet. */
-export const WAITING_CODES = ['NOT_VALUED', 'NO_RATE', 'CURRENCY', 'LOCKED', 'NO_SCAN'] as const
+// B-W2b-53: SCRAP_APPROVAL (scrap above a site's limit waits for the team leader).
+export const WAITING_CODES = ['NOT_VALUED', 'NO_RATE', 'CURRENCY', 'LOCKED', 'NO_SCAN', 'SCRAP_APPROVAL'] as const
 export type WaitingCode = (typeof WAITING_CODES)[number]
 export const DOCUMENT_TYPES = ['StockMove', 'OperationScan', 'ReworkOrder', 'SubcontractOrder', 'SupplierInvoiceLine', 'WorkOrderCostEntry'] as const
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]

@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { AlarmClock, AlertOctagon, AlertTriangle, ArrowRight, AtSign, CalendarCheck, CalendarClock, CheckCircle2, ChevronRight, Circle, ExternalLink, Eye, ListTodo, MoreHorizontal, Sun, UserRound, X } from 'lucide-react'
-import { AsOf, Banner, Card, EmptyState, Menu, MetricStrip, PressableRow, type Metric } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Menu, MetricStrip, PressableRow, type Metric } from '@nexus/ui/components'
 import { Button, FilterChip, InfoTip, SegmentedControl, Skeleton, Tag } from '@nexus/ui/primitives'
+import { AsOf } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListKeysInfo } from '../../../../list-frame/ListKeysInfo'

@@ -68,6 +68,11 @@ export interface BulkRefusal {
   readonly field?: string | null
   /** The record's state code (`CLOSED`), for `held`. */
   readonly status?: string | null
+  /**
+   * B-W2b-51: what holds the row, as the record's own codes (a work order's release checks that block it: CERTIFICATE,
+   * MATERIAL, …), for `held`; the screen says each in its own words. Absent: the code and status say it all.
+   */
+  readonly reasons?: readonly string[] | null
 }
 
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/

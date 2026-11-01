@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import { SLOW_TEST_TIMEOUT_MS } from '../../testing/timeouts'
 
 // scripts/factory/check-integration-calls.mjs, proven on plants: each test copies the source folders the guard reads
 // into a temporary root, plants one file, and runs the guard on it.
@@ -37,7 +38,7 @@ const guard = (root?: string) => {
 
 const MODULE = 'apps/factory-api/src/modules/sales/quote-mail.ts'
 
-describe('check-integration-calls', () => {
+describe('check-integration-calls', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('passes on the repository and on an untouched copy', () => {
     expect(guard()).toMatchObject({ status: 0, output: expect.stringMatching(/^check-integration-calls: ok/) })
     expect(guard(tree()).status).toBe(0)

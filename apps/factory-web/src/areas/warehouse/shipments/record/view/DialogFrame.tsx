@@ -1,8 +1,9 @@
 'use client'
 
 import type { KeyboardEvent, ReactNode } from 'react'
-import { Banner, Modal } from '@nexus/ui/components'
+import { Banner } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
 

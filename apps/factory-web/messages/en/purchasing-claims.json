@@ -589,12 +589,7 @@
     "whyTitle": "Why and what is asked"
   },
   "save": {
-    "discard": "Discard",
-    "region": "Unsaved changes",
-    "save": "Save",
-    "shortcut": "⌘S saves",
-    "unsaved_one": "{count} change not saved",
-    "unsaved_other": "{count} changes not saved"
+    "save": "Save"
   },
   "send": {
     "body": "The supplier gets the claim on its thread; the answer comes back to the same thread.",

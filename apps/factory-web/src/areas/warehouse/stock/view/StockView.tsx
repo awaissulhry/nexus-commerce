@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { CalendarClock, Download, FileText, MoreHorizontal, PackageCheck, PauseCircle, Search, SlidersHorizontal, Upload, X } from 'lucide-react'
-import { Banner, DateField, EmptyState, Field, Menu, MetricStrip, Modal } from '@nexus/ui/components'
+import { Banner, EmptyState, Field, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select } from '@nexus/ui/primitives'
+import { DateField, Modal } from '../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../lib/i18n/format'
@@ -43,8 +44,6 @@ import {
   type StockTile,
   type StockViewKey,
 } from '../model'
-import { usePhoneList } from '../use-phone'
-import { StockCards } from './StockCards'
 import '../../../_shared/stock/stock.css'
 import '../stock-pages.css'
 
@@ -85,8 +84,6 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
   const { address, can } = model
   const daily = useMemo(() => model.daily ?? dailyCan([]), [model.daily])
   const pastDate = !!address.asOf
-  const phoneWidth = usePhoneList()
-  const phone = model.phone === true || phoneWidth
   const [query, setQuery] = useState(address.q)
   useEffect(() => setQuery(address.q), [address.q])
   const typed = useRef(false)
@@ -494,37 +491,24 @@ function Stock({ model, actions, adjustActions, holdActions }: { model: StockPag
         />
       )}
 
-      {phone ? (
-        <StockCards
-          lines={state ? [] : lines}
-          state={state}
-          count={lines ? t('st.count', { count: lines.length }) : '—'}
-          search={search}
-          tools={tools}
-          selected={selected}
-          onSelected={setSelected}
-          bulk={bulk}
-          hrefOf={(line) => (line.hide ? hideHref(line.hide.id) : line.lot ? lotHref(line.lot.id) : null)}
-          selectMode={model.phoneSelect}
-        />
-      ) : (
-        <ListFrame<StockLine>
-          label={t('st.tableLabel')}
-          rows={state ? [] : lines}
-          rowId={(line) => line.id}
-          columns={columns}
-          count={lines ? t('st.count', { count: lines.length }) : '—'}
-          search={search}
-          tools={tools}
-          selection={{ selected, onChange: setSelected, actions: bulk }}
-          updates={model.updates > 0 && !pastDate ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
-          keys={ownKeys}
-          onHelp={() => setHelp(true)}
-          onOpen={(line) => (line.hide ? actions?.onOpenRecord?.('Hide', line.hide.id) : line.lot ? actions?.onOpenRecord?.('Lot', line.lot.id) : undefined)}
-          state={state}
-          focusRow={model.focusRow}
-        />
-      )}
+      <ListFrame<StockLine>
+        label={t('st.tableLabel')}
+        rows={state ? [] : lines}
+        rowId={(line) => line.id}
+        columns={columns}
+        count={lines ? t('st.count', { count: lines.length }) : '—'}
+        search={search}
+        tools={tools}
+        selection={{ selected, onChange: setSelected, actions: bulk }}
+        updates={model.updates > 0 && !pastDate ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
+        keys={ownKeys}
+        onHelp={() => setHelp(true)}
+        onOpen={(line) => (line.hide ? actions?.onOpenRecord?.('Hide', line.hide.id) : line.lot ? actions?.onOpenRecord?.('Lot', line.lot.id) : undefined)}
+        state={state}
+        focusRow={model.focusRow}
+        // Below 720 px the same rows as cards (B-W2b-18: the list frame's DS GridCardList, replacing the composed StockCards).
+        cards={{ hrefOf: (line) => (line.hide ? hideHref(line.hide.id) : line.lot ? lotHref(line.lot.id) : null) }}
+      />
       {lines && lines.length > 0 && (
         <p className="fw-stk-totals">
           {t('st.totals', { totals: filterTotals })}

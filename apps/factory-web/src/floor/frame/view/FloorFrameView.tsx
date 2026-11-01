@@ -2,8 +2,8 @@
 
 import type { ReactNode } from 'react'
 import { House, Languages, LogOut, ScanLine, X } from 'lucide-react'
-import { Modal } from '@nexus/ui/components'
 import { FloorButton, FloorFrame, FloorHeader, FloorHelpButton, IdleOverlay, OfflineBanner, OperatorChip } from '@nexus/ui/floor'
+import { Modal } from '../../../lib/i18n/ds-parts'
 import { LOCALES, LOCALE_NAMES, type Locale } from '../../../lib/i18n/locales'
 import { formatTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'

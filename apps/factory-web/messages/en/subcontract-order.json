@@ -416,9 +416,6 @@
     "lines": "Its kit lines stay sent: take back the ones that never left from the Kit tab.",
     "replace": "Goods that travel still need a new DDT: send the kit again with one.",
     "reason": "Why",
-    "type": "Type {number} to confirm",
-    "typeHint": "Capital letters and spaces count.",
-    "typeWrong": "Does not match the DDT number.",
     "held": {
       "reason": "Say why (at least 3 characters).",
       "phrase": "Type the DDT number to confirm."

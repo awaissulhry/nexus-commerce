@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from 'react'
 import { CheckCircle2, PackageCheck, PauseCircle, Printer, Scissors, Unlock, XCircle } from 'lucide-react'
-import { Banner, EmptyState, Field, Modal, SummaryTable } from '@nexus/ui/components'
+import { Banner, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { StepUpModal } from '@nexus/ui/patterns'
-import { Button, Checkbox, Input, RadioCard, Select, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, RadioCard, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { Modal, StepUpModal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { wordsIn } from '../../../../_shared/reasons/model'

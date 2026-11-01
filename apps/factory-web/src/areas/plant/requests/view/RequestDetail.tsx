@@ -2,10 +2,11 @@
 
 import { useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Check, ChevronDown, ChevronUp, ExternalLink, GitMerge, ShieldCheck, Wrench, X } from 'lucide-react'
-import { Banner, Card, KeyValue, Timeline, type TimelineStep } from '@nexus/ui/components'
-import { DetailModal, Lightbox } from '@nexus/ui/patterns'
+import { AlertTriangle, Check, ExternalLink, GitMerge, ShieldCheck, Wrench, X } from 'lucide-react'
+import { Banner, Card, KeyValue, type TimelineStep } from '@nexus/ui/components'
+import { Lightbox } from '@nexus/ui/patterns'
 import { Button, Kbd, Tag } from '@nexus/ui/primitives'
+import { DetailModal, Timeline } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
 import type { MaintenanceRequest, RequestRecord } from '../../_shared/api'
@@ -19,8 +20,8 @@ import type { RequestsListActions, RequestsListModel } from '../view-model'
  * status, the open job, the last five jobs, the "third failure in 30 days" hint), who reported it and when, the other open
  * requests of the machine (merge into one), and the trail of what happened. Decisions by keys: A acknowledge, M make a job,
  * D merge into the first duplicate, C close without a job, S sign the machine safe (a technician, a fresh code); J / K the
- * previous and next request of the queue. Each held with its reason in words. A worker is named only here, and only where
- * the site records workers (the API decides; Owner answer W1).
+ * previous and next request of the queue (the DS DetailModal's own Prev / Next). Each held with its reason in words. A
+ * worker is named only here, and only where the site records workers (the API decides; Owner answer W1).
  */
 export function RequestDetail({ model, actions }: { model: RequestsListModel; actions?: RequestsListActions }) {
   const t = useWords()
@@ -31,9 +32,6 @@ export function RequestDetail({ model, actions }: { model: RequestsListModel; ac
   const record = loaded.status === 'ready' ? loaded.value : null
   const request = record?.request ?? null
   const ids = (model.rows.items ?? []).map((row) => row.id)
-  const index = ids.indexOf(detail.id)
-  const prev = index > 0 ? ids[index - 1]! : null
-  const next = index >= 0 && index < ids.length - 1 ? ids[index + 1]! : null
 
   const open = request ? request.status === 'NEW' || request.status === 'ACKNOWLEDGED' : false
   const triage = record?.canTriage ?? false
@@ -44,8 +42,8 @@ export function RequestDetail({ model, actions }: { model: RequestsListModel; ac
   const signHeld = !(record?.canSignSafe ?? false) ? t('held.noSignSafe') : busyHeld
   const firstDuplicate = record?.duplicates[0] ?? null
 
-  const latest = useRef({ actions, prev, next, ackHeld, jobHeld, closeHeld, signHeld, request, firstDuplicate })
-  latest.current = { actions, prev, next, ackHeld, jobHeld, closeHeld, signHeld, request, firstDuplicate }
+  const latest = useRef({ actions, ackHeld, jobHeld, closeHeld, signHeld, request, firstDuplicate })
+  latest.current = { actions, ackHeld, jobHeld, closeHeld, signHeld, request, firstDuplicate }
   const quiet = model.dialog !== null || model.stepUp.open || detail.lightbox !== null
   useEffect(() => {
     if (quiet) return
@@ -59,9 +57,7 @@ export function RequestDetail({ model, actions }: { model: RequestsListModel; ac
         event.preventDefault()
         run()
       }
-      if (key === 'j' && now.next) act(() => now.actions?.onOpen?.(now.next))
-      else if (key === 'k' && now.prev) act(() => now.actions?.onOpen?.(now.prev))
-      else if (key === 'a' && !now.ackHeld) act(() => now.actions?.onAcknowledge?.())
+      if (key === 'a' && !now.ackHeld) act(() => now.actions?.onAcknowledge?.())
       else if (key === 'm' && !now.jobHeld) act(() => now.actions?.onMakeJob?.())
       else if (key === 'c' && !now.closeHeld) act(() => now.actions?.onClose?.())
       else if (key === 'd' && !now.jobHeld && now.firstDuplicate && !now.request?.locking) act(() => now.actions?.onMerge?.(now.firstDuplicate!))
@@ -93,16 +89,10 @@ export function RequestDetail({ model, actions }: { model: RequestsListModel; ac
         loading={loaded.status === 'loading'}
         error={loaded.status === 'error' ? t(loaded.problem) : loaded.status === 'notFound' ? t('detail.notFound') : loaded.status === 'forbidden' ? t('problem.forbidden') : undefined}
         onRetry={() => actions?.onRetryDetail?.()}
+        // J / K and the held ends are the DS DetailModal's (B-W2b-18; the queue's order as shown).
+        nav={ids.includes(detail.id) ? { ids, current: detail.id, onGo: (id) => actions?.onOpen?.(id), noun: t('detail.noun') } : undefined}
         actions={
           <>
-            <span className="fw-pl-row">
-              <Button size="sm" variant="quiet" aria-label={t('detail.prev')} heldReason={prev ? null : t('detail.firstOne')} onClick={() => prev && actions?.onOpen?.(prev)} aria-keyshortcuts="k">
-                <ChevronUp size={16} aria-hidden /> <Kbd>K</Kbd>
-              </Button>
-              <Button size="sm" variant="quiet" aria-label={t('detail.next')} heldReason={next ? null : t('detail.lastOne')} onClick={() => next && actions?.onOpen?.(next)} aria-keyshortcuts="j">
-                <ChevronDown size={16} aria-hidden /> <Kbd>J</Kbd>
-              </Button>
-            </span>
             {request && (
               <>
                 {request.locking && model.can.signSafe && (

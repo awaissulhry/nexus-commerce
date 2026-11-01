@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import { CheckCircle2, Copy } from 'lucide-react'
-import { Banner, Card, Disclosure, Field, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, Disclosure, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { SignBlock } from '@nexus/ui/components/SignBlock/index'
-import { Button, Input, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime, formatNumber } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { pdfViewerLabels } from '../../../lib/pdf/labels'

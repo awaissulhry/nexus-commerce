@@ -49,7 +49,7 @@ import { events as payables } from '../payables/events'
 // B-W2b-26: people (employees, teams, loans, areas, leaver steps).
 // B-W2b-27: people (privacy of people data: the legal gate per site and purpose, the privacy settings).
 import { events as people } from '../people/events'
-// B-W2b-35: the line's signals (help calls and their types).
+// B-W2b-35: the line's signals (help calls and their types); B-W2b-50: a line's hourly targets and a short hour's reason.
 import { events as andon } from '../andon/events'
 // B-W2b-45: labour records and corrections (line days closed and reopened, disputes).
 import { events as labour } from '../labour/events'

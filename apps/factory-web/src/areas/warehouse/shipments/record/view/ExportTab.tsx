@@ -2,8 +2,9 @@
 
 import { Download, FilePlus2, Globe2, MoreHorizontal, ShieldCheck } from 'lucide-react'
 import { isEuCountry } from '@nexus/factory-domain/shipping/evidence/evidence'
-import { Card, EmptyState, FileRow, KeyValue, Menu } from '@nexus/ui/components'
+import { Card, EmptyState, KeyValue, Menu } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
+import { FileRow } from '../../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { EvidenceStatus, Shipment } from '../../api'

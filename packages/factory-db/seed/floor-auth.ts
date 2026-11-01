@@ -1,3 +1,4 @@
+import { hashPin, pinKeyring } from '@nexus/factory-domain/auth/floor/pin'
 import { ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
 import { BadgeStatus, DeviceKind, DeviceStatus, FloorSessionEndReason, RoleAudience, WorkerStatus } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
@@ -8,11 +9,22 @@ import { seedUuid, type SeedContext } from '../src/seeding'
  * team leader), and one ended floor session. The floor system roles of factory-domain's templates are written here too
  * (the roles seed runs later, by name, and keeps them), so the workers' roles exist.
  *
- * Nothing seeded can open anything: no worker has a PIN, and every token, code and badge hash is a marker that nothing
- * hashes to (a real one is 64 hex characters); the enrolment code is used and expired, the session ended. A local
- * device is enrolled through the API. Runs after seed/_core.ts and seed/auth.ts; writes in the tenant's office scope,
- * and the session in the plant's floor scope.
+ * Nothing seeded opens anything by itself: every token, code and badge hash is a marker that nothing hashes to (a real
+ * one is 64 hex characters); the enrolment code is used and expired, the session ended. A local device is enrolled
+ * through the API. B-W2b-30: each seed worker has a PIN (SEED_WORKER_PIN), hashed with the LOCAL pepper only (the API's
+ * env.ts LOCAL_PIN_PEPPER, which staging and production refuse; the seed command runs only on a loopback test or worktree
+ * database), so on a local stack a worker signs in by name on an enrolled tablet, and a badge-only site's sign-in finds
+ * the PIN it asks for (sign-in.ts: pinHash not null). Written when the worker is made, never over a PIN changed since;
+ * with a cheap scrypt that the first sign-in re-hashes. Runs after seed/_core.ts and seed/auth.ts; writes in the
+ * tenant's office scope, and the session in the plant's floor scope.
  */
+
+/** The made-up PIN of every seed worker (local stacks only: see above). */
+export const SEED_WORKER_PIN = '418273'
+/** = apps/factory-api env.ts LOCAL_PIN_PEPPER (public on purpose; the seed cannot import the API, a test there compares). */
+export const SEED_PIN_PEPPER = 'factory-local-pin-pepper-not-for-staging-or-production'
+/** The seed workers' PIN hash: the local pepper, a cheap scrypt (the first sign-in stores one with the full settings). */
+export const seedWorkerPinHash = (): Promise<string> => hashPin(SEED_WORKER_PIN, pinKeyring(SEED_PIN_PEPPER), { logN: 12, r: 8, p: 1 })
 
 export interface FloorAuthSeed {
   readonly deviceIds: readonly string[]
@@ -34,6 +46,7 @@ export async function seed({ db, namespace }: SeedContext): Promise<FloorAuthSee
   const floorTemplates = ROLE_TEMPLATES.filter((template) => template.audience === 'floor')
   const deviceIds: string[] = []
   const workerIds: string[] = []
+  const pinHash = await seedWorkerPinHash()
 
   await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
     client.$transaction(async (tx) => {
@@ -97,6 +110,8 @@ export async function seed({ db, namespace }: SeedContext): Promise<FloorAuthSee
             status: WorkerStatus.ACTIVE,
           }
           await tx.worker.upsert({ where: { id: workerId }, create: { id: workerId, ...worker, createdAt: SEEDED_AT, createdById: actorId }, update: worker })
+          // B-W2b-30: the seed PIN, only on a worker without one (a PIN changed since, by the worker or a reset, stays).
+          await tx.worker.updateMany({ where: { id: workerId, pinHash: null }, data: { pinHash, pinChangedAt: SEEDED_AT } })
 
           const badgeId = id(`badge:${plant.code}:${entry.key}`)
           const badge = { ...at, workerId, codeHash: notAToken(`badge:${plant.code}:${entry.key}`), hint: 'SEED', status: BadgeStatus.ACTIVE, issuedAt: SEEDED_AT, issuedById: actorId }

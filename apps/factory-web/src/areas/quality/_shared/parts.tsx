@@ -2,10 +2,12 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { CircleAlert, CircleCheck, CircleDashed, CircleMinus, MessageSquare } from 'lucide-react'
+import { MessageSquare } from 'lucide-react'
 import { Banner, Card, EmptyState, Tabs, type TabItem } from '@nexus/ui/components'
-import { DetailHeader, StepUpModal } from '@nexus/ui/patterns'
+import { DetailHeader } from '@nexus/ui/patterns'
 import { Button, Kbd, Skeleton, Spinner } from '@nexus/ui/primitives'
+import { CheckList as DsCheckList, type CheckItem } from '@nexus/ui/patterns/checklist/index'
+import { StepUpModal, useDsWords } from '../../../lib/i18n/ds-parts'
 import { formatTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
@@ -17,7 +19,7 @@ import './quality.css'
  * The parts every quality screen of this step draws (Inspections, the inspection record, the evidence trail, Tests &
  * substances, the PPE register), from design-system parts only; nothing here fetches. Where the design names a DS part
  * that does not exist yet it is composed here and named in the step notes: the page band (`usePageBand`: a head row
- * here), LiveUpdates (a Button), GateExplainer (the check list below), SignOffPanel, TraceTree, EvidenceChain.
+ * here), LiveUpdates (a Button), SignOffPanel, EvidenceChain. GateExplainer is the DS CheckList (B-W2b-18).
  */
 
 /** The screen's catalogues plus the shared `quality` words, the list frame's (`lists`) and the record panels' (`records`). */
@@ -293,15 +295,15 @@ export function RecordSkeleton() {
   )
 }
 
-/** A check's state (a gate, a release checklist, a duty): done, open, not needed, or unknown. */
-export type CheckState = 'OK' | 'OPEN' | 'NOT_NEEDED' | 'UNKNOWN'
+/** A check's state (a gate, a release checklist, a duty): done, open, not needed, unknown, or a note to watch. */
+export type CheckState = 'OK' | 'OPEN' | 'NOT_NEEDED' | 'UNKNOWN' | 'WARNING'
 
 export interface CheckLine {
   id: string
   state: CheckState
   /** What the check says (the API's sentence for a gate; our words for a duty). */
   text: ReactNode
-  /** How to clear it, when it is open. */
+  /** How to clear it, when it does not pass. */
   fix?: ReactNode | null
   /** A short name of the check ("Certificate", "Labels"), read before the sentence. */
   name?: ReactNode
@@ -309,39 +311,36 @@ export interface CheckLine {
   word?: string
 }
 
-const CHECK_ICON: Record<CheckState, ReactNode> = {
-  OK: <CircleCheck size={16} aria-hidden />,
-  OPEN: <CircleAlert size={16} aria-hidden />,
-  NOT_NEEDED: <CircleMinus size={16} aria-hidden />,
-  UNKNOWN: <CircleDashed size={16} aria-hidden />,
-}
+/** The quality states as the DS CheckList's. */
+const DS_STATE: Record<CheckState, CheckItem['state']> = { OK: 'pass', OPEN: 'fail', NOT_NEEDED: 'skipped', UNKNOWN: 'unknown', WARNING: 'warning' }
 
 /**
- * The gate in words (design GateExplainer, a DS part not built yet: composed here): each check as a line with its mark
- * AND a word (✓ Done / ! Open / – Not needed / ? Unknown — never colour alone), its sentence and, when open, how to fix it.
+ * The gate in words (design GateExplainer = the DS CheckList, B-W2b-18): each check as a line with its icon AND a word
+ * (Done / Open / Not needed / Unknown / Warning — never colour alone), its name, its sentence and, when it does not
+ * pass, how to fix it. A state said in another word for this list (`word`, "Not yet") replaces the DS word for that
+ * state when every check in it says the same. The screen's own verdict stays its own: no summary line by default.
  */
-export function CheckList({ checks, label }: { checks: readonly CheckLine[]; label: string }) {
+export function CheckList({ checks, label, summary = false }: { checks: readonly CheckLine[]; label: string; summary?: boolean }) {
   const t = useT('quality')
-  return (
-    <ul className="fw-q-checks" aria-label={label}>
-      {checks.map((check) => (
-        <li key={check.id} className="fw-q-check" data-state={check.state}>
-          <span className="fw-q-check-mark">
-            {CHECK_ICON[check.state]}
-            <span className="fw-q-check-word">{t(check.word ?? `check.${check.state}`)}</span>
-          </span>
-          <span className="fw-q-check-text">
-            {check.name && <span className="fw-q-check-name">{check.name}</span>}
-            <span>{check.text}</span>
-            {check.state === 'OPEN' && check.fix && <span className="fw-q-hint">{check.fix}</span>}
-          </span>
-        </li>
-      ))}
-    </ul>
-  )
+  const ds = useDsWords()
+  const states = { ...ds.checkList.states }
+  for (const state of Object.keys(DS_STATE) as CheckState[]) {
+    const words = new Set(checks.filter((check) => check.state === state).map((check) => check.word ?? null))
+    const [word] = words
+    if (words.size === 1 && word) states[DS_STATE[state]] = t(word)
+  }
+  const items: CheckItem[] = checks.map((check) => ({
+    id: check.id,
+    state: DS_STATE[check.state],
+    // The DS draws the name as given: a sentence of ours may carry its own marks (a node), as before.
+    name: (check.name ?? check.text) as string,
+    ...(check.name ? { detail: check.text } : {}),
+    ...(check.fix ? { fix: check.fix } : {}),
+  }))
+  return <DsCheckList label={label} checks={items} summary={summary} labels={{ ...ds.checkList, states }} />
 }
 
-/** The DS step-up dialog in this screen's words (what the code allows; the refusal of a code). */
+/** The DS StepUpModal with this screen's words (what the code allows; the refusal of a code); the DS words come from ds-parts. */
 export function StepUpDialog({ state, onSubmit, onCancel, confirmLabel }: { state: StepUpState; onSubmit: (code: string) => void; onCancel: () => void; confirmLabel?: string }) {
   const t = useT('quality')
   return (

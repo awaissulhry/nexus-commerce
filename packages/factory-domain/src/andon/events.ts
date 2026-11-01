@@ -20,11 +20,17 @@ import { CALL_ACTORS, CALL_KINDS, CALL_STATUSES, CALL_STEPS, OUTCOME_TYPES } fro
  * Every one reaches the office's Help calls (production.calls.view) and the floor devices of the call's site (floor.work:
  * the station's own call, the team leader's line view, the line TV). Ids, codes and states only: never a person (the
  * caller or who answered), never a typed word, never a response time (a call's time is read from the call).
+ *
+ * B-W2b-50 (MES-084, MES-161; modules/production/boards) adds a line's hourly targets (LineTarget, the same schema file):
+ *   line_targets.changed       the office set, changed or removed hours of a line's day
+ *   line_target.reason_given   the reason for a short hour was given (the team leader on the floor, or the office)
  */
 
 const kind = z.enum(CALL_KINDS)
 const by = z.enum(['OFFICE', 'FLOOR'])
 const callLive = { permission: 'production.calls.view', floor: 'floor.work' } as const
+/** B-W2b-50: the boards' events reach Floor now and the team leader's line view. */
+const boardsLive = { permission: 'production.boards.view', floor: 'production.boards.view' } as const
 
 export const events = [
   defineEvent({
@@ -87,5 +93,34 @@ export const events = [
       fields: z.array(z.string()),
     }),
     live: { ...callLive, fields: ['typeId', 'code', 'change'] },
+  }),
+  // ---- B-W2b-50: a line's hourly targets and the reason of a short hour (LineTarget, andon.prisma) -------------------------
+  // The office's Floor now (production.boards.view) and the team leader's line view (the floor shares the permission) read
+  // the hour by hour again. Ids, hours and codes only: never a person, never the typed words of a reason.
+  defineEvent({
+    type: 'line_targets.changed',
+    context: 'andon',
+    description: "A line's hourly targets of a day were set, changed or removed by the office (the hours that changed).",
+    payload: z.strictObject({
+      lineId: z.uuid(),
+      workDate: z.iso.date(),
+      set: z.array(z.number().int().min(0).max(23)),
+      removed: z.array(z.number().int().min(0).max(23)),
+    }),
+    live: { ...boardsLive, fields: ['lineId', 'workDate', 'set', 'removed'] },
+  }),
+  defineEvent({
+    type: 'line_target.reason_given',
+    context: 'andon',
+    description: "The reason for a line's short hour was given (a code of the downtime reason list), by the team leader on the floor or by the office.",
+    payload: z.strictObject({
+      targetId: z.uuid(),
+      lineId: z.uuid(),
+      workDate: z.iso.date(),
+      hour: z.number().int().min(0).max(23),
+      reasonCode: z.string(),
+      by,
+    }),
+    live: { ...boardsLive, fields: ['targetId', 'lineId', 'workDate', 'hour', 'reasonCode'] },
   }),
 ] as const

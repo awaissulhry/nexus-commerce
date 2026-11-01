@@ -2,8 +2,9 @@
 
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { CheckCircle2 } from 'lucide-react'
-import { Banner, DateField, Field, KeyValue, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Input, RadioCard, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field, KeyValue } from '@nexus/ui/components'
+import { Button, Checkbox, Input, RadioCard, Spinner } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'

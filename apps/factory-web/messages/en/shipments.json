@@ -690,14 +690,11 @@
     "shipped": "The goods left: issue the replacement DDT right after.",
     "invoice": "An invoiced DDT cannot be annulled: a credit note corrects the invoice.",
     "reason": "Reason",
-    "type": "Type {number} to annul it",
     "go": "Annul DDT",
     "held": {
       "reason": "Say why (3 characters or more)",
       "phrase": "Type the DDT number exactly"
-    },
-    "typeHint": "Exactly as printed: digits and the slash.",
-    "typeWrong": "Not the DDT's number yet"
+    }
   },
   "buy": {
     "title": "Buy labels",

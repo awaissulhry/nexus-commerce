@@ -2,8 +2,8 @@
 
 import type { ReactNode } from 'react'
 import { ArrowLeft, BadgeCheck, CircleAlert, CircleHelp, IdCard, Info, KeyRound, Users, X } from 'lucide-react'
-import { Modal } from '@nexus/ui/components'
 import { FloorButton, FloorTile, FloorTileGrid, PinPad, ScanInput, operatorInitials } from '@nexus/ui/floor'
+import { Modal } from '../../../lib/i18n/ds-parts'
 import { useT } from '../../../lib/i18n/provider'
 import { rosterLetters } from '../../model'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../frame/view/FloorFrameView'

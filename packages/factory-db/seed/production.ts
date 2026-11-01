@@ -86,6 +86,10 @@ const T = {
   rescanned: new Date('2026-11-17T09:30:00.000Z'),
   asked: new Date('2026-11-17T10:00:00.000Z'),
   refused: new Date('2026-11-17T10:30:00.000Z'),
+  // B-W2b-30: the cut's own server and device time is in the past (the rest of this story is in November): the cutting
+  // tablet's undo and a hide's closing cut take the newest entry by serverTime, and "last cut" shows it, so a cut a
+  // local run makes today must sort after the seed's. The work order's start stays `cut` above.
+  cutLogged: new Date('2026-10-30T09:00:00.000Z'),
 } as const
 const DAY = { orderDate: new Date('2026-11-12T00:00:00.000Z'), due: new Date('2026-12-04T00:00:00.000Z') } as const
 
@@ -528,16 +532,16 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
           note: 'Sleeves first; the rest of the hide stays at the table.',
           ...onDevice,
           clientEventId: 'seed-cut-H1-1',
-          deviceTime: T.cut,
-          serverTime: T.cut,
+          deviceTime: T.cutLogged,
+          serverTime: T.cutLogged,
           createdById: operatorId,
         },
         select: { id: true },
       })
       await tx.cutLogPiece.createMany({
         data: [
-          { id: id('production:cut:H1:1:BLK-50'), siteId: siteA, workOrderId, cutLogId, workOrderSizeId: cellIds['BLK-50'], part: 'sleeve', pieces: 2, serverTime: T.cut, createdById: operatorId },
-          { id: id('production:cut:H1:1:BLK-52'), siteId: siteA, workOrderId, cutLogId, workOrderSizeId: cellIds['BLK-52'], part: 'sleeve', pieces: 4, serverTime: T.cut, createdById: operatorId },
+          { id: id('production:cut:H1:1:BLK-50'), siteId: siteA, workOrderId, cutLogId, workOrderSizeId: cellIds['BLK-50'], part: 'sleeve', pieces: 2, serverTime: T.cutLogged, createdById: operatorId },
+          { id: id('production:cut:H1:1:BLK-52'), siteId: siteA, workOrderId, cutLogId, workOrderSizeId: cellIds['BLK-52'], part: 'sleeve', pieces: 4, serverTime: T.cutLogged, createdById: operatorId },
         ],
       })
       await tx.hide.update({ where: { id: hide1 }, data: { state: HideState.PARTLY_CUT, updatedAt: T.cut }, select: { id: true } })

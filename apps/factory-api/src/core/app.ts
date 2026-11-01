@@ -41,6 +41,8 @@ export interface AppConfig {
   /** Signs cookies (@fastify/cookie). */
   readonly cookieSecret: string
   readonly rateLimit?: { readonly max: number; readonly timeWindowMs: number }
+  /** FACTORY_QUEUE_PREFIX: the rate-limit counters sit under it (rateLimitNamespace). Default `factory`. */
+  readonly queuePrefix?: string
 }
 
 /** The app settings from the loaded env. */
@@ -50,7 +52,18 @@ export function appConfig(env: FactoryEnv): AppConfig {
     webOrigin: env.FACTORY_WEB_ORIGIN,
     trustProxyHops: env.FACTORY_TRUST_PROXY_HOPS,
     cookieSecret: env.FACTORY_COOKIE_SECRET,
+    queuePrefix: env.FACTORY_QUEUE_PREFIX,
   }
+}
+
+/**
+ * The Redis key prefix of the rate-limit counters: the queue prefix, then the environment. Every worktree's API on the
+ * one local Redis has its own FACTORY_QUEUE_PREFIX, so parallel APIs on this machine never share a client's count (they
+ * all met `factory:local:rate-limit:127.0.0.1` before). On Railway the prefix is `factory` (env.ts), so the key there
+ * stays `factory:<environment>:rate-limit:`.
+ */
+export function rateLimitNamespace(config: Pick<AppConfig, 'environment' | 'queuePrefix'>): string {
+  return `${config.queuePrefix ?? 'factory'}:${config.environment}:rate-limit:`
 }
 
 export interface AppDependencies {
@@ -151,7 +164,7 @@ export async function buildApp(config: AppConfig, dependencies: AppDependencies 
     rateLimit: {
       ...(config.rateLimit ?? DEFAULT_RATE_LIMIT),
       redis,
-      namespace: `factory:${config.environment}:rate-limit:`,
+      namespace: rateLimitNamespace(config),
     },
   })
   await app.register(cookie, { secret: config.cookieSecret })

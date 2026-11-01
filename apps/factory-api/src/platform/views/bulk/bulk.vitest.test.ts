@@ -35,13 +35,22 @@ describe('the registry', () => {
     expect([...processBulkTargets().keys()]).toEqual(BULK_TARGETS.map((target) => target.listKey))
     const workOrders = bulkTargetOf('production.work-orders')!
     expect(workOrders.permission).toBe('workorders.manage')
-    expect(Object.keys(workOrders.fields)).toEqual(['due', 'priority'])
+    // B-W2b-51: the rush flag beside them (RUSH | NORMAL).
+    expect(Object.keys(workOrders.fields)).toEqual(['due', 'priority', 'rush'])
+    expect(workOrders.fields.rush).toMatchObject({ kind: 'choice', choices: ['RUSH', 'NORMAL'] })
     expect(workOrders.fields.due).toMatchObject({ kind: 'date', nullable: true })
     expect(workOrders.fields.priority).toMatchObject({ kind: 'integer', min: -1000, max: 1000 })
     expect(workOrders.fields.due!.held!({ status: 'CLOSED' })).toEqual({ code: 'held', status: 'CLOSED' })
     expect(workOrders.fields.priority!.held!({ status: 'CANCELLED' })).toEqual({ code: 'held', status: 'CANCELLED' })
     expect(workOrders.fields.due!.held!({ status: 'ON_HOLD' })).toBeNull()
     expect(bulkTargetOf('sales.orders')).toBeUndefined()
+    // B-W2b-51: "Release N work orders" (workorders.release, status → RELEASED, at most 50 rows).
+    const release = bulkTargetOf('production.work-orders.release')!
+    expect(release).toMatchObject({ permission: 'workorders.release', maxRows: 50 })
+    expect(release.fields.status).toMatchObject({ kind: 'choice', choices: ['RELEASED'] })
+    expect(release.fields.status!.held!({ status: 'DRAFT', blocking: ['CERTIFICATE'] })).toEqual({ code: 'held', field: 'status', status: 'DRAFT', reasons: ['CERTIFICATE'] })
+    expect(release.fields.status!.held!({ status: 'DRAFT', blocking: [] })).toBeNull()
+    expect(release.fields.status!.read({ status: 'IN_PROGRESS', blocking: [] })).toBe('RELEASED')
   })
 
   it('tests set their own targets; two of one list are refused', () => {

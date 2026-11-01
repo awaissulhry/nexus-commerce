@@ -2,9 +2,10 @@
 
 import { useEffect } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ChevronUp, FilePlus2 } from 'lucide-react'
-import { Banner, Modal, SummaryTable } from '@nexus/ui/components'
-import { Button, Kbd, Spinner, Tag } from '@nexus/ui/primitives'
+import { FilePlus2 } from 'lucide-react'
+import { Banner, SummaryTable } from '@nexus/ui/components'
+import { Button, Spinner, Tag } from '@nexus/ui/primitives'
+import { DetailModal } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { dayAt, decimalValue, quantity } from '../../../_shared/buying/model'
@@ -16,7 +17,8 @@ import '../mrp.css'
  * "Why this number — <material>" (design planning.mrp why-drawer, shown as a centred detail: the Owner's rule for
  * details): the netting as sentences from the numbers, the ladder (need → − usable → − on order → = short → rounding →
  * = buy), what each order and size needs, today's stock with the reason a lot is not counted, the open purchase lines
- * (one arriving after the need is not counted), and the dates. ⌘↑ / ⌘↓ walk the lines, b drafts the PO, Esc closes.
+ * (one arriving after the need is not counted), and the dates. The DS DetailModal (B-W2b-18): its Prev / Next (J / K)
+ * walk the lines, b drafts the PO, Esc closes.
  * Every word is this app's (the API's English sentence is never drawn).
  */
 export function WhyModal({ model, actions, order }: { model: PlanModel; actions?: PlanActions; order: readonly string[] }) {
@@ -27,20 +29,11 @@ export function WhyModal({ model, actions, order }: { model: PlanModel; actions?
   const explain = why.explain.status === 'ready' ? why.explain.value : null
   const planLine = model.plan.status === 'ready' ? (model.plan.value.lines.find((line) => line.id === why.lineId) ?? null) : null
   const line: PlanLine | null = explain?.line ?? planLine
-  const at = order.indexOf(why.lineId)
-  const previous = at > 0 ? order[at - 1] : null
-  const next = at >= 0 && at < order.length - 1 ? order[at + 1] : null
   const held = line ? draftHeld(line, model.can) : null
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 'ArrowUp' && previous) {
-        event.preventDefault()
-        actions?.onWhy?.(previous)
-      } else if ((event.metaKey || event.ctrlKey) && event.key === 'ArrowDown' && next) {
-        event.preventDefault()
-        actions?.onWhy?.(next)
-      } else if (event.key === 'b' && !event.metaKey && !event.ctrlKey && line && !held) {
+      if (event.key === 'b' && !event.metaKey && !event.ctrlKey && line && !held) {
         const target = event.target as HTMLElement | null
         if (target?.closest('input, textarea, select')) return
         event.preventDefault()
@@ -55,30 +48,15 @@ export function WhyModal({ model, actions, order }: { model: PlanModel; actions?
   const q = (value: string | null | undefined) => quantity(value, locale)
 
   return (
-    <Modal
+    <DetailModal
       open
       onClose={() => actions?.onWhy?.(null)}
-      size="detail"
       title={line ? t('why.title', { material: `${line.item.code} ${line.item.name}${line.colour ? ` · ${line.colour.name}` : ''}` }) : t('why.titleLoading')}
       subtitle={line ? t('why.subtitle', { action: t(`plan.action.${line.action}`), supplier: line.supplier?.name ?? t('plan.noSupplier') }) : undefined}
-      headerActions={
-        <span className="fw-by-inline">
-          <Button size="sm" variant="quiet" heldReason={previous ? null : t('why.first')} onClick={() => previous && actions?.onWhy?.(previous)} aria-keyshortcuts="Meta+ArrowUp" aria-label={t('why.previous')}>
-            <ChevronUp size={14} aria-hidden />
-          </Button>
-          <span className="fw-by-hint">{at >= 0 ? t('why.position', { at: at + 1, count: order.length }) : null}</span>
-          <Button size="sm" variant="quiet" heldReason={next ? null : t('why.last')} onClick={() => next && actions?.onWhy?.(next)} aria-keyshortcuts="Meta+ArrowDown" aria-label={t('why.next')}>
-            <ChevronDown size={14} aria-hidden />
-          </Button>
-        </span>
-      }
+      // Prev / Next with "3 of 12", J / K and the held ends: the DS DetailModal's (B-W2b-18), over the plan's lines as shown.
+      nav={order.includes(why.lineId) ? { ids: order, current: why.lineId, onGo: (id) => actions?.onWhy?.(id), noun: t('why.noun') } : undefined}
       footer={
         <>
-          <span className="fw-by-hint">
-            <Kbd>⌘</Kbd>
-            <Kbd>↑</Kbd> <Kbd>⌘</Kbd>
-            <Kbd>↓</Kbd> {t('why.walk')}
-          </span>
           <span className="grow" />
           <Button size="sm" onClick={() => actions?.onWhy?.(null)}>
             {t('common.close')}
@@ -100,7 +78,7 @@ export function WhyModal({ model, actions, order }: { model: PlanModel; actions?
       ) : (
         <WhyBody explain={why.explain.value} unit={unit} q={q} model={model} actions={actions} />
       )}
-    </Modal>
+    </DetailModal>
   )
 }
 

@@ -385,12 +385,6 @@ export const workOrderHref = (prefix: string, number: string) => `${prefix}/prod
 export const salesOrderHref = (prefix: string, id: string) => `${prefix}/sales/orders/${encodeURIComponent(id)}`
 export const orderHref = (prefix: string, id: string) => `${prefix}/purchasing/orders/${encodeURIComponent(id)}`
 
-/** The neighbours of a row in the order on screen (the detail's J / K). */
-export function neighbours(ids: readonly string[], id: string): { index: number; previous: string | null; next: string | null } {
-  const index = ids.indexOf(id)
-  return { index, previous: index > 0 ? ids[index - 1]! : null, next: index >= 0 && index < ids.length - 1 ? ids[index + 1]! : null }
-}
-
 // ---- the page models -------------------------------------------------------------------------------------------------------
 
 export interface DetailModel {

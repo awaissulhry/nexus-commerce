@@ -2,9 +2,10 @@
 
 import { useRef, useState, type ReactNode } from 'react'
 import { Download, Eye, FolderOpen, Upload } from 'lucide-react'
-import { Banner, Disclosure, EmptyState, Field, FileRow, Modal } from '@nexus/ui/components'
+import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { Button, Checkbox, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { FileRow, Modal } from '../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../lib/i18n/format'
 import { useLocale, useT } from '../../lib/i18n/provider'
 import { pdfViewerLabels } from '../../lib/pdf/labels'
