@@ -3,11 +3,10 @@
 import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { Check, CheckCheck, Footprints, Wrench, X } from 'lucide-react'
-import { Banner, KeyValue, Timeline, type TimelineStep } from '@nexus/ui/components'
-import { DetailModal } from '@nexus/ui/patterns'
+import { Banner, KeyValue, type TimelineStep } from '@nexus/ui/components'
 import { Button, Kbd } from '@nexus/ui/primitives'
+import { DetailModal, Timeline } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
-import { useDsLabels } from '../../../../lib/i18n/ds-labels'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
@@ -29,7 +28,6 @@ const STEP_TONE = { SENT: 'neutral', SEEN: 'info', ON_THE_WAY: 'info', SOLVED: '
  */
 export function CallDetail({ model, actions, ids }: { model: CallsModel; actions?: CallsActions; ids: readonly string[] }) {
   const t = useCallsT()
-  const ds = useDsLabels()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const detail = model.detail!
@@ -87,7 +85,6 @@ export function CallDetail({ model, actions, ids }: { model: CallsModel; actions
       loading={loaded.status === 'loading'}
       error={loaded.status === 'error' ? t(loaded.problem) : loaded.status === 'notFound' ? t('detail.notFound') : undefined}
       onRetry={() => actions?.onRetryDetail?.()}
-      labels={ds.detail}
       actions={
         call ? (
           <>
@@ -119,7 +116,6 @@ export function CallDetail({ model, actions, ids }: { model: CallsModel; actions
 
 export function CallDetailBody({ model, call, place }: { model: CallsModel; call: CallRecord; place: { locale: ReturnType<typeof useLocale>; timeZone: string } }) {
   const t = useCallsT()
-  const ds = useDsLabels()
   const who = (person: CallRecord['caller']) => say(t, personPhrase(person, true))
   const steps: TimelineStep[] = call.timeline.map((entry, index) => ({
     key: `${entry.step}:${index}`,
@@ -154,7 +150,7 @@ export function CallDetailBody({ model, call, place }: { model: CallsModel; call
       <div className="fw-cl-detail-grid">
         <section className="fw-cl-section" aria-label={t('detail.timeline')}>
           <h3 className="fw-cl-h3">{t('detail.timeline')}</h3>
-          <Timeline steps={steps} label={t('detail.timeline')} labels={ds.timeline} now={model.now} />
+          <Timeline steps={steps} label={t('detail.timeline')} now={model.now} />
         </section>
         <section className="fw-cl-section" aria-label={t('detail.facts')}>
           <h3 className="fw-cl-h3">{t('detail.facts')}</h3>

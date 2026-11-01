@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { BarChart3, Check, CheckCheck, MoreHorizontal, Search, Settings2, ShieldOff, Users } from 'lucide-react'
-import { Banner, Card, EmptyState, Menu, MetricStrip, Modal, PerformanceGraph, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Menu, MetricStrip, PerformanceGraph, SummaryTable } from '@nexus/ui/components'
 import { BarList } from '@nexus/ui/charts/bar-list/index'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Kbd, SegmentedControl, Select, Skeleton, SWATCHES } from '@nexus/ui/primitives'
 import { chart } from '@nexus/ui/tokens'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { CALL_KINDS, CALL_VIEWS, type CallKind, type CallView } from '@nexus/factory-domain/production/calls/rules'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
@@ -562,7 +563,6 @@ function CallsList({
         onOpen={(row) => actions?.onAddress?.({ open: row.id })}
         state={state}
         focusRow={model.focusRow}
-        cards={{}}
       />
       {model.dialog?.kind === 'keys' && <KeysDialog own={ownKeys} withSelection={model.can.answer} onClose={() => actions?.onDialog?.(null)} />}
     </>

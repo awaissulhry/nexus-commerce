@@ -2,10 +2,10 @@
 
 import Link from 'next/link'
 import { CheckCheck, Wrench, X } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, SegmentedControl, Select, Skeleton, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, SegmentedControl, Select, Skeleton, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { CALL_LIMITS } from '@nexus/factory-domain/production/calls/rules'
-import { useDsLabels } from '../../../../lib/i18n/ds-labels'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { cancelHeld, jobDraftHeld, RESOLUTIONS, solveHeld, type JobDraft, type Resolution } from '../model'
 import type { CallDialog, CallsActions, CallsModel } from './CallsView'
@@ -28,7 +28,6 @@ export function CallDialogs({ model, actions }: { model: CallsModel; actions?: C
 
 function SolveDialog({ model, dialog, actions }: { model: CallsModel; dialog: Extract<CallDialog, { kind: 'solve' }>; actions?: CallsActions }) {
   const t = useCallsT()
-  const ds = useDsLabels()
   const held = solveHeld(dialog.draft, model.busy)
   const set = (draft: Partial<typeof dialog.draft>) => actions?.onDialog?.({ ...dialog, draft: { ...dialog.draft, ...draft }, problem: null })
   const count = dialog.ids.length
@@ -38,7 +37,6 @@ function SolveDialog({ model, dialog, actions }: { model: CallsModel; dialog: Ex
       onClose={() => actions?.onDialog?.(null)}
       title={count === 1 ? t('solve.title') : t('solve.titleN', { count })}
       size="md"
-      labels={ds.modal}
       footer={
         <>
           <Button onClick={() => actions?.onDialog?.(null)}>{t('common.back')}</Button>
@@ -62,7 +60,7 @@ function SolveDialog({ model, dialog, actions }: { model: CallsModel; dialog: Ex
           </Select>
         </Field>
         <Field label={t('solve.note')} hint={t('solve.noteHint')}>
-          <Textarea rows={3} value={dialog.draft.note} limit={CALL_LIMITS.resolutionNote} labels={ds.textarea} disabled={model.busy} onChange={(event) => set({ note: event.target.value })} />
+          <Textarea rows={3} value={dialog.draft.note} limit={CALL_LIMITS.resolutionNote} disabled={model.busy} onChange={(event) => set({ note: event.target.value })} />
         </Field>
       </div>
     </Modal>
@@ -71,7 +69,6 @@ function SolveDialog({ model, dialog, actions }: { model: CallsModel; dialog: Ex
 
 function CancelDialog({ model, dialog, actions }: { model: CallsModel; dialog: Extract<CallDialog, { kind: 'cancel' }>; actions?: CallsActions }) {
   const t = useCallsT()
-  const ds = useDsLabels()
   const held = cancelHeld(dialog.reason, model.busy)
   return (
     <Modal
@@ -79,7 +76,6 @@ function CancelDialog({ model, dialog, actions }: { model: CallsModel; dialog: E
       onClose={() => actions?.onDialog?.(null)}
       title={t('cancel.title')}
       size="md"
-      labels={ds.modal}
       footer={
         <>
           <Button onClick={() => actions?.onDialog?.(null)}>{t('common.back')}</Button>
@@ -93,7 +89,7 @@ function CancelDialog({ model, dialog, actions }: { model: CallsModel; dialog: E
         <p className="fw-cl-text">{t('cancel.body')}</p>
         {dialog.problem && <Banner tone="danger" title={say(t, dialog.problem)} />}
         <Field label={t('cancel.reason')} required hint={t('cancel.reasonHint')}>
-          <Textarea rows={3} value={dialog.reason} limit={CALL_LIMITS.reason} labels={ds.textarea} disabled={model.busy} onChange={(event) => actions?.onDialog?.({ ...dialog, reason: event.target.value, problem: null })} />
+          <Textarea rows={3} value={dialog.reason} limit={CALL_LIMITS.reason} disabled={model.busy} onChange={(event) => actions?.onDialog?.({ ...dialog, reason: event.target.value, problem: null })} />
         </Field>
       </div>
     </Modal>
@@ -102,7 +98,6 @@ function CancelDialog({ model, dialog, actions }: { model: CallsModel; dialog: E
 
 function JobDialog({ model, dialog, actions }: { model: CallsModel; dialog: Extract<CallDialog, { kind: 'job' }>; actions?: CallsActions }) {
   const t = useCallsT()
-  const ds = useDsLabels()
   const locale = useLocale()
   const held = dialog.machines.status === 'ready' ? jobDraftHeld(dialog.draft, model.busy) : dialog.machines.status === 'loading' ? 'held.loading' : 'held.machine'
   const set = (draft: Partial<JobDraft>) => actions?.onDialog?.({ ...dialog, draft: { ...dialog.draft, ...draft }, problem: null })
@@ -113,7 +108,6 @@ function JobDialog({ model, dialog, actions }: { model: CallsModel; dialog: Extr
       onClose={() => actions?.onDialog?.(null)}
       title={t('job.title')}
       size="md"
-      labels={ds.modal}
       footer={
         <>
           <Button onClick={() => actions?.onDialog?.(null)}>{t('common.back')}</Button>
@@ -155,7 +149,7 @@ function JobDialog({ model, dialog, actions }: { model: CallsModel; dialog: Extr
           <SegmentedControl size="sm" ariaLabel={t('job.priority')} value={dialog.draft.priority} onChange={(value) => set({ priority: value as JobDraft['priority'] })} options={(['P1', 'P2', 'P3'] as const).map((priority) => ({ value: priority, label: t(`job.${priority}`) }))} />
         </Field>
         <Field label={t('job.problem')} required hint={t('job.problemHint')}>
-          <Textarea rows={3} value={dialog.draft.problem} limit={2000} labels={ds.textarea} disabled={model.busy} onChange={(event) => set({ problem: event.target.value })} />
+          <Textarea rows={3} value={dialog.draft.problem} limit={2000} disabled={model.busy} onChange={(event) => set({ problem: event.target.value })} />
         </Field>
       </div>
     </Modal>

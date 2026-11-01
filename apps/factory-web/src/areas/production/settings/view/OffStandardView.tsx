@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Plus, RotateCcw, Search, XCircle } from 'lucide-react'
-import { Banner, EmptyState, Field, Modal } from '@nexus/ui/components'
+import { Banner, EmptyState, Field } from '@nexus/ui/components'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Kbd, Pill, SegmentedControl, Select, Toggle } from '@nexus/ui/primitives'
 import { OFF_STANDARD_KINDS, PAY_RULES, type OffStandardKind, type PayRule } from '@nexus/factory-domain/production/offstandard/rules'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
-import { useDsLabels } from '../../../../lib/i18n/ds-labels'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { FLOOR_RULES_NAMESPACES } from '../model'
@@ -305,7 +305,6 @@ function Editor({ model, actions }: { model: OffStandardModel; actions?: OffStan
 
 function NewCodeDialog({ dialog, codes, busy, actions }: { dialog: { draft: OffDraft; problem: string | null }; codes: readonly string[]; busy: boolean; actions?: OffStandardActions }) {
   const t = useT('floor-rules')
-  const ds = useDsLabels()
   const draft = dialog.draft
   const set = (patch: Partial<OffDraft>) => actions?.onDialog?.({ kind: 'new', draft: { ...draft, ...patch }, problem: null })
   const held = offDraftHeld(draft, codes, busy)
@@ -315,7 +314,6 @@ function NewCodeDialog({ dialog, codes, busy, actions }: { dialog: { draft: OffD
       onClose={() => actions?.onDialog?.(null)}
       title={t('fr.off.new.title')}
       size="lg"
-      labels={ds.modal}
       footer={
         <>
           <Button onClick={() => actions?.onDialog?.(null)}>{t('fr.cells.back')}</Button>

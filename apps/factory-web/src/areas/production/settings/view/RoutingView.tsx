@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Plus, RotateCcw, Search, XCircle } from 'lucide-react'
-import { Banner, EmptyState, Field, Modal } from '@nexus/ui/components'
+import { Banner, EmptyState, Field } from '@nexus/ui/components'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, NumberStepper, Pill, Select, SWATCHES, TagGlyph, Toggle } from '@nexus/ui/primitives'
 import { CALL_KINDS, type CallKind } from '@nexus/factory-domain/production/calls/rules'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
-import { useDsLabels } from '../../../../lib/i18n/ds-labels'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { FLOOR_RULES_NAMESPACES } from '../model'
@@ -318,7 +318,6 @@ function Editor({ model, actions }: { model: RoutingModel; actions?: RoutingActi
 
 function NewTypeDialog({ model, dialog, free, actions }: { model: RoutingModel; dialog: { draft: RouteDraft; problem: string | null }; free: readonly HelpCode[]; actions?: RoutingActions }) {
   const t = useT('floor-rules')
-  const ds = useDsLabels()
   const locale = useLocale()
   const draft = dialog.draft
   const set = (patch: Partial<RouteDraft>) => actions?.onDialog?.({ kind: 'new', draft: { ...draft, ...patch }, problem: null })
@@ -329,7 +328,6 @@ function NewTypeDialog({ model, dialog, free, actions }: { model: RoutingModel; 
       onClose={() => actions?.onDialog?.(null)}
       title={t('fr.route.new.title')}
       size="lg"
-      labels={ds.modal}
       footer={
         <>
           <Button onClick={() => actions?.onDialog?.(null)}>{t('fr.cells.back')}</Button>

@@ -1,7 +1,6 @@
 'use client'
 
-import { CellSaveMark } from '@nexus/ui/grid'
-import { useDsLabels } from '../../../../lib/i18n/ds-labels'
+import { CellSaveMark } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 import type { Mark } from '../w2b-model'
 
@@ -11,7 +10,6 @@ import type { Mark } from '../w2b-model'
  */
 export function SaveMark({ mark }: { mark: Mark | undefined }) {
   const t = useT('floor-rules')
-  const ds = useDsLabels()
   if (!mark || mark.state === 'saved') return null
   if (mark.state === 'refused') {
     const words = t(mark.problem ?? 'fr.problem.write')
@@ -21,7 +19,7 @@ export function SaveMark({ mark }: { mark: Mark | undefined }) {
       </span>
     )
   }
-  return <CellSaveMark state={mark.state} labels={ds.cellSaveMark} />
+  return <CellSaveMark state={mark.state} />
 }
 
 /** A key the cell takes for itself (Enter on a switch); printable keys never start an edit (they are the list's keys). */

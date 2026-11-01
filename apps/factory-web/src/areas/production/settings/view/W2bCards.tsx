@@ -3,11 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { Banner, Card, Field } from '@nexus/ui/components'
-import { EditModeBar } from '@nexus/ui/patterns'
 import { Button, Input, NumberStepper, RadioCard, SegmentedControl, Skeleton, Spinner, Toggle } from '@nexus/ui/primitives'
+import { EditModeBar } from '../../../../lib/i18n/ds-parts'
 import { BUNDLE_CODE_MODES, FLOOR_RULE_MODES, type FloorRuleMode } from '@nexus/factory-domain/production/settings/floor-rules'
 import { formatDateTime } from '../../../../lib/i18n/format'
-import { useDsLabels } from '../../../../lib/i18n/ds-labels'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { BundleRules, FloorRules } from '../w2b-api'
 import { checksChange, checksDraftOf, checksHeld, couponsChange, couponsDraftOf, couponsHeld, fullMissing, LIMITS, type ChecksDraft, type CouponsDraft } from '../w2b-model'
@@ -57,7 +56,6 @@ export function FloorChecksCard({ model, actions }: { model: FloorRulesModel; ac
 
 function ChecksForm({ model, actions, rules }: { model: FloorRulesModel; actions?: FloorRulesActions; rules: FloorRules }) {
   const t = useT('floor-rules')
-  const ds = useDsLabels()
   const locale = useLocale()
   const saved = useMemo(() => checksDraftOf(rules), [rules])
   const [draft, setDraft] = useState<ChecksDraft>(model.checksDraft ?? saved)
@@ -130,7 +128,6 @@ function ChecksForm({ model, actions, rules }: { model: FloorRulesModel; actions
               applyHeldReason={held ? t(held) : null}
               busy={busy}
               saveShortcut
-              labels={ds.editModeBar}
             />
           ) : (
             <p className="fw-fr-sub">{rules.updatedAt ? t('fr.save.lastChange', { when: formatDateTime(rules.updatedAt, { locale, timeZone: model.timeZone }) }) : t('fr.save.default')}</p>
@@ -155,7 +152,6 @@ export function CouponsCard({ model, actions }: { model: FloorRulesModel; action
 
 function CouponsForm({ model, actions, rules }: { model: FloorRulesModel; actions?: FloorRulesActions; rules: BundleRules }) {
   const t = useT('floor-rules')
-  const ds = useDsLabels()
   const saved = useMemo(() => couponsDraftOf(rules), [rules])
   const [draft, setDraft] = useState<CouponsDraft>(model.couponsDraft ?? saved)
   useEffect(() => setDraft(model.couponsDraft ?? saved), [model.couponsDraft, saved])
@@ -202,7 +198,7 @@ function CouponsForm({ model, actions, rules }: { model: FloorRulesModel; action
         )}
         {editable ? (
           change.count > 0 ? (
-            <EditModeBar count={change.count} onDiscard={() => setDraft(saved)} onApply={() => actions?.onCoupons?.(draft)} applyLabel={t('fr.save.apply')} applyHeldReason={held ? t(held) : null} busy={busy} saveShortcut labels={ds.editModeBar} />
+            <EditModeBar count={change.count} onDiscard={() => setDraft(saved)} onApply={() => actions?.onCoupons?.(draft)} applyLabel={t('fr.save.apply')} applyHeldReason={held ? t(held) : null} busy={busy} saveShortcut />
           ) : null
         ) : (
           <p className="fw-fr-sub">{t('fr.viewOnly')}</p>
