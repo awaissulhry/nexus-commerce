@@ -10,6 +10,8 @@ import { SKILL_KINDS, SKILL_LEVELS } from './skills/rules'
 import { VERSION_STATUSES } from './piecerates/rates'
 // B-W2b-33: clock in and out.
 import { CLOCK_ACTIONS } from './clock/rules'
+// B-W2b-38: incentive schemes.
+import { SCHEME_STATUSES } from './schemes/rules'
 
 /**
  * The people module's events (B-W2b-26 employees and teams; design people.employees "Live": employee.created / updated
@@ -78,6 +80,8 @@ export const PRIVACY_SETTINGS_CHANGES = ['WIDENED', 'NARROWED'] as const
 export const PIECE_RATE_TABLE_CHANGES = ['CREATED', 'EDITED', 'ARCHIVED'] as const
 export const PIECE_RATE_VERSION_CHANGES = ['CREATED', 'EDITED', 'RATES_SET', 'IN_FORCE', 'CONFIRMED', 'SUPERSEDED', 'CANCELLED'] as const
 export const PIECE_PAY_SWITCH_CHANGES = ['PRECONDITIONS_RECORDED', 'SWITCHED_ON', 'SWITCHED_OFF'] as const
+// B-W2b-38
+export const INCENTIVE_SCHEME_CHANGES = ['CREATED', 'EDITED', 'ACTIVATED', 'RETIRED', 'ENDED', 'DELETED'] as const
 
 const by = z.enum(['OFFICE', 'SYSTEM', 'IMPORT'])
 
@@ -235,6 +239,17 @@ export const events = [
       by: z.enum(['OFFICE', 'GATE_OFF']),
     }),
     live: { permission: 'people.piecerates.view', fields: ['siteId', 'change', 'state', 'onFrom', 'offFrom'] },
+  }),
+  // B-W2b-38: incentive schemes (MES-253, MES-257, MES-258, MES-259; c.c. arts. 2100-2101), emitted by apps/factory-api
+  // modules/people/schemes in the command that makes the change. Ids and states only: never a rate, an amount or a
+  // reason. They reach the office screens of people.piecerates.view holders (the page's "Scheme" section and the legal
+  // switch's scheme); the floor receives none.
+  defineEvent({
+    type: 'incentive_scheme.changed',
+    context: 'people',
+    description: 'An incentive scheme of a company or a line was drafted, changed or deleted as a draft, started (the scheme before it ended the day before and retired), or ended.',
+    payload: z.strictObject({ schemeId: z.uuid(), companyId: z.uuid(), lineId: z.uuid().nullable(), change: z.enum(INCENTIVE_SCHEME_CHANGES), status: z.enum(SCHEME_STATUSES) }),
+    live: { permission: 'people.piecerates.view', fields: ['schemeId', 'companyId', 'lineId', 'change', 'status'] },
   }),
   // B-W2b-33: clock in and out.
   defineEvent({
