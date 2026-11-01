@@ -230,6 +230,22 @@ const CALLS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object
 const GUARDS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   team_leader: ['production.scan.override'],
 })
+/**
+ * B-W2b-50 (line targets and boards, MES-084, MES-161, MES-162, MES-166, ANA-007; design production.floor "Hour by hour",
+ * the WIP heat map, the line TV's office preview): the production manager, the floor supervisor and the planner set the
+ * lines' hourly targets; the manager and the supervisor give a short hour's reason from the office too; quality reads the
+ * boards (DHU). On the floor the team leader's line view reads its line's hour by hour and gives the reason. A line TV
+ * (DISPLAY device) needs no role: nobody signs in on it. Owner and read-only from every().
+ */
+const BOARDS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.boards.view', 'production.boards.targets', 'production.boards.reason'],
+  floor_supervisor: ['production.boards.view', 'production.boards.targets', 'production.boards.reason'],
+  planner: ['production.boards.view', 'production.boards.targets'],
+  quality_inspector: ['production.boards.view'],
+})
+const BOARDS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.boards.view', 'production.boards.reason'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -252,7 +268,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-35
   ...((audience === 'office' ? CALLS_ADDS : CALLS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-46
-  ...(audience === 'floor' ? (GUARDS_FLOOR_ADDS[key] ?? []) : [])]
+  ...(audience === 'floor' ? (GUARDS_FLOOR_ADDS[key] ?? []) : []),
+  // B-W2b-50
+  ...((audience === 'office' ? BOARDS_ADDS : BOARDS_FLOOR_ADDS)[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
