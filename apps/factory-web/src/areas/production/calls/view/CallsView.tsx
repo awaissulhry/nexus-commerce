@@ -12,6 +12,7 @@ import { CALL_KINDS, CALL_VIEWS, type CallKind, type CallView } from '@nexus/fac
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { formatTime } from '../../../../lib/i18n/format'
+import { useDsLabels } from '../../../../lib/i18n/ds-labels'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { LiveState } from '../../_shared/hooks'
@@ -233,6 +234,7 @@ const LINE_SWATCHES = ['Blue', 'Teal', 'Amber', 'Purple', 'Green', 'Rose', 'Indi
 
 function ChartCard({ model, actions }: { model: CallsModel; actions?: CallsActions }) {
   const t = useCallsT()
+  const ds = useDsLabels()
   const day = model.day
   let body: ReactNode
   if (!model.site) body = <p className="fw-cl-hint">{t('chart.noSite')}</p>
@@ -265,6 +267,7 @@ function ChartCard({ model, actions }: { model: CallsModel; actions?: CallsActio
         <section className="fw-cl-responses" aria-label={t('chart.responses')}>
           <h3 className="fw-cl-h3">{t('chart.responses')}</h3>
           <BarList
+            labels={ds.barList}
             label={t('chart.responses')}
             format={(value) => say(t, durationPhrase(value))}
             items={responses.map((row) => ({
