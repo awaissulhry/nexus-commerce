@@ -1,8 +1,9 @@
 'use client'
 
 import { Fragment, type ReactNode } from 'react'
-import { Modal, SummaryTable } from '@nexus/ui/components'
+import { SummaryTable } from '@nexus/ui/components'
 import { Button, Kbd, Pill, Tag } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { QualityMessages } from '../../../quality/_shared/parts'

@@ -26,7 +26,6 @@ import {
   historyPhrases,
   intoBody,
   intoOf,
-  neighbours,
   nettingPhrases,
   NO_FILTERS,
   plusDays,
@@ -55,6 +54,13 @@ vi.mock('@nexus/ui/components', async (original) => {
   const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
     open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), subtitle as never, children as never, footer as never) : null
   return { ...actual, Modal }
+})
+// The detail is the DS DetailModal (B-W2b-18): drawn in place the same way.
+vi.mock('@nexus/ui/patterns', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/patterns')>()
+  const DetailModal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), subtitle as never, children as never, footer as never) : null
+  return { ...actual, DetailModal }
 })
 
 /**
@@ -148,8 +154,6 @@ describe('rows: what may be picked, the groups, the words from the numbers', () 
     const leather = byCode('DEMO-LEA-01', 'BLK')
     expect(sourceHref('/w/DEMO', leather)).toBe(`/w/DEMO/planning/mrp?site=${leather.siteId}&line=${leather.refId}`)
     expect(sourceHref('/w/DEMO', byCode('DEMO-ZIP-04'))).toBe(`/w/DEMO/products/materials/${byCode('DEMO-ZIP-04').item.id}`)
-    expect(neighbours(['a', 'b', 'c'], 'b')).toEqual({ index: 1, previous: 'a', next: 'c' })
-    expect(neighbours(['a'], 'a')).toEqual({ index: 0, previous: null, next: null })
   })
 })
 
@@ -272,7 +276,7 @@ describe('every design case draws in both languages with no key left on screen',
     }
   })
 
-  it('draws the dialogs and the detail (the DS Modal in place)', () => {
+  it('draws the dialogs and the detail (the DS Modal and DetailModal in place)', () => {
     const html = (id: string, locale: 'it' | 'en') => render(screen, screen.cases.find((item) => item.id === id)!.model, locale)
     expect(html('draft-ready', 'en')).toContain('Add to draft PO-DEMO-0004')
     expect(html('draft-ready', 'it')).toContain('Crea 3 ordini')

@@ -2,9 +2,8 @@
 
 import { Fragment, useRef, type ReactNode } from 'react'
 import { Paperclip } from 'lucide-react'
-import { Modal } from '@nexus/ui/components'
-import { StepUpModal } from '@nexus/ui/patterns'
 import { Button, Kbd, Pill, Tag } from '@nexus/ui/primitives'
+import { Modal, StepUpModal } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { StepUpState } from '../../../quality/_shared/hooks'
 import { LOT_TONE, type Lot } from '../../../quality/_shared/lots'

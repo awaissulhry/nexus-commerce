@@ -2,10 +2,11 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { Camera, MoreHorizontal, Plus, TriangleAlert } from 'lucide-react'
-import { Banner, EmptyState, Field, Menu, Modal } from '@nexus/ui/components'
-import { CellSaveMark, SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
+import { Banner, EmptyState, Field, Menu } from '@nexus/ui/components'
+import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { PhotoCapture } from '@nexus/ui/components/PhotoCapture/index'
 import { Button, Input, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { CellSaveMark, Modal } from '../../../../../lib/i18n/ds-parts'
 import { DEFECT_CLASSES } from '@nexus/factory-domain/quality/final/rules'
 import { usePhotoWords, PHOTO_KIT_NAMESPACE } from '../../../../../lib/ds-words/photo-capture'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'

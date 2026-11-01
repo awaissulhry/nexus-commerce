@@ -2,8 +2,10 @@
 
 import type { KeyboardEvent, ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, Circle, Clock, MinusCircle } from 'lucide-react'
-import { Banner, Card, EmptyState, Modal } from '@nexus/ui/components'
+import { Banner, Card, EmptyState } from '@nexus/ui/components'
 import { Button, Spinner } from '@nexus/ui/primitives'
+import { CheckList as DsCheckList } from '@nexus/ui/patterns/checklist/index'
+import { Modal, useDsWords } from '../../../lib/i18n/ds-parts'
 import { useT } from '../../../lib/i18n/provider'
 import type { JourneyStep, Phrase, StepState } from './model'
 
@@ -11,7 +13,7 @@ import type { JourneyStep, Phrase, StepState } from './model'
  * The Finance screens' small shared parts, composed from the design system (packages/ui is frozen; each part named here is
  * a stand-in for a part the design asks and the DS lacks): PartState (a part that loads or failed, never drawn as
  * empty), DialogFrame (a DS Modal with the confirm footer, ⌘↵), StepIcon, JourneyStrip (the design's "JourneyStrip"),
- * CheckList (the design's "NEW CheckList"), Bridge (the design's "NEW Bridge": from goods to what is left to pay).
+ * Bridge (the design's "NEW Bridge": from goods to what is left to pay). CheckList is the DS CheckList (B-W2b-18).
  */
 
 /** A part a tab reads, while it loads or when its read failed (with Try again). */
@@ -154,18 +156,20 @@ export interface CheckItem {
   fix?: ReactNode
 }
 
-/** The checks before an action (design "CheckList"): what passes, what fails with where to fix it. */
+/**
+ * The checks before an action (design "CheckList" = the DS CheckList, B-W2b-18): what passes (Done) and what is open
+ * with where to fix it. The dialog's own held reason and verb stay its own; no summary line.
+ */
 export function CheckList({ items, label }: { items: readonly CheckItem[]; label: string }) {
+  const ds = useDsWords()
   return (
-    <ul className="fw-fin-checks" aria-label={label}>
-      {items.map((item) => (
-        <li key={item.id} className="fw-fin-check">
-          <StepIcon state={item.ok ? 'done' : 'problem'} />
-          <span className="fw-fin-step-body">{item.words}</span>
-          {item.fix}
-        </li>
-      ))}
-    </ul>
+    <DsCheckList
+      label={label}
+      summary={false}
+      labels={ds.checkList}
+      // The DS draws the name as given: our words may carry their own marks (a node), as before.
+      checks={items.map((item) => ({ id: item.id, state: item.ok ? 'pass' : 'fail', name: item.words as string, ...(item.fix ? { fix: item.fix } : {}) }))}
+    />
   )
 }
 

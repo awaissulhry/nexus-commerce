@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Banner, EmptyState, Modal } from '@nexus/ui/components'
+import { Banner, EmptyState } from '@nexus/ui/components'
 import { Button, Spinner } from '@nexus/ui/primitives'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { addLinesProblems, takenOf } from '../../model'
 import type { AddLinesModel, RmaActions, RmaModel } from '../../view-model'
 import { ReturnLinePicker } from '../../view/ReturnLinePicker'

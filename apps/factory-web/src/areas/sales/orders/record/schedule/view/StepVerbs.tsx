@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { DateField, Field } from '@nexus/ui/components'
-import { Button, Textarea } from '@nexus/ui/primitives'
+import { Field } from '@nexus/ui/components'
+import { Button } from '@nexus/ui/primitives'
+import { DateField, Textarea } from '../../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'

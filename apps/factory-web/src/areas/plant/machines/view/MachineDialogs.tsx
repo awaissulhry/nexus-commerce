@@ -1,8 +1,9 @@
 'use client'
 
 import { Archive, Plus } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import type { Machine } from '../../_shared/api'
 import { say, useWords, type Translate } from '../../_shared/parts'
 import type { MachinesListActions, MachinesListModel } from '../view-model'

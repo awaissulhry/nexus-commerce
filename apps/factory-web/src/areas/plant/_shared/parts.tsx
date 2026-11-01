@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, FileX, Lock, ShieldOff, Wrench } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, Modal, Tabs, type TabItem } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Tabs, type TabItem } from '@nexus/ui/components'
 import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Input, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { Modal, StepUpModal } from '../../../lib/i18n/ds-parts'
 import { listKeys, type ListKey } from '../../../list-frame/model'
 import { formatNumber, formatTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
@@ -272,72 +273,23 @@ export interface StepUpState {
 export const STEP_UP_CLOSED: StepUpState = Object.freeze({ open: false, busy: false, sentence: '', problem: null })
 
 /**
- * The fresh authenticator code of a signing act (design 00 §3.8: asked at the moment of the act). Composed from the DS
- * Modal, Field and Input in this screen's words: the DS StepUpModal draws its field's label, hint and buttons in English
- * only (named in the step's notes as a missing DS part).
+ * The fresh authenticator code of a signing act (design 00 §3.8: asked at the moment of the act): the DS StepUpModal
+ * (B-W2b-18; it was composed here while the DS part spoke English only) with this screen's title, sentence, verb and
+ * refusal — six digits arm the verb, Enter signs, the field comes back focused after a refused code.
  */
 export function StepUpDialog({ state, onSubmit, onCancel }: { state: StepUpState; onSubmit?: (code: string) => void; onCancel?: () => void }) {
   const t = useWords()
-  const [code, setCode] = useState('')
-  const id = useId()
-  const input = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (state.open) setCode('')
-  }, [state.open])
-  // A refused code comes back with the field ready for the next one.
-  useEffect(() => {
-    if (state.open && !state.busy && state.problem) {
-      input.current?.focus()
-      input.current?.select()
-    }
-  }, [state.open, state.busy, state.problem])
-  if (!state.open) return null
-  const held = state.busy ? t('stepUp.checking') : /^\d{6}$/.test(code) ? null : t('stepUp.sixDigits')
-  const submit = () => !held && onSubmit?.(code)
   return (
-    <Modal
-      open
-      onClose={() => onCancel?.()}
+    <StepUpModal
+      open={state.open}
       title={t('stepUp.title')}
-      size="sm"
-      footer={
-        <>
-          <span className="fw-pl-grow" />
-          <Button size="sm" onClick={() => onCancel?.()}>
-            {t('common.cancel')}
-          </Button>
-          <Button size="sm" variant="primary" heldReason={held} onClick={submit}>
-            {state.busy ? <Spinner size={12} /> : null} {t('stepUp.confirm')}
-          </Button>
-        </>
-      }
-    >
-      <form
-        className="fw-pl-dialog"
-        onSubmit={(event) => {
-          event.preventDefault()
-          submit()
-        }}
-      >
-        <p className="fw-pl-text">{state.sentence ? t(state.sentence) : ''}</p>
-        {state.problem && <Banner tone="danger" title={t(state.problem)} />}
-        <Field label={t('stepUp.code')} required hint={t('stepUp.codeHint')} htmlFor={id}>
-          <Input
-            ref={input}
-            id={id}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            pattern="[0-9]{6}"
-            maxLength={6}
-            required
-            autoFocus
-            value={code}
-            disabled={state.busy}
-            onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-          />
-        </Field>
-      </form>
-    </Modal>
+      sentence={state.sentence ? t(state.sentence) : ''}
+      busy={state.busy}
+      error={state.problem ? t(state.problem) : null}
+      onSubmit={(code) => onSubmit?.(code)}
+      onClose={() => onCancel?.()}
+      confirmLabel={t('stepUp.confirm')}
+    />
   )
 }
 

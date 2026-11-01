@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { Banner, ConfirmPhraseField, DateField, Field, Modal, phraseMatches } from '@nexus/ui/components'
-import { Button, Checkbox, Input, RadioCard, Select, Textarea, Toggle } from '@nexus/ui/primitives'
+import { Banner, Field, phraseMatches } from '@nexus/ui/components'
+import { Button, Checkbox, Input, RadioCard, Select, Toggle } from '@nexus/ui/primitives'
+import { ConfirmPhraseField, DateField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { CR_VI_EVIDENCE, LOT_DOCUMENT_KINDS, type EvidenceRule } from '@nexus/factory-domain/quality/lab/rules'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { Lot } from '../../../../quality/_shared/lots'

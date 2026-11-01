@@ -200,8 +200,8 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'hold-rejected', label: 'A rejected lot cannot be held: said in our words, the button held', model: page('quality', { hold: hold({ preview: { value: REJECTED_PREVIEW, problem: null }, draft: { ...blankHold(), reasonCode: 'QUALITY_CHECK' } }) }) },
     { id: 'hold-refused', label: 'The hold refused (a lot’s state changed meanwhile, 409): in our words', model: page('quality', { hold: hold({ draft: { ...blankHold(), reasonCode: 'QUALITY_CHECK' }, problem: { key: 'hold.problem.subjects' } }) }) },
     { id: 'hold-done', label: 'Placed: 2 lots on hold, the page reads again', model: page('quality', { hold: hold({ done: { count: 2 } }) }) },
-    { id: 'phone', label: 'Phone (390): the same rows as cards, with search and Rows ▾', model: page('warehouse', { phone: true }) },
-    { id: 'phone-select', label: 'Phone: Select mode, two cards ticked, the bulk actions', model: page('quality', { phone: true, phoneSelect: true, selected: [lineId(ROWS[0]!), lineId(ROWS[12]!)] }) },
+    { id: 'phone', label: 'Phone (open at 390): the same rows as cards (the list frame’s DS card list), with search and Rows ▾', model: page('warehouse') },
+    { id: 'phone-select', label: 'Phone (open at 390): Select mode, two cards ticked, the bulk actions', model: page('quality', { selected: [lineId(ROWS[0]!), lineId(ROWS[12]!)] }) },
     { id: 'sales', label: 'Sales: no inventory.stock.view — the page says so', model: page('sales') },
   ],
 })

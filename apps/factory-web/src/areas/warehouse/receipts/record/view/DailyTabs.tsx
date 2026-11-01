@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Camera, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, FileText, Mail, MoreHorizontal, PencilLine, Plus, Send, Trash2 } from 'lucide-react'
-import { Banner, Card, EmptyState, KeyValue, Menu, Modal } from '@nexus/ui/components'
+import { AlertTriangle, Camera, CheckCircle2, ExternalLink, FileText, Mail, MoreHorizontal, PencilLine, Plus, Send, Trash2 } from 'lucide-react'
+import { Banner, Card, EmptyState, KeyValue, Menu } from '@nexus/ui/components'
 import { PhotoCapture } from '@nexus/ui/components/PhotoCapture/index'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Kbd, Pill, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Pill, Spinner, Tag } from '@nexus/ui/primitives'
+import { DetailModal } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { usePhotoWords } from '../../../../../lib/ds-words/photo-capture'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
@@ -230,7 +231,10 @@ export function PhotoList({ photos, addresses, label }: { photos: readonly Store
   )
 }
 
-/** One discrepancy in a centred detail (`?open=<id>`; J / K walk the list): what was found, its photos, what happened. */
+/**
+ * One discrepancy in a centred detail = the DS DetailModal (`?open=<id>`; its Prev / Next, J / K, walk the list): what was
+ * found, its photos, what happened.
+ */
 export function DiscrepancyDetail({ receipt, daily, actions, prefix, timeZone }: { receipt: Receipt; daily: ReceiptDailyModel; actions?: ReceiptDailyActions; prefix: string; timeZone?: string }) {
   const t = useT(NAMESPACE)
   const locale = useLocale()
@@ -244,37 +248,20 @@ export function DiscrepancyDetail({ receipt, daily, actions, prefix, timeZone }:
   useEffect(() => {
     if (row && row.photos.length > 0) actions?.onPhotos?.(row.photos.filter((photo) => photo.status === 'AVAILABLE').map((photo) => photo.id))
   }, [ids])
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || capture) return
-      if (target && target.closest('input, textarea, select, [contenteditable="true"]')) return
-      if (event.key === 'j' && index < rows.length - 1) actions?.onOpen?.(rows[index + 1]!.id)
-      if (event.key === 'k' && index > 0) actions?.onOpen?.(rows[index - 1]!.id)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
   if (!row) return null
   const place = { locale, timeZone }
   const photoWhy = words(t, photoHeld(row, daily.can))
   const changeWhy = words(t, changeHeld(row, daily.can))
   const removeWhy = words(t, removeHeld(row, daily.can))
   return (
-    <Modal
+    <DetailModal
       open
       onClose={() => actions?.onOpen?.(null)}
       title={t('detail.title', { seq: row.seq, receipt: receipt.number })}
-      subtitle={t('detail.position', { n: index + 1, count: rows.length })}
-      size="lg"
+      // Prev / Next with "2 of 5", J / K and the held ends: the DS DetailModal's (B-W2b-18), over the list's order.
+      nav={{ ids: rows.map((entry) => entry.id), current: row.id, onGo: (id) => actions?.onOpen?.(id), noun: t('detail.noun') }}
       footer={
         <>
-          <Button size="sm" variant="quiet" heldReason={index <= 0 ? t('detail.first') : null} onClick={() => actions?.onOpen?.(rows[index - 1]!.id)} aria-keyshortcuts="k">
-            <ChevronUp size={14} aria-hidden /> {t('detail.previous')} <Kbd>K</Kbd>
-          </Button>
-          <Button size="sm" variant="quiet" heldReason={index >= rows.length - 1 ? t('detail.last') : null} onClick={() => actions?.onOpen?.(rows[index + 1]!.id)} aria-keyshortcuts="j">
-            <ChevronDown size={14} aria-hidden /> {t('detail.next')} <Kbd>J</Kbd>
-          </Button>
           <span className="grow" />
           <Button size="sm" tone="danger" heldReason={removeWhy} onClick={() => actions?.onDialog?.({ kind: 'remove', id: row.id })}>
             <Trash2 size={13} aria-hidden /> {t('disc.remove')}
@@ -364,7 +351,7 @@ export function DiscrepancyDetail({ receipt, daily, actions, prefix, timeZone }:
         </section>
         {daily.problem && !daily.dialog && <Banner tone="danger" title={words(t, daily.problem)!} />}
       </div>
-    </Modal>
+    </DetailModal>
   )
 }
 

@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { CheckCircle2, CircleAlert, Lock } from 'lucide-react'
 import { Banner, Field, KeyValue, phraseMatches } from '@nexus/ui/components'
-import { Button, Checkbox, Input, NumberStepper, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, NumberStepper, Select, Spinner } from '@nexus/ui/primitives'
+import { ConfirmPhraseField, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { DDT_FREIGHT, DDT_REASONS, LINK_EXPIRY_DAYS, TRANSPORT_BY, type Shipment, type TransportBy } from '../../api'
@@ -180,10 +181,8 @@ function AnnulDialog({ shipment, model, actions, ddtId }: DialogProps & { ddtId:
       <Field label={t('annul.reason')} required>
         <Textarea rows={2} value={reason} onChange={(event) => setReason(event.target.value)} />
       </Field>
-      {/* The DS ConfirmPhraseField speaks English only ("Capital letters and spaces count."): the same check, our words. */}
-      <Field label={t('annul.type', { number })} hint={t('annul.typeHint')} error={typed.trim() !== '' && !phraseMatches(typed, annulPhrase({ number })) ? t('annul.typeWrong') : undefined}>
-        <Input size="sm" value={typed} onChange={(event) => setTyped(event.target.value)} autoComplete="off" spellCheck={false} />
-      </Field>
+      {/* The DS ConfirmPhraseField (B-W2b-18): the DDT's number as written, its state in the person's language. */}
+      <ConfirmPhraseField phrase={annulPhrase({ number })} value={typed} onChange={setTyped} />
     </Frame>
   )
 }

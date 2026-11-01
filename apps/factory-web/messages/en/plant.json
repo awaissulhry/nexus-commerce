@@ -229,11 +229,8 @@
   "detail": {
     "title": "Request · {machine}",
     "titleUnknown": "Request",
+    "noun": "request",
     "notFound": "This request does not exist or you may not see it.",
-    "prev": "Previous request",
-    "next": "Next request",
-    "firstOne": "This is the first request of the queue.",
-    "lastOne": "This is the last request of the queue.",
     "signSafe": "Sign safe",
     "acknowledge": "Acknowledge",
     "close": "Close without a job",
@@ -842,11 +839,7 @@
       "wrong": "That code is wrong or used: type the new one.",
       "locked": "Too many tries: wait a moment.",
       "unavailable": "The code couldn't be checked: try again."
-    },
-    "code": "Authenticator code",
-    "codeHint": "The 6 digits your authenticator app shows now.",
-    "checking": "Checking the code…",
-    "sixDigits": "Type the 6 digits first."
+    }
   },
   "csv": {
     "reportedAt": "Reported",

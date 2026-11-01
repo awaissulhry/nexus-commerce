@@ -115,25 +115,6 @@
     "released": "Released · batch {batch}",
     "held": "Still a draft: {checks}"
   },
-  "csv": {
-    "number": "Work order",
-    "batch": "Batch",
-    "status": "Status",
-    "style": "Style",
-    "styleName": "Style name",
-    "colourways": "Colourways",
-    "customer": "Customer",
-    "orders": "Sales orders",
-    "pieces": "Pieces",
-    "cut": "Cut",
-    "bundled": "In bundles",
-    "sewn": "Sewn",
-    "finished": "Finished",
-    "due": "Due date",
-    "daysLate": "Days late",
-    "priority": "Priority",
-    "site": "Site"
-  },
   "held": {
     "noManage": "You can view work orders, not change them (workorders.manage)",
     "noRelease": "Releasing needs the right to release (workorders.release)",

@@ -1,8 +1,9 @@
 'use client'
 
 import { useId } from 'react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, Input, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { ddtProblems, MOVE_OF, noteKeyOf } from '../../model'
 import type { RepairActions, RepairDialog, RepairModel } from '../../view-model'
 import { DdtFields } from '../../view/DdtFields'

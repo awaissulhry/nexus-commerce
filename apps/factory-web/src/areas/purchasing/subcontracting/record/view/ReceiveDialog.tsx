@@ -1,8 +1,9 @@
 'use client'
 
 import { Plus, Trash2 } from 'lucide-react'
-import { Banner, DateField, Field, SummaryTable } from '@nexus/ui/components'
+import { Banner, Field, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { DateField } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { quantity } from '../../../../_shared/buying/model'
 import { plainQuantity, receiveHeld, stockKey, type BackLineDraft, type ReceiveDraft } from '../record-model'

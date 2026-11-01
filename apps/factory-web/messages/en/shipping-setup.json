@@ -48,10 +48,8 @@
     "reload": "Reload"
   },
   "save": {
-    "region": "Unsaved changes",
     "problems_one": "fix {count} problem first",
     "problems_other": "fix {count} problems first",
-    "discard": "Discard",
     "busy": "Saving…",
     "save": "Save",
     "create": "Save settings",
