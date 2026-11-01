@@ -31,6 +31,10 @@ import { closeAtStation, sendCall } from '../../modules/production/calls/station
 import { ClockRefusedError } from '../../modules/people/clock/access'
 import { clockFromQueue } from '../../modules/people/clock/clock'
 import { queuedClockBody } from '../../modules/people/clock/contract'
+// B-W2b-40: operation timing from the floor's queue.
+import { TimingRefusedError } from '../../modules/production/terminal/access'
+import { handBackBody, partialBody, pauseBody, resumeBody, startBody } from '../../modules/production/terminal/contract'
+import { timeOperation } from '../../modules/production/terminal/timing'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -54,6 +58,9 @@ import { queuedClockBody } from '../../modules/people/clock/contract'
  *                                         own closeAtStation)
  *   people.clock.record                   modules/people/clock clockFromQueue (B-W2b-33: the signed-in worker's clock-in,
  *                                         clock-out or break with the tablet's time, flagged when its clock looked wrong)
+ *   production.scan.start / pause / resume / handBack / partial
+ *                                         modules/production/terminal timeOperation (B-W2b-40: the timing of a bundle at an
+ *                                         operation with the tablet's time; the client event id is its clientScanId)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -88,6 +95,7 @@ export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof OffStandardRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof CallRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof ClockRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix, final: error.refusal.final })
+  if (error instanceof TimingRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix, final: error.refusal.final })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
     return first ? moduleRefusal({ code: first.code, message: first.message, fix: first.fix }) : moduleRefusal({ code: 'NUMBER_REFUSED', message: error.message })
@@ -190,6 +198,23 @@ async function applyClock(caller: CommandCaller, event: QueuedEvent, key: string
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'ClockEvent', id: result.id } }
 }
 
+/** B-W2b-40: a queued timing action, through the terminal's own command (its key: `<device>.<client event id>`). */
+const TIMING = {
+  'production.scan.start': { action: 'START', body: startBody },
+  'production.scan.pause': { action: 'PAUSE', body: pauseBody },
+  'production.scan.resume': { action: 'RESUME', body: resumeBody },
+  'production.scan.handBack': { action: 'HAND_BACK', body: handBackBody },
+  'production.scan.partial': { action: 'PARTIAL', body: partialBody },
+} as const
+
+async function applyTiming(caller: CommandCaller, event: QueuedEvent): Promise<Applied> {
+  const spec = TIMING[event.kind as keyof typeof TIMING]
+  const body = parsed(spec.body as z.ZodType, { ...event.payload, clientScanId: event.clientEventId, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const result = await timeOperation(caller, spec.action, body.value as Parameters<typeof timeOperation>[2])
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'OperationScan', id: result.scan.id } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -216,6 +241,12 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
         return await applyCall(caller, event, context.key)
       case 'people.clock.record':
         return await applyClock(caller, event, context.key, context.sentAt)
+      case 'production.scan.start':
+      case 'production.scan.pause':
+      case 'production.scan.resume':
+      case 'production.scan.handBack':
+      case 'production.scan.partial':
+        return await applyTiming(caller, event)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

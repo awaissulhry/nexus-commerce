@@ -34,6 +34,13 @@ export const FLOOR_SYNC_KINDS = [
   'andon.call.answer',
   // B-W2b-33: the signed-in worker's clock-in, clock-out or break kept offline with the tablet's time (MES-199).
   'people.clock.record',
+  // B-W2b-40: operation timing kept offline with the tablet's time (MES-087 start, -088 pause, -089 resume, -091 hand
+  // back, -092 pieces so far; a team's members in the payload, MES-094).
+  'production.scan.start',
+  'production.scan.pause',
+  'production.scan.resume',
+  'production.scan.handBack',
+  'production.scan.partial',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -67,6 +74,12 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'andon.call.answer': { kind: 'andon.call.answer', permission: 'floor.work', numbers: null, what: 'Answer or close a help call' },
   // B-W2b-33
   'people.clock.record': { kind: 'people.clock.record', permission: 'floor.work', numbers: null, what: 'Clock in, clock out or a break' },
+  // B-W2b-40: the scans' permission (timing is part of working a bundle at an operation).
+  'production.scan.start': { kind: 'production.scan.start', permission: 'production.scan', numbers: null, what: 'Start a bundle at an operation' },
+  'production.scan.pause': { kind: 'production.scan.pause', permission: 'production.scan', numbers: null, what: 'Pause a bundle with a reason' },
+  'production.scan.resume': { kind: 'production.scan.resume', permission: 'production.scan', numbers: null, what: 'Resume a paused bundle' },
+  'production.scan.handBack': { kind: 'production.scan.handBack', permission: 'production.scan', numbers: null, what: 'Hand back an unfinished bundle' },
+  'production.scan.partial': { kind: 'production.scan.partial', permission: 'production.scan', numbers: null, what: 'Report the pieces done so far' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const
