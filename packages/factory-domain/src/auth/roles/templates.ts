@@ -231,6 +231,22 @@ const GUARDS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Objec
   team_leader: ['production.scan.override'],
 })
 /**
+ * B-W2b-50 (line targets and boards, MES-084, MES-161, MES-162, MES-166, ANA-007; design production.floor "Hour by hour",
+ * the WIP heat map, the line TV's office preview): the production manager, the floor supervisor and the planner set the
+ * lines' hourly targets; the manager and the supervisor give a short hour's reason from the office too; quality reads the
+ * boards (DHU). On the floor the team leader's line view reads its line's hour by hour and gives the reason. A line TV
+ * (DISPLAY device) needs no role: nobody signs in on it. Owner and read-only from every().
+ */
+const BOARDS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.boards.view', 'production.boards.targets', 'production.boards.reason'],
+  floor_supervisor: ['production.boards.view', 'production.boards.targets', 'production.boards.reason'],
+  planner: ['production.boards.view', 'production.boards.targets'],
+  quality_inspector: ['production.boards.view'],
+})
+const BOARDS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.boards.view', 'production.boards.reason'],
+})
+/**
  * B-W2b-34 (piece rates and the legal switch of piece pay; MES-254, MES-255, MES-262; design people.piecerates): the
  * administrator and the production manager read the rate tables, who has read them and the legal switch, without a pay
  * figure (neither holds the pay grain: operations and standard minutes only). Keeping the rates (people.piecerates.manage:
@@ -264,6 +280,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...((audience === 'office' ? CALLS_ADDS : CALLS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-46
   ...(audience === 'floor' ? (GUARDS_FLOOR_ADDS[key] ?? []) : []),
+  // B-W2b-50
+  ...((audience === 'office' ? BOARDS_ADDS : BOARDS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-34
   ...(audience === 'office' ? (PEOPLE_PIECERATES_ADDS[key] ?? []) : [])]
 /**
@@ -670,6 +688,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'production.scrap.view',
       'production.scrap',
       'production.scrap.approve',
+      // B-W2b-53 (MES-128): approves or refuses scrap above a site's limit in the office.
+      'production.scrap.overLimit',
       'production.cutting.view',
       'workorders.view',
       'workorders.manage',
@@ -716,6 +736,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'reasons.view',
       // B-W2a-26 (MES-008): puts work orders and bundles on hold; reads the defect library.
       'quality.holds.view', 'quality.holds.place', 'quality.defects.view',
+      // B-W2b-53 (MES-128): approves or refuses scrap above a site's limit from the Office.
+      'production.scrap.overLimit',
       // B-W2b-29: decides the floor's off-standard blocks (MES-157), as it decides scan corrections; never one's own.
       'production.offstandard.view', 'production.offstandard.approve',
       // B-W2b-45: closes the lines' days and answers the workers' disputes as their lead (never their own); reopening is the manager's.

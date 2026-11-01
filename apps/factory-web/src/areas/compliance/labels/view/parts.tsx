@@ -1,9 +1,10 @@
 'use client'
 
 import { Fragment, type ReactNode } from 'react'
-import { Banner, Modal } from '@nexus/ui/components'
+import { Banner } from '@nexus/ui/components'
 import { LabelPreview, type LabelPrintState } from '@nexus/ui/components/LabelPreview/index'
 import { Button, Kbd, Pill } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 import { QualityMessages } from '../../../quality/_shared/parts'
 import type { LabelTemplate, Rendered } from '../api'

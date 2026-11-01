@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { Banner, DateTimeField, Field, Modal, SummaryTable } from '@nexus/ui/components'
-import { Button, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field, SummaryTable } from '@nexus/ui/components'
+import { Button, Spinner } from '@nexus/ui/primitives'
+import { DateTimeField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { quantity, type Phrase } from '../../../../_shared/buying/model'

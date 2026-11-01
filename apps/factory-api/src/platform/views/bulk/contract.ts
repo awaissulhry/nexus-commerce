@@ -19,7 +19,8 @@ const changesIn = z.record(fieldId, valueIn)
 const unique = (ids: readonly string[]) => new Set(ids).size === ids.length
 
 const value = z.union([z.string(), z.number(), z.null()])
-const refusal = output({ code: z.enum(BULK_REFUSALS), field: z.string().nullable(), status: z.string().nullable() })
+// B-W2b-51: `reasons`, what holds a row in the record's own codes (a work order's blocking release checks).
+const refusal = output({ code: z.enum(BULK_REFUSALS), field: z.string().nullable(), status: z.string().nullable(), reasons: z.array(z.string()).optional() })
 const values = z.record(z.string(), value)
 
 export const previewBulkContract = defineContract({

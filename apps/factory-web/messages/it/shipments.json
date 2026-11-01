@@ -690,14 +690,11 @@
     "shipped": "La merce è partita: emetti subito il DDT sostitutivo.",
     "invoice": "Un DDT fatturato non si può annullare: una nota di credito corregge la fattura.",
     "reason": "Motivo",
-    "type": "Scrivi {number} per annullarlo",
     "go": "Annulla DDT",
     "held": {
       "reason": "Di' perché (almeno 3 caratteri)",
       "phrase": "Scrivi esattamente il numero del DDT"
-    },
-    "typeHint": "Esattamente come stampato: cifre e barra.",
-    "typeWrong": "Non è ancora il numero del DDT"
+    }
   },
   "buy": {
     "title": "Compra etichette",

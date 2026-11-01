@@ -2,8 +2,9 @@
 
 import { useRef } from 'react'
 import { FileUp } from 'lucide-react'
-import { Banner, DateField, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, Select, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input, Select } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { foreignProblems, PAYABLES_NAMESPACE, type ForeignDraft } from '../model'
 import type { ForeignModel } from './PayablesListView'

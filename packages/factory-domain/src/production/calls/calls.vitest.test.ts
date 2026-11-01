@@ -150,8 +150,10 @@ describe('permissions, templates and events', () => {
   })
 
   it('declares four events with no person, no typed word and no time in their payloads, live to the office and the floor', () => {
-    expect(events.map((event) => event.type)).toEqual(['help_call.raised', 'help_call.answered', 'help_call.changed', 'help_call_type.changed'])
-    for (const event of events) {
+    // B-W2b-50 adds a line's hourly targets to the andon module (their own test: production/boards).
+    const callEvents = events.filter((event) => event.type.startsWith('help_call'))
+    expect(callEvents.map((event) => event.type)).toEqual(['help_call.raised', 'help_call.answered', 'help_call.changed', 'help_call_type.changed'])
+    for (const event of callEvents) {
       expect(EVENT_CATALOGUE.find(event.type, 1)).toBeDefined()
       expect(event.live).toMatchObject({ permission: 'production.calls.view', floor: 'floor.work' })
       expect(Object.keys((event.payload as unknown as { shape: Record<string, unknown> }).shape).join(' ')).not.toMatch(/worker|employee|user|by[A-Z]|note|seconds|name/i)

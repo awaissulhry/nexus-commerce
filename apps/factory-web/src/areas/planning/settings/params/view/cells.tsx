@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback } from 'react'
-import { Banner, Modal } from '@nexus/ui/components'
-import { CellSaveMark } from '@nexus/ui/grid'
+import { Banner } from '@nexus/ui/components'
 import { Button, Kbd } from '@nexus/ui/primitives'
+import { CellSaveMark, Modal } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import type { Mark, Notice, Words } from '../model'

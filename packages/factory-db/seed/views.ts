@@ -8,7 +8,8 @@ import { seedUuid, type SeedContext } from '../src/seeding'
  *   - saved views of Sales › Orders: the owner's own "Late orders", one for everyone, and the sales role's default view
  *     for company A;
  *   - exports: one QUEUED (the owner's), one that FAILED after it ran (its reason in words), one RUNNING;
- *   - the member's daily production report of plant A1, Monday to Friday at 07:30, in Italian.
+ *   - the owner's daily production report of plant A1, Monday to Friday at 07:30, in Italian (B-W2b-30: the owner may read
+ *     it; the member's sales role may not, so the report cron skipped it as not_allowed every day).
  * Made-up data, written in the tenant's office scope as the API writes them; idempotent (rows found by id first). First
  * rows (00000000) are ones the generated isolation tests can copy (an export is born QUEUED; a role default is unique
  * per list, role and company).
@@ -103,7 +104,7 @@ export async function seed(context: SeedContext): Promise<void> {
         data: [
           {
             id: firstId('views:subscription:daily-production'),
-            userId: memberId,
+            userId: ownerId,
             locale: 'it',
             reportKey: 'production.daily',
             companyId: companyA,

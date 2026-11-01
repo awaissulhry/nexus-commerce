@@ -61,6 +61,8 @@ import {
 } from './store'
 // B-W2b-46 hook (modules/production/guards): the site's checks before a scan counts, the override, the lots at the operation.
 import { guardReportInCommand, recordGuardsInCommand, type ComponentInput, type VerifiedOverride } from './hooks/guards'
+// B-W2b-53 hook: scrap above the site's limit waits for the team leader (the answer's words).
+import { scrapWaitsInCommand, type ScrapWaits } from './hooks/scrap-limit'
 // B-W2b-40 hook (modules/production/terminal; MES-094): a report that ends a team's stretch names the team.
 import { timingAfterReportInCommand } from './hooks/timing'
 
@@ -168,6 +170,8 @@ export interface ScanView {
   readonly undoUntil: string | null
   /** B-W2b-10: an outside operation's REPORT names the subcontract receipt line that brought the bundle back. */
   readonly subcontractReceiptLineId: string | null
+  /** B-W2b-53: a floor REPORT whose scrap is above the site's limit (the answer when it was taken; null: no approval needed). */
+  readonly scrapWaits?: ScrapWaits | null
 }
 
 export function scanView(scan: ScanRow, operations: readonly OperationRow[], bundleCode: string, defects: readonly DefectLine[]): ScanView {
@@ -503,7 +507,8 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   tools.emit(scanEvent(workOrder, row, decision.operation.seq, 'FLOOR'))
   // B-W2b-46 hook: what the checks found, the override and the lots, kept and told.
   recordGuardsInCommand(tools, guard, { scan: row, workOrder, bundleId: locked.bundle.id, operation: decision.operation })
-  return scanView(row, operations, locked.bundle.code, work.lines)
+  // B-W2b-53 hook: the scrap above the site's limit waits for the team leader before it posts; the tablet is told.
+  return { ...scanView(row, operations, locked.bundle.code, work.lines), scrapWaits: await scrapWaitsInCommand(tools, workOrder.siteId, row.scrapQuantity) }
 }
 
 export function scanEvent(workOrder: Pick<ScanHeader, 'id' | 'number' | 'companyId' | 'siteId'>, scan: ScanRow, operationSeq: number, postedBy: 'FLOOR' | 'OFFICE' | 'SYSTEM') {

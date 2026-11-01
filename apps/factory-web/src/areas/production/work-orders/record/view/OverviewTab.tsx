@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Circle, Pencil, XCircle } from 'lucide-react'
-import { Banner, Card, DateField, Field, KeyValue, ProgressBar } from '@nexus/ui/components'
+import { Banner, Card, Field, KeyValue, ProgressBar } from '@nexus/ui/components'
 import { SizeGridEditor, SizeGridView } from '@nexus/ui/grid'
 import { Button, Input, SegmentedControl, Spinner, Tag } from '@nexus/ui/primitives'
+import { DateField } from '../../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { WorkOrder } from '../../../_shared/api'

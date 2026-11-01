@@ -2,8 +2,8 @@
 
 import type { ReactNode } from 'react'
 import { Banner } from '@nexus/ui/components'
-import { CellSaveMark } from '@nexus/ui/grid'
 import { Button } from '@nexus/ui/primitives'
+import { CellSaveMark } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 import type { Mark, Notice } from '../model'
 

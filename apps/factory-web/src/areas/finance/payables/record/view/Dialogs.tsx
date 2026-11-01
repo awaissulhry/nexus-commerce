@@ -1,7 +1,8 @@
 'use client'
 
-import { Banner, DateField, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { SupplierInvoice } from '../../api'
 import { amountOf, decimalOf, PAYABLES_NAMESPACE, payProblem, unmappedLines } from '../../model'

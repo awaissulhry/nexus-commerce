@@ -3,18 +3,21 @@
 import Link from 'next/link'
 import { MetricStrip, SummaryTable, type Metric } from '@nexus/ui/components'
 import { Pill } from '@nexus/ui/primitives'
+import { BarList as DsBarList } from '@nexus/ui/charts/bar-list/index'
+import { MarginMeter as DsMarginMeter } from '@nexus/ui/charts/margin-meter/index'
+import { Waterfall as DsWaterfall } from '@nexus/ui/charts/waterfall/index'
+import { useDsWords } from '../../../../lib/i18n/ds-parts'
 import type { Locale } from '../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { OrderMargin } from '../api'
-import { barWidth, bridgeOf, changeTone, MARGINS_NAMESPACE, moneyText, pctText, pctTone, pointsBetween, waterfallOf, workOrderCostHref, type Bar, type MarginsCan } from '../model'
+import { bridgeOf, changeTone, MARGINS_NAMESPACE, moneyText, pctText, pctTone, pointsBetween, waterfallOf, workOrderCostHref, type Bar, type MarginsCan } from '../model'
 import '../margins.css'
 
 /**
  * The margin parts the Margins page (SCR-155: its profitability DetailModal, By customer and style) and the sales order's
- * Margin tab share. Composed in the app (packages/ui is frozen; the design marks them "(new)"): MarginStrip (quoted →
- * now → so far, the difference in tone), MarginMeter (the margin now against the margin as quoted, on one bar),
- * Waterfall (where the margin went, quoted → each part → now; a step opens Finance › Standard vs actual), BarList
- * (margin % per customer or style; a bar filters the orders) and ProfitBridge (price − each cost − freight = margin).
+ * Margin tab share: MarginStrip (quoted → now → so far, the difference in tone; DS MetricStrip), MarginMeter, Waterfall
+ * and BarList — the DS charts (B-W2b-18; composed here until B-W2b-09 built them) in this page's words — and
+ * ProfitBridge (price − each cost − freight = margin, composed: the design's "NEW Bridge").
  * Each figure only with its grain; a margin amount only with the margin AND the cost grain (Owner answer S2).
  */
 
@@ -38,100 +41,86 @@ export function MarginStrip({ detail, can }: { detail: OrderMargin; can: Pick<Ma
   return <MetricStrip metrics={metrics} minTileWidth={170} />
 }
 
-/** The margin now against the margin as quoted, on one bar (0 to 100 %; a negative margin draws no fill, the words say it). */
-export function MarginMeter({ quoted, now }: { quoted: string | null | undefined; now: string | null | undefined }) {
+/** A decimal the API writes as text ("24.50"), as a number; null when not known. */
+const numberOf = (value: string | null | undefined): number | null => (value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value))
+
+/**
+ * The margin now against the margin as quoted (design order.margin.meter): the DS MarginMeter (B-W2b-18) with the
+ * quoted margin as its mark, in this page's sentence ("Margin now 24 % against 30 % quoted"); an unknown margin says so,
+ * never 0. Drawn only with the margin grain.
+ */
+export function MarginMeter({ quoted, now, allowed = true }: { quoted: string | null | undefined; now: string | null | undefined; allowed?: boolean }) {
   const t = useT(MARGINS_NAMESPACE)
   const locale = useLocale()
-  const clamp = (value: string | null | undefined) => (value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Math.max(0, Math.min(100, Number(value))))
-  const fill = clamp(now)
-  const mark = clamp(quoted)
-  const label = mark === null ? t('meter.noQuoted', { now: pctText(now ?? null, locale) }) : t('meter.label', { now: pctText(now ?? null, locale), quoted: pctText(quoted ?? null, locale) })
+  const ds = useDsWords()
+  const against = (value: string, mark: string) => t('meter.label', { now: value, quoted: mark })
   return (
-    <div className="fw-fmg-meter" role="img" aria-label={label}>
-      <div className="fw-fmg-meter-track">
-        {fill !== null && <span className={`fw-fmg-meter-fill is-${pctTone(now)}`} style={{ width: `${fill}%` }} />}
-        {mark !== null && <span className="fw-fmg-meter-mark" style={{ left: `${mark}%` }} aria-hidden />}
-      </div>
-      <p className="fw-fmg-muted">{label}</p>
-    </div>
+    <DsMarginMeter
+      value={numberOf(now)}
+      target={numberOf(quoted)}
+      allowed={allowed}
+      format={(value) => pctText(String(value), locale)}
+      labels={{ ...ds.marginMeter, underTarget: against, onTarget: against, plain: (value) => t('meter.noQuoted', { now: value }), targetMark: (mark) => t('meter.quotedMark', { quoted: mark }) }}
+    />
   )
 }
 
 /**
- * Where the margin went (design order.margin.waterfall): the margin as quoted, each part's difference (a cost part that
- * rose takes margin off), the margin now; drawn as floating bars on one scale, the amounts beside them. A cost step
- * opens Finance › Standard vs actual (the order's work order when it has one). Needs the margin and the cost grain.
+ * Where the margin went (design order.margin.waterfall): the DS Waterfall (B-W2b-18) — the margin as quoted, each part's
+ * difference (a cost part that rose takes margin off), the margin now; a cost step opens Finance › Standard vs actual
+ * (the order's work order when it has one). Without the margin and the cost grain, the reason in place of the chart.
  */
 export function Waterfall({ detail, can, prefix }: { detail: OrderMargin; can: Pick<MarginsCan, 'margin' | 'cost' | 'costing'>; prefix: string }) {
   const t = useT(MARGINS_NAMESPACE)
   const locale = useLocale()
-  if (!can.margin || !can.cost) return <p className="fw-fmg-muted">{t('waterfall.noGrain')}</p>
-  const steps = waterfallOf(detail)
-  if (!steps) return <p className="fw-fmg-muted">{t('waterfall.none')}</p>
-  const lowest = Math.min(0, ...steps.map((step) => Math.min(step.from, step.to)))
-  const highest = Math.max(0, ...steps.map((step) => Math.max(step.from, step.to)))
-  const span = highest - lowest || 1
-  const at = (value: number) => ((value - lowest) / span) * 100
+  const ds = useDsWords()
+  const allowed = can.margin && can.cost
+  const steps = allowed ? waterfallOf(detail) : null
+  if (allowed && !steps) return <p className="fw-fmg-muted">{t('waterfall.none')}</p>
   const workOrders = detail.workOrderShares.map((share) => share.workOrder.id)
   const target = workOrders.length === 1 ? workOrders[0]! : null
   return (
-    <ol className="fw-fmg-waterfall" aria-label={t('waterfall.title')}>
-      {steps.map((step) => {
-        const total = step.reason === 'QUOTED' || step.reason === 'NOW'
-        const left = at(Math.min(step.from, step.to))
-        const width = Math.max(0.6, at(Math.max(step.from, step.to)) - left)
-        const tone = total ? 'total' : step.amount < 0 ? 'down' : 'up'
-        const label = total ? t(`waterfall.${step.reason}`) : t(`waterfall.reason.${step.reason}`)
-        const amount = total ? moneyText(step.amount, detail.currency, locale) : signed(step.amount, detail.currency, locale)
-        const linked = !total && step.reason !== 'PRICE' && can.costing
-        return (
-          <li key={step.id} className={`fw-fmg-step is-${tone}`}>
-            <span className="fw-fmg-step-label">
-              {linked ? (
-                <Link className="fw-fmg-link" href={workOrderCostHref(prefix, target)} aria-label={t('waterfall.open', { part: label })}>
-                  {label}
-                </Link>
-              ) : (
-                label
-              )}
-            </span>
-            <span className="fw-fmg-step-track" aria-hidden>
-              <span className="fw-fmg-step-bar" style={{ left: `${left}%`, width: `${width}%` }} />
-            </span>
-            <span className="fw-fmg-step-amount">{amount}</span>
-          </li>
-        )
-      })}
-    </ol>
+    <DsWaterfall
+      label={t('waterfall.title')}
+      format={(value) => moneyText(value, detail.currency, locale)}
+      heldReason={allowed ? null : t('waterfall.noGrain')}
+      labels={ds.waterfall}
+      steps={(steps ?? []).map((step) =>
+        step.reason === 'QUOTED' || step.reason === 'NOW'
+          ? { id: step.id, kind: step.reason === 'QUOTED' ? ('start' as const) : ('total' as const), label: t(`waterfall.${step.reason}`), amount: step.amount }
+          : {
+              id: step.id,
+              kind: 'step' as const,
+              label: t(`waterfall.reason.${step.reason}`),
+              amount: step.amount,
+              ...(step.reason !== 'PRICE' && can.costing ? { href: workOrderCostHref(prefix, target) } : {}),
+            },
+      )}
+    />
   )
 }
 
-/** Margin % per customer or per style (design "NEW BarList"): one row each, the bar to the widest margin; a row filters the orders. */
+/** Margin % per customer or per style (design "BarList with margin %" = the DS BarList, B-W2b-18): a row filters the orders. */
 export function BarList({ bars, label, onPick, active }: { bars: readonly Bar[]; label: string; onPick?: (id: string) => void; active?: string | null }) {
   const t = useT(MARGINS_NAMESPACE)
   const locale = useLocale()
+  const ds = useDsWords()
   if (bars.length === 0) return <p className="fw-fmg-muted">{t('by.empty')}</p>
   return (
-    <ul className="fw-fmg-bars" aria-label={label}>
-      {bars.map((bar) => {
-        const width = barWidth(bar.pct, bars)
-        const text = pctText(bar.pct, locale)
-        return (
-          <li key={bar.id}>
-            <button type="button" className={`fw-fmg-bar${active === bar.id ? ' is-active' : ''}`} aria-pressed={active === bar.id} onClick={() => onPick?.(bar.id)} aria-label={t('by.pick', { name: bar.label, pct: text, count: bar.orders })}>
-              <span className="fw-fmg-bar-label">
-                <span className="fw-fmg-ellipsis">{bar.label}</span>
-                <span className="fw-fmg-bar-sub">{bar.sub ? `${bar.sub} · ${t('by.orders', { count: bar.orders })}` : t('by.orders', { count: bar.orders })}</span>
-              </span>
-              <span className="fw-fmg-bar-track" aria-hidden>
-                <span className={`fw-fmg-bar-fill is-${pctTone(bar.pct)}`} style={{ width: `${width}%` }} />
-              </span>
-              <span className="fw-fmg-bar-value">{text}</span>
-            </button>
-          </li>
-        )
-      })}
-    </ul>
+    <DsBarList
+      label={label}
+      format={(value) => pctText(String(value), locale)}
+      labels={ds.barList}
+      {...(onPick ? { onPick } : {})}
+      active={active ?? null}
+      items={bars.map((bar) => ({
+        id: bar.id,
+        label: bar.label,
+        sub: bar.sub ? `${bar.sub} · ${t('by.orders', { count: bar.orders })}` : t('by.orders', { count: bar.orders }),
+        value: numberOf(bar.pct),
+        ...(pctTone(bar.pct) === 'danger' ? { tone: 'danger' as const } : {}),
+      }))}
+    />
   )
 }
 

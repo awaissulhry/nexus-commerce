@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { AlarmClock, Check, CheckCircle2, ExternalLink, Eye, UserRound, X } from 'lucide-react'
-import { Banner, Field, KeyValue, Modal, type KeyValueItem } from '@nexus/ui/components'
-import { DetailModal } from '@nexus/ui/patterns'
-import { Button, Kbd, Tag, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field, KeyValue, type KeyValueItem } from '@nexus/ui/components'
+import { Button, Kbd, Tag } from '@nexus/ui/primitives'
+import { DetailModal, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime, formatNumber } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { decideKey, DECIDED_HERE, dueWords, offersVerb, OWN_KINDS, ownVerbHeld, ownVerbKey, rejectReasonProblem, verbHeld, verbKey, type Loaded, type LiveState, type Notice, type OwnVerb, type QueueItem, type QuoteReview, type ReviewState, type RowVerb } from '../model'

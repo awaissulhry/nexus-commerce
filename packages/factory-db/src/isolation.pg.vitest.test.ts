@@ -236,8 +236,9 @@ beforeAll(async () => {
   await seedTime({ db: factory, namespace: 'iso-a' })
   await seedTime({ db: factory, namespace: 'iso-b' })
   // The piece pay and payroll export schema of W2b (wave 6/7).
-  await seedPay({ db: factory, namespace: 'iso-a' })
-  await seedPay({ db: factory, namespace: 'iso-b' })
+  // B-W2b-30: piece pay ON (the default seed leaves it OFF), so every pay table has a first row to copy.
+  await seedPay({ db: factory, namespace: 'iso-a' }, { piecePay: true })
+  await seedPay({ db: factory, namespace: 'iso-b' }, { piecePay: true })
   // The floor work schema of W2b (wave 7/7).
   for (const seedFloorWork of [seedAndon, seedLabour]) {
     await seedFloorWork({ db: factory, namespace: 'iso-a' })

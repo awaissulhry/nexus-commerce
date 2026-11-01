@@ -14,4 +14,9 @@ export const manifest = defineManifest({
   'POST /production/settings/:siteId/bundle-size': { audiences: ['office'], permission: 'production.settings.manage', scope: 'record' },
   'GET /production/settings/:siteId/notice-acks': { audiences: ['office'], permission: 'production.settings.view', scope: 'record' },
   'GET /production/floor-rules': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
+  // B-W2b-53 (MES-294): the floor checks per site; (MES-293) the floor's full reason lists, the whole group's (tenant).
+  'GET /production/settings/:siteId/floor-rules': { audiences: ['office'], permission: 'production.settings.view', scope: 'record' },
+  'POST /production/settings/:siteId/floor-rules': { audiences: ['office'], permission: 'production.settings.manage', scope: 'record' },
+  'GET /production/settings/reasons': { audiences: ['office'], permission: 'reasons.view', scope: 'tenant' },
+  'POST /production/settings/reasons/full': { audiences: ['office'], permission: 'reasons.manage', scope: 'tenant' },
 })

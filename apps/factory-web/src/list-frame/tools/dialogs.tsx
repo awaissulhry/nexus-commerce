@@ -2,9 +2,10 @@
 
 import { useMemo, useState, type ReactNode } from 'react'
 import { Copy } from 'lucide-react'
-import { Banner, Field, JobProgress, Modal } from '@nexus/ui/components'
-import { PreferencesModal, type PreferencesValue } from '@nexus/ui/patterns'
+import { Banner, Field } from '@nexus/ui/components'
+import type { PreferencesValue } from '@nexus/ui/patterns'
 import { Button, Input, RadioCard, SegmentedControl, Select } from '@nexus/ui/primitives'
+import { JobProgress, Modal, PreferencesModal } from '../../lib/i18n/ds-parts'
 import { EXPORT_LIMITS } from '@nexus/factory-domain/views/exports'
 import type { ViewAudience } from '@nexus/factory-domain/views/rules'
 import { VIEW_LIMITS, type Density, type ViewState } from '@nexus/factory-domain/views/state'

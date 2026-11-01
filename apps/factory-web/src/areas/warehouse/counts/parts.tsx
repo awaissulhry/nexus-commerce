@@ -2,10 +2,12 @@
 
 import { useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, CircleDashed, FileX, MinusCircle, ShieldOff, XCircle } from 'lucide-react'
-import { Card, EmptyState, Modal, Tabs, type TabItem } from '@nexus/ui/components'
+import { FileX, ShieldOff } from 'lucide-react'
+import { Card, EmptyState, Tabs, type TabItem } from '@nexus/ui/components'
 import { DetailHeader } from '@nexus/ui/patterns'
 import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { CheckList as DsCheckList, type CheckItem } from '@nexus/ui/patterns/checklist/index'
+import { Modal, useDsWords } from '../../../lib/i18n/ds-parts'
 import { listKeys, type ListKey } from '../../../list-frame/model'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
@@ -20,7 +22,7 @@ import './counts.css'
  * View parts Warehouse › Counts (SCR-132) shares between the list, the count record and the dialogs: the catalogue
  * wrapper and its words (`warehouse-counts`, `stock:<key>` for the shared stock words), the state pill and kind tag in
  * words, the scope in words, a cost amount (absent without the grain: the caller draws nothing), the record band with its
- * states, the check list (a stand-in for the design's ReadinessChecklist, missing from the DS) and the keys list behind `?`.
+ * states, the steps as the DS CheckList (the design's ReadinessChecklist) and the keys list behind `?`.
  */
 
 export function CountsMessages({ children }: { children?: ReactNode }) {
@@ -184,28 +186,24 @@ export function PartState({ problem, loading, label, onRetry }: { problem: strin
 
 export type CheckState = 'done' | 'open' | 'failed' | 'skipped'
 
+/** The count's step states as the DS CheckList's: a step still to do is open; a stopped count is a warning to read. */
+const STEP_STATE: Record<CheckState, CheckItem['state']> = { done: 'pass', open: 'fail', failed: 'warning', skipped: 'skipped' }
+
 /**
- * The count's steps as a check list (stand-in for the design's ReadinessChecklist, not in the DS): each step with its
- * state in words and an icon (never colour alone) and what it says now.
+ * The count's steps as the DS CheckList (B-W2b-18; the design's ReadinessChecklist, composed here until B-W2b-09): each
+ * step with its icon AND its word — the DS's Done / Not needed, the count's own "To do" and "Stopped" — and what it says
+ * now. A list of steps, not a gate: no summary line.
  */
 export function CheckList({ items }: { items: ReadonlyArray<{ id: string; state: CheckState; title: string; detail?: ReactNode }> }) {
   const t = useWords()
-  const icon = (state: CheckState) =>
-    state === 'done' ? <CheckCircle2 size={16} aria-hidden /> : state === 'failed' ? <XCircle size={16} aria-hidden /> : state === 'skipped' ? <MinusCircle size={16} aria-hidden /> : <CircleDashed size={16} aria-hidden />
+  const ds = useDsWords()
   return (
-    <ul className="fw-cn-checks">
-      {items.map((item) => (
-        <li key={item.id} className={`fw-cn-check ${item.state}`}>
-          <span className="fw-cn-check-icon">{icon(item.state)}</span>
-          <span className="fw-cn-check-text">
-            <span className="fw-cn-check-title">
-              {item.title} <span className="fw-cn-sr">· {t(`check.state.${item.state}`)}</span>
-            </span>
-            {item.detail && <span className="fw-cn-check-detail">{item.detail}</span>}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <DsCheckList
+      label={t('approval.steps')}
+      summary={false}
+      labels={{ ...ds.checkList, states: { ...ds.checkList.states, fail: t('check.state.open'), warning: t('check.state.failed') } }}
+      checks={items.map((item) => ({ id: item.id, state: STEP_STATE[item.state], name: item.title, ...(item.detail ? { detail: item.detail } : {}) }))}
+    />
   )
 }
 

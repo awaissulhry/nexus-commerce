@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Kbd, RadioCard, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, Input, Kbd, RadioCard } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import { CheckList, Facts } from '../../../_shared/parts'
 import type { FinalCell, Inspection } from '../../api'

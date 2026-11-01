@@ -164,10 +164,6 @@
       "reload": "Reload"
     },
     "save": {
-      "region": "Unsaved changes",
-      "unsaved_one": "{count} unsaved change",
-      "unsaved_other": "{count} unsaved changes",
-      "discard": "Discard",
       "save": "Save",
       "saved": "All changes saved · {time}",
       "allSaved": "No unsaved changes."

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { CheckCircle2, Printer, XCircle } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, RadioCard, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { WorkOrder } from '../../../_shared/api'
 import { correctHold, onlyMaterialShort, quantityText, REPRINT_REASONS, type ReprintReason } from '../../../_shared/model'

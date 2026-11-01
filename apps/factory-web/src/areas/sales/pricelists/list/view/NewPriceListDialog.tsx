@@ -1,7 +1,8 @@
 'use client'
 
-import { Banner, DateField, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, Select, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input, Select } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { PRICE_LIST_KINDS, type PriceListKind } from '../../api'

@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react'
 import { Layers, Scissors } from 'lucide-react'
-import { Banner, EmptyState, Field, Modal } from '@nexus/ui/components'
+import { Banner, EmptyState, Field } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Availability } from '../../work-orders/daily/api'

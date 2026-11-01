@@ -2,8 +2,8 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { ArrowRight, FileText, Hash, ScanLine, Search, TriangleAlert } from 'lucide-react'
-import { Modal } from '@nexus/ui/components'
 import { Input, Kbd, Skeleton } from '@nexus/ui/primitives'
+import { Modal } from '../../../lib/i18n/ds-parts'
 import { useScopedT, useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
 import { statusKey, typeKey } from '../../../areas/search/model'

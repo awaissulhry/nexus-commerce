@@ -667,7 +667,6 @@
       "title": "Albero di tracciabilità",
       "intro": "All'indietro e in avanti in un solo albero. Ciò che i record conoscono solo per ordine di lavoro o per taglia dice «potrebbe contenerlo»: un richiamo lo conta comunque.",
       "label": "Tracciabilità di {code}",
-      "levels": "Livelli",
       "count": {
         "SUPPLIER_one": "{count} fornitore",
         "SUPPLIER_other": "{count} fornitori",
@@ -692,8 +691,6 @@
         "CUSTOMER_one": "{count} cliente",
         "CUSTOMER_other": "{count} clienti"
       },
-      "possibleCount_one": "{count} potrebbe contenerlo",
-      "possibleCount_other": "{count} potrebbero contenerlo",
       "gapTitle": {
         "BROKEN": "Dove la catena è interrotta",
         "COARSE": "Dove i record sono approssimativi",
@@ -741,7 +738,6 @@
         "CUSTOMER": "Cliente"
       },
       "hidden": "non visibile per te",
-      "possible": "potrebbe contenerlo",
       "received": "ricevuto",
       "onHold": "In blocco: {reason}",
       "partyHidden": "nome non visibile per te",
@@ -764,13 +760,6 @@
         "RELEASED": "rilasciato",
         "SHIPPED": "spedito",
         "VOID": "annullato"
-      },
-      "key": {
-        "walk": "Scorri l’albero",
-        "open": "Apri un livello, o entra",
-        "close": "Chiudi un livello, o esci",
-        "ends": "Prima e ultima riga",
-        "enter": "Apri il record"
       }
     },
     "rel": {

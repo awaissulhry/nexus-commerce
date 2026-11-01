@@ -2,8 +2,8 @@
 
 import type { ReactNode } from 'react'
 import { AlertCircle, Check } from 'lucide-react'
-import { StepUpModal } from '@nexus/ui/patterns'
 import { Pill, Spinner } from '@nexus/ui/primitives'
+import { StepUpModal } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { StepUpState } from '../../_shared/hooks'

@@ -1,9 +1,10 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Banner, EmptyState, Modal, SummaryTable } from '@nexus/ui/components'
+import { Banner, EmptyState, SummaryTable } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Pill, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'

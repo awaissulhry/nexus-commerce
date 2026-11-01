@@ -1,9 +1,10 @@
 'use client'
 
 import { FileDown, Printer, RotateCcw } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { LabelPreview } from '@nexus/ui/components/LabelPreview/index'
 import { Button, NumberStepper, Pill, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { useLocale } from '../../../../lib/i18n/provider'
 import type { HideRow } from '../../../_shared/stock/api'
 import { useWords } from '../../lots/shared/parts'

@@ -2,9 +2,10 @@
 
 import { useMemo, type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, ExternalLink, Mail, XCircle } from 'lucide-react'
-import { Banner, Field, KeyValue, Modal } from '@nexus/ui/components'
+import { Banner, Field, KeyValue } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
-import { Button, Input, Kbd, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Button, Input, Kbd, Spinner, Tag } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { pdfViewerLabels } from '../../../../lib/pdf/labels'

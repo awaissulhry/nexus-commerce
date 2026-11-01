@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { Search } from 'lucide-react'
-import { Banner, DateField, Field, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Select, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, Input, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { quantity, unitPrice } from '../../../../_shared/buying/model'
 import { say } from '../../model'

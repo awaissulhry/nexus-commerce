@@ -48,10 +48,8 @@
     "reload": "Ricarica"
   },
   "save": {
-    "region": "Modifiche non salvate",
     "problems_one": "prima correggi {count} problema",
     "problems_other": "prima correggi {count} problemi",
-    "discard": "Annulla modifiche",
     "busy": "Salvataggio…",
     "save": "Salva",
     "create": "Salva impostazioni",

@@ -161,11 +161,7 @@
   },
   "detail": {
     "title": "Discrepancy {seq} · {receipt}",
-    "position": "{n} of {count}",
-    "previous": "Previous",
-    "next": "Next",
-    "first": "This is the first one.",
-    "last": "This is the last one.",
+    "noun": "discrepancy",
     "reason": "Reason",
     "line": "Line",
     "quantity": "Quantity",

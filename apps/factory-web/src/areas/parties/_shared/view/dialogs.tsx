@@ -2,8 +2,9 @@
 
 import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Banner, DateField, Field, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Kbd, SegmentedControl, Select, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, Input, Kbd, SegmentedControl, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ADDRESS_KINDS, CONTACT_ROLES, PARTY_TAX_MODES, type PartyRole, type PartyRow, type TaxMode } from '../api'
 import {

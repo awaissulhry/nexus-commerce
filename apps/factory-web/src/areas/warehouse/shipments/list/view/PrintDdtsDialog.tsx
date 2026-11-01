@@ -1,8 +1,8 @@
 'use client'
 
 import { CheckCircle2, CircleAlert, Printer } from 'lucide-react'
-import { Modal } from '@nexus/ui/components'
 import { Button, Pill, Spinner } from '@nexus/ui/primitives'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import type { ShipmentRow } from '../../api'
 import { printDdtsHeld, printDdtsPlan } from '../../daily-model'
