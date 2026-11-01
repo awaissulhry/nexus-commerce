@@ -99,6 +99,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Planning › Planning settings (SCR-124, B-W2a-59): a calendar opens on Calendars & shifts, a shift pattern in its editor.
   WorkCalendar: '/planning/settings?tab=calendars&cal=[id]',
   ShiftPattern: '/planning/settings?tab=calendars&pattern=[id]',
+  // B-W2b-55 People › Employees (SCR-085): an employee's record; a team opens on the Teams view of Employees.
+  Employee: '/people/employees/[id]',
+  Team: '/people/employees?view=teams&team=[id]',
 })
 
 /**
@@ -195,6 +198,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-60: the cuts across work orders (SCR-238, `?view=`, `?q=`) and scrap & rework (SCR-140, `?view=`, `?period=`).
   '/production/cutting/cuts': '/production/cutting',
   '/production/scrap': '/production/scrap',
+  // B-W2b-55: the HR register (SCR-084) reads `?tile=`, `?rows=`, `?q=` and `?view=teams`.
+  '/people/employees': '/people/employees',
 })
 
 export interface RecordRef {

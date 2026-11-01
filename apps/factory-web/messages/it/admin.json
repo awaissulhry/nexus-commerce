@@ -812,6 +812,8 @@
       "floorBody": "Nessuna e-mail: nome, stabilimento, badge e PIN."
     },
     "later": "Gli utenti dei partner arrivano in W2b; gli agenti IA in W3. Dare un ruolo a più persone, stampare i badge e reinviare gli inviti in una volta arrivano più avanti.",
+    "hrData": "I dati del personale (squadra, linea, contratto, uscita) sono in Persone › Dipendenti: questa pagina tiene l'accesso.",
+    "hrDataLink": "Apri Persone › Dipendenti",
     "worker": {
       "hint": "Un operatore accede dal tablet con badge e PIN; nessuna e-mail.",
       "minimal": "Solo ciò che serve al lavoro (GDPR art. 5(1)(c)): niente foto, data di nascita o documento.",

@@ -40,8 +40,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
   it('the rail: one area per tree area that has a W0–W2a page, in the tree\'s order and with its order number; Plant right above Admin at the foot', () => {
     expect(officeAreaDeclarations().map((d) => [d.order, d.area.id])).toEqual(OFFICE.map((area) => [area.order, area.id]))
     expect(OFFICE_NAV.areas.slice(-2).map((area) => area.id)).toEqual(['plant', 'admin'])
-    // People (the tree's 11) is W2b: no row of it ships in W2a.
-    expect(OFFICE_NAV.areas.map((area) => area.id)).not.toContain('people')
+    // People (the tree's 11) is W2b: B-W2b-55 ships its first page (Employees); its other rows show once their pages are built.
+    expect(OFFICE_NAV.areas.map((area) => area.id).slice(-3)).toEqual(['people', 'plant', 'admin'])
   })
 
   for (const locale of LOCALES) {
@@ -64,7 +64,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
   it('no later-wave page shows: every row is a W0–W2a page of the tree (or one moved earlier, named), none deferred', () => {
     const allowed = new Set(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter(shipped).map((page) => page.href))))
     // Every tree page is of a built wave, or says why it ships early.
-    expect(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => !['W0', 'W1', 'W2a'].includes(page.wave) && !page.early).map((page) => page.id)))).toEqual([])
+    // B-W2b-55: W2b is being built; its pages join the tree as they ship (People › Employees first).
+    expect(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => !['W0', 'W1', 'W2a', 'W2b'].includes(page.wave) && !page.early).map((page) => page.id)))).toEqual([])
     expect(rows(OFFICE_NAV).map((row) => row.href).filter((href) => !allowed.has(href))).toEqual([])
     const early = OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => page.early).map((page) => page.id)))
     expect(early).toEqual(['plant.settings', 'admin.overview'])
@@ -162,6 +163,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/plant/jobs': 'plant.view', // GET /plant/jobs
       '/plant/machines': 'plant.view', // GET /plant/machines
       '/plant/settings': 'plant.view', // GET /plant/symptoms (B-W2a-73)
+      // B-W2b-55: People › Employees.
+      '/people/employees': 'people.view', // GET /people/employees
       '/admin': 'companies.view', // the checklist reads the companies
       '/admin/companies': 'companies.view',
       '/admin/devices': 'devices.view',
@@ -457,7 +460,8 @@ describe('the two naming fixes', () => {
   for (const locale of LOCALES) {
     it(`${locale}: every "Area › Page" a text points to names a page or group of that area`, () => {
       const t = shellT(locale)
-      const nav = translateNav(OFFICE_NAV, t)
+      // B-W2b-55: a page an area declares and a later step builds (People's) is a page of that area too.
+      const nav = translateNav({ view: 'office', areas: officeAreaDeclarations().map((declaration) => declaration.area) }, t)
       const places = new Map(nav.areas.map((area) => [area.label, [...(area.sections ?? []).map((section) => section.label), ...rows({ ...nav, areas: [area] }).map((row) => row.label)]]))
       const wrong: string[] = []
       for (const [namespace, dictionary] of Object.entries(CATALOGUE[locale])) {

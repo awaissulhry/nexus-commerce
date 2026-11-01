@@ -812,6 +812,8 @@
       "floorBody": "No e-mail needed: a name, a site, a badge and a PIN."
     },
     "later": "Partner users come in W2b; AI agents in W3. Giving a role to many people, printing badges and resending invites in one go come later.",
+    "hrData": "HR data (team, line, contract, leaving) is kept in People › Employees: this page keeps the sign-in.",
+    "hrDataLink": "Open People › Employees",
     "worker": {
       "hint": "A floor worker signs in on a tablet with a badge and a PIN; no e-mail.",
       "minimal": "Only what the work needs (GDPR art. 5(1)(c)): no photo, birth date or national id.",

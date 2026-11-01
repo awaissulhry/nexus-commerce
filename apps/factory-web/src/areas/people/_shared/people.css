@@ -1,0 +1,344 @@
+/*
+ * People (SCR-084 Employees, SCR-085 the employee record and the badge sheet, the staff list print) LAYOUT: the page
+ * column, the head row with the privacy note, the list's cells, the team cards, the leavers' steps, the record band and
+ * its two columns, the dialogs' forms and the print pages. The controls are the design system's; semantic tokens only,
+ * no colours of their own. No page max-width (Owner rule 2026-10-29): the pages fill the shell's main area; wide screens
+ * put cards side by side.
+ */
+.fw-pp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pp-head,
+.fw-pp-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pp-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pp-chips,
+.fw-pp-actions,
+.fw-pp-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pp-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pp-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-pp-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-pp-text {
+  margin: 0;
+  color: var(--nds-text-strong);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-pp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pp-stack.tight {
+  gap: var(--nds-space-8);
+}
+
+.fw-pp-h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pp-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-pp-plain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-pp-grow {
+  flex: 1 1 auto;
+}
+
+/* ---- the lists' cells ---- */
+.fw-pp-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-pp-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pp-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fw-pp-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fw-pp-link {
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+
+.fw-pp-link:hover,
+.fw-pp-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-pp-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-pp-warning {
+  color: var(--nds-warning-text);
+}
+
+.fw-pp-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-pp-success {
+  color: var(--nds-success-text);
+}
+
+/* ---- the Teams view: one card per team, side by side on wide screens ---- */
+.fw-pp-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pp-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* ---- leavers in progress: a card per person, the steps as a list beside the stepper ---- */
+.fw-pp-leavers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pp-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-pp-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-pp-step-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+/* ---- the record: main column and the side panel (design RecordLayout); one column below 1100 px ---- */
+.fw-pp-split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (max-width: 1099px) {
+  .fw-pp-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pp-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+/* ---- dialogs and form cards ---- */
+.fw-pp-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--nds-space-10) var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pp-form .wide {
+  grid-column: 1 / -1;
+}
+
+.fw-pp-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pp-badges {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* ---- print pages (opened in a new tab; the shell's print stylesheet hides the frame) ---- */
+.fw-pp-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pp-print-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-pp-print-title {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  color: var(--nds-text-strong);
+}
+
+.fw-pp-sheet {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-pp-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.fw-pp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pp-table th,
+.fw-pp-table td {
+  text-align: start;
+  padding: var(--nds-space-4) var(--nds-space-6);
+  border-bottom: 1px solid var(--nds-border);
+  vertical-align: top;
+}
+
+.fw-pp-table th {
+  color: var(--nds-text-muted);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+@media print {
+  .fw-pp-print-button {
+    display: none;
+  }
+
+  .fw-pp-table-wrap {
+    overflow: visible;
+  }
+
+  .fw-pp-sheet > *,
+  .fw-pp-print .nds-card {
+    break-inside: avoid;
+  }
+}
+
+/* ---- a badge's QR inside LabelPreview's square ---- */
+.fw-pp-qr {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fw-pp-qr-dark {
+  fill: var(--nds-label-ink);
+}

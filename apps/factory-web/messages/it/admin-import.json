@@ -240,6 +240,10 @@
         "name": "Macchine",
         "fills": "Macchine e attrezzature per numero di cespite della targhetta, con sede, classe, marca, modello, postazione e fornitore."
       },
+      "people_employees": {
+        "name": "Dipendenti",
+        "fills": "I dipendenti per matricola (codice dipendente del file paghe), con nomi, tipo, agenzia, sede, linea, reparto, mansione, contratto, ore settimanali, date e lingua. Mai paghe, presenze o dati sanitari."
+      },
       "planning_itemParameters": {
         "name": "Pianificazione articoli",
         "fills": "Come ogni sede pianifica ogni articolo e colore: metodo, origine, fornitore, tempi e livelli di scorta."

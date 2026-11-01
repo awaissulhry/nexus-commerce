@@ -316,6 +316,10 @@ function UsersList({ model, actions }: { model: UsersViewModel; actions?: UsersA
         />
       )}
       <p className="fw-adm-hint">{t('users.later')}</p>
+      {/* B-W2b-55 (design admin.users conn "People › Employees (W2b) for HR data"): this page keeps the sign-in identity. */}
+      <p className="fw-adm-hint">
+        {t('users.hrData')} <Link href={`${model.prefix}/people/employees`}>{t('users.hrDataLink')}</Link>
+      </p>
 
       <InviteModal model={model} open={dialog === 'invite'} onClose={() => open(null)} actions={actions} />
       <AddWorkerModal model={model} open={dialog === 'add-worker'} onClose={() => open(null)} actions={actions} />
