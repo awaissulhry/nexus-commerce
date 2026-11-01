@@ -1821,6 +1821,7 @@
     "production_bundles_who": "Vedere chi c'è dietro un'anomalia (solo con il presupposto legale della sede attivo; registrato)",
     "people_piecerates_view": "Vedere le tabelle di cottimo, le loro versioni, chi le ha lette e l'interruttore legale del cottimo (le tariffe solo con il permesso sul cottimo)",
     "people_piecerates_manage": "Creare nuove versioni delle tariffe di cottimo, pubblicarle ai lavoratori, metterle in vigore, confermare le tariffe provvisorie e registrare i presupposti del cottimo",
-    "people_piecerates_switch": "Avviare il cottimo in una sede quando ogni presupposto legale è registrato, o fermarlo"
+    "people_piecerates_switch": "Avviare il cottimo in una sede quando ogni presupposto legale è registrato, o fermarlo",
+    "people_attendance_view": "Vedere le presenze delle tue sedi: entrate, uscite e pause, le giornate e chi è presente ora (dove la finalità presenze è attiva)"
   }
 }
