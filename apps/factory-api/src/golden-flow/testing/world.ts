@@ -6,6 +6,7 @@ import { expect } from 'vitest'
 import { seed as seedGoldenScenario } from '../../../../../packages/factory-db/seed/scenarios/golden-flow'
 import { seedUuid, type SeedContext } from '../../../../../packages/factory-db/src/seeding'
 import { newId } from '@nexus/factory-domain/core/ids'
+import { businessDate } from '@nexus/factory-domain/core/time'
 import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
 import { fakePrintRelay, type FakePrintRelay } from '../../adapters/print-relay/fake'
 import { FakeSdi } from '../../adapters/sdi/fake'
@@ -100,11 +101,27 @@ export interface World {
   close(): Promise<void>
 }
 
+/** How far the harness clock may run ahead in one flow (each two-factor act moves it 30 s on), with room to spare. */
+export const HARNESS_DRIFT_MS = 2 * 3_600_000
+
+/**
+ * Where the harness clock starts (B-W2b-36): now, unless its forward moves could carry it into the next Europe/Rome month
+ * while today() (the server clock) still reads this one — then two hours earlier, the same day. A month-end check
+ * (accounting reads the month of today()) then never meets a row the harness dated in the next month (the daily flow
+ * failed so within about an hour of 31 October). The server clock itself is not moved: a run that starts less than its
+ * own length before midnight of a month end still sees today() change on the way.
+ */
+export function harnessStart(now: Date): Date {
+  const month = (instant: Date) => businessDate(instant).slice(0, 7)
+  return month(new Date(now.getTime() + HARNESS_DRIFT_MS)) === month(now) ? now : new Date(now.getTime() - HARNESS_DRIFT_MS)
+}
+
 export async function startWorld(): Promise<World> {
   const h = await startHarness('golden')
   // Commands run on the server clock (core/command.ts); the harness clock (sign-in, two-factor, presigned URLs, the
-  // modules' own clocks below) starts at the same instant, so every date of the flow is today's.
-  h.clock.set(new Date())
+  // modules' own clocks below) starts at the same instant, so every date of the flow is today's — but never so close to
+  // a month end that its forward moves cross into the next month (harnessStart).
+  h.clock.set(harnessStart(new Date()))
   const context: SeedContext = { db: h.database, namespace: NAMESPACE }
   for (const file of readdirSync(SEED_DIR).filter((name) => name.endsWith('.ts')).sort()) {
     const module = (await import(pathToFileURL(`${SEED_DIR}${file}`).href)) as { seed: (context: SeedContext) => Promise<unknown> }
