@@ -2,10 +2,10 @@
 
 import Link from 'next/link'
 import { Check, CircleDashed, ExternalLink, SkipForward } from 'lucide-react'
-import { Card, Countdown, EmptyState, Stepper } from '@nexus/ui/components'
+import { Card, EmptyState, Stepper } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
+import { Countdown } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
-import { useDsLabels } from '../../../../lib/i18n/ds-labels'
 import { useLocale } from '../../../../lib/i18n/provider'
 import type { Leaver, LeaverStep } from '../../_shared/api'
 import { daysUntil, stepHref, zonedInstant, type PeopleCan } from '../../_shared/model'
@@ -72,7 +72,6 @@ export function LeaverCard({
 }) {
   const t = useWords()
   const locale = useLocale()
-  const ds = useDsLabels(timeZone)
   const place = { locale, timeZone }
   const steps = [...leaver.steps].sort((a, b) => a.seq - b.seq)
   const firstOpen = steps.findIndex((step) => step.status === 'OPEN')
@@ -98,7 +97,7 @@ export function LeaverCard({
         <p className="fw-pp-text">
           {t('leavers.lastDay', { day: lastDay })}{' '}
           {days >= 0 ? (
-            <Countdown to={zonedInstant(leaver.lastWorkingDay, '23:59', timeZone)} label={(left) => t('leavers.endsIn', { left })} doneLabel={t('leavers.ended')} labels={ds.countdown} />
+            <Countdown to={zonedInstant(leaver.lastWorkingDay, '23:59', timeZone)} label={(left) => t('leavers.endsIn', { left })} doneLabel={t('leavers.ended')} />
           ) : (
             <Tag tone="neutral">{t('leavers.afterLastDay')}</Tag>
           )}

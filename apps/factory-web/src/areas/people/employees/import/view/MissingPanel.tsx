@@ -2,11 +2,9 @@
 
 import { useId } from 'react'
 import Link from 'next/link'
-import { Banner, Card, DateField, Field } from '@nexus/ui/components'
+import { Banner, Card, Field } from '@nexus/ui/components'
 import { Button, Spinner, Tag } from '@nexus/ui/primitives'
-import { useDsLabels } from '../../../../../lib/i18n/ds-labels'
-import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
-import { useLocale } from '../../../../../lib/i18n/provider'
+import { DateField } from '../../../../../lib/i18n/ds-parts'
 import type { WizardActions } from '../../../../admin/import/view/ImportWizard'
 import type { SheetImport } from '../../../../products/styles/import/sheet-import'
 import { SheetImportDialog } from '../../../../products/styles/import/view/SheetImportDialog'
@@ -61,8 +59,6 @@ export function MissingPanel({
 
 function Missing({ missing, can, prefix, onDay, onStart, onDismiss }: { missing: MissingModel; can: PeopleCan; prefix: string; onDay?: (day: string) => void; onStart?: () => void; onDismiss?: () => void }) {
   const t = useWords()
-  const locale = useLocale()
-  const ds = useDsLabels()
   const id = useId()
   const waiting = missing.people.filter((person) => !person.leaving)
   const held = !can.manageLeavers ? t('held.noManageLeavers') : waiting.length === 0 ? t('held.allLeaving') : !missing.lastWorkingDay ? t('held.lastDay') : missing.busy ? t('held.busy') : null
@@ -94,7 +90,7 @@ function Missing({ missing, can, prefix, onDay, onStart, onDismiss }: { missing:
         {missing.done > 0 && <Banner tone="success" title={t('missing.done', { count: missing.done })} />}
         <div className="fw-pp-row">
           <Field label={t('leaver.lastDay')} htmlFor={`${id}-day`}>
-            <DateField id={`${id}-day`} value={missing.lastWorkingDay} locale={INTL_LOCALE[locale]} onChange={(value) => onDay?.(value)} labels={ds.dateField} />
+            <DateField id={`${id}-day`} value={missing.lastWorkingDay} onChange={(value) => onDay?.(value)} />
           </Field>
           <Button size="sm" variant="primary" heldReason={held} onClick={() => !held && onStart?.()}>
             {missing.busy ? <Spinner size={12} /> : null} {t('missing.start', { count: waiting.length })}

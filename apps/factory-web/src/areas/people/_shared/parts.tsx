@@ -3,14 +3,14 @@
 import { useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
 import { FileX, ShieldOff } from 'lucide-react'
-import { Banner, Card, EmptyState, Modal, Tabs, type TabItem } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Tabs, type TabItem } from '@nexus/ui/components'
 import { LawRef } from '@nexus/ui/components/LawRef/index'
 import { PrivacyNote } from '@nexus/ui/components/PrivacyNote/index'
 import { DetailHeader } from '@nexus/ui/patterns'
 import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { Modal, useDsWords } from '../../../lib/i18n/ds-parts'
 import { listKeys, type ListKey } from '../../../list-frame/model'
 import { formatTime } from '../../../lib/i18n/format'
-import { useDsLabels } from '../../../lib/i18n/ds-labels'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
 import type { EmployeeKind, Lifecycle, Sight } from './api'
@@ -24,7 +24,7 @@ import './people.css'
  * each pill says its state.
  */
 
-export const PEOPLE_NAMESPACES = ['people', 'lists', 'ds-words'] as const
+export const PEOPLE_NAMESPACES = ['people', 'lists'] as const
 
 export function PeopleMessages({ children }: { children?: ReactNode }) {
   return <WithMessages namespaces={PEOPLE_NAMESPACES}>{children}</WithMessages>
@@ -73,7 +73,7 @@ export type SightState = { status: 'loading' } | { status: 'allSites' } | { stat
  */
 export function PeoplePrivacyNote({ sight, variant = 'pill', text }: { sight: SightState; variant?: 'pill' | 'panel'; text?: string }) {
   const t = useWords()
-  const ds = useDsLabels()
+  const ds = useDsWords()
   const whoMore =
     sight.status === 'loading'
       ? t('privacy.reading')

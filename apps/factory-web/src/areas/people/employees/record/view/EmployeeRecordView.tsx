@@ -3,13 +3,11 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowRightLeft, ExternalLink, IdCard, LogOut, MoreHorizontal, Pencil, Upload } from 'lucide-react'
-import { AsOf, Banner, Card, Countdown, DateField, EmptyState, Field, KeyValue, Menu, SummaryTable, Timeline, type TabItem } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Field, KeyValue, Menu, SummaryTable, type TabItem } from '@nexus/ui/components'
 import { LawRef } from '@nexus/ui/components/LawRef/index'
-import { EditModeBar } from '@nexus/ui/patterns'
 import { Button, Input, Pill, Select, SegmentedControl, Tag } from '@nexus/ui/primitives'
+import { AsOf, Countdown, DateField, EditModeBar, Timeline, useDsWords } from '../../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
-import { useDsLabels } from '../../../../../lib/i18n/ds-labels'
-import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { EMPLOYEE_KINDS, type EmployeeRecord, type NextStep } from '../../../_shared/api'
 import { activityAction, activityChanges, hoursText, zonedInstant } from '../../../_shared/model'
@@ -156,12 +154,11 @@ function JumpTo({ href, onDone }: { href: string; onDone: () => void }) {
 // ---- the explicit edit (Identity, Job) -----------------------------------------------------------------------------------------
 
 function EditBar({ model, actions, t }: { model: EmployeeRecordModel; actions?: EmployeeRecordActions; t: Translate }) {
-  const ds = useDsLabels(model.timeZone)
   const edit = model.edit
   if (!edit) return null
   const heldKey = editHeld(edit.draft, edit.section)
   const held = heldKey ? t(heldKey) : edit.codeTaken ? t('refusal.CODE_TAKEN') : null
-  return <EditModeBar count={1} message={edit.problem ? say(t, edit.problem) : t('edit.unsaved')} onDiscard={actions?.onDiscard} onApply={actions?.onApply} applyLabel={t('edit.apply')} busy={edit.busy} applyHeldReason={held} saveShortcut labels={ds.editModeBar} />
+  return <EditModeBar count={1} message={edit.problem ? say(t, edit.problem) : t('edit.unsaved')} onDiscard={actions?.onDiscard} onApply={actions?.onApply} applyLabel={t('edit.apply')} busy={edit.busy} applyHeldReason={held} saveShortcut />
 }
 
 /** Why Apply is held, or null (a message key). */
@@ -185,7 +182,7 @@ export function editHeld(draft: EditDraft, section: 'identity' | 'job'): string 
 
 function Profile({ model, value, actions, manage, place }: { model: EmployeeRecordModel; value: EmployeeRecord; actions?: EmployeeRecordActions; manage: boolean; place: Place }) {
   const t = useWords()
-  const ds = useDsLabels(model.timeZone)
+  const ds = useDsWords()
   const id = useId()
   const employee = value.employee
   const editing = model.edit?.section === 'identity' ? model.edit : null
@@ -248,10 +245,10 @@ function Profile({ model, value, actions, manage, place }: { model: EmployeeReco
                 </Select>
               </Field>
               <Field label={t('field.startDate')} required htmlFor={`${id}-start`} error={error('startDate')}>
-                <DateField id={`${id}-start`} value={draft.startDate} locale={INTL_LOCALE[place.locale]} onChange={(next) => actions?.onDraft?.({ startDate: next })} labels={ds.dateField} />
+                <DateField id={`${id}-start`} value={draft.startDate} onChange={(next) => actions?.onDraft?.({ startDate: next })} />
               </Field>
               <Field label={t('field.endDate')} required={draft.kind === 'AGENCY'} htmlFor={`${id}-end`} error={error('endDate')}>
-                <DateField id={`${id}-end`} value={draft.endDate} locale={INTL_LOCALE[place.locale]} clearable clearLabel={t('field.clearDate')} onChange={(next) => actions?.onDraft?.({ endDate: next })} labels={ds.dateField} />
+                <DateField id={`${id}-end`} value={draft.endDate} clearable clearLabel={t('field.clearDate')} onChange={(next) => actions?.onDraft?.({ endDate: next })} />
               </Field>
               <button type="submit" hidden aria-hidden tabIndex={-1} />
             </form>
@@ -367,7 +364,6 @@ function FloorSignIn({ model, value, actions, place }: { model: EmployeeRecordMo
 /** The side panel (design "Side panel": status and the next step at a glance; each line links to the tab that fixes it). */
 function Side({ model, value, actions, place }: { model: EmployeeRecordModel; value: EmployeeRecord; actions?: EmployeeRecordActions; place: Place }) {
   const t = useWords()
-  const ds = useDsLabels(model.timeZone)
   const employee = value.employee
   const base = `${model.prefix}/people/employees/${encodeURIComponent(employee.id)}`
   const fixAt: Record<NextStep, string> = { NOTICE_NOT_ACKNOWLEDGED: `${model.prefix}/admin/privacy`, AGENCY_ENDING: base, LEAVING: base, NO_EMPLOYEE_CODE: base, STARTING: base }
@@ -402,12 +398,12 @@ function Side({ model, value, actions, place }: { model: EmployeeRecordModel; va
           />
           {employee.kind === 'AGENCY' && employee.endDate && (
             <p className="fw-pp-text">
-              {t('side.contractEnds', { day: dayText(employee.endDate, place) })} <Countdown to={zonedInstant(employee.endDate, '23:59', model.timeZone)} label={(left) => t('side.in', { left })} doneLabel={t('side.ended')} labels={ds.countdown} />
+              {t('side.contractEnds', { day: dayText(employee.endDate, place) })} <Countdown to={zonedInstant(employee.endDate, '23:59', model.timeZone)} label={(left) => t('side.in', { left })} doneLabel={t('side.ended')} />
             </p>
           )}
           {value.lastChange && (
             <p className="fw-pp-hint">
-              {t('side.lastChange', { by: value.lastChange.by ?? t('side.system') })} <AsOf at={value.lastChange.at} kind="event" labels={ds.asOf} />
+              {t('side.lastChange', { by: value.lastChange.by ?? t('side.system') })} <AsOf at={value.lastChange.at} kind="event" />
             </p>
           )}
         </div>
@@ -626,7 +622,6 @@ function valueWords(t: Translate, field: string, value: string | null, place: Pl
 
 function Activity({ model, value, place }: { model: EmployeeRecordModel; value: EmployeeRecord; place: Place }) {
   const t = useWords()
-  const ds = useDsLabels(model.timeZone)
   const [filter, setFilter] = useState<'all' | 'changes' | 'views'>('all')
   if (!model.can.audit) {
     return (
@@ -671,7 +666,7 @@ function Activity({ model, value, place }: { model: EmployeeRecordModel; value: 
       ) : (
         <Timeline
           label={t('activity.title')}
-          labels={ds.timeline}
+         
           steps={entries.map((entry) => {
             const changes = activityChanges(entry.before, entry.after)
             return {

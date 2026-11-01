@@ -3,13 +3,11 @@
 import { useId, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ExternalLink, Printer } from 'lucide-react'
-import { Banner, DateField, DateTimeField, Field, Modal } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { LabelPreview } from '@nexus/ui/components/LabelPreview/index'
-import { ReviewChangesModal } from '@nexus/ui/patterns'
-import { Button, Checkbox, Input, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { DateField, DateTimeField, Modal, ReviewChangesModal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatTime } from '../../../../lib/i18n/format'
-import { useDsLabels } from '../../../../lib/i18n/ds-labels'
-import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { EMPLOYEE_KINDS, type Ref, type SiteLine, type Team } from '../../_shared/api'
 import type { PeopleCan } from '../../_shared/model'
@@ -108,8 +106,6 @@ export function newDraftHeld(draft: NewDraft): string | null {
 
 function NewEmployeeDialog({ model, dialog, actions }: { model: DialogsModel; dialog: Extract<EmployeesDialog, { kind: 'new' }>; actions?: DialogActions }) {
   const t = useWords()
-  const locale = useLocale()
-  const ds = useDsLabels(model.timeZone)
   const id = useId()
   const draft = dialog.draft
   const patch = (next: Partial<NewDraft>) => actions?.onNewDraft?.(next)
@@ -122,7 +118,7 @@ function NewEmployeeDialog({ model, dialog, actions }: { model: DialogsModel; di
       onClose={() => actions?.onClose?.()}
       title={t('new.title')}
       size="lg"
-      labels={ds.modal}
+     
       footer={<Footer t={t} held={held} busy={dialog.busy} label={t('new.create')} actions={actions} />}
     >
       <Form held={held} onSubmit={actions?.onSubmit}>
@@ -164,10 +160,10 @@ function NewEmployeeDialog({ model, dialog, actions }: { model: DialogsModel; di
             <Input id={`${id}-role`} value={draft.jobRole} maxLength={80} onChange={(event) => patch({ jobRole: event.target.value })} />
           </Field>
           <Field label={t('field.startDate')} required htmlFor={`${id}-start`} error={error('startDate')}>
-            <DateField id={`${id}-start`} value={draft.startDate} locale={INTL_LOCALE[locale]} onChange={(value) => patch({ startDate: value })} labels={ds.dateField} />
+            <DateField id={`${id}-start`} value={draft.startDate} onChange={(value) => patch({ startDate: value })} />
           </Field>
           <Field label={t('field.endDate')} required={draft.kind === 'AGENCY'} hint={t(draft.kind === 'AGENCY' ? 'field.endAgencyHint' : 'field.endHint')} htmlFor={`${id}-end`} error={error('endDate')}>
-            <DateField id={`${id}-end`} value={draft.endDate} locale={INTL_LOCALE[locale]} clearable clearLabel={t('field.clearDate')} onChange={(value) => patch({ endDate: value })} labels={ds.dateField} />
+            <DateField id={`${id}-end`} value={draft.endDate} clearable clearLabel={t('field.clearDate')} onChange={(value) => patch({ endDate: value })} />
           </Field>
           <Field label={t('field.locale')} hint={t('field.localeHint')} htmlFor={`${id}-locale`} error={error('locale')}>
             <Select id={`${id}-locale`} value={draft.locale} onChange={(event) => patch({ locale: event.target.value })}>
@@ -233,7 +229,6 @@ export function loanHeld(dialog: Extract<EmployeesDialog, { kind: 'loan' }>, can
 function LoanDialog({ model, dialog, actions }: { model: DialogsModel; dialog: Extract<EmployeesDialog, { kind: 'loan' }>; actions?: DialogActions }) {
   const t = useWords()
   const locale = useLocale()
-  const ds = useDsLabels(model.timeZone)
   const id = useId()
   const place = { locale, timeZone: model.timeZone }
   const lines = model.lines.filter((line) => line.siteId === dialog.person.siteId && line.id !== dialog.person.homeLine?.id)
@@ -245,7 +240,7 @@ function LoanDialog({ model, dialog, actions }: { model: DialogsModel; dialog: E
   const label = dialog.endsAt ? (sameDay ? t('loan.submitUntil', { time: formatTime(dialog.endsAt, place) }) : t('loan.submitUntilDay', { day: formatDate(dialog.endsAt, place) })) : t('loan.submit')
   const error = (field: string) => (dialog.field === field ? say(t, dialog.problem) : null)
   return (
-    <Modal open onClose={() => actions?.onClose?.()} title={t('loan.title', { name: dialog.person.name })} size="md" labels={ds.modal} footer={<Footer t={t} held={held} busy={dialog.busy} label={label} actions={actions} />}>
+    <Modal open onClose={() => actions?.onClose?.()} title={t('loan.title', { name: dialog.person.name })} size="md" footer={<Footer t={t} held={held} busy={dialog.busy} label={label} actions={actions} />}>
       <Form held={held} onSubmit={actions?.onSubmit}>
         {dialog.problem && !dialog.field && <Banner tone="danger" title={say(t, dialog.problem) ?? ''} />}
         <p className="fw-pp-hint">{t('loan.from', { line: dialog.person.homeLine ? `${dialog.person.homeLine.code} · ${dialog.person.homeLine.name}` : t('loan.noHomeLine') })}</p>
@@ -271,10 +266,10 @@ function LoanDialog({ model, dialog, actions }: { model: DialogsModel; dialog: E
             </Select>
           </Field>
           <Field label={t('loan.startsAt')} required htmlFor={`${id}-from`} error={error('startsAt')}>
-            <DateTimeField id={`${id}-from`} value={dialog.startsAt} stepMinutes={15} locale={INTL_LOCALE[locale]} onChange={(value) => actions?.onLoan?.({ startsAt: value })} labels={ds.dateTimeField} />
+            <DateTimeField id={`${id}-from`} value={dialog.startsAt} stepMinutes={15} onChange={(value) => actions?.onLoan?.({ startsAt: value })} />
           </Field>
           <Field label={t('loan.endsAt')} required htmlFor={`${id}-to`} error={error('endsAt')} hint={t('loan.endsAtHint')}>
-            <DateTimeField id={`${id}-to`} value={dialog.endsAt} stepMinutes={15} locale={INTL_LOCALE[locale]} onChange={(value) => actions?.onLoan?.({ endsAt: value })} labels={ds.dateTimeField} />
+            <DateTimeField id={`${id}-to`} value={dialog.endsAt} stepMinutes={15} onChange={(value) => actions?.onLoan?.({ endsAt: value })} />
           </Field>
           <Field label={t('field.reason')} required htmlFor={`${id}-reason`} error={error('reason')} className="wide">
             <Input id={`${id}-reason`} value={dialog.reason} maxLength={500} placeholder={t('loan.reasonExample')} onChange={(event) => actions?.onLoan?.({ reason: event.target.value })} />
@@ -303,7 +298,6 @@ function SkillCheck({ t, dialog, line, can }: { t: Translate; dialog: Extract<Em
 function LeaverDialog({ model, dialog, actions }: { model: DialogsModel; dialog: Extract<EmployeesDialog, { kind: 'leaver' }>; actions?: DialogActions }) {
   const t = useWords()
   const locale = useLocale()
-  const ds = useDsLabels(model.timeZone)
   const id = useId()
   const preview = dialog.preview
   const refusal = preview?.refusal ? t(`refusal.${preview.refusal.code}`) : null
@@ -323,11 +317,11 @@ function LeaverDialog({ model, dialog, actions }: { model: DialogsModel; dialog:
       ].filter((line): line is string => line !== null)
     : []
   return (
-    <Modal open onClose={() => actions?.onClose?.()} title={t('leaver.title', { name: dialog.person.name })} size="md" labels={ds.modal} footer={<Footer t={t} held={held} busy={dialog.busy} label={t('leaver.submit')} actions={actions} />}>
+    <Modal open onClose={() => actions?.onClose?.()} title={t('leaver.title', { name: dialog.person.name })} size="md" footer={<Footer t={t} held={held} busy={dialog.busy} label={t('leaver.submit')} actions={actions} />}>
       <Form held={held} onSubmit={actions?.onSubmit}>
         {dialog.problem && <Banner tone="danger" title={say(t, dialog.problem) ?? ''} />}
         <Field label={t('leaver.lastDay')} required htmlFor={`${id}-day`} hint={t('leaver.lastDayHint')}>
-          <DateField id={`${id}-day`} value={dialog.lastWorkingDay} locale={INTL_LOCALE[locale]} onChange={(value) => actions?.onLeaver?.({ lastWorkingDay: value })} labels={ds.dateField} />
+          <DateField id={`${id}-day`} value={dialog.lastWorkingDay} onChange={(value) => actions?.onLeaver?.({ lastWorkingDay: value })} />
         </Field>
         <div className="fw-pp-stack tight">
           <Checkbox checked={dialog.exitVisit} label={t('leaver.exitVisitAsk')} onChange={(event) => actions?.onLeaver?.({ exitVisit: event.target.checked })} />
@@ -363,7 +357,6 @@ export function badgeWords(t: Translate, companyName: string): BadgeWords {
 
 function BadgesDialog({ model, people, actions }: { model: DialogsModel; people: Person[]; actions?: DialogActions }) {
   const t = useWords()
-  const ds = useDsLabels(model.timeZone)
   const words = badgeWords(t, model.companyName)
   const href = badgeSheetHref(model.prefix, people.map((person) => person.id))
   const shown = people.slice(0, 12)
@@ -373,7 +366,7 @@ function BadgesDialog({ model, people, actions }: { model: DialogsModel; people:
       onClose={() => actions?.onClose?.()}
       title={t('badges.title', { count: people.length })}
       size="lg"
-      labels={ds.modal}
+     
       footer={
         <>
           <span className="fw-pp-grow" />
@@ -417,7 +410,6 @@ function BadgesDialog({ model, people, actions }: { model: DialogsModel; people:
 
 function TeamChangeDialog({ model, dialog, actions }: { model: DialogsModel; dialog: Extract<EmployeesDialog, { kind: 'teamChange' }>; actions?: DialogActions }) {
   const t = useWords()
-  const ds = useDsLabels(model.timeZone)
   const id = useId()
   const sites = new Set(dialog.people.map((person) => person.siteId))
   const teams = model.teams.filter((team) => team.status === 'ACTIVE' && sites.has(team.site.id))
@@ -425,7 +417,7 @@ function TeamChangeDialog({ model, dialog, actions }: { model: DialogsModel; dia
   if (!dialog.reviewing) {
     const held = !model.can.manageTeams ? t('held.noManageTeams') : null
     return (
-      <Modal open onClose={() => actions?.onClose?.()} title={t('teamChange.title', { count: dialog.people.length })} size="md" labels={ds.modal} footer={<Footer t={t} held={held} busy={false} label={t('teamChange.review')} actions={{ ...actions, onSubmit: actions?.onReview }} />}>
+      <Modal open onClose={() => actions?.onClose?.()} title={t('teamChange.title', { count: dialog.people.length })} size="md" footer={<Footer t={t} held={held} busy={false} label={t('teamChange.review')} actions={{ ...actions, onSubmit: actions?.onReview }} />}>
         <Form held={held} onSubmit={actions?.onReview}>
           <Field label={t('teamChange.to')} required htmlFor={`${id}-team`} hint={sites.size > 1 ? t('teamChange.manySites') : undefined}>
             <Select id={`${id}-team`} autoFocus value={dialog.teamId ?? ''} onChange={(event) => actions?.onTeam?.(event.target.value || null)}>
@@ -476,8 +468,8 @@ function TeamChangeDialog({ model, dialog, actions }: { model: DialogsModel; dia
       onSave={() => actions?.onSubmit?.()}
       onRetry={() => actions?.onReview?.()}
       onDone={() => actions?.onClose?.()}
-      doneVerb={ds.reviewDoneVerb}
-      labels={ds.review}
+     
+     
     />
   )
 }
@@ -486,14 +478,13 @@ function TeamChangeDialog({ model, dialog, actions }: { model: DialogsModel; dia
 
 function AddTeamDialog({ model, dialog, actions }: { model: DialogsModel; dialog: Extract<EmployeesDialog, { kind: 'addTeam' }>; actions?: DialogActions }) {
   const t = useWords()
-  const ds = useDsLabels(model.timeZone)
   const id = useId()
   const lines = model.lines.filter((line) => line.siteId === dialog.siteId)
   const heldKey = !model.can.manageTeams ? 'held.noManageTeams' : !dialog.siteId ? 'held.site' : !dialog.code.trim() || !dialog.name.trim() ? 'held.teamNames' : null
   const held = heldKey ? t(heldKey) : dialog.busy ? t('held.busy') : null
   const error = (field: string) => (dialog.field === field ? say(t, dialog.problem) : null)
   return (
-    <Modal open onClose={() => actions?.onClose?.()} title={t('addTeam.title')} size="md" labels={ds.modal} footer={<Footer t={t} held={held} busy={dialog.busy} label={t('addTeam.submit')} actions={actions} />}>
+    <Modal open onClose={() => actions?.onClose?.()} title={t('addTeam.title')} size="md" footer={<Footer t={t} held={held} busy={dialog.busy} label={t('addTeam.submit')} actions={actions} />}>
       <Form held={held} onSubmit={actions?.onSubmit}>
         {dialog.problem && !dialog.field && <Banner tone="danger" title={say(t, dialog.problem) ?? ''} />}
         <div className="fw-pp-form">
@@ -533,18 +524,17 @@ function AddTeamDialog({ model, dialog, actions }: { model: DialogsModel; dialog
 
 function ReasonDialog({ dialog, actions }: { dialog: Extract<EmployeesDialog, { kind: 'skip' | 'cancelLeaving' }>; actions?: DialogActions }) {
   const t = useWords()
-  const ds = useDsLabels()
   const id = useId()
   const held = !dialog.reason.trim() ? t('held.reason') : dialog.busy ? t('held.busy') : null
   const skip = dialog.kind === 'skip'
   const title = skip ? t('skip.title', { step: t(`step.${dialog.step.kind}`) }) : t('cancelLeaving.title', { name: dialog.leaver.employee.name })
   return (
-    <Modal open onClose={() => actions?.onClose?.()} title={title} size="sm" labels={ds.modal} footer={<Footer t={t} held={held} busy={dialog.busy} label={skip ? t('skip.submit') : t('cancelLeaving.submit')} actions={actions} />}>
+    <Modal open onClose={() => actions?.onClose?.()} title={title} size="sm" footer={<Footer t={t} held={held} busy={dialog.busy} label={skip ? t('skip.submit') : t('cancelLeaving.submit')} actions={actions} />}>
       <Form held={held} onSubmit={actions?.onSubmit}>
         {dialog.problem && <Banner tone="danger" title={say(t, dialog.problem) ?? ''} />}
         <p className="fw-pp-hint">{skip ? t('skip.body') : t('cancelLeaving.body')}</p>
         <Field label={t('field.reason')} required htmlFor={`${id}-reason`}>
-          <Textarea id={`${id}-reason`} autoFocus rows={3} value={dialog.reason} maxLength={500} onChange={(event) => actions?.onReason?.(event.target.value)} labels={ds.textarea} />
+          <Textarea id={`${id}-reason`} autoFocus rows={3} value={dialog.reason} maxLength={500} onChange={(event) => actions?.onReason?.(event.target.value)} />
         </Field>
       </Form>
     </Modal>
@@ -555,10 +545,9 @@ function ReasonDialog({ dialog, actions }: { dialog: Extract<EmployeesDialog, { 
 
 function LinkDialog({ dialog, actions }: { dialog: Extract<EmployeesDialog, { kind: 'link' }>; actions?: DialogActions }) {
   const t = useWords()
-  const ds = useDsLabels()
   const held = dialog.workers.length === 0 ? t('held.noneToLink') : dialog.busy ? t('held.busy') : null
   return (
-    <Modal open onClose={() => actions?.onClose?.()} title={t('link.title', { count: dialog.workers.length })} size="md" labels={ds.modal} footer={<Footer t={t} held={held} busy={dialog.busy} label={t('link.submit', { count: dialog.workers.length })} actions={actions} />}>
+    <Modal open onClose={() => actions?.onClose?.()} title={t('link.title', { count: dialog.workers.length })} size="md" footer={<Footer t={t} held={held} busy={dialog.busy} label={t('link.submit', { count: dialog.workers.length })} actions={actions} />}>
       <div className="fw-pp-dialog">
         <p className="fw-pp-hint">{t('link.body')}</p>
         <ul className="fw-pp-list">
