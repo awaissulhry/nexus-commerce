@@ -118,6 +118,8 @@ import { PEOPLE_SKILLS_DEFINITIONS, PEOPLE_SKILLS_PERMISSIONS } from '../../peop
 import { PEOPLE_PIECERATES_DEFINITIONS, PEOPLE_PIECERATES_PERMISSIONS } from '../../people/piecerates/permissions'
 // B-W2b-33: clock in and out (people.attendance.view: the attendance read; clocking itself is the floor's).
 import { PEOPLE_CLOCK_DEFINITIONS, PEOPLE_CLOCK_PERMISSIONS } from '../../people/clock/permissions'
+// B-W2b-37: attendance days (people.attendance.manage | approve | settings | rollcall).
+import { PEOPLE_ATTENDANCE_DEFINITIONS, PEOPLE_ATTENDANCE_PERMISSIONS } from '../../people/attendance/permissions'
 // B-W2b-45: labour records and corrections (production.labour.view | close | reopen | answer).
 import { PRODUCTION_LABOUR_DEFINITIONS, PRODUCTION_LABOUR_PERMISSIONS } from '../../production/labour/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
@@ -516,6 +518,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PEOPLE_PIECERATES_DEFINITIONS,
   // B-W2b-33: clock in and out.
   PEOPLE_CLOCK_DEFINITIONS,
+  // B-W2b-37: attendance days.
+  PEOPLE_ATTENDANCE_DEFINITIONS,
   // B-W2b-45: labour records and corrections.
   PRODUCTION_LABOUR_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -629,6 +633,8 @@ for (const name of PEOPLE_SKILLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of PEOPLE_PIECERATES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-33: clock in and out.
 for (const name of PEOPLE_CLOCK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-37: attendance days.
+for (const name of PEOPLE_ATTENDANCE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-45: labour records and corrections.
 for (const name of PRODUCTION_LABOUR_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

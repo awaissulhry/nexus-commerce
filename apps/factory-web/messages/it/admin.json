@@ -1822,6 +1822,10 @@
     "people_piecerates_view": "Vedere le tabelle di cottimo, le loro versioni, chi le ha lette e l'interruttore legale del cottimo (le tariffe solo con il permesso sul cottimo)",
     "people_piecerates_manage": "Creare nuove versioni delle tariffe di cottimo, pubblicarle ai lavoratori, metterle in vigore, confermare le tariffe provvisorie e registrare i presupposti del cottimo",
     "people_piecerates_switch": "Avviare il cottimo in una sede quando ogni presupposto legale è registrato, o fermarlo",
-    "people_attendance_view": "Vedere le presenze delle tue sedi: entrate, uscite e pause, le giornate e chi è presente ora (dove la finalità presenze è attiva)"
+    "people_attendance_view": "Vedere le presenze delle tue sedi: entrate, uscite e pause, le giornate e chi è presente ora (dove la finalità presenze è attiva)",
+    "people_attendance_manage": "Inserire e correggere a mano le giornate di presenza, sempre con un motivo (entrata o uscita mancante, un doppione annullato, lavoro fuori sede, un codice di assenza); riaprire una giornata approvata",
+    "people_attendance_approve": "Approvare le giornate di presenza senza anomalie aperte (mai le proprie)",
+    "people_attendance_settings": "Gestire i codici di assenza con il codice LUL del consulente del lavoro e le regole di arrotondamento, tolleranza e straordinario",
+    "people_attendance_rollcall": "Aprire l'appello di una sede: chi ha timbrato l'entrata ora, per un'evacuazione (ogni apertura è registrata)"
   }
 }
