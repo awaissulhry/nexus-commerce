@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ScanLine, Search, UserPlus, Wrench } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { JOB_TYPES, MANUAL_JOB_SOURCES, PRIORITIES } from '../../_shared/api'
 import { assigneeWords, labelOf } from '../../_shared/model'

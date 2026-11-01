@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Check, Minus, Plus } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, Modal, SummaryTable } from '@nexus/ui/components'
-import { EditModeBar } from '@nexus/ui/patterns'
+import { Banner, Card, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Pill, Tag } from '@nexus/ui/primitives'
+import { EditModeBar, Modal } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import type { CoverageCell, StyleView } from '../../api'
 import { RangeFields, type RangeValue } from '../../forms'

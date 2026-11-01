@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { AlertTriangle, CalendarClock, CheckCircle2, FilePlus2, Search, Send, XCircle } from 'lucide-react'
-import { Banner, Card, DateField, Field, Modal, SummaryTable } from '@nexus/ui/components'
-import { Button, Input, Pill, RadioCard, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Card, Field, SummaryTable } from '@nexus/ui/components'
+import { Button, Input, Pill, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
@@ -50,7 +51,7 @@ export function PlanDialogs({ model, actions, ownKeys }: { model: PlanModel; act
           </li>
         ))}
         <li>
-          <b>⌘ ↑ ⌘ ↓</b> — {t('why.walk')}
+          <b>J K</b> — {t('why.walk')}
         </li>
       </ul>
     </Modal>

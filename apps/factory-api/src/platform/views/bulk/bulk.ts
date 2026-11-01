@@ -20,7 +20,7 @@ import { ApiError } from '../../../core/errors'
 import type { z } from 'zod'
 import type { applyBulkContract, ApplyBulkBody, previewBulkContract, PreviewBulkBody } from './contract'
 import { bulkTargetOf } from './registry'
-import type { AnyBulkTarget } from './target'
+import { BulkRowRefused, type AnyBulkTarget } from './target'
 
 /**
  * Bulk edit with preview and inline edit (B-W2b-13; PLT-182, PLT-166). The preview reads the asked rows as they are now
@@ -77,12 +77,19 @@ function factsOf(caller: CommandCaller, target: AnyBulkTarget, row: unknown): Bu
   return { id: target.idOf(row), label: target.labelOf(row), version: target.versionOf(row), values, held }
 }
 
-type RefusalView = { code: BulkRefusal['code']; field: string | null; status: string | null }
-const refusalView = (refusal: BulkRefusal | null): RefusalView | null => (refusal ? { code: refusal.code, field: refusal.field ?? null, status: refusal.status ?? null } : null)
+type RefusalView = { code: BulkRefusal['code']; field: string | null; status: string | null; reasons?: string[] }
+const refusalView = (refusal: BulkRefusal | null): RefusalView | null =>
+  refusal ? { code: refusal.code, field: refusal.field ?? null, status: refusal.status ?? null, ...(refusal.reasons ? { reasons: [...refusal.reasons] } : {}) } : null
+
+/** B-W2b-51: a target whose rows are heavy to read reaches fewer rows at once (400 in words). */
+function assertRows(target: AnyBulkTarget, count: number, path: string): void {
+  if (target.maxRows !== undefined && count > target.maxRows) throw new ValidationError(`Up to ${target.maxRows} rows at once here.`, [{ path, message: `Choose at most ${target.maxRows} rows.` }])
+}
 
 /** POST /views/bulk/preview: old → new per row in the order asked; nothing is written. */
 export async function previewBulk(caller: CommandCaller, body: PreviewBulkBody): Promise<z.infer<(typeof previewBulkContract.response)[200]>> {
   const target = targetFor(caller, body.listKey)
+  assertRows(target, body.ids.length, 'body/ids')
   const { values, issues } = checkedChanges(caller, target, body.changes, body.ids.length, 'body')
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
   const rows = await target.load(caller, body.ids)
@@ -123,6 +130,7 @@ type ResultView = Omit<BulkResult, 'refusal'> & { refusal: RefusalView | null }
 /** POST /views/bulk/apply: each row through the record's own command, in the order asked. */
 export async function applyBulk(caller: CommandCaller, body: ApplyBulkBody, idempotencyKey?: string): Promise<z.infer<(typeof applyBulkContract.response)[200]>> {
   const target = targetFor(caller, body.listKey)
+  assertRows(target, body.rows.length, 'body/rows')
   const asked = body.rows.map((row, index) => {
     const { values, issues } = checkedChanges(caller, target, row.changes, 1, `body/rows/${index}`)
     return { row, values, issues }
@@ -172,7 +180,8 @@ export async function applyBulk(caller: CommandCaller, body: ApplyBulkBody, idem
       const now = factsOf(caller, target, after)
       results.push({ id: row.id, label: now.label, ok: true, refusal: null, before, after: Object.fromEntries(fields.map((field) => [field, now.values[field] ?? null])), version: now.version })
     } catch (error) {
-      results.push(refused(refusalOfError(kindOf(error), fieldOf(error, fields), target.statusOf?.(current) ?? null)))
+      // B-W2b-51: a refusal the target words in its own codes, as it is.
+      results.push(refused(error instanceof BulkRowRefused ? error.refusal : refusalOfError(kindOf(error), fieldOf(error, fields), target.statusOf?.(current) ?? null)))
     }
   }
   return { results }

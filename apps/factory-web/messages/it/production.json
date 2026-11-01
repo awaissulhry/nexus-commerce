@@ -115,25 +115,6 @@
     "released": "Rilasciato · lotto {batch}",
     "held": "Ancora in bozza: {checks}"
   },
-  "csv": {
-    "number": "Ordine",
-    "batch": "Lotto",
-    "status": "Stato",
-    "style": "Modello",
-    "styleName": "Nome modello",
-    "colourways": "Varianti colore",
-    "customer": "Cliente",
-    "orders": "Ordini di vendita",
-    "pieces": "Pezzi",
-    "cut": "Tagliati",
-    "bundled": "In fasci",
-    "sewn": "Cuciti",
-    "finished": "Finiti",
-    "due": "Data di consegna",
-    "daysLate": "Giorni di ritardo",
-    "priority": "Priorità",
-    "site": "Sede"
-  },
   "held": {
     "noManage": "Puoi vedere gli ordini, non modificarli (workorders.manage)",
     "noRelease": "Per rilasciare serve il permesso di rilascio (workorders.release)",

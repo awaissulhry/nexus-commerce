@@ -1,8 +1,9 @@
 'use client'
 
 import { CheckCircle2, ShieldCheck } from 'lucide-react'
-import { Banner, Field, Modal, SummaryTable } from '@nexus/ui/components'
-import { Button, Input, Pill, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field, SummaryTable } from '@nexus/ui/components'
+import { Button, Input, Pill, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { checkKey } from '../model'
 import { useWords } from '../shared/parts'
 import { expectedPhrase, releasable, releaseHeldKey, whyNot, type ReleaseActions, type ReleaseDialogModel } from './model'

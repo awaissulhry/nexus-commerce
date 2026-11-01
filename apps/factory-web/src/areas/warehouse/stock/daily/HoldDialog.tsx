@@ -1,8 +1,9 @@
 'use client'
 
 import { PauseCircle } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { unitTotals } from '../../../_shared/stock/model'
 import { useUnitWord } from '../../../_shared/stock/parts'

@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useId } from 'react'
-import { Banner, Field, Listbox, Modal } from '@nexus/ui/components'
-import { Button, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field, Listbox } from '@nexus/ui/components'
+import { Button, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { FINISH_REASONS, type FinishReason } from '../model'
 import type { CloseActions, CloseModel } from '../view-model'
 import { say, useWords } from './parts'

@@ -161,6 +161,19 @@ export async function progressTotalsOf(db: Reader, workOrder: Pick<Header, 'id' 
   }
 }
 
+/**
+ * B-W2b-51 (MES-010): the genealogy of splits — the work order this one was split from, and those split from it (each with
+ * its pieces). Two reads; nothing else of the others.
+ */
+async function genealogyOf(db: Reader, workOrder: Pick<Header, 'id' | 'splitFromId'>) {
+  const from = workOrder.splitFromId ? await db.workOrder.findUnique({ where: { id: workOrder.splitFromId }, select: { id: true, number: true, status: true } }) : null
+  const children = await db.workOrder.findMany({ where: { splitFromId: workOrder.id }, select: { id: true, number: true, status: true, sizes: { select: { quantity: true } } }, orderBy: { number: 'asc' } })
+  return {
+    splitFrom: from,
+    splits: children.map((child) => ({ id: child.id, number: child.number, status: child.status, pieces: child.sizes.reduce((sum, cell) => sum + cell.quantity, 0) })),
+  }
+}
+
 /** The record of one work order, read with one reader (a request's client, or the command's transaction). */
 export async function workOrderView(db: Reader, workOrder: Header, today: BusinessDate, loaded?: Basics) {
   const basics = loaded ?? (await readBasics(db, workOrder))
@@ -177,6 +190,7 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
   const pieces = cells.reduce((sum, cell) => sum + cell.quantity, 0)
   const perGarment = plan.operations.reduce<Decimal>((sum, op) => sum.plus(op.standardMinutes), ZERO)
   const dueDate = dayOrNull(workOrder.dueDate)
+  const genealogy = await genealogyOf(db, workOrder)
   return {
     id: workOrder.id,
     number: workOrder.number,
@@ -193,6 +207,10 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
     dueDate,
     daysLate: daysLate(workOrder.status, dueDate, today),
     priority: workOrder.priority,
+    // B-W2b-51 (MES-009, MES-010): the rush flag and the genealogy of splits.
+    rush: workOrder.rush,
+    splitFrom: genealogy.splitFrom,
+    splits: genealogy.splits,
     note: workOrder.note,
     release: await releaseOf(db, workOrder),
     startedAt: at(workOrder.startedAt),

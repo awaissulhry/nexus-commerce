@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
-import { Banner, DateField, Field, Modal } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { SizeGridEditor, type SizeGridIssue } from '@nexus/ui/grid'
 import { Button, Checkbox, Input, RadioCard, Spinner } from '@nexus/ui/primitives'
+import { DateField, Modal } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { sizeGridCopy } from '../../_shared/grid-copy'
 import type { ProductionCan } from '../../_shared/model'

@@ -1,10 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore, type ComponentType } from 'react'
-import { CellSaveMark, CellSaveTracker, numericEditor, type CellSaveState, roundTripClassRules, SAVED_FADE_MS, selectEditor, type ColDef, type GridApi, type ICellRendererParams } from '@nexus/ui/grid'
+import { CellSaveTracker, numericEditor, type CellSaveState, roundTripClassRules, SAVED_FADE_MS, selectEditor, type ColDef, type GridApi, type ICellRendererParams } from '@nexus/ui/grid'
 import type { CellSaveMarkLabels } from '@nexus/ui/grid'
 import type { SaveStatusState } from '@nexus/ui/components/SaveStatus/index'
 import { Input } from '@nexus/ui/primitives'
+import { CellSaveMark } from '../../lib/i18n/ds-parts'
 import type { BulkRefusal, BulkValue } from '@nexus/factory-domain/views/bulk/rules'
 import type { ListToolsTransport } from '../tools/transport'
 import { refusalKey, typedValue, valueProblemKey, type ListEdit, type ListEditField } from './model'

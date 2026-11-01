@@ -2,8 +2,9 @@
 
 import { useRef, type ReactNode } from 'react'
 import { Camera } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Input, RadioCard, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, Input, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { CONTAINMENT_KINDS, type NcrRecord } from '../../api'
 import { NoticeLine } from '../../parts'
 import {

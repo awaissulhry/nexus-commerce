@@ -2,8 +2,8 @@
 
 import { useMemo, type ReactNode } from 'react'
 import { Check, CircleDashed, CircleDot, Minus, Undo2, Wrench } from 'lucide-react'
-import { Modal } from '@nexus/ui/components'
 import { Pill, Tag, type Tone } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime, formatNumber } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Translate } from '../../../../lib/i18n/messages'

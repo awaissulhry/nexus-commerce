@@ -1,8 +1,9 @@
 'use client'
 
 import { Search } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Input, SegmentedControl, Spinner, Tag, Textarea, Toggle } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, Input, SegmentedControl, Spinner, Tag, Toggle } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import { CheckList, type CheckLine } from '../../../../quality/_shared/parts'
 import type { CertificateDetail } from '../../api'

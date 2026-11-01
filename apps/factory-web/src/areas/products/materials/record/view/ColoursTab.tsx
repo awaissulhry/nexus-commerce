@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react'
 import { Archive, MoreHorizontal, Plus, RotateCcw } from 'lucide-react'
-import { Banner, EmptyState, Field, Menu, Modal } from '@nexus/ui/components'
+import { Banner, EmptyState, Field, Menu } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select } from '@nexus/ui/primitives'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { useT } from '../../../../../lib/i18n/provider'
 import { refusedField } from '../../../library/model'

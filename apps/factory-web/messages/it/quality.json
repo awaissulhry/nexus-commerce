@@ -65,10 +65,6 @@
     }
   },
   "check": {
-    "OK": "Fatto",
-    "OPEN": "Da fare",
-    "NOT_NEEDED": "Non serve",
-    "UNKNOWN": "Non noto",
     "NOT_YET": "Non ancora"
   },
   "stepUp": {

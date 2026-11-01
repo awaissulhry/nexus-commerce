@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Check, Search } from 'lucide-react'
-import { Banner, Field, Modal, phraseMatchState, SummaryTable } from '@nexus/ui/components'
-import { Button, Input, Select, Spinner, Textarea, Toggle } from '@nexus/ui/primitives'
+import { Search } from 'lucide-react'
+import { Banner, Field, phraseMatchState, SummaryTable } from '@nexus/ui/components'
+import { Button, Input, Select, Spinner, Toggle } from '@nexus/ui/primitives'
+import { ConfirmPhraseField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { quantity } from '../../../../_shared/stock/model'
@@ -238,20 +239,8 @@ function SignOffDialog({ value, model, dialog, actions }: { value: CountRecord; 
           <option value="en">{t('signOff.en')}</option>
         </Select>
       </Field>
-      <Field
-        label={
-          <>
-            {t('signOff.type')} <strong className="fw-cn-code">{value.number}</strong>
-          </>
-        }
-        hint={
-          <span className={state === 'match' ? 'fw-cn-success' : state === 'mismatch' ? 'fw-cn-danger' : undefined} aria-live="polite">
-            {state === 'match' && <Check size={12} aria-hidden />} {t(`signOff.state.${state}`)}
-          </span>
-        }
-      >
-        <Input autoFocus autoComplete="off" spellCheck={false} value={dialog.phrase} onChange={(event) => actions?.onDialog?.({ ...dialog, phrase: event.target.value })} />
-      </Field>
+      {/* The DS ConfirmPhraseField (B-W2b-18): "Type CNT-… exactly to confirm" and its state, in the person's language. */}
+      <ConfirmPhraseField phrase={value.number} value={dialog.phrase} onChange={(phrase) => actions?.onDialog?.({ ...dialog, phrase })} autoFocus />
       <p className="fw-cn-hint">{t('valued.law')}</p>
     </Frame>
   )

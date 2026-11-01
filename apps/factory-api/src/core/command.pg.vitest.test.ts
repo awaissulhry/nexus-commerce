@@ -20,7 +20,7 @@ import {
   type PendingEvent,
 } from './command'
 import type { RequestContext } from './context'
-import { ApiError } from './errors'
+import { ApiError, BUSY_RETRY_AFTER_SECONDS, mapError } from './errors'
 
 /**
  * command() on the local stack: a throwaway PostgreSQL 17 database built from the migrations, the runtime login
@@ -494,5 +494,55 @@ describe('append-only ledgers (A1 §2.1)', () => {
     )
     await expect(admin('DELETE FROM "IdempotencyReceipt" WHERE id = $1 RETURNING id', [expired])).resolves.toEqual([{ id: expired }])
     await expect(admin(`UPDATE "IdempotencyReceipt" SET "expiresAt" = now() - interval '1 day'`)).rejects.toThrow(/append-only/)
+  })
+})
+
+describe('a busy database (B-W2b-F2): Prisma\'s own errors, answered 503 "busy, try again", never 500', () => {
+  const busy = { status: 503, code: 'not_ready', message: 'The factory is busy. Try again in a moment.', unexpected: false, retryAfterSeconds: BUSY_RETRY_AFTER_SECONDS }
+
+  it('no pool connection within maxWait: P2028, nothing written; the command holding the connection still commits', async () => {
+    const small = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 1 } })
+    try {
+      const holding = await newSite()
+      const waiting = await newSite()
+      let release!: () => void
+      const held = new Promise<void>((resolve) => (release = resolve))
+      let entered!: () => void
+      const inside = new Promise<void>((resolve) => (entered = resolve))
+      const holder = rename(callerFor(small, officeA()), { siteId: holding, name: 'Holder', key: key() }, SETTINGS, async () => {
+        entered()
+        await held
+      })
+      await inside
+      const error = await rename(callerFor(small, officeA()), { siteId: waiting, name: 'Waiting', key: key() }, { ...SETTINGS, maxWaitMs: 200 }).then(
+        () => null,
+        (failure: unknown) => failure,
+      )
+      expect(error).toMatchObject({ name: 'PrismaClientKnownRequestError', code: 'P2028' })
+      expect(mapError(error)).toEqual(busy)
+      release()
+      await expect(holder).resolves.toMatchObject({ replayed: false })
+      expect(await siteRow(holding)).toMatchObject({ name: 'Holder', version: 2 })
+      expect(await siteRow(waiting)).toMatchObject({ name: 'Plant', version: 1 })
+    } finally {
+      await small.close()
+    }
+  })
+
+  it('a command that outlives its timeout: P2028 (expired), rolled back, no audit row, no receipt', async () => {
+    const siteId = await newSite()
+    const context = officeA()
+    const k = key()
+    const error = await rename(as(context), { siteId, name: 'Slow', key: k }, { ...SETTINGS, timeoutMs: 200 }, async () => {
+      await new Promise((resolve) => setTimeout(resolve, 600))
+    }).then(
+      () => null,
+      (failure: unknown) => failure,
+    )
+    expect(error).toMatchObject({ name: 'PrismaClientKnownRequestError', code: 'P2028' })
+    expect(mapError(error)).toEqual(busy)
+    expect(await siteRow(siteId)).toMatchObject({ name: 'Plant', version: 1 })
+    expect(await auditRows('"requestId" = $1', [context.requestId])).toEqual([])
+    expect(await receipts(k)).toEqual([])
   })
 })

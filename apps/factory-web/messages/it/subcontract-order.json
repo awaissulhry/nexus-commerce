@@ -416,9 +416,6 @@
     "lines": "Le sue righe di kit restano inviate: fai rientrare quelle mai partite dalla scheda Kit.",
     "replace": "La merce che viaggia ha bisogno di un nuovo DDT: rispedisci il kit con uno nuovo.",
     "reason": "Motivo",
-    "type": "Digita {number} per confermare",
-    "typeHint": "Maiuscole e spazi contano.",
-    "typeWrong": "Non corrisponde al numero del DDT.",
     "held": {
       "reason": "Indica il motivo (almeno 3 caratteri).",
       "phrase": "Digita il numero del DDT per confermare."

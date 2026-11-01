@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, GitMerge, Search, ShieldCheck, TriangleAlert, Wrench, X } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { PhotoCapture } from '@nexus/ui/components/PhotoCapture/index'
 import { ReasonGrid, type ReasonTile } from '@nexus/ui/floor/ReasonGrid/index'
-import { Button, Checkbox, Input, RadioCard, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { usePhotoWords } from '../../../../lib/ds-words/photo-capture'
 import { useReasonWords } from '../../../../lib/ds-words/reason-grid'
 import { formatDateTime } from '../../../../lib/i18n/format'

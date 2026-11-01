@@ -2,8 +2,9 @@
 
 import { useRef, type ReactNode } from 'react'
 import { CheckCircle2, Clock3, FileText, Link2Off, Paperclip, Send, ShieldAlert, XCircle } from 'lucide-react'
-import { Banner, Card, DateField, EmptyState, Field, KeyValue, Modal } from '@nexus/ui/components'
-import { Button, Input, RadioCard, Select, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Banner, Card, EmptyState, Field, KeyValue } from '@nexus/ui/components'
+import { Button, Input, RadioCard, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../lib/i18n/ds-parts'
 import type { DeclineReason, LineAnswerKind } from '@nexus/factory-domain/purchasing/confirm/answer'
 import { formatDate, formatDateTime } from '../../../lib/i18n/format'
 import type { Locale } from '../../../lib/i18n/locales'

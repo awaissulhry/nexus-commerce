@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { Banner, DateField, Field, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
-import { Button, Kbd, SegmentedControl, Skeleton, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
+import { Button, Kbd, SegmentedControl, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import type { Board, PlaceByDueDate, PublishPreview } from '../api'
 import {

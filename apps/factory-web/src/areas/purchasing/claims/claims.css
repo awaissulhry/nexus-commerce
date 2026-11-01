@@ -91,22 +91,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The Claim tab's explicit save (composed: the DS EditModeBar speaks English only). */
-.fw-cl-savebar {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nds-space-8);
-  padding: var(--nds-space-8) var(--nds-space-12);
-  border: 1px solid var(--nds-border);
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-surface-raised);
-}
-
 .fw-cl-readfield {
   display: flex;
   flex-direction: column;

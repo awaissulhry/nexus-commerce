@@ -131,8 +131,8 @@ describe('the words of an entry', () => {
   })
 
   it('knows the money a person does not see, the tablet time that differs, and finds on the page', () => {
-    expect(hiddenGrains(['audit.read', 'money.price'])).toEqual(['cost', 'margin', 'wages'])
-    expect(hiddenGrains(['money.price', 'money.cost', 'money.margin', 'money.wages'])).toEqual([])
+    expect(hiddenGrains(['audit.read', 'money.price'])).toEqual(['cost', 'margin', 'wages', 'pay'])
+    expect(hiddenGrains(['money.price', 'money.cost', 'money.margin', 'money.wages', 'money.pay'])).toEqual([])
     expect(deviceTimeDiffers({ at: '2026-10-29T09:00:00.000Z', deviceTime: '2026-10-29T08:59:58.000Z' })).toBe(true)
     expect(deviceTimeDiffers({ at: '2026-10-29T09:00:00.000Z', deviceTime: '2026-10-29T08:59:59.500Z' })).toBe(false)
     expect(deviceTimeDiffers({ at: '2026-10-29T09:00:00.000Z', deviceTime: null })).toBe(false)

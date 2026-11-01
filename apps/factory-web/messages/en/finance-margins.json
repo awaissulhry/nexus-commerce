@@ -111,8 +111,7 @@
     "style": "By style",
     "empty": "No orders in this period.",
     "orders_one": "{count} order",
-    "orders_other": "{count} orders",
-    "pick": "{name}: {pct} over {count} orders — show only these"
+    "orders_other": "{count} orders"
   },
   "detail": {
     "title": "{number} — profitability",
@@ -144,7 +143,8 @@
   },
   "meter": {
     "label": "Margin now {now} against {quoted} quoted",
-    "noQuoted": "Margin now {now} (no margin at quote to compare)"
+    "noQuoted": "Margin now {now} (no margin at quote to compare)",
+    "quotedMark": "Quoted {quoted}"
   },
   "bridge": {
     "title": "From price to margin",
@@ -167,7 +167,6 @@
     "none": "Not told yet: the cost at quote or now is not known.",
     "QUOTED": "Margin quoted",
     "NOW": "Margin now",
-    "open": "{part} in Finance › Standard vs actual",
     "reason": {
       "PRICE": "Price",
       "MATERIAL": "Material",

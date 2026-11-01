@@ -1,8 +1,9 @@
 'use client'
 
 import { Lock, LockOpen } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, RadioCard, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { liftHeld, lockHeld, lockStateOf, monthWords, phraseFor, phraseState, warningKey, type AccountingCan } from '../model'

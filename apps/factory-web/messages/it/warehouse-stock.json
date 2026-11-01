@@ -121,15 +121,6 @@
       "backToNow": "Torna ad adesso",
       "notKept": "Non conservato per i giorni passati",
       "empty": "Nessuna giacenza al {day}"
-    },
-    "phone": {
-      "select": "Seleziona",
-      "done": "Fine",
-      "selectAll": "Seleziona tutte le righe",
-      "selected_one": "{count} selezionata",
-      "selected_other": "{count} selezionate",
-      "selectOne": "Seleziona {material} in {place}",
-      "nothingToSelect": "Non c'è nulla da selezionare."
     }
   },
   "adj": {

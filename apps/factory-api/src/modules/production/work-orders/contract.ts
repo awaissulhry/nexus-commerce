@@ -8,6 +8,10 @@ import { UNUSABLE_REASONS } from '@nexus/factory-domain/planning/usable'
 import { WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
 import { blockingHoldSchema, readinessPartSchema, workOrderHoldSchema } from './release/contract'
 import { RELATIVE_DAYS } from '@nexus/factory-domain/views/quick/relative'
+// B-W2b-51: the travellers' language and the bulk limits.
+import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
+import { PRIORITY_LIMITS } from '@nexus/factory-domain/production/work-orders/priority'
+import { TRAVELLER_BULK_LIMIT } from '@nexus/factory-domain/production/work-orders/bulk'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-003, MES-005, MES-007, MES-305; A2 SCR-069, SCR-070): the
@@ -67,6 +71,11 @@ export const workOrderSchema = output({
   dueDate: businessDate().nullable(),
   daysLate: z.number().int().nullable(),
   priority: z.number().int(),
+  /** B-W2b-51 (MES-009): the rush flag (first on the dispatch board and the tablet, whatever the priority). */
+  rush: z.boolean(),
+  /** B-W2b-51 (MES-010): the work order it was split from, and those split from it (the genealogy). */
+  splitFrom: output({ id: id(), number: z.string(), status }).nullable(),
+  splits: z.array(output({ id: id(), number: z.string(), status, pieces: z.number().int() })),
   note: z.string().nullable(),
   /** From RELEASED on: when, by whom, and the planner's material override (from the release's audit row). */
   release: output({
@@ -134,6 +143,8 @@ export const listContract = defineContract({
     q: z.string().trim().min(1).max(60).optional(),
     /** B-W2b-13 (PLT-167): a quick filter's relative day, resolved against today when the list is read (`this-week`, `overdue`). */
     due: z.enum(RELATIVE_DAYS).optional(),
+    /** B-W2b-51 (MES-009): rush work orders only (`true`), or none of them (`false`); the quick filter's flag. */
+    rush: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
@@ -166,6 +177,9 @@ export const listContract = defineContract({
           dueDate: businessDate().nullable(),
           daysLate: z.number().int().nullable(),
           priority: z.number().int(),
+          /** B-W2b-51: the rush flag, and the work order it was split from. */
+          rush: z.boolean(),
+          splitFrom: output({ id: id(), number: z.string() }).nullable(),
           releasedAt: instant().nullable(),
           createdAt: instant(),
         }),
@@ -227,6 +241,8 @@ export const createContract = defineContract({
     /** Default: the earliest promise (or request) of the lines and their orders. */
     dueDate: businessDate().optional(),
     priority: z.number().int().min(-1000).max(1000).optional(),
+    /** B-W2b-51 (MES-009): made as a rush work order (default not). */
+    rush: z.boolean().optional(),
     note: z.string().trim().max(2000).nullish(),
     lines: z
       .array(input({ salesOrderLineId: id(), /** Default: every size still open on the line. */ sizes: z.array(input({ size: size(), quantity: pieces() })).min(1).max(MAX_CELLS).optional() }))
@@ -248,6 +264,8 @@ export const updateContract = defineContract({
     version,
     dueDate: businessDate().nullish(),
     priority: z.number().int().min(-1000).max(1000).optional(),
+    /** B-W2b-51 (MES-009): the rush flag (until CLOSED or CANCELLED, like the priority). */
+    rush: z.boolean().optional(),
     note: z.string().trim().max(2000).nullish(),
     styleRevisionId: id().optional(),
   }),
@@ -398,4 +416,83 @@ export const repairOptionsContract = defineContract({
       blockers: z.array(z.string()),
     }),
   },
+})
+
+// ---- B-W2b-51: split a work order (MES-010) and its travellers (MES-014) ----------------------------------------------------
+
+const splitCells = () => z.array(input({ cellId: id(), /** Pieces of the cell that move to the new work order. */ quantity: z.number().int().min(1).max(MAX_CELL_PIECES) })).min(1).max(MAX_CELLS)
+
+const splitCell = output({
+  /** The parent's cell (the new work order's cells have no id before the split). */
+  cellId: id().nullable(),
+  /** The parent cell the pieces come from. */
+  fromCellId: id(),
+  colourwayCode: z.string(),
+  colourwayName: z.string(),
+  size: z.string(),
+  salesOrderLineId: id(),
+  quantity: z.number().int(),
+})
+
+const splitMaterial = output({ itemId: id(), itemCode: z.string(), itemName: z.string(), itemColourId: id().nullable(), colourCode: z.string().nullable(), baseUom: z.string(), planned: z.string() })
+
+/** One side of a split: its cells and pieces, and the materials planned from its cells (no cost). */
+const splitSide = output({ pieces: z.number().int(), cells: z.array(splitCell), materials: z.array(splitMaterial) })
+
+export const splitPreviewContract = defineContract({
+  params: workOrderParams,
+  body: input({ cells: splitCells() }),
+  response: {
+    200: output({
+      workOrderId: id(),
+      number: z.string(),
+      status,
+      version: z.number().int(),
+      /** Why this work order is not split at all (not a DRAFT, a repair, a made-to-measure unit), or null. */
+      refusal: z.string().nullable(),
+      /** What is wrong with the sizes asked (an unknown cell, too many pieces, nothing left), one per path. */
+      problems: z.array(issue),
+      /** The number the new work order gets, when the company's series says it. */
+      numberPreview: z.string().nullable(),
+      /** What each keeps and gets (null while refused or with problems). */
+      parent: splitSide.nullable(),
+      child: splitSide.nullable(),
+    }),
+  },
+})
+
+export const splitContract = defineContract({
+  params: workOrderParams,
+  body: input({
+    /** The parent's version as read. */
+    version,
+    cells: splitCells(),
+    /** The new work order's due date (null: none); default the parent's. */
+    dueDate: businessDate().nullish(),
+    /** Default the parent's. */
+    priority: z.number().int().min(PRIORITY_LIMITS.min).max(PRIORITY_LIMITS.max).optional(),
+    rush: z.boolean().optional(),
+    note: z.string().trim().max(2000).nullish(),
+  }),
+  response: { 201: output({ workOrder: workOrderSchema, parent: workOrderSchema }) },
+})
+
+const language = z.enum(DOCUMENT_LANGUAGES).optional()
+
+/** The traveller PDF of one work order (application/pdf, inline, stored nowhere). */
+export const travellerContract = defineContract({ params: workOrderParams, querystring: input({ language }), response: {} })
+
+/** The travellers of several work orders in one PDF, in the order asked (application/pdf, inline). */
+export const travellersContract = defineContract({
+  querystring: input({
+    /** Comma-separated work order ids, each once (at most TRAVELLER_BULK_LIMIT). */
+    ids: z
+      .string()
+      .min(36)
+      .max(TRAVELLER_BULK_LIMIT * 37)
+      .transform((value) => value.split(',').map((part) => part.trim()))
+      .pipe(z.array(id()).min(1).max(TRAVELLER_BULK_LIMIT).refine((ids) => new Set(ids).size === ids.length, { message: 'Each work order once.' })),
+    language,
+  }),
+  response: {},
 })

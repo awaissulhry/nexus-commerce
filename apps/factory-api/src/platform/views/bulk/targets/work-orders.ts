@@ -4,6 +4,7 @@ import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import type { WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_MANAGE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
+import { PRIORITY_LIMITS, RUSH_CHOICES, rushChoiceOf, rushOfChoice } from '@nexus/factory-domain/production/work-orders/priority'
 import type { BulkRefusal } from '@nexus/factory-domain/views/bulk/rules'
 import { actorOf } from '../../../../core/context'
 import { mayOn, officeContextOf } from '../../../../modules/production/work-orders/access'
@@ -17,9 +18,11 @@ import { defineBulkTarget } from '../target'
  * `priority`, each written through the module's own workorders.update (workorders.manage over the row's company and
  * site, its version check, its audit row and its workorder.changed event). A CLOSED or CANCELLED work order keeps both
  * (the command itself refuses them: "only its note changes"). Totals per work order only: no person, no money.
+ * B-W2b-51 (MES-009, MES-017 "Change priority"): the rush flag beside them, column id `rush`, a choice RUSH | NORMAL
+ * (workorder.priority_changed tells the floor's lists when the priority or the rush flag changes).
  */
 
-const SELECT = { id: true, number: true, status: true, version: true, companyId: true, siteId: true, dueDate: true, priority: true } as const satisfies Prisma.WorkOrderSelect
+const SELECT = { id: true, number: true, status: true, version: true, companyId: true, siteId: true, dueDate: true, priority: true, rush: true } as const satisfies Prisma.WorkOrderSelect
 
 interface Row {
   readonly id: string
@@ -30,6 +33,7 @@ interface Row {
   readonly siteId: string
   readonly dueDate: BusinessDate | null
   readonly priority: number
+  readonly rush: boolean
 }
 
 const FINAL: readonly WorkOrderStatus[] = ['CLOSED', 'CANCELLED']
@@ -40,7 +44,9 @@ export const workOrders = defineBulkTarget<Row>({
   permission: WORKORDERS_MANAGE,
   fields: {
     due: { kind: 'date', nullable: true, read: (row) => row.dueDate, held },
-    priority: { kind: 'integer', min: -1000, max: 1000, read: (row) => row.priority, held },
+    priority: { kind: 'integer', min: PRIORITY_LIMITS.min, max: PRIORITY_LIMITS.max, read: (row) => row.priority, held },
+    // B-W2b-51: the rush flag.
+    rush: { kind: 'choice', choices: RUSH_CHOICES, read: (row) => rushChoiceOf(row.rush), held },
   },
   async load(caller, ids) {
     const context = officeContextOf(caller)
@@ -64,9 +70,10 @@ export const workOrders = defineBulkTarget<Row>({
         version,
         ...(Object.hasOwn(changes, 'due') ? { dueDate: (changes.due as BusinessDate | null) ?? null } : {}),
         ...(Object.hasOwn(changes, 'priority') ? { priority: changes.priority as number } : {}),
+        ...(Object.hasOwn(changes, 'rush') ? { rush: rushOfChoice(String(changes.rush)) } : {}),
       },
       idempotencyKey,
     )
-    return { id: workOrder.id, number: workOrder.number, status: workOrder.status, version: workOrder.version, companyId: workOrder.companyId, siteId: workOrder.siteId, dueDate: workOrder.dueDate, priority: workOrder.priority }
+    return { id: workOrder.id, number: workOrder.number, status: workOrder.status, version: workOrder.version, companyId: workOrder.companyId, siteId: workOrder.siteId, dueDate: workOrder.dueDate, priority: workOrder.priority, rush: workOrder.rush }
   },
 })

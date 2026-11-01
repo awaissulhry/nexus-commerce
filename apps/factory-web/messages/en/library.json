@@ -106,12 +106,7 @@
   "save": {
     "saving": "Saving…",
     "saved": "Saved at {time}",
-    "failed": "Not saved",
-    "region": "Unsaved changes",
-    "unsaved_one": "{count} unsaved change",
-    "unsaved_other": "{count} unsaved changes",
-    "shortcut": "⌘S saves",
-    "discard": "Discard"
+    "failed": "Not saved"
   },
   "keys": {
     "title": "Keyboard shortcuts",

@@ -2,9 +2,11 @@
 
 import { useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, CircleDashed, ExternalLink, ShieldOff } from 'lucide-react'
-import { DetailPopover, EmptyState, Modal } from '@nexus/ui/components'
+import { ExternalLink, ShieldOff } from 'lucide-react'
+import { DetailPopover, EmptyState } from '@nexus/ui/components'
 import { Pill } from '@nexus/ui/primitives'
+import { CheckList as DsCheckList } from '@nexus/ui/patterns/checklist/index'
+import { Modal, useDsWords } from '../../../lib/i18n/ds-parts'
 import { listKeys, type ListKey } from '../../../list-frame/model'
 import { formatDate } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
@@ -19,8 +21,8 @@ import './picking.css'
  * View parts Warehouse › Picking & kits (SCR-237) shares between the page, the pick list dialog and the paper: the
  * catalogue wrapper and its words (`warehouse-picking`, `stock:<key>` for the shared stock words), the readiness word as
  * a button with its popover (pk-ready "Why 'Delayed'": each material's reason, Open PO, Buy), the kit pill, a quantity
- * with its unit, a held entry in words, the check list (a stand-in for the design's ReadinessChecklist, missing from the
- * DS), the page's no-permission state and the keys list behind `?`.
+ * with its unit, a held entry in words, the check list (the DS CheckList, the design's ReadinessChecklist), the page's
+ * no-permission state and the keys list behind `?`.
  */
 
 export function PickingMessages({ children }: { children?: ReactNode }) {
@@ -149,18 +151,10 @@ export function useHeldWords(): (entry: HeldEntry) => string {
   }
 }
 
-/** The check list (stand-in for the DS ReadinessChecklist): ✓ / ○ and the words of each line. */
+/** The check list = the DS CheckList (B-W2b-18; the design's ReadinessChecklist): Done or Open, and the words of each line. */
 export function CheckList({ items, label }: { items: readonly { id: string; ok: boolean; words: string }[]; label: string }) {
-  return (
-    <ul className="fw-pk-check" aria-label={label}>
-      {items.map((item) => (
-        <li key={item.id} className={item.ok ? 'ok' : 'open'}>
-          {item.ok ? <CheckCircle2 size={14} aria-hidden /> : <CircleDashed size={14} aria-hidden />}
-          <span>{item.words}</span>
-        </li>
-      ))}
-    </ul>
-  )
+  const ds = useDsWords()
+  return <DsCheckList label={label} summary={false} labels={ds.checkList} checks={items.map((item) => ({ id: item.id, state: item.ok ? 'pass' : 'fail', name: item.words }))} />
 }
 
 export function NoPickingAccess() {

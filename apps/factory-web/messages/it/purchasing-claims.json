@@ -589,12 +589,7 @@
     "whyTitle": "Perché e cosa si chiede"
   },
   "save": {
-    "discard": "Scarta",
-    "region": "Modifiche non salvate",
-    "save": "Salva",
-    "shortcut": "⌘S salva",
-    "unsaved_one": "{count} modifica non salvata",
-    "unsaved_other": "{count} modifiche non salvate"
+    "save": "Salva"
   },
   "send": {
     "body": "Il fornitore riceve il reclamo nel suo thread; la risposta torna nello stesso thread.",

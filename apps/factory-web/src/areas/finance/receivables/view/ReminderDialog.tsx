@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Banner, Card, Field, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
-import { DetailModal } from '@nexus/ui/patterns'
-import { Button, Input, Pill, SegmentedControl, Tag, Textarea } from '@nexus/ui/primitives'
+import { Banner, Card, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
+import { Button, Input, Pill, SegmentedControl, Tag } from '@nexus/ui/primitives'
+import { DetailModal, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { MAX_REMINDER_TEXT, type Reminder } from '../api'

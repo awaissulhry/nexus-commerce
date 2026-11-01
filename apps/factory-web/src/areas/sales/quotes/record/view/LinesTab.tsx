@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Search, ShieldAlert, Trash2 } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, Menu, Modal, RecordLayout, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Field, KeyValue, Menu, RecordLayout, SummaryTable } from '@nexus/ui/components'
 import { SizeGridEditor, SizeGridView, type SizeGridIssue } from '@nexus/ui/grid/size-grid/index'
 import { Button, Checkbox, InfoTip, Input, Pill, RadioCard, Spinner, Tag } from '@nexus/ui/primitives'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { QuoteDetail, QuoteLine, StyleDetail } from '../../api'
