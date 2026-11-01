@@ -24,6 +24,8 @@ import { GUARD_KINDS, OVERRIDE_REASON_CODES } from './guards/rules'
  *                                   (BASIS_RECORDED, BASIS_REPLACED) (B-W1-37; office screens)
  *   workorder.created               a DRAFT work order was made from sales order lines (B-W1-38)
  *   workorder.changed               a DRAFT's cells or revision, or a work order's due date, priority or note changed
+ *   workorder.priority_changed      B-W2b-51: a work order's priority or rush flag changed (MES-009; the dispatch lists
+ *                                   and the tablets of its site reorder: rush first)
  *   workorder.released              released with its frozen specification and batch number (the floor can start)
  *   workorder.status_changed        started, completed, closed or cancelled
  *   workorder.finished_to_stock     released garments of a work order went into finished-goods stock, all or part
@@ -69,7 +71,8 @@ const subject = z.enum(SCAN_SUBJECTS)
 const live = { permission: 'workorders.view', fields: ['workOrderId', 'number'] } as const
 
 // B-W2a-12: 'steps', a repair DRAFT's routing steps (MES-019).
-export const WORK_ORDER_CHANGES = ['cells', 'revision', 'details', 'steps'] as const
+// B-W2b-51: 'split', a DRAFT gave cells to a new work order split from it (MES-010).
+export const WORK_ORDER_CHANGES = ['cells', 'revision', 'details', 'steps', 'split'] as const
 
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 const postedBy = () => z.enum(['OFFICE', 'FLOOR', 'SYSTEM'])
@@ -116,6 +119,8 @@ export const events = [
       pieces: z.number().int().min(0),
       /** B-W2a-12: a REPAIR work order's repair order (MES-019); absent for a size run. */
       repairOrderId: z.uuid().optional(),
+      /** B-W2b-51: the work order it was split from (MES-010); absent for one made from order lines. */
+      splitFromId: z.uuid().optional(),
     }),
     live: { ...live, fields: ['workOrderId', 'number', 'styleId'] },
   }),
@@ -125,6 +130,14 @@ export const events = [
     description: "A work order's cells or revision (while a DRAFT), or its due date, priority or note changed.",
     payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), changes: z.array(z.enum(WORK_ORDER_CHANGES)).min(1), cells: z.number().int().min(0), pieces: z.number().int().min(0) }),
     live,
+  }),
+  // B-W2b-51 (MES-009): the dispatch board, the tablet's My work and the planning board put a rush work order first.
+  defineEvent({
+    type: 'workorder.priority_changed',
+    context: 'production',
+    description: "A work order's priority or rush flag changed: the dispatch lists and the tablets of its site order their work again.",
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), siteId: z.uuid(), priority: z.number().int(), rush: z.boolean(), previousPriority: z.number().int(), previousRush: z.boolean() }),
+    live: { ...live, floor: 'floor.work', fields: ['workOrderId', 'number', 'rush'] },
   }),
   defineEvent({
     type: 'workorder.released',

@@ -24,11 +24,14 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     // B-W2b-13 (PLT-167): the quick filter's relative day, as the list reads it.
     const dueWord = address.get('due')
     const due = isRelativeDay(dueWord) ? dueWord : undefined
+    // B-W2b-51 (MES-009): the rush quick filter, as the list reads it.
+    const rushWord = address.get('rush')
+    const rush = rushWord === 'true' ? true : rushWord === 'false' ? false : undefined
     const view = address.get('view') ?? (address.get('late') === 'true' ? 'late' : (address.get('status') ?? 'open'))
-    if (view === 'late') return { late: true, q, due }
-    if (view === 'all') return { q, due }
-    if (isStatus(view)) return { status: view, q, due }
-    return { open: true, q, due }
+    if (view === 'late') return { late: true, q, due, rush }
+    if (view === 'all') return { q, due, rush }
+    if (isStatus(view)) return { status: view, q, due, rush }
+    return { open: true, q, due, rush }
   },
   async read(caller, query, cursor, limit) {
     const page = await listWorkOrders(caller, { ...query, cursor: cursor ?? undefined, limit })
@@ -43,6 +46,8 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     progress: { value: (row) => row.progress?.finished ?? null },
     due: { value: (row) => (row.dueDate ? { day: row.dueDate } : null) },
     priority: { value: (row) => row.priority },
+    // B-W2b-51: the rush flag.
+    rush: { value: (row, words) => (row.rush ? words('rush') : null) },
     site: { value: (row) => row.siteCode },
   },
   words: {
@@ -54,6 +59,7 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
       'status.CLOSED': 'Chiuso',
       'status.CANCELLED': 'Annullato',
       'status.ON_HOLD': 'In sospeso',
+      rush: 'Urgente',
     },
     en: {
       'status.DRAFT': 'Draft',
@@ -63,6 +69,7 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
       'status.CLOSED': 'Closed',
       'status.CANCELLED': 'Cancelled',
       'status.ON_HOLD': 'On hold',
+      rush: 'Rush',
     },
   },
 })
