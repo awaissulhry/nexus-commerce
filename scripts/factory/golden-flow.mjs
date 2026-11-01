@@ -20,7 +20,12 @@
  * month-end export and period lock) in its own throwaway database, the same rules. Without an argument the runner runs
  * the W1 golden flow exactly as before (the daily folder is left out).
  *
- * Run: node scripts/factory/golden-flow.mjs [daily] — exit 1 when a step fails or the server is not usable. The vitest
+ * Third suite (B-W2b-36): `node scripts/factory/golden-flow.mjs followups` runs only src/golden-flow/followups/ — the
+ * W2a follow-ups of W2b-0 (SHIPMENT, CUSTOMER_RETURN and SUPPLIER_RETURN moves, reason codes, the claim letter, the
+ * caparra carried onto its invoice, a numbered hold, an NCR from picked defects, search and export, the month locks) in its
+ * own throwaway database, the same rules. The default run leaves that folder out too.
+ *
+ * Run: node scripts/factory/golden-flow.mjs [daily|followups] — exit 1 when a step fails or the server is not usable. The vitest
  * database guard needs FACTORY_DATABASE_URL (loopback, factory_test… or this worktree's database) on the command line
  * when the worktree has no apps/factory-api/.env.
  */
@@ -38,11 +43,17 @@ const WORKSPACE = join(ROOT, 'apps/factory-api')
 const FOLDER = 'src/golden-flow/'
 // The second suite (B-W2a-82): its own folder; the default run leaves it out.
 const DAILY = 'src/golden-flow/daily/'
-const SUITES = { w1: { folder: FOLDER, extra: ['--exclude', `${DAILY}**`] }, daily: { folder: DAILY, extra: [] } }
+// The third suite (B-W2b-36): the W2b-0 follow-ups; the default run leaves it out too.
+const FOLLOWUPS = 'src/golden-flow/followups/'
+const SUITES = {
+  w1: { folder: FOLDER, extra: ['--exclude', `${DAILY}**`, '--exclude', `${FOLLOWUPS}**`] },
+  daily: { folder: DAILY, extra: [] },
+  followups: { folder: FOLLOWUPS, extra: [] },
+}
 const suiteName = process.argv[2] ?? 'w1'
 const suite = SUITES[suiteName]
 if (!suite) {
-  console.error(`golden-flow: unknown suite ${JSON.stringify(suiteName)} (w1, daily)`)
+  console.error(`golden-flow: unknown suite ${JSON.stringify(suiteName)} (w1, daily, followups)`)
   process.exit(2)
 }
 const VITEST = join(ROOT, 'node_modules/.bin/vitest')

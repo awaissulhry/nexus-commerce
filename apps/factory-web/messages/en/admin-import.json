@@ -240,6 +240,10 @@
         "name": "Machines",
         "fills": "Machines and equipment by the asset number on their tag, with their site, class, make, model, station and supplier."
       },
+      "people_employees": {
+        "name": "Employees",
+        "fills": "Employees by their employee code (the payroll file's), with names, type, agency, site, line, department, role, contract, weekly hours, dates and language. Never pay, attendance or health data."
+      },
       "planning_itemParameters": {
         "name": "Item planning",
         "fills": "How each site plans each item and colour: method, source, supplier, lead times and stock levels."

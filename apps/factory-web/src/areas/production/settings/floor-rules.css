@@ -145,3 +145,96 @@
   border-radius: var(--nds-radius-md);
   background: var(--nds-surface-sunken);
 }
+
+/*
+ * B-W2b-58: Floor rules per site beside Bundle codes (3 : 2 from 1100 px), the forms' field grid (fills the card's width:
+ * two or three fields a row on a wide screen), and the cells of the Off-standard codes and Help-call routing grids.
+ */
+.fw-fr-wide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-fr-wide {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+.fw-fr-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  align-items: start;
+}
+
+.fw-fr-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-fr-cell-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-fr-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fw-fr-code.off {
+  color: var(--nds-text-3);
+  text-decoration: line-through;
+}
+
+.fw-fr-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-fr-refused {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-fr-keys {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-fr-keys > div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+
+.fw-fr-keys dt {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+}
+
+.fw-fr-keys dd {
+  margin: 0;
+}
