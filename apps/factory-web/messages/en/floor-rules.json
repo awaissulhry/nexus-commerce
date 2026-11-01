@@ -9,7 +9,9 @@
     "tabs": "Parts of the floor rules",
     "tab": {
       "rules": "Floor rules",
-      "codes": "Reason codes"
+      "codes": "Reason codes",
+      "offstd": "Off-standard codes",
+      "calls": "Help-call routing"
     },
     "viewOnly": "Only the production manager or the Owner changes this.",
     "noAccess": {
@@ -117,7 +119,11 @@
       "basisReplaced": "The legal basis was replaced; the earlier one stays in the audit log.",
       "bundle": "The standard bundle size is saved.",
       "saved": "Saved.",
-      "unchanged": "Nothing changed: the rules were already so."
+      "unchanged": "Nothing changed: the rules were already so.",
+      "checks": "The floor rules are saved: they apply from the next scan.",
+      "coupons": "The bundle codes are saved.",
+      "full_one": "{count} reason added to the floor lists.",
+      "full_other": "{count} reasons added to the floor lists."
     },
     "elsewhere": {
       "title": "Changed by someone else meanwhile",
@@ -164,18 +170,321 @@
       "value_other": "{count} garments per bundle",
       "mtm": "A made-to-measure garment is always one per bundle."
     },
-    "fixed": {
-      "title": "Fixed in this version",
-      "undo": "Undo on the tablet: {minutes} minutes after a report, or until the next scan.",
-      "bundleCode": "One bundle code, scanned at every operation.",
-      "idle": "Sign-out after {minutes} minutes without use, unless the site’s tablets are set to another time.",
-      "clock": "A tablet clock more than {minutes} minutes off is shown on the tablet.",
-      "offline": "Scans, cuts and bundles wait on the tablet while offline and are sent in order; receipts, inspections, releases and garment labels need the network."
-    },
     "codes": {
       "noAccess": {
         "title": "Your role may not read the reason codes",
         "body": "Reading them needs “production.scan”, which the production manager and the operators hold."
+      }
+    },
+    "checks": {
+      "title": "Floor rules per site",
+      "intro": "What a tablet checks when a scan is reported at this site. A change applies from the next scan; scans already taken keep what they recorded.",
+      "introDefault": "This site has no floor rules yet and follows the defaults. A change applies from the next scan.",
+      "sequence": {
+        "title": "Sequence of operations",
+        "FREE": {
+          "label": "Relaxed",
+          "body": "Operations may be reported in any order; a skipped one is not mentioned."
+        },
+        "WARN": {
+          "label": "Warn",
+          "body": "A skipped operation is shown on the tablet; the scan still counts."
+        },
+        "STRICT": {
+          "label": "Strict",
+          "body": "A required operation skipped stops the scan until the team leader lets it through."
+        }
+      },
+      "quantity": {
+        "title": "Quantity guard",
+        "FREE": {
+          "label": "Off",
+          "body": "More pieces than the operation before passed is not checked."
+        },
+        "WARN": {
+          "label": "Warn",
+          "body": "More pieces than the operation before passed is shown; the scan still counts."
+        },
+        "STRICT": {
+          "label": "Strict",
+          "body": "More pieces than the operation before passed stops the scan until the team leader lets it through."
+        }
+      },
+      "scrap": {
+        "title": "Scrap approval",
+        "toggle": "Scrap above a limit waits for the team leader",
+        "on": "Above",
+        "off": "Never waits",
+        "suffix": "pieces",
+        "less": "One fewer",
+        "more": "One more",
+        "onHint_one": "More than {count} piece of scrap in one scan waits for the team leader's approval before it posts; the scan counts at once.",
+        "onHint_other": "More than {count} pieces of scrap in one scan wait for the team leader's approval before they post; the scan counts at once.",
+        "offHint": "Scrap posts at once, whatever the quantity.",
+        "noValue": "A limit by value (cost) is not kept yet: the limit is in pieces."
+      },
+      "reason": "Why (optional)",
+      "reasonHint": "Kept in the audit log with the change.",
+      "limitRange": "Use a whole number of pieces from 1 to 500, or switch the limit off.",
+      "reasonLong": "Keep the reason to 2000 characters.",
+      "read": {
+        "sequence": "Sequence of operations: {mode}",
+        "quantity": "Quantity guard: {mode}",
+        "noLimit": "Scrap never waits for approval.",
+        "limit_one": "Scrap above {count} piece in one scan waits for the team leader.",
+        "limit_other": "Scrap above {count} pieces in one scan waits for the team leader."
+      },
+      "same": {
+        "title": "The same at every site, for now",
+        "undo": "Undo on the tablet: {seconds} seconds after a report, or until the next scan.",
+        "idle": "Sign-out after {minutes} minutes without use (the tablets' settings of this site).",
+        "clock": "A tablet clock off by more than {minutes} minutes is shown; beyond {hours} hours it is flagged on the record.",
+        "offlineNone": "Offline: a tablet keeps every action until the network is back; receipts, inspections, releases and garment labels need the network. No limit in hours or actions yet.",
+        "offline": "Offline: at most {hours} hours or {actions} actions wait on a tablet.",
+        "where": "Idle sign-out is changed with the site's tablets (Admin › Devices & printers); the other rules come per site with a later version."
+      }
+    },
+    "coupons": {
+      "title": "Bundle codes",
+      "intro": "How operators scan a bundle at each operation.",
+      "ONE_CODE": {
+        "title": "One bundle code",
+        "body": "The bundle's ticket is scanned at every operation; the operation comes from the station."
+      },
+      "COUPON_PER_OPERATION": {
+        "title": "A coupon per operation",
+        "body": "Each operation has its own coupon on the ticket; scanning it reports that operation. Coupons are printed for open work orders."
+      },
+      "stuck": "A bundle is stuck after",
+      "stuckHint": "Working hours with no scan ({min}–{max}); a stuck bundle is listed on Floor now and Bundles.",
+      "hours": "working hours",
+      "less": "One hour fewer",
+      "more": "One hour more",
+      "toCoupons": "From now on, bundles of open work orders get coupons when they are printed; tickets already on the floor keep working.",
+      "toOne": "From now on, only the bundle's ticket is scanned; coupons already printed are no longer needed.",
+      "stuckRange": "Use a whole number of working hours from 1 to 720.",
+      "read": {
+        "stuck_one": "A bundle with no scan for {count} working hour is stuck.",
+        "stuck_other": "A bundle with no scan for {count} working hours is stuck."
+      }
+    },
+    "full": {
+      "complete": "Every floor list has its full set of reasons.",
+      "held": "Only who keeps the reason lists adds them (reasons.manage at every company and site).",
+      "title_one": "The full floor lists: {count} reason not added yet",
+      "title_other": "The full floor lists: {count} reasons not added yet",
+      "add_one": "Add the full lists ({count} reason)",
+      "add_other": "Add the full lists ({count} reasons)",
+      "part_one": "{list} {count}",
+      "part_other": "{list} {count}",
+      "list": {
+        "PAUSE": "Pause",
+        "SCRAP": "Scrap",
+        "REWORK": "Rework",
+        "DOWNTIME": "Downtime",
+        "HELP_CALL": "Help calls",
+        "ADJUSTMENT": "Adjustments",
+        "HOLD": "Holds",
+        "CANCEL": "Cancellations"
+      }
+    },
+    "refusal": {
+      "KIND_FIXED": "A code keeps its kind: make a new code of the other kind and set this one inactive.",
+      "BOOKED_BY_CALLS": "A help-call type books its waiting to this code: change that type's routing first.",
+      "CODE_TAKEN": "This code is taken already.",
+      "CODE_NOT_LISTED": "This is not an active code of the help-call reasons: add it in Reason codes first.",
+      "TEAM_NOT_ACTIVE": "This team is archived or works at another site: pick an active team of the site, or the team leaders.",
+      "WAITING_CODE": "The waiting books to an active off-standard code of the company."
+    },
+    "cells": {
+      "fallback": "English words are shown",
+      "it": "Italian",
+      "en": "English",
+      "tooLong": "At most 80 characters.",
+      "needIt": "Say it in Italian.",
+      "needEn": "Say it in English.",
+      "keyNew": "New code",
+      "keyEdit": "Edit the cell",
+      "keyCancel": "Leave the cell without saving",
+      "keysTitle": "Keys",
+      "failed": "The codes could not be read",
+      "noMatch": "No code matches the search.",
+      "clearSearch": "Clear the search",
+      "pickRows": "Select rows first.",
+      "allOff": "The selected rows are inactive already.",
+      "allOn": "The selected rows are active already.",
+      "elsewhere": "Someone else changed these codes. Reload to see them as they are now.",
+      "count": "{active} active · {inactive} inactive",
+      "countTypes": "{active} on · {inactive} off",
+      "search": "Search code or words",
+      "loading": "Loading…",
+      "back": "Back",
+      "bulkOff_one": "Set {count} inactive",
+      "bulkOff_other": "Set {count} inactive",
+      "bulkOn_one": "Set {count} active",
+      "bulkOn_other": "Set {count} active"
+    },
+    "off": {
+      "title": "Off-standard codes",
+      "intro": "Codes for time not on standard work (waiting, cleaning, training…), each with its pay rule. Operators pick them on the tablet when no bundle runs; a help call's waiting books to one.",
+      "noAccess": {
+        "title": "Your role may not see the off-standard codes",
+        "body": "Reading them needs “production.offstandard.view”."
+      },
+      "ccnl": {
+        "title": "Pay rules not checked against your CCNL",
+        "body": "Average earnings, base hourly or unpaid is your choice per code: confirm each with your labour consultant before pay uses it."
+      },
+      "readOnly": {
+        "title": "You can look, not change",
+        "body": "Keeping the codes needs “production.offstandard.codes” (the production manager)."
+      },
+      "table": "Off-standard codes",
+      "kind": {
+        "OFF_STANDARD": "Off-standard",
+        "INDIRECT": "Indirect"
+      },
+      "kindHint": {
+        "OFF_STANDARD": "Time lost from standard work (waiting, machine down).",
+        "INDIRECT": "Work that is not on a bundle (training, cleaning, meetings)."
+      },
+      "col": {
+        "code": "Code",
+        "payRule": "Pay rule",
+        "needsApproval": "Team leader approves",
+        "active": "Active",
+        "used": "Used"
+      },
+      "pay": {
+        "AVERAGE": "Average earnings",
+        "BASE": "Base hourly",
+        "UNPAID": "Unpaid"
+      },
+      "payHint": {
+        "AVERAGE": "Paid as the worker's average earnings (CCNL to confirm).",
+        "BASE": "Paid at the base hourly rate (CCNL to confirm).",
+        "UNPAID": "Not paid (CCNL to confirm)."
+      },
+      "payFor": "Pay rule of {code}",
+      "needsApproval": {
+        "on": "Approves",
+        "off": "Counts as it ends",
+        "label": "The team leader approves {code}"
+      },
+      "active": {
+        "on": "Active",
+        "off": "Inactive",
+        "label": "{code} active"
+      },
+      "used_one": "{count} block",
+      "used_other": "{count} blocks",
+      "calls": "Help calls: {types}",
+      "empty": {
+        "title": "No off-standard code yet",
+        "body": "Add the first one: waiting for material, cleaning, training…",
+        "bodyView": "The production manager adds them."
+      },
+      "held": {
+        "manage": "Keeping the codes needs production.offstandard.codes."
+      },
+      "new": {
+        "button": "New code",
+        "first": "Add the first code",
+        "title": "New off-standard code",
+        "intro": "A code is set inactive, never deleted; its kind never changes.",
+        "codeHint": "Upper-case letters, digits and underscores (WAIT_MATERIAL).",
+        "kind": "Kind",
+        "approvalHint": "On: the team leader approves the time before pay uses it.",
+        "add": "Add code",
+        "codeShape": "Use 2 to 40 upper-case letters, digits and underscores, starting with a letter.",
+        "codeTaken": "This code is taken already.",
+        "done": "{code} is added."
+      }
+    },
+    "route": {
+      "title": "Help-call routing",
+      "titleAt": "Help-call routing · {site}",
+      "intro": "Each type of help call goes to a group of the site: their bells and tablets hear it at once. The waiting can book to an off-standard code, so it never counts against the worker.",
+      "hint": "Escalation minutes are kept now; the timed escalation comes with a later version.",
+      "noAccess": {
+        "title": "Your role may not see the help-call routing",
+        "body": "Reading it needs “production.calls.view”."
+      },
+      "readOnly": {
+        "title": "You can look, not change",
+        "body": "Keeping the routing needs “production.calls.manage” (the production manager)."
+      },
+      "noSite": "No site to show.",
+      "noPeople": "Picking a team needs people.view: the group is shown as it is.",
+      "table": "Help-call types",
+      "kindFixed": "A type keeps its kind: the calls already sent were routed by it.",
+      "kind": {
+        "MACHINE": "Machine",
+        "MATERIAL": "Material",
+        "QUALITY": "Quality",
+        "SUPERVISOR": "Supervisor",
+        "MAINTENANCE": "Maintenance",
+        "OTHER": "Other"
+      },
+      "col": {
+        "type": "Type",
+        "kind": "Kind",
+        "group": "Group called",
+        "members": "Members",
+        "escalate": "Escalate after",
+        "waiting": "Waiting books to",
+        "active": "On",
+        "used": "Calls"
+      },
+      "groupFor": "Group called for {type}",
+      "leaders": "The site's team leaders",
+      "archivedTeam": "{name} (archived)",
+      "teamOption": "{name} · {line}",
+      "archived": "Archived",
+      "members_one": "{count} person",
+      "members_other": "{count} people",
+      "never": "Never",
+      "minutes_one": "{count} minute",
+      "minutes_other": "{count} minutes",
+      "minutesSuffix": "minutes",
+      "less": "One minute fewer",
+      "more": "One minute more",
+      "escalateRange": "Escalate after 1 to 240 whole minutes, or leave it empty for never.",
+      "waitingFor": "Waiting of {type} books to",
+      "notBooked": "Not booked",
+      "activeFor": "{type} on",
+      "on": "On",
+      "off": "Off",
+      "used_one": "{count} so far · {open} open",
+      "used_other": "{count} so far · {open} open",
+      "keyNew": "New type",
+      "bulkOff_one": "Switch {count} off",
+      "bulkOff_other": "Switch {count} off",
+      "bulkOn_one": "Switch {count} on",
+      "bulkOn_other": "Switch {count} on",
+      "empty": {
+        "title": "No help-call type at this site",
+        "body": "Add the first one: each is a code of the help-call reasons, sent to a group.",
+        "bodyView": "The production manager adds them."
+      },
+      "held": {
+        "manage": "Keeping the routing needs production.calls.manage.",
+        "noCodes": "Every help-call reason is a type here already: add a reason in Reason codes first."
+      },
+      "new": {
+        "button": "New type",
+        "first": "Add the first type",
+        "title": "New help-call type",
+        "intro": "A type is a code of the help-call reasons (its words, icon and colour on the tablet). Its kind never changes.",
+        "code": "Help-call reason",
+        "codeHint": "The reasons not yet a type at this site.",
+        "pickCode": "Choose a reason",
+        "pickKind": "Choose the kind.",
+        "kindHint": "Machine, material, quality, supervisor, maintenance or other: it decides how the call is shown and counted.",
+        "groupHint": "A team of the site, or the site's team leaders.",
+        "escalateHint": "{min}–{max} minutes; empty: never.",
+        "add": "Add type",
+        "done": "{code} is added to the routing."
       }
     }
   }

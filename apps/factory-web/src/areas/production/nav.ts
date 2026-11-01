@@ -1,4 +1,4 @@
-import { Activity, BarChart3, ClipboardList, Factory, Recycle, Scissors, SlidersHorizontal } from 'lucide-react'
+import { Activity, BarChart3, BellRing, ClipboardList, Factory, Recycle, Scissors, SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -38,7 +38,11 @@ export const officeArea: OfficeAreaNav = {
         // B-W2a-60: Floor control › Scrap & rework (SCR-140, design production.scrap): pareto, rows, replacements.
         id: 'production-floor-control',
         label: 'shell:nav.production.floorControl',
-        items: [{ id: 'production-scrap', label: 'shell:nav.production.scrap', href: '/production/scrap', icon: Recycle, permission: 'production.scrap.view' }],
+        items: [
+          { id: 'production-scrap', label: 'shell:nav.production.scrap', href: '/production/scrap', icon: Recycle, permission: 'production.scrap.view' },
+          // B-W2b-58: Help calls (SCR-142, design production.calls): the calls with response and resolve times, who is called.
+          { id: 'production-calls', label: 'shell:nav.production.calls', href: '/production/calls', icon: BellRing, permission: 'production.calls.view' },
+        ],
       },
       {
         // B-W2a-38: Reports (design production.reports): the daily production report, per line, style and size.
