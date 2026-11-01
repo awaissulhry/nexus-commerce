@@ -64,7 +64,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
   it('no later-wave page shows: every row is a W0–W2a page of the tree (or one moved earlier, named), none deferred', () => {
     const allowed = new Set(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter(shipped).map((page) => page.href))))
     // Every tree page is of a built wave, or says why it ships early.
-    // B-W2b-55: W2b is being built; its pages join the tree as they ship (People › Employees first).
+    // W2b pages join the tree as their screen steps ship (B-W2b-55 People › Employees, B-W2b-58 Production › Help calls, …).
     expect(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => !['W0', 'W1', 'W2a', 'W2b'].includes(page.wave) && !page.early).map((page) => page.id)))).toEqual([])
     expect(rows(OFFICE_NAV).map((row) => row.href).filter((href) => !allowed.has(href))).toEqual([])
     const early = OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => page.early).map((page) => page.id)))
@@ -139,6 +139,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/production/reports': 'production.reports.view', // GET /production/reports/daily
       '/production/cutting': 'production.cutting.view', // GET /production/cutting/cuts (B-W2a-60)
       '/production/scrap': 'production.scrap.view', // GET /production/scrap (B-W2a-60)
+      '/production/calls': 'production.calls.view', // GET /production/calls (B-W2b-58)
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
       '/quality/holds': 'quality.holds.view', // GET /quality/holds (B-W2a-67)

@@ -106,7 +106,8 @@
       "cuttingRoom": "Cutting room",
       "cutting": "Cutting",
       "floorControl": "Floor control",
-      "scrap": "Scrap & rework"
+      "scrap": "Scrap & rework",
+      "calls": "Help calls"
     },
     "quality": {
       "area": "Quality",

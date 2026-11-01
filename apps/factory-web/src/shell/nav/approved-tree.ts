@@ -290,7 +290,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Floor control',
         labelIt: 'Controllo reparto',
         hideLabel: false,
-        pages: [{ id: 'production.scrap', title: 'Scrap & rework', titleIt: 'Scarti e rilavorazioni', wave: 'W2a', href: '/production/scrap' }],
+        pages: [
+          { id: 'production.scrap', title: 'Scrap & rework', titleIt: 'Scarti e rilavorazioni', wave: 'W2a', href: '/production/scrap' },
+          // W2b: B-W2b-58 Help calls (SCR-142).
+          { id: 'production.calls', title: 'Help calls', titleIt: 'Chiamate di aiuto', wave: 'W2b', href: '/production/calls' },
+        ],
       },
       {
         label: 'Reports',
