@@ -689,6 +689,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'quality.defects.view',
       // B-W2b-29: off-standard and indirect time (MES-155 … MES-158): the codes of Floor rules & codes, the labour inbox's blocks.
       'production.offstandard.view', 'production.offstandard.codes', 'production.offstandard.approve',
+      // B-W2b-45: Labour & corrections (MES-201 … MES-206): the queue, line days closed and reopened, disputes answered.
+      'production.labour.view', 'production.labour.close', 'production.labour.reopen', 'production.labour.answer',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export',
     ],
@@ -716,6 +718,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'quality.holds.view', 'quality.holds.place', 'quality.defects.view',
       // B-W2b-29: decides the floor's off-standard blocks (MES-157), as it decides scan corrections; never one's own.
       'production.offstandard.view', 'production.offstandard.approve',
+      // B-W2b-45: closes the lines' days and answers the workers' disputes as their lead (never their own); reopening is the manager's.
+      'production.labour.view', 'production.labour.close', 'production.labour.answer',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export'],
     grains: [],

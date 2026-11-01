@@ -51,6 +51,8 @@ import { events as payables } from '../payables/events'
 import { events as people } from '../people/events'
 // B-W2b-35: the line's signals (help calls and their types).
 import { events as andon } from '../andon/events'
+// B-W2b-45: labour records and corrections (line days closed and reopened, disputes).
+import { events as labour } from '../labour/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -169,7 +171,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-27
   ...people,
   // B-W2b-35
-  ...andon] as const satisfies readonly EventDefinition[]
+  ...andon,
+  // B-W2b-45
+  ...labour] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

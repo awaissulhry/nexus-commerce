@@ -1804,6 +1804,10 @@
     "production_offstandard_view": "See off-standard and indirect time blocks and their counts (no person in the lists)",
     "production_offstandard_codes": "Add and change off-standard and indirect time codes and their pay rules",
     "production_offstandard_approve": "Approve, reject, reopen and correct off-standard time blocks (never your own)",
+    "production_labour_view": "See Labour & corrections: the queue, line days and the changes to labour records (no person in the lists)",
+    "production_labour_close": "Close a line's day once its off-standard time is coded and its anomalies are cleared (closed days feed pay)",
+    "production_labour_reopen": "Reopen a closed line's day, with a reason",
+    "production_labour_answer": "Answer a worker's dispute of their own record, upheld or rejected (never your own)",
     "production_calls_view": "See help calls, their times per call and line, and who is called for each type (never per person)",
     "production_calls_answer": "Answer help calls: seen, on the way, solved or cancelled, and what they led to",
     "production_calls_manage": "Keep a site's help-call types and who answers them",
@@ -1817,6 +1821,7 @@
     "production_bundles_who": "See who is behind one finding (only with the site's legal basis on; logged)",
     "people_piecerates_view": "See the piece-rate tables, their versions, who has read them and the legal switch of piece pay (the rates only with the pay grain)",
     "people_piecerates_manage": "Make new versions of piece rates, publish them to the workers, put them in force, confirm provisional rates and record what piece pay rests on",
-    "people_piecerates_switch": "Start piece pay at a site once every legal precondition is on record, or stop it"
+    "people_piecerates_switch": "Start piece pay at a site once every legal precondition is on record, or stop it",
+    "people_attendance_view": "See attendance at your sites: clock-ins, clock-outs and breaks, the days and who is in now (where the attendance purpose is on)"
   }
 }
