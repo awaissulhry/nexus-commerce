@@ -111,8 +111,7 @@
     "style": "Per modello",
     "empty": "Nessun ordine in questo periodo.",
     "orders_one": "{count} ordine",
-    "orders_other": "{count} ordini",
-    "pick": "{name}: {pct} su {count} ordini — mostra solo questi"
+    "orders_other": "{count} ordini"
   },
   "detail": {
     "title": "{number} — redditività",
@@ -144,7 +143,8 @@
   },
   "meter": {
     "label": "Margine attuale {now} contro {quoted} a preventivo",
-    "noQuoted": "Margine attuale {now} (nessun margine a preventivo da confrontare)"
+    "noQuoted": "Margine attuale {now} (nessun margine a preventivo da confrontare)",
+    "quotedMark": "A preventivo {quoted}"
   },
   "bridge": {
     "title": "Dal prezzo al margine",
@@ -167,7 +167,6 @@
     "none": "Non ancora determinabile: il costo a preventivo o attuale non è noto.",
     "QUOTED": "Margine a preventivo",
     "NOW": "Margine attuale",
-    "open": "{part} in Amministrazione › Costi standard ed effettivi",
     "reason": {
       "PRICE": "Prezzo",
       "MATERIAL": "Materiale",

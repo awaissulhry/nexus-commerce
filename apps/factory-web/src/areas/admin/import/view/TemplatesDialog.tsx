@@ -1,8 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Modal } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Importer, NumberFormat } from '../api'
 import { NUMBER_SAMPLES, templateHref } from '../model'

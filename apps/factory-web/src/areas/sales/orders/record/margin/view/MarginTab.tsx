@@ -77,7 +77,7 @@ function Margin({ margin, prefix, orderId, onRetry }: { margin: MarginTabModel |
           </Link>
         </div>
         <MarginStrip detail={detail} can={can} />
-        <MarginMeter quoted={detail.quotedMarginPct} now={detail.estimateMarginPct} />
+        <MarginMeter quoted={detail.quotedMarginPct} now={detail.estimateMarginPct} allowed={can.margin} />
         <p className="fw-fmg-muted">{detail.provisional ? t('detail.provisional') : t('detail.method')}</p>
       </Card>
       <Card padded className="fw-fmg-card">

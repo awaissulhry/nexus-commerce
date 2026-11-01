@@ -1,5 +1,5 @@
 import type { WorkCentreKind } from '@nexus/factory-domain/product/routing/operations'
-import type { ScanFact } from '@nexus/factory-domain/production/scans/rules'
+import { SCAN_KINDS, type ScanFact } from '@nexus/factory-domain/production/scans/rules'
 import { wipOf, type Wip, type WipRework } from '@nexus/factory-domain/production/scans/wip'
 import { SCAN_COLUMNS } from '../../production/scans/store'
 import type { Reader } from '../store'
@@ -24,7 +24,8 @@ export async function wipForMany(db: Reader, workOrderIds: readonly string[]): P
   const colourwayIds = [...new Set(cells.map((cell) => cell.colourwayId))]
   const colourways = new Map(colourwayIds.length === 0 ? [] : (await db.colourway.findMany({ where: { id: { in: colourwayIds } }, select: { id: true, code: true } })).map((row) => [row.id, row.code]))
   const bundles = await db.bundle.findMany({ where: { workOrderId: { in: ids } }, select: { id: true, workOrderId: true, workOrderSizeId: true, part: true, quantity: true, status: true, parentBundleId: true, createdAt: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
-  const scans = (await db.operationScan.findMany({ where: { workOrderId: { in: ids } }, select: SCAN_COLUMNS, orderBy: [{ serverTime: 'asc' }, { id: 'asc' }] })) as (Awaited<ReturnType<typeof db.operationScan.findMany<{ select: typeof SCAN_COLUMNS }>>>[number] & ScanFact)[]
+  // W2b (B-W2b-40): the count ledger only (a timing row — START, PAUSE … — is no report).
+  const scans = (await db.operationScan.findMany({ where: { workOrderId: { in: ids }, kind: { in: [...SCAN_KINDS] } }, select: SCAN_COLUMNS, orderBy: [{ serverTime: 'asc' }, { id: 'asc' }] })) as (Awaited<ReturnType<typeof db.operationScan.findMany<{ select: typeof SCAN_COLUMNS }>>>[number] & ScanFact)[]
   const reworks = await db.reworkOrder.findMany({
     where: { workOrderId: { in: ids }, status: { not: 'CANCELLED' } },
     select: { id: true, workOrderId: true, workOrderSizeId: true, bundleId: true, sourceScanId: true, foundAtOperationId: true, reworkAtOperationId: true, status: true, quantity: true, goodQuantity: true, scrapQuantity: true, reasonCode: true, createdAt: true },

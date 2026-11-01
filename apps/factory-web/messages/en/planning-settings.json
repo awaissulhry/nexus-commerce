@@ -34,10 +34,6 @@
       "failed_other": "{count} changes not saved — try again"
     },
     "save": {
-      "region": "Unsaved changes",
-      "unsaved_one": "{count} unsaved change",
-      "unsaved_other": "{count} unsaved changes",
-      "discard": "Discard",
       "save": "Save"
     },
     "held": {

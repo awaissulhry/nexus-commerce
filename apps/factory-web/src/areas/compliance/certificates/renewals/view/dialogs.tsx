@@ -2,8 +2,9 @@
 
 import { ArrowRight } from 'lucide-react'
 import { renewalTask } from '@nexus/factory-domain/compliance/renewals/rules'
-import { Banner, DateField, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, SegmentedControl, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input, SegmentedControl, Select, Spinner } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { CertCan } from '../../model'
 import { dateLocale, PdfChooser, useDay } from '../../view/parts'

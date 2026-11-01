@@ -2,8 +2,8 @@
 
 import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { Search } from 'lucide-react'
-import { Modal } from '@nexus/ui/components'
 import { Input } from '@nexus/ui/primitives'
+import { Modal } from '../../../lib/i18n/ds-parts'
 import { useT } from '../../../lib/i18n/provider'
 import type { CompanyRef } from '../../../lib/session/session'
 import { matchCompanies } from '../switcher-search'

@@ -92,7 +92,8 @@ beforeAll(async () => {
   labour = await seedLabour({ db: factory, namespace: NS })
   await seedAndon({ db: factory, namespace: 'w2b12-b' })
   await seedLabour({ db: factory, namespace: 'w2b12-b' })
-  pay = await seedPay({ db: factory, namespace: NS })
+  // B-W2b-30: piece pay ON (the default seed leaves it OFF): the earnings entries and held scans below need it.
+  pay = await seedPay({ db: factory, namespace: NS }, { piecePay: true })
 }, 300_000)
 
 afterAll(async () => {

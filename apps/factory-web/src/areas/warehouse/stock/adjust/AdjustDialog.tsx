@@ -2,8 +2,9 @@
 
 import { useEffect, useRef } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, SegmentedControl, Select, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input, SegmentedControl, Select } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { quantity } from '../../../_shared/stock/model'
 import { adjustChecks, adjustPreview, type AdjustActions, type AdjustDialogModel } from './model'

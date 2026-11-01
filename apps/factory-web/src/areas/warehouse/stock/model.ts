@@ -370,12 +370,10 @@ export interface StockPageModel {
   hold?: HoldDialogModel | null
   /** "Now" for the as-of dialog's checks (design cases fix it; else the clock). */
   now?: string
-  /** Design cases: the rows selected, the keys panel open, the phone card list (and its select mode). */
+  /** Design cases: the rows selected, the keys panel open. */
   selected?: readonly string[]
   focusRow?: number
   helpOpen?: boolean
-  phone?: boolean
-  phoneSelect?: boolean
 }
 
 export interface StockPageActions {

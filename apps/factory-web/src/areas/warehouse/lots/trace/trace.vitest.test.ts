@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HIDE_TRACE, LARGE_TRACE, LOT_TRACE, OPENING_TRACE } from '../demo/trace/fixtures'
-import { countNodes, defaultOpen, findOutcome, GROUP_LIMIT, nodeRecord, onlyAffected, traceAddressOf, traceHref, traceTree, treeMove, visibleRows, type TreeItem } from './model'
+import { traceDefaultOpen, type TraceTreeNode } from '@nexus/ui/patterns/trace-tree/index'
+import { countNodes, findOutcome, GROUP_LIMIT, nodeRecord, onlyAffected, TRACE_OPEN_DEPTH, traceAddressOf, traceHref, traceTree, type TreeItem } from './model'
 
 /**
  * The trace tree (B-W2a-64, lt-trace-tree; TraceTree composed): the API's graph as one tree under the start (each node
@@ -40,7 +41,12 @@ describe('the trace tree', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({ kind: 'SERIAL', exact: 30, possible: 0 })
     expect(groups[0]!.children.length).toBeGreaterThan(GROUP_LIMIT)
-    expect(defaultOpen(root).has(groups[0]!.id)).toBe(false)
+    // The DS tree opens the start and its two sides; a group (a level counted first) stays closed.
+    const shape = (item: TreeItem): TraceTreeNode => ({ id: item.id, children: item.children.map(shape) })
+    const open = traceDefaultOpen([shape(root)], TRACE_OPEN_DEPTH)
+    expect(open.has(root.id)).toBe(true)
+    expect(root.children.every((side) => side.children.length === 0 || open.has(side.id))).toBe(true)
+    expect(open.has(groups[0]!.id)).toBe(false)
   })
 
   it('keeps only the branches that reach a customer who received the goods', () => {
@@ -54,20 +60,6 @@ describe('the trace tree', () => {
   it('a lot with nothing behind or ahead of it has empty sides', () => {
     const root = traceTree(OPENING_TRACE)!
     expect(root.children.every((item) => item.children.length === 0)).toBe(true)
-  })
-
-  it('walks the visible rows with the arrow keys (open, go in, close, go out, Home, End)', () => {
-    const root = traceTree(LOT_TRACE)!
-    const open = defaultOpen(root)
-    const rows = visibleRows(root, open)
-    expect(rows[0]).toMatchObject({ depth: 1, expandable: true, expanded: true })
-    expect(treeMove(rows, 'start', 'ArrowDown').focus).toBe(rows[1]!.item.id)
-    expect(treeMove(rows, rows[1]!.item.id, 'ArrowLeft')).toEqual({ focus: rows[1]!.item.id, toggle: rows[1]!.item.id })
-    const leaf = rows.find((row) => !row.expandable)!
-    expect(treeMove(rows, leaf.item.id, 'ArrowLeft').focus).toBe(leaf.parentId)
-    expect(treeMove(rows, 'start', 'End').focus).toBe(rows[rows.length - 1]!.item.id)
-    const closed = rows.find((row) => row.expandable && !row.expanded)
-    if (closed) expect(treeMove(rows, closed.item.id, 'ArrowRight').toggle).toBe(closed.item.id)
   })
 })
 

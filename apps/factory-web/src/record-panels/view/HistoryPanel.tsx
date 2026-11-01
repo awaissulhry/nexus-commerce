@@ -2,8 +2,9 @@
 
 import type { ReactNode } from 'react'
 import { History } from 'lucide-react'
-import { Banner, EmptyState, Timeline, type TimelineStep } from '@nexus/ui/components'
+import { Banner, EmptyState, type TimelineStep } from '@nexus/ui/components'
 import { Button, SegmentedControl, Spinner } from '@nexus/ui/primitives'
+import { Timeline } from '../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../lib/i18n/format'
 import type { Translate } from '../../lib/i18n/messages'
 import { useLocale, useT } from '../../lib/i18n/provider'

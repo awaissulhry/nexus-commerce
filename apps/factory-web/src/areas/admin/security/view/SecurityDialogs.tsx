@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Banner, DateField, Field, FileDropzone, Modal, SummaryTable } from '@nexus/ui/components'
-import { Button, Input, Pill, Skeleton, Tag, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field, SummaryTable } from '@nexus/ui/components'
+import { Button, Input, Pill, Skeleton, Tag } from '@nexus/ui/primitives'
+import { DateField, FileDropzone, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../lib/i18n/provider'

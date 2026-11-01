@@ -2,8 +2,9 @@
 
 import { useEffect, useRef } from 'react'
 import { Search } from 'lucide-react'
-import { Banner, DateField, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { BrandOption, StyleOption } from '../api'
 import { checkHeld, draftProblems, draftSpan, firstProblem, grantedClass, kindOf, STANDARD_SUGGESTIONS, type AddModel, type CertCan, type CertificateDraft, type CheckModel, type DraftField } from '../model'

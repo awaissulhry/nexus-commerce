@@ -12,6 +12,8 @@ import type { NodeKind, StartKind, Trace, TraceFind, TraceNode } from '../../sto
  */
 
 export const GROUP_LIMIT = 12
+/** The DS TraceTree's open depth: the start and its two sides open at first; the levels under them stay counted, closed. */
+export const TRACE_OPEN_DEPTH = 3
 const KIND_ORDER = new Map<string, number>(TRACE_NODE_KINDS.map((kind, index) => [kind, index]))
 
 export type TreeSide = 'BACKWARD' | 'FORWARD'
@@ -118,73 +120,6 @@ export function onlyAffected(root: TreeItem): TreeItem {
       return { ...section, count: countNodes(children), children }
     }),
   } as TreeItem
-}
-
-/** The items open at first: the start and its sections, and the first level of each side (groups stay counted, closed). */
-export function defaultOpen(root: TreeItem | null): Set<string> {
-  const open = new Set<string>()
-  if (!root) return open
-  open.add(root.id)
-  for (const section of root.children) {
-    open.add(section.id)
-    for (const item of section.children) if (item.type === 'node' && item.children.length > 0 && item.children.length <= GROUP_LIMIT) open.add(item.id)
-  }
-  return open
-}
-
-/** A visible row of the tree (what the arrow keys walk): its item, depth, parent and whether it opens. */
-export interface VisibleRow {
-  readonly item: TreeItem
-  readonly depth: number
-  readonly parentId: string | null
-  readonly expandable: boolean
-  readonly expanded: boolean
-  readonly posInSet: number
-  readonly setSize: number
-}
-
-/** The rows shown with these items open, in reading order. */
-export function visibleRows(root: TreeItem | null, open: ReadonlySet<string>): VisibleRow[] {
-  const rows: VisibleRow[] = []
-  const walk = (items: readonly TreeItem[], depth: number, parentId: string | null) => {
-    items.forEach((item, index) => {
-      const expandable = item.children.length > 0
-      const expanded = expandable && open.has(item.id)
-      rows.push({ item, depth, parentId, expandable, expanded, posInSet: index + 1, setSize: items.length })
-      if (expanded) walk(item.children, depth + 1, item.id)
-    })
-  }
-  if (root) walk([root], 1, null)
-  return rows
-}
-
-export type TreeKey = 'ArrowDown' | 'ArrowUp' | 'ArrowRight' | 'ArrowLeft' | 'Home' | 'End'
-
-/**
- * What an arrow key does on the focused row (WAI-ARIA tree): down / up to the next / previous row; right opens a closed
- * row, or goes to its first child; left closes an open row, or goes to its parent; Home / End the first / last row.
- */
-export function treeMove(rows: readonly VisibleRow[], focusId: string, key: TreeKey): { focus: string; toggle: string | null } {
-  const at = Math.max(0, rows.findIndex((row) => row.item.id === focusId))
-  const row = rows[at]
-  if (!row) return { focus: focusId, toggle: null }
-  switch (key) {
-    case 'ArrowDown':
-      return { focus: rows[Math.min(rows.length - 1, at + 1)]!.item.id, toggle: null }
-    case 'ArrowUp':
-      return { focus: rows[Math.max(0, at - 1)]!.item.id, toggle: null }
-    case 'Home':
-      return { focus: rows[0]!.item.id, toggle: null }
-    case 'End':
-      return { focus: rows[rows.length - 1]!.item.id, toggle: null }
-    case 'ArrowRight':
-      if (row.expandable && !row.expanded) return { focus: row.item.id, toggle: row.item.id }
-      if (row.expanded) return { focus: rows[at + 1]?.item.id ?? row.item.id, toggle: null }
-      return { focus: row.item.id, toggle: null }
-    case 'ArrowLeft':
-      if (row.expanded) return { focus: row.item.id, toggle: row.item.id }
-      return { focus: row.parentId ?? row.item.id, toggle: null }
-  }
 }
 
 // ---- where a node opens ---------------------------------------------------------------------------------------------------

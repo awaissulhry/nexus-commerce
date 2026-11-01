@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Banner, Card, DateField, Field, KeyValue } from '@nexus/ui/components'
-import { EditModeBar } from '@nexus/ui/patterns'
+import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
 import { Input, RadioCard, Select, Toggle } from '@nexus/ui/primitives'
+import { DateField, EditModeBar } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'

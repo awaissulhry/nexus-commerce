@@ -2,8 +2,9 @@
 
 import { useEffect, useId, useState } from 'react'
 import { Mail } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { Button, Checkbox, Select, Skeleton, Toggle } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { digestProblem, digestTimes, NOTIFICATION_CATEGORIES, type Digest, type DigestDraft, type Loaded } from '../model'

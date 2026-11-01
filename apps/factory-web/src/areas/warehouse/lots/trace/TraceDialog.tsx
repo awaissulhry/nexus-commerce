@@ -1,8 +1,9 @@
 'use client'
 
 import { GitBranch, Search } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { Button, Input, Spinner } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import type { TraceFind } from '../../stock/daily/api'
 import { useWords } from '../shared/parts'
 import type { TraceFindModel } from './model'

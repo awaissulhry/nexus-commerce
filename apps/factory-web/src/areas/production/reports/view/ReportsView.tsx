@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Mail, MoreHorizontal } from 'lucide-react'
-import { AsOf, Banner, Card, DateField, EmptyState, Menu, MetricStrip, PerformanceGraph, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Menu, MetricStrip, PerformanceGraph, SummaryTable } from '@nexus/ui/components'
 import { Button, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { chart } from '@nexus/ui/tokens'
+import { AsOf, DateField } from '../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'

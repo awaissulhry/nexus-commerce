@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Kbd, RadioCard, Skeleton, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Kbd, RadioCard, Skeleton } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Read } from '../../_shared/model'

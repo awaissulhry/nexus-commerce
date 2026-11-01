@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, type ReactNode } from 'react'
-import { Field, Modal } from '@nexus/ui/components'
+import { Field } from '@nexus/ui/components'
 import { PhotoCapture, type CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
 import { Button, FilterChip, Input, Kbd, RadioCard, Select, Toggle } from '@nexus/ui/primitives'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { DEFECT_CLASSES, QUALITY_STAGES, type DispositionOutcome } from '@nexus/factory-domain/quality/defects/rules'
 import { usePhotoWords } from '../../../../lib/ds-words/photo-capture'
 import { useLocale, useT } from '../../../../lib/i18n/provider'

@@ -2,8 +2,9 @@
 
 import type { ReactNode } from 'react'
 import { ExternalLink } from 'lucide-react'
-import { Banner, Field, KeyValue, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Radio, Spinner, Textarea, Toggle } from '@nexus/ui/primitives'
+import { Banner, Field, KeyValue } from '@nexus/ui/components'
+import { Button, Checkbox, Input, Radio, Spinner, Toggle } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { money, quantity } from '../../../../_shared/buying/model'
 import type { Claim } from '../../api'

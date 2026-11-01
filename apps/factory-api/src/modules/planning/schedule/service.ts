@@ -54,6 +54,8 @@ export interface BoardWorkOrder {
   readonly status: string
   readonly kind: string
   readonly priority: number
+  /** B-W2b-51 (MES-009): the work order's rush flag. */
+  readonly rush: boolean
   readonly version: number
   readonly dueDate: BusinessDate | null
   readonly lineId: string | null
@@ -110,6 +112,8 @@ const WORK_ORDER_COLUMNS = {
   status: true,
   kind: true,
   priority: true,
+  // B-W2b-51: the rush flag.
+  rush: true,
   version: true,
   dueDate: true,
   lineId: true,
@@ -146,6 +150,7 @@ async function readBoardWorkOrders(db: Reader, site: SiteRow, capacity: Capacity
       status: row.status,
       kind: row.kind,
       priority: row.priority,
+      rush: row.rush,
       version: row.version,
       dueDate: row.dueDate ? dayOf(row.dueDate) : null,
       lineId: row.lineId,

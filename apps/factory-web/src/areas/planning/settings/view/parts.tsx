@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { RotateCcw, ShieldOff, WifiOff } from 'lucide-react'
 import { Card, EmptyState } from '@nexus/ui/components'
-import { saveKeyAction } from '@nexus/ui/patterns'
-import { Button, Kbd, Skeleton, Spinner } from '@nexus/ui/primitives'
+import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
+import { EditModeBar } from '../../../../lib/i18n/ds-parts'
 import { formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { SaveStatus } from '../model'
@@ -38,45 +38,13 @@ export function SaveWords({ status, timeZone }: { status: SaveStatus | null; tim
 }
 
 /**
- * The bar of a form with unsaved changes (design: EditModeBar ⌘S): how many, Discard, Save; ⌘S / Ctrl+S saves (not
- * while held or busy); leaving the page asks first while changes wait. Composed here from DS parts because the DS
- * EditModeBar draws English words of its own ("Discard", "Save with", "Edit mode") on Italian pages: a DS gap.
+ * The bar of a form with unsaved changes (design: EditModeBar ⌘S) = the DS EditModeBar (B-W2b-18; composed here while
+ * its words were English only): how many, Discard, Save; ⌘S / Ctrl+S saves (not while held or busy); leaving the page
+ * asks first while changes wait.
  */
 export function SaveBar({ count, onDiscard, onSave, held, busy, saveLabel }: { count: number; onDiscard: () => void; onSave: () => void; held: string | null; busy: boolean; saveLabel?: string }) {
   const t = useT('planning-settings')
-  const latest = useRef({ onSave, held, busy })
-  latest.current = { onSave, held, busy }
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const action = saveKeyAction(event, { held: !!latest.current.held, busy: latest.current.busy })
-      if (action === 'ignore') return
-      event.preventDefault()
-      if (action === 'save') latest.current.onSave()
-    }
-    const onLeave = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ''
-    }
-    document.addEventListener('keydown', onKey)
-    window.addEventListener('beforeunload', onLeave)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      window.removeEventListener('beforeunload', onLeave)
-    }
-  }, [])
-  return (
-    <div className="fw-ps-savebar" role="region" aria-label={t('ps.save.region')}>
-      <span className="fw-ps-savebar-text">{t('ps.save.unsaved', { count })}</span>
-      <span className="fw-ps-actions">
-        <Button size="sm" onClick={onDiscard} heldReason={busy ? t('ps.held.busy') : null}>
-          {t('ps.save.discard')}
-        </Button>
-        <Button size="sm" variant="primary" onClick={onSave} heldReason={held ?? (busy ? t('ps.held.busy') : null)} aria-keyshortcuts="Meta+S Control+S">
-          {busy ? <Spinner size={12} /> : null} {saveLabel ?? t('ps.save.save')} <Kbd>⌘S</Kbd>
-        </Button>
-      </span>
-    </div>
-  )
+  return <EditModeBar count={count} onDiscard={onDiscard} onApply={onSave} applyLabel={saveLabel ?? t('ps.save.save')} busy={busy} applyHeldReason={held ?? (busy ? t('ps.held.busy') : null)} saveShortcut />
 }
 
 /** A failed read: what went wrong in words and Try again (never drawn as an empty section). */
