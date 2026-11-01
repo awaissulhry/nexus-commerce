@@ -14,6 +14,7 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { defineManifest, defineRoutes, PUBLIC } from '../../../core/manifest'
+import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
 
 /**
  * The money-grain wall on the app (features PLT-034, PLT-035), without a database: every answer is shaped by its
@@ -142,7 +143,7 @@ describe('requests that send money', () => {
   })
 })
 
-describe('the permission registry at boot', () => {
+describe('the permission registry at boot', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   const manifestModule = fileURLToPath(new URL('../../../core/manifest.ts', import.meta.url))
   const tree = (permission: string): string => {
     const root = mkdtempSync(join(tmpdir(), 'factory-permissions-'))
