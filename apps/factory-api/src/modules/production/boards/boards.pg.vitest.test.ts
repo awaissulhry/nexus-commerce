@@ -316,7 +316,7 @@ describe('the WIP heat map (MES-162): bundles per operation across lines', () =>
     // A, B, C and D were reported at sewing on L1's stations: they wait at the inspection (11 pieces).
     expect(qc).toMatchObject({ bundles: 4, pieces: 11, level: 'HIGH' })
     // E is cut (at a station alone) and not sewn: it waits at sewing on its work order's allocated line, else on no line.
-    const [{ lineId }] = await admin<{ lineId: string | null }>('SELECT "lineId" FROM "WorkOrder" WHERE id = $1', [wo1])
+    const lineId = (await admin<{ lineId: string | null }>('SELECT "lineId" FROM "WorkOrder" WHERE id = $1', [wo1]))[0]!.lineId
     const eRow = map.rows.find((row: Json) => (row.line?.id ?? null) === lineId)
     expect(eRow.cells[codes.indexOf(ops.sew!.code)].bundles).toBeGreaterThanOrEqual(1)
     expect(keysOf(map).filter((key) => PERSON_KEYS.test(key))).toEqual([])
