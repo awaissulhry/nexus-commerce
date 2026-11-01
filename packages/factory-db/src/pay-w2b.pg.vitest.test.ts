@@ -104,7 +104,8 @@ beforeAll(async () => {
   db = await migratedDatabase('payw2b')
   factory = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 4 } })
   a = await seedCore({ db: factory, namespace: NS })
-  pay = await seedPay({ db: factory, namespace: NS })
+  // B-W2b-30: piece pay ON (the default seed leaves it OFF): A1's PERFORMANCE gate, its switch ON and the ledger.
+  pay = await seedPay({ db: factory, namespace: NS }, { piecePay: true })
 }, 180_000)
 
 afterAll(async () => {
@@ -217,7 +218,7 @@ async function publishedVersion(from: string): Promise<{ tableId: string; versio
 describe('the seeds and the walls', () => {
   it('the seeds are idempotent: a second run writes nothing new', async () => {
     const before = await Promise.all(TABLES.map(count))
-    await seedPay({ db: factory, namespace: NS })
+    await seedPay({ db: factory, namespace: NS }, { piecePay: true })
     expect(await Promise.all(TABLES.map(count))).toEqual(before)
     expect(before.every((n) => n > 0)).toBe(true)
   })

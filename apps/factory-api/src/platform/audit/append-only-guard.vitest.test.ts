@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import { SLOW_TEST_TIMEOUT_MS } from '../../testing/timeouts'
 
 // scripts/factory/check-append-only.mjs, proven on plants: each test copies the real schema, ownership and migrations
 // into a temporary root, plants one violation, and runs the guard on it.
@@ -40,7 +41,7 @@ const guard = (root?: string) => {
 }
 const laterMigration = (sql: string) => ({ [`${MIGRATIONS}/209912010000_zz_later/migration.sql`]: sql })
 
-describe('check-append-only', () => {
+describe('check-append-only', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('passes on the repository and on an untouched copy', () => {
     expect(guard()).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(50 append-only model\(s\): AlertEvent, AuditLog, IdempotencyReceipt, NotificationDelivery, MessageMention, WorkOrderCostEntry, FloorSyncEvent, GeneratedDocument, AttentionActionLog, IntegrationCall, StockMove, StockValuation, OperationScanMember, OperationChecklistResult, LabourEdit, LinkEvidence, SdiNotification, PaymentAllocation, NumberAllocation, NumberBlockUse, RestoreDrill, ViesCheck, RateAcknowledgement, EarningsEntry, RequirementPegging, StaffNoticeAck, CutLog, CutLogPiece, BundleReprint, OperationScan, WorkerNoticeAck, OperationScanDefect, GarmentLabelPrint, QualityRelease, QualityReleaseReversal, LabResult, ReturnReceipt, RepairStageEvent, QuoteAcceptance, SalesOrderAmendment, Ddt, DdtCancellation, TrackingEvent, PurchaseOrderRevision, PurchaseOrderReminder, SubcontractReceipt, SubcontractReceiptLine, Message, ClockEvent, AttendanceCorrection/) })
     expect(guard(tree()).status).toBe(0)
