@@ -37,9 +37,6 @@ export function officeAreaDeclarations(modules: Readonly<Record<string, OfficeAr
     .sort((a, b) => a.order - b.order || a.area.id.localeCompare(b.area.id))
 }
 
-/** The whole Office manifest (before any person's filter). */
-export const OFFICE_NAV: AreaNav = { view: 'office', areas: officeAreaDeclarations().map((declaration) => declaration.area) }
-
 /** The Office navigation this person may open. */
 export function officeNavFor(can: (permission: string) => boolean, nav: AreaNav = OFFICE_NAV): AreaNav {
   return areaNavForPerson(nav, { can })
@@ -282,7 +279,38 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/plant/machines/tags',
   // B-W2a-73: Plant › Settings › Plant settings (SCR-241, its W2a section: the symptoms on the floor).
   '/plant/settings',
+  // B-W2b-55: People › Employees (SCR-084), an employee (SCR-085), the badge sheet and the staff list print (new tabs).
+  '/people/employees',
+  '/people/employees/[id]',
+  '/people/employees/badges',
+  '/people/employees/print',
 ])
+
+/**
+ * B-W2b-55: an area declares every page of its tree once (People: all nine), and a row shows only once its page is built
+ * (its address in OFFICE_PAGES), so a page step fills its own route and its row appears by itself; never a row that opens
+ * nothing. A section left without a row goes with its rows; an area with no section left, too (unless its own address is
+ * a page). Every W0–W2a row is built, so their manifest is unchanged.
+ */
+export function builtRowsOnly(nav: AreaNav, built: ReadonlySet<string> = OFFICE_PAGES): AreaNav {
+  const row = (item: AreaNavItem): AreaNavItem | null => {
+    const children = item.children?.flatMap((child) => row(child) ?? [])
+    if (!built.has(item.href) && !children?.length) return null
+    return { ...item, ...(item.children ? { children } : {}) }
+  }
+  const areas = nav.areas.flatMap((area) => {
+    if (!area.sections?.length) return [area]
+    const sections = area.sections.flatMap((section) => {
+      const items = section.items.flatMap((item) => row(item) ?? [])
+      return items.length ? [{ ...section, items }] : []
+    })
+    return sections.length || built.has(area.href) ? [{ ...area, sections }] : []
+  })
+  return { ...nav, areas }
+}
+
+/** The whole Office manifest (before any person's filter): the built rows of every area's declaration. */
+export const OFFICE_NAV: AreaNav = builtRowsOnly({ view: 'office', areas: officeAreaDeclarations().map((declaration) => declaration.area) })
 
 /**
  * B-W2b-05 (the W2a follow-up "window mode for new-tab pages and nav row target"; design arch new-tab-window: "no rail,

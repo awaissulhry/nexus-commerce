@@ -5,7 +5,7 @@
  * groups, pages, words, floor tiles and modes); held here so the navigation test (navigation-map.vitest.test.ts) can walk
  * it. A later wave that ships a page adds it here from the tree, with its address.
  *
- *  - OFFICE: the rail areas (the tree's `order`: People, 11, is W2b, so Plant 12 sits right above Admin 13), their groups
+ *  - OFFICE: the rail areas (the tree's `order`: People 11 — W2b, from B-W2b-55 —, Plant 12 right above Admin 13), their groups
  *    and pages. `href` is the page's built address; `early` and `deferred` name a page the build ships outside its tree
  *    wave and why.
  *  - FLOOR: the W0–W2a floor tasks with their tile (floor/model.ts TILE_KEYS) and the station modes the tree gives them
@@ -418,6 +418,23 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Impostazioni',
         hideLabel: false,
         pages: [{ id: 'finance.settings', title: 'Finance settings', titleIt: 'Impostazioni amministrazione', wave: 'W1', href: '/finance/settings' }],
+      },
+    ],
+  },
+  // W2b: B-W2b-55 the People area (the tree's 11) with its first page, Employees (SCR-084, SCR-085). Its other pages join
+  // here with their steps (Attendance, Shifts, Skills & training, Piece rates, Payroll export, Efficiency, People reports,
+  // People settings): their rows are declared in areas/people/nav.ts and show once their page is built.
+  {
+    id: 'people',
+    order: 11,
+    title: 'People',
+    titleIt: 'Persone',
+    groups: [
+      {
+        label: 'Main',
+        labelIt: 'Principali',
+        hideLabel: true,
+        pages: [{ id: 'people.employees', title: 'Employees', titleIt: 'Dipendenti', wave: 'W2b', href: '/people/employees' }],
       },
     ],
   },
