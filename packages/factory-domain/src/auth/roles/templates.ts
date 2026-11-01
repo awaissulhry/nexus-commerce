@@ -231,6 +231,18 @@ const GUARDS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Objec
   team_leader: ['production.scan.override'],
 })
 /**
+ * B-W2b-37 (attendance days; MES-225, MES-226, MES-228, MES-233, MES-238; design people.attendance, people.settings): the
+ * administrator (the HR register's keeper until an HR template comes) and the production manager read the days, fix them
+ * with a reason, approve them and open the roll call; the administrator keeps the absence codes and the rounding rules;
+ * the floor supervisor opens the roll call and sees who is in now (counts), never one person's day: the ATTENDANCE gate's
+ * basis never covers leads (B-W2b-27). Owner and read-only take theirs from every(). One line per template.
+ */
+const PEOPLE_ATTENDANCE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.attendance.view', 'people.attendance.manage', 'people.attendance.approve', 'people.attendance.settings', 'people.attendance.rollcall'],
+  production_manager: ['people.attendance.view', 'people.attendance.manage', 'people.attendance.approve', 'people.attendance.rollcall'],
+  floor_supervisor: ['people.attendance.rollcall'],
+})
+/**
  * B-W2b-50 (line targets and boards, MES-084, MES-161, MES-162, MES-166, ANA-007; design production.floor "Hour by hour",
  * the WIP heat map, the line TV's office preview): the production manager, the floor supervisor and the planner set the
  * lines' hourly targets; the manager and the supervisor give a short hour's reason from the office too; quality reads the
@@ -283,7 +295,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-50
   ...((audience === 'office' ? BOARDS_ADDS : BOARDS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-34
-  ...(audience === 'office' ? (PEOPLE_PIECERATES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PEOPLE_PIECERATES_ADDS[key] ?? []) : []),
+  // B-W2b-37
+  ...(audience === 'office' ? (PEOPLE_ATTENDANCE_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

@@ -12,6 +12,8 @@ import { VERSION_STATUSES } from './piecerates/rates'
 import { CLOCK_ACTIONS } from './clock/rules'
 // B-W2b-38: incentive schemes.
 import { SCHEME_STATUSES } from './schemes/rules'
+// B-W2b-37: attendance days.
+import { ANOMALY_KINDS, DAY_CHANGES, DAY_STATUSES } from './attendance/rules'
 
 /**
  * The people module's events (B-W2b-26 employees and teams; design people.employees "Live": employee.created / updated
@@ -67,6 +69,10 @@ import { SCHEME_STATUSES } from './schemes/rules'
  *
  * attendance.clock_event reaches the office screens of people.attendance.view holders and the tablets of the site
  * (floor.work; no person in the message: each tablet reads its own state again); clock.out reaches no screen.
+ * B-W2b-37 adds MANUAL to both sources: a clock-in or clock-out a person entered in the office with a reason.
+ *
+ * B-W2b-37 (attendance days), emitted by apps/factory-api modules/people/attendance (attendanceEvents, at the end of the
+ * file). Ids, kinds and states only: no name, no time, no minutes, no reason.
  */
 
 export const SKILL_CHANGES = ['CREATED', 'EDITED', 'ARCHIVED', 'RESTORED'] as const
@@ -88,6 +94,8 @@ const by = z.enum(['OFFICE', 'SYSTEM', 'IMPORT'])
 export const events = [
   // B-W2b-32: shifts and overtime requests (shiftEvents, at the end of the file).
   ...shiftEvents(),
+  // B-W2b-37: attendance days (attendanceEvents, at the end of the file).
+  ...attendanceEvents(),
   defineEvent({
     type: 'employee.created',
     context: 'people',
@@ -261,7 +269,7 @@ export const events = [
       siteId: z.uuid(),
       employeeId: z.uuid(),
       kind: z.enum(CLOCK_ACTIONS),
-      source: z.enum(['BADGE', 'NAME_PIN', 'OFFLINE', 'AUTO']),
+      source: z.enum(['BADGE', 'NAME_PIN', 'OFFLINE', 'AUTO', 'MANUAL']),
       flagged: z.boolean(),
     }),
     live: { permission: 'people.attendance.view', floor: 'floor.work', fields: ['clockEventId', 'siteId', 'kind'] },
@@ -275,7 +283,7 @@ export const events = [
       siteId: z.uuid(),
       employeeId: z.uuid(),
       workerId: z.uuid().nullable(),
-      source: z.enum(['BADGE', 'NAME_PIN', 'OFFLINE', 'AUTO']),
+      source: z.enum(['BADGE', 'NAME_PIN', 'OFFLINE', 'AUTO', 'MANUAL']),
     }),
   }),
 ] as const
@@ -332,6 +340,54 @@ function shiftEvents() {
       description: 'A person asked to work a planned overtime answered: on the tablet (FLOOR), or the lead recorded what they said (OFFICE).',
       payload: z.strictObject({ requestId: z.uuid(), agreementId: z.uuid(), employeeId: z.uuid(), answer: z.enum(OVERTIME_ANSWERS), via: z.enum(['FLOOR', 'OFFICE']), agreed: z.number().int().min(0), asked: z.number().int().min(0) }),
       live: { permission: 'people.shifts.view', fields: ['requestId', 'answer', 'via', 'agreed', 'asked'] },
+    }),
+  ] as const
+}
+
+/**
+ * B-W2b-37: attendance days (design people.attendance "Live": attendance.clock_event → the day row and Who is in now,
+ * attendance.anomaly_raised → the tiles), emitted by apps/factory-api modules/people/attendance in the command that
+ * makes the change. Ids, kinds and states only: never a name, a time, a minute figure or a reason about a person.
+ *
+ *   attendance.day_changed              a person's day was computed again (a clock event, the time passing), fixed by
+ *                                       hand, given an absence, approved, reopened, or an anomaly accepted
+ *   attendance.anomaly_raised           a computation found something wrong with a day (the kind; the rule is on the row)
+ *   absence_code.changed                an absence code was added, changed, archived or restored, or the standard list
+ *                                       was added
+ *   people_settings.attendance_changed  how clock events become hours changed for a company (rounding, grace, the
+ *                                       overtime unit, the automatic clock-out, fixed breaks)
+ *
+ * All four reach the office screens of people.attendance.view holders; the floor receives none.
+ */
+function attendanceEvents() {
+  return [
+    defineEvent({
+      type: 'attendance.day_changed',
+      context: 'people',
+      description: "A person's attendance day changed: computed again from the clock events, fixed by hand with a reason, given an absence code, approved, reopened, or an anomaly accepted.",
+      payload: z.strictObject({ dayId: z.uuid(), siteId: z.uuid(), employeeId: z.uuid(), status: z.enum(DAY_STATUSES), change: z.enum(DAY_CHANGES) }),
+      live: { permission: 'people.attendance.view', fields: ['dayId', 'siteId', 'status', 'change'] },
+    }),
+    defineEvent({
+      type: 'attendance.anomaly_raised',
+      context: 'people',
+      description: 'A computation found something wrong with an attendance day (a missing clock-out, a double clock-in, no shift planned …), with the rule that found it on the record.',
+      payload: z.strictObject({ anomalyId: z.uuid(), dayId: z.uuid(), siteId: z.uuid(), employeeId: z.uuid(), kind: z.enum(ANOMALY_KINDS) }),
+      live: { permission: 'people.attendance.view', fields: ['anomalyId', 'dayId', 'siteId', 'kind'] },
+    }),
+    defineEvent({
+      type: 'absence_code.changed',
+      context: 'people',
+      description: "An absence code (with the labour consultant's LUL code) was added, changed, archived or restored, or the standard list was added.",
+      payload: z.strictObject({ absenceCodeId: z.uuid().nullable(), companyId: z.uuid().nullable(), change: z.enum(['CREATED', 'EDITED', 'ARCHIVED', 'RESTORED', 'STANDARD']), codes: z.number().int().min(0) }),
+      live: { permission: 'people.attendance.view', fields: ['absenceCodeId', 'companyId', 'change', 'codes'] },
+    }),
+    defineEvent({
+      type: 'people_settings.attendance_changed',
+      context: 'people',
+      description: "How clock events become hours changed for a company: rounding, lateness grace, the overtime unit, the automatic clock-out or fixed breaks.",
+      payload: z.strictObject({ companyId: z.uuid(), version: z.number().int().min(1) }),
+      live: { permission: 'people.attendance.view', fields: ['companyId', 'version'] },
     }),
   ] as const
 }
