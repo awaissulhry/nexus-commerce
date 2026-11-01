@@ -6,6 +6,7 @@ import { EmptyState, Menu, type MenuItemDef } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select, TagGlyph, Toggle } from '@nexus/ui/primitives'
 import { DEFECT_CLASSES } from '@nexus/factory-domain/quality/defects/rules'
+import { REASON_ICONS } from '@nexus/factory-domain/reasons/rules'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
@@ -90,7 +91,8 @@ export function LibraryTable({
     const CodeCell = ({ data }: ICellRendererParams<LibraryRow>) => {
       if (!data) return null
       const code = data.code
-      const look = `${code.icon ? tr(`icon.${code.icon}`) : tr('look.noIcon')}`
+      // Only the offered icons have words (and a glyph); any other stored name draws no icon, so it says so — never a key.
+      const look = code.icon && (REASON_ICONS as readonly string[]).includes(code.icon) ? tr(`icon.${code.icon}`) : tr('look.noIcon')
       return (
         <span className={data.kind === 'category' ? 'fw-df-code is-category' : 'fw-df-code is-defect'}>
           <TagGlyph icon={code.icon} color={code.colour} size={16} />
