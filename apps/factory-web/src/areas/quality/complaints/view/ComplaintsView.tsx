@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Copy, Download, MessageSquareWarning, MoreHorizontal, Play, Plus, Search, X } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, FilterChip, Input, Kbd, Skeleton } from '@nexus/ui/primitives'
+import { Button, FilterChip, Input, Skeleton } from '@nexus/ui/primitives'
 import { formatDate, formatNumber } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
@@ -348,10 +348,10 @@ function Complaints({ model, actions }: { model: ComplaintsListModel; actions?: 
         actions={
           <>
             <Button size="sm" heldReason={triageHeld} onClick={() => actions?.onStartTriage?.()} aria-keyshortcuts="t">
-              <Play size={14} aria-hidden /> {fresh === null ? t('head.triage') : t('head.triageCount', { count: fresh })} <Kbd>T</Kbd>
+              <Play size={14} aria-hidden /> {fresh === null ? t('head.triage') : t('head.triageCount', { count: fresh })}
             </Button>
             <Button size="sm" variant="primary" heldReason={logHeld} onClick={() => actions?.onLog?.()} aria-keyshortcuts="c">
-              <Plus size={14} aria-hidden /> {t('log.action')} <Kbd>C</Kbd>
+              <Plus size={14} aria-hidden /> {t('log.action')}
             </Button>
           </>
         }

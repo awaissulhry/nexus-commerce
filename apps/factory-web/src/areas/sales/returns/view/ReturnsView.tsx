@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Copy, Download, MoreHorizontal, Plus, Search, Undo2, Wrench, X } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, FilterChip, Input, Kbd, Skeleton } from '@nexus/ui/primitives'
+import { Button, FilterChip, Input, Skeleton } from '@nexus/ui/primitives'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
@@ -313,10 +313,10 @@ function ReturnsList({ model, actions }: { model: ReturnsListModel; actions?: Re
         actions={
           <>
             <Button size="sm" heldReason={newRepairHeld} onClick={() => actions?.onNewRepair?.()} aria-keyshortcuts="n">
-              <Wrench size={14} aria-hidden /> {t('newRepair.action')} <Kbd>N</Kbd>
+              <Wrench size={14} aria-hidden /> {t('newRepair.action')}
             </Button>
             <Button size="sm" variant="primary" heldReason={newReturnHeld} onClick={() => actions?.onNewReturn?.()} aria-keyshortcuts="c">
-              <Plus size={14} aria-hidden /> {t('newReturn.action')} <Kbd>C</Kbd>
+              <Plus size={14} aria-hidden /> {t('newReturn.action')}
             </Button>
           </>
         }
