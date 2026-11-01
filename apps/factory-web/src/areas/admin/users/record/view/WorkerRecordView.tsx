@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Banner, Card, Field, KeyValue, Modal } from '@nexus/ui/components'
-import { EditModeBar } from '@nexus/ui/patterns'
-import { Button, CheckboxCard, Input, Pill, Select, Skeleton, Tag, Textarea } from '@nexus/ui/primitives'
+import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
+import { Button, CheckboxCard, Input, Pill, Select, Skeleton, Tag } from '@nexus/ui/primitives'
+import { EditModeBar, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { adminHref, STATUS_TONE } from '../../../shared/model'

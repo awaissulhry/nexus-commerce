@@ -1,7 +1,8 @@
 'use client'
 
 import { Banner, Field } from '@nexus/ui/components'
-import { Checkbox, Input, Select, Spinner, Textarea, Toggle } from '@nexus/ui/primitives'
+import { Checkbox, Input, Select, Spinner, Toggle } from '@nexus/ui/primitives'
+import { Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { quantity } from '../../../../_shared/buying/model'
 import { KIT_DDT_REASONS, TRANSPORT_BY } from '../../api'

@@ -1,9 +1,10 @@
 'use client'
 
 import { Download, FileCheck2, FileStack, FileText, Link2, Lock, Paperclip, Printer, Send } from 'lucide-react'
-import { Banner, Card, EmptyState, FileRow, KeyValue, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { Button, Pill, Spinner, Tag } from '@nexus/ui/primitives'
+import { FileRow } from '../../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { pdfViewerLabels } from '../../../../../lib/pdf/labels'

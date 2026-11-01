@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { MoreHorizontal, Pause, Play, Search } from 'lucide-react'
-import { Banner, EmptyState, Field, Menu, MetricStrip, Modal } from '@nexus/ui/components'
+import { Banner, EmptyState, Field, Menu, MetricStrip } from '@nexus/ui/components'
 import { IdentityCell, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Input, Pill, Tag, Textarea } from '@nexus/ui/primitives'
+import { Button, Input, Pill, Tag } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime, formatNumber, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'

@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Copy, Lock } from 'lucide-react'
-import { StepUpModal } from '@nexus/ui/patterns'
 import { Banner } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
+import { StepUpModal } from '../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { AdminPageMessages } from '../../kit/messages'

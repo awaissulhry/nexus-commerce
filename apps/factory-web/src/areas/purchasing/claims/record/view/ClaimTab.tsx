@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Camera, ExternalLink, FileText, Trash2 } from 'lucide-react'
 import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
 import { PhotoCapture } from '@nexus/ui/components/PhotoCapture/index'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Input, Radio, Select, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Button, Input, Radio, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { EditModeBar, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { usePhotoWords } from '../../../../../lib/ds-words/photo-capture'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
@@ -186,43 +187,10 @@ function Editable({ label, editable, value, hint, required, children }: { label:
   )
 }
 
-/** The explicit save (composed: the DS EditModeBar speaks English only): ⌘S saves, Discard, the browser asks before leaving. */
+/** The explicit save = the DS EditModeBar (B-W2b-18): ⌘S saves, Discard, the browser asks before leaving. */
 function SaveBar({ count, held, busy, onSave, onDiscard }: { count: number; held: string | null; busy: boolean; onSave: () => void; onDiscard: () => void }) {
   const t = useT('purchasing-claims')
-  const latest = useRef({ onSave, held, busy })
-  latest.current = { onSave, held, busy }
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 's') return
-      event.preventDefault()
-      if (!latest.current.held && !latest.current.busy) latest.current.onSave()
-    }
-    const onLeave = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ''
-    }
-    window.addEventListener('keydown', onKey)
-    window.addEventListener('beforeunload', onLeave)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      window.removeEventListener('beforeunload', onLeave)
-    }
-  }, [])
-  return (
-    <div className="fw-cl-savebar" role="region" aria-label={t('save.region')}>
-      <span className="fw-by-hint" role="status">
-        {t('save.unsaved', { count })} · {t('save.shortcut')}
-      </span>
-      <span className="fw-by-actions">
-        <Button size="sm" onClick={onDiscard} heldReason={busy ? t('held.busy') : null}>
-          {t('save.discard')}
-        </Button>
-        <Button size="sm" variant="primary" onClick={onSave} heldReason={held ?? (busy ? t('held.busy') : null)} aria-keyshortcuts="Meta+S Control+S">
-          {t('save.save')}
-        </Button>
-      </span>
-    </div>
-  )
+  return <EditModeBar count={count} onDiscard={onDiscard} onApply={onSave} applyLabel={t('save.save')} busy={busy} applyHeldReason={held ?? (busy ? t('held.busy') : null)} saveShortcut />
 }
 
 function LinesList({ claim, model, actions }: { claim: Claim; model: ClaimRecordModel; actions?: ClaimRecordActions }) {

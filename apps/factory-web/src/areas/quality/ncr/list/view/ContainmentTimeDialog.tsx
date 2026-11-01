@@ -1,7 +1,8 @@
 'use client'
 
-import { Banner, Field, Modal } from '@nexus/ui/components'
+import { Banner, Field } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Spinner } from '@nexus/ui/primitives'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { containmentHoursOf, containmentSaveHeld, containmentSpan } from '../../model'
 import { NoticeLine, useNcrWords } from '../../parts'
 import type { ListDialog, NcrListActions } from '../view-model'

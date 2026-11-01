@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { ExternalLink, MoreHorizontal, Network } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, Menu, Modal } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Field, KeyValue, Menu } from '@nexus/ui/components'
 import { Button, Kbd, NumberStepper, Select, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { LoadBar, PlanningBoard, type PlanningMove, type PlanningPlace } from '@nexus/ui/patterns/planning-board/index'
+import { Modal } from '../../../../lib/i18n/ds-parts'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'

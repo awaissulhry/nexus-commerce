@@ -1,8 +1,8 @@
 'use client'
 
 import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleCheck, Clock3, CloudOff, CloudUpload, HardDrive, Hash, OctagonAlert, RefreshCw, RotateCcw, Send, Trash2, TriangleAlert, Users, X } from 'lucide-react'
-import { Modal } from '@nexus/ui/components'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, type FloorAction, type FloorActions } from '@nexus/ui/floor'
+import { Modal } from '../../../lib/i18n/ds-parts'
 import type { EventSummary } from '@nexus/factory-domain/floor-sync/rules'
 import type { ScanIdKind } from '@nexus/factory-domain/numbering/kinds'
 import { formatTime } from '../../../lib/i18n/format'

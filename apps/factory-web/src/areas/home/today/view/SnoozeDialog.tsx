@@ -2,8 +2,9 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AlarmClock, Clock, RefreshCw } from 'lucide-react'
-import { DateTimeField, Field, Modal } from '@nexus/ui/components'
+import { Field } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
+import { DateTimeField, Modal } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../lib/i18n/provider'

@@ -6,6 +6,7 @@
   "updates_other": "{count} updates · Show",
   "selectAll": "Select all loaded rows",
   "loading": "Loading…",
+  "morePage": "Show more",
   "keys": {
     "trigger": "Keyboard keys of this list",
     "title": "Keys",

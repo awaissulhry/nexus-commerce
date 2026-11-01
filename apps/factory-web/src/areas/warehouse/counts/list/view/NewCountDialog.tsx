@@ -2,8 +2,9 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
-import { Button, Input, RadioCard, Select, Spinner, Textarea, Toggle } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Input, RadioCard, Select, Spinner, Toggle } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { ITEM_KIND_CHOICES, type CountItemKind } from '../../api'

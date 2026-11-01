@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { CheckCircle2, CircleAlert } from 'lucide-react'
-import { Banner, Field, FileDropzone, FileRow, KeyValue } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field, KeyValue } from '@nexus/ui/components'
+import { Button, Checkbox, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { FileDropzone, FileRow, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { EVIDENCE_KINDS, type EvidenceKind, type Shipment } from '../../api'
 import { evidenceEnough, fileSize, freightFacts, freightHeld, money, paperProblem, parseFreight, voidOutcomeKey, voidPlan } from '../../daily-model'

@@ -1,8 +1,9 @@
 'use client'
 
 import { Search } from 'lucide-react'
-import { Banner, DateField, Field, Modal, SummaryTable } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Select, Spinner, Textarea } from '@nexus/ui/primitives'
+import { Banner, Field, SummaryTable } from '@nexus/ui/components'
+import { Button, Checkbox, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { DateField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { dayAt, quantity } from '../../../../_shared/buying/model'

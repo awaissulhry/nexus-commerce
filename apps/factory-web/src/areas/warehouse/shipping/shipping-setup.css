@@ -124,31 +124,3 @@
   color: var(--nds-text-link);
 }
 
-/* The save bar: sticky at the bottom of the main area while there are unsaved changes. */
-.fw-shipset-savebar {
-  position: sticky;
-  bottom: var(--nds-space-12);
-  z-index: var(--nds-z-actionbar);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nds-space-8) var(--nds-space-16);
-  padding: var(--nds-space-10) var(--nds-space-14);
-  border: 1px solid var(--nds-border-strong);
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-surface-raised);
-  box-shadow: var(--nds-shadow-pop);
-  min-width: 0;
-}
-
-.fw-shipset-savebar-text {
-  font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-strong);
-}
-
-.fw-shipset-savebar-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--nds-space-8);
-}

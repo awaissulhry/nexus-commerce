@@ -93,20 +93,3 @@
   padding: 0;
   list-style: none;
 }
-
-.fw-lc-savebar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nds-space-8) var(--nds-space-12);
-  padding: var(--nds-space-8) var(--nds-space-12);
-  border: 1px solid var(--nds-border);
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-surface-sunken);
-}
-
-.fw-lc-savebar-text {
-  color: var(--nds-text-strong);
-  font-size: var(--nds-font-size-sm);
-}

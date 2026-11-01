@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Banner, Field, KeyValue, Modal } from '@nexus/ui/components'
+import { Banner, Field, KeyValue } from '@nexus/ui/components'
 import { Button, Input, RadioCard, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import { droppedWords, warningWords } from '../../model'
 import { duplicateHeld, type DuplicateActions, type DuplicateModel } from '../model'

@@ -121,15 +121,6 @@
       "backToNow": "Back to now",
       "notKept": "Not kept for past days",
       "empty": "No stock on {day}"
-    },
-    "phone": {
-      "select": "Select",
-      "done": "Done",
-      "selectAll": "Select all rows",
-      "selected_one": "{count} selected",
-      "selected_other": "{count} selected",
-      "selectOne": "Select {material} at {place}",
-      "nothingToSelect": "There is nothing to select."
     }
   },
   "adj": {

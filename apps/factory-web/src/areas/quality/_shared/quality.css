@@ -270,7 +270,7 @@ a.fw-q-link:focus-visible {
   overflow-wrap: anywhere;
 }
 
-/* ---- the gate in words (each check: a mark AND a word, never colour alone) ---- */
+/* ---- a plain stacked list (the lab's lot picker); the gate in words is the DS CheckList (B-W2b-18) ---- */
 .fw-q-checks {
   list-style: none;
   margin: 0;
@@ -278,48 +278,6 @@ a.fw-q-link:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-8);
-}
-
-.fw-q-check {
-  display: grid;
-  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
-  gap: var(--nds-space-10);
-  align-items: start;
-}
-
-.fw-q-check-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-4);
-  font-size: var(--nds-font-size-sm);
-  font-weight: var(--nds-font-weight-semibold);
-  white-space: nowrap;
-}
-
-.fw-q-check[data-state='OK'] .fw-q-check-mark {
-  color: var(--nds-success-text);
-}
-
-.fw-q-check[data-state='OPEN'] .fw-q-check-mark {
-  color: var(--nds-danger-text);
-}
-
-.fw-q-check[data-state='NOT_NEEDED'] .fw-q-check-mark,
-.fw-q-check[data-state='UNKNOWN'] .fw-q-check-mark {
-  color: var(--nds-text-2);
-}
-
-.fw-q-check-text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-2);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.fw-q-check-name {
-  font-weight: var(--nds-font-weight-semibold);
-  color: var(--nds-text-strong);
 }
 
 /* ---- dialogs ---- */

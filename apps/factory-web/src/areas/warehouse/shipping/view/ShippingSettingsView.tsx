@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { MapPin, PlugZap, Printer as PrinterIcon, RotateCcw, ShieldOff, Truck, Undo2 } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, Modal } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Field, KeyValue } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Pill, SegmentedControl, Select, Skeleton, Spinner } from '@nexus/ui/primitives'
+import { EditModeBar, Modal } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Translate } from '../../../../lib/i18n/messages'
@@ -182,19 +183,13 @@ function SiteForm({ site, sites, model, actions }: { site: SiteSettings; sites: 
     }
     actions?.onSave?.(draft)
   }
-  const latest = useRef({ save, dirty, discard })
-  latest.current = { save, dirty, discard }
+  const latest = useRef({ dirty, discard })
+  latest.current = { dirty, discard }
 
-  // ⌘S / Ctrl+S saves; Esc with unsaved changes asks before discarding them (never inside a dialog or a menu).
+  // Esc with unsaved changes asks before discarding them (never inside a dialog or a menu); ⌘S and leaving are the EditModeBar's.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
-        if (!latest.current.dirty) return
-        event.preventDefault()
-        latest.current.save()
-        return
-      }
       if (event.key === 'Escape' && latest.current.dirty && !latest.current.discard && !target?.closest('[role="dialog"], [role="menu"], [role="listbox"]')) {
         event.preventDefault()
         setDiscard(true)
@@ -203,17 +198,6 @@ function SiteForm({ site, sites, model, actions }: { site: SiteSettings; sites: 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
-
-  // Leaving the page with unsaved changes asks first.
-  useEffect(() => {
-    if (!dirty) return
-    const onLeave = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ''
-    }
-    window.addEventListener('beforeunload', onLeave)
-    return () => window.removeEventListener('beforeunload', onLeave)
-  }, [dirty])
 
   const set = <K extends keyof SettingsForm>(field: K, value: SettingsForm[K]) => setDraft((current) => ({ ...current, [field]: value }))
   const setAddress = (part: 'sender' | 'returns', field: AddressField, value: string) =>
@@ -353,20 +337,17 @@ function SiteForm({ site, sites, model, actions }: { site: SiteSettings; sites: 
       </div>
 
       {editable && dirty && (
-        <div className="fw-shipset-savebar" role="region" aria-label={t('save.region')}>
-          <span className="fw-shipset-savebar-text">
-            {t('status.unsaved', { count: changed.length })}
-            {tried && problemCount(problems) > 0 ? ` · ${t('save.problems', { count: problemCount(problems) })}` : ''}
-          </span>
-          <span className="fw-shipset-savebar-actions">
-            <Button size="sm" variant="secondary" disabled={model.busy} onClick={() => setDiscard(true)}>
-              {t('save.discard')}
-            </Button>
-            <Button size="sm" variant="primary" type="submit" aria-keyshortcuts="Meta+S Control+S" heldReason={model.busy ? t('save.busy') : null}>
-              {model.busy ? <Spinner size={13} /> : null} {site.settings ? t('save.save') : t('save.create')}
-            </Button>
-          </span>
-        </div>
+        // The DS EditModeBar (B-W2b-18; composed here while its words were English only): ⌘S saves, leaving asks first.
+        <EditModeBar
+          message={`${t('status.unsaved', { count: changed.length })}${tried && problemCount(problems) > 0 ? ` · ${t('save.problems', { count: problemCount(problems) })}` : ''}`}
+          count={changed.length}
+          onDiscard={() => setDiscard(true)}
+          onApply={save}
+          applyLabel={site.settings ? t('save.save') : t('save.create')}
+          busy={model.busy}
+          applyHeldReason={model.busy ? t('save.busy') : null}
+          saveShortcut
+        />
       )}
 
       {discard && (

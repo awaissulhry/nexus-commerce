@@ -112,6 +112,8 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   the address, the API resolves them), `selection.exportSelected` (Export N of the selected rows through the export
   engine, `ids`), `withheld` (Columns ▾ "Hidden: …"). Columns ▾ also offers Freeze the first column and the density.
   The transport gained `bulkPreview` / `bulkApply`. First list on it: Production › Work orders (due date, priority).
+  B-W2b-18: the phone card list is ON for every list (leave `cards` out for the defaults; `cards={null}` keeps a table on a
+  phone); an `endless` list gets "Show more" on its cards.
 - `src/areas/search/` — global search (B-W2a-32): All results (SCR-248, `/w/<company>/search?q=&type=`, a frame page
   with no navigation row) and the shared parts of the palette's record groups (`model.ts`: where a result opens —
   its company's Office, `recordAddress`, a supplier on the buying side —, the type/status words of `search.json`;
@@ -126,7 +128,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/areas/quality/` (Inspections SCR-075, the record SCR-076 with its release, reversal and quality-rules dialogs, the
   evidence trail `/compliance/evidence/<batch|serial>/<subject>`) and `src/areas/compliance/` (Tests & substances SCR-054:
   lots, Cr VI results, the lot release; PPE register SCR-113): their shared parts are `areas/quality/_shared/` (record
-  frame, check list = the gate in words, step-up hook + DS StepUpModal, live hook, `qualityCan`, the lot schema);
+  frame, CheckList = the DS CheckList over the gate in words, step-up hook + DS StepUpModal, live hook, `qualityCan`, the lot schema);
   catalogues `quality`, `lab`, `register`.
 - `src/areas/quality/complaints/` — Quality › Problems › Complaints (B-W2a-65; SCR-113-complaints list, SCR-113-complaint the record; catalogue `complaints`): `?view=new|safety|dueSoon|open|answeredMonth|closed|all` (the tiles = named filters), `?category=` `?severity=` `?mine=1` `?q=`, `?new=1` Log complaint (a scanned serial fills customer, garment, order, shipment through `POST /quality/complaints/preview`; photos after logging through the generic files routes), `?open=<id>` the triage DetailModal (J / K over the NEW queue; Safety asks `ComplaintSafetyConfirm`, which names who is told from `/quality/complaints/people`); the danger safety banner (one at a time, never timed out; Acknowledge = the owner's `quality.complaints.acknowledge`); the record `?tab=complaint|linked|activity` (`?do=ncr|register` from the list's verbs; NCR via POST /quality/ncr from Complaint, repair via POST /sales/repairs {complaintId}); held steps are the API's `held/<CODE>` in words (`held.<CODE>`).
 - B-W2a-40 (every day at Home): `src/areas/home/notifications/` (SCR-005, `/home/notifications?tab=&state=`, catalogue
@@ -177,7 +179,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/areas/finance/` — Finance (area order 10, Italian "Amministrazione"; SCR-080 … SCR-083): `_shared/` (api.ts every call + zod,
   model.ts the pure rules — saved views ⇄ address = the API's own `?status=` `?docType=`, journey, next step held with its
   reason, the checks in words with where to fix, payment state, placement oldest first, CSV, problems —, hooks.ts live,
-  step-up asked first, thread dock; parts.tsx the named stand-ins JourneyStrip, CheckList, Bridge, DialogFrame;
+  step-up asked first, thread dock; parts.tsx the named stand-ins JourneyStrip, Bridge, DialogFrame and the DS CheckList;
   placement.tsx = MatchPanel), `invoices/list` (Shipped, not invoiced + All invoices: two list frames), `invoices/record`
   (`?tab=lines|money|sdi|documents|activity`; issue = P1 confirm then send; fix and resend; credit note), `payments/list`
   (Record a payment: two steps; `?new=1&invoice=<id>`), `payments/record` (`?tab=allocation|bank`), `settings`,
@@ -267,7 +269,10 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   search field, a text column in a card, a dialog) may; on wide screens use the width (more columns, two-column cards).
 - Design system only: `@nexus/ui` primitives, components, patterns (the narrower `@nexus/ui/patterns/shell/index` for
   the rail); BottomBar, PdfViewer and QrCode from their own entry points (`@nexus/ui/components/<Name>/index`). No
-  Tailwind. App CSS is layout only, with semantic `--nds-*` tokens (no raw colours). A server component never imports a
+  Tailwind. The DS parts that SPEAK (Modal, DetailModal, StepUpModal, ReviewChangesModal, EditModeBar, ConfirmPhraseField,
+  DateField, DateTimeField, Textarea, Timeline, AsOf, FileRow … the list in the file) come from `src/lib/i18n/ds-parts`
+  (B-W2b-18): the same DS part with its `labels` from `ds-words.json` in the page's language; a screen's own words win.
+  The B-W2b-09 parts with their own entry point (CheckList, TraceTree, charts) take `labels={useDsWords().x}`. App CSS is layout only, with semantic `--nds-*` tokens (no raw colours). A server component never imports a
   DS barrel (it holds client components): render a client component.
 - `import.meta.glob` (Turbopack and Vitest): a pattern outside the calling folder needs `base` (`{ base: '../../areas' }`
   with `'./*/nav.ts'`); the keys differ between the two, so read only the last path parts.

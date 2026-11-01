@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Download, Pencil } from 'lucide-react'
-import { Banner, DateField, Field, Menu, Modal, type DateFieldLabels, type ModalLabels } from '@nexus/ui/components'
-import { ReviewChangesModal, type ReviewChangesLabels } from '@nexus/ui/patterns'
+import { Banner, Field, Menu, type DateFieldLabels, type ModalLabels } from '@nexus/ui/components'
+import type { ReviewChangesLabels } from '@nexus/ui/patterns'
 import { SelectionLabel, type ColDef } from '@nexus/ui/grid'
 import { Button, Checkbox, Input, Select } from '@nexus/ui/primitives'
+import { DateField, Modal, ReviewChangesModal } from '../../lib/i18n/ds-parts'
 import type { ExportFormat } from '@nexus/factory-domain/views/exports'
 import { applyRowsOf, previewCounts, undoRowsOf, type BulkPreviewRow, type BulkResult, type BulkValue } from '@nexus/factory-domain/views/bulk/rules'
 import { formatDate, formatNumber } from '../../lib/i18n/format'

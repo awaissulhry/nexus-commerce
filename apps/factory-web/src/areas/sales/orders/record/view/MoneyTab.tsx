@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { Banknote, CalendarClock, CheckCircle2, Circle, Clock, Send } from 'lucide-react'
-import { Card, EmptyState, KeyValue, MetricStrip, SummaryTable, Timeline } from '@nexus/ui/components'
+import { Card, EmptyState, KeyValue, MetricStrip, SummaryTable } from '@nexus/ui/components'
 import { Button, Pill, Spinner } from '@nexus/ui/primitives'
+import { Timeline } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
