@@ -1,0 +1,343 @@
+{
+  "common": {
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "open": "Open",
+    "clearFilters": "Clear filters",
+    "more": "Show more",
+    "back": "Back"
+  },
+  "live": {
+    "connecting": "connecting…",
+    "live": "live",
+    "offline": "offline: not updating"
+  },
+  "page": {
+    "noAccess": {
+      "title": "Your role may not see the help calls",
+      "body": "Your role does not include “production.calls.view”. Ask an administrator if you need this page."
+    },
+    "editRouting": "Edit who is called (Floor rules & codes)",
+    "more": "More actions",
+    "chart": "Calls by hour",
+    "ack": "Acknowledge",
+    "ackN_one": "Acknowledge {count} call",
+    "ackN_other": "Acknowledge {count} calls"
+  },
+  "tiles": {
+    "label": "Call tiles"
+  },
+  "tile": {
+    "OPEN": "Open calls",
+    "WAITING": "Waiting over {minutes} minutes",
+    "ANSWERED_TODAY": "Answered today",
+    "MEDIAN": "Median response time today",
+    "medianHint": "From sent to seen, today's calls of the site: never a person's figure."
+  },
+  "held": {
+    "noAnswer": "Your role may not answer help calls (production.calls.answer).",
+    "busy": "Saving…",
+    "loading": "Loading the call…",
+    "ackNone": "Select the open calls nobody has seen yet.",
+    "ackNothing": "None of the selected calls waits to be seen.",
+    "solveNothing": "None of the selected calls is open.",
+    "noSettings": "Your role may not open Floor rules & codes (production.settings.view).",
+    "closed": "This call is closed.",
+    "seenAlready": "Someone has seen this call already.",
+    "comingAlready": "Someone is on the way already.",
+    "outcomeNamed": "What this call led to is named already.",
+    "noPlantJobs": "Opening a maintenance job needs plant.view and plant.jobs.manage.",
+    "code": "Pick one of the codes offered.",
+    "noteLong": "Keep the words to 500 characters.",
+    "reason": "Say why the call is cancelled.",
+    "reasonLong": "Keep the reason to 500 characters.",
+    "machine": "Pick the machine first.",
+    "problem": "Say what the problem is.",
+    "problemLong": "Keep the problem to 2000 characters."
+  },
+  "kind": {
+    "MACHINE": "Machine",
+    "MATERIAL": "Material",
+    "QUALITY": "Quality",
+    "SUPERVISOR": "Supervisor",
+    "MAINTENANCE": "Maintenance",
+    "OTHER": "Other"
+  },
+  "status": {
+    "SENT": "Open",
+    "SEEN": "Acknowledged",
+    "ON_THE_WAY": "On the way",
+    "SOLVED": "Resolved",
+    "CANCELLED": "Cancelled"
+  },
+  "chart": {
+    "title": "Calls by hour · {site}",
+    "titleNoSite": "Calls by hour",
+    "noSite": "Pick a site in the top bar to see its calls by hour.",
+    "label": "Help calls today at {site}, per hour",
+    "byLabel": "Stack the bars by",
+    "by": {
+      "kind": "By type",
+      "line": "By line"
+    },
+    "calls": "Calls",
+    "sofar": "Calls so far today",
+    "noLine": "No line",
+    "caption_one": "{count} call today. Stations send a call with one tap; nobody is counted by name.",
+    "caption_other": "{count} calls today. Stations send a call with one tap; nobody is counted by name.",
+    "none": {
+      "title": "No calls today",
+      "body": "When a station calls for help, its hour shows here."
+    },
+    "responses": "Response time by type (median)",
+    "answeredOf": "{answered} of {calls} seen",
+    "noAnswer": "not seen yet",
+    "responsesHint": "From sent to seen, per type of call today: a call's time, never a person's."
+  },
+  "routing": {
+    "title": "Who is called",
+    "noSite": "Pick a site in the top bar to see who is called there.",
+    "none": {
+      "title": "No help-call types at this site",
+      "body": "Add them in Floor rules & codes › Help-call routing: each type goes to a team."
+    },
+    "col": {
+      "type": "Type",
+      "group": "Group",
+      "members": "Members"
+    },
+    "leaders": "The site's team leaders",
+    "archived": "Team archived: nobody is told",
+    "escalate": "Escalate after {minutes} min",
+    "members_one": "{count} person",
+    "members_other": "{count} people",
+    "hint": "A call goes to its group's bells and tablets at once. Changed in Floor rules & codes."
+  },
+  "col": {
+    "type": "Type",
+    "line": "Line",
+    "station": "Station",
+    "work": "Work order / bundle",
+    "opened": "Opened",
+    "team": "Group called",
+    "status": "Status",
+    "seenBy": "Acknowledged by",
+    "response": "Response",
+    "resolve": "Resolve",
+    "more": "Actions"
+  },
+  "list": {
+    "label": "Help calls",
+    "title": "Help calls",
+    "count_one": "{count} call",
+    "count_other": "{count} calls",
+    "search": "Search station, line, work order…",
+    "viewLabel": "Which calls",
+    "kindLabel": "Type of call",
+    "kindAll": "Every type",
+    "noLine": "—",
+    "notYet": "not yet",
+    "failed": "The calls could not be read",
+    "rowMenu": "Actions for {type} at {station}",
+    "noMatch": {
+      "title": "No call matches",
+      "body": "Clear the filters or the search to see every open call."
+    },
+    "empty": {
+      "title": "No open calls ✓",
+      "body": "Every station has what it needs. A new call shows here at once."
+    }
+  },
+  "view": {
+    "open": "Open calls",
+    "closed": "Closed calls",
+    "all": "Every call"
+  },
+  "bulk": {
+    "solve_one": "Mark {count} solved",
+    "solve_other": "Mark {count} solved"
+  },
+  "keys": {
+    "title": "Keys",
+    "ack": "Acknowledge the call shown",
+    "done": "Done: solved, with how",
+    "next": "Next / previous call"
+  },
+  "person": {
+    "named": "{name}",
+    "worker": "A floor team member",
+    "workerHidden": "A floor team member (this site records stations, not people)",
+    "user": "An office user"
+  },
+  "dur": {
+    "s": "{s} s",
+    "m": "{m} min",
+    "ms": "{m} min {s} s",
+    "hm": "{h} h {m} min"
+  },
+  "open": {
+    "for": "open {time}",
+    "lateHint": "Waiting longer than {minutes} minutes"
+  },
+  "waiting": {
+    "tag": "Waiting time not counted",
+    "hint": "While the call is open, the station's time books to an off-standard code: the waiting never counts against the worker.",
+    "banner": "The station's waiting books to {code} ({status}) while the call is open: it never counts against the worker.",
+    "status": {
+      "OPEN": "running",
+      "PENDING": "waiting for the team leader",
+      "APPROVED": "approved",
+      "REJECTED": "refused"
+    }
+  },
+  "detail": {
+    "title": "{type} · {line} · {station}",
+    "titleNoLine": "{type} · {station}",
+    "titleLoading": "Help call",
+    "noun": "call",
+    "notFound": "This call does not exist, or it belongs to a site your role does not reach.",
+    "job": "Open a maintenance job",
+    "cancel": "Cancel call",
+    "coming": "On my way",
+    "ack": "Acknowledge",
+    "done": "Done",
+    "timeline": "What happened",
+    "facts": "The call",
+    "type": "Type",
+    "where": "Where",
+    "whereValue": "{station} · {line}",
+    "work": "Work order",
+    "bundle": "Bundle {code}",
+    "team": "Group called",
+    "comingLabel": "Who is coming",
+    "caller": "Sent by",
+    "callerHint": "Named because this site's floor records name workers.",
+    "sent": "Sent",
+    "response": "Response time",
+    "onTheWay": "On the way after",
+    "resolve": "Resolve time",
+    "note": "The station's words",
+    "resolution": "How it was solved",
+    "outcome": "What it led to",
+    "noOutcome": "Nothing named yet",
+    "legal": "These are this call's times. Response times are never shown, grouped or totalled by person."
+  },
+  "step": {
+    "SENT": "Sent",
+    "SEEN": "Seen",
+    "ON_THE_WAY": "On the way",
+    "SOLVED": "Solved",
+    "CANCELLED": "Cancelled",
+    "sentBy": "By {who} at {station}",
+    "sentFrom": "From station {station}"
+  },
+  "coming": {
+    "SEEN": "{who} · {team} · has seen it",
+    "ON_THE_WAY": "{who} · {team} · on the way"
+  },
+  "resolution": {
+    "FIXED": "Fixed",
+    "BROUGHT": "Material brought",
+    "ADJUSTED": "Adjusted",
+    "EXPLAINED": "Explained on the spot",
+    "REPLACED": "Part replaced",
+    "NOT_NEEDED": "No help needed after all"
+  },
+  "outcome": {
+    "MaintenanceJob": "A maintenance job",
+    "MaintenanceRequest": "A machine request",
+    "Nonconformance": "A nonconformance (NCR)",
+    "Task": "A task"
+  },
+  "solve": {
+    "title": "Mark the call solved",
+    "titleN_one": "Mark {count} call solved",
+    "titleN_other": "Mark {count} calls solved",
+    "body": "The station sees it solved at once; the call's times are kept.",
+    "bodyN_one": "{count} call gets the same code and words; a call someone changed meanwhile is told apart.",
+    "bodyN_other": "The {count} calls get the same code and words; a call someone changed meanwhile is told apart.",
+    "code": "How it was solved",
+    "codeHint": "Optional: it helps to see what calls are about.",
+    "noCode": "Not said",
+    "note": "Words",
+    "noteHint": "Optional. Never about a person's work.",
+    "do": "Mark solved",
+    "doN_one": "Mark {count} solved",
+    "doN_other": "Mark {count} solved"
+  },
+  "cancel": {
+    "title": "Cancel this call?",
+    "body": "The station's call closes without help. The station can send a new one.",
+    "reason": "Why",
+    "reasonHint": "Kept in the audit log with the change.",
+    "do": "Cancel call"
+  },
+  "job": {
+    "title": "Open a maintenance job",
+    "body": "A corrective job for the machine at this station; the call then names it as what it led to.",
+    "machine": "Machine",
+    "pickMachine": "Choose the machine",
+    "machineOption": "{asset} · {kind} · {status}",
+    "noMachine": "No machine is recorded at this station.",
+    "toPlant": "Open the job from Plant › Maintenance jobs",
+    "priority": "Priority",
+    "P1": "P1 · now",
+    "P2": "P2 · today",
+    "P3": "P3 · when possible",
+    "problem": "Problem",
+    "problemHint": "What the technician needs to know. No names.",
+    "prefill": "Help call from station {station} ({line}): {type}.",
+    "prefillNoLine": "Help call from station {station}: {type}.",
+    "do": "Open job"
+  },
+  "machine": {
+    "RUNNING": "running",
+    "DOWN": "down",
+    "UNDER_MAINTENANCE": "under maintenance",
+    "DO_NOT_USE": "do not use",
+    "RETIRED": "retired"
+  },
+  "announce": {
+    "raised": "New help call: {kind}"
+  },
+  "notice": {
+    "acked_one": "{count} call acknowledged.",
+    "acked_other": "{count} calls acknowledged.",
+    "coming_one": "The station sees that you are on the way.",
+    "coming_other": "The stations see that you are on the way.",
+    "solved_one": "{count} call solved.",
+    "solved_other": "{count} calls solved.",
+    "cancelled_one": "The call is cancelled.",
+    "cancelled_other": "The calls are cancelled.",
+    "partly": "{done} done, {refused} not: someone changed them meanwhile or they are closed. The list is read again.",
+    "job": "Maintenance job {number} is open and linked to the call.",
+    "openJob": "Open {number}"
+  },
+  "refusal": {
+    "SOLVED": "This call is solved already.",
+    "CANCELLED": "This call was cancelled.",
+    "ALREADY_SEEN": "Someone has seen this call already: say you are on the way, or mark it solved.",
+    "ALREADY_ON_THE_WAY": "Someone is on the way to this call already: read the call again to see who.",
+    "OUTCOME_NAMED": "What this call led to is named already: open that record from the call.",
+    "KIND_FIXED": "A call type keeps its kind: switch it off and add a new one with the other kind.",
+    "CODE_TAKEN": "The site has a help-call type with this code already.",
+    "CODE_NOT_LISTED": "This is not an active code of the help-call reasons: add it there first.",
+    "TEAM_NOT_ACTIVE": "This team is archived or works at another site.",
+    "WAITING_CODE": "The waiting time books to an active off-standard code of the company.",
+    "TYPE_INACTIVE": "This kind of call is switched off at the site.",
+    "NOT_THIS_STATION": "Only the station that sent this call closes it there.",
+    "NO_STATION": "The tablet stands at no station.",
+    "OTHER_STATION": "Only a team leader calls for another station."
+  },
+  "problem": {
+    "read": "The server didn’t answer as expected. Try again.",
+    "write": "It was not saved. Try again.",
+    "changed": "The call changed meanwhile: it is read again.",
+    "forbidden": "Your role may not do this at this site.",
+    "gone": "This call no longer exists, or your role does not reach its site.",
+    "invalid": "Something was not accepted. Check the fields and try again.",
+    "offline": "No connection to the server. Try again."
+  }
+}

@@ -1,6 +1,4 @@
-import { FLOOR_SESSION } from '@nexus/factory-domain/auth/floor/session'
 import { MAX_BUNDLE_SIZE } from '@nexus/factory-domain/production/bundles/rules'
-import { CLOCK_WARN_MS, UNDO_WINDOW_MS } from '@nexus/factory-domain/production/scans/rules'
 import { monitoringChangeOf, REASON_MAX, REFERENCE_MAX, type MonitoringChange } from '@nexus/factory-domain/production/settings/monitoring'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Affected, BasisKind, NoticeAcks, Rules, RulesDetail, ScanSubject } from './api'
@@ -9,12 +7,13 @@ import type { Affected, BasisKind, NoticeAcks, Rules, RulesDetail, ScanSubject }
  * Production › Settings › Floor rules & codes (SCR-074; design production.settings, fr-monitor, fr-rules, fr-reasons),
  * pure: what this person may do, the monitoring switch's draft and what applying it does (narrowing never asks;
  * widening needs the legal basis on record, a reason and a fresh code), the site's readiness and a change's reach in
- * this page's words (keys of `floor-rules`, prefix `fr.`), the standard bundle size and the fixed W1 floor rules. Counts
+ * this page's words (keys of `floor-rules`, prefix `fr.`) and the standard bundle size (the W2b sections: w2b-model.ts). Counts
  * are counts: no worker is ever named here (Owner answer W1; Statuto dei Lavoratori art. 4).
  */
 
-export const FLOOR_RULES_NAMESPACES = ['floor-rules', 'lists'] as const
-export const TABS = ['rules', 'codes'] as const
+export const FLOOR_RULES_NAMESPACES = ['floor-rules', 'lists', 'ds-words'] as const
+/** B-W2b-58: + Off-standard codes (fr-offstd) and Help-call routing (fr-calls), grids saved per cell, each its own tab. */
+export const TABS = ['rules', 'codes', 'offstd', 'calls'] as const
 export type Tab = (typeof TABS)[number]
 export const tabOf = (value: string | null | undefined): Tab => (TABS.includes(value as Tab) ? (value as Tab) : 'rules')
 
@@ -25,11 +24,32 @@ export interface FloorRulesCan {
   reasons: boolean
   /** Admin › Privacy & notices (the notice's text and versions). */
   privacy: boolean
+  /** B-W2b-58: Off-standard codes (production.offstandard.view; .codes keeps them). */
+  offstd: boolean
+  offstdManage: boolean
+  /** B-W2b-58: Help-call routing (production.calls.view; .manage keeps it). */
+  calls: boolean
+  callsManage: boolean
+  /** people.view: the site's teams to pick as a call's group. */
+  people: boolean
+  /** money.cost: the scrap limit says a value limit is not kept yet. */
+  cost: boolean
 }
 
 export function floorRulesCan(permissions: readonly string[]): FloorRulesCan {
   const held = new Set(permissions)
-  return { view: held.has('production.settings.view'), manage: held.has('production.settings.manage'), reasons: held.has('reasons.view'), privacy: held.has('privacy.view') }
+  return {
+    view: held.has('production.settings.view'),
+    manage: held.has('production.settings.manage'),
+    reasons: held.has('reasons.view'),
+    privacy: held.has('privacy.view'),
+    offstd: held.has('production.offstandard.view'),
+    offstdManage: held.has('production.offstandard.codes'),
+    calls: held.has('production.calls.view'),
+    callsManage: held.has('production.calls.manage'),
+    people: held.has('people.view'),
+    cost: held.has('money.cost'),
+  }
 }
 
 // ---- the monitoring switch ------------------------------------------------------------------------------------------------
@@ -182,21 +202,12 @@ export async function withStepUp<T>(work: () => Promise<T>, askForCode: () => Pr
   }
 }
 
-// ---- the bundle size and the fixed rules -------------------------------------------------------------------------------------
+// ---- the bundle size ---------------------------------------------------------------------------------------------------------
 
 export const bundleHeld = (value: number | '', saved: number): string | null =>
   value === '' || !Number.isInteger(value) || value < 1 || value > MAX_BUNDLE_SIZE ? 'fr.bundle.range' : value === saved ? 'fr.bundle.same' : null
 
 export const MAX_BUNDLE = MAX_BUNDLE_SIZE
-
-/** The floor rules this version fixes (design fr-rules, fr-bundle: W1 shows them as text; a site setting is W2b). */
-export const FIXED_RULES: readonly Line[] = Object.freeze([
-  { key: 'fr.fixed.undo', params: { minutes: UNDO_WINDOW_MS / 60_000 } },
-  { key: 'fr.fixed.bundleCode' },
-  { key: 'fr.fixed.idle', params: { minutes: FLOOR_SESSION.defaultIdleMinutes } },
-  { key: 'fr.fixed.clock', params: { minutes: CLOCK_WARN_MS / 60_000 } },
-  { key: 'fr.fixed.offline' },
-])
 
 /** The site the page shows: the address's, else the first by code. */
 export function chosenSite<T extends { site: { id: string; code: string } }>(sites: readonly T[], siteId: string | null): T | null {

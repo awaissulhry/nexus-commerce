@@ -1,0 +1,250 @@
+/*
+ * Production › Floor control › Help calls (SCR-142): LAYOUT only — the page head, the tiles, Calls by hour beside Who is
+ * called on a wide screen (one column on a narrow one), the list's cells, the call's detail and the dialogs. The controls
+ * are the design system's; semantic tokens only. No page max-width (Owner rule 2026-10-29): the page fills the main area.
+ */
+.fw-cl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-cl-head,
+.fw-cl-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-cl-actions,
+.fw-cl-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cl-inline {
+  gap: var(--nds-space-4);
+}
+
+.fw-cl-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cl-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.fw-cl-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-cl-text {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.fw-cl-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-cl-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+/* Calls by hour (2 parts) beside Who is called (1 part) from 1100 px; alone, Who is called takes the row. */
+.fw-cl-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: stretch;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-cl-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  .fw-cl-grid.solo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-cl-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+/* The bars and the response times by kind side by side on a wide card. */
+.fw-cl-chart {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(220px, 2fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-cl-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-cl-responses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cl-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cl-type > svg,
+.fw-cl-type > span:first-child {
+  flex: none;
+}
+
+.fw-cl-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-cl-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-cl-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-cl-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-link);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.fw-cl-link:hover,
+.fw-cl-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-cl-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-cl-open {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-cl-open.late {
+  color: var(--nds-danger-text);
+  font-weight: 600;
+}
+
+.fw-cl-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-cl-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-cl-section,
+.fw-cl-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-cl-form {
+  gap: var(--nds-space-12);
+}
+
+.fw-cl-keys {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-cl-keys > div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+
+.fw-cl-keys dt {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+}
+
+.fw-cl-keys dd {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .fw-cl-chart,
+  .fw-cl-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

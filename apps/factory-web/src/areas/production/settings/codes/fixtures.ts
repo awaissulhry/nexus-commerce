@@ -3,7 +3,7 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { designScreen as reasonEditor } from '../../../_shared/reasons/fixtures'
 import type { ReasonListsModel } from '../../../_shared/reasons/view/ReasonListsView'
 import { ReasonListsView } from '../../../_shared/reasons/view/ReasonListsView'
-import { base, inShell, WORKER_SITE, type Role } from '../fixtures'
+import { base, FULL, inShell, WORKER_SITE, type Role } from '../fixtures'
 import { FloorRulesView, type FloorRulesModel } from '../view/FloorRulesView'
 
 /**
@@ -53,7 +53,11 @@ export const designScreen = defineDesignScreen<CodesCase>({
     { id: 'offline', label: 'Offline while saving: the value before is put back, in words', model: codes('production', 'offline') },
     { id: 'loading', label: 'Loading', model: codes('production', 'loading') },
     { id: 'error', label: 'The read failed: in words, Try again', model: codes('production', 'error') },
-    { id: 'no-permission', label: 'No reasons.view: the page says so', model: codes('supervisor', null, { can: { view: true, manage: false, reasons: false, privacy: false } }) },
+    { id: 'no-permission', label: 'No reasons.view: the page says so', model: codes('supervisor', null, { can: { view: true, manage: false, reasons: false, privacy: false, offstd: true, offstdManage: false, calls: true, callsManage: false, people: false, cost: false } }) },
     { id: 'keys', label: 'The keys (the footer’s information icon)', model: codes('production', 'keys') },
+    // B-W2b-58 (fr-reasons, MES-293): the full floor lists above the editor.
+    { id: 'full-missing', label: 'The full floor lists: 10 reasons not added yet, per list — Add the full lists', model: codes('production', 'floor-rules'), note: 'Pause 2 · Scrap 3 · Downtime 5; the help-call list is complete.' },
+    { id: 'full-held', label: 'Full lists: held for a role that does not keep every list (in words)', model: codes('supervisor', 'read-only', { full: { value: { ...FULL, canManage: false }, problem: null } }) },
+    { id: 'full-done', label: 'Added: 10 reasons in the floor lists; every list complete', model: codes('production', 'floor-rules', { full: { value: { ...FULL, lists: FULL.lists.map((entry) => ({ ...entry, fullMissing: [] })) }, problem: null }, notice: { tone: 'success', key: 'fr.done.full', params: { count: 10 } } }) },
   ],
 })

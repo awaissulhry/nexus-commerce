@@ -90,7 +90,8 @@
       "cuttingRoom": "Sala taglio",
       "cutting": "Taglio",
       "floorControl": "Controllo reparto",
-      "scrap": "Scarti e rilavorazioni"
+      "scrap": "Scarti e rilavorazioni",
+      "calls": "Chiamate di aiuto"
     },
     "quality": {
       "area": "Qualità",

@@ -7,6 +7,7 @@ import { officeNavFor } from '../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../shell/office/view/OfficeShellView'
 import type { NoticeAcks, RulesDetail, SiteRules } from './api'
 import { floorRulesCan, type Tab } from './model'
+import type { BundleRules, FloorRules, FullLists } from './w2b-api'
 import { FloorRulesView, type FloorRulesModel } from './view/FloorRulesView'
 
 /**
@@ -26,7 +27,7 @@ const SOUTH = { id: uid('2222', 2), companyId: COMPANY, code: 'MAG-S', name: 'Ma
 
 const template = (key: string): string[] => [...(templateOf(key)?.permissions ?? []), 'home.view']
 const ROLES = {
-  owner: [...OWNER_PERMISSIONS, ...template('production_manager'), 'privacy.view', 'production.settings.manage'],
+  owner: [...OWNER_PERMISSIONS, ...template('production_manager'), 'privacy.view', 'production.settings.manage', 'money.cost'],
   production: template('production_manager'),
   supervisor: template('floor_supervisor'),
   readOnly: [...(templateOf('read_only')?.permissions ?? []), 'home.view'],
@@ -60,6 +61,28 @@ const DEFAULT_SITE = detailOf(NORTH, rulesOf({ isDefault: true, legalBasis: null
 const SOUTH_SITE = detailOf(SOUTH, rulesOf({ scanSubject: 'STATION', legalBasis: null, version: 1 }))
 const ACKS: NoticeAcks = { workers: { active: 36, acknowledged: 34, notAcknowledged: 2 }, versions: [{ noticeVersion: '2026-10', workers: 34 }, { noticeVersion: '2026-09', workers: 3 }] }
 
+// B-W2b-58: the site's floor checks (B-W2b-53's read), its bundle codes (B-W2b-41's) and the full reason lists (made up).
+export const FLOOR: FloorRules = {
+  site: { id: NORTH.id, code: NORTH.code, name: NORTH.name },
+  checks: { quantityGuard: 'STRICT', skippedOperationRule: 'WARN', scrapApprovalLimit: null, bundleCodeMode: 'ONE_CODE', stuckBundleHours: 4 },
+  isDefault: false,
+  fixed: { undoWindowSeconds: 120, clockOffSeconds: 300, clockFlagSeconds: 86_400, offlineMaxHours: null, offlineMaxActions: null, onlineOnly: ['receipt', 'inspection', 'release', 'serial'] },
+  idleSignOut: { idleMinutes: 10, shiftEnds: ['14:00', '22:00'], badgeOnlySignIn: false, isDefault: true },
+  version: 3,
+  updatedAt: at(12, 15, 20),
+  canManage: true,
+}
+export const COUPONS: BundleRules = { site: { id: NORTH.id, code: NORTH.code, name: NORTH.name }, bundleCodeMode: 'ONE_CODE', stuckBundleHours: 4, version: 3, updatedAt: at(12, 15, 20), changed: false }
+export const FULL: FullLists = {
+  lists: [
+    { list: 'PAUSE', active: 4, inactive: 1, fullMissing: ['WAIT_INSTRUCTIONS', 'MEDICAL'] },
+    { list: 'SCRAP', active: 6, inactive: 0, fullMissing: ['NEEDLE_HOLE', 'SHADE', 'GLUE_MARK'] },
+    { list: 'DOWNTIME', active: 3, inactive: 0, fullMissing: ['NEEDLE_BREAK', 'POWER_CUT', 'AIR_PRESSURE', 'SETUP_LONG', 'OTHER'] },
+    { list: 'HELP_CALL', active: 4, inactive: 0, fullMissing: [] },
+  ],
+  canManage: true,
+}
+
 export function base(role: Role, detail: RulesDetail = WORKER_SITE, over: Partial<FloorRulesModel> = {}, tab: Tab = 'rules'): { role: Role; model: FloorRulesModel } {
   return {
     role,
@@ -77,6 +100,9 @@ export function base(role: Role, detail: RulesDetail = WORKER_SITE, over: Partia
       notice: null,
       changedElsewhere: false,
       stepUp: { open: false, busy: false, problem: null },
+      floor: { value: FLOOR, problem: null },
+      coupons: { value: COUPONS, problem: null },
+      full: { value: FULL, problem: null },
       ...over,
     },
   }
@@ -114,6 +140,16 @@ export const designScreen = defineDesignScreen<{ role: Role; model: FloorRulesMo
     { id: 'loading', label: 'Loading', model: base('owner', WORKER_SITE, { sites: { status: 'loading' } }) },
     { id: 'error', label: 'The read failed: in words with Try again', model: base('owner', WORKER_SITE, { sites: { status: 'error', problem: 'fr.problem.offline' } }) },
     { id: 'no-sites', label: 'No site within the person’s access', model: base('owner', WORKER_SITE, { sites: { status: 'ready', items: [] } }) },
+    // B-W2b-58: Floor rules per site (fr-rules) and Bundle codes (fr-bundle), each with the DS EditModeBar.
+    { id: 'w2b-checks', label: 'Floor rules per site and Bundle codes: the sequence, the quantity guard, scrap approval; the rules the same at every site', model: base('production'), note: 'Change a rule: the EditModeBar appears in that card (⌘S applies it).' },
+    { id: 'w2b-checks-typed', label: 'Strict sequence and a scrap limit of 5 pieces chosen, with a reason: the EditModeBar counts 2 changes', model: base('production', WORKER_SITE, { checksDraft: { skippedOperationRule: 'STRICT', quantityGuard: 'STRICT', limitOn: true, limit: 5, reason: 'Troppi scarti non visti dal caposquadra.' } }) },
+    { id: 'w2b-checks-held', label: 'Scrap limit switched on with no number: Apply held, in words', model: base('production', WORKER_SITE, { checksDraft: { skippedOperationRule: 'WARN', quantityGuard: 'STRICT', limitOn: true, limit: '', reason: '' } }) },
+    { id: 'w2b-checks-default', label: 'A site with no floor rules yet (the defaults); the Owner with the cost grain reads that a value limit is not kept yet', model: base('owner', DEFAULT_SITE, { floor: { value: { ...FLOOR, isDefault: true, version: null, updatedAt: null, checks: { ...FLOOR.checks, quantityGuard: 'STRICT', skippedOperationRule: 'WARN' } }, problem: null }, coupons: { value: { ...COUPONS, version: null, updatedAt: null }, problem: null } }) },
+    { id: 'w2b-checks-saved', label: 'Saved: the floor rules apply from the next scan', model: base('production', WORKER_SITE, { floor: { value: { ...FLOOR, checks: { ...FLOOR.checks, skippedOperationRule: 'STRICT', scrapApprovalLimit: 5 }, version: 4 }, problem: null }, notice: { tone: 'success', key: 'fr.done.checks' } }) },
+    { id: 'w2b-coupons-typed', label: 'Bundle codes: a coupon per operation chosen, stuck after 6 working hours', model: base('production', WORKER_SITE, { couponsDraft: { mode: 'COUPON_PER_OPERATION', stuckHours: 6 } }) },
+    { id: 'w2b-coupons-range', label: 'Stuck hours out of range (0): Apply held, in words', model: base('production', WORKER_SITE, { couponsDraft: { mode: 'ONE_CODE', stuckHours: 0 } }) },
+    { id: 'w2b-checks-loading', label: 'The floor checks and bundle codes are being read (the switch shows)', model: base('production', WORKER_SITE, { floor: { value: null, problem: null }, coupons: { value: null, problem: null } }) },
+    { id: 'w2b-checks-failed', label: 'The floor checks could not be read: in words, Try again', model: base('production', WORKER_SITE, { floor: { value: null, problem: 'fr.problem.offline' }, coupons: { value: null, problem: 'fr.problem.offline' } }) },
     { id: 'no-permission-warehouse', label: 'Warehouse: no permission (production.settings.view)', model: base('warehouse') },
     { id: 'no-permission-sales', label: 'Sales: no permission', model: base('sales') },
   ],

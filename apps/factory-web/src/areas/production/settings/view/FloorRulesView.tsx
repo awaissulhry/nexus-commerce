@@ -6,12 +6,15 @@ import { Scale, ShieldOff, SlidersHorizontal } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, Modal, Tabs, type TabItem } from '@nexus/ui/components'
 import { saveKeyAction, StepUpModal } from '@nexus/ui/patterns'
 import { Button, Input, NumberStepper, Pill, RadioCard, Select, Skeleton, Spinner, Textarea } from '@nexus/ui/primitives'
+import type { BundleRules, FloorRules, FullLists } from '../w2b-api'
+import type { ChecksDraft, CouponsDraft } from '../w2b-model'
+import { CouponsCard, FloorChecksCard, FullListsNote } from './W2bCards'
 import { MONITORING_BASES } from '@nexus/factory-domain/production/settings/monitoring'
 import { formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { BasisKind, NoticeAcks, RulesDetail, ScanSubject, SiteRules } from '../api'
-import { bundleHeld, draftOf, FIXED_RULES, FLOOR_RULES_NAMESPACES, impactOf, MAX_BUNDLE, planOf, readinessOf, type FloorRulesCan, type Line, type SwitchDraft, type SwitchPlan, type Tab } from '../model'
+import { bundleHeld, draftOf, FLOOR_RULES_NAMESPACES, impactOf, MAX_BUNDLE, planOf, readinessOf, TABS, type FloorRulesCan, type Line, type SwitchDraft, type SwitchPlan, type Tab } from '../model'
 import '../floor-rules.css'
 
 export interface Part<T> {
@@ -29,7 +32,12 @@ export interface FloorRulesModel {
   detail: Part<RulesDetail>
   acks: Part<NoticeAcks>
   asOf: string | null
-  busy: 'switch' | 'bundle' | null
+  busy: 'switch' | 'bundle' | 'checks' | 'coupons' | 'full' | null
+  /** B-W2b-58: the site's floor checks (fr-rules) with the fixed rules and idle sign-out, and its bundle codes (fr-bundle). */
+  floor?: Part<FloorRules>
+  coupons?: Part<BundleRules>
+  /** B-W2b-58 (fr-reasons, MES-293): what the full floor lists still lack (the Reason codes tab). */
+  full?: Part<FullLists>
   notice: { tone: 'success' | 'danger'; key: string; params?: Record<string, string | number> } | null
   /** The site's rules changed on another screen meanwhile (production.monitoring_changed): Reload. */
   changedElsewhere: boolean
@@ -38,12 +46,18 @@ export interface FloorRulesModel {
   draft?: SwitchDraft
   confirmOpen?: boolean
   bundleDraft?: number | ''
+  checksDraft?: ChecksDraft
+  couponsDraft?: CouponsDraft
 }
 
 export interface FloorRulesActions {
   onSite?: (siteId: string) => void
   onApplySwitch?: (draft: SwitchDraft, plan: SwitchPlan) => void
   onBundle?: (size: number) => void
+  /** B-W2b-58: Apply the floor checks, the bundle codes; add the full reason lists. */
+  onChecks?: (draft: ChecksDraft) => void
+  onCoupons?: (draft: CouponsDraft) => void
+  onFullLists?: () => void
   onStepUp?: (code: string) => void
   onStepUpCancel?: () => void
   onReload?: () => void
@@ -60,17 +74,17 @@ export interface FloorRulesActions {
  * widening asks a fresh code, narrowing asks "Record stations only"; the standard bundle size; the rules this version
  * fixes. Reason codes (SCR-088, B-W2a-46): the shared reason list editor, passed in by the page as `codes`. Fetches nothing.
  */
-export function FloorRulesView({ model, actions, codes }: { model: FloorRulesModel; actions?: FloorRulesActions; codes?: ReactNode }) {
+export function FloorRulesView({ model, actions, codes, offstd, routing }: { model: FloorRulesModel; actions?: FloorRulesActions; codes?: ReactNode; offstd?: ReactNode; routing?: ReactNode }) {
   return (
     <WithMessages namespaces={FLOOR_RULES_NAMESPACES}>
-      <FloorRules model={model} actions={actions} codes={codes} />
+      <FloorRules model={model} actions={actions} codes={codes} offstd={offstd} routing={routing} />
     </WithMessages>
   )
 }
 
 const lineText = (t: (key: string, params?: Readonly<Record<string, string | number>>) => string, line: Line) => t(line.key, line.params)
 
-function FloorRules({ model, actions, codes }: { model: FloorRulesModel; actions?: FloorRulesActions; codes?: ReactNode }) {
+function FloorRules({ model, actions, codes, offstd, routing }: { model: FloorRulesModel; actions?: FloorRulesActions; codes?: ReactNode; offstd?: ReactNode; routing?: ReactNode }) {
   const t = useT('floor-rules')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -106,10 +120,8 @@ function FloorRules({ model, actions, codes }: { model: FloorRulesModel; actions
   const sites = model.sites.items
   const site = sites.find((entry) => entry.site.id === model.siteId) ?? sites[0]!
   const href = (tab: Tab) => `${model.prefix}/production/settings?site=${encodeURIComponent(site.site.id)}&tab=${tab}`
-  const tabs: TabItem[] = [
-    { id: 'rules', label: t('fr.tab.rules'), href: href('rules') },
-    { id: 'codes', label: t('fr.tab.codes'), href: href('codes') },
-  ]
+  // B-W2b-58: Off-standard codes and Help-call routing are grids saved per cell, each its own link tab.
+  const tabs: TabItem[] = TABS.map((id) => ({ id, label: t(`fr.tab.${id}`), href: href(id) }))
   const detail = model.detail.value
   const ready = detail ? readinessOf(detail, model.acks.value).ready : site.status.readyForFloor
 
@@ -160,7 +172,15 @@ function FloorRules({ model, actions, codes }: { model: FloorRulesModel; actions
       )}
 
       {model.tab === 'codes' ? (
-        <Codes model={model} codes={codes} />
+        <Codes model={model} codes={codes} actions={actions} />
+      ) : model.tab === 'offstd' ? (
+        <Slot allowed={model.can.offstd} title="fr.off.noAccess.title" body="fr.off.noAccess.body">
+          {offstd}
+        </Slot>
+      ) : model.tab === 'calls' ? (
+        <Slot allowed={model.can.calls} title="fr.route.noAccess.title" body="fr.route.noAccess.body">
+          {routing}
+        </Slot>
       ) : detail ? (
         <Rules key={`${detail.site.id}-${detail.rules.version ?? 0}`} model={model} actions={actions} detail={detail} />
       ) : model.detail.problem ? (
@@ -393,19 +413,12 @@ function Rules({ model, actions, detail }: { model: FloorRulesModel; actions?: F
         </Card>
 
         <BundleCard model={model} actions={actions} detail={detail} />
+      </div>
 
-        <Card padded>
-          <section className="fw-fr-section" aria-labelledby="fr-fixed">
-            <h2 id="fr-fixed" className="fw-fr-title">
-              {t('fr.fixed.title')}
-            </h2>
-            <ul className="fw-fr-list">
-              {FIXED_RULES.map((line) => (
-                <li key={line.key}>{lineText(t, line)}</li>
-              ))}
-            </ul>
-          </section>
-        </Card>
+      {/* B-W2b-58: Floor rules per site (fr-rules) beside Bundle codes (fr-bundle), each with its EditModeBar. */}
+      <div className="fw-fr-wide">
+        <FloorChecksCard model={model} actions={actions} />
+        <CouponsCard model={model} actions={actions} />
       </div>
 
       {confirm && (
@@ -504,7 +517,7 @@ function BundleCard({ model, actions, detail }: { model: FloorRulesModel; action
  * (areas/_shared/reasons, B-W2a-18) as `codes` — pause, scrap, rework, downtime, help-call, adjustment, hold and cancel
  * reasons with words per language, icon and colour, active and used count, saved per cell. The view fetches nothing.
  */
-function Codes({ model, codes }: { model: FloorRulesModel; codes?: ReactNode }) {
+function Codes({ model, codes, actions }: { model: FloorRulesModel; codes?: ReactNode; actions?: FloorRulesActions }) {
   const t = useT('floor-rules')
   if (!model.can.reasons)
     return (
@@ -512,5 +525,22 @@ function Codes({ model, codes }: { model: FloorRulesModel; codes?: ReactNode }) 
         <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('fr.codes.noAccess.title')} description={t('fr.codes.noAccess.body')} />
       </Card>
     )
-  return <div className="fw-fr-stack">{codes ?? null}</div>
+  return (
+    <div className="fw-fr-stack">
+      <FullListsNote model={model} actions={actions} />
+      {codes ?? null}
+    </div>
+  )
+}
+
+/** A W2b grid tab (Off-standard codes, Help-call routing): the editor the page passes, or why the role may not see it. */
+function Slot({ allowed, title, body, children }: { allowed: boolean; title: string; body: string; children?: ReactNode }) {
+  const t = useT('floor-rules')
+  if (!allowed)
+    return (
+      <Card padded>
+        <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t(title)} description={t(body)} />
+      </Card>
+    )
+  return <div className="fw-fr-stack">{children ?? null}</div>
 }
