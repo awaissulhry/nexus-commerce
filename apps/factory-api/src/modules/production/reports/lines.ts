@@ -3,6 +3,7 @@ import { workingMinutesBetween } from '@nexus/factory-domain/calendars/working-t
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { businessDate, businessDayRange, toUtcIso } from '@nexus/factory-domain/core/time'
 import { laneKey } from '@nexus/factory-domain/production/reports/daily'
+import { OPEN_CALL_STATUSES } from '@nexus/factory-domain/production/calls/rules'
 import { bottleneckOf, lineStateOf, outputPct, plannedOnLine, plannedShare, type PlannedSlot, type WaitingAt } from '@nexus/factory-domain/production/reports/lines'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import type { CommandCaller } from '../../../core/command'
@@ -11,6 +12,8 @@ import { serverClock } from '../../../core/time'
 import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
 import { floorVersionsOf, slotsOf } from '../../planning/schedule/store'
 import type { Reader } from '../../planning/store'
+import { legalGateFor } from '../../people/privacy/gate'
+import { minimumGroupSizeFor } from '../../people/privacy/groups'
 import { wipFor } from '../scans/progress'
 import { officeContextOf, readDaily, siteFor, sitesFor, type ReportSite } from './daily'
 
@@ -21,10 +24,26 @@ import { officeContextOf, readDaily, siteFor, sitesFor, type ReportSite } from '
  * the published version, never the working plan), the open work orders allocated or planned on it, the operation where
  * most pieces wait, and per station only whether someone is signed in and whether a machine at it is down. Rules in
  * factory-domain production/reports/lines. No worker is read: a device's session is read for its times only.
+ * B-W2b-66 (design "open help calls (W2b) · people absent: a number only (W2b)"): each line's open help calls, and how
+ * many of the people whose home line it is have an absence today: a number and nothing else (no name, no code, no
+ * minutes), only behind the site's ATTENDANCE legal gate and for a line of at least the company's minimum group (ANA-075).
  */
 
 const OPEN = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD'] as const
 const DOWN = ['DOWN', 'UNDER_MAINTENANCE', 'DO_NOT_USE'] as const
+
+/** People absent today per line (see the module comment): null for a line the gate or the group size keeps silent. */
+async function absentByLine(db: Reader, site: ReportSite, lineIds: readonly string[], today: string): Promise<ReadonlyMap<string, number>> {
+  if (!(await legalGateFor(db, site.id, 'ATTENDANCE')).open) return new Map()
+  const people = await db.employee.findMany({ where: { siteId: site.id, status: 'ACTIVE', homeLineId: { in: [...lineIds] } }, select: { id: true, homeLineId: true } })
+  const absent = people.length ? await db.absenceEntry.findMany({ where: { employeeId: { in: people.map((person) => person.id) }, date: new Date(`${today}T00:00:00.000Z`) }, select: { employeeId: true } }) : []
+  const away = new Set(absent.map((row) => row.employeeId))
+  const minimum = await minimumGroupSizeFor(db, site.companyId)
+  return new Map(lineIds.flatMap((lineId) => {
+    const own = people.filter((person) => person.homeLineId === lineId)
+    return own.length >= minimum ? [[lineId, own.filter((person) => away.has(person.id)).length] as const] : []
+  }))
+}
 
 async function linesOfSite(db: Reader, site: ReportSite, now: Date) {
   const today = businessDate(now, site.timezone)
@@ -42,6 +61,9 @@ async function linesOfSite(db: Reader, site: ReportSite, now: Date) {
     : []
   const signedIn = new Set(devices.filter((device) => device.currentSession && device.currentSession.endedAt === null && device.currentSession.idleExpiresAt > now && device.currentSession.endsAt > now).map((device) => device.stationId))
   const machines = stationIds.length ? await db.machine.findMany({ where: { stationId: { in: stationIds }, status: { in: [...DOWN] } }, select: { stationId: true, assetNumber: true, status: true }, orderBy: { assetNumber: 'asc' } }) : []
+
+  const openCalls = await db.helpCall.findMany({ where: { lineId: { in: lineIds }, status: { in: [...OPEN_CALL_STATUSES] } }, select: { lineId: true } })
+  const absent = await absentByLine(db, site, lineIds, today)
 
   // The plan: the slots of the version the floor works to now that reach into today, on these lines.
   const { current } = await floorVersionsOf(db, site.id, now)
@@ -125,6 +147,8 @@ async function linesOfSite(db: Reader, site: ReportSite, now: Date) {
       output,
       outputPct: outputPct(output, plannedToday),
       bottleneck: bottleneckOf(waitingAt),
+      openCalls: openCalls.filter((call) => call.lineId === line.id).length,
+      absent: absent.get(line.id) ?? null,
       stations: own.map((station) => ({
         id: station.id,
         code: station.code,

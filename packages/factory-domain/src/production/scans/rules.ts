@@ -118,6 +118,18 @@ export const SCAN_REFUSALS = [
   'OVERRIDE_NOT_LEAD',
   'OVERRIDE_SELF',
   'OVERRIDE_NOTE_MISSING',
+  // B-W2b-47 (MES-099, MES-102; production/onbehalf, production/checklists): a report entered on someone's behalf, and the
+  // steps inside an operation.
+  'BEHALF_STATION_UNKNOWN',
+  'BEHALF_NAMES_NOBODY',
+  'BEHALF_PERSON_NEEDED',
+  'BEHALF_PERSON_UNKNOWN',
+  'BEHALF_SELF',
+  'BEHALF_NO_NOTICE',
+  'BEHALF_NOTE_MISSING',
+  'CHECKLIST_OPEN',
+  'CHECKLIST_STEP_UNKNOWN',
+  'CHECKLIST_REPORTED',
 ] as const
 export type ScanRefusalCode = (typeof SCAN_REFUSALS)[number]
 

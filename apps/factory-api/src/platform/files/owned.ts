@@ -52,6 +52,8 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
 export interface UploadPath {
   /** Set only by a module whose record type is in MODULE_OWNED_FILES, from its own route. */
   readonly viaModule?: boolean
+  /** B-W2b-47 (COL-017): this PHOTO may be a short clip (FLOOR_CLIP_TYPES); only the floor notes' route says so. */
+  readonly clip?: boolean
 }
 
 /** The module that owns this record type's files of this kind, or null. */

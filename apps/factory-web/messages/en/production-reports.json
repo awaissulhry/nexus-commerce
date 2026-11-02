@@ -186,6 +186,10 @@
     "nobody": "Nobody signed in: {stations}",
     "machineDown_one": "{count} machine down",
     "machineDown_other": "{count} machines down",
-    "scoped": "Only line {line}"
+    "scoped": "Only line {line}",
+    "openCalls_one": "{count} open help call",
+    "openCalls_other": "{count} open help calls",
+    "absent_one": "{count} person absent",
+    "absent_other": "{count} people absent"
   }
 }

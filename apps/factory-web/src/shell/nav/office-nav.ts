@@ -169,6 +169,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/warehouse/shipments/[id]/pack',
   '/warehouse/shipping',
   '/production/floor',
+  // B-W2b-66: the Office's preview of a line TV (SCR-173 display.preview), a window page.
+  '/production/floor/display',
   '/production/work-orders',
   '/production/work-orders/[id]',
   '/quality/inspections',
@@ -329,7 +331,7 @@ export const OFFICE_NAV: AreaNav = builtRowsOnly({ view: 'office', areas: office
  * shell opens it on a plain click; ⌘-click does as always). An office entry never lands on one. A W2b window page (the
  * line TV's office preview) adds its address here.
  */
-export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board'])
+export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')

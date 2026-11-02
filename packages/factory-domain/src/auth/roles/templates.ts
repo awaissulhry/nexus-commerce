@@ -231,6 +231,18 @@ const GUARDS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Objec
   team_leader: ['production.scan.override'],
 })
 /**
+ * B-W2b-47 (more on the tablet, MES-099, MES-086; design floor.supervisor "Scan on behalf"): the team leader records work
+ * for someone who could not scan and adds an unplanned operation on the tablet; the production office adds one to a work
+ * order too. The owner from every().
+ */
+const TABLET_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.scan.behalf', 'production.extraops.add'],
+})
+const TABLET_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.extraops.add'],
+  floor_supervisor: ['production.extraops.add'],
+})
+/**
  * B-W2b-37 (attendance days; MES-225, MES-226, MES-228, MES-233, MES-238; design people.attendance, people.settings): the
  * administrator (the HR register's keeper until an HR template comes) and the production manager read the days, fix them
  * with a reason, approve them and open the roll call; the administrator keeps the absence codes and the rounding rules;
@@ -257,6 +269,19 @@ const BOARDS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.free
 })
 const BOARDS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   team_leader: ['production.boards.view', 'production.boards.reason'],
+})
+/**
+ * B-W2b-49 (dispatch every shift, MES-022 … MES-033; design production.dispatch, floor.supervisor): the production manager
+ * and the floor supervisor run the board and write handover notes; the planner reads it. On the floor the team leader's
+ * line view reads its line, reassigns work and writes the handover note. Owner and read-only from every().
+ */
+const DISPATCH_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.dispatch.view', 'production.dispatch.manage', 'production.dispatch.handover'],
+  floor_supervisor: ['production.dispatch.view', 'production.dispatch.manage', 'production.dispatch.handover'],
+  planner: ['production.dispatch.view'],
+})
+const DISPATCH_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.dispatch.view', 'production.dispatch.manage', 'production.dispatch.handover'],
 })
 /**
  * B-W2b-34 (piece rates and the legal switch of piece pay; MES-254, MES-255, MES-262; design people.piecerates): the
@@ -292,12 +317,16 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...((audience === 'office' ? CALLS_ADDS : CALLS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-46
   ...(audience === 'floor' ? (GUARDS_FLOOR_ADDS[key] ?? []) : []),
+  // B-W2b-47
+  ...((audience === 'office' ? TABLET_ADDS : TABLET_FLOOR_ADDS)[key] ?? []),
   // B-W2b-50
   ...((audience === 'office' ? BOARDS_ADDS : BOARDS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-34
   ...(audience === 'office' ? (PEOPLE_PIECERATES_ADDS[key] ?? []) : []),
   // B-W2b-37
-  ...(audience === 'office' ? (PEOPLE_ATTENDANCE_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PEOPLE_ATTENDANCE_ADDS[key] ?? []) : []),
+  // B-W2b-49
+  ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

@@ -199,6 +199,8 @@ export const LINE_CARDS: LineCard[] = [
     output: 14,
     outputPct: 70,
     bottleneck: { workOrderId: wo(0).id, workOrderNumber: wo(0).number, operationId: uid('4141', 82), seq: 30, code: 'CUC-ASS', name: 'Cucitura assemblaggio', waiting: 6 },
+    openCalls: 2,
+    absent: 1,
     stations: [station(1, 'CUC-01', 'Cucitura 1', true), station(2, 'CUC-02', 'Cucitura 2', false), station(3, 'CUC-03', 'Cucitura 3', true, [{ assetNumber: 'MAC-DEMO-07', status: 'DOWN' }])],
   },
   {
@@ -214,6 +216,8 @@ export const LINE_CARDS: LineCard[] = [
     output: 0,
     outputPct: null,
     bottleneck: { workOrderId: wo(2).id, workOrderNumber: wo(2).number, operationId: uid('4141', 92), seq: 20, code: 'CUC-PRE', name: 'Preparazione', waiting: 4 },
+    openCalls: 0,
+    absent: 0,
     stations: [station(4, 'CUC-11', 'Cucitura 11', false), station(5, 'CUC-12', 'Cucitura 12', false)],
   },
   {
@@ -229,6 +233,8 @@ export const LINE_CARDS: LineCard[] = [
     output: 0,
     outputPct: null,
     bottleneck: null,
+    openCalls: 0,
+    absent: null,
     stations: [],
   },
 ]
