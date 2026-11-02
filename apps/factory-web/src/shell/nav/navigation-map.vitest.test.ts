@@ -386,6 +386,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       final: 'quality.inspections.view',
       machine: 'plant.report', // GET /plant/floor/machines (B-W2a-73)
       clock: 'floor.work', // GET /people/clock/floor (B-W2b-67)
+      myday: 'floor.work', // GET /people/myday (B-W2b-68)
       help: 'floor.work', // GET /production/calls/station (B-W2b-70)
       lineview: 'floor.lead', // the team leader's Line view (B-W2b-70)
       scan: 'floor.work',

@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { CircleAlert, ClipboardList, Clock, CloudOff, Factory, Hash, Layers, LifeBuoy, ListTodo, Package, PackageOpen, Pause, Play, ScanLine, Scissors, ScrollText, ShieldCheck, Shirt, Tag, Undo2, UserRoundCheck, Users, Wrench } from 'lucide-react'
+import { CircleAlert, ClipboardList, Clock, CloudOff, Factory, Hash, Layers, LifeBuoy, ListTodo, Package, PackageOpen, Pause, Play, ScanLine, Scissors, ScrollText, ShieldCheck, Shirt, Tag, Undo2, UserRound, UserRoundCheck, Users, Wrench } from 'lucide-react'
 import type { ScanIdKind } from '@nexus/factory-domain/numbering/kinds'
 import { FloorButton, FloorTile, FloorTileGrid, ScanInput, type CameraScanner } from '@nexus/ui/floor'
 import { FloorCard } from '@nexus/ui/floor/FloorCard/index'
@@ -38,6 +38,8 @@ export interface HomeViewModel {
   lowNumbers?: readonly { kind: ScanIdKind; left: number }[]
   /** Unfinished on this tablet (design floor.home "resume"); hidden when nothing is open. `asOf`: read earlier, offline now. */
   resume?: { items: readonly OpenItem[]; asOf: string | null } | null
+  /** B-W2b-68: answers to the person's disputes not opened yet (the My day tile's badge). */
+  mydayAnswers?: number
   timeZone?: string
 }
 
@@ -66,6 +68,8 @@ export const TILE_ICON: Readonly<Record<TileKey, ReactNode>> = {
   machine: <Wrench />,
   // B-W2b-67
   clock: <Clock />,
+  // B-W2b-68
+  myday: <UserRound />,
   // B-W2b-70
   help: <LifeBuoy />,
   lineview: <Users />,
@@ -182,6 +186,7 @@ export function HomeView({ model, onAction, onFrame, camera }: HomeViewProps) {
                 tone={tile.held ? 'neutral' : 'primary'}
                 heldReason={tile.held ? t(`tile.held.${tile.held}`) : null}
                 onPress={() => send({ type: 'tile', key: tile.key })}
+                {...(tile.key === 'myday' && model.mydayAnswers ? { count: model.mydayAnswers, countLabel: t('tile.mydayAnswers', { count: model.mydayAnswers }) } : {})}
               />
             ))}
           </FloorTileGrid>

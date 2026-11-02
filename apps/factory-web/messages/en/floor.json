@@ -393,6 +393,7 @@
       "labels": "Print garment labels behind the certificate check",
       "machine": "Report a machine problem; a technician’s jobs",
       "clock": "Your time today, breaks, forgot badge",
+      "myday": "Your minutes, records and statement. Only you see it.",
       "help": "One tap calls the right person",
       "lineview": "Calls, what waits, stations"
     },
@@ -402,6 +403,9 @@
     },
     "machine": "Machine problem",
     "clock": "Clock in & out",
+    "myday": "My day",
+    "mydayAnswers_one": "{count} answer to your dispute waits",
+    "mydayAnswers_other": "{count} answers to your disputes wait",
     "help": "Call for help",
     "lineview": "Line view"
   },

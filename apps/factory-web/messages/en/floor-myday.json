@@ -1,0 +1,227 @@
+{
+  "title": "My day",
+  "loading": "Reading your day…",
+  "action": {
+    "back": "Back",
+    "done": "Done, close",
+    "home": "Home",
+    "retry": "Try again",
+    "send": "Send",
+    "withdraw": "Withdraw",
+    "pdf": "Open as PDF",
+    "print": "Print at the office"
+  },
+  "pin": {
+    "title": "Only you",
+    "meaning": "Your own work and pay on a shared tablet: enter your PIN, even if your badge signed you in. The screen closes after 60 seconds without a touch.",
+    "again": "It has been a moment: enter your PIN again to go on."
+  },
+  "privacy": {
+    "text": "Only you see this page",
+    "who": "No one else sees it here. It shows you, never anyone else.",
+    "law": "GDPR art. 15; c.c. art. 2101",
+    "plain": "You may see your own records, the work you did and what you were paid for it."
+  },
+  "gate": {
+    "law": "Statuto dei Lavoratori art. 4",
+    "plain": "Figures about one person's work need a legal basis on record at the site before anyone sees them, you included."
+  },
+  "offline": {
+    "title": "My day needs the network",
+    "body": "Your own figures are not stored on this tablet, so they cannot show without the network. Your work is still recorded: come back when the network is back."
+  },
+  "station": {
+    "title": "This site records stations, not people",
+    "body": "There is no personal list here: scans name the station, not you."
+  },
+  "closing": {
+    "title": "Still reading?",
+    "body": "Your figures leave the screen in a moment, so nobody else sees them.",
+    "stay": "I am here",
+    "close": "Close now"
+  },
+  "today": {
+    "title": "Today",
+    "pieces": "Pieces",
+    "reports_one": "{count} report",
+    "reports_other": "{count} reports",
+    "defects": "{scrap} scrap, {rework} rework",
+    "minutes": "Standard minutes earned",
+    "minutesHint": "Your good pieces × the operation's minutes",
+    "efficiency": "Efficiency",
+    "efficiencyHint": "Earned ÷ your timed minutes",
+    "noTiming": "Nothing timed today",
+    "earned": "Earned today",
+    "earnedHint": "So far: it may still change",
+    "notLinked": "Your floor sign-in is not linked to your employee record yet. Your pieces show; for minutes and pay, ask the office.",
+    "gateOff": "Minutes and pace are off at this site: its legal basis for one person's work figures is not on record.",
+    "trainee": "You are in training today: minutes and pace do not count against you.",
+    "held_one": "{count} scan is held until your clock-in shows it. Nothing is lost.",
+    "held_other": "{count} scans are held until your clock-in shows them. Nothing is lost.",
+    "more": "More about your day"
+  },
+  "pace": {
+    "title": "Your pace",
+    "none": "—",
+    "ON_PACE": "On the line's target so far",
+    "BEHIND": "Under the line's target so far",
+    "NO_TARGET": "No target to measure against yet",
+    "soFar": "{done} of {target} pieces so far",
+    "hour": "Target this hour: {target} pieces",
+    "line": "Line {line}",
+    "shared_one": "{count} report shared with others is left out.",
+    "shared_other": "{count} reports shared with others are left out.",
+    "only": "Your pieces against the line's target. Nobody is compared with you."
+  },
+  "tile": {
+    "records_one": "{count} entry today",
+    "records_other": "{count} entries today",
+    "answers_one": "{count} new answer",
+    "answers_other": "{count} new answers",
+    "disputes_one": "{count} open",
+    "disputes_other": "{count} open",
+    "statement": "{month}",
+    "noStatement": "Not made yet"
+  },
+  "records": {
+    "title": "Your records",
+    "span": {
+      "today": "Today",
+      "period": "This period"
+    },
+    "none": {
+      "today": "Nothing recorded today.",
+      "period": "Nothing recorded this period."
+    },
+    "count_one": "{count} entry",
+    "count_other": "{count} entries",
+    "operation": "Op {seq} {name}",
+    "pieces": "pieces",
+    "min": "min",
+    "scrap_one": "{count} scrap",
+    "scrap_other": "{count} scrap",
+    "rework_one": "{count} rework",
+    "rework_other": "{count} rework",
+    "minutes": "{minutes} min",
+    "byLead": "entered by your team leader",
+    "corrected": "Corrected",
+    "undone": "Undone",
+    "block": {
+      "OPEN": "Running",
+      "PENDING": "Waiting for approval",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected"
+    },
+    "done": {
+      "sent": "Sent. The team leader or HR answers you here.",
+      "existing": "You already disputed this entry: the open dispute stands."
+    }
+  },
+  "keys": {
+    "move": "Move between rows",
+    "open": "Open the row",
+    "back": "Back"
+  },
+  "dispute": {
+    "question": "What is wrong?",
+    "words": "Say what is wrong",
+    "who": "The team leader or HR answers. You see the answer here.",
+    "reason": {
+      "WRONG_QUANTITY": "Wrong quantity",
+      "NOT_ME": "Not me",
+      "WRONG_OPERATION": "Wrong operation",
+      "WRONG_TIME": "Wrong time",
+      "WRONG_CODE": "Wrong code",
+      "OTHER": "Other"
+    },
+    "status": {
+      "OPEN": "Waiting for an answer",
+      "UPHELD": "Upheld",
+      "REJECTED": "Rejected",
+      "WITHDRAWN": "Withdrawn"
+    }
+  },
+  "disputes": {
+    "title": "Your disputes",
+    "open": "Open",
+    "answered": "Answers",
+    "edits": "Changes to your records",
+    "change": "{from} → {to}",
+    "none": {
+      "title": "No disputes",
+      "body": "If an entry is wrong, open it in Your records."
+    },
+    "done": {
+      "withdrawn": "Withdrawn."
+    }
+  },
+  "answer": {
+    "raised": "Sent on {date}"
+  },
+  "statement": {
+    "title": "Your statement",
+    "earlier": "The month before",
+    "later": "The month after",
+    "operation": "Operation",
+    "pieces": "Pieces",
+    "minutes": "Standard minutes",
+    "rate": "Rate",
+    "amount": "Amount",
+    "time": "paid time off standard",
+    "share": "share {share}%",
+    "earnings": "Earnings of the month",
+    "makeUp": "Make-up to guaranteed pay",
+    "total": "Total",
+    "noLines": "No piece work this month.",
+    "approved": "Approved, revision {revision}.",
+    "draft": "Not approved yet: it may still change.",
+    "sent": "Sent to the office printer {printer}, in your name.",
+    "pdfReady": "PIN accepted: press Open as PDF.",
+    "none": {
+      "title": "No statement for this month",
+      "body": "It is made when the period is run.",
+      "noPay": "This month has no piece pay."
+    }
+  },
+  "held": {
+    "reason": "Pick what is wrong first.",
+    "words": "Say what is wrong first.",
+    "busy": "Working on it…",
+    "draft": "Only an approved statement can leave the screen.",
+    "noPrinter": "The tablet does not know which printer is the office one: ask the office to print it.",
+    "months": "A statement goes back a year here: older ones are at the office.",
+    "thisMonth": "This is the current month.",
+    "row": {
+      "undone": "This entry was undone: nothing to dispute.",
+      "running": "This block is still running: dispute it when it ends.",
+      "open": "You already disputed this entry."
+    }
+  },
+  "refusal": {
+    "other": "This was refused. Ask your team leader.",
+    "NOT_APPROVED": {
+      "message": "This statement is not approved yet.",
+      "fix": "It can be printed once HR has approved it."
+    },
+    "NO_PRINTER": {
+      "message": "The tablet does not know which printer is the office one.",
+      "fix": "Ask the office to print your statement."
+    },
+    "PHONE_ONLY": {
+      "message": "A shared tablet keeps no statement.",
+      "fix": "Print it at the office, or open it on your own phone."
+    },
+    "NOT_DISPUTABLE": {
+      "message": "This entry cannot be disputed.",
+      "fix": "Ask your team leader."
+    },
+    "NOT_YOURS": {
+      "message": "This entry is not yours.",
+      "fix": "Ask your team leader."
+    },
+    "DISPUTE_NOT_OPEN": {
+      "message": "This dispute is closed already.",
+      "fix": "Its answer is in Your disputes."
+    }
+  }
+}

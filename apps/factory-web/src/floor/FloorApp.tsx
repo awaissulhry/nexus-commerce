@@ -154,6 +154,8 @@ const HOME = '/floor'
 const SYNC = '/floor/sync'
 /** B-W2b-67: Clock in & out (SCR-170), open with nobody signed in. */
 const CLOCK = '/floor/clock'
+/** B-W2b-68: My day (SCR-171), the operator's menu on a home with no tile for it. */
+const MY_DAY = '/floor/myday'
 /** B-W2b-70: Call for help (SCR-172), the frame's Help button; the Line view (SCR-168), where a LINE tablet lands. */
 const HELP = '/floor/help'
 const LINE_VIEW = '/floor/lineview'
@@ -443,7 +445,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
         languageOpen: ui.language,
         // B-W2b-67: the crew strip on Home, the clock and sign-in (a job's screen keeps its height); the menu's own lines.
         crew: (options.crew ?? !options.showHome) ? (me?.crew ?? crewLeft) : null,
-        menu: me ? { clock: me.permissions.includes('floor.work'), addPerson: Boolean(me.rules?.crew), crew: Boolean(me.crew), full: me.crew ? (me.crew.members.length >= me.crew.max ? me.crew.max : null) : null } : undefined,
+        menu: me ? { clock: me.permissions.includes('floor.work'), myday: me.permissions.includes('floor.work'), addPerson: Boolean(me.rules?.crew), crew: Boolean(me.crew), full: me.crew ? (me.crew.members.length >= me.crew.max ? me.crew.max : null) : null } : undefined,
         idle: me ? { warning: idle.warning, secondsLeft: idle.secondsLeft } : undefined,
       }
       const onFrame = (action: FrameAction) => {
@@ -467,6 +469,9 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
           case 'clock':
             setUi((current) => ({ ...current, menu: false }))
             return router.push(CLOCK)
+          case 'myday':
+            setUi((current) => ({ ...current, menu: false }))
+            return router.push(MY_DAY)
           case 'crew-add':
             setUi((current) => ({ ...current, menu: false }))
             setCrewStep({ kind: 'join' })

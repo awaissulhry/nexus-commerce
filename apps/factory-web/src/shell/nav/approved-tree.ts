@@ -593,6 +593,8 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.machine', title: 'Machine problem & jobs', titleIt: 'Guasto e interventi', tile: 'machine', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'maintenance'] },
   // W2b: B-W2b-70 Call for help (SCR-172) and the team leader's Line view (SCR-168).
   { id: 'floor.clock', title: 'Clock in & out', titleIt: 'Timbratura', tile: 'clock', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'phone'] },
+  // W2b: B-W2b-68 My day (SCR-171).
+  { id: 'floor.myday', title: 'My day', titleIt: 'La mia giornata', tile: 'myday', modes: ['sewing', 'phone'] },
   { id: 'floor.help', title: 'Call for help', titleIt: 'Chiama aiuto', tile: 'help', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'] },
   { id: 'floor.supervisor', title: 'Line view', titleIt: 'Vista linea', tile: 'lineview', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor'] },
 ]
