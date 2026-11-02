@@ -1,0 +1,221 @@
+/*
+ * People › Skills & training (SCR-160, the employee's tab, the A3 print) LAYOUT: the matrix's cells, the cell popover, the
+ * dialogs' forms and the sheet. The controls are the design system's; semantic tokens only, no colours of their own. A
+ * level is said by a word and its steps, never by a colour alone.
+ */
+.fw-sk-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+}
+
+.fw-sk-cell-button {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-sk-level {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-sk-word {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-sk-steps {
+  display: inline-flex;
+  gap: 2px;
+  flex: none;
+}
+
+.fw-sk-steps i {
+  width: 6px;
+  height: 12px;
+  border: 1px solid var(--nds-text-muted);
+  border-radius: 1px;
+}
+
+.fw-sk-steps i[data-on] {
+  background: var(--nds-text-muted);
+}
+
+.fw-sk-none {
+  display: inline-flex;
+  color: var(--nds-text-muted);
+}
+
+.fw-sk-head.machine {
+  border-left: 2px solid var(--nds-border);
+}
+
+.fw-sk-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  width: 270px;
+  max-width: 100%;
+}
+
+.fw-sk-pop p {
+  margin: 0;
+}
+
+.fw-sk-pop-title,
+.fw-sk-pop-sub {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-sk-pop-person,
+.fw-sk-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-sk-levels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--nds-space-4);
+}
+
+.fw-sk-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.fw-sk-plain,
+.fw-sk-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-sk-history {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.fw-sk-history li span {
+  display: block;
+  color: var(--nds-text-muted);
+}
+
+.fw-sk-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-sk-form.boxed {
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-sk-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-sk-value {
+  margin: 0;
+}
+
+.fw-sk-effect {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-sk-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-16);
+  color: var(--nds-text-strong);
+}
+
+.fw-sk-print-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nds-space-16);
+}
+
+.fw-sk-print-head h1 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-sk-print-head p,
+.fw-sk-print-foot {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-sk-print-frame {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.fw-sk-print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-sk-print-table th,
+.fw-sk-print-table td {
+  padding: 2px 6px;
+  border: 1px solid var(--nds-border);
+  text-align: left;
+}
+
+.fw-sk-print-table tbody th {
+  font-weight: var(--nds-font-weight-medium);
+  white-space: nowrap;
+}
+
+.fw-sk-print-group th {
+  background: var(--nds-surface-sunken);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+@media print {
+  .fw-sk-noprint {
+    display: none;
+  }
+
+  .fw-sk-print {
+    padding: 0;
+  }
+
+  .fw-sk-print-frame {
+    overflow: visible;
+  }
+}

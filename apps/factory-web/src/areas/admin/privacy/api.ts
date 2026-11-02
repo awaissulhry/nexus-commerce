@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { NOTICE_KINDS, NOTICE_STATUSES } from '@nexus/factory-domain/privacy/notices'
 import { DPIA_STATUSES, PROCESSING_ACTIVITY_STATUSES } from '@nexus/factory-domain/privacy/records'
+import { GATE_PURPOSES, PEOPLE_DATA_PURPOSES } from '@nexus/factory-domain/people/privacy/purposes'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { presignedSchema, type Presigned } from '../../../record-panels/api'
 import { putToStore, sha256Hex } from '../../../record-panels/store'
@@ -126,6 +127,18 @@ export const listNotices = (api: ApiClient, companyId: string, signal?: AbortSig
 export const getNotice = (api: ApiClient, noticeId: string, signal?: AbortSignal) => api.get(`/privacy/notices/${seg(noticeId)}`, { schema: oneNotice, signal }).then((answer) => answer.notice)
 /** Counts for every viewer; names (sorted by name, never a ranking) only with privacy.manage. */
 export const noticeAcks = (api: ApiClient, noticeId: string, signal?: AbortSignal) => api.get(`/privacy/notices/${seg(noticeId)}/acknowledgements`, { schema: acksSchema, signal })
+const peopleRulesSchema = z.object({
+  purposes: z.array(z.object({ purpose: z.enum(PEOPLE_DATA_PURPOSES), gate: z.enum(GATE_PURPOSES).nullable(), floor: z.boolean() })),
+  facts: z.array(z.object({ key: z.string() })),
+  automatedDecisions: z.array(z.object({ system: z.string(), decides: z.string() })),
+  informationPackDue: z.boolean(),
+  sites: z.array(z.object({ site: z.object({ id: z.string(), code: z.string(), name: z.string() }), open: z.array(z.enum(GATE_PURPOSES)) })),
+})
+export type PeopleRules = z.infer<typeof peopleRulesSchema>
+
+/** People data rules (B-W2b-65, read-only here; people.privacy.view): set in People › People settings. */
+export const peopleRules = (api: ApiClient, signal?: AbortSignal) => api.get('/people/privacy/rules', { schema: peopleRulesSchema, signal })
+
 export const listDpia = (api: ApiClient, companyId: string, signal?: AbortSignal) => api.get('/privacy/dpia', { query: { companyId }, schema: dpiaListSchema, signal })
 export const listActivities = (api: ApiClient, companyId: string, signal?: AbortSignal) =>
   api.get('/privacy/register', { query: { companyId }, schema: z.object({ company, activities: z.array(activitySchema) }), signal }).then((answer) => answer.activities)

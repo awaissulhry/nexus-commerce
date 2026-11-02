@@ -36,6 +36,8 @@ import {
   type DpiaList,
   type Notice,
   type NoticeKind,
+  peopleRules,
+  type PeopleRules,
 } from './api'
 import {
   activityDraftOf,
@@ -101,6 +103,7 @@ export function PrivacyPage() {
   const [notices, setNotices] = useState<Read<Notice[]>>(LOADING)
   const [dpia, setDpia] = useState<Read<DpiaList>>(LOADING)
   const [register, setRegister] = useState<Read<Activity[]>>(LOADING)
+  const [rules, setRules] = useState<Read<PeopleRules>>(LOADING)
   const [registerFilter, setRegisterFilter] = useState<RegisterFilter>('ACTIVE')
   const [selectedNotices, setSelectedNotices] = useState<readonly string[]>([])
   const [selectedActivities, setSelectedActivities] = useState<readonly string[]>([])
@@ -162,6 +165,17 @@ export function PrivacyPage() {
   useEffect(() => {
     void loadOverview()
   }, [loadOverview])
+  const loadRules = useCallback(async () => {
+    if (!can.peopleRules) return
+    try {
+      setRules({ value: await peopleRules(api), problem: null })
+    } catch {
+      setRules({ value: null, problem: 'pv.rules.failed' })
+    }
+  }, [api, can.peopleRules])
+  useEffect(() => {
+    void loadRules()
+  }, [loadRules])
   useEffect(() => {
     setNotices(LOADING)
     setDpia(LOADING)
@@ -497,6 +511,7 @@ export function PrivacyPage() {
     notices,
     dpia,
     register,
+    peopleRules: rules,
     registerFilter,
     selectedNotices,
     selectedActivities,
@@ -518,6 +533,7 @@ export function PrivacyPage() {
     <PrivacyView
       model={model}
       actions={{
+        onPeopleRulesRetry: () => void loadRules(),
         onCompany: (id) => go({ company: id, open: null }),
         onView: (next) => go({ view: next }),
         onRetry: () => void loadAll(),

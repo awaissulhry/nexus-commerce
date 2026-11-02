@@ -3,7 +3,9 @@ import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { DEMO_COMPANIES, OWNER_PERMISSIONS } from '../../../shell/design-data'
 import { inShell } from '../shared/fixtures'
-import type { Activity, AckPerson, CompanyOverview, Dpia, DpiaList, Notice, NoticeAcks } from './api'
+import { peopleDataFacts } from '@nexus/factory-domain/people/privacy/decisions'
+import { PEOPLE_DATA_PURPOSES } from '@nexus/factory-domain/people/privacy/purposes'
+import type { Activity, AckPerson, CompanyOverview, Dpia, DpiaList, Notice, NoticeAcks, PeopleRules } from './api'
 import { activityDraftOf, emptyActivity, LOADING, privacyCan, STEP_UP_SHUT, type PrivacyDialog, type PrivacyViewModel } from './model'
 import { PrivacyView } from './view/PrivacyView'
 
@@ -147,7 +149,7 @@ const EMPTY_OVERVIEW = [
 
 const templatePermissions = (key: string): string[] => [...(templateOf(key)?.permissions ?? []), 'home.view']
 const ROLES = {
-  owner: [...OWNER_PERMISSIONS, 'privacy.view', 'privacy.manage', 'files.read', 'files.upload'],
+  owner: [...OWNER_PERMISSIONS, 'privacy.view', 'privacy.manage', 'files.read', 'files.upload', 'people.privacy.view'],
   admin: templatePermissions('admin'),
   readOnly: templatePermissions('read_only'),
   sales: templatePermissions('sales'),
@@ -157,6 +159,17 @@ type Role = keyof typeof ROLES
 interface Case {
   model: PrivacyViewModel
   role: Role
+}
+
+const PEOPLE_RULES: PeopleRules = {
+  purposes: PEOPLE_DATA_PURPOSES.map((purpose) => ({ purpose, gate: purpose === 'ATTENDANCE' || purpose === 'PERFORMANCE' ? purpose : null, floor: purpose !== 'EMPLOYMENT' && purpose !== 'PAY' && purpose !== 'PERFORMANCE' })),
+  facts: peopleDataFacts().map((fact) => ({ key: fact.key })),
+  automatedDecisions: [],
+  informationPackDue: false,
+  sites: [
+    { site: { id: uid('9101', 1), code: 'DS1', name: 'Sito demo uno' }, open: ['ATTENDANCE'] },
+    { site: { id: uid('9101', 2), code: 'DS2', name: 'Sito demo due' }, open: [] },
+  ],
 }
 
 function base(extra: Partial<PrivacyViewModel> = {}, role: Role = 'owner'): Case {
@@ -171,6 +184,7 @@ function base(extra: Partial<PrivacyViewModel> = {}, role: Role = 'owner'): Case
       notices: { value: NOTICES, problem: null },
       dpia: { value: DPIA, problem: null },
       register: { value: REGISTER, problem: null },
+      peopleRules: { value: PEOPLE_RULES, problem: null },
       registerFilter: 'ACTIVE',
       selectedNotices: [],
       selectedActivities: [],
@@ -217,6 +231,8 @@ export const designScreen = defineDesignScreen<Case>({
   cases: [
     { id: 'owner', label: 'Owner: every duty done, the worker notice versions', model: base(), note: 'The duties in words with the law named; DS1 waits for its floor rules (the site names workers, no legal basis on record). Sample texts are said at rest.' },
     { id: 'admin', label: 'Administrator (the admin role)', model: base({}, 'admin') },
+    { id: 'people-rules', label: 'People data rules: read-only, one site with attendance on', model: base(), note: 'Set in People settings; here they are only read.' },
+    { id: 'people-rules-failed', label: 'People data rules did not load', model: base({ peopleRules: { value: null, problem: 'pv.rules.failed' } }), note: 'The rest of the page keeps working.' },
     { id: 'read-only', label: 'Read-only: sees, changes nothing', model: base({}, 'readOnly'), note: 'No New version, no names of people: counts only.' },
     { id: 'sales', label: 'Sales: no access', model: base({}, 'sales'), note: 'The page says which right is missing; the navigation has no row for this person.' },
     { id: 'loading', label: 'Loading', model: base({ overview: LOADING, notices: LOADING, dpia: LOADING, register: LOADING, asOf: null }) },
