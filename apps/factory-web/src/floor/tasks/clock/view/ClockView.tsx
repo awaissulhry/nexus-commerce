@@ -277,35 +277,35 @@ function Mine({ model, step, send }: { model: ClockViewModel; step: Extract<Cloc
     <>
       {model.receipt ? <ReceiptLine receipt={model.receipt} ticks={model.ticks} model={model} /> : null}
       <div className="fw-floor-card-words">
-      <FloorCard
-        icon={<Clock />}
-        kind={t('card.kind')}
-        code={head}
-        title={today}
-        status={{ label: stateLabel, tone }}
-        facts={
-          view
-            ? [
-                { id: 'shift', label: t('fact.shift'), value: view.shift ? [view.shift.label, range(view.shift.startsAt, view.shift.endsAt)].filter(Boolean).join(' · ') : null },
-                { id: 'break', label: t('fact.break'), value: view.breaks.mode === 'FIXED' && view.breaks.next ? t('fixedBreak', { time: range(view.breaks.next.startsAt, view.breaks.next.endsAt) }) : null },
-                { id: 'auto', label: t('fact.auto'), value: view.autoClockOutAt ? time(view.autoClockOutAt) : null },
-              ]
-            : []
-        }
-        flags={[
-          ...(view?.forgottenSince ? [{ id: 'forgotten', label: t('flag.forgotten', { when: formatDateTime(view.forgottenSince, place) }), tone: 'warning' as const }] : []),
-          ...flags.map((flag) => ({ id: flag, label: t(`flag.${flag}`), tone: 'warning' as const })),
-        ]}
-        asOf={step.asOf}
-        formatTime={time}
-        labels={ds.floorCard}
-      >
-        {clock ? (
-          <div className="fw-clock-today">
-            <FloorElapsed label={t('elapsed')} since={clock.since} carriedMs={clock.carriedMs} paused={clock.paused} precision="minutes" size="md" labels={ds.floorElapsed} />
-          </div>
-        ) : null}
-      </FloorCard>
+        <FloorCard
+          icon={<Clock />}
+          kind={t('card.kind')}
+          code={head}
+          title={today}
+          status={{ label: stateLabel, tone }}
+          facts={
+            view
+              ? [
+                  { id: 'shift', label: t('fact.shift'), value: view.shift ? [view.shift.label, range(view.shift.startsAt, view.shift.endsAt)].filter(Boolean).join(' · ') : null },
+                  { id: 'break', label: t('fact.break'), value: view.breaks.mode === 'FIXED' && view.breaks.next ? t('fixedBreak', { time: range(view.breaks.next.startsAt, view.breaks.next.endsAt) }) : null },
+                  { id: 'auto', label: t('fact.auto'), value: view.autoClockOutAt ? time(view.autoClockOutAt) : null },
+                ]
+              : []
+          }
+          flags={[
+            ...(view?.forgottenSince ? [{ id: 'forgotten', label: t('flag.forgotten', { when: formatDateTime(view.forgottenSince, place) }), tone: 'warning' as const }] : []),
+            ...flags.map((flag) => ({ id: flag, label: t(`flag.${flag}`), tone: 'warning' as const })),
+          ]}
+          asOf={step.asOf}
+          formatTime={time}
+          labels={ds.floorCard}
+        >
+          {clock ? (
+            <div className="fw-clock-today">
+              <FloorElapsed label={t('elapsed')} since={clock.since} carriedMs={clock.carriedMs} paused={clock.paused} precision="minutes" size="md" labels={ds.floorElapsed} />
+            </div>
+          ) : null}
+        </FloorCard>
       </div>
       {!view ? (
         <TaskLine tone="info" icon={<CloudOff />}>

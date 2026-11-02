@@ -48,6 +48,8 @@ export interface TileRule {
   readonly permission: string
   /** The modes whose stations show it; every mode for Scan. */
   readonly modes: readonly FloorMode[] | 'all'
+  /** B-W2b-67: also on a device with no station's mode (a line tablet, a person's phone). */
+  readonly noStation?: boolean
   /** Its page exists in this build: only built tiles open; the others say "coming" (never a dead tile). */
   readonly built: boolean
   /** It takes scans that name the worker: held while the worker notice blocks scans. */
@@ -83,12 +85,12 @@ export const TILE_RULES: readonly TileRule[] = [
   { key: 'machine', permission: 'plant.report', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
   // SCR-170 (B-W2b-67): Clock in & out on every tablet (a line tablet and a phone too: design floor.clock Modes). Not a scan:
   // the worker notice does not hold it; the ATTENDANCE gate does, on its page. On a full home the operator's menu still opens it.
-  { key: 'clock', permission: 'floor.work', modes: 'all', built: true, takesScans: false },
+  { key: 'clock', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], noStation: true, built: true, takesScans: false },
   // SCR-172 (B-W2b-70): Call for help at every station mode (design floor.help); floor.work sends, and a call always goes out
   // (never held by the worker notice). The frame's Help button opens it from any screen, so a full home may leave the tile out.
   { key: 'help', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
   // SCR-168 (B-W2b-70): the team leader's Line view, wherever they sign in (design floor.supervisor; floor.lead).
-  { key: 'lineview', permission: 'floor.lead', modes: 'all', built: true, takesScans: false },
+  { key: 'lineview', permission: 'floor.lead', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], noStation: true, built: true, takesScans: false },
   { key: 'scan', permission: 'floor.work', modes: 'all', built: true, takesScans: true },
 ]
 
@@ -109,7 +111,7 @@ export interface HomeTile {
  */
 export function homeTiles(mode: FloorMode | null, permissions: readonly string[], noticeBlocksScans: boolean): HomeTile[] {
   const held = new Set(permissions)
-  const fits = TILE_RULES.filter((rule) => (rule.modes === 'all' || (mode !== null && rule.modes.includes(mode))) && held.has(rule.permission) && held.has('floor.work'))
+  const fits = TILE_RULES.filter((rule) => (rule.modes === 'all' || (mode === null ? rule.noStation === true : rule.modes.includes(mode))) && held.has(rule.permission) && held.has('floor.work'))
   // B-W2b-70: Scan anything stays last on a full home; the Line view too (the lead's first job, no other way to it).
   const kept = fits.filter((rule) => rule.key === 'lineview' || rule.key === 'scan')
   const first = fits.filter((rule) => !kept.includes(rule)).slice(0, MAX_TILES - kept.length)

@@ -378,6 +378,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       pack: 'shipping.pack',
       final: 'quality.inspections.view',
       machine: 'plant.report', // GET /plant/floor/machines (B-W2a-73)
+      clock: 'floor.work', // GET /people/clock/floor (B-W2b-67)
       help: 'floor.work', // GET /production/calls/station (B-W2b-70)
       lineview: 'floor.lead', // the team leader's Line view (B-W2b-70)
       scan: 'floor.work',
@@ -390,7 +391,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
     expect(Object.fromEntries(FLOOR_MODES.map((mode) => [mode, keys(mode)]))).toEqual({
       // B-W2b-70: a full home keeps the Line view and Scan anything; the frame's Help button opens Call for help from any screen.
       cutting: ['mywork', 'operation', 'cut', 'bundles', 'lineview', 'scan'],
-      sewing: ['mywork', 'operation', 'machine', 'help', 'lineview', 'scan'],
+      sewing: ['mywork', 'operation', 'machine', 'clock', 'lineview', 'scan'],
       packing: ['mywork', 'operation', 'labels', 'pack', 'lineview', 'scan'],
       inspection: ['mywork', 'operation', 'final', 'machine', 'lineview', 'scan'],
       warehouse: ['receive', 'pick', 'returnsin', 'kits', 'lineview', 'scan'],

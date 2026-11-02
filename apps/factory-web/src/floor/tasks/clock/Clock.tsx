@@ -81,14 +81,15 @@ export function FloorClock() {
 
   const refresh = useCallback(async () => {
     if (!workerId) {
-      if (!online) return setScreen('ready')
+      // A clock known to be closed stays closed offline: nothing is kept for a site that does not clock.
+      if (!online) return setScreen((now) => (now === 'closed' ? now : 'ready'))
       const answer = await fetchTabletClock(api)
       return setScreen(answer.ok ? (answer.value.open ? 'ready' : 'closed') : answer.problem.kind === 'offline' ? 'ready' : 'unavailable')
     }
     const memory = () => {
       const known = KEPT.get(workerId)
       setRead(known ? { view: known.value, readAt: Date.now(), asOf: known.asOf } : null)
-      setScreen('ready')
+      setScreen((now) => (now === 'closed' ? now : 'ready'))
     }
     if (!online) return memory()
     const answer = await fetchClock(api)
