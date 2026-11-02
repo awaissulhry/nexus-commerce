@@ -262,6 +262,7 @@
       "MAINTENANCE_JOB": "Maintenance job",
       "ACCOUNTING_EXPORT": "Accounting export",
       "HOLD": "Quality hold",
+      "INCOMING_INSPECTION": "Incoming inspection",
       "PAYROLL_EXPORT": "Payroll export"
     },
     "record": {

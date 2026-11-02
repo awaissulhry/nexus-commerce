@@ -25,7 +25,7 @@ const FILES_READ = 'files.read' satisfies Permission
  * partner role's wall. The shipping module's link of a Shipment shows its DDT, DoC and leaflet copies (B-W1-49). A link of a
  * PayrollExport (B-W2b-54; MES-274) brings the labour consultant the month's file: its files are shared with nobody, the
  * generic file routes never find them, and only that module's link route hands them out (the design's SECURE_FILE purpose
- * is a schema need). Its party id is the export's own: the consultant is no Party (PartyRole has no such value).
+ * is a schema need). Its party id is the export's own: the link names no party, and the labour consultant's Party (PartyRole CONSULTANT) belongs to People settings.
  *
  * The price grain goes only to purposes that show the party its OWN document (its quote, its invoice, its deposit
  * request: the party scope of the session makes it its own). A PO_CONFIRM link holds no grain at all: the supplier

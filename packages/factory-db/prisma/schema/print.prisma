@@ -44,12 +44,16 @@ model Printer {
   // production.prisma: the garment labels sent to it (B-W1-44) and the bundle tickets printed again on it.
   garmentLabelPrints       GarmentLabelPrint[]
   bundleReprints           BundleReprint[]
+  // people.prisma: the people settings that print worker statements on it.
+  statementSettings        PeopleSettings[] @relation("PeopleSettingsStatementPrinter")
   // _core.prisma: the stations whose label printer it is (MES-184).
   stations                 Station[]
 
   @@unique([tenantId, siteId, code])
   // The target of a job's reference: a job is on its printer's company and site.
   @@unique([tenantId, companyId, siteId, id])
+  // The target of the people settings' reference: a printer of the settings' company.
+  @@unique([tenantId, companyId, id])
 }
 
 enum PrinterKind {

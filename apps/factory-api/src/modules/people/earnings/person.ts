@@ -152,7 +152,8 @@ async function paidMinutes(db: Client, facts: PayFacts, person: PersonRow, perio
 }
 
 const line = (entry: EntryRecord, work: { code: string; name: string; standardMinutes: string } | null, code: string | null, corrects: ReadonlyMap<string, string>): PayLine => ({
-  kind: entry.kind,
+  // BONUS is in the schema (B-W2b-75), but nothing books one before B-W2b-84: it widens PayLine and drops this `as`.
+  kind: entry.kind as PayLine['kind'],
   operationCode: work?.code ?? null,
   operationName: work?.name ?? null,
   standardMinutes: work?.standardMinutes ?? null,

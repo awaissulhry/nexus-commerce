@@ -23,6 +23,8 @@ describe('model ownership', () => {
       'Alert',
       'AlertEvent',
       'AlertRule',
+      'AqlProfile',
+      'AqlProfileAssignment',
       'AttendanceAnomaly',
       'AttendanceCorrection',
       'AttendanceDay',
@@ -86,11 +88,23 @@ describe('model ownership', () => {
       'IdempotencyReceipt',
       'ImportJob',
       'ImportRow',
+      'InProcessCheck',
       'InboundEmail',
       'InboundWebhook',
       'IncentiveScheme',
+      'IncomingComponentResult',
+      'IncomingHideResult',
+      'IncomingInspection',
+      'IncomingRollResult',
       'Inspection',
+      'InspectionAmendment',
+      'InspectionCheckResult',
       'InspectionDefect',
+      'InspectionMeasurement',
+      'InspectionPlan',
+      'InspectionPlanCheck',
+      'InspectionPlanVersion',
+      'InspectionTrigger',
       'IntegrationAccount',
       'IntegrationCall',
       'InterestReferenceRate',
@@ -420,6 +434,10 @@ describe('model ownership', () => {
           '  costMinor    Int',
           '  /// @grain margin',
           '  marginMinor  Int',
+          '  /// @grain wages',
+          '  wageMinor    Int',
+          '  /// @grain pay',
+          '  payMinor     Int',
           '  /// For the office only.',
           '  /// @internal',
           '  internalNote String?',
@@ -443,10 +461,12 @@ describe('model ownership', () => {
       },
     })
 
-    it('finds the cost, margin, wages and internal-note columns from the schema markers; prices stay readable', () => {
+    it('finds the cost, margin, wages, pay and internal-note columns from the schema markers; prices stay readable', () => {
       expect(partnerWalledColumns(quotes[0]!)).toEqual([
         { column: 'costMinor', why: 'a cost (@grain cost)' },
         { column: 'marginMinor', why: 'a margin (@grain margin)' },
+        { column: 'wageMinor', why: 'wages (@grain wages)' },
+        { column: 'payMinor', why: 'pay (@grain pay)' },
         { column: 'internalNote', why: 'an internal note (@internal)' },
       ])
     })
@@ -455,9 +475,11 @@ describe('model ownership', () => {
       expect(problems([...loadOwnership(), classify([])], [...loadSchema(), ...quotes])).toEqual([
         'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column costMinor is a cost (@grain cost), behind the partner wall; add it to hiddenColumns',
         'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column marginMinor is a margin (@grain margin), behind the partner wall; add it to hiddenColumns',
+        'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column wageMinor is wages (@grain wages), behind the partner wall; add it to hiddenColumns',
+        'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column payMinor is pay (@grain pay), behind the partner wall; add it to hiddenColumns',
         'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column internalNote is an internal note (@internal), behind the partner wall; add it to hiddenColumns',
       ])
-      expect(problems([...loadOwnership(), classify(['costMinor', 'marginMinor', 'internalNote'])], [...loadSchema(), ...quotes])).toEqual([])
+      expect(problems([...loadOwnership(), classify(['costMinor', 'marginMinor', 'wageMinor', 'payMinor', 'internalNote'])], [...loadSchema(), ...quotes])).toEqual([])
     })
 
     it('holds on the real schema: the link note is hidden from the partner role', () => {
@@ -485,6 +507,8 @@ describe('model ownership', () => {
           // W2b floor work (wave 7/7): purpose PRODUCTION (what the floor reads), with PAY and PERFORMANCE where pay and
           // one person's figures (behind the legal gate) read them.
           ...['CrewMember', 'DispatchAssignment', 'HelpCall', 'LabourDispute', 'LabourEdit', 'OffStandardEntry', 'OperationChecklistResult', 'OperationScanMember'],
+          // W2b inspection records (wave 10/16): the operator of an in-process check, behind the PERFORMANCE gate.
+          'InProcessCheck',
         ].sort(),
       )
       const employee = map.find((entry) => entry.model === 'Employee')!
@@ -498,7 +522,7 @@ describe('model ownership', () => {
       // work records of wave 7/7 (off-standard time, labour edits, disputes), read through the legal gate.
       const used = new Set(map.flatMap((entry) => Object.values(entry.columns).flat()))
       for (const purpose of used) expect(Object.keys(PERSONAL_PURPOSES)).toContain(purpose)
-      expect(map.filter((entry) => Object.values(entry.columns).flat().includes('PERFORMANCE')).map((entry) => entry.model).sort()).toEqual(['LabourDispute', 'LabourEdit', 'OffStandardEntry'])
+      expect(map.filter((entry) => Object.values(entry.columns).flat().includes('PERFORMANCE')).map((entry) => entry.model).sort()).toEqual(['InProcessCheck', 'LabourDispute', 'LabourEdit', 'OffStandardEntry'])
     })
 
     it('fails on an unknown purpose, a column that does not exist, a subject that is not a uuid column, an empty list', () => {

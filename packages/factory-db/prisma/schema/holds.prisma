@@ -90,6 +90,8 @@ model DefectCode {
   picture           StoredFile?        @relation("DefectCodePicture", fields: [tenantId, pictureFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // quality.prisma, ncr.prisma: the inspection defects and the nonconformances that name it.
   inspectionDefects InspectionDefect[]
+  // W2b inspection-plans.prisma (wave 10/16): the in-process checks that found it.
+  inProcessChecks   InProcessCheck[]
   nonconformances   Nonconformance[]
 
   @@unique([tenantId, code])

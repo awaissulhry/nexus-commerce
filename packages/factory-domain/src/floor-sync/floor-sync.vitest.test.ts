@@ -28,7 +28,7 @@ describe('what queues offline and what waits for the network', () => {
       if (behaviour && !behaviour.queues) expect(behaviour.held.message).toMatch(/network/)
     }
     // Every floor document kind (gapless series) belongs to an action that waits for the network.
-    expect([...FLOOR_DOCUMENT_KINDS].sort()).toEqual(['GOODS_RECEIPT', 'HOLD', 'INSPECTION', 'LOT', 'NCR', 'RELEASE'])
+    expect([...FLOOR_DOCUMENT_KINDS].sort()).toEqual(['GOODS_RECEIPT', 'HOLD', 'INCOMING_INSPECTION', 'INSPECTION', 'LOT', 'NCR', 'RELEASE'])
     expect(offlineBehaviourOf('sales.quote')).toBeNull()
   })
 })

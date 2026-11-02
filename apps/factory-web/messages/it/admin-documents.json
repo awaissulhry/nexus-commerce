@@ -262,6 +262,7 @@
       "MAINTENANCE_JOB": "Intervento di manutenzione",
       "ACCOUNTING_EXPORT": "Esportazione contabile",
       "HOLD": "Blocco qualità",
+      "INCOMING_INSPECTION": "Controllo in accettazione",
       "PAYROLL_EXPORT": "Esportazione paghe"
     },
     "record": {

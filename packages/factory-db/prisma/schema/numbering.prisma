@@ -9,7 +9,7 @@
 // NumberAllocation is append-only (`@append-only`, scripts/factory/check-append-only.mjs).
 //
 // Floor tablets number the floor's document kinds (@nexus/factory-domain/numbering/kinds FLOOR_DOCUMENT_KINDS: goods
-// receipts, lots, inspections, releases; W2b: holds and NCRs raised at the bench) from their own commands, online, through the same allocateNumber: the floor's
+// receipts, lots, inspections, releases; W2b: holds and NCRs raised at the bench, incoming inspections opened there) from their own commands, online, through the same allocateNumber: the floor's
 // policies reach only the series and numbers of those kinds (ownership/numbering.json onlyValues), and the hand-written
 // …_numbering_floor_documents_guards triggers hold that a tablet never touches a fiscal series, numbers only for its own
 // site's company, moves a counter one number at a time past a number it recorded, and adds only a new year of a series.
@@ -115,6 +115,9 @@ enum NumberKind {
   /// W2b wave 2: a quality hold's number (HLD-…; holds.prisma QualityHold.number). A floor document kind: the bench
   /// numbers the hold it places.
   HOLD
+  /// W2b wave 10/16: an incoming inspection's number (IIN-…; inspection-plans.prisma IncomingInspection.number). A floor
+  /// document kind: the bench numbers the inspection it opens.
+  INCOMING_INSPECTION
   /// W2b wave 6: a payroll export's number (PAY-…; pay.prisma PayrollExport.number).
   PAYROLL_EXPORT
 }

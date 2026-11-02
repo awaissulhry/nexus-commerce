@@ -208,6 +208,8 @@ model WorkOrder {
   scanRefusals           FloorScanRefusal[]
   // quality.prisma: its final inspections.
   inspections   Inspection[]
+  // W2b inspection-plans.prisma (wave 10/16): its in-process checks.
+  inProcessChecks InProcessCheck[]
   // returns.prisma: the repairs it is the repair work order of.
   repairOrders  RepairOrder[]
   // W2a subcontract.prisma: the work sent out of it to workshops.
@@ -362,6 +364,8 @@ model WorkOrderOperation {
   dispatchAssignments DispatchAssignment[]
   // W2a subcontract.prisma: the subcontract orders that send it out.
   subcontractOperations SubcontractOperation[]
+  // W2b inspection-plans.prisma (wave 10/16): the in-process checks at it.
+  inProcessChecks InProcessCheck[]
   // W2a rework.prisma, schedule.prisma: the rework found at it and done at it, its slots on the planning board.
   reworkFound   ReworkOrder[]  @relation("ReworkFoundAt")
   reworkDone    ReworkOrder[]  @relation("ReworkDoneAt")
@@ -555,6 +559,8 @@ model Bundle {
   // W2b subcontract.prisma (B-W2b-01): its trips to workshops, and what came back of it.
   subcontractBundles      SubcontractBundle[]
   subcontractReceiptLines SubcontractReceiptLine[]
+  // W2b inspection-plans.prisma (wave 10/16): the in-process checks of it.
+  inProcessChecks         InProcessCheck[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, clientEventId])

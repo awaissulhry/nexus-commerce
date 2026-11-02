@@ -19,6 +19,7 @@ import { seed as seedFollowupsQualityMoney } from '../seed/followups-quality-mon
 import { seed as seedHolds } from '../seed/holds'
 import { seed as seedImports } from '../seed/imports'
 import { seed as seedInsights } from '../seed/insights'
+import { seed as seedInspectionPlans } from '../seed/inspection-plans'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedInventory } from '../seed/inventory'
 import { seed as seedLabour } from '../seed/labour'
@@ -244,6 +245,9 @@ beforeAll(async () => {
     await seedFloorWork({ db: factory, namespace: 'iso-a' })
     await seedFloorWork({ db: factory, namespace: 'iso-b' })
   }
+  // The inspection plans and records schema of W2b (wave 10/16).
+  await seedInspectionPlans({ db: factory, namespace: 'iso-a' })
+  await seedInspectionPlans({ db: factory, namespace: 'iso-b' })
   // W2b-2 (B-W2b-74): a floor session inserts only an unplanned operation, so the first operation of tenant A's first site is
   // one, on its work order in progress (the seeds leave a work order's operations to their routing, every test reads them).
   await db.admin.query(
@@ -273,6 +277,8 @@ it('covers every classified table and every runtime role', () => {
     'Alert',
     'AlertEvent',
     'AlertRule',
+    'AqlProfile',
+    'AqlProfileAssignment',
     'AttendanceAnomaly',
     'AttendanceCorrection',
     'AttendanceDay',
@@ -336,11 +342,23 @@ it('covers every classified table and every runtime role', () => {
     'IdempotencyReceipt',
     'ImportJob',
     'ImportRow',
+    'InProcessCheck',
     'InboundEmail',
     'InboundWebhook',
     'IncentiveScheme',
+    'IncomingComponentResult',
+    'IncomingHideResult',
+    'IncomingInspection',
+    'IncomingRollResult',
     'Inspection',
+    'InspectionAmendment',
+    'InspectionCheckResult',
     'InspectionDefect',
+    'InspectionMeasurement',
+    'InspectionPlan',
+    'InspectionPlanCheck',
+    'InspectionPlanVersion',
+    'InspectionTrigger',
     'IntegrationAccount',
     'IntegrationCall',
     'InterestReferenceRate',

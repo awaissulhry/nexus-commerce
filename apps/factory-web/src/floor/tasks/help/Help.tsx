@@ -1,11 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { useLiveChanges } from '../../../record-panels/live'
 import { newIdempotencyKey } from '../../../lib/api/client'
-import { useFloor } from '../../FloorApp'
+import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { TASK_ROUTES } from '../routes'
 import { AsOfMemory } from '../shared/as-of'
@@ -30,7 +29,7 @@ const LIVE = new Set(['help_call.raised', 'help_call.answered', 'help_call.chang
 
 export function FloorHelp() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('tile.help', { showHome: true })
   const { api, me, online, sessionEnded, queue, queueSnapshot } = store

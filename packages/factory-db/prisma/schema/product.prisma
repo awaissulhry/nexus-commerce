@@ -432,6 +432,8 @@ model Style {
   ppeRegisterEntries  PpeRegisterEntry[]
   // W2a ncr.prisma: the nonconformances about it.
   nonconformances     Nonconformance[]
+  // W2b inspection-plans.prisma (wave 10/16): the AQL profiles assigned to it.
+  aqlProfileAssignments AqlProfileAssignment[]
   // pricing.prisma, returns.prisma, complaints.prisma: its prices in price lists, its repairs and complaints.
   /// @not-money the relation to its price list entries
   priceListEntries    PriceListEntry[]

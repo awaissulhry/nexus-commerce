@@ -1,13 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import type { FeedbackKind } from '@nexus/ui/floor'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { useT } from '../../../lib/i18n/provider'
 import { zxingCamera } from '../../camera'
-import { useFloor } from '../../FloorApp'
+import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { readScan } from '../../scan/scan-model'
 import { AsOfMemory, codeKey } from '../shared/as-of'
@@ -66,6 +65,7 @@ import {
   type CorrectionTarget,
   type LastAction,
 } from './model'
+import { forgetLeft, keepLeft, leftCounts, withLeft } from './left'
 import { moreFiles, NEW_NOTE, notePayload, noteHeld, type NoteDraft } from './notes'
 import { addToStack, afterFinish, expectedOf, joinedBundles, stackItems, stackTotals, stepRow, takeOffStack, type StackRow } from './stack'
 import { afterPause, afterResume, afterStart, piecesLeft, skewOf, type OpenItem } from './timing'
@@ -107,7 +107,7 @@ interface OverrideTarget {
 
 export function FloorOperation() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const confirm = useConfirmFeedback()
   // Colour, vibration and sound together (MES-108): the screen's own area flashes.
   const feedback = useCallback((kind: FeedbackKind) => confirm(kind, document.getElementById('fw-op-flash')), [confirm])
@@ -126,7 +126,9 @@ export function FloorOperation() {
   const [receipt, setReceipt] = useState(false)
   const [leave, setLeave] = useState<string | null>(null)
   const [askedId, setAskedId] = useState<string | null>(null)
-  const [resume, setResume] = useState<readonly OpenItem[]>([])
+  const person = me?.worker.id ?? null
+  // Online the read below answers; with the network gone, what this person left here.
+  const [resume, setResume] = useState<readonly OpenItem[]>(() => (person ? withLeft(person, []) : []))
   const [running, setRunning] = useState<{ block: OffStandardBlock; skewMs: number } | null>(null)
   const [tiles, setTiles] = useState<readonly OffStandardTile[] | null>(null)
   const [override, setOverride] = useState<(OverrideModel & { readonly work: OverrideTarget }) | null>(null)
@@ -149,6 +151,11 @@ export function FloorOperation() {
   stackNow.current = step.kind === 'stack' ? step.rows : []
   // One action at a time: a gloved double tap is one tap.
   const acting = useRef(false)
+
+  // B-W2b-F6: a move to another page keeps what was typed and the open work (left.ts).
+  useEffect(() => {
+    if (person && step.kind === 'counts') keepLeft(person, step)
+  }, [person, step])
 
   // The undo window closes by itself after two minutes: draw the strip again then.
   const closesIn = undoClosesIn(last, new Date())
@@ -184,7 +191,9 @@ export function FloorOperation() {
       if (run !== lookRun.current) return
       // What reached the operation is the check's (a skipped operation has no `expected` on the card).
       const at = { ...operation, expected: work.check?.expected ?? operation.expected }
-      const from: CountsStep = { kind: 'counts', card, operation: at, counts: NO_COUNTS, open: null, asOf, work }
+      // B-W2b-F6: what this person typed before moving to another page comes back with the bundle.
+      const counts = (person && leftCounts(person, card.bundle.code, operation.id)) || NO_COUNTS
+      const from: CountsStep = { kind: 'counts', card, operation: at, counts, open: null, asOf, work }
       const held = heldFindings(work.check).map(lineOf)
       if (held.length > 0) {
         feedback('error')
@@ -193,7 +202,7 @@ export function FloorOperation() {
       feedback(toldFindings(work.check).length > 0 ? 'warning' : 'success')
       setStep(from)
     },
-    [feedback, readWork],
+    [feedback, person, readWork],
   )
 
   const openCard = useCallback(
@@ -435,6 +444,7 @@ export function FloorOperation() {
     prior.current.set(ids.clientEventId, card)
     CARDS.keep(codeKey(card.bundle.code), afterReport(card, operation.id, counts, expected, new Date(at)))
     WORK.forget(workKey(card.bundle.code, operation.id))
+    if (person) forgetLeft(person, card.bundle.code, operation.id)
     setLast({
       clientEventId: ids.clientEventId,
       bundleCode: card.bundle.code,
@@ -580,6 +590,7 @@ export function FloorOperation() {
     const sent = await timed(from, route, extra)
     if (!sent) return
     WORK.forget(workKey(from.card.bundle.code, from.operation.id))
+    if (person) forgetLeft(person, from.card.bundle.code, from.operation.id)
     setResume((items) => items.filter((item) => !(item.bundleId === from.card.bundle.id && item.operation.id === from.operation.id)))
     setDone({ ...line, queued: sent.queuedId })
     setReceipt(false)
@@ -881,7 +892,10 @@ export function FloorOperation() {
       case 'leave': {
         const code = leave
         setLeave(null)
-        if (action.leave && code) void look(code)
+        if (action.leave && code) {
+          if (person && step.kind === 'counts') forgetLeft(person, step.card.bundle.code, step.operation.id)
+          void look(code)
+        }
         return
       }
       // ---- B-W2b-69 ----

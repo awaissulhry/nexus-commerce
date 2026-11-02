@@ -1,12 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { useFloorListUpdates } from '@nexus/ui/floor/FloorListUpdates/index'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { useLiveChanges } from '../../../record-panels/live'
-import { useFloor } from '../../FloorApp'
+import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { AsOfMemory } from '../shared/as-of'
 import { queuedView } from '../shared/queued'
@@ -122,7 +121,7 @@ const value = <T,>(answer: TaskOutcome<T>): T | null => (answer.ok ? answer.valu
 
 export function FloorLineView() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('tile.lineview', { showHome: true })
   const { api, me, online, sessionEnded, queue, queueSnapshot } = store
