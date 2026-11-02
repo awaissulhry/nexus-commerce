@@ -1,0 +1,545 @@
+{
+  "common": {
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "clearFilters": "Clear filters",
+    "more": "Show more",
+    "open": "Open",
+    "back": "Back",
+    "from": "From",
+    "to": "To",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Not updating"
+  },
+  "page": {
+    "noAccess": {
+      "title": "Your role cannot see Labour & corrections",
+      "body": "It takes “production.labour.view”."
+    },
+    "find": "Open a person's day…",
+    "payroll": "Export closed days for payroll",
+    "lineLabel": "Line",
+    "lineAll": "All lines",
+    "lineOption": "{code} · {name}",
+    "approveNormal": "Approve normal blocks",
+    "more": "More actions"
+  },
+  "tiles": {
+    "label": "To decide, by kind"
+  },
+  "tile": {
+    "CORRECTION": "Corrections to decide",
+    "DISPUTE": "Disputes open",
+    "OFF_STANDARD": "Off-standard blocks to approve",
+    "LINE_DAY": "Line days to close",
+    "held_one": "{count} more held",
+    "held_other": "{count} more held"
+  },
+  "bulk": {
+    "approve_one": "Approve {count} normal block",
+    "approve_other": "Approve {count} normal blocks",
+    "close_one": "Close {count} day",
+    "close_other": "Close {count} days"
+  },
+  "kind": {
+    "CORRECTION": "Correction",
+    "DISPUTE": "Dispute",
+    "OFF_STANDARD": "Off-standard block",
+    "LINE_DAY": "Line day"
+  },
+  "dayState": {
+    "OPEN": "Open",
+    "READY": "Ready",
+    "CLOSED": "Closed"
+  },
+  "legal": {
+    "label": "Legal basis",
+    "BASIS": "Pay records under L. 300/1970 art. 4 c.1: {basis} {reference}, recorded {when} by {name}. One person at a time; views are logged.",
+    "BASIS_noName": "Pay records under L. 300/1970 art. 4 c.1: {basis} {reference}, recorded {when}. One person at a time; views are logged.",
+    "ON": "Pay records under L. 300/1970 art. 4 c.1: this site's legal basis is in force. One person at a time; views are logged.",
+    "GATE_OFF": "Per-person sheets are off on this site: its legal basis for one person's work figures is not in force. Records say where and what, never who.",
+    "STATION": "Per-person sheets are off on this site: it records stations, not people.",
+    "UNKNOWN": "This site's legal basis could not be read: no person's sheet opens until it can.",
+    "atSite": "{site}: {text}",
+    "who": "The worker and HR see one person's day",
+    "whoLeads": "The worker, HR and the worker's team lead see one person's day",
+    "whoGATE_OFF": "Nobody opens one person's sheet here",
+    "whoSTATION": "Only line days and station corrections remain",
+    "whoUNKNOWN": "Try the page again",
+    "law": "Statuto dei Lavoratori art. 4",
+    "lawPlain": "Equipment that could also watch workers needs a union agreement or an authorisation from the labour inspectorate, and workers must be told first. Pay records of one person are shown only on that basis, one person at a time, and every opening is written down.",
+    "rules": "Floor rules & codes"
+  },
+  "basis": {
+    "UNION_AGREEMENT": "union agreement",
+    "INL_AUTHORISATION": "labour inspectorate authorisation",
+    "NOT_REQUIRED": "written legal opinion",
+    "other": "recorded basis"
+  },
+  "who": {
+    "named": "This record is {name}'s: named here because the site's legal basis is in force.",
+    "hidden": "A person is on this record. Their name shows only where the site's legal basis is in force."
+  },
+  "col": {
+    "kind": "Kind",
+    "site": "Site",
+    "line": "Line",
+    "date": "Date",
+    "work": "Work order / bundle / operation",
+    "what": "What changes",
+    "age": "Age",
+    "actions": "Actions",
+    "coded": "Off-standard coded",
+    "anomalies": "Anomalies",
+    "records": "Reports",
+    "status": "Status"
+  },
+  "what": {
+    "block": "{code} · {minutes} min",
+    "day": "Everything coded and cleared: ready to close"
+  },
+  "verb": {
+    "CORRECTION": "Approve",
+    "DISPUTE": "Uphold",
+    "OFF_STANDARD": "Approve",
+    "LINE_DAY": "Close day",
+    "reject": "Reject",
+    "named": "{verb}: {kind}, line {line}"
+  },
+  "dispute": {
+    "reason": {
+      "WRONG_QUANTITY": "Wrong quantity",
+      "WRONG_OPERATION": "Wrong operation",
+      "WRONG_TIME": "Wrong time",
+      "WRONG_CODE": "Wrong code",
+      "NOT_ME": "Not me",
+      "OTHER": "Other"
+    },
+    "noReason": "No reason given",
+    "aboutBlock": "About an off-standard block",
+    "aboutReport": "About a report",
+    "on": {
+      "FLOOR": "From the tablet",
+      "OFFICE": "From the office"
+    }
+  },
+  "unusual": {
+    "LONG": "Longer than an hour",
+    "TYPED_AFTERWARDS": "Typed afterwards",
+    "BY_SYSTEM": "Closed by the system",
+    "CHANGED": "Changed after it ended"
+  },
+  "queue": {
+    "label": "To decide",
+    "title": "To decide",
+    "failed": "The queue could not be read",
+    "count_one": "{count} item",
+    "count_other": "{count} items",
+    "search": "Search line, work order, bundle",
+    "noMatch": {
+      "title": "Nothing here matches",
+      "body": "Clear the filters to see the whole queue."
+    },
+    "empty": {
+      "title": "Nothing to decide ✓",
+      "body": "Corrections, disputes, off-standard blocks and line days to close land here."
+    }
+  },
+  "keys": {
+    "title": "Keys",
+    "approve": "Approve the item",
+    "reject": "Reject the item, with a reason",
+    "next": "Next / previous item"
+  },
+  "held": {
+    "busy": "One moment: the last decision is being saved.",
+    "loading": "Still reading.",
+    "noApprove": "Approving a block takes “production.offstandard.approve”.",
+    "noCorrect": "Deciding a correction takes “production.scan.correct”.",
+    "noAnswer": "Answering a dispute takes “production.labour.answer”.",
+    "noClose": "Closing a day takes “production.labour.close”.",
+    "noReopen": "Reopening a closed day takes “production.labour.reopen”.",
+    "noNormal": "No normal block is waiting.",
+    "noNormalPicked": "No normal block is selected.",
+    "noDayPicked": "No line day ready to close is selected.",
+    "tooMany": "This is the most one list shows: narrow it by line or kind.",
+    "decided": "This was decided already.",
+    "closedAlready": "This day is closed already.",
+    "dayHeld": "Something still holds this day: see what, here.",
+    "dayHeldCount_one": "{count} thing still holds this day.",
+    "dayHeldCount_other": "{count} things still hold this day.",
+    "ownDispute": "This dispute is about your own record: another person answers it.",
+    "ownBlock": "This is your own time: another person decides it.",
+    "dayNoReject": "A line day is closed or left open: there is nothing to reject.",
+    "notClosed": "Only a closed day is reopened.",
+    "reason": "Write the reason first.",
+    "reasonShort": "Write a little more: at least three letters.",
+    "reasonLong": "The reason is too long.",
+    "noteLong": "The note is too long.",
+    "sheetsOff": "Per-person sheets are off on this site.",
+    "noEmployee": "This person has no employee record: no sheet to open.",
+    "noFigures": "One person's day is opened only by the worker, by HR and, where the site allows it, by the worker's team lead.",
+    "noPeople": "The name search takes “people.view”.",
+    "sheetReason": "Say why you open this person's day.",
+    "pickPerson": "Pick a person first.",
+    "noPayroll": "People › Payroll export is not built yet."
+  },
+  "select": {
+    "oneByOne": "Decided on its own: open it.",
+    "unusual": "Decided one by one: {why}."
+  },
+  "days": {
+    "title": "Line days",
+    "hint": "Close each line's day once off-standard time is coded and anomalies are cleared; closed days feed pay.",
+    "stateLabel": "Status",
+    "stateAll": "Every status",
+    "failed": "The line days could not be read",
+    "count_one": "{count} day",
+    "count_other": "{count} days",
+    "empty": {
+      "title": "No line days in these dates",
+      "body": "A day shows once something happened on the line."
+    },
+    "coded": "Yes",
+    "left_one": "{count} block left",
+    "left_other": "{count} blocks left",
+    "closedBy": "Closed by {name}",
+    "close": "Close day",
+    "reopen": "Reopen",
+    "closeNamed": "Close the day of line {line}, {day}",
+    "reopenNamed": "Reopen the day of line {line}, {day}"
+  },
+  "blocker": {
+    "OFF_STANDARD_RUNNING_one": "{count} off-standard block still running",
+    "OFF_STANDARD_RUNNING_other": "{count} off-standard blocks still running",
+    "OFF_STANDARD_WAITING_one": "{count} off-standard block to approve",
+    "OFF_STANDARD_WAITING_other": "{count} off-standard blocks to approve",
+    "CORRECTION_WAITING_one": "{count} correction to decide",
+    "CORRECTION_WAITING_other": "{count} corrections to decide",
+    "DISPUTE_OPEN_one": "{count} dispute open",
+    "DISPUTE_OPEN_other": "{count} disputes open",
+    "REFUSED_SCAN_one": "{count} refused scan not dealt with",
+    "REFUSED_SCAN_other": "{count} refused scans not dealt with",
+    "ATTENDANCE_ANOMALY_one": "{count} attendance anomaly",
+    "ATTENDANCE_ANOMALY_other": "{count} attendance anomalies"
+  },
+  "edits": {
+    "title": "Changes to labour records",
+    "hint": "Every edit keeps before and after, who, when and why.",
+    "step": "{kind} · {where} · {day}",
+    "noLine": "No line",
+    "why": "Why: {reason}",
+    "by": "By {name}",
+    "bySystem": "By the system",
+    "named": "a person is on this record",
+    "empty": {
+      "title": "No changes in these dates",
+      "body": "Every change to a labour record lands here."
+    },
+    "kindLabel": "Kind of change",
+    "kindAll": "Every kind"
+  },
+  "editKind": {
+    "LABOUR_EDIT": "Labour edit",
+    "SCAN_CORRECTION": "Report corrected",
+    "ATTENDANCE_CORRECTION": "Attendance corrected",
+    "CLOCK_EDIT": "Clock event changed"
+  },
+  "change": {
+    "none": "Nothing",
+    "more": "+{count}"
+  },
+  "field": {
+    "good": "Good",
+    "scrap": "Scrap",
+    "rework": "Rework",
+    "codeId": "Code",
+    "startedAt": "Start",
+    "endedAt": "End",
+    "workDate": "Date",
+    "status": "Status",
+    "approvedAt": "Approved",
+    "rejectedAt": "Rejected",
+    "rejectReason": "Rejection reason",
+    "clock": "Clock event",
+    "minutes": "Minutes",
+    "other": "Value"
+  },
+  "blockStatus": {
+    "OPEN": "Running",
+    "PENDING": "To approve",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected"
+  },
+  "clock": {
+    "IN": "In",
+    "OUT": "Out",
+    "BREAK_OUT": "Break start",
+    "BREAK_IN": "Break end",
+    "VOID": "Voided",
+    "other": "Clock event"
+  },
+  "age": {
+    "min_one": "{count} min",
+    "min_other": "{count} min",
+    "h_one": "{count} h",
+    "h_other": "{count} h",
+    "d_one": "{count} d",
+    "d_other": "{count} d"
+  },
+  "detail": {
+    "title": {
+      "CORRECTION": "Correction request",
+      "DISPUTE": "Dispute of an entry",
+      "OFF_STANDARD": "Off-standard block",
+      "LINE_DAY": "Line day"
+    },
+    "loading": "Reading…",
+    "dayTitle": "Line {line}, {day}",
+    "noun": "item",
+    "notFound": "This item is gone, or belongs to a site you cannot reach.",
+    "openDay": "Open this person's day",
+    "recordOf": "{bundle} · {operation}",
+    "enteredByLead": "Entered by the team leader",
+    "original": "The original entry (unchanged)",
+    "proposed": "The proposed correcting entry",
+    "when": "When",
+    "where": "Where",
+    "earned": "Standard minutes earned",
+    "earnedHint": "Good pieces × the operation's standard minutes.",
+    "noChange": "The counts asked are the same as those recorded.",
+    "reason": "Reason",
+    "status": "Status",
+    "askedAt": "Asked at",
+    "appendOnly": "Approve adds a correction row; nothing is overwritten.",
+    "steps": "What happened to it since",
+    "step": "Kind",
+    "around": "The scans around it",
+    "aroundHeld": "The bundle's scans take “workorders.view”.",
+    "operation": "Operation",
+    "station": "Station",
+    "voided": "{kind} (voided)",
+    "disputeAbout": "What the person says",
+    "raised": "Raised",
+    "theirWords": "Their words",
+    "theRecord": "The record it is about",
+    "code": "Code",
+    "minutes": "Minutes",
+    "from": "From",
+    "to": "To",
+    "entry": "Entry",
+    "recordGone": "The record could not be read.",
+    "answer": "The answer",
+    "answeredBy": "{name}, {when}",
+    "corrected": "What the answer changed",
+    "rights": "A worker may see and dispute their own records at any time (GDPR arts. 15-16).",
+    "blockHeld": "This block's record takes “production.offstandard.view”.",
+    "unusual": "Decided on its own",
+    "running": "Still running",
+    "source": "Recorded",
+    "note": "Note",
+    "dayFacts": "The day",
+    "reopened": "Reopened because",
+    "holds": "What holds it",
+    "dayClosed": "Closed: nothing holds it.",
+    "nothingHolds": "Nothing holds it: it can be closed.",
+    "history": "History"
+  },
+  "requestStatus": {
+    "PENDING": "To decide",
+    "APPROVED": "Approved",
+    "REFUSED": "Refused"
+  },
+  "disputeStatus": {
+    "OPEN": "Open",
+    "UPHELD": "Upheld",
+    "REJECTED": "Rejected",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "scanKind": {
+    "REPORT": "Report",
+    "CORRECTION": "Correction",
+    "UNDO": "Undo",
+    "other": "Scan"
+  },
+  "source": {
+    "FLOOR": "On the floor, as it happened",
+    "LEAD": "Typed afterwards",
+    "HELP_CALL": "By a help call",
+    "SYSTEM": "By the system"
+  },
+  "dayChange": {
+    "CLOSED": "Closed",
+    "REOPENED": "Reopened"
+  },
+  "reject": {
+    "title": "Reject",
+    "do": "Reject",
+    "reason": "Reason",
+    "reasonHint": "Sent to the person as you write it.",
+    "body": {
+      "CORRECTION": "The report stays as it was recorded. The person sees why.",
+      "OFF_STANDARD": "The block stays on the record as rejected and pays nothing. The person sees why."
+    }
+  },
+  "answer": {
+    "title": "Answer the dispute",
+    "outcome": "The answer",
+    "outcomes": {
+      "UPHELD": "Upheld",
+      "REJECTED": "Rejected"
+    },
+    "do": {
+      "UPHELD": "Uphold",
+      "REJECTED": "Reject"
+    },
+    "words": "In words",
+    "wordsHint": "Sent to the person as you write it.",
+    "reportHint": "An upheld answer changes no count: a report changes through its correction, which the worker asks and a lead approves.",
+    "blockHint": "Upheld, the block can be corrected in this step: its change is written down with this dispute.",
+    "sameCode": "Keep {code}"
+  },
+  "close": {
+    "title": "Close the day for {line}",
+    "titleN_one": "Close {count} day",
+    "titleN_other": "Close {count} days",
+    "do": "Close day",
+    "doN_one": "Close {count} day",
+    "doN_other": "Close {count} days",
+    "day": "{line}, {day}.",
+    "dayLine": "{line}, {day}",
+    "body": "Closed days feed pay; reopening needs permission and a reason.",
+    "note": "Note",
+    "noteHint": "Optional, kept on the day."
+  },
+  "reopen": {
+    "title": "Reopen the day for {line}",
+    "do": "Reopen",
+    "body": "{day}. Its blocks and disputes take changes again, and pay reads it again once it is closed.",
+    "reason": "Reason",
+    "reasonHint": "Required, kept on the day."
+  },
+  "find": {
+    "title": "Open a person's day",
+    "do": "Continue",
+    "body": "One person, one day. Their name stays in this dialog; opening their day is logged.",
+    "name": "Name or employee code",
+    "none": "Nobody by that name at this site.",
+    "day": "Day"
+  },
+  "sheet": {
+    "title": "Daily sheet",
+    "close": "Close",
+    "open": "Open the sheet",
+    "who": "{name}, {day}",
+    "whoHidden": "{day}",
+    "level": "One person, one day",
+    "logged": "This view is logged: who opened it, when and why are recorded and visible to HR and the data protection officer. No comparison with others, no export, no print.",
+    "reason": "Why you open it",
+    "reasonHint": "Recorded with the opening.",
+    "pickReason": "Choose a reason",
+    "reasons": {
+      "COACHING_ASKED": "Coaching the worker asked for",
+      "PAY_QUERY": "A pay query",
+      "WORKER_REQUEST": "The worker's own request"
+    },
+    "note": "Note",
+    "attendance": "Attendance",
+    "minutes_one": "{count} minute",
+    "minutes_other": "{count} minutes",
+    "minutesText": "{minutes} minutes",
+    "noAttendanceDay": "No attendance day on record.",
+    "noAttendance": "Not shown: this site's attendance purpose is off (Statuto dei Lavoratori art. 4 c.2).",
+    "production": "Production minutes",
+    "pieces": "Pieces",
+    "piecesValue": "{good} good · {scrap} scrap · {rework} rework",
+    "offStandard": "Off-standard minutes",
+    "byCode": "Off-standard minutes by code",
+    "blocks": "Blocks",
+    "exceptions": "Exceptions",
+    "records": "Reports of the day",
+    "earned": "Minutes",
+    "edits": "Changes to this day"
+  },
+  "exception": {
+    "CORRECTION_WAITING_one": "{count} correction waiting",
+    "CORRECTION_WAITING_other": "{count} corrections waiting",
+    "DISPUTE_OPEN_one": "{count} dispute open",
+    "DISPUTE_OPEN_other": "{count} disputes open",
+    "BLOCK_WAITING_one": "{count} block waiting for approval",
+    "BLOCK_WAITING_other": "{count} blocks waiting for approval",
+    "BLOCK_REJECTED_one": "{count} block rejected",
+    "BLOCK_REJECTED_other": "{count} blocks rejected",
+    "RECORD_UNDONE_one": "{count} report undone",
+    "RECORD_UNDONE_other": "{count} reports undone",
+    "ATTENDANCE_ANOMALY_one": "{count} attendance anomaly",
+    "ATTENDANCE_ANOMALY_other": "{count} attendance anomalies"
+  },
+  "refusal": {
+    "ALREADY_CLOSED": "This day is closed already.",
+    "NOT_YET": "This day has not come yet: close a day once its work is done.",
+    "HELD": "Something still holds this day: it stays open until that is dealt with.",
+    "NOT_CLOSED": "This day is not closed.",
+    "DAY_CLOSED": "The day is closed (closed days feed pay): reopen it with a reason first.",
+    "STATION_SITE": "This site records stations: it has no personal records.",
+    "DISPUTE_NOT_OPEN": "This dispute was answered or withdrawn already.",
+    "OWN_DISPUTE": "This dispute is about your own record: another person answers it.",
+    "BLOCK_RUNNING": "The block is still running: its times are corrected once it ended.",
+    "STILL_RUNNING": "The block is still running: it is decided once it ended.",
+    "NOT_PENDING": "This block was decided already.",
+    "OWN_TIME": "This is your own time: another person decides it.",
+    "OVERLAPS": "Those times overlap another block of the same person or station.",
+    "CODE_INACTIVE": "That code is not in use any more.",
+    "DECIDED_ALREADY": "This correction was decided already.",
+    "SELF_APPROVAL": "You took this scan or asked its correction: another person decides it.",
+    "TARGET_VOIDED": "The scan it corrects was undone or corrected since: reject it, and the floor asks again.",
+    "GATE": "Per-person sheets are off on this site.",
+    "FIGURES": "One person's day is opened only by the worker, by HR and, where the site allows it, by the worker's team lead.",
+    "WORK_ORDER_NOT_OPEN": "The work order is not open any more: its reports do not change.",
+    "PREVIOUS_NOT_REPORTED": "The operation before this one has not passed this bundle yet: report it first.",
+    "MORE_THAN_BUNDLE": "These counts are more than the bundle carries.",
+    "MORE_THAN_PASSED": "These counts are more than the operation before passed on.",
+    "LESS_THAN_TAKEN": "These counts are less than the next operation already took.",
+    "NO_COUNT": "A report needs at least one piece.",
+    "UNKNOWN_SCAN": "The scan it corrects is gone.",
+    "SAME_COUNTS": "These counts are the same as the report's.",
+    "NEXT_REPORTED": "The next operation took this bundle already.",
+    "ON_HOLD": "The bundle or its work order is on hold: this waits for its release."
+  },
+  "problem": {
+    "read": "This could not be read. Try again.",
+    "write": "This did not go through. Try again.",
+    "changed": "Someone else changed this meanwhile: read it again and decide.",
+    "refused": "The rule refused this: read it again.",
+    "forbidden": "Your role cannot do this.",
+    "gone": "This is gone, or belongs to a site you cannot reach.",
+    "invalid": "Something in this is not valid: check it and try again.",
+    "offline": "No connection: nothing was sent."
+  },
+  "notice": {
+    "corrected": "Correction approved: a correction row was added, nothing overwritten.",
+    "approved": "Block approved.",
+    "refused": "Correction refused: the report stands as recorded.",
+    "rejected": "Block rejected.",
+    "upheld": "Dispute upheld.",
+    "upheldCorrected": "Dispute upheld and the block corrected.",
+    "disputeRejected": "Dispute rejected.",
+    "closed_one": "{count} day closed.",
+    "closed_other": "{count} days closed.",
+    "closedPartly": "{done} closed, {refused} not.",
+    "reopened": "Day reopened.",
+    "approvedN_one": "{count} block approved.",
+    "approvedN_other": "{count} blocks approved.",
+    "skipped": "{code}: left out ({why}).",
+    "skippedOther": "{code}: left out (it changed, it is your own time, or its day is closed).",
+    "leftOut_one": "{count} unusual block stays to decide on its own.",
+    "leftOut_other": "{count} unusual blocks stay to decide one by one."
+  }
+}

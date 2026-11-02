@@ -108,7 +108,8 @@
       "bundles": "Fasci",
       "floorControl": "Controllo reparto",
       "scrap": "Scarti e rilavorazioni",
-      "calls": "Chiamate di aiuto"
+      "calls": "Chiamate di aiuto",
+      "labour": "Manodopera e rettifiche"
     },
     "quality": {
       "area": "Qualità",

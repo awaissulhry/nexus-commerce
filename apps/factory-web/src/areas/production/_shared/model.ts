@@ -22,6 +22,8 @@ const phrase = (key: string, params?: Phrase['params']): Phrase => (params ? { k
 export interface ProductionCan {
   /** workorders.view: every page of the area. */
   readonly view: boolean
+  /** production.labour.view: Labour & corrections (B-W2b-57; where a correction waiting is decided, else Today). */
+  readonly labour: boolean
   /** workorders.manage: new work orders, a draft's sizes, due date and priority, start / complete / close / cancel. */
   readonly manage: boolean
   /** workorders.release. */
@@ -46,6 +48,7 @@ export function abilitiesOf(permissions: readonly string[]): ProductionCan {
   const held = new Set(permissions)
   return {
     view: held.has('workorders.view'),
+    labour: held.has('production.labour.view'),
     manage: held.has('workorders.manage'),
     release: held.has('workorders.release'),
     correctCuts: held.has('production.cut.correct'),

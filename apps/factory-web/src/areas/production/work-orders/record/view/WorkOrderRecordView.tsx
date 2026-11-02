@@ -303,7 +303,7 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
           {model.tab === 'bundles' && <BundlesTab workOrder={workOrder} model={model} actions={actions} />}
           {model.tab === 'operations' && <OperationsTab workOrder={workOrder} model={model} actions={actions} />}
           {model.tab === 'quality' && <QualityTab workOrder={workOrder} model={model} actions={actions} />}
-          {model.tab === 'labour' && <LabourTab labour={model.labour} prefix={model.prefix} workOrderId={workOrder.id} draft={workOrder.status === 'DRAFT'} onRetry={actions?.onRetryLabour} minutes={minutesOf(workOrder, model.wip.value)} />}
+          {model.tab === 'labour' && <LabourTab labour={model.labour} prefix={model.prefix} workOrderId={workOrder.id} draft={workOrder.status === 'DRAFT'} onRetry={actions?.onRetryLabour} minutes={minutesOf(workOrder, model.wip.value)} labourHref={model.can.labour ? `${model.prefix}/production/labour` : null} />}
           {model.tab === 'documents' && <DocumentsTab workOrder={workOrder} prefix={model.prefix} bundles={activeBundles} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-pr-hint">{t('record.noPanels')}</p>)}
         </div>
