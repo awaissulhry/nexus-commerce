@@ -222,7 +222,7 @@ export type LedgerCounts = z.infer<typeof ledgerCountsSchema>
 export const ledgerCounts = (api: ApiClient, siteId: string | null, signal?: AbortSignal) => api.get('/inventory/ledger/counts', { query: clean({ siteId }), schema: ledgerCountsSchema, signal })
 
 const moveDetailSchema = z.object({
-  move: ledgerRowSchema.extend({ idempotencyKey: z.string(), receiptLineId: z.string().nullable(), workOrderId: z.string().nullable(), worker: z.string().nullable(), stationOnly: z.boolean() }),
+  move: ledgerRowSchema.extend({ idempotencyKey: z.string(), receiptLineId: z.string().nullable(), workOrderId: z.string().nullable(), worker: z.string().nullable(), workerHidden: z.boolean().optional(), stationOnly: z.boolean() }),
   original: ledgerRowSchema.nullable(),
   reversal: ledgerRowSchema.nullable(),
 })
@@ -337,6 +337,7 @@ const cutSchema = z.object({
   station: named.nullable(),
   device: z.object({ id: z.string(), name: z.string() }).nullable(),
   cutBy: z.string().nullable(),
+  cutByHidden: z.boolean().optional(),
   note: z.string().nullable(),
   reversalOfId: z.string().nullable(),
   reversedById: z.string().nullable(),

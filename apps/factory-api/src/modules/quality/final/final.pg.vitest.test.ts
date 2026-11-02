@@ -20,6 +20,7 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { fileTravelDocuments, TRAVEL_DOCUMENT_PERMISSIONS } from '../../shipping/documents/testing/compliance'
+import { switchOnPerformance } from '../../people/privacy/testing/performance-gate'
 
 /**
  * The final inspection and release by an inspector who is not a maker (B-W1-45; QHS-013, QHS-050, QHS-051, QHS-058,
@@ -736,17 +737,43 @@ describe('goods on hold are reached from the lists (Owner answer Q3 (a))', () =>
 // ---- the evidence trail (Q2 (a)) ----------------------------------------------------------------------------------------------------------
 
 describe('the evidence trail (Owner answer Q2 (a))', () => {
+  it('keeps a floor inspector and releaser back too while the gate is off: `kind` says FLOOR, never who (art. 4 c.1)', async () => {
+    const [inspection] = await admin<{ id: string; worker: string }>(`SELECT id, "inspectorWorkerId" AS worker FROM "Inspection" WHERE "workOrderId" = $1 AND "inspectorWorkerId" IS NOT NULL`, [WO.bench.id])
+    const [release] = await admin<{ id: string; worker: string }>(`SELECT id, "releasedByWorkerId" AS worker FROM "QualityRelease" WHERE "workOrderId" = $1 AND "releasedByWorkerId" IS NOT NULL`, [WO.bench.id])
+    const closed = await ok('viewer', 'GET', `/quality/evidence?batch=${WO.bench.batchNumber}`)
+    expect(closed.inspections.find((row: Json) => row.id === inspection!.id).inspector).toEqual({ kind: 'FLOOR', workerId: null, userId: null })
+    expect(closed.releases.find((row: Json) => row.id === release!.id).releasedBy).toEqual({ kind: 'FLOOR', workerId: null, userId: null })
+    expect(JSON.stringify(closed)).not.toContain(inspection!.worker)
+    const gateOff = await switchOnPerformance(admin, { tenantId: A.tenant, companyId: A.companyA, siteId: A.siteA1, byId: newId() })
+    const open = await ok('viewer', 'GET', `/quality/evidence?batch=${WO.bench.batchNumber}`)
+    await gateOff()
+    expect(open.inspections.find((row: Json) => row.id === inspection!.id).inspector).toEqual({ kind: 'FLOOR', workerId: inspection!.worker, userId: null })
+    expect(open.releases.find((row: Json) => row.id === release!.id).releasedBy).toEqual({ kind: 'FLOOR', workerId: release!.worker, userId: null })
+  }, 60_000)
+
   it('gathers every proof of a batch, money only with its grain, within the walls', async () => {
+    // Gate off (the default): the trail stands on the station and the time; who cut and who scanned stay back (art. 4 c.1).
+    const closed = await ok('viewer', 'GET', `/quality/evidence?batch=${WO.main.batchNumber}`)
+    expect(closed.cutting[0]).toMatchObject({ hideCode: hides.H01, worker: null, workerHidden: true })
+    expect(closed.scans[0]).toMatchObject({ operation: { seq: 10 }, kind: 'REPORT', worker: null, workerHidden: true })
+    // The whole answer, against every worker: an inspector, an assignee or a releaser on the floor stays back too (`kind` says FLOOR).
+    const raw = JSON.stringify(closed)
+    for (const person of await admin<{ id: string; displayName: string }>(`SELECT id, "displayName" FROM "Worker"`)) {
+      expect(raw).not.toContain(person.id)
+      expect(raw).not.toContain(person.displayName)
+    }
+    const gateOff = await switchOnPerformance(admin, { tenantId: A.tenant, companyId: A.companyA, siteId: A.siteA1, byId: newId() })
     const trail = await ok('viewer', 'GET', `/quality/evidence?batch=${WO.main.batchNumber}`)
+    await gateOff()
     expect(trail.subject).toMatchObject({ kind: 'BATCH', batchNumber: WO.main.batchNumber, workOrder: { id: WO.main.id } })
     expect(trail.style).toMatchObject({ id: A.style, tracking: 'BATCH' })
     expect(trail.documents.map((document: Json) => `${document.kind}:${document.language}`).sort()).toEqual(['DECLARATION_OF_CONFORMITY:en', 'DECLARATION_OF_CONFORMITY:it', 'USER_INFORMATION:en', 'USER_INFORMATION:it'])
     expect(trail.certificates.today.map((entry: Json) => entry.words)).toEqual([expect.stringMatching(/^Covered: certificate /), expect.stringMatching(/^Covered: certificate /)])
     expect(trail.lots.map((lot: Json) => lot.code)).toEqual([`T-${run}-BIG`])
-    expect(trail.cutting[0]).toMatchObject({ hideCode: hides.H01, worker: expect.any(String) })
+    expect(trail.cutting[0]).toMatchObject({ hideCode: hides.H01, worker: expect.any(String), workerHidden: false })
     expect(trail.bundles.length).toBe(2)
     expect(trail.scans.length).toBe(8)
-    expect(trail.scans[0]).toMatchObject({ operation: { seq: 10 }, kind: 'REPORT', worker: expect.any(String) })
+    expect(trail.scans[0]).toMatchObject({ operation: { seq: 10 }, kind: 'REPORT', worker: expect.any(String), workerHidden: false })
     expect(trail.inspections).toEqual([expect.objectContaining({ id: mainInspection.id, status: 'PASSED', defects: [expect.objectContaining({ code: 'LOOSE-THREAD' })] })])
     expect(trail.releases.map((row: Json) => row.secondPerson.reasons)).toEqual(expect.arrayContaining([[], ['CUSTOMER']]))
     expect(trail.releases.some((row: Json) => row.reversals.length === 1)).toBe(true)

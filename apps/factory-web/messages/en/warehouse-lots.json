@@ -281,7 +281,8 @@
       "reverses": "Reverses an earlier cut",
       "reversed": "Reversed by a later entry",
       "deviceTime": "Tablet clock {time}",
-      "office": "Entered in the office"
+      "office": "Entered in the office",
+      "workerHidden": "A person is on this record"
     },
     "daily": {
       "onHold": "On hold: {reason}",

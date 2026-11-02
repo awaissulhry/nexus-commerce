@@ -53,8 +53,8 @@ export const workOrderChecklistsContract = defineContract({
           operation: operationRef,
           steps: z.array(output({ code: z.string(), words: z.string(), required: z.boolean() })),
           open: z.number().int(),
-          /** Every tick, oldest first: who (where the site names workers) and when; the latest of a step stands. */
-          ticks: z.array(output({ id: id(), stepCode: z.string(), outcome, at: instant(), deviceTime: instant().nullable(), by: z.string().nullable(), station: z.string().nullable() })),
+          /** Every tick, oldest first: who (where the site names workers and its PERFORMANCE gate is on; else `byHidden`) and when; the latest of a step stands. */
+          ticks: z.array(output({ id: id(), stepCode: z.string(), outcome, at: instant(), deviceTime: instant().nullable(), by: z.string().nullable(), byHidden: z.boolean(), station: z.string().nullable() })),
         }),
       ),
     }),

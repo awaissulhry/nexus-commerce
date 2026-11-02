@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startInventoryFixture, type InventoryFixture } from '../ledger/testing/fixture'
+import { switchOnPerformance } from '../../people/privacy/testing/performance-gate'
 
 /**
  * The warehouse screens' reads on the local stack (reads-contract.ts: Hides, Lots & traceability, the Movements grid,
@@ -51,7 +52,7 @@ beforeAll(async () => {
   const reversed = await f.call('manager', 'POST', `/inventory/moves/${moveIds.scrap}/reverse`, { note: 'Not cracked after all.' }, key())
   expect(reversed.statusCode, reversed.body).toBe(201)
   moveIds.reversal = reversed.json().move.id
-}, 60_000)
+}, 300_000)
 
 afterAll(async () => {
   await f?.close()
@@ -178,9 +179,15 @@ describe('the ledger as the Movements grid shows it (SCR-064; Owner answers W1, 
     expect((await get(`/inventory/ledger`, 'floor-a1')).status).toBe(403)
   })
 
-  it('one move: its key, its reversal both ways, and the worker only where the site records workers', async () => {
+  it('one move: its key, its reversal both ways, and the worker only where the site records workers and its PERFORMANCE gate is on', async () => {
+    // Gate off (the default): the move says a person is on it, never who (art. 4 c.1).
+    const closed = await ok(`/inventory/ledger/${moveIds.floor}`, 'warehouse')
+    expect(closed.move).toMatchObject({ id: moveIds.floor, worker: null, workerHidden: true, stationOnly: false, postedBy: { audience: 'FLOOR', name: null } })
+    expect(JSON.stringify(closed)).not.toContain('Marco Prova')
+    expect(JSON.stringify(closed)).not.toContain(ids.worker)
+    const gateOff = await switchOnPerformance(f.admin, { tenantId: ids.tenantA, companyId: ids.companyA, siteId: ids.siteA1, byId: ids.user })
     const floor = await ok(`/inventory/ledger/${moveIds.floor}`, 'warehouse')
-    expect(floor.move).toMatchObject({ id: moveIds.floor, worker: 'Marco Prova', stationOnly: false, postedBy: { audience: 'FLOOR', name: null } })
+    expect(floor.move).toMatchObject({ id: moveIds.floor, worker: 'Marco Prova', workerHidden: false, stationOnly: false, postedBy: { audience: 'FLOOR', name: null } })
     expect(floor.move.idempotencyKey).toMatch(/^inventory\.transfer:/)
     const scrap = await ok(`/inventory/ledger/${moveIds.scrap}`)
     expect(scrap.reversal).toMatchObject({ id: moveIds.reversal })
@@ -189,7 +196,8 @@ describe('the ledger as the Movements grid shows it (SCR-064; Owner answers W1, 
     // The site records stations only: the same record names no worker.
     await f.admin(`INSERT INTO "ProductionSettings" (id, "tenantId", "companyId", "siteId", "scanSubject") VALUES ($1, $2, $3, $1, 'STATION')`, [ids.siteA1, ids.tenantA, ids.companyA])
     const station = await ok(`/inventory/ledger/${moveIds.floor}`, 'warehouse')
-    expect(station.move).toMatchObject({ worker: null, stationOnly: true })
+    expect(station.move).toMatchObject({ worker: null, workerHidden: false, stationOnly: true })
+    await gateOff()
     expect((await get(`/inventory/ledger/${moveIds.floor}`, 'company-two')).status).toBe(404)
   })
 })

@@ -17,6 +17,7 @@ import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../core/app'
 import { testAuthenticator, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
+import { switchOnPerformance } from '../../modules/people/privacy/testing/performance-gate'
 
 /**
  * The floor sync (B-W0-30; PLT-237, PLT-239, PLT-240, PLT-189; A1 §3.8; design floor.sync SCR-023) on the local stack with
@@ -332,8 +333,14 @@ describe('a refused action is kept with its reason in words and one fix (PLT-239
     expect(list.refused.map((refused: Json) => refused.id)).toContain(answer!.refusal.id)
     expect(list.refused.find((refused: Json) => refused.id === answer!.refusal.id)).toMatchObject({ device: { id: A.sew1, name: 'Sewing tablet 1' }, code: 'UNKNOWN_BUNDLE', fix: expect.any(String) })
     expect(JSON.stringify(list)).not.toContain('Seed Worker')
+    // Gate off (the default): one record says a person sent it, never who (art. 4 c.1). Gate on: the name.
+    const closed = await ok('supervisor', 'GET', `/floor-sync/refused/${answer!.refusal.id}`)
+    expect(closed.refused).toMatchObject({ worker: null, workerHidden: true, payload: { code: 'NOT-A-BUNDLE-123', good: 1 }, moduleRefusal: { type: 'FloorScanRefusal' } })
+    expect(JSON.stringify(closed)).not.toContain(A.operatorA1)
+    const gateOff = await switchOnPerformance(admin, { tenantId: A.tenant, companyId: A.companyA, siteId: A.siteA1, byId: A.supervisor })
     const one = await ok('supervisor', 'GET', `/floor-sync/refused/${answer!.refusal.id}`)
-    expect(one.refused).toMatchObject({ worker: { id: A.operatorA1 }, payload: { code: 'NOT-A-BUNDLE-123', good: 1 }, moduleRefusal: { type: 'FloorScanRefusal' } })
+    await gateOff()
+    expect(one.refused).toMatchObject({ worker: { id: A.operatorA1, name: expect.any(String) }, workerHidden: false, payload: { code: 'NOT-A-BUNDLE-123', good: 1 }, moduleRefusal: { type: 'FloorScanRefusal' } })
   })
 
   it("counts another person's refused actions on the tablet, never shows them (Statuto dei Lavoratori art. 4)", async () => {

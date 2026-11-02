@@ -307,6 +307,7 @@
       "hide": "Pelle",
       "noNote": "Nessuna nota",
       "worker": "Lavoratore: {name} (questa sede registra i lavoratori)",
+      "workerHidden": "Su questo dato c'è una persona. Il nome compare solo dove la base giuridica della sede è in vigore.",
       "stationOnly": "Questa sede registra solo la postazione: nessun lavoratore è nominato.",
       "happened": "Avvenuto",
       "deviceClock": "secondo l’orologio del tablet",

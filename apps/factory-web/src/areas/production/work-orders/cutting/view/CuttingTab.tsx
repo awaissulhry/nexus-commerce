@@ -166,7 +166,7 @@ function CutLogList({ log, model, actions }: { log: CutLog; model: WorkOrderReco
       { colId: 'pieces', headerName: t('cutting.col.pieces'), minWidth: 90, flex: 0.6, type: 'rightAligned', valueGetter: (params) => (params.data ? params.data.pieces.reduce((sum, piece) => sum + piece.pieces, 0) : 0) },
       { colId: 'area', headerName: t('cutting.col.area'), field: 'baseAreaUsed', minWidth: 100, flex: 0.7, type: 'rightAligned', valueFormatter: (params) => (params.data ? quantityText(params.data.baseAreaUsed, locale) : '') },
       { colId: 'remnant', headerName: t('cutting.col.remnant'), field: 'baseRemnantArea', minWidth: 100, flex: 0.7, type: 'rightAligned', valueFormatter: (params) => (params.data ? quantityText(params.data.baseRemnantArea, locale) : '') },
-      { colId: 'by', headerName: t('cutting.col.by'), minWidth: 120, flex: 0.9, valueGetter: (params) => params.data?.worker?.name ?? '—' },
+      { colId: 'by', headerName: t('cutting.col.by'), minWidth: 120, flex: 0.9, valueGetter: (params) => params.data?.worker?.name ?? (params.data?.workerHidden ? t('cutting.workerHiddenShort') : '—') },
       { colId: 'state', headerName: t('cutting.col.state'), minWidth: 120, flex: 0.8, cellRenderer: StateCell },
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
@@ -226,7 +226,7 @@ function EntryDetail({ log, entryId, model, actions }: { log: CutLog; entryId: s
             { label: t('cutting.col.area'), value: quantityText(entry.baseAreaUsed, locale), hint: entry.pattern ? t('cutting.pattern', { area: quantityText(entry.pattern, locale) }) : undefined },
             { label: t('cutting.col.remnant'), value: quantityText(entry.baseRemnantArea, locale) },
             { label: t('cutting.station'), value: entry.station ? `${entry.station.code} · ${entry.station.name}` : t('cutting.office') },
-            { label: t('cutting.col.by'), value: entry.worker?.name ?? t('cutting.noWorker') },
+            { label: t('cutting.col.by'), value: entry.worker?.name ?? t(entry.workerHidden ? 'cutting.workerHidden' : 'cutting.noWorker') },
           ]}
         />
         {entry.pieces.length > 0 && (

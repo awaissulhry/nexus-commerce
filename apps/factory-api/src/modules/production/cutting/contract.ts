@@ -291,7 +291,10 @@ export const cutLogContract = defineContract({
           live: z.boolean(),
           /** The closing entry of its used-up hide: the one cut of that hide the office may still correct (it opens the hide again). */
           closing: z.boolean(),
+          /** Who cut it, where the site names workers and its PERFORMANCE gate is on (this one record). */
           worker: output({ id: id(), name: z.string() }).nullable(),
+          /** The entry names a person and the gate keeps back who. */
+          workerHidden: z.boolean(),
           station: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
           cells: z.array(output({ workOrderSizeId: id(), colourwayCode: z.string(), size: z.string() })),
         }),
