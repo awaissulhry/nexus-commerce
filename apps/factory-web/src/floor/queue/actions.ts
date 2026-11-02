@@ -43,6 +43,11 @@ export const WHAT_KEY = {
   'production.cut.remnant': 'remnant',
   'production.bundles.make': 'bundle',
   'plant.report': 'machine',
+  // B-W2b-70
+  'andon.call.send': 'call',
+  'andon.call.answer': 'callAnswer',
+  'andon.handover.write': 'handover',
+  'production.scan.onBehalf': 'onBehalf',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

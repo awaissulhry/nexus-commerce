@@ -1,0 +1,39 @@
+/*
+ * SCR-172 — Call for help: layout only, inside the DS FloorFrame. Sizes read the floor tier's `--nds-density-*` tokens,
+ * colours are semantic `--nds-*` roles. No raw colour. The one-job screen stays centred on the tablet (the frame's column).
+ */
+
+.fw-hp-elapsed {
+  display: flex;
+  justify-content: center;
+  padding-block: var(--nds-space-8);
+}
+
+/* ── "Add details" and what follows the call, side by side on a tablet, stacked on a phone ─────────────────────────── */
+.fw-hp-more {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+
+.fw-hp-ticks {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+
+.fw-hp-note {
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  overflow-wrap: anywhere;
+}
+
+/* ── Who is coming: the DS Timeline at floor size (the DS part reads no density token) ─────────────────────────────── */
+.fw-hp-progress .nds-timeline-label,
+.fw-hp-progress .nds-timeline-detail,
+.fw-hp-progress .nds-as-of {
+  font-size: var(--nds-density-font-label);
+}
+.fw-hp-progress .nds-timeline-step {
+  padding-bottom: var(--nds-space-12);
+}

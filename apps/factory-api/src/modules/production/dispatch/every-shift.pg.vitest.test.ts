@@ -469,6 +469,8 @@ describe('absence-aware dispatch and the load from the clock (MES-028, MES-031, 
     expect(line).toMatchObject({ line: { id: lineL1 }, day: DAY, mayManage: true, mayWriteHandover: true })
     expect(line.shift.length).toBeGreaterThan(0)
     const station = line.stations.find((entry: Json) => entry.id === sew1)
+    // Owner answer F2: "nobody signed in", as a yes or no per station; this test's sessions have no row, so nobody is in.
+    expect(line.stations.map((entry: Json) => entry.signedIn)).toEqual(line.stations.map(() => false))
     expect(station.reassign).toEqual([expect.objectContaining({ kind: 'STATION_OPERATOR', words: 'Not clocked in: reassign this work.' })])
     const names = (await admin<{ name: string }>('SELECT "displayName" AS name FROM "Worker" WHERE "tenantId" = $1', [T])).map((row) => row.name)
     const text = JSON.stringify(line)

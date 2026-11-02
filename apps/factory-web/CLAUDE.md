@@ -233,6 +233,11 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `locations/` (SCR-065 + record); `areas/production/settings/` (SCR-074: who floor records name, its legal basis, step-up
   when widening); `areas/admin/privacy/` (SCR-086: duties, notices, DPIA, register; sample texts said on screen);
   `floor/tasks/labels/` (SCR-096, `/floor/labels`: garment labels behind the certificate gate; online only).
+  B-W2b-70: `floor/tasks/help/` (SCR-172, `/floor/help`, catalogue `floor-help`; the frame's Help button opens it once someone is
+  signed in: one tap queues `andon.call.send`, the open call with who is coming, `andon.call.answer` closes it) and
+  `floor/tasks/lineview/` (SCR-168, `/floor/lineview`, catalogue `floor-lineview`; a LINE tablet of a team leader lands on it,
+  `store.landing`: line totals, calls, Waiting for you, stations, handover note, scan on behalf; per station only a call, a
+  machine down, material and "nobody signed in", Owner answer F2).
   B-W2a-76: `floor/tasks/returns-in/` (SCR-180, `/floor/returnsin`: scan the RMA → parcel condition + photos → lines by serial/batch
   scan or tap → ONE receipt, photos onto it → grade per garment (suggestion = factory-domain suggestedOutcome; the office
   decides) → the inspection place scanned) and `floor/tasks/kits/` (SCR-181, `/floor/kits`: Send a kit = ticks by scan,

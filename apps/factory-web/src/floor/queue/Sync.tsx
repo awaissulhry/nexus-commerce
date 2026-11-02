@@ -100,6 +100,8 @@ export function FloorSync() {
 
   const onAction = async (action: SyncAction) => {
     switch (action.type) {
+      case 'lineview':
+        return router.push('/floor/lineview')
       case 'send':
         return queue.sync()
       case 'open':
@@ -129,5 +131,5 @@ export function FloorSync() {
     }
   }
 
-  return <SyncView model={model} onFrame={onFrame} onAction={(action) => void onAction(action)} />
+  return <SyncView model={{ ...model, lineView: me.permissions.includes('floor.lead') }} onFrame={onFrame} onAction={(action) => void onAction(action)} />
 }

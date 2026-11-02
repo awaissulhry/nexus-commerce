@@ -19,7 +19,7 @@
     "helpDialog": {
       "title": "Help",
       "body": "Ask your team leader, or the office.",
-      "later": "Calling for help from the tablet comes later."
+      "later": "Sign in to call for help from this tablet."
     },
     "languageDialog": {
       "title": "Language",
@@ -319,13 +319,17 @@
       "final": "Check, sign and release garments",
       "pack": "Scan garments into cartons, print labels and the DDT",
       "labels": "Print garment labels behind the certificate check",
-      "machine": "Report a machine problem; a technician’s jobs"
+      "machine": "Report a machine problem; a technician’s jobs",
+      "help": "One tap calls the right person",
+      "lineview": "Calls, what waits, stations"
     },
     "held": {
       "notice": "Read the notice first",
       "coming": "Coming soon"
     },
-    "machine": "Machine problem"
+    "machine": "Machine problem",
+    "help": "Call for help",
+    "lineview": "Line view"
   },
   "scan": {
     "title": "Scan anything",
@@ -550,7 +554,8 @@
       "final": "Refused",
       "again": "Sent again by itself",
       "others_one": "Another person has {count} refused action: the team leader sees it.",
-      "others_other": "Another person has {count} refused actions: the team leader sees them."
+      "others_other": "Another person has {count} refused actions: the team leader sees them.",
+      "lineView": "Sync conflicts: Line view"
     },
     "waiting": {
       "title": "Waiting, in send order",
@@ -604,7 +609,12 @@
       "scrap_other": "{count} scrap",
       "rework_one": "{count} rework",
       "rework_other": "{count} rework",
-      "machine": "Machine problem on {code}"
+      "machine": "Machine problem on {code}",
+      "call": "Help call",
+      "callAnswer": "Answer to a help call",
+      "handover": "Handover note",
+      "onBehalf_one": "Entry on behalf: {code} · {count} good",
+      "onBehalf_other": "Entry on behalf: {code} · {count} good"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

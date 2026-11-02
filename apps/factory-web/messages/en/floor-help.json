@@ -1,0 +1,115 @@
+{
+  "title": "Call for help",
+  "loading": "Reading this station's calls…",
+  "asOf": "From this tablet, as of {time}: the network is down.",
+  "offline": "No network: the call waits on this tablet. Call out loud or use the line lamp.",
+  "tiles": {
+    "title": "Who do you need?",
+    "none": "This site has no help calls set up yet. Ask the office.",
+    "oneTap": "One tap calls",
+    "waiting": "Saved on this tablet"
+  },
+  "status": {
+    "SENT": "Sent",
+    "SEEN": "Seen",
+    "ON_THE_WAY": "On the way",
+    "SOLVED": "Solved",
+    "CANCELLED": "Cancelled"
+  },
+  "card": {
+    "kind": "Your call",
+    "elapsed": "Waiting"
+  },
+  "fact": {
+    "station": "Station",
+    "sent": "Sent at",
+    "who": "Who",
+    "nobody": "Nobody yet"
+  },
+  "who": {
+    "office": "The office",
+    "someone": "Someone"
+  },
+  "progress": {
+    "title": "Who is coming",
+    "SENT": "Sent",
+    "SEEN": "Seen",
+    "ON_THE_WAY": "On the way",
+    "SOLVED": "Solved"
+  },
+  "call": {
+    "gone": "This call is closed."
+  },
+  "queued": {
+    "title": "{type}: call saved",
+    "sending": "Sending it now. It shows who is coming as soon as the office has it.",
+    "refused": "The office refused this call",
+    "refusedFix": "Open Waiting to send to see why."
+  },
+  "details": {
+    "title": "Add details (optional)",
+    "lead": "Call first, explain after. Your words go on the open call.",
+    "words": "What is wrong?",
+    "photo": "Add a photo",
+    "send": "Add to the call",
+    "done": "Your words are on the call.",
+    "failed": "The words were not added. Try again."
+  },
+  "closed": {
+    "SOLVED": "{type}: solved",
+    "CANCELLED": "{type}: call cancelled"
+  },
+  "cancel": {
+    "title": "Cancel this call?",
+    "coming": "{name} is on the way. Cancel anyway?",
+    "nobody": "Nobody will come for it.",
+    "keep": "Keep the call",
+    "confirm": "Cancel call"
+  },
+  "action": {
+    "back": "Back",
+    "tiles": "Who do you need?",
+    "home": "Home",
+    "cancel": "Cancel call",
+    "solved": "It's solved",
+    "details": "Add details",
+    "machine": "Say what is wrong with the machine",
+    "incident": "Report an incident"
+  },
+  "held": {
+    "noStation": "This tablet belongs to no station: a call needs one. Ask the office.",
+    "photo": "Photos on a call are not ready yet: say it in words.",
+    "detailsOffline": "Words on a call need the network.",
+    "incident": "Reporting an incident comes with a later version: tell your team leader.",
+    "details": {
+      "offline": "Words on a call need the network.",
+      "empty": "Write a few words first."
+    }
+  },
+  "refusal": {
+    "NO_STATION": {
+      "message": "This tablet belongs to no station.",
+      "fix": "Ask the office to set its station."
+    },
+    "OTHER_STATION": {
+      "message": "Only a team leader calls for another station.",
+      "fix": "Call from this station, or ask your team leader."
+    },
+    "TYPE_INACTIVE": {
+      "message": "This call is no longer offered.",
+      "fix": "Pick another tile."
+    },
+    "NOT_THIS_STATION": {
+      "message": "This call belongs to another station.",
+      "fix": "Close it from its own station."
+    },
+    "SOLVED": {
+      "message": "This call is solved already.",
+      "fix": "Nothing more to do."
+    },
+    "CANCELLED": {
+      "message": "This call was cancelled.",
+      "fix": "Call again if you still need help."
+    }
+  }
+}

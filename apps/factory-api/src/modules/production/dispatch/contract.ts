@@ -318,6 +318,8 @@ export const floorLineContract = defineContract({
           id: id(),
           code: z.string(),
           name: z.string(),
+          /** Someone is signed in on a tablet of the station (Owner answer F2: "nobody signed in", never who). */
+          signedIn: z.boolean(),
           work: output({ cards: z.number().int(), pieces: z.number().int(), minutes: z.string() }),
           material: output({ state: z.enum(MATERIAL_STATES), icon: z.string(), tone: z.string() }).nullable(),
           reassign: z.array(output({ assignmentId: id(), version: z.number().int(), kind: z.enum(ASSIGNMENT_KINDS), workOrder: output({ number: z.string() }).nullable(), operation: output({ seq: z.number().int(), name: z.string() }).nullable(), words: z.string() })),

@@ -23,18 +23,20 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'operation', held: null },
       { key: 'cut', held: null },
       { key: 'bundles', held: null },
+      { key: 'help', held: null },
       { key: 'scan', held: null },
     ])
   })
 
   it('a tile asks the permission its page\'s API needs (fail closed)', () => {
-    expect(homeTiles('cutting', ['floor.work', 'production.cut'], false).map((tile) => tile.key)).toEqual(['mywork', 'cut', 'scan'])
-    expect(homeTiles('inspection', ['floor.work', 'production.scan', 'quality.inspections.view'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'final', 'scan'])
-    expect(homeTiles('sewing', ['floor.work'], false).map((tile) => tile.key)).toEqual(['mywork', 'scan'])
-    expect(homeTiles('sewing', ['floor.work', 'production.scan'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'scan'])
+    expect(homeTiles('cutting', ['floor.work', 'production.cut'], false).map((tile) => tile.key)).toEqual(['mywork', 'cut', 'help', 'scan'])
+    expect(homeTiles('inspection', ['floor.work', 'production.scan', 'quality.inspections.view'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'final', 'help', 'scan'])
+    expect(homeTiles('sewing', ['floor.work'], false).map((tile) => tile.key)).toEqual(['mywork', 'help', 'scan'])
+    expect(homeTiles('sewing', ['floor.work', 'production.scan'], false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'help', 'scan'])
     expect(homeTiles('inspection', ['floor.work', 'quality.inspections.view'], false)).toEqual([
       { key: 'mywork', held: null },
       { key: 'final', held: null },
+      { key: 'help', held: null },
       { key: 'scan', held: null },
     ])
     // Garment labels at the packing station (SCR-096) ask production.serials, the permission of its API; Pack is built (SCR-098).
@@ -42,6 +44,7 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'mywork', held: null },
       { key: 'operation', held: null },
       { key: 'pack', held: null },
+      { key: 'help', held: null },
       { key: 'scan', held: null },
     ])
     expect(homeTiles('packing', [...OPERATOR, 'production.serials'], false)).toEqual([
@@ -49,14 +52,15 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'operation', held: null },
       { key: 'labels', held: null },
       { key: 'pack', held: null },
+      { key: 'help', held: null },
       { key: 'scan', held: null },
     ])
   })
 
   it('drops a tile whose permission the person lacks (Receive needs an office permission)', () => {
-    expect(homeTiles('warehouse', OPERATOR, false).map((tile) => tile.key)).toEqual(['pick', 'scan'])
-    expect(homeTiles('packing', ['floor.work', 'print.labels'], false).map((tile) => tile.key)).toEqual(['mywork', 'scan'])
-    expect(homeTiles('packing', ['floor.work', 'production.serials'], false).map((tile) => tile.key)).toEqual(['mywork', 'labels', 'scan'])
+    expect(homeTiles('warehouse', OPERATOR, false).map((tile) => tile.key)).toEqual(['pick', 'help', 'scan'])
+    expect(homeTiles('packing', ['floor.work', 'print.labels'], false).map((tile) => tile.key)).toEqual(['mywork', 'help', 'scan'])
+    expect(homeTiles('packing', ['floor.work', 'production.serials'], false).map((tile) => tile.key)).toEqual(['mywork', 'labels', 'help', 'scan'])
     // A subcontract station: Scan only.
     expect(homeTiles(null, OPERATOR, false).map((tile) => tile.key)).toEqual(['scan'])
   })
@@ -68,17 +72,17 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('holds every scan tile with "Read the notice first" while the notice blocks scans (My work only reads: never held)', () => {
-    expect(homeTiles('cutting', OPERATOR, true).map((tile) => tile.held)).toEqual([null, 'notice', 'notice', 'notice', 'notice'])
+    expect(homeTiles('cutting', OPERATOR, true).map((tile) => tile.held)).toEqual([null, 'notice', 'notice', 'notice', null, 'notice'])
   })
 
   it('the floor tasks are built: receive (SCR-092) and garment labels (SCR-096) too', () => {
-    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', 'scan'])
+    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', /* B-W2b-70 */ 'help', 'lineview', 'scan'])
   })
 
   it('B-W2a-73: Machine problem at every station mode for whoever may report (plant.report), never held by the worker notice', () => {
     const reporter = [...OPERATOR, 'plant.report']
-    expect(homeTiles('sewing', reporter, false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'machine', 'scan'])
-    expect(homeTiles('warehouse', reporter, false).map((tile) => tile.key)).toEqual(['pick', 'machine', 'scan'])
+    expect(homeTiles('sewing', reporter, false).map((tile) => tile.key)).toEqual(['mywork', 'operation', 'machine', 'help', 'scan'])
+    expect(homeTiles('warehouse', reporter, false).map((tile) => tile.key)).toEqual(['pick', 'machine', 'help', 'scan'])
     // A safety report never waits for the privacy notice (the station is named instead of the worker).
     expect(homeTiles('cutting', reporter, true).find((tile) => tile.key === 'machine')).toEqual({ key: 'machine', held: null })
     // A subcontract station (no floor mode): Scan only; without plant.report: no tile.
