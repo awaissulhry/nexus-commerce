@@ -65,9 +65,12 @@ export interface SyncViewModel {
    * rest; null when none waits (or it is going on now).
    */
   update?: 'queue' | 'network' | 'screen' | null
+  /** B-W2b-70: a team leader: reports refused because another tablet reported first are decided in the Line view. */
+  lineView?: boolean
 }
 
 export type SyncAction =
+  | { type: 'lineview' }
   | { type: 'send' }
   | { type: 'open'; key: string }
   | { type: 'back' }
@@ -271,6 +274,11 @@ export function SyncView({ model, onAction, onFrame }: SyncViewProps) {
               })}
             </FloorList>
           )}
+          {model.lineView ? (
+            <FloorButton size="md" variant="secondary" icon={<Users />} onClick={() => send({ type: 'lineview' })}>
+              {t('sync.refused.lineView')}
+            </FloorButton>
+          ) : null}
           {model.counts.othersRefused > 0 ? (
             <p className="fw-floor-muted">
               <span className="fw-floor-inline-icon" aria-hidden="true">

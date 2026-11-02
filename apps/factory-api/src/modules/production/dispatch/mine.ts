@@ -27,7 +27,8 @@ import { cardAt, dispatchWorld, materialFlags, planView, type DayCard, type Disp
  *   GET /production/dispatch/floor/line  the team leader's line view (MES-028, MES-031; design floor.supervisor "Stations",
  *                                        production.dispatch.view): the line's load and each station's queue, with the work
  *                                        to reassign. No name and no figure per person (Owner answer F2): a station says
- *                                        "Reassign", never who is away, and why never exists here
+ *                                        "Reassign", never who is away, and why never exists here; `signedIn` says whether
+ *                                        anyone is signed in at the station (B-W2b-70: "nobody signed in"), never who
  *
  * The queue reads in the floor's own scope (published plans only: Owner answer P3); the material flag, the calendars and
  * the clock through the tenant's system view, after the checks: the floor role reads none of them.
@@ -120,6 +121,7 @@ export async function floorLine(caller: CommandCaller, query: { readonly lineId?
     const flags = await materialFlags(db, site, onLine.map((card) => card.workOrder.id))
     const opOf = new Map(world.cards.map((card) => [card.operation.id, card]))
     const rowsOf = (stationId: string) => world.rows.filter((row) => row.stationId === stationId && row.workerId !== null)
+    const signedIn = await stationsWithSomeone(db, stations.map((station) => station.id), now)
     return {
       line: { id: line.id, code: line.code, name: line.name },
       site: { id: site.id, code: site.code, name: site.name, timeZone: site.timezone },
@@ -139,12 +141,19 @@ export async function floorLine(caller: CommandCaller, query: { readonly lineId?
             })
           : []
         const material = worstMaterial(cards.flatMap((card) => (flags.get(card.workOrder.id) ? [flags.get(card.workOrder.id)!.state] : [])))
-        return { id: station.id, code: station.code, name: station.name, work: { cards: cards.length, pieces: cards.reduce((sum, card) => sum + card.pieces, 0), minutes: sumMinutes(queued.map((card) => card.minutes)) }, material: material ? { state: material, ...MATERIAL_LOOK[material] } : null, reassign }
+        return { id: station.id, code: station.code, name: station.name, signedIn: signedIn.has(station.id), work: { cards: cards.length, pieces: cards.reduce((sum, card) => sum + card.pieces, 0), minutes: sumMinutes(queued.map((card) => card.minutes)) }, material: material ? { state: material, ...MATERIAL_LOOK[material] } : null, reassign }
       }),
       mayManage,
       mayWriteHandover: may(context, PRODUCTION_DISPATCH_HANDOVER, scope),
     }
   })
+}
+
+/** The stations with someone signed in on a tablet of theirs now (Owner answer F2: yes or no, never who). */
+async function stationsWithSomeone(db: Reader, stationIds: readonly string[], now: Date): Promise<ReadonlySet<string>> {
+  if (stationIds.length === 0) return new Set()
+  const live = await db.floorSession.findMany({ where: { endedAt: null, idleExpiresAt: { gt: now }, endsAt: { gt: now }, device: { stationId: { in: [...stationIds] } } }, select: { device: { select: { stationId: true } } } })
+  return new Set(live.flatMap((session) => (session.device.stationId ? [session.device.stationId] : [])))
 }
 
 /** The line a tablet belongs to: its own (a line tablet or display), else its station's. */

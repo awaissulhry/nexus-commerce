@@ -58,7 +58,7 @@ export function FloorNotice() {
       case 'language':
         return open(action.locale)
       case 'home':
-        return router.push('/floor')
+        return router.push(store.landing)
       case 'reload':
         return open()
       case 'acknowledge': {

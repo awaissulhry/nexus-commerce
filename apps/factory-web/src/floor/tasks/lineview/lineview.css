@@ -1,0 +1,124 @@
+/*
+ * SCR-168 — the floor Line view: layout only, inside the DS FloorFrame. Sizes read the floor tier's `--nds-density-*`
+ * tokens, colours are semantic `--nds-*` roles painted as the floor kit paints a tone. No raw colour. The stations' board
+ * is composed: the DS FloorTile is always a button, and a station with nothing to do is no button (Owner rule: no dead
+ * control).
+ */
+
+.fw-lv-head {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.fw-lv-metrics {
+  min-width: 0;
+}
+
+/* ── Stations: state in icon + word, never colour alone ────────────────────────────────────────────────────────────── */
+.fw-lv-stations {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15em), 1fr));
+  gap: var(--nds-density-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-lv-station {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-inline-start: 6px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-lv-station[data-tone='danger'] {
+  border-inline-start-color: var(--nds-danger);
+}
+.fw-lv-station[data-tone='warning'] {
+  border-inline-start-color: var(--nds-warning);
+}
+.fw-lv-station[data-tone='info'] {
+  border-inline-start-color: var(--nds-info);
+}
+.fw-lv-station[data-tone='success'] {
+  border-inline-start-color: var(--nds-success);
+}
+.fw-lv-station-code {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-lv-station-name {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  overflow-wrap: anywhere;
+}
+.fw-lv-station-states {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-lv-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-lv-reassign {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-density-font-label);
+  overflow-wrap: anywhere;
+}
+
+/* ── Handover note and Scan on behalf, side by side on a tablet, stacked on a phone ────────────────────────────────── */
+.fw-lv-more,
+.fw-lv-topics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+
+/* ── A sync conflict: both reports side by side ────────────────────────────────────────────────────────────────────── */
+.fw-lv-sides {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18em), 1fr));
+  gap: var(--nds-density-gap);
+}
+
+.fw-lv-last {
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-lv-text {
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  overflow-wrap: anywhere;
+}
+
+.fw-lv-ticks {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+
+/* ── My line now: the DS MetricStrip at floor size (the DS part reads no density token) ────────────────────────────── */
+.fw-lv-metrics .val {
+  font-size: max(32px, calc(var(--nds-density-font-body) * 1.6));
+}
+.fw-lv-metrics .lbl,
+.fw-lv-metrics .hint {
+  font-size: var(--nds-density-font-label);
+}

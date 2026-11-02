@@ -1,0 +1,308 @@
+{
+  "title": "Vista linea",
+  "loading": "Lettura della tua linea…",
+  "asOf": "Da questo tablet, alle {time}: la rete non c'è.",
+  "noLine": {
+    "title": "Questo tablet non appartiene a una linea",
+    "body": "La Vista linea mostra una linea. Chiedi all'ufficio di impostare la linea di questo tablet."
+  },
+  "now": {
+    "title": "La mia linea ora",
+    "shift": "Turno {shift}",
+    "asOf": "alle {time}",
+    "output": "Prodotti oggi",
+    "wip": "Fasci in lavorazione",
+    "calls": "Chiamate aperte",
+    "machines": "Macchine ferme",
+    "dhu": "DHU",
+    "pace": {
+      "ON_PACE": "In linea",
+      "BEHIND": "Sotto l'obiettivo",
+      "NO_TARGET": "Nessun obiettivo oggi"
+    },
+    "stuck_one": "{count} fermo",
+    "stuck_other": "{count} fermi",
+    "noStuck": "Nessuno fermo",
+    "callsOpen": "Aspettano risposta",
+    "noCalls": "Nessuna aperta",
+    "machinesDown": "Ferme ora",
+    "machinesFine": "Tutte in funzione",
+    "noDhu": "Ancora nessun controllo",
+    "defects_one": "{count} difetto",
+    "defects_other": "{count} difetti"
+  },
+  "calls": {
+    "title": "Chiamate",
+    "none": "Nessuna chiamata aperta.",
+    "unknown": "Le chiamate non si leggono ora. Tornano da sole.",
+    "saved": "Salvata su questo tablet"
+  },
+  "status": {
+    "SENT": "Inviata",
+    "SEEN": "Vista",
+    "ON_THE_WAY": "In arrivo",
+    "SOLVED": "Risolta",
+    "CANCELLED": "Annullata"
+  },
+  "waiting": {
+    "title": "Aspettano te",
+    "none": "Nulla aspetta te.",
+    "unknown": "Una parte di questo elenco non si legge ora. Torna da sola.",
+    "corrections": "Le correzioni di una segnalazione si decidono in Ufficio: Home › Approvazioni.",
+    "scrap_one": "{bundle}: {count} pezzo di scarto oltre il limite",
+    "scrap_other": "{bundle}: {count} pezzi di scarto oltre il limite",
+    "block_one": "{code}: {count} minuto",
+    "block_other": "{code}: {count} minuti",
+    "conflict": "{bundle}: segnalato su due tablet",
+    "state": {
+      "own": "Tuo: decide un'altra persona",
+      "withOffice": "All'ufficio"
+    },
+    "count_one": "{count} voce",
+    "count_other": "{count} voci"
+  },
+  "stations": {
+    "title": "Postazioni",
+    "none": "Questa linea non ha postazioni.",
+    "machineDown": "Macchina ferma",
+    "CALLING": "Sta chiamando",
+    "COMING": "Aiuto in arrivo",
+    "material": "Aspetta materiale",
+    "nobody": "Nessuno ha fatto l'accesso",
+    "clear": "Tutto a posto",
+    "notIn": "{work}: non ha timbrato"
+  },
+  "keys": {
+    "move": "Passa da una riga all'altra",
+    "open": "Apri la riga",
+    "back": "Indietro"
+  },
+  "fact": {
+    "op": "Op {seq} {name}",
+    "operation": "Operazione",
+    "station": "Postazione",
+    "noStation": "Nessuna postazione",
+    "workOrder": "Ordine di lavoro",
+    "good": "Buoni",
+    "scrap": "Scarti",
+    "rework": "Rilavorazioni",
+    "limit": "Limite",
+    "reasons": "Motivi",
+    "from": "Dalle",
+    "to": "Alle",
+    "minutes": "Minuti",
+    "tablet": "Tablet"
+  },
+  "scrap": {
+    "kind": "Scarto oltre il limite",
+    "waits": "Aspetta te"
+  },
+  "block": {
+    "kind": "Tempo senza fascio",
+    "waits": "Aspetta te"
+  },
+  "conflict": {
+    "title": "{bundle}: quale segnalazione resta?",
+    "recorded": "Registrata per prima",
+    "refused": "Rifiutata dopo",
+    "office": "L'ufficio",
+    "keep": "Resta la segnalazione registrata per prima. Perché?",
+    "send": "Decide l'ufficio: corregge la segnalazione registrata, l'originale resta. Perché?",
+    "reason": {
+      "SAME_WORK": "Entrambi i tablet hanno segnalato lo stesso lavoro",
+      "SCANNED_TWICE": "Scansionato di nuovo per errore",
+      "WRONG_TABLET": "Segnalato sul tablet sbagliato",
+      "COUNTS_WRONG": "I conteggi registrati sono sbagliati",
+      "OTHER_STATION": "Fatto in un'altra postazione"
+    }
+  },
+  "reject": {
+    "title": "Perché?",
+    "words": "Scrivi il perché"
+  },
+  "pin": {
+    "title": "Firma con il tuo PIN",
+    "meaning": {
+      "scrap": "Approvi questo scarto: va avanti alla registrazione. La tua firma resta con il documento.",
+      "block": "Decidi su questo tempo. La tua firma resta con il documento.",
+      "conflict": "Resta la segnalazione registrata per prima, l'altra è messa da parte. La tua firma resta con il documento."
+    }
+  },
+  "done": {
+    "decided": "Fatto. Nient'altro aspetta te.",
+    "next": "Fatto. Ecco la prossima.",
+    "reassigned": "Lavoro riassegnato.",
+    "handover": "Nota salvata."
+  },
+  "reassign": {
+    "title": "Riassegna il lavoro di {station}",
+    "to": "Dallo a {name}",
+    "why": "Perché questa persona?",
+    "loading": "Lettura di chi può prenderlo…",
+    "none": "Nessuno può prendere questo lavoro ora.",
+    "clocked": "Persone che hanno timbrato ora.",
+    "pick": "Chi lo prende?",
+    "heldPerson": "Non ammesso su questo lavoro."
+  },
+  "handover": {
+    "title": "Nota per il prossimo turno · {shift}",
+    "last": "Ultima nota · {shift} · {day}",
+    "topics": "Di che cosa si tratta?",
+    "text": "Poche parole",
+    "wall": "La legge il prossimo turno e compare sullo schermo a parete della linea. Non nominare nessuno."
+  },
+  "topic": {
+    "PROBLEMS": "Problemi",
+    "HALF_DONE_BUNDLES": "Fasci a metà",
+    "MACHINES": "Macchine",
+    "MATERIAL": "Materiale",
+    "QUALITY": "Qualità",
+    "OTHER": "Altro"
+  },
+  "behalf": {
+    "lead": "Registra il lavoro di chi non ha potuto scansionare. Quale postazione?",
+    "station": "Postazioni",
+    "offline": "Nessuna rete: l'inserimento resta su questo tablet, e si scansiona solo un fascio che questo tablet può leggere.",
+    "nobody": "Ora non si può nominare nessuno: prima va confermata l'informativa.",
+    "person": "Chi ha fatto il lavoro?",
+    "scan": "Scansiona il fascio",
+    "scanHint": "Il cartellino del fascio lavorato.",
+    "read": "Letto {code}",
+    "type": "Scrivi il codice",
+    "operation": "{bundle}: quale operazione?",
+    "operationList": "Operazioni",
+    "reason": "Perché non ha scansionato?",
+    "summary_one": "{bundle}: {count} buono",
+    "summary_other": "{bundle}: {count} buoni",
+    "mark": "Segnato: inserito dal capo squadra.",
+    "override": "Questo controllo richiede un altro capo squadra. Sceglie il motivo, scansiona il suo badge e digita il suo PIN.",
+    "overrideReason": "Perché passa?",
+    "badge": "Scansiona il badge dell'altro capo squadra",
+    "badgeHint": "Non puoi firmarlo tu.",
+    "pin": "Il PIN dell'altro capo squadra",
+    "pinMeaning": "Fai passare questo inserimento. La tua firma resta con il documento.",
+    "entered_one": "{bundle}: {count} buono inserito",
+    "entered_other": "{bundle}: {count} buoni inseriti",
+    "undone": "Inserimento annullato."
+  },
+  "camera": {
+    "start": "Usa la fotocamera",
+    "stop": "Ferma la fotocamera",
+    "error": "La fotocamera non è partita. Scrivi il codice."
+  },
+  "counts": {
+    "good": "Buoni",
+    "of_one": "su {count}",
+    "of_other": "su {count}",
+    "scrap": "Scarti, per motivo",
+    "rework": "Rilavorazioni, per motivo"
+  },
+  "pad": {
+    "less": "Uno in meno",
+    "more": "Uno in più",
+    "clear": "Cancella",
+    "back": "Indietro",
+    "empty": "Ancora nessun numero"
+  },
+  "action": {
+    "back": "Indietro",
+    "home": "Home",
+    "onMyWay": "Sto arrivando",
+    "solved": "Risolto",
+    "approve": "Approva",
+    "reject": "Rifiuta",
+    "sendReject": "Rifiuta",
+    "keepRecorded": "Tieni quella registrata",
+    "toOffice": "Invia in ufficio",
+    "reassign": "Riassegna",
+    "handover": "Scrivi la nota di consegna",
+    "behalf": "Scansiona per conto di altri",
+    "saveNote": "Salva la nota",
+    "next": "Avanti",
+    "enter": "Inserisci",
+    "another": "Altro inserimento",
+    "toLine": "Vista linea"
+  },
+  "held": {
+    "offline": "Serve la rete: firma un documento. Aspetta che la rete torni.",
+    "saved": "La tua risposta è salvata su questo tablet.",
+    "noAnswer": "Il tuo ruolo non risponde alle chiamate.",
+    "own": "È un tuo lavoro: decide un altro capo squadra.",
+    "withOffice": "L'hai mandato all'ufficio: decide lì.",
+    "reject": {
+      "tile": "Scegli prima un motivo.",
+      "words": "Scrivi prima il perché."
+    },
+    "note": {
+      "empty": "Scegli un argomento o scrivi prima qualche parola.",
+      "long": "La nota è troppo lunga."
+    },
+    "counts": {
+      "nothing": "Conta almeno un pezzo.",
+      "atMost_one": "Al massimo {count} pezzo.",
+      "atMost_other": "Al massimo {count} pezzi."
+    },
+    "behalf": {
+      "station": "Scegli prima la postazione.",
+      "person": "Scegli prima la persona.",
+      "bundle": "Scansiona prima il fascio.",
+      "reason": "Scegli prima un motivo.",
+      "note": "Scrivi prima il perché."
+    }
+  },
+  "refusal": {
+    "other": "Non si può fare.",
+    "SOLVED": {
+      "message": "Questa chiamata è già risolta.",
+      "fix": "Non serve altro."
+    },
+    "CANCELLED": {
+      "message": "Questa chiamata è stata annullata.",
+      "fix": "Non serve altro."
+    },
+    "ALREADY_ON_THE_WAY": {
+      "message": "Qualcuno sta già arrivando.",
+      "fix": "Rileggi l'elenco."
+    },
+    "DECIDED_ALREADY": {
+      "message": "Questa decisione è già stata presa.",
+      "fix": "Passa alla prossima."
+    },
+    "SELF_DECISION": {
+      "message": "Non puoi decidere un tuo lavoro.",
+      "fix": "Chiedi a un altro capo squadra."
+    },
+    "BEHALF_SELF": {
+      "message": "Non puoi inserire un tuo lavoro per conto di altri.",
+      "fix": "Segnalalo con la tua scansione."
+    },
+    "BEHALF_NO_NOTICE": {
+      "message": "Questa persona non ha ancora confermato l'informativa.",
+      "fix": "La conferma al prossimo accesso."
+    },
+    "OVERRIDE_SELF": {
+      "message": "Non puoi firmare un tuo inserimento.",
+      "fix": "Chiedi a un altro capo squadra di firmare."
+    },
+    "NOT_QUALIFIED": {
+      "message": "Questa persona non ha la competenza per questo lavoro.",
+      "fix": "Scegli un'altra persona."
+    },
+    "NOT_AUTHORISED": {
+      "message": "Questa persona non può usare questa macchina.",
+      "fix": "Scegli un'altra persona."
+    },
+    "OVERRIDE_REASON_NEEDED": {
+      "message": "Per questa persona serve un motivo.",
+      "fix": "Scrivi il perché."
+    },
+    "STALE": {
+      "message": "È cambiato nel frattempo.",
+      "fix": "Torna indietro e rileggi."
+    },
+    "OTHER_KIND": {
+      "message": "Questa postazione non fa questo tipo di lavoro.",
+      "fix": "Torna indietro e scegli una postazione del tipo di lavoro dell'operazione."
+    }
+  }
+}
