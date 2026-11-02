@@ -50,8 +50,8 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   AttendanceMonthClose: { route: 'POST /people/month-close, or POST /people/month-close/:closeId/seal for a calendar not sealed yet (made by the API, never uploaded)' },
   // B-W2b-54: a payroll export's data file and summary (modules/people/payroll): every kind; only ever made by the API.
   PayrollExport: { route: 'POST /people/payroll/exports (made by the API, never uploaded)' },
-  // B-W2b-68: an approved worker statement's PDF (modules/people/myday): every kind; only ever made by the API.
-  WorkerStatement: { route: 'POST /people/myday/statements/:statementId/print (made by the API, never uploaded)' },
+  // B-W2b-62, B-W2b-68: an approved worker statement's PDF (modules/people/earnings, modules/people/myday): every kind; only ever made by the API.
+  WorkerStatement: { route: 'POST /people/statements/:statementId/pdf, or POST /people/myday/statements/:statementId/print (made by the API, never uploaded)' },
 })
 
 /**
@@ -63,8 +63,9 @@ export const MODULE_READ_FILES: Readonly<Record<string, string>> = Object.freeze
   AttendanceMonthClose: 'POST /people/month-close/:closeId/lul/open',
   // B-W2b-54: everyone's hours and pay by employee code.
   PayrollExport: 'POST /people/payroll/exports/:exportId/files/:fileId/open',
-  // B-W2b-68: one person's pay: the worker's own through My day; files.read never reaches it.
-  WorkerStatement: 'GET /people/myday/statements/:statementId/pdf',
+  // B-W2b-62, B-W2b-68: one person's pay: the office with people.earnings.records and the pay grain, each opening recorded; the
+  // worker's own through My day; files.read never reaches it.
+  WorkerStatement: 'POST /people/statements/:statementId/pdf, or GET /people/myday/statements/:statementId/pdf',
 })
 
 export const readsThroughModule = (recordType: string): boolean => Object.hasOwn(MODULE_READ_FILES, recordType)

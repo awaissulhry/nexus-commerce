@@ -3,6 +3,7 @@ import { localInstant } from '../../calendars/dates'
 import type { CompanyLegal } from '../../documents/model'
 import type { StatementSummary } from '../earnings/statement'
 import { MYDAY_CLOSE_AFTER_MS, MYDAY_REFUSALS, monthPays, myPaceOf, officePrinterOf, targetHours } from './rules'
+import { workerStatementDocument } from '../earnings/statement-document'
 import { myStatementDocument } from './statement-document'
 
 /** My day's pure rules (B-W2b-68; MES-111, MES-112): a person's pace against the line's target, and when money may show. */
@@ -84,7 +85,7 @@ describe('my statement as a document (c.c. art. 2101 c.3)', () => {
 
   it('pieces, minutes, rates, earnings and make-up, in the worker\'s language, on the letterhead', () => {
     const document = myStatementDocument(input)
-    expect(document.title).toBe('Il mio prospetto')
+    expect(document.title).toBe('Prospetto di cottimo')
     expect(document.issuer.name).toBe('Demo Factory S.r.l.')
     expect(document.table.rows[0]).toContain('100')
     expect(document.table.rows[1]![0]).toBe('WAIT_HELP')
@@ -94,7 +95,12 @@ describe('my statement as a document (c.c. art. 2101 c.3)', () => {
 
   it('the same statement gives the same document', () => {
     expect(myStatementDocument(input)).toEqual(myStatementDocument(input))
-    expect(myStatementDocument({ ...input, language: 'en' }).title).toBe('My statement')
+    expect(myStatementDocument({ ...input, language: 'en' }).title).toBe('Piece-work statement')
+  })
+
+  it('the floor prints the office\'s one statement (B-W2b-62)', () => {
+    const { approvedOn, ...rest } = input
+    expect(myStatementDocument(input)).toEqual(workerStatementDocument({ ...rest, status: 'APPROVED', on: approvedOn }))
   })
 
   it('refuses a company without its legal data, as every company document', () => {

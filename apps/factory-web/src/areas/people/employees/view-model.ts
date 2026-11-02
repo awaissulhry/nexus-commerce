@@ -169,7 +169,7 @@ export interface DialogActions {
 
 // ---- the record ----------------------------------------------------------------------------------------------------------------
 
-export const EMPLOYEE_TABS = ['profile', 'job', 'attendance', 'skills', 'documents', 'activity'] as const
+export const EMPLOYEE_TABS = ['profile', 'job', 'attendance', 'skills', 'pay', 'documents', 'activity'] as const
 export type EmployeeTab = (typeof EMPLOYEE_TABS)[number]
 
 /** The record's explicit edit (Profile › Identity, Job & team › Job), as typed. */

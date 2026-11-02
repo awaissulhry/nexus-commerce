@@ -22,6 +22,7 @@ export const manifest = defineManifest({
   'POST /people/pay-periods/:periodId/lock': manage,
   'GET /people/pay-periods/:periodId/statements': view,
   'POST /people/statements/:statementId/open': view,
+  'POST /people/statements/:statementId/pdf': records,
   'POST /people/statements/:statementId/approve': manage,
   'POST /people/statements/:statementId/lead-review': { audiences: ['office'], permission: 'people.earnings.review', scope: 'record' },
   'GET /people/employees/:employeeId/statements': records,

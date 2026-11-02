@@ -363,6 +363,24 @@ describe('my statement (c.c. art. 2101 c.3)', () => {
     expect(JSON.stringify(refused.body)).toContain('refusal/NO_PRINTER')
   })
 
+  it('the floor and the office print the same file: one statement document (B-W2b-62)', async () => {
+    const device = (await admin<{ id: string }>('SELECT "deviceId" AS id FROM "FloorSession" WHERE "tenantId" = $1 AND "workerId" = $2 ORDER BY "startedAt" DESC LIMIT 1', [T, operator]))[0]!.id
+    await replica(`UPDATE "Device" SET mode = 'PHONE', "stationId" = NULL, "personalWorkerId" = '${operator}' WHERE id = '${device}'`)
+    const floor = await tablet.get(`/people/myday/statements/${period.statement}/pdf`)
+    await replica(`UPDATE "Device" SET mode = 'STATION', "stationId" = '${sew1}', "personalWorkerId" = NULL WHERE id = '${device}'`)
+    expect(floor.status).toBe(200)
+    const hr = await addUser(h, TENANT, { email: `hr-${run}@example.test` })
+    const role = newId()
+    await admin(`INSERT INTO "Role" (id, "tenantId", key, name, permissions, grains, "requireMfa", audience, "updatedAt") VALUES ($1, $2, $3, 'Made-up HR', $4, $5, false, 'OFFICE', now())`, [role, T, `custom.hr_${run}`, ['people.earnings.view', 'people.earnings.records'], ['pay']])
+    await admin(`INSERT INTO "RoleAssignment" (id, "tenantId", "userId", "roleId", "allCompanies", "companyIds", "siteIds", "validFrom", "updatedAt") VALUES ($1, $2, $3, $4, true, '{}', '{}', now() - interval '1 minute', now())`, [newId(), T, hr.id, role])
+    const office = new Browser(h.app)
+    const signed = await office.signIn(TENANT.slug, hr.email, hr.password)
+    expect(signed.body.status).toBe('signed_in')
+    const paper = await office.post(`/people/statements/${period.statement}/pdf`, {})
+    expect(paper.status).toBe(200)
+    expect(paper.response.rawPayload.equals(floor.response.rawPayload)).toBe(true)
+  })
+
   it('a draft leaves no screen', async () => {
     await replica(`UPDATE "WorkerStatement" SET status = 'DRAFT', "approvedAt" = NULL, "approvedById" = NULL, "fileId" = NULL WHERE id = '${period.statement}'`)
     const refused = await tablet.post(`/people/myday/statements/${period.statement}/print`, {}, keyed())

@@ -27,6 +27,7 @@ import {
   periodsContract,
   reopenContract,
   runContract,
+  statementPdfContract,
   statementsContract,
 } from './contract'
 import { adjust, correctEntry, counts, entry, ledger } from './entries'
@@ -36,6 +37,7 @@ import { labourCost } from './labour-cost'
 import { manifest } from './manifest'
 import { backToPreview, createPeriod, listPeriods, lockPeriod, period, reopenPeriod, runPeriod, startReview } from './periods'
 import { approveStatement, leadReviewStatement, listStatements, openStatement, statementsOfEmployee } from './statements'
+import { statementPdf } from './statement-pdf'
 
 /**
  * Earnings and pay periods (B-W2b-43; GATE-PIECE-PAY; c.c. arts. 2100-2101): the append-only earnings ledger, scans that pay
@@ -58,6 +60,11 @@ export default defineRoutes('people.earnings', manifest, async (app) => {
   app.post('/people/pay-periods/:periodId/lock', { schema: lockContract }, async (request) => lockPeriod(request, request.params.periodId, request.body, idempotencyKeyFrom(request)))
   app.get('/people/pay-periods/:periodId/statements', { schema: statementsContract }, async (request) => listStatements(request, request.params.periodId))
   app.post('/people/statements/:statementId/open', { schema: openStatementContract }, async (request) => openStatement(request, request.params.statementId, request.body))
+  // B-W2b-62: the PDF is a POST: each opening is recorded (./statement-pdf.ts).
+  app.post('/people/statements/:statementId/pdf', { schema: statementPdfContract }, async (request, reply) => {
+    const { pdf, fileName } = await statementPdf(request, request.params.statementId)
+    return reply.type('application/pdf').header('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`).header('cache-control', 'no-store').send(pdf)
+  })
   app.post('/people/statements/:statementId/approve', { schema: approveStatementContract }, async (request) => approveStatement(request, request.params.statementId, request.body, idempotencyKeyFrom(request)))
   app.post('/people/statements/:statementId/lead-review', { schema: leadReviewContract }, async (request) => leadReviewStatement(request, request.params.statementId, request.body, idempotencyKeyFrom(request)))
   app.get('/people/employees/:employeeId/statements', { schema: employeeStatementsContract }, async (request) => statementsOfEmployee(request, request.params.employeeId))

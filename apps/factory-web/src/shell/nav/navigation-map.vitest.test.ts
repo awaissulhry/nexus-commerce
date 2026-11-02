@@ -171,6 +171,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/people/employees': 'people.view', // GET /people/employees
       // B-W2b-60: People › Shifts.
       '/people/shifts': 'people.shifts.view', // GET /people/shifts/roster
+      // B-W2b-62: People › Piece rates.
+      '/people/piecerates': 'people.piecerates.view', // GET /people/piece-rates
       // B-W2b-65: People › Skills & training and People settings.
       '/people/skills': 'people.skills.view', // GET /people/skills/matrix
       '/people/settings': 'people.privacy.view', // GET /people/privacy

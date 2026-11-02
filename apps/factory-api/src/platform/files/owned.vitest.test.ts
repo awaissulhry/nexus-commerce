@@ -30,7 +30,7 @@ describe('record types whose files only their module writes (owned.ts)', () => {
     expect(() => assertGenericPath('Certificate', 'ATTACHMENT', {})).not.toThrow()
   })
 
-  it('reads a closed month\'s LUL calendar only through its module (B-W2b-48), no other record type', () => {
+  it('reads a closed month\'s LUL calendar (B-W2b-48), a payroll file (B-W2b-54) and a worker statement (B-W2b-62, B-W2b-68) only through their modules, no other record type', () => {
     expect(Object.keys(MODULE_READ_FILES)).toEqual(['AttendanceMonthClose', 'PayrollExport', 'WorkerStatement'])
     expect(readsThroughModule('AttendanceMonthClose')).toBe(true)
     expect(readsThroughModule('PayrollExport')).toBe(true)

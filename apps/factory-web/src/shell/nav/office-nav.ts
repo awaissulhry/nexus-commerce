@@ -317,6 +317,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/people/efficiency/print',
   '/people/reports',
   '/people/reports/print',
+  // B-W2b-62: People › Piece rates (SCR-158), the rate sheet and the worker statement (new tabs).
+  '/people/piecerates',
+  '/people/piecerates/rate-sheet',
+  '/people/piecerates/statement/[id]',
 ])
 
 /**
