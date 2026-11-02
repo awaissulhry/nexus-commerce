@@ -255,6 +255,16 @@ const PEOPLE_ATTENDANCE_ADDS: Readonly<Record<string, readonly Permission[]>> = 
   floor_supervisor: ['people.attendance.rollcall'],
 })
 /**
+ * B-W2b-44 (efficiency; MES-247, MES-250, MES-251, ANA-016, ANA-017; design people.efficiency "What you see here": owner,
+ * supervisor, the industrial engineer): the production manager and the floor supervisor read the figures per line and per
+ * operation; the production manager decides the standard review. Nobody here sees one person's figures: that is
+ * people.figures.view (B-W2b-27), held by no template. Owner and read-only take theirs from every(). One line per template.
+ */
+const PEOPLE_EFFICIENCY_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['people.efficiency.view', 'people.efficiency.review'],
+  floor_supervisor: ['people.efficiency.view'],
+})
+/**
  * B-W2b-42 (overtime worked, timesheets, working-time limits; MES-229, MES-230, MES-232): the administrator (the HR
  * register's keeper) decides overtime, gives HR's approval of a timesheet and keeps the limits; the production manager
  * decides overtime and stands in as the lead for any timesheet; the floor supervisor approves as the lead the timesheets of
@@ -313,6 +323,26 @@ const PEOPLE_PIECERATES_ADDS: Readonly<Record<string, readonly Permission[]>> = 
   admin: ['people.piecerates.view'],
   production_manager: ['people.piecerates.view'],
 })
+/**
+ * B-W2b-43 (earnings and pay periods): the administrator, production manager and floor supervisor see the periods, their
+ * states and the held scans with no name (no pay figure: they hold no pay grain); a lead reviews a statement's pieces and
+ * minutes where the site's legal basis lets them. One person's pay (people.earnings.records) and running a period
+ * (people.earnings.manage) are in no template: the Owner holds them through every office permission; an HR role gets them
+ * with the pay grain.
+ */
+const PEOPLE_EARNINGS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.earnings.view'],
+  production_manager: ['people.earnings.view', 'people.earnings.review'],
+  floor_supervisor: ['people.earnings.view', 'people.earnings.review'],
+})
+/**
+ * B-W2b-54 (the payroll export, MES-267 to MES-274; design people.payroll): the administrator keeps the mapping and makes the
+ * hours file, as it closes the month and opens the LUL calendar. Amounts ask the pay grain, so with piece pay in the month
+ * only the Owner or HR (a custom role with the grain) makes the file. Owner from every(); read-only reads the view.
+ */
+const PEOPLE_PAYROLL_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.payroll.view', 'people.payroll.records', 'people.payroll.manage'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -344,10 +374,16 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_PIECERATES_ADDS[key] ?? []) : []),
   // B-W2b-37
   ...(audience === 'office' ? (PEOPLE_ATTENDANCE_ADDS[key] ?? []) : []),
+  // B-W2b-44
+  ...(audience === 'office' ? (PEOPLE_EFFICIENCY_ADDS[key] ?? []) : []),
   // B-W2b-42
   ...(audience === 'office' ? (PEOPLE_OVERTIME_ADDS[key] ?? []) : []),
   // B-W2b-48
   ...(audience === 'office' ? (PEOPLE_CLOSE_ADDS[key] ?? []) : []),
+  // B-W2b-43
+  ...(audience === 'office' ? (PEOPLE_EARNINGS_ADDS[key] ?? []) : []),
+  // B-W2b-54
+  ...(audience === 'office' ? (PEOPLE_PAYROLL_ADDS[key] ?? []) : []),
   // B-W2b-49
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? [])]
 /**

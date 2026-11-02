@@ -1885,10 +1885,19 @@
     "people_attendance_close": "Chiudere definitivamente il mese delle presenze di una società e sigillare il suo calendario LUL",
     "people_attendance_correct": "Correggere un giorno di un mese chiuso, con una nuova registrazione e il motivo",
     "people_attendance_lul": "Aprire il calendario LUL di un mese chiuso, con le ore di tutti (ogni apertura è registrata)",
+    "people_efficiency_view": "Vedere l'efficienza per linea e per operazione, la coda di revisione degli standard e il tempo ciclo (mai per persona)",
+    "people_efficiency_review": "Decidere la revisione degli standard: tenere uno standard, cambiarlo o indagare, sempre con un motivo",
     "people_overtime_review": "Approvare o rifiutare lo straordinario lavorato (si paga solo dopo l'approvazione)",
     "people_timesheets_team": "Approvare come responsabile i fogli ore dei team che guidi (i giorni, non le ore)",
     "people_timesheets_lead": "Approvare come responsabile qualsiasi foglio ore raggiungibile e rimandarlo indietro",
     "people_timesheets_hr": "Preparare i fogli ore del mese, approvarli dopo il responsabile, rimandarli indietro",
-    "people_limits_manage": "Tenere i limiti di orario: valore, avviso o blocco, chi avvisano"
+    "people_limits_manage": "Tenere i limiti di orario: valore, avviso o blocco, chi avvisano",
+    "people_earnings_view": "Vedere i periodi paga: stato, controlli aperti, scansioni trattenute e cifre per linea (mai una persona)",
+    "people_earnings_records": "Aprire il prospetto e le righe di guadagno di una persona, il registro e il report per lavoratore (ogni apertura è registrata)",
+    "people_earnings_manage": "Eseguire, rivedere e chiudere un periodo paga, decidere le scansioni trattenute, approvare i prospetti, correggere una riga",
+    "people_earnings_review": "Rivedere come responsabile il prospetto di una persona: pezzi e minuti, mai importi",
+    "people_payroll_view": "Vedere l'esportazione paghe del mese in conteggi, mai i dati di una persona",
+    "people_payroll_records": "Aprire i valori per matricola e i file di un'esportazione paghe",
+    "people_payroll_manage": "Gestire codici e tracciati paghe, fare le esportazioni e inviarle con link sicuro"
   }
 }

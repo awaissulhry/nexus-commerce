@@ -66,6 +66,8 @@ import { autoClockOutCron } from './modules/people/clock/auto'
 import { attendanceDaysCron, attendanceHandlers } from './modules/people/attendance/jobs'
 // B-W2b-42: overtime computed from an attendance day (the handler after attendance.day_changed).
 import { overtimeHandlers } from './modules/people/overtime/jobs'
+// B-W2b-43: earnings (a scan pays or is held; a late clock event releases a held scan).
+import { earningsHandlers } from './modules/people/earnings/jobs'
 // B-W2b-24: the W2b data catch-ups (two-factor since, lifted blocks, first-load steps from their W2a audit rows).
 import { fillTwoFactorSinceAll, twoFactorSinceCron } from './platform/auth/roles/two-factor-since'
 import { liftCatchUpCron, moveLiftsAll } from './platform/email-out/delivery/lift-catch-up'
@@ -125,6 +127,8 @@ const W2B_40_HANDLERS: readonly EventHandler[] = [pauseAtClockOutHandler()]
 const W2B_37_HANDLERS: readonly EventHandler[] = attendanceHandlers()
 // B-W2b-42: attendance.day_changed → that day's overtime entries in step.
 const W2B_42_HANDLERS: readonly EventHandler[] = overtimeHandlers()
+// B-W2b-43: production.scan_recorded → the earnings ledger; attendance.day_changed → held scans looked at again.
+const W2B_43_HANDLERS: readonly EventHandler[] = earningsHandlers()
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 
@@ -191,7 +195,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]

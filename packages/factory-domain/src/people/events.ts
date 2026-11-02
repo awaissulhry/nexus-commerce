@@ -2,6 +2,8 @@ import { z } from 'zod'
 // B-W2b-32: shifts and overtime requests.
 import { OVERTIME_ANSWERS } from './shifts/rules'
 import { defineEvent } from '../events/define'
+// B-W2b-54: the payroll export.
+import { PAYROLL_CODE_KINDS } from './payroll/codes'
 import { EMPLOYEE_KINDS } from './employees/rules'
 import { LEAVER_STEP_KINDS, LEAVER_STEP_STATUSES } from './leavers/rules'
 import { GATE_PURPOSES } from './privacy/purposes'
@@ -10,6 +12,8 @@ import { SKILL_KINDS, SKILL_LEVELS } from './skills/rules'
 import { VERSION_STATUSES } from './piecerates/rates'
 // B-W2b-33: clock in and out.
 import { CLOCK_ACTIONS } from './clock/rules'
+// B-W2b-44: efficiency.
+import { REVIEW_DECISIONS } from './efficiency/rules'
 // B-W2b-38: incentive schemes.
 import { SCHEME_STATUSES } from './schemes/rules'
 // B-W2b-37: attendance days.
@@ -20,6 +24,9 @@ import { ENTRY_CHANGES, ENTRY_STATUSES, OVERTIME_CLASSES } from './overtime/rule
 import { TIMESHEET_CHANGES, TIMESHEET_STATUSES } from './overtime/timesheets'
 // B-W2b-48: the month close and the LUL calendar.
 import { CORRECTION_KINDS } from './close/rules'
+// B-W2b-43: earnings and pay periods.
+import { HOLD_STATUSES, STATEMENT_STATUSES } from './earnings/rules'
+import { PERIOD_STATUSES } from './schemes/rules'
 
 /**
  * The people module's events (B-W2b-26 employees and teams; design people.employees "Live": employee.created / updated
@@ -106,6 +113,16 @@ export const events = [
   ...overtimeEvents(),
   // B-W2b-48: the month close and the LUL calendar (closeEvents, at the end of the file).
   ...closeEvents(),
+  // B-W2b-44: the standard review (no person, no figure).
+  defineEvent({
+    type: 'standard_review.decided',
+    context: 'people',
+    description: 'A decision of the standard review: a standard kept, to be changed or under investigation, or an operation sent to the review.',
+    payload: z.strictObject({ routingOperationId: z.uuid(), siteId: z.uuid(), decision: z.enum(REVIEW_DECISIONS) }),
+    live: { permission: 'people.efficiency.view', fields: ['routingOperationId', 'siteId', 'decision'] },
+  }),
+  ...earningsEvents(),
+  ...payrollEvents(),
   defineEvent({
     type: 'employee.created',
     context: 'people',
@@ -450,6 +467,51 @@ function overtimeEvents() {
 }
 
 /**
+ * B-W2b-43: earnings and pay periods (design people.piecerates "Live": operation.scanned → ledger, batched; attendance.day_approved
+ * → held scans clear; people.reports: pay_period.locked → earnings), emitted by apps/factory-api modules/people/earnings in the
+ * command that makes the change. Ids, states and counts only: never a name, a rate, an amount or a reason.
+ *
+ *   earnings.recorded          entries were added or reversed for a bundle (or by a person's correction), scans held or released
+ *   held_scan.changed          a scan was held, counted or decided not to pay
+ *   pay_period.changed         a period was opened, run, put back, its review started or taken back, or it was locked
+ *   worker_statement.changed   a statement was made, reviewed by the lead or approved
+ *
+ * All reach the office screens of people.earnings.view holders; the floor receives none.
+ */
+function earningsEvents() {
+  return [
+    defineEvent({
+      type: 'earnings.recorded',
+      context: 'people',
+      description: 'The earnings ledger moved: entries added or reversed for a bundle, or a correction by a person; scans held or released.',
+      payload: z.strictObject({ siteId: z.uuid(), bundleId: z.uuid().nullable(), added: z.number().int().min(0), reversed: z.number().int().min(0), held: z.number().int().min(0), released: z.number().int().min(0) }),
+      live: { permission: 'people.earnings.view', fields: ['siteId', 'added', 'reversed', 'held', 'released'] },
+    }),
+    defineEvent({
+      type: 'held_scan.changed',
+      context: 'people',
+      description: 'A scan was held because its worker was not clocked in, counted once the attendance showed it, or decided not to pay.',
+      payload: z.strictObject({ heldScanId: z.uuid(), siteId: z.uuid(), periodId: z.uuid(), status: z.enum(HOLD_STATUSES), change: z.enum(['HELD', 'COUNTED', 'NOT_PAID']) }),
+      live: { permission: 'people.earnings.view', fields: ['heldScanId', 'siteId', 'periodId', 'status', 'change'] },
+    }),
+    defineEvent({
+      type: 'pay_period.changed',
+      context: 'people',
+      description: 'A pay period was opened, run, put back to open, its review started or taken back, or it was locked.',
+      payload: z.strictObject({ periodId: z.uuid(), companyId: z.uuid(), month: z.string().regex(/^\d{4}-\d{2}$/), status: z.enum(PERIOD_STATUSES), change: z.enum(['CREATED', 'RUN', 'REOPENED', 'REVIEW_STARTED', 'REVIEW_TAKEN_BACK', 'LOCKED']) }),
+      live: { permission: 'people.earnings.view', fields: ['periodId', 'companyId', 'month', 'status', 'change'] },
+    }),
+    defineEvent({
+      type: 'worker_statement.changed',
+      context: 'people',
+      description: "A person's statement of a period was made, reviewed by their lead or approved by HR.",
+      payload: z.strictObject({ statementId: z.uuid(), periodId: z.uuid(), siteId: z.uuid(), status: z.enum(STATEMENT_STATUSES), revision: z.number().int().min(1), change: z.enum(['MADE', 'LEAD_REVIEWED', 'APPROVED']) }),
+      live: { permission: 'people.earnings.view', fields: ['statementId', 'periodId', 'siteId', 'status', 'revision', 'change'] },
+    }),
+  ] as const
+}
+
+/**
  * B-W2b-48: the month close and the LUL calendar (design people.attendance "Month close", people.reports "attendance.
  * month_closed → match check"), emitted by apps/factory-api modules/people/close in the command that makes the change. Ids,
  * months and kinds only: never a name, a minute figure or a reason about a person.
@@ -484,4 +546,63 @@ function closeEvents() {
       live: { permission: 'people.attendance.view', fields: ['correctionId', 'closeId', 'dayId', 'siteId', 'kind'] },
     }),
   ] as const
+}
+
+/**
+ * The payroll export's events (B-W2b-54): ids, states and counts only. No person, no figure, no address, never a link's token.
+ * Live under people.payroll.view: the design's `link.downloaded → 'Downloaded 4 Nov 09:12'` is payroll_export.downloaded.
+ */
+function payrollEvents() {
+  const PAYROLL_MONTH = z.string().regex(/^\d{4}-\d{2}$/)
+  return [
+    defineEvent({
+      type: 'payroll_export.exported',
+      context: 'people',
+      description: "A month's payroll export, or a correction of it, was made with its number and files.",
+      payload: z.strictObject({ exportId: z.uuid(), companyId: z.uuid(), month: PAYROLL_MONTH, number: z.string(), revision: z.number().int().min(1), correctionOfId: z.uuid().nullable(), people: z.number().int().min(0), rows: z.number().int().min(0) }),
+      live: { permission: 'people.payroll.view', fields: ['exportId', 'companyId', 'month', 'number', 'revision', 'correctionOfId'] },
+    }),
+    defineEvent({
+      type: 'payroll_export.cancelled',
+      context: 'people',
+      description: 'A draft payroll export was abandoned, by a person or by a newer export of the month.',
+      payload: z.strictObject({ exportId: z.uuid(), companyId: z.uuid(), month: PAYROLL_MONTH }),
+      live: { permission: 'people.payroll.view', fields: ['exportId', 'companyId', 'month'] },
+    }),
+    defineEvent({
+      type: 'payroll_export.sent',
+      context: 'people',
+      description: 'A payroll export was sent to the labour consultant by a secure link.',
+      payload: z.strictObject({ exportId: z.uuid(), companyId: z.uuid(), month: PAYROLL_MONTH, linkId: z.uuid() }),
+      live: { permission: 'people.payroll.view', fields: ['exportId', 'companyId', 'month', 'linkId'] },
+    }),
+    defineEvent({
+      type: 'payroll_export.link_withdrawn',
+      context: 'people',
+      description: 'The secure link of a payroll export was withdrawn: by a person, or because a correction replaced the file.',
+      payload: z.strictObject({ exportId: z.uuid(), companyId: z.uuid(), linkId: z.uuid() }),
+      live: { permission: 'people.payroll.view', fields: ['exportId', 'companyId', 'linkId'] },
+    }),
+    defineEvent({
+      type: 'payroll_export.downloaded',
+      context: 'people',
+      description: "A file of a payroll export was downloaded through its secure link.",
+      payload: z.strictObject({ exportId: z.uuid(), companyId: z.uuid(), linkId: z.uuid(), fileId: z.uuid() }),
+      live: { permission: 'people.payroll.view', fields: ['exportId', 'companyId', 'linkId'] },
+    }),
+    defineEvent({
+      type: 'payroll_code.changed',
+      context: 'people',
+      description: 'A code of the payroll code mapping changed.',
+      payload: z.strictObject({ companyId: z.uuid(), kind: z.enum(PAYROLL_CODE_KINDS), ourCode: z.string() }),
+      live: { permission: 'people.payroll.view', fields: ['companyId', 'kind', 'ourCode'] },
+    }),
+    defineEvent({
+      type: 'payroll_layout.changed',
+      context: 'people',
+      description: 'A payroll file layout was added, changed or archived.',
+      payload: z.strictObject({ layoutId: z.uuid(), companyId: z.uuid(), change: z.enum(['CREATED', 'EDITED', 'ARCHIVED']) }),
+      live: { permission: 'people.payroll.view', fields: ['layoutId', 'companyId', 'change'] },
+    }),
+  ]
 }

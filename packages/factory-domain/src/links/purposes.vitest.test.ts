@@ -70,9 +70,9 @@ describe('the purposes', () => {
     expect(ROLE_TEMPLATES.find((template) => template.key === 'read_only')?.permissions).not.toContain(LINKS_MANAGE)
   })
 
-  it('let only DOCUMENT_VIEW read files (its record\'s, shared with its party\'s links): a stored file or a shipment', () => {
+  it('let only DOCUMENT_VIEW read files (its record\'s, shared with its party\'s links): a stored file, a shipment, or a payroll export through its own module', () => {
     expect(linkPermissions('DOCUMENT_VIEW')).toEqual(['files.read', 'links.open', 'money.price'])
-    expect(PURPOSE_RULES.DOCUMENT_VIEW.recordTypes).toEqual(['StoredFile', 'Shipment'])
+    expect(PURPOSE_RULES.DOCUMENT_VIEW.recordTypes).toEqual(['StoredFile', 'Shipment', 'PayrollExport'])
     for (const purpose of LINK_PURPOSES.filter((name) => name !== 'DOCUMENT_VIEW')) expect(linkPermissions(purpose), purpose).not.toContain('files.read')
   })
 

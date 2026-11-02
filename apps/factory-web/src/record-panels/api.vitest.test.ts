@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createApiClient } from '../lib/api/client'
-import { listFiles, postNote, requestUpload, sendEmail, setThreadStatus } from './api'
+import { listFiles, messageSchema, postNote, requestUpload, sendEmail, setThreadStatus, timelineEntrySchema } from './api'
 import { parseLiveData } from './live'
 import { sendNotice } from './RecordPanels'
 import { apiErrorFrom } from '../lib/api/errors'
@@ -132,5 +132,32 @@ describe('the live stream', () => {
     expect(parseLiveData('not json')).toBeNull()
     expect(parseLiveData('{"fields":{}}')).toBeNull()
     expect(parseLiveData('{"type":"x"}')).toEqual({ type: 'x', fields: {} })
+  })
+})
+
+describe('the thread answer (B-W2b-F4)', () => {
+  const note = { id: 'm1', direction: 'INTERNAL_NOTE', audience: 'OFFICE', channel: 'APP', body: 'x', bodyHtml: null, attachments: [], at: '2026-10-28T10:00:00.000Z' }
+
+  it('takes a floor note the legal gate keeps back: no id, no name, and the message says so', () => {
+    expect(messageSchema.parse({ ...note, author: { kind: 'WORKER', id: null, name: null }, authorHidden: true })).toMatchObject({ author: { kind: 'WORKER', id: null, name: null }, authorHidden: true })
+  })
+
+  it('a portal answer carries no flag: nobody is hidden', () => {
+    expect(messageSchema.parse({ ...note, author: { kind: 'USER', name: null } }).authorHidden).toBe(false)
+  })
+})
+
+describe('the timeline answer (B-W2b-F4)', () => {
+  const change = { kind: 'change', id: 'c1', at: '2026-10-28T10:00:00.000Z', action: 'production.cut', status: null, fields: [], before: null, after: null, reason: null }
+
+  it('takes a floor worker the legal gate keeps back: no id, and the row says so', () => {
+    expect(timelineEntrySchema.parse({ ...change, actor: { audience: 'FLOOR', id: null }, actorHidden: true })).toMatchObject({ actor: { audience: 'FLOOR', id: null }, actorHidden: true })
+    expect(
+      timelineEntrySchema.parse({ kind: 'message', id: 'm1', at: change.at, direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'WORKER', id: null, name: null }, authorHidden: true, excerpt: 'x', attachmentCount: 0 }),
+    ).toMatchObject({ author: { kind: 'WORKER', id: null, name: null }, authorHidden: true })
+  })
+
+  it('an office user stays as the API sent them', () => {
+    expect(timelineEntrySchema.parse({ ...change, actor: { audience: 'OFFICE', id: 'u1' }, actorHidden: false })).toMatchObject({ actor: { audience: 'OFFICE', id: 'u1' }, actorHidden: false })
   })
 })

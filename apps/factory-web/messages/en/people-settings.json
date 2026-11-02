@@ -1,0 +1,362 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "loading": "Loading…",
+    "reason": "Reason",
+    "unknown": "someone",
+    "min": "min",
+    "hours": "h",
+    "months": "months",
+    "people": "people",
+    "close": "Close"
+  },
+  "band": {
+    "more": "More actions",
+    "history": "History (audit log)",
+    "changedElsewhere": "Changed by someone else: read the page again to see it.",
+    "reload": "Reload"
+  },
+  "section": {
+    "loading": "{section}: still loading…",
+    "failed": "Couldn't load {section}"
+  },
+  "card": {
+    "unsaved": "Unsaved changes"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "save": "Save the card"
+  },
+  "rounding": {
+    "title": "Rounding, tolerance and grace",
+    "purpose": "How clock events become hours. It counts from each day's next computation; an approved day keeps its figures.",
+    "early": "Early clock-in counts from shift start",
+    "earlyHint": "Clocking in before the shift adds no time.",
+    "fixedBreaks": "Breaks come from the shift",
+    "fixedBreaksHint": "Off: people clock out for a break.",
+    "grace": "Lateness grace",
+    "unit": "Minimum overtime unit",
+    "round": "Rounding of clock events",
+    "roundNone": "None",
+    "roundMinutes": "{count} min",
+    "auto": "Automatic clock-out",
+    "autoHint": "After the shift ends, plus this tolerance. The day is flagged for a person to look at.",
+    "autoToggle": "Close an open clock-in automatically",
+    "example": "Worked example, 06:00–14:00 shift",
+    "problem": {
+      "lateGraceMinutes": "Give the grace as 0 to 60 minutes.",
+      "overtimeUnitMinutes": "Count overtime in units of 1 to 60 minutes.",
+      "roundingMinutes": "Round to none, 5 or 15 minutes.",
+      "autoClockOutAfterMinutes": "Close it 0 to 720 minutes after the shift ends."
+    }
+  },
+  "example": {
+    "earlyOn": "A clock-in at 05:52 for a 06:00 shift counts from 06:00.",
+    "earlyOff": "A clock-in at 05:52 for a 06:00 shift counts from {time}: the minutes before 06:00 count only as overtime.",
+    "graceOn": "A clock-in up to {until} still counts from 06:00; at {after} it counts from {counted}.",
+    "graceNone": "A clock-in after 06:00 counts from that minute (no lateness grace).",
+    "graceNoneRounded": "A clock-in after 06:00 counts from that minute, rounded (no lateness grace).",
+    "roundOn": "Clock events are rounded to the nearest {unit} minutes: 13:52 counts as {a}, 13:53 as {b}.",
+    "roundOff": "Clock events are not rounded: they count to the minute.",
+    "overtime": "Overtime counts in whole units of {unit} minutes: a clock-out {after} minutes after a 14:00 shift end gives {unit} minutes.",
+    "overtimeLong": "Overtime counts in whole units of {unit} minutes: a clock-out {after} minutes after a 14:00 shift end gives {unit} minutes; {less} minutes after it gives none.",
+    "autoNever": "An open clock-in is never closed automatically: the day is flagged for a person to fix.",
+    "autoAfter": "An open clock-in is closed automatically {minutes} minutes after the shift ends, and the day is flagged for a person to look at.",
+    "breaksFixed": "Breaks come from the shift and are deducted automatically; nobody clocks them.",
+    "breaksClocked": "People clock out for a break and back in; the clocked breaks are deducted."
+  },
+  "code": {
+    "title": "Absence codes",
+    "purpose": "Codes for the LUL and payroll. An archived code stays readable on its days.",
+    "code": "Code",
+    "codeHint": "1 to 8 capital letters and digits, starting with a letter.",
+    "codeFixed": "A code never changes.",
+    "nameIt": "Name in Italian",
+    "nameEn": "Name in English",
+    "category": "Category",
+    "paid": "Paid",
+    "isPaid": "Paid",
+    "isUnpaid": "Unpaid",
+    "lul": "LUL code",
+    "lulHint": "From the labour consultant; empty until they give it.",
+    "document": "Needs a document number",
+    "documentHint": "Only a number, such as a certificate's protocol.",
+    "documentYes": "Number needed",
+    "documentNo": "Not needed",
+    "reach": "For",
+    "reachGroup": "Every company",
+    "reachCompany": "This company",
+    "reachHint": "Needs a role over every company.",
+    "inUse": "Days",
+    "status": "State",
+    "state": {
+      "ACTIVE": "In use",
+      "ARCHIVED": "Archived"
+    },
+    "rowMenu": "Actions on {code}",
+    "edit": "Edit",
+    "archive": "Archive",
+    "restore": "Restore",
+    "standard_one": "Add {count} from the standard list",
+    "standard_other": "Add {count} from the standard list",
+    "standardAll": "Start from the standard list",
+    "add": "Add a code",
+    "count_one": "{count} code",
+    "count_other": "{count} codes",
+    "showArchived": "Show archived",
+    "archiveCount_one": "Archive {count}",
+    "archiveCount_other": "Archive {count}",
+    "restoreCount_one": "Restore {count}",
+    "restoreCount_other": "Restore {count}",
+    "empty": "No absence codes yet",
+    "foot": "The standard list holds the usual Italian codes to review: their LUL codes come from the labour consultant.",
+    "titleNew": "New absence code",
+    "titleEdit": "Absence code {code}",
+    "save": "Save code",
+    "sensitive": "For this category Nexus keeps a certificate's number at most, never a diagnosis.",
+    "law": "GDPR art. 9",
+    "lawPlain": "Health and family data are special categories of personal data.",
+    "problem": {
+      "code": "1 to 8 capital letters and digits, starting with a letter.",
+      "labelI18n": "Give the name in Italian at least.",
+      "category": "Choose the category.",
+      "lulCode": "1 to 16 letters, digits, dots, hyphens or underscores.",
+      "paid": "Say whether it is paid."
+    }
+  },
+  "category": {
+    "HOLIDAY": "Holiday",
+    "PERMIT": "Permit (ROL)",
+    "SICKNESS": "Sickness",
+    "INJURY": "Injury",
+    "PARENTAL": "Parental leave",
+    "LAW_104": "Law 104 leave",
+    "UNION": "Union leave",
+    "STRIKE": "Strike",
+    "UNPAID_LEAVE": "Unpaid leave",
+    "OTHER": "Other"
+  },
+  "limits": {
+    "title": "Working-time limits",
+    "purpose": "Warnings before the law is broken.",
+    "forSite": "For {name}",
+    "forCompany": "For the whole company",
+    "waitingScope": "Save or discard this card to see the site chosen in the top bar.",
+    "kind": {
+      "DAILY_REST": "Rest between shifts",
+      "WEEKLY_REST": "Weekly rest",
+      "WEEKLY_AVERAGE": "Weekly average",
+      "BREAK_AFTER": "Break after",
+      "OVERTIME_YEARLY_CAP": "Overtime in a year",
+      "NIGHT_AVERAGE": "Night work"
+    },
+    "value": {
+      "DAILY_REST": "At least",
+      "WEEKLY_REST": "At least",
+      "WEEKLY_AVERAGE": "At most",
+      "BREAK_AFTER": "After",
+      "OVERTIME_YEARLY_CAP": "At most",
+      "NIGHT_AVERAGE": "At most, on average"
+    },
+    "lawValue": "The law says {hours} h.",
+    "notChecked": "Kept here, not checked yet",
+    "months": "Reference period",
+    "break": "Break of",
+    "action": "When it is reached",
+    "WARN": "Warn",
+    "BLOCK": "Block",
+    "source": "Comes from",
+    "LAW": "The law",
+    "CCNL": "CCNL",
+    "reference": "CCNL article",
+    "alerted": "Who is alerted",
+    "useCompany": "Use the company's limit",
+    "useLaw": "Use the wider limit or the law",
+    "problem": {
+      "limitMinutes": "Looser than the law: it needs the CCNL article that allows it.",
+      "breakMinutes": "The law asks at least 10 minutes: less needs the CCNL article.",
+      "referenceMonths": "The law says 4 months: longer needs the CCNL article.",
+      "legalReference": "Name the CCNL article.",
+      "alertRoles": "Check who is alerted (8 roles at most)."
+    },
+    "alertedSearch": "Search roles",
+    "alertedNone": "Nobody yet"
+  },
+  "privacy": {
+    "title": "Privacy of people data",
+    "purpose": "Who sees individual figures and how small a group may be shown.",
+    "sites": "the sites",
+    "group": "Minimum group size for totals",
+    "groupHint": "A smaller group never shows its figures. {min} is the lowest.",
+    "roles": "Roles that see one person's figures, besides the worker",
+    "rolesHint": "A role here must also hold the right to open figures; every opening is recorded.",
+    "widenHint": "This widens who sees people's figures: it needs a reason and a fresh code.",
+    "basis": "Legal basis of the site",
+    "noBasis": "None recorded",
+    "basisLink": "Production › Settings",
+    "retention": "Retention",
+    "retentionLink": "Admin › Privacy & notices",
+    "problem": {
+      "size": "The group size goes from 3 to 50.",
+      "reason": "Say why first."
+    }
+  },
+  "basis": {
+    "UNION_AGREEMENT": "Union agreement (RSU / RSA)",
+    "INL_AUTHORISATION": "Labour inspectorate authorisation",
+    "NOT_REQUIRED": "Counsel's written opinion: none needed"
+  },
+  "gate": {
+    "title": {
+      "ATTENDANCE": "Attendance",
+      "PERFORMANCE": "One person's work figures"
+    },
+    "item": {
+      "notice": "The worker notice is published",
+      "dpia": "The impact assessment is stored",
+      "dpiaVersion": "Version {version}",
+      "basis": "The site's legal basis is recorded",
+      "attendanceBasis": "The basis kept for attendance",
+      "privacyLink": "Admin › Privacy & notices",
+      "basisLink": "Production › Settings",
+      "onRecord": "On record"
+    },
+    "law": {
+      "notice": "L. 300/1970 art. 4 c.3; GDPR art. 13",
+      "noticePlain": "Workers are told how their data is used, before it is used.",
+      "dpia": "GDPR art. 35",
+      "dpiaPlain": "A risk to people's rights is assessed first.",
+      "ATTENDANCE": "L. 300/1970 art. 4 c.2",
+      "ATTENDANCEPlain": "A tool that records work needs no agreement, but the workers must be told.",
+      "PERFORMANCE": "L. 300/1970 art. 4 c.1",
+      "PERFORMANCEPlain": "A tool that can monitor work needs an agreement or an authorisation."
+    },
+    "switchOn": "Switch on",
+    "switchOff": "Switch off",
+    "who": "Who sees one person's figures at this site",
+    "whoHr": "The worker and HR",
+    "whoHrHint": "Each opening is recorded.",
+    "whoLead": "The worker, the team lead and HR",
+    "whoLeadHint": "The recorded basis covers leads. Widening needs a fresh code.",
+    "whoLeadHeld": "Held: the recorded basis does not cover leads.",
+    "onTitle": "Switch on: {purpose}, {site}",
+    "offTitle": "Switch off: {purpose}, {site}",
+    "leadsTitle": "Let team leads see figures, {site}",
+    "leadsBody": "Team leads will see one person's figures of their own team. Each opening is recorded.",
+    "leadsConfirm": "Let leads see figures",
+    "onBody": {
+      "ATTENDANCE": "Clock-in and attendance days start at this site. The worker notice and the impact assessment in force are recorded with this decision.",
+      "PERFORMANCE": "One person's work figures open at this site, for the worker and HR, one person at a time. The site's basis, the notice and the assessment are recorded with this decision."
+    },
+    "offBody": {
+      "ATTENDANCE": "Attendance closes at this site: per-person reads are refused from now on. What was recorded stays. Switching on again is a new decision.",
+      "PERFORMANCE": "One person's figures close at this site. Switching on again is a new decision."
+    },
+    "basisKind": "Basis kept",
+    "basisPick": "Choose the basis",
+    "basisReference": "Reference",
+    "basisReferenceHint": "The opinion's author and date, or the agreement's number and date.",
+    "siteBasis": "Basis of this site: {basis}. To change it, use Production › Settings.",
+    "covers": "The agreement names team leads",
+    "coversHint": "Only an agreement or an authorisation can say so.",
+    "leads": "Leads see figures from the start",
+    "reasonHint": "Kept with the decision.",
+    "problem": {
+      "reason": "Say why first.",
+      "basis": "Give the basis and its reference first."
+    }
+  },
+  "note": {
+    "dpiaReview": "The impact assessment (version {version}) was due for review on {day}: review it.",
+    "stationOnly": "This site's floor records name the station only: no work figure about one person is recorded here.",
+    "noticeChanged": "The worker notice changed since this was switched on: switch off and on again to record the one in force.",
+    "dpiaChanged": "The impact assessment changed since this was switched on: check it still covers this, then switch off and on again.",
+    "basisChanged": "The site's legal basis changed since this was switched on: switch off and on again to record the one in force.",
+    "other": "Something changed since this was switched on: check it."
+  },
+  "stepUp": {
+    "title": "Your code",
+    "widen": "Widening who sees people's figures needs a fresh code from your authenticator app.",
+    "leads": "Letting leads see figures needs a fresh code from your authenticator app.",
+    "switchOn": "Switching this on needs a fresh code from your authenticator app.",
+    "confirm": "Confirm",
+    "problem": {
+      "wrong": "That code is not valid.",
+      "locked": "Too many tries: wait a moment.",
+      "unavailable": "The code could not be checked: try again."
+    }
+  },
+  "done": {
+    "rounding": "Rounding rules saved: they count from each day's next computation.",
+    "limits_one": "{count} limit saved.",
+    "limits_other": "{count} limits saved.",
+    "privacy": "Privacy settings saved.",
+    "code": "Code {code} saved.",
+    "archived_one": "{count} code archived.",
+    "archived_other": "{count} codes archived.",
+    "restored_one": "{count} code restored.",
+    "restored_other": "{count} codes restored.",
+    "standard_one": "{count} code added from the standard list.",
+    "standard_other": "{count} codes added from the standard list.",
+    "switchedOn": "Switched on at this site.",
+    "switchedOff": "Switched off at this site.",
+    "widened": "Team leads see figures at this site.",
+    "narrowed": "Team leads no longer see figures at this site."
+  },
+  "held": {
+    "noAudit": "Your role does not read the audit log.",
+    "noAttendance": "Your role reads these rules and does not change them.",
+    "noLimits": "Your role reads these limits and does not change them.",
+    "noPrivacy": "Only the Owner changes these.",
+    "allArchived": "Every chosen code is archived.",
+    "noneArchived": "No chosen code is archived."
+  },
+  "field": {
+    "code": "Check the code.",
+    "codeTaken": "This code exists already: codes are unique across the group.",
+    "labelI18n": "Check the name.",
+    "lulCode": "Check the LUL code.",
+    "limitMinutes": "Check the limit.",
+    "breakMinutes": "Check the break.",
+    "referenceMonths": "Check the reference period.",
+    "legalReference": "Name the law or the CCNL article.",
+    "reason": "Say why, in a few words.",
+    "basis": "Check the basis and its reference.",
+    "basisCoversLeads": "The basis recorded does not cover leads.",
+    "leadsSeeFigures": "Leads see figures only where the recorded basis covers them.",
+    "minimumGroupSize": "The group size goes from 3 to 50.",
+    "figureRoleKeys": "Check the roles chosen."
+  },
+  "leave": {
+    "title": "Unsaved changes",
+    "body": "You changed these settings and did not save them.",
+    "save": "Save",
+    "discard": "Discard",
+    "stay": "Stay"
+  },
+  "history": {
+    "title": "People settings: audit log",
+    "failed": "Couldn't read the log",
+    "empty": "Nothing changed yet",
+    "when": "When",
+    "who": "Who",
+    "what": "What",
+    "system": "The system",
+    "action": {
+      "changeAttendanceSettings": "Rounding rules changed",
+      "changePrivacySettings": "Privacy settings changed",
+      "switchOnPurpose": "Gate switched on",
+      "switchOffPurpose": "Gate switched off",
+      "changePurposeLeads": "Who sees figures changed",
+      "createAbsenceCode": "Absence code added",
+      "editAbsenceCode": "Absence code changed",
+      "archiveAbsenceCode": "Absence code archived",
+      "restoreAbsenceCode": "Absence code restored",
+      "saveWorkingTimeLimit": "Working-time limit saved",
+      "archiveWorkingTimeLimit": "Working-time limit removed",
+      "other": "Changed"
+    }
+  }
+}
