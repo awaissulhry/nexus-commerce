@@ -1882,6 +1882,8 @@
     "people_attendance_approve": "Approvare le giornate di presenza senza anomalie aperte (mai le proprie)",
     "people_attendance_settings": "Gestire i codici di assenza con il codice LUL del consulente del lavoro e le regole di arrotondamento, tolleranza e straordinario",
     "people_attendance_rollcall": "Aprire l'appello di una sede: chi ha timbrato l'entrata ora, per un'evacuazione (ogni apertura è registrata)",
+    "people_efficiency_view": "Vedere l'efficienza per linea e per operazione, la coda di revisione degli standard e il tempo ciclo (mai per persona)",
+    "people_efficiency_review": "Decidere la revisione degli standard: tenere uno standard, cambiarlo o indagare, sempre con un motivo",
     "people_overtime_review": "Approvare o rifiutare lo straordinario lavorato (si paga solo dopo l'approvazione)",
     "people_timesheets_team": "Approvare come responsabile i fogli ore dei team che guidi (i giorni, non le ore)",
     "people_timesheets_lead": "Approvare come responsabile qualsiasi foglio ore raggiungibile e rimandarlo indietro",

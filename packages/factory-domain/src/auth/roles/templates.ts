@@ -255,6 +255,16 @@ const PEOPLE_ATTENDANCE_ADDS: Readonly<Record<string, readonly Permission[]>> = 
   floor_supervisor: ['people.attendance.rollcall'],
 })
 /**
+ * B-W2b-44 (efficiency; MES-247, MES-250, MES-251, ANA-016, ANA-017; design people.efficiency "What you see here": owner,
+ * supervisor, the industrial engineer): the production manager and the floor supervisor read the figures per line and per
+ * operation; the production manager decides the standard review. Nobody here sees one person's figures: that is
+ * people.figures.view (B-W2b-27), held by no template. Owner and read-only take theirs from every(). One line per template.
+ */
+const PEOPLE_EFFICIENCY_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['people.efficiency.view', 'people.efficiency.review'],
+  floor_supervisor: ['people.efficiency.view'],
+})
+/**
  * B-W2b-42 (overtime worked, timesheets, working-time limits; MES-229, MES-230, MES-232): the administrator (the HR
  * register's keeper) decides overtime, gives HR's approval of a timesheet and keeps the limits; the production manager
  * decides overtime and stands in as the lead for any timesheet; the floor supervisor approves as the lead the timesheets of
@@ -336,6 +346,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_PIECERATES_ADDS[key] ?? []) : []),
   // B-W2b-37
   ...(audience === 'office' ? (PEOPLE_ATTENDANCE_ADDS[key] ?? []) : []),
+  // B-W2b-44
+  ...(audience === 'office' ? (PEOPLE_EFFICIENCY_ADDS[key] ?? []) : []),
   // B-W2b-42
   ...(audience === 'office' ? (PEOPLE_OVERTIME_ADDS[key] ?? []) : []),
   // B-W2b-49

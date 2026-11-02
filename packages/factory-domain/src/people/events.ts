@@ -10,6 +10,8 @@ import { SKILL_KINDS, SKILL_LEVELS } from './skills/rules'
 import { VERSION_STATUSES } from './piecerates/rates'
 // B-W2b-33: clock in and out.
 import { CLOCK_ACTIONS } from './clock/rules'
+// B-W2b-44: efficiency.
+import { REVIEW_DECISIONS } from './efficiency/rules'
 // B-W2b-38: incentive schemes.
 import { SCHEME_STATUSES } from './schemes/rules'
 // B-W2b-37: attendance days.
@@ -102,6 +104,14 @@ export const events = [
   ...attendanceEvents(),
   // B-W2b-42: overtime worked, timesheets, working-time limits (overtimeEvents, at the end of the file).
   ...overtimeEvents(),
+  // B-W2b-44: the standard review (no person, no figure).
+  defineEvent({
+    type: 'standard_review.decided',
+    context: 'people',
+    description: 'A decision of the standard review: a standard kept, to be changed or under investigation, or an operation sent to the review.',
+    payload: z.strictObject({ routingOperationId: z.uuid(), siteId: z.uuid(), decision: z.enum(REVIEW_DECISIONS) }),
+    live: { permission: 'people.efficiency.view', fields: ['routingOperationId', 'siteId', 'decision'] },
+  }),
   defineEvent({
     type: 'employee.created',
     context: 'people',
