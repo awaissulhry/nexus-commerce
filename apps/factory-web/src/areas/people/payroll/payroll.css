@@ -1,0 +1,182 @@
+/*
+ * People › Payroll export (SCR-159, its Past export and file tabs) LAYOUT: the band's status, the wizard (stepper, the step with
+ * "This export" beside it from 1280 px, Back / Continue at the foot), the sites, the formats, the files, the CSV columns' rows.
+ * The controls are the design system's; this file only places them, with semantic tokens (no colours of its own). No page
+ * max-width (Owner rule 2026-10-29): the page fills the shell's main area; the preview and the mapping take the whole width.
+ */
+.fw-pay-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pay-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pay-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pay-status .nds-pill {
+  white-space: normal;
+}
+
+.fw-pay-stepper {
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: var(--nds-space-6);
+}
+
+/* On a phone the five steps keep their words and scroll inside this box. */
+.fw-pay-stepper .nds-stepper {
+  min-width: 34rem;
+}
+
+.fw-pay-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14) var(--nds-space-20);
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .fw-pay-body {
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+    align-items: start;
+  }
+
+  .fw-pay-body.is-wide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pay-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-pay-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle, var(--nds-border));
+  min-width: 0;
+}
+
+.fw-pay-sites {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--nds-space-6) var(--nds-space-14);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pay-sites li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pay-open {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pay-formats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pay-format {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-pay-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-pay-ordered {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-inline-start: var(--nds-space-20);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-pay-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-6);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fw-pay-column.is-fixed {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 0.5fr) minmax(0, 1.2fr) auto;
+}
+
+@media (max-width: 719px) {
+  .fw-pay-column,
+  .fw-pay-column.is-fixed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pay .fw-pp-cell {
+  align-items: flex-start;
+  width: 100%;
+  text-align: start;
+}
+
+.fw-pay .fw-pp-cell > * {
+  max-width: 100%;
+}
+
+.fw-pay-editor {
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--nds-space-8);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface);
+  color: var(--nds-text-strong);
+  font: inherit;
+}

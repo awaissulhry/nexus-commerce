@@ -94,6 +94,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Sales › Returns & repairs (SCR-112, B-W2a-77): a customer return (RMA) and a repair or alteration.
   ReturnAuthorisation: '/sales/returns/[id]',
   RepairOrder: '/sales/returns/repairs/[id]',
+  // B-W2b-63 People › Payroll export (SCR-159): a file made for the labour consultant opens as Past export.
+  PayrollExport: '/people/payroll/[id]',
   // Finance › Accounting export (SCR-156, B-W2a-51): a batch opens on its files tab (its checks, explanations and files).
   AccountingExport: '/finance/accounting/files?export=[id]',
   // Production › Scrap & rework (SCR-140, B-W2a-60): a rework order opens in its row's detail on the list.

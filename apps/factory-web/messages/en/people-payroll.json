@@ -1,0 +1,650 @@
+{
+  "aside": {
+    "checks": "Checks",
+    "format": "Format",
+    "month": "Month",
+    "noFormat": "None yet",
+    "people": "People on the file",
+    "peopleHint": "A count: their values open by employee code.",
+    "title": "This export",
+    "version": "Version",
+    "versionHint": "v{version} is the file sent so far."
+  },
+  "band": {
+    "correct": "Make correction",
+    "format": "Format: Zucchetti / CSV / Excel",
+    "keys": "Keyboard shortcuts",
+    "mapping": "Code mapping",
+    "more": "More actions",
+    "open": "Open v{version}",
+    "past": "Past exports",
+    "send": "Send by secure link",
+    "start": "Start {month} export",
+    "startPlain": "Start an export"
+  },
+  "cancel": {
+    "heldReason": "Write the reason.",
+    "reason": "Reason",
+    "submit": "Cancel draft",
+    "title": "Cancel the draft of {month}"
+  },
+  "change": {
+    "ADDED": "Added",
+    "CHANGED": "Changed",
+    "REMOVED": "Removed"
+  },
+  "check": {
+    "AGENCY_LEFT_OUT": {
+      "done": "Nobody is left out.",
+      "left_one": "{count} agency or external person is left out: their employer pays them.",
+      "left_other": "{count} agency or external people are left out: their employer pays them.",
+      "name": "Agency workers left out"
+    },
+    "ANOMALIES_CLEARED": {
+      "done": "No anomaly is open.",
+      "left_one": "{count} anomaly is still open.",
+      "left_other": "{count} anomalies are still open.",
+      "name": "Anomalies cleared"
+    },
+    "CODES_MAPPED": {
+      "done": "Every code the file needs is mapped.",
+      "left_one": "{count} code has no provider code.",
+      "left_other": "{count} codes have no provider code.",
+      "name": "Codes mapped",
+      "warn_one": "{count} code has no provider code. This format prints our own codes, so it can go.",
+      "warn_other": "{count} codes have no provider code. This format prints our own codes, so it can go."
+    },
+    "DAYS_APPROVED": {
+      "done": "Every day is approved.",
+      "left_one": "{count} day is not approved.",
+      "left_other": "{count} days are not approved.",
+      "name": "Days approved"
+    },
+    "EMPLOYEE_CODES": {
+      "done": "Every person has an employee code.",
+      "left_one": "{count} person has no employee code.",
+      "left_other": "{count} people have no employee code.",
+      "name": "Employee codes"
+    },
+    "LAYOUT_FITS": {
+      "done": "Every value fits its column.",
+      "left_one": "{count} value does not fit a column of this format.",
+      "left_other": "{count} values do not fit a column of this format.",
+      "name": "Values fit the format"
+    },
+    "LAYOUT_NOT_CONFIRMED": {
+      "done": "The format is confirmed.",
+      "left": "The provider format is not confirmed by the labour consultant yet.",
+      "name": "Format confirmed"
+    },
+    "LEAVERS": {
+      "done": "No leaver this month.",
+      "left_one": "{count} leaver is flagged on this file.",
+      "left_other": "{count} leavers are flagged on this file.",
+      "name": "Leavers flagged"
+    },
+    "MONTH_CLOSED": {
+      "done": "{month} is closed.",
+      "left": "{month} is not closed: close it in Attendance first.",
+      "name": "Month closed"
+    },
+    "NOT_ON_FILE": {
+      "done": "Every active employee is on the file.",
+      "left_one": "{count} active employee has no day and no earnings this month, so is not on the file.",
+      "left_other": "{count} active employees have no day and no earnings this month, so are not on the file.",
+      "name": "Active employees not on the file"
+    },
+    "PAY_PERIOD_LOCKED": {
+      "done": "The pay period is locked, or piece pay is not on in this month.",
+      "left": "Piece pay is on in {month}: its pay period must be locked first.",
+      "name": "Pay period locked"
+    },
+    "PRODUCTION_DAYS": {
+      "done": "Production days are closed.",
+      "left_one": "{count} line day is not closed in Production › Labour & corrections.",
+      "left_other": "{count} line days are not closed in Production › Labour & corrections.",
+      "name": "Production days closed"
+    }
+  },
+  "checks": {
+    "counts": "Blocking: {blocking} · Warnings: {warnings}",
+    "recorded": "\"Show me\" names people only with the right, and each opening is recorded."
+  },
+  "col": {
+    "amount": "Amount",
+    "changed": "What changed",
+    "changedRow": "Changed",
+    "company": "Company",
+    "downloads": "Downloads",
+    "employeeCode": "Employee code",
+    "expires": "Expires",
+    "format": "Format",
+    "kind": "Type",
+    "lastChanged": "Last changed",
+    "lastDay": "Last day",
+    "linkState": "Link",
+    "made": "Made by, at",
+    "meaning": "Meaning",
+    "more": "Actions",
+    "ourCode": "Our code",
+    "people": "People",
+    "period": "Period",
+    "person": "Person",
+    "providerCode": "Provider code (voce, causale)",
+    "quantity": "Quantity",
+    "seal": "Seal",
+    "sent": "Sent to · downloaded",
+    "to": "To",
+    "uses": "Uses",
+    "version": "Version"
+  },
+  "column": {
+    "amount": "Amount",
+    "code": "Provider code",
+    "companyCode": "Company code",
+    "constant": "Fixed text",
+    "currency": "Currency",
+    "employeeCode": "Employee code",
+    "kind": "Type",
+    "lastDay": "Leaver's last day",
+    "meaning": "Meaning",
+    "minutes": "Minutes",
+    "month": "Month",
+    "ourCode": "Our code",
+    "periodEnd": "Last day",
+    "periodStart": "First day",
+    "quantity": "Quantity",
+    "revision": "Version",
+    "unit": "Unit"
+  },
+  "columns": {
+    "add": "Add a column",
+    "comma": "Comma",
+    "companyCode": "Payroll company code",
+    "companyCodeHint": "Empty: the company's code.",
+    "date": "Date format",
+    "decimal": "Decimal separator",
+    "delimiter": {
+      "0": "Semicolon ;",
+      "1": "Comma ,",
+      "2": "Tab",
+      "3": "Bar |"
+    },
+    "delimiterLabel": "Column separator",
+    "dot": "Dot",
+    "dropsConfirmation": "Saving new columns takes back the consultant's confirmation.",
+    "encoding": "Character set",
+    "format": "Format of column {number}",
+    "formatDefault": "Default format",
+    "header": "Header of column {number}",
+    "headerHint": "Header",
+    "headerRow": "First row holds the headers",
+    "held": {
+      "format": "Column {number} has a format that does not fit it.",
+      "key": "Choose the content of column {number}.",
+      "name": "Give the format a name.",
+      "none": "A format has at least one column.",
+      "other": "Check the separators and the date format.",
+      "value": "Column {number} says what it prints.",
+      "width": "Column {number} needs a whole width of 1 to 200."
+    },
+    "implied_one": "Whole digits, {count} implied decimal",
+    "implied_other": "Whole digits, {count} implied decimals",
+    "key": "Content of column {number}",
+    "list": "Columns, in order",
+    "name": "Format name",
+    "number_one": "{count} decimal",
+    "number_other": "{count} decimals",
+    "remove": "Remove column {number}",
+    "save": "Save layout",
+    "value": "Text of column {number}",
+    "valueHint": "Always prints this",
+    "width": "Width of column {number}",
+    "widthHint": "Width"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "retry": "Try again"
+  },
+  "confirm": {
+    "by": "Confirmed by",
+    "byHint": "The consultant's name or their office.",
+    "held": {
+      "by": "Write who confirmed it.",
+      "on": "Choose the day."
+    },
+    "item": {
+      "1": "The provider layout: the record, its widths and formats (the Zucchetti starter here is made up; their sample replaces it).",
+      "10": "That a correction replaces the whole file (v2 replaces v1) rather than carrying only the differences.",
+      "11": "The character set and line ends of the file.",
+      "12": "How long our copy is kept (five years here).",
+      "2": "The file format they import: fixed-width text, delimited text, or XML.",
+      "3": "Their codes (voci, causali) for each hour type, absence code and earning type.",
+      "4": "The company code (codice ditta) their software knows us by.",
+      "5": "Decimal hours (7.50) rather than hours and minutes, and how negative amounts are written.",
+      "6": "That night and holiday hours go as \"of which\" rows beside ordinary hours.",
+      "7": "That agency and external people stay out of the file.",
+      "8": "How a leaver's last working day is flagged.",
+      "9": "That earnings of an earlier month go under their own code."
+    },
+    "lead": "Record who confirmed this layout against the consultant's sample. Nexus checks nothing: the words are yours. Changing the columns later takes it back.",
+    "list_one": "What the labour consultant must confirm ({count})",
+    "list_other": "What the labour consultant must confirm ({count})",
+    "on": "On",
+    "save": "Save confirmation",
+    "takeBack": "Take it back",
+    "title": "Consultant's confirmation of {name}"
+  },
+  "correct": {
+    "changed": "What changed: {people} people, {values} values.",
+    "corrections_one": "It carries {count} correction of a closed day.",
+    "corrections_other": "It carries {count} corrections of closed days.",
+    "from": "From",
+    "links": "Live links of v{version} are withdrawn.",
+    "made": "{number} · {month} · v{version}",
+    "madeBody": "It replaces v{version} for the consultant; v{version} is kept. Live links of the replaced file are withdrawn. Send the new one.",
+    "madeTitle": "v{version} is made",
+    "make": "Make v{version}",
+    "question": "Make v{version} of {month}?",
+    "reading": "Reading what changed…",
+    "readingChanges": "Opening what changed…",
+    "replaces": "v{version} replaces v{previous} for the consultant; v{previous} is kept.",
+    "review": "What changed, per employee code",
+    "show": "Show what changed",
+    "title": "Make correction export",
+    "to": "To"
+  },
+  "csv": {
+    "at": "Made at",
+    "company": "Company",
+    "downloaded": "Downloaded at",
+    "file": "payroll-exports.csv",
+    "format": "Format",
+    "made": "Made by",
+    "number": "Number",
+    "period": "Period",
+    "seal": "Seal (SHA-256)",
+    "sent": "Sent to",
+    "status": "Status",
+    "version": "Version"
+  },
+  "file": {
+    "byCode": "The file is by employee code, never by name.",
+    "clock": "Nexus server clock",
+    "dataKind": "Export file · {format} · {count} rows",
+    "dataTitle": "Export file · {month} · v{version}",
+    "download": "Download",
+    "failed": "Couldn't open the file",
+    "forbiddenBody": "Your role does not reach every site of this company.",
+    "heldTitle": "This file does not open for you",
+    "list": "Files of v{version}",
+    "noFile": "This export has no such file.",
+    "open": "Open",
+    "opening": "Opening the summary…",
+    "reading": "Reading the file…",
+    "recorded": "Each opening and download is recorded.",
+    "seal": "Payroll file of {month}",
+    "summaryKind": "Export summary (PDF) · {count} rows",
+    "summaryTitle": "Export summary · {month} · v{version}",
+    "window": "Open {name} in a new tab"
+  },
+  "format": {
+    "DELIMITED": "Delimited text (CSV)",
+    "FIXED_WIDTH": "Fixed-width text",
+    "SPREADSHEET": "Excel",
+    "add": "Add a format",
+    "archive": "Archive",
+    "columns": "CSV columns",
+    "columnsFixed": "File columns",
+    "confirm": "Consultant's confirmation",
+    "description": "{format} · {count} columns",
+    "failed": "Couldn't read the formats",
+    "lead": "The file's layout. A generic one works with any consultant from day one.",
+    "leadFile": "The company's formats. A correction keeps the format of the file it replaces.",
+    "menu": "Actions of {name}",
+    "none": {
+      "body": "Add one: a generic CSV works with any consultant.",
+      "title": "No format yet"
+    },
+    "reading": "Reading the formats…",
+    "title": "Format"
+  },
+  "gate": {
+    "body": "A month can be read only once the attendance purpose is on at a site, in People › People settings. The past exports stay here.",
+    "title": "Attendance is off at every site of this company",
+    "wizardBody": "Switch attendance on in People › People settings first: nothing about a person is read while it is off.",
+    "wizardTitle": "No month can be read yet"
+  },
+  "held": {
+    "blocking_one": "{count} blocking check stands in the way",
+    "blocking_other": "{count} blocking checks stand in the way",
+    "busy": "Working on it…",
+    "firstStep": "This is the first step.",
+    "noExportYet": "This month has no file yet.",
+    "noLayout": "Choose a format first.",
+    "noManage": "Making and sending a file needs people.payroll.manage.",
+    "noPay": "This file carries amounts: it asks the pay grain.",
+    "noReach": "Your role does not reach every site of this company.",
+    "noRecords": "This needs people.payroll.records.",
+    "notClosed": "{month} is not closed · Close it in Attendance",
+    "notExported": "Only an exported file is opened or sent.",
+    "notRead": "The month is still being read.",
+    "nothingChanged": "Nothing changed since v{version}.",
+    "replaced": "A newer version replaced this file."
+  },
+  "keys": {
+    "continue": "Continue",
+    "next": "Next step",
+    "previous": "Previous step",
+    "start": "Start the export"
+  },
+  "kind": {
+    "ABSENCE": "Absence",
+    "EARNING": "Earning",
+    "HOUR": "Hours"
+  },
+  "layout": {
+    "confirmed": "Confirmed",
+    "generic": "Generic",
+    "notConfirmed": "{provider} layout not confirmed by the labour consultant",
+    "notConfirmedBody": "It is a starting shape until their sample replaces it: the file may not import. It can still go, with this warning on the summary and the mail.",
+    "notConfirmedShort": "Not confirmed"
+  },
+  "link": {
+    "EXPIRED": "Expired",
+    "LIVE": "Live",
+    "REVOKED": "Withdrawn",
+    "USED_UP": "Used up"
+  },
+  "list": {
+    "allYears": "All years",
+    "cancel": "Cancel draft",
+    "changed": "{people} people, {values} values",
+    "correct": "Make correction",
+    "countMore_one": "{count} export, more to show",
+    "countMore_other": "{count} exports, more to show",
+    "count_one": "{count} export",
+    "count_other": "{count} exports",
+    "csv_one": "Export {count} as CSV",
+    "csv_other": "Export {count} as CSV",
+    "downloaded": "Downloaded {at}",
+    "empty": {
+      "body": "The first file of a closed month starts here.",
+      "title": "No export yet"
+    },
+    "failed": "Couldn't load the exports",
+    "firstFile": "First file",
+    "lead": "Every file made, with what changed since the previous one. No money and no person here.",
+    "more": "Show more",
+    "noMatch": {
+      "body": "Show every year to see the others.",
+      "title": "No export in {year}"
+    },
+    "noNumber": "No number yet",
+    "notDownloaded": "Not downloaded",
+    "notSent": "Not sent",
+    "open": "Open export",
+    "replaced": "Replaced",
+    "rowMenu": "Actions of {month} v{version}",
+    "send": "Send by secure link",
+    "slow": "Still loading the exports…",
+    "someone": "Someone",
+    "summary": "Export summary (PDF)",
+    "title": "Exports",
+    "yearLabel": "Year"
+  },
+  "mapping": {
+    "count_one": "{count} code",
+    "count_other": "{count} codes",
+    "editor": "Provider code of {code}",
+    "empty": "No codes yet",
+    "failed": "{code} was not saved",
+    "never": "Never",
+    "notInUse": "No longer used by Nexus",
+    "notMapped": "Not mapped",
+    "saved": "Saved",
+    "unmapped_one": "{count} code without a provider code",
+    "unmapped_other": "{count} codes without a provider code"
+  },
+  "month": {
+    "failed": "Couldn't read this month"
+  },
+  "noAccess": {
+    "body": "This page needs people.payroll.view. Ask your administrator.",
+    "title": "You cannot open Payroll export"
+  },
+  "notPayroll": "Nexus does not run payroll: it makes a file for the labour consultant, who runs it.",
+  "notice": {
+    "archived": "{name} is archived.",
+    "layoutSaved": "{name} is saved."
+  },
+  "period": {
+    "close": "Month close (Attendance)",
+    "closeIt": "Close it in Attendance",
+    "closeLater": "Close it in People › Attendance, once that page is here.",
+    "closed": "{month} is closed",
+    "company": "Company",
+    "companyCode": "Payroll company code",
+    "companyCodeHint": "As the provider knows the company. Change it in the format's columns.",
+    "correction": "{month} has a file (v{version}): a new one is a correction, and replaces it for the consultant.",
+    "first": "The first file of {month}.",
+    "gateOff": "Attendance off",
+    "gateOn": "Attendance on",
+    "month": "Month",
+    "notClosed": "{month} is not closed",
+    "sites": "Sites of the company",
+    "wholeCompany": "A payroll export is the whole company: the site in the top bar narrows nothing here."
+  },
+  "pill": {
+    "CORRECTION_PENDING": "Exported {day} · v{version} · correction pending: {people} people, {values} values",
+    "EXPORTED": "Exported {day} · v{version}",
+    "NOT_EXPORTED": "{month} · not exported"
+  },
+  "place": {
+    "ATTENDANCE": "Open Attendance",
+    "CODE_MAPPING": "Open Code mapping",
+    "EMPLOYEES": "Open Employees",
+    "LAYOUTS": "Open the format",
+    "PIECE_RATES": "Open Piece rates",
+    "PRODUCTION_LABOUR": "Open Labour & corrections",
+    "notBuilt": "{place}: this page is not here yet."
+  },
+  "preview": {
+    "changedPeople": "People changed",
+    "changedTotal": "Values changed",
+    "changedValues_one": "{count} value",
+    "changedValues_other": "{count} values",
+    "count_one": "{count} employee code",
+    "count_other": "{count} employee codes",
+    "leaver": "Last day {day}",
+    "noChanged": "Nothing changed",
+    "noChangedBody": "No row differs from the file before.",
+    "noCode": "No code",
+    "noPay": "Amounts are left out: they ask the pay grain.",
+    "noRight": {
+      "title": "The numbers open with people.payroll.records"
+    },
+    "nobody": "Nobody on the file",
+    "nobodyBody": "No employee has days or earnings in this month.",
+    "onlyChanged": "Only changed rows",
+    "open": "Show the numbers",
+    "people_one": "{count} person on the file",
+    "people_other": "{count} people on the file",
+    "recorded": "Opening them is recorded.",
+    "totals": "Totals of the company"
+  },
+  "privacy": {
+    "law": "GDPR art. 5(1)(c), art. 32",
+    "lawPlain": "Only the data the consultant needs travels, and it travels protected.",
+    "text": "This page shows states and counts. The values open by employee code, never by name.",
+    "who": "Values and files: people with people.payroll.records over every site of the company; amounts also ask the pay grain. Each opening is recorded."
+  },
+  "problem": {
+    "conflict": "Someone changed this meanwhile: it was read again, try once more.",
+    "definition": "The columns of this format are not valid.",
+    "email": "This is not a mail address.",
+    "forbidden": "Your role does not allow this.",
+    "gate": "Attendance is off at every site of this company.",
+    "invalid": "Check what you wrote.",
+    "notFound": "Nothing here: it may have been removed.",
+    "rateLimited": "Too many tries: wait a moment.",
+    "signedOut": "You are signed out. Sign in again.",
+    "unavailable": "The service did not answer. Try again."
+  },
+  "record": {
+    "back": "Payroll export",
+    "cancelled": "This export was cancelled",
+    "checks": "Checks as they stood",
+    "checksLead": "As they stood when the file was made.",
+    "downloaded": "Downloaded at",
+    "draft": "This export is a draft: it has no file",
+    "draftBody": "A failure left it behind. The next export of the month replaces it, or cancel it.",
+    "file": "The file",
+    "links": "Secure links",
+    "next": "The newer version",
+    "noLinks": "Not sent by link.",
+    "noun": "Past export",
+    "open": "Show the numbers",
+    "previous": "v{version}",
+    "reading": "Opening the numbers…",
+    "replacedBy": "Replaced by",
+    "replaces": "Replaces",
+    "sentTo": "Sent to (secure link)",
+    "title": "{month} · v{version}",
+    "uses": "{used} of {max}",
+    "values": "What this file sent",
+    "withdrawn": "The link to {email} is withdrawn."
+  },
+  "refusal": {
+    "ALREADY_EXPORTED": "This month is exported already: make a correction.",
+    "CHANGED_WHILE_MAKING": "Something changed while the file was being made: try again.",
+    "CHECKS_OPEN_one": "{count} blocking check stands in the way: open Checks.",
+    "CHECKS_OPEN_other": "{count} blocking checks stand in the way: open Checks.",
+    "LAYOUT_ARCHIVED": "This format is archived: choose another.",
+    "LINK_NOT_LIVE": "This link is withdrawn already.",
+    "NAME_TAKEN": "This company already has a format with this name.",
+    "NOTHING_CHANGED": "Nothing changed since the last file.",
+    "NOTHING_EXPORTED": "This month has no export yet: make its first one.",
+    "NOT_DRAFT": "Only a draft is cancelled.",
+    "NOT_EXPORTED": "Only an exported file is sent.",
+    "NOT_LATEST": "A correction replaces the month's latest file.",
+    "NOT_OUR_CODE": "This is not one of our codes.",
+    "REPLACED": "A newer version replaced this file: send that one.",
+    "SUPPRESSED": "This address does not take our mail: ask for another."
+  },
+  "send": {
+    "carriesPay": "This file carries amounts: making it asks the pay grain.",
+    "fileOf": "v{version} is the file of {month}. Nothing changed since.",
+    "format": "Format",
+    "held": {
+      "days": "The link lives 1 to {max} days.",
+      "email": "Write the consultant's address.",
+      "uses": "The link allows 1 to {max} downloads."
+    },
+    "make": "Make {month} · v{version}",
+    "makeNext": "Make v{version}",
+    "making": "Making the file of {month}…",
+    "makingDetail": "The data file and its summary.",
+    "month": "Month",
+    "noPage": "The consultant's download page comes in a later wave: until then a consultant cannot fetch the file in a browser. Download it here and hand it over yourself.",
+    "note": "Note",
+    "noteHint": "Kept with the export, not sent.",
+    "openRecord": "Open this export",
+    "pending": "Correction pending: {people} people, {values} values differ from v{version}",
+    "pendingBody": "A correction carries the whole month and replaces the file for the consultant. The earlier file is kept.",
+    "people": "People on the file",
+    "send": "Send to the labour consultant",
+    "version": "Version",
+    "versionHint": "Numbered when it is made."
+  },
+  "sendDialog": {
+    "days": "Expires after (days)",
+    "daysHint": "1 to {max}.",
+    "delivery": {
+      "FAILED": "The mail to {email} failed: the link exists, withdraw it and send again",
+      "QUEUED": "The mail to {email} is waiting to go",
+      "SENT": "Sent to {email}"
+    },
+    "earlier_one": "{count} earlier link of this file was withdrawn.",
+    "earlier_other": "{count} earlier links of this file were withdrawn.",
+    "en": "English",
+    "expiresAt": "Expires",
+    "it": "Italian",
+    "language": "Language of the mail",
+    "log": "Every download is logged with who and when (GDPR art. 32), on this export's page.",
+    "message": "Message",
+    "messageHint": "Added to the mail. Keep names and figures out of it.",
+    "noPage": "The consultant cannot fetch the file in a browser yet",
+    "noPageBody": "Their download page comes in a later wave. The link is made and logged, but until then download the file here and hand it over yourself.",
+    "send": "Send link",
+    "state": "Link",
+    "terms": "The link is expiring and logged. A correction withdraws it.",
+    "title": "Send to the labour consultant",
+    "to": "Recipient",
+    "toHint": "The labour consultant's address.",
+    "uses": "Downloads allowed",
+    "usesHint": "1 to {max}.",
+    "what": "{month} · v{version} · {number}. The mail carries a link, never the file.",
+    "withdraw": "Withdraw link",
+    "withdrawnHeld": "This link is withdrawn."
+  },
+  "show": {
+    "codes_one": "{count} code",
+    "codes_other": "{count} codes",
+    "nothing": "Nothing left here",
+    "people_one": "{count} person",
+    "people_other": "{count} people",
+    "reading": "Opening…",
+    "recorded": "This opening is recorded. The names stay in this window."
+  },
+  "starter": {
+    "GENERIC_CSV": "Generic CSV",
+    "GENERIC_EXCEL": "Generic Excel",
+    "ZUCCHETTI": "Zucchetti import (a made-up starting shape)"
+  },
+  "status": {
+    "CANCELLED": "Cancelled",
+    "DRAFT": "Draft",
+    "EXPORTED": "Exported"
+  },
+  "step": {
+    "checks": {
+      "lead": "Nothing reaches the consultant broken: blocking checks hold the file, warnings are for you to read.",
+      "short": "Checks",
+      "title": "2 · Checks"
+    },
+    "failed": "Couldn't load {step}",
+    "mapping": {
+      "lead": "Our hour types, absence codes and earning types → the provider's codes (voce, causale), for this company. A cell saves itself when you leave it.",
+      "short": "Code mapping",
+      "title": "3 · Code mapping"
+    },
+    "period": {
+      "lead": "What to export: a company's whole month, closed in Attendance.",
+      "short": "Period and company",
+      "title": "1 · Period and company"
+    },
+    "preview": {
+      "lead": "The numbers that will be sent, per employee code. Never a name.",
+      "short": "Preview",
+      "title": "4 · Preview"
+    },
+    "reading": "Reading {step}…",
+    "send": {
+      "short": "Export and send",
+      "title": "5 · Export and send"
+    }
+  },
+  "wizard": {
+    "back": "Back",
+    "continue": "Continue",
+    "done": "Done",
+    "leave": "Back to the exports",
+    "nav": "Move between the steps",
+    "showMe": "Show me",
+    "stepOf": "Step {step} of {count} · {name}",
+    "title": "New payroll export",
+    "titleMonth": "Payroll export of {month}"
+  }
+}
