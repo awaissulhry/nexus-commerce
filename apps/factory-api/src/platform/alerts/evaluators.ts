@@ -10,6 +10,8 @@ import type { CommandTx } from '../../core/command'
 import { ddtDeadlines } from '../../modules/invoicing/from-shipment/deadlines'
 import { invoicedOf, readDdts, shippedOf } from '../../modules/invoicing/from-shipment/store'
 import { readSubjects } from '../../modules/quality/holds/store'
+// B-W2b-42: a site's people close to or over a working-time limit.
+import { workingTimeFindings } from '../../modules/people/limits/warnings'
 
 /**
  * What each kind of rule watches (B-W2a-33; factory-domain alerts/kinds), read in the tenant's system scope: the records a
@@ -250,6 +252,8 @@ export const FINDERS: Readonly<Partial<Record<RuleKind, Find>>> = Object.freeze(
   PO_NOT_CONFIRMED: poNotConfirmed,
   // B-W2b-24: the connections' health.
   INTEGRATION_FAILING: integrationFailing,
+  // B-W2b-42: the working-time limits (one alert per site and limit, naming nobody).
+  WORKING_TIME_LIMIT: workingTimeFindings,
 })
 
 export const DATED: Readonly<Partial<Record<RuleKind, Dated>>> = Object.freeze({

@@ -11,6 +11,10 @@
     "alerts.INVOICE_DEADLINE.LATE": "La merce del DDT {label} andava fatturata entro il {dueDate}: {days} giorni di ritardo.",
     "alerts.INTEGRATION_FAILING": "Il collegamento {label} non funziona da {hours} ore: la sua ultima chiamata non è riuscita.",
     "alerts.INTEGRATION_FAILING.NEVER": "Il collegamento {label} non ha mai funzionato: nessuna chiamata è riuscita nelle {hours} ore da quando è stato impostato.",
+    "alerts.WORKING_TIME_LIMIT": "Sede {label}: qualcuno è vicino a un limite di orario o lo ha superato.",
+    "alerts.WORKING_TIME_LIMIT.OVERTIME_YEARLY_CAP": "Sede {label}: qualcuno è vicino al limite annuo di straordinario o lo ha superato.",
+    "alerts.WORKING_TIME_LIMIT.DAILY_REST": "Sede {label}: qualcuno è sotto il riposo minimo, o lo sarebbe prima del prossimo turno.",
+    "alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE": "Sede {label}: qualcuno è vicino alla media settimanale di ore di lavoro o la ha superata.",
     "alerts.UNKNOWN": "Avviso su {label}."
   },
   "refused": {
@@ -156,7 +160,8 @@
       "PO_NOT_CONFIRMED": "{record} non confermato",
       "CERTIFICATE_EXPIRING": "{record} in scadenza",
       "INVOICE_DEADLINE": "{record}: scadenza di fatturazione vicina",
-      "INTEGRATION_FAILING": "{record} è in errore"
+      "INTEGRATION_FAILING": "{record} è in errore",
+      "WORKING_TIME_LIMIT": "{record}: limite di orario vicino"
     },
     "snooze": "Rimanda",
     "assign": "Assegna",

@@ -109,7 +109,8 @@
       "bundles": "Bundles",
       "floorControl": "Floor control",
       "scrap": "Scrap & rework",
-      "calls": "Help calls"
+      "calls": "Help calls",
+      "labour": "Labour & corrections"
     },
     "quality": {
       "area": "Quality",

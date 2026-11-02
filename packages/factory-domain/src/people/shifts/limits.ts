@@ -116,7 +116,7 @@ export interface LimitWarning {
   readonly values: Readonly<Record<string, number | string>>
 }
 
-const hours = (minutes: number): string => {
+export const hours = (minutes: number): string => {
   const whole = Math.floor(minutes / 60)
   const rest = Math.round(minutes - whole * 60)
   return rest === 0 ? `${whole} h` : `${whole} h ${rest} min`
@@ -230,31 +230,44 @@ export function weeklyAverageWindowStart(from: BusinessDate, rule: LimitRule): B
   return plusDays(mondayOf(from), -7 * (referenceWeeks(rule.referenceMonths ?? LAW_LIMITS.WEEKLY_AVERAGE.referenceMonths!) - 1))
 }
 
+/** The average of the reference period's weeks ending with `week` (B-W2b-42 reads it for worked time too). */
+export interface WeekAverage {
+  readonly months: number
+  /** The period's first Monday (the person's first week, for a newcomer). */
+  readonly start: BusinessDate
+  readonly count: number
+  readonly weekMinutes: number
+  readonly average: number
+}
+
+export function weekAverageOf(work: readonly PlannedWork[], rule: LimitRule, week: BusinessDate, employedFrom: BusinessDate): WeekAverage {
+  const months = rule.referenceMonths ?? LAW_LIMITS.WEEKLY_AVERAGE.referenceMonths!
+  const span = referenceWeeks(months)
+  const byWeek = new Map<BusinessDate, number>()
+  for (const item of work) byWeek.set(mondayOf(item.date), (byWeek.get(mondayOf(item.date)) ?? 0) + item.minutes)
+  const firstWeek = mondayOf(employedFrom)
+  const periodStart = plusDays(week, -7 * (span - 1))
+  const start = periodStart < firstWeek ? firstWeek : periodStart
+  const count = Math.max(1, Math.floor(daysFrom(start, week) / 7) + 1)
+  let total = 0
+  for (let at = start; at <= week; at = plusDays(at, 7)) total += byWeek.get(at) ?? 0
+  return { months, start, count, weekMinutes: byWeek.get(week) ?? 0, average: total / count }
+}
+
 /**
  * The 48-hour weekly average (art. 4) for each week that has a day in `report`: the planned working minutes of the
  * reference period's weeks ending with it, divided by its weeks (only those since the person started: a newcomer's
  * empty weeks before their first day do not lower the average). Shown on the week's last planned day in `report`.
  */
 export function weeklyAverageWarnings(work: readonly PlannedWork[], rule: LimitRule, report: ReadonlySet<BusinessDate>, employedFrom: BusinessDate): LimitWarning[] {
-  const months = rule.referenceMonths ?? LAW_LIMITS.WEEKLY_AVERAGE.referenceMonths!
-  const span = referenceWeeks(months)
-  const byWeek = new Map<BusinessDate, number>()
-  for (const item of work) byWeek.set(mondayOf(item.date), (byWeek.get(mondayOf(item.date)) ?? 0) + item.minutes)
   const weeks = [...new Set([...report].map(mondayOf))].sort()
   const out: LimitWarning[] = []
-  const firstWeek = mondayOf(employedFrom)
   for (const week of weeks) {
-    const periodStart = plusDays(week, -7 * (span - 1))
-    const start = periodStart < firstWeek ? firstWeek : periodStart
-    const count = Math.max(1, Math.floor(daysFrom(start, week) / 7) + 1)
-    let total = 0
-    for (let at = start; at <= week; at = plusDays(at, 7)) total += byWeek.get(at) ?? 0
-    const average = total / count
+    const { months, start, count, weekMinutes, average } = weekAverageOf(work, rule, week, employedFrom)
     if (average <= rule.limitMinutes) continue
     const days = [...report].filter((date) => mondayOf(date) === week).sort()
     const planned = days.filter((date) => work.some((item) => item.date === date && item.minutes > 0))
     const date = planned.at(-1) ?? days.at(-1)!
-    const weekMinutes = byWeek.get(week) ?? 0
     out.push({
       rule: 'WEEKLY_AVERAGE',
       level: rule.action,

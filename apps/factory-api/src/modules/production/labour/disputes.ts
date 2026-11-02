@@ -163,6 +163,7 @@ async function disputeAnswer(db: Reader, row: DisputeRow, viewer: { readonly act
     raisedAt: toUtcIso(row.createdAt),
     raisedOn: row.deviceId ? ('FLOOR' as const) : ('OFFICE' as const),
     worker: shown ? someone(row.workerId) : null,
+    employeeId: shown ? row.employeeId : null,
     workerHidden: !shown,
     record: await summaryOf(db, row, now),
     edits: edits.map((edit) => ({ id: edit.id, at: toUtcIso(edit.createdAt), by: someone(edit.createdById), reason: edit.reason, changes: changesOf(jsonObject(edit.before), jsonObject(edit.after)) })),

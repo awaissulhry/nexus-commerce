@@ -26,7 +26,7 @@ export function OperationsTab({ workOrder, model, actions }: { workOrder: WorkOr
     <div className="fw-pr-stack">
       {/* B-W2a-46 (wo-flow "W2a OperationFlow"): the operations as a row with the pile waiting before each. */}
       {model.daily && <OperationFlow wip={wip} />}
-      <Flow workOrder={workOrder} wip={wip} prefix={model.prefix} bySize={!!model.draft?.opsBySize} />
+      <Flow workOrder={workOrder} wip={wip} prefix={model.prefix} labour={model.can.labour} bySize={!!model.draft?.opsBySize} />
     </div>
   )
 }
@@ -59,7 +59,7 @@ function PlannedOperations({ workOrder }: { workOrder: WorkOrder }) {
   )
 }
 
-function Flow({ workOrder, wip, prefix, bySize }: { workOrder: WorkOrder; wip: WorkOrderWip; prefix: string; bySize: boolean }) {
+function Flow({ workOrder, wip, prefix, labour, bySize }: { workOrder: WorkOrder; wip: WorkOrderWip; prefix: string; labour: boolean; bySize: boolean }) {
   const t = useT('production')
   const [view, setView] = useState<'operations' | 'sizes'>(bySize ? 'sizes' : 'operations')
   const minutes = new Map(workOrder.spec.operations.map((op) => [op.seq, op.standardMinutes]))
@@ -151,7 +151,7 @@ function Flow({ workOrder, wip, prefix, bySize }: { workOrder: WorkOrder; wip: W
           <h2 className="fw-pr-h2">{t('ops.corrections')}</h2>
           <p className="fw-pr-hint">
             {wip.correctionsWaiting === 0 ? t('ops.noCorrections') : t('ops.correctionsWaiting', { count: wip.correctionsWaiting })}{' '}
-            {wip.correctionsWaiting > 0 && <Link href={`${prefix}/home/today`}>{t('ops.toToday')}</Link>}
+            {wip.correctionsWaiting > 0 && (labour ? <Link href={`${prefix}/production/labour?kind=CORRECTION`}>{t('ops.toLabour')}</Link> : <Link href={`${prefix}/home/today`}>{t('ops.toToday')}</Link>)}
           </p>
           <p className="fw-pr-hint">{t('ops.correctionsHint')}</p>
         </Card>

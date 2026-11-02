@@ -271,6 +271,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/scrap',
   // B-W2b-58: Production › Floor control › Help calls (SCR-142).
   '/production/calls',
+  // B-W2b-57: Production › Floor control › Labour & corrections (SCR-139, SCR-143).
+  '/production/labour',
   // B-W2b-59: Production › Cutting room › Bundles (SCR-259), a bundle and its ticket PDF (a new tab, no navigation row).
   '/production/bundles',
   '/production/bundles/[id]',
@@ -298,6 +300,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/people/employees/[id]',
   '/people/employees/badges',
   '/people/employees/print',
+  // B-W2b-60: People › Shifts (SCR-263) and the roster for the notice board (a new tab).
+  '/people/shifts',
+  '/people/shifts/print',
 ])
 
 /**

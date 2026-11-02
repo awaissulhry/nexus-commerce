@@ -649,6 +649,7 @@
     "correctionsWaiting_one": "{count} correction request waits for a decision.",
     "correctionsWaiting_other": "{count} correction requests wait for a decision.",
     "toToday": "Open Today",
+    "toLabour": "Open Labour & corrections",
     "correctionsHint": "The original scan stays; an approved correction adds a row."
   },
   "quality": {

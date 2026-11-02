@@ -8,7 +8,7 @@ import type { CommandCaller } from '../../../core/command'
 import type { GateReader } from '../../people/privacy/gate'
 import { workerGateFor } from '../../people/privacy/worker-gate'
 import { officeOf, reaches } from './access'
-import { bundlesById, chainsOf, COUNT_KINDS, devicesById, linesById, peopleNames, recordsFor, SCAN, sitesById, stationsById, toLabourScan, workOrdersById, type OperationRow, type Reader } from './store'
+import { bundlesById, chainsOf, COUNT_KINDS, devicesById, employeesOfWorkers, linesById, peopleNames, recordsFor, SCAN, sitesById, stationsById, toLabourScan, workOrdersById, type OperationRow, type Reader } from './store'
 
 /**
  * One labour record (B-W2b-45; MES-201 "a labour record per scan with its minutes"; design production.labour "Correction
@@ -58,6 +58,8 @@ export async function recordOf(caller: CommandCaller, scanId: string) {
     const places = await recordPlaces(db, [record])
     const shown = record.workerId !== null && (await workerGateFor(db as GateReader, site.id)).open
     const names = await peopleNames(db, [shown ? record.workerId : null, ...record.steps.map((step) => step.approvedById)])
+    // B-W2b-57: "Open this person's day" names the employee record; only where the worker is shown.
+    const employees = await employeesOfWorkers(db, [shown ? record.workerId : null])
     const someone = (id: string | null) => (id ? { id, name: names.get(id) ?? '' } : null)
     const chainIds = [record.scanId, ...record.steps.map((step) => step.scanId)]
     const disputes = await db.labourDispute.findMany({ where: { recordType: 'OperationScan', recordId: { in: chainIds } }, select: { id: true, status: true, message: true, createdAt: true }, orderBy: { createdAt: 'asc' } })
@@ -80,6 +82,7 @@ export async function recordOf(caller: CommandCaller, scanId: string) {
         earnedMinutes: record.earnedMinutes,
         steps: record.steps.map((step) => ({ scanId: step.scanId, kind: step.kind, at: toUtcIso(step.at), counts: step.counts, approvedBy: someone(step.approvedById), reason: step.reason })),
         worker: shown ? someone(record.workerId) : null,
+        employeeId: shown && record.workerId ? (employees.get(record.workerId) ?? null) : null,
         workerHidden: record.workerId !== null && !shown,
         // B-W2b-47 (MES-099): the team leader entered it for someone who could not scan (the reason is on the scan).
         enteredByLead: isOnBehalfEntry(root.reason),

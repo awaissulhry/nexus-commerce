@@ -20,12 +20,12 @@ import '../../../../finance/costing/costing.css'
  * without it the tab says why and shows no figure; without costing.view it says which permission. Never wages, never a
  * person. Before the release a work order has no cost yet. B-W2b-59: the Minutes section above it (no money, no grain).
  */
-export function LabourTab({ labour, prefix, workOrderId, draft, onRetry, minutes }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void; minutes?: Minutes }) {
+export function LabourTab({ labour, prefix, workOrderId, draft, onRetry, minutes, labourHref = null }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void; minutes?: Minutes; labourHref?: string | null }) {
   return (
     <WithMessages namespaces={[COSTING_NAMESPACE]}>
       {/* B-W2b-59 (wo-minutes): standard minutes, no money: open to whoever reads the work order, above the cost and its grain. */}
       <div className="fw-pr-stack">
-        {minutes && <MinutesCard minutes={minutes} />}
+        {minutes && <MinutesCard minutes={minutes} labourHref={labourHref} />}
         <Labour labour={labour} prefix={prefix} workOrderId={workOrderId} draft={draft} onRetry={onRetry} />
       </div>
     </WithMessages>
