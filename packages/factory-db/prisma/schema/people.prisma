@@ -345,8 +345,9 @@ enum LeaverStepStatus {
 
 /// A company's people settings (design people.settings; MES-225, MES-227, ANA-075, H3): how clock events become hours
 /// (early clock-in, lateness grace, the overtime unit, rounding, automatic clock-out, fixed breaks), the minimum group
-/// size of any people figure, and the office roles that see one person's figures besides the worker. The row has the
-/// company's id; no row: the defaults below. Absence codes and working-time limits are the time schema's (B-W2b-07).
+/// size of any people figure, the office roles that see one person's figures besides the worker, the printer of
+/// statements, the limits of the standard review, and the labour consultant. The row has the company's id; no row: the
+/// defaults below. Absence codes and working-time limits are the time schema's (B-W2b-07).
 model PeopleSettings {
   /// The company's id: a company has at most one row, read by its id.
   id                         String   @id @db.Uuid
@@ -371,12 +372,27 @@ model PeopleSettings {
   /// The office roles (Role.key, e.g. "hr") that see one person's figures besides the worker (Owner answer H3: HR),
   /// where the site's legal gate for the purpose is open. Empty: nobody but the worker. Widening it asks a step-up.
   figureRoleKeys             String[] @default([])
+  /// The office printer of the company's worker statements (B-W2b-68: one person's pay must not come out at the dock):
+  /// an A4 printer of the company, ACTIVE when it is named; null: none named (B-W2b-68's rule stands: the site's only
+  /// active A4 printer).
+  statementPrinterId         String?  @db.Uuid
+  /// The standard review queue (MES-251, B-W2b-44): an operation goes in when it is more than this many percent off its
+  /// standard, 1 to 100 …
+  standardReviewPercent      Int      @default(10)
+  /// … over at least this many bundles, 1 to 1000. The window (60 days) stays a constant of factory-domain.
+  standardReviewMinBundles   Int      @default(5)
+  /// The company's labour consultant (design people.settings; GATE-PAYROLL): a party with the CONSULTANT role, ACTIVE
+  /// when it is named, of this company or tenant-wide.
+  payrollConsultantPartyId   String?  @db.Uuid
   version                    Int      @default(1)
   createdAt                  DateTime @default(now()) @db.Timestamptz(3)
   updatedAt                  DateTime @default(now()) @updatedAt @db.Timestamptz(3)
   createdById                String?  @db.Uuid
 
-  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  company           Company  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  statementPrinter  Printer? @relation("PeopleSettingsStatementPrinter", fields: [tenantId, companyId, statementPrinterId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  payrollConsultant Party?   @relation("PeopleSettingsConsultant", fields: [tenantId, payrollConsultantPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, companyId])
 }
