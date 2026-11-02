@@ -452,7 +452,16 @@ export const OFFICE: readonly TreeArea[] = [
         ],
       },
       // B-W2b-65: Skills & training (SCR-160) and People settings (SCR-265).
-      { label: 'Skills & pay', labelIt: 'Competenze e paghe', hideLabel: false, pages: [{ id: 'people.skills', title: 'Skills & training', titleIt: 'Competenze e formazione', wave: 'W2b', href: '/people/skills' }] },
+      {
+        label: 'Skills & pay',
+        labelIt: 'Competenze e paghe',
+        hideLabel: false,
+        pages: [
+          { id: 'people.skills', title: 'Skills & training', titleIt: 'Competenze e formazione', wave: 'W2b', href: '/people/skills' },
+          // B-W2b-63: Payroll export (SCR-159).
+          { id: 'people.payroll', title: 'Payroll export', titleIt: 'Esportazione paghe', wave: 'W2b', href: '/people/payroll' },
+        ],
+      },
       { label: 'Settings', labelIt: 'Impostazioni', hideLabel: false, pages: [{ id: 'people.settings', title: 'People settings', titleIt: 'Impostazioni persone', wave: 'W2b', href: '/people/settings' }] },
     ],
   },

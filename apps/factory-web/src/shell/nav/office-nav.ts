@@ -305,6 +305,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/people/shifts/print',
   '/people/skills',
   '/people/skills/print',
+  // SCR-159 (B-W2b-63): the wizard and Exports; Past export; its summary and file tabs.
+  '/people/payroll',
+  '/people/payroll/[id]',
+  '/people/payroll/[id]/file',
   '/people/settings',
   '/people/settings/history',
 ])
