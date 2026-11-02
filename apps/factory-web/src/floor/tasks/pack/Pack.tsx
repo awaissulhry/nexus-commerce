@@ -1,10 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { zxingCamera } from '../../camera'
-import { useFloor } from '../../FloorApp'
+import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { readScan } from '../../scan/scan-model'
 import { AsOfMemory, codeKey } from '../shared/as-of'
@@ -79,7 +78,7 @@ const WAIT_MS = 10_000
 
 export function FloorPack() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('tile.pack', { showHome: true })
   const { api, me, online, sessionEnded } = store

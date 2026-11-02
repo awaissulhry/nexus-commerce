@@ -1,11 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { useLiveChanges } from '../../../record-panels/live'
 import { zxingCamera } from '../../camera'
-import { useFloor } from '../../FloorApp'
+import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { homeTiles, modeOf } from '../../model'
 import { readScan } from '../../scan/scan-model'
@@ -75,7 +74,7 @@ function saveSeen(ids: readonly string[]): void {
 
 export function FloorMyWork() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('tile.mywork', { showHome: true })
   const { me, api, online, sessionEnded, queue, queueSnapshot } = store

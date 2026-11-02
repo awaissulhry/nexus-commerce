@@ -1,6 +1,7 @@
 {
   "brand": "Nexus Factory",
   "frame": {
+    "moveHeld": "Questa pagina si apre quando torna la rete. Qui non si perde nulla.",
     "home": "Home",
     "help": "Aiuto",
     "close": "Chiudi",

@@ -1,13 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { kioskCheck, type KioskHomeTest } from '@nexus/factory-domain/auth/floor/kiosk'
 import { localeOf } from '../../lib/i18n/locales'
 import { enrolDevice, reportKioskCheck, type DeviceInfo } from '../api'
 import { zxingCamera } from '../camera'
-import { useFloor } from '../FloorApp'
+import { useFloor, useFloorRouter } from '../FloorApp'
 import { useFloorKeys } from '../keys'
 import { enrolmentCodeOf, modeOf } from '../model'
 import { EnrolView, type Binding, type Checks, type EnrolAction, type EnrolStep, type InstallState, type KioskCheckView } from './view/EnrolView'
@@ -44,7 +43,7 @@ function tabletFacts(installable: boolean): { fullScreen: boolean | null; instal
 
 export function FloorEnrol() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('enrol.title')
   const [step, setStep] = useState<EnrolStep>(() =>

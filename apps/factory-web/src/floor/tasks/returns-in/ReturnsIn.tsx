@@ -1,12 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import type { CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { zxingCamera } from '../../camera'
-import { useFloor } from '../../FloorApp'
+import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { readScan } from '../../scan/scan-model'
 import type { TaskProblem } from '../shared/task-api'
@@ -30,7 +29,7 @@ interface Shot {
 
 export function FloorReturnsIn() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('tile.returnsin', { showHome: true })
   const { me, api, online, sessionEnded } = store

@@ -22,6 +22,9 @@ export default function factoryWebConfig(phase: string): NextConfig {
     transpilePackages: ['@nexus/ui'],
     // `/design` (the local design index) exists only under `next dev`: src/lib/design/route.ts.
     pageExtensions: pageExtensionsFor(phase === PHASE_DEVELOPMENT_SERVER),
+    // B-W2b-F6 (floor/moves.ts): a floor tablet keeps the pages it prefetched whole for a day, and a move with the network gone
+    // waits instead of falling back to a full page load, which ends on the browser's error page.
+    experimental: { staleTimes: { static: 86_400 }, useOffline: true },
     // The browser talks to the factory API through this app (`/api/<route>` → `<FACTORY_API_URL>/<route>`), so the
     // session cookie stays first-party. The API's routes carry no `/api` prefix of their own.
     async rewrites() {

@@ -1,11 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback, useIdleSignOut } from '@nexus/ui/floor'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { useLiveChanges } from '../../../record-panels/live'
-import { useFloor } from '../../FloorApp'
+import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { readScan } from '../../scan/scan-model'
 import { useWedgeScans } from '../scans/wedge'
@@ -41,7 +40,7 @@ export function FloorMyDay() {
 
 function Open() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('tile.myday', { showHome: true })
   const { api, me, online, sessionEnded, landing } = store
