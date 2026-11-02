@@ -17,6 +17,10 @@ import { DECIDED_ON, SCRAP_DECISIONS } from './scrap/approval'
 import { FLOOR_RULE_FIELDS, FLOOR_RULE_MODES } from './settings/floor-rules'
 // B-W2b-40: operation timing on the tablet.
 import { TIMING_KINDS } from './terminal/rules'
+// B-W2b-47: more on the tablet.
+import { CHECKLIST_OUTCOMES } from './checklists/rules'
+import { EXTRA_REASON_CODES } from './extraops/rules'
+import { ON_BEHALF_REASON_CODES } from './onbehalf/rules'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -72,6 +76,10 @@ import { TIMING_KINDS } from './terminal/rules'
  *                                           the scrap approval limit); Floor rules & codes and the site's tablets re-read
  *   production.scrap_over_limit_decided     B-W2b-53: a scan's scrap above the site's limit was approved (it posts) or
  *                                           refused, by a team leader on the tablet or in the office (MES-128)
+ *   production.scan_entered_on_behalf       B-W2b-47: a team leader recorded a report for someone who could not scan, with
+ *                                           a reason (who stays in the audit log; the report's own scan_recorded follows)
+ *   production.checklist_step_ticked        B-W2b-47: a step inside an operation was ticked on a bundle
+ *   production.extra_operation_added        B-W2b-47: an unplanned operation was added to a work order, with a reason
  *   production.operation_timed              B-W2b-40: a bundle at an operation was started, paused (a reason code),
  *                                           resumed, handed back or reported in part (pieces so far), on the floor or
  *                                           by the system at clock-out (MES-087 … MES-094, MES-117); no person, no
@@ -775,5 +783,54 @@ export const events = [
       postedBy: z.enum(['FLOOR', 'SYSTEM']),
     }),
     live: scanLive,
+  }),
+  // ---- B-W2b-47: more on the tablet (modules/production/{onbehalf,checklists,extraops}). Ids, codes and counts only: never
+  // a worker, a station or words (Statuto dei Lavoratori art. 4). A floor note is its thread's thread.message_posted.
+  defineEvent({
+    type: 'production.scan_entered_on_behalf',
+    context: 'production',
+    description: 'A team leader recorded a report for someone who could not scan, with a reason; the report pays the person it names.',
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      siteId: z.uuid(),
+      bundleId: z.uuid(),
+      scanId: z.uuid(),
+      operationId: z.uuid(),
+      reasonCode: z.enum(ON_BEHALF_REASON_CODES),
+    }),
+    live: guardLive,
+  }),
+  defineEvent({
+    type: 'production.checklist_step_ticked',
+    context: 'production',
+    description: 'A step inside an operation was ticked on a bundle (done, or not applicable); the operation screen and the work order record refresh.',
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      siteId: z.uuid(),
+      bundleId: z.uuid(),
+      operationId: z.uuid(),
+      stepCode: z.string(),
+      outcome: z.enum(CHECKLIST_OUTCOMES),
+      /** The required steps still open on the bundle at the operation. */
+      open: z.number().int().min(0),
+    }),
+    live: scanLive,
+  }),
+  defineEvent({
+    type: 'production.extra_operation_added',
+    context: 'production',
+    description: 'An operation the routing does not have was added to a released work order, with a reason.',
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      siteId: z.uuid(),
+      recordId: z.uuid(),
+      operationId: z.uuid(),
+      code: z.string(),
+      reasonCode: z.enum(EXTRA_REASON_CODES),
+    }),
+    live: { permission: 'workorders.view', floor: 'floor.work', fields: ['workOrderId', 'number', 'recordId'] },
   }),
 ] as const

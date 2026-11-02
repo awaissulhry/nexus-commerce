@@ -1,6 +1,7 @@
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { addDays, changesOf, DISPUTE_REASONS_FOR, LABOUR_LIMITS, rangeProblems, STATION_SITE } from '@nexus/factory-domain/production/labour/rules'
+import { isOnBehalfEntry } from '@nexus/factory-domain/production/onbehalf/rules'
 import { minutesOf } from '@nexus/factory-domain/production/offstandard/rules'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
@@ -82,6 +83,8 @@ export async function mine(caller: CommandCaller, query: MineQuery) {
         counts: record.counts,
         state: record.state,
         minutes: minutesShown ? record.earnedMinutes : null,
+        // B-W2b-47 (MES-099): my team leader entered it for me.
+        enteredByLead: isOnBehalfEntry(set.scans.get(record.scanId)?.reason ?? null),
         disputable: record.state !== 'UNDONE',
         dispute: latestDispute.get(record.scanId) ?? null,
       })),
