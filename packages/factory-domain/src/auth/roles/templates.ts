@@ -335,6 +335,14 @@ const PEOPLE_EARNINGS_ADDS: Readonly<Record<string, readonly Permission[]>> = Ob
   production_manager: ['people.earnings.view', 'people.earnings.review'],
   floor_supervisor: ['people.earnings.view', 'people.earnings.review'],
 })
+/**
+ * B-W2b-54 (the payroll export, MES-267 to MES-274; design people.payroll): the administrator keeps the mapping and makes the
+ * hours file, as it closes the month and opens the LUL calendar. Amounts ask the pay grain, so with piece pay in the month
+ * only the Owner or HR (a custom role with the grain) makes the file. Owner from every(); read-only reads the view.
+ */
+const PEOPLE_PAYROLL_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.payroll.view', 'people.payroll.records', 'people.payroll.manage'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -374,6 +382,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_CLOSE_ADDS[key] ?? []) : []),
   // B-W2b-43
   ...(audience === 'office' ? (PEOPLE_EARNINGS_ADDS[key] ?? []) : []),
+  // B-W2b-54
+  ...(audience === 'office' ? (PEOPLE_PAYROLL_ADDS[key] ?? []) : []),
   // B-W2b-49
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? [])]
 /**

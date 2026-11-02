@@ -439,7 +439,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
 describe('the link-type registry (links/_nav/link-types.ts)', () => {
   it('every purpose × record type a link can have opens its task page or, by name, the link frame', () => {
     const frame = linkKinds().filter((kind) => linkTaskOf({ purpose: kind.purpose, record: { type: kind.recordType } }) === null)
-    expect(frame).toEqual([{ purpose: 'DOCUMENT_VIEW', recordType: 'StoredFile' }])
+    expect(frame).toEqual([{ purpose: 'DOCUMENT_VIEW', recordType: 'StoredFile' }, { purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport' }])
     for (const rule of LINK_TASK_RULES) expect(PURPOSE_RULES[rule.purpose].recordTypes, rule.task).toContain(rule.recordType)
     expect(LINK_TASK_RULES.map((rule) => rule.task).sort()).toEqual([...LINK_TASKS].sort())
   })

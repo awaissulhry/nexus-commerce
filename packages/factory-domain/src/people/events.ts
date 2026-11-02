@@ -2,6 +2,8 @@ import { z } from 'zod'
 // B-W2b-32: shifts and overtime requests.
 import { OVERTIME_ANSWERS } from './shifts/rules'
 import { defineEvent } from '../events/define'
+// B-W2b-54: the payroll export.
+import { PAYROLL_CODE_KINDS } from './payroll/codes'
 import { EMPLOYEE_KINDS } from './employees/rules'
 import { LEAVER_STEP_KINDS, LEAVER_STEP_STATUSES } from './leavers/rules'
 import { GATE_PURPOSES } from './privacy/purposes'
@@ -120,6 +122,7 @@ export const events = [
     live: { permission: 'people.efficiency.view', fields: ['routingOperationId', 'siteId', 'decision'] },
   }),
   ...earningsEvents(),
+  ...payrollEvents(),
   defineEvent({
     type: 'employee.created',
     context: 'people',
@@ -543,4 +546,63 @@ function closeEvents() {
       live: { permission: 'people.attendance.view', fields: ['correctionId', 'closeId', 'dayId', 'siteId', 'kind'] },
     }),
   ] as const
+}
+
+/**
+ * The payroll export's events (B-W2b-54): ids, states and counts only. No person, no figure, no address, never a link's token.
+ * Live under people.payroll.view: the design's `link.downloaded → 'Downloaded 4 Nov 09:12'` is payroll_export.downloaded.
+ */
+function payrollEvents() {
+  const PAYROLL_MONTH = z.string().regex(/^\d{4}-\d{2}$/)
+  return [
+    defineEvent({
+      type: 'payroll_export.exported',
+      context: 'people',
+      description: "A month's payroll export, or a correction of it, was made with its number and files.",
+      payload: z.strictObject({ exportId: z.uuid(), companyId: z.uuid(), month: PAYROLL_MONTH, number: z.string(), revision: z.number().int().min(1), correctionOfId: z.uuid().nullable(), people: z.number().int().min(0), rows: z.number().int().min(0) }),
+      live: { permission: 'people.payroll.view', fields: ['exportId', 'companyId', 'month', 'number', 'revision', 'correctionOfId'] },
+    }),
+    defineEvent({
+      type: 'payroll_export.cancelled',
+      context: 'people',
+      description: 'A draft payroll export was abandoned, by a person or by a newer export of the month.',
+      payload: z.strictObject({ exportId: z.uuid(), companyId: z.uuid(), month: PAYROLL_MONTH }),
+      live: { permission: 'people.payroll.view', fields: ['exportId', 'companyId', 'month'] },
+    }),
+    defineEvent({
+      type: 'payroll_export.sent',
+      context: 'people',
+      description: 'A payroll export was sent to the labour consultant by a secure link.',
+      payload: z.strictObject({ exportId: z.uuid(), companyId: z.uuid(), month: PAYROLL_MONTH, linkId: z.uuid() }),
+      live: { permission: 'people.payroll.view', fields: ['exportId', 'companyId', 'month', 'linkId'] },
+    }),
+    defineEvent({
+      type: 'payroll_export.link_withdrawn',
+      context: 'people',
+      description: 'The secure link of a payroll export was withdrawn: by a person, or because a correction replaced the file.',
+      payload: z.strictObject({ exportId: z.uuid(), companyId: z.uuid(), linkId: z.uuid() }),
+      live: { permission: 'people.payroll.view', fields: ['exportId', 'companyId', 'linkId'] },
+    }),
+    defineEvent({
+      type: 'payroll_export.downloaded',
+      context: 'people',
+      description: "A file of a payroll export was downloaded through its secure link.",
+      payload: z.strictObject({ exportId: z.uuid(), companyId: z.uuid(), linkId: z.uuid(), fileId: z.uuid() }),
+      live: { permission: 'people.payroll.view', fields: ['exportId', 'companyId', 'linkId'] },
+    }),
+    defineEvent({
+      type: 'payroll_code.changed',
+      context: 'people',
+      description: 'A code of the payroll code mapping changed.',
+      payload: z.strictObject({ companyId: z.uuid(), kind: z.enum(PAYROLL_CODE_KINDS), ourCode: z.string() }),
+      live: { permission: 'people.payroll.view', fields: ['companyId', 'kind', 'ourCode'] },
+    }),
+    defineEvent({
+      type: 'payroll_layout.changed',
+      context: 'people',
+      description: 'A payroll file layout was added, changed or archived.',
+      payload: z.strictObject({ layoutId: z.uuid(), companyId: z.uuid(), change: z.enum(['CREATED', 'EDITED', 'ARCHIVED']) }),
+      live: { permission: 'people.payroll.view', fields: ['layoutId', 'companyId', 'change'] },
+    }),
+  ]
 }
