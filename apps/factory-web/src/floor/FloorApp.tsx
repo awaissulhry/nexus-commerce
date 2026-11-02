@@ -102,6 +102,8 @@ export interface FloorStore {
   /** B-W2b-67: badges scanned on the clock while offline, sealed until sent (tasks/clock/kept.ts). */
   kept: KeptClocks
   keptSnapshot: KeptSnapshot
+  /** B-W2b-70: where this tablet opens for this person: Home, or the Line view on a LINE tablet of a team leader. */
+  landing: string
   /** The offline queue: actions saved here first, sent in order (queue/queue.ts). */
   queue: FloorQueue
   queueSnapshot: QueueSnapshot
@@ -152,6 +154,9 @@ const HOME = '/floor'
 const SYNC = '/floor/sync'
 /** B-W2b-67: Clock in & out (SCR-170), open with nobody signed in. */
 const CLOCK = '/floor/clock'
+/** B-W2b-70: Call for help (SCR-172), the frame's Help button; the Line view (SCR-168), where a LINE tablet lands. */
+const HELP = '/floor/help'
+const LINE_VIEW = '/floor/lineview'
 /** B-W2b-66: a DISPLAY device's page (SCR-173). */
 const DISPLAY = '/floor/display'
 /** While the app is open, the queue tries to send this often (it sends at once when the network comes back). */
@@ -189,7 +194,8 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
   const [crewLeft, setCrewLeft] = useState<CrewView | null>(null)
   const [arriving, setArriving] = useState(false)
   const scan = useRef<string | null>(null)
-  const arrivalTo = useRef(HOME)
+  // B-W2b-67: where the welcome cards end: the job they opened, else (null) the person's landing.
+  const arrivalTo = useRef<string | null>(null)
   const queue = useMemo(() => new FloorQueue(browserStorage(), api), [api])
   const queueSnapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot, queue.getSnapshot)
   const kept = useMemo(() => new KeptClocks(browserKeptStorage(), keptSender(api)), [api])
@@ -353,7 +359,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
         return null
       }
       setSwitched({ from, to: answer.value.worker.displayName })
-      arrivalTo.current = HOME
+      arrivalTo.current = null
       setArriving(true)
       router.replace(answer.value.notice.due ? NOTICE : SIGN_IN)
       return null
@@ -399,7 +405,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     }
     if (pathname === SIGN_IN && !pendingSwitch && !crewStep) {
       if (me.notice.due) router.replace(NOTICE)
-      else if (!arriving) router.replace(arrivalTo.current)
+      else if (!arriving) router.replace(arrivalTo.current ?? (device.rules?.landing === 'LINE_VIEW' && me.permissions.includes('floor.lead') ? LINE_VIEW : HOME))
     }
   }, [load.status, device, me, pathname, pendingSwitch, crewStep, arriving, router])
 
@@ -447,6 +453,8 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
           case 'menu':
             return setUi((current) => ({ ...current, menu: action.open }))
           case 'help':
+            // B-W2b-70 (design floor.help: two taps from any screen): signed in, Help is Call for help; before a sign-in, the words.
+            if (me && action.open) return router.push(HELP)
             return setUi((current) => ({ ...current, help: action.open }))
           case 'language':
             return setUi((current) => ({ ...current, language: action.open }))
@@ -528,22 +536,23 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     },
     crewDone: (joined) => {
       setCrewStep(null)
-      arrivalTo.current = HOME
+      arrivalTo.current = null
       setArriving(joined)
     },
     crewLeft,
     arriving,
     arrive: () => {
-      arrivalTo.current = HOME
+      arrivalTo.current = null
       setArriving(true)
     },
     arrived: (next) => {
-      arrivalTo.current = next?.path ?? HOME
+      arrivalTo.current = next?.path ?? null
       scan.current = next?.code ?? null
       setArriving(false)
     },
     kept,
     keptSnapshot,
+    landing: device?.rules?.landing === 'LINE_VIEW' && me?.permissions.includes('floor.lead') ? LINE_VIEW : HOME,
     queue,
     queueSnapshot,
     shellQueue,

@@ -313,6 +313,7 @@
     "loading": "Reading the scans…",
     "title": "Scans",
     "hint": "Append-only: a correction is asked from the floor or approved in Labour & corrections, never edited here.",
+    "toLabour": "Open Labour & corrections",
     "privacy": "Names show only here, inside this one bundle, where the site records workers.",
     "col": {
       "n": "#",

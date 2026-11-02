@@ -1,6 +1,7 @@
 import { defineDesignScreen } from '../../lib/design/design-screen'
 import { signedInFrame, onFloor } from '../frame/fixtures'
 import { homeTiles, type FloorMode } from '../model'
+import type { OpenItem } from '../tasks/scans/timing'
 import { HomeView, type HomeViewModel } from './view/HomeView'
 
 /**
@@ -21,6 +22,9 @@ const home = (mode: FloorMode | null, extra: Partial<HomeViewModel> = {}, permis
   notice: { due: blocks, blocksScans: blocks },
   ...extra,
 })
+
+// B-W2b-69: "Unfinished on this tablet". Made-up tickets only.
+const open = (state: OpenItem['state'], extra: Partial<OpenItem> = {}): OpenItem => ({ bundleId: 'b-123', bundleCode: 'B-000123', operation: { id: 'op-30', seq: 30, code: 'SEW-SLV', name: 'Attaccare maniche' }, state, pausedAt: state === 'PAUSED' ? '2026-10-29T10:58:00.000Z' : null, runningSince: state === 'RUNNING' ? '2026-10-29T09:12:00.000Z' : null, pausedAtClockOut: false, ...extra })
 
 export const designScreen = defineDesignScreen<HomeViewModel>({
   screen: 'SCR-022',
@@ -106,6 +110,10 @@ export const designScreen = defineDesignScreen<HomeViewModel>({
       model: home('cutting', { frame: signedInFrame('home.title', { showHome: false, online: false, pending: 6 }), offline: { held: null }, lowNumbers: [{ kind: 'BUNDLE', left: 12 }] }),
       note: 'Tickets printed offline take numbers from this tablet\'s own block; it tops up by itself with the next send.',
     },
+    { id: 'resume-paused', label: 'Unfinished: a paused bundle', model: home('sewing', { resume: { items: [open('PAUSED')], asOf: null } }), note: '"Paused: B-000123 at Op 30 since 11:58 · Continue": Continue opens the job at the step it was left. Hidden when nothing is open.' },
+    { id: 'resume-clock-out', label: 'Unfinished: paused at clock-out', model: home('sewing', { resume: { items: [open('PAUSED', { pausedAtClockOut: true })], asOf: null } }) },
+    { id: 'resume-running', label: 'Unfinished: running and paused', model: home('sewing', { resume: { items: [open('RUNNING', { bundleId: 'b-124', bundleCode: 'B-000124' }), open('PAUSED')], asOf: null } }) },
+    { id: 'resume-offline', label: 'Unfinished offline, from this tablet', model: home('sewing', { frame: signedInFrame('home.title', { showHome: false, online: false }), offline: { held: null }, resume: { items: [open('PAUSED')], asOf: '2026-10-29T10:59:00.000Z' } }), note: 'The last answer of this visit, with its as-of time.' },
     { id: 'switched', label: 'Person switched by a badge', model: home('cutting', { switched: { from: 'Bea Esempio', to: 'Ada Demo' } }), note: 'The next person scanned their badge on Home (badge-only site): one line says who left and who is on.' },
     { id: 'badge-refused', label: 'A badge that does not open this tablet', model: home('cutting', { badgeRefused: true }), note: 'The person signed in stays.' },
   ],

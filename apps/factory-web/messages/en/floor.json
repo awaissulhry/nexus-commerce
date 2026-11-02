@@ -19,7 +19,7 @@
     "helpDialog": {
       "title": "Help",
       "body": "Ask your team leader, or the office.",
-      "later": "Calling for help from the tablet comes later."
+      "later": "Sign in to call for help from this tablet."
     },
     "languageDialog": {
       "title": "Language",
@@ -352,6 +352,17 @@
         "inspect": "No network: inspections and releases wait for the network (they take their number from the office). Scans are saved on this tablet.",
         "serials": "No network: garment serials and their labels wait for the network (the office gives them). Other work is saved on this tablet."
       }
+    },
+    "resume": {
+      "title": "Unfinished on this tablet",
+      "paused": "Paused",
+      "running": "Running",
+      "continue": "Continue",
+      "line": {
+        "paused": "Op {seq} {name} · since {time}",
+        "running": "Op {seq} {name} · since {time}",
+        "clockOut": "Op {seq} {name} · paused at clock-out, {time}"
+      }
     }
   },
   "tile": {
@@ -381,14 +392,18 @@
       "pack": "Scan garments into cartons, print labels and the DDT",
       "labels": "Print garment labels behind the certificate check",
       "machine": "Report a machine problem; a technician’s jobs",
-      "clock": "Your time today, breaks, forgot badge"
+      "clock": "Your time today, breaks, forgot badge",
+      "help": "One tap calls the right person",
+      "lineview": "Calls, what waits, stations"
     },
     "held": {
       "notice": "Read the notice first",
       "coming": "Coming soon"
     },
     "machine": "Machine problem",
-    "clock": "Clock in & out"
+    "clock": "Clock in & out",
+    "help": "Call for help",
+    "lineview": "Line view"
   },
   "scan": {
     "title": "Scan anything",
@@ -613,7 +628,8 @@
       "final": "Refused",
       "again": "Sent again by itself",
       "others_one": "Another person has {count} refused action: the team leader sees it.",
-      "others_other": "Another person has {count} refused actions: the team leader sees them."
+      "others_other": "Another person has {count} refused actions: the team leader sees them.",
+      "lineView": "Sync conflicts: Line view"
     },
     "waiting": {
       "title": "Waiting, in send order",
@@ -668,7 +684,22 @@
       "rework_one": "{count} rework",
       "rework_other": "{count} rework",
       "machine": "Machine problem on {code}",
-      "clock": "Clock in, out or a break"
+      "clock": "Clock in, out or a break",
+      "start": "Start {code}",
+      "pause": "Pause {code}",
+      "resume": "Resume {code}",
+      "handBack": "Hand back {code}",
+      "partial_one": "{code}: {count} piece so far",
+      "partial_other": "{code}: {count} pieces so far",
+      "tick": "A step ticked",
+      "note": "A comment on a work order",
+      "noBundleStart": "No-bundle time started",
+      "noBundleEnd": "No-bundle time ended",
+      "call": "Help call",
+      "callAnswer": "Answer to a help call",
+      "handover": "Handover note",
+      "onBehalf_one": "Entry on behalf: {code} · {count} good",
+      "onBehalf_other": "Entry on behalf: {code} · {count} good"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

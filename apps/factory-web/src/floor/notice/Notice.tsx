@@ -59,7 +59,7 @@ export function FloorNotice() {
         return open(action.locale)
       case 'home':
         // B-W2b-67: right after a sign-in the welcome cards come next (the handover note, Continue bundle).
-        return router.push(store.arriving ? '/floor/sign-in' : '/floor')
+        return router.push(store.arriving ? '/floor/sign-in' : store.landing)
       case 'reload':
         return open()
       case 'acknowledge': {

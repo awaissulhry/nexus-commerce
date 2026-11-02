@@ -41,6 +41,8 @@ export interface BundlesCan {
   workOrders: boolean
   /** production.settings.view: the legal basis on record, read for "Show who". */
   settings: boolean
+  /** production.labour.view: Labour & corrections (B-W2b-57), linked from the Scans tab. */
+  labour: boolean
 }
 
 export function bundlesCanOf(permissions: readonly string[]): BundlesCan {
@@ -53,6 +55,7 @@ export function bundlesCanOf(permissions: readonly string[]): BundlesCan {
     printLabels: held.has('print.labels'),
     workOrders: held.has('workorders.view'),
     settings: held.has('production.settings.view'),
+    labour: held.has('production.labour.view'),
   }
 }
 

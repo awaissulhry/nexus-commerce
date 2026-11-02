@@ -140,7 +140,9 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/production/cutting': 'production.cutting.view', // GET /production/cutting/cuts (B-W2a-60)
       '/production/scrap': 'production.scrap.view', // GET /production/scrap (B-W2a-60)
       '/production/calls': 'production.calls.view', // GET /production/calls (B-W2b-58)
+      '/production/labour': 'production.labour.view', // GET /production/labour/inbox (B-W2b-57)
       '/production/bundles': 'production.bundles.view', // GET /production/bundles (B-W2b-59)
+      '/production/dispatch': 'production.dispatch.view', // GET /production/dispatch/board (B-W2b-56)
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
       '/quality/holds': 'quality.holds.view', // GET /quality/holds (B-W2a-67)
@@ -296,7 +298,7 @@ describe('record links and list addresses (lib/records/record-links.ts)', () => 
   })
 
   it('a record without a page of its own opens its panels (thread, files, history)', () => {
-    for (const type of ['DepositRequest', 'Ddt', 'ScanCorrectionRequest', 'FloorScanRefusal', 'StoredFile']) {
+    for (const type of ['DepositRequest', 'Ddt', 'FloorScanRefusal', 'StoredFile']) {
       expect(RECORD_PAGES[type], type).toBeUndefined()
       expect(recordAddress({ type, id: 'r1', label: 'R-1', companyId: 'c1' }, OFFICE_PAGES)).toBe(`/records/${type}/r1?label=R-1&company=c1`)
     }
@@ -330,7 +332,8 @@ describe('record links and list addresses (lib/records/record-links.ts)', () => 
   it('a Today row opens its kind\'s page when it has one, else its record', () => {
     expect(attentionAddress('PRIVACY_DUTY', { type: 'Company', id: 'c1' }, OFFICE_PAGES)).toBe('/admin/privacy?company=c1')
     expect(attentionAddress('INVOICE_SDI', { type: 'Invoice', id: 'i1' }, OFFICE_PAGES)).toBe('/finance/invoices/i1')
-    expect(attentionAddress('SCAN_CORRECTION', { type: 'ScanCorrectionRequest', id: 'k1' }, OFFICE_PAGES)).toBe('/records/ScanCorrectionRequest/k1')
+    // B-W2b-57: a correction request is decided on Labour & corrections.
+    expect(attentionAddress('SCAN_CORRECTION', { type: 'ScanCorrectionRequest', id: 'k1' }, OFFICE_PAGES)).toBe('/production/labour?open=CORRECTION:k1')
   })
 })
 
@@ -375,6 +378,8 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       pack: 'shipping.pack',
       final: 'quality.inspections.view',
       machine: 'plant.report', // GET /plant/floor/machines (B-W2a-73)
+      help: 'floor.work', // GET /production/calls/station (B-W2b-70)
+      lineview: 'floor.lead', // the team leader's Line view (B-W2b-70)
       scan: 'floor.work',
     })
     for (const rule of TILE_RULES) expect(everything, rule.key).toContain(rule.permission)
@@ -383,11 +388,12 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
   it('a station shows its mode\'s tiles in order, at most six, each with its word in both languages', () => {
     const keys = (mode: FloorMode) => homeTiles(mode, everything, false).map((tile) => tile.key)
     expect(Object.fromEntries(FLOOR_MODES.map((mode) => [mode, keys(mode)]))).toEqual({
-      cutting: ['mywork', 'operation', 'cut', 'bundles', 'machine', 'scan'],
-      sewing: ['mywork', 'operation', 'machine', 'scan'],
-      packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'scan'],
-      inspection: ['mywork', 'operation', 'final', 'machine', 'scan'],
-      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'scan'],
+      // B-W2b-70: a full home keeps the Line view and Scan anything; the frame's Help button opens Call for help from any screen.
+      cutting: ['mywork', 'operation', 'cut', 'bundles', 'lineview', 'scan'],
+      sewing: ['mywork', 'operation', 'machine', 'help', 'lineview', 'scan'],
+      packing: ['mywork', 'operation', 'labels', 'pack', 'lineview', 'scan'],
+      inspection: ['mywork', 'operation', 'final', 'machine', 'lineview', 'scan'],
+      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'lineview', 'scan'],
     })
     for (const mode of FLOOR_MODES) expect(keys(mode).length).toBeLessThanOrEqual(MAX_TILES)
     for (const locale of LOCALES) {

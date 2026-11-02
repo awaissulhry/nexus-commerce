@@ -58,6 +58,118 @@
     "OTHER_KIND": {
       "message": "This operation is other work than this station does.",
       "fix": "Take the bundle to the right station, or ask your team leader."
+    },
+    "WRONG_BUNDLE": {
+      "message": "This bundle is for another line.",
+      "fix": "Take it to its line, or ask your team leader."
+    },
+    "MORE_THAN_PASSED": {
+      "message": "More pieces than the operation before passed.",
+      "fix": "Count them again, or ask your team leader."
+    },
+    "MORE_THAN_BUNDLE": {
+      "message": "More pieces than this bundle holds.",
+      "fix": "Count them again: no override lifts this."
+    },
+    "LESS_THAN_TAKEN": {
+      "message": "Fewer good pieces than the next operation already took.",
+      "fix": "Count them again, or ask your team leader."
+    },
+    "ON_HOLD": {
+      "message": "This bundle or its work order is on hold.",
+      "fix": "Keep it aside and ask your team leader."
+    },
+    "MACHINE_UNSAFE": {
+      "message": "The machine at this station is marked do not use.",
+      "fix": "Work at another station, or ask your team leader."
+    },
+    "COMPONENTS_MISSING": {
+      "message": "A component's lot is not scanned yet.",
+      "fix": "Scan the lot of the component you used."
+    },
+    "WRONG_COMPONENT": {
+      "message": "This lot is not a material of this garment.",
+      "fix": "Take it away and scan the lot of the component in your hand."
+    },
+    "UNKNOWN_LOT": {
+      "message": "This is not a lot of this site.",
+      "fix": "Scan the lot's label again, or ask your team leader."
+    },
+    "LOT_NOT_RELEASED": {
+      "message": "This lot is not released: only a released lot goes into a garment.",
+      "fix": "Use a released lot, or ask quality to release this one."
+    },
+    "COMPONENT_COUNT": {
+      "message": "The lots do not cover every garment that goes on.",
+      "fix": "Say how many garments each lot covers."
+    },
+    "CHECKLIST_OPEN": {
+      "message": "A required step of this operation is not ticked.",
+      "fix": "Tick the steps, then Finish."
+    },
+    "CHECKLIST_REPORTED": {
+      "message": "This bundle is reported here already: its steps are closed.",
+      "fix": "Ask a correction if something is wrong."
+    },
+    "CHECKLIST_STEP_UNKNOWN": {
+      "message": "This step is no longer part of the operation.",
+      "fix": "Scan the bundle again."
+    },
+    "ALREADY_REPORTED": {
+      "message": "This bundle is already reported here.",
+      "fix": "Take it to its next operation."
+    },
+    "OTHER_RUNNING": {
+      "message": "Another bundle is running on your name.",
+      "fix": "Pause it, hand it back or finish it first."
+    },
+    "OPEN_BY_OTHER": {
+      "message": "Another person is working on this bundle.",
+      "fix": "Your team leader can see who."
+    },
+    "ALREADY_RUNNING": {
+      "message": "This bundle is already running.",
+      "fix": "Carry on, or pause it."
+    },
+    "ALREADY_PAUSED": {
+      "message": "This bundle is already paused.",
+      "fix": "Resume it when you are back."
+    },
+    "PAUSED_RESUME": {
+      "message": "This bundle is paused.",
+      "fix": "Resume it."
+    },
+    "NOT_STARTED": {
+      "message": "This bundle is not started.",
+      "fix": "Start it, or just Finish it."
+    },
+    "NO_PIECES": {
+      "message": "Say how many pieces are done.",
+      "fix": "From one piece up."
+    },
+    "PIECES_TOO_MANY": {
+      "message": "That is as many as the bundle holds.",
+      "fix": "Finish the bundle instead."
+    },
+    "NOT_QUALIFIED": {
+      "message": "This operation is not on your skills yet.",
+      "fix": "A team leader may override it with their PIN and a reason."
+    },
+    "NOT_AUTHORISED": {
+      "message": "You are not authorised for this operation.",
+      "fix": "Ask your team leader: no override lifts this."
+    },
+    "TEAM_NOT_IN_CREW": {
+      "message": "Someone on the team is no longer on this tablet.",
+      "fix": "Check the crew, then try again."
+    },
+    "TEAM_NOTICE": {
+      "message": "Someone on the team has not read the worker notice.",
+      "fix": "They read it first, on their own sign-in."
+    },
+    "BUNDLE_RUNNING": {
+      "message": "A bundle is running here.",
+      "fix": "Pause or finish the bundle first."
     }
   },
   "unknownCode": {
@@ -100,7 +212,15 @@
     "of": "of {count}",
     "atMost": "At most {count}",
     "allLeft": "All left",
-    "tapHint": "Tap a count to change it."
+    "tapHint": "Tap a count to change it.",
+    "stepGood": "Good, one piece at a time",
+    "oneLess": "One less",
+    "oneMore": "One more",
+    "least": "Good cannot go below 0.",
+    "rule": {
+      "held": "More than the operation before passed ({count}): a team leader signs at Finish.",
+      "told": "More than the operation before passed ({count}): your team leader is told."
+    }
   },
   "finish": {
     "label_one": "Finish · {count} good",
@@ -110,6 +230,12 @@
       "nothing": "Count at least one piece",
       "atMost": "At most {count}",
       "unknown": "Nothing passed to this operation yet"
+    },
+    "work": {
+      "steps_one": "{count} step left to tick",
+      "steps_other": "{count} steps left to tick",
+      "component": "Scan the lot of {code}: {covered} of {garments} covered",
+      "lotCount": "Say how many garments lot {code} covers"
     }
   },
   "fact": {
@@ -120,7 +246,8 @@
     "workOrder": "Work order",
     "part": "Part",
     "operation": "Operation",
-    "at": "When"
+    "at": "When",
+    "rush": "Rush"
   },
   "opShort": "Op {seq}",
   "opCode": "Op {seq} · {code}",
@@ -181,5 +308,216 @@
       "title": "Sent to your team leader",
       "body": "Waiting for your team leader. The report stays until it is decided."
     }
+  },
+  "timing": {
+    "title": "This bundle's time",
+    "running": "Working",
+    "paused": "Paused",
+    "start": "Start",
+    "pause": "Pause",
+    "resume": "Resume",
+    "notAllGood": "Not all good",
+    "handBack": "Hand back",
+    "handBackTitle": "Hand back this bundle?",
+    "handBackBody": "The time so far stays on the record; anyone may start it again.",
+    "piecesOpen": "Pieces so far",
+    "piecesTitle": "Pieces so far on {code}",
+    "piecesHint": "Another person can then carry on with the rest.",
+    "piecesSend": "Save the pieces",
+    "piecesEmpty": "Say how many pieces",
+    "noPieces": "Nothing to say so far: finish the bundle.",
+    "piecesSoFar_one": "{count} piece so far",
+    "piecesSoFar_other": "{count} pieces so far",
+    "other": "Another person is working on it. Your team leader can see who.",
+    "pausedAtClockOut": "Paused when you clocked out",
+    "team_one": "Team of {count}",
+    "team_other": "Team of {count}",
+    "qualification": "This operation is not on your skills yet: your team leader is told."
+  },
+  "pause": {
+    "choose": "Choose a reason first",
+    "needsWords": "Say why in a few words",
+    "words": "A few words"
+  },
+  "guard": {
+    "title": "Stop: this does not count yet",
+    "lift": "A team leader may override it here with their PIN and a reason.",
+    "noLift": "No override lifts this. Do what it says, or ask your team leader.",
+    "override": "Team leader override",
+    "told": "{what} Your team leader is told.",
+    "liftReport": "Go back to change the counts, or a team leader overrides it here with their PIN and a reason."
+  },
+  "override": {
+    "title": "Team leader override",
+    "reason": "Why does it count anyway?",
+    "words": "Say why in a few words",
+    "badge": "Team leader: scan your badge",
+    "badgeHint": "Or pick your name.",
+    "badgeRead": "Badge read",
+    "byName": "No badge: pick my name",
+    "pickName": "Team leader's name",
+    "useBadge": "Use the badge",
+    "signsName": "{name} signs with their PIN.",
+    "signsBadge": "Badge read. Sign with your PIN.",
+    "otherLead": "Another team leader",
+    "pin": "Team leader's PIN",
+    "offline": "The override needs the network: the PIN is checked by the office.",
+    "cancel": "Cancel",
+    "problem": {
+      "wrong": "Wrong badge or PIN. Try again, or ask another team leader.",
+      "self": "A team leader never overrides their own scan. Ask another team leader.",
+      "notLead": "This person may not override floor checks. Ask a team leader of this site.",
+      "note": "With \"Other\" say why in a few words.",
+      "locked": "Too many tries. Wait a few minutes, or ask another team leader.",
+      "unavailable": "The office is not answering. Try again."
+    },
+    "because": "Why: {reason}",
+    "change": "Change"
+  },
+  "components": {
+    "title": "Scan what you used",
+    "scan": "Scan the lot",
+    "hint": "Scan the label of the lot in your hand.",
+    "scanIt": "Not scanned yet",
+    "done": "Traced",
+    "of": "of {count}",
+    "rest": "The rest: {count}",
+    "saySo": "How many?",
+    "covers_one": "{count} garment",
+    "covers_other": "{count} garments",
+    "less": "One garment less on {code}",
+    "more": "One garment more on {code}",
+    "least": "At least one garment",
+    "most": "At most {count}: the last lot takes the rest",
+    "drop": "Take {code} off",
+    "unchecked": "Saved on this tablet: the office checks the lot when the report arrives."
+  },
+  "steps": {
+    "title": "Steps in this operation",
+    "required": "Required",
+    "optional": "Optional",
+    "you": "You",
+    "other": "Another person",
+    "when": "{who} · {time}",
+    "notHere": "Does not apply",
+    "outcome": {
+      "DONE": "Done",
+      "NOT_APPLICABLE": "Does not apply"
+    }
+  },
+  "stack": {
+    "open": "Several bundles",
+    "add": "Add another bundle",
+    "heldCounts": "Finish or leave this count first",
+    "scan": "Scan the next bundle",
+    "hint": "Up to {count} bundles, then Finish once.",
+    "empty": "Scan the bundles you have finished.",
+    "offline": "Saved on this tablet: each bundle is sent as its own report.",
+    "bySize": "Count by size",
+    "allSizes": "All sizes",
+    "none": "None",
+    "bundles_one": "{count} bundle",
+    "bundles_other": "{count} bundles",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "size": "Size {size}",
+    "of": "of {count}",
+    "least": "Good cannot go below 0.",
+    "less": "One piece less on {code}",
+    "more": "One piece more on {code}",
+    "alone": "Report alone",
+    "drop": "Take {code} off the stack",
+    "total_one": "{count} bundle · {good} good",
+    "total_other": "{count} bundles · {good} good",
+    "finish_one": "Finish {count} bundle · {good} good",
+    "finish_other": "Finish {count} bundles · {good} good",
+    "done_one": "{count} bundle finished · {what}",
+    "done_other": "{count} bundles finished · {what}",
+    "partly_one": "{count} bundle finished; {refused} stays here with its reason.",
+    "partly_other": "{count} bundles finished; {refused} stay here with their reason.",
+    "heldEmpty": "Scan a bundle first",
+    "heldShade": "Shades do not match: take one off",
+    "heldRefused": "Take the refused bundles off, or report them alone",
+    "failed": "The office is not answering. Nothing was lost: try again.",
+    "signed": "Signed by the team leader: that bundle counts.",
+    "notBundle": "{code} is not a bundle ticket.",
+    "notFound": "{code} is not a bundle ticket of this site.",
+    "notOnTablet": "{code} is not on this tablet: report it when the network is back.",
+    "pick": "{code} has two operations here: report it alone.",
+    "already": "{code} is already reported here.",
+    "refused": "{code} cannot be reported here: scan it alone to see why.",
+    "twice": "{code} is on the stack already.",
+    "full": "The stack is full: finish these first.",
+    "shade": "These parts are from different shade lots: they may not be joined. Take one off and ask your team leader.",
+    "reportedAlone": "{code} reported on its own.",
+    "leaveTitle": "Leave this stack?",
+    "leaveBody": "These bundles are not reported yet: they stay as they are.",
+    "leave": "Leave it",
+    "keep": "Keep counting",
+    "noneFinished_one": "Nothing finished: {count} bundle stays here with its reason.",
+    "noneFinished_other": "Nothing finished: {count} bundles stay here with their reason."
+  },
+  "indirect": {
+    "open": "No bundle: what are you doing?",
+    "question": "No bundle: what are you doing?",
+    "loading": "Reading the tiles…",
+    "offline": {
+      "title": "The tiles are not on this tablet",
+      "body": "They come back with the network."
+    },
+    "empty": {
+      "title": "No tiles at this site",
+      "body": "Ask your team leader to add them in Floor rules."
+    },
+    "queues": "Saved on this tablet, sent when the network is back.",
+    "running": "No-bundle time running",
+    "scanReturns": "Scanning a bundle returns to standard.",
+    "done": "Done"
+  },
+  "note": {
+    "open": "Photo or comment",
+    "title": "Photo or comment",
+    "question": "What differs from the plan?",
+    "reminder": "Keep faces out of the picture.",
+    "photo": "Take a photo",
+    "words": "In your own words (optional)",
+    "post": "Post to the work order",
+    "offline": "A photo or clip needs the network; a comment is saved on this tablet.",
+    "full": "At most {count} files on one note.",
+    "uploading": "Sending the picture…",
+    "failed": "The picture did not go up. Take it again.",
+    "detail": "With \"Other\" say what differs in a few words, or add a photo.",
+    "drop": "Take {name} off",
+    "cancel": "Cancel",
+    "held": {
+      "tile": "Choose what differs first",
+      "detail": "Say what differs, or add a photo",
+      "busy": "The picture is still going up"
+    },
+    "clip": {
+      "title": "Record a 15-second clip",
+      "preview": "Camera",
+      "review": "The clip you recorded",
+      "left": "Time left",
+      "failed": "This tablet cannot record a clip. Take a photo instead.",
+      "camera": "Start camera",
+      "record_one": "Record {count} second",
+      "record_other": "Record up to {count} seconds",
+      "stop": "Stop",
+      "again": "Record again",
+      "use": "Use this clip"
+    }
+  },
+  "resume": {
+    "title": "Your open work",
+    "PAUSED": "Paused: {code} at Op {seq} since {time}",
+    "RUNNING": "Running: {code} at Op {seq} since {time}",
+    "continue": "Continue"
+  },
+  "done": {
+    "pieces_one": "{code}: {count} piece so far saved",
+    "pieces_other": "{code}: {count} pieces so far saved",
+    "handBack": "{code} handed back: the time is kept",
+    "note": "{code}: note posted to the work order"
   }
 }

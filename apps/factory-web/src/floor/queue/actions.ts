@@ -45,6 +45,21 @@ export const WHAT_KEY = {
   'plant.report': 'machine',
   // B-W2b-67
   'people.clock.record': 'clock',
+  // B-W2b-70
+  'andon.call.send': 'call',
+  'andon.call.answer': 'callAnswer',
+  'andon.handover.write': 'handover',
+  'production.scan.onBehalf': 'onBehalf',
+  // B-W2b-69: the operation screen every shift.
+  'production.scan.start': 'start',
+  'production.scan.pause': 'pause',
+  'production.scan.resume': 'resume',
+  'production.scan.handBack': 'handBack',
+  'production.scan.partial': 'partial',
+  'production.checklist.tick': 'tick',
+  'production.floorNote.post': 'note',
+  'production.offStandard.start': 'noBundleStart',
+  'production.offStandard.end': 'noBundleEnd',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

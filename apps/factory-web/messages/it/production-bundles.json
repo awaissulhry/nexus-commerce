@@ -312,7 +312,8 @@
     "failed": "Non è stato possibile leggere le scansioni",
     "loading": "Leggo le scansioni…",
     "title": "Scansioni",
-    "hint": "Solo aggiunte: una correzione si chiede dal reparto o si approva in Manodopera e correzioni, mai qui.",
+    "hint": "Solo aggiunte: una correzione si chiede dal reparto o si approva in Manodopera e rettifiche, mai qui.",
+    "toLabour": "Apri Manodopera e rettifiche",
     "privacy": "I nomi compaiono solo qui, dentro questo singolo fascio, dove lo stabilimento registra i lavoratori.",
     "col": {
       "n": "N.",
