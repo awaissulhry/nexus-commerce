@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { MoreHorizontal, Printer } from 'lucide-react'
+import Link from 'next/link'
+import { ExternalLink, MoreHorizontal, Printer } from 'lucide-react'
 import { Card, KeyValue, Menu, SummaryTable } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Pill, Select, Spinner, Tag, TokenChip } from '@nexus/ui/primitives'
@@ -15,6 +16,7 @@ import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../../record/
 import { NotReleased, PartState } from '../../record/view/WorkOrderRecordView'
 import { bundlesOnHold, DAILY_NAMESPACE, splitHeld } from '../../daily/model'
 import { FinishedCard, say } from '../../daily/view/DailyParts'
+import { SHIFT_NAMESPACE } from '../../every-shift/model'
 
 /**
  * SCR-072 — Bundles (design wo-bundles; MES-065, MES-068, MES-073): per cell what is cut, bundled and still to bundle;
@@ -213,6 +215,7 @@ function BundleList({ workOrder, data, model, actions }: { workOrder: WorkOrder;
 
 function BundleDetail({ data, workOrder, model, actions }: { data: WorkOrderBundles; workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
   const t = useT('production')
+  const ts = useT(SHIFT_NAMESPACE)
   const locale = useLocale()
   const open = model.bundleOpen!
   const bundle = data.bundles.find((row) => row.id === open.bundleId)
@@ -236,6 +239,14 @@ function BundleDetail({ data, workOrder, model, actions }: { data: WorkOrderBund
             {t('bundles.next')}
           </Button>
           <span className="grow" />
+          {/* B-W2b-59 (wo-bundles "W2b 'Open full page' (Bundle record)"). */}
+          {model.can.bundlesView && (
+            <Button size="sm" asChild>
+              <Link href={`${model.prefix}/production/bundles/${bundle.id}`}>
+                <ExternalLink size={13} aria-hidden /> {ts('docs.bundleFullPage')}
+              </Link>
+            </Button>
+          )}
           {model.can.bundles && (
             <Button size="sm" heldReason={hold ? t(`bundles.hold.${hold}`) : null} onClick={() => actions?.onDialog?.({ kind: 'reprint', bundleIds: [bundle.id] })}>
               <Printer size={13} aria-hidden /> {t('bundles.reprintOne')}

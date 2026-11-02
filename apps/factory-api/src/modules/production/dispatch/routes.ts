@@ -25,6 +25,7 @@ import { lineHandover, newHandover, writeHandover } from './handover'
 import { manifest } from './manifest'
 import { floorLine, myWork } from './mine'
 import { moveWork } from './moves'
+import { myMessagesContract, myWorkMessages } from './mywork-messages'
 import { dispatchOperators } from './operators'
 import { printedPaper, printedPdf } from './print'
 
@@ -52,6 +53,7 @@ export default defineRoutes('production.dispatch', manifest, async (app) => {
   app.post('/production/dispatch/moves', { schema: moveContract }, async (request) => moveWork(request, request.body, idempotencyKeyFrom(request)))
 
   app.get('/production/dispatch/mine', { schema: mineContract }, async (request) => myWork(request))
+  app.get('/production/dispatch/mine/messages', { schema: myMessagesContract }, async (request) => myWorkMessages(request))
   app.get('/production/dispatch/floor/line', { schema: floorLineContract }, async (request) => floorLine(request, request.query))
 
   app.get('/production/dispatch/handover', { schema: handoverContract }, async (request) => lineHandover(request, request.query))

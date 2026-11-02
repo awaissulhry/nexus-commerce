@@ -21,6 +21,8 @@ export const manifest = defineManifest({
   'POST /production/dispatch/assignments/:assignmentId/remove': { audiences: ['office'], permission: 'production.dispatch.manage', scope: 'record' },
   'POST /production/dispatch/moves': { audiences: ['office'], permission: 'production.dispatch.manage', scope: 'record' },
   'GET /production/dispatch/mine': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
+  // B-W2b-71 (COL-036): the open messages on the tablet's work orders; read in the system view after the floor's checks.
+  'GET /production/dispatch/mine/messages': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
   'GET /production/dispatch/floor/line': { audiences: ['floor'], permission: 'production.dispatch.view', scope: 'record' },
   'GET /production/dispatch/handover': { audiences: ['office', 'floor'], permission: 'production.dispatch.view', scope: 'record' },
   'POST /production/dispatch/handover': { audiences: ['office', 'floor'], permission: 'production.dispatch.handover', scope: 'record' },

@@ -6,6 +6,7 @@ import { NO_NEW_ORDER, type NewWorkOrderModel, type WorkOrdersListModel } from '
 import { WorkOrdersListView } from './view/WorkOrdersListView'
 import { DAILY_ROLE_OF, dailyDemo } from './daily/demo/fixtures'
 import type { ReadinessRow } from './daily/api'
+import type { ReleasePreviewRow } from './every-shift/api'
 
 /**
  * SCR-069 — Work orders (design production.workorders) with made-up data only: every state of the list (loading, error,
@@ -74,6 +75,14 @@ const chosen = (over: Partial<NewWorkOrderModel> = {}): NewWorkOrderModel => ({
 })
 
 const drafts = OPEN_ROWS.filter((row) => row.status === 'DRAFT')
+const REVIEW_ROWS = drafts.map((row) => ({ id: row.id, number: row.number, styleCode: row.styleCode }))
+const released = OPEN_ROWS.find((row) => row.status === 'RELEASED') ?? OPEN_ROWS[2]!
+const PREVIEW: ReleasePreviewRow[] = [
+  { id: drafts[0]!.id, label: drafts[0]!.number, version: 1, changes: [{ field: 'status', now: 'DRAFT', next: 'RELEASED' }], refusal: null },
+  { id: drafts[1]!.id, label: drafts[1]!.number, version: 1, changes: [], refusal: { code: 'held', field: 'status', status: 'DRAFT', reasons: ['DEPOSIT', 'MATERIAL'] } },
+  { id: released.id, label: released.number, version: 3, changes: [], refusal: null },
+]
+const RUSH_ROWS = OPEN_ROWS.map((row, index) => (index % 3 === 0 ? { ...row, rush: true, priority: index + 2 } : row))
 
 function WorkOrdersDesign({ model }: { model: ListCase }) {
   return inShell('/production/work-orders', createElement(WorkOrdersListView, { model: model.list }), model.role)
@@ -88,22 +97,28 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'all', label: 'Owner: every work order (Rows ▾ All)', model: base('owner', { view: 'all', rows: { items: LIST_ROWS, more: false, problem: null } }) },
     { id: 'late', label: 'The Late tile pressed', model: base('manager', { view: 'late', rows: { items: LIST_ROWS.filter((row) => (row.daysLate ?? 0) > 0), more: false, problem: null } }) },
     { id: 'drafts-selected', label: 'Two drafts selected: Release 2 can go', model: base('manager', { selected: drafts.map((row) => row.id) }) },
-    { id: 'mixed-selected', label: 'A draft and an in-progress one selected: Release is held with its reason', model: base('manager', { selected: [drafts[0]!.id, OPEN_ROWS.find((row) => row.status === 'IN_PROGRESS')!.id] }) },
+    { id: 'mixed-selected', label: 'A draft and an in-progress one selected: Release opens the review, which says what each row does', model: base('manager', { selected: [drafts[0]!.id, OPEN_ROWS.find((row) => row.status === 'IN_PROGRESS')!.id] }) },
     {
       id: 'release-confirm',
-      label: 'Release 2: the confirm with what it does',
-      model: base('manager', { selected: drafts.map((row) => row.id), release: { rows: drafts.map((row) => ({ id: row.id, number: row.number, styleCode: row.styleCode })), running: false, done: false, results: {} } }),
+      label: 'Release 2: the review of the rows as they are now',
+      model: base('manager', { selected: drafts.map((row) => row.id), release: { rows: REVIEW_ROWS, preview: PREVIEW.slice(0, 2), state: { phase: 'ready' } } }),
     },
     {
+      id: 'release-blockers',
+      label: 'Release 3: one goes, one is released already, one held with what holds it',
+      model: base('manager', { selected: drafts.map((row) => row.id), release: { rows: REVIEW_ROWS, preview: PREVIEW, state: { phase: 'ready' } } }),
+    },
+    { id: 'release-reading', label: 'Release: reading the rows as they are now', model: base('manager', { selected: drafts.map((row) => row.id), release: { rows: REVIEW_ROWS, preview: null, state: { phase: 'reading' } } }) },
+    { id: 'release-failed', label: 'Release: the read failed, Try again', model: base('manager', { selected: drafts.map((row) => row.id), release: { rows: REVIEW_ROWS, preview: null, state: { phase: 'failed', words: { key: 'error.offline' } } } }) },
+    {
       id: 'release-results',
-      label: 'Release 2: one released with its batch, one still a draft with what holds it',
+      label: 'Release: one released, one refused at Save (the stock changed since the review)',
       model: base('manager', {
         selected: drafts.map((row) => row.id),
         release: {
-          rows: drafts.map((row) => ({ id: row.id, number: row.number, styleCode: row.styleCode })),
-          running: false,
-          done: true,
-          results: { [drafts[0]!.id]: { state: 'released', batchNumber: 'BA-00052' }, [drafts[1]!.id]: { state: 'held', codes: ['DEPOSIT', 'MATERIAL'] } },
+          rows: REVIEW_ROWS,
+          preview: PREVIEW.slice(0, 2),
+          state: { phase: 'done', results: [{ id: PREVIEW[0]!.id, label: PREVIEW[0]!.label, ok: true, refusal: null, version: 2 }, { id: PREVIEW[1]!.id, label: PREVIEW[1]!.label, ok: false, refusal: { code: 'held', field: 'status', status: 'DRAFT', reasons: ['MATERIAL'] }, version: 1 }] },
         },
       }),
     },
@@ -136,6 +151,10 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'new-failed', label: 'New work order: the API refused it (the order changed meanwhile)', model: base('manager', { newOrder: chosen({ problem: { key: 'error.conflict' } }) }) },
     { id: 'new-none', label: 'New work order: no confirmed order matches', model: base('manager', { newOrder: { ...NO_NEW_ORDER, query: 'ZZZ', orders: [] } }) },
     // ---- B-W2a-46: readiness word, On hold, Hold N ----
+    // ---- B-W2b-59: rush, Release N, Print travellers ----
+    { id: 'w2b-rush', label: 'W2b · Rush beside the priority (Edit N changes both; the quick filter Rush)', model: base('manager', { rows: { items: RUSH_ROWS, more: false, problem: null } }) },
+    { id: 'w2b-rush-filter', label: 'W2b · The quick filter “Rush” as a chip (`?rush=true`)', model: base('manager', { rush: true, rows: { items: RUSH_ROWS.filter((row) => row.rush), more: false, problem: null } }) },
+    { id: 'w2b-no-draft', label: 'W2b · Selected rows with no draft: Release held with the reason', model: base('manager', { selected: [released.id] }) },
     { id: 'w2a-readiness', label: 'W2a · The Readiness column (the plan’s word per work order) and the On hold tile', model: base('manager') },
     { id: 'w2a-on-hold', label: 'W2a · The On hold view (tile pressed)', model: base('manager', { view: 'ON_HOLD', rows: { items: HELD_ROWS, more: false, problem: null } }) },
     { id: 'w2a-hold-many', label: 'W2a · Two rows selected: Hold 2 — one hold over both, the reason asked', model: base('manager', { selected: OPEN_ROWS.slice(0, 2).map((row) => row.id), daily: { ...dailyDemo('manager'), dialog: { kind: 'hold', workOrderIds: OPEN_ROWS.slice(0, 2).map((row) => row.id), numbers: OPEN_ROWS.slice(0, 2).map((row) => row.number) }, draft: { reasonCode: 'CUSTOMER_REQUEST', note: 'Il cliente sospende la stagione' } } }) },

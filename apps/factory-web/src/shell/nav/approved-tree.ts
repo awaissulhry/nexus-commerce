@@ -284,7 +284,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Cutting room',
         labelIt: 'Sala taglio',
         hideLabel: false,
-        pages: [{ id: 'production.cutting', title: 'Cutting', titleIt: 'Taglio', wave: 'W2a', href: '/production/cutting' }],
+        pages: [
+          { id: 'production.cutting', title: 'Cutting', titleIt: 'Taglio', wave: 'W2a', href: '/production/cutting' },
+          // W2b: B-W2b-59 Bundles (SCR-259).
+          { id: 'production.bundles', title: 'Bundles', titleIt: 'Fasci', wave: 'W2b', href: '/production/bundles' },
+        ],
       },
       {
         label: 'Floor control',

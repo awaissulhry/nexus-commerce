@@ -31,17 +31,40 @@
   gap: var(--nds-space-6);
 }
 
-/* ── "List changed · Show": a big button above the list (stand-in for the DS FloorList updates slot) ───────────── */
-.fw-mywork-changed {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-/* ── a rush row's flag before its number ─────────────────────────────────────────────────────────────────────────── */
+/* ── a row's flags before its number (rush, material) ────────────────────────────────────────────────────────────── */
 .fw-mywork-rush {
   margin-inline-end: var(--nds-space-8);
   vertical-align: middle;
+}
+
+/* ── "For your work": counts as chips, half a row each, so Next stays on the first screen ─────────────────────────── */
+.fw-mywork-foryou .nds-floor-tiles {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.fw-mywork-foryou .nds-floor-tile {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'icon label count';
+  grid-template-rows: auto;
+  align-items: center;
+  min-height: var(--nds-density-control-h-primary);
+  padding-block: var(--nds-space-8);
+}
+.fw-mywork-foryou .nds-floor-tile-label {
+  align-self: center;
+}
+@container nds-floor-frame (max-width: 759.98px) {
+  .fw-mywork-foryou .nds-floor-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── one message: the words at reading size, its lines kept ──────────────────────────────────────────────────────── */
+.fw-mywork-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: calc(var(--nds-density-font-body) * 1.15);
+  line-height: 1.4;
 }
 
 /* ── "Can't find it?": three big choices, one under the other ────────────────────────────────────────────────────── */
