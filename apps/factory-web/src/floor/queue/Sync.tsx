@@ -1,11 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { isFloorSyncKind } from '@nexus/factory-domain/floor-sync/kinds'
 import { summaryOf } from '@nexus/factory-domain/floor-sync/rules'
-import { useFloor } from '../FloorApp'
+import { useFloor, useFloorRouter } from '../FloorApp'
 import { useFloorKeys } from '../keys'
 import { numberKindsOf } from './actions'
 import { isLow, minutesOff, remainingOf, storageWord, type QueueItem } from './model'
@@ -78,7 +77,7 @@ const UPDATE_WORD: Readonly<Record<UpdateStep, SyncViewModel['update']>> = { non
 
 export function FloorSync() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('sync.title', { showHome: true, queue: true })
   const [ui, setUi] = useState<Pick<SyncViewModel, 'open' | 'confirm' | 'showRecorded'>>({ open: null, confirm: false, showRecorded: false })

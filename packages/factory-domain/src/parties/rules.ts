@@ -12,7 +12,7 @@ import { isCountryCode, isLanguageCode } from './geo'
  *   code        1 to 24 capital letters or digits, with . _ - inside; unique in the tenant (the database says so)
  *   legal name  as on its invoices (FatturaPA Denominazione, which carries at most 80 characters: a longer name is kept
  *               and warned about, ./warnings.ts)
- *   roles       one or more of CUSTOMER, BRAND, SUPPLIER, SUBCONTRACTOR, CARRIER, each once
+ *   roles       one or more of CUSTOMER, BRAND, SUPPLIER, SUBCONTRACTOR, CARRIER, CONSULTANT, each once
  *   country     ISO 3166-1 alpha-2; currency ISO 4217; language ISO 639-1 (its documents and mail)
  *
  * Status (`partyMachine`): PROSPECT → ACTIVE ⇄ BLOCKED; PROSPECT and ACTIVE → ARCHIVED → ACTIVE. A blocked party is
@@ -22,7 +22,7 @@ import { isCountryCode, isLanguageCode } from './geo'
 
 export const PARTY_KINDS = ['ORGANISATION', 'PERSON'] as const
 export type PartyKind = (typeof PARTY_KINDS)[number]
-export const PARTY_ROLES = ['CUSTOMER', 'BRAND', 'SUPPLIER', 'SUBCONTRACTOR', 'CARRIER'] as const
+export const PARTY_ROLES = ['CUSTOMER', 'BRAND', 'SUPPLIER', 'SUBCONTRACTOR', 'CARRIER', 'CONSULTANT'] as const
 export type PartyRole = (typeof PARTY_ROLES)[number]
 export const PARTY_STATUSES = ['PROSPECT', 'ACTIVE', 'BLOCKED', 'ARCHIVED'] as const
 export type PartyStatus = (typeof PARTY_STATUSES)[number]

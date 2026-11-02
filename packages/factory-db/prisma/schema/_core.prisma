@@ -86,6 +86,9 @@ model Company {
   iban                 String?
   bic                  String?
   bankName             String?
+  /// The company as the labour consultant's payroll software knows it (codice ditta; GATE-PAYROLL), 20 characters at
+  /// most; null: not given. Office only. B-W2b-54 keeps it in a layout's `definition.companyCode` until B-W2b-89 moves it.
+  payrollCode          String?
   status               MasterStatus @default(ACTIVE)
   version              Int          @default(1)
   createdAt            DateTime     @default(now()) @db.Timestamptz(3)

@@ -1,10 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { acknowledgeNotice, fetchNotice, type ShownNotice } from '../api'
-import { useFloor } from '../FloorApp'
+import { useFloor, useFloorRouter } from '../FloorApp'
 import { useFloorKeys } from '../keys'
 import { noticePages } from '../model'
 import { NoticeView, type NoticeAction, type NoticeState } from './view/NoticeView'
@@ -17,7 +16,7 @@ import { NoticeView, type NoticeAction, type NoticeState } from './view/NoticeVi
  */
 export function FloorNotice() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('notice.title', { showHome: true })
   const [state, setState] = useState<NoticeState>({ kind: 'loading' })

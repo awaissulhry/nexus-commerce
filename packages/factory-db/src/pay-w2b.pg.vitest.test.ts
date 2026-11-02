@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed as seedCore, type CoreSeed } from '../seed/_core'
 import { seed as seedPay, type PaySeed } from '../seed/pay'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
-import { classifiedModels, personalDataOf } from './ownership'
+import { classifiedModels, partnerWalledColumns, personalDataOf } from './ownership'
 import { FLOOR_ROLE, PARTNER_ROLE, RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
@@ -12,7 +12,7 @@ import { loadOwnership, loadSchema } from './tools'
 /**
  * W2b schema wave 6/7 (piece pay and the payroll export) beyond the generated isolation tests, on a database built from
  * the migrations and seeded, through the real login and the scoped client (…_pay_w2b_guards):
- *   - the walls: office only (the floor reads and writes nothing here); every rate and amount is `@grain wages`; the rows
+ *   - the walls: office only (the floor reads and writes nothing here); every rate and amount is `@grain pay`; the rows
  *     about one person name the Employee and list their personal columns (purpose PAY); no name, tax code, IBAN or
  *     birth date is kept; the legal switch ships OFF;
  *   - rate versions leave DRAFT only once published to the workers on or before their first day (c.c. art. 2101), never
@@ -257,10 +257,10 @@ describe('the seeds and the walls', () => {
     expect(keys.filter((key) => String(key.def).includes('"companyId"')).map((key) => key.t)).toEqual(['"EarningsEntry"', '"HeldScan"', '"WorkerStatement"'])
   })
 
-  it('every rate and amount is a wages figure; no name, tax code, IBAN or birth date is kept', async () => {
+  it('every rate and amount is a pay figure, behind the partner wall; no name, tax code, IBAN or birth date is kept', async () => {
     const models = loadSchema().filter((model) => model.file === FILE)
     const tagged = (grain: string) => models.flatMap((model) => model.fields.filter((field) => field.tags.includes(grain)).map((field) => `${model.name}.${field.name}`))
-    expect(tagged('@grain wages').sort()).toEqual(
+    const figures = (
       [
         'EarningsEntry.amount',
         'EarningsEntry.rate',
@@ -272,9 +272,11 @@ describe('the seeds and the walls', () => {
         'WorkerStatement.earningsAmount',
         'WorkerStatement.makeUpAmount',
         'WorkerStatement.summary',
-      ].sort(),
-    )
-    expect(models.flatMap((model) => model.fields.filter((field) => field.tags.some((t) => t.startsWith('@grain') && t !== '@grain wages')).map((field) => field.name))).toEqual([])
+      ]
+    ).sort()
+    expect(tagged('@grain pay').sort()).toEqual(figures)
+    expect(models.flatMap((model) => model.fields.filter((field) => field.tags.some((t) => t.startsWith('@grain') && t !== '@grain pay')).map((field) => field.name))).toEqual([])
+    expect(models.flatMap((model) => partnerWalledColumns(model).map(({ column, why }) => [`${model.name}.${column}`, why]))).toEqual(expect.arrayContaining(figures.map((figure) => [figure, 'pay (@grain pay)'])))
     const columns = await admin(`SELECT table_name AS t, column_name AS c FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ANY($1::text[])`, [[...TABLES]])
     expect(columns.filter((column) => /displayName|firstName|lastName|fiscal|taxCode|iban|birth|address|photo/i.test(String(column.c)))).toEqual([])
   })

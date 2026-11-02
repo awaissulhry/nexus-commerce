@@ -1,16 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { zxingCamera } from '../camera'
-import { useFloor } from '../FloorApp'
+import { useFloor, useFloorRouter } from '../FloorApp'
 import { homeTiles, modeOf, tilePage } from '../model'
 import { heldWorkOf } from '../queue/actions'
 import { readScan } from '../scan/scan-model'
 import { TASK_ROUTES, taskForScan, taskOfTile } from '../tasks/routes'
 import { useMyDayBadge } from '../tasks/myday/badge'
 import { fetchOpenWork } from '../tasks/scans/api'
+import { withLeft } from '../tasks/scans/left'
 import { resumeRows, type OpenItem } from '../tasks/scans/timing'
 import { HomeView, type HomeAction } from './view/HomeView'
 
@@ -27,11 +27,12 @@ import { HomeView, type HomeAction } from './view/HomeView'
 let KEPT: { person: string; items: readonly OpenItem[]; asOf: string } | null = null
 export function FloorHome() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('home.title')
   const [refused, setRefused] = useState(false)
   const [open, setOpen] = useState(KEPT)
+  const [read, setRead] = useState(false)
   const [page, setPage] = useState(0)
   const { me, api, online } = store
   const scans = Boolean(me?.permissions.includes('production.scan'))
@@ -44,7 +45,9 @@ export function FloorHome() {
     if (!scans || !online) return
     let live = true
     void fetchOpenWork(api).then((answer) => {
-      if (!live || !answer.ok || !person) return
+      if (!live) return
+      setRead(answer.ok)
+      if (!answer.ok || !person) return
       KEPT = { person, items: resumeRows(answer.value), asOf: new Date().toISOString() }
       setOpen(KEPT)
     })
@@ -56,6 +59,9 @@ export function FloorHome() {
   const mode = modeOf(me.device.station, me.device.mode)
   const tiles = homeTiles(mode, me.permissions, me.notice.blocksScans, me.device.mode)
   const shown = tilePage(tiles, page)
+  const fresh = online && read
+  const kept = open?.person === person ? (open?.items ?? []) : []
+  const asOf = open?.person === person ? (open?.asOf ?? null) : null
 
   const onAction = async (action: HomeAction) => {
     switch (action.type) {
@@ -101,8 +107,8 @@ export function FloorHome() {
         badgeRefused: refused,
         offline: store.online ? null : { held: heldWorkOf(mode) },
         lowNumbers: store.shellQueue.lowNumbers,
-        // One person's open work never reaches the next person on the tablet.
-        resume: open && scans && open.person === person ? { items: open.items, asOf: online ? null : open.asOf } : null,
+        // One person's open work never reaches the next person on the tablet. B-W2b-F6: unread, what they left on Operation counts too.
+        resume: scans && person ? { items: fresh ? kept : withLeft(person, kept), asOf: online ? null : asOf } : null,
         mydayAnswers: answers,
       }}
       onFrame={onFrame}

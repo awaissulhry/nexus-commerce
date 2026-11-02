@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Clock, House, Languages, LogOut, ScanLine, UserPlus, UserRound, Users, X } from 'lucide-react'
+import { Clock, CloudOff, House, Languages, LogOut, ScanLine, UserPlus, UserRound, Users, X } from 'lucide-react'
 import { FloorButton, FloorFrame, FloorHeader, FloorHelpButton, IdleOverlay, OfflineBanner, OperatorChip } from '@nexus/ui/floor'
 import { Modal } from '../../../lib/i18n/ds-parts'
 import { LOCALES, LOCALE_NAMES, type Locale } from '../../../lib/i18n/locales'
@@ -33,6 +33,8 @@ export interface FrameModel {
   pending: number
   /** The person's actions the office refused. */
   refused?: number
+  /** B-W2b-F6: a move this tablet could not make without the network: the screen stays, and says so. */
+  moveHeld?: boolean
   /** The server's last answer to a send (an instant): "Last sent 10:42". */
   lastSentAt?: string | null
   /** The banner offers "Open queue" (every screen but the queue's own). */
@@ -170,6 +172,14 @@ export function FloorFrameView({ frame, onFrame, actions, children }: FloorFrame
     >
       <div id="main-content" tabIndex={-1} className="fw-floor-job">
         {frame.crew ? <CrewStrip crew={frame.crew} signedIn={Boolean(frame.operator)} onAdd={() => send({ type: 'crew-add' })} onChip={(workerId, name) => send({ type: 'crew-chip', workerId, name })} /> : null}
+        {frame.moveHeld ? (
+          <p role="status" className="fw-floor-notice" data-tone="warning">
+            <span className="fw-floor-inline-icon" aria-hidden="true">
+              <CloudOff />
+            </span>
+            {t('frame.moveHeld')}
+          </p>
+        ) : null}
         {children}
       </div>
       <Modal

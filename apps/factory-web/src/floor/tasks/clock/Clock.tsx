@@ -1,10 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { useLiveChanges } from '../../../record-panels/live'
-import { useFloor } from '../../FloorApp'
+import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { isBadgeCode } from '../../model'
 import { AsOfMemory } from '../shared/as-of'
@@ -36,7 +35,7 @@ type Screen = 'loading' | 'ready' | 'closed' | 'noRole' | 'unavailable'
 
 export function FloorClock() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { me, device, online, api, kept, keptSnapshot, queue, queueSnapshot, sessionEnded } = store
   const signedIn = Boolean(me && !me.pinMustChange)

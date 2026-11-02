@@ -1872,7 +1872,7 @@ ALTER TABLE "public"."PeopleSettings" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."PeopleSettings" FORCE ROW LEVEL SECURITY;
 DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'PeopleSettings' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'PeopleSettings'); END LOOP; END $$;
 REVOKE ALL ON TABLE "public"."PeopleSettings" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
-GRANT SELECT ON TABLE "public"."PeopleSettings" TO "factory_floor_runtime";
+GRANT SELECT ("autoClockOutAfterMinutes", "companyId", "createdAt", "createdById", "earlyClockInFromShiftStart", "figureRoleKeys", "fixedBreaks", "id", "lateGraceMinutes", "minimumGroupSize", "overtimeUnitMinutes", "roundingMinutes", "tenantId", "updatedAt", "version") ON TABLE "public"."PeopleSettings" TO "factory_floor_runtime";
 GRANT SELECT, INSERT, UPDATE ON TABLE "public"."PeopleSettings" TO "factory_runtime";
 CREATE POLICY "factory_floor_runtime_select" ON "public"."PeopleSettings" AS PERMISSIVE FOR SELECT TO "factory_floor_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_select" ON "public"."PeopleSettings" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
