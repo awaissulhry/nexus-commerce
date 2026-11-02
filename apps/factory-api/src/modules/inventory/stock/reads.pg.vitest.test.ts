@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startInventoryFixture, type InventoryFixture } from '../ledger/testing/fixture'
+import { switchOnPerformance } from '../../people/privacy/testing/performance-gate'
 
 /**
  * The warehouse screens' reads on the local stack (reads-contract.ts: Hides, Lots & traceability, the Movements grid,
@@ -51,7 +52,7 @@ beforeAll(async () => {
   const reversed = await f.call('manager', 'POST', `/inventory/moves/${moveIds.scrap}/reverse`, { note: 'Not cracked after all.' }, key())
   expect(reversed.statusCode, reversed.body).toBe(201)
   moveIds.reversal = reversed.json().move.id
-}, 60_000)
+}, 300_000)
 
 afterAll(async () => {
   await f?.close()
@@ -178,9 +179,15 @@ describe('the ledger as the Movements grid shows it (SCR-064; Owner answers W1, 
     expect((await get(`/inventory/ledger`, 'floor-a1')).status).toBe(403)
   })
 
-  it('one move: its key, its reversal both ways, and the worker only where the site records workers', async () => {
+  it('one move: its key, its reversal both ways, and the worker only where the site records workers and its PERFORMANCE gate is on', async () => {
+    // Gate off (the default): the move says a person is on it, never who (art. 4 c.1).
+    const closed = await ok(`/inventory/ledger/${moveIds.floor}`, 'warehouse')
+    expect(closed.move).toMatchObject({ id: moveIds.floor, worker: null, workerHidden: true, stationOnly: false, postedBy: { audience: 'FLOOR', name: null } })
+    expect(JSON.stringify(closed)).not.toContain('Marco Prova')
+    expect(JSON.stringify(closed)).not.toContain(ids.worker)
+    const gateOff = await switchOnPerformance(f.admin, { tenantId: ids.tenantA, companyId: ids.companyA, siteId: ids.siteA1, byId: ids.user })
     const floor = await ok(`/inventory/ledger/${moveIds.floor}`, 'warehouse')
-    expect(floor.move).toMatchObject({ id: moveIds.floor, worker: 'Marco Prova', stationOnly: false, postedBy: { audience: 'FLOOR', name: null } })
+    expect(floor.move).toMatchObject({ id: moveIds.floor, worker: 'Marco Prova', workerHidden: false, stationOnly: false, postedBy: { audience: 'FLOOR', name: null } })
     expect(floor.move.idempotencyKey).toMatch(/^inventory\.transfer:/)
     const scrap = await ok(`/inventory/ledger/${moveIds.scrap}`)
     expect(scrap.reversal).toMatchObject({ id: moveIds.reversal })
@@ -189,7 +196,8 @@ describe('the ledger as the Movements grid shows it (SCR-064; Owner answers W1, 
     // The site records stations only: the same record names no worker.
     await f.admin(`INSERT INTO "ProductionSettings" (id, "tenantId", "companyId", "siteId", "scanSubject") VALUES ($1, $2, $3, $1, 'STATION')`, [ids.siteA1, ids.tenantA, ids.companyA])
     const station = await ok(`/inventory/ledger/${moveIds.floor}`, 'warehouse')
-    expect(station.move).toMatchObject({ worker: null, stationOnly: true })
+    expect(station.move).toMatchObject({ worker: null, workerHidden: false, stationOnly: true })
+    await gateOff()
     expect((await get(`/inventory/ledger/${moveIds.floor}`, 'company-two')).status).toBe(404)
   })
 })
@@ -214,5 +222,54 @@ describe('why is it this number (SCM-191; design mv-why)', () => {
     expect(hide).toMatchObject({ onHand: '53.2000', hide: { code: 'TEST-HIDE-1' }, byReason: [{ reason: 'TRANSFER', in: '53.2000', out: '0.0000', net: '53.2000', moves: 1 }] })
     expect((await get(`/inventory/stock/explain?siteId=${ids.siteA1}&itemId=${ids.lining}`, 'company-two')).status).toBe(404)
     expect((await get(`/inventory/stock/explain?siteId=${ids.siteA1}&itemId=${ids.lining}&locationId=${ids.storeA2}`)).status).toBe(404)
+  })
+})
+
+describe("GET /inventory/moves and the stock card: who posted a floor move stays behind the site's PERFORMANCE gate (B-W2b-F4)", () => {
+  const MOVES = '/inventory/moves?limit=500'
+  const card = () => `/inventory/stock/card?siteId=${ids.siteA1}&itemId=${ids.leather}`
+  let floorA2: string
+
+  beforeAll(async () => {
+    // A floor move at a second site: a list over two sites, a gate each.
+    const bin = '0190f0e2-7777-7000-8000-000000000001'
+    await f.admin(`INSERT INTO "Location" (id, "tenantId", "companyId", "siteId", code, name, kind) VALUES ($1, $2, $3, $4, 'A2-BIN', 'A2-BIN', 'BIN')`, [bin, ids.tenantA, ids.companyA, ids.siteA2])
+    await post('/inventory/adjustments', { siteId: ids.siteA2, itemId: ids.protector, locationId: ids.storeA2, direction: 'IN', quantity: '3', note: 'Opening.' })
+    const moved = await f.call('floor-a2', 'POST', '/inventory/transfers', { siteId: ids.siteA2, itemId: ids.protector, fromLocationId: ids.storeA2, toLocationId: bin, quantity: '1' }, key())
+    expect(moved.statusCode, moved.body).toBe(201)
+    floorA2 = moved.json().move.id
+  })
+
+  const of = (answer: Json, id: string) => answer.moves.find((move: Json) => move.id === id)
+  const closedRead = async () => {
+    const moves = await ok(MOVES, 'warehouse')
+    const lines = await ok(card(), 'warehouse')
+    expect(JSON.stringify(moves)).not.toContain(ids.worker)
+    expect(JSON.stringify(lines)).not.toContain(ids.worker)
+    expect(of(moves, moveIds.floor!)).toMatchObject({ createdById: null, createdByHidden: true, deviceId: ids.deviceA1 })
+    expect(of(moves, floorA2)).toMatchObject({ createdById: null, createdByHidden: true, deviceId: ids.deviceA2 })
+    expect(lines.lines.find((line: Json) => line.moveId === moveIds.floor)).toMatchObject({ createdById: null, createdByHidden: true })
+    // The filter by author says nothing either: the rows it would keep are the worker's.
+    expect((await ok(`${MOVES}&createdById=${ids.worker}`, 'warehouse')).moves).toEqual([])
+  }
+
+  it('gate off: no worker id in the raw answers, the move says a person; an office user stays, and so does the filter by them', async () => {
+    await closedRead()
+    const moves = await ok(MOVES, 'warehouse')
+    expect(of(moves, moveIds.scrap!)).toMatchObject({ createdById: ids.user, createdByHidden: false, deviceId: null })
+    const lines = await ok(card(), 'warehouse')
+    expect(lines.lines.find((line: Json) => line.moveId === moveIds.hide1)).toMatchObject({ createdById: ids.user, createdByHidden: false })
+    expect((await ok(`${MOVES}&createdById=${ids.user}`, 'warehouse')).moves.map((move: Json) => move.id)).toContain(moveIds.scrap)
+  })
+
+  it('gate on at one site: its worker as before, the other site still closed, in the list and in the filter; off again: closed', async () => {
+    const gateOff = await switchOnPerformance(f.admin, { tenantId: ids.tenantA, companyId: ids.companyA, siteId: ids.siteA1, byId: ids.user })
+    const moves = await ok(MOVES, 'warehouse')
+    expect(of(moves, moveIds.floor!)).toMatchObject({ createdById: ids.worker, createdByHidden: false })
+    expect(of(moves, floorA2)).toMatchObject({ createdById: null, createdByHidden: true })
+    expect((await ok(card(), 'warehouse')).lines.find((line: Json) => line.moveId === moveIds.floor)).toMatchObject({ createdById: ids.worker, createdByHidden: false })
+    expect((await ok(`${MOVES}&createdById=${ids.worker}`, 'warehouse')).moves.map((move: Json) => move.id)).toEqual([moveIds.floor])
+    await gateOff()
+    await closedRead()
   })
 })

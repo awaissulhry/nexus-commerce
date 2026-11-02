@@ -17,6 +17,7 @@ import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { systemContext } from '../../../platform/outbox/system'
+import { switchOnPerformance } from '../../people/privacy/testing/performance-gate'
 import { valueMove } from '../ledger/valuation'
 
 /**
@@ -261,6 +262,26 @@ describe('a goods-in tablet receives a delivery: hides one by one and a lot, hel
     expect(await admin(`SELECT "createdById"::text AS by, "postedById"::text AS posted FROM "GoodsReceipt" WHERE id = $1`, [receipt.id])).toEqual([{ by: A.operatorA1, posted: A.operatorA1 }])
     expect(await admin(`SELECT count(*)::int AS n FROM "PrintJob" WHERE "recordType" = 'Hide' AND "recordId" = ANY($1::uuid[]) AND "printerId" = $2 AND "labelKind" = 'HIDE'`, [receipt.hides.map((hide: Json) => hide.id), A.printer])).toEqual([{ n: 3 }])
     expect(await admin(`SELECT type, payload->>'postedBy' AS by FROM "OutboxEvent" WHERE subject = $1`, [receipt.id])).toEqual([{ type: 'inventory.receipt_posted', by: 'FLOOR' }])
+  })
+
+  it("the office's reads of a floor receipt: who made and posted it stay behind the PERFORMANCE gate (B-W2b-F4)", async () => {
+    const LIST = `/inventory/receipts?purchaseOrderId=${order.id}`
+    const closed = async () => {
+      const list = await call('manager', 'GET', LIST)
+      const one = await call('manager', 'GET', `/inventory/receipts/${receipt.id}`)
+      expect(list.statusCode, list.body).toBe(200)
+      expect(one.statusCode, one.body).toBe(200)
+      expect(list.body).not.toContain(A.operatorA1)
+      expect(one.body).not.toContain(A.operatorA1)
+      expect(list.json().receipts[0]).toMatchObject({ id: receipt.id, postedById: null, postedByHidden: true })
+      expect(one.json().receipt).toMatchObject({ postedById: null, postedByHidden: true, createdById: null, createdByHidden: true })
+    }
+    await closed()
+    const gateOff = await switchOnPerformance(admin, { tenantId: A.tenant, companyId: A.companyA, siteId: A.siteA1, byId: newId() })
+    expect((await ok('manager', 'GET', LIST)).receipts[0]).toMatchObject({ postedById: A.operatorA1, postedByHidden: false })
+    expect((await ok('manager', 'GET', `/inventory/receipts/${receipt.id}`)).receipt).toMatchObject({ postedById: A.operatorA1, postedByHidden: false, createdById: A.operatorA1, createdByHidden: false })
+    await gateOff()
+    await closed()
   })
 
   it('a resend of the same request answers the same receipt: nothing posted, numbered or printed twice', async () => {

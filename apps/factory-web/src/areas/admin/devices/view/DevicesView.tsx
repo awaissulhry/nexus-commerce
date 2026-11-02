@@ -29,6 +29,7 @@ export interface DevicesActions {
   onOpen?: (href: string) => void
   onEnrol?: (open: boolean) => void
   onCreateDevice?: (draft: EnrolDraft) => Promise<boolean>
+  onPeople?: (siteId: string) => void
   onRenew?: (device: Device) => void
   onPrinter?: (dialog: PrinterDialog | null) => void
   onSavePrinter?: (draft: PrinterDraft, printer: Printer | null) => Promise<boolean>
@@ -306,7 +307,7 @@ function Devices({ model, actions }: { model: DevicesViewModel; actions?: Device
       )}
       <p className="fw-adm-hint">{t('devices.later')}</p>
 
-      <EnrolWizard model={model.enrol} sites={model.sites} busy={!!model.busy} problem={model.dialogProblem ?? null} onClose={() => actions?.onEnrol?.(false)} onCreate={actions?.onCreateDevice} onRenew={actions?.onRenew} />
+      <EnrolWizard model={model.enrol} sites={model.sites} busy={!!model.busy} problem={model.dialogProblem ?? null} onClose={() => actions?.onEnrol?.(false)} onCreate={actions?.onCreateDevice} onRenew={actions?.onRenew} people={model.people} peopleHeld={model.peopleHeld} onPeople={actions?.onPeople} />
       <PrinterModal dialog={model.printer} printers={printers ?? []} sites={model.sites} busy={!!model.busy} problem={model.dialogProblem ?? null} onClose={() => actions?.onPrinter?.(null)} onSave={actions?.onSavePrinter} />
       <BulkConfirm
         open={!!confirm && confirm.count > 0}

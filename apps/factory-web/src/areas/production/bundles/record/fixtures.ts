@@ -66,6 +66,7 @@ const SCANS: RecordScan[] = [
   scan(3, { kind: 'CORRECTION', operation: BACK, goodQuantity: 9, scrapQuantity: 1, scrapReason: 'Cucitura storta', serverTime: at(29, 8, 40), correctsId: uid('2121', 2), approvedById: uid('2222', 9) }),
 ]
 const NAMED = SCANS.map((entry) => ({ ...entry, worker: { id: uid('1515', 1), name: 'Bea Esempio' } }))
+const HIDDEN = SCANS.map((entry) => ({ ...entry, workerHidden: true }))
 
 const REPRINT: ReprintRun = { rows: [{ id: RECORD.bundle.id, code: RECORD.bundle.code }], printers: { value: { printers: [], defaultPrinterId: null }, problem: null }, running: false, done: false, results: {} }
 
@@ -85,6 +86,7 @@ export const designScreen = defineDesignScreen<BundleRecordModel>({
     { id: 'progress', label: 'Progress: done · here · not reached with good, scrap and rework; stuck past the limit', model: base('progress') },
     { id: 'scans', label: 'Scans at a station site: no worker column; a correction and what it voids', model: base('scans') },
     { id: 'scans-named', label: 'Scans where the site names workers: inside this one bundle, with the note', model: base('scans', { scans: { value: NAMED, problem: null } }) },
+    { id: 'scans-hidden', label: "The site's PERFORMANCE gate is off: each scan says a person is on it, never who", model: base('scans', { scans: { value: HIDDEN, problem: null } }) },
     { id: 'scans-loading', label: 'Scans: reading', model: base('scans', { scans: { value: null, problem: null } }) },
     { id: 'scans-error', label: 'Scans: the read failed', model: base('scans', { scans: { value: null, problem: 'error.offline' } }) },
     { id: 'scans-no-right', label: 'Scans: no workorders.view', model: base('scans', { scans: null, can: { ...bundlesCanAs('reader'), workOrders: false } }) },

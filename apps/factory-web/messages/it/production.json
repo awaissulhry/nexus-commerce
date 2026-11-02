@@ -480,7 +480,9 @@
     "pattern": "Area del modello dei set {area}",
     "station": "Postazione",
     "correctionOf": "Questa voce corregge il taglio del {when}; il motivo è nella cronologia.",
-    "noWorker": "Non registrato in questa sede"
+    "noWorker": "Non registrato in questa sede",
+    "workerHidden": "Su questo dato c'è una persona. Il nome compare solo dove la base giuridica della sede è in vigore.",
+    "workerHiddenShort": "Su questo dato c'è una persona"
   },
   "hideState": {
     "FULL": "Intera",
@@ -573,6 +575,7 @@
     "oldCodes": "Codici precedenti",
     "scans": "Scansioni per fase",
     "voided": "Annullata",
+    "workerHidden": "Su questo dato c'è una persona",
     "scanKind": {
       "REPORT": "Segnalazione",
       "UNDO": "Annullamento",

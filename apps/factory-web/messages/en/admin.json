@@ -1327,10 +1327,13 @@
       "station": "Station",
       "stationHint": "Optional: it can move to a station of the same site later.",
       "name": "Name",
-      "kind": "Kind"
+      "kind": "Kind",
+      "mode": "What it is for",
+      "line": "Line",
+      "person": "Person",
+      "personHint": "Only this person signs in on it."
     },
     "noStation": "No station yet",
-    "modeLater": "Its mode (Operator, Cutting, Warehouse…) comes with the floor step: the server has no mode yet.",
     "scanBody": "On {name}, open the camera or the Nexus Factory start page and scan this code. It works once, for 15 minutes.",
     "qrLabel": "Enrolment code for {name}",
     "expiresIn": "Valid for {left}",
@@ -1376,7 +1379,30 @@
         "revoke_one": "{count} device revoked",
         "revoke_other": "{count} devices revoked"
       }
-    }
+    },
+    "deviceMode": {
+      "STATION": "Station tablet",
+      "LINE": "Line tablet",
+      "DISPLAY": "Line board",
+      "PHONE": "Personal phone"
+    },
+    "deviceModeShows": {
+      "STATION": "At a station: the tiles of its work; a crew of up to four can share it.",
+      "LINE": "For one line: anyone signs in; a team leader starts on the Line view.",
+      "DISPLAY": "The line TV: nobody signs in; it opens the board by itself.",
+      "PHONE": "One person's own phone: never locked, and it never tracks where they are."
+    },
+    "modeProblem": {
+      "line": "Pick the line it shows.",
+      "person": "Pick the person it is for.",
+      "pc": "A personal phone is a handheld or a tablet, not a PC."
+    },
+    "pickLine": "Pick a line",
+    "pickPerson": "Pick a person",
+    "noLines": "This site has no active line yet: add one in Admin › Companies & sites.",
+    "peopleHeld": "Your role does not list workers: ask someone who manages them.",
+    "readyDisplay": "Nobody signs in on it: it opens the line board by itself, also after a power cut.",
+    "readyPhone": "Only that person signs in on this phone; it never tracks where they are."
   },
   "printers": {
     "add": "Add printer",
@@ -1468,8 +1494,7 @@
     },
     "mode": {
       "title": "Mode",
-      "coming": "Coming with the floor step",
-      "later": "The mode (Operator, Cutting, Warehouse, Packing, Inspection, Supervisor, Display) picks the tiles the tablet shows; it comes with the floor step. The default printers of a device come in W1."
+      "inUse": "Someone is signed in on it: the mode changes when nobody is."
     },
     "health": {
       "title": "Is it working?",
@@ -1491,6 +1516,25 @@
     },
     "done": {
       "saved": "Saved."
+    },
+    "kiosk": {
+      "title": "Kiosk lock",
+      "at": "Reported {at}",
+      "fullScreen": {
+        "yes": "Full screen",
+        "no": "Not full screen",
+        "unknown": "Full screen not known"
+      },
+      "installed": {
+        "yes": "Installed",
+        "no": "Not installed",
+        "unknown": "Install not known"
+      },
+      "home": {
+        "STAYED": "Home test: it stayed (as the person said)",
+        "LEFT": "Home test: it left (as the person said)",
+        "NOT_TESTED": "Home test not done"
+      }
     }
   },
   "area": {
@@ -1838,6 +1882,11 @@
     "people_attendance_approve": "Approve attendance days with no anomaly left (never your own)",
     "people_attendance_settings": "Keep the absence codes with the labour consultant's LUL code, and the rounding, grace and overtime rules",
     "people_attendance_rollcall": "Open the roll call of a site: who is clocked in now, for an evacuation (every opening is recorded)",
+    "people_attendance_close": "Close a company's attendance month for good and seal its LUL calendar",
+    "people_attendance_correct": "Correct a day of a closed month, with a new entry and its reason",
+    "people_attendance_lul": "Open the LUL calendar of a closed month, with everyone's hours (every opening is recorded)",
+    "people_efficiency_view": "See efficiency per line and per operation, the standard review queue and operation cycle time (never per person)",
+    "people_efficiency_review": "Decide the standard review: keep a standard, change it or investigate, always with a reason",
     "people_overtime_review": "Approve or reject the overtime people worked (paid only once approved)",
     "people_timesheets_team": "Approve as the lead the timesheets of the teams you lead (the days, not the hours)",
     "people_timesheets_lead": "Approve as the lead any timesheet in reach, and send one back",

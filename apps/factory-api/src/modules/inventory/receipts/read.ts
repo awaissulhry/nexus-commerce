@@ -18,6 +18,7 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext, type RequestContext } from '../../../core/context'
+import { workerGateFor, workerGatesFor, workersAmong } from '../../people/privacy/worker-gate'
 import { mayAt, officeContextOf, seesCost, type StockContext } from '../ledger/access'
 import {
   byId,
@@ -250,6 +251,11 @@ export async function receiptDetail(db: Reader, context: RequestContext, receipt
       ...(withCost ? { value: asMoney('cost', total(lineMoves.map((move) => values.get(move.id)))) } : {}),
     }
   })
+  // A receipt has no device beside its author: a worker made it on a tablet (behind the site's PERFORMANCE gate, B-W2b-F4), or an office user.
+  const who = await workerGateFor(db, receipt.siteId)
+  const workers = await workersAmong(db, [receipt.postedById, receipt.createdById])
+  const posted = who.author(receipt.postedById, workers.has(receipt.postedById ?? ''))
+  const created = who.author(receipt.createdById, workers.has(receipt.createdById ?? ''))
   return {
     id: receipt.id,
     number: receipt.number,
@@ -267,14 +273,16 @@ export async function receiptDetail(db: Reader, context: RequestContext, receipt
     note: receipt.note,
     location,
     postedAt: iso(receipt.postedAt),
-    postedById: receipt.postedById,
+    postedById: posted.id,
+    postedByHidden: posted.hidden,
     reversedAt: iso(receipt.reversedAt),
     reversedById: receipt.reversedById,
     reversalReason: receipt.reversalReason,
     cancelledAt: iso(receipt.cancelledAt),
     version: receipt.version,
     createdAt: toUtcIso(receipt.createdAt),
-    createdById: receipt.createdById,
+    createdById: created.id,
+    createdByHidden: created.hidden,
     summary: {
       lines: lines.length,
       lots: lots.length,
@@ -373,6 +381,8 @@ export async function listReceipts(caller: CommandCaller, query: ListReceiptsQue
     const moves = withCost ? await client.stockMove.findMany({ where: { reason: 'RECEIPT', reversalOfId: null, receiptLineId: { in: lines.map((line) => line.id) } }, select: { id: true, receiptLineId: true } }) : []
     const values = withCost ? await valueOf(client, moves.map((move) => move.id)) : new Map()
     const discrepancies = await discrepancyCounts(client, receiptIds)
+    const workers = await workersAmong(client, page.map((row) => row.postedById))
+    const gates = await workerGatesFor(client, page.filter((row) => workers.has(row.postedById ?? '')).map((row) => row.siteId))
     return {
       receipts: page.map((row) => {
         const own = lines.filter((line) => line.receiptId === row.id)
@@ -383,6 +393,7 @@ export async function listReceipts(caller: CommandCaller, query: ListReceiptsQue
           quantities.set(baseUom, (quantities.get(baseUom) ?? ZERO).plus(dec(line.baseQuantity)))
         }
         const ownMoves = moves.filter((move) => own.some((line) => line.id === move.receiptLineId))
+        const posted = gates.at(row.siteId).author(row.postedById, workers.has(row.postedById ?? ''))
         return {
           id: row.id,
           number: row.number,
@@ -400,7 +411,8 @@ export async function listReceipts(caller: CommandCaller, query: ListReceiptsQue
           hides: ownLots.reduce((sum, lot) => sum + (hides.get(lot.id) ?? 0), 0),
           quantities: [...quantities].map(([uom, baseQuantity]) => ({ uom, baseQuantity: quantityText(baseQuantity) })),
           postedAt: iso(row.postedAt),
-          postedById: row.postedById,
+          postedById: posted.id,
+          postedByHidden: posted.hidden,
           discrepancies: discrepancies.get(row.id) ?? { count: 0, open: 0, unsent: 0 },
           ...(withCost ? { value: asMoney('cost', total(ownMoves.map((move) => values.get(move.id)))) } : {}),
         }

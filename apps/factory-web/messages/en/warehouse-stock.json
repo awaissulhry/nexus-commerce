@@ -307,6 +307,7 @@
       "hide": "Hide",
       "noNote": "No note",
       "worker": "Worker: {name} (this site records workers)",
+      "workerHidden": "A person is on this record. Their name shows only where the site's legal basis is in force.",
       "stationOnly": "This site records the station only: no worker is named.",
       "happened": "Happened",
       "deviceClock": "by the tablet’s clock",

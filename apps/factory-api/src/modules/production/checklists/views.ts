@@ -6,6 +6,7 @@ import { openSteps, standingTicks, type ChecklistOutcome, type ChecklistStep } f
 import { isOwn, type Viewer } from '@nexus/factory-domain/production/scans/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { floorOf, scanWorkOrder } from '../scans/access'
 import { deviceStationOf, readOperations, readStations, workerNames, type Reader } from '../scans/store'
 import { scanSubjectFor } from '../settings/subject'
@@ -63,7 +64,8 @@ export async function workOrderChecklists(caller: CommandCaller, workOrderId: st
     const bundle = isUuid(bundleId) ? await db.bundle.findFirst({ where: { id: bundleId, workOrderId: workOrder.id }, select: { id: true, code: true } }) : null
     if (!bundle) throw new NotFoundError('Bundle not found.')
     const ticks = await readBundleTicks(db, bundle.id)
-    const names = await workerNames(db, ticks.map((tick) => tick.workerId))
+    const who = await workerGateFor(db, workOrder.siteId)
+    const names = await workerNames(db, who.lookup(ticks.map((tick) => tick.workerId)))
     const stations = await readStations(db, ticks.map((tick) => tick.stationId))
     const operations = []
     for (const operation of await readOperations(db, workOrder.id)) {
@@ -74,7 +76,7 @@ export async function workOrderChecklists(caller: CommandCaller, workOrderId: st
         operation: { id: operation.id, seq: operation.seq, code: operation.code, name: operation.name },
         steps: steps.map((step) => ({ code: step.code, words: step.words, required: step.required })),
         open: openSteps(steps, own).length,
-        ticks: own.map((tick) => ({ id: tick.id, stepCode: tick.stepCode, outcome: tick.outcome as ChecklistOutcome, at: toUtcIso(tick.serverTime), deviceTime: tick.deviceTime ? toUtcIso(tick.deviceTime) : null, by: tick.workerId ? (names.get(tick.workerId) ?? null) : null, station: tick.stationId ? (stations.get(tick.stationId)?.code ?? null) : null })),
+        ticks: own.map((tick) => ({ id: tick.id, stepCode: tick.stepCode, outcome: tick.outcome as ChecklistOutcome, at: toUtcIso(tick.serverTime), deviceTime: tick.deviceTime ? toUtcIso(tick.deviceTime) : null, by: who.name(tick.workerId, names), byHidden: who.hidden(tick.workerId), station: tick.stationId ? (stations.get(tick.stationId)?.code ?? null) : null })),
       })
     }
     return { bundle, operations }

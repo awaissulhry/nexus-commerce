@@ -126,7 +126,10 @@ export const stockCardContract = defineContract({
           reversalOfId: id().nullable(),
           occurredAt: instant(),
           createdAt: instant(),
+          /** Who posted it: an office user, or on a floor move the worker, while the site's PERFORMANCE gate is open. */
           createdById: id().nullable(),
+          /** A floor worker posted it and the gate keeps back who. */
+          createdByHidden: z.boolean(),
           /** + or − for the card (the location's, or the site's stock). */
           delta: z.string(),
           balance: z.string(),

@@ -1,0 +1,182 @@
+{
+  "bar": "Timbratura",
+  "back": "Indietro",
+  "toSignIn": "Accedi",
+  "retry": "Riprova",
+  "loading": "Lettura del tuo orario…",
+  "elapsed": "Oggi",
+  "today": "{time} oggi",
+  "duration": {
+    "hours": "{hours} h {minutes} min",
+    "minutes": "{minutes} min"
+  },
+  "action": {
+    "IN": "Timbra entrata",
+    "OUT": "Timbra uscita",
+    "BREAK_OUT": "Pausa",
+    "BREAK_IN": "Fine pausa"
+  },
+  "state": {
+    "IN": "Presente",
+    "ON_BREAK": "In pausa",
+    "OUT": "Non timbrato",
+    "unknown": "Non noto"
+  },
+  "head": {
+    "IN": "Presente dalle {time}",
+    "ON_BREAK": "In pausa dalle {time}",
+    "OUT": "Non timbrato",
+    "unknown": "Il tuo orario non è su questo tablet"
+  },
+  "card": {
+    "kind": "Il tuo orario di oggi"
+  },
+  "fact": {
+    "shift": "Turno",
+    "break": "Prossima pausa",
+    "auto": "Uscita automatica alle"
+  },
+  "fixedBreak": "Detratta automaticamente {time}",
+  "breakDue": "È ora di una pausa: almeno 10 minuti.",
+  "breakLaw": "Dopo sei ore di lavoro spetta una pausa, di almeno 10 minuti se un accordo non dice altro.",
+  "flag": {
+    "FORGOT_BADGE": "Con nome e PIN: il capo squadra lo vede.",
+    "CLOCK_SKEW": "L'orologio di questo tablet sembra sbagliato: il capo squadra controlla l'ora.",
+    "forgotten": "L'entrata del {when} non è mai stata chiusa: il capo squadra corregge quel giorno."
+  },
+  "closed": {
+    "title": "La timbratura è spenta in questo stabilimento",
+    "body": "Resta spenta finché l'azienda non ha scritto la base legale e dato a ogni lavoratore l'informativa (Statuto dei Lavoratori art. 4, c.2 e c.3). Qui non viene registrato nulla.",
+    "fix": "Le tue ore restano registrate come sempre. Chiedi alle Risorse umane quando parte."
+  },
+  "unavailable": {
+    "title": "La timbratura non risponde",
+    "body": "Non è stato registrato nulla. Riprova tra poco; se manca la rete, il tablet conserva la timbratura."
+  },
+  "receipt": {
+    "IN": "Entrata timbrata alle {time}.",
+    "OUT": "Uscita timbrata alle {time}.",
+    "BREAK_OUT": "Pausa iniziata alle {time}.",
+    "BREAK_IN": "Rientro dalla pausa alle {time}.",
+    "repeated": "Già registrato alle {time}.",
+    "named": "{name}: {done}",
+    "saved": "Salvato su questo tablet alle {time} (ora del tablet).",
+    "wrong": "Questo badge o PIN non apre questo tablet. Chiedi al capo squadra.",
+    "notBadge": "Questo non è un badge. Scansiona il tuo badge.",
+    "rateLimited": "Troppi tentativi. Aspetta un minuto, poi riprova.",
+    "unavailable": "Non è stato registrato nulla. Riprova tra poco."
+  },
+  "refusal": {
+    "ALREADY_IN": {
+      "message": "Hai già timbrato l'entrata.",
+      "fix": "Timbra l'uscita a fine turno."
+    },
+    "NOT_IN": {
+      "message": "Non hai timbrato l'entrata.",
+      "fix": "Timbra prima l'entrata; il capo squadra corregge un'entrata mancata."
+    },
+    "ON_BREAK": {
+      "message": "Sei in pausa.",
+      "fix": "Prima rientra dalla pausa."
+    },
+    "NOT_ON_BREAK": {
+      "message": "Non sei in pausa.",
+      "fix": "Prima inizia una pausa."
+    },
+    "ALREADY_ON_BREAK": {
+      "message": "Sei già in pausa.",
+      "fix": "Prima rientra dalla pausa."
+    },
+    "BREAKS_FIXED": {
+      "message": "Qui le pause sono detratte automaticamente.",
+      "fix": "Non serve timbrare la pausa."
+    },
+    "NO_EMPLOYEE": {
+      "message": "Non hai ancora una scheda dipendente in questa azienda.",
+      "fix": "Chiedi alle Risorse umane di collegarla."
+    },
+    "EMPLOYEE_LEFT": {
+      "message": "La tua scheda dipendente è chiusa.",
+      "fix": "Chiedi alle Risorse umane."
+    },
+    "MONTH_CLOSED": {
+      "message": "Quel mese è chiuso.",
+      "fix": "Chiedi alle Risorse umane di correggerlo."
+    },
+    "OTHER_PERSON": {
+      "message": "Questa timbratura è di un'altra persona su questo tablet.",
+      "fix": "Parte quando quella persona accede."
+    },
+    "CLOCK_AHEAD": {
+      "message": "L'ora del tablet è avanti rispetto ad adesso.",
+      "fix": "Chiedi al capo squadra di regolare l'orologio del tablet."
+    }
+  },
+  "scan": {
+    "label": "Scansiona il tuo badge",
+    "read": "Badge letto",
+    "hint": "Un badge scansionato qui timbra subito entrata o uscita."
+  },
+  "kiosk": {
+    "title": "Scansiona il tuo badge",
+    "body": "Una scansione timbra entrata o uscita. Non serve accedere."
+  },
+  "forgot": {
+    "button": "Hai dimenticato il badge?",
+    "title": "Scegli il tuo nome",
+    "flagged": "Il capo squadra vede che hai timbrato con nome e PIN.",
+    "offline": "Nome e PIN richiedono la rete. Usa il badge.",
+    "emptyTitle": "Nessuno è ancora configurato qui",
+    "empty": "Chiedi all'ufficio di configurare i lavoratori di questo stabilimento."
+  },
+  "pin": {
+    "title": "Digita il tuo PIN",
+    "forName": "Per {name}. Non sei tu? Torna indietro.",
+    "entered": "{entered} di {total}",
+    "clear": "Cancella",
+    "backspace": "Togli una cifra",
+    "problem": {
+      "wrong": "Questo PIN non apre questo tablet. Chiedi al capo squadra.",
+      "rateLimited": "Troppi tentativi. Aspetta un minuto.",
+      "unavailable": "La timbratura non risponde. Riprova tra poco."
+    }
+  },
+  "choose": {
+    "title": "Entrata o uscita?",
+    "body": "Il tablet non ha rete e non può saperlo. Lo salva con la sua ora.",
+    "notKept": "Questo tablet non può conservare un badge in sicurezza. Timbra quando torna la rete."
+  },
+  "offline": {
+    "unknown": "Senza rete e senza dati su questo tablet: indica entrata o uscita, l'ufficio la conserva con l'ora del tablet.",
+    "asOf": "Letto su questo tablet il {day} alle {time}."
+  },
+  "kept": {
+    "waiting_one": "{count} timbratura è salvata su questo tablet e parte quando torna la rete.",
+    "waiting_other": "{count} timbrature sono salvate su questo tablet e partono quando torna la rete.",
+    "refused": "{what} delle {time} non è stata registrata.",
+    "refusedFix": "Dillo al capo squadra: la inserisce a mano.",
+    "dismiss": "Fatto"
+  },
+  "confirm": {
+    "title": "Timbrare l'uscita?",
+    "one": "Il tuo fascio aperto {bundle} sarà messo in pausa.",
+    "many": "I tuoi {count} fasci aperti ({bundles}) saranno messi in pausa.",
+    "next": "Al prossimo accesso ti viene proposto di continuare.",
+    "cancel": "Resta presente"
+  },
+  "open": {
+    "kind": "Lavoro aperto",
+    "code_one": "{count} fascio in pausa",
+    "code_other": "{count} fasci in pausa",
+    "status": "In pausa",
+    "item": "{bundle} all'Op {seq} in pausa.",
+    "next": "Al prossimo accesso ti viene proposto di continuare."
+  },
+  "held": {
+    "busy": "Registrazione…"
+  },
+  "noRole": {
+    "title": "La timbratura non è per il tuo ruolo qui",
+    "body": "Chiedi al capo squadra."
+  }
+}

@@ -46,7 +46,20 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // B-W2b-14: a supplier claim's photos of what is wrong (modules/purchasing/claims): PHOTO files only, of category
   // CLAIM_PHOTO; the claim letter is made by the API; attachments of the claim's thread stay open.
   SupplierClaim: { kinds: ['PHOTO'], route: 'POST /purchasing/claims/:claimId/photos, then POST …/photos/:fileId/complete' },
+  // B-W2b-48: a closed month's LUL calendar (modules/people/close): every kind; only ever made by the API at the close.
+  AttendanceMonthClose: { route: 'POST /people/month-close, or POST /people/month-close/:closeId/seal for a calendar not sealed yet (made by the API, never uploaded)' },
 })
+
+/**
+ * Record types whose files are READ only through their module (B-W2b-48): the file names people and their hours, so files.read
+ * is not enough: its module asks its own permission and the legal gate, and records each opening. The generic routes do not
+ * find these files; the module calls downloadFile with `{ viaModule: true }`.
+ */
+export const MODULE_READ_FILES: Readonly<Record<string, string>> = Object.freeze({
+  AttendanceMonthClose: 'POST /people/month-close/:closeId/lul/open',
+})
+
+export const readsThroughModule = (recordType: string): boolean => Object.hasOwn(MODULE_READ_FILES, recordType)
 
 /** How a caller of requestUpload / completeUpload reaches them: the generic files routes, or a module's own route. */
 export interface UploadPath {

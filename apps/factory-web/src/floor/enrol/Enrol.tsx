@@ -3,19 +3,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
+import { kioskCheck, type KioskHomeTest } from '@nexus/factory-domain/auth/floor/kiosk'
 import { localeOf } from '../../lib/i18n/locales'
-import { enrolDevice, type DeviceInfo } from '../api'
+import { enrolDevice, reportKioskCheck, type DeviceInfo } from '../api'
 import { zxingCamera } from '../camera'
 import { useFloor } from '../FloorApp'
 import { useFloorKeys } from '../keys'
 import { enrolmentCodeOf, modeOf } from '../model'
-import { EnrolView, type Binding, type Checks, type EnrolAction, type EnrolStep, type InstallState } from './view/EnrolView'
+import { EnrolView, type Binding, type Checks, type EnrolAction, type EnrolStep, type InstallState, type KioskCheckView } from './view/EnrolView'
 
 /**
  * The live SCR-020 (`/floor/enrol`, also `/floor/enrol#token=…` from the office's QR code opened by the tablet's
  * camera app): the set-up code is read from the scan (or the address's fragment, once, then removed from the address
  * bar) and traded for the device token; the binding, the install and the checks follow. The code never enters the
- * view's model, a log or the address bar.
+ * view's model, a log or the address bar. B-W2b-67: the mode comes from the office's enrol wizard; the kiosk step reports
+ * its honest check (POST /floor/device/kiosk: full screen, installed, what the person said) to the device's history.
  */
 
 export function bindingOf(device: DeviceInfo): Binding {
@@ -25,10 +27,20 @@ export function bindingOf(device: DeviceInfo): Binding {
     station: device.device.station ? `${device.device.station.code} · ${device.device.station.name}` : null,
     mode: modeOf(device.device.station),
     language: localeOf(device.defaultLocale) ?? 'it',
+    deviceMode: device.device.mode ?? 'STATION',
+    line: device.line ? `${device.line.code} · ${device.line.name}` : null,
+    kiosk: device.rules?.kiosk ?? true,
   }
 }
 
 const standalone = () => typeof window !== 'undefined' && (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true)
+
+/** What the browser can tell of itself (null: it does not say). An installed app runs full screen; a browser tab says nothing of an install. */
+function tabletFacts(installable: boolean): { fullScreen: boolean | null; installed: boolean | null } {
+  if (typeof window === 'undefined' || !window.matchMedia) return { fullScreen: null, installed: null }
+  const app = standalone()
+  return { fullScreen: app || window.matchMedia('(display-mode: fullscreen)').matches, installed: app ? true : installable ? false : null }
+}
 
 export function FloorEnrol() {
   const store = useFloor()
@@ -40,6 +52,8 @@ export function FloorEnrol() {
   )
   const [storage, setStorage] = useState<InstallState['storage']>('unknown')
   const [checks, setChecks] = useState<Checks>({ camera: 'missing', scanner: 'waiting', sound: 'untested', vibration: 'missing' })
+  const [homeTest, setHomeTest] = useState<KioskHomeTest>('NOT_TESTED')
+  const [kioskRows, setKioskRows] = useState<KioskCheckView['rows'] | null>(null)
   const read = useRef(false)
   const enrolled = useRef<DeviceInfo | null>(null)
 
@@ -103,6 +117,14 @@ export function FloorEnrol() {
 
   const binding = enrolled.current ? bindingOf(enrolled.current) : store.device ? bindingOf(store.device) : null
   const install: InstallState = { app: standalone() ? 'installed' : store.installPrompt ? 'available' : 'manual', storage }
+  const facts = tabletFacts(Boolean(store.installPrompt))
+  const kioskView: KioskCheckView = { rows: kioskRows ?? kioskCheck({ ...facts, homeTest }).rows, homeTest }
+
+  /** The check as it stands goes on the device's history; a failure blocks nothing (the guide is a help, never a gate). */
+  const report = async (result: KioskHomeTest) => {
+    const answer = await reportKioskCheck(store.api, { ...facts, homeTest: result })
+    if (answer.ok) setKioskRows(answer.value.rows)
+  }
 
   const onAction = async (action: EnrolAction) => {
     switch (action.type) {
@@ -117,7 +139,13 @@ export function FloorEnrol() {
       case 'continue':
         if (!binding) return
         if (step.kind === 'binding') return setStep({ kind: 'install', binding, install, checks })
+        if (step.kind === 'install' && binding.kiosk) return setStep({ kind: 'kiosk', binding, check: kioskView })
+        if (step.kind === 'kiosk') void report(homeTest)
         return setStep({ kind: 'done', binding })
+      case 'home-test':
+        setHomeTest(action.result)
+        setKioskRows(null)
+        return report(action.result)
       case 'install':
         if (!store.installPrompt) return
         await store.installPrompt.prompt()
@@ -138,10 +166,17 @@ export function FloorEnrol() {
   }
 
   useFloorKeys({
-    enter: step.kind === 'binding' || step.kind === 'install' ? () => void onAction({ type: 'continue' }) : step.kind === 'done' ? () => void onAction({ type: 'sign-in' }) : step.kind === 'replace' ? () => void onAction({ type: 'keep' }) : null,
-    escape: step.kind === 'install' && binding ? () => setStep({ kind: 'binding', binding }) : step.kind === 'scan' && step.problem ? () => setStep({ kind: 'scan' }) : null,
+    enter: step.kind === 'binding' || step.kind === 'install' || step.kind === 'kiosk' ? () => void onAction({ type: 'continue' }) : step.kind === 'done' ? () => void onAction({ type: 'sign-in' }) : step.kind === 'replace' ? () => void onAction({ type: 'keep' }) : null,
+    escape:
+      step.kind === 'install' && binding
+        ? () => setStep({ kind: 'binding', binding })
+        : step.kind === 'kiosk' && binding
+          ? () => setStep({ kind: 'install', binding, install, checks })
+          : step.kind === 'scan' && step.problem
+            ? () => setStep({ kind: 'scan' })
+            : null,
   })
 
-  const shown: EnrolStep = step.kind === 'install' ? { ...step, install, checks } : step
+  const shown: EnrolStep = step.kind === 'install' ? { ...step, install, checks } : step.kind === 'kiosk' ? { ...step, check: kioskView } : step
   return <EnrolView model={{ step: shown, frame }} onFrame={onFrame} onAction={(action) => void onAction(action)} camera={zxingCamera} />
 }

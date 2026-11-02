@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { assertGenericPath, MODULE_OWNED_FILES, ownerOf } from './owned'
+import { assertGenericPath, MODULE_OWNED_FILES, MODULE_READ_FILES, ownerOf, readsThroughModule } from './owned'
 
 describe('record types whose files only their module writes (owned.ts)', () => {
   it('lists the compliance document, the parcel, the privacy notice and DPIA and the type-change review (every kind), the certificate, the lot and the opening-stock reports (CERTIFICATE) and the DDT (FISCAL_ARCHIVE)', () => {
-    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['Certificate', 'ComplianceDocument', 'Ddt', 'Lot', 'OpeningStock', 'Parcel', 'PrivacyDpia', 'PrivacyNotice', 'SupplierClaim', 'TypeChangeReview'])
+    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['AttendanceMonthClose', 'Certificate', 'ComplianceDocument', 'Ddt', 'Lot', 'OpeningStock', 'Parcel', 'PrivacyDpia', 'PrivacyNotice', 'SupplierClaim', 'TypeChangeReview'])
     expect(ownerOf('OpeningStock', 'CERTIFICATE')).not.toBeNull()
     expect(ownerOf('OpeningStock', 'ATTACHMENT')).toBeNull()
     expect(ownerOf('PrivacyNotice', 'DOCUMENT')).not.toBeNull()
@@ -28,5 +28,12 @@ describe('record types whose files only their module writes (owned.ts)', () => {
     expect(() => assertGenericPath('Certificate', 'CERTIFICATE', { viaModule: false })).toThrow(/POST \/compliance\/certificates\/:certificateId\/pdf/)
     expect(() => assertGenericPath('ComplianceDocument', 'DOCUMENT', { viaModule: true })).not.toThrow()
     expect(() => assertGenericPath('Certificate', 'ATTACHMENT', {})).not.toThrow()
+  })
+
+  it('reads a closed month\'s LUL calendar only through its module (B-W2b-48), no other record type', () => {
+    expect(Object.keys(MODULE_READ_FILES)).toEqual(['AttendanceMonthClose'])
+    expect(readsThroughModule('AttendanceMonthClose')).toBe(true)
+    expect(readsThroughModule('Quote')).toBe(false)
+    expect(readsThroughModule('constructor')).toBe(false)
   })
 })

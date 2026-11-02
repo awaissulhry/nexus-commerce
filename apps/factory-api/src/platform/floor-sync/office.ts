@@ -5,6 +5,7 @@ import { FLOOR_SYNC_DISCARD, FLOOR_SYNC_VIEW } from '@nexus/factory-domain/floor
 import { StaleVersionError, type CommandCaller } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { officeOf } from '../../modules/production/scans/access'
+import { workerGateFor } from '../../modules/people/privacy/worker-gate'
 import { workerNames } from '../../modules/production/scans/store'
 import { readRefused, readRefusedOne, type RefusedStatus } from './store'
 import { discardWithModule, refusedView } from './sync'
@@ -49,13 +50,17 @@ export async function refusedOne(caller: CommandCaller, refusedId: string) {
   const { row } = await reachable(caller, refusedId, FLOOR_SYNC_VIEW)
   return caller.withClient(async (db) => {
     const devices = await devicesOf(db, [row.deviceId])
-    const names = await workerNames(db, [row.workerId])
+    const who = await workerGateFor(db, row.siteId)
+    const names = await workerNames(db, who.lookup([row.workerId]))
+    // Who discarded it: an office user, or on the floor a worker, who stays behind the same gate.
+    const discardedByWorker = (await workerNames(db, [row.discardedById])).has(row.discardedById ?? '')
     return {
       refused: {
         ...refusedView(row),
         device: { id: row.deviceId, name: devices.get(row.deviceId) ?? '' },
-        worker: row.workerId ? { id: row.workerId, name: names.get(row.workerId) ?? '' } : null,
-        discardedById: row.discardedById,
+        worker: who.person(row.workerId, names),
+        workerHidden: who.hidden(row.workerId),
+        discardedById: discardedByWorker ? who.id(row.discardedById) : row.discardedById,
         payload: (row.payload ?? {}) as Record<string, unknown>,
         moduleRefusal: row.moduleRefusal,
       },

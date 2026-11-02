@@ -148,7 +148,7 @@ export function MoveDetailModal({ model, actions }: { model: MovesPageModel; act
                   ...(move.writeOff ? [{ label: t('mv.detail.writeOff'), value: reasonLabel(model.writeOffReasons ?? [], move.writeOff.reasonCode, locale) }] : []),
                   { label: t('mv.col.note'), value: (move.writeOff ? move.writeOff.note : move.note) ?? t('mv.detail.noNote') },
                   { label: t('mv.col.document'), value: move.document && docHref(move) ? <Link className="fw-st-link" href={docHref(move)!}>{move.document.number}</Link> : (move.reference ?? '—'), hint: move.document && move.reference && move.reference !== move.document.number ? move.reference : undefined },
-                  { label: t('mv.col.posted'), value: postedBy(move), hint: move.worker ? t('mv.detail.worker', { name: move.worker }) : move.postedBy.audience === 'FLOOR' && move.stationOnly ? t('mv.detail.stationOnly') : undefined },
+                  { label: t('mv.col.posted'), value: postedBy(move), hint: move.worker ? t('mv.detail.worker', { name: move.worker }) : move.workerHidden ? t('mv.detail.workerHidden') : move.postedBy.audience === 'FLOOR' && move.stationOnly ? t('mv.detail.stationOnly') : undefined },
                   { label: t('mv.detail.happened'), value: formatDateTime(move.occurredAt, place), hint: move.postedBy.audience === 'FLOOR' ? t('mv.detail.deviceClock') : undefined },
                   { label: t('mv.detail.recorded'), value: formatDateTime(move.createdAt, place) },
                   { label: t('mv.detail.key'), value: <code className="fw-st-sub">{move.idempotencyKey}</code> },

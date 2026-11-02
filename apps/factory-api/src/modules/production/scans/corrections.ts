@@ -7,6 +7,7 @@ import { PRODUCTION_SCAN_CORRECT } from '@nexus/factory-domain/production/scans/
 import { correctionApprovalRefusal, decidedRefusal, scrapReasonColumn, standingScans } from '@nexus/factory-domain/production/scans/rules'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { bundleFlowOf } from '../bundles/flow'
 import { lockBundleForScan, readBundle } from '../bundles/store'
 import { mayScan, officeOf, refuse } from './access'
@@ -24,7 +25,7 @@ import { lockBundleScans, readBundleScans, readHeader, readOperations, readScan,
  * caps and at least what the next operation took) → a CORRECTION row (the old scan's worker and station, the asked
  * counts, the request's reason, approved by the approver; no device) with its lines → the request APPROVED with it.
  * Refuse = the request REFUSED with the note. Lists name no worker (Owner answer W1: names only inside one record); the
- * request's own record does, where the site records workers.
+ * request's own record does, where the site records workers and its PERFORMANCE gate is on (off: it says a person is on it).
  */
 
 async function officeRequest(caller: CommandCaller, requestId: string): Promise<CorrectionRequest> {
@@ -175,23 +176,24 @@ export async function listCorrections(caller: CommandCaller, query: { readonly s
   })
 }
 
-/** One request: the list's facts, plus who asked and who took the scan by name where the site records workers (one record). */
+/** One request: the list's facts, plus who asked and who took the scan by name where the site records workers and its PERFORMANCE gate is on (one record). */
 export async function correctionOf(caller: CommandCaller, requestId: string) {
   const request = await officeRequest(caller, requestId)
   return caller.withClient(async (db) => {
     const [row] = await listRows(db, [request])
     const scan = await readScan(db, request.scanId)
-    const names = await workerNames(db, [request.askedById, scan?.workerId ?? null])
+    const who = await workerGateFor(db, request.siteId)
+    const names = await workerNames(db, who.lookup([request.askedById, scan?.workerId]))
     const stations = await readStations(db, [request.stationId, scan?.stationId ?? null])
-    const person = (id: string | null) => (id ? { id, name: names.get(id) ?? '' } : null)
     const station = (id: string | null) => (id && stations.get(id) ? { id, code: stations.get(id)!.code, name: stations.get(id)!.name } : null)
     return {
       request: {
         ...row!,
-        askedBy: person(request.askedById),
+        askedBy: who.person(request.askedById, names),
+        askedByHidden: who.hidden(request.askedById),
         askedAt: station(request.stationId),
         decidedById: request.decidedById,
-        scan: scan ? { id: scan.id, kind: scan.kind, worker: person(scan.workerId), station: station(scan.stationId), defects: (await readDefects(db, [scan.id])).get(scan.id) ?? [] } : null,
+        scan: scan ? { id: scan.id, kind: scan.kind, worker: who.person(scan.workerId, names), workerHidden: who.hidden(scan.workerId), station: station(scan.stationId), defects: (await readDefects(db, [scan.id])).get(scan.id) ?? [] } : null,
       },
     }
   })

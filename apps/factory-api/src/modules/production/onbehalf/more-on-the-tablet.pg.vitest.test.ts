@@ -27,6 +27,7 @@ import { createGateway } from '../../../platform/gateway/gateway'
 import { testRedis, type TestRedis } from '../../../platform/outbox/testing'
 import { createSecretsService } from '../../../platform/secrets/envelope'
 import { localKeyProvider } from '../../../platform/secrets/local'
+import { switchOnPerformance } from '../../people/privacy/testing/performance-gate'
 
 /**
  * More on the tablet (B-W2b-47; MES-099 scan on behalf, MES-100 several bundles, MES-101 + COL-017 comment, photo and short
@@ -350,7 +351,13 @@ describe('steps in an operation (MES-102)', () => {
     expect((await state('lead', bundleId)).steps[0].tick).toMatchObject({ mine: true, by: 'Seed Worker A1-2' })
     await ok('op', 'POST', '/production/checklists/tick', tick(bundleId, 'CHECK_SEAM'), 201)
     expect((await state('lead', bundleId)).steps[1].tick).toMatchObject({ mine: false, by: 'Seed Worker A1-1' })
+    // Gate off (the default): each tick says a person is on it, never who (art. 4 c.1). Gate on: the name.
+    const closed = await ok('office', 'GET', `/production/checklists/work-orders/${wo}?bundleId=${bundleId}`)
+    expect(closed.operations[0].ticks.every((row: Json) => row.by === null && row.byHidden === true)).toBe(true)
+    expect(JSON.stringify(closed)).not.toContain('Seed Worker')
+    const gateOff = await switchOnPerformance(admin, { tenantId: T, companyId: companyA, siteId: siteA1, byId: newId() })
     const record = await ok('office', 'GET', `/production/checklists/work-orders/${wo}?bundleId=${bundleId}`)
+    await gateOff()
     expect(record.operations).toHaveLength(1)
     expect(record.operations[0]).toMatchObject({ operation: { id: ops.sew }, open: 0 })
     expect(record.operations[0].ticks.map((row: Json) => [row.stepCode, row.outcome, row.by, row.station])).toEqual([
