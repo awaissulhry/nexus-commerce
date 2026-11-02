@@ -43,6 +43,8 @@ export const WHAT_KEY = {
   'production.cut.remnant': 'remnant',
   'production.bundles.make': 'bundle',
   'plant.report': 'machine',
+  // B-W2b-67
+  'people.clock.record': 'clock',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

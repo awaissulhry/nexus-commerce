@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { KIOSK_HOME_TESTS } from '@nexus/factory-domain/auth/floor/kiosk'
+import { DEVICE_MODES, type DeviceMode } from '@nexus/factory-domain/auth/floor/modes'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 
 /**
@@ -278,6 +280,12 @@ export const deviceSchema = z.object({
   // B-W2b-24: the network it last said (null: the browser does not say) and since when someone is signed in on it (never who).
   network: z.enum(DEVICE_NETWORKS).nullable().optional(),
   inUseSince: z.string().nullable().optional(),
+  // B-W2b-52 / -67: what it is for, the line it shows, the person a phone is for (an id: the name only inside its record),
+  // and the kiosk check as the tablet last reported it (never "locked").
+  mode: z.enum(DEVICE_MODES).optional(),
+  lineId: z.string().nullable().optional(),
+  personalWorkerId: z.string().nullable().optional(),
+  kiosk: z.object({ checkedAt: z.string(), fullScreen: z.boolean().nullable(), installed: z.boolean().nullable(), homeTest: z.enum(KIOSK_HOME_TESTS), looksLocked: z.boolean() }).nullable().optional(),
   revokedAt: z.string().nullable(),
   inUse: z.boolean(),
   version: z.number(),
@@ -289,11 +297,12 @@ const deviceWithCode = z.object({ device: deviceSchema, enrolment: enrolmentSche
 
 export const listDevices = (api: ApiClient, siteId?: string) =>
   api.get('/auth/floor/devices', { query: { siteId }, schema: z.object({ devices: z.array(deviceSchema) }) }).then((answer) => answer.devices)
-export const createDevice = (api: ApiClient, body: { siteId: string; stationId?: string; name: string; kind?: DeviceKind }, idempotencyKey: string) =>
+export { DEVICE_MODES as FLOOR_DEVICE_MODES, type DeviceMode as FloorDeviceMode }
+export const createDevice = (api: ApiClient, body: { siteId: string; stationId?: string; name: string; kind?: DeviceKind; mode?: DeviceMode; lineId?: string; personalWorkerId?: string }, idempotencyKey: string) =>
   api.post('/auth/floor/devices', { body, schema: deviceWithCode, idempotencyKey })
 export const renewEnrolment = (api: ApiClient, deviceId: string, idempotencyKey: string) =>
   api.post(`/auth/floor/devices/${encodeURIComponent(deviceId)}/enrolment`, { body: {}, schema: deviceWithCode, idempotencyKey })
-export const editDevice = (api: ApiClient, deviceId: string, body: { version: number; name?: string; stationId?: string | null }) =>
+export const editDevice = (api: ApiClient, deviceId: string, body: { version: number; name?: string; stationId?: string | null; mode?: DeviceMode; lineId?: string | null; personalWorkerId?: string | null }) =>
   api.request('PATCH', `/auth/floor/devices/${encodeURIComponent(deviceId)}`, { body, schema: deviceSchema })
 export const revokeDevice = (api: ApiClient, deviceId: string, body: { version?: number; reason?: string }) =>
   api.post(`/auth/floor/devices/${encodeURIComponent(deviceId)}/revoke`, { body, schema: deviceSchema })

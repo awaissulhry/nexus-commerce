@@ -17,9 +17,10 @@ export type FloorMode = (typeof FLOOR_MODES)[number]
 /**
  * CUTTING → cutting; SEWING, ASSEMBLY → sewing; FINISHING, PACKING → packing; INSPECTION → inspection. A device with
  * no station is a warehouse device (W1 has no other way to say it); a subcontract station has no floor mode: Scan only.
+ * B-W2b-67: a line tablet or a person's own phone with no station is no warehouse device: no station's tiles, no mode.
  */
-export function modeOf(station: { workCentreKind: WorkCentreKind } | null): FloorMode | null {
-  if (station === null) return 'warehouse'
+export function modeOf(station: { workCentreKind: WorkCentreKind } | null, deviceMode?: string | null): FloorMode | null {
+  if (station === null) return deviceMode === 'LINE' || deviceMode === 'PHONE' || deviceMode === 'DISPLAY' ? null : 'warehouse'
   switch (station.workCentreKind) {
     case 'CUTTING':
       return 'cutting'
@@ -38,7 +39,7 @@ export function modeOf(station: { workCentreKind: WorkCentreKind } | null): Floo
 
 // ---- the home tiles (design floor.home "tiles": the station's mode AND the person's permissions, fail closed) ----
 
-export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', 'scan'] as const
+export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', /* B-W2b-67 */ 'clock', 'scan'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 
 export interface TileRule {
@@ -80,6 +81,9 @@ export const TILE_RULES: readonly TileRule[] = [
   // SCR-179 (B-W2a-73): a machine problem at every station mode (design floor.machine); its API asks plant.report, which
   // every floor role holds (Owner answer H1). Never held by the worker notice: a safety report names the station instead.
   { key: 'machine', permission: 'plant.report', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
+  // SCR-170 (B-W2b-67): Clock in & out on every tablet (a line tablet and a phone too: design floor.clock Modes). Not a scan:
+  // the worker notice does not hold it; the ATTENDANCE gate does, on its page. On a full home the operator's menu still opens it.
+  { key: 'clock', permission: 'floor.work', modes: 'all', built: true, takesScans: false },
   { key: 'scan', permission: 'floor.work', modes: 'all', built: true, takesScans: true },
 ]
 
@@ -100,8 +104,10 @@ export interface HomeTile {
  */
 export function homeTiles(mode: FloorMode | null, permissions: readonly string[], noticeBlocksScans: boolean): HomeTile[] {
   const held = new Set(permissions)
-  return TILE_RULES.filter((rule) => (rule.modes === 'all' || (mode !== null && rule.modes.includes(mode))) && held.has(rule.permission) && held.has('floor.work'))
-    .slice(0, MAX_TILES)
+  const fits = TILE_RULES.filter((rule) => (rule.modes === 'all' || (mode !== null && rule.modes.includes(mode))) && held.has(rule.permission) && held.has('floor.work'))
+  // B-W2b-67: Scan anything stays last on a full home (the Clock tile is the seventh on some); what no longer fits drops first.
+  const scan = fits.filter((rule) => rule.key === 'scan')
+  return [...fits.filter((rule) => rule.key !== 'scan').slice(0, MAX_TILES - scan.length), ...scan]
     .map((rule) => ({ key: rule.key, held: noticeBlocksScans && rule.takesScans ? 'notice' : rule.built ? null : 'coming' }))
 }
 

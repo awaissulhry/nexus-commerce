@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowLeft, BadgeCheck, CircleAlert, CircleHelp, IdCard, Info, KeyRound, Users, X } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, CircleAlert, CircleHelp, Clock, IdCard, Info, KeyRound, Users, X } from 'lucide-react'
 import { FloorButton, FloorTile, FloorTileGrid, PinPad, ScanInput, operatorInitials } from '@nexus/ui/floor'
 import { Modal } from '../../../lib/i18n/ds-parts'
 import { useT } from '../../../lib/i18n/provider'
@@ -26,7 +26,7 @@ export type SignInStep =
   /** A new PIN after a reset: the office's PIN (when not typed at sign-in), the new one, then again. */
   | { kind: 'change'; stage: 'current' | 'new' | 'repeat' }
 
-export type SignInProblem = 'wrong' | 'rateLimited' | 'unavailable' | 'operatorActive' | 'pinNeeded'
+export type SignInProblem = 'wrong' | 'rateLimited' | 'unavailable' | 'operatorActive' | 'pinNeeded' | 'crew'
 export type ChangeProblem = 'mismatch' | 'refused' | 'wrong' | 'repeat' | 'run' | null
 export type SignedOutWhy = 'idle' | 'self' | 'ended' | null
 
@@ -45,6 +45,10 @@ export interface SignInViewModel {
   /** A switch of person on a busy station: who is signed in now. */
   switchingFrom?: string | null
   forgotOpen?: boolean
+  /** B-W2b-67: a crew's step on this screen: the next person joins, or a member takes the tablet. */
+  crewStep?: 'join' | 'switch' | null
+  /** B-W2b-67: the kiosk's button ("Clock in or out"); `closed`: held, the reason in words. Null: no button. */
+  clock?: { closed: boolean } | null
 }
 
 export type SignInAction =
@@ -57,6 +61,7 @@ export type SignInAction =
   | { type: 'forgot'; open: boolean }
   | { type: 'change'; pin: string }
   | { type: 'cancel-switch' }
+  | { type: 'clock' }
 
 export interface SignInViewProps {
   model: SignInViewModel
@@ -77,8 +82,8 @@ export function SignInView({ model, onAction, onFrame }: SignInViewProps) {
           <div className="fw-floor-hero" aria-hidden="true">
             <IdCard />
           </div>
-          <h1 className="fw-floor-section-title fw-floor-center-text">{t('signIn.badge.title')}</h1>
-          <p className="fw-floor-lead fw-floor-center-text">{model.badgeOnly ? t('signIn.badge.alone') : t('signIn.badge.withPin')}</p>
+          <h1 className="fw-floor-section-title fw-floor-center-text">{model.crewStep === 'join' ? t('signIn.crew.title') : t('signIn.badge.title')}</h1>
+          <p className="fw-floor-lead fw-floor-center-text">{model.crewStep === 'join' ? t('signIn.crew.body') : model.badgeOnly ? t('signIn.badge.alone') : t('signIn.badge.withPin')}</p>
           <ScanInput
             label={t('signIn.badge.label')}
             hideLabel
@@ -88,9 +93,22 @@ export function SignInView({ model, onAction, onFrame }: SignInViewProps) {
             disabled={model.busy}
             onScan={(code) => send({ type: 'badge', code })}
           />
-          <FloorButton size="md" variant="secondary" icon={<Users />} onClick={() => send({ type: 'names' })}>
-            {t('signIn.badge.noBadge')}
-          </FloorButton>
+          <div className="fw-floor-row-actions">
+            <FloorButton size="md" variant="secondary" icon={<Users />} onClick={() => send({ type: 'names' })}>
+              {t('signIn.badge.noBadge')}
+            </FloorButton>
+            {model.clock ? (
+              <FloorButton size="md" variant="secondary" icon={<Clock />} heldReason={model.clock.closed ? t('signIn.clock.closed') : null} onClick={() => send({ type: 'clock' })}>
+                {t('signIn.clock.button')}
+              </FloorButton>
+            ) : null}
+            {model.crewStep === 'join' ? (
+              <FloorButton size="md" variant="secondary" icon={<X />} onClick={() => send({ type: 'back' })}>
+                {t('signIn.crew.cancel')}
+              </FloorButton>
+            ) : null}
+          </div>
+          {model.clock?.closed ? <p className="fw-floor-muted fw-floor-center-text">{t('signIn.clock.closed')}</p> : null}
         </div>
       )
       break
@@ -130,7 +148,7 @@ export function SignInView({ model, onAction, onFrame }: SignInViewProps) {
         <div className="fw-floor-stack fw-floor-center">
           <h1 className="fw-floor-section-title fw-floor-center-text">{model.switchingFrom ? t('signIn.switch.title') : t('signIn.pin.title')}</h1>
           <p className="fw-floor-lead fw-floor-center-text">
-            {model.switchingFrom ? t('signIn.switch.body', { name: model.switchingFrom }) : step.forName ? t('signIn.pin.forName', { name: step.forName }) : t('signIn.pin.forBadge')}
+            {model.switchingFrom ? t('signIn.switch.body', { name: model.switchingFrom }) : model.crewStep === 'switch' && step.forName ? t('signIn.crew.switchBody', { name: step.forName }) : step.forName ? t('signIn.pin.forName', { name: step.forName }) : t('signIn.pin.forBadge')}
           </p>
           <PinPad
             key="sign-in"

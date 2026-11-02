@@ -9,8 +9,8 @@ import { RecordPanels } from '../../../record-panels/RecordPanels'
 import { editDevice, listDevices, renewEnrolment, revokeDevice, type Device } from '../shared/api'
 import { problemKey, problemNotice, type Notice } from '../shared/model'
 import { useRecordTab, useThreadDock } from '../shared/record-hooks'
-import { siteChoices, useEnrolWatch } from './DevicesPage'
-import { DEVICE_TABS, type EnrolModel, type SiteChoice } from './model'
+import { personChoices, siteChoices, useEnrolWatch } from './DevicesPage'
+import { bindingBody, DEVICE_TABS, type EnrolModel, type PersonChoice, type SiteChoice } from './model'
 import { fetchFloorVersion } from './version'
 import { DeviceRecordView } from './view/DeviceRecordView'
 
@@ -35,6 +35,7 @@ export function DeviceRecord({ deviceId }: { deviceId: string }) {
   const [busy, setBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [people, setPeople] = useState<readonly PersonChoice[] | null>(null)
   const [now, setNow] = useState(() => new Date().toISOString())
   // B-W2a-42: the floor app version the server serves now.
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
@@ -50,6 +51,8 @@ export function DeviceRecord({ deviceId }: { deviceId: string }) {
         const choices = await siteChoices(api).catch(() => [])
         setSite(choices.find((item) => item.id === found.siteId) ?? null)
       }
+      // B-W2b-67: a personal phone names its person; the names come only here, inside the device's own record.
+      if (found && held.has('workers.view')) void personChoices(api, found.siteId).then(setPeople, () => setPeople(null))
     } catch (error) {
       setProblem(problemKey(error))
     }
@@ -70,7 +73,7 @@ export function DeviceRecord({ deviceId }: { deviceId: string }) {
 
   return (
     <DeviceRecordView
-      model={{ prefix, tab, device, problem: device ? null : problem, site, can, enrol, revoking, busy, dialogProblem, notice, now, currentVersion, dockOpen }}
+      model={{ prefix, tab, device, problem: device ? null : problem, site, can, enrol, revoking, busy, dialogProblem, notice, now, currentVersion, dockOpen, people }}
       panels={device ? <RecordPanels record={{ type: 'Device', id: device.id, companyId: site?.companyId ?? null, siteId: device.siteId }} title={device.name} /> : null}
       actions={{
         onSave: async (draft) => {
@@ -78,7 +81,7 @@ export function DeviceRecord({ deviceId }: { deviceId: string }) {
           setBusy(true)
           setNotice(null)
           try {
-            setDevice(await editDevice(api, device.id, { version: device.version, name: draft.name.trim(), stationId: draft.stationId || null }))
+            setDevice(await editDevice(api, device.id, bindingBody(device, draft)))
             setNotice({ key: 'device.done.saved', tone: 'success' })
             return true
           } catch (error) {

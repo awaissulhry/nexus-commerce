@@ -1,7 +1,10 @@
 'use client'
 
 import { ArrowLeft, ArrowRight, BookOpenCheck, CircleAlert, CircleCheck, House, Languages, RotateCcw, ScrollText } from 'lucide-react'
+import { speechLang } from '@nexus/factory-domain/auth/floor/literacy'
 import { FloorActionBar, FloorButton, type FloorActions } from '@nexus/ui/floor'
+import { ReadAloudButton } from '@nexus/ui/floor/ReadAloud/index'
+import { useDsWords } from '../../../lib/i18n/ds-parts'
 import { LOCALE_NAMES, isLocale } from '../../../lib/i18n/locales'
 import { useT } from '../../../lib/i18n/provider'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../frame/view/FloorFrameView'
@@ -13,7 +16,8 @@ import { FloorState } from '../../frame/view/FloorState'
  * acknowledged it (`notice.due`), the notice opens in the worker's language, in short pages with big Next and Back
  * (no swipe). "I have read it" waits for the last page; it records the version, the language shown and the text's
  * fingerprint (POST /privacy/floor/notice/acknowledge). While the site names workers (`blocksScans`) every scan tile
- * on Home stays held until then. Only the notice's text appears here; nothing else is signed.
+ * on Home stays held until then. Only the notice's text appears here; nothing else is signed. B-W2b-67 (D27, MES-188):
+ * Read aloud reads the page on screen in the language shown, in the device's own voice (no voice: no button).
  */
 
 export interface NoticeText {
@@ -61,6 +65,7 @@ export interface NoticeViewProps {
 
 export function NoticeView({ model, onAction, onFrame }: NoticeViewProps) {
   const t = useT('floor')
+  const ds = useDsWords()
   const send = (action: NoticeAction) => onAction?.(action)
   const { state } = model
 
@@ -122,6 +127,8 @@ export function NoticeView({ model, onAction, onFrame }: NoticeViewProps) {
           <div className="fw-floor-notice-text" aria-live="polite">
             {notice.pages[page]?.split('\n\n').map((paragraph, index) => <p key={index}>{paragraph}</p>)}
           </div>
+          {/* The key: a new page stops the voice of the page before. */}
+          <ReadAloudButton key={`${notice.locale}-${page}`} text={notice.pages[page] ?? ''} lang={speechLang(notice.locale)} labels={ds.readAloud} />
           {last ? (
             <p className="fw-floor-notice-means">
               <span className="fw-floor-inline-icon" aria-hidden="true">

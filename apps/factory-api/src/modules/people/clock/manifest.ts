@@ -11,4 +11,6 @@ export const manifest = defineManifest({
   'GET /people/clock/floor': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
   'POST /people/clock/floor': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
   'POST /people/clock/scan': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
+  // B-W2b-67: is the clock open at the tablet's site? The device token only; a yes or no, nothing of a person.
+  'GET /people/clock/tablet': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
 })

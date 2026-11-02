@@ -10,7 +10,7 @@ import { readCookie, writeCookie } from '../lib/cookies'
 import { LOCALE_COOKIE, isLocale, type Locale } from '../lib/i18n/locales'
 import type { LocaleMessages } from '../lib/i18n/messages'
 import { I18nProvider, useT } from '../lib/i18n/provider'
-import { fetchDevice, fetchMe, signIn, signOut as apiSignOut, type DeviceInfo, type FloorMe, type FloorProblem } from './api'
+import { endCrew, fetchDevice, fetchMe, leaveCrew, signIn, signOut as apiSignOut, type CrewView, type DeviceInfo, type FloorMe, type FloorProblem } from './api'
 import { FloorFrameView, type FrameAction, type FrameModel } from './frame/view/FloorFrameView'
 import { FloorState } from './frame/view/FloorState'
 import { floorLocale, IDLE_WARN_MS, idleWarnAfterMs } from './model'
@@ -20,6 +20,8 @@ import { browserStorage } from './queue/storage'
 import { DeviceReporter, readBattery, readNetwork, sendDeviceState } from './queue/report'
 import { AppUpdater, queuedCount, updateStep, VERSION_CHECK_MS, type UpdateSnapshot, type UpdateStep } from './queue/update'
 import { shellQueueOf, type ShellQueue } from './shell/banner'
+import { keptSender } from './tasks/clock/api'
+import { browserKeptStorage, KeptClocks, type KeptSnapshot } from './tasks/clock/kept'
 import type { SignedOutWhy } from './sign-in/view/SignInView'
 import { DEFAULT_TIME_ZONE } from '../lib/i18n/format'
 
@@ -30,7 +32,10 @@ import { DEFAULT_TIME_ZONE } from '../lib/i18n/format'
  *   no device token            → /floor/enrol      (SCR-020)
  *   enrolled, nobody signed in → /floor/sign-in    (SCR-021)
  *   a PIN to choose            → /floor/sign-in    (the new-PIN step)
- *   just signed in             → /floor/notice     when the worker notice is due (SCR-025), else /floor (SCR-022)
+ *   just signed in             → /floor/notice     when the worker notice is due (SCR-025), then what must come first on
+ *                                                  sign-in's welcome cards (B-W2b-67: the handover note, Continue bundle), else /floor (SCR-022)
+ * B-W2b-67: `/floor/clock` stays open with nobody signed in (a kiosk: a badge clocks, SCR-170); a crew's Add a person and a
+ * chip open sign-in on a signed-in tablet (`crewStep`).
  * `/floor/enrol` stays open on an enrolled tablet (it asks "Replace?" first). A 401 from any call means the session
  * ended (idle, shift end, the office revoked it): the app reads the device again and shows sign-in with the reason.
  *
@@ -79,7 +84,24 @@ export interface FloorStore {
   /** The browser's install prompt, kept from the page load (set-up's "Install as an app"). */
   installPrompt: InstallPrompt | null
   /** The frame of a screen: its model and its actions (`queue`: the queue's own screen, no "Open queue"). */
-  frame: (titleKey: string, options?: { showHome?: boolean; queue?: boolean }) => { frame: FrameModel; onFrame: (action: FrameAction) => void }
+  frame: (titleKey: string, options?: { showHome?: boolean; queue?: boolean; crew?: boolean }) => { frame: FrameModel; onFrame: (action: FrameAction) => void }
+  /** B-W2b-67: a crew's next step on the sign-in screen: add a person, or a member takes the tablet. */
+  crewStep: CrewStep | null
+  openCrew: (step: CrewStep) => void
+  /** Back to the tablet as it was. */
+  closeCrew: () => void
+  /** The step is done (`joined`: a new person, who sees the welcome cards); the gate sends them on. */
+  crewDone: (joined: boolean) => void
+  /** Who stays signed in after the active member left (the sign-in screen's strip); null: nobody. */
+  crewLeft: CrewView | null
+  /** B-W2b-67: someone just signed in: sign-in's welcome cards come before Home. */
+  arriving: boolean
+  arrive: () => void
+  /** The welcome cards are done: Home, or the job they open (a code for it to take, as `openWith`). */
+  arrived: (next?: { path: string; code: string | null }) => void
+  /** B-W2b-67: badges scanned on the clock while offline, sealed until sent (tasks/clock/kept.ts). */
+  kept: KeptClocks
+  keptSnapshot: KeptSnapshot
   /** The offline queue: actions saved here first, sent in order (queue/queue.ts). */
   queue: FloorQueue
   queueSnapshot: QueueSnapshot
@@ -88,6 +110,9 @@ export interface FloorStore {
   /** The version this page runs, the server's latest, and what an update waits for (B-W2a-42). */
   appUpdate: UpdateSnapshot & { step: UpdateStep }
 }
+
+/** A crew's step: the next person joins, or a member takes the tablet (tap on their chip, then badge or PIN). */
+export type CrewStep = { readonly kind: 'join' } | { readonly kind: 'switch'; readonly workerId: string; readonly name: string }
 
 /** Chrome's `beforeinstallprompt` event (not in the DOM types). */
 export interface InstallPrompt extends Event {
@@ -125,6 +150,8 @@ const SIGN_IN = '/floor/sign-in'
 const NOTICE = '/floor/notice'
 const HOME = '/floor'
 const SYNC = '/floor/sync'
+/** B-W2b-67: Clock in & out (SCR-170), open with nobody signed in. */
+const CLOCK = '/floor/clock'
 /** B-W2b-66: a DISPLAY device's page (SCR-173). */
 const DISPLAY = '/floor/display'
 /** While the app is open, the queue tries to send this often (it sends at once when the network comes back). */
@@ -158,9 +185,15 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null)
   const [switched, setSwitched] = useState<{ from: string; to: string } | null>(null)
   const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null)
+  const [crewStep, setCrewStep] = useState<CrewStep | null>(null)
+  const [crewLeft, setCrewLeft] = useState<CrewView | null>(null)
+  const [arriving, setArriving] = useState(false)
   const scan = useRef<string | null>(null)
+  const arrivalTo = useRef(HOME)
   const queue = useMemo(() => new FloorQueue(browserStorage(), api), [api])
   const queueSnapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot, queue.getSnapshot)
+  const kept = useMemo(() => new KeptClocks(browserKeptStorage(), keptSender(api)), [api])
+  const keptSnapshot = useSyncExternalStore(kept.subscribe, kept.getSnapshot, kept.getSnapshot)
 
   const updater = useMemo(() => new AppUpdater(appVersion), [appVersion])
   const updateSnapshot = useSyncExternalStore(updater.subscribe, updater.getSnapshot, updater.getSnapshot)
@@ -193,15 +226,25 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
   // The queue: read what the tablet kept, then send when the network or the screen comes back, and on a timer.
   useEffect(() => {
     void queue.start().then(() => queue.setOnline(navigator.onLine))
-    const online = () => queue.setOnline(navigator.onLine)
+    // B-W2b-67: badges kept at a kiosk go with the same beats (a kiosk has nobody signed in, so the queue itself waits).
+    void kept.start().then(() => (navigator.onLine ? kept.flush() : undefined))
+    const online = () => {
+      queue.setOnline(navigator.onLine)
+      if (navigator.onLine) void kept.flush()
+    }
     const visible = () => {
-      if (document.visibilityState === 'visible') void queue.sync()
+      if (document.visibilityState !== 'visible') return
+      void queue.sync()
+      if (navigator.onLine) void kept.flush()
     }
     window.addEventListener('online', online)
     window.addEventListener('offline', online)
     document.addEventListener('visibilitychange', visible)
     window.addEventListener('focus', visible)
-    const timer = window.setInterval(() => void queue.sync(), QUEUE_TIMER_MS)
+    const timer = window.setInterval(() => {
+      void queue.sync()
+      if (navigator.onLine) void kept.flush()
+    }, QUEUE_TIMER_MS)
     // PLT-242: ask the browser to keep the tablet's data, and see how much room is left.
     void storageState().then((state) => queue.setStorage(state))
     // The test seam of the live check (never in a production build): the real queue, driven like a screen drives it.
@@ -213,14 +256,14 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
       window.removeEventListener('focus', visible)
       window.clearInterval(timer)
     }
-  }, [queue])
+  }, [queue, kept])
   useEffect(() => {
     queue.setContext({ deviceId: device?.device.id ?? null, workerId: me && !me.pinMustChange ? me.worker.id : null, numberKinds })
   }, [queue, device?.device.id, me, numberKinds])
 
   // Safe app updates (B-W2a-42): ask for the server's version at start, on a timer, back in view and after each send;
   // take a newer one only when updateStep says nothing can be lost.
-  const queued = queuedCount(queueSnapshot.items)
+  const queued = queuedCount(queueSnapshot.items) + keptSnapshot.waiting
   const step = updateStep({ running: appVersion, latest: updateSnapshot.latest, queued, sending: queueSnapshot.sending, online, path: pathname, triedFor: updateSnapshot.triedFor })
   useEffect(() => {
     void updater.check()
@@ -264,19 +307,33 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
       setSignedOut(why)
       setSessionLocale(null)
       setSwitched(null)
-    } else setSignedOut(null)
+      setArriving(false)
+      setCrewStep(null)
+    } else {
+      setSignedOut(null)
+      setCrewLeft(null)
+    }
     setUi({ menu: false, help: false, language: false })
   }, [])
 
   const signOut = useCallback(
     async (why: Exclude<SignedOutWhy, null>) => {
-      await apiSignOut(api)
+      // B-W2b-67: on a crew only the active one leaves; the others stay signed in, and the sign-in screen shows them.
+      const left = me?.crew ? await leaveCrew(api) : (await apiSignOut(api), null)
       setMe(null, why)
+      setCrewLeft(left?.ok ? left.value : null)
       setPendingSwitch(null)
       router.replace(SIGN_IN)
     },
-    [api, router, setMe],
+    [api, me?.crew, router, setMe],
   )
+
+  const endTheCrew = useCallback(async () => {
+    await endCrew(api)
+    setMe(null, 'self')
+    setPendingSwitch(null)
+    router.replace(SIGN_IN)
+  }, [api, router, setMe])
 
   const switchTo = useCallback(
     async (badgeCode: string): Promise<FloorProblem | null> => {
@@ -290,8 +347,15 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
       if (!answer.ok) return answer.problem
       const from = me.worker.displayName
       setMe(answer.value)
+      // B-W2b-67: on a crew nobody signed out: the strip shows who is on now.
+      if (answer.value.crew) {
+        router.replace(answer.value.notice.due ? NOTICE : HOME)
+        return null
+      }
       setSwitched({ from, to: answer.value.worker.displayName })
-      router.replace(answer.value.notice.due ? NOTICE : HOME)
+      arrivalTo.current = HOME
+      setArriving(true)
+      router.replace(answer.value.notice.due ? NOTICE : SIGN_IN)
       return null
     },
     [api, device, me, router, setMe],
@@ -326,15 +390,18 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
       return
     }
     if (!me) {
-      if (pathname !== SIGN_IN && pathname !== ENROL) router.replace(SIGN_IN)
+      if (pathname !== SIGN_IN && pathname !== ENROL && pathname !== CLOCK) router.replace(SIGN_IN)
       return
     }
     if (me.pinMustChange) {
       if (pathname !== SIGN_IN) router.replace(SIGN_IN)
       return
     }
-    if (pathname === SIGN_IN && !pendingSwitch) router.replace(me.notice.due ? NOTICE : HOME)
-  }, [load.status, device, me, pathname, pendingSwitch, router])
+    if (pathname === SIGN_IN && !pendingSwitch && !crewStep) {
+      if (me.notice.due) router.replace(NOTICE)
+      else if (!arriving) router.replace(arrivalTo.current)
+    }
+  }, [load.status, device, me, pathname, pendingSwitch, crewStep, arriving, router])
 
   // B-W2b-66: nobody presses Try again on a wall screen: while the server does not answer, the app keeps asking.
   useEffect(() => {
@@ -351,7 +418,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
   })
 
   const frame = useCallback(
-    (titleKey: string, options: { showHome?: boolean; queue?: boolean } = {}) => {
+    (titleKey: string, options: { showHome?: boolean; queue?: boolean; crew?: boolean } = {}) => {
       const station = device ? { name: device.device.station?.name ?? null, site: device.site.name } : null
       const model: FrameModel = {
         operator: me ? { name: me.worker.displayName } : null,
@@ -368,6 +435,9 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
         menuOpen: ui.menu,
         helpOpen: ui.help,
         languageOpen: ui.language,
+        // B-W2b-67: the crew strip on Home, the clock and sign-in (a job's screen keeps its height); the menu's own lines.
+        crew: (options.crew ?? !options.showHome) ? (me?.crew ?? crewLeft) : null,
+        menu: me ? { clock: me.permissions.includes('floor.work'), addPerson: Boolean(me.rules?.crew), crew: Boolean(me.crew), full: me.crew ? (me.crew.members.length >= me.crew.max ? me.crew.max : null) : null } : undefined,
         idle: me ? { warning: idle.warning, secondsLeft: idle.secondsLeft } : undefined,
       }
       const onFrame = (action: FrameAction) => {
@@ -386,6 +456,18 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
             return setPicked(action.locale)
           case 'sign-out':
             return void signOut('self')
+          case 'clock':
+            setUi((current) => ({ ...current, menu: false }))
+            return router.push(CLOCK)
+          case 'crew-add':
+            setUi((current) => ({ ...current, menu: false }))
+            setCrewStep({ kind: 'join' })
+            return router.push(SIGN_IN)
+          case 'crew-chip':
+            setCrewStep({ kind: 'switch', workerId: action.workerId, name: action.name })
+            return router.push(SIGN_IN)
+          case 'crew-end':
+            return void endTheCrew()
           case 'stay':
             return idle.stay()
           case 'queue':
@@ -394,7 +476,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
       }
       return { frame: model, onFrame }
     },
-    [device, me, online, ui, idle, router, signOut, shellQueue.pending, shellQueue.refused, shellQueue.lastSentAt],
+    [device, me, online, ui, idle, router, signOut, endTheCrew, crewLeft, shellQueue.pending, shellQueue.refused, shellQueue.lastSentAt],
   )
 
   const store: FloorStore = {
@@ -435,6 +517,33 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     switched,
     installPrompt,
     frame,
+    crewStep,
+    openCrew: (step) => {
+      setCrewStep(step)
+      router.push(SIGN_IN)
+    },
+    closeCrew: () => {
+      setCrewStep(null)
+      router.replace(me ? HOME : SIGN_IN)
+    },
+    crewDone: (joined) => {
+      setCrewStep(null)
+      arrivalTo.current = HOME
+      setArriving(joined)
+    },
+    crewLeft,
+    arriving,
+    arrive: () => {
+      arrivalTo.current = HOME
+      setArriving(true)
+    },
+    arrived: (next) => {
+      arrivalTo.current = next?.path ?? HOME
+      scan.current = next?.code ?? null
+      setArriving(false)
+    },
+    kept,
+    keptSnapshot,
     queue,
     queueSnapshot,
     shellQueue,

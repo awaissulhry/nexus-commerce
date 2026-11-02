@@ -1,0 +1,182 @@
+{
+  "bar": "Clock in and out",
+  "back": "Back",
+  "toSignIn": "Sign in",
+  "retry": "Try again",
+  "loading": "Reading your time…",
+  "elapsed": "Today",
+  "today": "{time} today",
+  "duration": {
+    "hours": "{hours} h {minutes} min",
+    "minutes": "{minutes} min"
+  },
+  "action": {
+    "IN": "Clock in",
+    "OUT": "Clock out",
+    "BREAK_OUT": "Break",
+    "BREAK_IN": "Back from break"
+  },
+  "state": {
+    "IN": "In",
+    "ON_BREAK": "On a break",
+    "OUT": "Not clocked in",
+    "unknown": "Not known"
+  },
+  "head": {
+    "IN": "In since {time}",
+    "ON_BREAK": "On a break since {time}",
+    "OUT": "Not clocked in",
+    "unknown": "Your time is not on this tablet"
+  },
+  "card": {
+    "kind": "Your time today"
+  },
+  "fact": {
+    "shift": "Shift",
+    "break": "Next break",
+    "auto": "Clocks out by itself at"
+  },
+  "fixedBreak": "Deducted automatically {time}",
+  "breakDue": "Time for a break: take at least 10 minutes.",
+  "breakLaw": "After six hours of work a break is due, at least 10 minutes if no agreement says otherwise.",
+  "flag": {
+    "FORGOT_BADGE": "By name and PIN: your team leader sees it.",
+    "CLOCK_SKEW": "This tablet's clock looks wrong: your team leader checks the time.",
+    "forgotten": "The clock-in of {when} was never closed: your team leader corrects that day."
+  },
+  "closed": {
+    "title": "Clocking is off at this site",
+    "body": "The clock stays off until the company has written its legal basis and given every worker the notice (Statuto dei Lavoratori art. 4, c.2 and c.3). Nothing is recorded here.",
+    "fix": "Your hours are kept the usual way. Ask HR when it starts."
+  },
+  "unavailable": {
+    "title": "The clock does not answer",
+    "body": "Nothing was recorded. Try again in a moment; if the network is down, the tablet keeps your clocking."
+  },
+  "receipt": {
+    "IN": "Clocked in at {time}.",
+    "OUT": "Clocked out at {time}.",
+    "BREAK_OUT": "Break started at {time}.",
+    "BREAK_IN": "Back from the break at {time}.",
+    "repeated": "Already recorded at {time}.",
+    "named": "{name}: {done}",
+    "saved": "Saved on this tablet at {time} (tablet time).",
+    "wrong": "This badge or PIN does not open this tablet. Ask your team leader.",
+    "notBadge": "That is not a badge. Scan your badge.",
+    "rateLimited": "Too many tries. Wait a minute, then scan again.",
+    "unavailable": "Nothing was recorded. Try again in a moment."
+  },
+  "refusal": {
+    "ALREADY_IN": {
+      "message": "You are already clocked in.",
+      "fix": "Clock out at the end of your shift."
+    },
+    "NOT_IN": {
+      "message": "You are not clocked in.",
+      "fix": "Clock in first; your team leader corrects a clock-in that was missed."
+    },
+    "ON_BREAK": {
+      "message": "You are on a break.",
+      "fix": "Come back from the break first."
+    },
+    "NOT_ON_BREAK": {
+      "message": "You are not on a break.",
+      "fix": "Start a break first."
+    },
+    "ALREADY_ON_BREAK": {
+      "message": "You are already on a break.",
+      "fix": "Come back from the break first."
+    },
+    "BREAKS_FIXED": {
+      "message": "Breaks are deducted automatically here.",
+      "fix": "There is nothing to clock for a break."
+    },
+    "NO_EMPLOYEE": {
+      "message": "You have no employee record at this company yet.",
+      "fix": "Ask HR to link your worker to your record."
+    },
+    "EMPLOYEE_LEFT": {
+      "message": "Your employee record is closed.",
+      "fix": "Ask HR."
+    },
+    "MONTH_CLOSED": {
+      "message": "That month is closed.",
+      "fix": "Ask HR to correct it."
+    },
+    "OTHER_PERSON": {
+      "message": "This was clocked by another person on this tablet.",
+      "fix": "It goes when they are signed in."
+    },
+    "CLOCK_AHEAD": {
+      "message": "The tablet's time is ahead of now.",
+      "fix": "Ask your team leader to set the tablet's clock."
+    }
+  },
+  "scan": {
+    "label": "Scan your badge",
+    "read": "Badge read",
+    "hint": "A badge scanned here clocks in or out at once."
+  },
+  "kiosk": {
+    "title": "Scan your badge",
+    "body": "One scan clocks you in or out. Nobody needs to sign in."
+  },
+  "forgot": {
+    "button": "Forgot your badge?",
+    "title": "Pick your name",
+    "flagged": "Your team leader sees that you clocked by name and PIN.",
+    "offline": "Name and PIN need the network. Use your badge.",
+    "emptyTitle": "No one is set up here yet",
+    "empty": "Ask the office to set up the workers of this site."
+  },
+  "pin": {
+    "title": "Type your PIN",
+    "forName": "For {name}. Not you? Go back.",
+    "entered": "{entered} of {total}",
+    "clear": "Clear",
+    "backspace": "Remove a digit",
+    "problem": {
+      "wrong": "This PIN does not open this tablet. Ask your team leader.",
+      "rateLimited": "Too many tries. Wait a minute.",
+      "unavailable": "The clock does not answer. Try again in a moment."
+    }
+  },
+  "choose": {
+    "title": "In or out?",
+    "body": "The tablet has no network, so it cannot tell. It saves this with its own time.",
+    "notKept": "This tablet cannot keep a badge safely. Clock when the network is back."
+  },
+  "offline": {
+    "unknown": "Offline, with nothing read on this tablet: say in or out, and the office keeps it with the tablet's time.",
+    "asOf": "Read on this tablet on {day} at {time}."
+  },
+  "kept": {
+    "waiting_one": "{count} clocking is saved on this tablet and goes when the network is back.",
+    "waiting_other": "{count} clockings are saved on this tablet and go when the network is back.",
+    "refused": "{what} at {time} was not recorded.",
+    "refusedFix": "Tell your team leader: they enter it by hand.",
+    "dismiss": "Done"
+  },
+  "confirm": {
+    "title": "Clock out?",
+    "one": "Your open bundle {bundle} will be paused.",
+    "many": "Your {count} open bundles ({bundles}) will be paused.",
+    "next": "Your next sign-in offers to continue.",
+    "cancel": "Stay clocked in"
+  },
+  "open": {
+    "kind": "Open work",
+    "code_one": "{count} bundle paused",
+    "code_other": "{count} bundles paused",
+    "status": "Paused",
+    "item": "{bundle} at Op {seq} paused.",
+    "next": "Your next sign-in offers to continue."
+  },
+  "held": {
+    "busy": "Recording…"
+  },
+  "noRole": {
+    "title": "Clocking is not for your role here",
+    "body": "Ask your team leader."
+  }
+}

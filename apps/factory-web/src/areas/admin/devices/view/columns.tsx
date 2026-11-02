@@ -11,7 +11,7 @@ import { cellOf as cell } from '../../shared/view/cells'
 import { batteryOf, deviceTileMatch, inUseSinceOf, isOutdated, networkKey, type SiteChoice } from '../model'
 
 /**
- * SCR-013 devices: name (the Device record's link), kind, site, station, status ("In use" says someone is signed in,
+ * SCR-013 devices: name (the Device record's link), kind, mode (B-W2b-67), site, station, status ("In use" says someone is signed in,
  * never who: Statuto dei Lavoratori art. 4), last seen (marked when not seen for a day), app version (marked when it is
  * not the version the server serves now, B-W2a-42) and battery as the tablet last said it (low marked; W2a).
  */
@@ -40,6 +40,7 @@ export function deviceColumns(ctx: { t: Translate; locale: Locale; prefix: strin
       cellRenderer: cell<Device>((device) => <IdentityCell noImage title={device.name} titleAttr={device.name} href={adminHref(ctx.prefix, `/devices/${device.id}`)} />),
     },
     { colId: 'kind', headerName: t('org.col.kind'), valueGetter: ({ data }) => (data ? t(`devices.kind.${data.kind}`) : ''), minWidth: 120, flex: 0.7 },
+    { colId: 'mode', headerName: t('devices.field.mode'), valueGetter: ({ data }) => (data ? t(`devices.deviceMode.${data.mode ?? 'STATION'}`) : ''), minWidth: 150, flex: 0.8 },
     { colId: 'site', headerName: t('devices.col.site'), valueGetter: ({ data }) => (data ? (site(data)?.name ?? '—') : ''), flex: 1.2, minWidth: 170 },
     { colId: 'station', headerName: t('devices.col.station'), valueGetter: ({ data }) => (data ? station(data) : ''), flex: 1.2, minWidth: 170 },
     {

@@ -1,18 +1,27 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
-import { changePin, signIn, type Credentials } from '../api'
+import { changePin, signIn, type Credentials, type SignInRoute } from '../api'
 import { useFloor } from '../FloorApp'
 import { useFloorKeys } from '../keys'
-import { newPinProblem } from '../model'
+import { isBadgeCode, newPinProblem } from '../model'
+import { fetchTabletClock } from '../tasks/clock/api'
+import { useWedgeScans } from '../tasks/scans/wedge'
 import { SignInView, type ChangeProblem, type SignInAction, type SignInProblem, type SignInStep } from './view/SignInView'
+import { FloorWelcome } from './Welcome'
 
 /**
  * The live SCR-021 (`/floor/sign-in`): the badge (or the name) and the PIN go to POST /floor/sign-in — or
  * /floor/switch when a badge was scanned on a signed-in tablet — and the app's gate sends the person on (the notice
  * when due, else Home). The PIN lives only in this component's memory: typed on the pad, sent, and kept for the
  * new-PIN step only (it is the "current PIN" of POST /floor/pin after an administrator's reset), then dropped.
+ *
+ * B-W2b-67: the crew on a station tablet (PLT-059): Add a person (`crewStep` join: POST /floor/crew/join) and a chip (a
+ * member proves it is them: POST /floor/crew/switch; with nobody active POST /floor/sign-in, which re-activates them).
+ * After a sign-in the welcome cards come first (Welcome.tsx), then Home. "Clock in or out" opens the kiosk (SCR-170),
+ * held in words while the site's clock is closed.
  */
 
 const problemOf = (problem: string): SignInProblem =>
@@ -20,17 +29,55 @@ const problemOf = (problem: string): SignInProblem =>
 
 export function FloorSignIn() {
   const store = useFloor()
+  // B-W2b-67: the person is in, the notice read: the welcome cards before Home.
+  if (store.me && !store.me.pinMustChange && !store.me.notice.due && store.arriving && !store.pendingSwitch && !store.crewStep) return <FloorWelcome />
+  return <SignInScreen />
+}
+
+function SignInScreen() {
+  const store = useFloor()
+  const router = useRouter()
   const feedback = useConfirmFeedback()
-  const { device, me } = store
+  const { device, me, crewStep } = store
   const switching = Boolean(me && store.pendingSwitch)
-  const { frame, onFrame } = store.frame(switching ? 'signIn.switch.frameTitle' : 'signIn.title', { showHome: switching })
+  const adding = Boolean(me && crewStep?.kind === 'join')
+  const member = crewStep?.kind === 'switch' ? crewStep : null
+  const onCrew = adding || Boolean(me && member)
+  const { frame, onFrame } = store.frame(switching ? 'signIn.switch.frameTitle' : onCrew ? 'signIn.crew.frameTitle' : 'signIn.title', { showHome: switching || onCrew, crew: !me })
   const changing = Boolean(me?.pinMustChange)
-  const [step, setStep] = useState<SignInStep>(() => (changing ? { kind: 'change', stage: 'current' } : switching ? { kind: 'pin', forName: null } : { kind: 'badge' }))
+  const [step, setStep] = useState<SignInStep>(() => (changing ? { kind: 'change', stage: 'current' } : switching ? { kind: 'pin', forName: null } : member ? { kind: 'pin', forName: member.name } : { kind: 'badge' }))
   const [problem, setProblem] = useState<SignInProblem | null>(null)
   const [changeProblem, setChangeProblem] = useState<ChangeProblem>(null)
   const [busy, setBusy] = useState(false)
   const [forgot, setForgot] = useState(false)
-  const held = useRef<{ badgeCode?: string; workerId?: string; name?: string; pin?: string; newPin?: string }>({})
+  const held = useRef<{ badgeCode?: string; workerId?: string; name?: string; pin?: string; newPin?: string }>(member ? { workerId: member.workerId, name: member.name } : {})
+  const [clockOpen, setClockOpen] = useState<boolean | null>(null)
+
+  // A chip tapped on this screen, or Add a person: the step follows.
+  useEffect(() => {
+    if (!crewStep) return
+    setProblem(null)
+    if (crewStep.kind === 'switch') {
+      held.current = { workerId: crewStep.workerId, name: crewStep.name }
+      setStep({ kind: 'pin', forName: crewStep.name })
+    } else {
+      held.current = {}
+      setStep({ kind: 'badge' })
+    }
+  }, [crewStep])
+
+  // B-W2b-67: whether the site clocks at all, so the kiosk's button says why it waits.
+  const anyone = device?.rules?.signIn === 'ANYONE'
+  useEffect(() => {
+    if (!anyone || me) return
+    let live = true
+    void fetchTabletClock(store.api).then((answer) => {
+      if (live && answer.ok) setClockOpen(answer.value.open)
+    })
+    return () => {
+      live = false
+    }
+  }, [anyone, me, store.api])
 
   // A sign-in that must choose a new PIN: the one just typed is the current one (with a badge alone, ask it).
   useEffect(() => {
@@ -40,26 +87,36 @@ export function FloorSignIn() {
   const send = async (credentials: Credentials) => {
     setBusy(true)
     setProblem(null)
-    const answer = await signIn(store.api, credentials, switching ? 'switch' : 'sign-in')
+    const route: SignInRoute = switching ? 'switch' : adding ? 'crew-join' : member && me ? 'crew-switch' : 'sign-in'
+    const answer = await signIn(store.api, credentials, route)
     setBusy(false)
     if (!answer.ok) {
       feedback('error')
       // A refused PIN keeps the pad (the same badge or name, a new try); a refused badge alone goes back to the scan.
       held.current.pin = undefined
-      setProblem(problemOf(answer.problem))
+      setProblem(onCrew && answer.problem === 'operatorActive' ? 'crew' : problemOf(answer.problem))
       if (credentials.pin === undefined) {
-        held.current = {}
-        setStep({ kind: 'badge' })
+        held.current = member ? { workerId: member.workerId, name: member.name } : {}
+        if (!member) setStep({ kind: 'badge' })
       }
       return
     }
     feedback('success')
     if (!answer.value.pinMustChange) held.current = {}
     const from = me?.worker.displayName ?? null
+    if (onCrew || member) store.crewDone(adding)
+    else store.arrive()
     store.setMe(answer.value)
-    // The app's gate sends the person on: the notice when due, else Home.
+    // The app's gate sends the person on: the notice when due, the welcome cards, else Home.
     if (switching && from) store.completeSwitch(from, answer.value.worker.displayName)
   }
+
+  // A member's badge works with the PIN pad on screen (design: "tap a chip, then badge scan or PIN").
+  useWedgeScans((code) => {
+    if (!isBadgeCode(code)) return
+    held.current = { ...held.current, badgeCode: code, workerId: undefined }
+    if (device?.signIn.badgeOnly) void send({ badgeCode: code })
+  }, step.kind === 'pin' && member !== null)
 
   const onAction = async (action: SignInAction) => {
     switch (action.type) {
@@ -90,7 +147,11 @@ export function FloorSignIn() {
         held.current = {}
         setProblem(null)
         if (switching) return store.cancelSwitch()
-        return setStep({ kind: 'badge' })
+        setStep({ kind: 'badge' })
+        if (crewStep) store.closeCrew()
+        return
+      case 'clock':
+        return router.push('/floor/clock')
       case 'forgot':
         return setForgot(action.open)
       case 'cancel-switch':
@@ -157,6 +218,8 @@ export function FloorSignIn() {
         signedOut: store.signedOut,
         switchingFrom: switching ? (me?.worker.displayName ?? null) : null,
         forgotOpen: forgot,
+        crewStep: me || member ? (crewStep?.kind ?? null) : null,
+        clock: !me && anyone ? { closed: clockOpen === false } : null,
       }}
       onFrame={onFrame}
       onAction={(action) => void onAction(action)}
