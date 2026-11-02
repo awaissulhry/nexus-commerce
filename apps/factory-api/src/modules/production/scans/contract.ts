@@ -170,7 +170,8 @@ export const cardContract = defineContract({
       /** Why this code takes the bundle no more (REPLACED, VOIDED) or its work order is not open, or null. */
       refusal: output({ code: z.string(), message: z.string() }).nullable(),
       bundle: output({ id: id(), code: z.string(), status: z.enum(['ACTIVE', 'VOID']), quantity: z.number().int(), part: z.string().nullable(), workOrderSizeId: id(), colourwayCode: z.string(), colourwayName: z.string(), size: z.string() }),
-      workOrder: output({ id: id(), number: z.string(), batchNumber: z.string().nullable(), status, siteId: id(), style: output({ code: z.string(), name: z.string() }) }),
+      // B-W2b-69: `rush`, the operation screen's flag.
+      workOrder: output({ id: id(), number: z.string(), batchNumber: z.string().nullable(), status, rush: z.boolean(), siteId: id(), style: output({ code: z.string(), name: z.string() }) }),
       station: output({ id: id(), code: z.string(), name: z.string(), kind: z.enum(WORK_CENTRE_KINDS) }).nullable(),
       operations: z.array(
         operationRef.extend({

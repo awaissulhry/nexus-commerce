@@ -68,7 +68,7 @@ export interface BundleCard {
     readonly colourwayName: string
     readonly size: string
   }
-  readonly workOrder: { readonly id: string; readonly number: string; readonly batchNumber: string | null; readonly status: string; readonly siteId: string; readonly style: { readonly code: string; readonly name: string } }
+  readonly workOrder: { readonly id: string; readonly number: string; readonly batchNumber: string | null; readonly status: string; /** B-W2b-69: the Rush flag (absent: an older card kept on the tablet). */ readonly rush?: boolean; readonly siteId: string; readonly style: { readonly code: string; readonly name: string } }
   readonly station: { readonly id: string; readonly code: string; readonly name: string; readonly kind: string } | null
   readonly operations: readonly CardOperation[]
   readonly next: string | null
@@ -202,19 +202,22 @@ export function maxGood(counts: Counts, expected: number): number {
   return Math.max(0, expected - scrapOf(counts) - reworkOf(counts))
 }
 
-/** Why Finish cannot run with these counts, or null. */
-export function finishHeld(counts: Counts, expected: number | null): 'nothing' | 'atMost' | 'unknown' | null {
+/**
+ * Why Finish cannot run with these counts, or null. `ceiling` (B-W2b-69, MES-097): the bundle's own pieces, the most a report
+ * ever takes; between what passed (`expected`) and the ceiling the site's quantity rule decides (checks.ts `quantityRule`).
+ */
+export function finishHeld(counts: Counts, expected: number | null, ceiling: number | null = expected): 'nothing' | 'atMost' | 'unknown' | null {
   if (expected === null || expected <= 0) return 'unknown'
   const total = totalOf(counts, expected)
   if (total < 1) return 'nothing'
-  if (total > expected) return 'atMost'
+  if (total > (ceiling ?? expected)) return 'atMost'
   return null
 }
 
 const lines = (record: Readonly<Record<string, number>>) => Object.entries(record).filter(([, quantity]) => quantity > 0).map(([reason, quantity]) => ({ reason, quantity }))
 
-/** The queued report's body (floor-sync `production.scan.report`), empty lines left out. */
-export function reportPayload(card: Pick<BundleCard, 'bundle'>, operationId: string, counts: Counts, expected: number): Record<string, unknown> {
+/** The queued report's body (floor-sync `production.scan.report`), empty lines left out; `components`: the lots scanned (MES-114). */
+export function reportPayload(card: Pick<BundleCard, 'bundle'>, operationId: string, counts: Counts, expected: number, components: readonly { readonly code: string; readonly garments: number }[] = []): Record<string, unknown> {
   const scrap = lines(counts.scrap)
   const rework = lines(counts.rework)
   return {
@@ -223,6 +226,7 @@ export function reportPayload(card: Pick<BundleCard, 'bundle'>, operationId: str
     good: goodOf(counts, expected),
     ...(scrap.length > 0 ? { scrap } : {}),
     ...(rework.length > 0 ? { rework } : {}),
+    ...(components.length > 0 ? { components } : {}),
   }
 }
 
@@ -267,11 +271,15 @@ export interface LastAction {
   readonly undoEventId: string | null
   /** The correction's queue id, once asked. */
   readonly askEventId: string | null
+  /** The server's id of a report that did not go through the queue (a team leader's override signs online). */
+  readonly scanId?: string | null
+  /** A stack finished at once (MES-100): how many bundles; each is its own report, so no single Undo. */
+  readonly bundles?: number
 }
 
 /** Undo is open: no scan since, within two minutes, not undone yet. */
 export function undoOpen(last: LastAction | null, now: Date): boolean {
-  if (!last || last.scannedAfter || last.undoEventId) return false
+  if (!last || last.scannedAfter || last.undoEventId || last.bundles) return false
   return now.getTime() - Date.parse(last.at) < UNDO_WINDOW_MS
 }
 
@@ -348,4 +356,33 @@ export const KNOWN_REFUSALS = [
   'NOTICE_NOT_ACKNOWLEDGED',
   'UNKNOWN_BUNDLE',
   'OTHER_KIND',
+  // B-W2b-69: checks before it counts, timing, the lots, the steps, no-bundle time.
+  'WRONG_BUNDLE',
+  'MORE_THAN_PASSED',
+  'MORE_THAN_BUNDLE',
+  'LESS_THAN_TAKEN',
+  'ON_HOLD',
+  'MACHINE_UNSAFE',
+  'COMPONENTS_MISSING',
+  'WRONG_COMPONENT',
+  'UNKNOWN_LOT',
+  'LOT_NOT_RELEASED',
+  'COMPONENT_COUNT',
+  'CHECKLIST_OPEN',
+  'CHECKLIST_REPORTED',
+  'CHECKLIST_STEP_UNKNOWN',
+  'ALREADY_REPORTED',
+  'OTHER_RUNNING',
+  'OPEN_BY_OTHER',
+  'ALREADY_RUNNING',
+  'ALREADY_PAUSED',
+  'PAUSED_RESUME',
+  'NOT_STARTED',
+  'NO_PIECES',
+  'PIECES_TOO_MANY',
+  'NOT_QUALIFIED',
+  'NOT_AUTHORISED',
+  'TEAM_NOT_IN_CREW',
+  'TEAM_NOTICE',
+  'BUNDLE_RUNNING',
 ] as const

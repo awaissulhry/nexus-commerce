@@ -51,6 +51,26 @@ export const checkContract = defineContract({
   },
 })
 
+/**
+ * B-W2b-69 (MES-114; design floor.operation "Scan what you used": "a wrong item is refused"): a lot scanned at the operation,
+ * read before the report: the same decision the report takes (the same words), so the row ticks or the scan is refused at once.
+ */
+export const lotCheckContract = defineContract({
+  querystring: input({
+    /** The lot's label. */
+    code: z.string().trim().min(1).max(60),
+    /** The bundle's ticket. */
+    bundle: z.string().trim().min(1).max(60),
+    workOrderOperationId: id(),
+  }),
+  response: {
+    200: output({
+      lot: output({ code: z.string(), itemId: id(), itemCode: z.string() }).nullable(),
+      refusal: output({ code: z.string(), message: z.string(), fix: z.string() }).nullable(),
+    }),
+  },
+})
+
 const answer = reportContract.response[201].extend({
   /** What the team leader overrode, or null: nothing held the report any more when it was sent. */
   override: output({ guards: z.array(guardKind), reasonCode: z.enum(OVERRIDE_REASON_CODES) }).nullable(),

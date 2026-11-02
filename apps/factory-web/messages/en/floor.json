@@ -291,6 +291,17 @@
         "inspect": "No network: inspections and releases wait for the network (they take their number from the office). Scans are saved on this tablet.",
         "serials": "No network: garment serials and their labels wait for the network (the office gives them). Other work is saved on this tablet."
       }
+    },
+    "resume": {
+      "title": "Unfinished on this tablet",
+      "paused": "Paused",
+      "running": "Running",
+      "continue": "Continue",
+      "line": {
+        "paused": "Op {seq} {name} · since {time}",
+        "running": "Op {seq} {name} · since {time}",
+        "clockOut": "Op {seq} {name} · paused at clock-out, {time}"
+      }
     }
   },
   "tile": {
@@ -610,6 +621,16 @@
       "rework_one": "{count} rework",
       "rework_other": "{count} rework",
       "machine": "Machine problem on {code}",
+      "start": "Start {code}",
+      "pause": "Pause {code}",
+      "resume": "Resume {code}",
+      "handBack": "Hand back {code}",
+      "partial_one": "{code}: {count} piece so far",
+      "partial_other": "{code}: {count} pieces so far",
+      "tick": "A step ticked",
+      "note": "A comment on a work order",
+      "noBundleStart": "No-bundle time started",
+      "noBundleEnd": "No-bundle time ended",
       "call": "Help call",
       "callAnswer": "Answer to a help call",
       "handover": "Handover note",

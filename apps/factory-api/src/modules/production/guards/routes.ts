@@ -6,9 +6,9 @@ import { deviceCookieOf } from '../../../platform/auth/floor/cookies'
 import { parseSiteToken } from '../../../platform/auth/floor/tokens'
 import { AUTH_RATE_LIMITS } from '../../../platform/auth/sessions/office-auth'
 import { overrideReport } from './apply'
-import { checkContract, flagContract, flagsContract, lotGarmentsContract, overrideContract, workOrderComponentsContract } from './contract'
+import { checkContract, flagContract, flagsContract, lotCheckContract, lotGarmentsContract, overrideContract, workOrderComponentsContract } from './contract'
 import { manifest } from './manifest'
-import { checkBundle, flagOf, listFlags, lotGarments, workOrderComponents } from './views'
+import { checkBundle, checkLot, flagOf, listFlags, lotGarments, workOrderComponents } from './views'
 
 /**
  * Checks before a scan counts (B-W2b-46; MES-070, MES-097, MES-098, MES-114; design floor.operation "Checks before it
@@ -22,6 +22,8 @@ export default defineRoutes('production.guards', manifest, async (app) => {
   const perDevice = { rateLimit: { max: limit.max, timeWindow: limit.timeWindowMs, keyGenerator: (request: FastifyRequest) => `guard-override:${parseSiteToken(deviceCookieOf(request))?.id ?? request.ip}` } }
 
   app.get('/production/guards/check', { schema: checkContract }, async (request) => checkBundle(request, request.query))
+
+  app.get('/production/guards/lot', { schema: lotCheckContract }, async (request) => checkLot(request, request.query))
 
   app.post('/production/guards/override', { schema: overrideContract, config: perDevice }, async (request, reply) => {
     const header = idempotencyKeyFrom(request)

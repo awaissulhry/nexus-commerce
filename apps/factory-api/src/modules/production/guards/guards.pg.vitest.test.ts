@@ -491,6 +491,16 @@ describe('MES-114 protectors and lots scanned per garment at the sewn operation 
     expect(short.message).toBe('The lots of SEED-PRO-300 cover 3 garments; 5 garments go on from Op 20.')
   })
 
+  it('reads a scanned lot before the report: the row ticks; a wrong item, an unknown lot or a lot in quarantine is refused in the report\'s words', async () => {
+    const lot = (code: string) => ok('sew1', 'GET', `/production/guards/lot?code=${encodeURIComponent(code)}&bundle=${BN.parts[0]!.code}&workOrderOperationId=${opOf(WO.parts, 20)}`)
+    expect(await lot(lots.protectorA)).toMatchObject({ lot: { code: lots.protectorA, itemId: A.protector, itemCode: 'SEED-PRO-300' }, refusal: null })
+    expect(await lot(lots.leather)).toMatchObject({ lot: null, refusal: { code: 'WRONG_COMPONENT' } })
+    expect(await lot('NOT-A-LOT-1')).toMatchObject({ lot: null, refusal: { code: 'UNKNOWN_LOT', message: 'NOT-A-LOT-1 is not a lot of this site.' } })
+    expect(await lot(lots.protectorQ)).toMatchObject({ lot: null, refusal: { code: 'LOT_NOT_RELEASED' } })
+    // The card carries the work order's Rush flag for the same screen.
+    expect((await ok('sew1', 'GET', `/production/scans/card?code=${BN.parts[0]!.code}`)).workOrder.rush).toBe(false)
+  })
+
   it('traces 3 garments to one lot and 2 to another; the work order and the lot read it back (the recall)', async () => {
     const scan = await reported('sew1', scanBody(BN.parts[0]!, 4, { rework: [{ reason: 'RESTITCH', quantity: 1 }], components: [{ code: lots.protectorA, garments: 3 }, { code: lots.protectorB.toLowerCase(), garments: 2 }] }))
     const [row] = await flagRows(scan.id, 'production.scanComponentsTraced')

@@ -58,6 +58,118 @@
     "OTHER_KIND": {
       "message": "Questa operazione è un lavoro diverso da quello di questa postazione.",
       "fix": "Porta il fascio alla postazione giusta, o chiedi al capo squadra."
+    },
+    "WRONG_BUNDLE": {
+      "message": "Questo fascio è di un'altra linea.",
+      "fix": "Portalo alla sua linea, o chiedi al tuo capo squadra."
+    },
+    "MORE_THAN_PASSED": {
+      "message": "Più pezzi di quanti ne ha passati l'operazione prima.",
+      "fix": "Ricontali, o chiedi al tuo capo squadra."
+    },
+    "MORE_THAN_BUNDLE": {
+      "message": "Più pezzi di quanti ne contiene questo fascio.",
+      "fix": "Ricontali: nessuno sblocco è possibile."
+    },
+    "LESS_THAN_TAKEN": {
+      "message": "Meno pezzi buoni di quanti ne ha già presi l'operazione dopo.",
+      "fix": "Ricontali, o chiedi al tuo capo squadra."
+    },
+    "ON_HOLD": {
+      "message": "Questo fascio o il suo ordine di lavoro è bloccato.",
+      "fix": "Mettilo da parte e chiedi al tuo capo squadra."
+    },
+    "MACHINE_UNSAFE": {
+      "message": "La macchina di questa postazione è segnata da non usare.",
+      "fix": "Lavora a un'altra postazione, o chiedi al tuo capo squadra."
+    },
+    "COMPONENTS_MISSING": {
+      "message": "Il lotto di un componente non è ancora scansionato.",
+      "fix": "Scansiona il lotto del componente che hai usato."
+    },
+    "WRONG_COMPONENT": {
+      "message": "Questo lotto non è un materiale di questo capo.",
+      "fix": "Mettilo via e scansiona il lotto del componente che hai in mano."
+    },
+    "UNKNOWN_LOT": {
+      "message": "Questo non è un lotto di questo stabilimento.",
+      "fix": "Scansiona di nuovo l'etichetta del lotto, o chiedi al tuo capo squadra."
+    },
+    "LOT_NOT_RELEASED": {
+      "message": "Questo lotto non è rilasciato: in un capo va solo un lotto rilasciato.",
+      "fix": "Usa un lotto rilasciato, o chiedi alla qualità di rilasciare questo."
+    },
+    "COMPONENT_COUNT": {
+      "message": "I lotti non coprono tutti i capi che vanno avanti.",
+      "fix": "Di' quanti capi copre ogni lotto."
+    },
+    "CHECKLIST_OPEN": {
+      "message": "Un passo obbligatorio di questa operazione non è spuntato.",
+      "fix": "Spunta i passi, poi Fine."
+    },
+    "CHECKLIST_REPORTED": {
+      "message": "Questo fascio è già segnalato qui: i suoi passi sono chiusi.",
+      "fix": "Chiedi una correzione se c'è un errore."
+    },
+    "CHECKLIST_STEP_UNKNOWN": {
+      "message": "Questo passo non fa più parte dell'operazione.",
+      "fix": "Scansiona di nuovo il fascio."
+    },
+    "ALREADY_REPORTED": {
+      "message": "Questo fascio è già segnalato qui.",
+      "fix": "Portalo alla sua prossima operazione."
+    },
+    "OTHER_RUNNING": {
+      "message": "Un altro fascio è in corso a tuo nome.",
+      "fix": "Prima mettilo in pausa, restituiscilo o finiscilo."
+    },
+    "OPEN_BY_OTHER": {
+      "message": "Un'altra persona sta lavorando su questo fascio.",
+      "fix": "Il tuo capo squadra può vedere chi."
+    },
+    "ALREADY_RUNNING": {
+      "message": "Questo fascio è già in corso.",
+      "fix": "Continua, o mettilo in pausa."
+    },
+    "ALREADY_PAUSED": {
+      "message": "Questo fascio è già in pausa.",
+      "fix": "Riprendilo quando torni."
+    },
+    "PAUSED_RESUME": {
+      "message": "Questo fascio è in pausa.",
+      "fix": "Riprendilo."
+    },
+    "NOT_STARTED": {
+      "message": "Questo fascio non è iniziato.",
+      "fix": "Inizialo, o semplicemente chiudilo con Fine."
+    },
+    "NO_PIECES": {
+      "message": "Di' quanti pezzi sono fatti.",
+      "fix": "Da un pezzo in su."
+    },
+    "PIECES_TOO_MANY": {
+      "message": "Sono tanti quanti ne contiene il fascio.",
+      "fix": "Chiudi il fascio con Fine."
+    },
+    "NOT_QUALIFIED": {
+      "message": "Questa operazione non è ancora tra le tue competenze.",
+      "fix": "Un capo squadra può sbloccarla con il suo PIN e un motivo."
+    },
+    "NOT_AUTHORISED": {
+      "message": "Non sei autorizzato a questa operazione.",
+      "fix": "Chiedi al tuo capo squadra: nessuno sblocco è possibile."
+    },
+    "TEAM_NOT_IN_CREW": {
+      "message": "Qualcuno della squadra non è più su questo tablet.",
+      "fix": "Controlla la squadra, poi riprova."
+    },
+    "TEAM_NOTICE": {
+      "message": "Qualcuno della squadra non ha letto l'informativa.",
+      "fix": "La legga prima, entrando con il proprio accesso."
+    },
+    "BUNDLE_RUNNING": {
+      "message": "Qui è in corso un fascio.",
+      "fix": "Prima mettilo in pausa o finiscilo."
     }
   },
   "unknownCode": {
@@ -100,7 +212,15 @@
     "of": "su {count}",
     "atMost": "Al massimo {count}",
     "allLeft": "Tutti i restanti",
-    "tapHint": "Tocca un conteggio per cambiarlo."
+    "tapHint": "Tocca un conteggio per cambiarlo.",
+    "stepGood": "Buoni, un pezzo alla volta",
+    "oneLess": "Uno in meno",
+    "oneMore": "Uno in più",
+    "least": "I buoni non scendono sotto 0.",
+    "rule": {
+      "held": "Più di quanti ne ha passati l'operazione prima ({count}): alla fine firma un capo squadra.",
+      "told": "Più di quanti ne ha passati l'operazione prima ({count}): il tuo capo squadra viene avvisato."
+    }
   },
   "finish": {
     "label_one": "Fine · {count} buono",
@@ -110,6 +230,12 @@
       "nothing": "Conta almeno un pezzo",
       "atMost": "Al massimo {count}",
       "unknown": "Niente è ancora arrivato a questa operazione"
+    },
+    "work": {
+      "steps_one": "Resta {count} passo da spuntare",
+      "steps_other": "Restano {count} passi da spuntare",
+      "component": "Scansiona il lotto di {code}: coperti {covered} di {garments}",
+      "lotCount": "Di' quanti capi copre il lotto {code}"
     }
   },
   "fact": {
@@ -120,7 +246,8 @@
     "workOrder": "Ordine di lavoro",
     "part": "Parte",
     "operation": "Operazione",
-    "at": "Quando"
+    "at": "Quando",
+    "rush": "Urgente"
   },
   "opShort": "Op {seq}",
   "opCode": "Op {seq} · {code}",
@@ -181,5 +308,216 @@
       "title": "Inviata al capo squadra",
       "body": "In attesa del capo squadra. La segnalazione resta finché non decide."
     }
+  },
+  "timing": {
+    "title": "Tempo di questo fascio",
+    "running": "In lavorazione",
+    "paused": "In pausa",
+    "start": "Inizia",
+    "pause": "Pausa",
+    "resume": "Riprendi",
+    "notAllGood": "Difetti",
+    "handBack": "Restituisci",
+    "handBackTitle": "Restituire questo fascio?",
+    "handBackBody": "Il tempo fatto resta registrato; chiunque può riprenderlo.",
+    "piecesOpen": "Pezzi fatti finora",
+    "piecesTitle": "Pezzi fatti finora su {code}",
+    "piecesHint": "Un'altra persona potrà continuare con il resto.",
+    "piecesSend": "Salva i pezzi",
+    "piecesEmpty": "Di' quanti pezzi",
+    "noPieces": "Niente da dire per ora: finisci il fascio.",
+    "piecesSoFar_one": "{count} pezzo finora",
+    "piecesSoFar_other": "{count} pezzi finora",
+    "other": "Ci sta lavorando un'altra persona. Il tuo capo squadra può vedere chi.",
+    "pausedAtClockOut": "In pausa dalla tua timbratura di uscita",
+    "team_one": "Squadra di {count}",
+    "team_other": "Squadra di {count}",
+    "qualification": "Questa operazione non è ancora tra le tue competenze: il tuo capo squadra viene avvisato."
+  },
+  "pause": {
+    "choose": "Prima scegli un motivo",
+    "needsWords": "Di' perché in poche parole",
+    "words": "Poche parole"
+  },
+  "guard": {
+    "title": "Fermo: questo non conta ancora",
+    "lift": "Un capo squadra può sbloccarlo qui con il suo PIN e un motivo.",
+    "noLift": "Nessuno sblocco è possibile. Fai quello che dice, o chiedi al tuo capo squadra.",
+    "override": "Sblocco del capo squadra",
+    "told": "{what} Il tuo capo squadra viene avvisato.",
+    "liftReport": "Torna indietro per cambiare i conteggi, oppure un capo squadra lo sblocca qui con il suo PIN e un motivo."
+  },
+  "override": {
+    "title": "Sblocco del capo squadra",
+    "reason": "Perché vale lo stesso?",
+    "words": "Di' perché in poche parole",
+    "badge": "Capo squadra: scansiona il tuo badge",
+    "badgeHint": "Oppure scegli il tuo nome.",
+    "badgeRead": "Badge letto",
+    "byName": "Senza badge: scegli il nome",
+    "pickName": "Nome del capo squadra",
+    "useBadge": "Usa il badge",
+    "signsName": "{name} firma con il PIN.",
+    "signsBadge": "Badge letto. Firma con il PIN.",
+    "otherLead": "Un altro capo squadra",
+    "pin": "PIN del capo squadra",
+    "offline": "Lo sblocco ha bisogno della rete: il PIN lo controlla l'ufficio.",
+    "cancel": "Annulla",
+    "problem": {
+      "wrong": "Badge o PIN errato. Riprova, o chiedi a un altro capo squadra.",
+      "self": "Un capo squadra non sblocca mai una propria scansione. Chiedi a un altro capo squadra.",
+      "notLead": "Questa persona non può sbloccare i controlli. Chiedi a un capo squadra di questo stabilimento.",
+      "note": "Con \"Altro\" di' perché in poche parole.",
+      "locked": "Troppi tentativi. Aspetta qualche minuto, o chiedi a un altro capo squadra.",
+      "unavailable": "L'ufficio non risponde. Riprova."
+    },
+    "because": "Perché: {reason}",
+    "change": "Cambia"
+  },
+  "components": {
+    "title": "Scansiona quello che hai usato",
+    "scan": "Scansiona il lotto",
+    "hint": "Scansiona l'etichetta del lotto che hai in mano.",
+    "scanIt": "Non ancora scansionato",
+    "done": "Tracciato",
+    "of": "di {count}",
+    "rest": "Il resto: {count}",
+    "saySo": "Quanti?",
+    "covers_one": "{count} capo",
+    "covers_other": "{count} capi",
+    "less": "Un capo in meno su {code}",
+    "more": "Un capo in più su {code}",
+    "least": "Almeno un capo",
+    "most": "Al massimo {count}: l'ultimo lotto prende il resto",
+    "drop": "Togli {code}",
+    "unchecked": "Salvato su questo tablet: l'ufficio controlla il lotto quando arriva la segnalazione."
+  },
+  "steps": {
+    "title": "Passi di questa operazione",
+    "required": "Obbligatorio",
+    "optional": "Facoltativo",
+    "you": "Tu",
+    "other": "Un'altra persona",
+    "when": "{who} · {time}",
+    "notHere": "Non si applica",
+    "outcome": {
+      "DONE": "Fatto",
+      "NOT_APPLICABLE": "Non si applica"
+    }
+  },
+  "stack": {
+    "open": "Più fasci insieme",
+    "add": "Aggiungi un altro fascio",
+    "heldCounts": "Prima finisci o lascia questo conteggio",
+    "scan": "Scansiona il prossimo fascio",
+    "hint": "Fino a {count} fasci, poi Fine una volta sola.",
+    "empty": "Scansiona i fasci che hai finito.",
+    "offline": "Salvato su questo tablet: ogni fascio parte come una segnalazione a sé.",
+    "bySize": "Conta per taglia",
+    "allSizes": "Tutte le taglie",
+    "none": "Nessuno",
+    "bundles_one": "{count} fascio",
+    "bundles_other": "{count} fasci",
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "size": "Taglia {size}",
+    "of": "di {count}",
+    "least": "I buoni non scendono sotto 0.",
+    "less": "Un pezzo in meno su {code}",
+    "more": "Un pezzo in più su {code}",
+    "alone": "Segnala da solo",
+    "drop": "Togli {code} dalla pila",
+    "total_one": "{count} fascio · {good} buoni",
+    "total_other": "{count} fasci · {good} buoni",
+    "finish_one": "Fine {count} fascio · {good} buoni",
+    "finish_other": "Fine {count} fasci · {good} buoni",
+    "done_one": "{count} fascio finito · {what}",
+    "done_other": "{count} fasci finiti · {what}",
+    "partly_one": "{count} fascio finito; {refused} resta qui con il suo motivo.",
+    "partly_other": "{count} fasci finiti; {refused} restano qui con il loro motivo.",
+    "heldEmpty": "Prima scansiona un fascio",
+    "heldShade": "Le tonalità non coincidono: toglierne uno",
+    "heldRefused": "Togli i fasci rifiutati, o segnalali da soli",
+    "failed": "L'ufficio non risponde. Non si è perso niente: riprova.",
+    "signed": "Firmato dal capo squadra: quel fascio conta.",
+    "notBundle": "{code} non è il cartellino di un fascio.",
+    "notFound": "{code} non è il cartellino di un fascio di questo stabilimento.",
+    "notOnTablet": "{code} non è su questo tablet: segnalalo quando torna la rete.",
+    "pick": "{code} ha due operazioni qui: segnalalo da solo.",
+    "already": "{code} è già segnalato qui.",
+    "refused": "{code} non si può dichiarare qui: scansionalo da solo per vedere perché.",
+    "twice": "{code} è già nella pila.",
+    "full": "La pila è piena: prima finisci questi.",
+    "shade": "Queste parti vengono da lotti di tonalità diverse: non si possono unire. Togline una e chiedi al tuo capo squadra.",
+    "reportedAlone": "{code} segnalato da solo.",
+    "leaveTitle": "Lasciare questa pila?",
+    "leaveBody": "Questi fasci non sono ancora segnalati: restano come sono.",
+    "leave": "Lascia",
+    "keep": "Continua a contare",
+    "noneFinished_one": "Niente di finito: {count} fascio resta qui con il suo motivo.",
+    "noneFinished_other": "Niente di finito: {count} fasci restano qui con il loro motivo."
+  },
+  "indirect": {
+    "open": "Senza fascio: cosa stai facendo?",
+    "question": "Senza fascio: cosa stai facendo?",
+    "loading": "Lettura delle tessere…",
+    "offline": {
+      "title": "Le tessere non sono su questo tablet",
+      "body": "Tornano con la rete."
+    },
+    "empty": {
+      "title": "Nessuna tessera in questo stabilimento",
+      "body": "Chiedi al tuo capo squadra di aggiungerle in Regole del reparto."
+    },
+    "queues": "Salvato su questo tablet, inviato quando torna la rete.",
+    "running": "Tempo senza fascio in corso",
+    "scanReturns": "Scansionando un fascio si torna allo standard.",
+    "done": "Fatto"
+  },
+  "note": {
+    "open": "Foto o commento",
+    "title": "Foto o commento",
+    "question": "Cosa è diverso dal piano?",
+    "reminder": "Tieni i volti fuori dall'inquadratura.",
+    "photo": "Scatta una foto",
+    "words": "Con parole tue (facoltativo)",
+    "post": "Pubblica sull'ordine di lavoro",
+    "offline": "Foto e video hanno bisogno della rete; il commento si salva su questo tablet.",
+    "full": "Al massimo {count} file su una nota.",
+    "uploading": "Invio dell'immagine…",
+    "failed": "L'immagine non è partita. Rifalla.",
+    "detail": "Con \"Altro\" di' cosa è diverso in poche parole, o aggiungi una foto.",
+    "drop": "Togli {name}",
+    "cancel": "Annulla",
+    "held": {
+      "tile": "Prima scegli cosa è diverso",
+      "detail": "Di' cosa è diverso, o aggiungi una foto",
+      "busy": "L'immagine sta ancora partendo"
+    },
+    "clip": {
+      "title": "Registra un video di 15 secondi",
+      "preview": "Fotocamera",
+      "review": "Il video registrato",
+      "left": "Tempo rimasto",
+      "failed": "Questo tablet non registra video. Scatta una foto.",
+      "camera": "Avvia la fotocamera",
+      "record_one": "Registra {count} secondo",
+      "record_other": "Registra fino a {count} secondi",
+      "stop": "Ferma",
+      "again": "Registra di nuovo",
+      "use": "Usa questo video"
+    }
+  },
+  "resume": {
+    "title": "Il tuo lavoro aperto",
+    "PAUSED": "In pausa: {code} all'Op {seq} dalle {time}",
+    "RUNNING": "In corso: {code} all'Op {seq} dalle {time}",
+    "continue": "Continua"
+  },
+  "done": {
+    "pieces_one": "{code}: {count} pezzo finora salvato",
+    "pieces_other": "{code}: {count} pezzi finora salvati",
+    "handBack": "{code} restituito: il tempo resta",
+    "note": "{code}: nota pubblicata sull'ordine di lavoro"
   }
 }
