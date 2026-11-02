@@ -47,7 +47,7 @@ export function FloorHome() {
     }
   }, [api, online, scans, person])
   if (!me) return null
-  const mode = modeOf(me.device.station)
+  const mode = modeOf(me.device.station, me.device.mode)
   const tiles = homeTiles(mode, me.permissions, me.notice.blocksScans)
 
   const onAction = async (action: HomeAction) => {

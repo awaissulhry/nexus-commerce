@@ -1,7 +1,9 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowRight, Camera, Check, CircleAlert, CircleCheck, Download, HardDrive, LogIn, MonitorSmartphone, RotateCcw, ScanLine, Smartphone, Vibrate, Volume2, X } from 'lucide-react'
+import { ArrowRight, Camera, Check, CircleAlert, CircleCheck, CircleHelp, Download, HardDrive, LogIn, Maximize, MonitorSmartphone, Pin, RotateCcw, ScanLine, Settings, ShieldCheck, Smartphone, Vibrate, Volume2, X } from 'lucide-react'
+import { KIOSK_STEPS, type KioskHomeTest, type KioskRow, type KioskStepId } from '@nexus/factory-domain/auth/floor/kiosk'
+import type { DeviceMode } from '@nexus/factory-domain/auth/floor/modes'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, ScanInput, type CameraScanner, type FloorAction, type FloorActions, type FloorTone } from '@nexus/ui/floor'
 import { LOCALE_NAMES, type Locale } from '../../../lib/i18n/locales'
 import { useT } from '../../../lib/i18n/provider'
@@ -11,13 +13,17 @@ import { FloorFacts } from '../../frame/view/FloorFacts'
 import { FloorState } from '../../frame/view/FloorState'
 
 /**
- * SCR-020 — set up this tablet (design floor.enrol; PLT-056, PLT-227, PLT-236, MES-175, MES-183): scan the one-time
- * set-up code the office shows (camera or scanner; typing it is the other way), see what the tablet now is, install it
- * as an app and check its parts, then go to sign-in. A tablet that is set up already asks "Replace?" first.
+ * SCR-020 — set up this tablet (design floor.enrol; PLT-056, PLT-227, PLT-236, MES-175, MES-183, MES-181, MES-186): scan the
+ * one-time set-up code the office shows (camera or scanner; typing it is the other way), see what the tablet now is
+ * (B-W2b-67: the mode the office chose), install it as an app and check its parts, lock it to the app (a station tablet,
+ * a line tablet or a line board; never a person's own phone), then go to sign-in; a line board goes straight to its board.
+ * A tablet that is set up already asks "Replace?" first.
  *
  * The office's code is traded for the device token in one call (POST /floor/device/enrol), so what the tablet becomes
- * is shown right after the trade, not before (the API has no preview of a code). The kiosk lock is a guide with an
- * honest check: Android does not tell a web app whether it is pinned.
+ * is shown right after the trade, not before (the API has no preview of a code). The kiosk lock (B-W2b-67, PLT-227) is
+ * four illustrated steps with an honest check: full screen and installed are ticks the tablet can give; Android does not
+ * tell a web app whether it is pinned, so that row is what the person says after pressing Home, never a tick of the
+ * tablet's. Skipping it is fine: Continue stays the main action. The DS has no FloorMediaSteps: `KioskSteps` composes it.
  */
 
 export interface Binding {
@@ -26,6 +32,11 @@ export interface Binding {
   station: string | null
   mode: FloorMode | null
   language: Locale
+  /** B-W2b-67: what the office chose it for (an older answer: a station tablet), and the line it shows. */
+  deviceMode: DeviceMode
+  line: string | null
+  /** The kiosk lock step applies (never a person's own phone). */
+  kiosk: boolean
 }
 
 export type EnrolProblem = 'codeInvalid' | 'offline' | 'unavailable' | 'rateLimited'
@@ -50,7 +61,14 @@ export type EnrolStep =
   | { kind: 'replace'; current: { device: string; station: string | null; site: string } }
   | { kind: 'binding'; binding: Binding }
   | { kind: 'install'; binding: Binding; install: InstallState; checks: Checks }
+  | { kind: 'kiosk'; binding: Binding; check: KioskCheckView }
   | { kind: 'done'; binding: Binding }
+
+/** The honest check on screen: the rows, and what the person said after pressing Home. */
+export interface KioskCheckView {
+  rows: readonly Pick<KioskRow, 'id' | 'state' | 'source'>[]
+  homeTest: KioskHomeTest
+}
 
 export interface EnrolViewModel {
   step: EnrolStep
@@ -67,6 +85,7 @@ export type EnrolAction =
   | { type: 'keep-data' }
   | { type: 'test-sound' }
   | { type: 'sign-in' }
+  | { type: 'home-test'; result: 'STAYED' | 'LEFT' }
 
 export interface EnrolViewProps {
   model: EnrolViewModel
@@ -76,8 +95,13 @@ export interface EnrolViewProps {
   camera?: CameraScanner
 }
 
-const STEP_NO: Record<EnrolStep['kind'], number> = { scan: 1, replace: 1, binding: 2, install: 3, done: 4 }
-const STEPS = 4
+const STEP_NO: Record<EnrolStep['kind'], number> = { scan: 1, replace: 1, binding: 2, install: 3, kiosk: 4, done: 5 }
+
+/** Where the step sits: a phone has no kiosk step, so it is one step shorter. */
+function stepOf(step: EnrolStep): { n: number; total: number } {
+  const noKiosk = 'binding' in step && !step.binding.kiosk
+  return { n: noKiosk && step.kind === 'done' ? 4 : STEP_NO[step.kind], total: noKiosk ? 4 : 5 }
+}
 
 export function EnrolView({ model, onAction, onFrame, camera }: EnrolViewProps) {
   const t = useT('floor')
@@ -121,26 +145,37 @@ export function EnrolView({ model, onAction, onFrame, camera }: EnrolViewProps) 
       body = <InstallStep step={step} send={send} />
       actions = [{ label: t('enrol.continue'), icon: <ArrowRight />, onPress: () => send({ type: 'continue' }) }]
       break
-    case 'done':
+    case 'kiosk':
+      body = <KioskStep step={step} send={send} />
+      actions = [{ label: t('enrol.continue'), icon: <ArrowRight />, onPress: () => send({ type: 'continue' }) }]
+      break
+    case 'done': {
+      const { binding } = step
+      const words =
+        binding.deviceMode === 'DISPLAY'
+          ? t('enrol.done.display', { line: binding.line ?? binding.site })
+          : binding.deviceMode === 'PHONE'
+            ? t('enrol.done.phone')
+            : binding.deviceMode === 'LINE'
+              ? t('enrol.done.line', { line: binding.line ?? binding.site })
+              : binding.station
+                ? t('enrol.done.body', { station: binding.station, site: binding.site })
+                : t('enrol.done.bodyNoStation', { site: binding.site })
       body = (
-        <FloorState
-          tone="success"
-          icon={<CircleCheck />}
-          title={t('enrol.done.title')}
-          text={step.binding.station ? t('enrol.done.body', { station: step.binding.station, site: step.binding.site }) : t('enrol.done.bodyNoStation', { site: step.binding.site })}
-        >
-          <BindingFacts binding={step.binding} />
+        <FloorState tone="success" icon={<CircleCheck />} title={t('enrol.done.title')} text={words}>
+          <BindingFacts binding={binding} />
         </FloorState>
       )
-      actions = [{ label: t('enrol.done.signIn'), icon: <LogIn />, onPress: () => send({ type: 'sign-in' }) }]
+      actions = [{ label: binding.deviceMode === 'DISPLAY' ? t('enrol.done.board') : t('enrol.done.signIn'), icon: <LogIn />, onPress: () => send({ type: 'sign-in' }) }]
       break
+    }
   }
 
   return (
     <FloorFrameView
       frame={model.frame}
       onFrame={onFrame}
-      actions={actions ? <FloorActionBar label={t('enrol.title')} start={<span className="fw-floor-step">{t('enrol.step', { n: STEP_NO[step.kind], total: STEPS })}</span>} actions={actions} /> : undefined}
+      actions={actions ? <FloorActionBar label={t('enrol.title')} start={<span className="fw-floor-step">{t('enrol.step', stepOf(step))}</span>} actions={actions} /> : undefined}
     >
       {body}
     </FloorFrameView>
@@ -199,7 +234,9 @@ function BindingFacts({ binding }: { binding: Binding }) {
         { label: t('enrol.binding.device'), value: binding.device },
         { label: t('enrol.binding.site'), value: binding.site },
         { label: t('enrol.binding.station'), value: binding.station ?? t('frame.noStation') },
-        { label: t('enrol.binding.mode'), value: t(`mode.${binding.mode ?? 'none'}`) },
+        // B-W2b-67: what the office chose; a station's tablet also says what its station does.
+        { label: t('enrol.binding.mode'), value: binding.deviceMode === 'STATION' ? `${t('deviceMode.STATION')} · ${t(`mode.${binding.mode ?? 'none'}`)}` : t(`deviceMode.${binding.deviceMode}`) },
+        ...(binding.line ? [{ label: t('enrol.binding.line'), value: binding.line }] : []),
         { label: t('enrol.binding.language'), value: <span lang={binding.language}>{LOCALE_NAMES[binding.language]}</span> },
       ]}
     />
@@ -266,13 +303,57 @@ function InstallStep({ step, send }: { step: Extract<EnrolStep, { kind: 'install
         </FloorList>
         <p className="fw-floor-muted">{t('enrol.checks.printer')}</p>
       </Section>
-      <Section title={t('enrol.kiosk.title')} icon={<Smartphone />}>
-        <ol className="fw-floor-steps">
-          {[1, 2, 3, 4].map((n) => (
-            <li key={n}>{t(`enrol.kiosk.step${n}`)}</li>
+    </div>
+  )
+}
+
+const KIOSK_ICON: Readonly<Record<KioskStepId, ReactNode>> = { install: <Download />, 'pinning-on': <Settings />, 'open-app': <Maximize />, 'pin-app': <Pin /> }
+const ROW_ICON: Readonly<Record<'ok' | 'no' | 'unknown', ReactNode>> = { ok: <Check />, no: <X />, unknown: <CircleHelp /> }
+const ROW_TONE: Readonly<Record<'ok' | 'no' | 'unknown', FloorTone>> = { ok: 'success', no: 'warning', unknown: 'info' }
+
+/** The kiosk lock guide (PLT-227): four pictures, then the check: never "locked", Android does not say. */
+function KioskStep({ step, send }: { step: Extract<EnrolStep, { kind: 'kiosk' }>; send: (action: EnrolAction) => void }) {
+  const t = useT('floor')
+  const { check } = step
+  return (
+    <div className="fw-floor-stack">
+      <Section title={t('enrol.kiosk.title')} icon={<ShieldCheck />}>
+        <ol className="fw-floor-media-steps">
+          {KIOSK_STEPS.map((item, index) => (
+            <li key={item.id} className="fw-floor-media-step" data-tone={item.look.tone}>
+              <span className="fw-floor-media-step-picture" aria-hidden="true">
+                {KIOSK_ICON[item.id]}
+              </span>
+              <span className="fw-floor-media-step-no">{index + 1}</span>
+              <span>{t(`enrol.kiosk.step.${item.id}`)}</span>
+            </li>
           ))}
         </ol>
+      </Section>
+      <Section title={t('enrol.kiosk.check')} icon={<Check />}>
+        <FloorList label={t('enrol.kiosk.check')}>
+          {check.rows.map((row) => (
+            <FloorListRow
+              key={row.id}
+              icon={ROW_ICON[row.state]}
+              tone={ROW_TONE[row.state]}
+              title={t(`enrol.kiosk.row.${row.id}`)}
+              meta={row.id === 'pinned' ? t(`enrol.kiosk.source.${row.source}`) : undefined}
+              status={t(`enrol.kiosk.state.${row.id === 'pinned' ? 'pinned.' : ''}${row.state}`)}
+            />
+          ))}
+        </FloorList>
         <p className="fw-floor-muted">{t('enrol.kiosk.honest')}</p>
+        <div role="group" aria-label={t('enrol.kiosk.ask')} className="fw-floor-row-actions">
+          <span className="fw-floor-locales-label">{t('enrol.kiosk.ask')}</span>
+          <FloorButton size="md" variant={check.homeTest === 'STAYED' ? 'primary' : 'secondary'} aria-pressed={check.homeTest === 'STAYED'} icon={<Check />} onClick={() => send({ type: 'home-test', result: 'STAYED' })}>
+            {t('enrol.kiosk.stayed')}
+          </FloorButton>
+          <FloorButton size="md" variant={check.homeTest === 'LEFT' ? 'primary' : 'secondary'} aria-pressed={check.homeTest === 'LEFT'} icon={<X />} onClick={() => send({ type: 'home-test', result: 'LEFT' })}>
+            {t('enrol.kiosk.left')}
+          </FloorButton>
+        </div>
+        <p className="fw-floor-muted">{t('enrol.kiosk.skip')}</p>
       </Section>
     </div>
   )

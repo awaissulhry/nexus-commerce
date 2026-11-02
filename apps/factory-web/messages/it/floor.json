@@ -104,7 +104,8 @@
       "station": "Postazione",
       "mode": "Modalità",
       "language": "Lingua prima dell'accesso",
-      "office": "Si cambia in ufficio: Sistema › Dispositivi e stampanti."
+      "office": "Si cambia in ufficio: Sistema › Dispositivi e stampanti.",
+      "line": "Linea"
     },
     "install": {
       "title": "Installa come app",
@@ -142,17 +143,48 @@
     },
     "kiosk": {
       "title": "Blocca il tablet sull'app",
-      "step1": "Apri l'app dalla schermata Home.",
-      "step2": "Impostazioni di Android › Sicurezza › Blocco app su schermo: attivalo.",
-      "step3": "Apri le app recenti, tocca l'icona dell'app, poi Blocca.",
-      "step4": "Per sbloccare: tieni premuti Indietro e App recenti insieme (l'ufficio conosce il PIN).",
-      "honest": "Android non dice a un'app se è bloccata: premi Home per provarlo."
+      "check": "Controllo",
+      "honest": "Android non ci dice se l'app è bloccata: premi Home per provarlo.",
+      "ask": "Dopo aver premuto Home, l'app è rimasta?",
+      "stayed": "È rimasta",
+      "left": "È uscita",
+      "skip": "Non hai tempo ora? Continua funziona comunque; l'ufficio vede ciò che si sa.",
+      "step": {
+        "install": "Installa l'app nella schermata Home.",
+        "pinning-on": "Impostazioni di Android › Sicurezza › Blocco app su schermo: attivalo, con \"Chiedi il PIN prima di sbloccare\".",
+        "open-app": "Apri l'app dalla sua icona: gira a schermo intero.",
+        "pin-app": "Apri le app recenti, tocca l'icona dell'app, poi Blocca."
+      },
+      "row": {
+        "fullScreen": "Schermo intero",
+        "installed": "Installata",
+        "pinned": "Bloccata"
+      },
+      "state": {
+        "ok": "Sì",
+        "no": "No",
+        "unknown": "Non noto",
+        "pinned": {
+          "ok": "È rimasta",
+          "no": "È uscita",
+          "unknown": "Non noto"
+        }
+      },
+      "source": {
+        "TABLET": "Lo dice il tablet.",
+        "PERSON": "Come hai detto tu: il tablet non può controllarlo.",
+        "NOBODY": "Nessuno lo sa ancora."
+      }
     },
     "done": {
       "title": "Pronto",
       "body": "Questo tablet è {station} presso {site}.",
       "bodyNoStation": "Questo tablet è configurato presso {site}, senza postazione.",
-      "signIn": "Vai all'accesso"
+      "signIn": "Vai all'accesso",
+      "display": "Questo è il tabellone della linea {line}. Nessuno vi accede.",
+      "phone": "Solo tu accedi da questo telefono; non traccia mai dove sei.",
+      "line": "Questo è il tablet della linea {line}.",
+      "board": "Apri il tabellone di linea"
     }
   },
   "signIn": {
@@ -195,7 +227,8 @@
       "rateLimited": "Troppi tentativi su questo tablet. Attendi un minuto.",
       "unavailable": "Il server della fabbrica non risponde. Riprova.",
       "operatorActive": "Un'altra persona è entrata su questo tablet. Chiedile di uscire.",
-      "pinNeeded": "In questa sede si entra con badge e PIN."
+      "pinNeeded": "In questa sede si entra con badge e PIN.",
+      "crew": "Questa persona non può unirsi: al massimo quattro su un tablet, oppure è nella squadra di un altro tablet."
     },
     "signedOut": {
       "idle": "Sei uscito dopo un periodo senza uso.",
@@ -221,6 +254,34 @@
         "repeat": "Non la stessa cifra sei volte. Scegline un altro.",
         "run": "Non cifre in fila. Scegline un altro."
       }
+    },
+    "clock": {
+      "button": "Timbra entrata o uscita",
+      "closed": "La timbratura è spenta in questo stabilimento finché l'azienda non completa l'informativa legale."
+    },
+    "crew": {
+      "frameTitle": "Squadra su questa postazione",
+      "title": "Aggiungi persona",
+      "body": "Chi arriva scansiona il suo badge. Diventa la persona attiva: ogni azione va a suo nome.",
+      "cancel": "Indietro",
+      "switchBody": "{name}: scansiona il badge o digita il PIN."
+    },
+    "welcome": {
+      "frameTitle": "Benvenuto",
+      "loading": "Un momento…",
+      "handover": "Consegne del turno precedente",
+      "handoverLine": "Consegne per {line}",
+      "note": "Nota",
+      "seen": "Visto",
+      "continue": "Continua",
+      "later": "Non ora",
+      "pausedKind": "In pausa all'uscita",
+      "pausedStatus": "In pausa",
+      "continueQuestion": "Continuare il fascio {bundle} all'Op {seq}?",
+      "resuming": "Ripresa…",
+      "refusedTitle": "Questo fascio non può continuare ora",
+      "refused": "{bundle} resta in pausa. Scansiona il cartellino quando sei pronto.",
+      "onward": "Avanti"
     }
   },
   "notice": {
@@ -331,6 +392,7 @@
       "pack": "Scansiona i capi nei cartoni, stampa etichette e DDT",
       "labels": "Stampa le etichette capo, solo con certificato valido",
       "machine": "Segnala un guasto; gli interventi del tecnico",
+      "clock": "Il tuo orario di oggi, pause, badge dimenticato",
       "help": "Un tocco chiama la persona giusta",
       "lineview": "Chiamate, in attesa, postazioni"
     },
@@ -339,6 +401,7 @@
       "coming": "In arrivo"
     },
     "machine": "Guasto macchina",
+    "clock": "Timbratura",
     "help": "Chiama aiuto",
     "lineview": "Vista linea"
   },
@@ -621,6 +684,7 @@
       "rework_one": "{count} da rilavorare",
       "rework_other": "{count} da rilavorare",
       "machine": "Guasto su {code}",
+      "clock": "Entrata, uscita o pausa",
       "start": "Inizia {code}",
       "pause": "Pausa {code}",
       "resume": "Riprendi {code}",
@@ -707,5 +771,20 @@
         "fix": "Si reinvia da sola; se resta qui, chiedi al capo squadra."
       }
     }
+  },
+  "crew": {
+    "title": "Persone su questa postazione",
+    "now": "Ora",
+    "tap": "Tocca per subentrare",
+    "add": "Aggiungi persona",
+    "end": "Escono tutti",
+    "full": "Al massimo {max} persone su un tablet.",
+    "switchTo": "Subentra: {name}"
+  },
+  "deviceMode": {
+    "STATION": "Tablet di postazione",
+    "LINE": "Tablet di linea",
+    "DISPLAY": "Tabellone di linea",
+    "PHONE": "Telefono personale"
   }
 }

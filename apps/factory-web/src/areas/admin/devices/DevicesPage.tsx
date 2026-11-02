@@ -5,11 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
-import { createDevice, createPrinter, failedJobs, getSite, listCompanies, listDevices, listPrinters, renewEnrolment, revokeDevice, updatePrinter, type Device, type Printer } from '../shared/api'
+import { createDevice, createPrinter, failedJobs, getSite, listCompanies, listDevices, listPrinters, listWorkers, renewEnrolment, revokeDevice, updatePrinter, type Device, type Printer } from '../shared/api'
 import { runBulk, type BulkResult } from '../shared/bulk'
 import { bulkNotice } from '../shared/reach'
 import { adminHref, failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
-import { printerBody, type DevicesMode, type DeviceTile, type EnrolModel, type PrinterDialog, type SiteChoice } from './model'
+import { enrolBody, printerBody, type DevicesMode, type DeviceTile, type EnrolModel, type PersonChoice, type PrinterDialog, type SiteChoice } from './model'
 import { fetchFloorVersion } from './version'
 import { DevicesView } from './view/DevicesView'
 
@@ -31,9 +31,16 @@ export async function siteChoices(api: ReturnType<typeof useOfficeApi>): Promise
         name: site.name,
         companyId: site.companyId,
         stations: (structure?.stations ?? []).filter((station) => station.status === 'ACTIVE').map((station) => ({ id: station.id, code: station.code, name: station.name })),
+        lines: (structure?.lines ?? []).filter((line) => line.status === 'ACTIVE').map((line) => ({ id: line.id, code: line.code, name: line.name })),
       }
     }),
   )
+}
+
+/** The site's active workers, for a personal phone (a name only inside the dialog and the device's own record). */
+export async function personChoices(api: ReturnType<typeof useOfficeApi>, siteId: string): Promise<PersonChoice[]> {
+  const workers = await listWorkers(api, siteId)
+  return workers.filter((worker) => worker.status === 'ACTIVE').map((worker) => ({ id: worker.id, name: worker.displayName }))
 }
 
 /** While a code waits for its tablet, ask every few seconds; the device turns ACTIVE when the tablet trades it. */
@@ -85,6 +92,7 @@ export function DevicesPage() {
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
   const asked = params?.get('enrol') ?? null
   const [enrol, setEnrol] = useState<EnrolModel | null>(asked ? { step: 'where', siteId: asked === '1' ? null : asked } : null)
+  const [people, setPeople] = useState<readonly PersonChoice[] | null>(null)
   const [printer, setPrinter] = useState<PrinterDialog | null>(params?.get('new') === 'printer' ? { kind: 'new', siteId: params?.get('site') ?? null } : null)
   const [busy, setBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
@@ -146,7 +154,7 @@ export function DevicesPage() {
 
   return (
     <DevicesView
-      model={{ prefix, mode, devices, printers, failedPrinters, sites, tile, query, pages, asOf, now, currentVersion, can, enrol, printer, busy, dialogProblem, notice }}
+      model={{ prefix, mode, devices, printers, failedPrinters, sites, tile, query, pages, asOf, now, currentVersion, can, enrol, people, peopleHeld: !held.has('workers.view'), printer, busy, dialogProblem, notice }}
       actions={{
         onMode: (next) => {
           setMode(next)
@@ -179,7 +187,7 @@ export function DevicesPage() {
           setDialogProblem(null)
           enrolKey.current ??= newIdempotencyKey()
           try {
-            const answer = await createDevice(api, { siteId: draft.siteId, name: draft.name.trim(), kind: draft.kind, ...(draft.stationId ? { stationId: draft.stationId } : {}) }, enrolKey.current)
+            const answer = await createDevice(api, enrolBody(draft), enrolKey.current)
             enrolKey.current = null
             setEnrol({ step: 'scan', device: answer.device, enrolment: answer.enrolment })
             void load()
@@ -190,6 +198,11 @@ export function DevicesPage() {
           } finally {
             setBusy(false)
           }
+        },
+        onPeople: (siteId) => {
+          if (!held.has('workers.view')) return
+          setPeople(null)
+          personChoices(api, siteId).then(setPeople, () => setPeople([]))
         },
         onRenew: (device) => {
           setBusy(true)
