@@ -427,3 +427,66 @@
   font-size: var(--nds-density-font-body);
   font-weight: var(--nds-font-weight-semibold);
 }
+
+/* B-W2b-67: the crew strip (design floor.signin "crew"): chips in a row, the active one with a bar and "Now"; never colour alone. */
+.fw-floor-crew {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-density-gap);
+}
+.fw-floor-crew-chip {
+  display: inline-flex;
+  padding-block-end: var(--nds-density-focus-offset, 4px);
+  border-block-end: 4px solid transparent;
+}
+.fw-floor-crew-chip[data-active='true'] {
+  border-block-end-color: var(--nds-success);
+}
+
+/* B-W2b-67: the kiosk lock guide's pictures (a stand-in for the design's FloorMediaSteps, not in the DS yet): big icon, number, words. */
+.fw-floor-media-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-density-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-floor-media-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-content: start;
+  align-items: center;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+}
+.fw-floor-media-step > span:last-child {
+  grid-column: 1 / -1;
+}
+.fw-floor-media-step-picture {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: calc(var(--nds-density-icon) * 2);
+  block-size: calc(var(--nds-density-icon) * 2);
+  color: var(--nds-primary);
+}
+.fw-floor-media-step-picture > svg {
+  inline-size: calc(var(--nds-density-icon) * 1.5);
+  block-size: calc(var(--nds-density-icon) * 1.5);
+}
+.fw-floor-media-step-no {
+  font-size: var(--nds-density-font-numeral);
+  font-weight: var(--nds-font-weight-semibold);
+  justify-self: end;
+}
+
+/* B-W2b-67: a FloorCard whose heading is words, not a code ("In since 07:58"): no code face. */
+.fw-floor-card-words .nds-floor-card-code {
+  font-family: inherit;
+}

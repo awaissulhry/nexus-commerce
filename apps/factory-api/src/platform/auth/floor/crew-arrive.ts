@@ -130,6 +130,8 @@ export async function arriveOnCrew(arrival: Arrival): Promise<Started> {
 export async function openCrew(tx: CommandTx, now: Date, audit: (entry: AuditEntry) => void, device: FloorDevice, starter: { readonly sessionId: string; readonly workerId: string }): Promise<OpenCrew> {
   if (!MODE_RULES[device.mode].crew) throw new ConflictError('Crews sign in on a station tablet only.')
   const crewId = newId()
+  // B-W2b-67: the person signed in here may still be on another tablet's crew: words, not the database's refusal (a 500).
+  await refuseIfInAnotherCrew(tx, starter.workerId, crewId, now)
   await tx.crewSession.create({ data: { id: crewId, siteId: device.siteId, deviceId: device.id, startedAt: now, createdAt: now, updatedAt: now, createdById: starter.workerId }, select: { id: true } })
   audit({ action: 'floor.crewStart', recordType: 'CrewSession', recordId: crewId, after: { deviceId: device.id } })
   const memberId = newId()

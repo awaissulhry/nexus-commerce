@@ -110,6 +110,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-55 People › Employees (SCR-085): an employee's record; a team opens on the Teams view of Employees.
   Employee: '/people/employees/[id]',
   Team: '/people/employees?view=teams&team=[id]',
+  // B-W2b-60 People › Shifts (SCR-263): an overtime request opens in its modal.
+  OvertimeRequest: '/people/shifts?open=[id]',
 })
 
 /**
@@ -216,6 +218,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/production/scrap': '/production/scrap',
   // B-W2b-55: the HR register (SCR-084) reads `?tile=`, `?rows=`, `?q=` and `?view=teams`.
   '/people/employees': '/people/employees',
+  // B-W2b-60: the overtime requests are a section of Shifts (SCR-263).
+  '/people/overtime-requests': '/people/shifts',
 })
 
 export interface RecordRef {

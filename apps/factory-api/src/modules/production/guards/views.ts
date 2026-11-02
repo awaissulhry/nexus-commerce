@@ -19,6 +19,7 @@ import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/pe
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { bundleFlowOf } from '../bundles/flow'
 import { readBundleByCode } from '../bundles/store'
 import { floorOrOffice, mayScan, officeOf, scanWorkOrder } from '../scans/access'
@@ -196,7 +197,7 @@ export async function listFlags(caller: CommandCaller, query: { readonly siteId?
   })
 }
 
-/** One report's checks (one record: the team leader who overrode and the scan's worker, by name where the site names workers). */
+/** One report's checks (one record: the team leader who overrode and the scan's worker, by name where the site names workers and its PERFORMANCE gate is on). */
 export async function flagOf(caller: CommandCaller, scanId: string) {
   const context = officeOf(caller)
   return caller.withClient(async (db) => {
@@ -209,7 +210,8 @@ export async function flagOf(caller: CommandCaller, scanId: string) {
     const traced = rows.find((row) => row.action === TRACED_ACTION) ?? null
     if (!flagged && !overridden && !traced) throw new NotFoundError('This scan met no check.')
     const lead = overridden ? text(objectOf(overridden.after).leadWorkerId) : null
-    const names = await workerNames(db, [scan.workerId, lead])
+    const who = await workerGateFor(db, workOrder.siteId)
+    const names = await workerNames(db, who.lookup([scan.workerId, lead]))
     const operations = await readOperations(db, workOrder.id)
     const operation = operations.find((row) => row.id === scan.workOrderOperationId)
     const bundle = await db.bundle.findUnique({ where: { id: scan.bundleId }, select: { code: true } })
@@ -224,10 +226,11 @@ export async function flagOf(caller: CommandCaller, scanId: string) {
         operation: { id: scan.workOrderOperationId, seq: operation?.seq ?? 0, name: operation ? operationLabel(operation) : '' },
         counts: { good: scan.goodQuantity, scrap: scan.scrapQuantity, rework: scan.reworkQuantity },
         station: station ? { id: station.id, code: station.code } : null,
-        worker: scan.workerId ? { id: scan.workerId, name: names.get(scan.workerId) ?? '' } : null,
+        worker: who.person(scan.workerId, names),
+        workerHidden: who.hidden(scan.workerId),
         warned: guards(flagged),
         overridden: overridden
-          ? { guards: guards(overridden), lead: lead ? { id: lead, name: names.get(lead) ?? '' } : null, reasonCode: text(objectOf(overridden.after).reasonCode) ?? '', reason: overridden.reason ?? '', note: text(objectOf(overridden.after).note) }
+          ? { guards: guards(overridden), lead: who.person(lead, names), leadHidden: who.hidden(lead), reasonCode: text(objectOf(overridden.after).reasonCode) ?? '', reason: overridden.reason ?? '', note: text(objectOf(overridden.after).note) }
           : null,
         components: traced ? componentLines(traced) : [],
       },

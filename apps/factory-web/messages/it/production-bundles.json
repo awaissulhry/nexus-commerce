@@ -315,6 +315,8 @@
     "hint": "Solo aggiunte: una correzione si chiede dal reparto o si approva in Manodopera e rettifiche, mai qui.",
     "toLabour": "Apri Manodopera e rettifiche",
     "privacy": "I nomi compaiono solo qui, dentro questo singolo fascio, dove lo stabilimento registra i lavoratori.",
+    "workerHidden": "Su questo dato c'è una persona",
+    "privacyHidden": "Su questi dati c'è una persona. Il nome compare solo dove la base giuridica della sede è in vigore.",
     "col": {
       "n": "N.",
       "kind": "Tipo",

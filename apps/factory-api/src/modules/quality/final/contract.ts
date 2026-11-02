@@ -514,7 +514,7 @@ export const evidenceContract = defineContract({
           currency: z.string().nullable(),
         }),
       ),
-      cutting: z.array(output({ id: id(), hideCode: z.string().nullable(), lotId: id(), areaUsed: z.string(), uom: z.string(), reversal: z.boolean(), worker: z.string().nullable(), station: z.string().nullable(), at: instant() })),
+      cutting: z.array(output({ id: id(), hideCode: z.string().nullable(), lotId: id(), areaUsed: z.string(), uom: z.string(), reversal: z.boolean(), worker: z.string().nullable(), workerHidden: z.boolean(), station: z.string().nullable(), at: instant() })),
       bundles: z.array(output({ id: id(), code: z.string(), workOrderSizeId: id(), quantity: z.number().int(), part: z.string().nullable(), status: z.string(), cutLogIds: z.array(id()), madeOn: z.enum(['FLOOR', 'OFFICE']), at: instant() })),
       scans: z.array(
         output({
@@ -527,6 +527,7 @@ export const evidenceContract = defineContract({
           rework: z.number().int(),
           corrects: id().nullable(),
           worker: z.string().nullable(),
+          workerHidden: z.boolean(),
           station: z.string().nullable(),
           at: instant(),
         }),

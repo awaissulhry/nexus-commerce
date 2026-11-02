@@ -27,6 +27,7 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { bundleFlowOf } from '../bundles/flow'
 import { readBundleByCode, readCellLabels } from '../bundles/store'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import { floorOf, floorOrOffice, mayScan, officeOf, scanWorkOrder } from './access'
 import { readCorrectionRequests } from './corrections-store'
@@ -42,8 +43,9 @@ import { deviceStationOf, latestOnDevice, readBundleScans, readHeader, readOpera
  * design floor.operation, floor.sync): the bundle card a scan opens (its operations, what each passed, the standing
  * reports in the viewer's words, what this station does next and up to how many), the device's own work today (the
  * undo strip, the reports a correction may be asked of, its asks, its refused scans), a work order's scans for the
- * office (one record: the worker by name per row where the site records workers), the refused scans list and the
- * reasons. A floor viewer never sees another worker's name or figures: "another person" (Statuto dei Lavoratori art. 4).
+ * office (one record: the worker by name per row where the site records workers and its PERFORMANCE gate is on), the
+ * refused scans list and the reasons. A floor viewer never sees another worker's name or figures: "another person"
+ * (Statuto dei Lavoratori art. 4).
  */
 
 /** One reason tile as the screens read it (B-W2b-10, MES-125: with its icon, colour, other languages and "needs detail"). */
@@ -210,7 +212,8 @@ export async function mine(caller: CommandCaller) {
 /**
  * Every scan of a work order (or one bundle of it), oldest first, for the office's work order record and bundle drawer
  * (design bd-scans): kind, operation, counts, reasons, device and server time, station, the worker by name where the scan
- * names one (one record: Owner answer W1), who approved a correction, and the scan that voids it.
+ * names one and the site's PERFORMANCE gate is on (one record: Owner answer W1; off: `workerHidden`, never who), who approved
+ * a correction, and the scan that voids it.
  */
 export async function workOrderScans(caller: CommandCaller, workOrderId: string, query: { readonly bundleId?: string | undefined }) {
   officeOf(caller)
@@ -220,7 +223,8 @@ export async function workOrderScans(caller: CommandCaller, workOrderId: string,
     const operations = await readOperations(db, workOrder.id)
     const bundles = new Map((await db.bundle.findMany({ where: { workOrderId: workOrder.id }, select: { id: true, code: true } })).map((row) => [row.id, row.code]))
     const defects = await readDefects(db, scans.map((scan) => scan.id))
-    const names = await workerNames(db, scans.map((scan) => scan.workerId))
+    const who = await workerGateFor(db, workOrder.siteId)
+    const names = await workerNames(db, who.lookup(scans.map((scan) => scan.workerId)))
     const stations = await readStations(db, scans.map((scan) => scan.stationId))
     const voidedBy = new Map(scans.flatMap((scan) => (scan.correctsId ? [[scan.correctsId, scan.id] as const] : [])))
     return {
@@ -228,7 +232,8 @@ export async function workOrderScans(caller: CommandCaller, workOrderId: string,
       scans: scans.map((scan) => ({
         ...scanView(scan, operations, bundles.get(scan.bundleId) ?? '', defects.get(scan.id) ?? []),
         scrapReason: scan.scrapReason,
-        worker: scan.workerId ? { id: scan.workerId, name: names.get(scan.workerId) ?? '' } : null,
+        worker: who.person(scan.workerId, names),
+        workerHidden: who.hidden(scan.workerId),
         station: scan.stationId && stations.get(scan.stationId) ? { id: scan.stationId, code: stations.get(scan.stationId)!.code, name: stations.get(scan.stationId)!.name } : null,
         approvedById: scan.approvedById,
         voidedById: voidedBy.get(scan.id) ?? null,
@@ -277,16 +282,19 @@ export async function listRefusals(caller: CommandCaller, query: { readonly site
   })
 }
 
-/** One refused scan for the office (one record: who sent it, by name, where the site names workers). */
+/** One refused scan for the office (one record: who sent it, by name, where the site names workers and its PERFORMANCE gate is on). */
 export async function refusalOf(caller: CommandCaller, refusalId: string) {
   const context = officeOf(caller)
   return caller.withClient(async (db) => {
     const row = await readRefusal(db, refusalId)
     const site = row ? await db.site.findUnique({ where: { id: row.siteId }, select: { id: true, companyId: true } }) : null
     if (!row || !site || !mayScan(context, PRODUCTION_SCAN_CORRECT, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Refused scan not found.')
-    const names = await workerNames(db, [row.workerId])
+    const who = await workerGateFor(db, row.siteId)
+    const names = await workerNames(db, who.lookup([row.workerId]))
     const device = await db.device.findUnique({ where: { id: row.deviceId }, select: { id: true, name: true } })
-    return { refusal: { ...refusalRow(row), siteId: row.siteId, device: { id: row.deviceId, name: device?.name ?? '' }, worker: row.workerId ? { id: row.workerId, name: names.get(row.workerId) ?? '' } : null, discardedById: row.discardedById } }
+    // Who discarded it: an office user, or on the floor a worker, who stays behind the same gate.
+    const discardedByWorker = (await workerNames(db, [row.discardedById])).has(row.discardedById ?? '')
+    return { refusal: { ...refusalRow(row), siteId: row.siteId, device: { id: row.deviceId, name: device?.name ?? '' }, worker: who.person(row.workerId, names), workerHidden: who.hidden(row.workerId), discardedById: discardedByWorker ? who.id(row.discardedById) : row.discardedById } }
   })
 }
 

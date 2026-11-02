@@ -96,6 +96,12 @@ export const scanClockContract = defineContract({
   response: { 200: recorded, 201: recorded },
 })
 
+/**
+ * B-W2b-67: whether the tablet's site clocks at all (the ATTENDANCE gate), for a tablet nobody is signed in on: the clock
+ * stays closed and says why before anyone scans a badge. Nothing of a person.
+ */
+export const tabletClockContract = defineContract({ response: { 200: output({ open: z.boolean() }) } })
+
 /** The queued event's payload (floor-sync kind `people.clock.record`): the action; the envelope has the tablet's time. */
 export const queuedClockBody = input({ clientEventId, action: z.enum(CLOCK_ACTIONS), occurredAt: instant() })
 export type QueuedClockBody = z.infer<typeof queuedClockBody>

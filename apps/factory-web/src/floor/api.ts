@@ -2,6 +2,8 @@ import { z } from 'zod'
 import type { ApiClient } from '../lib/api/client'
 import { newIdempotencyKey } from '../lib/api/client'
 import { isApiError, issuePath, type ApiError } from '../lib/api/errors'
+import { DEVICE_MODES } from '@nexus/factory-domain/auth/floor/modes'
+import type { KioskReport } from '@nexus/factory-domain/auth/floor/kiosk'
 import { WORK_CENTRE_KINDS } from './model'
 import type { HideCard, LocationCard, WorkOrderCard } from './scan/scan-model'
 
@@ -24,21 +26,37 @@ const session = z.object({
 })
 const noticeGate = z.object({ noticeId: z.string().nullable(), label: z.string().nullable(), acknowledged: z.boolean(), due: z.boolean(), blocksScans: z.boolean() })
 
+// B-W2b-67 (the merged API of B-W2b-52): what the device is for, the line it shows, the crew strip, the voice's language.
+const look = z.object({ icon: z.string(), tone: z.string() })
+const modeRules = z.object({ signIn: z.enum(['ANYONE', 'ONE_PERSON', 'NOBODY']), landing: z.enum(['HOME', 'LINE_VIEW', 'LINE_BOARD']), crew: z.boolean(), kiosk: z.boolean(), look })
+const lineRef = z.object({ id: z.string(), code: z.string(), name: z.string() })
+const crewMember = z.object({ workerId: z.string(), displayName: z.string(), locale: z.string(), active: z.boolean(), joinedAt: z.string(), look })
+const crewView = z.object({ id: z.string(), startedAt: z.string(), max: z.number(), members: z.array(crewMember) })
+export type CrewView = z.infer<typeof crewView>
+export type ModeRules = z.infer<typeof modeRules>
+
 export const deviceInfoSchema = z.object({
-  device: z.object({ id: z.string(), name: z.string(), kind: z.string(), station: station.nullable() }),
+  device: z.object({ id: z.string(), name: z.string(), kind: z.string(), station: station.nullable(), mode: z.enum(DEVICE_MODES).optional() }),
   site: named,
   defaultLocale: z.string(),
   signIn: z.object({ badgeOnly: z.boolean() }),
   operatorSignedIn: z.boolean(),
   roster: z.array(workerRef),
-  // B-W2b-66: where the device goes first (B-W2b-52's mode rules); LINE_BOARD opens the line TV.
-  rules: z.object({ landing: z.string() }).optional(),
+  // B-W2b-66: where the device goes first (B-W2b-52's mode rules); LINE_BOARD opens the line TV. B-W2b-67: the whole rule.
+  rules: modeRules.optional(),
+  line: lineRef.nullable().optional(),
+  speech: z.object({ lang: z.string() }).optional(),
 })
 export type DeviceInfo = z.infer<typeof deviceInfoSchema>
 
 export const floorMeSchema = z.object({
   worker: workerRef,
-  device: z.object({ id: z.string(), name: z.string(), station: station.nullable() }),
+  device: z.object({ id: z.string(), name: z.string(), station: station.nullable(), mode: z.enum(DEVICE_MODES).optional() }),
+  // B-W2b-67: what the mode means, the line, the crew strip (null: one operator) and the person's voice language.
+  rules: modeRules.optional(),
+  line: lineRef.nullable().optional(),
+  crew: crewView.nullable().optional(),
+  speech: z.object({ lang: z.string() }).optional(),
   site: named,
   scanTag: z.string(),
   session,
@@ -50,6 +68,8 @@ export type FloorMe = z.infer<typeof floorMeSchema>
 export type NoticeGate = z.infer<typeof noticeGate>
 
 const signedIn = z.object({ status: z.literal('signed_in'), worker: workerRef, session, pinMustChange: z.boolean(), notice: noticeGate })
+const SIGN_IN_ROUTES = { 'sign-in': '/floor/sign-in', switch: '/floor/switch', 'crew-join': '/floor/crew/join', 'crew-switch': '/floor/crew/switch' } as const
+export type SignInRoute = keyof typeof SIGN_IN_ROUTES
 
 const csrf = (api: ApiClient) => api.get('/auth/csrf')
 
@@ -152,13 +172,48 @@ export interface Credentials {
   readonly pin?: string
 }
 
-/** Sign in (or, with someone signed in, switch person) and read who is on. */
-export function signIn(api: ApiClient, credentials: Credentials, mode: 'sign-in' | 'switch' = 'sign-in'): Promise<Outcome<FloorMe>> {
+/**
+ * Sign in (or, with someone signed in, switch person; B-W2b-67: join the crew, or a member takes the tablet) and read who
+ * is on. A full crew, another tablet's crew or a person not on the crew answer 409 (`operatorActive`, the crew's words).
+ */
+export function signIn(api: ApiClient, credentials: Credentials, mode: SignInRoute = 'sign-in'): Promise<Outcome<FloorMe>> {
   return attempt(async () => {
     await csrf(api)
-    await api.post(mode === 'switch' ? '/floor/switch' : '/floor/sign-in', { body: credentials, schema: signedIn })
+    await api.post(SIGN_IN_ROUTES[mode], { body: credentials, schema: signedIn })
     return api.get('/floor/me', { schema: floorMeSchema })
   })
+}
+
+// ---- the crew on a station tablet (B-W2b-52's routes; design floor.signin "Crew on this station", PLT-059) ----
+
+/** The active member signs out of the crew: who stays signed in, for the sign-in screen's strip. */
+export function leaveCrew(api: ApiClient): Promise<Outcome<CrewView | null>> {
+  return attempt(async () => {
+    await csrf(api)
+    const answer = await api.post('/floor/crew/leave', { body: {}, schema: z.object({ status: z.literal('left'), crew: crewView.nullable() }) })
+    return answer.crew
+  }, { conflict: 'unavailable' })
+}
+
+/** Everyone on the crew signs out. */
+export function endCrew(api: ApiClient): Promise<Outcome<true>> {
+  return attempt(async () => {
+    await csrf(api)
+    await api.post('/floor/crew/end', { body: {}, schema: z.object({ status: z.literal('ended') }) })
+    return true as const
+  }, { conflict: 'unavailable' })
+}
+
+// ---- the kiosk lock guide's honest check (B-W2b-52; PLT-227; signed in or not) ----
+
+const kioskRow = z.object({ id: z.enum(['fullScreen', 'installed', 'pinned']), state: z.enum(['ok', 'no', 'unknown']), source: z.enum(['TABLET', 'PERSON', 'NOBODY']), look })
+const kioskAnswer = z.object({ checkedAt: z.string(), applies: z.boolean(), rows: z.array(kioskRow), lockedKnown: z.literal(false), looksLocked: z.boolean() })
+
+export function reportKioskCheck(api: ApiClient, report: KioskReport): Promise<Outcome<z.infer<typeof kioskAnswer>>> {
+  return attempt(async () => {
+    await csrf(api)
+    return api.post('/floor/device/kiosk', { body: report, schema: kioskAnswer })
+  }, { signedOut: 'notEnrolled', conflict: 'unavailable' })
 }
 
 export async function signOut(api: ApiClient): Promise<void> {

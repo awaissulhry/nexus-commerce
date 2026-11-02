@@ -1,3 +1,5 @@
+import { KIOSK_STEPS } from '@nexus/factory-domain/auth/floor/kiosk'
+import { DEVICE_MODES } from '@nexus/factory-domain/auth/floor/modes'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -40,7 +42,7 @@ function sources(dir: string): string[] {
   })
 }
 
-const PREFIXES = ['brand', 'frame', 'mode', 'start', 'enrol', 'signIn', 'notice', 'home', 'tile', 'scan', 'label', 'labelPlural', 'status', 'sync']
+const PREFIXES = ['brand', 'frame', 'mode', /* B-W2b-67 */ 'deviceMode', 'crew', 'start', 'enrol', 'signIn', 'notice', 'home', 'tile', 'scan', 'label', 'labelPlural', 'status', 'sync']
 const literalKeys = () => {
   const pattern = new RegExp(`\\bt\\(\\s*'((?:${PREFIXES.join('|')})(?:\\.[A-Za-z0-9_]+)*)'`, 'g')
   const keys = new Set<string>()
@@ -60,8 +62,12 @@ const built = [
   ...['ok', 'missing', 'waiting', 'untested'].map((status) => `enrol.checks.status.${status}`),
   ...['available', 'installed', 'manual'].map((app) => `enrol.install.app.${app}`),
   ...['kept', 'notKept', 'unknown'].map((storage) => `enrol.install.storage.${storage}`),
-  ...[1, 2, 3, 4].map((n) => `enrol.kiosk.step${n}`),
-  ...['wrong', 'rateLimited', 'unavailable', 'operatorActive', 'pinNeeded'].map((problem) => `signIn.problem.${problem}`),
+  ...KIOSK_STEPS.map((step) => `enrol.kiosk.step.${step.id}`),
+  ...DEVICE_MODES.map((mode) => `deviceMode.${mode}`),
+  ...['fullScreen', 'installed', 'pinned'].map((row) => `enrol.kiosk.row.${row}`),
+  ...['ok', 'no', 'unknown'].flatMap((state) => [`enrol.kiosk.state.${state}`, `enrol.kiosk.state.pinned.${state}`]),
+  ...['TABLET', 'PERSON', 'NOBODY'].map((source) => `enrol.kiosk.source.${source}`),
+  ...['wrong', 'rateLimited', 'unavailable', 'operatorActive', 'pinNeeded', 'crew'].map((problem) => `signIn.problem.${problem}`),
   ...['idle', 'self', 'ended'].map((why) => `signIn.signedOut.${why}`),
   ...['current', 'new', 'repeat'].map((stage) => `signIn.change.${stage}`),
   ...['mismatch', 'refused', 'wrong', 'repeat', 'run'].map((problem) => `signIn.change.problem.${problem}`),

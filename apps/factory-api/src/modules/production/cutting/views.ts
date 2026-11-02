@@ -25,6 +25,7 @@ import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/pe
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { cuttingWorkOrder, entryView, mayCut } from './cut'
 import {
   CUT_HEADER,
@@ -330,9 +331,10 @@ export async function cutLog(caller: CommandCaller, workOrderId: string) {
     const lots = new Map((await db.lot.findMany({ where: { id: { in: [...new Set(hides.map((hide) => hide.lotId))] } }, select: { id: true, code: true, itemColourId: true } })).map((lot) => [lot.id, lot]))
     const hideOf = new Map(hides.map((hide) => [hide.id, hide]))
     const ledger = await readHideLedger(db, workOrder.siteId, workOrder.id, hideIds)
-    // The office sees who cut an entry where the site names workers (an agreement on record, B-W1-37); the floor never.
+    // The office sees who cut an entry where the site names workers (an agreement on record, B-W1-37) and its PERFORMANCE gate is on; the floor never.
+    const who = await workerGateFor(db, workOrder.siteId)
     const workers = new Map(
-      (await db.worker.findMany({ where: { id: { in: [...new Set(all.entries.flatMap((entry) => (entry.workerId ? [entry.workerId] : [])))] } }, select: { id: true, displayName: true } })).map((worker) => [worker.id, { id: worker.id, name: worker.displayName }]),
+      (await db.worker.findMany({ where: { id: { in: [...new Set(who.lookup(all.entries.map((entry) => entry.workerId)))] } }, select: { id: true, displayName: true } })).map((worker) => [worker.id, { id: worker.id, name: worker.displayName }]),
     )
     const stations = await readStations(db, [...new Set(all.entries.flatMap((entry) => (entry.stationId ? [entry.stationId] : [])))])
     const cellLabels = new Map(cells.map((cell) => [cell.id, cell]))
@@ -349,13 +351,15 @@ export async function cutLog(caller: CommandCaller, workOrderId: string) {
         const pattern = entry.reversalOfId ? null : patternOf(entry.id, entry.hideId)
         return {
           ...entryView(entry, pieces),
+          workerId: who.id(entry.workerId),
           hideCode: hideOf.get(entry.hideId)?.code ?? '',
           lotCode: lots.get(entry.lotId)?.code ?? '',
           pattern: pattern === null ? null : text(Dec.min(pattern, new Dec(entry.baseAreaUsed.toString()))),
           reversedById: all.entries.find((row) => row.reversalOfId === entry.id)?.id ?? null,
           live: live.some((row) => row.id === entry.id),
           closing: hideOf.get(entry.hideId)?.closingCutLogId === entry.id,
-          worker: entry.workerId ? (workers.get(entry.workerId) ?? null) : null,
+          worker: who.id(entry.workerId) ? (workers.get(entry.workerId!) ?? null) : null,
+          workerHidden: who.hidden(entry.workerId),
           station: entry.stationId ? (stations.get(entry.stationId) ?? null) : null,
           cells: [...new Set(pieces.filter((piece) => piece.cutLogId === entry.id).map((piece) => piece.cellId))].map((cellId) => ({
             workOrderSizeId: cellId,

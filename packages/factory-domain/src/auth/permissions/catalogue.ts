@@ -123,9 +123,15 @@ import { PEOPLE_PIECERATES_DEFINITIONS, PEOPLE_PIECERATES_PERMISSIONS } from '..
 import { PEOPLE_CLOCK_DEFINITIONS, PEOPLE_CLOCK_PERMISSIONS } from '../../people/clock/permissions'
 // B-W2b-37: attendance days (people.attendance.manage | approve | settings | rollcall).
 import { PEOPLE_ATTENDANCE_DEFINITIONS, PEOPLE_ATTENDANCE_PERMISSIONS } from '../../people/attendance/permissions'
+// B-W2b-44: efficiency (people.efficiency.view | review).
+import { PEOPLE_EFFICIENCY_DEFINITIONS, PEOPLE_EFFICIENCY_PERMISSIONS } from '../../people/efficiency/permissions'
 // B-W2b-42: overtime worked and timesheets (people.overtime.review, people.timesheets.team | lead | hr), working-time limits.
 import { PEOPLE_OVERTIME_DEFINITIONS, PEOPLE_OVERTIME_PERMISSIONS } from '../../people/overtime/permissions'
+// B-W2b-48: the month close (people.attendance.close | correct | lul).
+import { PEOPLE_CLOSE_DEFINITIONS, PEOPLE_CLOSE_PERMISSIONS } from '../../people/close/permissions'
 import { PEOPLE_LIMITS_DEFINITIONS, PEOPLE_LIMITS_PERMISSIONS } from '../../people/limits/permissions'
+// B-W2b-43: earnings and pay periods (people.earnings.view | records | manage | review).
+import { PEOPLE_EARNINGS_DEFINITIONS, PEOPLE_EARNINGS_PERMISSIONS } from '../../people/earnings/permissions'
 // B-W2b-45: labour records and corrections (production.labour.view | close | reopen | answer).
 import { PRODUCTION_LABOUR_DEFINITIONS, PRODUCTION_LABOUR_PERMISSIONS } from '../../production/labour/permissions'
 // B-W2b-50: line targets and boards (production.boards.view | targets | reason).
@@ -533,9 +539,15 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PEOPLE_CLOCK_DEFINITIONS,
   // B-W2b-37: attendance days.
   PEOPLE_ATTENDANCE_DEFINITIONS,
+  // B-W2b-44: efficiency.
+  PEOPLE_EFFICIENCY_DEFINITIONS,
   // B-W2b-42: overtime worked, timesheets, working-time limits.
   PEOPLE_OVERTIME_DEFINITIONS,
+  // B-W2b-48: the month close.
+  PEOPLE_CLOSE_DEFINITIONS,
   PEOPLE_LIMITS_DEFINITIONS,
+  // B-W2b-43: earnings and pay periods.
+  PEOPLE_EARNINGS_DEFINITIONS,
   // B-W2b-45: labour records and corrections.
   PRODUCTION_LABOUR_DEFINITIONS,
   // B-W2b-50: line targets and boards (production.boards.view | targets | reason).
@@ -662,8 +674,14 @@ for (const name of PEOPLE_PIECERATES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 for (const name of PEOPLE_CLOCK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-37: attendance days.
 for (const name of PEOPLE_ATTENDANCE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-44: efficiency.
+for (const name of PEOPLE_EFFICIENCY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-42: overtime worked, timesheets, working-time limits.
 for (const name of [...PEOPLE_OVERTIME_PERMISSIONS, ...PEOPLE_LIMITS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-48: the month close.
+for (const name of PEOPLE_CLOSE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-43: earnings and pay periods.
+for (const name of PEOPLE_EARNINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-45: labour records and corrections.
 for (const name of PRODUCTION_LABOUR_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-50: line targets and boards.

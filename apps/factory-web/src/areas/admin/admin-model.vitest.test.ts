@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { OFFICE_PAGES } from '../../shell/nav/office-nav'
 import { companyDraft, companyPatch, companyProblems, newCompanyProblems, newSiteProblems, readiness, siteAddress, suggestCode, treeRows } from './companies/model'
-import { deviceRows, deviceTileMatch, enrolProblems, printerBody, printerDraft, printerProblems } from './devices/model'
+import { bindingBody, bindingOf, bindingProblem, deviceRows, deviceTileMatch, enrolBody, enrolProblems, printerBody, printerDraft, printerProblems } from './devices/model'
 import { setupSteps, type OverviewFacts } from './overview/model'
 import { heldAreas, holdersOf, roleRows, templateGap } from './roles/model'
 import { grainsOf, problemKey, problemNotice, scopeWords, selectedAmong, shownOf, usesOf } from './shared/model'
@@ -239,7 +239,7 @@ describe('SCR-012 roles', () => {
 
 describe('SCR-013 devices and printers', () => {
   const now = new Date(NOW).getTime()
-  const sites = SITES.map((site) => ({ id: site.id, name: site.name, companyId: site.companyId, stations: [] }))
+  const sites = SITES.map((site) => ({ id: site.id, name: site.name, companyId: site.companyId, stations: [], lines: [] }))
   it('tiles: seen in the last hour, not seen for a day, waiting, revoked; revoked ones only under their tile', () => {
     expect(DEVICES.filter((device) => deviceTileMatch('seenHour', device, now)).map((device) => device.name)).toEqual(['Tablet taglio 1', 'Tablet cucito 2'])
     expect(DEVICES.filter((device) => deviceTileMatch('notSeen', device, now)).map((device) => device.name)).toEqual(['Tablet taglio 2'])
@@ -248,11 +248,39 @@ describe('SCR-013 devices and printers', () => {
   })
 
   it('enrol and printer forms', () => {
-    expect(enrolProblems({ siteId: '', stationId: '', name: ' ', kind: 'TABLET' })).toEqual({ siteId: 'form.required', name: 'form.required' })
+    const enrol = { siteId: 'S', stationId: '', name: 'Tablet', kind: 'TABLET', mode: 'STATION', lineId: '', personalWorkerId: '' } as const
+    expect(enrolProblems({ ...enrol, siteId: '', name: ' ' })).toEqual({ siteId: 'form.required', name: 'form.required' })
+    // B-W2b-67 (MES-181, MES-186): a line tablet or a board needs its line; a phone its person, and it is no PC.
+    expect(enrolProblems(enrol)).toEqual({})
+    expect(enrolProblems({ ...enrol, mode: 'DISPLAY' })).toEqual({ lineId: 'devices.modeProblem.line' })
+    expect(enrolProblems({ ...enrol, mode: 'LINE', lineId: 'L' })).toEqual({})
+    expect(enrolProblems({ ...enrol, mode: 'PHONE', kind: 'PC' })).toEqual({ personalWorkerId: 'devices.modeProblem.person', kind: 'devices.modeProblem.pc' })
+    expect(enrolBody({ ...enrol, stationId: 'ST' })).toEqual({ siteId: 'S', name: 'Tablet', kind: 'TABLET', mode: 'STATION', stationId: 'ST' })
+    expect(enrolBody({ ...enrol, mode: 'DISPLAY', stationId: 'ST', lineId: 'L' })).toEqual({ siteId: 'S', name: 'Tablet', kind: 'TABLET', mode: 'DISPLAY', lineId: 'L' })
+    expect(enrolBody({ ...enrol, mode: 'PHONE', kind: 'HANDHELD', stationId: 'ST', personalWorkerId: 'W' })).toEqual({ siteId: 'S', name: 'Tablet', kind: 'HANDHELD', mode: 'PHONE', personalWorkerId: 'W' })
     const draft = printerDraft(null, SITES[0]!.id)
     expect(printerProblems({ ...draft, code: 'LBL-CUT', name: 'X', relayTarget: 'host:9100' }, PRINTERS.map((printer) => printer.code), true)).toEqual({ code: 'form.codeTaken' })
     expect(printerProblems({ ...draft, code: 'NEW', name: 'X', relayTarget: 'host:9100', labelWidthMm: '50', dpi: '150' }, [], true)).toEqual({ labelWidthMm: 'printers.form.width', dpi: 'printers.form.dpi' })
     expect(printerBody({ ...printerDraft(PRINTERS[1]!, SITES[0]!.id) })).toEqual({ name: 'Stampante ufficio', relayTarget: 'office-printer', dpi: null, labelWidthMm: null, labelHeightMm: null })
+  })
+})
+
+describe('SCR-013 a device record changes its mode (B-W2b-67)', () => {
+  const device = { ...DEVICES[0]!, version: 3, stationId: 'ST', mode: 'STATION', lineId: null, personalWorkerId: null } as const
+
+  it('sends the mode, line and person only when they changed', () => {
+    expect(bindingBody(device, bindingOf(device))).toEqual({ version: 3, name: device.name, stationId: 'ST' })
+    expect(bindingBody(device, { ...bindingOf(device), mode: 'DISPLAY', lineId: 'L' })).toEqual({ version: 3, name: device.name, stationId: 'ST', mode: 'DISPLAY', lineId: 'L' })
+    expect(bindingBody(device, { ...bindingOf(device), mode: 'PHONE', personalWorkerId: 'W' })).toEqual({ version: 3, name: device.name, stationId: null, mode: 'PHONE', personalWorkerId: 'W' })
+    const board = { ...device, mode: 'DISPLAY', lineId: 'L' } as const
+    expect(bindingBody(board, { ...bindingOf(board), mode: 'STATION', lineId: '' })).toEqual({ version: 3, name: device.name, stationId: 'ST', mode: 'STATION', lineId: null })
+  })
+
+  it('a board needs its line, a phone its person', () => {
+    expect(bindingProblem(bindingOf(device))).toBeNull()
+    expect(bindingProblem({ ...bindingOf(device), name: ' ' })).toBe('form.required')
+    expect(bindingProblem({ ...bindingOf(device), mode: 'LINE' })).toBe('devices.modeProblem.line')
+    expect(bindingProblem({ ...bindingOf(device), mode: 'PHONE' })).toBe('devices.modeProblem.person')
   })
 })
 

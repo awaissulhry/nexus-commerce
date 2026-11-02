@@ -17,6 +17,7 @@ import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { lockHideCuts } from '../../inventory/issue/store'
+import { switchOnPerformance } from '../../people/privacy/testing/performance-gate'
 
 /**
  * The cutting log per hide (B-W1-40; MES-051, MES-056, MES-058, SCM-194, SCM-253; PLAN §4.7 stage 11b-cut; A2 SCR-094)
@@ -90,6 +91,7 @@ const SESSIONS: Record<string, SessionContext> = {
   manager: office(A.tenant, [grant(OFFICE_CUT)]),
   /** Reads the work orders only. */
   viewer: office(A.tenant, [grant(['workorders.view'])]),
+  stock: office(A.tenant, [grant(['inventory.stock.view'])]),
   companyB: office(A.tenant, [grant(OFFICE_CUT, [A.companyB])]),
   otherTenant: office(B.tenant, [grant(OFFICE_CUT)]),
   floor: floor(A.siteA1, A.deviceA1, A.operatorA1, A.companyA),
@@ -600,7 +602,20 @@ describe('Hide done (MES-058, SCM-253): the remnant back to stock as a REMNANT, 
     const [closed] = await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'production.hide_closed' AND payload->>'hideId' = $1`, [hides.H07!.id])
     expect(closed!.payload).toMatchObject({ cutLogId: done.cut.id, remnantMoveId: done.remnant.id, baseRemnantArea: '5.0000', hideState: 'REMNANT' })
     // The office's cut log: the hide's bar is the set (cut), its offcut (waste), the remnant (returned) and nothing left.
+    // Gate off (the default): who cut it stays back, in the cut log and in the hide's record (art. 4 c.1). Gate on: the name.
+    const logClosed = await ok('manager', 'GET', `/production/cutting/work-orders/${WO.remnant.id}/cut-log`)
+    expect(logClosed.entries[0]).toMatchObject({ id: done.cut.id, worker: null, workerId: null, workerHidden: true, station: { id: A.station, code: 'CUT-01' } })
+    expect(JSON.stringify(logClosed)).not.toContain(A.operatorA1)
+    const hideClosed = await ok('stock', 'GET', `/inventory/hides/${hides.H07!.id}`)
+    expect(hideClosed.cuts[0]).toMatchObject({ cutBy: null, cutByHidden: true })
+    expect(JSON.stringify(hideClosed)).not.toContain(A.operatorA1)
+    expect(JSON.stringify(hideClosed)).not.toContain('Seed Worker')
+    const gateOff = await switchOnPerformance(admin, { tenantId: A.tenant, companyId: A.companyA, siteId: A.siteA1, byId: newId() })
     const log = await ok('manager', 'GET', `/production/cutting/work-orders/${WO.remnant.id}/cut-log`)
+    const hideOpen = await ok('stock', 'GET', `/inventory/hides/${hides.H07!.id}`)
+    await gateOff()
+    expect(log.entries[0]).toMatchObject({ workerId: A.operatorA1, workerHidden: false })
+    expect(hideOpen.cuts[0]).toMatchObject({ cutBy: expect.stringContaining('Seed Worker'), cutByHidden: false })
     expect(log.hides).toEqual([{ hideId: hides.H07!.id, code: hides.H07!.code, lotCode: lots.BLK!.code, state: 'REMNANT', issued: '55.0000', cut: '48.1600', waste: '1.8400', returned: '5.0000', left: '0.0000' }])
     expect(log.entries[0]).toMatchObject({ id: done.cut.id, pattern: '0.0000', live: true, worker: { id: A.operatorA1, name: expect.any(String) }, station: { id: A.station, code: 'CUT-01' } })
     expect(log.entries[1]).toMatchObject({ id: first.json().cut.id, pattern: '48.1600', cells: [{ workOrderSizeId: WO.remnant.cells[0].id, colourwayCode: 'BLK', size: '50' }] })
@@ -635,8 +650,19 @@ describe('Hide done (MES-058, SCM-253): the remnant back to stock as a REMNANT, 
   })
 
   it("corrects a wrong closing cut (B-W1-40's gap): the office's reversal opens the used-up hide again, and it closes again with the right remnant", async () => {
-    const corrected = await ok('manager', 'POST', `/production/cutting/cuts/${closing.id}/correct`, { reason: 'A usable offcut was set aside, not wasted' }, 201)
+    const correction = { reason: 'A usable offcut was set aside, not wasted' }
+    const correctKey = freshKey()
+    const corrected = await ok('manager', 'POST', `/production/cutting/cuts/${closing.id}/correct`, correction, 201, correctKey)
     expect(corrected).toMatchObject({ reversedId: closing.id, hide: { id: hides.H08!.id, state: 'PARTLY_CUT', left: '55.0000' }, cells: [expect.objectContaining({ cut: 0, toCut: 2 })] })
+    // Gate off (the default): the answer keeps back who cut, B-W2b-F4. A replay follows the gate as it stands now, not the stored answer.
+    expect(corrected.reversal).toMatchObject({ workerId: null, workerHidden: true })
+    expect(JSON.stringify(corrected)).not.toContain(A.operatorA1)
+    const gateOff = await switchOnPerformance(admin, { tenantId: A.tenant, companyId: A.companyA, siteId: A.siteA1, byId: newId() })
+    expect((await ok('manager', 'POST', `/production/cutting/cuts/${closing.id}/correct`, correction, 201, correctKey)).reversal).toMatchObject({ workerId: A.operatorA1, workerHidden: false })
+    await gateOff()
+    const replayed = await ok('manager', 'POST', `/production/cutting/cuts/${closing.id}/correct`, correction, 201, correctKey)
+    expect(replayed.reversal).toMatchObject({ workerId: null, workerHidden: true })
+    expect(JSON.stringify(replayed)).not.toContain(A.operatorA1)
     expect(await hideRow(hides.H08!.id)).toEqual({ state: 'PARTLY_CUT', closingCutLogId: null })
     const [audit] = await admin(`SELECT before, after FROM "AuditLog" WHERE action = 'production.hideState' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [hides.H08!.id])
     expect(audit).toEqual({ before: { state: 'CONSUMED', closingCutLogId: closing.id }, after: { state: 'PARTLY_CUT' } })
@@ -739,7 +765,9 @@ describe('undo (the cutter, before the next cut) and correction (the office, wit
     expect((await call('floor', 'POST', `/production/cutting/cuts/${entry.id}/correct`, { reason: 'Wrong size logged' }, freshKey())).statusCode).toBe(403)
     expect((await call('viewer', 'POST', `/production/cutting/cuts/${entry.id}/correct`, { reason: 'Wrong size logged' }, freshKey())).statusCode).toBe(403)
     const corrected = await ok('manager', 'POST', `/production/cutting/cuts/${entry.id}/correct`, { reason: 'Logged on the wrong order' }, 201)
-    expect(corrected).toMatchObject({ reversedId: entry.id, reversal: { reversalOfId: entry.id, deviceId: null, workerId: A.operatorA1, note: 'Corrected by the office: Logged on the wrong order' }, cells: [expect.objectContaining({ cut: 0 })] })
+    expect(corrected).toMatchObject({ reversedId: entry.id, reversal: { reversalOfId: entry.id, deviceId: null, workerId: null, workerHidden: true, note: 'Corrected by the office: Logged on the wrong order' }, cells: [expect.objectContaining({ cut: 0 })] })
+    // The mirror entry still names the cutter: only the answer keeps them back while the gate is off (B-W2b-F4).
+    expect(await admin(`SELECT "workerId"::text AS worker FROM "CutLog" WHERE id = $1`, [corrected.reversal.id])).toEqual([{ worker: A.operatorA1 }])
     expect(await admin(`SELECT audience, reason FROM "AuditLog" WHERE action = 'production.correctCut' AND "recordType" = 'WorkOrder' AND "recordId" = $1`, [WO.correct.id])).toEqual([
       { audience: 'OFFICE', reason: 'Corrected by the office: Logged on the wrong order' },
     ])

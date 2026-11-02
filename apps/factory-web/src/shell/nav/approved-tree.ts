@@ -446,7 +446,10 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Main',
         labelIt: 'Principali',
         hideLabel: true,
-        pages: [{ id: 'people.employees', title: 'Employees', titleIt: 'Dipendenti', wave: 'W2b', href: '/people/employees' }],
+        pages: [
+          { id: 'people.employees', title: 'Employees', titleIt: 'Dipendenti', wave: 'W2b', href: '/people/employees' },
+          { id: 'people.shifts', title: 'Shifts', titleIt: 'Turni', wave: 'W2b', href: '/people/shifts' },
+        ],
       },
       // B-W2b-65: Skills & training (SCR-160) and People settings (SCR-265).
       { label: 'Skills & pay', labelIt: 'Competenze e paghe', hideLabel: false, pages: [{ id: 'people.skills', title: 'Skills & training', titleIt: 'Competenze e formazione', wave: 'W2b', href: '/people/skills' }] },
@@ -588,6 +591,7 @@ export const FLOOR: ReadonlyArray<{
   // W2a: B-W2a-73 the floor area Maintenance & safety, its machine problem (SCR-179); Report an incident is W2b.
   { id: 'floor.machine', title: 'Machine problem & jobs', titleIt: 'Guasto e interventi', tile: 'machine', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'maintenance'] },
   // W2b: B-W2b-70 Call for help (SCR-172) and the team leader's Line view (SCR-168).
+  { id: 'floor.clock', title: 'Clock in & out', titleIt: 'Timbratura', tile: 'clock', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'phone'] },
   { id: 'floor.help', title: 'Call for help', titleIt: 'Chiama aiuto', tile: 'help', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'] },
   { id: 'floor.supervisor', title: 'Line view', titleIt: 'Vista linea', tile: 'lineview', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor'] },
 ]

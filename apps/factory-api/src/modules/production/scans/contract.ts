@@ -289,10 +289,12 @@ export const correctionContract = defineContract({
   response: {
     200: output({
       request: listed.extend({
+        /** Behind the site's PERFORMANCE gate; `askedByHidden`: a person asked, the gate keeps back who. */
         askedBy: person.nullable(),
+        askedByHidden: z.boolean(),
         askedAt: stationRef.nullable(),
         decidedById: id().nullable(),
-        scan: output({ id: id(), kind, worker: person.nullable(), station: stationRef.nullable(), defects: z.array(defectLine) }).nullable(),
+        scan: output({ id: id(), kind, worker: person.nullable(), workerHidden: z.boolean(), station: stationRef.nullable(), defects: z.array(defectLine) }).nullable(),
       }),
     }),
   },
@@ -394,8 +396,10 @@ export const workOrderScansContract = defineContract({
       scans: z.array(
         scan.extend({
           scrapReason: z.string().nullable(),
-          /** Where the scan names a worker (a site that records workers): inside this one record only. */
+          /** Where the scan names a worker (a site that records workers) and the site's PERFORMANCE gate is on: inside this one record only. */
           worker: person.nullable(),
+          /** The scan names a person and the gate keeps back who. */
+          workerHidden: z.boolean(),
           station: stationRef.nullable(),
           approvedById: id().nullable(),
           /** The UNDO or CORRECTION that voids it. */
@@ -415,7 +419,7 @@ export const refusalsContract = defineContract({
 
 export const refusalContract = defineContract({
   params: refusalParams,
-  response: { 200: output({ refusal: officeRefusal.extend({ worker: person.nullable(), discardedById: id().nullable() }) }) },
+  response: { 200: output({ refusal: officeRefusal.extend({ worker: person.nullable(), workerHidden: z.boolean(), discardedById: id().nullable() }) }) },
 })
 
 export const discardContract = defineContract({

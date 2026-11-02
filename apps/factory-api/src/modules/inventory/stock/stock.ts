@@ -20,6 +20,7 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { officeContextOf, seesCost, siteFor } from '../ledger/access'
 import { demandOpen, readDemands, RESERVATION_COLUMNS } from '../reservations/store'
 // B-W2a-26: stock under an ACTIVE quality hold is held too.
@@ -284,6 +285,7 @@ export async function stockCardOf(caller: CommandCaller, query: CardQuery) {
         occurredAt: true,
         createdAt: true,
         createdById: true,
+        deviceId: true,
       },
     })
     const shown = latest.slice(0, query.limit).reverse()
@@ -298,6 +300,8 @@ export async function stockCardOf(caller: CommandCaller, query: CardQuery) {
     }
     const ledger = shown.map((move) => ({ ...move, baseQuantity: move.baseQuantity.toString() }) satisfies LedgerMove & { reason: StockMoveReason })
     const lines = stockCard(opening, ledger, query.locationId ?? null)
+    // A floor move's author is a worker: behind the site's PERFORMANCE gate (B-W2b-F4).
+    const who = await workerGateFor(client, site.id)
     return {
       siteId: site.id,
       itemId: query.itemId,
@@ -305,26 +309,30 @@ export async function stockCardOf(caller: CommandCaller, query: CardQuery) {
       opening: quantityText(opening),
       closing: quantityText(lines.at(-1)?.balance ?? opening),
       complete: latest.length <= query.limit,
-      lines: lines.map(({ move, delta, balance }) => ({
-        moveId: move.id,
-        reason: move.reason,
-        itemColourId: move.itemColourId,
-        lotId: move.lotId,
-        hideId: move.hideId,
-        fromLocationId: move.fromLocationId,
-        toLocationId: move.toLocationId,
-        quantity: move.quantity.toFixed(4),
-        uom: move.uom,
-        baseQuantity: quantityText(move.baseQuantity),
-        reference: move.reference,
-        note: move.note,
-        reversalOfId: move.reversalOfId,
-        occurredAt: toUtcIso(move.occurredAt),
-        createdAt: toUtcIso(move.createdAt),
-        createdById: move.createdById,
-        delta: quantityText(delta),
-        balance: quantityText(balance),
-      })),
+      lines: lines.map(({ move, delta, balance }) => {
+        const author = who.author(move.createdById, move.deviceId !== null)
+        return {
+          moveId: move.id,
+          reason: move.reason,
+          itemColourId: move.itemColourId,
+          lotId: move.lotId,
+          hideId: move.hideId,
+          fromLocationId: move.fromLocationId,
+          toLocationId: move.toLocationId,
+          quantity: move.quantity.toFixed(4),
+          uom: move.uom,
+          baseQuantity: quantityText(move.baseQuantity),
+          reference: move.reference,
+          note: move.note,
+          reversalOfId: move.reversalOfId,
+          occurredAt: toUtcIso(move.occurredAt),
+          createdAt: toUtcIso(move.createdAt),
+          createdById: author.id,
+          createdByHidden: author.hidden,
+          delta: quantityText(delta),
+          balance: quantityText(balance),
+        }
+      }),
     }
   })
 }

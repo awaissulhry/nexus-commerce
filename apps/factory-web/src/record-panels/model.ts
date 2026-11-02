@@ -137,6 +137,8 @@ export interface PanelMessage {
   authorKind: AuthorKind
   /** Null: a system message, or a writer the reader may not see. */
   authorName: string | null
+  /** A floor worker wrote it and the site's legal gate keeps back who: the message says a person did. */
+  authorHidden?: boolean
   /** ISO instant (UTC). */
   at: string
   body: string
@@ -182,6 +184,8 @@ export type PanelTimelineEntry =
       direction: MessageDirection
       channel: MessageChannel
       authorName: string | null
+      /** A floor worker wrote it and the site's legal gate keeps back who: the row says a person did. */
+      authorHidden?: boolean
       excerpt: string
       attachmentCount: number
     }
@@ -194,6 +198,8 @@ export type PanelTimelineEntry =
       /** Who did it: a name when the panel knows the person, else null (the audience says who). */
       actorName: string | null
       actorAudience: 'OFFICE' | 'FLOOR' | 'PARTNER' | 'LINK' | 'SYSTEM'
+      /** A floor worker did it and the site's legal gate keeps back who: the row says a person did. */
+      actorHidden?: boolean
       status: { from: string | null; to: string | null } | null
       fields: readonly string[]
       /** The values, only when the API gave them (audit.read over the row; money only with its grain). */

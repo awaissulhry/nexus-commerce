@@ -276,6 +276,7 @@
       "quarantined": "File {name} refused by the store",
       "detail": "{kind} · {audiences}"
     },
+    "person": "A person",
     "actor": {
       "OFFICE": "Someone in the office",
       "FLOOR": "The floor",

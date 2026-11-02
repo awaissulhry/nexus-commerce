@@ -43,6 +43,8 @@ export const WHAT_KEY = {
   'production.cut.remnant': 'remnant',
   'production.bundles.make': 'bundle',
   'plant.report': 'machine',
+  // B-W2b-67
+  'people.clock.record': 'clock',
   // B-W2b-70
   'andon.call.send': 'call',
   'andon.call.answer': 'callAnswer',
