@@ -103,17 +103,7 @@
     "export_one": "Export {count} (CSV)",
     "export_other": "Export {count} (CSV)",
     "release_one": "Release {count}",
-    "release_other": "Release {count}",
-    "releaseHeld_one": "{count} selected is not a draft: only drafts are released",
-    "releaseHeld_other": "{count} selected are not drafts: only drafts are released",
-    "releaseTitle_one": "Release {count} work order",
-    "releaseTitle_other": "Release {count} work orders",
-    "releaseBody": "Each work order is checked again as it is released: the spec is frozen and a batch number given. One the check holds stays a draft, with what holds it.",
-    "releaseRun_one": "Release {count}",
-    "releaseRun_other": "Release {count}",
-    "releaseDone": "{released} of {count} released.",
-    "released": "Released · batch {batch}",
-    "held": "Still a draft: {checks}"
+    "release_other": "Release {count}"
   },
   "held": {
     "noManage": "You can view work orders, not change them (workorders.manage)",
@@ -207,6 +197,7 @@
     "operations": "Operations & WIP",
     "quality": "Quality",
     "labour": "Labour & cost",
+    "documents": "Documents",
     "activity": "Activity",
     "problems_one": "{count} check holds the release",
     "problems_other": "{count} checks hold the release"

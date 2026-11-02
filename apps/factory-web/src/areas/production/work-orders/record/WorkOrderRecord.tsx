@@ -39,6 +39,8 @@ import { PART_LOADING, type Loaded, type Part, type RecordDialog, type ReprintRu
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { useStepUp, isStepUpCancelled } from '../../../quality/_shared/hooks'
 import { useLabourCost } from '../labour/use-labour'
+import { SHIFT_NAMESPACE } from '../every-shift/model'
+import { useSplit } from '../every-shift/use-split'
 import { getAvailability, getFinished, getHold, getReadiness, getScrap, getYield, holdReasons, listHolds, placeHold, releaseHold, reportFinished, reserveHides, splitBundle } from '../daily/api'
 import { beforeRelease, DAILY_NAMESPACE, dailyCan, dailyProblem, dailyReadProblem, FINISHABLE, LOADING, NO_DAILY, READINESS_STATUSES, type DailyDialog, type DailyModel } from '../daily/model'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
@@ -52,7 +54,7 @@ import { WorkOrderRecordView } from './view/WorkOrderRecordView'
  */
 export function WorkOrderRecord({ workOrderId }: { workOrderId: string }) {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, 'lists', 'records']}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records']}>
       <RecordContainer workOrderId={workOrderId} />
     </WithMessages>
   )
@@ -290,6 +292,9 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   // B-W2a-72: the Labour & cost tab reads the work order's cost while it is open.
   const labour = useLabourCost(api, workOrderId, tab === 'labour', session.permissions, workOrder.status === 'ready' ? { status: workOrder.value.status, version: workOrder.value.version } : null)
 
+  // B-W2b-59: Split work order: done, the new draft opens.
+  const split = useSplit(api, workOrder.status === 'ready' ? workOrder.value : null, (child) => router.push(`${prefix}/production/work-orders/${child.id}`))
+
   const model: WorkOrderRecordModel = {
     prefix,
     can,
@@ -316,6 +321,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     cutOpen,
     daily: { ...daily, can: dcan, stepUp },
     labour: labour.model,
+    split: split.model,
   }
 
   const value = workOrder.status === 'ready' ? workOrder.value : null
@@ -327,6 +333,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
       actions={{
         onRetry: () => void load(),
         onRetryLabour: labour.retry,
+        onOpenSplit: split.open,
+        split: split.actions,
         onRetryPart: () => value && void loadParts(value),
         onReload: () => void load(),
         onDock: toggleDock,
@@ -358,7 +366,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         onCancel: (reason) => void write(() => cancelWorkOrder(api, workOrderId, version(), reason), 'workOrder', 'notice.cancelled'),
         onSaveDetails: (details) => {
           dirty.current.delete('details')
-          void write(() => updateWorkOrder(api, workOrderId, { version: version(), dueDate: details.dueDate, priority: details.priority }), 'workOrder', 'notice.saved')
+          void write(() => updateWorkOrder(api, workOrderId, { version: version(), dueDate: details.dueDate, priority: details.priority, rush: details.rush }), 'workOrder', 'notice.saved')
         },
         onSaveSizes: (grid) => {
           dirty.current.delete('sizes')

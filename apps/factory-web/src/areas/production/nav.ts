@@ -1,4 +1,4 @@
-import { Activity, BarChart3, BellRing, ClipboardList, Factory, Recycle, Scissors, SlidersHorizontal } from 'lucide-react'
+import { Activity, BarChart3, BellRing, ClipboardList, Factory, Layers, Recycle, Scissors, SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -32,7 +32,11 @@ export const officeArea: OfficeAreaNav = {
         // B-W2a-60: Cutting room › Cutting (SCR-238, design production.cutting): one cut per work order, the tiles, yield.
         id: 'production-cutting-room',
         label: 'shell:nav.production.cuttingRoom',
-        items: [{ id: 'production-cutting', label: 'shell:nav.production.cutting', href: '/production/cutting', icon: Scissors, permission: 'production.cutting.view' }],
+        items: [
+          { id: 'production-cutting', label: 'shell:nav.production.cutting', href: '/production/cutting', icon: Scissors, permission: 'production.cutting.view' },
+          // B-W2b-59: Bundles (SCR-259, design production.bundles): where every bundle is, scan-pattern checks, the bundle record.
+          { id: 'production-bundles', label: 'shell:nav.production.bundles', href: '/production/bundles', icon: Layers, permission: 'production.bundles.view' },
+        ],
       },
       {
         // B-W2a-60: Floor control › Scrap & rework (SCR-140, design production.scrap): pareto, rows, replacements.

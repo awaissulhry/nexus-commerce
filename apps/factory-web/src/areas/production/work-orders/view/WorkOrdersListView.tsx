@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, MoreHorizontal, PauseCircle, Plus, Rocket, Search, XCircle } from 'lucide-react'
+import { MoreHorizontal, PauseCircle, Plus, Printer, Rocket, Search, Zap } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, ProgressBar } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Input, Pill, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Input, Pill, Select, Tag } from '@nexus/ui/primitives'
 import { Modal } from '../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
@@ -21,6 +21,8 @@ import { NewWorkOrderDialog } from './NewWorkOrderDialog'
 import { bulkHoldHeld, DAILY_NAMESPACE, HOLDABLE } from '../daily/model'
 import { HoldDialog } from '../daily/view/DailyDialogs'
 import { ReadinessPill, say } from '../daily/view/DailyParts'
+import { releaseHeld, RUSH_CHOICES, SHIFT_NAMESPACE, travellersHeld, travellersHref } from '../every-shift/model'
+import { ReleaseReview } from '../every-shift/view/ReleaseReview'
 import '../../_shared/production.css'
 
 export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
@@ -31,17 +33,17 @@ export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
  * and Release N while rows are selected; live changes behind "N updates · Show"; B-W2b-13: Table · Board · Calendar ·
  * Cards, the due quick filter, the due date and priority edited in the grid), each number a real link to the work order
  * studio, progress from the floor (cut / bundled / sewn / finished), due dates with days late, and the New work order
- * dialog (`c`). Totals per work order only: no person's output anywhere (Statuto dei Lavoratori art. 4). No money.
+ * dialog (`c`). B-W2b-59: the rush flag beside the priority (edited with Edit N, the quick filter Rush), Release N through
+ * the review with each row's blockers, Print travellers (a new tab). Totals per work order only: no person's output
+ * anywhere (Statuto dei Lavoratori art. 4). No money.
  */
 export function WorkOrdersListView({ model, actions }: { model: WorkOrdersListModel; actions?: WorkOrdersListActions }) {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, 'lists']}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists']}>
       <WorkOrdersList model={model} actions={actions} />
     </WithMessages>
   )
 }
-
-const RELEASABLE = 'DRAFT'
 
 function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; actions?: WorkOrdersListActions }) {
   const t = useT('production')
@@ -80,7 +82,14 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
   })
 
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
-  const notDraft = picked.filter((row) => row.status !== RELEASABLE).length
+  // B-W2b-59: Release N and Print travellers, selection-aware (design page.h "Release…", "Print travellers").
+  const ts = useT(SHIFT_NAMESPACE)
+  const heldWords = useScopedT('production')
+  const releaseWait = releaseHeld(picked, model.can)
+  const releaseWaitWords = releaseWait ? heldWords(releaseWait.key, releaseWait.params) : null
+  const travellerIds = (picked.length > 0 ? picked : (items ?? [])).map((row) => row.id)
+  const travellerWait = travellersHeld(travellerIds)
+  const travellerWaitWords = travellerWait ? heldWords(travellerWait.key, travellerWait.params) : null
   // B-W2a-46: the readiness word column, Hold N (wo-grid "'Hold' (W2a)"), notices of either catalogue.
   const tw = useT(DAILY_NAMESPACE)
   const notices = useScopedT('production')
@@ -142,6 +151,17 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
           <span>—</span>
         )
       ) : null
+    const PriorityCell = ({ data }: ICellRendererParams<WorkOrderRow>) =>
+      data ? (
+        <span className="fw-pr-inline">
+          {data.rush && (
+            <Tag tone="danger">
+              <Zap size={11} aria-hidden /> {ts('rush.word')}
+            </Tag>
+          )}
+          <span>{data.priority}</span>
+        </span>
+      ) : null
     const ReadinessCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
       if (!data) return null
       const row = readiness?.[data.id]
@@ -158,6 +178,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
             { id: 'tab', label: t('list.openNewTab'), href: href(data), target: '_blank' },
             { id: 'cutting', label: t('tab.cutting'), href: `${href(data)}?tab=cutting` },
             { id: 'bundles', label: t('tab.bundles'), href: `${href(data)}?tab=bundles` },
+            { id: 'traveller', label: ts('docs.openTraveller'), href: travellersHref(model.prefix, [data.id]), target: '_blank' },
           ]}
         />
       ) : null
@@ -170,11 +191,11 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       { colId: 'progress', headerName: t('col.progress'), minWidth: 160, flex: 1.3, cellRenderer: ProgressCell },
       { colId: 'readiness', headerName: tw('readiness.column'), minWidth: 130, flex: 0.9, cellRenderer: ReadinessCell },
       { colId: 'due', headerName: t('col.due'), field: 'dueDate', minWidth: 132, flex: 0.9, cellRenderer: DueCell },
-      { colId: 'priority', headerName: t('col.priority'), field: 'priority', minWidth: 84, flex: 0.5, type: 'rightAligned' },
+      { colId: 'priority', headerName: t('col.priority'), field: 'priority', minWidth: 112, flex: 0.6, type: 'rightAligned', cellRenderer: PriorityCell },
       { colId: 'site', headerName: t('col.site'), field: 'siteCode', minWidth: 80, flex: 0.5 },
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, tw, locale, model.prefix, readiness])
+  }, [t, tw, ts, locale, model.prefix, readiness])
 
   // B-W2b-13 — the W2b list frame: board by state, calendar by due date, cards, the due quick filter, inline and bulk edit.
   const final = (row: WorkOrderRow) => (row.status === 'CLOSED' || row.status === 'CANCELLED' ? t('w2b.heldFinal') : null)
@@ -182,6 +203,8 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
     fields: {
       due: { kind: 'date', nullable: true, valueOf: (row) => row.dueDate, held: final },
       priority: { kind: 'integer', min: -1000, max: 1000, valueOf: (row) => row.priority, held: final },
+      // B-W2b-59 (MES-009): the rush flag in Edit N (no column of its own: it shows beside the priority).
+      rush: { kind: 'choice', choices: RUSH_CHOICES, label: ts('rush.field'), choiceLabels: { RUSH: ts('rush.RUSH'), NORMAL: ts('rush.NORMAL') }, valueOf: (row) => (row.rush ? 'RUSH' : 'NORMAL'), held: final },
     },
     versionOf: (row) => row.version,
     labelOf: (row) => row.number,
@@ -190,9 +213,12 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
     held: model.can.manage ? null : t('held.noManage'),
   }
   const quick: ListQuick = {
-    filters: [{ id: 'due', kind: 'date', label: t('w2b.quickDue'), choices: ['overdue', 'today', 'this-week', 'next-week', 'next-7-days', 'this-month'] }],
-    values: { due: model.due ?? null },
-    onChange: (_, value) => actions?.onDue?.(value as never),
+    filters: [
+      { id: 'due', kind: 'date', label: t('w2b.quickDue'), choices: ['overdue', 'today', 'this-week', 'next-week', 'next-7-days', 'this-month'] },
+      { id: 'rush', kind: 'flag', label: ts('rush.word'), value: 'true' },
+    ],
+    values: { due: model.due ?? null, rush: model.rush ? 'true' : null },
+    onChange: (id, value) => (id === 'rush' ? actions?.onRush?.(value === 'true') : actions?.onDue?.(value as never)),
   }
   const laneTotal = (status: WorkOrderRow['status']): number | null => {
     const counts = model.counts
@@ -205,7 +231,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
   const state = model.rows.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
   ) : items && items.length === 0 ? (
-    model.q.trim() !== '' || !!model.due || (model.view !== 'all' && model.view !== 'open') ? (
+    model.q.trim() !== '' || !!model.due || !!model.rush || (model.view !== 'all' && model.view !== 'open') ? (
       <EmptyState
         title={t('list.noMatch.title')}
         description={t('list.noMatch.body')}
@@ -216,6 +242,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
               setQuery('')
               actions?.onSearch?.('')
               actions?.onDue?.(null)
+              actions?.onRush?.(false)
               actions?.onView?.('all')
             }}
           >
@@ -250,9 +277,27 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
             {t(`live.${model.live}`)}
           </span>
         </div>
-        <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNew?.(true)} aria-keyshortcuts="c">
-          <Plus size={14} aria-hidden /> {t('list.new')}
-        </Button>
+        <span className="fw-pr-actions">
+          <Button size="sm" heldReason={releaseWaitWords} onClick={() => actions?.onReleaseMany?.(picked.map((row) => row.id))}>
+            <Rocket size={14} aria-hidden /> {picked.length > 0 ? t('bulk.release', { count: picked.length }) : ts('release.open')}
+          </Button>
+          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNew?.(true)} aria-keyshortcuts="c">
+            <Plus size={14} aria-hidden /> {t('list.new')}
+          </Button>
+          <Menu
+            label={<MoreHorizontal size={16} aria-hidden />}
+            align="right"
+            triggerProps={{ 'aria-label': ts('list.more') }}
+            items={[
+              {
+                id: 'travellers',
+                label: picked.length > 0 ? ts('travellers.printSelected', { count: picked.length }) : ts('travellers.printShown', { count: travellerIds.length }),
+                icon: <Printer size={14} aria-hidden />,
+                ...(travellerWaitWords ? { disabled: true, description: travellerWaitWords } : { href: travellersHref(model.prefix, travellerIds), target: '_blank' as const }),
+              },
+            ]}
+          />
+        </span>
       </div>
 
       {model.notice && (
@@ -326,11 +371,22 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
                   <PauseCircle size={13} aria-hidden /> <SelectionLabel>{tw('bulk.hold', { count: picked.length })}</SelectionLabel>
                 </Button>
               )}
+              {travellerWaitWords ? (
+                <Button size="sm" aria-label={ts('travellers.printSelected', { count: picked.length })} heldReason={travellerWaitWords}>
+                  <Printer size={13} aria-hidden /> <SelectionLabel>{ts('travellers.printSelected', { count: picked.length })}</SelectionLabel>
+                </Button>
+              ) : (
+                <Button size="sm" asChild>
+                  <Link href={travellersHref(model.prefix, travellerIds)} target="_blank" aria-label={ts('travellers.printSelected', { count: picked.length })}>
+                    <Printer size={13} aria-hidden /> <SelectionLabel>{ts('travellers.printSelected', { count: picked.length })}</SelectionLabel>
+                  </Link>
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="primary"
                 aria-label={t('bulk.release', { count: picked.length })}
-                heldReason={!model.can.release ? t('held.noRelease') : notDraft > 0 ? t('bulk.releaseHeld', { count: notDraft }) : null}
+                heldReason={releaseWaitWords}
                 onClick={() => actions?.onReleaseMany?.(picked.map((row) => row.id))}
               >
                 <Rocket size={13} aria-hidden /> <SelectionLabel>{t('bulk.release', { count: picked.length })}</SelectionLabel>
@@ -364,7 +420,17 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       {filtered && model.view !== 'open' && <p className="fw-pr-hint">{t('list.viewing', { view: t(`view.${model.view}`) })}</p>}
 
       {model.newOrder && <NewWorkOrderDialog model={model.newOrder} can={model.can} actions={actions} />}
-      {model.release && <BulkReleaseDialog model={model} actions={actions} onDone={() => setSelected([])} />}
+      {model.release && (
+        <ReleaseReview
+          model={model.release}
+          onSave={() => actions?.onRunRelease?.()}
+          onRetry={() => actions?.onRetryRelease?.()}
+          onClose={() => {
+            if (model.release?.state.phase === 'done') setSelected([])
+            actions?.onCloseRelease?.()
+          }}
+        />
+      )}
       {daily?.dialog?.kind === 'hold' && <HoldDialog numbers={daily.dialog.numbers} workOrderIds={daily.dialog.workOrderIds} daily={daily} actions={actions?.daily} />}
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('list.keysTitle')} size="sm">
@@ -378,78 +444,5 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
         </Modal>
       )}
     </div>
-  )
-}
-
-/** Release N: a confirm with what it does, then each work order's answer (released with its batch, or what holds it). */
-function BulkReleaseDialog({ model, actions, onDone }: { model: WorkOrdersListModel; actions?: WorkOrdersListActions; onDone: () => void }) {
-  const t = useT('production')
-  const release = model.release!
-  const released = release.rows.filter((row) => release.results[row.id]?.state === 'released').length
-  return (
-    <Modal
-      open
-      onClose={() => {
-        if (release.done) onDone()
-        actions?.onCloseRelease?.()
-      }}
-      title={t('bulk.releaseTitle', { count: release.rows.length })}
-      size="md"
-      footer={
-        release.done ? (
-          <>
-            <span className="grow" />
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => {
-                onDone()
-                actions?.onCloseRelease?.()
-              }}
-            >
-              {t('common.done')}
-            </Button>
-          </>
-        ) : (
-          <>
-            <span className="grow" />
-            <Button size="sm" onClick={() => actions?.onCloseRelease?.()} heldReason={release.running ? t('held.busy') : null}>
-              {t('common.cancel')}
-            </Button>
-            <Button size="sm" variant="primary" heldReason={release.running ? t('held.busy') : null} onClick={() => actions?.onRunRelease?.()}>
-              {release.running ? <Spinner size={12} /> : <Rocket size={13} aria-hidden />} {t('bulk.releaseRun', { count: release.rows.length })}
-            </Button>
-          </>
-        )
-      }
-    >
-      <div className="fw-pr-dialog">
-        <p className="fw-pr-hint">{release.done ? t('bulk.releaseDone', { released, count: release.rows.length }) : t('bulk.releaseBody')}</p>
-        <ul className="fw-pr-checks" aria-live="polite">
-          {release.rows.map((row) => {
-            const result = release.results[row.id]
-            return (
-              <li key={row.id} className="fw-pr-check">
-                {result?.state === 'released' ? (
-                  <CheckCircle2 size={16} className="fw-pr-ico is-ok" aria-hidden />
-                ) : result ? (
-                  <XCircle size={16} className="fw-pr-ico is-blocked" aria-hidden />
-                ) : (
-                  <Rocket size={16} className="fw-pr-ico" aria-hidden />
-                )}
-                <span className="fw-pr-check-body">
-                  <b>
-                    {row.number} · {row.styleCode}
-                  </b>
-                  {result?.state === 'released' && <span>{t('bulk.released', { batch: result.batchNumber ?? '—' })}</span>}
-                  {result?.state === 'held' && <span>{t('bulk.held', { checks: result.codes.map((code) => t(`check.name.${code}`)).join(', ') || t('check.name.other') })}</span>}
-                  {result?.state === 'failed' && <span>{t(result.words.key, result.words.params)}</span>}
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      </div>
-    </Modal>
   )
 }

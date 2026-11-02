@@ -121,9 +121,9 @@ describe('the calls', () => {
 })
 
 describe('the record tabs in the design\'s order', () => {
-  it('the order: … Documents, Margin, Activity; the work order: … Quality, Labour & cost, Activity', () => {
+  it('the order: … Documents, Margin, Activity; the work order: … Quality, Labour & cost, Documents, Activity', () => {
     expect(ORDER_TABS.slice(-3)).toEqual(['documents', 'margin', 'activity'])
-    expect(WORK_ORDER_TABS.slice(-3)).toEqual(['quality', 'labour', 'activity'])
+    expect(WORK_ORDER_TABS.slice(-4)).toEqual(['quality', 'labour', 'documents', 'activity'])
   })
 })
 
