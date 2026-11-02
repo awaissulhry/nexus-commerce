@@ -14,6 +14,10 @@ import { CLOCK_ACTIONS } from './clock/rules'
 import { SCHEME_STATUSES } from './schemes/rules'
 // B-W2b-37: attendance days.
 import { ANOMALY_KINDS, DAY_CHANGES, DAY_STATUSES } from './attendance/rules'
+// B-W2b-42: overtime worked, timesheets, working-time limits.
+import { RULE_KINDS } from './limits/rules'
+import { ENTRY_CHANGES, ENTRY_STATUSES, OVERTIME_CLASSES } from './overtime/rules'
+import { TIMESHEET_CHANGES, TIMESHEET_STATUSES } from './overtime/timesheets'
 
 /**
  * The people module's events (B-W2b-26 employees and teams; design people.employees "Live": employee.created / updated
@@ -96,6 +100,8 @@ export const events = [
   ...shiftEvents(),
   // B-W2b-37: attendance days (attendanceEvents, at the end of the file).
   ...attendanceEvents(),
+  // B-W2b-42: overtime worked, timesheets, working-time limits (overtimeEvents, at the end of the file).
+  ...overtimeEvents(),
   defineEvent({
     type: 'employee.created',
     context: 'people',
@@ -296,7 +302,8 @@ export const events = [
  *
  *   shift.assigned            roster cells set or cleared (back to the default shift), assigned to many, or last week copied
  *   roster.published          what the workers read changed: a range published, or a published cell changed or cleared
- *   overtime_request.changed  a request made, changed, its people added or taken off, approved or cancelled
+ *   overtime_request.changed  a request made, changed, its people added or taken off, approved or cancelled; DONE: the
+ *                             overtime it asked was worked and decided (B-W2b-42)
  *   overtime.asked            people were asked (on the tablet's My day, or by the lead)
  *   overtime.answered         a person answered: on the tablet (FLOOR), or the lead recorded what they said (OFFICE)
  *
@@ -323,8 +330,8 @@ function shiftEvents() {
     defineEvent({
       type: 'overtime_request.changed',
       context: 'people',
-      description: 'A planned overtime request was made, changed, its people added or taken off, approved or cancelled.',
-      payload: z.strictObject({ requestId: z.uuid(), lineId: z.uuid().nullable(), date: day, change: z.enum(['CREATED', 'EDITED', 'PEOPLE_ADDED', 'PEOPLE_REMOVED', 'APPROVED', 'CANCELLED']), asked: z.number().int().min(0), agreed: z.number().int().min(0) }),
+      description: 'A planned overtime request was made, changed, its people added or taken off, approved or cancelled, or the overtime it asked was worked and decided.',
+      payload: z.strictObject({ requestId: z.uuid(), lineId: z.uuid().nullable(), date: day, change: z.enum(['CREATED', 'EDITED', 'PEOPLE_ADDED', 'PEOPLE_REMOVED', 'APPROVED', 'CANCELLED', 'DONE']), asked: z.number().int().min(0), agreed: z.number().int().min(0) }),
       live: { permission: 'people.shifts.view', fields: ['requestId', 'date', 'change', 'asked', 'agreed'] },
     }),
     defineEvent({
@@ -388,6 +395,52 @@ function attendanceEvents() {
       description: "How clock events become hours changed for a company: rounding, lateness grace, the overtime unit, the automatic clock-out or fixed breaks.",
       payload: z.strictObject({ companyId: z.uuid(), version: z.number().int().min(1) }),
       live: { permission: 'people.attendance.view', fields: ['companyId', 'version'] },
+    }),
+  ] as const
+}
+
+/**
+ * B-W2b-42: overtime worked, timesheets and working-time limits (design people.attendance "Overtime to approve",
+ * people.settings "Working-time limits"), emitted by apps/factory-api modules/people/overtime and limits in the command
+ * that makes the change. Ids, classes and states only: never a name, a minute figure or a reason about a person.
+ *
+ *   overtime_entry.changed      overtime was computed from an attendance day, removed, approved, rejected, or its decision
+ *                               taken back (by a person, or because a reopened day changed the figures)
+ *   timesheet.prepared          a month's timesheets were made for a site (how many)
+ *   timesheet.changed           a timesheet was approved by the lead, by HR, or sent back
+ *   working_time_rule.changed   a limit was set or archived for a company or a site
+ *
+ * All reach the office screens of people.attendance.view holders; the floor receives none.
+ */
+function overtimeEvents() {
+  return [
+    defineEvent({
+      type: 'overtime_entry.changed',
+      context: 'people',
+      description: 'Overtime worked changed: computed from an attendance day, removed, approved, rejected, or a decision taken back because the figures changed or a person reopened it.',
+      payload: z.strictObject({ entryId: z.uuid(), siteId: z.uuid(), employeeId: z.uuid(), kind: z.enum(OVERTIME_CLASSES), status: z.enum(ENTRY_STATUSES), change: z.enum(ENTRY_CHANGES) }),
+      live: { permission: 'people.attendance.view', fields: ['entryId', 'siteId', 'kind', 'status', 'change'] },
+    }),
+    defineEvent({
+      type: 'timesheet.prepared',
+      context: 'people',
+      description: "A month's timesheets were made for a site (how many).",
+      payload: z.strictObject({ siteId: z.uuid(), month: z.string().regex(/^\d{4}-\d{2}$/), created: z.number().int().min(0) }),
+      live: { permission: 'people.attendance.view', fields: ['siteId', 'month', 'created'] },
+    }),
+    defineEvent({
+      type: 'timesheet.changed',
+      context: 'people',
+      description: 'A timesheet was approved by the lead, by HR, or sent back with the reason.',
+      payload: z.strictObject({ timesheetId: z.uuid(), siteId: z.uuid(), employeeId: z.uuid(), status: z.enum(TIMESHEET_STATUSES), change: z.enum(TIMESHEET_CHANGES) }),
+      live: { permission: 'people.attendance.view', fields: ['timesheetId', 'siteId', 'status', 'change'] },
+    }),
+    defineEvent({
+      type: 'working_time_rule.changed',
+      context: 'people',
+      description: 'A working-time limit was set or archived for the group, a company or a site.',
+      payload: z.strictObject({ ruleId: z.uuid(), companyId: z.uuid().nullable(), siteId: z.uuid().nullable(), kind: z.enum(RULE_KINDS), change: z.enum(['SET', 'ARCHIVED']) }),
+      live: { permission: 'people.attendance.view', fields: ['ruleId', 'companyId', 'siteId', 'kind', 'change'] },
     }),
   ] as const
 }

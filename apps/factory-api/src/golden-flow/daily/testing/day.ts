@@ -9,6 +9,7 @@ import { releaseOnWorkOrderDoneHandler } from '../../../modules/inventory/reserv
 import { pauseAtClockOutHandler } from '../../../modules/production/terminal/clock-out'
 // B-W2b-37: attendance.clock_event → that person's attendance day computed again.
 import { attendanceHandlers } from '../../../modules/people/attendance/jobs'
+import { overtimeHandlers } from '../../../modules/people/overtime/jobs'
 import { ladderHandlers } from '../../../modules/receivables/ladder'
 import { alertsRecheckHandler } from '../../../platform/alerts/engine'
 import { notificationsHandler } from '../../../platform/notifications/fan-out'
@@ -39,6 +40,7 @@ const W2A_LISTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['W2B_15_HANDLERS', ['releaseOnWorkOrderDoneHandler']],
   ['W2B_40_HANDLERS', ['pauseAtClockOutHandler']],
   ['W2B_37_HANDLERS', ['attendanceHandlers']],
+  ['W2B_42_HANDLERS', ['overtimeHandlers']],
 ]
 
 /** The search indexers the worker loads from the registry folder (background.ts SEARCH_INDEXERS). */
@@ -48,7 +50,7 @@ export async function searchIndexers(): Promise<readonly SearchIndexer[]> {
 
 /** Every handler the worker runs: W1's HANDLERS, then the W2a lists, as background.ts hands them to startEventWorkers. */
 export function everyHandler(indexers: readonly SearchIndexer[]): readonly EventHandler[] {
-  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers()]
+  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers()]
 }
 
 /** background.ts starts exactly W1's HANDLERS and the W2a lists above: a list or factory a step adds fails the day until it runs here too. */

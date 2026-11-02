@@ -297,6 +297,8 @@ function whenWords(kind: RuleKind, threshold: Record<string, number | boolean>, 
       return it ? `${days(n('daysBefore'))} prima della scadenza per fatturare la merce di un DDT` : `${days(n('daysBefore'))} before the deadline to invoice a DDT's goods`
     case 'INTEGRATION_FAILING':
       return it ? `Quando un collegamento non funziona da più di ${n('hours')} h` : `When a connection has not worked for more than ${n('hours')} h`
+    case 'WORKING_TIME_LIMIT':
+      return it ? 'Quando qualcuno si avvicina a un limite di orario o lo supera' : 'When someone comes close to a working-time limit, or passes it'
   }
 }
 
@@ -337,6 +339,11 @@ export const ALERT_TEMPLATES = {
   // B-W2b-24: a connection failing ({label} its name; {hours} since its last success, or since it was set up when none worked).
   'alerts.INTEGRATION_FAILING': { en: 'Connection {label} has not worked for {hours} hours: its last call failed.', it: 'Il collegamento {label} non funziona da {hours} ore: la sua ultima chiamata non è riuscita.' },
   'alerts.INTEGRATION_FAILING.NEVER': { en: 'Connection {label} has never worked: no call has succeeded in the {hours} hours since it was set up.', it: 'Il collegamento {label} non ha mai funzionato: nessuna chiamata è riuscita nelle {hours} ore da quando è stato impostato.' },
+  // B-W2b-42: a site and a limit, never a person or a figure ({label} the site's code).
+  'alerts.WORKING_TIME_LIMIT': { en: 'Site {label}: someone is close to or over a working-time limit.', it: 'Sede {label}: qualcuno è vicino a un limite di orario o lo ha superato.' },
+  'alerts.WORKING_TIME_LIMIT.OVERTIME_YEARLY_CAP': { en: 'Site {label}: someone is close to or over the yearly overtime cap.', it: 'Sede {label}: qualcuno è vicino al limite annuo di straordinario o lo ha superato.' },
+  'alerts.WORKING_TIME_LIMIT.DAILY_REST': { en: 'Site {label}: someone is under the minimum rest, or would be before their next shift.', it: 'Sede {label}: qualcuno è sotto il riposo minimo, o lo sarebbe prima del prossimo turno.' },
+  'alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE': { en: 'Site {label}: someone is close to or over the weekly average of working hours.', it: 'Sede {label}: qualcuno è vicino alla media settimanale di ore di lavoro o la ha superata.' },
   'alerts.INVOICE_DEADLINE.LATE': { en: 'The goods of DDT {label} were due to be invoiced by {dueDate}: {days} days late.', it: 'La merce del DDT {label} andava fatturata entro il {dueDate}: {days} giorni di ritardo.' },
 } as const satisfies Record<string, Words>
 export type AlertTemplateKey = keyof typeof ALERT_TEMPLATES
@@ -374,6 +381,8 @@ export function alertPhrase(kind: string, label: string, facts: unknown): AlertP
         : { key: 'alerts.INVOICE_DEADLINE', params: { label, dueDate: text('dueDate'), days: num('daysLeft') } }
     case 'INTEGRATION_FAILING':
       return { key: f.never === true ? 'alerts.INTEGRATION_FAILING.NEVER' : 'alerts.INTEGRATION_FAILING', params: { label, hours: num('hours') } }
+    case 'WORKING_TIME_LIMIT':
+      return { key: text('limit') === 'OVERTIME_YEARLY_CAP' || text('limit') === 'DAILY_REST' || text('limit') === 'WEEKLY_AVERAGE' ? `alerts.WORKING_TIME_LIMIT.${text('limit') as 'DAILY_REST'}` : 'alerts.WORKING_TIME_LIMIT', params: { label } }
     default:
       return null
   }

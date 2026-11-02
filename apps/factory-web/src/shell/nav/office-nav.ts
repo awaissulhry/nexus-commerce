@@ -300,6 +300,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/people/employees/[id]',
   '/people/employees/badges',
   '/people/employees/print',
+  // B-W2b-60: People › Shifts (SCR-263) and the roster for the notice board (a new tab).
+  '/people/shifts',
+  '/people/shifts/print',
 ])
 
 /**

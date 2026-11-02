@@ -1881,6 +1881,11 @@
     "people_attendance_manage": "Enter and fix attendance days by hand, always with a reason (missing clock-in or clock-out, a duplicate voided, work outside the plant, an absence code); reopen an approved day",
     "people_attendance_approve": "Approve attendance days with no anomaly left (never your own)",
     "people_attendance_settings": "Keep the absence codes with the labour consultant's LUL code, and the rounding, grace and overtime rules",
-    "people_attendance_rollcall": "Open the roll call of a site: who is clocked in now, for an evacuation (every opening is recorded)"
+    "people_attendance_rollcall": "Open the roll call of a site: who is clocked in now, for an evacuation (every opening is recorded)",
+    "people_overtime_review": "Approve or reject the overtime people worked (paid only once approved)",
+    "people_timesheets_team": "Approve as the lead the timesheets of the teams you lead (the days, not the hours)",
+    "people_timesheets_lead": "Approve as the lead any timesheet in reach, and send one back",
+    "people_timesheets_hr": "Prepare a month's timesheets, approve them after the lead, send one back",
+    "people_limits_manage": "Keep the working-time limits: value, warn or block, whom they alert"
   }
 }

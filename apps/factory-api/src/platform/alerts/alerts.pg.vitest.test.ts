@@ -171,7 +171,8 @@ describe('the engine (scheduler and worker)', () => {
     const run = await evaluate()
     expect(errors).toEqual([])
     // B-W2b-24: + INTEGRATION_FAILING (4 built-ins made; nothing fails in the seed, so it raises nothing).
-    expect(run.builtIns).toBe(4)
+    // B-W2b-42: + WORKING_TIME_LIMIT (no site's attendance is on in the seed, so it raises nothing).
+    expect(run.builtIns).toBe(5)
     expect((await admin(`SELECT "ruleKind" FROM "AlertRule" WHERE "tenantId" = $1 AND "builtIn" ORDER BY 1`, [T])).map((row) => row.ruleKind)).toEqual([
       'APPROVAL_OVERDUE',
       'CERTIFICATE_EXPIRING',
@@ -181,6 +182,7 @@ describe('the engine (scheduler and worker)', () => {
       'MATERIAL_SHORT',
       'ORDER_LATE_RISK',
       'PO_NOT_CONFIRMED',
+      'WORKING_TIME_LIMIT',
     ])
     // A new built-in rule tells the holders of its system role.
     expect((await ruleOf('INVOICE_DEADLINE')).recipientRoleId).toBe((await one(`SELECT id FROM "Role" WHERE "tenantId" = $1 AND key = 'finance'`, [T])).id)
@@ -210,9 +212,9 @@ describe('the engine (scheduler and worker)', () => {
     expect(events).toEqual([
       { type: 'alert.raised', n: 3 },
       { type: 'alert.resolved', n: 1 },
-      { type: 'alert.rule_changed', n: 4 },
+      { type: 'alert.rule_changed', n: 5 },
     ])
-    expect((await one(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1`, [T])).n).toBe(before + 8)
+    expect((await one(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1`, [T])).n).toBe(before + 9)
   })
 
   it('a second pass (a replay, the next tick) raises nothing twice and writes nothing at all', async () => {
@@ -388,7 +390,7 @@ describe('the rules and the date timers (home.alerts Rules, admin.automation Rem
   it('lists the rules as sentences with their numbers, recipients, last fired and fired in 7 days', async () => {
     const list = await ok('planner', 'GET', '/alerts/rules')
     // B-W2b-24: + INTEGRATION_FAILING (a rule's sentence is no record: listed to whoever reads the rules).
-    expect((list.rules as Json[]).map((rule) => rule.ruleKind).sort()).toEqual(['APPROVAL_OVERDUE', 'CERTIFICATE_EXPIRING', 'HOLD_TOO_LONG', 'INTEGRATION_FAILING', 'INVOICE_DEADLINE', 'MATERIAL_SHORT', 'ORDER_LATE_RISK', 'PO_NOT_CONFIRMED'])
+    expect((list.rules as Json[]).map((rule) => rule.ruleKind).sort()).toEqual(['APPROVAL_OVERDUE', 'CERTIFICATE_EXPIRING', 'HOLD_TOO_LONG', 'INTEGRATION_FAILING', 'INVOICE_DEADLINE', 'MATERIAL_SHORT', 'ORDER_LATE_RISK', 'PO_NOT_CONFIRMED', 'WORKING_TIME_LIMIT'])
     const hold = (list.rules as Json[]).find((rule) => rule.ruleKind === 'HOLD_TOO_LONG')!
     expect(hold).toMatchObject({ threshold: { hours: 24 }, recipient: { name: 'Quality inspector' }, cooldownWords: 'at most once a day', enabled: true, builtIn: true, canChange: false, timers: null })
     expect(hold.place.label).toBeTruthy()

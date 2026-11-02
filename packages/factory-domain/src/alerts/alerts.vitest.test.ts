@@ -47,8 +47,8 @@ const state = (n: number, extra: Partial<KeyState> = {}): KeyState => ({ alertId
 
 describe('the kinds of rule', () => {
   it('ship a built-in rule each, whose numbers their own schema reads, and refuse numbers out of range', () => {
-    // B-W2b-24: + INTEGRATION_FAILING (the design's last built-in).
-    expect(RULE_KINDS).toHaveLength(8)
+    // B-W2b-24: + INTEGRATION_FAILING (the design's last built-in). B-W2b-42: + WORKING_TIME_LIMIT.
+    expect(RULE_KINDS).toHaveLength(9)
     expect(kindsOf('DATE')).toEqual(['CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE'])
     for (const kind of RULE_KINDS) {
       const read = readThreshold(kind, KINDS[kind].builtIn.threshold)
@@ -197,6 +197,9 @@ describe('words', () => {
     expect(phraseText(alertPhrase('INTEGRATION_FAILING', 'SES main', { hours: 5, never: true }), 'SES main', 'it')).toBe('Il collegamento SES main non ha mai funzionato: nessuna chiamata è riuscita nelle 5 ore da quando è stato impostato.')
     expect(ruleSentence({ ruleKind: 'INTEGRATION_FAILING', threshold: { hours: 1 }, channels: ['IN_APP'], cooldownMinutes: 1440 }, { place: null, recipient: 'Administrator' })).toBe('When a connection has not worked for more than 1 h, tell Administrator by the bell at most once a day.')
     expect(readThreshold('INTEGRATION_FAILING', { hours: 0 }).ok).toBe(false)
+    // B-W2b-42: a site and a limit, never a person or a figure.
+    expect(phraseText(alertPhrase('WORKING_TIME_LIMIT', 'A1', { limit: 'DAILY_REST' }), 'A1')).toBe('Site A1: someone is under the minimum rest, or would be before their next shift.')
+    expect(phraseText(alertPhrase('WORKING_TIME_LIMIT', 'A1', { limit: 'OVERTIME_YEARLY_CAP' }), 'A1', 'it')).toBe('Sede A1: qualcuno è vicino al limite annuo di straordinario o lo ha superato.')
     expect(phraseText(alertPhrase('NOPE', 'X', {}), 'X')).toBe('Alert on X.')
     for (const kind of RULE_KINDS) expect(alertPhrase(kind, 'L', {}), kind).not.toBeNull()
   })

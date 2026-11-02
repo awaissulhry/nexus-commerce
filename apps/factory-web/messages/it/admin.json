@@ -1881,6 +1881,11 @@
     "people_attendance_manage": "Inserire e correggere a mano le giornate di presenza, sempre con un motivo (entrata o uscita mancante, un doppione annullato, lavoro fuori sede, un codice di assenza); riaprire una giornata approvata",
     "people_attendance_approve": "Approvare le giornate di presenza senza anomalie aperte (mai le proprie)",
     "people_attendance_settings": "Gestire i codici di assenza con il codice LUL del consulente del lavoro e le regole di arrotondamento, tolleranza e straordinario",
-    "people_attendance_rollcall": "Aprire l'appello di una sede: chi ha timbrato l'entrata ora, per un'evacuazione (ogni apertura è registrata)"
+    "people_attendance_rollcall": "Aprire l'appello di una sede: chi ha timbrato l'entrata ora, per un'evacuazione (ogni apertura è registrata)",
+    "people_overtime_review": "Approvare o rifiutare lo straordinario lavorato (si paga solo dopo l'approvazione)",
+    "people_timesheets_team": "Approvare come responsabile i fogli ore dei team che guidi (i giorni, non le ore)",
+    "people_timesheets_lead": "Approvare come responsabile qualsiasi foglio ore raggiungibile e rimandarlo indietro",
+    "people_timesheets_hr": "Preparare i fogli ore del mese, approvarli dopo il responsabile, rimandarli indietro",
+    "people_limits_manage": "Tenere i limiti di orario: valore, avviso o blocco, chi avvisano"
   }
 }
