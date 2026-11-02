@@ -176,6 +176,9 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/people/settings': 'people.privacy.view', // GET /people/privacy
       // B-W2b-61: People › Attendance.
       '/people/attendance': 'people.attendance.view', // GET /people/attendance/days
+      // B-W2b-64: People › Efficiency and People reports.
+      '/people/efficiency': 'people.efficiency.view', // GET /people/efficiency
+      '/people/reports': 'people.attendance.view', // GET /people/reports/attendance
       '/admin': 'companies.view', // the checklist reads the companies
       '/admin/companies': 'companies.view',
       '/admin/devices': 'devices.view',

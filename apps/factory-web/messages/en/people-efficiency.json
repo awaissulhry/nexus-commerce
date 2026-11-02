@@ -1,0 +1,326 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "cancel": "Cancel",
+    "waitsForPrivacy": "Read once the page has said what it shows."
+  },
+  "section": {
+    "privacy": "What you see here",
+    "tiles": "Period totals",
+    "trend": "Lines over time",
+    "lines": "Lines",
+    "operations": "Planned vs actual by operation",
+    "review": "Standard review queue",
+    "individual": "One person's figures"
+  },
+  "band": {
+    "arrange": "Arrange",
+    "more": "More actions",
+    "export": "Export (line level)",
+    "print": "Print line report"
+  },
+  "scope": {
+    "label": "Scope",
+    "line": "Line",
+    "allLines": "All lines",
+    "style": "Style",
+    "allStyles": "All styles",
+    "compare": "Compare with the previous period"
+  },
+  "updates_one": "{count} update · Show",
+  "updates_other": "{count} updates · Show",
+  "privacy": {
+    "pill": "Line totals · individual figures private",
+    "failed": "We couldn't read what this site lets you see",
+    "failedBody": "Nothing else is read until it is said. Try again.",
+    "pickSite": "Choose a site in the top bar",
+    "pickSiteBody": "The privacy rules and the legal basis are the site's: nothing is read for all sites at once.",
+    "gateOff": "Nobody sees one person's figures at this site: no legal basis is recorded",
+    "youOnRequest": "You may open one person's figures on request; each opening is recorded",
+    "workerHr": "The worker and HR see one person's figures on request; each opening is recorded",
+    "lines_one": "You see lines and operations. A group of fewer than {count} person shows “—”: too few people to show without identifying them.",
+    "lines_other": "You see lines and operations. A group of fewer than {count} people shows “—”: too few people to show without identifying them.",
+    "hrOpen": "HR: one person on request, with a purpose; the opening is recorded and visible to HR and the DPO.",
+    "hrClosed": "One person: not at this site. Until a legal basis is recorded here (union agreement or labour inspectorate authorisation), the page cannot show any person at all.",
+    "worker": "Worker: their own figures on the floor, in My day."
+  },
+  "tile": {
+    "efficiency": "Line efficiency",
+    "onStandard": "On-standard efficiency",
+    "earned": "Earned minutes",
+    "attended": "Attended minutes",
+    "offStandard": "Off-standard minutes"
+  },
+  "tileHint": {
+    "efficiency": "Earned ÷ attended minutes",
+    "onStandard": "Earned ÷ minutes on standard work",
+    "earned": "Good pieces × the standard",
+    "attended": "From the attendance days",
+    "offStandard": "Coded, so not blamed on people"
+  },
+  "tiles": {
+    "period": "{from} – {to}. Lines shown only.",
+    "delta": "{delta} on the previous period",
+    "failed": "We couldn't read the totals",
+    "comparedWith": "Compared with {from} – {to}.",
+    "nothingBefore": "Nothing to compare: no line shown between {from} and {to}."
+  },
+  "notes": {
+    "attendanceOff": "Attended minutes are not shown: this site's attendance purpose is off (Statuto dei Lavoratori art. 4 c.2). Earned minutes still count.",
+    "provisional": "Attended minutes are provisional: some attendance days are not approved yet.",
+    "hiddenLines_one": "{count} line with too few people is left out of the totals too: a total would give it away.",
+    "hiddenLines_other": "{count} lines with too few people are left out of the totals too: a total would give them away.",
+    "traineeDays_one": "{count} trainee day is left out on both sides of the line figures.",
+    "traineeDays_other": "{count} trainee days are left out on both sides of the line figures."
+  },
+  "how": {
+    "title": "How efficiency is computed",
+    "formulas": "Formulas",
+    "sources": "Sources",
+    "exclusions": "What is left out",
+    "formula": {
+      "line": "Line efficiency = earned minutes ÷ attended minutes.",
+      "onStandard": "On-standard efficiency = earned minutes ÷ minutes on standard work (attended less coded off-standard and indirect minutes).",
+      "planned": "Planned efficiency = earned minutes ÷ the planned shift minutes of the people on the line.",
+      "earned": "Earned minutes = good pieces of the standing reports × the operation's standard minutes on the work order.",
+      "actual": "Actual minutes per piece = person-minutes of the closed stretches ÷ pieces reported; pauses are left out."
+    },
+    "source": {
+      "scans": "Production scans and timing",
+      "blocks": "Off-standard blocks",
+      "days": "Attendance days",
+      "standards": "The standards of each routing revision"
+    },
+    "exclusion": {
+      "trainees": "Trainee days: on both sides of the line figures. Bundles a trainee worked on: from the operations.",
+      "oneTap": "One-tap reports: they have no timing, so they count as earned minutes and not as actual minutes.",
+      "offStandard": "Off-standard codes: rejected blocks are left out; the rest come off the minutes on standard work.",
+      "outside": "Work done outside: a report of a subcontract receipt.",
+      "groups": "Any group under the minimum size, also from the totals."
+    }
+  },
+  "trend": {
+    "hint": "One chart per line against its target; never one series per person. A day with too few people is a gap, not a zero.",
+    "efficiency": "Line efficiency",
+    "target": "Target",
+    "chartOf": "Line efficiency of {line} per day",
+    "hiddenDays_one": "{count} day hidden: too few people.",
+    "hiddenDays_other": "{count} days hidden: too few people.",
+    "noTarget": "No target set for this line in Planning.",
+    "failed": "We couldn't read the lines over time",
+    "noAttendance": "No line efficiency without attended minutes",
+    "empty": "No line worked in this period."
+  },
+  "lines": {
+    "line": "Line",
+    "people": "People",
+    "planned": "Planned efficiency",
+    "noLine": "No line",
+    "tableLabel": "Efficiency per line",
+    "count_one": "{count} line",
+    "count_other": "{count} lines",
+    "failed": "We couldn't read the lines",
+    "empty": "No figures in this period."
+  },
+  "tooFew": {
+    "short": "Too few people",
+    "long": "Too few people to show without identifying them.",
+    "settings": "Minimum group size in People settings",
+    "why": "A group smaller than the minimum would show one person's work, so it stays hidden everywhere."
+  },
+  "operations": {
+    "style": "Style",
+    "operation": "Operation",
+    "smv": "Standard minutes",
+    "actual": "Actual average",
+    "bundles": "Bundles counted",
+    "difference": "Difference",
+    "trend": "Days",
+    "state": "State",
+    "days": "Days shown",
+    "daysHidden_one": "{count} day hidden: too few people",
+    "daysHidden_other": "{count} days hidden: too few people",
+    "lastDecision": "Last decision",
+    "noDecision": "None yet",
+    "send": "Send to standard review",
+    "sendCount_one": "Send {count} to standard review",
+    "sendCount_other": "Send {count} to standard review",
+    "inProducts": "Open in Products",
+    "popFailed": "We couldn't read this operation",
+    "openPop": "Open {operation}",
+    "spark": "Difference from the standard per day, {operation}",
+    "sparkEmpty": "No day to show",
+    "tableLabel": "Planned against actual minutes by operation",
+    "count_one": "{count} operation",
+    "count_other": "{count} operations",
+    "dayFilter": "Day",
+    "allDays": "Every day of the period",
+    "failed": "We couldn't read the operations",
+    "empty": "No timed operations in this period.",
+    "hidden_one": "{count} operation hidden: too few people.",
+    "hidden_other": "{count} operations hidden: too few people.",
+    "trainees_one": "{count} bundle a trainee worked on is not counted.",
+    "trainees_other": "{count} bundles a trainee worked on are not counted.",
+    "untimed_one": "{count} one-tap report has no timing, so it is not in the actual minutes.",
+    "untimed_other": "{count} one-tap reports have no timing, so they are not in the actual minutes.",
+    "rule": "Review: more than {percent} % off the standard, in either direction, over at least {bundles} bundles.",
+    "dayShown": "The grid shows {day} only."
+  },
+  "state": {
+    "WITHIN": "Within tolerance",
+    "REVIEW": "Review",
+    "TOO_FEW_BUNDLES": "Too few bundles",
+    "TOO_FEW_PEOPLE": "Too few people"
+  },
+  "decision": {
+    "KEEP": "Keep",
+    "CHANGE": "Change",
+    "INVESTIGATE": "Investigate",
+    "SEND": "Sent to review"
+  },
+  "review": {
+    "smvActual": "Standard → actual",
+    "since": "Since",
+    "why": "On the queue because",
+    "reason": {
+      "OFF_STANDARD": "Off its standard",
+      "INVESTIGATING": "Under investigation",
+      "SENT": "Sent by hand"
+    },
+    "leftOut_one": "{count} operation off its standard is left out",
+    "leftOut_other": "{count} operations off their standard are left out",
+    "leftOutMost": "Too few people worked on them to show without identifying them: with one person per operation that can be most of the queue, so this list is not the whole picture. It is the cost of the rule (Statuto dei Lavoratori art. 4): those operations can only be reviewed once more people work on them, or with a lower minimum group size.",
+    "leftOutSome": "Too few people worked on them to show without identifying them.",
+    "tableLabel": "Operations to review",
+    "count_one": "{count} to review",
+    "count_other": "{count} to review",
+    "failed": "We couldn't read the review queue",
+    "empty": "Nothing to review.",
+    "emptyLeftOut": "Nothing that can be shown: see what is left out above.",
+    "rule": "More than {percent} % off the standard, in either direction, over at least {bundles} bundles of the last {days} days.",
+    "reasonLabel": "Reason (kept with the decision)",
+    "title": "Standard review",
+    "noun": "operation",
+    "figures": "Figures",
+    "window": "{from} – {to}",
+    "notOnQueue": "Not on the queue",
+    "history": "History",
+    "noHistory": "No decision yet.",
+    "decision": "Decision",
+    "proposed": "New standard, minutes per piece",
+    "changeNote": "This records what the standard should become. It changes with a new routing revision in Products, and rates follow only as the law allows.",
+    "law": "Civil Code art. 2101",
+    "lawPlain": "Piece rates change only when working conditions change, and after notice.",
+    "record": "Record decision",
+    "startRevision": "Start the new revision in Products",
+    "done": {
+      "KEEP": "Kept: the standard stays and the operation leaves the queue.",
+      "CHANGE": "Recorded. The standard itself changes with a new revision.",
+      "INVESTIGATE": "Recorded: it stays on the queue until someone decides."
+    },
+    "proposedWas": "proposed {minutes}"
+  },
+  "history": {
+    "KEEP": "{who} kept the standard",
+    "CHANGE": "{who} decided to change the standard",
+    "INVESTIGATE": "{who} started an investigation",
+    "SEND": "{who} sent it to the review"
+  },
+  "bulk": {
+    "keep_one": "Keep {count}",
+    "keep_other": "Keep {count}",
+    "investigate_one": "Investigate {count}",
+    "investigate_other": "Investigate {count}",
+    "done": {
+      "KEEP_one": "{count} standard kept.",
+      "KEEP_other": "{count} standards kept.",
+      "INVESTIGATE_one": "{count} operation under investigation.",
+      "INVESTIGATE_other": "{count} operations under investigation."
+    }
+  },
+  "sent": {
+    "done_one": "{count} operation sent to the standard review.",
+    "done_other": "{count} operations sent to the standard review."
+  },
+  "held": {
+    "reading": "Still reading the figures.",
+    "noReview": "Your role may not decide the standard review.",
+    "busy": "Working…",
+    "pickDecision": "Choose Keep, Change or Investigate first.",
+    "proposed": "Say the new standard in minutes per piece, for example 1,25.",
+    "reason": "Say why: a decision about a standard is kept with its reason.",
+    "reasonLong": "Keep the reason to 500 characters.",
+    "pickPerson": "Choose the person first.",
+    "pickPurpose": "Say the purpose first.",
+    "noteLong": "Keep the note to 500 characters.",
+    "oneAtATime": "Its figures are hidden: open it and decide on its own."
+  },
+  "refused": {
+    "gatePerformance": "The site's legal basis for one person's figures is off, so nothing was shown or recorded.",
+    "gateAttendance": "This site's attendance purpose is off.",
+    "notAllowed": "One person's efficiency is seen only by the worker and by HR (Statuto dei Lavoratori art. 4).",
+    "REVIEW_MOVED": "Someone decided about this operation after you opened it. It has been read again: check it, then decide.",
+    "TOO_FEW_PEOPLE": "Too few people worked on this operation to review it without identifying them.",
+    "STATION_SITE": "At this site the floor records name stations, not people: there is no one person's figure.",
+    "reason": "Say why you open this person's figures.",
+    "range": "Choose a shorter period: at most {days} days."
+  },
+  "individual": {
+    "view": "View one person",
+    "gateOff": "Not at this site: no legal basis is recorded here (Statuto dei Lavoratori art. 4 c.1), so no person can be shown, looked up or chosen.",
+    "notYours": "One person's figures are seen only by the worker and by HR, so there is nobody to choose here.",
+    "available": "Opened one person at a time, with a purpose. No comparison with others, no export, no print."
+  },
+  "person": {
+    "titleOf": "{name}: daily efficiency",
+    "another": "Choose someone else",
+    "show": "Show figures",
+    "recorded": "This view is recorded and visible to HR and the DPO",
+    "period": "{from} – {to} · purpose: {purpose}",
+    "empty": "No solo timed work in this period",
+    "emptyBody": "The opening was still recorded.",
+    "tableLabel": "This person's days",
+    "day": "Day",
+    "pieces": "Pieces",
+    "timed": "Timed minutes",
+    "efficiency": "Efficiency",
+    "denominator": "Efficiency here is earned ÷ the person's own timed minutes, not attended minutes: attendance is kept for attendance.",
+    "traineeDays_one": "{count} trainee day left out.",
+    "traineeDays_other": "{count} trainee days left out.",
+    "sharedReports_one": "{count} report shared with others left out.",
+    "sharedReports_other": "{count} reports shared with others left out.",
+    "noExport": "No comparison, no export, no print. Closing this window forgets the figures.",
+    "noRegister": "You can't choose a person here",
+    "noRegisterBody": "Choosing needs the HR register (people.view).",
+    "who": "Person",
+    "search": "Name or employee code",
+    "purpose": "Purpose",
+    "pickPurpose": "Choose the purpose",
+    "note": "Note (optional)",
+    "scope": "Period: {from} – {to}, the page's."
+  },
+  "purpose": {
+    "COACHING_ASKED": "Coaching the worker asked for",
+    "PAY_QUERY": "A pay query",
+    "WORKER_REQUEST": "The worker's own request"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "keep": "keep",
+    "change": "change",
+    "investigate": "investigate",
+    "moves": "next and previous operation in the review"
+  },
+  "arrange": {
+    "title": "Arrange Efficiency",
+    "titleReports": "Arrange People reports",
+    "list": "Sections",
+    "hint": "Ticked sections show, in this order. What you see here stays first.",
+    "apply": "Apply"
+  },
+  "print": {
+    "title": "Line report",
+    "period": "Period",
+    "privacy": "Line totals only. No person is named or counted here."
+  }
+}
