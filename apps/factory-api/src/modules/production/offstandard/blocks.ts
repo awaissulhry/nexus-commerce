@@ -26,7 +26,7 @@ import { command, StaleVersionError, type CommandCaller, type CommandTools } fro
 import { actorOf } from '../../../core/context'
 import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import type { GateReader } from '../../people/privacy/gate'
-import { workerGateFor } from '../../people/privacy/worker-gate'
+import { workerGateFor, workersAmong } from '../../people/privacy/worker-gate'
 import { officeOf, refuse } from './access'
 import type { CorrectBody, ListBlocksQuery, RecordBlockBody } from './contract'
 import { blocksAround, BLOCK, closedDays, lockBlock, dayKey, editedBlocks, editsOf, linesById, peopleNames, readBlock, readBlocks, readCode, sitesById, stationsById, workerOf, workerUsers, type BlockRow, type CodeRow, type Reader, type Subject } from './store'
@@ -154,7 +154,11 @@ export async function recordOf(db: Reader, block: BlockRow, viewer: { readonly a
   const someone = (id: string | null) => (id ? { id, name: names.get(id) ?? '' } : null)
   const own = (await involvedOf(db, block)).has(viewer.actorId)
   // One person's record of work: their name only where the site's PERFORMANCE gate is on (art. 4 c.1; GATE-LABOUR).
-  const shown = block.workerId !== null && (await workerGateFor(db as GateReader, block.siteId)).open
+  const gate = await workerGateFor(db as GateReader, block.siteId)
+  const shown = block.workerId !== null && gate.open
+  // A team leader who decided on the tablet is a Worker on this record: the same rule. An office user who decided stays.
+  const workers = await workersAmong(db, [block.approvedById, block.rejectedById])
+  const decidedBy = (decider: string | null) => gate.author(decider, decider !== null && workers.has(decider))
   const json = (value: Prisma.JsonValue): Record<string, unknown> => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {})
   return {
     ...rowOf(block, facts),
@@ -162,9 +166,11 @@ export async function recordOf(db: Reader, block: BlockRow, viewer: { readonly a
     workerHidden: block.workerId !== null && !shown,
     note: block.note,
     approvedAt: block.approvedAt ? toUtcIso(block.approvedAt) : null,
-    approvedBy: someone(block.approvedById),
+    approvedBy: someone(decidedBy(block.approvedById).id),
+    approvedByHidden: decidedBy(block.approvedById).hidden,
     rejectedAt: block.rejectedAt ? toUtcIso(block.rejectedAt) : null,
-    rejectedBy: someone(block.rejectedById),
+    rejectedBy: someone(decidedBy(block.rejectedById).id),
+    rejectedByHidden: decidedBy(block.rejectedById).hidden,
     rejectReason: block.rejectReason,
     deviceTime: block.deviceTime ? toUtcIso(block.deviceTime) : null,
     createdAt: toUtcIso(block.createdAt),

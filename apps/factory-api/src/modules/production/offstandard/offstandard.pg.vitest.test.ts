@@ -32,6 +32,7 @@ import { addUser, Browser, startHarness, type Harness, type TestTenant } from '.
  */
 
 let h: Harness
+let decidedOnTablet = ''
 let app: FastifyInstance
 let labour: LabourSeed
 
@@ -470,6 +471,23 @@ describe("the team leader's approval on the tablet, with the PIN (MES-157)", () 
     expect((approved.body as Json).block).toMatchObject({ id: target.id, status: 'APPROVED' })
     expect(await block(target.id)).toMatchObject({ status: 'APPROVED', approvedById: lead })
     expect((await outbox('production.off_standard_decided', target.id)).at(-1)!.payload).toMatchObject({ decidedOn: 'FLOOR' })
+    decidedOnTablet = target.id
+  })
+
+  it('names the team leader who decided on the tablet only behind the same gate; the office person who decided stays (B-W2b-72; art. 4 c.1)', async () => {
+    const url = `/production/offstandard/blocks/${decidedOnTablet}`
+    expect((await ok('supervisor', 'GET', url)).block).toMatchObject({ approvedBy: { id: lead }, approvedByHidden: false, rejectedByHidden: false })
+    const [gate] = await admin(`UPDATE "PeopleLegalGate" SET "switchedOffAt" = now(), "switchedOffById" = $2, "switchOffReason" = 'Made-up test' WHERE "siteId" = $1 AND purpose = 'PERFORMANCE' AND "switchedOffAt" IS NULL RETURNING "tenantId", "companyId", "siteId", basis, "basisReference", "noticeId", "dpiaId"`, [siteA1, actors.manager])
+    const closed = (await ok('supervisor', 'GET', url)).block
+    expect(closed).toMatchObject({ approvedBy: null, approvedByHidden: true })
+    expect(JSON.stringify(closed)).not.toContain(lead)
+    // An office person's decision on a block is not a worker's: it reads the same with the gate off.
+    const decidedInOffice = (await admin<{ id: string }>(`SELECT id FROM "OffStandardEntry" WHERE "tenantId" = $1 AND "approvedById" = $2 LIMIT 1`, [T, actors.supervisor]))[0]!.id
+    expect((await ok('supervisor', 'GET', `/production/offstandard/blocks/${decidedInOffice}`)).block).toMatchObject({ approvedBy: { id: actors.supervisor }, approvedByHidden: false })
+    await admin(
+      `INSERT INTO "PeopleLegalGate" (id, "tenantId", "companyId", "siteId", purpose, basis, "basisReference", "noticeId", "dpiaId", "switchedOnAt", "switchedOnById", "updatedAt") VALUES ($1, $2, $3, $4, 'PERFORMANCE', $5, $6, $7, $8, now(), $9, now())`,
+      [newId(), gate!.tenantId, gate!.companyId, gate!.siteId, gate!.basis, gate!.basisReference, gate!.noticeId, gate!.dpiaId, actors.manager],
+    )
   })
 
   it('asks the PIN again once the step-up window has passed (a signing act)', async () => {
