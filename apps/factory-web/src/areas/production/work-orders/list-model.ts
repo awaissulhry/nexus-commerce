@@ -1,11 +1,12 @@
 import type { LiveState } from '../_shared/hooks'
-import type { OpenLines, OrderOption, ReleaseCheckCode, WorkOrderCounts, WorkOrderRow } from '../_shared/api'
+import type { OpenLines, OrderOption, WorkOrderCounts, WorkOrderRow } from '../_shared/api'
 import type { ListView, Phrase, ProductionCan } from '../_shared/model'
 import type { ReadinessRow } from './daily/api'
 import type { DailyActions, DailyModel } from './daily/model'
 import type { BulkValue } from '@nexus/factory-domain/views/bulk/rules'
 import type { RelativeDay } from '@nexus/factory-domain/views/quick/relative'
 import type { ListMode } from '../../../list-frame/w2b/model'
+import type { BulkReleaseModel } from './every-shift/model'
 
 /** SCR-069 — the work orders list's view model (WorkOrdersListView draws it and fetches nothing). */
 export interface WorkOrdersListModel {
@@ -17,6 +18,8 @@ export interface WorkOrdersListModel {
   /** B-W2b-13: Table · Board · Calendar · Cards (`?mode=`) and the due quick filter (`?due=this-week`), both address terms. */
   mode?: ListMode
   due?: RelativeDay | null
+  /** B-W2b-59: the quick filter "Rush" (`?rush=true`). */
+  rush?: boolean
   /** The site's day (the calendar's today). */
   today?: string
   rows: { items: WorkOrderRow[] | null; more: boolean; problem: string | null }
@@ -50,9 +53,11 @@ export interface WorkOrdersListActions {
   /** B-W2b-13: the mode switch, the due quick filter, a cell or Edit N saved (the row's new values and version). */
   onMode?: (mode: ListMode) => void
   onDue?: (due: RelativeDay | null) => void
+  onRush?: (rush: boolean) => void
   onSaved?: (id: string, after: Readonly<Record<string, BulkValue>>, version: number) => void
   onReleaseMany?: (ids: string[]) => void
   onRunRelease?: () => void
+  onRetryRelease?: () => void
   onCloseRelease?: () => void
   onDismissNotice?: () => void
   onNew?: (open: boolean) => void
@@ -61,13 +66,7 @@ export interface WorkOrdersListActions {
   daily?: DailyActions
 }
 
-/** "Release N work orders": each is checked again by the API; the ones that pass are released, the others stay drafts. */
-export interface BulkReleaseModel {
-  rows: Array<{ id: string; number: string; styleCode: string }>
-  running: boolean
-  done: boolean
-  results: Record<string, { state: 'released'; batchNumber: string | null } | { state: 'held'; codes: ReleaseCheckCode[] } | { state: 'failed'; words: Phrase }>
-}
+export type { BulkReleaseModel }
 
 /** The "New work order" dialog (design wo-new): a sales order, its open lines of ONE style, the sizes, a due date. */
 export interface NewWorkOrderModel {

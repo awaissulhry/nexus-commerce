@@ -8,18 +8,19 @@
   "status": {
     "station": "{station}",
     "plan": "plan v{number}",
-    "asOf": "as of {time}"
+    "asOf": "as of {time}",
+    "person": "My list"
   },
   "fromTablet": "From this tablet",
-  "changed": "List changed · Show",
   "upcoming": "New plan v{number} from {time}",
   "next": {
     "title": "Next",
-    "type": "Next",
+    "type": "Work order",
     "none": {
       "title": "Nothing ready to start yet",
       "body": "Every task here waits for something: see why in the list. Scan a bundle to work on it."
-    }
+    },
+    "current": "In progress"
   },
   "then": {
     "title": "Then",
@@ -53,18 +54,26 @@
   "waitingHere_other": "{count} pieces here",
   "scanToStart": "Scan the bundle to start it.",
   "fact": {
-    "style": "Style",
     "due": "Due",
     "planned": "Planned for",
-    "waiting": "Waiting here"
+    "waiting": "Waiting here",
+    "station": "Station"
   },
   "cantFind": {
     "open": "I can't find it",
     "title": "Can't find it?",
-    "body": "Put it last and go on with the next one, or call for help.",
+    "body": "Call for help, or put it last and go on with the next one.",
     "help": "Call for help: material",
-    "helpHeld": "Calling for help comes with a later update: ask your team leader.",
-    "putLast": "Put it last"
+    "putLast": "Put it last",
+    "held": {
+      "reading": "Checking who to call…",
+      "offline": "This tablet has no network and has not read who to call yet: ask your team leader.",
+      "failed": "The office does not answer, so nobody can be called from here: ask your team leader.",
+      "noStation": "A call goes out from a station, and this tablet is at none: ask your team leader.",
+      "noType": "This site has no material call yet: the office sets it (Production › Floor rules & codes).",
+      "open": "A material call is already open at this station: someone has been told.",
+      "waiting": "Your material call is saved on this tablet: it goes when the network is back."
+    }
   },
   "putLast": {
     "done": "Done",
@@ -98,6 +107,10 @@
     "allDone": {
       "title": "Everything planned here is done",
       "body": "Scan a bundle to work on it."
+    },
+    "warehouse": {
+      "title": "The warehouse task list is not here yet",
+      "body": "It comes with picking and put-away. Work from the tiles on Home. If this tablet belongs to a station, the office places it (Admin › Devices & printers)."
     }
   },
   "noPermission": {
@@ -106,6 +119,62 @@
   },
   "keys": {
     "rows": "Move between the tasks",
-    "open": "Open the task with the focus"
+    "open": "Open the task with the focus",
+    "messages": "Move between the messages",
+    "openMessage": "Open the message with the focus"
+  },
+  "material": {
+    "IN_STOCK": "Material in stock",
+    "ON_THE_WAY": "Material on the way",
+    "MISSING": "Material missing",
+    "NOT_KNOWN": "Material not known",
+    "card": {
+      "IN_STOCK": "Material for this work order: in stock",
+      "ON_THE_WAY": "Material for this work order: on the way",
+      "MISSING": "Material for this work order: something is missing",
+      "NOT_KNOWN": "Material for this work order: not known",
+      "expected": "Material for this work order: on the way, expected {date}"
+    }
+  },
+  "foryou": {
+    "title": "For your work",
+    "messages": "Messages",
+    "messagesCount_one": "{count} message to read",
+    "messagesCount_other": "{count} messages to read",
+    "failed": "The messages could not be read. They show here when the office answers."
+  },
+  "messages": {
+    "title": "Messages on your work orders",
+    "unread": "New",
+    "read": "Read",
+    "count_one": "{count} message",
+    "count_other": "{count} messages",
+    "fromTablet": "From this tablet, as of {time}",
+    "none": {
+      "title": "No open messages",
+      "body": "Go back to your work."
+    }
+  },
+  "message": {
+    "kind": "Message on",
+    "at": "Written",
+    "from": {
+      "OFFICE": "From the office",
+      "FLOOR": "From another station"
+    },
+    "cut": "The rest of this message is in the office.",
+    "gone": {
+      "title": "This message is no longer open",
+      "body": "Go back to the list."
+    }
+  },
+  "call": {
+    "said": "Help called: material for {number} · Op {seq}.",
+    "refused": "The material call for {number} · Op {seq} did not go: ask your team leader.",
+    "refusal": {
+      "NO_STATION": "The material call did not go: this tablet is at no station.",
+      "OTHER_STATION": "The material call did not go: only a team leader calls for another station.",
+      "TYPE_INACTIVE": "The material call did not go: the office switched it off. Ask your team leader."
+    }
   }
 }

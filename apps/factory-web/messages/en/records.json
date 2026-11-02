@@ -20,6 +20,7 @@
   },
   "notice": {
     "noteAdded": "Note added. Only the office sees it.",
+    "noteAddedFloor": "Note added. The office sees it, and the tablets working on this order.",
     "emailQueued": "Email queued. It goes out in a moment; its state shows on the message.",
     "closed": "Thread closed. Nobody can write in it until it is reopened.",
     "reopened": "Thread reopened.",
@@ -65,6 +66,7 @@
     },
     "rule": {
       "note": "Only people in the office see an internal note: {party} never does.",
+      "noteFloor": "The office and the tablets working on this order see an internal note: {party} never does.",
       "noParty": "the customer or supplier",
       "email": "Sent from your company's address, as you. {party} sees it, and their reply comes back to this thread."
     },

@@ -4,9 +4,9 @@ import { defineRoutes } from '../../../core/manifest'
 import { deviceCookieOf } from '../../../platform/auth/floor/cookies'
 import { parseSiteToken } from '../../../platform/auth/floor/tokens'
 import { AUTH_RATE_LIMITS, officeAuthOf } from '../../../platform/auth/sessions/office-auth'
-import { displayContract, heatmapContract, hourlyContract, reasonContract, setTargetsContract, targetsContract, tvContract } from './contract'
+import { displayContract, heatCellContract, heatmapContract, hourlyContract, reasonContract, setTargetsContract, targetsContract, tvContract } from './contract'
 import { manifest } from './manifest'
-import { displayBoard, hourlyBoard, tvBoard, wipHeatmap } from './reads'
+import { displayBoard, heatCell, hourlyBoard, tvBoard, wipHeatmap } from './reads'
 import { giveReason, lineTargets, setTargets } from './targets'
 
 /**
@@ -30,6 +30,8 @@ export default defineRoutes('production.boards', manifest, async (app) => {
   app.get('/production/boards/hourly', { schema: hourlyContract }, async (request) => hourlyBoard(request, request.query))
 
   app.get('/production/boards/heatmap', { schema: heatmapContract }, async (request) => wipHeatmap(request, request.query))
+
+  app.get('/production/boards/heatmap/cell', { schema: heatCellContract }, async (request) => heatCell(request, request.query))
 
   app.get('/production/boards/tv', { schema: tvContract }, async (request) => tvBoard(request, request.query))
 

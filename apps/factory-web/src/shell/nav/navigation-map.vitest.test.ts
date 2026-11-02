@@ -140,6 +140,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/production/cutting': 'production.cutting.view', // GET /production/cutting/cuts (B-W2a-60)
       '/production/scrap': 'production.scrap.view', // GET /production/scrap (B-W2a-60)
       '/production/calls': 'production.calls.view', // GET /production/calls (B-W2b-58)
+      '/production/bundles': 'production.bundles.view', // GET /production/bundles (B-W2b-59)
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
       '/quality/holds': 'quality.holds.view', // GET /quality/holds (B-W2a-67)
@@ -374,6 +375,8 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       pack: 'shipping.pack',
       final: 'quality.inspections.view',
       machine: 'plant.report', // GET /plant/floor/machines (B-W2a-73)
+      help: 'floor.work', // GET /production/calls/station (B-W2b-70)
+      lineview: 'floor.lead', // the team leader's Line view (B-W2b-70)
       scan: 'floor.work',
     })
     for (const rule of TILE_RULES) expect(everything, rule.key).toContain(rule.permission)
@@ -382,11 +385,12 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
   it('a station shows its mode\'s tiles in order, at most six, each with its word in both languages', () => {
     const keys = (mode: FloorMode) => homeTiles(mode, everything, false).map((tile) => tile.key)
     expect(Object.fromEntries(FLOOR_MODES.map((mode) => [mode, keys(mode)]))).toEqual({
-      cutting: ['mywork', 'operation', 'cut', 'bundles', 'machine', 'scan'],
-      sewing: ['mywork', 'operation', 'machine', 'scan'],
-      packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'scan'],
-      inspection: ['mywork', 'operation', 'final', 'machine', 'scan'],
-      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'scan'],
+      // B-W2b-70: a full home keeps the Line view and Scan anything; the frame's Help button opens Call for help from any screen.
+      cutting: ['mywork', 'operation', 'cut', 'bundles', 'lineview', 'scan'],
+      sewing: ['mywork', 'operation', 'machine', 'help', 'lineview', 'scan'],
+      packing: ['mywork', 'operation', 'labels', 'pack', 'lineview', 'scan'],
+      inspection: ['mywork', 'operation', 'final', 'machine', 'lineview', 'scan'],
+      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'lineview', 'scan'],
     })
     for (const mode of FLOOR_MODES) expect(keys(mode).length).toBeLessThanOrEqual(MAX_TILES)
     for (const locale of LOCALES) {

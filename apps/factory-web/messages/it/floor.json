@@ -19,7 +19,7 @@
     "helpDialog": {
       "title": "Aiuto",
       "body": "Chiedi al tuo capoturno, o all'ufficio.",
-      "later": "La chiamata di aiuto dal tablet arriva più avanti."
+      "later": "Accedi per chiamare aiuto da questo tablet."
     },
     "languageDialog": {
       "title": "Lingua",
@@ -330,13 +330,17 @@
       "final": "Controlla, firma e rilascia i capi",
       "pack": "Scansiona i capi nei cartoni, stampa etichette e DDT",
       "labels": "Stampa le etichette capo, solo con certificato valido",
-      "machine": "Segnala un guasto; gli interventi del tecnico"
+      "machine": "Segnala un guasto; gli interventi del tecnico",
+      "help": "Un tocco chiama la persona giusta",
+      "lineview": "Chiamate, in attesa, postazioni"
     },
     "held": {
       "notice": "Prima leggi l'informativa",
       "coming": "In arrivo"
     },
-    "machine": "Guasto macchina"
+    "machine": "Guasto macchina",
+    "help": "Chiama aiuto",
+    "lineview": "Vista linea"
   },
   "scan": {
     "title": "Scansiona",
@@ -561,7 +565,8 @@
       "final": "Rifiutata",
       "again": "Si reinvia da sola",
       "others_one": "Un'altra persona ha {count} azione rifiutata: la vede il capo squadra.",
-      "others_other": "Un'altra persona ha {count} azioni rifiutate: le vede il capo squadra."
+      "others_other": "Un'altra persona ha {count} azioni rifiutate: le vede il capo squadra.",
+      "lineView": "Conflitti di invio: Vista linea"
     },
     "waiting": {
       "title": "In attesa, in ordine di invio",
@@ -625,7 +630,12 @@
       "tick": "Un passo spuntato",
       "note": "Un commento su un ordine di lavoro",
       "noBundleStart": "Tempo senza fascio iniziato",
-      "noBundleEnd": "Tempo senza fascio finito"
+      "noBundleEnd": "Tempo senza fascio finito",
+      "call": "Chiamata di aiuto",
+      "callAnswer": "Risposta a una chiamata",
+      "handover": "Nota di consegna",
+      "onBehalf_one": "Inserimento per conto di altri: {code} · {count} buono",
+      "onBehalf_other": "Inserimento per conto di altri: {code} · {count} buoni"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

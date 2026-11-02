@@ -18,6 +18,7 @@ import {
   mentionQuery,
   mentionsInText,
   mentionSuggestions,
+  noteReachesFloor,
   type ComposerDraft,
   type ComposerMode,
   type EmailStatus,
@@ -188,7 +189,7 @@ export function ThreadPanel({ model, actions }: { model: RecordPanelsViewModel; 
           <ReplyComposer
             title={mode === 'note' ? t('composer.title.note') : t('composer.title.email', { party: partyName })}
             label={mode === 'note' ? t('composer.title.note') : t('composer.title.email', { party: partyName })}
-            ruleLine={mode === 'note' ? t('composer.rule.note', { party: partyName || t('composer.rule.noParty') }) : t('composer.rule.email', { party: partyName })}
+            ruleLine={mode === 'note' ? t(noteReachesFloor(model.record.type) ? 'composer.rule.noteFloor' : 'composer.rule.note', { party: partyName || t('composer.rule.noParty') }) : t('composer.rule.email', { party: partyName })}
             placeholder={mode === 'note' ? t('composer.placeholder.note') : t('composer.placeholder.email')}
             value={body}
             onChange={setBody}

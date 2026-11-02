@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { FileX, MessageSquare, MoreHorizontal, PauseCircle, ShieldOff, Unlock } from 'lucide-react'
+import { FileX, MessageSquare, MoreHorizontal, PauseCircle, ShieldOff, Unlock, Zap } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, Tabs, type TabItem } from '@nexus/ui/components'
 import { DetailHeader } from '@nexus/ui/patterns'
 import { Button, Kbd, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
@@ -24,6 +24,9 @@ import { MaterialsTab } from './MaterialsTab'
 import { OverviewTab } from './OverviewTab'
 import { QualityTab } from './QualityTab'
 import { LabourTab } from '../../labour/view/LabourTab'
+import { minutesOf, SHIFT_NAMESPACE, splitHeld, travellersHref } from '../../every-shift/model'
+import { DocumentsTab } from '../../every-shift/view/DocumentsTab'
+import { SplitDialog } from '../../every-shift/view/SplitDialog'
 import '../../../_shared/production.css'
 
 export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
@@ -38,7 +41,7 @@ export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-mod
  */
 export function WorkOrderRecordView({ model, actions, panels }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; panels?: ReactNode }) {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, 'lists', 'records']}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records']}>
       <WorkOrderRecord model={model} actions={actions} panels={panels} />
     </WithMessages>
   )
@@ -157,7 +160,13 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
     </Button>
   ) : null
 
+  // B-W2b-59: Split work order (⋯, held with its reason) and the traveller's new tab.
+  const ts = useT(SHIFT_NAMESPACE)
+  const heldWords = useScopedT('production')
+  const splitWait = splitHeld(workOrder, model.can)
   const more = [
+    { id: 'split', label: ts('split.open'), disabled: splitWait !== null, ...(splitWait ? { description: heldWords(splitWait.key, splitWait.params) } : {}), onSelect: () => actions?.onOpenSplit?.() },
+    { id: 'traveller', label: ts('docs.openTraveller'), href: travellersHref(model.prefix, [workOrder.id]), target: '_blank' as const },
     ...(mayCancel(workOrder, model.can) ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []),
     {
       id: 'copy',
@@ -227,6 +236,16 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
         <div className="fw-pr-meta-row">
           <span className="fw-pr-meta">
             <Pill tone={STATUS_TONE[workOrder.status]}>{t(`status.${workOrder.status}`)}</Pill>
+            {workOrder.rush && (
+              <Tag tone="danger">
+                <Zap size={11} aria-hidden /> {ts('rush.word')}
+              </Tag>
+            )}
+            {workOrder.splitFrom && (
+              <Link className="fw-pr-link" href={`${model.prefix}/production/work-orders/${workOrder.splitFrom.id}`}>
+                {ts('split.from', { number: workOrder.splitFrom.number })}
+              </Link>
+            )}
             {workOrder.batchNumber && <Tag tone="info">{t('record.batch', { batch: workOrder.batchNumber })}</Tag>}
             {workOrder.revision && <Tag tone="neutral">{t(workOrder.spec.frozen ? 'record.revFrozen' : 'record.revDraft', { revision: workOrder.revision.revision })}</Tag>}
             {workOrder.dueDate && (
@@ -284,7 +303,8 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
           {model.tab === 'bundles' && <BundlesTab workOrder={workOrder} model={model} actions={actions} />}
           {model.tab === 'operations' && <OperationsTab workOrder={workOrder} model={model} actions={actions} />}
           {model.tab === 'quality' && <QualityTab workOrder={workOrder} model={model} actions={actions} />}
-          {model.tab === 'labour' && <LabourTab labour={model.labour} prefix={model.prefix} workOrderId={workOrder.id} draft={workOrder.status === 'DRAFT'} onRetry={actions?.onRetryLabour} />}
+          {model.tab === 'labour' && <LabourTab labour={model.labour} prefix={model.prefix} workOrderId={workOrder.id} draft={workOrder.status === 'DRAFT'} onRetry={actions?.onRetryLabour} minutes={minutesOf(workOrder, model.wip.value)} />}
+          {model.tab === 'documents' && <DocumentsTab workOrder={workOrder} prefix={model.prefix} bundles={activeBundles} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-pr-hint">{t('record.noPanels')}</p>)}
         </div>
         {showDock && (
@@ -295,6 +315,7 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
       </div>
 
       <RecordDialogs workOrder={workOrder} model={model} actions={actions} />
+      {model.split && <SplitDialog workOrder={workOrder} model={model.split} actions={actions?.split} />}
       {daily && <DailyDialogs workOrder={workOrder} daily={daily} actions={actions?.daily} pick={model.pick?.value ?? null} bundles={model.bundles.value} />}
     </div>
   )

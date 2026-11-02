@@ -30,6 +30,8 @@ export interface ProductionCan {
   readonly correctCuts: boolean
   /** production.bundles: reprint a bundle ticket. */
   readonly bundles: boolean
+  /** production.bundles.view: a bundle's full page (B-W2b-59). */
+  readonly bundlesView: boolean
   /** print.labels: send a ticket to a label printer. */
   readonly printLabels: boolean
   /** quality.inspections.view: the Quality tab. */
@@ -48,6 +50,7 @@ export function abilitiesOf(permissions: readonly string[]): ProductionCan {
     release: held.has('workorders.release'),
     correctCuts: held.has('production.cut.correct'),
     bundles: held.has('production.bundles'),
+    bundlesView: held.has('production.bundles.view'),
     printLabels: held.has('print.labels'),
     quality: held.has('quality.inspections.view'),
     pick: held.has('inventory.issue'),
@@ -143,7 +146,8 @@ export function progressPhrase(row: Pick<WorkOrderRow, 'progress' | 'pieces' | '
 // ---- the record --------------------------------------------------------------------------------------------------------------
 
 // B-W2a-72: 'labour' = Labour & cost (design production.workorders rec:labour), between Quality and Activity.
-export const RECORD_TABS = ['overview', 'materials', 'cutting', 'bundles', 'operations', 'quality', 'labour', 'activity'] as const
+// B-W2b-59: 'documents' (design rec:documents wo-docs), the traveller and the tickets.
+export const RECORD_TABS = ['overview', 'materials', 'cutting', 'bundles', 'operations', 'quality', 'labour', 'documents', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 export function tabOf(value: string | null | undefined): RecordTab {

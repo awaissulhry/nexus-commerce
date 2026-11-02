@@ -43,6 +43,11 @@ export const WHAT_KEY = {
   'production.cut.remnant': 'remnant',
   'production.bundles.make': 'bundle',
   'plant.report': 'machine',
+  // B-W2b-70
+  'andon.call.send': 'call',
+  'andon.call.answer': 'callAnswer',
+  'andon.handover.write': 'handover',
+  'production.scan.onBehalf': 'onBehalf',
   // B-W2b-69: the operation screen every shift.
   'production.scan.start': 'start',
   'production.scan.pause': 'pause',

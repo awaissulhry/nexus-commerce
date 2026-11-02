@@ -1,0 +1,402 @@
+{
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "cancel": "Annulla",
+    "close": "Chiudi"
+  },
+  "held": {
+    "noAct": "Serve {permission}",
+    "noPrint": "Per stampare le etichette serve {permission}",
+    "pickFirst": "Spunta prima i fasci",
+    "oneSite": "Ristampa uno stabilimento alla volta: ognuno ha le sue stampanti",
+    "reprintVoid_one": "{count} selezionato è annullato: un fascio annullato non ha un nuovo cartellino",
+    "reprintVoid_other": "{count} selezionati sono annullati: un fascio annullato non ha un nuovo cartellino",
+    "reprintNotOpen_one": "{count} selezionato è di un ordine di lavoro non aperto",
+    "reprintNotOpen_other": "{count} selezionati sono di ordini di lavoro non aperti",
+    "voidAlready": "Questo fascio è già annullato",
+    "voidNotOpen": "Il suo ordine di lavoro non è aperto: i fasci cambiano solo mentre è rilasciato o in corso",
+    "voidScanned_one": "{count} scansione cita questo fascio: annullala o correggila",
+    "voidScanned_other": "{count} scansioni citano questo fascio: annullale o correggile",
+    "noFindings": "Per esaminare le anomalie serve {permission}",
+    "findingFinal": "Questa anomalia è già stata esaminata: è definitivo",
+    "busy": "Ci sto lavorando…",
+    "noWho": "Lo apre solo il titolare: serve {permission}",
+    "ticketVoid": "Un fascio annullato non ha un nuovo cartellino",
+    "ticketNotOpen": "Il suo ordine di lavoro non è aperto: i cartellini cambiano solo mentre è rilasciato o in corso"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In diretta",
+    "offline": "Non in linea: mi riconnetto"
+  },
+  "noAccess": {
+    "title": "Non puoi vedere i fasci",
+    "body": "Questa pagina richiede {permission}."
+  },
+  "tile": {
+    "active": "Attivi",
+    "stuck": "Nessuna scansione da {hours} h",
+    "stuckAny": "Nessuna scansione oltre il limite",
+    "replaced": "Cartellini sostituiti oggi",
+    "onHold": "In blocco",
+    "subcontractor": "Dal terzista",
+    "capped": "Più fasci di quanti una lettura ne segua: le caselle contano i più recenti. Scegli uno stabilimento nella barra in alto."
+  },
+  "place": {
+    "line": "Linea · {seq} {code}",
+    "lineAny": "In linea",
+    "subcontractor": "Terzista · {number}",
+    "subcontractorAny": "Dal terzista",
+    "rework": "Qualità · rilavorazione",
+    "hold": "Qualità · in blocco",
+    "cutting": "Taglio",
+    "finished": "Finito",
+    "void": "Annullato",
+    "next": "Prossima: {seq} {code}"
+  },
+  "stuck": {
+    "for": "{hours} h senza scansione (limite {limit} h)"
+  },
+  "col": {
+    "bundle": "Fascio",
+    "workOrder": "Ordine di lavoro",
+    "style": "Modello",
+    "colour": "Colore",
+    "size": "Taglia",
+    "part": "Parte",
+    "pieces": "Pezzi",
+    "place": "Dove è ora",
+    "lastScan": "Ultima scansione",
+    "status": "Stato",
+    "replaced": "Codici sostituiti",
+    "hides": "Pelli e lotto",
+    "site": "Stabilimento",
+    "more": "Altro",
+    "noScan": "Nessuna scansione",
+    "whole": "Capi interi",
+    "splitOff": "Diviso da un fascio",
+    "piecesCount_one": "{count} pezzo",
+    "piecesCount_other": "{count} pezzi"
+  },
+  "status": {
+    "ACTIVE": "Attivo",
+    "VOID": "Annullato"
+  },
+  "view": {
+    "active": "Attivi (non finiti)",
+    "stuck": "Nessuna scansione oltre il limite",
+    "cutting": "Al taglio",
+    "line": "In linea",
+    "quality": "In qualità",
+    "onHold": "In blocco",
+    "subcontractor": "Dal terzista",
+    "finished": "Finiti",
+    "void": "Annullati",
+    "all": "Tutti"
+  },
+  "list": {
+    "table": "Fasci",
+    "search": "Cerca o scansiona un cartellino",
+    "viewLabel": "Righe",
+    "count_one": "{count} fascio",
+    "count_other": "{count} fasci",
+    "countMore_one": "{count} fascio mostrato, altri sotto",
+    "countMore_other": "{count} fasci mostrati, altri sotto",
+    "failed": "Non è stato possibile leggere i fasci",
+    "noMatch": {
+      "title": "Nessuna riga corrisponde a questi filtri",
+      "body": "Togli i filtri o scansiona un altro cartellino."
+    },
+    "clearFilters": "Togli i filtri",
+    "empty": {
+      "title": "Ancora nessun fascio",
+      "body": "Si creano al tavolo di taglio."
+    },
+    "more": "Mostra altri 50",
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "rowMenu": "Altro per {code}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "openWorkOrder": "Apri l'ordine di lavoro",
+    "reprint_one": "Ristampa {count} cartellino",
+    "reprint_other": "Ristampa {count} cartellini",
+    "reprintNone": "Ristampa cartellini",
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)",
+    "fileName": "fasci",
+    "keysTitle": "Tasti di questo elenco"
+  },
+  "reprint": {
+    "asPdf": "Nessuna stampante: un PDF in questo browser",
+    "printersFailed": "Non è stato possibile leggere le stampanti dello stabilimento: il cartellino si può comunque fare in PDF."
+  },
+  "void": {
+    "title": "Annulla il fascio {code}",
+    "body": "Le scansioni non lo accettano più, i suoi coupon vengono annullati con lui e i pezzi tornano tra i tagliati non in fasci. Non si può tornare indietro.",
+    "reason": "Perché",
+    "reasonShort": "Di' il perché in 3-200 caratteri",
+    "go": "Annulla il fascio",
+    "open": "Annulla il fascio…",
+    "done": "Fascio annullato."
+  },
+  "patterns": {
+    "title": "Controlli sulle scansioni",
+    "days_one": "Ultimo {count} giorno",
+    "days_other": "Ultimi {count} giorni",
+    "law": "Usato dopo aver informato i lavoratori (L. 300/1970 art. 4). Esaminato prima in forma aggregata. Sono spunti di cui parlare, non punteggi.",
+    "lawLabel": "La legge dietro questi controlli",
+    "lawName": "Statuto dei Lavoratori art. 4",
+    "lawPlain": "Gli strumenti che potrebbero anche controllare i lavoratori richiedono un accordo sindacale o un'autorizzazione, e i lavoratori devono esserne informati. Questi controlli guardano fasci e postazioni, mai il rendimento di una persona.",
+    "failed": "Non è stato possibile leggere i controlli",
+    "none": "Nulla di rilevato in questi giorni.",
+    "noLine": "Nessuna linea",
+    "openCount_one": "{count} anomalia: {kind}. Apri il fascio",
+    "openCount_other": "{count} anomalie: {kind}. Apri i fasci",
+    "col": {
+      "line": "Linea",
+      "operation": "Operazione",
+      "kind": "Cosa è stato visto",
+      "open": "Da esaminare",
+      "reviewed": "Esaminate",
+      "dismissed": "Archiviate"
+    }
+  },
+  "checks": {
+    "STATION_SITE": "Non disponibile: questo stabilimento registra le postazioni, non le persone.",
+    "NO_BASIS": "Non disponibile: questo stabilimento non ha una base giuridica registrata.",
+    "GATE_CLOSED": "Spento: la finalità di prestazione non è attiva in questo stabilimento.",
+    "UNKNOWN": "Non è stato possibile leggere i controlli dello stabilimento."
+  },
+  "kind": {
+    "BUNCHED_AT_SHIFT_END": "Scansioni ammassate a fine turno",
+    "MOVED_NOT_SCANNED": "Spostato ma non scansionato",
+    "GAP_BELOW_STANDARD": "Intervallo più breve dello standard"
+  },
+  "seen": {
+    "BUNCHED_AT_SHIFT_END": "{scans} scansioni in {minutes} minuti attorno alla fine di un turno",
+    "MOVED_NOT_SCANNED": "Dichiarato all'operazione {reached}, l'operazione {missing} non ha scansioni",
+    "GAP_BELOW_STANDARD": "{gap} minuti per {pieces} pezzi, lo standard ne chiede almeno {standard}"
+  },
+  "finding": {
+    "OPEN": "Da esaminare",
+    "REVIEWED": "Esaminata",
+    "DISMISSED": "Archiviata",
+    "menu": "Altro per {code}",
+    "open": "Apri il fascio",
+    "markReviewed": "Segna come esaminata",
+    "dismiss": "Archivia",
+    "who": "Mostra chi…",
+    "col": {
+      "bundle": "Fascio",
+      "workOrder": "Ordine di lavoro",
+      "seen": "Cosa è stato visto",
+      "when": "Quando",
+      "status": "Stato",
+      "more": "Altro"
+    },
+    "failed": "Non è stato possibile leggere le anomalie",
+    "none": "Qui non ci sono più anomalie.",
+    "subtitle": "I fasci dietro questo conteggio, mai le persone.",
+    "table": "Anomalie",
+    "count_one": "{count} anomalia",
+    "count_other": "{count} anomalie",
+    "countMore_one": "{count} anomalia mostrata, altre sotto",
+    "countMore_other": "{count} anomalie mostrate, altre sotto",
+    "reviewMany_one": "Segna {count} come esaminata",
+    "reviewMany_other": "Segna {count} come esaminate",
+    "reviewed_one": "{count} anomalia segnata come esaminata.",
+    "reviewed_other": "{count} anomalie segnate come esaminate.",
+    "dismissed_one": "Anomalia archiviata.",
+    "dismissed_other": "Anomalie archiviate.",
+    "dismissTitle": "Archivia l'anomalia su {code}",
+    "dismissNote": "Perché viene archiviata"
+  },
+  "review": {
+    "failed": "Non è stato possibile salvare l'esame.",
+    "changed": "Qualcuno ha esaminato prima questa anomalia: rileggila.",
+    "noteNeeded": "Per archiviare serve il perché"
+  },
+  "who": {
+    "title": "Mostra chi · {code}",
+    "show": "Mostra",
+    "logged": "Questa consultazione viene registrata",
+    "oneFinding": "Chi ha guardato, quale anomalia, perché e chi è stato mostrato finisce nel registro di audit. Una anomalia alla volta.",
+    "basis": "Base giuridica registrata: {kind}, {reference} ({when})",
+    "basisKind": {
+      "UNION_AGREEMENT": "accordo sindacale",
+      "INL_AUTHORISATION": "autorizzazione dell'Ispettorato del lavoro",
+      "NOT_REQUIRED": "nessuna autorizzazione necessaria"
+    },
+    "noScans": "Nessuna scansione di questo fascio nella finestra dell'anomalia.",
+    "table": "Le scansioni dietro questa anomalia",
+    "col": {
+      "when": "Quando",
+      "operation": "Operazione",
+      "worker": "Lavoratore",
+      "station": "Postazione",
+      "good": "Buoni",
+      "scrap": "Scarti",
+      "rework": "Rilav."
+    },
+    "noWorker": "Non indicato",
+    "purpose": "Perché ti servono i nomi",
+    "purposeWord": {
+      "TALK_WITH_THE_WORKER": "Per parlare di questa anomalia con il lavoratore",
+      "WORKER_ASKED": "Lo ha chiesto il lavoratore",
+      "PAY_QUERY": "Una domanda sulla paga"
+    },
+    "note": "Una nota per il registro (facoltativa)",
+    "heldPurpose": "Scegli perché ti servono i nomi",
+    "failed": "Non è stato possibile leggere i nomi.",
+    "gone": "Questa anomalia non c'è più."
+  },
+  "scanKind": {
+    "REPORT": "Dichiarazione",
+    "UNDO": "Annullamento",
+    "CORRECTION": "Correzione"
+  },
+  "record": {
+    "back": "Fasci",
+    "title": "Fascio",
+    "loading": "Leggo il fascio…",
+    "state": {
+      "forbidden": {
+        "title": "Non puoi vedere questo fascio",
+        "body": "Questa pagina richiede {permission}."
+      },
+      "not_found": {
+        "title": "Questo fascio non esiste",
+        "body": "Potrebbe essere di un'altra azienda."
+      },
+      "error": {
+        "title": "Non è stato possibile leggere il fascio"
+      }
+    },
+    "backToList": "Torna ai fasci",
+    "more": "Altro",
+    "tab": {
+      "progress": "Avanzamento",
+      "scans": "Scansioni",
+      "quality": "Qualità",
+      "ticket": "Cartellino"
+    },
+    "tabs": "Le schede del fascio",
+    "voided": "Annullato {when}: {reason}"
+  },
+  "progress": {
+    "title": "Le operazioni in ordine",
+    "none": "L'ordine di lavoro non ha operazioni scansionate.",
+    "state": {
+      "DONE": "Fatta",
+      "HERE": "È qui",
+      "NOT_REACHED": "Non raggiunta"
+    },
+    "good_one": "{count} buono",
+    "good_other": "{count} buoni",
+    "scrap_one": "{count} scarto",
+    "scrap_other": "{count} scarti",
+    "rework_one": "{count} rilavorazione",
+    "rework_other": "{count} rilavorazioni",
+    "where": "Dove si trova",
+    "place": "Dove è ora",
+    "next": "Prossima",
+    "since": "Da"
+  },
+  "scans": {
+    "noRight": {
+      "title": "Non puoi vedere le scansioni di questo fascio",
+      "body": "Le scansioni richiedono {permission}."
+    },
+    "failed": "Non è stato possibile leggere le scansioni",
+    "loading": "Leggo le scansioni…",
+    "title": "Scansioni",
+    "hint": "Solo aggiunte: una correzione si chiede dal reparto o si approva in Manodopera e correzioni, mai qui.",
+    "privacy": "I nomi compaiono solo qui, dentro questo singolo fascio, dove lo stabilimento registra i lavoratori.",
+    "col": {
+      "n": "N.",
+      "kind": "Tipo",
+      "operation": "Operazione",
+      "good": "Buoni",
+      "scrap": "Scarti",
+      "rework": "Rilavorazioni",
+      "reason": "Motivo scarto",
+      "device": "Ora dispositivo",
+      "server": "Ora server",
+      "station": "Postazione",
+      "worker": "Lavoratore",
+      "state": "Note"
+    },
+    "voidedBy": "Annullata da n. {n}",
+    "voids": "Annulla n. {n}",
+    "approved": "Approvata"
+  },
+  "quality": {
+    "holds": "Blocchi",
+    "noHolds": "Nessun blocco su questo fascio o sul suo ordine di lavoro.",
+    "holdOne": "blocco",
+    "holdMany": "blocchi",
+    "reworks": "Rilavorazioni",
+    "noReworks": "Nessuna rilavorazione per questo fascio.",
+    "reworkName": "{count} pezzi · {status}",
+    "reworkOne": "rilavorazione",
+    "reworkMany": "rilavorazioni",
+    "genealogy": "Genealogia",
+    "shades": "Tonalità: {shades}",
+    "treeLabel": "Genealogia del fascio {code}"
+  },
+  "tree": {
+    "bundle": "Fascio",
+    "hide": "Pelle",
+    "lot": "Lotto",
+    "serial": "Capo",
+    "child": "Diviso in",
+    "parent": "Diviso da"
+  },
+  "ticket": {
+    "pdf": "PDF del cartellino",
+    "title": "Il cartellino attuale",
+    "reprint": "Ristampa…",
+    "name": "Cartellino {code}",
+    "workOrder": "Ordine di lavoro",
+    "operations": "Operazioni",
+    "qr": "Codice QR del cartellino {code}",
+    "code": {
+      "barcode": "Codice a barre del cartellino {code}",
+      "qr": "Codice QR del cartellino {code}"
+    },
+    "voided": "Questo fascio è annullato: nessuna scansione accetta questo cartellino.",
+    "replaced": "Codici sostituiti",
+    "noReplaced": "Questo è il primo cartellino.",
+    "replacedHint": "Scansionando un vecchio codice si legge che è stato sostituito.",
+    "reprints": "Ristampe",
+    "col": {
+      "when": "Quando",
+      "new": "Nuovo codice",
+      "old": "Vecchio codice",
+      "reason": "Perché",
+      "where": "Dove",
+      "state": "Stato",
+      "error": "Problema",
+      "code": "Codice",
+      "operation": "Operazione"
+    },
+    "jobs": "Storico di stampa",
+    "noJobsRight": "Lo storico di stampa richiede {permission}.",
+    "noJobs": "Ancora nulla di stampato.",
+    "jobFailed": "La stampante l'ha rifiutato",
+    "coupons": "Coupon per operazione"
+  },
+  "pdf": {
+    "noRight": {
+      "title": "Non puoi stampare cartellini",
+      "body": "Il PDF del cartellino richiede {permission}."
+    },
+    "title": "Cartellino",
+    "held": "Il PDF non è ancora pronto",
+    "print": "Stampa",
+    "storedNowhere": "Creato su richiesta e non conservato.",
+    "loading": "Creo il PDF…"
+  }
+}

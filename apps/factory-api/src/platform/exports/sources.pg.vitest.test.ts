@@ -17,6 +17,7 @@ import { callerFor, type CommandCaller } from '../../core/command'
 import { testAuthenticator, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { loadReports } from '../../modules/insights/reports/registry'
+import { SLOW_TEST_TIMEOUT_MS } from '../../testing/timeouts'
 import { startHarness, WEB_ORIGIN, type Harness } from '../auth/sessions/testing/harness'
 import { processImporters } from '../imports/registry'
 import { readSheet } from '../imports/sheet'
@@ -112,7 +113,8 @@ beforeEach(async () => {
   await admin(`UPDATE "ExportJob" SET status = 'FAILED', "finishedAt" = now(), "failureReason" = 'test reset' WHERE status IN ('QUEUED', 'RUNNING')`)
 })
 
-describe('every list exports (the W1 and W2a lists)', () => {
+// One export per source: slow by nature, and it grows with every list (it ran past the default 5 s under load).
+describe('every list exports (the W1 and W2a lists)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('each source, every column, for the owner: the file’s header is the screen’s, one line per row', async () => {
     for (const source of EXPORT_SOURCES) {
       const columns = columnsOf(source.listKey)

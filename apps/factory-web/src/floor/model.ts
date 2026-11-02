@@ -38,7 +38,7 @@ export function modeOf(station: { workCentreKind: WorkCentreKind } | null): Floo
 
 // ---- the home tiles (design floor.home "tiles": the station's mode AND the person's permissions, fail closed) ----
 
-export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', 'scan'] as const
+export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', /* B-W2b-70 */ 'help', 'lineview', 'scan'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 
 export interface TileRule {
@@ -80,6 +80,11 @@ export const TILE_RULES: readonly TileRule[] = [
   // SCR-179 (B-W2a-73): a machine problem at every station mode (design floor.machine); its API asks plant.report, which
   // every floor role holds (Owner answer H1). Never held by the worker notice: a safety report names the station instead.
   { key: 'machine', permission: 'plant.report', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
+  // SCR-172 (B-W2b-70): Call for help at every station mode (design floor.help); floor.work sends, and a call always goes out
+  // (never held by the worker notice). The frame's Help button opens it from any screen, so a full home may leave the tile out.
+  { key: 'help', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
+  // SCR-168 (B-W2b-70): the team leader's Line view, wherever they sign in (design floor.supervisor; floor.lead).
+  { key: 'lineview', permission: 'floor.lead', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
   { key: 'scan', permission: 'floor.work', modes: 'all', built: true, takesScans: true },
 ]
 
@@ -100,8 +105,11 @@ export interface HomeTile {
  */
 export function homeTiles(mode: FloorMode | null, permissions: readonly string[], noticeBlocksScans: boolean): HomeTile[] {
   const held = new Set(permissions)
-  return TILE_RULES.filter((rule) => (rule.modes === 'all' || (mode !== null && rule.modes.includes(mode))) && held.has(rule.permission) && held.has('floor.work'))
-    .slice(0, MAX_TILES)
+  const fits = TILE_RULES.filter((rule) => (rule.modes === 'all' || (mode !== null && rule.modes.includes(mode))) && held.has(rule.permission) && held.has('floor.work'))
+  // B-W2b-70: Scan anything stays last on a full home; the Line view too (the lead's first job, no other way to it).
+  const kept = fits.filter((rule) => rule.key === 'lineview' || rule.key === 'scan')
+  const first = fits.filter((rule) => !kept.includes(rule)).slice(0, MAX_TILES - kept.length)
+  return [...first, ...kept]
     .map((rule) => ({ key: rule.key, held: noticeBlocksScans && rule.takesScans ? 'notice' : rule.built ? null : 'coming' }))
 }
 

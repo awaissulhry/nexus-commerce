@@ -1,0 +1,161 @@
+{
+  "loading": "Caricamento…",
+  "retry": "Riprova",
+  "saving": "Salvataggio…",
+  "cancel": "Annulla",
+  "close": "Chiudi",
+  "error": {
+    "read": "Lettura non riuscita. Riprova.",
+    "forbidden": "Non hai accesso a questa parte del reparto.",
+    "offline": "Nessuna connessione al server. Riprova."
+  },
+  "tile": {
+    "stuck_one": "Fasci senza scansione da {count} h",
+    "stuck_other": "Fasci senza scansione da {count} h",
+    "stuckAny": "Fasci senza scansione",
+    "calls": "Chiamate di aiuto aperte"
+  },
+  "pace": {
+    "ON_PACE": "In linea",
+    "BEHIND": "In ritardo",
+    "NO_TARGET": "Nessun obiettivo"
+  },
+  "hourly": {
+    "title": "Ora per ora",
+    "hint": "Pezzi all’ora rispetto all’obiettivo della linea",
+    "tip": "Gli obiettivi sono di linea, mai per persona (regola sui ritmi: art. 2100 c.c.). Si vedono solo i totali di linea (Statuto dei Lavoratori art. 4).",
+    "failed": "Impossibile leggere l’ora per ora",
+    "none": {
+      "title": "Nessuna linea in questo sito",
+      "body": "Aggiungi una linea nella configurazione dello stabilimento per vederne le ore."
+    },
+    "lineLabel": "Ora per ora, linea {line}",
+    "graphLabel": "Pezzi all’ora rispetto all’obiettivo, linea {line}",
+    "done": "{done} fatti · {target} obiettivo finora · {day} oggi",
+    "doneNoTarget": "{done} fatti oggi · nessun obiettivo impostato",
+    "noHours": "Nessuna ora lavorativa oggi.",
+    "noTarget": "Nessun obiettivo per oggi: le barre mostrano solo i pezzi.",
+    "pieces": "Pezzi",
+    "met": "Obiettivo raggiunto",
+    "short": "Sotto obiettivo",
+    "target": "Obiettivo",
+    "ofTarget": "{done} su {target}",
+    "noReason": "Motivo non ancora indicato",
+    "calls_one": "{count} chiamata di aiuto nell’ora",
+    "calls_other": "{count} chiamate di aiuto nell’ora",
+    "running": "Ora in corso"
+  },
+  "reason": {
+    "title": "Perché {hour} è sotto obiettivo?",
+    "add": "Aggiungi un motivo",
+    "change": "Cambia il motivo",
+    "code": "Motivo",
+    "pick": "Scegli un motivo…",
+    "note": "Nota",
+    "save": "Salva motivo",
+    "held": {
+      "code": "Scegli prima un motivo.",
+      "note": "Questo motivo richiede una nota."
+    }
+  },
+  "refusal": {
+    "HOUR_NOT_OVER": "Quest’ora non è ancora finita.",
+    "NOT_SHORT": "Quest’ora ha raggiunto l’obiettivo.",
+    "CODE_NOT_LISTED": "Questo motivo non è più in elenco.",
+    "NOTE_NEEDED": "Questo motivo richiede una nota.",
+    "STALE": "Qualcuno ha modificato questi dati nel frattempo.",
+    "PAST_DAY": "Gli obiettivi di un giorno passato sono storia.",
+    "REASON_GIVEN": "Il motivo di quest’ora è stato indicato: l’obiettivo resta.",
+    "NOT_LINE_OF_SITE": "Questa linea è di un altro sito."
+  },
+  "fix": {
+    "HOUR_NOT_OVER": "Indica il motivo quando l’ora è finita.",
+    "NOT_SHORT": "Non serve un motivo.",
+    "CODE_NOT_LISTED": "Scegli un altro motivo.",
+    "NOTE_NEEDED": "Aggiungi qualche parola.",
+    "STALE": "Leggi i nuovi dati e riprova.",
+    "PAST_DAY": "Imposta gli obiettivi di oggi o di un giorno futuro.",
+    "REASON_GIVEN": "Cambia i pezzi invece di toglierlo.",
+    "NOT_LINE_OF_SITE": "Scegli una linea di questo sito."
+  },
+  "targets": {
+    "open": "Imposta obiettivi",
+    "title": "Obiettivi orari · {line}",
+    "subtitle": "Pezzi all’ora di oggi per tutta la linea, mai per persona. Lascia vuota una riga per nessun obiettivo.",
+    "save": "Salva obiettivi",
+    "noHours": "Questa linea non ha ore lavorative oggi.",
+    "hour": "Obiettivo per {hour}",
+    "minutes_one": "{count} minuto lavorativo",
+    "minutes_other": "{count} minuti lavorativi",
+    "noWork": "Nessun tempo lavorativo",
+    "total_one": "{count} pezzo oggi",
+    "total_other": "{count} pezzi oggi",
+    "held": {
+      "number": "Scrivi pezzi interi o lascia vuota la riga.",
+      "reasonGiven": "Un’ora con un motivo mantiene l’obiettivo: cambia i pezzi.",
+      "nothing": "Ancora nessuna modifica."
+    }
+  },
+  "heat": {
+    "title": "Dove si accumulano i fasci",
+    "hint": "Fasci in attesa per linea e operazione; più scuro significa di più, un contorno segna un accumulo",
+    "failed": "Impossibile leggere la mappa",
+    "none": "Nessun fascio in attesa a un’operazione.",
+    "noLine": "Nessuna linea",
+    "cell_one": "{place}: {count} fascio, {pieces} pezzi",
+    "cell_other": "{place}: {count} fasci, {pieces} pezzi",
+    "cellEmpty": "{place}: niente in attesa",
+    "cellStuck_one": "{count} fermo",
+    "cellStuck_other": "{count} fermi",
+    "pile": "accumulo",
+    "piles": "Accumuli: {places}",
+    "pilePlace_one": "{line} · {operation} ({count} fascio)",
+    "pilePlace_other": "{line} · {operation} ({count} fasci)",
+    "noPile": "Nessun accumulo oltre il solito della linea.",
+    "capped": "Più fasci aperti di quanti una lettura ne segue: scegli un sito o una linea."
+  },
+  "cell": {
+    "title": "Fasci a {operation}",
+    "open": "Apri i fasci",
+    "noScan": "Non ancora scansionato"
+  },
+  "col": {
+    "bundle": "Fascio",
+    "workOrder": "Ordine di lavoro",
+    "size": "Taglia",
+    "pieces": "Pezzi",
+    "lastPlace": "Ultimo posto",
+    "lastScan": "Ultima scansione",
+    "station": "Postazione",
+    "hours": "Dall’ultima scansione"
+  },
+  "stuck": {
+    "title": "Fasci fermi",
+    "hint": "Nessuna scansione oltre il limite del sito, in ore lavorative",
+    "capped": "Più fasci aperti di quanti una lettura ne segue: scegli un sito.",
+    "failed": "Impossibile leggere i fasci fermi",
+    "none": "Nessuno ✓",
+    "neverScanned": "Non ancora scansionato",
+    "count_one": "{count} fascio",
+    "count_other": "{count} fasci",
+    "hours": "{hours} h",
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)"
+  },
+  "tv": {
+    "open": "Apri tabellone di linea",
+    "openNewTab": "Apri il tabellone di linea in una nuova scheda",
+    "pick": "Apri tabellone di linea: scegli una linea",
+    "held": "Ancora nessuna linea da mostrare",
+    "line": "Linea",
+    "previous": "Vista precedente",
+    "next": "Vista successiva",
+    "pause": "Pausa",
+    "resume": "Riprendi",
+    "privacy": "Solo totali di linea, come sullo schermo",
+    "noLines": {
+      "title": "Nessuna linea da mostrare",
+      "body": "Aggiungi prima una linea nella configurazione dello stabilimento."
+    }
+  }
+}

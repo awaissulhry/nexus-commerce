@@ -186,6 +186,10 @@
     "nobody": "Nessuno collegato: {stations}",
     "machineDown_one": "{count} macchina ferma",
     "machineDown_other": "{count} macchine ferme",
-    "scoped": "Solo la linea {line}"
+    "scoped": "Solo la linea {line}",
+    "openCalls_one": "{count} chiamata aperta",
+    "openCalls_other": "{count} chiamate aperte",
+    "absent_one": "{count} persona assente",
+    "absent_other": "{count} persone assenti"
   }
 }

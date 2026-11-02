@@ -1,0 +1,78 @@
+/* Production › Bundles (SCR-259): layout only, semantic tokens. */
+.fw-bd-law {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-muted);
+}
+.fw-bd-law p {
+  flex: 1 1 320px;
+  margin: 0;
+}
+.fw-bd-off {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.fw-bd-flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--nds-space-8);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fw-bd-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+.fw-bd-step.is-here {
+  border-color: var(--nds-accent);
+}
+.fw-bd-step-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.fw-bd-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.fw-bd-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+  gap: var(--nds-space-12);
+}
+.fw-bd-qr {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.fw-bd-qr-dark {
+  fill: var(--nds-label-ink);
+}
+.fw-bd-pdf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+.fw-bd-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+@media print {
+  .fw-bd-noprint {
+    display: none;
+  }
+}

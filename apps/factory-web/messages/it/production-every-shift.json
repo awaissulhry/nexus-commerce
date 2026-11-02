@@ -1,0 +1,134 @@
+{
+  "rush": {
+    "word": "Urgente",
+    "field": "Urgente",
+    "label": "Urgente: passa davanti a ogni altro ordine di lavoro nell'assegnazione e sul tablet",
+    "RUSH": "Urgente",
+    "NORMAL": "Non urgente",
+    "priority": "{priority} · Urgente"
+  },
+  "list": {
+    "more": "Altro"
+  },
+  "release": {
+    "open": "Rilascia…",
+    "pickFirst": "Spunta prima le bozze da rilasciare",
+    "tooMany": "Al massimo {max} ordini di lavoro alla volta",
+    "noDraft": "Nessuno dei selezionati è una bozza",
+    "heldBy": "Resta bozza: {checks}",
+    "heldState": "Non rilasciato: è {status}",
+    "refusal": {
+      "held": "Non rilasciato: {status}",
+      "stale": "Qualcuno l'ha cambiato nel frattempo: rileggilo",
+      "missing": "Non trovato, o non più nei tuoi stabilimenti",
+      "forbidden": "Non puoi rilasciare questo ordine di lavoro",
+      "invalid": "L'API l'ha rifiutato",
+      "failed": "Qualcosa è andato storto: su questa riga non è stato scritto nulla"
+    },
+    "already_one": "{count} è già rilasciato.",
+    "already_other": "{count} sono già rilasciati.",
+    "heldTitle_one": "{count} è bloccato:",
+    "heldTitle_other": "{count} sono bloccati:",
+    "released": "Rilasciato",
+    "title_one": "Rilascia {count} ordine di lavoro",
+    "title_other": "Rilascia {count} ordini di lavoro",
+    "summary": "Ognuno viene ricontrollato al rilascio: la specifica si congela e viene dato un numero di lotto. Un rilascio non si annulla.",
+    "metric": {
+      "changing": "Da rilasciare",
+      "already": "Già rilasciati",
+      "held": "Bloccati"
+    },
+    "save_one": "Rilascia {count}",
+    "save_other": "Rilascia {count}",
+    "doneVerb": "rilasciati"
+  },
+  "travellers": {
+    "none": "Nessun ordine di lavoro da stampare",
+    "tooMany": "Al massimo {max} fogli di lavorazione alla volta",
+    "printSelected_one": "Stampa {count} foglio di lavorazione",
+    "printSelected_other": "Stampa {count} fogli di lavorazione",
+    "printShown_one": "Stampa il foglio di lavorazione mostrato",
+    "printShown_other": "Stampa i {count} fogli di lavorazione mostrati"
+  },
+  "split": {
+    "open": "Dividi l'ordine di lavoro…",
+    "title": "Dividi {number}",
+    "subtitle": "I pezzi che scegli passano a una nuova bozza con la sua data di consegna. Le righe d'ordine restano uguali, su due ordini di lavoro.",
+    "go": "Dividi",
+    "cells": "Pezzi per taglia",
+    "col": {
+      "cell": "Colore e taglia",
+      "pieces": "Pezzi",
+      "move": "Sposta",
+      "keeps": "Restano",
+      "material": "Materiale",
+      "parent": "Restano",
+      "child": "Passano"
+    },
+    "moveLabel": "Pezzi di {cell} da spostare",
+    "tooMany": "Troppi",
+    "due": "Consegna del nuovo ordine di lavoro",
+    "dueHint": "Parte dalla consegna di questo ordine di lavoro.",
+    "note": "Una nota (facoltativa)",
+    "reading": "Leggo cosa tiene ciascuna parte…",
+    "outcome": "{number} tiene {keeps} pezzi, {child} ne riceve {gets}.",
+    "newNumber": "il nuovo ordine di lavoro",
+    "materials": "Materiali previsti di ciascuna parte",
+    "heldFrozen": "Si divide solo una bozza: il rilascio congela le taglie",
+    "heldKind": "Una riparazione o un su misura non hanno nulla da dividere",
+    "heldNothing": "Sposta almeno un pezzo",
+    "heldOver": "Una taglia sposta più pezzi di quanti ne ha",
+    "heldAll": "Tieni almeno un pezzo su questo ordine di lavoro",
+    "heldApi": "Questa divisione non si può fare: rileggi l'ordine di lavoro",
+    "changed": "Qualcuno ha cambiato questo ordine di lavoro: rileggilo.",
+    "failed": "Non è stato possibile dividere.",
+    "from": "Diviso da {number}",
+    "fromLabel": "Diviso da",
+    "toLabel": "Diviso in",
+    "child_one": "{number} ({count} pezzo)",
+    "child_other": "{number} ({count} pezzi)"
+  },
+  "minutes": {
+    "title": "Minuti",
+    "hint": "Minuti standard × capi interi dichiarati buoni, solo per questo ordine di lavoro",
+    "value": "{minutes} min",
+    "planned": "Previsti",
+    "earned": "Maturati",
+    "notScanned": "Non scansionata: nulla la dichiara",
+    "offStandard": "I minuti fuori standard si tengono per linea e giorno, non per ordine di lavoro: si vedono sulla giornata della linea in Manodopera e correzioni.",
+    "neverPerson": "Mai per persona: i minuti di un lavoratore stanno solo nella sua scheda."
+  },
+  "docs": {
+    "title": "Documenti",
+    "traveller": "Foglio di lavorazione {number}",
+    "travellerHint": "PDF con codice QR, la carta che viaggia con il lavoro. Creato su richiesta, non conservato.",
+    "travellerDraft": "PDF con codice QR. Finché è bozza dice che le taglie non sono congelate.",
+    "openTraveller": "PDF del foglio di lavorazione",
+    "tickets": "Cartellini dei fasci",
+    "ticketsNone": "Ancora nulla",
+    "ticketsCount_one": "{count} fascio attivo",
+    "ticketsCount_other": "{count} fasci attivi",
+    "openTickets": "Apri i fasci",
+    "spec": "Revisione {revision} del modello",
+    "specFrozen": "Congelata al rilascio",
+    "specDraft": "Non ancora congelata",
+    "openSpec": "Apri il modello",
+    "bundleFullPage": "Apri la pagina intera"
+  },
+  "traveller": {
+    "noRight": {
+      "title": "Non puoi vedere questo foglio di lavorazione",
+      "body": "Richiede {permission}."
+    },
+    "none": {
+      "title": "Nessun ordine di lavoro indicato",
+      "body": "Apri un foglio di lavorazione da un ordine di lavoro o dalla selezione dell'elenco."
+    },
+    "title_one": "Foglio di lavorazione",
+    "title_other": "{count} fogli di lavorazione",
+    "held": "Il PDF non è ancora pronto",
+    "print": "Stampa",
+    "storedNowhere": "Creato su richiesta e non conservato.",
+    "loading": "Creo il PDF…"
+  }
+}
