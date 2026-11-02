@@ -1,0 +1,650 @@
+{
+  "aside": {
+    "checks": "Controlli",
+    "format": "Formato",
+    "month": "Mese",
+    "noFormat": "Nessuno",
+    "people": "Persone nel file",
+    "peopleHint": "Un conteggio: i valori si aprono per matricola.",
+    "title": "Questa esportazione",
+    "version": "Versione",
+    "versionHint": "La v{version} è il file inviato finora."
+  },
+  "band": {
+    "correct": "Crea correzione",
+    "format": "Formato: Zucchetti / CSV / Excel",
+    "keys": "Scorciatoie da tastiera",
+    "mapping": "Mappatura codici",
+    "more": "Altre azioni",
+    "open": "Apri v{version}",
+    "past": "Esportazioni passate",
+    "send": "Invia con link sicuro",
+    "start": "Avvia esportazione di {month}",
+    "startPlain": "Avvia un'esportazione"
+  },
+  "cancel": {
+    "heldReason": "Scrivi il motivo.",
+    "reason": "Motivo",
+    "submit": "Annulla bozza",
+    "title": "Annulla la bozza di {month}"
+  },
+  "change": {
+    "ADDED": "Aggiunto",
+    "CHANGED": "Cambiato",
+    "REMOVED": "Rimosso"
+  },
+  "check": {
+    "AGENCY_LEFT_OUT": {
+      "done": "Nessuno è escluso.",
+      "left_one": "{count} persona in somministrazione o esterna è esclusa: la paga il suo datore di lavoro.",
+      "left_other": "{count} persone in somministrazione o esterne sono escluse: le paga il loro datore di lavoro.",
+      "name": "Lavoratori in somministrazione esclusi"
+    },
+    "ANOMALIES_CLEARED": {
+      "done": "Nessuna anomalia aperta.",
+      "left_one": "{count} anomalia è ancora aperta.",
+      "left_other": "{count} anomalie sono ancora aperte.",
+      "name": "Anomalie risolte"
+    },
+    "CODES_MAPPED": {
+      "done": "Ogni codice che serve al file è mappato.",
+      "left_one": "{count} codice non ha il codice del fornitore.",
+      "left_other": "{count} codici non hanno il codice del fornitore.",
+      "name": "Codici mappati",
+      "warn_one": "{count} codice non ha il codice del fornitore. Questo formato stampa i nostri codici, quindi può partire.",
+      "warn_other": "{count} codici non hanno il codice del fornitore. Questo formato stampa i nostri codici, quindi può partire."
+    },
+    "DAYS_APPROVED": {
+      "done": "Ogni giorno è approvato.",
+      "left_one": "{count} giorno non è approvato.",
+      "left_other": "{count} giorni non sono approvati.",
+      "name": "Giorni approvati"
+    },
+    "EMPLOYEE_CODES": {
+      "done": "Ogni persona ha una matricola.",
+      "left_one": "{count} persona non ha la matricola.",
+      "left_other": "{count} persone non hanno la matricola.",
+      "name": "Matricole"
+    },
+    "LAYOUT_FITS": {
+      "done": "Ogni valore entra nella sua colonna.",
+      "left_one": "{count} valore non entra in una colonna di questo formato.",
+      "left_other": "{count} valori non entrano in una colonna di questo formato.",
+      "name": "I valori entrano nel formato"
+    },
+    "LAYOUT_NOT_CONFIRMED": {
+      "done": "Il formato è confermato.",
+      "left": "Il formato del fornitore non è ancora confermato dal consulente del lavoro.",
+      "name": "Formato confermato"
+    },
+    "LEAVERS": {
+      "done": "Nessuna cessazione questo mese.",
+      "left_one": "{count} cessazione è segnalata in questo file.",
+      "left_other": "{count} cessazioni sono segnalate in questo file.",
+      "name": "Cessazioni segnalate"
+    },
+    "MONTH_CLOSED": {
+      "done": "{month} è chiuso.",
+      "left": "{month} non è chiuso: chiudilo prima in Presenze.",
+      "name": "Mese chiuso"
+    },
+    "NOT_ON_FILE": {
+      "done": "Ogni dipendente attivo è nel file.",
+      "left_one": "{count} dipendente attivo non ha giorni né competenze questo mese, quindi non è nel file.",
+      "left_other": "{count} dipendenti attivi non hanno giorni né competenze questo mese, quindi non sono nel file.",
+      "name": "Dipendenti attivi non nel file"
+    },
+    "PAY_PERIOD_LOCKED": {
+      "done": "Il periodo paga è bloccato, oppure il cottimo non è attivo in questo mese.",
+      "left": "Il cottimo è attivo in {month}: prima va bloccato il suo periodo paga.",
+      "name": "Periodo paga bloccato"
+    },
+    "PRODUCTION_DAYS": {
+      "done": "I giorni di produzione sono chiusi.",
+      "left_one": "{count} giorno di linea non è chiuso in Produzione › Manodopera e rettifiche.",
+      "left_other": "{count} giorni di linea non sono chiusi in Produzione › Manodopera e rettifiche.",
+      "name": "Giorni di produzione chiusi"
+    }
+  },
+  "checks": {
+    "counts": "Bloccanti: {blocking} · Avvisi: {warnings}",
+    "recorded": "\"Mostrami\" nomina persone solo con il permesso, e ogni apertura viene registrata."
+  },
+  "col": {
+    "amount": "Importo",
+    "changed": "Cosa è cambiato",
+    "changedRow": "Cambiati",
+    "company": "Società",
+    "downloads": "Download",
+    "employeeCode": "Matricola",
+    "expires": "Scade",
+    "format": "Formato",
+    "kind": "Tipo",
+    "lastChanged": "Ultima modifica",
+    "lastDay": "Ultimo giorno",
+    "linkState": "Link",
+    "made": "Creato da, il",
+    "meaning": "Significato",
+    "more": "Azioni",
+    "ourCode": "Nostro codice",
+    "people": "Persone",
+    "period": "Periodo",
+    "person": "Persona",
+    "providerCode": "Codice fornitore (voce, causale)",
+    "quantity": "Quantità",
+    "seal": "Sigillo",
+    "sent": "Inviato a · scaricato",
+    "to": "A",
+    "uses": "Utilizzi",
+    "version": "Versione"
+  },
+  "column": {
+    "amount": "Importo",
+    "code": "Codice fornitore",
+    "companyCode": "Codice ditta",
+    "constant": "Testo fisso",
+    "currency": "Valuta",
+    "employeeCode": "Matricola",
+    "kind": "Tipo",
+    "lastDay": "Ultimo giorno di chi cessa",
+    "meaning": "Significato",
+    "minutes": "Minuti",
+    "month": "Mese",
+    "ourCode": "Nostro codice",
+    "periodEnd": "Ultimo giorno",
+    "periodStart": "Primo giorno",
+    "quantity": "Quantità",
+    "revision": "Versione",
+    "unit": "Unità"
+  },
+  "columns": {
+    "add": "Aggiungi una colonna",
+    "comma": "Virgola",
+    "companyCode": "Codice ditta paghe",
+    "companyCodeHint": "Vuoto: il codice della società.",
+    "date": "Formato data",
+    "decimal": "Separatore decimale",
+    "delimiter": {
+      "0": "Punto e virgola ;",
+      "1": "Virgola ,",
+      "2": "Tabulazione",
+      "3": "Barra |"
+    },
+    "delimiterLabel": "Separatore di colonna",
+    "dot": "Punto",
+    "dropsConfirmation": "Salvare nuove colonne annulla la conferma del consulente.",
+    "encoding": "Set di caratteri",
+    "format": "Formato della colonna {number}",
+    "formatDefault": "Formato predefinito",
+    "header": "Intestazione della colonna {number}",
+    "headerHint": "Intestazione",
+    "headerRow": "La prima riga contiene le intestazioni",
+    "held": {
+      "format": "La colonna {number} ha un formato non adatto.",
+      "key": "Scegli il contenuto della colonna {number}.",
+      "name": "Dai un nome al formato.",
+      "none": "Un formato ha almeno una colonna.",
+      "other": "Controlla i separatori e il formato data.",
+      "value": "La colonna {number} deve dire cosa stampa.",
+      "width": "La colonna {number} richiede una larghezza intera da 1 a 200."
+    },
+    "implied_one": "Solo cifre, {count} decimale implicito",
+    "implied_other": "Solo cifre, {count} decimali impliciti",
+    "key": "Contenuto della colonna {number}",
+    "list": "Colonne, in ordine",
+    "name": "Nome del formato",
+    "number_one": "{count} decimale",
+    "number_other": "{count} decimali",
+    "remove": "Rimuovi la colonna {number}",
+    "save": "Salva tracciato",
+    "value": "Testo della colonna {number}",
+    "valueHint": "Stampa sempre questo",
+    "width": "Larghezza della colonna {number}",
+    "widthHint": "Largh."
+  },
+  "common": {
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "retry": "Riprova"
+  },
+  "confirm": {
+    "by": "Confermato da",
+    "byHint": "Il nome del consulente o del suo studio.",
+    "held": {
+      "by": "Scrivi chi l'ha confermato.",
+      "on": "Scegli il giorno."
+    },
+    "item": {
+      "1": "Il tracciato del fornitore: il record, le larghezze e i formati (la base Zucchetti qui è inventata; la sostituisce il loro esempio).",
+      "10": "Che una correzione sostituisca l'intero file (la v2 sostituisce la v1) invece di portare solo le differenze.",
+      "11": "Il set di caratteri e i fine riga del file.",
+      "12": "Per quanto tempo si conserva la nostra copia (qui cinque anni).",
+      "2": "Il formato di file che importano: testo a larghezza fissa, testo delimitato o XML.",
+      "3": "I loro codici (voci, causali) per ogni tipo di ore, codice di assenza e tipo di competenza.",
+      "4": "Il codice ditta con cui il loro software ci conosce.",
+      "5": "Ore decimali (7,50) invece di ore e minuti, e come si scrivono gli importi negativi.",
+      "6": "Che le ore notturne e festive vadano come righe \"di cui\" accanto alle ore ordinarie.",
+      "7": "Che le persone in somministrazione ed esterne restino fuori dal file.",
+      "8": "Come si segnala l'ultimo giorno di lavoro di chi cessa.",
+      "9": "Che le competenze di un mese precedente abbiano un codice proprio."
+    },
+    "lead": "Registra chi ha confermato questo tracciato sull'esempio del consulente. Nexus non verifica nulla: la dichiarazione è tua. Cambiare poi le colonne la annulla.",
+    "list_one": "Cosa deve confermare il consulente del lavoro ({count})",
+    "list_other": "Cosa deve confermare il consulente del lavoro ({count})",
+    "on": "Il",
+    "save": "Salva la conferma",
+    "takeBack": "Annulla la conferma",
+    "title": "Conferma del consulente per {name}"
+  },
+  "correct": {
+    "changed": "Cosa è cambiato: {people} persone, {values} valori.",
+    "corrections_one": "Contiene {count} correzione di un giorno chiuso.",
+    "corrections_other": "Contiene {count} correzioni di giorni chiusi.",
+    "from": "Da",
+    "links": "I link attivi della v{version} vengono ritirati.",
+    "made": "{number} · {month} · v{version}",
+    "madeBody": "Sostituisce la v{version} per il consulente; la v{version} resta conservata. I link attivi del file sostituito sono ritirati. Invia quello nuovo.",
+    "madeTitle": "La v{version} è stata creata",
+    "make": "Crea v{version}",
+    "question": "Creare la v{version} di {month}?",
+    "reading": "Lettura di cosa è cambiato…",
+    "readingChanges": "Apertura di cosa è cambiato…",
+    "replaces": "La v{version} sostituisce la v{previous} per il consulente; la v{previous} resta conservata.",
+    "review": "Cosa è cambiato, per matricola",
+    "show": "Mostra cosa è cambiato",
+    "title": "Crea esportazione di correzione",
+    "to": "A"
+  },
+  "csv": {
+    "at": "Creato il",
+    "company": "Società",
+    "downloaded": "Scaricato il",
+    "file": "esportazioni-paghe.csv",
+    "format": "Formato",
+    "made": "Creato da",
+    "number": "Numero",
+    "period": "Periodo",
+    "seal": "Sigillo (SHA-256)",
+    "sent": "Inviato a",
+    "status": "Stato",
+    "version": "Versione"
+  },
+  "file": {
+    "byCode": "Il file è per matricola, mai per nome.",
+    "clock": "Orologio del server Nexus",
+    "dataKind": "File di esportazione · {format} · {count} righe",
+    "dataTitle": "File di esportazione · {month} · v{version}",
+    "download": "Scarica",
+    "failed": "Impossibile aprire il file",
+    "forbiddenBody": "Il tuo ruolo non raggiunge tutti i siti di questa società.",
+    "heldTitle": "Questo file non si apre per te",
+    "list": "File della v{version}",
+    "noFile": "Questa esportazione non ha questo file.",
+    "open": "Apri",
+    "opening": "Apertura del riepilogo…",
+    "reading": "Lettura del file…",
+    "recorded": "Ogni apertura e download viene registrato.",
+    "seal": "File paghe di {month}",
+    "summaryKind": "Riepilogo esportazione (PDF) · {count} righe",
+    "summaryTitle": "Riepilogo esportazione · {month} · v{version}",
+    "window": "Apri {name} in una nuova scheda"
+  },
+  "format": {
+    "DELIMITED": "Testo delimitato (CSV)",
+    "FIXED_WIDTH": "Testo a larghezza fissa",
+    "SPREADSHEET": "Excel",
+    "add": "Aggiungi un formato",
+    "archive": "Archivia",
+    "columns": "Colonne CSV",
+    "columnsFixed": "Colonne del file",
+    "confirm": "Conferma del consulente",
+    "description": "{format} · {count} colonne",
+    "failed": "Impossibile leggere i formati",
+    "lead": "Il tracciato del file. Uno generico funziona con qualsiasi consulente da subito.",
+    "leadFile": "I formati della società. Una correzione mantiene il formato del file che sostituisce.",
+    "menu": "Azioni di {name}",
+    "none": {
+      "body": "Aggiungine uno: un CSV generico funziona con qualsiasi consulente.",
+      "title": "Ancora nessun formato"
+    },
+    "reading": "Lettura dei formati…",
+    "title": "Formato"
+  },
+  "gate": {
+    "body": "Un mese si può leggere solo dopo aver attivato la finalità presenze in un sito, in Persone › Impostazioni persone. Le esportazioni passate restano qui.",
+    "title": "Le presenze sono spente in tutti i siti di questa società",
+    "wizardBody": "Attiva prima le presenze in Persone › Impostazioni persone: finché sono spente non si legge nulla di una persona.",
+    "wizardTitle": "Nessun mese si può ancora leggere"
+  },
+  "held": {
+    "blocking_one": "{count} controllo bloccante ferma l'esportazione",
+    "blocking_other": "{count} controlli bloccanti fermano l'esportazione",
+    "busy": "In corso…",
+    "firstStep": "Questo è il primo passo.",
+    "noExportYet": "Questo mese non ha ancora un file.",
+    "noLayout": "Scegli prima un formato.",
+    "noManage": "Creare e inviare un file richiede people.payroll.manage.",
+    "noPay": "Questo file contiene importi: serve il permesso paghe.",
+    "noReach": "Il tuo ruolo non raggiunge tutti i siti di questa società.",
+    "noRecords": "Serve people.payroll.records.",
+    "notClosed": "{month} non è chiuso · Chiudilo in Presenze",
+    "notExported": "Solo un file esportato si apre o si invia.",
+    "notRead": "Il mese è ancora in lettura.",
+    "nothingChanged": "Nulla è cambiato dalla v{version}.",
+    "replaced": "Una versione più recente ha sostituito questo file."
+  },
+  "keys": {
+    "continue": "Continua",
+    "next": "Passo successivo",
+    "previous": "Passo precedente",
+    "start": "Avvia l'esportazione"
+  },
+  "kind": {
+    "ABSENCE": "Assenza",
+    "EARNING": "Competenza",
+    "HOUR": "Ore"
+  },
+  "layout": {
+    "confirmed": "Confermato",
+    "generic": "Generico",
+    "notConfirmed": "Tracciato {provider} non confermato dal consulente del lavoro",
+    "notConfirmedBody": "È una forma di partenza finché il loro esempio non la sostituisce: il file potrebbe non essere importato. Può comunque partire, con questo avviso sul riepilogo e nella mail.",
+    "notConfirmedShort": "Non confermato"
+  },
+  "link": {
+    "EXPIRED": "Scaduto",
+    "LIVE": "Attivo",
+    "REVOKED": "Ritirato",
+    "USED_UP": "Esaurito"
+  },
+  "list": {
+    "allYears": "Tutti gli anni",
+    "cancel": "Annulla bozza",
+    "changed": "{people} persone, {values} valori",
+    "correct": "Crea correzione",
+    "countMore_one": "{count} esportazione, altre da mostrare",
+    "countMore_other": "{count} esportazioni, altre da mostrare",
+    "count_one": "{count} esportazione",
+    "count_other": "{count} esportazioni",
+    "csv_one": "Esporta {count} in CSV",
+    "csv_other": "Esporta {count} in CSV",
+    "downloaded": "Scaricato {at}",
+    "empty": {
+      "body": "Il primo file di un mese chiuso parte da qui.",
+      "title": "Ancora nessuna esportazione"
+    },
+    "failed": "Impossibile caricare le esportazioni",
+    "firstFile": "Primo file",
+    "lead": "Ogni file creato, con cosa è cambiato rispetto al precedente. Qui nessun importo e nessuna persona.",
+    "more": "Mostra altre",
+    "noMatch": {
+      "body": "Mostra tutti gli anni per vedere le altre.",
+      "title": "Nessuna esportazione nel {year}"
+    },
+    "noNumber": "Nessun numero",
+    "notDownloaded": "Non scaricato",
+    "notSent": "Non inviato",
+    "open": "Apri esportazione",
+    "replaced": "Sostituito",
+    "rowMenu": "Azioni di {month} v{version}",
+    "send": "Invia con link sicuro",
+    "slow": "Caricamento delle esportazioni in corso…",
+    "someone": "Qualcuno",
+    "summary": "Riepilogo esportazione (PDF)",
+    "title": "Esportazioni",
+    "yearLabel": "Anno"
+  },
+  "mapping": {
+    "count_one": "{count} codice",
+    "count_other": "{count} codici",
+    "editor": "Codice fornitore di {code}",
+    "empty": "Nessun codice",
+    "failed": "{code} non è stato salvato",
+    "never": "Mai",
+    "notInUse": "Non più usato da Nexus",
+    "notMapped": "Non mappato",
+    "saved": "Salvato",
+    "unmapped_one": "{count} codice senza codice del fornitore",
+    "unmapped_other": "{count} codici senza codice del fornitore"
+  },
+  "month": {
+    "failed": "Impossibile leggere questo mese"
+  },
+  "noAccess": {
+    "body": "Questa pagina richiede people.payroll.view. Chiedi al tuo amministratore.",
+    "title": "Non puoi aprire Esportazione paghe"
+  },
+  "notPayroll": "Nexus non elabora le paghe: prepara un file per il consulente del lavoro, che le elabora.",
+  "notice": {
+    "archived": "{name} è archiviato.",
+    "layoutSaved": "{name} è salvato."
+  },
+  "period": {
+    "close": "Chiusura del mese (Presenze)",
+    "closeIt": "Chiudilo in Presenze",
+    "closeLater": "Chiudilo in Persone › Presenze, quando quella pagina sarà disponibile.",
+    "closed": "{month} è chiuso",
+    "company": "Società",
+    "companyCode": "Codice ditta paghe",
+    "companyCodeHint": "Come il fornitore conosce la società. Si cambia nelle colonne del formato.",
+    "correction": "{month} ha già un file (v{version}): uno nuovo è una correzione e lo sostituisce per il consulente.",
+    "first": "Il primo file di {month}.",
+    "gateOff": "Presenze spente",
+    "gateOn": "Presenze attive",
+    "month": "Mese",
+    "notClosed": "{month} non è chiuso",
+    "sites": "Siti della società",
+    "wholeCompany": "Un'esportazione paghe riguarda tutta la società: il sito nella barra in alto qui non restringe nulla."
+  },
+  "pill": {
+    "CORRECTION_PENDING": "Esportato il {day} · v{version} · correzione da fare: {people} persone, {values} valori",
+    "EXPORTED": "Esportato il {day} · v{version}",
+    "NOT_EXPORTED": "{month} · non esportato"
+  },
+  "place": {
+    "ATTENDANCE": "Apri Presenze",
+    "CODE_MAPPING": "Apri Mappatura codici",
+    "EMPLOYEES": "Apri Dipendenti",
+    "LAYOUTS": "Apri il formato",
+    "PIECE_RATES": "Apri Cottimi",
+    "PRODUCTION_LABOUR": "Apri Manodopera e rettifiche",
+    "notBuilt": "{place}: questa pagina non è ancora disponibile."
+  },
+  "preview": {
+    "changedPeople": "Persone cambiate",
+    "changedTotal": "Valori cambiati",
+    "changedValues_one": "{count} valore",
+    "changedValues_other": "{count} valori",
+    "count_one": "{count} matricola",
+    "count_other": "{count} matricole",
+    "leaver": "Ultimo giorno {day}",
+    "noChanged": "Nulla è cambiato",
+    "noChangedBody": "Nessuna riga differisce dal file precedente.",
+    "noCode": "Senza matricola",
+    "noPay": "Gli importi sono omessi: serve il permesso paghe.",
+    "noRight": {
+      "title": "I numeri si aprono con people.payroll.records"
+    },
+    "nobody": "Nessuno nel file",
+    "nobodyBody": "Nessun dipendente ha giorni o competenze in questo mese.",
+    "onlyChanged": "Solo le righe cambiate",
+    "open": "Mostra i numeri",
+    "people_one": "{count} persona nel file",
+    "people_other": "{count} persone nel file",
+    "recorded": "L'apertura viene registrata.",
+    "totals": "Totali della società"
+  },
+  "privacy": {
+    "law": "GDPR art. 5(1)(c), art. 32",
+    "lawPlain": "Viaggiano solo i dati che servono al consulente, e viaggiano protetti.",
+    "text": "Questa pagina mostra stati e conteggi. I valori si aprono per matricola, mai per nome.",
+    "who": "Valori e file: chi ha people.payroll.records su tutti i siti della società; gli importi richiedono anche il permesso paghe. Ogni apertura viene registrata."
+  },
+  "problem": {
+    "conflict": "Qualcuno lo ha cambiato nel frattempo: è stato riletto, riprova.",
+    "definition": "Le colonne di questo formato non sono valide.",
+    "email": "Questo non è un indirizzo mail.",
+    "forbidden": "Il tuo ruolo non lo consente.",
+    "gate": "Le presenze sono spente in tutti i siti di questa società.",
+    "invalid": "Controlla ciò che hai scritto.",
+    "notFound": "Qui non c'è nulla: potrebbe essere stato rimosso.",
+    "rateLimited": "Troppi tentativi: attendi un momento.",
+    "signedOut": "Sei uscito. Accedi di nuovo.",
+    "unavailable": "Il servizio non ha risposto. Riprova."
+  },
+  "record": {
+    "back": "Esportazione paghe",
+    "cancelled": "Questa esportazione è stata annullata",
+    "checks": "Controlli al momento dell'esportazione",
+    "checksLead": "Come erano quando il file è stato creato.",
+    "downloaded": "Scaricato il",
+    "draft": "Questa esportazione è una bozza: non ha un file",
+    "draftBody": "Un errore l'ha lasciata. La prossima esportazione del mese la sostituisce, oppure annullala.",
+    "file": "Il file",
+    "links": "Link sicuri",
+    "next": "La versione più recente",
+    "noLinks": "Non inviato con link.",
+    "noun": "Esportazione passata",
+    "open": "Mostra i numeri",
+    "previous": "v{version}",
+    "reading": "Apertura dei numeri…",
+    "replacedBy": "Sostituito da",
+    "replaces": "Sostituisce",
+    "sentTo": "Inviato a (link sicuro)",
+    "title": "{month} · v{version}",
+    "uses": "{used} di {max}",
+    "values": "Cosa ha inviato questo file",
+    "withdrawn": "Il link a {email} è stato ritirato."
+  },
+  "refusal": {
+    "ALREADY_EXPORTED": "Questo mese è già esportato: crea una correzione.",
+    "CHANGED_WHILE_MAKING": "Qualcosa è cambiato mentre il file veniva creato: riprova.",
+    "CHECKS_OPEN_one": "{count} controllo bloccante ferma l'esportazione: apri Controlli.",
+    "CHECKS_OPEN_other": "{count} controlli bloccanti fermano l'esportazione: apri Controlli.",
+    "LAYOUT_ARCHIVED": "Questo formato è archiviato: scegline un altro.",
+    "LINK_NOT_LIVE": "Questo link è già stato ritirato.",
+    "NAME_TAKEN": "Questa società ha già un formato con questo nome.",
+    "NOTHING_CHANGED": "Nulla è cambiato dall'ultimo file.",
+    "NOTHING_EXPORTED": "Questo mese non ha ancora un'esportazione: crea la prima.",
+    "NOT_DRAFT": "Si annulla solo una bozza.",
+    "NOT_EXPORTED": "Si invia solo un file esportato.",
+    "NOT_LATEST": "Una correzione sostituisce l'ultimo file del mese.",
+    "NOT_OUR_CODE": "Questo non è uno dei nostri codici.",
+    "REPLACED": "Una versione più recente ha sostituito questo file: invia quella.",
+    "SUPPRESSED": "Questo indirizzo non accetta la nostra posta: chiedine un altro."
+  },
+  "send": {
+    "carriesPay": "Questo file contiene importi: per crearlo serve il permesso paghe.",
+    "fileOf": "La v{version} è il file di {month}. Da allora nulla è cambiato.",
+    "format": "Formato",
+    "held": {
+      "days": "Il link dura da 1 a {max} giorni.",
+      "email": "Scrivi l'indirizzo del consulente.",
+      "uses": "Il link consente da 1 a {max} download."
+    },
+    "make": "Crea {month} · v{version}",
+    "makeNext": "Crea v{version}",
+    "making": "Creazione del file di {month}…",
+    "makingDetail": "Il file dati e il suo riepilogo.",
+    "month": "Mese",
+    "noPage": "La pagina di download del consulente arriverà in una fase successiva: fino ad allora il consulente non può scaricare il file da un browser. Scaricalo qui e consegnalo tu.",
+    "note": "Nota",
+    "noteHint": "Resta con l'esportazione, non viene inviata.",
+    "openRecord": "Apri questa esportazione",
+    "pending": "Correzione da fare: {people} persone, {values} valori differiscono dalla v{version}",
+    "pendingBody": "Una correzione contiene tutto il mese e sostituisce il file per il consulente. Il file precedente resta conservato.",
+    "people": "Persone nel file",
+    "send": "Invia al consulente del lavoro",
+    "version": "Versione",
+    "versionHint": "Numerata alla creazione."
+  },
+  "sendDialog": {
+    "days": "Scade dopo (giorni)",
+    "daysHint": "Da 1 a {max}.",
+    "delivery": {
+      "FAILED": "La mail a {email} non è partita: il link esiste, ritiralo e invia di nuovo",
+      "QUEUED": "La mail a {email} è in attesa di partire",
+      "SENT": "Inviato a {email}"
+    },
+    "earlier_one": "{count} link precedente di questo file è stato ritirato.",
+    "earlier_other": "{count} link precedenti di questo file sono stati ritirati.",
+    "en": "Inglese",
+    "expiresAt": "Scade",
+    "it": "Italiano",
+    "language": "Lingua della mail",
+    "log": "Ogni download è registrato con chi e quando (GDPR art. 32), nella pagina di questa esportazione.",
+    "message": "Messaggio",
+    "messageHint": "Aggiunto alla mail. Non inserire nomi né cifre.",
+    "noPage": "Il consulente non può ancora scaricare il file da un browser",
+    "noPageBody": "La pagina di download arriverà in una fase successiva. Il link viene creato e registrato, ma fino ad allora scarica il file qui e consegnalo tu.",
+    "send": "Invia link",
+    "state": "Link",
+    "terms": "Il link scade ed è registrato. Una correzione lo ritira.",
+    "title": "Invia al consulente del lavoro",
+    "to": "Destinatario",
+    "toHint": "L'indirizzo del consulente del lavoro.",
+    "uses": "Download consentiti",
+    "usesHint": "Da 1 a {max}.",
+    "what": "{month} · v{version} · {number}. La mail contiene un link, mai il file.",
+    "withdraw": "Ritira il link",
+    "withdrawnHeld": "Questo link è stato ritirato."
+  },
+  "show": {
+    "codes_one": "{count} codice",
+    "codes_other": "{count} codici",
+    "nothing": "Qui non resta nulla",
+    "people_one": "{count} persona",
+    "people_other": "{count} persone",
+    "reading": "Apertura…",
+    "recorded": "Questa apertura viene registrata. I nomi restano in questa finestra."
+  },
+  "starter": {
+    "GENERIC_CSV": "CSV generico",
+    "GENERIC_EXCEL": "Excel generico",
+    "ZUCCHETTI": "Importazione Zucchetti (forma di partenza inventata)"
+  },
+  "status": {
+    "CANCELLED": "Annullato",
+    "DRAFT": "Bozza",
+    "EXPORTED": "Esportato"
+  },
+  "step": {
+    "checks": {
+      "lead": "Al consulente non arriva nulla di sbagliato: i controlli bloccanti fermano il file, gli avvisi sono da leggere.",
+      "short": "Controlli",
+      "title": "2 · Controlli"
+    },
+    "failed": "Impossibile caricare {step}",
+    "mapping": {
+      "lead": "I nostri tipi di ore, codici di assenza e tipi di competenza → i codici del fornitore (voce, causale), per questa società. Una cella si salva da sola quando la lasci.",
+      "short": "Mappatura codici",
+      "title": "3 · Mappatura codici"
+    },
+    "period": {
+      "lead": "Cosa esportare: l'intero mese di una società, chiuso in Presenze.",
+      "short": "Periodo e società",
+      "title": "1 · Periodo e società"
+    },
+    "preview": {
+      "lead": "I numeri che verranno inviati, per matricola. Mai un nome.",
+      "short": "Anteprima",
+      "title": "4 · Anteprima"
+    },
+    "reading": "Lettura di {step}…",
+    "send": {
+      "short": "Esporta e invia",
+      "title": "5 · Esporta e invia"
+    }
+  },
+  "wizard": {
+    "back": "Indietro",
+    "continue": "Continua",
+    "done": "Fine",
+    "leave": "Torna alle esportazioni",
+    "nav": "Muoviti tra i passi",
+    "showMe": "Mostrami",
+    "stepOf": "Passo {step} di {count} · {name}",
+    "title": "Nuova esportazione paghe",
+    "titleMonth": "Esportazione paghe di {month}"
+  }
+}

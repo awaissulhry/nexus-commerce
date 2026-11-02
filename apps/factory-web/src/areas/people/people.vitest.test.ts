@@ -13,7 +13,7 @@ import { createTranslator, messagesFor } from '../../lib/i18n/messages'
 import { I18nProvider } from '../../lib/i18n/provider'
 import { LIST_PAGES, recordAddress } from '../../lib/records/record-links'
 import { permissionCheck } from '../../lib/session/session'
-import { builtRowsOnly, OFFICE_NAV, OFFICE_PAGES, officeNavFor } from '../../shell/nav/office-nav'
+import { OFFICE_NAV, OFFICE_PAGES, officeNavFor } from '../../shell/nav/office-nav'
 import { applyMoves, createEmployee, createLoan, listEmployees, startLeaving, updateEmployee, whatYouSee } from './_shared/api'
 import { EMPLOYEE_LIST, LEAVER, PEOPLE } from './_shared/fixtures'
 import {
@@ -70,10 +70,8 @@ describe('people: the area and who may do what', () => {
     const rows = (officeArea.area.sections ?? []).flatMap((section) => section.items.map((item) => item.href))
     expect(rows).toEqual(['/people/employees', '/people/attendance', '/people/shifts', '/people/skills', '/people/piecerates', '/people/payroll', '/people/efficiency', '/people/reports', '/people/settings'])
     const people = OFFICE_NAV.areas.find((area) => area.id === 'people')!
-    expect((people.sections ?? []).flatMap((section) => section.items.map((item) => item.href))).toEqual(['/people/employees', '/people/attendance', '/people/shifts', '/people/skills', '/people/piecerates', '/people/efficiency', '/people/reports', '/people/settings'])
-    // A page step that adds its address to OFFICE_PAGES makes its row appear by itself.
-    const later = builtRowsOnly({ view: 'office', areas: [officeArea.area] }, new Set([...OFFICE_PAGES, '/people/payroll']))
-    expect((later.areas[0]!.sections ?? []).flatMap((section) => section.items.map((item) => item.href))).toEqual(['/people/employees', '/people/attendance', '/people/shifts', '/people/skills', '/people/piecerates', '/people/payroll', '/people/efficiency', '/people/reports', '/people/settings'])
+    // Every page of the area is built (B-W2b-63, the last): a row appears by itself when its address joins OFFICE_PAGES.
+    expect((people.sections ?? []).flatMap((section) => section.items.map((item) => item.href))).toEqual(['/people/employees', '/people/attendance', '/people/shifts', '/people/skills', '/people/piecerates', '/people/payroll', '/people/efficiency', '/people/reports', '/people/settings'])
   })
 
   it('People sits after Finance and before Plant; HR and the production manager see Employees, sales and a lead-only role do not', () => {
