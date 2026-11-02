@@ -284,7 +284,7 @@ export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller
   }
   const retention = retentionFor(input.kind, input.retainUntil ? new Date(input.retainUntil) : null, now)
   const problems: Issue[] = [
-    ...uploadProblems({ kind: input.kind, contentType, sizeBytes: input.sizeBytes, sha256: input.sha256 }),
+    ...uploadProblems({ kind: input.kind, contentType, sizeBytes: input.sizeBytes, sha256: input.sha256, clip: path.clip }),
     ...(originalName === null ? [{ path: 'body/originalName', message: 'The file needs a name.' }] : []),
     ...sharingProblems(sharing),
     ...retention.problems,

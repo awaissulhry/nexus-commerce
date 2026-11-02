@@ -216,6 +216,13 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       return { code: text(p.code) ?? text(p.bundleId) }
     case 'production.scan.partial':
       return { code: text(p.code) ?? text(p.bundleId), good: whole(p.pieces) ?? 0 }
+    // B-W2b-47: the bundle and its counts; a step's code; the note's tile. Never who it is for, never the words.
+    case 'production.scan.onBehalf':
+      return { code: text(p.code) ?? text(p.bundleId), good: whole(p.good) ?? 0, scrap: sumOf(p.scrap), rework: sumOf(p.rework) }
+    case 'production.checklist.tick':
+      return { code: text(p.stepCode, 40) }
+    case 'production.floorNote.post':
+      return { code: text(p.tileCode, 40), ...(workOrderId ? { workOrderId } : {}) }
   }
 }
 

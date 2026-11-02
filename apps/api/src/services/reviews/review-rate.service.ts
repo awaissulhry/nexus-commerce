@@ -11,14 +11,15 @@
  *
  * "Can follow" (measurable): eBay — some eBay feedback in Nexus is linked to its order (eBay feedback names no product,
  * so without the order nothing can be matched); every other channel — reviews of that channel and market arrive in
- * Nexus (Amazon gives no review count: only reviews a person imported or seller feedback). Where nothing can follow,
- * the rate is null and the words say so — never a 0 %.
+ * Nexus (Amazon gives no review count: only reviews a person imported). Amazon's seller feedback does not make a market
+ * measurable: the report holds only 1–3 star feedback about the seller, so one such row would turn a market's whole
+ * "no data" into a false 0 %. Where nothing can follow, the rate is null and the words say so — never a 0 %.
  *
  * `rateOf` and its words are pure (review-rate.vitest.test.ts); `readRateRequests` / `readRateFacts` read.
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
-import { visibleReviewWhere } from './review-visibility.js'
+import { countsInRating, visibleReviewWhere } from './review-visibility.js'
 
 /** A review counts for a request when it arrives within this many days after the request. */
 export const ATTRIBUTION_DAYS = 30
@@ -129,11 +130,16 @@ export async function readRateRequests(scope: {
   }))
 }
 
+/** The channel × markets a review can follow a request in; Amazon's seller feedback never opens one. Pure. */
+export function reviewedKeysOf(groups: ReadonlyArray<{ channel: string; marketplace: string | null; kind?: string | null }>): Set<string> {
+  return new Set(groups.filter(countsInRating).map((g) => rateKey(g.channel, g.marketplace)))
+}
+
 /** Where a review can follow a request: the channel × markets visible reviews came from, and eBay's order links. */
 export async function readRateFacts(): Promise<RateFacts> {
   const [groups, linkedEbay] = await Promise.all([
-    prisma.review.groupBy({ by: ['channel', 'marketplace'], where: visibleReviewWhere() }),
+    prisma.review.groupBy({ by: ['channel', 'marketplace', 'kind'], where: visibleReviewWhere() }),
     prisma.review.findFirst({ where: visibleReviewWhere({ channel: 'EBAY', orderId: { not: null } }), select: { id: true } }),
   ])
-  return { reviewedKeys: new Set(groups.map((g) => rateKey(g.channel, g.marketplace))), ebayLinked: !!linkedEbay }
+  return { reviewedKeys: reviewedKeysOf(groups), ebayLinked: !!linkedEbay }
 }

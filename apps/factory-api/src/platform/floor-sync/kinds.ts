@@ -35,6 +35,13 @@ import { queuedClockBody } from '../../modules/people/clock/contract'
 import { TimingRefusedError } from '../../modules/production/terminal/access'
 import { handBackBody, partialBody, pauseBody, resumeBody, startBody } from '../../modules/production/terminal/contract'
 import { timeOperation } from '../../modules/production/terminal/timing'
+// B-W2b-47: a report on someone's behalf, a step ticked and a comment from the floor's queue.
+import { tickBody } from '../../modules/production/checklists/contract'
+import { tickStep } from '../../modules/production/checklists/tick'
+import { noteBody } from '../../modules/production/floornotes/contract'
+import { postFloorNote } from '../../modules/production/floornotes/notes'
+import { onBehalfBody } from '../../modules/production/onbehalf/contract'
+import { reportOnBehalf } from '../../modules/production/onbehalf/report'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -61,6 +68,11 @@ import { timeOperation } from '../../modules/production/terminal/timing'
  *   production.scan.start / pause / resume / handBack / partial
  *                                         modules/production/terminal timeOperation (B-W2b-40: the timing of a bundle at an
  *                                         operation with the tablet's time; the client event id is its clientScanId)
+ *   production.scan.onBehalf              modules/production/onbehalf reportOnBehalf (B-W2b-47: the team leader's entry for
+ *                                         someone who could not scan; the client event id is its clientScanId)
+ *   production.checklist.tick             modules/production/checklists tickStep (B-W2b-47: a step ticked at an operation)
+ *   production.floorNote.post             modules/production/floornotes postFloorNote (B-W2b-47: a comment on the work
+ *                                         order's thread, with the files confirmed before it was sent)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -215,6 +227,31 @@ async function applyTiming(caller: CommandCaller, event: QueuedEvent): Promise<A
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'OperationScan', id: result.scan.id } }
 }
 
+/** B-W2b-47: a queued entry on behalf: the scans' report through onbehalf's own checks (the client event id is its clientScanId). */
+async function applyOnBehalf(caller: CommandCaller, event: QueuedEvent): Promise<Applied> {
+  const body = parsed(onBehalfBody, { ...event.payload, clientScanId: event.clientEventId, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const result = await reportOnBehalf(caller, body.value)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'OperationScan', id: result.scan.id } }
+}
+
+/** B-W2b-47: a queued tick, through the checklists' own command (its key: `<device>.<client event id>`). */
+async function applyTick(caller: CommandCaller, event: QueuedEvent): Promise<Applied> {
+  const body = parsed(tickBody, { ...event.payload, clientEventId: event.clientEventId, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const result = await tickStep(caller, body.value)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'OperationChecklistResult', id: result.tick.id } }
+}
+
+/** B-W2b-47: a queued comment, through the floor notes' own command (its key: `<device>.<client event id>`). */
+async function applyFloorNote(caller: CommandCaller, event: QueuedEvent): Promise<Applied> {
+  const body = parsed(withWorkOrder(noteBody), { ...event.payload, clientEventId: event.clientEventId, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const { workOrderId, ...input } = body.value
+  const result = await postFloorNote(caller, workOrderId, input)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'Message', id: result.messageId } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -247,6 +284,12 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
       case 'production.scan.handBack':
       case 'production.scan.partial':
         return await applyTiming(caller, event)
+      case 'production.scan.onBehalf':
+        return await applyOnBehalf(caller, event)
+      case 'production.checklist.tick':
+        return await applyTick(caller, event)
+      case 'production.floorNote.post':
+        return await applyFloorNote(caller, event)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

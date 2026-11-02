@@ -68,6 +68,17 @@ describe('what each kind may hold', () => {
   })
 })
 
+describe('a short clip from the floor (B-W2b-47, COL-017)', () => {
+  it('is a PHOTO only on the route that says so, within the PHOTO limit', () => {
+    const clip = { kind: 'PHOTO', contentType: 'video/mp4', sizeBytes: 10, sha256: SHA } as const
+    expect(uploadProblems({ ...clip, clip: true })).toEqual([])
+    expect(uploadProblems(clip)).toEqual([{ path: 'body/contentType', message: expect.any(String) }])
+    expect(uploadProblems({ ...clip, kind: 'ATTACHMENT', clip: true })).toEqual([{ path: 'body/contentType', message: expect.any(String) }])
+    expect(uploadProblems({ ...clip, contentType: 'video/x-msvideo', clip: true })).toEqual([{ path: 'body/contentType', message: expect.any(String) }])
+    expect(uploadProblems({ ...clip, sizeBytes: 15 * 1_048_576 + 1, clip: true })).toEqual([{ path: 'body/sizeBytes', message: expect.any(String) }])
+  })
+})
+
 describe('names', () => {
   it('keeps the last path part without control characters, at most 200 characters', () => {
     expect(cleanFileName('C:\\Users\\someone\\Report 1.pdf')).toBe('Report 1.pdf')
