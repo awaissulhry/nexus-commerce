@@ -280,7 +280,7 @@ function MessageItem({ message, model, actions }: { message: PanelMessage; model
   const locale = useLocale()
   const partyName = model.party?.name || t('message.theParty')
   const internal = message.direction === 'INTERNAL_NOTE'
-  const author = message.authorName ?? t(`message.author.${message.authorKind}`)
+  const author = message.authorHidden ? t('history.person') : (message.authorName ?? t(`message.author.${message.authorKind}`))
   const kind = internal ? t('message.kind.note') : message.direction === 'OUTBOUND' ? t('message.kind.outbound', { party: partyName }) : t('message.kind.inbound', { party: partyName })
   return (
     <li className={`fw-rp-message ${internal ? 'is-internal' : 'is-shared'}`}>

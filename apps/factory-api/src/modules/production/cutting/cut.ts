@@ -32,6 +32,7 @@ import { floorReadinessFor } from '../../../platform/privacy/read'
 import { issueInCommand, type IssueResult } from '../../inventory/issue/issue'
 import { lockHideCuts, lockWorkOrderIssues } from '../../inventory/issue/store'
 import { LEDGER_SELECT, postMoves, type PostedMove } from '../../inventory/ledger/post-moves'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { stationBlock } from '../../plant/checks'
 import { holdOnCut } from '../../quality/holds/checks'
 import { floorRecordSubjectFor } from '../settings/subject'
@@ -643,5 +644,7 @@ export async function correctCut(caller: CommandCaller, cutLogId: string, body: 
   const { result } = await command(caller, { name: 'production.correctCut', idempotencyKey, input: { cutLogId, reason } }, (tools) =>
     reverseInCommand(tools, entry, { undo: false, reason: `Corrected by the office: ${reason}`, key: `production.correctCut:${idempotencyKey ?? `g-${newId()}`}` }),
   )
-  return result
+  // Read after the command, so a replay of the same request follows the gate as it stands now, not the stored answer (B-W2b-F4).
+  const who = await caller.withClient((client) => workerGateFor(client, entry.siteId))
+  return { ...result, reversal: { ...result.reversal, workerId: who.id(result.reversal.workerId), workerHidden: who.hidden(result.reversal.workerId) } }
 }

@@ -23,6 +23,7 @@ import { decodeCursor, encodeCursor, type TimelineCursor } from '@nexus/factory-
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../core/command'
 import { actorOf, type RequestContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
+import { workerGatesFor } from '../../modules/people/privacy/worker-gate'
 import { heldRoles } from '../auth/roles/access'
 import { audienceSees, type FileAudience, type Viewer } from '../files/rules'
 import type { AttachmentView, MessageView, ThreadView } from './contract'
@@ -172,14 +173,17 @@ export function threadViewOf(row: SeenThread): ThreadView {
   }
 }
 
-function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>): MessageView {
+/** `workerShown`: the site's PERFORMANCE gate lets the office read who wrote a floor note; without it the note says a person did (B-W2b-F4). */
+function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>, workerShown = true): MessageView {
+  const authorHidden = row.authorKind === 'WORKER' && !workerShown
   return {
     id: row.id,
     threadId: row.threadId,
     direction: row.direction,
     audience: row.audience,
     channel: row.channel,
-    author: { kind: row.authorKind, ...('authorId' in row ? { id: row.authorId ?? null } : {}), name: row.authorName },
+    author: { kind: row.authorKind, ...('authorId' in row ? { id: authorHidden ? null : (row.authorId ?? null) } : {}), name: authorHidden ? null : row.authorName },
+    ...('authorId' in row ? { authorHidden } : {}),
     body: row.bodyText,
     bodyHtml: row.bodyHtml,
     ...('mentionedUserIds' in row ? { mentions: row.mentionedUserIds ?? [] } : {}),
@@ -252,9 +256,11 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     const shown = rows.slice(0, page.limit)
     const attachments = await visibleAttachments(client, context, shown.flatMap((row) => row.attachmentFileIds))
     const last = shown.at(-1)
+    // A thread sits on one site: its gate is read once, and only for a page with a floor note (the office's: others read none).
+    const gates = await workerGatesFor(client, office && shown.some((row) => row.authorKind === 'WORKER') ? [thread.siteId] : [])
     return {
       thread: threadViewOf(thread),
-      messages: shown.map((row) => messageViewOf(row, attachments)),
+      messages: shown.map((row) => messageViewOf(row, attachments, gates.at(thread.siteId).open)),
       nextCursor: rows.length > page.limit && last ? encodeCursor(last) : null,
     }
   })

@@ -196,6 +196,9 @@ describe('leather received hide by hide against a confirmed order', () => {
     }, 201)
     first = answer.receipt
     expect(first).toMatchObject({ status: 'POSTED', purchaseOrder: { id: order.id, status: 'PARTLY_RECEIVED', version: before.version + 1 }, supplierDdtNumber: 'DDT-T-0042', location: { id: A.dock, code: 'A1-RCV' } })
+    // An office user's id stays, whatever the PERFORMANCE gate says (B-W2b-F4: only a floor worker stays behind it).
+    const manager = SESSIONS.manager as { actorId: string }
+    expect(first).toMatchObject({ createdById: manager.actorId, createdByHidden: false, postedById: manager.actorId, postedByHidden: false })
     expect(first.number).toMatch(/^GR-\d{4}-\d{4}$/)
     expect(first.summary).toEqual({ lines: 1, lots: 1, lotsInQuarantine: 1, lotsReleased: 0, hides: 12, quantities: [{ uom: 'FT2', baseQuantity: '612.1668' }] })
     const [line] = first.lines

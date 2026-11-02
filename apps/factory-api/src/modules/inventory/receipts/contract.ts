@@ -193,14 +193,19 @@ export const receiptView = output({
   /** Where its moves put the goods. */
   location: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
   postedAt: instant().nullable(),
+  /** Who posted it: an office user, or on a floor receipt the worker, while the site's PERFORMANCE gate is open. */
   postedById: id().nullable(),
+  /** A floor worker posted it and the gate keeps back who. */
+  postedByHidden: z.boolean(),
   reversedAt: instant().nullable(),
   reversedById: id().nullable(),
   reversalReason: z.string().nullable(),
   cancelledAt: instant().nullable(),
   version: z.number().int(),
   createdAt: instant(),
+  /** Who made it, like `postedById`. */
   createdById: id().nullable(),
+  createdByHidden: z.boolean(),
   /** Two numbers for leather: hides and area, per base unit. */
   summary: output({
     lines: z.number().int(),
@@ -282,7 +287,10 @@ export const listReceiptsContract = defineContract({
           hides: z.number().int(),
           quantities: z.array(output({ uom, baseQuantity: decimal })),
           postedAt: instant().nullable(),
+          /** Who posted it: an office user, or on a floor receipt the worker, while the site's PERFORMANCE gate is open. */
           postedById: id().nullable(),
+          /** A floor worker posted it and the gate keeps back who. */
+          postedByHidden: z.boolean(),
           /** B-W2a-31: its discrepancies — every one, not closed yet, not reported yet. */
           discrepancies: output({ count: z.number().int(), open: z.number().int(), unsent: z.number().int() }),
           value,

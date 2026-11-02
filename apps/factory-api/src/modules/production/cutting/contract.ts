@@ -272,7 +272,12 @@ export const undoContract = defineContract({
 export const correctContract = defineContract({
   params: cutParams,
   body: input({ reason: z.string().trim().min(3).max(500) }),
-  response: { 201: reversalAnswer },
+  response: {
+    201: reversalAnswer.extend({
+      /** `workerId` only while the site's PERFORMANCE gate is open; `workerHidden`: the entry names a person and the gate keeps back who. */
+      reversal: entry.extend({ workerHidden: z.boolean() }),
+    }),
+  },
 })
 
 export const cutLogContract = defineContract({

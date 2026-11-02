@@ -294,6 +294,17 @@ export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
       note: 'The design system\'s PDF viewer with this app\'s pdf.js.',
     },
     {
+      id: 'conversation-person',
+      label: "A floor note: the site's legal gate keeps back the worker, the message says a person wrote it (B-W2b-F4)",
+      model: {
+        ...base,
+        messages: {
+          items: [message(10, { direction: 'INTERNAL_NOTE', at: at(28, 9, 15), authorKind: 'WORKER', authorName: null, authorHidden: true, body: 'Pelle segnata al taglio, avvisare il capo reparto.' }), message(3, { direction: 'INTERNAL_NOTE', at: at(23, 8, 30), authorName: 'Carlo Prova', body: 'Il certificato precedente scade a dicembre: serve il rinnovo.' })],
+          more: false,
+        },
+      },
+    },
+    {
       id: 'history',
       label: 'History',
       model: { ...base, tab: 'history' },
@@ -303,6 +314,21 @@ export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
       id: 'history-changes',
       label: 'History: changes only',
       model: { ...base, tab: 'history', timelineFilter: 'change', timeline: { items: TIMELINE.filter((entry) => entry.kind === 'change'), more: true } },
+    },
+    {
+      id: 'history-person',
+      label: "History: the site's legal gate keeps back a floor worker, the row says a person did it (B-W2b-F4)",
+      model: {
+        ...base,
+        tab: 'history',
+        timeline: {
+          items: [
+            { kind: 'message', id: mid(10), at: at(28, 9, 15), direction: 'INTERNAL_NOTE', channel: 'APP', authorName: null, authorHidden: true, excerpt: 'Pelle segnata al taglio, avvisare il capo reparto.', attachmentCount: 0 },
+            { kind: 'change', id: '0190f0e2-9999-7000-8000-000000000004', at: at(28, 9), action: 'production.tickChecklistStep', actorName: null, actorAudience: 'FLOOR', actorHidden: true, status: null, fields: ['stepId'], values: null, reason: null },
+          ],
+          more: false,
+        },
+      },
     },
     {
       id: 'note-added',
