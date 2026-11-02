@@ -13,6 +13,7 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *   PO_CONFIRM      PurchaseOrder    po-confirm              links/po-confirm (SCR-100)
  *   DOCUMENT_VIEW   Shipment         shipment-documents      links/document (SCR-101)
  *   DOCUMENT_VIEW   StoredFile       — the frame (one file; the public DoC and secure-file pages are W2b)
+ *   DOCUMENT_VIEW   PayrollExport    — the frame until the secure-file page (SCR-200, W2b-3); its API routes are B-W2b-54's
  *
  * A step that builds a link page adds ONE row here and its component to LinkLanding.
  */

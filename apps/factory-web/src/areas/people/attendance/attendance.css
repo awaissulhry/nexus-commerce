@@ -1,0 +1,226 @@
+/*
+ * People › Attendance (SCR-157, the roll call, the person's timesheet, the LUL calendar tab, the employee's Attendance tab) LAYOUT:
+ * the band, the scope row, the sections, the close and who-is-in pair, the day's window. The controls are the design system's;
+ * semantic tokens only, no colours of their own. No page max-width (Owner rule 2026-10-29): the page fills the shell's main
+ * area and wide screens put the close and Who is in now side by side. Prefix `fw-at-`.
+ */
+.fw-at-status,
+.fw-at-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-at-month {
+  min-width: 11ch;
+  text-align: center;
+}
+
+.fw-at-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-at-title {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-at-sub {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-at-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-at-close {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: var(--nds-space-14) var(--nds-space-20);
+  min-width: 0;
+}
+
+.fw-at-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-at-confirm-list {
+  margin: 0;
+  padding-inline-start: var(--nds-space-20);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-at-tones,
+.fw-at-inline {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.fw-at-cell-problem {
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-xs);
+  white-space: normal;
+}
+
+.fw-at-day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-at-anomalies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-at-anomalies > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text-strong);
+}
+
+.fw-at-anomalies > li.is-resolved {
+  color: var(--nds-text-muted);
+}
+
+.fw-at-rule {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nds-space-2);
+  border: 0;
+  border-radius: var(--nds-radius-sm);
+  background: transparent;
+  color: var(--nds-text-muted);
+  cursor: pointer;
+}
+
+/* A dialog over the one-record window stays above it even when both open at once (an address, a design case). */
+.nds-backdrop:has(> .fw-at-over) {
+  z-index: calc(var(--nds-z-overlay) + 1);
+}
+
+.fw-at-voided {
+  color: var(--nds-text-muted);
+  text-decoration: line-through;
+}
+
+.fw-at-gate-law {
+  display: flex;
+  justify-content: center;
+  margin: var(--nds-space-8) 0 0;
+}
+
+/* The tabs: the roll call, the timesheet, the LUL calendar. */
+.fw-at-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-at-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  color: var(--nds-text-strong);
+}
+
+.fw-at-roll {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-at-roll ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-at-roll li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-4) 0;
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-at-lul {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-at-table {
+  overflow-x: auto;
+}
+
+@media (max-width: 1100px) {
+  .fw-at-pair,
+  .fw-at-lul {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+  }
+
+  .fw-topbar,
+  .h10-rail,
+  .fw-office-subheader,
+  .nds-bottombar,
+  .fw-system-banner,
+  .fw-at-noprint {
+    display: none !important;
+  }
+
+  .fw-at-table {
+    overflow: visible;
+  }
+}

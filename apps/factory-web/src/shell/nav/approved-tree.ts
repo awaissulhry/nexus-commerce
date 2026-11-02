@@ -448,16 +448,15 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: true,
         pages: [
           { id: 'people.employees', title: 'Employees', titleIt: 'Dipendenti', wave: 'W2b', href: '/people/employees' },
+          { id: 'people.attendance', title: 'Attendance', titleIt: 'Presenze', wave: 'W2b', href: '/people/attendance' },
           { id: 'people.shifts', title: 'Shifts', titleIt: 'Turni', wave: 'W2b', href: '/people/shifts' },
         ],
       },
-      // B-W2b-62: Piece rates (the group's first built row).
-      {
-        label: 'Skills & pay',
-        labelIt: 'Competenze e paghe',
-        hideLabel: false,
-        pages: [{ id: 'people.piecerates', title: 'Piece rates', titleIt: 'Cottimi', wave: 'W2b', href: '/people/piecerates' }],
-      },
+      // B-W2b-65: Skills & training (SCR-160) and People settings (SCR-265).
+      { label: 'Skills & pay', labelIt: 'Competenze e paghe', hideLabel: false, pages: [{ id: 'people.skills', title: 'Skills & training', titleIt: 'Competenze e formazione', wave: 'W2b', href: '/people/skills' }, /* B-W2b-62 */ { id: 'people.piecerates', title: 'Piece rates', titleIt: 'Cottimi', wave: 'W2b', href: '/people/piecerates' }, /* B-W2b-64 */ { id: 'people.efficiency', title: 'Efficiency', titleIt: 'Efficienza', wave: 'W2b', href: '/people/efficiency' }] },
+      // B-W2b-64: People reports (SCR-264).
+      { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'people.reports', title: 'People reports', titleIt: 'Report persone', wave: 'W2b', href: '/people/reports' }] },
+      { label: 'Settings', labelIt: 'Impostazioni', hideLabel: false, pages: [{ id: 'people.settings', title: 'People settings', titleIt: 'Impostazioni persone', wave: 'W2b', href: '/people/settings' }] },
     ],
   },
   // W2a: B-W2a-53 the Plant area (Owner answer T2), its Maintenance pages: Machine requests (SCR-148), Maintenance jobs
@@ -596,6 +595,8 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.machine', title: 'Machine problem & jobs', titleIt: 'Guasto e interventi', tile: 'machine', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'maintenance'] },
   // W2b: B-W2b-70 Call for help (SCR-172) and the team leader's Line view (SCR-168).
   { id: 'floor.clock', title: 'Clock in & out', titleIt: 'Timbratura', tile: 'clock', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'phone'] },
+  // W2b: B-W2b-68 My day (SCR-171).
+  { id: 'floor.myday', title: 'My day', titleIt: 'La mia giornata', tile: 'myday', modes: ['sewing', 'phone'] },
   { id: 'floor.help', title: 'Call for help', titleIt: 'Chiama aiuto', tile: 'help', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'] },
   { id: 'floor.supervisor', title: 'Line view', titleIt: 'Vista linea', tile: 'lineview', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor'] },
 ]

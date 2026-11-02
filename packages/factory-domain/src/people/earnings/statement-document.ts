@@ -11,7 +11,8 @@ import type { StatementSummary } from './statement'
 /**
  * The worker statement as a document (B-W2b-62; design people.piecerates new tab "Worker statement (PDF)"; c.c. art. 2101 c.3:
  * the quantity of work done and the time taken), pure: every word and number decided here, on the company's letterhead
- * (c.c. art. 2250), from the frozen statement row: the same statement the office and the floor read. The metadata come from
+ * (c.c. art. 2250), from the frozen statement row: the ONE statement document, the office's route and the floor's My day
+ * (people/myday/statement-document.ts) print this, so they give the same file. The metadata come from
  * the statement only (its creation date is the approval), so the same statement gives the same bytes. A statement that is
  * not approved says so on a banner: it may still change; only an approved one is stored.
  */
@@ -47,7 +48,7 @@ const WORDS = {
     none: 'Nessun lavoro a cottimo in questo mese.',
     draft: 'BOZZA: non approvato, può ancora cambiare',
     superseded: 'SOSTITUITO da una revisione successiva',
-    notice: 'Prospetto dei dati di lavorazione e dei guadagni a cottimo (art. 2101 c.c.). Scarti e rilavorazioni sulle proprie scansioni seguono la regola dello schema: si può contestare la voce sul terminale.',
+    notice: 'Prospetto dei dati di lavorazione e dei guadagni a cottimo (art. 2101 c.c.). Scarti e rilavorazioni sulle proprie scansioni seguono la regola dello schema. Se una voce è sbagliata, contestala da La mia giornata sul terminale.',
   },
   en: {
     title: 'Piece-work statement',
@@ -76,7 +77,7 @@ const WORDS = {
     none: 'No piece work this month.',
     draft: 'DRAFT: not approved, it may still change',
     superseded: 'SUPERSEDED by a later revision',
-    notice: "Statement of the work done and the piece-work earnings (c.c. art. 2101). Scrap and rework on your own scans follow the scheme's own-fault rule: dispute the entry on the tablet if it was not your fault.",
+    notice: "Statement of the work done and the piece-work earnings (c.c. art. 2101). Scrap and rework on your own scans follow the scheme's own-fault rule. If an entry is wrong, dispute it from My day on the tablet.",
   },
 } as const
 

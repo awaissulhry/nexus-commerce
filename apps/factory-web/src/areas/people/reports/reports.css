@@ -1,0 +1,19 @@
+/*
+ * People › People reports (SCR-264) LAYOUT: the scope row and the match check's line. Section parts are Efficiency's
+ * (efficiency.css); semantic tokens only, no page max-width.
+ */
+.fw-prp-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-prp-match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}

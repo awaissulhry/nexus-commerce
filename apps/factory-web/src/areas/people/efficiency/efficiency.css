@@ -1,0 +1,103 @@
+/*
+ * People › Efficiency (SCR-161) and People reports (SCR-264, it shares these section parts) LAYOUT: the scope row, section heads, the
+ * charts side by side, the review's two columns and the print. The controls are the design system's; semantic tokens only.
+ * No page max-width (Owner rule 2026-10-29): wide screens put more charts side by side.
+ */
+.fw-ef-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ef-sections {
+  min-width: 0;
+}
+
+.fw-ef-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin-bottom: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ef-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-ef-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-ef-list-title {
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}
+
+.fw-ef-link {
+  color: var(--nds-primary);
+  text-decoration: underline;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-ef-cell {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.fw-ef-anchor {
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-ef-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-ef-chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-ef-how,
+.fw-ef-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  width: min(440px, 80vw);
+  min-width: 0;
+}
+
+.fw-ef-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--nds-space-20);
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .fw-ef-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-ef-print-note {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}

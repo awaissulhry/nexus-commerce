@@ -1,0 +1,227 @@
+{
+  "title": "La mia giornata",
+  "loading": "Sto leggendo la tua giornata…",
+  "action": {
+    "back": "Indietro",
+    "done": "Fatto, chiudi",
+    "home": "Home",
+    "retry": "Riprova",
+    "send": "Invia",
+    "withdraw": "Ritira",
+    "pdf": "Apri come PDF",
+    "print": "Stampa in ufficio"
+  },
+  "pin": {
+    "title": "Solo tu",
+    "meaning": "Il tuo lavoro e la tua paga su un tablet condiviso: inserisci il PIN, anche se sei entrato con il badge. La schermata si chiude dopo 60 secondi senza un tocco.",
+    "again": "È passato un momento: inserisci di nuovo il PIN per continuare."
+  },
+  "privacy": {
+    "text": "Questa pagina la vedi solo tu",
+    "who": "Qui nessun altro la vede. Mostra te, mai altri.",
+    "law": "GDPR art. 15; c.c. art. 2101",
+    "plain": "Puoi vedere le tue registrazioni, il lavoro svolto e quanto ti è stato pagato."
+  },
+  "gate": {
+    "law": "Statuto dei Lavoratori art. 4",
+    "plain": "I dati sul lavoro di una persona richiedono una base legale registrata per il sito prima che qualcuno li veda, anche tu."
+  },
+  "offline": {
+    "title": "La mia giornata richiede la rete",
+    "body": "I tuoi dati non sono salvati su questo tablet, quindi senza rete non si vedono. Il tuo lavoro viene comunque registrato: torna quando c'è la rete."
+  },
+  "station": {
+    "title": "Questo sito registra le postazioni, non le persone",
+    "body": "Qui non c'è un elenco personale: le scansioni indicano la postazione, non te."
+  },
+  "closing": {
+    "title": "Stai ancora leggendo?",
+    "body": "Tra un momento i tuoi dati lasciano lo schermo, così nessun altro li vede.",
+    "stay": "Sono qui",
+    "close": "Chiudi ora"
+  },
+  "today": {
+    "title": "Oggi",
+    "pieces": "Pezzi",
+    "reports_one": "{count} dichiarazione",
+    "reports_other": "{count} dichiarazioni",
+    "defects": "{scrap} scarti, {rework} rilavorazioni",
+    "minutes": "Minuti standard maturati",
+    "minutesHint": "I tuoi pezzi buoni × i minuti dell'operazione",
+    "efficiency": "Efficienza",
+    "efficiencyHint": "Maturati ÷ i tuoi minuti cronometrati",
+    "noTiming": "Nessun tempo rilevato oggi",
+    "earned": "Guadagnato oggi",
+    "earnedHint": "Finora: può ancora cambiare",
+    "notLinked": "Il tuo accesso al reparto non è ancora collegato alla tua scheda dipendente. I pezzi si vedono; per minuti e paga chiedi all'ufficio.",
+    "gateOff": "Minuti e ritmo sono disattivati in questo sito: la base legale per i dati sul lavoro di una persona non è registrata.",
+    "trainee": "Oggi sei in formazione: minuti e ritmo non contano a tuo sfavore.",
+    "held_one": "{count} scansione è sospesa finché la tua timbratura non la copre. Non si perde nulla.",
+    "held_other": "{count} scansioni sono sospese finché la tua timbratura non le copre. Non si perde nulla.",
+    "more": "Altro sulla tua giornata"
+  },
+  "pace": {
+    "title": "Il tuo ritmo",
+    "none": "—",
+    "ON_PACE": "In linea con l'obiettivo della linea finora",
+    "BEHIND": "Sotto l'obiettivo della linea finora",
+    "NO_TARGET": "Ancora nessun obiettivo con cui misurare",
+    "soFar": "{done} su {target} pezzi finora",
+    "hour": "Obiettivo di quest'ora: {target} pezzi",
+    "line": "Linea {line}",
+    "shared_one": "{count} dichiarazione condivisa con altri è esclusa.",
+    "shared_other": "{count} dichiarazioni condivise con altri sono escluse.",
+    "only": "I tuoi pezzi rispetto all'obiettivo della linea. Nessuno viene confrontato con te."
+  },
+  "tile": {
+    "records_one": "{count} voce oggi",
+    "records_other": "{count} voci oggi",
+    "answers_one": "{count} nuova risposta",
+    "answers_other": "{count} nuove risposte",
+    "disputes_one": "{count} aperta",
+    "disputes_other": "{count} aperte",
+    "statement": "{month}",
+    "noStatement": "Non ancora pronto"
+  },
+  "records": {
+    "title": "Le tue registrazioni",
+    "span": {
+      "today": "Oggi",
+      "period": "Questo periodo"
+    },
+    "none": {
+      "today": "Nessuna registrazione oggi.",
+      "period": "Nessuna registrazione in questo periodo."
+    },
+    "count_one": "{count} voce",
+    "count_other": "{count} voci",
+    "operation": "Op {seq} {name}",
+    "pieces": "pezzi",
+    "min": "min",
+    "scrap_one": "{count} scarto",
+    "scrap_other": "{count} scarti",
+    "rework_one": "{count} rilavorazione",
+    "rework_other": "{count} rilavorazioni",
+    "minutes": "{minutes} min",
+    "byLead": "inserita dal tuo capo squadra",
+    "corrected": "Corretta",
+    "undone": "Annullata",
+    "block": {
+      "OPEN": "In corso",
+      "PENDING": "In attesa di approvazione",
+      "APPROVED": "Approvato",
+      "REJECTED": "Respinto"
+    },
+    "done": {
+      "sent": "Inviata. Il capo squadra o HR ti rispondono qui.",
+      "existing": "Hai già contestato questa voce: la contestazione aperta resta valida."
+    }
+  },
+  "keys": {
+    "move": "Spostati tra le righe",
+    "open": "Apri la riga",
+    "back": "Indietro"
+  },
+  "dispute": {
+    "question": "Che cosa è sbagliato?",
+    "words": "Spiega che cosa è sbagliato",
+    "who": "Risponde il capo squadra o HR. La risposta la vedi qui.",
+    "reason": {
+      "WRONG_QUANTITY": "Quantità sbagliata",
+      "NOT_ME": "Non ero io",
+      "WRONG_OPERATION": "Operazione sbagliata",
+      "WRONG_TIME": "Orario sbagliato",
+      "WRONG_CODE": "Codice sbagliato",
+      "OTHER": "Altro"
+    },
+    "status": {
+      "OPEN": "In attesa di risposta",
+      "UPHELD": "Accolta",
+      "REJECTED": "Respinta",
+      "WITHDRAWN": "Ritirata"
+    }
+  },
+  "disputes": {
+    "title": "Le tue contestazioni",
+    "open": "Aperte",
+    "answered": "Risposte",
+    "edits": "Modifiche alle tue registrazioni",
+    "change": "{from} → {to}",
+    "none": {
+      "title": "Nessuna contestazione",
+      "body": "Se una voce è sbagliata, aprila in Le tue registrazioni."
+    },
+    "done": {
+      "withdrawn": "Ritirata."
+    }
+  },
+  "answer": {
+    "raised": "Inviata il {date}"
+  },
+  "statement": {
+    "title": "Il tuo prospetto",
+    "earlier": "Il mese prima",
+    "later": "Il mese dopo",
+    "operation": "Operazione",
+    "pieces": "Pezzi",
+    "minutes": "Minuti standard",
+    "rate": "Tariffa",
+    "amount": "Importo",
+    "time": "tempo pagato fuori cottimo",
+    "share": "quota {share}%",
+    "earnings": "Guadagni del mese",
+    "makeUp": "Integrazione alla paga garantita",
+    "total": "Totale",
+    "noLines": "Nessun lavoro a cottimo in questo mese.",
+    "approved": "Approvato, revisione {revision}.",
+    "draft": "Non ancora approvato: può cambiare.",
+    "sent": "Inviato alla stampante d'ufficio {printer}, a tuo nome.",
+    "pdfReady": "PIN accettato: premi Apri come PDF.",
+    "none": {
+      "title": "Nessun prospetto per questo mese",
+      "body": "Si prepara quando viene eseguito il periodo.",
+      "noPay": "In questo mese non c'è cottimo."
+    }
+  },
+  "held": {
+    "reason": "Scegli prima che cosa è sbagliato.",
+    "words": "Spiega prima che cosa è sbagliato.",
+    "busy": "Ci sto lavorando…",
+    "draft": "Solo un prospetto approvato può uscire dallo schermo.",
+    "noPrinter": "Il tablet non sa quale stampante è quella d'ufficio: chiedi all'ufficio di stamparlo.",
+    "months": "Qui il prospetto arriva indietro di un anno: i più vecchi sono in ufficio.",
+    "thisMonth": "Questo è il mese in corso.",
+    "row": {
+      "undone": "Questa voce è stata annullata: non c'è nulla da contestare.",
+      "running": "Questo blocco è ancora in corso: contestalo quando finisce.",
+      "open": "Hai già contestato questa voce."
+    }
+  },
+  "refusal": {
+    "other": "Richiesta rifiutata. Chiedi al tuo capo squadra.",
+    "NOT_APPROVED": {
+      "message": "Questo prospetto non è ancora approvato.",
+      "fix": "Si può stampare dopo l'approvazione di HR."
+    },
+    "NO_PRINTER": {
+      "message": "Il tablet non sa quale stampante è quella d'ufficio.",
+      "fix": "Chiedi all'ufficio di stampare il tuo prospetto."
+    },
+    "PHONE_ONLY": {
+      "message": "Un tablet condiviso non conserva prospetti.",
+      "fix": "Stampalo in ufficio o aprilo sul tuo telefono."
+    },
+    "NOT_DISPUTABLE": {
+      "message": "Questa voce non si può contestare.",
+      "fix": "Chiedi al tuo capo squadra."
+    },
+    "NOT_YOURS": {
+      "message": "Questa voce non è tua.",
+      "fix": "Chiedi al tuo capo squadra."
+    },
+    "DISPUTE_NOT_OPEN": {
+      "message": "Questa contestazione è già chiusa.",
+      "fix": "La risposta è in Le tue contestazioni."
+    }
+  }
+}

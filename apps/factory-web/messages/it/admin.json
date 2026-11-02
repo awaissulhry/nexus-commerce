@@ -1895,6 +1895,9 @@
     "people_earnings_view": "Vedere i periodi paga: stato, controlli aperti, scansioni trattenute e cifre per linea (mai una persona)",
     "people_earnings_records": "Aprire il prospetto e le righe di guadagno di una persona, il registro e il report per lavoratore (ogni apertura è registrata)",
     "people_earnings_manage": "Eseguire, rivedere e chiudere un periodo paga, decidere le scansioni trattenute, approvare i prospetti, correggere una riga",
-    "people_earnings_review": "Rivedere come responsabile il prospetto di una persona: pezzi e minuti, mai importi"
+    "people_earnings_review": "Rivedere come responsabile il prospetto di una persona: pezzi e minuti, mai importi",
+    "people_payroll_view": "Vedere l'esportazione paghe del mese in conteggi, mai i dati di una persona",
+    "people_payroll_records": "Aprire i valori per matricola e i file di un'esportazione paghe",
+    "people_payroll_manage": "Gestire codici e tracciati paghe, fare le esportazioni e inviarle con link sicuro"
   }
 }

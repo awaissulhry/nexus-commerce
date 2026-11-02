@@ -1,0 +1,156 @@
+{
+  "common": {
+    "loading": "Caricamento…",
+    "settings": "Apri Impostazioni persone",
+    "noMatch": "Nessun risultato per questa ricerca.",
+    "search": "Cerca nel report"
+  },
+  "section": {
+    "privacy": "Cosa vedi qui",
+    "attendance": "Report presenze",
+    "earnings": "Report guadagni"
+  },
+  "band": {
+    "arrange": "Disponi",
+    "more": "Altre azioni",
+    "exportAttendance": "Esporta presenze (CSV)",
+    "exportEarnings": "Esporta guadagni (CSV)",
+    "print": "Stampa o salva come PDF",
+    "send": "Invia al consulente del lavoro (link sicuro)"
+  },
+  "held": {
+    "noReport": "Il report non è ancora sulla pagina."
+  },
+  "scope": {
+    "label": "Ambito",
+    "month": "Mese"
+  },
+  "tooFew": "Troppo poche persone",
+  "privacy": {
+    "level": "Linee, squadre e mesi · nessuna persona",
+    "who": "Il mese di una persona si apre un record alla volta",
+    "minimum_one": "Un gruppo di meno di {count} persona mostra «—», e un totale che lo rivelerebbe è nascosto.",
+    "minimum_other": "Un gruppo di meno di {count} persone mostra «—», e un totale che lo rivelerebbe è nascosto.",
+    "onePerson": "Una riga è un gruppo, quindi non apre nulla. Il mese di una persona è nella scheda del dipendente.",
+    "workers": "Puoi aprire anche i guadagni per lavoratore. Ogni apertura è registrata; resta su questa pagina e non va in nessun file né stampa.",
+    "failed": "Non siamo riusciti a leggere le regole di questa sede."
+  },
+  "attendance": {
+    "group": "Linea o squadra",
+    "people": "Persone",
+    "ordinary": "Ore ordinarie",
+    "overtimeDay": "Straordinario diurno",
+    "overtimeNight": "Straordinario notturno",
+    "overtimeHoliday": "Straordinario festivo",
+    "night": "Ore notturne",
+    "holiday": "Ore festive",
+    "noGroup": "Nessuna linea o squadra",
+    "noRight": "Solo risorse umane",
+    "noRightBody": "Questo report richiede people.attendance.view.",
+    "pickSite": "Scegli una sede nella barra in alto",
+    "pickSiteBody": "Il report presenze è di una sola sede.",
+    "gateOff": "Le presenze sono spente in questa sede",
+    "gateOffBody": "Lo scopo presenze della sede è spento, quindi non esiste alcun dato di presenza da riportare (Statuto dei Lavoratori art. 4 c.2).",
+    "failed": "Non siamo riusciti a leggere il report presenze",
+    "empty": "Nulla registrato per {month}.",
+    "tableLabel": "Ore per tipo, per linea o squadra",
+    "count_one": "{count} gruppo",
+    "count_other": "{count} gruppi",
+    "groupBy": "Raggruppa per",
+    "by": {
+      "line": "Linea",
+      "team": "Squadra"
+    },
+    "team": "Squadra",
+    "allTeams": "Tutte le squadre",
+    "final": "Il mese è chiuso: solo una correzione cambia questi dati.",
+    "open": "Il mese non è chiuso: i dati possono cambiare ancora, e lo straordinario conta quando è approvato.",
+    "total_one": "Totale: {count} persona · ordinarie {ordinary} h · straordinario {overtime} h · assenze {absent} h",
+    "total_other": "Totale: {count} persone · ordinarie {ordinary} h · straordinario {overtime} h · assenze {absent} h",
+    "totalHidden": "Nessun totale: rivelerebbe un gruppo di troppo poche persone."
+  },
+  "match": {
+    "NOT_CLOSED": "{month} non è ancora chiuso: non c'è un calendario LUL da confrontare",
+    "NOT_SEALED": "{month} è chiuso, ma il suo calendario LUL non è ancora sigillato",
+    "MATCHES": "Corrisponde al LUL chiuso di {month} ✓",
+    "DIFFERS_one": "Differisce in {count} cella dal LUL chiuso di {month}",
+    "DIFFERS_other": "Differisce in {count} celle dal LUL chiuso di {month}",
+    "show": "Mostra"
+  },
+  "differences": {
+    "title": "Cosa differisce dal LUL di {month}",
+    "failed": "Non siamo riusciti a leggere le differenze",
+    "none": "Non differisce più nulla.",
+    "tableLabel": "Celle che differiscono dal calendario chiuso",
+    "day": "Giorno",
+    "kind": "Cella",
+    "open": "Apri il giorno"
+  },
+  "kind": {
+    "PRESENT": "Presenza",
+    "ORDINARY": "Ordinarie",
+    "NIGHT": "Notturne",
+    "HOLIDAY": "Festive",
+    "OVERTIME_DAY": "Straordinario diurno",
+    "OVERTIME_NIGHT": "Straordinario notturno",
+    "OVERTIME_HOLIDAY": "Straordinario festivo",
+    "ABSENCE": "Assenza"
+  },
+  "day": {
+    "title": "Giorno chiuso",
+    "employee": "Apri il dipendente",
+    "closedNow": "Chiuso {closed} h · ora {now} h",
+    "corrections": "Correzioni",
+    "when": "Quando",
+    "who": "Chi",
+    "change": "Modifica (h)",
+    "why": "Perché"
+  },
+  "earnings": {
+    "line": "Linea",
+    "month": "Mese",
+    "worker": "Lavoratore",
+    "people": "Persone",
+    "pieces": "Capi",
+    "earnings": "Guadagni",
+    "makeUp": "Integrazione",
+    "share": "Quota integrazione",
+    "noLine": "Nessuna linea",
+    "noGrain": "Serve il livello paghe",
+    "noGrainBody": "I dati dei guadagni si vedono solo col livello paghe.",
+    "workersOpen": "Guadagni per lavoratore: questa apertura è registrata",
+    "backToLines": "Torna alle linee",
+    "workersNote": "Resta su questa pagina: nessun file, nessuna stampa, nessun indirizzo. Le righe vanno per nome, mai per importo.",
+    "tableLabel": "Guadagni, integrazione e quota di integrazione",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "groupBy": "Raggruppa per",
+    "byLine": "Linea",
+    "byMonth": "Mese",
+    "to": "Fino a",
+    "toMonth": "Fino a {month}",
+    "openWorkers": "Apri per lavoratore",
+    "failed": "Non siamo riusciti a leggere il report guadagni",
+    "empty": "Nessun guadagno in questo periodo.",
+    "foot": "Importi nella valuta del registro. Un gruppo sotto la dimensione minima non mostra dati."
+  },
+  "send": {
+    "title": "Invia report",
+    "download": "Scarica il CSV",
+    "openPdf": "Apri il PDF",
+    "send": "Invia il link",
+    "report": "Report",
+    "recipient": "E-mail del destinatario",
+    "expiry": "Il link scade dopo",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "format": "Formato",
+    "heldPay": "I dati di paga non escono mai tramite un link. Dai al consulente il file paghe da Esportazione paghe.",
+    "heldNoLink": "Un link sicuro non può ancora portare un report: porta solo il file paghe. Salva qui il file e consegnalo tu."
+  },
+  "print": {
+    "title": "Report persone · {month}",
+    "earningsRange": "Guadagni",
+    "privacy": "Solo linee, squadre e mesi. Qui nessuna persona è nominata."
+  }
+}

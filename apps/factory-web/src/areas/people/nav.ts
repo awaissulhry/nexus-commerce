@@ -41,15 +41,15 @@ export const officeArea: OfficeAreaNav = {
           { id: 'people-piecerates', label: 'shell:nav.people.piecerates', href: '/people/piecerates', icon: HandCoins, permission: 'people.piecerates.view' },
           // SCR-159 (B-W2b-63): the payroll export wizard.
           { id: 'people-payroll', label: 'shell:nav.people.payroll', href: '/people/payroll', icon: FileOutput, permission: 'people.payroll.view' },
-          // SCR-161 (B-W2b-64): efficiency, one person's figures behind the gate.
+          // SCR-161 (B-W2b-64): lines and operations (GET /people/efficiency, people.efficiency.view), one person's figures behind the gate.
           { id: 'people-efficiency', label: 'shell:nav.people.efficiency', href: '/people/efficiency', icon: Gauge, permission: 'people.efficiency.view' },
         ],
       },
       {
         id: 'people-reports',
         label: 'shell:nav.people.reportsGroup',
-        // SCR-264 (B-W2b-64): attendance and earnings reports.
-        items: [{ id: 'people-reports', label: 'shell:nav.people.reports', href: '/people/reports', icon: BarChart3, permission: 'people.reports.view' }],
+        // SCR-264 (B-W2b-64): attendance and earnings reports (GET /people/reports/attendance, people.attendance.view).
+        items: [{ id: 'people-reports', label: 'shell:nav.people.reports', href: '/people/reports', icon: BarChart3, permission: 'people.attendance.view' }],
       },
       {
         id: 'people-settings',
