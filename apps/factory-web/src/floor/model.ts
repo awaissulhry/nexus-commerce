@@ -39,7 +39,7 @@ export function modeOf(station: { workCentreKind: WorkCentreKind } | null, devic
 
 // ---- the home tiles (design floor.home "tiles": the station's mode AND the person's permissions, fail closed) ----
 
-export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-70 */ 'help', 'lineview', 'scan'] as const
+export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-70 */ 'help', 'lineview', 'scan'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 
 export interface TileRule {
@@ -86,6 +86,9 @@ export const TILE_RULES: readonly TileRule[] = [
   // SCR-170 (B-W2b-67): Clock in & out on every tablet (a line tablet and a phone too: design floor.clock Modes). Not a scan:
   // the worker notice does not hold it; the ATTENDANCE gate does, on its page. On a full home the operator's menu still opens it.
   { key: 'clock', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], noStation: true, built: true, takesScans: false },
+  // SCR-171 (B-W2b-68): My day at a sewing station and on a person's own phone (design floor.myday Modes); the operator's menu opens it
+  // everywhere else. Its figures ask the PIN on the page; floor.work is what its API asks.
+  { key: 'myday', permission: 'floor.work', modes: ['sewing'], noStation: true, built: true, takesScans: false },
   // SCR-172 (B-W2b-70): Call for help at every station mode (design floor.help); floor.work sends, and a call always goes out
   // (never held by the worker notice). The frame's Help button opens it from any screen, so a full home may leave the tile out.
   { key: 'help', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },

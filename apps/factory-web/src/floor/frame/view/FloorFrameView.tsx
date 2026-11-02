@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Clock, House, Languages, LogOut, ScanLine, UserPlus, Users, X } from 'lucide-react'
+import { Clock, House, Languages, LogOut, ScanLine, UserPlus, UserRound, Users, X } from 'lucide-react'
 import { FloorButton, FloorFrame, FloorHeader, FloorHelpButton, IdleOverlay, OfflineBanner, OperatorChip } from '@nexus/ui/floor'
 import { Modal } from '../../../lib/i18n/ds-parts'
 import { LOCALES, LOCALE_NAMES, type Locale } from '../../../lib/i18n/locales'
@@ -49,7 +49,7 @@ export interface FrameModel {
   /** B-W2b-67: the crew strip (null, or left out: one person on the tablet, hidden). */
   crew?: CrewView | null
   /** B-W2b-67: the operator menu's own lines: Clock in & out, Add a person, Everyone signs out. */
-  menu?: { clock: boolean; addPerson: boolean; crew: boolean; /** The crew's limit when it is full: Add a person waits, and says why. */ full?: number | null }
+  menu?: { clock: boolean; /** B-W2b-68: My day, for every home it has no tile on. */ myday?: boolean; addPerson: boolean; crew: boolean; /** The crew's limit when it is full: Add a person waits, and says why. */ full?: number | null }
   idle?: { warning: boolean; secondsLeft: number }
 }
 
@@ -63,6 +63,7 @@ export type FrameAction =
   | { type: 'stay' }
   | { type: 'queue' }
   | { type: 'clock' }
+  | { type: 'myday' }
   | { type: 'crew-add' }
   | { type: 'crew-chip'; workerId: string; name: string }
   | { type: 'crew-end' }
@@ -191,6 +192,11 @@ export function FloorFrameView({ frame, onFrame, actions, children }: FloorFrame
               {frame.menu.clock ? (
                 <FloorButton size="md" variant="secondary" icon={<Clock />} onClick={() => send({ type: 'clock' })}>
                   {t('tile.clock')}
+                </FloorButton>
+              ) : null}
+              {frame.menu.myday ? (
+                <FloorButton size="md" variant="secondary" icon={<UserRound />} onClick={() => send({ type: 'myday' })}>
+                  {t('tile.myday')}
                 </FloorButton>
               ) : null}
               {frame.menu.addPerson ? (
