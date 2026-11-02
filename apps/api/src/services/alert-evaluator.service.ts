@@ -167,17 +167,35 @@ export function detectOverdueCrons(rows: CronSuccessRow[], now: number): string[
   return overdue
 }
 
+/**
+ * Enough runs to read a job's cadence. Reading every run of the 14 days moved about 54 MB a minute from the database
+ * (2026-11-02, the largest item on its bill): 20,160 rows for each job that runs every minute, once per business.
+ */
+export const OVERDUE_RUNS_PER_JOB = 50
+
+/**
+ * The newest completed runs of each job. Exported for its test on real SQL.
+ * It reads no row older than `since`: a walk of every job name reached 90 days of old pages (2026-11-02, 5.3M rows).
+ */
+export async function recentCompletedCronRuns(since: Date): Promise<CronSuccessRow[]> {
+  const statuses = [...CRON_COMPLETED_STATUSES]
+  return prisma.$queryRaw<CronSuccessRow[]>`
+    SELECT j."jobName", r."startedAt"
+    FROM (SELECT DISTINCT "jobName" FROM "CronRun" WHERE "startedAt" >= ${since}) j
+    CROSS JOIN LATERAL (
+      SELECT c."startedAt" FROM "CronRun" c
+      WHERE c."jobName" = j."jobName" AND c."status" = ANY(${statuses}) AND c."startedAt" >= ${since}
+      ORDER BY c."startedAt" DESC
+      LIMIT ${OVERDUE_RUNS_PER_JOB}
+    ) r`
+}
+
 /** The crons overdue now. Exported for its test: which rows count as "it ran" is the whole question. */
 export async function overdueCronJobs(now: number = Date.now()): Promise<string[]> {
-  // 14d of completed runs is enough to infer cadence for daily/weekly crons
-  // while bounding the row count. Select only what detectOverdueCrons needs.
+  // 14d of completed runs is enough to infer cadence for daily/weekly crons.
   // P1.8 — a run that finished PARTIAL or NOT_CONFIGURED still RAN on schedule: counting SUCCESS alone made
   // such a job look silent. FAILED / RUNNING prove nothing about cadence.
-  const rows = await prisma.cronRun.findMany({
-    where: { status: { in: [...CRON_COMPLETED_STATUSES] }, startedAt: { gte: new Date(now - 14 * 24 * HOUR) } },
-    select: { jobName: true, startedAt: true },
-  })
-  return detectOverdueCrons(rows, now)
+  return detectOverdueCrons(await recentCompletedCronRuns(new Date(now - 14 * 24 * HOUR)), now)
 }
 
 async function metricOverdueCrons(_ctx: MetricContext): Promise<number> {
