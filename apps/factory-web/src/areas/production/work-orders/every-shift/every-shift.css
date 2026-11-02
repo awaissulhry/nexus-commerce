@@ -1,0 +1,28 @@
+/* The work order every shift (B-W2b-59): layout only, semantic tokens. */
+.fw-es-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
+  gap: var(--nds-space-12);
+}
+.fw-es-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: var(--nds-space-12);
+}
+.fw-es-pdf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+.fw-es-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+@media print {
+  .fw-es-noprint {
+    display: none;
+  }
+}

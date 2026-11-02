@@ -8,6 +8,8 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { COSTING_NAMESPACE, workOrderCostHref } from '../../../../finance/costing/model'
 import { CostBridge, CostFacts, CostLabour, CostMaterials, CostScrapAndWaiting, CostSummary } from '../../../../finance/costing/view/CostParts'
 import type { LabourModel } from '../model'
+import type { Minutes } from '../../every-shift/model'
+import { MinutesCard } from '../../every-shift/view/MinutesCard'
 import '../../../../finance/costing/costing.css'
 
 /**
@@ -16,12 +18,16 @@ import '../../../../finance/costing/costing.css'
  * facts, planned and actual per part, the bridge, the materials issued (a material line → its stock movements) and labour
  * per operation (standard minutes earned × the cost per minute). The whole section needs the cost grain (money.cost):
  * without it the tab says why and shows no figure; without costing.view it says which permission. Never wages, never a
- * person. Before the release a work order has no cost yet.
+ * person. Before the release a work order has no cost yet. B-W2b-59: the Minutes section above it (no money, no grain).
  */
-export function LabourTab({ labour, prefix, workOrderId, draft, onRetry }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void }) {
+export function LabourTab({ labour, prefix, workOrderId, draft, onRetry, minutes }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void; minutes?: Minutes }) {
   return (
     <WithMessages namespaces={[COSTING_NAMESPACE]}>
-      <Labour labour={labour} prefix={prefix} workOrderId={workOrderId} draft={draft} onRetry={onRetry} />
+      {/* B-W2b-59 (wo-minutes): standard minutes, no money: open to whoever reads the work order, above the cost and its grain. */}
+      <div className="fw-pr-stack">
+        {minutes && <MinutesCard minutes={minutes} />}
+        <Labour labour={labour} prefix={prefix} workOrderId={workOrderId} draft={draft} onRetry={onRetry} />
+      </div>
     </WithMessages>
   )
 }

@@ -1,0 +1,134 @@
+{
+  "rush": {
+    "word": "Rush",
+    "field": "Rush",
+    "label": "Rush: goes before every other work order on the dispatch board and the tablet",
+    "RUSH": "Rush",
+    "NORMAL": "Not rush",
+    "priority": "{priority} · Rush"
+  },
+  "list": {
+    "more": "More"
+  },
+  "release": {
+    "open": "Release…",
+    "pickFirst": "Tick the drafts to release first",
+    "tooMany": "Up to {max} work orders at once",
+    "noDraft": "None of the selected is a draft",
+    "heldBy": "Stays a draft: {checks}",
+    "heldState": "Not released: it is {status}",
+    "refusal": {
+      "held": "Not released: {status}",
+      "stale": "Someone changed it since: read it again",
+      "missing": "Not found, or no longer in your sites",
+      "forbidden": "You may not release this work order",
+      "invalid": "The API refused it",
+      "failed": "Something went wrong: nothing was written to this row"
+    },
+    "already_one": "{count} is released already.",
+    "already_other": "{count} are released already.",
+    "heldTitle_one": "{count} is held:",
+    "heldTitle_other": "{count} are held:",
+    "released": "Released",
+    "title_one": "Release {count} work order",
+    "title_other": "Release {count} work orders",
+    "summary": "Each is checked again as it is released: the spec is frozen and a batch number given. A release has no undo.",
+    "metric": {
+      "changing": "To release",
+      "already": "Released already",
+      "held": "Held"
+    },
+    "save_one": "Release {count}",
+    "save_other": "Release {count}",
+    "doneVerb": "released"
+  },
+  "travellers": {
+    "none": "No work order to print",
+    "tooMany": "Up to {max} travellers at once",
+    "printSelected_one": "Print {count} traveller",
+    "printSelected_other": "Print {count} travellers",
+    "printShown_one": "Print the traveller shown",
+    "printShown_other": "Print the {count} travellers shown"
+  },
+  "split": {
+    "open": "Split work order…",
+    "title": "Split {number}",
+    "subtitle": "The pieces you choose move into a new draft with its own due date. The order lines stay the same, on two work orders.",
+    "go": "Split",
+    "cells": "Pieces per size",
+    "col": {
+      "cell": "Colour and size",
+      "pieces": "Pieces",
+      "move": "Move",
+      "keeps": "Stays",
+      "material": "Material",
+      "parent": "Stays",
+      "child": "Moves"
+    },
+    "moveLabel": "Pieces of {cell} to move",
+    "tooMany": "Too many",
+    "due": "Due date of the new work order",
+    "dueHint": "Starts from this work order's due date.",
+    "note": "A note (optional)",
+    "reading": "Reading what each side keeps…",
+    "outcome": "{number} keeps {keeps} pieces, {child} gets {gets}.",
+    "newNumber": "the new work order",
+    "materials": "Planned materials of each side",
+    "heldFrozen": "Only a draft is split: the release freezes its sizes",
+    "heldKind": "A repair or a made-to-measure unit has nothing to split",
+    "heldNothing": "Move at least one piece",
+    "heldOver": "A size moves more pieces than it has",
+    "heldAll": "Keep at least one piece on this work order",
+    "heldApi": "This split cannot be made: read the work order again",
+    "changed": "Someone changed this work order: read it again.",
+    "failed": "The split could not be made.",
+    "from": "Split from {number}",
+    "fromLabel": "Split from",
+    "toLabel": "Split into",
+    "child_one": "{number} ({count} piece)",
+    "child_other": "{number} ({count} pieces)"
+  },
+  "minutes": {
+    "title": "Minutes",
+    "hint": "Standard minutes × whole garments reported good, for this work order only",
+    "value": "{minutes} min",
+    "planned": "Planned",
+    "earned": "Earned",
+    "notScanned": "Not scanned: nothing reports it",
+    "offStandard": "Off-standard minutes are kept per line and day, not per work order: see them on the line's day in Labour & corrections.",
+    "neverPerson": "Never per person: a worker's minutes live only in their own record."
+  },
+  "docs": {
+    "title": "Documents",
+    "traveller": "Traveller {number}",
+    "travellerHint": "PDF with a QR code, the paper that travels with the work. Made on request, stored nowhere.",
+    "travellerDraft": "PDF with a QR code. While it is a draft it says the sizes are not frozen.",
+    "openTraveller": "Traveller PDF",
+    "tickets": "Bundle tickets",
+    "ticketsNone": "Nothing made yet",
+    "ticketsCount_one": "{count} active bundle",
+    "ticketsCount_other": "{count} active bundles",
+    "openTickets": "Open the bundles",
+    "spec": "Style revision {revision}",
+    "specFrozen": "Frozen at the release",
+    "specDraft": "Not frozen yet",
+    "openSpec": "Open the style",
+    "bundleFullPage": "Open full page"
+  },
+  "traveller": {
+    "noRight": {
+      "title": "You cannot see this traveller",
+      "body": "It needs {permission}."
+    },
+    "none": {
+      "title": "No work order named",
+      "body": "Open a traveller from a work order or from the list's selection."
+    },
+    "title_one": "Traveller",
+    "title_other": "{count} travellers",
+    "held": "The PDF is not ready yet",
+    "print": "Print",
+    "storedNowhere": "Made on request and stored nowhere.",
+    "loading": "Making the PDF…"
+  }
+}
