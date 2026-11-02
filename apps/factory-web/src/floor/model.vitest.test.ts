@@ -44,7 +44,6 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'cut', held: null },
       { key: 'bundles', held: null },
       { key: 'clock', held: null },
-      { key: 'help', held: null },
       { key: 'scan', held: null },
     ])
   })
@@ -76,7 +75,6 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'labels', held: null },
       { key: 'pack', held: null },
       { key: 'clock', held: null },
-      { key: 'help', held: null },
       { key: 'scan', held: null },
     ])
   })
