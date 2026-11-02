@@ -5,7 +5,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 
 /**
  * The floor numbering seed: each seeded tablet (seed/floor-auth.ts: the cutting tablets of plants A1 and B1) holds one
- * block of every scan-id kind (BUNDLE, HIDE, GARMENT_SERIAL; the tenant's counter runs A1's block, then B1's), and two
+ * block of every scan-id kind (BUNDLE, HIDE, GARMENT_SERIAL, COUPON; the tenant's counter runs A1's block, then B1's), and two
  * hide tags of A1's block and one of B1's are used, for made-up hides. A separate file from seed/numbering.ts because a
  * block needs its tablet: it runs after seed/floor-auth.ts (seeds run in name order), and the tests that seed only the
  * document series need no tablet.

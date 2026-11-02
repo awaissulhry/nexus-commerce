@@ -248,6 +248,18 @@ beforeAll(async () => {
   // The inspection plans and records schema of W2b (wave 10/16).
   await seedInspectionPlans({ db: factory, namespace: 'iso-a' })
   await seedInspectionPlans({ db: factory, namespace: 'iso-b' })
+  // W2b-2 (B-W2b-74): a floor session inserts only an unplanned operation, so the first operation of tenant A's first site is
+  // one, on its work order in progress (the seeds leave a work order's operations to their routing, every test reads them).
+  await db.admin.query(
+    `INSERT INTO "WorkOrderOperation" (id, "tenantId", "siteId", "workOrderId", "styleRevisionId", seq, "operationId", "unplannedReason", code, name, "standardMinutes", "workCentreId")
+     SELECT '00000000-0000-7000-8000-000000000074', o."tenantId", o."siteId", o."workOrderId", o."styleRevisionId", 900, r."operationId", 'QUALITY_FIX', l.code, l.name, l."standardMinutes", o."workCentreId"
+       FROM "WorkOrderOperation" o
+       JOIN "WorkOrder" w ON w."tenantId" = o."tenantId" AND w.id = o."workOrderId"
+       JOIN "RoutingOperation" r ON r."tenantId" = o."tenantId" AND r."revisionId" = o."styleRevisionId" AND r.seq = o."routingSeq"
+       JOIN "Operation" l ON l."tenantId" = r."tenantId" AND l.id = r."operationId"
+      WHERE o."siteId" = $1 AND w.status = 'IN_PROGRESS' ORDER BY o.seq LIMIT 1`,
+    [a.sites[0]!.id],
+  )
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -494,6 +506,7 @@ it('covers every classified table and every runtime role', () => {
     'ScanCorrectionRequest',
     'ScanPatternFinding',
     'ScheduleSlot',
+    'ScrapApproval',
     'ScrapReason',
     'SdiInboxItem',
     'SdiNotification',

@@ -32,6 +32,7 @@ export const SCAN_TYPES = {
   CARTON: 'CT',
   LOCATION: 'LC',
   WORK_ORDER: 'WO',
+  COUPON: 'CP',
 } as const
 export type ScanType = keyof typeof SCAN_TYPES
 

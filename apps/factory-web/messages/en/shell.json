@@ -297,7 +297,8 @@
     "SERIAL": "Serial number",
     "CARTON": "Carton",
     "LOCATION": "Location",
-    "WORK_ORDER": "Work order"
+    "WORK_ORDER": "Work order",
+    "COUPON": "Bundle coupon"
   },
   "links": {
     "language": "Language",

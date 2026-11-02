@@ -637,6 +637,9 @@ model BomLine {
   colourwayId     String?  @db.Uuid
   /// Bought from this supplier when it is not the item's default.
   supplierId      String?  @db.Uuid
+  /// W2b-2 (B-W2b-74): the routing step of the same revision that uses the line (RoutingOperation.seq), so a material flag
+  /// and a scan's components can be per operation (B-W2b-88); null: not tied to one step (what every line was before).
+  routingSeq      Int?
   note            String?
   version         Int      @default(1)
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
@@ -644,6 +647,8 @@ model BomLine {
   createdById     String?  @db.Uuid
 
   revision   StyleRevision   @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-2: a renumbered step of a draft revision takes its lines along (Cascade); a step in use is not removed.
+  routingStep RoutingOperation? @relation(fields: [tenantId, revisionId, routingSeq], references: [tenantId, revisionId, seq], onDelete: Restrict, onUpdate: Cascade)
   item       Item            @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   itemColour ItemColour?     @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   colourway  Colourway?      @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -739,6 +744,8 @@ model Operation {
   skills  Skill[]
   // W2b pay.prisma (schema wave 6/7): the piece rates that pay it.
   pieceRateEntries PieceRateEntry[]
+  // W2b-2 production.prisma (B-W2b-74): the unplanned operations made from it.
+  unplannedOperations WorkOrderOperation[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])
@@ -764,6 +771,9 @@ model RoutingOperation {
   standardMinutes Decimal        @db.Decimal(10, 3)
   /// Every bundle is scanned at it (floor scans, B-W1-42).
   scanRequired    Boolean        @default(true)
+  /// W2b-2 (B-W2b-74; MES-025): steps of the routing with the same number run side by side and count as one step; null:
+  /// in sequence. From 1. Its work orders' operations keep a copy.
+  parallelGroup   Int?
   instructions    String?
   /// W2a subcontracted operation (PRD-120): the workshop that does it (a party with the SUBCONTRACTOR role; the product
   /// module checks the role), its fee per piece in euros (a subcontract order copies it in its own currency) and the
@@ -784,6 +794,8 @@ model RoutingOperation {
   supplier  Party?        @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // production.prisma: the work order operations made from the step.
   workOrderOperations WorkOrderOperation[]
+  // W2b-2 (B-W2b-74): the BOM lines it uses.
+  bomLines            BomLine[]
 
   @@unique([tenantId, revisionId, seq])
 }

@@ -125,7 +125,8 @@ async function stepsOfOperations(db: Reader, ids: readonly string[]): Promise<Ma
   const out = new Map<string, RoutingStep>()
   for (const part of chunks([...new Set(ids)])) {
     const rows = await db.workOrderOperation.findMany({ where: { id: { in: part } }, select: { id: true, code: true, name: true, standardMinutes: true, routingOperation: { select: { id: true, styleId: true, revisionId: true, seq: true, operationId: true } } } })
-    for (const row of rows) out.set(row.id, { ...row.routingOperation, code: row.code, name: row.name, standardMinutes: row.standardMinutes.toFixed(3) })
+    // B-W2b-74: an unplanned operation is no routing step: it stays out of the efficiency reports until B-W2b-82 says.
+    for (const row of rows) if (row.routingOperation) out.set(row.id, { ...row.routingOperation, code: row.code, name: row.name, standardMinutes: row.standardMinutes.toFixed(3) })
   }
   return out
 }

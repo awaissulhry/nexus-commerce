@@ -77,6 +77,11 @@ model HelpCall {
   workOrderId       String?        @db.Uuid
   bundleId          String?        @db.Uuid
   note              String?
+  /// W2b-2 (B-W2b-74; MES-137): the reason tile, finer than the type (a code, no spaces), and for a material call how much
+  /// is asked, above 0 (of what: the note, as the call's words say today). Told when it is sent or added later as a
+  /// detail while the call is open; set once.
+  reasonCode        String?
+  requestedQuantity Decimal?       @db.Decimal(18, 4)
   status            HelpCallStatus @default(SENT)
   sentAt            DateTime       @db.Timestamptz(3)
   /// Each step's time and who took it (a team leader, a responder; an office user or a floor worker), set once.

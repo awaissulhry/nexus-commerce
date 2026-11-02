@@ -171,6 +171,7 @@ describe('the walls', () => {
       OperationChecklistResult: ['select', 'insert'],
       OperationScanMember: ['select', 'insert'],
       ScanPatternFinding: [],
+      ScrapApproval: ['select', 'insert', 'update'],
     })
     for (const { model, ownership } of models) {
       expect(ownership.access[OFFICE_ROLE], model.name).toBeDefined()

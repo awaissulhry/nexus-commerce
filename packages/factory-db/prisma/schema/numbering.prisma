@@ -88,6 +88,9 @@ enum NumberKind {
   HIDE
   /// A finished garment's serial (SN-…).
   GARMENT_SERIAL
+  /// W2b-2 (B-W2b-74; MES-067): a bundle's coupon for one operation (CP-…; labour.prisma BundleCoupon.code), a scan-id
+  /// kind with its own tenant-wide counter. Coupons printed before it took BN-… codes from the BUNDLE counter and stay valid.
+  COUPON
   /// A final inspection's number (INS-…; quality.prisma Inspection.number). A floor document kind: the bench numbers it.
   INSPECTION
   /// A quality release's number (REL-…; quality.prisma QualityRelease.number). A floor document kind too.
