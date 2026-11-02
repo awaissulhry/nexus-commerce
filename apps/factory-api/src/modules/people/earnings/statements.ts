@@ -34,7 +34,7 @@ type StatementRow = Prisma.WorkerStatementGetPayload<{ select: typeof STATEMENT_
 
 const leadReview = (row: Pick<StatementRow, 'summary'>): { readonly at: string; readonly byName: string | null; readonly note: string | null } | null => leadReviewOf(row.summary) as never
 
-async function statementOf(caller: CommandCaller, statementId: string): Promise<{ context: OfficeContext; row: StatementRow }> {
+export async function statementOf(caller: CommandCaller, statementId: string): Promise<{ context: OfficeContext; row: StatementRow }> {
   const context = officeOf(caller)
   const row = isUuid(statementId) ? await caller.withClient((db) => db.workerStatement.findUnique({ where: { id: statementId }, select: STATEMENT_SELECT })) : null
   if (!row || !can(actorOf(context), PEOPLE_EARNINGS_VIEW, { companyId: row.companyId, siteId: row.siteId })) throw new NotFoundError('Statement not found.')

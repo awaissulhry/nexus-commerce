@@ -137,6 +137,8 @@ export const openStatementContract = defineContract({
   body: input({ reason: z.enum(OPEN_REASONS).optional(), note: z.string().trim().max(OPEN_NOTE_MAX).optional() }),
   response: { 200: statementView },
 })
+/** The PDF's bytes (B-W2b-62): `response` left open, as every document. */
+export const statementPdfContract = defineContract({ params: statementParams, response: {} })
 export const approveStatementContract = defineContract({ params: statementParams, body: input({ version }), response: { 200: statementView } })
 export const leadReviewContract = defineContract({
   params: statementParams,

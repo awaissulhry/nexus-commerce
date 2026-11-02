@@ -27,10 +27,10 @@ export type { EmployeeRecordActions, EmployeeRecordModel } from '../../view-mode
  * who, when, why; the views of protected data). Skills & training, Attendance, Pay & piece rates and Safety join with their
  * own pages. J / K open the employee before or after in the list last opened.
  */
-export function EmployeeRecordView({ model, actions }: { model: EmployeeRecordModel; actions?: EmployeeRecordActions }) {
+export function EmployeeRecordView({ model, actions, pay }: { model: EmployeeRecordModel; actions?: EmployeeRecordActions; pay?: ReactNode }) {
   return (
     <PeopleMessages>
-      <RecordBody model={model} actions={actions} />
+      <RecordBody model={model} actions={actions} pay={pay} />
     </PeopleMessages>
   )
 }
@@ -38,7 +38,7 @@ export function EmployeeRecordView({ model, actions }: { model: EmployeeRecordMo
 type Place = { locale: ReturnType<typeof useLocale>; timeZone: string }
 const dayText = (value: string | null, place: Place) => (value ? formatDate(`${value}T12:00:00Z`, place) : '—')
 
-function RecordBody({ model, actions }: { model: EmployeeRecordModel; actions?: EmployeeRecordActions }) {
+function RecordBody({ model, actions, pay }: { model: EmployeeRecordModel; actions?: EmployeeRecordActions; pay?: ReactNode }) {
   const t = useWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -120,7 +120,7 @@ function RecordBody({ model, actions }: { model: EmployeeRecordModel; actions?: 
       meta={meta}
       actions={bandActions}
       status={<LiveLine asOf={model.asOf} live={model.live} />}
-      note={<PeoplePrivacyNote sight={model.sight} text={t('privacy.record')} />}
+      note={<PeoplePrivacyNote sight={model.sight} text={t(model.tab === 'pay' ? 'privacy.recordPay' : 'privacy.record')} />}
       tabs={tabs}
       tab={model.tab}
       onRetry={actions?.onRetry}
@@ -129,6 +129,7 @@ function RecordBody({ model, actions }: { model: EmployeeRecordModel; actions?: 
       <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
       {value && model.tab === 'profile' && <Profile model={model} value={value} actions={actions} manage={manage} place={place} />}
       {value && model.tab === 'job' && <Job model={model} value={value} actions={actions} manage={manage} place={place} />}
+      {value && model.tab === 'pay' && pay}
       {value && model.tab === 'documents' && <Documents model={model} value={value} place={place} />}
       {value && model.tab === 'activity' && <Activity model={model} value={value} place={place} />}
       {value && (

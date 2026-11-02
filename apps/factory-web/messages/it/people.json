@@ -550,6 +550,7 @@
     "pickSite": "I dati individuali seguono le regole di ogni sede: scegli una sede in alto",
     "reading": "Lettura delle regole della sede…",
     "record": "Una persona: i dati che servono al lavoro — mai paghe, presenze o salute in questa scheda",
+    "recordPay": "Una persona: questa scheda mostra la sua paga, solo con il diritto; ogni apertura viene registrata",
     "register": "Anagrafica del personale: nomi, mansione e squadra — mai paghe, presenze, salute o dati sul lavoro di una persona",
     "unread": "Regole della sede non lette: nessun dato individuale è mostrato",
     "workerHr": "I dati di una persona li vedono solo il lavoratore e le Risorse umane",
@@ -724,6 +725,7 @@
     "activity": "Attività",
     "documents": "Documenti",
     "job": "Lavoro e squadra",
+    "pay": "Paga e cottimi",
     "profile": "Profilo"
   },
   "team": {

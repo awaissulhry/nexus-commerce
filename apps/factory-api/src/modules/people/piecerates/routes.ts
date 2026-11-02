@@ -11,6 +11,7 @@ import {
   confirmPreviewContract,
   createTableContract,
   createVersionContract,
+  employeePublicationsContract,
   floorMineContract,
   floorReadContract,
   overviewContract,
@@ -33,6 +34,7 @@ import {
 } from './contract'
 import { floorMine, floorRead } from './floor'
 import { manifest } from './manifest'
+import { employeePublications } from './person'
 import { overview, publishPreview, rates, table, tables, version } from './store'
 import { recordPreconditions, startPiecePay, stopPiecePay, switchView } from './switch'
 import {
@@ -96,6 +98,7 @@ export default defineRoutes('people.piecerates', manifest, async (app) => {
     paperReceipts(request, request.params.publicationId, request.body, idempotencyKeyFrom(request)),
   )
 
+  app.get('/people/employees/:employeeId/rate-publications', { schema: employeePublicationsContract }, async (request) => employeePublications(request, request.params.employeeId))
   app.get('/people/piece-rates/sites/:siteId/switch', { schema: switchContract }, async (request) => switchView(request, request.params.siteId, request.query))
   app.put('/people/piece-rates/sites/:siteId/switch/preconditions', { schema: preconditionsContract }, async (request) => recordPreconditions(request, request.params.siteId, request.body, idempotencyKeyFrom(request)))
   app.post('/people/piece-rates/sites/:siteId/switch/start', { schema: startContract }, async (request) =>

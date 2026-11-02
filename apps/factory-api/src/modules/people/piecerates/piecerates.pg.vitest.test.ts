@@ -337,6 +337,11 @@ describe('who has read the rates: a receipt per worker (MES-255, AckTracker; c.c
     const v2Publication = (mine.body as Json).publications.find((row: Json) => row.versionId === v2)
     const late = await tablet.post(`/people/piece-rates/floor/publications/${v2Publication.publicationId}/read`, {}, { headers: { 'idempotency-key': key() } })
     expect(late.status).toBe(403)
+    // B-W2b-62: the employee record's Pay tab: their own reading, the device, no rate.
+    const proof = await ok('hr', 'GET', `/people/employees/${receipt.employeeId}/rate-publications`)
+    const shown = proof.publications.find((row: Json) => row.id === own.publicationId)
+    expect(shown).toMatchObject({ versionNo: 1, read: { channel: 'DEVICE', device: `Rates tablet ${run}` } })
+    expect(JSON.stringify(proof)).not.toContain('11.58')
   }, 120_000)
 })
 

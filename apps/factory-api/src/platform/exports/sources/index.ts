@@ -29,6 +29,8 @@ import { moves } from './moves'
 import { receipts } from './receipts'
 import { shipments } from './shipments'
 import { stock } from './stock'
+// B-W2b-62: People › Piece rates › Earnings ledger.
+import { earningsLedger } from './earnings-ledger'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -70,4 +72,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   receipts,
   shipments,
   stock,
+  // B-W2b-62: People.
+  earningsLedger,
 ])

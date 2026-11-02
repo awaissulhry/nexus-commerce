@@ -71,7 +71,7 @@ export type SightState = { status: 'loading' } | { status: 'allSites' } | { stat
  * may see one person's work figures at this site (the PERFORMANCE gate: off, the worker and HR, on request). The DS
  * PrivacyNote with the law as a LawRef; every word ours.
  */
-export function PeoplePrivacyNote({ sight, variant = 'pill', text }: { sight: SightState; variant?: 'pill' | 'panel'; text?: string }) {
+export function PeoplePrivacyNote({ sight, variant = 'pill', text, level = 'individual' }: { sight: SightState; variant?: 'pill' | 'panel'; text?: string; level?: 'line' | 'individual' }) {
   const t = useWords()
   const ds = useDsWords()
   const whoMore =
@@ -90,7 +90,7 @@ export function PeoplePrivacyNote({ sight, variant = 'pill', text }: { sight: Si
                 : t('privacy.workerHr')
   return (
     <PrivacyNote
-      level="individual"
+      level={level}
       variant={variant}
       text={text ?? t('privacy.register')}
       whoMore={whoMore}
