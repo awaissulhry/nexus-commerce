@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { CERTIFICATES_VIEW } from '../compliance/certificates/permissions'
 import type { Permission } from '../core/permissions'
 import { INVOICES_VIEW } from '../invoicing/permissions'
+// B-W2b-42: a working-time limit alert names a site and a limit, never a person: the roster's own reading permission.
+import { PEOPLE_SHIFTS_VIEW } from '../people/shifts/permissions'
 import { PLANNING_VIEW } from '../planning/permissions'
 import { PURCHASING_VIEW } from '../purchasing/permissions'
 import { QUALITY_HOLDS_VIEW } from '../quality/holds/permissions'
@@ -34,7 +36,8 @@ const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
  */
 
 // B-W2b-24: INTEGRATION_FAILING (the design's last built-in), from the connections' health.
-export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING'] as const
+// B-W2b-42: WORKING_TIME_LIMIT (MES-232), a site's people close to or over a working-time limit.
+export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT'] as const
 export type RuleKind = (typeof RULE_KINDS)[number]
 export const isRuleKind = (value: unknown): value is RuleKind => typeof value === 'string' && (RULE_KINDS as readonly string[]).includes(value)
 
@@ -199,6 +202,18 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     threshold: z.strictObject({ hours: whole(1, 168).default(1) }),
     builtIn: { name: { en: 'Connection failing', it: 'Collegamento in errore' }, threshold: { hours: 1 }, severity: 'CRITICAL', cooldownMinutes: 1440, recipientRole: 'admin' },
     label: { en: 'Connections failing', it: 'Collegamenti in errore' },
+    recheck: [],
+  }),
+  WORKING_TIME_LIMIT: spec({
+    kind: 'WORKING_TIME_LIMIT',
+    trigger: 'CONDITION',
+    // One alert per site and limit, never per person: it names no one and carries no figure (Statuto dei Lavoratori art. 4).
+    recordType: 'Site',
+    view: PEOPLE_SHIFTS_VIEW,
+    // B-W2b-42: someone close to a limit (people/limits/checks NEAR_PERCENT), or over it, at a site whose attendance is on.
+    threshold: z.strictObject({}),
+    builtIn: { name: { en: 'Working-time limit close', it: 'Limite di orario vicino' }, threshold: {}, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'admin' },
+    label: { en: 'Working-time limits close or passed', it: 'Limiti di orario vicini o superati' },
     recheck: [],
   }),
 })

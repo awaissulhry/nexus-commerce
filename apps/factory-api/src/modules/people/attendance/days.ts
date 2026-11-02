@@ -25,6 +25,8 @@ import { assertVersion, dateOf, dayOf, may, officeOf, refuse } from '../employee
 import { assertPersonDecides } from '../privacy/decide'
 import { legalGateFor } from '../privacy/gate'
 import { minimumGroupSizeFor, refusePersonKeys } from '../privacy/groups'
+// B-W2b-42: what an approved timesheet covers changes only after it is sent back.
+import { refuseCoveredDay } from '../overtime/timesheets'
 import { ownEmployeeId, personFor, rangeOf, refuseOwnDay, requireAttendance, siteFor } from './access'
 import { dayFactsOf, lockPerson, syncDayInCommand, type DayFacts } from './compute'
 import type { CountsQuery, ListDaysQuery } from './contract'
@@ -461,6 +463,7 @@ export async function reopenDay(caller: CommandCaller, dayId: string, body: { ve
     await refuseOwnDay(tools.tx, context, person.id)
     if (row.status === 'CLOSED') refuse('DAY_CLOSED', "This day's month is closed: it changes only by a correction (People › Attendance › Correct a closed day).")
     if (row.status !== 'APPROVED') refuse('NOT_APPROVED', 'This day is not approved: there is nothing to reopen.')
+    await refuseCoveredDay(tools.tx, person.id, date)
     await tools.tx.attendanceDay.update({ where: { id: dayId }, data: { status: 'OPEN', approvedAt: null, approvedById: null, version: { increment: 1 } }, select: { id: true } })
     tools.audit({ action: 'people.reopenAttendanceDay', recordType: 'AttendanceDay', recordId: dayId, companyId: row.companyId, siteId: row.siteId, before: { status: 'APPROVED', approvedById: row.approvedById }, after: { status: 'OPEN' }, reason: body.reason.trim() })
     const synced = await syncDayInCommand(tools, person, date, { change: 'REOPENED', reason: body.reason.trim() })

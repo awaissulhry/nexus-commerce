@@ -255,6 +255,17 @@ const PEOPLE_ATTENDANCE_ADDS: Readonly<Record<string, readonly Permission[]>> = 
   floor_supervisor: ['people.attendance.rollcall'],
 })
 /**
+ * B-W2b-42 (overtime worked, timesheets, working-time limits; MES-229, MES-230, MES-232): the administrator (the HR
+ * register's keeper) decides overtime, gives HR's approval of a timesheet and keeps the limits; the production manager
+ * decides overtime and stands in as the lead for any timesheet; the floor supervisor approves as the lead the timesheets of
+ * the teams they lead (the days, not the hours). Owner from every(). One line per template.
+ */
+const PEOPLE_OVERTIME_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.overtime.review', 'people.timesheets.hr', 'people.limits.manage'],
+  production_manager: ['people.overtime.review', 'people.timesheets.lead'],
+  floor_supervisor: ['people.timesheets.team'],
+})
+/**
  * B-W2b-50 (line targets and boards, MES-084, MES-161, MES-162, MES-166, ANA-007; design production.floor "Hour by hour",
  * the WIP heat map, the line TV's office preview): the production manager, the floor supervisor and the planner set the
  * lines' hourly targets; the manager and the supervisor give a short hour's reason from the office too; quality reads the
@@ -325,6 +336,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_PIECERATES_ADDS[key] ?? []) : []),
   // B-W2b-37
   ...(audience === 'office' ? (PEOPLE_ATTENDANCE_ADDS[key] ?? []) : []),
+  // B-W2b-42
+  ...(audience === 'office' ? (PEOPLE_OVERTIME_ADDS[key] ?? []) : []),
   // B-W2b-49
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? [])]
 /**

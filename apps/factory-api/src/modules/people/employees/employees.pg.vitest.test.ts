@@ -192,8 +192,10 @@ describe('one person, one record (MES-208, MES-211)', () => {
   })
 
   it('keeps an agency worker with the agency (an organisation) and the contract end', async () => {
-    const agency = (await ok('hr', 'POST', '/people/employees', { siteId: T.siteA1, firstName: 'Made', lastName: 'Temp', kind: 'AGENCY', agencyPartyId: T.agency, startDate: '2026-11-02', endDate: '2026-11-20' }, 201)).employee
-    expect(agency).toMatchObject({ kind: 'AGENCY', agency: { id: T.agency }, endDate: '2026-11-20', lifecycle: 'STARTING' })
+    // Days from today, not fixed dates: "the start ahead" and "within 14 days" are read against the clock.
+    const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
+    const agency = (await ok('hr', 'POST', '/people/employees', { siteId: T.siteA1, firstName: 'Made', lastName: 'Temp', kind: 'AGENCY', agencyPartyId: T.agency, startDate: inDays(5), endDate: inDays(23) }, 201)).employee
+    expect(agency).toMatchObject({ kind: 'AGENCY', agency: { id: T.agency }, endDate: inDays(23), lifecycle: 'STARTING' })
     // It starts within 14 days (T-100 in January does not).
     expect((await ok('hr', 'GET', '/people/employees/counts')).tiles.STARTING).toBe(1)
     // Away from AGENCY the agency goes with it.
