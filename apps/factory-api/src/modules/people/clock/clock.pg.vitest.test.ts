@@ -382,3 +382,60 @@ describe('the automatic clock-out at the shift end (MES-227)', () => {
     expect(await clockRows(e3)).toHaveLength(2)
   })
 })
+
+describe('an answer lost on its way back (B-W2b-77): the online try and its retry are one tablet event', () => {
+  const nextAction = async (): Promise<string> => {
+    const state = await sew.get('/people/clock/floor')
+    expect(state.status, JSON.stringify(state.body)).toBe(200)
+    return state.body.clock.next
+  }
+  const queued = (clientEventId: string, action: string, occurredAt: string) => ({ events: [{ clientEventId, seq: 1, kind: 'people.clock.record', occurredAt, workerId: operator, payload: { action } }] })
+  const rowsOf = (clientEventId: string) => admin('SELECT id FROM "ClockEvent" WHERE "tenantId" = $1 AND "clientEventId" = $2', [T, clientEventId])
+
+  it('a tap the office recorded, retried from the queue under its id: one event, one event out, answered duplicate', async () => {
+    const id = evt('lost-tap')
+    const action = await nextAction()
+    const online = await sew.post('/people/clock/floor', { clientEventId: id, action, deviceTime: new Date().toISOString() })
+    expect(online.status, JSON.stringify(online.body)).toBe(201)
+    const out = (await outbox('attendance.clock_event', e1)).length
+    const retry = await sew.post('/floor/sync', queued(id, action, new Date().toISOString()))
+    expect(retry.status, JSON.stringify(retry.body)).toBe(200)
+    expect(retry.body.events[0]).toMatchObject({ status: 'duplicate', refusal: null, result: { type: 'ClockEvent', id: online.body.event.id } })
+    expect(await rowsOf(id)).toHaveLength(1)
+    expect(await outbox('attendance.clock_event', e1)).toHaveLength(out)
+  })
+
+  it('the retry may be read while the try still runs: whichever comes first records, neither is refused, one event', async () => {
+    for (let round = 0; round < 4; round += 1) {
+      const id = evt('raced')
+      const action = await nextAction()
+      const [online, retry] = await Promise.all([sew.post('/people/clock/floor', { clientEventId: id, action, deviceTime: new Date().toISOString() }), sew.post('/floor/sync', queued(id, action, new Date().toISOString()))])
+      expect([200, 201], JSON.stringify(online.body)).toContain(online.status)
+      expect(retry.body.events[0], JSON.stringify(retry.body)).toMatchObject({ refusal: null, result: { type: 'ClockEvent' } })
+      expect(await rowsOf(id)).toHaveLength(1)
+    }
+  })
+
+  it("the retry of a recorded tap is answered whatever the tablet's clock says now", async () => {
+    const id = evt('lost-ahead')
+    const action = await nextAction()
+    const online = await sew.post('/people/clock/floor', { clientEventId: id, action, deviceTime: new Date().toISOString() })
+    expect(online.status, JSON.stringify(online.body)).toBe(201)
+    const retry = await sew.post('/floor/sync', queued(id, action, minutesFromNow(90).toISOString()))
+    expect(retry.body.events[0]).toMatchObject({ status: 'duplicate', refusal: null })
+    expect(await rowsOf(id)).toHaveLength(1)
+  })
+
+  it('a badge whose answer was lost is sent again from the tablet under its id: one event, whichever way the person answered In or out', async () => {
+    const id = evt('lost-badge')
+    const last = (await admin<{ kind: string }>('SELECT kind::text AS kind FROM "ClockEvent" WHERE "workerId" = $1 ORDER BY "occurredAt" DESC LIMIT 1', [lead]))[0]?.kind
+    const action = last === 'IN' ? 'OUT' : 'IN'
+    const scan = await kiosk.post('/people/clock/scan', { clientEventId: id, badgeCode: badges.lead, action })
+    expect(scan.status, JSON.stringify(scan.body)).toBe(201)
+    const other = action === 'IN' ? 'OUT' : 'IN'
+    const kept = await kiosk.post('/people/clock/scan', { clientEventId: id, badgeCode: badges.lead, action: other, occurredAt: new Date().toISOString(), sentAt: new Date().toISOString() })
+    expect(kept.status, JSON.stringify(kept.body)).toBe(200)
+    expect(kept.body.event.id).toBe(scan.body.event.id)
+    expect(await rowsOf(id)).toHaveLength(1)
+  })
+})

@@ -215,6 +215,27 @@ describe('every site starts closed: the build ships every purpose OFF (GATE-LABO
     await expect(h.database.withScope({ audience: 'office', tenantId: A.tenant, actorId: newId() }, (client) => requireLegalGate(client, A.siteA1, 'ATTENDANCE'))).rejects.toMatchObject({ code: 'invalid_state' })
     expect(await auditOf('people.openPersonFigures')).toEqual([])
   })
+
+  it('a closed gate says nothing of who exists: one answer for a real person, a person of another company and an id that finds nobody (B-W2b-77)', async () => {
+    const real = people.employeeIds.e1
+    const asked = async (employeeId: string) => {
+      const { status, body } = await as('hr', 'GET', `/people/privacy/figures/${employeeId}/access?purpose=PERFORMANCE`)
+      return { status, body: { ...body, employeeId: 'asked' } }
+    }
+    const access = await asked(real)
+    expect(access.status).toBe(200)
+    expect(access.body).toMatchObject({ allowed: false, refusal: 'GATE_CLOSED', siteId: null, as: null, reasons: [] })
+    expect(await asked(newId())).toEqual(access)
+    expect(await asked(people.employeeIds.eb1)).toEqual(access)
+    const opened = async (employeeId: string) => {
+      const { status, body } = await as('hr', 'POST', `/people/privacy/figures/${employeeId}/open`, { purpose: 'PERFORMANCE', reason: 'PAY_QUERY' })
+      return { status, error: { ...body.error, requestId: null } }
+    }
+    const open = await opened(real)
+    expect(open).toMatchObject({ status: 409, error: { code: 'invalid_state', issues: [{ path: 'gate/PERFORMANCE' }] } })
+    expect(await opened(newId())).toEqual(open)
+    expect(await auditOf('people.openPersonFigures')).toEqual([])
+  })
 })
 
 describe('switching a purpose on (Statuto art. 4 c.2 / c.1; GDPR arts. 13, 35)', () => {
@@ -323,7 +344,7 @@ describe("one person's figures: the worker and HR only (MES-249; Owner answer H3
     ])
   })
 
-  it("HR's role reaches company A only: a person of company B is not even found (404); a role not named sees nothing", async () => {
+  it("HR's role reaches company A only, every gate in reach on: a person of company B and an id that finds nobody are not found (404); a role not named sees nothing", async () => {
     expect((await as('hr', 'GET', `/people/privacy/figures/${people.employeeIds.eb1}/access?purpose=PERFORMANCE`)).status).toBe(404)
     expect((await as('plainFigures', 'GET', `/people/privacy/figures/${people.employeeIds.e1}/access?purpose=PERFORMANCE`)).body).toMatchObject({ allowed: false, refusal: 'NOT_ALLOWED' })
     expect((await as('hr', 'GET', `/people/privacy/figures/${newId()}/access?purpose=PERFORMANCE`)).status).toBe(404)

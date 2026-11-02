@@ -8,7 +8,8 @@ import { useFloorKeys } from '../../keys'
 import { isBadgeCode } from '../../model'
 import { AsOfMemory } from '../shared/as-of'
 import { queuedView } from '../shared/queued'
-import { clockProved, clockTap, fetchClock, fetchOpenWork, fetchTabletClock, newClockEventId, type ClockOutcome, type ClockProof, type Recorded } from './api'
+import type { QueueItem } from '../../queue/model'
+import { clockProved, fetchClock, fetchOpenWork, fetchTabletClock, newClockEventId, tapOrKeep, type ClockOutcome, type ClockProof, type Recorded } from './api'
 import { afterAction, mainActionOf, pausedAtClockOut, RECEIPT_MS, runningBundles, type ClockAction, type ClockView, type OpenWork, type Receipt } from './model'
 import { ClockScreen, type ClockAct, type ClockStep, type ClockViewModel } from './view/ClockView'
 
@@ -17,7 +18,8 @@ import { ClockScreen, type ClockAct, type ClockStep, type ClockViewModel } from 
  * POST /people/clock/floor; a badge scanned here, or a name and PIN, through POST /people/clock/scan (the person of the
  * badge, not always the one signed in). Offline: the signed-in person's taps go through the tablet's queue
  * (`people.clock.record`) and a badge scanned is sealed until sent (kept.ts). Only a network failure falls back to them: a
- * refusal is shown, never queued. Nobody signed in, the page is a kiosk: it stays on the scan, and a person's answer
+ * refusal is shown, never queued. The fallback keeps the id of the try, so an answer lost on its way back is never a second
+ * clock-in (queue/online-first.ts; B-W2b-77). Nobody signed in, the page is a kiosk: it stays on the scan, and a person's answer
  * leaves the screen after a few seconds. Read again on a shift change, on the live channel's reconnect and on a beat.
  */
 
@@ -55,7 +57,7 @@ export function FloorClock() {
   const [pinProblem, setPinProblem] = useState<ClockViewModel['pinProblem']>(null)
   const [picked, setPicked] = useState<{ id: string; name: string } | null>(null)
   const acting = useRef(false)
-  const badge = useRef<string | null>(null)
+  const badge = useRef<{ readonly code: string; readonly clientEventId: string } | null>(null)
   const clearing = useRef<number | null>(null)
 
   const stayFor = useCallback((next: Receipt | null, timed: boolean) => {
@@ -184,10 +186,9 @@ export function FloorClock() {
     return false
   }
 
-  /** The signed-in person's action kept on this tablet with its time. */
-  const keepAction = async (action: ClockAction) => {
-    const at = new Date().toISOString()
-    const item = await queue.enqueue('people.clock.record', { action })
+  /** The signed-in person's action, kept on this tablet with its time. */
+  const savedHere = (item: QueueItem, action: ClockAction) => {
+    const at = item.occurredAt
     setSaved(item.clientEventId)
     setRead((current) => (current ? { ...current, view: afterAction(current.view, action, at) } : current))
     feedback('success')
@@ -200,19 +201,14 @@ export function FloorClock() {
     setBusy(true)
     const will = action === 'OUT' ? runningBundles(open) : []
     try {
-      if (!online) {
-        await keepAction(action)
+      const sent = await tapOrKeep(api, queue, online, action)
+      if (sent.kept) {
+        savedHere(sent.kept, action)
         if (action === 'OUT') setWillPause(will)
         return
       }
-      const answer = await clockTap(api, action, newClockEventId(), new Date().toISOString())
-      if (!answer.ok && answer.problem.kind === 'offline') {
-        await keepAction(action)
-        if (action === 'OUT') setWillPause(will)
-        return
-      }
-      if (answer.ok && answer.value.event.kind === 'OUT') afterOut(will)
-      answered(answer, { mine: true })
+      if (sent.answer.ok && sent.answer.value.event.kind === 'OUT') afterOut(will)
+      answered(sent.answer, { mine: true })
     } finally {
       acting.current = false
       setBusy(false)
@@ -231,9 +227,9 @@ export function FloorClock() {
     return act('OUT')
   }
 
-  const prove = async (proof: ClockProof) => {
+  const prove = async (proof: ClockProof, clientEventId: string) => {
     setBusy(true)
-    const answer = await clockProved(api, proof, newClockEventId(), new Date().toISOString())
+    const answer = await clockProved(api, proof, clientEventId, new Date().toISOString())
     setBusy(false)
     return answer
   }
@@ -244,15 +240,17 @@ export function FloorClock() {
       feedback('error')
       return stayFor({ kind: 'notBadge' }, true)
     }
+    // One id for this scan: kept after a network failure it goes under the id the try used, and the office answers the event it may hold.
+    const clientEventId = newClockEventId()
     if (!online) {
-      badge.current = code
+      badge.current = { code, clientEventId }
       return setStep('choose')
     }
     acting.current = true
-    const answer = await prove({ badgeCode: code })
+    const answer = await prove({ badgeCode: code }, clientEventId)
     acting.current = false
     if (!answer.ok && answer.problem.kind === 'offline') {
-      badge.current = code
+      badge.current = { code, clientEventId }
       return setStep('choose')
     }
     if (answer.ok && answer.value.event.kind === 'OUT' && answer.value.clock.person.workerId === workerId) afterOut(runningBundles(open))
@@ -282,7 +280,7 @@ export function FloorClock() {
       }
       case 'pin': {
         if (!picked) return setStep('clock')
-        const answer = await prove({ workerId: picked.id, pin: action.pin })
+        const answer = await prove({ workerId: picked.id, pin: action.pin }, newClockEventId())
         if (!answer.ok && answer.problem.kind === 'signedOut') {
           feedback('error')
           return setPinProblem('wrong')
@@ -305,11 +303,11 @@ export function FloorClock() {
         setPicked(null)
         return setStep(step === 'pin' ? 'names' : 'clock')
       case 'choose': {
-        const code = badge.current
+        const held = badge.current
         badge.current = null
-        if (!code) return setStep('clock')
+        if (!held) return setStep('clock')
         const at = new Date().toISOString()
-        const done = await kept.add(code, action.action, newClockEventId())
+        const done = await kept.add(held.code, action.action, held.clientEventId)
         setStep('clock')
         if (!done) {
           feedback('error')

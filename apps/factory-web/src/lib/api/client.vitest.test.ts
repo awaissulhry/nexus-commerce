@@ -58,6 +58,15 @@ describe('the API client', () => {
     await expect(client(new Response('<html>', { status: 502 })).api.get('/x')).rejects.toMatchObject({ kind: 'unavailable', status: 502 })
   })
 
+  it('an answer cut inside its body is a network failure: the headers came, the rest died (B-W2b-77)', async () => {
+    const broken = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new TypeError('network error'))
+      },
+    })
+    await expect(client(new Response(broken, { status: 201 })).api.post('/x', { body: {} })).rejects.toMatchObject({ kind: 'unavailable', code: 'network' })
+  })
+
   it('tells a step-up request from a plain refusal', () => {
     // The API's shape: `{ path: 'stepUp' }` (apps/factory-api office/account.ts StepUpRequiredError); a list is read too.
     expect(errorKindFor(403, [{ path: 'stepUp', message: 'Required.' }])).toBe('step_up')

@@ -130,10 +130,14 @@ export class FloorQueue {
   /**
    * Saves one action on the tablet ("Saved on this tablet") and sends the queue when it can. A label the action prints
    * offline takes the next number of the tablet's own block (`ticketCode` of a bundle), unless the screen gave one.
+   * `clientEventId`: the id an online try of this same action used (online-first.ts): the office may hold it already, and
+   * then answers it `duplicate`. An id the queue holds is that action: it is kept once, and a send never names it twice.
    */
-  async enqueue(kind: FloorSyncKind, payload: Readonly<Record<string, unknown>>): Promise<QueueItem> {
+  async enqueue(kind: FloorSyncKind, payload: Readonly<Record<string, unknown>>, clientEventId?: string): Promise<QueueItem> {
     const { deviceId, workerId } = this.context
     if (!deviceId || !workerId) throw new Error('A floor action is saved for the person signed in on an enrolled tablet.')
+    const held = clientEventId ? this.snapshot.items.find((entry) => entry.clientEventId === clientEventId) : undefined
+    if (held) return held
     let body: Record<string, unknown> = { ...payload }
     let numbered: QueueItem['numbered'] = null
     let numbers = this.meta.numbers
@@ -148,7 +152,7 @@ export class FloorQueue {
       // No number left on the tablet: the office numbers the ticket when the action arrives.
     }
     const item: QueueItem = {
-      clientEventId: this.newId(),
+      clientEventId: clientEventId ?? this.newId(),
       seq: this.meta.nextSeq,
       kind,
       payload: body,

@@ -1,26 +1,26 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { z } from 'zod'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { useFloor } from '../FloorApp'
 import { useFloorKeys } from '../keys'
-import { fetchOpenWork, newClockEventId } from '../tasks/clock/api'
+import { fetchOpenWork } from '../tasks/clock/api'
 import { TASK_ROUTES } from '../tasks/routes'
-import { floorWrite } from '../tasks/shared/task-api'
+import { timingOrKeep } from '../tasks/scans/api'
 import { WelcomeView } from './view/WelcomeView'
 import { fetchNewHandover, welcomeCards, type WelcomeCard } from './arrival'
 
 /**
  * The welcome cards after a sign-in (arrival.ts): each with one main action. Continue resumes the bundle a clock-out paused
- * (POST /production/terminal/resume) and opens it on Operation; offline the resume goes through the tablet's queue. A refusal
+ * (POST /production/terminal/resume) and opens it on Operation; offline the resume goes through the tablet's queue, under the
+ * id of the try when the network failed during it (queue/online-first.ts). A refusal
  * says so and goes on to Home; nothing here blocks a worker.
  */
 export function FloorWelcome() {
   const store = useFloor()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('signIn.welcome.frameTitle')
-  const { api, me, queue } = store
+  const { api, me, online, queue } = store
   const [cards, setCards] = useState<readonly WelcomeCard[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [refused, setRefused] = useState(false)
@@ -49,12 +49,9 @@ export function FloorWelcome() {
     if (card?.kind !== 'continue' || busy) return
     const { item } = card
     setBusy(true)
-    const clientScanId = newClockEventId()
-    const body = { bundleId: item.bundleId, workOrderOperationId: item.operation.id, clientScanId }
-    const answer = await floorWrite(api, 'POST', '/production/terminal/resume', { body, schema: z.object({ timing: z.object({ state: z.string() }) }), idempotencyKey: clientScanId })
-    if (!answer.ok && answer.problem.kind === 'offline') await queue.enqueue('production.scan.resume', { bundleId: item.bundleId, workOrderOperationId: item.operation.id })
+    const sent = await timingOrKeep(api, queue, online, 'resume', { bundleId: item.bundleId, workOrderOperationId: item.operation.id })
     setBusy(false)
-    if (!answer.ok && answer.problem.kind !== 'offline') {
+    if (sent.answer && !sent.answer.ok) {
       feedback('error')
       return setRefused(true)
     }

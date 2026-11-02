@@ -203,7 +203,8 @@ export const sightContract = defineContract({
 
 const accessView = output({
   employeeId: id(),
-  siteId: id(),
+  /** Null while the gate is off: the answer is the same for a real person and an id that finds nobody. */
+  siteId: id().nullable(),
   purpose,
   allowed: z.boolean(),
   /** How the viewer may open them (SELF, FIGURE_ROLE, LEAD); null when refused. */

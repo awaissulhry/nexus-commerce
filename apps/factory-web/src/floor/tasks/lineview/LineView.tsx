@@ -430,14 +430,15 @@ export function FloorLineView() {
     const shown = current.current
     if (shown.kind !== 'behalf' || shown.busy || behalfHeld(shown.draft, shown.options)) return
     const body = behalfPayload(shown.draft, shown.options.subject)
+    // One id for this entry: saved on the tablet after a failed try it goes under the id the try used (queue/online-first.ts).
+    const clientScanId = newIdempotencyKey()
     const saveOnTablet = async () => {
-      const item = await queue.enqueue(SCAN_ON_BEHALF, body)
+      const item = await queue.enqueue(SCAN_ON_BEHALF, body, clientScanId)
       feedback('success')
       setStep({ ...shown, busy: false, stage: 'done', queued: item.clientEventId, problem: null })
     }
     try {
       if (!online) return await saveOnTablet()
-      const clientScanId = newIdempotencyKey()
       const report = { ...body, clientScanId }
       setStep({ ...shown, busy: true, problem: null })
       const done = await reportOnBehalf(api, report, clientScanId)

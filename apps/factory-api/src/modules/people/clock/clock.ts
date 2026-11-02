@@ -257,7 +257,9 @@ export async function recordClock(caller: CommandCaller, rec: Recording, idempot
   const { context, person } = rec
   const before = await caller.withClient((db) => eventByClient(db, context.deviceId, rec.clientEventId))
   if (before) return { event: eventView(before), action: before.kind as ClockAction, replayed: true, repeated: false }
-  const input = { clientEventId: rec.clientEventId, workerId: person.worker.id, action: rec.action, way: rec.way, offlineAt: rec.offline ? toUtcIso(rec.offline.deviceTime) : null }
+  // One tablet event is one request, however it travels: an online try whose answer was lost and its retry from the queue
+  // (another action word, the tablet's time) meet here when the first is still running, and the second answers from its receipt.
+  const input = { clientEventId: rec.clientEventId, workerId: person.worker.id }
   try {
     const { result, replayed } = await command(
       caller,
@@ -424,6 +426,9 @@ export async function clockFromQueue(caller: CommandCaller, body: QueuedClockBod
   await requireAttendanceGate(caller, context.siteId)
   const person = await personAt(caller, context, context.actorId)
   const way = await wayOfSession(caller, context)
+  // The answer of an online try was lost and this is its retry: the event stands, whatever the tablet's clock says now.
+  const sentBefore = await caller.withClient((db) => eventByClient(db, context.deviceId, body.clientEventId))
+  if (sentBefore) return { id: sentBefore.id, replayed: true }
   const deviceTime = parseInstant(body.occurredAt)!
   const now = serverClock.now()
   const ahead = clockAheadRefusal(deviceTime, now)

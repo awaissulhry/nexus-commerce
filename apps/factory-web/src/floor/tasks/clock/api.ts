@@ -3,6 +3,7 @@ import { CLOCK_ACTIONS, CLOCK_FLAGS, CLOCK_SOURCES, CLOCK_STATES, type ClockActi
 import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError, issuePath } from '../../../lib/api/errors'
+import { onlineFirst, type KeepsActions } from '../../queue/online-first'
 import { floorRead, taskProblemOf, type TaskOutcome, type TaskProblem } from '../shared/task-api'
 import type { SendKept } from './kept'
 import type { ClockView, OpenWork } from './model'
@@ -75,6 +76,10 @@ export const newClockEventId = (): string => globalThis.crypto.randomUUID()
 export function clockTap(api: ApiClient, action: ClockAction, clientEventId: string, deviceTime: string): Promise<ClockOutcome<Recorded>> {
   return write(api, '/people/clock/floor', { clientEventId, action, deviceTime }, recorded)
 }
+
+/** The tap, online first: a network failure keeps it on the tablet under the id the try used (one clock-in, whatever became of the answer). */
+export const tapOrKeep = (api: ApiClient, queue: KeepsActions, online: boolean, action: ClockAction) =>
+  onlineFirst(queue, { online, kind: 'people.clock.record', payload: { action }, attempt: (clientEventId) => clockTap(api, action, clientEventId, new Date().toISOString()) })
 
 export type ClockProof = { readonly badgeCode: string } | { readonly workerId: string; readonly pin: string }
 

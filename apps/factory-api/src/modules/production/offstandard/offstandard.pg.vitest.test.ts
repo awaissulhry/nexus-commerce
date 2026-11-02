@@ -500,3 +500,16 @@ describe("the team leader's approval on the tablet, with the PIN (MES-157)", () 
     expect((await block(target.id)).status).toBe('PENDING')
   })
 })
+
+describe('an answer lost on its way back (B-W2b-77): the online try and its retry are one action', () => {
+  it('a tile and its Done whose answers were lost, retried from the queue under their ids: one block, one end (B-W2b-77)', async () => {
+    const start = evt('lost-start')
+    const end = evt('lost-end')
+    const started = await ok('sew', 'POST', '/production/offstandard/floor/start', { codeId: codes.TRAINING, clientEventId: start }, 201)
+    const first = await ok('sew', 'POST', '/floor/sync', { events: [{ clientEventId: start, seq: 1, kind: 'production.offStandard.start', occurredAt: new Date().toISOString(), payload: { codeId: codes.TRAINING } }] })
+    expect(first.events[0]).toMatchObject({ status: 'duplicate', refusal: null, result: { id: started.block.id } })
+    await ok('sew', 'POST', '/production/offstandard/floor/end', { clientEventId: end })
+    const second = await ok('sew', 'POST', '/floor/sync', { events: [{ clientEventId: end, seq: 2, kind: 'production.offStandard.end', occurredAt: new Date().toISOString(), payload: {} }] })
+    expect(second.events[0]).toMatchObject({ status: 'duplicate', refusal: null, result: { id: started.block.id } })
+  })
+})

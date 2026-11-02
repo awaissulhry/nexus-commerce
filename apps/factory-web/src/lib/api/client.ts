@@ -114,7 +114,14 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       if ((cause as { name?: string } | null)?.name === 'AbortError') throw cause
       throw networkError(cause)
     }
-    const text = await response.text()
+    let text: string
+    try {
+      text = await response.text()
+    } catch (cause) {
+      // The connection died inside the answer: as lost as one that never came, and the request may have been recorded.
+      if ((cause as { name?: string } | null)?.name === 'AbortError') throw cause
+      throw networkError(cause)
+    }
     let body: unknown = undefined
     if (text !== '') {
       try {

@@ -103,10 +103,12 @@ export async function floorStart(caller: CommandCaller, body: FloorStartBody, ke
   if (!code || code.companyId !== site.companyId) throw new NotFoundError('Off-standard code not found.')
   if (!code.active) refuse(CODE_INACTIVE)
   const occurredAt = body.occurredAt ? parseInstant(body.occurredAt) : null
+  // The tablet's time is not part of "the same request": an online try has none, its retry from the queue has.
+  const { occurredAt: _tabletTime, ...same } = body
   try {
     const { result, replayed } = await command(
       caller,
-      { name: 'production.offStandardStart', idempotencyKey: key ?? keyOf(context, body.clientEventId), input: body, ...(occurredAt ? { deviceTime: occurredAt } : {}) },
+      { name: 'production.offStandardStart', idempotencyKey: key ?? keyOf(context, body.clientEventId), input: same, ...(occurredAt ? { deviceTime: occurredAt } : {}) },
       async (tools: CommandTools) => {
         const subject = await floorRecordSubjectFor(tools.tx, { siteId: site.id, workerId: context.actorId, stationId: place.stationId })
         const running = await lockRunningBlock(tools.tx, context.tenantId, site.id, subject)
@@ -167,12 +169,14 @@ export async function floorEnd(caller: CommandCaller, body: FloorEndBody, key?: 
   const subject = await caller.withClient((db) => viewerSubject(db, place))
   const running = await caller.withClient((db) => runningBlockOf(db, site.id, subject))
   const idempotencyKey = key ?? keyOf(context, body.clientEventId)
+  // The tablet's time is not part of "the same request": an online try has none, its retry from the queue has.
+  const { occurredAt: _tabletTime, ...same } = body
   if (!running) {
     // A resend of an end already done answers from its receipt; otherwise nothing runs.
-    const answered = await command(caller, { name: 'production.offStandardEnd', idempotencyKey, input: body }, async (): Promise<FloorBlockView> => refuse(NONE_RUNNING))
+    const answered = await command(caller, { name: 'production.offStandardEnd', idempotencyKey, input: same }, async (): Promise<FloorBlockView> => refuse(NONE_RUNNING))
     return { block: answered.result, replayed: answered.replayed }
   }
-  const { result, replayed } = await command(caller, { name: 'production.offStandardEnd', idempotencyKey, input: body, ...(occurredAt ? { deviceTime: occurredAt } : {}) }, async (tools) => {
+  const { result, replayed } = await command(caller, { name: 'production.offStandardEnd', idempotencyKey, input: same, ...(occurredAt ? { deviceTime: occurredAt } : {}) }, async (tools) => {
     const locked = await lockRunningBlock(tools.tx, context.tenantId, site.id, subject)
     if (!locked) refuse(NONE_RUNNING)
     const code = (await readCode(tools.tx, locked!.codeId))!
