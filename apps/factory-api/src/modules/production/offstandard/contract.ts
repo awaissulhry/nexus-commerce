@@ -92,8 +92,11 @@ export const blockRecord = blockRow.extend({
   note: z.string().nullable(),
   approvedAt: instant().nullable(),
   approvedBy: someone.nullable(),
+  /** A team leader on the tablet decided, and the site's legal gate keeps back who. */
+  approvedByHidden: z.boolean(),
   rejectedAt: instant().nullable(),
   rejectedBy: someone.nullable(),
+  rejectedByHidden: z.boolean(),
   rejectReason: z.string().nullable(),
   /** The tablet's own time when it started (offline), if it sent one. */
   deviceTime: instant().nullable(),

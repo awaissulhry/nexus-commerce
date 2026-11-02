@@ -45,15 +45,18 @@ const FOLDER = 'src/golden-flow/'
 const DAILY = 'src/golden-flow/daily/'
 // The third suite (B-W2b-36): the W2b-0 follow-ups; the default run leaves it out too.
 const FOLLOWUPS = 'src/golden-flow/followups/'
+// The fourth suite (B-W2b-72): the W2b-1 shift and month; the default run leaves it out too.
+const PEOPLE = 'src/golden-flow/people/'
 const SUITES = {
-  w1: { folder: FOLDER, extra: ['--exclude', `${DAILY}**`, '--exclude', `${FOLLOWUPS}**`] },
+  w1: { folder: FOLDER, extra: ['--exclude', `${DAILY}**`, '--exclude', `${FOLLOWUPS}**`, '--exclude', `${PEOPLE}**`] },
   daily: { folder: DAILY, extra: [] },
   followups: { folder: FOLLOWUPS, extra: [] },
+  people: { folder: PEOPLE, extra: [] },
 }
 const suiteName = process.argv[2] ?? 'w1'
 const suite = SUITES[suiteName]
 if (!suite) {
-  console.error(`golden-flow: unknown suite ${JSON.stringify(suiteName)} (w1, daily, followups)`)
+  console.error(`golden-flow: unknown suite ${JSON.stringify(suiteName)} (w1, daily, followups, people)`)
   process.exit(2)
 }
 const VITEST = join(ROOT, 'node_modules/.bin/vitest')
