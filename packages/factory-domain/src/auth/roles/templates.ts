@@ -266,6 +266,14 @@ const PEOPLE_OVERTIME_ADDS: Readonly<Record<string, readonly Permission[]>> = Ob
   floor_supervisor: ['people.timesheets.team'],
 })
 /**
+ * B-W2b-48 (the month close and the LUL calendar; MES-231): the administrator, the HR register's keeper, closes the month,
+ * corrects a closed day and opens the calendar for the labour consultant. Nobody else: the calendar names everyone's hours.
+ * Owner from every(). One line per template.
+ */
+const PEOPLE_CLOSE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.attendance.close', 'people.attendance.correct', 'people.attendance.lul'],
+})
+/**
  * B-W2b-50 (line targets and boards, MES-084, MES-161, MES-162, MES-166, ANA-007; design production.floor "Hour by hour",
  * the WIP heat map, the line TV's office preview): the production manager, the floor supervisor and the planner set the
  * lines' hourly targets; the manager and the supervisor give a short hour's reason from the office too; quality reads the
@@ -338,6 +346,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_ATTENDANCE_ADDS[key] ?? []) : []),
   // B-W2b-42
   ...(audience === 'office' ? (PEOPLE_OVERTIME_ADDS[key] ?? []) : []),
+  // B-W2b-48
+  ...(audience === 'office' ? (PEOPLE_CLOSE_ADDS[key] ?? []) : []),
   // B-W2b-49
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? [])]
 /**
