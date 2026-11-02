@@ -171,6 +171,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/people/employees': 'people.view', // GET /people/employees
       // B-W2b-60: People › Shifts.
       '/people/shifts': 'people.shifts.view', // GET /people/shifts/roster
+      // B-W2b-61: People › Attendance.
+      '/people/attendance': 'people.attendance.view', // GET /people/attendance/days
       '/admin': 'companies.view', // the checklist reads the companies
       '/admin/companies': 'companies.view',
       '/admin/devices': 'devices.view',

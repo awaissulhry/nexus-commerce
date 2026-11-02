@@ -550,6 +550,7 @@
     "pickSite": "I dati individuali seguono le regole di ogni sede: scegli una sede in alto",
     "reading": "Lettura delle regole della sede…",
     "record": "Una persona: i dati che servono al lavoro — mai paghe, presenze o salute in questa scheda",
+    "recordAttendance": "Le presenze di una persona, come nel calendario LUL: solo con la base legale del sito, mai paghe o salute",
     "register": "Anagrafica del personale: nomi, mansione e squadra — mai paghe, presenze, salute o dati sul lavoro di una persona",
     "unread": "Regole della sede non lette: nessun dato individuale è mostrato",
     "workerHr": "I dati di una persona li vedono solo il lavoratore e le Risorse umane",
@@ -722,6 +723,7 @@
   },
   "tab": {
     "activity": "Attività",
+    "attendance": "Presenze",
     "documents": "Documenti",
     "job": "Lavoro e squadra",
     "profile": "Profilo"

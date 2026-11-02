@@ -120,7 +120,7 @@ function RecordBody({ model, actions }: { model: EmployeeRecordModel; actions?: 
       meta={meta}
       actions={bandActions}
       status={<LiveLine asOf={model.asOf} live={model.live} />}
-      note={<PeoplePrivacyNote sight={model.sight} text={t('privacy.record')} />}
+      note={<PeoplePrivacyNote sight={model.sight} text={t(model.tab === 'attendance' ? 'privacy.recordAttendance' : 'privacy.record')} />}
       tabs={tabs}
       tab={model.tab}
       onRetry={actions?.onRetry}
@@ -129,6 +129,7 @@ function RecordBody({ model, actions }: { model: EmployeeRecordModel; actions?: 
       <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
       {value && model.tab === 'profile' && <Profile model={model} value={value} actions={actions} manage={manage} place={place} />}
       {value && model.tab === 'job' && <Job model={model} value={value} actions={actions} manage={manage} place={place} />}
+      {value && model.tab === 'attendance' && model.attendance}
       {value && model.tab === 'documents' && <Documents model={model} value={value} place={place} />}
       {value && model.tab === 'activity' && <Activity model={model} value={value} place={place} />}
       {value && (
