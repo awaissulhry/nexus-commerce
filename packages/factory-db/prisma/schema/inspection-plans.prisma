@@ -1,0 +1,832 @@
+// Inspection plans and records (W2b schema wave 10/16, B-W2b-76; features QHS-008 … QHS-016, QHS-020 … QHS-025,
+// QHS-028, QHS-032 … QHS-036, QHS-039 … QHS-042, QHS-145, MES-054, MES-127; design quality.plans, quality.inspections,
+// floor.incoming, floor.inline): what W1 keeps as one fixed checklist in JSON, as data. A plan with approved versions and
+// their checks, the AQL profiles with who they apply to, the rules that open an inspection, and the records of the two
+// inspections that are not a final inspection: an incoming inspection (a lot, or goods back from a workshop) and an
+// in-process check (first piece, cutting, roving, end of line).
+//
+// A final inspection stays Inspection (quality.prisma): bound to a work order, its defects and releases hang on that key,
+// and the W1 final-release rules do not change. It gains only the plan version it ran on, the AQL profile and the ISO
+// 2859-1 code letter. The inspections list unions the three records. A result of any of the three is an
+// InspectionCheckResult or an InspectionMeasurement, and an amendment of any signed one an InspectionAmendment: each
+// names exactly one of the three.
+//
+// Versions (QHS-016): a plan's DRAFT version is edited; a second person (never its author) approves it and it is then
+// frozen, with its checks; a record keeps the version it ran on for good (the foreign key), so retiring a version or
+// approving the next changes no record. A record names an APPROVED version when it is opened.
+//
+// AQL (ISO 2859-1 single sampling; the engine is factory-domain's, B-W2b-93): a profile is a saved set of level and AQLs,
+// critical locked at 0 (QHS-002: a critical defect is never accepted). Which one applies: a style override, then the
+// customer's, then the company's default (AqlProfile.isDefault). The record copies the numbers it ran on, as W1's
+// Inspection does, so changing a profile changes no record.
+//
+// Links to records of schema steps not merged when this was built are recordType + recordId, with no foreign key:
+// IncomingHideResult to the shade group and the leather grade (ShadeGroup, LeatherGrade, B-W2b-80), IncomingRollResult to
+// the fabric roll (FabricRoll, B-W2b-80). The result also keeps the words it was judged with, so it reads on its own.
+//
+// Who sees what (ownership/inspection-plans.json): the office keeps plans, profiles and triggers; the floor reads plans
+// and profiles (the bench shows the plan) and records incoming inspections, in-process checks, results and measurements
+// of its own site; amendments are the office's. Portal and link sessions read nothing here. No table here has a cost,
+// price, margin or wages column.
+
+/// Where in the making a plan is used (design quality.plans "Stage").
+enum InspectionPlanStage {
+  /// Goods arriving: a supplier's lot, or goods back from a workshop (IncomingInspection).
+  INCOMING
+  /// Cutting inspection (InProcessCheck CUTTING).
+  CUTTING
+  /// In-line: the first piece and the roving check (InProcessCheck FIRST_PIECE, ROVING).
+  IN_LINE
+  /// End of line (InProcessCheck END_OF_LINE).
+  END_OF_LINE
+  /// The final inspection of the garments (Inspection).
+  FINAL
+  /// A customer's return (no record table yet: the return's own grading, B-W2a-44).
+  RETURN
+}
+
+/// DRAFT → APPROVED → RETIRED; a draft nobody wants is RETIRED unapproved. RETIRED is final.
+enum InspectionPlanVersionStatus {
+  /// Being edited: its checks change.
+  DRAFT
+  /// In force, frozen with its checks. At most one per plan.
+  APPROVED
+  /// No longer used for new records; the records that ran on it keep it.
+  RETIRED
+}
+
+/// How a plan says how much to inspect (design quality.plans "Sampling").
+enum InspectionSamplingMethod {
+  /// The AQL profile that applies: the one the version names, or (none named) style, customer, company default.
+  AQL_PROFILE
+  /// A fixed number of units.
+  FIXED
+}
+
+/// How often an inspection is made (QHS-011; design quality.plans "When inspections are created").
+enum InspectionFrequency {
+  EVERY_LOT
+  /// A share of the operations finished: frequencyValue, 1 to 100.
+  PERCENT_OF_OPERATIONS
+  FIRST_PIECE
+  /// Every Nth bundle: frequencyValue, from 1.
+  EVERY_NTH_BUNDLE
+}
+
+/// What one check of a plan asks (QHS-009).
+enum InspectionCheckType {
+  PASS_FAIL
+  /// A value against nominal ± tolerance; no nominal: the size's value from the style's graded spec.
+  MEASUREMENT
+  COUNT
+  /// One of the check's choices.
+  CHOICE
+  FREE_TEXT
+  /// A photo is taken (a file of the result).
+  PHOTO
+  SIGNATURE
+  /// Words to read; it takes no result.
+  INSTRUCTION
+}
+
+/// The result of one check (design quality.inspections "Checklist"). Not checked yet: no row.
+enum InspectionCheckOutcome {
+  PASS
+  FAIL
+  NOT_APPLICABLE
+}
+
+/// ISO 2859-1 inspection levels: general I, II, III and special S-1 … S-4. (W1's Inspection keeps the words: "II", "S-3".)
+enum AqlInspectionLevel {
+  I
+  II
+  III
+  S1
+  S2
+  S3
+  S4
+}
+
+/// What opens an inspection (QHS-010).
+enum InspectionTriggerEvent {
+  GOODS_RECEIPT
+  OPERATION_FINISHED
+  BUNDLE_SCAN
+  PACKING
+  RETURN_RECEIVED
+}
+
+/// OPEN → DECIDED | CANCELLED (both final).
+enum IncomingInspectionStatus {
+  OPEN
+  /// Signed: the accepted, rejected and to-sort quantities add up to the lot.
+  DECIDED
+  /// Abandoned before a decision, with the reason.
+  CANCELLED
+}
+
+/// What the inspector says of one hide, roll or component (QHS-034).
+enum IncomingUnitDecision {
+  ACCEPTED
+  REJECTED
+  TO_SORT
+}
+
+/// What an incoming component check is about (QHS-033; EN 1621-1, -2 for protectors).
+enum IncomingComponentKind {
+  PROTECTOR
+  ZIP
+  REFLECTIVE
+  HARDWARE
+  OTHER
+}
+
+/// The kinds of in-process check (QHS-039 … QHS-042).
+enum InProcessCheckKind {
+  /// Its run waits until a first piece is APPROVED (QHS-039).
+  FIRST_PIECE
+  /// Pieces against the pattern, per lay or hide (QHS-040).
+  CUTTING
+  /// Green, amber or red per operation (QHS-041).
+  ROVING
+  /// Each garment or bundle: pass, or a defect sent back (QHS-042).
+  END_OF_LINE
+}
+
+/// OPEN → DECIDED | CANCELLED (both final). A check decided at once (an end-of-line pass) is written DECIDED.
+enum InProcessCheckStatus {
+  OPEN
+  DECIDED
+  CANCELLED
+}
+
+/// What an in-process check found: APPROVED | REJECTED (first piece), PASS | FAIL (cutting, end of line), GREEN | AMBER |
+/// RED (roving).
+enum InProcessOutcome {
+  APPROVED
+  REJECTED
+  PASS
+  FAIL
+  GREEN
+  AMBER
+  RED
+}
+
+/// The rows of an amendment (QHS-145): the correction asked, then the second person's answer.
+enum InspectionAmendmentKind {
+  /// The correction asked: field, before, after, reason, who asked.
+  REQUEST
+  /// The second signature: the correction stands.
+  SIGNED
+  /// The second person refused it, saying why: the result stays as it was.
+  REFUSED
+}
+
+/// A checklist template (QHS-008): a stage, a name, its owner and where it applies. Its checks and sampling are in its
+/// versions. Never deleted: a plan no longer used has its versions retired.
+model InspectionPlan {
+  id          String              @id @db.Uuid
+  tenantId    String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String              @db.Uuid
+  /// The plan's code ("FIN-JACKET"), unique in the company; fixed, no spaces.
+  code        String
+  /// The stage never changes: every record of it is of that stage.
+  stage       InspectionPlanStage
+  name        String
+  /// The office user who looks after it.
+  ownerId     String?             @db.Uuid
+  /// Where it is used (design "Applies to": rule chips): [{ "kind": "STYLE", "value": "<id>" }, { "kind": "CATEGORY",
+  /// "value": "JACKET" } …], kinds STYLE, CATEGORY, MATERIAL, SUPPLIER, OPERATION, CUSTOMER; empty: everything of its stage.
+  appliesTo   Json                @default("[]")
+  version     Int                 @default(1)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?             @db.Uuid
+
+  company  Company                 @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  versions InspectionPlanVersion[]
+  triggers InspectionTrigger[]
+
+  @@unique([tenantId, companyId, code])
+  // The target of the versions' and triggers' references: a plan of the same company.
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, stage])
+}
+
+/// One version of a plan (QHS-016): DRAFT while it is edited, APPROVED by a second person (never its author) and then
+/// frozen with its checks, RETIRED when no longer used. At most one APPROVED per plan (…_inspection_plans_w2b_guards'
+/// partial unique index): the command retires the old one first. A record keeps the version it ran on.
+model InspectionPlanVersion {
+  id                String                      @id @db.Uuid
+  tenantId          String                      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The plan's company.
+  companyId         String                      @db.Uuid
+  planId            String                      @db.Uuid
+  /// 1, 2, 3 … in the plan ("FIN-JACKET v3"), fixed.
+  number            Int
+  status            InspectionPlanVersionStatus @default(DRAFT)
+  /// What changed from the version before, in words.
+  changeNote        String?
+  /// The office user who wrote it; never its approver.
+  authorId          String                      @db.Uuid
+  samplingMethod    InspectionSamplingMethod    @default(AQL_PROFILE)
+  /// AQL_PROFILE: the profile it names; null: the one that applies (style, customer, company default). FIXED: none.
+  aqlProfileId      String?                     @db.Uuid
+  /// FIXED: the units to inspect, from 1. AQL_PROFILE: none.
+  fixedSampleSize   Int?
+  /// How often its trigger rules start from, with the percent or the N (see InspectionFrequency); null: not said.
+  frequency         InspectionFrequency?
+  frequencyValue    Int?
+  /// Stop at the reject number (true) or finish the sample (false); null: the company's quality setting.
+  stopAtReject      Boolean?
+  /// Who approved it, when, and the SHA-256 (hex) of what they signed: set together, at the approval.
+  approvedById      String?                     @db.Uuid
+  approvedAt        DateTime?                   @db.Timestamptz(3)
+  approvalSha256    String?
+  /// Set exactly when RETIRED.
+  retiredById       String?                     @db.Uuid
+  retiredAt         DateTime?                   @db.Timestamptz(3)
+  version           Int                         @default(1)
+  createdAt         DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                    @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?                     @db.Uuid
+
+  plan              InspectionPlan      @relation(fields: [tenantId, companyId, planId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  aqlProfile        AqlProfile?         @relation(fields: [tenantId, companyId, aqlProfileId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  checks            InspectionPlanCheck[]
+  inspections       Inspection[]
+  incomingInspections IncomingInspection[]
+  inProcessChecks   InProcessCheck[]
+
+  @@unique([tenantId, planId, number])
+  // The target of the records' references: a version of the record's own company.
+  @@unique([tenantId, companyId, id])
+  // The target of the checks' reference.
+  @@unique([tenantId, id])
+  @@index([tenantId, planId, status])
+}
+
+/// One check of a plan version (QHS-009), in the order of `sortOrder`. Changes only while its version is DRAFT.
+model InspectionPlanCheck {
+  id            String              @id @db.Uuid
+  tenantId      String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  planVersionId String              @db.Uuid
+  /// The check's place on the list (not unique: the builder renumbers).
+  sortOrder     Int
+  /// Its code, unique in the version and kept from version to version ("CE_MARK"): results are compared by it. No spaces.
+  code          String
+  /// The words on the bench: Italian, English, and the other floor languages as { "<language>": "<words>" }.
+  labelIt       String
+  labelEn       String
+  labelI18n     Json                @default("{}")
+  type          InspectionCheckType
+  /// CRITICAL, MAJOR, MINOR; a failed CRITICAL check fails the record. Null: no class. An INSTRUCTION has none.
+  checkClass    DefectClass?
+  /// The record is not signed as passed without its result. An INSTRUCTION is never mandatory.
+  mandatory     Boolean             @default(true)
+  /// A photo is required with the result (files of the result).
+  photoRequired Boolean             @default(false)
+  /// MEASUREMENT: the nominal and the ± tolerance in `uom`; none of the three: the size's value from the graded spec.
+  nominal       Decimal?            @db.Decimal(12, 3)
+  tolerance     Decimal?            @db.Decimal(12, 3)
+  uom           Uom?
+  /// CHOICE: the choices, at least two, each once.
+  choices       String[]            @default([])
+  version       Int                 @default(1)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?             @db.Uuid
+
+  planVersion  InspectionPlanVersion   @relation(fields: [tenantId, planVersionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  results      InspectionCheckResult[]
+  measurements InspectionMeasurement[]
+
+  @@unique([tenantId, planVersionId, code])
+  // The target of the results' and measurements' references.
+  @@unique([tenantId, id])
+}
+
+/// A saved AQL set (QHS-021; ISO 2859-1): inspection level and the AQL of each class; critical is locked at 0 (QHS-002).
+/// At most one company default per company. Never deleted; retired with `active`. A record copies the numbers it ran on.
+model AqlProfile {
+  id              String             @id @db.Uuid
+  tenantId        String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId       String             @db.Uuid
+  /// The profile's code ("AQL-EXM"), unique in the company; fixed, no spaces.
+  code            String
+  name            String
+  inspectionLevel AqlInspectionLevel
+  /// Always 0: a critical defect is never accepted (the guard).
+  aqlCritical     Decimal            @default(0) @db.Decimal(7, 3)
+  aqlMajor        Decimal            @db.Decimal(7, 3)
+  aqlMinor        Decimal            @db.Decimal(7, 3)
+  /// The company's default: the last step of the chain style, customer, company.
+  isDefault       Boolean            @default(false)
+  active          Boolean            @default(true)
+  note            String?
+  version         Int                @default(1)
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?            @db.Uuid
+
+  company             Company                 @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  assignments         AqlProfileAssignment[]
+  planVersions        InspectionPlanVersion[]
+  inspections         Inspection[]
+  incomingInspections IncomingInspection[]
+  inProcessChecks     InProcessCheck[]
+
+  @@unique([tenantId, companyId, code])
+  // The target of the references: a profile of the same company.
+  @@unique([tenantId, companyId, id])
+}
+
+/// A profile for a customer, a style, or a style of a customer (QHS-021). One active row per customer and style pair
+/// (…_inspection_plans_w2b_guards' partial unique index); an assignment no longer in force is set inactive, so the
+/// history stays.
+model AqlProfileAssignment {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The profile's company.
+  companyId   String   @db.Uuid
+  profileId   String   @db.Uuid
+  /// A party of the tenant with the CUSTOMER or BRAND role; at least one of customer and style.
+  customerId  String?  @db.Uuid
+  styleId     String?  @db.Uuid
+  active      Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  profile  AqlProfile @relation(fields: [tenantId, companyId, profileId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  customer Party?     @relation(fields: [tenantId, customerId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  style    Style?     @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, customerId])
+  @@index([tenantId, styleId])
+  @@index([tenantId, profileId])
+}
+
+/// One rule of "When inspections are created" (QHS-010, QHS-011), in the order of `sortOrder`: when, for what, which plan,
+/// how often. Which version is used is decided when the inspection opens: the plan's APPROVED one. A rule no longer
+/// wanted is deleted (its inspections keep their version) or set inactive.
+model InspectionTrigger {
+  id             String                 @id @db.Uuid
+  tenantId       String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId      String                 @db.Uuid
+  /// The rule's place on the list (not unique: reordering renumbers).
+  sortOrder      Int
+  event          InspectionTriggerEvent
+  /// What it applies to: the same chips as InspectionPlan.appliesTo; empty: everything.
+  appliesTo      Json                   @default("[]")
+  planId         String                 @db.Uuid
+  frequency      InspectionFrequency
+  /// The percent (PERCENT_OF_OPERATIONS, 1 to 100) or the N (EVERY_NTH_BUNDLE, from 1); none otherwise.
+  frequencyValue Int?
+  active         Boolean                @default(true)
+  version        Int                    @default(1)
+  createdAt      DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?                @db.Uuid
+
+  plan InspectionPlan @relation(fields: [tenantId, companyId, planId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The company's rules in order, for one event.
+  @@index([tenantId, companyId, event, sortOrder])
+  @@index([tenantId, planId])
+}
+
+/// The incoming inspection of a lot, or of goods back from a workshop (QHS-025 … QHS-036; floor.incoming): its plan
+/// version, the sample, the units found (hides, rolls, components), the decision in three quantities that add up to the
+/// lot, signed by the inspector. OPEN → DECIDED | CANCELLED; a decided inspection never changes (an amendment corrects
+/// it). It decides nothing on the lot by itself: the command moves the lot (W1's rule stays: a person with the quality
+/// role, never who received it).
+model IncomingInspection {
+  id                   String                   @id @db.Uuid
+  tenantId             String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company and site of what is inspected.
+  companyId            String                   @db.Uuid
+  siteId               String                   @db.Uuid
+  /// Its number (IIN-2026-0007), from the company's INCOMING_INSPECTION series when it is opened (office or bench:
+  /// allocateNumber), unique in the tenant, given once and never changed.
+  number               String
+  /// A lot with its item, or a workshop's receipt with its work order: exactly one of the two.
+  lotId                String?                  @db.Uuid
+  itemId               String?                  @db.Uuid
+  subcontractReceiptId String?                  @db.Uuid
+  workOrderId          String?                  @db.Uuid
+  /// The APPROVED version of an INCOMING plan it runs on (QHS-016), fixed.
+  planVersionId        String                   @db.Uuid
+  /// The profile the sample comes from and the ISO 2859-1 code letter; none for a fixed sample. Fixed once counting
+  /// starts.
+  aqlProfileId         String?                  @db.Uuid
+  codeLetter           String?
+  /// What the decision counts in: the units of the lot (hides, rolls or pieces) in `uom`, above 0.
+  lotSize              Decimal                  @db.Decimal(18, 4)
+  uom                  Uom
+  /// The units examined, from 1 up to the lot.
+  sampleSize           Int
+  /// The sampling plan as it ran, as W1's Inspection keeps it: level ("II", "S-3"), AQLs in percent, acceptance numbers.
+  /// All five or none (a fixed sample has none).
+  inspectionLevel      String?
+  aqlMajor             Decimal?                 @db.Decimal(7, 3)
+  aqlMinor             Decimal?                 @db.Decimal(7, 3)
+  acceptMajor          Int?
+  acceptMinor          Int?
+  /// Units of the sample found with a defect, per class (the bench's counter), from 0.
+  foundCritical        Int                      @default(0)
+  foundMajor           Int                      @default(0)
+  foundMinor           Int                      @default(0)
+  status               IncomingInspectionStatus @default(OPEN)
+  /// The decision (QHS-034): exactly when DECIDED, each from 0, adding up to the lot.
+  acceptedQuantity     Decimal?                 @db.Decimal(18, 4)
+  rejectedQuantity     Decimal?                 @db.Decimal(18, 4)
+  toSortQuantity       Decimal?                 @db.Decimal(18, 4)
+  /// The result the rules give: written by the database at the decision, never by the API.
+  computedResult       InspectionResult?
+  /// The inspector's reason when the whole lot is accepted over a computed FAIL, or rejected over a computed PASS:
+  /// exactly then. A whole-lot acceptance never goes over a critical defect or a failed critical check.
+  overrideReason       String?
+  /// The inspector: a worker of the site or an office user, at most one until it is decided, exactly one then. The floor
+  /// names only a worker.
+  inspectorWorkerId    String?                  @db.Uuid
+  inspectorUserId      String?                  @db.Uuid
+  /// By when it is to be done; null: no date.
+  dueAt                DateTime?                @db.Timestamptz(3)
+  /// When it was decided, and the SHA-256 (hex) of the decision as the inspector signed it: set exactly then.
+  decidedAt            DateTime?                @db.Timestamptz(3)
+  signatureSha256      String?
+  /// Set exactly when CANCELLED.
+  cancelledAt          DateTime?                @db.Timestamptz(3)
+  cancelReason         String?
+  note                 String?
+  version              Int                      @default(1)
+  createdAt            DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?                  @db.Uuid
+
+  site               Site                  @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  planVersion        InspectionPlanVersion @relation(fields: [tenantId, companyId, planVersionId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and companyId.
+  lot                Lot?                  @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  subcontractReceipt SubcontractReceipt?   @relation(fields: [tenantId, siteId, workOrderId, subcontractReceiptId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  aqlProfile         AqlProfile?           @relation(fields: [tenantId, companyId, aqlProfileId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  inspectorWorker    Worker?               @relation("IncomingInspectionInspector", fields: [tenantId, siteId, inspectorWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  hideResults        IncomingHideResult[]
+  rollResults        IncomingRollResult[]
+  componentResults   IncomingComponentResult[]
+  checkResults       InspectionCheckResult[]
+  measurements       InspectionMeasurement[]
+  amendments         InspectionAmendment[]
+
+  @@unique([tenantId, number])
+  // The target of the results' references: an inspection of the same site.
+  @@unique([tenantId, siteId, id])
+  // The target of the hide results' reference: an inspection of the hide's own lot.
+  @@unique([tenantId, siteId, lotId, id])
+  @@index([tenantId, lotId])
+  @@index([tenantId, subcontractReceiptId])
+  @@index([tenantId, status, dueAt])
+}
+
+/// One hide of an incoming inspection's sample (QHS-025, QHS-028, MES-054): the area measured against the tannery's, the
+/// shade group, the grade, the defect marks on the hide map and what the inspector says of it. Written, changed and
+/// removed only while the inspection is OPEN. Every result has its decision when the inspection is decided, and a hide
+/// has one decided row per inspection (…_inspection_plans_w2b_guards' partial unique index).
+model IncomingHideResult {
+  id                   String                @id @db.Uuid
+  tenantId             String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String                @db.Uuid
+  incomingInspectionId String                @db.Uuid
+  /// The inspection's lot, and a hide of it.
+  lotId                String                @db.Uuid
+  hideId               String                @db.Uuid
+  /// Its place in the sample: 1, 2, 3 …
+  seq                  Int
+  /// The tannery's declared area of the hide, when known, and the area measured, in the same area unit (M2, DM2, FT2).
+  declaredArea         Decimal?              @db.Decimal(18, 4)
+  measuredArea         Decimal               @db.Decimal(18, 4)
+  areaUom              Uom
+  /// The shade group's label against the master swatch ("1", "out of shade"), and the group: recordType + recordId
+  /// (ShadeGroup, B-W2b-80), both or neither.
+  shadeGroup           String?
+  shadeRecordType      String?
+  shadeRecordId        String?               @db.Uuid
+  /// The grade given, and its record (LeatherGrade, B-W2b-80), both or neither.
+  grade                String?
+  gradeRecordType      String?
+  gradeRecordId        String?               @db.Uuid
+  /// The defect marks on the hide map, from 0 to 1 on each axis: [{ "x": 0.42, "y": 0.31, "code": "SCAR", "zone": "A" }].
+  marks                Json                  @default("[]")
+  /// Null until the inspector says.
+  decision             IncomingUnitDecision?
+  note                 String?
+  version              Int                   @default(1)
+  createdAt            DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?               @db.Uuid
+
+  inspection IncomingInspection @relation(fields: [tenantId, siteId, lotId, incomingInspectionId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  hide       Hide               @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, incomingInspectionId, seq])
+  @@index([tenantId, hideId])
+}
+
+/// One fabric roll of an incoming inspection (QHS-032, the 4-point system): the counters of 1-, 2-, 3- and 4-point
+/// defects, the width and length, and the points per 100 square yards the database works out. Written, changed and
+/// removed only while the inspection is OPEN.
+model IncomingRollResult {
+  id                   String                @id @db.Uuid
+  tenantId             String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String                @db.Uuid
+  incomingInspectionId String                @db.Uuid
+  /// The roll as it is known at the dock (its tag, or the supplier's number), unique in the inspection.
+  rollRef              String
+  /// The roll's record (FabricRoll, B-W2b-80), both or neither.
+  recordType           String?
+  recordId             String?               @db.Uuid
+  onePoint             Int                   @default(0)
+  twoPoint             Int                   @default(0)
+  threePoint           Int                   @default(0)
+  fourPoint            Int                   @default(0)
+  widthCm              Decimal               @db.Decimal(10, 2)
+  lengthM              Decimal               @db.Decimal(12, 2)
+  /// Points per 100 square yards: written by the database from the counters, the width and the length, never by the API.
+  pointsPer100SqYd     Decimal               @default(0) @db.Decimal(10, 2)
+  /// Null until the inspector says.
+  decision             IncomingUnitDecision?
+  note                 String?
+  version              Int                   @default(1)
+  createdAt            DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?               @db.Uuid
+
+  inspection IncomingInspection @relation(fields: [tenantId, siteId, incomingInspectionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, incomingInspectionId, rollRef])
+}
+
+/// One component check of an incoming inspection (QHS-033): protectors (marking, size, type A or B; EN 1621-1, -2), zips,
+/// reflectives and hardware, against the spec and the certificate. Written, changed and removed only while the
+/// inspection is OPEN.
+model IncomingComponentResult {
+  id                   String                @id @db.Uuid
+  tenantId             String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String                @db.Uuid
+  incomingInspectionId String                @db.Uuid
+  /// Its place on the inspection: 1, 2, 3 …
+  seq                  Int
+  kind                 IncomingComponentKind
+  /// The marking as read from the component.
+  marking              String?
+  /// PROTECTOR: its type ("A", "B") and size, as marked.
+  protectorType        String?
+  size                 String?
+  /// The certificate it was checked against.
+  certificateId        String?               @db.Uuid
+  /// Pieces looked at, from 1, and those not right, from 0 up to them.
+  checkedQuantity      Int
+  defectiveQuantity    Int                   @default(0)
+  /// Null until the inspector says.
+  decision             IncomingUnitDecision?
+  note                 String?
+  version              Int                   @default(1)
+  createdAt            DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?               @db.Uuid
+
+  inspection  IncomingInspection @relation(fields: [tenantId, siteId, incomingInspectionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  certificate Certificate?       @relation(fields: [tenantId, certificateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, incomingInspectionId, seq])
+  @@index([tenantId, certificateId])
+}
+
+/// One in-process check (QHS-039 … QHS-042; floor.inline): first piece, cutting, roving or end of line, of a line, work
+/// order, bundle or operation, with how many pieces it looked at and what it found. OPEN → DECIDED | CANCELLED; a decided
+/// check never changes (an amendment corrects it).
+///
+/// First piece (QHS-039): a FIRST_PIECE check holds its run (the work order, at its operation or, naming none, at all of
+/// them) from the moment it is written until one of the run is APPROVED: the database refuses other bundles' scans
+/// (OperationScan_awaits_first_piece); stopping and correcting work stays allowed.
+///
+/// Per operation by default (Statuto art. 4): the check's findings are about the line and the operation. A person's name
+/// is only behind the gate: `workerId` is written only while the site's PERFORMANCE legal gate is in force, and never by
+/// a floor session (the floor reads no legal basis: the API checks the gate in the tenant's system scope and writes it
+/// there).
+model InProcessCheck {
+  id                   String               @id @db.Uuid
+  tenantId             String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId            String               @db.Uuid
+  siteId               String               @db.Uuid
+  kind                 InProcessCheckKind
+  status               InProcessCheckStatus @default(OPEN)
+  /// Exactly when DECIDED: which values fit each kind is on InProcessOutcome.
+  outcome              InProcessOutcome?
+  /// Where: a line of the site, a work order, a bundle of it, an operation of it. FIRST_PIECE needs the work order and
+  /// its first bundle, CUTTING the work order; ROVING and END_OF_LINE a line or a work order.
+  lineId               String?              @db.Uuid
+  workOrderId          String?              @db.Uuid
+  bundleId             String?              @db.Uuid
+  workOrderOperationId String?              @db.Uuid
+  /// The APPROVED version of a plan of the check's stage it runs on (QHS-016), fixed; null: a check with no checklist (a
+  /// roving tile, an end-of-line pass).
+  planVersionId        String?              @db.Uuid
+  aqlProfileId         String?              @db.Uuid
+  codeLetter           String?
+  /// Pieces looked at: from 1 when decided; those with a defect, from 0 up to them; the defects found, from 0 (the line's
+  /// DHU: defects per 100 pieces).
+  pieces               Int                  @default(0)
+  defectivePieces      Int                  @default(0)
+  defects              Int                  @default(0)
+  /// The defect found, from the library, when one is named.
+  defectCodeId         String?              @db.Uuid
+  /// Who checked: a worker of the site or an office user, at most one until it is decided, exactly one then. The floor
+  /// names only a worker.
+  inspectorWorkerId    String?              @db.Uuid
+  inspectorUserId      String?              @db.Uuid
+  /// The operator it is about: only behind the gate (above). Their employee: Worker.employeeId, as it stands then.
+  workerId             String?              @db.Uuid
+  employeeId           String?              @db.Uuid
+  /// When it was decided; a first piece also carries the SHA-256 (hex) of what the inspector signed with the PIN.
+  decidedAt            DateTime?            @db.Timestamptz(3)
+  signatureSha256      String?
+  /// Set exactly when CANCELLED.
+  cancelledAt          DateTime?            @db.Timestamptz(3)
+  cancelReason         String?
+  note                 String?
+  version              Int                  @default(1)
+  createdAt            DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?              @db.Uuid
+
+  site            Site                   @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and companyId.
+  line            Line?                  @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder       WorkOrder?             @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle          Bundle?                @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation       WorkOrderOperation?    @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  planVersion     InspectionPlanVersion? @relation(fields: [tenantId, companyId, planVersionId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  aqlProfile      AqlProfile?            @relation(fields: [tenantId, companyId, aqlProfileId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  defectCode      DefectCode?            @relation(fields: [tenantId, defectCodeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  inspectorWorker Worker?                @relation("InProcessCheckInspector", fields: [tenantId, siteId, inspectorWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  worker          Worker?                @relation("InProcessCheckOperator", fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee        Employee?              @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  checkResults    InspectionCheckResult[]
+  measurements    InspectionMeasurement[]
+  amendments      InspectionAmendment[]
+
+  // The target of the results' references: a check of the same site.
+  @@unique([tenantId, siteId, id])
+  // A run's first-piece checks (the hold), and a line's checks of a kind.
+  @@index([tenantId, workOrderId, kind, status])
+  @@index([tenantId, siteId, lineId, kind])
+  @@index([tenantId, employeeId])
+}
+
+/// The result of one plan check on a record (QHS-009, QHS-016): of a final inspection, an incoming inspection or an
+/// in-process check, exactly one of the three, on the plan version frozen on that record. One row per check and sampled
+/// unit. Written, changed and removed only while the record is OPEN; after that a correction is an InspectionAmendment.
+/// Photos are files of the row (StoredFile recordType "InspectionCheckResult").
+model InspectionCheckResult {
+  id                   String                 @id @db.Uuid
+  tenantId             String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String                 @db.Uuid
+  inspectionId         String?                @db.Uuid
+  incomingInspectionId String?                @db.Uuid
+  inProcessCheckId     String?                @db.Uuid
+  planCheckId          String                 @db.Uuid
+  /// The unit of the sample it is about: 1 for a check made once per record.
+  sampleIndex          Int                    @default(1)
+  outcome              InspectionCheckOutcome
+  /// The value given, as text: a decimal (MEASUREMENT), a whole number (COUNT), one of the choices (CHOICE), the words
+  /// (FREE_TEXT); none needed for the other types or for NOT_APPLICABLE.
+  value                String?
+  note                 String?
+  /// Who recorded it and where: an office user or a worker of the site (at most one; the floor never an office user), and
+  /// the floor device; at least one of the three.
+  recordedById         String?                @db.Uuid
+  recordedByWorkerId   String?                @db.Uuid
+  deviceId             String?                @db.Uuid
+  recordedAt           DateTime               @default(now()) @db.Timestamptz(3)
+  version              Int                    @default(1)
+  createdAt            DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?                @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  inspection         Inspection?         @relation(fields: [tenantId, siteId, inspectionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  incomingInspection IncomingInspection? @relation(fields: [tenantId, siteId, incomingInspectionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  inProcessCheck     InProcessCheck?     @relation(fields: [tenantId, siteId, inProcessCheckId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  planCheck          InspectionPlanCheck @relation(fields: [tenantId, planCheckId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  recordedByWorker   Worker?             @relation("InspectionCheckResultRecorder", fields: [tenantId, siteId, recordedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device             Device?             @relation("InspectionCheckResultDevice", fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, inspectionId, planCheckId, sampleIndex])
+  @@unique([tenantId, incomingInspectionId, planCheckId, sampleIndex])
+  @@unique([tenantId, inProcessCheckId, planCheckId, sampleIndex])
+  @@index([tenantId, planCheckId])
+}
+
+/// One value of a point of measure on a sampled unit (QHS-014; design quality.inspections "Measurement chart"): of a final
+/// inspection, an incoming inspection or an in-process check, exactly one of the three. Nominal and tolerance are kept on
+/// the row as they applied, and `pass` is written by the database from them, never by the API. Written, changed and
+/// removed only while the record is OPEN.
+model InspectionMeasurement {
+  id                   String   @id @db.Uuid
+  tenantId             String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String   @db.Uuid
+  inspectionId         String?  @db.Uuid
+  incomingInspectionId String?  @db.Uuid
+  inProcessCheckId     String?  @db.Uuid
+  /// The MEASUREMENT check of the plan it answers; null: a point taken from the style's graded spec.
+  planCheckId          String?  @db.Uuid
+  /// The point of measure's code ("CHEST-HALF"), no spaces.
+  pointCode            String
+  /// The size it was measured at; empty: no size (a component, a hide).
+  size                 String   @default("")
+  /// The unit of the sample: sample 1 … n.
+  sampleIndex          Int      @default(1)
+  nominal              Decimal  @db.Decimal(12, 3)
+  tolerance            Decimal  @db.Decimal(12, 3)
+  measured             Decimal  @db.Decimal(12, 3)
+  uom                  Uom
+  /// Within nominal ± tolerance: written by the database.
+  pass                 Boolean  @default(false)
+  /// Who recorded it and where, as on InspectionCheckResult.
+  recordedById         String?  @db.Uuid
+  recordedByWorkerId   String?  @db.Uuid
+  deviceId             String?  @db.Uuid
+  recordedAt           DateTime @default(now()) @db.Timestamptz(3)
+  version              Int      @default(1)
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?  @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  inspection         Inspection?          @relation(fields: [tenantId, siteId, inspectionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  incomingInspection IncomingInspection?  @relation(fields: [tenantId, siteId, incomingInspectionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  inProcessCheck     InProcessCheck?      @relation(fields: [tenantId, siteId, inProcessCheckId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  planCheck          InspectionPlanCheck? @relation(fields: [tenantId, planCheckId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  recordedByWorker   Worker?              @relation("InspectionMeasurementRecorder", fields: [tenantId, siteId, recordedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device             Device?              @relation("InspectionMeasurementDevice", fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, inspectionId, pointCode, size, sampleIndex])
+  @@unique([tenantId, incomingInspectionId, pointCode, size, sampleIndex])
+  @@unique([tenantId, inProcessCheckId, pointCode, size, sampleIndex])
+  @@index([tenantId, planCheckId])
+}
+
+/// A correction of a signed result (QHS-145): a signed record never changes, a correction is written here, append-only.
+/// A REQUEST says what field goes from what to what and why; it waits for the second signature, a SIGNED row by another
+/// person, or a REFUSED one with their reason. One answer per request. What is correct now is the signed record with its
+/// SIGNED requests applied, newest last. It names exactly one signed record of the three kinds; the office writes it.
+/// @append-only
+model InspectionAmendment {
+  id                   String                  @id @db.Uuid
+  tenantId             String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String                  @db.Uuid
+  inspectionId         String?                 @db.Uuid
+  incomingInspectionId String?                 @db.Uuid
+  inProcessCheckId     String?                 @db.Uuid
+  kind                 InspectionAmendmentKind
+  /// SIGNED, REFUSED: the REQUEST it answers, of the same record. REQUEST: none.
+  requestId            String?                 @db.Uuid
+  /// REQUEST: the field corrected, and the row it is on when not the record itself (recordType + recordId, both or
+  /// neither: an InspectionCheckResult, an InspectionMeasurement, a hide result).
+  field                String?
+  recordType           String?
+  recordId             String?                 @db.Uuid
+  /// REQUEST: the value before and after, as JSON.
+  before               Json?
+  after                Json?
+  /// Why: required on a REQUEST and a REFUSED row.
+  reason               String?
+  /// The office user who signed this row, when, and the SHA-256 (hex) of what they signed. An answer is never signed by
+  /// the person who asked.
+  signedById           String                  @db.Uuid
+  signedAt             DateTime                @db.Timestamptz(3)
+  signatureSha256      String
+  createdAt            DateTime                @default(now()) @db.Timestamptz(3)
+  createdById          String?                 @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  inspection         Inspection?          @relation(fields: [tenantId, siteId, inspectionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  incomingInspection IncomingInspection?  @relation(fields: [tenantId, siteId, incomingInspectionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  inProcessCheck     InProcessCheck?      @relation(fields: [tenantId, siteId, inProcessCheckId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  request            InspectionAmendment? @relation("InspectionAmendmentAnswer", fields: [tenantId, siteId, requestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  answers            InspectionAmendment[] @relation("InspectionAmendmentAnswer")
+
+  // One answer per request (a REQUEST's NULL repeats freely).
+  @@unique([tenantId, requestId])
+  // The target of the answers' reference: a request of the same site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, inspectionId])
+  @@index([tenantId, incomingInspectionId])
+  @@index([tenantId, inProcessCheckId])
+}
