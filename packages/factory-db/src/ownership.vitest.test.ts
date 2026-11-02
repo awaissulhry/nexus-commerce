@@ -238,6 +238,7 @@ describe('model ownership', () => {
       'ScanCorrectionRequest',
       'ScanPatternFinding',
       'ScheduleSlot',
+      'ScrapApproval',
       'ScrapReason',
       'SdiInboxItem',
       'SdiNotification',

@@ -29,7 +29,8 @@ const workOrderParams = input({ workOrderId: id() })
 const operation = output({
   id: id().nullable(),
   seq: z.number().int(),
-  routingSeq: z.number().int(),
+  // Null: an unplanned operation (B-W2b-74; MES-086).
+  routingSeq: z.number().int().nullable(),
   code: z.string(),
   name: z.string(),
   standardMinutes: z.string(),

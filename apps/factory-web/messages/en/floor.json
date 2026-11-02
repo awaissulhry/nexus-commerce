@@ -628,7 +628,8 @@
       "kind": {
         "BUNDLE": "bundle ticket",
         "HIDE": "hide tag",
-        "GARMENT_SERIAL": "garment serial"
+        "GARMENT_SERIAL": "garment serial",
+        "COUPON": "bundle coupon"
       }
     },
     "refused": {

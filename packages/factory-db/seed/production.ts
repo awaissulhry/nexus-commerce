@@ -15,6 +15,9 @@ import {
   ScanKind,
   ScanRefusalAction,
   ScanSubject,
+  ScrapApprovalStatus,
+  ScrapDecidedOn,
+  ScrapFault,
   StockMoveReason,
   StockValuationMethod,
   StyleRevisionStatus,
@@ -56,6 +59,8 @@ import { seedWorkerNotice } from './privacy'
  *                1 scrapped, its line STAIN 1), still PENDING; a scan the cutting tablet's queue sent that was refused
  *                (an unknown ticket), kept open (B-W1-42).
  *   reasons      the tenant's scrap and rework reasons: W1's list (factory-domain production/scans/reasons), it/en.
+ *   over limit   W2b-2: a report of two sleeve sets scrapped at cutting (second bundle), above a limit of 1: the team leader
+ *                refused it on the tablet (ScrapApproval) and it was undone, so every count stays as it was.
  *   kit          W2b (B-W2b-01): WO-0001's material kit, staged at the cutting room's rack and marked complete by the
  *                office (WorkOrderKit, id = the work order's).
  *
@@ -86,12 +91,20 @@ const T = {
   rescanned: new Date('2026-11-17T09:30:00.000Z'),
   asked: new Date('2026-11-17T10:00:00.000Z'),
   refused: new Date('2026-11-17T10:30:00.000Z'),
+  // B-W2b-74: in the past too, as `cutLogged` (a bundle-operation's rows are ordered by serverTime, so a scan a local run
+  // makes today must sort after these).
+  overLimit: new Date('2026-10-30T10:00:00.000Z'),
+  overLimitRefused: new Date('2026-10-30T10:10:00.000Z'),
+  overLimitUndone: new Date('2026-10-30T10:12:00.000Z'),
   // B-W2b-30: the cut's own server and device time is in the past (the rest of this story is in November): the cutting
   // tablet's undo and a hide's closing cut take the newest entry by serverTime, and "last cut" shows it, so a cut a
   // local run makes today must sort after the seed's. The work order's start stays `cut` above.
   cutLogged: new Date('2026-10-30T09:00:00.000Z'),
 } as const
 const DAY = { orderDate: new Date('2026-11-12T00:00:00.000Z'), due: new Date('2026-12-04T00:00:00.000Z') } as const
+
+/** W2b-2: who the seeded reasons are put down to; the others stay UNKNOWN (made up, as every reason's wording). */
+const FAULT: Readonly<Record<string, ScrapFault>> = { LEATHER_FLAW: ScrapFault.OTHERS, MACHINE: ScrapFault.OTHERS, CUT_WRONG: ScrapFault.OWN, STITCHING: ScrapFault.OWN }
 
 /** The style's sizes and the leather (ft²) one jacket of each takes, before wastage. */
 const SIZES = [
@@ -132,6 +145,9 @@ export interface ProductionSeed {
   /** Plant A1's operator (acknowledged the notice) and team leader (has not), and the cutting tablet. */
   readonly operatorId: string
   readonly leadId: string
+  /** W2b-2: the report of two scrapped pieces, refused and undone, and its approval (REFUSED). */
+  readonly overLimitScanId: string
+  readonly scrapApprovalId: string
   readonly deviceId: string
   /** The operator's PENDING correction request of the standing report (scanIds[2]) and the cutting tablet's refused scan. */
   readonly correctionRequestId: string
@@ -257,11 +273,26 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
         data: { id: revisionId, styleId, revision: 1, status: StyleRevisionStatus.DRAFT, changeNote: 'First revision.', plannedHideYieldPct: '75.0000', labelTemplateId, ...stamp(T.setup) },
         select: { id: true },
       })
+      // The routing first: a BOM line names the step that uses it (B-W2b-74).
+      await tx.routingOperation.createMany({
+        data: ROUTING.map((step) => ({
+          id: lastId(`production:routing:JKT-02:1:${step.code}`),
+          styleId,
+          revisionId,
+          seq: step.seq,
+          operationId: step.operationId,
+          code: step.code,
+          name: step.name,
+          workCentreKind: step.kind,
+          standardMinutes: step.minutes,
+          ...stamp(T.setup),
+        })),
+      })
       await tx.bomLine.createMany({
         data: [
-          { id: line.leather, styleId, revisionId, seq: 10, itemId: item.leather, placement: 'Outer shell', qty: '45.0000', uom: Uom.FT2, wastagePct: '12.0000', sizeDependent: true, colourDependent: true, ...stamp(T.setup) },
-          { id: line.lining, styleId, revisionId, seq: 20, itemId: item.lining, placement: 'Body lining', qty: '1.8000', uom: Uom.M, wastagePct: '5.0000', itemColourId: itemColour.lining, ...stamp(T.setup) },
-          { id: line.protector, styleId, revisionId, seq: 30, itemId: item.protector, placement: 'Shoulder pockets', qty: '2.0000', uom: Uom.PCS, ...stamp(T.setup) },
+          { id: line.leather, styleId, revisionId, seq: 10, routingSeq: 10, itemId: item.leather, placement: 'Outer shell', qty: '45.0000', uom: Uom.FT2, wastagePct: '12.0000', sizeDependent: true, colourDependent: true, ...stamp(T.setup) },
+          { id: line.lining, styleId, revisionId, seq: 20, routingSeq: 20, itemId: item.lining, placement: 'Body lining', qty: '1.8000', uom: Uom.M, wastagePct: '5.0000', itemColourId: itemColour.lining, ...stamp(T.setup) },
+          { id: line.protector, styleId, revisionId, seq: 30, routingSeq: 20, itemId: item.protector, placement: 'Shoulder pockets', qty: '2.0000', uom: Uom.PCS, ...stamp(T.setup) },
         ],
       })
       await tx.bomLineSize.createMany({
@@ -276,20 +307,6 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
           itemId: item.leather,
           colourwayId: colourway[code],
           itemColourId: itemColour[code],
-          ...stamp(T.setup),
-        })),
-      })
-      await tx.routingOperation.createMany({
-        data: ROUTING.map((step) => ({
-          id: lastId(`production:routing:JKT-02:1:${step.code}`),
-          styleId,
-          revisionId,
-          seq: step.seq,
-          operationId: step.operationId,
-          code: step.code,
-          name: step.name,
-          workCentreKind: step.kind,
-          standardMinutes: step.minutes,
           ...stamp(T.setup),
         })),
       })
@@ -616,7 +633,8 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
       for (const reason of W1_SCAN_REASONS) {
         const reasonId = id(`production:scrap-reason:${reason.kind}:${reason.code}`)
         // W2b (B-W2b-10; MES-125): OTHER needs detail (a photo on the floor, a note in the office); no icon: the standard look.
-        const data = { labelIt: reason.label.it, labelEn: reason.label.en, sortOrder: reason.sortOrder, active: reason.active, needsDetail: reason.needsDetail ?? false }
+        // W2b-2 (B-W2b-74): the fault of a reason, for pay (placeholders: the labour consultant says what each means).
+        const data = { labelIt: reason.label.it, labelEn: reason.label.en, sortOrder: reason.sortOrder, active: reason.active, needsDetail: reason.needsDetail ?? false, fault: FAULT[reason.code] ?? ScrapFault.UNKNOWN }
         await tx.scrapReason.upsert({
           where: { id: reasonId },
           create: { id: reasonId, kind: reason.kind === 'SCRAP' ? DefectKind.SCRAP : DefectKind.REWORK, code: reason.code, ...data, ...stamp(T.setup) },
@@ -688,6 +706,37 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
       })
     }),
   )
+  // W2b-2 (B-W2b-74; MES-128): a report over the limit of 1 piece, refused by the team leader on the tablet and undone, so no
+  // count changes. Written once (a scan is append-only).
+  const overLimitScanId = lastId('production:scan:WO-0001:over-limit')
+  const scrapApprovalId = lastId('labour:scrap-approval:WO-0001:1')
+  await db.withScope(signedIn, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.operationScan.findUnique({ where: { id: overLimitScanId }, select: { id: true } })) return
+      const at = { siteId: siteA, workOrderId, workOrderOperationId: operationIds.cut, bundleId: bundleIds[1], ...onDevice, createdById: operatorId }
+      await tx.operationScan.create({
+        data: { id: overLimitScanId, ...at, kind: ScanKind.REPORT, scrapQuantity: 2, scrapReason: 'CUT_WRONG', clientScanId: 'seed-scan-4', deviceTime: T.overLimit, serverTime: T.overLimit },
+        select: { id: true },
+      })
+      await tx.operationScanDefect.create({
+        data: { id: lastId('production:scan-line:WO-0001:over-limit'), siteId: siteA, scanId: overLimitScanId, kind: DefectKind.SCRAP, reasonCode: 'CUT_WRONG', quantity: 2, serverTime: T.overLimit, createdById: operatorId },
+        select: { id: true },
+      })
+      await tx.scrapApproval.create({
+        data: { id: scrapApprovalId, siteId: siteA, scanId: overLimitScanId, limitPieces: 1, key: `scrap:${overLimitScanId}`, createdAt: T.overLimit, updatedAt: T.overLimit, createdById: operatorId },
+        select: { id: true },
+      })
+      await tx.scrapApproval.update({
+        where: { id: scrapApprovalId },
+        data: { status: ScrapApprovalStatus.REFUSED, decidedOn: ScrapDecidedOn.FLOOR, decidedAt: T.overLimitRefused, decidedById: leadId, reasonCode: 'WRONG_COUNT', version: 2, updatedAt: T.overLimitRefused },
+        select: { id: true },
+      })
+      await tx.operationScan.create({
+        data: { id: lastId('production:scan:WO-0001:over-limit-undo'), ...at, kind: ScanKind.UNDO, correctsId: overLimitScanId, reason: 'Counted the wrong bundle.', clientScanId: 'seed-scan-5', deviceTime: T.overLimitUndone, serverTime: T.overLimitUndone },
+        select: { id: true },
+      })
+    }),
+  )
   // The first floor work moves the work order on (the office, or the worker's handler after the floor's event).
   await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
     client.workOrder.updateMany({ where: { id: workOrderId, status: WorkOrderStatus.RELEASED }, data: { status: WorkOrderStatus.IN_PROGRESS, startedAt: T.cut, updatedAt: T.cut } }),
@@ -733,6 +782,8 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     workerNoticeId: notice.workerNoticeId,
     operatorId,
     leadId,
+    overLimitScanId,
+    scrapApprovalId,
     deviceId,
     correctionRequestId,
     refusalId,

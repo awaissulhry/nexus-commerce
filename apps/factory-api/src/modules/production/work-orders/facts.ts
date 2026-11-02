@@ -284,10 +284,11 @@ export async function repairSpecOf(db: Reader, workOrderId: string, parts: SpecP
   })
   const centreOf = new Map(parts.centres.map((centre) => [centre.id, centre]))
   const stepOf = new Map(parts.steps.map((step) => [step.seq, step]))
+  // A DRAFT holds only its routing's steps (…_followups_floor_w2b_guards: an unplanned operation comes after the release).
   const operations: PlannedOperation[] = rows.map((row) => ({
     seq: row.seq,
-    routingSeq: row.routingSeq,
-    stepId: stepOf.get(row.routingSeq)?.id ?? '',
+    routingSeq: row.routingSeq!,
+    stepId: stepOf.get(row.routingSeq!)?.id ?? '',
     code: row.code,
     name: row.name,
     standardMinutes: decimalText(row.standardMinutes.toString()),

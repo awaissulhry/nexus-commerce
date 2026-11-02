@@ -273,7 +273,7 @@ describe('the floor', () => {
       rules: (await as(scope, (client) => client.productionSettings.findMany({ select: { scanSubject: true } }))).map((row) => row.scanSubject),
     })
     // Prisma's default select names every column: the floor holds them all here (none is walled), but the floor rules'.
-    expect(await seen(floor(0))).toEqual({ workOrders: ['SEED-WO-0001', 'SEED-WO-0002'], bundles: ['SEED-BN-0001', 'SEED-BN-0002'], scans: 3, rules: ['WORKER'] })
+    expect(await seen(floor(0))).toEqual({ workOrders: ['SEED-WO-0001', 'SEED-WO-0002'], bundles: ['SEED-BN-0001', 'SEED-BN-0002'], scans: 5, rules: ['WORKER'] })
     // The plant of company B (site B1) sees its own floor rules only.
     expect(await seen(floor(1))).toEqual({ workOrders: [], bundles: [], scans: 0, rules: ['STATION'] })
   })
@@ -282,7 +282,8 @@ describe('the floor', () => {
     await expect(run(floor(), `UPDATE "WorkOrder" SET note = 'x' WHERE id = $1::uuid`, seeded.workOrderId)).rejects.toThrow(DENIED)
     await expect(run(floor(), `UPDATE "WorkOrderSize" SET quantity = 9 WHERE id = $1::uuid`, seeded.cellIds['BLK-50'])).rejects.toThrow(DENIED)
     await expect(run(floor(), `UPDATE "WorkOrderOperation" SET "workCentreId" = "workCentreId" WHERE id = $1::uuid`, seeded.operationIds.sew)).rejects.toThrow(DENIED)
-    await expect(insert(floor(), 'WorkOrderOperation', operationRow(seeded.draftWorkOrderId, routing[0]!))).rejects.toThrow(DENIED)
+    // W2b-2 (B-W2b-74): the floor's INSERT is for an unplanned operation only (the guard, in words).
+    await expect(insert(floor(), 'WorkOrderOperation', operationRow(seeded.draftWorkOrderId, routing[0]!))).rejects.toThrow(/adds only an unplanned operation/)
     await expect(run(floor(), 'DELETE FROM "Bundle" WHERE id = $1::uuid', seeded.bundleIds[0])).rejects.toThrow(DENIED)
     await expect(run(floor(), `UPDATE "OperationScan" SET reason = 'x' WHERE id = $1::uuid`, seeded.scanIds[2])).rejects.toThrow(DENIED)
     await expect(run(floor(), 'DELETE FROM "CutLog" WHERE id = $1::uuid', seeded.cutLogId)).rejects.toThrow(DENIED)
@@ -669,7 +670,7 @@ describe('the seeds', () => {
       return out
     }
     const before = await counts()
-    expect(before).toEqual([2, 2, 7, 8, 21, 1, 2, 2, 1, 3, 1, 2, 2])
+    expect(before).toEqual([2, 2, 7, 8, 21, 1, 2, 2, 1, 5, 1, 2, 2])
     await seedProduction({ db: factory, namespace: 'production-b' })
     expect(await counts()).toEqual(before)
     expect(await admin(`SELECT number, status::text, "batchNumber" FROM "WorkOrder" WHERE "tenantId" = $1 ORDER BY number`, [b.tenantId])).toEqual([

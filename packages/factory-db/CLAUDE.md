@@ -86,7 +86,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    SHIPPED serials may go back to RELEASED; the RMA as a PPE register source; it redefines wave 2's
    `factory_quality_hold_number_guard`, wave 1's `factory_shipment_guard`, shipping's `factory_shipment_line_guard`, the
    final release's `factory_garment_serial_guard` and wave 6's `factory_ppe_register_entry_guard`, and fills the new
-   column for carrier returns received before it): triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
+   column for carrier returns received before it), `…_followups_floor_w2b_guards` (W2b wave 8/16, B-W2b-74: COUPON a scan-id
+   kind, unplanned operations and the parallel group's frozen copy, a floor session's decision of a correction, scrap
+   approvals, the work order of an off-standard block, what a material call asks, an unplanned operation's piece rate; it
+   redefines numbering's `factory_number_series_document_kind` and `factory_number_block_guard`, production's
+   `factory_work_order_operation_guard` and the scan records' `factory_scan_correction_request_guard`, and recreates
+   `OffStandardEntry_edit_recorded` with the work order among its facts): triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written
    too but goes the other way: keep it IN `prisma/migrations`, under a timestamp before its schema folder, while

@@ -120,6 +120,8 @@ export async function seed(context: SeedContext): Promise<AndonSeed> {
           workerId: operatorId,
           employeeId: people.employeeIds.e1,
           note: 'Lining for size 52.',
+          reasonCode: 'MATERIAL_SHORT',
+          requestedQuantity: '4.0000',
           status: HelpCallStatus.SOLVED,
           sentAt: T.sent,
           seenAt: T.seen,

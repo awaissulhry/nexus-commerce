@@ -2,7 +2,7 @@ import { MAX_NUMBER, type ScanIdKind } from './kinds'
 import { formatScanId, parseScanId, tenantTag, type ScanType } from './scan-id'
 
 /**
- * Number blocks: how scan ids (BUNDLE, HIDE, GARMENT_SERIAL) are handed out, online and offline (design 02-sections-floor
+ * Number blocks: how scan ids (BUNDLE, HIDE, GARMENT_SERIAL, COUPON) are handed out, online and offline (design 02-sections-floor
  * "tags print offline from numbers reserved per tablet"; features PLT-126, PLT-237, PLT-238).
  *
  * Each scan-id kind has ONE counter per tenant: the scan id carries the tenant's tag, never the company, so a reference
@@ -20,19 +20,19 @@ import { formatScanId, parseScanId, tenantTag, type ScanType } from './scan-id'
  */
 
 /** The scan type (letters on the label) of each scan-id kind. */
-export const SCAN_TYPE_OF: Readonly<Record<ScanIdKind, ScanType>> = Object.freeze({ BUNDLE: 'BUNDLE', HIDE: 'HIDE', GARMENT_SERIAL: 'SERIAL' })
+export const SCAN_TYPE_OF: Readonly<Record<ScanIdKind, ScanType>> = Object.freeze({ BUNDLE: 'BUNDLE', HIDE: 'HIDE', GARMENT_SERIAL: 'SERIAL', COUPON: 'COUPON' })
 
 /** The kind in words, for messages. */
-export const SCAN_KIND_WORDS: Readonly<Record<ScanIdKind, string>> = Object.freeze({ BUNDLE: 'bundle ticket', HIDE: 'hide tag', GARMENT_SERIAL: 'garment serial' })
+export const SCAN_KIND_WORDS: Readonly<Record<ScanIdKind, string>> = Object.freeze({ BUNDLE: 'bundle ticket', HIDE: 'hide tag', GARMENT_SERIAL: 'garment serial', COUPON: 'bundle coupon' })
 
 /** The most references one block holds (the database's guard refuses a larger one). */
 export const MAX_BLOCK_SIZE = 1000
 
 /** What a tablet gets when it runs low: about a shift's worth of labels. */
-export const DEVICE_BLOCK_SIZE: Readonly<Record<ScanIdKind, number>> = Object.freeze({ BUNDLE: 200, HIDE: 200, GARMENT_SERIAL: 500 })
+export const DEVICE_BLOCK_SIZE: Readonly<Record<ScanIdKind, number>> = Object.freeze({ BUNDLE: 200, HIDE: 200, GARMENT_SERIAL: 500, COUPON: 200 })
 
 /** Below this many numbers left (of a kind, over its open blocks) a tablet gets a new block. */
-export const LOW_WATER: Readonly<Record<ScanIdKind, number>> = Object.freeze({ BUNDLE: 50, HIDE: 50, GARMENT_SERIAL: 125 })
+export const LOW_WATER: Readonly<Record<ScanIdKind, number>> = Object.freeze({ BUNDLE: 50, HIDE: 50, GARMENT_SERIAL: 125, COUPON: 50 })
 
 /** At most this many blocks of a kind with numbers left per tablet: a tablet never hoards the counter. */
 export const MAX_LIVE_BLOCKS = 3

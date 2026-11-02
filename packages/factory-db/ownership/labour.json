@@ -97,6 +97,15 @@
         "columns": { "workerId": ["PRODUCTION"], "overrideReason": ["PRODUCTION", "SAFETY"] }
       }
     },
+    "ScrapApproval": {
+      "about": "A scan's scrap above the site's limit (B-W2b-74; MES-128): the floor's report writes the WAITING row (a tablet's command), the team leader on the floor or the office decides it once, never who took the scan. Both read their rows; the floor its own site's. Names the decider (decidedById), not as the subject: the row is about the scrap. No money: the limit is a count. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
     "BundleCoupon": {
       "about": "A coupon per bundle and operation (sites that scan coupons): printed in the office or on the floor, voided with a reason and replaced there. No person column. Never deleted.",
       "kind": "tenant",

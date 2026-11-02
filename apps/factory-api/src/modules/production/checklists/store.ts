@@ -10,7 +10,8 @@ import type { Reader } from '../scans/store'
 /** The steps of a work order's operation: W2b-4's instructions replace this one read (factory-domain checklists/rules). */
 export async function stepsOfOperation(db: Reader, operationId: string): Promise<ChecklistStep[]> {
   const operation = await db.workOrderOperation.findUnique({ where: { id: operationId }, select: { styleRevisionId: true, routingSeq: true } })
-  if (!operation) return []
+  // B-W2b-74: an unplanned operation has no routing step, so no steps to tick.
+  if (!operation || operation.routingSeq === null) return []
   const step = await db.routingOperation.findFirst({ where: { revisionId: operation.styleRevisionId, seq: operation.routingSeq }, select: { instructions: true } })
   return stepsOfInstructions(step?.instructions ?? null)
 }

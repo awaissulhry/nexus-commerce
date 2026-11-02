@@ -29,12 +29,12 @@
       }
     },
     "WorkOrderOperation": {
-      "about": "The office maps a DRAFT work order's routing to the site's work centres (and, after release, moves an operation to another work centre of the same kind). The floor reads its site's operations (the scan screen).",
+      "about": "The office maps a DRAFT work order's routing to the site's work centres (and, after release, moves an operation to another work centre of the same kind). The floor reads its site's operations (the scan screen). W2b-2 (B-W2b-74; MES-086): the team leader on the tablet, or the office, adds an unplanned operation to a RELEASED or IN_PROGRESS work order; a floor session inserts nothing else (the guard), and changes or removes no operation.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
-        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
       }
     },
     "WorkOrderMaterial": {
@@ -128,12 +128,12 @@
       }
     },
     "ScanCorrectionRequest": {
-      "about": "The site's floor asks a correction of one of its own older scans (B-W1-42; MES-096); the office (a lead or the production manager) decides it, approved with the CORRECTION scan or refused with a note. The floor reads its site's requests (its own asks and their answers) and inserts them; only the office updates (decides) one. Nobody deletes one.",
+      "about": "The site's floor asks a correction of one of its own older scans (B-W1-42; MES-096); the office (a lead or the production manager) decides it, approved with the CORRECTION scan or refused with a note. The floor reads its site's requests (its own asks and their answers) and inserts them. W2b-2 (B-W2b-74): a team leader on the floor decides one too (the guard lets only status, decidedById, decidedAt, decisionNote, correctionScanId, version and updatedAt change, once, four eyes). Nobody deletes one.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
       }
     },
     "FloorScanRefusal": {

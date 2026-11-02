@@ -107,7 +107,7 @@ export async function countWorkOrders(api: ApiClient, signal?: AbortSignal): Pro
 const operationSchema = z.object({
   id: z.string().nullable(),
   seq: z.number(),
-  routingSeq: z.number(),
+  routingSeq: z.number().nullable(),
   code: z.string(),
   name: z.string(),
   standardMinutes: z.string(),

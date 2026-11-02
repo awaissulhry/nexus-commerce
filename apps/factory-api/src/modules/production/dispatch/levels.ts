@@ -20,8 +20,8 @@ export async function levelsOfBoard(db: Reader, employeeIds: readonly (string | 
   const people = [...new Set(employeeIds.filter((id): id is string => id !== null))]
   const steps = [...new Set(workOrderOperationIds)]
   if (people.length === 0 || steps.length === 0) return () => null
-  const operations = await db.workOrderOperation.findMany({ where: { id: { in: steps } }, select: { id: true, routingOperation: { select: { operationId: true } } } })
-  const libraryOf = new Map(operations.map((row) => [row.id, row.routingOperation.operationId]))
+  const operations = await db.workOrderOperation.findMany({ where: { id: { in: steps } }, select: { id: true, operationId: true, routingOperation: { select: { operationId: true } } } })
+  const libraryOf = new Map(operations.map((row) => [row.id, row.routingOperation?.operationId ?? row.operationId!]))
   const skills = await db.skill.findMany({ where: { kind: 'OPERATION', status: 'ACTIVE', operationId: { in: [...new Set(libraryOf.values())] } }, select: { id: true, operationId: true } })
   const skillsOf = new Map<string, string[]>()
   for (const skill of skills) if (skill.operationId) skillsOf.set(skill.operationId, [...(skillsOf.get(skill.operationId) ?? []), skill.id])

@@ -116,7 +116,7 @@ export interface WorkOrderFacts {
   readonly styleRevisionId: string | null
   readonly style: { readonly id: string; readonly code: string; readonly name: string }
   readonly cells: (Cell & { readonly colourway: string; readonly size: string })[]
-  readonly operations: { readonly id: string; readonly seq: number; readonly routingSeq: number; readonly code: string; readonly name: string; readonly styleRevisionId: string }[]
+  readonly operations: { readonly id: string; readonly seq: number; readonly routingSeq: number | null; readonly code: string; readonly name: string; readonly styleRevisionId: string }[]
 }
 
 /** The work order with its cells and operations, or null (not found or not in scope). */
@@ -160,7 +160,7 @@ export async function outsideStepsOf(db: Reader, operations: WorkOrderFacts['ope
   const revisions = [...new Set(operations.map((operation) => operation.styleRevisionId))]
   if (revisions.length === 0) return new Map()
   const steps = await db.routingOperation.findMany({
-    where: { revisionId: { in: revisions }, seq: { in: [...new Set(operations.map((operation) => operation.routingSeq))] }, supplierId: { not: null } },
+    where: { revisionId: { in: revisions }, seq: { in: [...new Set(operations.flatMap((operation) => (operation.routingSeq === null ? [] : [operation.routingSeq])))] }, supplierId: { not: null } },
     select: { revisionId: true, seq: true, supplierId: true, pricePerPiece: true, transitDays: true },
   })
   const byStep = new Map(steps.map((step) => [`${step.revisionId}|${step.seq}`, step]))

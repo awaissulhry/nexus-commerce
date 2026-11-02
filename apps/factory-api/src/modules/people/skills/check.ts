@@ -116,10 +116,10 @@ async function fullName(db: Reader, employeeId: string, fallback: string): Promi
 async function operationOf(db: Reader, input: QualificationInput): Promise<{ id: string; code: string; name: string; workOrderOperationId: string | null; siteId: string | null } | null> {
   if (input.workOrderOperationId) {
     const step = isUuid(input.workOrderOperationId)
-      ? await db.workOrderOperation.findUnique({ where: { id: input.workOrderOperationId }, select: { id: true, siteId: true, routingOperation: { select: { operation: { select: { id: true, code: true, name: true } } } } } })
+      ? await db.workOrderOperation.findUnique({ where: { id: input.workOrderOperationId }, select: { id: true, siteId: true, libraryOperation: { select: { id: true, code: true, name: true } }, routingOperation: { select: { operation: { select: { id: true, code: true, name: true } } } } } })
       : null
     if (!step) throw new NotFoundError('Work order operation not found.')
-    const operation = step.routingOperation.operation
+    const operation = step.routingOperation?.operation ?? step.libraryOperation!
     return { id: operation.id, code: operation.code, name: operation.name, workOrderOperationId: step.id, siteId: step.siteId }
   }
   if (input.operationId) {

@@ -628,7 +628,8 @@
       "kind": {
         "BUNDLE": "cartellino del fascio",
         "HIDE": "etichetta della pelle",
-        "GARMENT_SERIAL": "seriale del capo"
+        "GARMENT_SERIAL": "seriale del capo",
+        "COUPON": "tagliando del fascio"
       }
     },
     "refused": {

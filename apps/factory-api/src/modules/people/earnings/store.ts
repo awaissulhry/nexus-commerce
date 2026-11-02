@@ -134,7 +134,7 @@ export async function workOfScans(db: Client, scans: readonly ScanRecord[]): Pro
   if (scans.length === 0) return new Map()
   const unique = <T>(values: readonly (T | null)[]): T[] => [...new Set(values.filter((value): value is T => value !== null))]
   const [operations, workOrders, bundles, stations, devices] = await Promise.all([
-    db.workOrderOperation.findMany({ where: { id: { in: unique(scans.map((scan) => scan.workOrderOperationId)) } }, select: { id: true, code: true, name: true, standardMinutes: true, routingOperation: { select: { operationId: true } } } }),
+    db.workOrderOperation.findMany({ where: { id: { in: unique(scans.map((scan) => scan.workOrderOperationId)) } }, select: { id: true, code: true, name: true, standardMinutes: true, operationId: true, routingOperation: { select: { operationId: true } } } }),
     db.workOrder.findMany({ where: { id: { in: unique(scans.map((scan) => scan.workOrderId)) } }, select: { id: true, styleId: true } }),
     db.bundle.findMany({ where: { id: { in: unique(scans.map((scan) => scan.bundleId)) } }, select: { id: true, code: true, workOrderSize: { select: { size: true } } } }),
     db.station.findMany({ where: { id: { in: unique(scans.map((scan) => scan.stationId)) } }, select: { id: true, lineId: true } }),
@@ -150,7 +150,7 @@ export async function workOfScans(db: Client, scans: readonly ScanRecord[]): Pro
       const operation = operationBy.get(scan.workOrderOperationId)!
       const bundle = bundleBy.get(scan.bundleId)!
       const lineId = (scan.stationId ? stationBy.get(scan.stationId)?.lineId : null) ?? (scan.deviceId ? deviceBy.get(scan.deviceId)?.lineId : null) ?? null
-      return [scan.id, { operationId: operation.routingOperation.operationId, code: operation.code, name: operation.name, standardMinutes: operation.standardMinutes.toString(), styleId: workOrderBy.get(scan.workOrderId)!.styleId, size: bundle.workOrderSize.size, lineId, bundleCode: bundle.code }]
+      return [scan.id, { operationId: operation.routingOperation?.operationId ?? operation.operationId!, code: operation.code, name: operation.name, standardMinutes: operation.standardMinutes.toString(), styleId: workOrderBy.get(scan.workOrderId)!.styleId, size: bundle.workOrderSize.size, lineId, bundleCode: bundle.code }]
     }),
   )
 }

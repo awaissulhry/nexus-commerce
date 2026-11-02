@@ -190,9 +190,10 @@ describe("a tablet's blocks", () => {
       ['BUNDLE', 200, 0],
       ['HIDE', 200, 0],
       ['GARMENT_SERIAL', 500, 0],
+      ['COUPON', 200, 0],
     ])
     for (const block of first.reserved) expect(block.fromRef).toBeGreaterThan(400)
-    expect(first.blocks).toHaveLength(3)
+    expect(first.blocks).toHaveLength(4)
     // Enough left: nothing reserved, the check is audited.
     const enough = await topUpBlocks(as(floor(tablet, siteA1)), [{ kind: 'HIDE' }], newId())
     expect(enough.reserved).toEqual([])
@@ -205,7 +206,7 @@ describe("a tablet's blocks", () => {
     expect((await topUpBlocks(as(floor(tablet, siteA1)), [{ kind: 'HIDE', remaining: 0 }], newId())).reserved).toEqual([])
     expect((await admin('SELECT count(*)::int AS n FROM "NumberBlock" WHERE "deviceId" = $1 AND kind = \'HIDE\'', [tablet]))[0]).toEqual({ n: 3 })
     // Every reservation is audited on its block.
-    expect(await admin('SELECT count(*)::int AS n FROM "AuditLog" WHERE action = \'numbering.reserveBlock\' AND after->>\'deviceId\' = $1', [tablet])).toEqual([{ n: 5 }])
+    expect(await admin('SELECT count(*)::int AS n FROM "AuditLog" WHERE action = \'numbering.reserveBlock\' AND after->>\'deviceId\' = $1', [tablet])).toEqual([{ n: 6 }])
   })
 
   it('the office reserves a block for an active tablet it may manage, and closes one with a reason', async () => {

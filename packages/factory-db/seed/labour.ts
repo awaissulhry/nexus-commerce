@@ -193,7 +193,7 @@ export async function seed(context: SeedContext): Promise<LabourSeed> {
       })
       // Typed with the wrong start (10:35 Rome); the dispute below puts it right.
       await tx.offStandardEntry.create({
-        data: { id: blockIds[0], ...block, codeId: codeIds.WAIT_MATERIAL, workDate: DAY.waited, startedAt: T.typedStart, endedAt: T.waitEnd, status: OffStandardStatus.PENDING, note: 'The lining trolley ran out.', clientEventId: 'seed-off-1', deviceTime: T.typedStart, createdAt: T.typedStart, updatedAt: T.waitEnd },
+        data: { id: blockIds[0], ...block, workOrderId: production.workOrderId, codeId: codeIds.WAIT_MATERIAL, workDate: DAY.waited, startedAt: T.typedStart, endedAt: T.waitEnd, status: OffStandardStatus.PENDING, note: 'The lining trolley ran out.', clientEventId: 'seed-off-1', deviceTime: T.typedStart, createdAt: T.typedStart, updatedAt: T.waitEnd },
         select,
       })
       const dispute = { siteId: siteA, workerId: operatorId, employeeId: operatorEmployee, lineId: lineL1, workDate: DAY.waited, deviceId, createdById: operatorId, createdAt: T.disputed, updatedAt: T.disputed }

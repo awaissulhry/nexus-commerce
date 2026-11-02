@@ -129,7 +129,7 @@ export async function workshopsOf(db: Reader, site: SiteRow, alsoIds: Iterable<s
 }
 
 /** The outside work of a work order's operations: its routing step's workshop and transit days (null: in-house). */
-export async function outsideWorkOf(db: Reader, operations: readonly { readonly id: string; readonly styleRevisionId: string; readonly routingSeq: number }[]): Promise<Map<string, { partyId: string; transitDays: number | null }>> {
+export async function outsideWorkOf(db: Reader, operations: readonly { readonly id: string; readonly styleRevisionId: string; readonly routingSeq: number | null }[]): Promise<Map<string, { partyId: string; transitDays: number | null }>> {
   const revisions = [...new Set(operations.map((operation) => operation.styleRevisionId))]
   if (revisions.length === 0) return new Map()
   const steps = await db.routingOperation.findMany({ where: { revisionId: { in: revisions }, supplierId: { not: null } }, select: { revisionId: true, seq: true, supplierId: true, transitDays: true } })
