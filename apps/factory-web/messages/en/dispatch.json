@@ -1,0 +1,326 @@
+{
+  "common": {
+    "retry": "Try again",
+    "loading": "Loading…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "undo": "Undo",
+    "dismiss": "Dismiss"
+  },
+  "noPermission": {
+    "title": "You cannot open Dispatch",
+    "body": "Reading the board needs the permission to view dispatch at this site."
+  },
+  "error": {
+    "title": "The board could not be read",
+    "read": "Something went wrong while reading. Try again.",
+    "forbidden": "You have no permission to do this.",
+    "noSite": "There is no site where you may read the board.",
+    "offline": "No answer from the server. Check the connection and try again.",
+    "write": "It could not be saved. Try again.",
+    "changed": "Someone changed this since you read it: the board was read again.",
+    "stale": "The board could not be read again: what you see may be out of date.",
+    "noTarget": "This site has no line to print."
+  },
+  "live": {
+    "connecting": "Connecting",
+    "live": "Live",
+    "offline": "Offline"
+  },
+  "head": {
+    "asOf": "As of {time}",
+    "changed": "List changed {time}",
+    "plan": "Plan v{number}",
+    "noPlan": "Nothing published",
+    "attendanceOff": "Clock-in is off at this site",
+    "site": "Site",
+    "day": "Day",
+    "today": "Today",
+    "print": "Print dispatch list"
+  },
+  "rule": {
+    "sequence": {
+      "STRICT": "Strict sequence",
+      "WARN": "Sequence warns",
+      "FREE": "Free sequence"
+    },
+    "qualification": {
+      "STRICT": "Skills hold",
+      "WARN": "Skills warn",
+      "FREE": "Skills not checked"
+    }
+  },
+  "banner": {
+    "past": "{day} is over: the board stays as it was.",
+    "noNames": "This site's floor records name the station, not the worker: no operator is named here."
+  },
+  "load": {
+    "title": "Load against minutes",
+    "over": "Queued {queued} min · available {available} min · {minutes} min over",
+    "spare": "Queued {queued} min · available {available} min · {minutes} min spare",
+    "efficiency": "line efficiency {pct}%",
+    "absent_one": "absent: {count}",
+    "absent_other": "absent: {count}",
+    "allLines": "Show every line",
+    "onlyLine": "Show only this line on the board",
+    "none": {
+      "title": "No line at this site",
+      "body": "Lines and stations are kept in Planning › Lines & subcontractors."
+    },
+    "noMinutes": "No minutes available",
+    "noMinutesSentence": "{label}: no minutes available, {booked} min queued."
+  },
+  "source": {
+    "ATTENDANCE_OFF": "Planned people: clock-in is not switched on at this site",
+    "NOT_TODAY": "Planned people: this is not today",
+    "TOO_FEW": "Planned people: too few are in on this line to show a count",
+    "BEFORE_THE_SHIFT": "Planned people: the shift has not begun",
+    "CLOCKED_IN_one": "{count} person clocked in",
+    "CLOCKED_IN_other": "{count} people clocked in"
+  },
+  "board": {
+    "title": "Board",
+    "label": "Dispatch board · {site} · {day}",
+    "empty": {
+      "title": "Nothing queued for this shift",
+      "body": "Work shows here once the plan puts it on this day."
+    },
+    "noPlan": {
+      "title": "Nothing published to the floor yet",
+      "body": "The board reads the plan the floor works to.",
+      "link": "Open the planning board"
+    }
+  },
+  "stations": {
+    "title": "Stations",
+    "none": "This line has no active station.",
+    "assign": "Assign",
+    "reassign": "Reassign",
+    "remove": "Take {person} off this station",
+    "printLine": "Print the list of line {line}",
+    "printStation": "Print the list of station {station}"
+  },
+  "lane": {
+    "noOperator": "No operator",
+    "other": "Stations with no line"
+  },
+  "level": {
+    "LEARNING": "Learning",
+    "CAN_DO": "Can do",
+    "EXPERT": "Expert",
+    "TRAINER": "Trainer"
+  },
+  "operator": {
+    "trainee": "Trainee"
+  },
+  "presence": {
+    "NOT_IN": "Not clocked in",
+    "OFF": "Not on shift today",
+    "LATER": "Starts later",
+    "ON_BREAK": "On a break"
+  },
+  "kit": {
+    "tray": "Not assigned",
+    "trayEmpty": "All assigned ✓",
+    "empty": "Nothing queued for this shift",
+    "lanes": "Stations",
+    "instructions": "To move a card, focus it and press Space or M. The left and right arrows choose a station, Space or Enter drops, Escape cancels. Enter opens the card, Ctrl+Z undoes the last move.",
+    "targetTray": "{place}: back to the work with no station.",
+    "moveLane": "Station",
+    "queue": "Queued",
+    "queueMinutes": "{booked} min",
+    "queueSentence": "{label}: {booked} min queued."
+  },
+  "card": {
+    "label": "{number} · Op {seq}",
+    "operation": "Op {seq} {name}",
+    "noBundles": "no bundles yet",
+    "bundles_one": "{count} bundle",
+    "bundles_other": "{count} bundles",
+    "pieces_one": "{count} pc",
+    "pieces_other": "{count} pcs",
+    "due": "due {date}"
+  },
+  "mark": {
+    "rush": "Rush",
+    "draft": "Draft · books nothing",
+    "onHold": "On hold",
+    "sequenceHeld": "Op {seq} first",
+    "sequenceWarn": "Op {seq} not done yet",
+    "waiting": "Waiting for Op {seq}",
+    "reassign": "Reassign",
+    "material": {
+      "IN_STOCK": "Material ready",
+      "ON_THE_WAY": "Material on the way",
+      "expected": "Material {date}",
+      "MISSING": "Material missing"
+    }
+  },
+  "held": {
+    "draft": "A draft is not dispatched: release the work order first.",
+    "workCentre": "{station} does not do this operation's work.",
+    "readOnly": "You can look at this board, not change it (production.dispatch.manage).",
+    "past": "A day that is over stays as it was.",
+    "offline": "Offline: nothing can be moved until the connection is back.",
+    "noBundles": "This card has no bundles to pick.",
+    "pickBundles": "Pick at least one bundle.",
+    "pickPlace": "Pick where they go.",
+    "noLane": "Only work at a station has an order.",
+    "first": "It is first in the queue.",
+    "last": "It is last in the queue.",
+    "rushFirst": "Rush work stays first.",
+    "pickPerson": "Pick a person.",
+    "reason": "Say why in a few words.",
+    "busy": "One moment: the last change is being saved.",
+    "loading": "Still reading.",
+    "noLines": "This site has no line to print.",
+    "alreadyNotAssigned": "It is in Not assigned already."
+  },
+  "move": {
+    "title": "Move bundles",
+    "bundles": "Bundles",
+    "all": "All",
+    "none": "None",
+    "bundle": "{code} · {count} pcs",
+    "to": "To",
+    "pick": "Pick a line or a station",
+    "do_one": "Move {count} bundle",
+    "do_other": "Move {count} bundles",
+    "toLine": "Line {line} (its first station for this work)",
+    "toStation": "{station} · {name}"
+  },
+  "detail": {
+    "place": "Where",
+    "stateLabel": "State",
+    "state": {
+      "READY": "Ready",
+      "WAITING_FOR_PREVIOUS": "Waiting for Op {seq} {name}",
+      "NOT_RELEASED": "Draft: it books no minutes",
+      "ON_HOLD": "On hold: it books no minutes",
+      "DONE": "Done"
+    },
+    "pieces": "Pieces",
+    "minutes": "Standard minutes",
+    "minutesValue": "{minutes} min ({each} min each)",
+    "due": "Due",
+    "materialLabel": "Material",
+    "material": {
+      "IN_STOCK": "Components, trims and protectors in stock",
+      "ON_THE_WAY": "On the way, expected {date}",
+      "MISSING": "Some material is missing",
+      "NOT_KNOWN": "The plan says nothing about it"
+    },
+    "bundles": "Bundles",
+    "hold": "On hold because",
+    "operators": "Operators",
+    "keptWithReason": "Kept with a reason",
+    "openWorkOrder": "Open work order",
+    "moveBundles": "Move bundles…",
+    "assign": "Assign operator…",
+    "earlier": "Earlier in the queue",
+    "later": "Later in the queue",
+    "back": "Back to Not assigned"
+  },
+  "assign": {
+    "title": "Assign operator",
+    "titleReassign": "Reassign this work",
+    "from": "From {person} · {place}",
+    "person": "Person",
+    "do": "Assign",
+    "doReassign": "Reassign",
+    "clockedOnly": "People clocked in.",
+    "everyone": "Everybody active at this site.",
+    "nobody": "Nobody is active at this site.",
+    "nobodyIn": "Nobody is clocked in yet.",
+    "first": "The first {count} people.",
+    "noLevel": "No level",
+    "askReason": "This goes against the site's skills rule: say why to keep it.",
+    "check": {
+      "warn": "Below the level this work asks: the site's rule lets it go on with a reason.",
+      "notQualified": "Not qualified for this work: the site's rule holds it.",
+      "notAuthorised": "Not authorised for this machine: this is never overridden."
+    },
+    "mark": {
+      "warn": "needs a reason",
+      "hold": "held"
+    },
+    "clockedOnlyLevel": "People clocked in, with their level for this operation.",
+    "everyoneLevel": "Everybody active at this site, with their level for this operation."
+  },
+  "reason": {
+    "title": "Keep with a reason",
+    "body": "Someone on this work is below the level it asks. The site's rule lets it go on with a reason, kept with the assignment.",
+    "label": "Reason",
+    "hint_one": "At least {count} character.",
+    "hint_other": "At least {count} characters.",
+    "do": "Keep with this reason"
+  },
+  "notice": {
+    "sequence": "Kept: this order puts an operation before the one it follows. The site's rule warns, the team leader sees it.",
+    "movedBundles_one": "{count} bundle moved to {place}.",
+    "movedBundles_other": "{count} bundles moved to {place}.",
+    "earlier": "{card} moved earlier in the queue.",
+    "later": "{card} moved later in the queue.",
+    "back": "{card} is back in Not assigned.",
+    "undone": "Put back.",
+    "assigned": "{person} assigned: {place}.",
+    "removed": "{person} taken off {place}."
+  },
+  "refusal": {
+    "PAST_DAY": "A day that is over stays as it was.",
+    "SITE_NAMES_NO_WORKERS": "This site's floor records name the station, not the worker: no operator is named here.",
+    "NOT_RELEASED": "Only a released work order is dispatched. Release it first.",
+    "WRONG_WORK_CENTRE": "This station does not do this operation's work.",
+    "LINE_DOES_NOT_DO": "This line has no active station for this operation's work.",
+    "STATION_INACTIVE": "This station is not active.",
+    "LINE_INACTIVE": "This line is not active.",
+    "WORKER_INACTIVE": "This person is not an active worker of the site.",
+    "ALREADY_ASSIGNED": "This person is already assigned to this work.",
+    "WHOLE_ELSEWHERE": "This operation already sits at another station: move its bundles to share it between stations.",
+    "BUNDLE_NOT_OPEN": "A bundle named is not open at this operation any more: the board was read again.",
+    "BUNDLE_TAKEN": "A bundle named is already placed: move the bundle instead.",
+    "NOT_SPLIT_OFF": "Part of a card cannot go back to Not assigned: move the whole card, or move the bundles to a station.",
+    "MOVED_ALREADY": "This card changed since you read it: the board was read again.",
+    "NOTHING_TO_MOVE": "The card is already there.",
+    "SEQUENCE_ORDER": "This order puts an operation before the one it follows, and this site keeps a strict sequence: put the earlier operation first.",
+    "STALE": "This assignment changed since you read it: the board was read again.",
+    "NOT_QUALIFIED": "Not qualified for this work: the site's rule holds it.",
+    "NOT_AUTHORISED": "Not authorised for this machine: this is never overridden.",
+    "OVERRIDE_REASON_NEEDED": "This needs a reason to go on."
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "pick": {
+      "key": "Space or M",
+      "does": "Pick up a card"
+    },
+    "arrows": {
+      "key": "← →",
+      "does": "Choose a station"
+    },
+    "drop": {
+      "key": "Space or Enter",
+      "does": "Drop it there"
+    },
+    "cancel": {
+      "key": "Esc",
+      "does": "Cancel the move"
+    },
+    "open": {
+      "key": "Enter",
+      "does": "Open the card"
+    },
+    "undo": {
+      "key": "⌘Z or Ctrl+Z",
+      "does": "Undo the last move"
+    },
+    "redo": {
+      "key": "⌘⇧Z or Ctrl+Y",
+      "does": "Redo it"
+    }
+  },
+  "print": {
+    "button": "Print",
+    "held": "Still reading the list."
+  }
+}

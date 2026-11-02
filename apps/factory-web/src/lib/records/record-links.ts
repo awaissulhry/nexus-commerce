@@ -137,6 +137,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/production/work-orders': '/production/work-orders',
   // B-W2b-58: the help calls (`?view=`, `?tile=`, `?kind=` as the API reads them).
   '/production/calls': '/production/calls',
+  // B-W2b-56: the dispatch board (`?site=`, `?line=`, `?date=`).
+  '/production/dispatch': '/production/dispatch',
   // The pages read the API's own filters from the address (`?onHold=true`, `?waitingRelease=true`, `?status=OPEN`).
   '/quality/inspections': '/quality/inspections',
   // B-W2a-68: the NCR list and board (SCR-144; `?view=`, `?q=`, `?site=`, `?mode=board`, New NCR `?new=1&from=&id=`).

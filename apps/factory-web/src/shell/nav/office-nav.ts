@@ -271,6 +271,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/scrap',
   // B-W2b-58: Production › Floor control › Help calls (SCR-142).
   '/production/calls',
+  // B-W2b-56: Production › Dispatch (SCR-138) and its print window (a new tab, no navigation row).
+  '/production/dispatch',
+  '/production/dispatch/print',
   // B-W2a-53: Plant › Maintenance — Machine requests (SCR-148) and their print for the shift, Maintenance jobs (SCR-149),
   // a job and its job sheet, Machines & tools (SCR-150), a machine and the tag sheet.
   '/plant/requests',

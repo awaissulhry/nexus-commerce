@@ -1,0 +1,326 @@
+{
+  "common": {
+    "retry": "Riprova",
+    "loading": "Caricamento…",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "undo": "Annulla modifica",
+    "dismiss": "Chiudi"
+  },
+  "noPermission": {
+    "title": "Non puoi aprire Assegnazione lavoro",
+    "body": "Per leggere il tabellone serve il permesso di vedere l'assegnazione lavoro in questo sito."
+  },
+  "error": {
+    "title": "Non è stato possibile leggere il tabellone",
+    "read": "Qualcosa è andato storto nella lettura. Riprova.",
+    "forbidden": "Non hai il permesso di farlo.",
+    "noSite": "Non c'è un sito in cui puoi leggere il tabellone.",
+    "offline": "Il server non risponde. Controlla la connessione e riprova.",
+    "write": "Non è stato possibile salvare. Riprova.",
+    "changed": "Qualcuno lo ha cambiato dopo la tua lettura: il tabellone è stato riletto.",
+    "stale": "Non è stato possibile rileggere il tabellone: ciò che vedi potrebbe non essere aggiornato.",
+    "noTarget": "Questo sito non ha linee da stampare."
+  },
+  "live": {
+    "connecting": "Connessione",
+    "live": "In diretta",
+    "offline": "Offline"
+  },
+  "head": {
+    "asOf": "Dati delle {time}",
+    "changed": "Lista cambiata alle {time}",
+    "plan": "Piano v{number}",
+    "noPlan": "Niente pubblicato",
+    "attendanceOff": "Timbratura non attiva in questo sito",
+    "site": "Sito",
+    "day": "Giorno",
+    "today": "Oggi",
+    "print": "Stampa lista di lavoro"
+  },
+  "rule": {
+    "sequence": {
+      "STRICT": "Sequenza rigida",
+      "WARN": "Sequenza con avviso",
+      "FREE": "Sequenza libera"
+    },
+    "qualification": {
+      "STRICT": "Competenze bloccanti",
+      "WARN": "Competenze con avviso",
+      "FREE": "Competenze non controllate"
+    }
+  },
+  "banner": {
+    "past": "{day} è passato: il tabellone resta com'era.",
+    "noNames": "I registri di reparto di questo sito indicano la postazione, non la persona: qui non si nomina nessun operatore."
+  },
+  "load": {
+    "title": "Carico sui minuti disponibili",
+    "over": "In coda {queued} min · disponibili {available} min · {minutes} min oltre",
+    "spare": "In coda {queued} min · disponibili {available} min · {minutes} min liberi",
+    "efficiency": "efficienza di linea {pct}%",
+    "absent_one": "assenti: {count}",
+    "absent_other": "assenti: {count}",
+    "allLines": "Mostra tutte le linee",
+    "onlyLine": "Mostra solo questa linea sul tabellone",
+    "none": {
+      "title": "Nessuna linea in questo sito",
+      "body": "Linee e postazioni si gestiscono in Pianificazione › Linee e terzisti."
+    },
+    "noMinutes": "Nessun minuto disponibile",
+    "noMinutesSentence": "{label}: nessun minuto disponibile, {booked} min in coda."
+  },
+  "source": {
+    "ATTENDANCE_OFF": "Persone pianificate: la timbratura non è attiva in questo sito",
+    "NOT_TODAY": "Persone pianificate: non è oggi",
+    "TOO_FEW": "Persone pianificate: troppo poche presenti su questa linea per mostrare il numero",
+    "BEFORE_THE_SHIFT": "Persone pianificate: il turno non è iniziato",
+    "CLOCKED_IN_one": "{count} persona timbrata",
+    "CLOCKED_IN_other": "{count} persone timbrate"
+  },
+  "board": {
+    "title": "Tabellone",
+    "label": "Tabellone assegnazione · {site} · {day}",
+    "empty": {
+      "title": "Niente in coda per questo turno",
+      "body": "Il lavoro compare qui quando il piano lo mette in questo giorno."
+    },
+    "noPlan": {
+      "title": "Ancora niente pubblicato al reparto",
+      "body": "Il tabellone legge il piano su cui lavora il reparto.",
+      "link": "Apri il tabellone di pianificazione"
+    }
+  },
+  "stations": {
+    "title": "Postazioni",
+    "none": "Questa linea non ha postazioni attive.",
+    "assign": "Assegna",
+    "reassign": "Riassegna",
+    "remove": "Togli {person} da questa postazione",
+    "printLine": "Stampa la lista della linea {line}",
+    "printStation": "Stampa la lista della postazione {station}"
+  },
+  "lane": {
+    "noOperator": "Nessun operatore",
+    "other": "Postazioni senza linea"
+  },
+  "level": {
+    "LEARNING": "In formazione",
+    "CAN_DO": "Autonomo",
+    "EXPERT": "Esperto",
+    "TRAINER": "Formatore"
+  },
+  "operator": {
+    "trainee": "Tirocinante"
+  },
+  "presence": {
+    "NOT_IN": "Non timbrato",
+    "OFF": "Non in turno oggi",
+    "LATER": "Inizia più tardi",
+    "ON_BREAK": "In pausa"
+  },
+  "kit": {
+    "tray": "Non assegnati",
+    "trayEmpty": "Tutto assegnato ✓",
+    "empty": "Niente in coda per questo turno",
+    "lanes": "Postazioni",
+    "instructions": "Per spostare una scheda, selezionala e premi Spazio o M. Le frecce sinistra e destra scelgono la postazione, Spazio o Invio la posa, Esc annulla. Invio apre la scheda, Ctrl+Z annulla l'ultimo spostamento.",
+    "targetTray": "{place}: torna tra il lavoro senza postazione.",
+    "moveLane": "Postazione",
+    "queue": "In coda",
+    "queueMinutes": "{booked} min",
+    "queueSentence": "{label}: {booked} min in coda."
+  },
+  "card": {
+    "label": "{number} · Op {seq}",
+    "operation": "Op {seq} {name}",
+    "noBundles": "ancora senza mazzi",
+    "bundles_one": "{count} mazzo",
+    "bundles_other": "{count} mazzi",
+    "pieces_one": "{count} pz",
+    "pieces_other": "{count} pz",
+    "due": "consegna {date}"
+  },
+  "mark": {
+    "rush": "Urgente",
+    "draft": "Bozza · non prenota",
+    "onHold": "In attesa",
+    "sequenceHeld": "Prima l'Op {seq}",
+    "sequenceWarn": "Op {seq} non ancora finita",
+    "waiting": "Aspetta l'Op {seq}",
+    "reassign": "Riassegna",
+    "material": {
+      "IN_STOCK": "Materiale pronto",
+      "ON_THE_WAY": "Materiale in arrivo",
+      "expected": "Materiale {date}",
+      "MISSING": "Materiale mancante"
+    }
+  },
+  "held": {
+    "draft": "Una bozza non si assegna: prima rilascia l'ordine di produzione.",
+    "workCentre": "{station} non fa il lavoro di questa operazione.",
+    "readOnly": "Puoi guardare questo tabellone, non cambiarlo (production.dispatch.manage).",
+    "past": "Un giorno passato resta com'era.",
+    "offline": "Offline: non si può spostare nulla finché la connessione non torna.",
+    "noBundles": "Questa scheda non ha mazzi da scegliere.",
+    "pickBundles": "Scegli almeno un mazzo.",
+    "pickPlace": "Scegli dove vanno.",
+    "noLane": "Solo il lavoro in postazione ha un ordine.",
+    "first": "È la prima in coda.",
+    "last": "È l'ultima in coda.",
+    "rushFirst": "Il lavoro urgente resta per primo.",
+    "pickPerson": "Scegli una persona.",
+    "reason": "Di' il perché in poche parole.",
+    "busy": "Un momento: si sta salvando l'ultima modifica.",
+    "loading": "Lettura in corso.",
+    "noLines": "Questo sito non ha linee da stampare.",
+    "alreadyNotAssigned": "È già in Non assegnati."
+  },
+  "move": {
+    "title": "Sposta mazzi",
+    "bundles": "Mazzi",
+    "all": "Tutti",
+    "none": "Nessuno",
+    "bundle": "{code} · {count} pz",
+    "to": "Verso",
+    "pick": "Scegli una linea o una postazione",
+    "do_one": "Sposta {count} mazzo",
+    "do_other": "Sposta {count} mazzi",
+    "toLine": "Linea {line} (la sua prima postazione per questo lavoro)",
+    "toStation": "{station} · {name}"
+  },
+  "detail": {
+    "place": "Dove",
+    "stateLabel": "Stato",
+    "state": {
+      "READY": "Pronto",
+      "WAITING_FOR_PREVIOUS": "Aspetta l'Op {seq} {name}",
+      "NOT_RELEASED": "Bozza: non prenota minuti",
+      "ON_HOLD": "In attesa: non prenota minuti",
+      "DONE": "Fatto"
+    },
+    "pieces": "Pezzi",
+    "minutes": "Minuti standard",
+    "minutesValue": "{minutes} min ({each} min l'uno)",
+    "due": "Consegna",
+    "materialLabel": "Materiale",
+    "material": {
+      "IN_STOCK": "Componenti, accessori e protezioni a magazzino",
+      "ON_THE_WAY": "In arrivo, previsto {date}",
+      "MISSING": "Manca del materiale",
+      "NOT_KNOWN": "Il piano non dice nulla"
+    },
+    "bundles": "Mazzi",
+    "hold": "In attesa perché",
+    "operators": "Operatori",
+    "keptWithReason": "Tenuto con un motivo",
+    "openWorkOrder": "Apri ordine di produzione",
+    "moveBundles": "Sposta mazzi…",
+    "assign": "Assegna operatore…",
+    "earlier": "Prima nella coda",
+    "later": "Dopo nella coda",
+    "back": "Torna in Non assegnati"
+  },
+  "assign": {
+    "title": "Assegna operatore",
+    "titleReassign": "Riassegna questo lavoro",
+    "from": "Da {person} · {place}",
+    "person": "Persona",
+    "do": "Assegna",
+    "doReassign": "Riassegna",
+    "clockedOnly": "Persone timbrate.",
+    "everyone": "Tutte le persone attive in questo sito.",
+    "nobody": "Nessuna persona attiva in questo sito.",
+    "nobodyIn": "Ancora nessuno ha timbrato.",
+    "first": "Le prime {count} persone.",
+    "noLevel": "Nessun livello",
+    "askReason": "Questo va contro la regola sulle competenze del sito: di' il perché per tenerlo.",
+    "check": {
+      "warn": "Sotto il livello che questo lavoro chiede: la regola del sito lo lascia proseguire con un motivo.",
+      "notQualified": "Non qualificato per questo lavoro: la regola del sito lo blocca.",
+      "notAuthorised": "Non autorizzato per questa macchina: non si può mai forzare."
+    },
+    "mark": {
+      "warn": "chiede un motivo",
+      "hold": "bloccato"
+    },
+    "clockedOnlyLevel": "Persone timbrate, con il loro livello per questa operazione.",
+    "everyoneLevel": "Tutte le persone attive in questo sito, con il loro livello per questa operazione."
+  },
+  "reason": {
+    "title": "Tieni con un motivo",
+    "body": "Qualcuno su questo lavoro è sotto il livello richiesto. La regola del sito lo lascia proseguire con un motivo, che resta sull'assegnazione.",
+    "label": "Motivo",
+    "hint_one": "Almeno {count} carattere.",
+    "hint_other": "Almeno {count} caratteri.",
+    "do": "Tieni con questo motivo"
+  },
+  "notice": {
+    "sequence": "Tenuto: questo ordine mette un'operazione prima di quella che segue. La regola del sito avvisa, il caposquadra lo vede.",
+    "movedBundles_one": "{count} mazzo spostato in {place}.",
+    "movedBundles_other": "{count} mazzi spostati in {place}.",
+    "earlier": "{card} spostata prima nella coda.",
+    "later": "{card} spostata dopo nella coda.",
+    "back": "{card} è tornata in Non assegnati.",
+    "undone": "Rimesso com'era.",
+    "assigned": "{person} assegnato: {place}.",
+    "removed": "{person} tolto da {place}."
+  },
+  "refusal": {
+    "PAST_DAY": "Un giorno passato resta com'era.",
+    "SITE_NAMES_NO_WORKERS": "I registri di reparto di questo sito indicano la postazione, non la persona: qui non si nomina nessun operatore.",
+    "NOT_RELEASED": "Si assegna solo un ordine rilasciato. Rilascialo prima.",
+    "WRONG_WORK_CENTRE": "Questa postazione non fa il lavoro di questa operazione.",
+    "LINE_DOES_NOT_DO": "Questa linea non ha postazioni attive per il lavoro di questa operazione.",
+    "STATION_INACTIVE": "Questa postazione non è attiva.",
+    "LINE_INACTIVE": "Questa linea non è attiva.",
+    "WORKER_INACTIVE": "Questa persona non è un operatore attivo del sito.",
+    "ALREADY_ASSIGNED": "Questa persona è già assegnata a questo lavoro.",
+    "WHOLE_ELSEWHERE": "Questa operazione è già in un'altra postazione: sposta i suoi mazzi per dividerla tra le postazioni.",
+    "BUNDLE_NOT_OPEN": "Un mazzo indicato non è più aperto a questa operazione: il tabellone è stato riletto.",
+    "BUNDLE_TAKEN": "Un mazzo indicato ha già un posto: sposta il mazzo.",
+    "NOT_SPLIT_OFF": "Una parte di scheda non può tornare in Non assegnati: sposta tutta la scheda, oppure sposta i mazzi in una postazione.",
+    "MOVED_ALREADY": "Questa scheda è cambiata dopo la tua lettura: il tabellone è stato riletto.",
+    "NOTHING_TO_MOVE": "La scheda è già lì.",
+    "SEQUENCE_ORDER": "Questo ordine mette un'operazione prima di quella che segue, e questo sito tiene una sequenza rigida: metti prima l'operazione precedente.",
+    "STALE": "Questa assegnazione è cambiata dopo la tua lettura: il tabellone è stato riletto.",
+    "NOT_QUALIFIED": "Non qualificato per questo lavoro: la regola del sito lo blocca.",
+    "NOT_AUTHORISED": "Non autorizzato per questa macchina: non si può mai forzare.",
+    "OVERRIDE_REASON_NEEDED": "Per proseguire serve un motivo."
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "pick": {
+      "key": "Spazio o M",
+      "does": "Prendi una scheda"
+    },
+    "arrows": {
+      "key": "← →",
+      "does": "Scegli la postazione"
+    },
+    "drop": {
+      "key": "Spazio o Invio",
+      "does": "Posala lì"
+    },
+    "cancel": {
+      "key": "Esc",
+      "does": "Annulla lo spostamento"
+    },
+    "open": {
+      "key": "Invio",
+      "does": "Apri la scheda"
+    },
+    "undo": {
+      "key": "⌘Z o Ctrl+Z",
+      "does": "Annulla l'ultimo spostamento"
+    },
+    "redo": {
+      "key": "⌘⇧Z o Ctrl+Y",
+      "does": "Rifallo"
+    }
+  },
+  "print": {
+    "button": "Stampa",
+    "held": "Lettura della lista in corso."
+  }
+}
