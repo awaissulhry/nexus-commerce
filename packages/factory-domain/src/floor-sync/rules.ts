@@ -223,6 +223,9 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       return { code: text(p.stepCode, 40) }
     case 'production.floorNote.post':
       return { code: text(p.tileCode, 40), ...(workOrderId ? { workOrderId } : {}) }
+    // B-W2b-49: the line and the shift; never a word of the note.
+    case 'andon.handover.write':
+      return { code: text(p.shiftLabel, 40), target: text(p.lineId, 40) }
   }
 }
 
