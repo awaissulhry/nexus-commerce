@@ -33,7 +33,7 @@ import {
   type Sharing,
   type Viewer,
 } from './rules'
-import { assertGenericPath, type UploadPath } from './owned'
+import { assertGenericPath, readsThroughModule, type UploadPath } from './owned'
 import type { FilesRuntime } from './service'
 import { RetainedFileError } from './store'
 import { heldForScan, waitsForScan } from './scan/rules'
@@ -198,11 +198,14 @@ async function readRow(caller: CommandCaller, fileId: string): Promise<Row> {
 }
 
 /** The file as the caller may see it: anything it may not see (another audience's, out of its scope) is not found. */
-async function readVisible(caller: CommandCaller, fileId: string): Promise<Row> {
+async function readVisible(caller: CommandCaller, fileId: string, path: UploadPath = {}): Promise<Row> {
   const context = contextOf(caller)
   const row = await readRow(caller, fileId)
   const office = context.audience === 'office'
-  if (!audienceSees(viewerOf(context), row) || (!office && row.status !== 'AVAILABLE') || !can(actorOf(context), FILES_READ, scopeOf(context, row))) {
+  // B-W2b-48: a record type read through its module: its module asked its own permission instead of files.read.
+  const throughModule = readsThroughModule(row.recordType)
+  if (throughModule && !path.viaModule) throw new NotFoundError('File not found.')
+  if (!audienceSees(viewerOf(context), row) || (!office && row.status !== 'AVAILABLE') || (!throughModule && !can(actorOf(context), FILES_READ, scopeOf(context, row)))) {
     throw new NotFoundError('File not found.')
   }
   return row
@@ -628,9 +631,9 @@ export function systemCallerOf(request: FastifyRequest): (tenantId: string) => C
 }
 
 /** A presigned GET for a file the caller may see (A1 §3.6: 60 seconds, always an attachment). */
-export async function downloadFile(runtime: FilesRuntime, callers: Callers, fileId: string) {
+export async function downloadFile(runtime: FilesRuntime, callers: Callers, fileId: string, path: UploadPath = {}) {
   const context = contextOf(callers.caller)
-  const row = await readVisible(callers.caller, fileId)
+  const row = await readVisible(callers.caller, fileId, path)
   if (row.status !== 'AVAILABLE') throw new InvalidStateError(`This file is ${row.status}; only an available file can be downloaded.`)
   const storeCaller = context.audience === 'office' ? callers.caller : callers.system(tenantOf(context))
   const download = await storeCall(() =>
@@ -655,6 +658,7 @@ const AUDIENCE_FLAG: Partial<Record<RequestContext['audience'], FileAudience>> =
 export async function listFiles(caller: CommandCaller, record: { readonly recordType: string; readonly recordId: string }): Promise<FileView[]> {
   const context = contextOf(caller)
   if (context.audience === 'link' && (context.record.type !== record.recordType || context.record.id !== record.recordId)) return []
+  if (readsThroughModule(record.recordType)) return []
   const columns: ScopeColumns = {
     company: { field: 'companyId', nullable: true },
     ...(context.audience === 'floor' ? { site: 'floorSiteId' } : {}),
