@@ -31,6 +31,7 @@ import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
  * files.manage over the work order's company and site (OFFICE + FLOOR, as the dock's photos), and the note in a command of the
  * tenant's system caller, keyed `<device>.<clientEventId>`. The author is the worker where the site names workers (once they
  * acknowledged the notice, as any floor record), else the station: a site that records stations names no person here either.
+ * A comment written on the floor is for the floor (`forFloor`, B-W2b-F5): the other stations read it on My work.
  */
 
 const keyOf = (deviceId: string, clientEventId: string) => `${deviceId}.${clientEventId}`
@@ -130,7 +131,7 @@ export async function postFloorNote(caller: CommandCaller, workOrderId: string, 
       if (thread.status !== 'OPEN') throw new InvalidStateError("This work order's thread is closed in the office: the note cannot be posted.")
       const issues = await attachmentProblems(tools.tx, tools.context, thread, fileIds, 'OFFICE')
       if (issues.length > 0) throw new ValidationError('The note is not valid.', issues)
-      const message = await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author, bodyText, attachments: fileIds })
+      const message = await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author, bodyText, attachments: fileIds, forFloor: true })
       tools.audit({ action: 'production.postFloorNote', recordType: 'WorkOrder', recordId: workOrder.id, companyId: workOrder.companyId, siteId: workOrder.siteId, after: { messageId: message.id, tileCode: input.tileCode, bundleId: place.bundle?.id ?? null, operationId: place.operation?.id ?? null, files: fileIds.length, deviceId: context.deviceId, stationId: place.stationId, workerId: place.scanSubject === 'WORKER' ? context.actorId : null } })
       return { messageId: message.id, threadId: thread.id, files: fileIds.length }
     },

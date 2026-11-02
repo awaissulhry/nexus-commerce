@@ -10,6 +10,7 @@ import {
   MAX_BODY_LENGTH,
   MAX_MENTIONS,
   newReplyToken,
+  noteMayGoToFloor,
   noteProblems,
   REPLY_TOKEN_LENGTH,
   threadMachine,
@@ -70,6 +71,13 @@ describe('a note', () => {
     const long = excerptOf('word '.repeat(100))
     expect(long).toHaveLength(280)
     expect(long.endsWith('…')).toBe(true)
+  })
+})
+
+describe('a note for the floor (B-W2b-F5)', () => {
+  it('belongs to a work order, the one record with tablets working on it', () => {
+    expect(noteMayGoToFloor('WorkOrder')).toBe(true)
+    for (const type of ['Quote', 'SalesOrder', 'PurchaseOrder', 'workorder']) expect(noteMayGoToFloor(type), type).toBe(false)
   })
 })
 

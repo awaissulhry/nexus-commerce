@@ -17,16 +17,17 @@ import { dispatchWorld } from './world'
  *
  *   my work orders   what the tablet's station queue holds and what the day's assignments name the signed-in person for,
  *                    the two lists of My work, at the tablet's own site
- *   a message        an internal note written in the app on the work order's thread: the office's, or another station's
- *                    from the floor's comment (B-W2b-47 writes those on the same thread). Never a mail
+ *   a message        an internal note written in the app on the work order's thread and marked for the floor (B-W2b-F5): the
+ *                    office's, ticked "For the floor" by its writer, or another station's comment (B-W2b-47 writes those
+ *                    there, marked). An office note with no tick stays in the office. Never a mail
  *   open             the thread is open, the note is at most 14 days old, and it is not the reader's own; whether it was
  *                    read stays on the tablet (nothing here records who read what: Statuto dei Lavoratori art. 4)
  *
  * The floor role reads neither threads nor messages, so the list is read through the tenant's system view after the floor's
  * checks (floor.work at the device's site, work orders of that site only), as the material flag is. What goes back is the
  * work order, where the note comes from, its words and its time: never a name, never a file, and no more than a tablet can
- * show. Words that may be cut say so. There is no money field; what a person typed in a note is theirs, which is why the
- * office's composer says a work order's notes reach the tablets (record-panels, B-W2b-71).
+ * show. Words that may be cut say so. There is no money field, and nothing reads the words of a note: that is why a person
+ * chooses, note by note, and the composer's tick says no prices (the Owner's rule; record-panels).
  */
 
 export const FLOOR_MESSAGES = Object.freeze({
@@ -79,6 +80,7 @@ export async function myWorkMessages(caller: CommandCaller) {
         threadId: { in: threads.map((thread) => thread.id) },
         direction: 'INTERNAL_NOTE',
         channel: 'APP',
+        forFloor: true,
         at: { gte: new Date(now.getTime() - FLOOR_MESSAGES.days * DAY_MS) },
         bodyText: { not: '' },
         // Not the reader's own comment, nor their station's at a site that names no worker (B-W2b-47: the station's code).

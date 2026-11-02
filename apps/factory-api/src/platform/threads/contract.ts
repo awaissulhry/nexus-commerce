@@ -61,6 +61,8 @@ export const messageView = output({
   }),
   /** Office only: a floor worker wrote it and the site's PERFORMANCE gate keeps back who (no id, no name). */
   authorHidden: z.boolean().optional(),
+  /** Office only: the tablets read this note too (B-W2b-F5). */
+  forFloor: z.boolean().optional(),
   body: z.string(),
   /** The sanitised HTML of an inbound mail; null otherwise. */
   bodyHtml: z.string().nullable(),
@@ -93,6 +95,8 @@ export const postNoteContract = defineContract({
     mentions: z.array(id()).max(MAX_MENTIONS).optional(),
     /** Files of this record to attach (AVAILABLE, and readable by the writer). */
     attachments: z.array(id()).max(MAX_ATTACHMENTS).optional(),
+    /** "For the floor": the tablets working on the work order read it too. A work order's note only; default false, it stays in the office. */
+    forFloor: z.boolean().optional(),
   }),
   response: { 201: output({ thread: threadView, message: messageView }) },
 })

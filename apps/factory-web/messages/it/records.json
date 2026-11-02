@@ -21,6 +21,7 @@
   "notice": {
     "noteAdded": "Nota aggiunta. La vede solo l'ufficio.",
     "noteAddedFloor": "Nota aggiunta. La vedono l'ufficio e i tablet che lavorano quest'ordine.",
+    "floorRefused": "Non è stato salvato nulla: solo una nota su un ordine di lavoro può andare al reparto.",
     "emailQueued": "Email in coda. Parte tra un momento; il suo stato compare sul messaggio.",
     "closed": "Conversazione chiusa. Nessuno può scrivere finché non viene riaperta.",
     "reopened": "Conversazione riaperta.",
@@ -66,7 +67,7 @@
     },
     "rule": {
       "note": "Una nota interna la vede solo l'ufficio: {party} non la vede mai.",
-      "noteFloor": "Una nota interna la vedono l'ufficio e i tablet che lavorano quest'ordine: {party} non la vede mai.",
+      "noteFloor": "Questa nota la vedono l'ufficio e i tablet che lavorano quest'ordine: {party} non la vede mai.",
       "noParty": "il cliente o il fornitore",
       "email": "Parte dall'indirizzo della tua azienda, a tuo nome. {party} la vede e la risposta torna in questa conversazione."
     },
@@ -77,6 +78,10 @@
     "send": {
       "note": "Aggiungi la nota",
       "email": "Invia l'email"
+    },
+    "forFloor": {
+      "label": "Per il reparto",
+      "hint": "La leggono i tablet che lavorano quest'ordine. Niente prezzi."
     },
     "to": "A",
     "toHint": "Indirizzi separati da virgole.",
@@ -142,6 +147,7 @@
       "COMPLAINED": "Segnalata come spam",
       "FAILED": "Non inviata"
     },
+    "forFloor": "Per il reparto",
     "emailTo": "A {to} · {subject}",
     "mentioned": "Menzionati: {names}",
     "attachments": "File allegati"

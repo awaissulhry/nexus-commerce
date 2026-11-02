@@ -77,6 +77,17 @@
   display: none;
 }
 
+.fw-rp-floor-tick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-rp-floor-tick p {
+  margin: 0;
+}
+
 .fw-rp-checklist {
   display: flex;
   flex-direction: column;

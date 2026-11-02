@@ -141,6 +141,13 @@ const TIMELINE: PanelTimelineEntry[] = [
   },
 ]
 
+/** A work order's thread (B-W2b-F5): a note that stayed in the office, one for the tablets, and a comment from the floor. */
+const WORK_ORDER_MESSAGES: PanelMessage[] = [
+  message(13, { direction: 'INTERNAL_NOTE', at: at(28, 11, 40), authorName: 'Bea Esempio', body: 'Usare il filo rinforzato su questo ordine.', forFloor: true }),
+  message(12, { direction: 'INTERNAL_NOTE', at: at(28, 10, 30), authorKind: 'WORKER', authorName: 'Carlo Prova', body: 'Cucitura diversa (B-000123 a Op 20): manica sinistra', forFloor: true }),
+  message(11, { direction: 'INTERNAL_NOTE', at: at(28, 9, 15), authorName: 'Bea Esempio', body: 'Il cliente ha chiesto di anticipare: ne parlo domani con la produzione.' }),
+]
+
 const base: RecordPanelsViewModel = {
   record: RECORD,
   title: 'Certificato 0000-17092-A',
@@ -180,6 +187,12 @@ const FOLLOWERS: PanelFollowers = {
   busy: false,
 }
 const w2a = { ...base, tasks: tasksOf(), followers: FOLLOWERS }
+const workOrder: RecordPanelsViewModel = {
+  ...base,
+  record: { ...RECORD, type: 'WorkOrder', id: '0190f0e2-5555-7000-8000-000000000002' },
+  title: 'Ordine di lavoro WO-000123',
+  messages: { items: WORK_ORDER_MESSAGES, more: false },
+}
 
 export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
   screen: 'SCR-006',
@@ -334,6 +347,16 @@ export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
       id: 'note-added',
       label: 'Note added',
       model: { ...base, notice: { key: 'notice.noteAdded', tone: 'success' } },
+    },
+    {
+      id: 'work-order-note',
+      label: 'Work order: the tick For the floor, off: only the office sees the note (B-W2b-F5)',
+      model: { ...workOrder, notice: { key: 'notice.noteAdded', tone: 'success' } },
+    },
+    {
+      id: 'work-order-note-floor',
+      label: 'Work order: the tick For the floor, on: the tablets see it too (B-W2b-F5)',
+      model: { ...workOrder, composerForFloor: true, composerText: 'Controllare la taglia prima di cucire.', notice: { key: 'notice.noteAddedFloor', tone: 'success' } },
     },
     {
       id: 'loading',
