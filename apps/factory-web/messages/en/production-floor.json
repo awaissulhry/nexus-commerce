@@ -1,0 +1,161 @@
+{
+  "loading": "Loading…",
+  "retry": "Try again",
+  "saving": "Saving…",
+  "cancel": "Cancel",
+  "close": "Close",
+  "error": {
+    "read": "The read failed. Try again.",
+    "forbidden": "You have no access to this part of the floor.",
+    "offline": "No connection to the server. Try again."
+  },
+  "tile": {
+    "stuck_one": "Bundles without a scan for {count} h",
+    "stuck_other": "Bundles without a scan for {count} h",
+    "stuckAny": "Bundles without a scan",
+    "calls": "Open help calls"
+  },
+  "pace": {
+    "ON_PACE": "On pace",
+    "BEHIND": "Behind",
+    "NO_TARGET": "No target"
+  },
+  "hourly": {
+    "title": "Hour by hour",
+    "hint": "Pieces per hour against the line’s target",
+    "tip": "Targets are line targets, never per person (pacing rule: Civil Code art. 2100). Only line totals are shown (Statuto dei Lavoratori art. 4).",
+    "failed": "Hour by hour could not be read",
+    "none": {
+      "title": "No line at this site",
+      "body": "Add a line in the plant’s set-up to see its hours."
+    },
+    "lineLabel": "Hour by hour, line {line}",
+    "graphLabel": "Pieces per hour against the target, line {line}",
+    "done": "{done} done · {target} target so far · {day} today",
+    "doneNoTarget": "{done} done today · no target set",
+    "noHours": "No working hours today.",
+    "noTarget": "No target set for today: the bars show the pieces only.",
+    "pieces": "Pieces",
+    "met": "Target met",
+    "short": "Short",
+    "target": "Target",
+    "ofTarget": "{done} of {target}",
+    "noReason": "No reason given yet",
+    "calls_one": "{count} help call in the hour",
+    "calls_other": "{count} help calls in the hour",
+    "running": "This hour"
+  },
+  "reason": {
+    "title": "Why was {hour} short?",
+    "add": "Add a reason",
+    "change": "Change the reason",
+    "code": "Reason",
+    "pick": "Choose a reason…",
+    "note": "Note",
+    "save": "Save reason",
+    "held": {
+      "code": "Choose a reason first.",
+      "note": "This reason needs a note."
+    }
+  },
+  "refusal": {
+    "HOUR_NOT_OVER": "This hour is not over yet.",
+    "NOT_SHORT": "This hour met its target.",
+    "CODE_NOT_LISTED": "This reason is no longer on the list.",
+    "NOTE_NEEDED": "This reason needs a note.",
+    "STALE": "Someone changed this in the meantime.",
+    "PAST_DAY": "A past day’s targets are history.",
+    "REASON_GIVEN": "This hour’s reason was given, so its target stays.",
+    "NOT_LINE_OF_SITE": "This line is at another site."
+  },
+  "fix": {
+    "HOUR_NOT_OVER": "Give the reason once the hour has ended.",
+    "NOT_SHORT": "No reason is needed.",
+    "CODE_NOT_LISTED": "Choose another reason.",
+    "NOTE_NEEDED": "Add a few words.",
+    "STALE": "Read the new figures and try again.",
+    "PAST_DAY": "Set today’s or a later day’s targets.",
+    "REASON_GIVEN": "Change its pieces instead of removing it.",
+    "NOT_LINE_OF_SITE": "Choose a line of this site."
+  },
+  "targets": {
+    "open": "Set targets",
+    "title": "Hourly targets · {line}",
+    "subtitle": "Today’s pieces per hour for the whole line, never per person. Leave a row empty for no target.",
+    "save": "Save targets",
+    "noHours": "This line has no working hours today.",
+    "hour": "Target for {hour}",
+    "minutes_one": "{count} working minute",
+    "minutes_other": "{count} working minutes",
+    "noWork": "No working time",
+    "total_one": "{count} piece today",
+    "total_other": "{count} pieces today",
+    "held": {
+      "number": "Type whole pieces, or leave the row empty.",
+      "reasonGiven": "An hour with a reason keeps its target: change its pieces instead.",
+      "nothing": "Nothing changed yet."
+    }
+  },
+  "heat": {
+    "title": "Where bundles pile up",
+    "hint": "Bundles waiting per line and operation; darker means more, an outline marks a pile",
+    "failed": "The heat map could not be read",
+    "none": "No bundle is waiting at an operation.",
+    "noLine": "No line",
+    "cell_one": "{place}: {count} bundle, {pieces} pieces",
+    "cell_other": "{place}: {count} bundles, {pieces} pieces",
+    "cellEmpty": "{place}: nothing waiting",
+    "cellStuck_one": "{count} stuck",
+    "cellStuck_other": "{count} stuck",
+    "pile": "pile",
+    "piles": "Piles: {places}",
+    "pilePlace_one": "{line} · {operation} ({count} bundle)",
+    "pilePlace_other": "{line} · {operation} ({count} bundles)",
+    "noPile": "No pile above a line’s usual size.",
+    "capped": "More open bundles than one read follows: pick a site or a line."
+  },
+  "cell": {
+    "title": "Bundles at {operation}",
+    "open": "Open bundles",
+    "noScan": "Not scanned yet"
+  },
+  "col": {
+    "bundle": "Bundle",
+    "workOrder": "Work order",
+    "size": "Size",
+    "pieces": "Pieces",
+    "lastPlace": "Last place",
+    "lastScan": "Last scan",
+    "station": "Station",
+    "hours": "Since the last scan"
+  },
+  "stuck": {
+    "title": "Stuck bundles",
+    "hint": "No scan for longer than the site’s limit, in working hours",
+    "capped": "More open bundles than one read follows: pick a site.",
+    "failed": "The stuck bundles could not be read",
+    "none": "None ✓",
+    "neverScanned": "Not scanned yet",
+    "count_one": "{count} bundle",
+    "count_other": "{count} bundles",
+    "hours": "{hours} h",
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)"
+  },
+  "tv": {
+    "open": "Open line TV",
+    "openNewTab": "Open line TV in a new tab",
+    "pick": "Open line TV: choose a line",
+    "held": "No line to show yet",
+    "line": "Line",
+    "previous": "Previous view",
+    "next": "Next view",
+    "pause": "Pause",
+    "resume": "Resume",
+    "privacy": "Line totals only, as on the wall",
+    "noLines": {
+      "title": "No line to show",
+      "body": "Add a line in the plant’s set-up first."
+    }
+  }
+}

@@ -67,6 +67,7 @@ const SESSIONS: Record<string, SessionContext> = {
   hr: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(HR)] },
   hr2: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(HR)] },
   viewer: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(['people.attendance.view'])] },
+  floorNow: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(['workorders.view'])] },
   lead: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(['people.attendance.rollcall'])] },
   companyB: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(HR, [T.companyB])] },
   // The seed member's account: E2's record (a decision about E2 is their own).
@@ -390,5 +391,27 @@ describe('absence codes with their LUL code (MES-228)', () => {
     const p5 = await dayRow(P.P5!)
     expect(pathsOf(await no('hr', 'POST', `${dayUrl(p5.id)}/fix`, { version: p5.version, action: { kind: 'SET_ABSENCE', codeId: created.id, minutes: 60 }, reason: 'A visit in the morning' }, 409))).toContain('refusal/CODE_ARCHIVED')
     expect((await outbox('absence_code.changed')).map(({ payload }) => payload.change)).toEqual(expect.arrayContaining(['STANDARD', 'CREATED', 'EDITED', 'ARCHIVED']))
+  })
+})
+
+describe('Floor now’s line cards (B-W2b-66, design "people absent: a number only")', () => {
+  const lineCard = async () => (await ok('floorNow', 'GET', `/production/reports/lines?siteId=${T.siteA1}`)).lines.find((line: Json) => line.id === T.lineL1)
+
+  it('says how many people of a line are absent today and nothing else; a line under the minimum group says nothing', async () => {
+    const today = businessDate(new Date(), ROME)
+    const code = (await admin<{ id: string }>(`SELECT id FROM "AbsenceCode" WHERE "tenantId" = $1 AND code = 'MAL' LIMIT 1`, [T.tenant]))[0]!.id
+    const before = (await lineCard()).absent as number
+    await admin(`INSERT INTO "AbsenceEntry" (id, "tenantId", "companyId", "employeeId", date, "codeId", minutes) VALUES ($1, $2, $3, $4, $5::date, $6, 480)`, [newId(), T.tenant, T.companyA, P.P2, today, code])
+    const card = await lineCard()
+    expect(card.absent).toBe(before + 1)
+    // A number only: no code, no minutes, nobody.
+    expect(JSON.stringify(card)).not.toContain('made up')
+    expect(keysOf(card)).not.toContain('employeeId')
+    // Under the company's minimum group (three): no number at all.
+    const home = (await admin<{ id: string }>(`SELECT id FROM "Employee" WHERE "homeLineId" = $1`, [T.lineL1])).map((row) => row.id)
+    const moved = home.filter((id) => id !== P.P2).slice(1)
+    await admin(`UPDATE "Employee" SET "homeLineId" = NULL WHERE id = ANY($1::uuid[])`, [moved])
+    expect((await lineCard()).absent).toBeNull()
+    await admin(`UPDATE "Employee" SET "homeLineId" = $1 WHERE id = ANY($2::uuid[])`, [T.lineL1, moved])
   })
 })

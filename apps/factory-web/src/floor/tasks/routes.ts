@@ -36,7 +36,7 @@ export function taskOfTile(key: TileKey): TaskKey | null {
 }
 
 /** The catalogues the floor app loads (the frame's and each task's). */
-export const FLOOR_NAMESPACES = ['floor', 'floor-tasks', 'floor-scans', 'floor-issue', 'floor-cutting', 'floor-bundles', 'floor-final', 'floor-receive', 'floor-pack', 'floor-labels', 'floor-mywork', 'floor-reasons', 'reason-kit', 'floor-machine', /* B-W2a-76 */ 'floor-returns-in', 'floor-kits'] as const
+export const FLOOR_NAMESPACES = ['floor', 'floor-tasks', 'floor-scans', 'floor-issue', 'floor-cutting', 'floor-bundles', 'floor-final', 'floor-receive', 'floor-pack', 'floor-labels', 'floor-mywork', 'floor-reasons', 'reason-kit', 'floor-machine', /* B-W2a-76 */ 'floor-returns-in', 'floor-kits', /* B-W2b-66 */ 'line-board'] as const
 
 /**
  * The task a code scanned on Home opens at this station, given the tiles the person has (a tile = mode AND permission),

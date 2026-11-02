@@ -1,0 +1,146 @@
+/* Floor now's W2b sections (SCR-073). Layout and semantic tokens only; a section fills the main area. */
+.fw-fn-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+}
+.fw-fn-lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  gap: var(--nds-space-16);
+}
+.fw-fn-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md, 8px);
+}
+.fw-fn-line-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+}
+.fw-fn-graph {
+  margin: 0;
+  min-width: 0;
+}
+.fw-fn-missed {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-fn-miss {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  padding: var(--nds-space-6) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-fn-miss-hour {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.fw-fn-miss-figures {
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-muted);
+}
+.fw-fn-miss-why {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fw-fn-reason-open {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--nds-link, var(--nds-primary));
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.fw-fn-reason-open:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+.fw-fn-reason {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  width: min(320px, 80vw);
+  padding: var(--nds-space-4);
+}
+.fw-fn-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-fn-refused {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+.fw-fn-heat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-fn-heat-map {
+  min-width: 0;
+  overflow-x: auto;
+}
+.fw-fn-targets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.fw-fn-target {
+  display: grid;
+  grid-template-columns: 110px 96px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+.fw-fn-target-total {
+  margin: var(--nds-space-4) 0 0;
+  font-weight: 600;
+}
+.fw-fn-tv {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* the Office's preview of a line's TV */
+.fw-fn-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-fn-preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+@media (max-width: 720px) {
+  .fw-fn-miss {
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+  }
+  .fw-fn-miss-why {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

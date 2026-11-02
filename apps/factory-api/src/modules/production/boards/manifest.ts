@@ -16,6 +16,7 @@ export const manifest = defineManifest({
   'POST /production/boards/targets/:targetId/reason': { audiences: ['office', 'floor'], permission: 'production.boards.reason', scope: 'record' },
   'GET /production/boards/hourly': { audiences: ['office', 'floor'], permission: 'production.boards.view', scope: 'record' },
   'GET /production/boards/heatmap': { audiences: ['office'], permission: 'production.boards.view', scope: 'record' },
+  'GET /production/boards/heatmap/cell': { audiences: ['office'], permission: 'production.boards.view', scope: 'record' },
   'GET /production/boards/tv': { audiences: ['office', 'floor'], permission: 'production.boards.view', scope: 'record' },
   'GET /production/boards/display': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
 })

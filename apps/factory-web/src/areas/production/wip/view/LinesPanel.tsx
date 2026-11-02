@@ -25,7 +25,7 @@ export interface LinesPanelActions {
  * per line with its state word (Running, Waiting, No work), the garments through its last operation today against what
  * the published plan puts through it today (ProgressBar with the numbers), the work orders on it, the operation where most
  * pieces wait, and per station only "nobody signed in" and the machines down. A card sets the page's line scope (again:
- * all lines); [ and ] step through the lines. Help calls and absences (a number) come in W2b. Never a person.
+ * all lines); [ and ] step through the lines. B-W2b-66: the open help calls and the people absent (a number only). Never a person.
  */
 export function LinesPanel({ model, actions }: { model: LinesPanelModel; actions?: LinesPanelActions }) {
   return (
@@ -99,6 +99,13 @@ function LineCardView({ card, pressed, showSite, onPress }: { card: LineCard; pr
       </span>
       <span className="fw-prr-muted">{card.workOrders.length === 0 ? t('lines.noWorkOrders') : t('lines.workOrders', { count: card.workOrders.length, numbers: shown.join(', ') + (more > 0 ? ` +${more}` : '') })}</span>
       {card.bottleneck && <span className="fw-prr-muted">{t('lines.bottleneck', { seq: card.bottleneck.seq, operation: card.bottleneck.code, waiting: card.bottleneck.waiting, number: card.bottleneck.workOrderNumber })}</span>}
+      {/* B-W2b-66: open help calls, and the people absent as a number only. */}
+      {card.openCalls > 0 && (
+        <span className="fw-prr-inline">
+          <Tag tone="warning">{t('lines.openCalls', { count: card.openCalls })}</Tag>
+        </span>
+      )}
+      {card.absent !== null && <span className="fw-prr-muted">{t('lines.absent', { count: card.absent })}</span>}
       {card.stations.length === 0 ? (
         <span className="fw-prr-muted">{t('lines.noStations')}</span>
       ) : (
