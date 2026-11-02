@@ -1,10 +1,14 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { CircleAlert, ClipboardList, CloudOff, Factory, Hash, Layers, ListTodo, Package, PackageOpen, ScanLine, ScrollText, Scissors, ShieldCheck, Shirt, Tag, Undo2, UserRoundCheck, Wrench } from 'lucide-react'
+import { CircleAlert, ClipboardList, CloudOff, Factory, Hash, Layers, ListTodo, Package, PackageOpen, Pause, Play, ScanLine, ScrollText, Scissors, ShieldCheck, Shirt, Tag, Undo2, UserRoundCheck, Wrench } from 'lucide-react'
 import type { ScanIdKind } from '@nexus/factory-domain/numbering/kinds'
 import { FloorButton, FloorTile, FloorTileGrid, ScanInput, type CameraScanner } from '@nexus/ui/floor'
-import { useT } from '../../../lib/i18n/provider'
+import { FloorCard } from '@nexus/ui/floor/FloorCard/index'
+import { useDsWords } from '../../../lib/i18n/ds-parts'
+import { formatTime } from '../../../lib/i18n/format'
+import { useLocale, useT } from '../../../lib/i18n/provider'
+import type { OpenItem } from '../../tasks/scans/timing'
 import type { FloorMode, HomeTile, TileKey } from '../../model'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../frame/view/FloorFrameView'
 import { FloorState } from '../../frame/view/FloorState'
@@ -32,9 +36,12 @@ export interface HomeViewModel {
   offline?: { held: 'receive' | 'inspect' | 'serials' | null } | null
   /** Label kinds this tablet is running low on, with the numbers left (said while offline: online it tops up itself). */
   lowNumbers?: readonly { kind: ScanIdKind; left: number }[]
+  /** Unfinished on this tablet (design floor.home "resume"); hidden when nothing is open. `asOf`: read earlier, offline now. */
+  resume?: { items: readonly OpenItem[]; asOf: string | null } | null
+  timeZone?: string
 }
 
-export type HomeAction = { type: 'tile'; key: TileKey } | { type: 'scan'; code: string } | { type: 'notice' }
+export type HomeAction = { type: 'tile'; key: TileKey } | { type: 'scan'; code: string } | { type: 'notice' } | { type: 'continue'; code: string }
 
 export interface HomeViewProps {
   model: HomeViewModel
@@ -62,8 +69,12 @@ export const TILE_ICON: Readonly<Record<TileKey, ReactNode>> = {
 
 export function HomeView({ model, onAction, onFrame, camera }: HomeViewProps) {
   const t = useT('floor')
+  const locale = useLocale()
+  const cardWords = useDsWords().floorCard
   const send = (action: HomeAction) => onAction?.(action)
   const held = model.notice.blocksScans
+  const time = (value: string | null) => (value ? formatTime(value, { locale, timeZone: model.timeZone }) : '')
+  const resume = model.resume?.items ?? []
   return (
     <FloorFrameView frame={model.frame} onFrame={onFrame}>
       <div className="fw-floor-stack">
@@ -125,6 +136,33 @@ export function HomeView({ model, onAction, onFrame, camera }: HomeViewProps) {
             camera={camera ? { scanner: camera, startLabel: t('scan.camera.start'), stopLabel: t('scan.camera.stop'), errorLabel: t('scan.camera.error') } : undefined}
             onScan={(code) => send({ type: 'scan', code })}
           />
+        ) : null}
+        {resume.length > 0 ? (
+          <section className="fw-floor-stack" aria-labelledby="fw-home-resume">
+            <h2 id="fw-home-resume" className="fw-floor-section-title">
+              {t('home.resume.title')}
+            </h2>
+            {resume.map((item) => {
+              const paused = item.state === 'PAUSED'
+              return (
+                <FloorCard
+                  key={`${item.bundleId}:${item.operation.id}`}
+                  icon={paused ? <Pause /> : <Play />}
+                  kind={t(paused ? 'home.resume.paused' : 'home.resume.running')}
+                  code={item.bundleCode}
+                  title={t(`home.resume.line.${paused ? (item.pausedAtClockOut ? 'clockOut' : 'paused') : 'running'}`, { seq: item.operation.seq, name: item.operation.name, time: time(item.pausedAt ?? item.runningSince) })}
+                  tone={paused ? 'warning' : 'info'}
+                  asOf={model.resume?.asOf ?? null}
+                  formatTime={(iso) => time(iso)}
+                  labels={cardWords}
+                >
+                  <FloorButton size="lg" variant="primary" icon={<Play />} heldReason={held ? t('tile.held.notice') : null} onClick={() => send({ type: 'continue', code: item.bundleCode })}>
+                    {t('home.resume.continue')}
+                  </FloorButton>
+                </FloorCard>
+              )
+            })}
+          </section>
         ) : null}
         {model.tiles.length === 0 ? (
           <FloorState tone="info" icon={<ShieldCheck />} title={t('home.empty.title')} text={t('home.empty.body')} />

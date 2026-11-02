@@ -291,6 +291,17 @@
         "inspect": "Nessuna rete: collaudi e rilasci aspettano la rete (prendono il numero dall'ufficio). Le scansioni restano salvate sul tablet.",
         "serials": "Nessuna rete: i seriali dei capi e le loro etichette aspettano la rete (li dà l'ufficio). Il resto del lavoro resta salvato sul tablet."
       }
+    },
+    "resume": {
+      "title": "Da finire su questo tablet",
+      "paused": "In pausa",
+      "running": "In corso",
+      "continue": "Continua",
+      "line": {
+        "paused": "Op {seq} {name} · dalle {time}",
+        "running": "Op {seq} {name} · dalle {time}",
+        "clockOut": "Op {seq} {name} · in pausa all'uscita, {time}"
+      }
     }
   },
   "tile": {
@@ -604,7 +615,17 @@
       "scrap_other": "{count} scarti",
       "rework_one": "{count} da rilavorare",
       "rework_other": "{count} da rilavorare",
-      "machine": "Guasto su {code}"
+      "machine": "Guasto su {code}",
+      "start": "Inizia {code}",
+      "pause": "Pausa {code}",
+      "resume": "Riprendi {code}",
+      "handBack": "Restituisci {code}",
+      "partial_one": "{code}: {count} pezzo finora",
+      "partial_other": "{code}: {count} pezzi finora",
+      "tick": "Un passo spuntato",
+      "note": "Un commento su un ordine di lavoro",
+      "noBundleStart": "Tempo senza fascio iniziato",
+      "noBundleEnd": "Tempo senza fascio finito"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

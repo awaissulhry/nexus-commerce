@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { zxingCamera } from '../camera'
@@ -9,6 +9,8 @@ import { homeTiles, modeOf } from '../model'
 import { heldWorkOf } from '../queue/actions'
 import { readScan } from '../scan/scan-model'
 import { TASK_ROUTES, taskForScan, taskOfTile } from '../tasks/routes'
+import { fetchOpenWork } from '../tasks/scans/api'
+import { resumeRows, type OpenItem } from '../tasks/scans/timing'
 import { HomeView, type HomeAction } from './view/HomeView'
 
 /**
@@ -16,14 +18,34 @@ import { HomeView, type HomeAction } from './view/HomeView'
  * scan strip (a label opens the station's job with it — tasks/routes.ts `taskForScan` — else Scan anything; a badge
  * switches person), and the notice card while it is due.
  * Offline, what goes on and what waits for the network; the tablet's label numbers when they run low.
+ * B-W2b-69: "Unfinished on this tablet": the person's paused or running bundles (`GET /production/terminal/open`), Continue opens the
+ * job with its ticket; offline the last answer of this visit stands, with its as-of time.
  */
+
+/** The last open work read in this visit (kept for an offline Home). */
+let KEPT: { person: string; items: readonly OpenItem[]; asOf: string } | null = null
 export function FloorHome() {
   const store = useFloor()
   const router = useRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('home.title')
   const [refused, setRefused] = useState(false)
-  const { me } = store
+  const [open, setOpen] = useState(KEPT)
+  const { me, api, online } = store
+  const scans = Boolean(me?.permissions.includes('production.scan'))
+  const person = me?.worker.id ?? null
+  useEffect(() => {
+    if (!scans || !online) return
+    let live = true
+    void fetchOpenWork(api).then((answer) => {
+      if (!live || !answer.ok || !person) return
+      KEPT = { person, items: resumeRows(answer.value), asOf: new Date().toISOString() }
+      setOpen(KEPT)
+    })
+    return () => {
+      live = false
+    }
+  }, [api, online, scans, person])
   if (!me) return null
   const mode = modeOf(me.device.station)
   const tiles = homeTiles(mode, me.permissions, me.notice.blocksScans)
@@ -39,6 +61,8 @@ export function FloorHome() {
       }
       case 'notice':
         return router.push('/floor/notice')
+      case 'continue':
+        return store.openWith(TASK_ROUTES.operation, action.code)
       case 'scan': {
         setRefused(false)
         const read = readScan(action.code, me.scanTag)
@@ -67,6 +91,8 @@ export function FloorHome() {
         badgeRefused: refused,
         offline: store.online ? null : { held: heldWorkOf(mode) },
         lowNumbers: store.shellQueue.lowNumbers,
+        // One person's open work never reaches the next person on the tablet.
+        resume: open && scans && open.person === person ? { items: open.items, asOf: online ? null : open.asOf } : null,
       }}
       onFrame={onFrame}
       onAction={(action) => void onAction(action)}

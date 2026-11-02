@@ -109,3 +109,169 @@
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 14em), 1fr));
   gap: var(--nds-density-target-gap);
 }
+
+/* ── B-W2b-69: the bundle's own clock, centred and big (a no-bundle block the same way) ───────────────────────────────── */
+.fw-scans-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-16) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  text-align: center;
+}
+.fw-scans-clock[data-state='paused'] {
+  border-color: var(--nds-warning);
+  background: var(--nds-warning-soft);
+}
+.fw-scans-clock[data-state='indirect'] {
+  border-color: var(--nds-info);
+  background: var(--nds-info-soft);
+}
+.fw-scans-clock-why {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.2);
+  font-weight: var(--nds-font-weight-bold);
+}
+
+/* ── big secondary choices, two a row: several bundles, no bundle, pieces so far, hand back, photo or comment ─────────── */
+.fw-scans-more,
+.fw-scans-stepper {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-scans-stepper {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ── a step's row with its "Does not apply"; a lot with its − and +; a bundle on the stack ────────────────────────────── */
+.fw-scans-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-density-target-gap);
+}
+.fw-scans-step > .nds-floor-list {
+  flex: 1 1 18em;
+  min-width: 0;
+}
+.fw-scans-lot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-density-target-gap);
+}
+.fw-scans-lot-code {
+  flex: 1 1 8em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-scans-lot-steps {
+  display: inline-flex;
+  gap: var(--nds-density-target-gap);
+}
+.fw-scans-stack-total {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.35);
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+.fw-scans-stack-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-density-gap);
+}
+.fw-scans-stack-row > .nds-floor-list {
+  flex: 1 1 22em;
+  min-width: 0;
+}
+.fw-scans-stack-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-density-target-gap);
+}
+.fw-scans-stack-sizes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--nds-density-gap);
+}
+@container nds-floor-frame (max-width: 520px) {
+  .fw-scans-stack-sizes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.fw-scans-panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+/* Why the main action waits, on screen, at the other end of the bar. */
+.fw-scans-bar-words {
+  font-weight: var(--nds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+/* ── the red screen's lines ──────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-scans-guard-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+/* ── the override pop-up: one job, top to bottom ─────────────────────────────────────────────────────────────────────────── */
+.fw-scans-override {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+}
+
+.fw-scans-override-why {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-density-gap);
+  font-weight: var(--nds-font-weight-bold);
+}
+/* The PIN beside what it signs: a tablet shows all of it without scrolling; a phone stacks them. */
+.fw-scans-override-sign {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-density-gap);
+  align-items: start;
+}
+@media (max-width: 640px) {
+  .fw-scans-override-sign {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── the clip: the camera at the tablet's width, the outline guide over it ───────────────────────────────────────────────── */
+.fw-scans-clip {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+}
+.fw-scans-clip-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.fw-scans-clip-guide {
+  position: absolute;
+  inset: 12%;
+  border: 3px dashed var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  pointer-events: none;
+}

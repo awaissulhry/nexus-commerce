@@ -59,6 +59,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   sign-in; just signed in → the notice when due, else Home). Rules without a screen in `floor/model.ts` (mode from the
   work centre, tiles = mode AND permission, only built pages open) and `floor/scan/scan-model.ts` (the scan router);
   calls in `floor/api.ts`. A step that builds a floor page sets its tile `built` in `TILE_RULES`.
+- `src/floor/tasks/scans/` — SCR-090 Operation, the screen every operator uses all shift (B-W2b-69; `/floor/operation`, catalogue
+  `floor-scans`): `model.ts` (W1: counts, report, undo, correction), `timing.ts` (the bundle's clock, what the tablet knows after a
+  queued action), `checks.ts` (findings, the quantity rule, steps, lots, why Finish waits), `stack.ts`, `indirect.ts`, `notes.ts`, all
+  pure and held by `shift.vitest.test.ts`; `Operation.tsx` the container; `view/` one part per job. Right after the scan the API says
+  the rest (`/production/terminal/state`, `/production/guards/check`, `/production/checklists/state`), kept beside the card for an
+  offline scan. Finish stays one tap with or without a Start (F3): it makes no call when all good. A timing action, a tile and a stack
+  answer at once online (a refusal is a screen) and queue the same action when the network is gone; the report, a tick and a note
+  always queue; an override and a picture only exist online (held with the reason). `floor/home/` shows the person's open work
+  ("Unfinished on this tablet", `/production/terminal/open`; never carried to the next person on the tablet).
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),

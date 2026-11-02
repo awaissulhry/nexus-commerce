@@ -43,6 +43,16 @@ export const WHAT_KEY = {
   'production.cut.remnant': 'remnant',
   'production.bundles.make': 'bundle',
   'plant.report': 'machine',
+  // B-W2b-69: the operation screen every shift.
+  'production.scan.start': 'start',
+  'production.scan.pause': 'pause',
+  'production.scan.resume': 'resume',
+  'production.scan.handBack': 'handBack',
+  'production.scan.partial': 'partial',
+  'production.checklist.tick': 'tick',
+  'production.floorNote.post': 'note',
+  'production.offStandard.start': 'noBundleStart',
+  'production.offStandard.end': 'noBundleEnd',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]
