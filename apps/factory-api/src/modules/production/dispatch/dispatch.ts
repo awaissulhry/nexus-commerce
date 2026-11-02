@@ -1,17 +1,25 @@
 import { ForbiddenError, NotFoundError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
-import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { dispatchOrder, dispatchState } from '@nexus/factory-domain/planning/schedule/dispatch'
+import type { MaterialFlag } from '@nexus/factory-domain/production/dispatch/material'
+import { laneFirst, sequenceOf } from '@nexus/factory-domain/production/dispatch/rules'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type FloorContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { floorVersionsOf, slotsOf, type PlanRow } from '../../planning/schedule/store'
-import { dayOf, type Reader } from '../../planning/store'
+import { dayOf, SITE_COLUMNS, type Reader, type SiteRow } from '../../planning/store'
+import { systemView } from '../scans/access'
 import { wipFor } from '../scans/progress'
+import { floorChecksFor } from '../settings/floor-rules'
+import { materialView } from './board'
 import type { OfficeDispatchQuery } from './contract'
+import { entryOfCard, nextOf } from './mine'
+import { assignmentsOf } from './store'
+import { cardAt, dispatchWorld, materialFlags, plannedOperations, WORK_ORDER_SELECT, type WorkOrderRow } from './world'
 
 /**
  * The dispatch list per line or station (B-W2a-34; MES-021; design floor.mywork "Next" and "Then"; Owner answer P3): what
@@ -28,15 +36,14 @@ import type { OfficeDispatchQuery } from './contract'
  * Office: GET /production/dispatch?lineId|workCentreId|stationId (workorders.view over the lane's site). Floor: GET
  * /production/dispatch/station (floor.work): the device's own station (a device not placed at a station gets the reason
  * in words). No person, no money.
+ *
+ * B-W2b-49: a day the board changed, the lists follow it: an operation with assignments of today shows where they put it
+ * (./world.ts), in the lane's order after rush; the other operations stay as the plan has them. Each entry also carries the
+ * site's sequence rule on it (MES-025) and its work order's material flag (MES-026; the floor reads it through the tenant's
+ * system view: it reads no planning table).
  */
 
-interface SiteFacts {
-  readonly id: string
-  readonly companyId: string
-  readonly code: string
-  readonly name: string
-  readonly timezone: string
-}
+type SiteFacts = SiteRow
 
 interface Target {
   readonly kind: 'LINE' | 'WORK_CENTRE' | 'STATION'
@@ -48,7 +55,7 @@ interface Target {
   readonly site: SiteFacts
 }
 
-const SITE = { id: true, companyId: true, code: true, name: true, timezone: true } as const
+const SITE = SITE_COLUMNS
 
 async function lineName(db: Reader, id: string | null) {
   return id ? db.line.findUnique({ where: { id }, select: { id: true, code: true, name: true } }) : null
@@ -57,8 +64,10 @@ async function centreName(db: Reader, id: string | null) {
   return id ? db.workCentre.findUnique({ where: { id }, select: { id: true, code: true, name: true } }) : null
 }
 
+type FlagsOf = (workOrderIds: readonly string[]) => Promise<ReadonlyMap<string, MaterialFlag>>
+
 /** The list of one target. */
-async function listFor(db: Reader, target: Target, now: Date) {
+async function listFor(db: Reader, target: Target, now: Date, flagsOf: FlagsOf) {
   const site = target.site
   const { current, upcoming } = await floorVersionsOf(db, site.id, now)
   const base = {
@@ -73,32 +82,9 @@ async function listFor(db: Reader, target: Target, now: Date) {
   }
   const slots = await slotsOf(db, current.id)
   const workOrderIds = [...new Set(slots.map((slot) => slot.workOrderId))]
-  const workOrders = workOrderIds.length
-    ? await db.workOrder.findMany({
-        where: { id: { in: workOrderIds } },
-        select: {
-          id: true,
-          siteId: true,
-          number: true,
-          status: true,
-          priority: true,
-          // B-W2b-51 (MES-009): the rush flag (first in the list).
-          rush: true,
-          dueDate: true,
-          holdReason: true,
-          style: { select: { code: true, name: true } },
-          sizes: { select: { quantity: true } },
-          operations: { select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true }, orderBy: { seq: 'asc' } },
-        },
-      })
-    : []
+  const workOrders: WorkOrderRow[] = workOrderIds.length ? await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: WORK_ORDER_SELECT }) : []
   const byId = new Map(workOrders.map((workOrder) => [workOrder.id, workOrder]))
-  // What each line does: the work centres of its active stations (none: every operation).
-  const stations = await db.station.findMany({ where: { siteId: site.id, status: 'ACTIVE' }, select: { lineId: true, workCentreId: true } })
-  const lineDoes = (lineId: string) => {
-    const own = stations.filter((station) => station.lineId === lineId).map((station) => station.workCentreId)
-    return own.length > 0 ? new Set(own) : null
-  }
+  const stations = await db.station.findMany({ where: { siteId: site.id, status: 'ACTIVE' }, select: { id: true, lineId: true, workCentreId: true } })
   const lineMatches = (lineId: string | null, workCentreId: string) => {
     if (lineId === null) return false
     if (target.kind === 'LINE') return lineId === target.id
@@ -106,34 +92,19 @@ async function listFor(db: Reader, target: Target, now: Date) {
     return false
   }
   const centreMatches = (workCentreId: string | null) => workCentreId !== null && (target.kind === 'WORK_CENTRE' ? workCentreId === target.id : target.kind === 'STATION' && workCentreId === target.workCentreId)
-  const picked: { slot: (typeof slots)[number]; operationId: string; garments: number }[] = []
-  for (const slot of slots) {
-    const workOrder = byId.get(slot.workOrderId)
-    if (!workOrder) continue
-    const garments = workOrder.sizes.reduce((sum, size) => sum + size.quantity, 0)
-    if (slot.workOrderOperationId) {
-      const operation = workOrder.operations.find((candidate) => candidate.id === slot.workOrderOperationId)
-      if (!operation) continue
-      if (lineMatches(slot.lineId, operation.workCentreId) || centreMatches(slot.workCentreId)) picked.push({ slot, operationId: operation.id, garments })
-      continue
-    }
-    // A work order (or part of it) placed whole on a line: the operations the line does that have no bar of their own.
-    if (slot.lineId === null) continue
-    const does = lineDoes(slot.lineId)
-    for (const operation of workOrder.operations) {
-      if (does !== null && !does.has(operation.workCentreId)) continue
-      if (slots.some((other) => other.workOrderId === workOrder.id && other.workOrderOperationId === operation.id)) continue
-      if (lineMatches(slot.lineId, operation.workCentreId)) picked.push({ slot, operationId: operation.id, garments: slot.pieces ?? garments })
-    }
-  }
+  const picked = plannedOperations(slots, workOrders, stations)
+    .filter((entry) => lineMatches(entry.lineId, entry.operation.workCentreId) || centreMatches(entry.workCentreId))
+    .map((entry) => ({ slot: entry.slot, operationId: entry.operation.id, garments: entry.garments }))
   const wips = new Map<string, Awaited<ReturnType<typeof wipFor>>>()
   for (const workOrderId of new Set(picked.map((entry) => entry.slot.workOrderId))) wips.set(workOrderId, await wipFor(db, { id: workOrderId, siteId: site.id }))
+  const sequenceRule = (await floorChecksFor(db, site.id)).skippedOperationRule
   const entries = picked.map(({ slot, operationId, garments }) => {
     const workOrder = byId.get(slot.workOrderId)!
     const operation = workOrder.operations.find((candidate) => candidate.id === operationId)!
     const previous = [...workOrder.operations].reverse().find((candidate) => candidate.seq < operation.seq) ?? null
     const flow = wips.get(workOrder.id)!.operations.find((row) => row.operationId === operation.id)
     const done = Math.min(garments, (flow?.good ?? 0) + (flow?.scrap ?? 0))
+    const sequenceFacts = { operation: { seq: operation.seq, name: operation.name }, previous: previous ? { seq: previous.seq, name: previous.name } : null }
     const state = dispatchState({
       workOrderNumber: workOrder.number,
       workOrderStatus: workOrder.status,
@@ -162,12 +133,27 @@ async function listFor(db: Reader, target: Target, now: Date) {
         arrived: flow?.arrived ?? 0,
         waiting: flow?.waiting ?? 0,
         done,
+        sequence: sequenceOf(sequenceRule, { ...sequenceFacts, waiting: state.state === 'WAITING_FOR_PREVIOUS' }),
       },
     }
   })
-  entries.sort((a, b) => dispatchOrder(a.key, b.key))
-  const list = entries.map((entry) => entry.view)
-  const next = list.find((entry) => entry.state === 'READY') ?? null
+  // B-W2b-49: an operation with assignments of today shows where the board put it.
+  const today = businessDate(now, site.timezone)
+  const touched = new Set((await assignmentsOf(db, site.id, today)).flatMap((row) => (row.workOrderOperationId ? [row.workOrderOperationId] : [])))
+  const world = touched.size > 0 ? await dispatchWorld(db, site, today, now) : null
+  const placed = world ? world.cards.filter((card) => touched.has(card.operation.id) && cardAt(card, target, stations)) : []
+  const flags = await flagsOf([...new Set([...entries.map((entry) => entry.view.workOrder.id), ...placed.map((card) => card.workOrder.id)])])
+  const rows = [
+    ...entries.filter((entry) => !touched.has(entry.view.operation.id)).map((entry) => ({ key: entry.key, order: null as number | null, view: { ...entry.view, material: materialView(flags.get(entry.view.workOrder.id)) } })),
+    ...placed.map((card) => ({
+      key: { rush: card.workOrder.rush, priority: card.workOrder.priority, dueDate: card.workOrder.dueDate ? dayOf(card.workOrder.dueDate) : null, startAt: card.slot?.startAt.getTime() ?? 0, seq: card.operation.seq, workOrderNumber: card.workOrder.number },
+      order: card.order,
+      view: entryOfCard(card, world!, flags),
+    })),
+  ]
+  rows.sort((a, b) => laneFirst({ rush: a.key.rush ?? false, order: a.order }, { rush: b.key.rush ?? false, order: b.order }) || dispatchOrder(a.key, b.key))
+  const list = rows.map((entry) => entry.view)
+  const next = nextOf(list)
   return { ...base, next, entries: list, words: list.length ? null : `Nothing queued for ${target.name} in v${current.number}. Scan a bundle to work on it.` }
 }
 
@@ -201,7 +187,8 @@ export async function officeDispatch(caller: CommandCaller, query: OfficeDispatc
       if (row) target = { kind: 'STATION', id: row.id, code: row.code, name: row.name, lineId: row.lineId, workCentreId: row.workCentreId, site: row.site }
     }
     if (!target || !can(actorOf(context), WORKORDERS_VIEW, { companyId: target.site.companyId, siteId: target.site.id })) throw new NotFoundError(`${asked[0] === 'lineId' ? 'Line' : asked[0] === 'workCentreId' ? 'Work centre' : 'Station'} not found.`)
-    return listFor(db, target, now)
+    const site = target.site
+    return listFor(db, target, now, (ids) => materialFlags(db, site, ids))
   })
 }
 
@@ -233,6 +220,6 @@ export async function stationDispatch(caller: CommandCaller) {
         words: 'This tablet is not placed at a station: ask the office to place it at one. Scan a bundle to work on it.',
       }
     }
-    return listFor(db, { kind: 'STATION', id: station.id, code: station.code, name: station.name, lineId: station.lineId, workCentreId: station.workCentreId, site: device.site }, now)
+    return listFor(db, { kind: 'STATION', id: station.id, code: station.code, name: station.name, lineId: station.lineId, workCentreId: station.workCentreId, site: device.site }, now, (ids) => systemView(caller).withClient((system: Reader) => materialFlags(system, device.site, ids)))
   })
 }

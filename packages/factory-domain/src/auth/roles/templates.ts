@@ -259,6 +259,19 @@ const BOARDS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Objec
   team_leader: ['production.boards.view', 'production.boards.reason'],
 })
 /**
+ * B-W2b-49 (dispatch every shift, MES-022 … MES-033; design production.dispatch, floor.supervisor): the production manager
+ * and the floor supervisor run the board and write handover notes; the planner reads it. On the floor the team leader's
+ * line view reads its line, reassigns work and writes the handover note. Owner and read-only from every().
+ */
+const DISPATCH_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.dispatch.view', 'production.dispatch.manage', 'production.dispatch.handover'],
+  floor_supervisor: ['production.dispatch.view', 'production.dispatch.manage', 'production.dispatch.handover'],
+  planner: ['production.dispatch.view'],
+})
+const DISPATCH_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.dispatch.view', 'production.dispatch.manage', 'production.dispatch.handover'],
+})
+/**
  * B-W2b-34 (piece rates and the legal switch of piece pay; MES-254, MES-255, MES-262; design people.piecerates): the
  * administrator and the production manager read the rate tables, who has read them and the legal switch, without a pay
  * figure (neither holds the pay grain: operations and standard minutes only). Keeping the rates (people.piecerates.manage:
@@ -297,7 +310,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-34
   ...(audience === 'office' ? (PEOPLE_PIECERATES_ADDS[key] ?? []) : []),
   // B-W2b-37
-  ...(audience === 'office' ? (PEOPLE_ATTENDANCE_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PEOPLE_ATTENDANCE_ADDS[key] ?? []) : []),
+  // B-W2b-49
+  ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

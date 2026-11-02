@@ -41,6 +41,8 @@ export const FLOOR_SYNC_KINDS = [
   'production.scan.resume',
   'production.scan.handBack',
   'production.scan.partial',
+  // B-W2b-49: a line's handover note written on the floor (design floor.supervisor: the line view works offline).
+  'andon.handover.write',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -80,6 +82,8 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'production.scan.resume': { kind: 'production.scan.resume', permission: 'production.scan', numbers: null, what: 'Resume a paused bundle' },
   'production.scan.handBack': { kind: 'production.scan.handBack', permission: 'production.scan', numbers: null, what: 'Hand back an unfinished bundle' },
   'production.scan.partial': { kind: 'production.scan.partial', permission: 'production.scan', numbers: null, what: 'Report the pieces done so far' },
+  // B-W2b-49
+  'andon.handover.write': { kind: 'andon.handover.write', permission: 'production.dispatch.handover', numbers: null, what: "Write a line's handover note" },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const

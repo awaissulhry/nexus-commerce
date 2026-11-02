@@ -35,6 +35,10 @@ import { queuedClockBody } from '../../modules/people/clock/contract'
 import { TimingRefusedError } from '../../modules/production/terminal/access'
 import { handBackBody, partialBody, pauseBody, resumeBody, startBody } from '../../modules/production/terminal/contract'
 import { timeOperation } from '../../modules/production/terminal/timing'
+// B-W2b-49: a line's handover note written offline.
+import { DispatchRefusedError } from '../../modules/production/dispatch/access'
+import { writeHandoverBody } from '../../modules/production/dispatch/contract'
+import { writeHandover } from '../../modules/production/dispatch/handover'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -61,6 +65,8 @@ import { timeOperation } from '../../modules/production/terminal/timing'
  *   production.scan.start / pause / resume / handBack / partial
  *                                         modules/production/terminal timeOperation (B-W2b-40: the timing of a bundle at an
  *                                         operation with the tablet's time; the client event id is its clientScanId)
+ *   andon.handover.write                  modules/production/dispatch writeHandover (B-W2b-49: a line's note of a shift; the
+ *                                         tablet's time picks the shift)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -96,6 +102,7 @@ export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof CallRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof ClockRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix, final: error.refusal.final })
   if (error instanceof TimingRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix, final: error.refusal.final })
+  if (error instanceof DispatchRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
     return first ? moduleRefusal({ code: first.code, message: first.message, fix: first.fix }) : moduleRefusal({ code: 'NUMBER_REFUSED', message: error.message })
@@ -190,6 +197,14 @@ async function applyCall(caller: CommandCaller, event: QueuedEvent, key: string)
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'HelpCall', id: result.call.id } }
 }
 
+/** B-W2b-49: a handover note kept offline, through its own command (the key: `<device>.<client event id>`). */
+async function applyHandover(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const body = parsed(writeHandoverBody, { ...event.payload, ...(event.occurredAt ? { at: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const result = await writeHandover(caller, body.value, key)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'HandoverNote', id: result.note.id } }
+}
+
 /** B-W2b-33: a clock action kept offline, through the clock's own command (its key: `<device>.<client event id>`). */
 async function applyClock(caller: CommandCaller, event: QueuedEvent, key: string, sentAt: string | undefined): Promise<Applied> {
   const body = parsed(queuedClockBody, { ...event.payload, clientEventId: event.clientEventId, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
@@ -247,6 +262,8 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
       case 'production.scan.handBack':
       case 'production.scan.partial':
         return await applyTiming(caller, event)
+      case 'andon.handover.write':
+        return await applyHandover(caller, event, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

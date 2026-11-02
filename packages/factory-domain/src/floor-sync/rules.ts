@@ -216,6 +216,9 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       return { code: text(p.code) ?? text(p.bundleId) }
     case 'production.scan.partial':
       return { code: text(p.code) ?? text(p.bundleId), good: whole(p.pieces) ?? 0 }
+    // B-W2b-49: the line and the shift; never a word of the note.
+    case 'andon.handover.write':
+      return { code: text(p.shiftLabel, 40), target: text(p.lineId, 40) }
   }
 }
 
