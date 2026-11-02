@@ -39,6 +39,9 @@ describe('review ↔ request matching (real SQL)', () => {
       await c.review.create({ data: { channel: 'EBAY', marketplace: 'IT', externalReviewId: 'TEST-FB-1', rating: 5, body: 'Great', postedAt: daysAgo(2), orderId: 'test-o1', ingestSource: 'EBAY_API' } as never })
       await c.review.create({ data: { channel: 'EBAY', marketplace: 'IT', externalReviewId: 'TEST-FB-2', rating: 5, body: 'Great', postedAt: daysAgo(2), orderId: 'test-o2', ingestSource: 'FIXTURE' } as never })
       await c.review.create({ data: { channel: 'EBAY', marketplace: 'IT', externalReviewId: 'TEST-FB-3', rating: 5, body: 'Great', postedAt: daysAgo(8), orderId: 'test-o3', ingestSource: 'EBAY_API' } as never })
+      // Amazon: seller feedback in IT, an imported product review in DE.
+      await c.review.create({ data: { channel: 'AMAZON', marketplace: 'IT', kind: 'SELLER', externalReviewId: 'TEST-SF-1', rating: 1, body: 'Late', postedAt: daysAgo(2), ingestSource: 'AMAZON_API' } as never })
+      await c.review.create({ data: { channel: 'AMAZON', marketplace: 'DE', kind: 'PRODUCT', externalReviewId: 'TEST-PR-1', rating: 4, body: 'Good', postedAt: daysAgo(2), ingestSource: 'IMPORT_CSV' } as never })
     })
   }, 180_000)
 
@@ -57,5 +60,10 @@ describe('review ↔ request matching (real SQL)', () => {
     const [rows, facts] = await inside(() => Promise.all([readRateRequests({ from: daysAgo(30), to: NOW, channel: 'EBAY' }), readRateFacts()]))
     expect(facts.ebayLinked).toBe(true)
     expect(rateOf(rows, facts)).toMatchObject({ sent: 3, measured: 3, followed: 1, words: null })
+  })
+
+  it('Amazon: only a product review opens a market — seller feedback in Italy leaves Italy not measurable', async () => {
+    const facts = await inside(() => readRateFacts())
+    expect([...facts.reviewedKeys].filter((k) => k.startsWith('AMAZON|'))).toEqual(['AMAZON|DE'])
   })
 })
