@@ -13,6 +13,7 @@ import { requireDevice, shownLine } from '../../../platform/auth/floor/device'
 import { siteScope } from '../../../platform/auth/floor/store'
 import type { OfficeAuth } from '../../../platform/auth/sessions/office-auth'
 import { asSystem } from '../../../platform/outbox/system'
+import { rowsOf } from '../bundles/tracked'
 import { devicePlaceOf } from '../calls/store'
 import { assertMay, contextOf, knownLine, may, officeOf, readerOf, refuse, type BoardContext } from './access'
 import { hourView, lineDays, shiftView, stationStates, totalsView, waitingOfSite } from './facts'
@@ -27,6 +28,8 @@ import { activeLinesOf, notesOf, reasonWordsOf, siteRow, siteView, type LineRow,
  *                                                      pace and the shift; the downtime reasons to pick from
  *   GET /production/boards/heatmap?siteId              the bundles waiting at each operation across the site's lines
  *                                                      (production.boards.view; office)
+ *   GET /production/boards/heatmap/cell?siteId&lineId&code  the bundles behind one cell (B-W2b-66; office): code, size,
+ *                                                      pieces, last scan time and station; never who
  *   GET /production/boards/tv?lineId                   the line TV board (production.boards.view): the office's preview in
  *                                                      a new tab; a signed-in floor device for its line
  *   GET /production/boards/display                     the same board for a DISPLAY device with nobody signed in (MES-166):
@@ -120,6 +123,19 @@ export async function wipHeatmap(caller: CommandCaller, query: { readonly siteId
       stuckLimitHours,
       capped,
     }
+  })
+}
+
+/** GET /production/boards/heatmap/cell (office): the same bundles the cell counts; no lineId is the row of no line. */
+export async function heatCell(caller: CommandCaller, query: { readonly siteId: string; readonly lineId?: string | undefined; readonly code: string }) {
+  const context = officeOf(caller)
+  const now = nowOf()
+  return caller.withClient(async (db) => {
+    const site = await siteOfQuery(db, query.siteId)
+    assertMay(context, PRODUCTION_BOARDS_VIEW, { companyId: site.companyId, siteId: site.id }, 'Site')
+    const { waiting, capped } = await waitingOfSite(db, site.id, now)
+    const here = waiting.filter((bundle) => bundle.lineId === (query.lineId ?? null) && bundle.operation.code === query.code)
+    return { asOf: toUtcIso(now), bundles: await rowsOf(db, here.map((bundle) => bundle.tracked)), capped }
   })
 }
 

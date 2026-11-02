@@ -125,8 +125,11 @@ const SIGN_IN = '/floor/sign-in'
 const NOTICE = '/floor/notice'
 const HOME = '/floor'
 const SYNC = '/floor/sync'
+/** B-W2b-66: a DISPLAY device's page (SCR-173). */
+const DISPLAY = '/floor/display'
 /** While the app is open, the queue tries to send this often (it sends at once when the network comes back). */
 const QUEUE_TIMER_MS = 20_000
+const UNAVAILABLE_RETRY_MS = 15_000
 
 /** PLT-242: the browser keeps the tablet's data (persist), and the room left (estimate); unknown where it cannot say. */
 async function storageState(): Promise<{ persisted: boolean | null; freeMb: number | null }> {
@@ -317,6 +320,11 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
       if (pathname !== ENROL) router.replace(ENROL)
       return
     }
+    // B-W2b-66 (design floor.display): a line board signs nobody in; it opens the board, also by itself after a power cut.
+    if (device.rules?.landing === 'LINE_BOARD') {
+      if (pathname !== DISPLAY && pathname !== ENROL) router.replace(DISPLAY)
+      return
+    }
     if (!me) {
       if (pathname !== SIGN_IN && pathname !== ENROL) router.replace(SIGN_IN)
       return
@@ -327,6 +335,13 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     }
     if (pathname === SIGN_IN && !pendingSwitch) router.replace(me.notice.due ? NOTICE : HOME)
   }, [load.status, device, me, pathname, pendingSwitch, router])
+
+  // B-W2b-66: nobody presses Try again on a wall screen: while the server does not answer, the app keeps asking.
+  useEffect(() => {
+    if (load.status !== 'unavailable') return
+    const timer = window.setTimeout(() => void reload(), UNAVAILABLE_RETRY_MS)
+    return () => window.clearTimeout(timer)
+  }, [load, reload])
 
   const idle = useIdleSignOut({
     idleMs: idleWarnAfterMs(me?.session.idleMinutes ?? 10),

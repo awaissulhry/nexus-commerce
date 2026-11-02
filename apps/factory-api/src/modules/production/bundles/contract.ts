@@ -321,7 +321,7 @@ const placeFields = {
 
 const hideRef = output({ hideId: id(), code: z.string(), lotId: id(), lotCode: z.string() })
 
-const trackedRow = output({
+export const trackedRow = output({
   id: id(),
   code: z.string(),
   replacedCodes: z.array(z.string()),

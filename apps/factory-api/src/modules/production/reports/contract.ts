@@ -91,6 +91,10 @@ export const linesContract = defineContract({
           outputPct: z.number().int().nullable(),
           /** The operation of its work orders where most pieces wait (null: nothing waits). */
           bottleneck: output({ workOrderId: id(), workOrderNumber: z.string(), operationId: id(), seq: z.number().int(), code: z.string(), name: z.string(), waiting: z.number().int() }).nullable(),
+          /** B-W2b-66: the help calls open on its stations (a count). */
+          openCalls: z.number().int(),
+          /** B-W2b-66: people of the line absent today, a number only; null: the site's attendance gate is closed, or the line is under the minimum group. */
+          absent: z.number().int().nullable(),
           /** Owner F2: per station only "nobody signed in" and machine down; never who. */
           stations: z.array(
             output({

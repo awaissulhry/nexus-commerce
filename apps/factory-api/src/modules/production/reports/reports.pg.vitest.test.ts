@@ -209,6 +209,8 @@ describe('the floor overview by line (MES-160; Owner F2: per station only who is
       { id: station('SEW-02'), code: 'SEW-02', name: 'Sewing station 2', signedIn: false, machinesDown: [{ assetNumber: 'W2A38-SEW-02', status: 'DOWN' }] },
     ])
     if (l1.bottleneck) expect(l1.bottleneck).toMatchObject({ workOrderNumber: 'SEED-WO-0001', waiting: expect.any(Number) })
+    // B-W2b-66: no open call; the site's attendance gate is closed, so no number of people absent.
+    expect(l1).toMatchObject({ openCalls: 0, absent: null })
   })
 
   it('says Waiting once the line has been quiet, and refuses the office without the floor', async () => {

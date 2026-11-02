@@ -19,7 +19,7 @@ export const FLOOR_VERSION_PATH = '/floor/version'
 /** How often a tablet asks for the version while the app is open. */
 export const VERSION_CHECK_MS = 5 * 60_000
 /** The screens a reload may happen on: nothing typed is lost there. */
-export const RESTING_PATHS: readonly string[] = ['/floor', '/floor/sign-in', '/floor/sync', '/floor/enrol']
+export const RESTING_PATHS: readonly string[] = ['/floor', '/floor/sign-in', '/floor/sync', '/floor/enrol', /* B-W2b-66: a wall screen is always at rest */ '/floor/display']
 
 export type UpdateStep = 'none' | 'waitQueue' | 'waitNetwork' | 'waitScreen' | 'apply'
 
