@@ -35,6 +35,8 @@ export const THRESHOLD_FIELDS: Readonly<Record<RuleKind, { readonly numbers: rea
   INVOICE_DEADLINE: { numbers: [{ key: 'daysBefore', min: 0, max: 15, unit: 'days' }], workingDays: true },
   // B-W2b-24: no call of a connection worked for this many hours.
   INTEGRATION_FAILING: { numbers: [{ key: 'hours', min: 1, max: 168, unit: 'hours' }], workingDays: false },
+  // B-W2b-42: no number here (the limits themselves are People settings').
+  WORKING_TIME_LIMIT: { numbers: [], workingDays: false },
 })
 
 /** The kind's one number edited in the rules list itself (inline), or null (none, as "Material short"). */

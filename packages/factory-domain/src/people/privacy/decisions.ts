@@ -29,6 +29,9 @@ export const PERSON_DECISIONS = [
   'LABOUR_CORRECTION',
   'SCAN_FINDING_REVIEW',
   'PAY_PERIOD_LOCK',
+  // B-W2b-42: worked overtime approved, rejected or taken back; a timesheet approved or sent back.
+  'OVERTIME_DECISION',
+  'TIMESHEET_APPROVAL',
 ] as const
 export type PersonDecision = (typeof PERSON_DECISIONS)[number]
 
