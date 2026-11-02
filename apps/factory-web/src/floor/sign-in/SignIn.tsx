@@ -1,10 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { changePin, signIn, type Credentials, type SignInRoute } from '../api'
-import { useFloor } from '../FloorApp'
+import { useFloor, useFloorRouter } from '../FloorApp'
 import { useFloorKeys } from '../keys'
 import { isBadgeCode, newPinProblem } from '../model'
 import { fetchTabletClock } from '../tasks/clock/api'
@@ -36,7 +35,7 @@ export function FloorSignIn() {
 
 function SignInScreen() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { device, me, crewStep } = store
   const switching = Boolean(me && store.pendingSwitch)

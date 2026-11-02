@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import { PrefetchKind } from 'next/dist/client/components/router-reducer/router-reducer-types'
 import { CircleAlert, RotateCcw, Smartphone } from 'lucide-react'
 import { FloorActionBar, useIdleSignOut } from '@nexus/ui/floor'
 import type { ApiClient } from '../lib/api/client'
@@ -14,6 +15,7 @@ import { endCrew, fetchDevice, fetchMe, leaveCrew, signIn, signOut as apiSignOut
 import { FloorFrameView, type FrameAction, type FrameModel } from './frame/view/FloorFrameView'
 import { FloorState } from './frame/view/FloorState'
 import { floorLocale, IDLE_WARN_MS, idleWarnAfterMs } from './model'
+import { FLOOR_PAGES, FloorMoves, PREFETCH_EVERY_MS, serverAnswers } from './moves'
 import { numberKindsOf } from './queue/actions'
 import { FloorQueue, type QueueSnapshot } from './queue/queue'
 import { browserStorage } from './queue/storage'
@@ -104,6 +106,8 @@ export interface FloorStore {
   keptSnapshot: KeptSnapshot
   /** B-W2b-70: where this tablet opens for this person: Home, or the Line view on a LINE tablet of a team leader. */
   landing: string
+  /** B-W2b-F6: every floor move goes through it (moves.ts): with the network gone it never ends on the browser's error page. */
+  router: Pick<FloorMoves, 'push' | 'replace'>
   /** The offline queue: actions saved here first, sent in order (queue/queue.ts). */
   queue: FloorQueue
   queueSnapshot: QueueSnapshot
@@ -128,6 +132,11 @@ export function useFloor(): FloorStore {
   const store = useContext(FloorContext)
   if (!store) throw new Error('useFloor() outside the floor app')
   return store
+}
+
+/** The router of every floor screen. */
+export function useFloorRouter(): FloorStore['router'] {
+  return useFloor().router
 }
 
 const subscribeOnline = (notify: () => void) => {
@@ -181,7 +190,12 @@ async function storageState(): Promise<{ persisted: boolean | null; freeMb: numb
 
 export function FloorApp({ appVersion, catalogues, children }: { appVersion: string; catalogues: Readonly<Record<Locale, LocaleMessages>>; children: ReactNode }) {
   const api = useMemo(() => browserApi(), [])
-  const router = useRouter()
+  const nextRouter = useRouter()
+  const [moveHeld, setMoveHeld] = useState(false)
+  const router = useMemo(
+    () => new FloorMoves({ push: (path) => nextRouter.push(path), replace: (path) => nextRouter.replace(path), at: () => `${window.location.pathname}${window.location.search}`, reachable: serverAnswers, held: setMoveHeld }),
+    [nextRouter],
+  )
   const pathname = usePathname()
   const online = useOnline()
   const [load, setLoad] = useState<Load>({ status: 'loading' })
@@ -375,6 +389,20 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     await reload()
   }, [reload, setMe])
 
+  // B-W2b-F6: the pages a worker moves between, held whole while online (moves.ts): from the start, as a kiosk's clock opens with
+  // nobody signed in. A line board has no moves.
+  const holdsPages = device !== null && device.rules?.landing !== 'LINE_BOARD'
+  useEffect(() => {
+    if (!online || !holdsPages) return
+    const hold = () => {
+      for (const path of FLOOR_PAGES) nextRouter.prefetch(path, { kind: PrefetchKind.FULL })
+    }
+    hold()
+    const timer = window.setInterval(hold, PREFETCH_EVERY_MS)
+    return () => window.clearInterval(timer)
+  }, [nextRouter, online, holdsPages])
+  useEffect(() => router.arrived(), [router, pathname])
+
   // The screen's language: the operator's (or the one they chose for this session), else the one picked here, else the tenant's.
   const locale = me ? (sessionLocale ?? floorLocale({ person: me.worker.locale, tenant: device?.defaultLocale })) : floorLocale({ picked, tenant: device?.defaultLocale })
   useEffect(() => {
@@ -433,6 +461,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
         station,
         titleKey,
         online,
+        moveHeld,
         pending: shellQueue.pending,
         refused: shellQueue.refused,
         lastSentAt: shellQueue.lastSentAt,
@@ -489,7 +518,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
       }
       return { frame: model, onFrame }
     },
-    [device, me, online, ui, idle, router, signOut, endTheCrew, crewLeft, shellQueue.pending, shellQueue.refused, shellQueue.lastSentAt],
+    [device, me, online, moveHeld, ui, idle, router, signOut, endTheCrew, crewLeft, shellQueue.pending, shellQueue.refused, shellQueue.lastSentAt],
   )
 
   const store: FloorStore = {
@@ -558,6 +587,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     kept,
     keptSnapshot,
     landing: device?.rules?.landing === 'LINE_VIEW' && me?.permissions.includes('floor.lead') ? LINE_VIEW : HOME,
+    router,
     queue,
     queueSnapshot,
     shellQueue,

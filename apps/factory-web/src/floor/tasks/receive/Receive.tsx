@@ -1,12 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { zxingCamera } from '../../camera'
-import { useFloor } from '../../FloorApp'
+import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { readScan } from '../../scan/scan-model'
 import { AsOfMemory, codeKey } from '../shared/as-of'
@@ -61,7 +60,7 @@ const POLL_TRIES = 40
 
 export function FloorReceive() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('tile.receive', { showHome: true })
   const { me, api, online, sessionEnded, locale } = store
