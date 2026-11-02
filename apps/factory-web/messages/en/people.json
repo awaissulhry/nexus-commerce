@@ -724,7 +724,8 @@
     "activity": "Activity",
     "documents": "Documents",
     "job": "Job & team",
-    "profile": "Profile"
+    "profile": "Profile",
+    "skills": "Skills & training"
   },
   "team": {
     "isLead": "Lead",

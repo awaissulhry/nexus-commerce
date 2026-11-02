@@ -1,0 +1,362 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "loading": "Caricamento…",
+    "reason": "Motivo",
+    "unknown": "qualcuno",
+    "min": "min",
+    "hours": "h",
+    "months": "mesi",
+    "people": "persone",
+    "close": "Chiudi"
+  },
+  "band": {
+    "more": "Altre azioni",
+    "history": "Storico (registro modifiche)",
+    "changedElsewhere": "Modificato da qualcun altro: rileggi la pagina per vederlo.",
+    "reload": "Ricarica"
+  },
+  "section": {
+    "loading": "{section}: caricamento in corso…",
+    "failed": "Impossibile caricare {section}"
+  },
+  "card": {
+    "unsaved": "Modifiche non salvate"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "save": "Salva la scheda"
+  },
+  "rounding": {
+    "title": "Arrotondamenti, tolleranze e grazia",
+    "purpose": "Come le timbrature diventano ore. Vale dal prossimo calcolo di ogni giorno; un giorno approvato mantiene i suoi valori.",
+    "early": "La timbratura anticipata vale dall'inizio turno",
+    "earlyHint": "Timbrare prima del turno non aggiunge tempo.",
+    "fixedBreaks": "Le pause vengono dal turno",
+    "fixedBreaksHint": "Spento: per la pausa si timbra.",
+    "grace": "Grazia sul ritardo",
+    "unit": "Unità minima di straordinario",
+    "round": "Arrotondamento delle timbrature",
+    "roundNone": "Nessuno",
+    "roundMinutes": "{count} min",
+    "auto": "Uscita automatica",
+    "autoHint": "Dopo la fine del turno, più questa tolleranza. Il giorno viene segnalato a una persona.",
+    "autoToggle": "Chiudi automaticamente una timbratura aperta",
+    "example": "Esempio, turno 06:00–14:00",
+    "problem": {
+      "lateGraceMinutes": "Indica la grazia da 0 a 60 minuti.",
+      "overtimeUnitMinutes": "Conta lo straordinario a unità da 1 a 60 minuti.",
+      "roundingMinutes": "Arrotonda a nessuno, 5 o 15 minuti.",
+      "autoClockOutAfterMinutes": "Chiudila da 0 a 720 minuti dopo la fine del turno."
+    }
+  },
+  "example": {
+    "earlyOn": "Una timbratura alle 05:52 per un turno delle 06:00 vale dalle 06:00.",
+    "earlyOff": "Una timbratura alle 05:52 per un turno delle 06:00 vale dalle {time}: i minuti prima delle 06:00 contano solo come straordinario.",
+    "graceOn": "Una timbratura fino alle {until} vale ancora dalle 06:00; alle {after} vale dalle {counted}.",
+    "graceNone": "Una timbratura dopo le 06:00 vale da quel minuto (nessuna grazia sul ritardo).",
+    "graceNoneRounded": "Una timbratura dopo le 06:00 vale da quel minuto, arrotondato (nessuna grazia sul ritardo).",
+    "roundOn": "Le timbrature si arrotondano ai {unit} minuti più vicini: 13:52 vale {a}, 13:53 vale {b}.",
+    "roundOff": "Le timbrature non si arrotondano: valgono al minuto.",
+    "overtime": "Lo straordinario conta a unità intere di {unit} minuti: un'uscita {after} minuti dopo la fine turno delle 14:00 dà {unit} minuti.",
+    "overtimeLong": "Lo straordinario conta a unità intere di {unit} minuti: un'uscita {after} minuti dopo la fine turno delle 14:00 dà {unit} minuti; {less} minuti dopo non dà nulla.",
+    "autoNever": "Una timbratura aperta non si chiude mai da sola: il giorno viene segnalato a una persona.",
+    "autoAfter": "Una timbratura aperta si chiude da sola {minutes} minuti dopo la fine del turno, e il giorno viene segnalato a una persona.",
+    "breaksFixed": "Le pause vengono dal turno e si sottraggono da sole; nessuno le timbra.",
+    "breaksClocked": "Per la pausa si timbra in uscita e in entrata; le pause timbrate si sottraggono."
+  },
+  "code": {
+    "title": "Codici di assenza",
+    "purpose": "Codici per il LUL e la paga. Un codice archiviato resta leggibile sui suoi giorni.",
+    "code": "Codice",
+    "codeHint": "Da 1 a 8 lettere maiuscole e cifre, con una lettera all'inizio.",
+    "codeFixed": "Un codice non cambia mai.",
+    "nameIt": "Nome in italiano",
+    "nameEn": "Nome in inglese",
+    "category": "Categoria",
+    "paid": "Retribuita",
+    "isPaid": "Retribuita",
+    "isUnpaid": "Non retribuita",
+    "lul": "Codice LUL",
+    "lulHint": "Dal consulente del lavoro; vuoto finché non lo comunica.",
+    "document": "Richiede un numero di documento",
+    "documentHint": "Solo un numero, come il protocollo di un certificato.",
+    "documentYes": "Numero richiesto",
+    "documentNo": "Non richiesto",
+    "reach": "Per",
+    "reachGroup": "Tutte le aziende",
+    "reachCompany": "Questa azienda",
+    "reachHint": "Serve un ruolo su tutte le aziende.",
+    "inUse": "Giorni",
+    "status": "Stato",
+    "state": {
+      "ACTIVE": "In uso",
+      "ARCHIVED": "Archiviato"
+    },
+    "rowMenu": "Azioni su {code}",
+    "edit": "Modifica",
+    "archive": "Archivia",
+    "restore": "Ripristina",
+    "standard_one": "Aggiungi {count} dall'elenco standard",
+    "standard_other": "Aggiungi {count} dall'elenco standard",
+    "standardAll": "Parti dall'elenco standard",
+    "add": "Aggiungi un codice",
+    "count_one": "{count} codice",
+    "count_other": "{count} codici",
+    "showArchived": "Mostra archiviati",
+    "archiveCount_one": "Archivia {count}",
+    "archiveCount_other": "Archivia {count}",
+    "restoreCount_one": "Ripristina {count}",
+    "restoreCount_other": "Ripristina {count}",
+    "empty": "Ancora nessun codice di assenza",
+    "foot": "L'elenco standard contiene i codici italiani più comuni da rivedere: i codici LUL vengono dal consulente del lavoro.",
+    "titleNew": "Nuovo codice di assenza",
+    "titleEdit": "Codice di assenza {code}",
+    "save": "Salva codice",
+    "sensitive": "Per questa categoria Nexus tiene al massimo il numero di un certificato, mai una diagnosi.",
+    "law": "GDPR art. 9",
+    "lawPlain": "I dati sanitari e familiari sono categorie particolari di dati personali.",
+    "problem": {
+      "code": "Da 1 a 8 lettere maiuscole e cifre, con una lettera all'inizio.",
+      "labelI18n": "Inserisci almeno il nome in italiano.",
+      "category": "Scegli la categoria.",
+      "lulCode": "Da 1 a 16 lettere, cifre, punti, trattini o trattini bassi.",
+      "paid": "Indica se è retribuita."
+    }
+  },
+  "category": {
+    "HOLIDAY": "Ferie",
+    "PERMIT": "Permesso (ROL)",
+    "SICKNESS": "Malattia",
+    "INJURY": "Infortunio",
+    "PARENTAL": "Congedo parentale",
+    "LAW_104": "Permesso legge 104",
+    "UNION": "Permesso sindacale",
+    "STRIKE": "Sciopero",
+    "UNPAID_LEAVE": "Aspettativa non retribuita",
+    "OTHER": "Altro"
+  },
+  "limits": {
+    "title": "Limiti dell'orario di lavoro",
+    "purpose": "Avvisi prima che la legge sia violata.",
+    "forSite": "Per {name}",
+    "forCompany": "Per tutta l'azienda",
+    "waitingScope": "Salva o annulla questa scheda per vedere il sito scelto nella barra in alto.",
+    "kind": {
+      "DAILY_REST": "Riposo tra i turni",
+      "WEEKLY_REST": "Riposo settimanale",
+      "WEEKLY_AVERAGE": "Media settimanale",
+      "BREAK_AFTER": "Pausa dopo",
+      "OVERTIME_YEARLY_CAP": "Straordinario annuo",
+      "NIGHT_AVERAGE": "Lavoro notturno"
+    },
+    "value": {
+      "DAILY_REST": "Almeno",
+      "WEEKLY_REST": "Almeno",
+      "WEEKLY_AVERAGE": "Al massimo",
+      "BREAK_AFTER": "Dopo",
+      "OVERTIME_YEARLY_CAP": "Al massimo",
+      "NIGHT_AVERAGE": "Al massimo, in media"
+    },
+    "lawValue": "La legge dice {hours} h.",
+    "notChecked": "Tenuto qui, non ancora controllato",
+    "months": "Periodo di riferimento",
+    "break": "Pausa di",
+    "action": "Quando si raggiunge",
+    "WARN": "Avvisa",
+    "BLOCK": "Blocca",
+    "source": "Viene da",
+    "LAW": "La legge",
+    "CCNL": "CCNL",
+    "reference": "Articolo del CCNL",
+    "alerted": "Chi viene avvisato",
+    "useCompany": "Usa il limite dell'azienda",
+    "useLaw": "Usa il limite più ampio o la legge",
+    "problem": {
+      "limitMinutes": "Meno restrittivo della legge: serve l'articolo del CCNL che lo consente.",
+      "breakMinutes": "La legge chiede almeno 10 minuti: meno richiede l'articolo del CCNL.",
+      "referenceMonths": "La legge dice 4 mesi: di più richiede l'articolo del CCNL.",
+      "legalReference": "Indica l'articolo del CCNL.",
+      "alertRoles": "Controlla chi viene avvisato (al massimo 8 ruoli)."
+    },
+    "alertedSearch": "Cerca ruoli",
+    "alertedNone": "Ancora nessuno"
+  },
+  "privacy": {
+    "title": "Privacy dei dati delle persone",
+    "purpose": "Chi vede i dati individuali e quanto può essere piccolo un gruppo mostrato.",
+    "sites": "i siti",
+    "group": "Dimensione minima del gruppo per i totali",
+    "groupHint": "Un gruppo più piccolo non mostra mai i suoi dati. {min} è il minimo.",
+    "roles": "Ruoli che vedono i dati di una persona, oltre al lavoratore",
+    "rolesHint": "Un ruolo qui deve avere anche il diritto di aprire i dati; ogni apertura viene registrata.",
+    "widenHint": "Questo allarga chi vede i dati delle persone: servono un motivo e un nuovo codice.",
+    "basis": "Base giuridica del sito",
+    "noBasis": "Nessuna registrata",
+    "basisLink": "Produzione › Impostazioni",
+    "retention": "Conservazione",
+    "retentionLink": "Sistema › Privacy e informative",
+    "problem": {
+      "size": "La dimensione del gruppo va da 3 a 50.",
+      "reason": "Scrivi prima il motivo."
+    }
+  },
+  "basis": {
+    "UNION_AGREEMENT": "Accordo sindacale (RSU / RSA)",
+    "INL_AUTHORISATION": "Autorizzazione dell'Ispettorato del lavoro",
+    "NOT_REQUIRED": "Parere scritto del legale: non necessario"
+  },
+  "gate": {
+    "title": {
+      "ATTENDANCE": "Presenze",
+      "PERFORMANCE": "Dati di lavoro di una persona"
+    },
+    "item": {
+      "notice": "L'informativa ai lavoratori è pubblicata",
+      "dpia": "La valutazione d'impatto è archiviata",
+      "dpiaVersion": "Versione {version}",
+      "basis": "La base giuridica del sito è registrata",
+      "attendanceBasis": "La base tenuta per le presenze",
+      "privacyLink": "Sistema › Privacy e informative",
+      "basisLink": "Produzione › Impostazioni",
+      "onRecord": "Registrata"
+    },
+    "law": {
+      "notice": "L. 300/1970 art. 4 c.3; GDPR art. 13",
+      "noticePlain": "I lavoratori sanno come sono usati i loro dati, prima che siano usati.",
+      "dpia": "GDPR art. 35",
+      "dpiaPlain": "Un rischio per i diritti delle persone si valuta prima.",
+      "ATTENDANCE": "L. 300/1970 art. 4 c.2",
+      "ATTENDANCEPlain": "Uno strumento che registra il lavoro non richiede un accordo, ma i lavoratori vanno informati.",
+      "PERFORMANCE": "L. 300/1970 art. 4 c.1",
+      "PERFORMANCEPlain": "Uno strumento che può controllare il lavoro richiede un accordo o un'autorizzazione."
+    },
+    "switchOn": "Attiva",
+    "switchOff": "Disattiva",
+    "who": "Chi vede i dati di una persona in questo sito",
+    "whoHr": "Il lavoratore e le risorse umane",
+    "whoHrHint": "Ogni apertura viene registrata.",
+    "whoLead": "Il lavoratore, il capo squadra e le risorse umane",
+    "whoLeadHint": "La base registrata copre i capi squadra. Allargare richiede un nuovo codice.",
+    "whoLeadHeld": "In attesa: la base registrata non copre i capi squadra.",
+    "onTitle": "Attiva: {purpose}, {site}",
+    "offTitle": "Disattiva: {purpose}, {site}",
+    "leadsTitle": "Fai vedere i dati ai capi squadra, {site}",
+    "leadsBody": "I capi squadra vedranno i dati di una persona della propria squadra. Ogni apertura viene registrata.",
+    "leadsConfirm": "Fai vedere ai capi squadra",
+    "onBody": {
+      "ATTENDANCE": "Timbrature e giorni di presenza partono in questo sito. L'informativa e la valutazione d'impatto in vigore restano registrate con questa decisione.",
+      "PERFORMANCE": "I dati di lavoro di una persona si aprono in questo sito, per il lavoratore e le risorse umane, una persona alla volta. La base del sito, l'informativa e la valutazione restano registrate con questa decisione."
+    },
+    "offBody": {
+      "ATTENDANCE": "Le presenze si chiudono in questo sito: da ora le letture per persona sono rifiutate. Ciò che è registrato resta. Riattivare è una nuova decisione.",
+      "PERFORMANCE": "I dati di una persona si chiudono in questo sito. Riattivare è una nuova decisione."
+    },
+    "basisKind": "Base tenuta",
+    "basisPick": "Scegli la base",
+    "basisReference": "Riferimento",
+    "basisReferenceHint": "Autore e data del parere, oppure numero e data dell'accordo.",
+    "siteBasis": "Base di questo sito: {basis}. Per cambiarla usa Produzione › Impostazioni.",
+    "covers": "L'accordo nomina i capi squadra",
+    "coversHint": "Solo un accordo o un'autorizzazione possono dirlo.",
+    "leads": "I capi squadra vedono i dati dall'inizio",
+    "reasonHint": "Resta con la decisione.",
+    "problem": {
+      "reason": "Scrivi prima il motivo.",
+      "basis": "Inserisci prima la base e il suo riferimento."
+    }
+  },
+  "note": {
+    "dpiaReview": "La valutazione d'impatto (versione {version}) andava rivista il {day}: rivedila.",
+    "stationOnly": "I dati di reparto di questo sito indicano solo la postazione: qui non si registra nessun dato di lavoro di una persona.",
+    "noticeChanged": "L'informativa è cambiata dopo l'attivazione: disattiva e riattiva per registrare quella in vigore.",
+    "dpiaChanged": "La valutazione d'impatto è cambiata dopo l'attivazione: controlla che copra ancora questo, poi disattiva e riattiva.",
+    "basisChanged": "La base giuridica del sito è cambiata dopo l'attivazione: disattiva e riattiva per registrare quella in vigore.",
+    "other": "Qualcosa è cambiato dopo l'attivazione: controlla."
+  },
+  "stepUp": {
+    "title": "Il tuo codice",
+    "widen": "Allargare chi vede i dati delle persone richiede un nuovo codice dall'app di autenticazione.",
+    "leads": "Far vedere i dati ai capi squadra richiede un nuovo codice dall'app di autenticazione.",
+    "switchOn": "Attivare questo richiede un nuovo codice dall'app di autenticazione.",
+    "confirm": "Conferma",
+    "problem": {
+      "wrong": "Questo codice non è valido.",
+      "locked": "Troppi tentativi: aspetta un momento.",
+      "unavailable": "Non è stato possibile controllare il codice: riprova."
+    }
+  },
+  "done": {
+    "rounding": "Regole di arrotondamento salvate: valgono dal prossimo calcolo di ogni giorno.",
+    "limits_one": "{count} limite salvato.",
+    "limits_other": "{count} limiti salvati.",
+    "privacy": "Impostazioni privacy salvate.",
+    "code": "Codice {code} salvato.",
+    "archived_one": "{count} codice archiviato.",
+    "archived_other": "{count} codici archiviati.",
+    "restored_one": "{count} codice ripristinato.",
+    "restored_other": "{count} codici ripristinati.",
+    "standard_one": "{count} codice aggiunto dall'elenco standard.",
+    "standard_other": "{count} codici aggiunti dall'elenco standard.",
+    "switchedOn": "Attivato in questo sito.",
+    "switchedOff": "Disattivato in questo sito.",
+    "widened": "I capi squadra vedono i dati in questo sito.",
+    "narrowed": "I capi squadra non vedono più i dati in questo sito."
+  },
+  "held": {
+    "noAudit": "Il tuo ruolo non legge il registro modifiche.",
+    "noAttendance": "Il tuo ruolo legge queste regole ma non le cambia.",
+    "noLimits": "Il tuo ruolo legge questi limiti ma non li cambia.",
+    "noPrivacy": "Solo il titolare li cambia.",
+    "allArchived": "Tutti i codici scelti sono archiviati.",
+    "noneArchived": "Nessun codice scelto è archiviato."
+  },
+  "field": {
+    "code": "Controlla il codice.",
+    "codeTaken": "Questo codice esiste già: i codici sono unici in tutto il gruppo.",
+    "labelI18n": "Controlla il nome.",
+    "lulCode": "Controlla il codice LUL.",
+    "limitMinutes": "Controlla il limite.",
+    "breakMinutes": "Controlla la pausa.",
+    "referenceMonths": "Controlla il periodo di riferimento.",
+    "legalReference": "Indica la legge o l'articolo del CCNL.",
+    "reason": "Scrivi il motivo in poche parole.",
+    "basis": "Controlla la base e il riferimento.",
+    "basisCoversLeads": "La base registrata non copre i capi squadra.",
+    "leadsSeeFigures": "I capi squadra vedono i dati solo dove la base registrata li copre.",
+    "minimumGroupSize": "La dimensione del gruppo va da 3 a 50.",
+    "figureRoleKeys": "Controlla i ruoli scelti."
+  },
+  "leave": {
+    "title": "Modifiche non salvate",
+    "body": "Hai modificato queste impostazioni e non le hai salvate.",
+    "save": "Salva",
+    "discard": "Scarta",
+    "stay": "Resta"
+  },
+  "history": {
+    "title": "Impostazioni persone: registro modifiche",
+    "failed": "Impossibile leggere il registro",
+    "empty": "Ancora nessuna modifica",
+    "when": "Quando",
+    "who": "Chi",
+    "what": "Cosa",
+    "system": "Il sistema",
+    "action": {
+      "changeAttendanceSettings": "Regole di arrotondamento cambiate",
+      "changePrivacySettings": "Impostazioni privacy cambiate",
+      "switchOnPurpose": "Varco attivato",
+      "switchOffPurpose": "Varco disattivato",
+      "changePurposeLeads": "Chi vede i dati è cambiato",
+      "createAbsenceCode": "Codice di assenza aggiunto",
+      "editAbsenceCode": "Codice di assenza cambiato",
+      "archiveAbsenceCode": "Codice di assenza archiviato",
+      "restoreAbsenceCode": "Codice di assenza ripristinato",
+      "saveWorkingTimeLimit": "Limite d'orario salvato",
+      "archiveWorkingTimeLimit": "Limite d'orario tolto",
+      "other": "Modificato"
+    }
+  }
+}

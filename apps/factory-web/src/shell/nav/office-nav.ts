@@ -300,6 +300,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/people/employees/[id]',
   '/people/employees/badges',
   '/people/employees/print',
+  '/people/skills',
+  '/people/skills/print',
+  '/people/settings',
+  '/people/settings/history',
 ])
 
 /**
