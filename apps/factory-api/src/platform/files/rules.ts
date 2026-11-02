@@ -44,6 +44,12 @@ export const KIND_RULES: Readonly<Record<FileKind, { readonly contentTypes: read
   FISCAL_ARCHIVE: { contentTypes: [PDF, 'application/xml', 'text/xml', 'application/pkcs7-mime'], maxBytes: 20 * MIB },
 })
 
+/**
+ * B-W2b-47 (COL-017): a short clip from the floor is stored as a PHOTO file (no video kind yet: a schema need of the step's
+ * notes) with the PHOTO size limit; no other PHOTO route takes one (UploadPath.clip).
+ */
+export const FLOOR_CLIP_TYPES: readonly string[] = Object.freeze(['video/mp4', 'video/webm', 'video/quicktime'])
+
 /** The largest file of any kind (the local store's body limit). */
 export const MAX_FILE_BYTES = Math.max(...Object.values(KIND_RULES).map((rule) => rule.maxBytes))
 
@@ -63,11 +69,12 @@ export function normaliseContentType(value: string): string {
 }
 
 /** The problems of an announced upload against its kind's rules (empty when it may be uploaded). */
-export function uploadProblems(input: { kind: FileKind; contentType: string; sizeBytes: number; sha256: string }): Issue[] {
+export function uploadProblems(input: { kind: FileKind; contentType: string; sizeBytes: number; sha256: string; clip?: boolean | undefined }): Issue[] {
   const rule = KIND_RULES[input.kind]
   const problems: Issue[] = []
-  if (!rule.contentTypes.includes(normaliseContentType(input.contentType))) {
-    problems.push({ path: 'body/contentType', message: `A ${input.kind} file may be ${rule.contentTypes.join(', ')}.` })
+  const types = input.clip && input.kind === 'PHOTO' ? [...rule.contentTypes, ...FLOOR_CLIP_TYPES] : rule.contentTypes
+  if (!types.includes(normaliseContentType(input.contentType))) {
+    problems.push({ path: 'body/contentType', message: `A ${input.kind} file may be ${types.join(', ')}.` })
   }
   if (!Number.isSafeInteger(input.sizeBytes) || input.sizeBytes < 1 || input.sizeBytes > rule.maxBytes) {
     problems.push({ path: 'body/sizeBytes', message: `A ${input.kind} file holds 1 byte to ${rule.maxBytes / MIB} MiB.` })

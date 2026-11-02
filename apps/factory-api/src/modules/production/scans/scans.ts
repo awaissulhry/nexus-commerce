@@ -65,6 +65,11 @@ import { guardReportInCommand, recordGuardsInCommand, type ComponentInput, type 
 import { scrapWaitsInCommand, type ScrapWaits } from './hooks/scrap-limit'
 // B-W2b-40 hook (modules/production/terminal; MES-094): a report that ends a team's stretch names the team.
 import { timingAfterReportInCommand } from './hooks/timing'
+// B-W2b-47 hooks: a report entered on someone's behalf (MES-099), Finish held by the operation's steps (MES-102).
+import { undoViewer } from '@nexus/factory-domain/production/onbehalf/rules'
+import { PRODUCTION_SCAN_BEHALF } from '@nexus/factory-domain/production/onbehalf/permissions'
+import { checklistHoldInCommand } from './hooks/checklist'
+import { onBehalfRecordedInCommand, reportReason, type OnBehalf } from './hooks/onbehalf'
 
 /**
  * The floor's scans (B-W1-42; MES-069, MES-090, MES-095, MES-096, MES-308; PLAN §4.7 stage 12-scans, risk 17; A1 §3.8;
@@ -113,6 +118,8 @@ export interface ReportInput {
   readonly components?: readonly ComponentInput[] | undefined
   /** B-W2b-46: a team leader's verified override of the held checks (POST /production/guards/override; never a PIN). */
   readonly override?: VerifiedOverride | undefined
+  /** B-W2b-47: the team leader enters it for this person or station (POST /production/on-behalf/report; checked there). */
+  readonly onBehalf?: OnBehalf | undefined
 }
 
 export interface UndoInput {
@@ -382,7 +389,8 @@ async function report(caller: CommandCaller, session: Session, input: ReportInpu
   if (!normal.ok) return refused(normal.refusal)
   const counts = { good: input.good, scrap: normal.scrap, rework: normal.rework }
   const deviceTime = deviceTimeOf(input.occurredAt)
-  const stationId = await stationOf(caller, session)
+  // B-W2b-47 hook: an entry on behalf happened at the station picked, not at the team leader's tablet.
+  const stationId = input.onBehalf ? input.onBehalf.stationId : await stationOf(caller, session)
   const timeZone = session.timeZone ?? (session.timeZone = await caller.withClient((client) => siteTimeZone(client, context.siteId)))
 
   const outcome = await judged(
@@ -436,8 +444,11 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   const stations = await readStations(tx, [work.stationId, ...scans.map((scan) => scan.stationId)])
   const station = work.stationId ? (stations.get(work.stationId) ?? null) : null
   const scanSubject = await scanSubjectFor(tx, workOrder.siteId)
-  const acknowledged = scanSubject === 'WORKER' ? await hasAcknowledgedNotice(tx, workOrder.siteId, context.actorId) : false
-  const notNamed = subjectRefusal({ scanSubject, workerId: context.actorId, acknowledged, stationId: work.stationId })
+  // B-W2b-47 hook (hooks/onbehalf.ts): who the report names, the person a team leader enters it for, else the signed-in worker.
+  const onBehalf = work.input.onBehalf
+  const person = onBehalf ? onBehalf.workerId : context.actorId
+  const acknowledged = scanSubject === 'WORKER' && person ? await hasAcknowledgedNotice(tx, workOrder.siteId, person) : false
+  const notNamed = subjectRefusal({ scanSubject, workerId: person, acknowledged, stationId: work.stationId })
   if (notNamed) refuse(notNamed)
   // W2a B-W2a-13 hook (bundles/flow.ts): a split bundle's live garments, a child's place in the flow, rework back in it.
   const flow = await bundleFlowOf(tx, locked.bundle, operations, standing)
@@ -458,7 +469,7 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
     kindReason: work.input.kindReason?.trim() || null,
     standing: flow.standing,
     counts: work.counts,
-    viewer: { scanSubject, workerId: context.actorId, stationId: work.stationId },
+    viewer: { scanSubject, workerId: person, stationId: work.stationId },
     stationCodes: new Map([...stations.values()].map((row) => [row.id, row.code])),
     timeZone: work.timeZone,
     guarded: true,
@@ -466,8 +477,10 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   if (!decision.ok) return refuse(decision.refusal)
   // B-W2b-46 hook (production/guards): the site's checks hold the report (or a team leader's override lifts them); the lots at the operation.
   const guard = await guardReportInCommand(tools, { workOrder, bundle: { id: locked.bundle.id, code: locked.bundle.code, workOrderSizeId: work.bundle.workOrderSizeId }, quantity: flow.quantity, operations, operation: decision.operation, standing: flow.standing, counts: work.counts, stationId: work.stationId, components: work.input.components, override: work.input.override })
+  // B-W2b-47 hook (hooks/checklist.ts; MES-102): Finish waits for the operation's required steps.
+  await checklistHoldInCommand(tools, { bundleId: locked.bundle.id, bundleCode: locked.bundle.code, operationId: decision.operation.id })
   // Who it names: the site's floor rules (the trigger checks the same).
-  const subject = await floorRecordSubjectFor(tx, { siteId: workOrder.siteId, workerId: context.actorId, stationId: work.stationId })
+  const subject = await floorRecordSubjectFor(tx, { siteId: workOrder.siteId, workerId: person, stationId: work.stationId })
   const otherKind = station !== null && station.kind !== decision.operation.workCentreKind
   const id = newId()
   await tx.operationScan.create({
@@ -482,7 +495,7 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
       scrapQuantity: work.counts.scrap,
       reworkQuantity: work.counts.rework,
       scrapReason: scrapReasonColumn(work.lines),
-      reason: otherKind ? work.input.kindReason!.trim() : null,
+      reason: reportReason(onBehalf, otherKind ? work.input.kindReason!.trim() : null),
       workerId: subject.workerId,
       stationId: subject.stationId,
       deviceId: context.deviceId,
@@ -497,7 +510,7 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   // A refused send of this action that the device's queue sent again under the same id is resolved by it.
   await resolveRefusals(tx, tools.now, { deviceId: context.deviceId, clientScanId: work.input.clientScanId, scanId: id })
   // W2b B-W2b-29 hook (offstandard/writes.ts; MES-156): scanning a bundle returns to standard work — the subject's running off-standard block ends at the scan.
-  await endRunningBlock(tools, { tenantId: context.tenantId, siteId: workOrder.siteId, subject, at: believedTime(work.deviceTime, tools.now), endedBy: 'SCAN' })
+  if (!onBehalf) await endRunningBlock(tools, { tenantId: context.tenantId, siteId: workOrder.siteId, subject, at: believedTime(work.deviceTime, tools.now), endedBy: 'SCAN' })
   // B-W2b-40 hook (hooks/timing.ts; MES-094, F3): the report ends the running stretch (the database's rule); its team is named on it.
   await timingAfterReportInCommand(tools, { scanId: id, siteId: workOrder.siteId, bundleId: locked.bundle.id, workOrderOperationId: decision.operation.id, subject, createdById: subject.workerId ? context.actorId : null })
   const row = (await readScan(tx, id))!
@@ -507,6 +520,8 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   tools.emit(scanEvent(workOrder, row, decision.operation.seq, 'FLOOR'))
   // B-W2b-46 hook: what the checks found, the override and the lots, kept and told.
   recordGuardsInCommand(tools, guard, { scan: row, workOrder, bundleId: locked.bundle.id, operation: decision.operation })
+  // B-W2b-47 hook: the entry on behalf, kept and told.
+  onBehalfRecordedInCommand(tools, onBehalf, { scanId: id, workOrder, bundleId: locked.bundle.id, operationId: decision.operation.id })
   // B-W2b-53 hook: the scrap above the site's limit waits for the team leader before it posts; the tablet is told.
   return { ...scanView(row, operations, locked.bundle.code, work.lines), scrapWaits: await scrapWaitsInCommand(tools, workOrder.siteId, row.scrapQuantity) }
 }
@@ -592,7 +607,8 @@ async function undo(caller: CommandCaller, session: Session, input: UndoInput): 
             scans,
             latestOnDevice: await latestOnDevice(tx, context.deviceId),
             deviceId: context.deviceId,
-            viewer: { scanSubject, workerId: context.actorId, stationId },
+            // B-W2b-47 hook: the team leader takes back what they entered on someone's behalf, as its person could.
+            viewer: undoViewer({ scanSubject, workerId: context.actorId, stationId }, target, mayScan(context, PRODUCTION_SCAN_BEHALF, current)),
             deviceTime,
             now: tools.now,
           })

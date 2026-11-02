@@ -41,6 +41,11 @@ export const FLOOR_SYNC_KINDS = [
   'production.scan.resume',
   'production.scan.handBack',
   'production.scan.partial',
+  // B-W2b-47: kept offline with the tablet's time: a report on someone's behalf (MES-099; the override stays online), a step
+  // ticked (MES-102), a comment (MES-101: its photo goes up when the network is back, before the note is sent).
+  'production.scan.onBehalf',
+  'production.checklist.tick',
+  'production.floorNote.post',
   // B-W2b-49: a line's handover note written on the floor (design floor.supervisor: the line view works offline).
   'andon.handover.write',
 ] as const
@@ -82,6 +87,10 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'production.scan.resume': { kind: 'production.scan.resume', permission: 'production.scan', numbers: null, what: 'Resume a paused bundle' },
   'production.scan.handBack': { kind: 'production.scan.handBack', permission: 'production.scan', numbers: null, what: 'Hand back an unfinished bundle' },
   'production.scan.partial': { kind: 'production.scan.partial', permission: 'production.scan', numbers: null, what: 'Report the pieces done so far' },
+  // B-W2b-47: the team leader's own right for a report on behalf; steps and notes are part of working a bundle.
+  'production.scan.onBehalf': { kind: 'production.scan.onBehalf', permission: 'production.scan.behalf', numbers: null, what: "Report a bundle on someone's behalf" },
+  'production.checklist.tick': { kind: 'production.checklist.tick', permission: 'production.scan', numbers: null, what: 'Tick a step of an operation' },
+  'production.floorNote.post': { kind: 'production.floorNote.post', permission: 'production.scan', numbers: null, what: 'Post a comment or photo to a work order' },
   // B-W2b-49
   'andon.handover.write': { kind: 'andon.handover.write', permission: 'production.dispatch.handover', numbers: null, what: "Write a line's handover note" },
 } satisfies Record<FloorSyncKind, QueuedAction>)

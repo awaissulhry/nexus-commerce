@@ -210,6 +210,8 @@ const recordView = output({
   worker: someone.nullable(),
   /** A worker is on the record but not shown: the site's legal gate for one person's work figures is off (the default). */
   workerHidden: z.boolean(),
+  /** B-W2b-47: a team leader entered it for someone who could not scan. */
+  enteredByLead: z.boolean(),
   disputes: z.array(output({ id: id(), status: disputeStatus, reason: z.enum(DISPUTE_REASONS).nullable(), raisedAt: instant() })),
   correctionsWaiting: z.number().int().min(0),
 })
@@ -359,6 +361,8 @@ export const mineContract = defineContract({
           counts,
           state: z.enum(RECORD_STATES),
           minutes: minutes.nullable(),
+          /** B-W2b-47: my team leader entered it for me. */
+          enteredByLead: z.boolean(),
           disputable: z.boolean(),
           dispute: disputeRef.nullable(),
         }),

@@ -231,6 +231,18 @@ const GUARDS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Objec
   team_leader: ['production.scan.override'],
 })
 /**
+ * B-W2b-47 (more on the tablet, MES-099, MES-086; design floor.supervisor "Scan on behalf"): the team leader records work
+ * for someone who could not scan and adds an unplanned operation on the tablet; the production office adds one to a work
+ * order too. The owner from every().
+ */
+const TABLET_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.scan.behalf', 'production.extraops.add'],
+})
+const TABLET_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.extraops.add'],
+  floor_supervisor: ['production.extraops.add'],
+})
+/**
  * B-W2b-37 (attendance days; MES-225, MES-226, MES-228, MES-233, MES-238; design people.attendance, people.settings): the
  * administrator (the HR register's keeper until an HR template comes) and the production manager read the days, fix them
  * with a reason, approve them and open the roll call; the administrator keeps the absence codes and the rounding rules;
@@ -305,6 +317,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...((audience === 'office' ? CALLS_ADDS : CALLS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-46
   ...(audience === 'floor' ? (GUARDS_FLOOR_ADDS[key] ?? []) : []),
+  // B-W2b-47
+  ...((audience === 'office' ? TABLET_ADDS : TABLET_FLOOR_ADDS)[key] ?? []),
   // B-W2b-50
   ...((audience === 'office' ? BOARDS_ADDS : BOARDS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-34
