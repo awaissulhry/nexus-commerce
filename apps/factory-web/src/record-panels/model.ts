@@ -219,6 +219,12 @@ export interface Loaded<T> {
   problem?: string | null
 }
 
+/**
+ * A work order's internal notes reach the tablets working on it (B-W2b-71; design floor.mywork "For your work": the open
+ * messages on my work orders), so the composer and its notice say so; every other record's notes stay in the office.
+ */
+export const noteReachesFloor = (recordType: string): boolean => recordType === 'WorkOrder'
+
 export interface RecordPanelsViewModel {
   record: PanelRecord
   /** The record's name as its page shows it ("Certificate 0000-17092-A"), for the panel's accessible name. */
