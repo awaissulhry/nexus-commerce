@@ -1,0 +1,348 @@
+/*
+ * People › Shifts (SCR-263, its print) LAYOUT: the band's status, Range and people, the sheet's cells (ShiftCell, an area
+ * part: default faint, exception bold, draft dot, tones), group rows and foot rows, the phone's day cards, the dialogs'
+ * forms, the paper. The controls are the design system's; semantic tokens only, no colours of their own. No page max-width
+ * (Owner rule 2026-10-29): the sheet takes the shell's main area.
+ */
+.fw-rs-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rs-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-rs-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-rs-section-title {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-rs-sheet {
+  min-width: 0;
+}
+
+/* Group rows and foot rows. */
+.fw-rs-group {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  height: 100%;
+  padding-inline: var(--nds-space-12);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.fw-rs-group.is-line {
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-strong);
+}
+
+.fw-rs-group.is-team {
+  padding-inline-start: var(--nds-space-24);
+}
+
+.fw-rs-person {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-rs-foot-name {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-rs-foot {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+
+.fw-rs-foot b {
+  color: var(--nds-text-strong);
+}
+
+/* ShiftCell. */
+.fw-rs-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.fw-rs-cell.is-compact {
+  align-items: center;
+  flex-direction: row;
+  gap: 2px;
+}
+
+.fw-rs-main,
+.fw-rs-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-rs-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-rs-cell.is-default .fw-rs-name {
+  color: var(--nds-text-muted);
+}
+
+.fw-rs-cell.is-roster .fw-rs-name {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rs-cell.is-none .fw-rs-name {
+  color: var(--nds-text-muted);
+  font-style: italic;
+}
+
+.fw-rs-cell.is-compact .fw-rs-name {
+  flex: none;
+  overflow: visible;
+}
+
+.nds-ag-wrap .ag-header-cell.is-compact .ag-header-cell-text {
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-rs-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-rs-draft {
+  color: var(--nds-warning-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rs-ot {
+  color: var(--nds-text-strong);
+}
+
+.fw-rs-ot.is-approved {
+  color: var(--nds-success-text);
+}
+
+.fw-rs-absent {
+  color: var(--nds-text-link);
+}
+
+.fw-rs-why {
+  display: inline-flex;
+}
+
+.fw-rs-why-trigger {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--nds-warning-text);
+  cursor: pointer;
+}
+
+.fw-rs-why-trigger.is-block {
+  color: var(--nds-danger-text);
+}
+
+.fw-rs-why-panel {
+  max-width: 360px;
+}
+
+.fw-rs-why-title {
+  margin: 0 0 var(--nds-space-6);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* The month: a letter in a narrow column. */
+.nds-ag-wrap .ag-cell.fw-rs-day.is-compact,
+.nds-ag-wrap .ag-header-cell.is-compact {
+  padding-inline: var(--nds-space-4);
+}
+
+.nds-ag-wrap .ag-cell.fw-rs-closed {
+  background: var(--nds-surface-sunken);
+}
+
+.nds-ag-wrap .ag-cell.fw-rs-tone-warn {
+  background: var(--nds-warning-soft);
+}
+
+.nds-ag-wrap .ag-cell.fw-rs-tone-block {
+  background: var(--nds-danger-soft);
+}
+
+.nds-ag-wrap .ag-header-cell.fw-rs-head-closed {
+  background: var(--nds-surface-sunken);
+}
+
+.nds-ag-wrap .ag-header-cell.fw-rs-head-today .ag-header-cell-text {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rs-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-rs-legend .is-roster {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* A phone: one day, a card per person. */
+.fw-rs-phone-day {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.fw-rs-phone-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rs-phone-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md, 8px);
+  background: var(--nds-surface);
+}
+
+/* The dialogs' forms. */
+.fw-rs-pair,
+.fw-rs-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-rs-form {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.fw-rs-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-14);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-rs-weekdays legend {
+  margin-bottom: var(--nds-space-6);
+  padding: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.fw-rs-check.is-block {
+  color: var(--nds-danger-text);
+}
+
+@media (max-width: 720px) {
+  .fw-rs-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The paper: a page per line for the notice board. */
+.fw-rs-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  padding: var(--nds-space-16);
+}
+
+.fw-rs-print-line {
+  break-after: page;
+}
+
+.fw-rs-print-line:last-child {
+  break-after: auto;
+}
+
+.fw-rs-print-title {
+  margin: 0 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-rs-print table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rs-print th,
+.fw-rs-print td {
+  padding: var(--nds-space-4) var(--nds-space-6);
+  border: 1px solid var(--nds-border-subtle);
+  text-align: start;
+}
+
+.fw-rs-print-wrap {
+  overflow-x: auto;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+  }
+
+  .fw-topbar,
+  .h10-rail,
+  .fw-office-subheader,
+  .nds-bottombar,
+  .fw-system-banner,
+  .fw-rs-print-button {
+    display: none !important;
+  }
+
+  .fw-rs-print-wrap {
+    overflow: visible;
+  }
+}

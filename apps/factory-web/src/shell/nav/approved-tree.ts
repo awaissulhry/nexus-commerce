@@ -442,7 +442,10 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Main',
         labelIt: 'Principali',
         hideLabel: true,
-        pages: [{ id: 'people.employees', title: 'Employees', titleIt: 'Dipendenti', wave: 'W2b', href: '/people/employees' }],
+        pages: [
+          { id: 'people.employees', title: 'Employees', titleIt: 'Dipendenti', wave: 'W2b', href: '/people/employees' },
+          { id: 'people.shifts', title: 'Shifts', titleIt: 'Turni', wave: 'W2b', href: '/people/shifts' },
+        ],
       },
     ],
   },
