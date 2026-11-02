@@ -4,22 +4,22 @@
  * A run that finished PARTIAL or NOT_CONFIGURED (the contract run records these since P1.8) still ran on
  * schedule. Counting only SUCCESS made such a job look silent — or, once it had fewer than three SUCCESS
  * rows, dropped it from the alert entirely. FAILED and RUNNING prove nothing about cadence and stay out.
- * The database is stood in and applies the `where` it is given, so the test reads the real query.
+ * The database is stood in and applies the filters it is given; alert-evaluator.overdue-sql.vitest.test.ts runs the SQL.
  *
  * C2 (2026-10-10) — jobs quiet by design (utils/cron-quiet.ts): a work-only job is never overdue by its silence, a
  * windowed one counts only the ticks it expects, and the alert names the jobs in every channel.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const h = vi.hoisted(() => ({ rows: [] as Array<{ jobName: string; status: string; startedAt: Date }>, where: null as any, rules: [] as any[], events: [] as any[] }))
+const h = vi.hoisted(() => ({ rows: [] as Array<{ jobName: string; status: string; startedAt: Date }>, statuses: [] as string[], rules: [] as any[], events: [] as any[] }))
 vi.mock('../db.js', () => ({ default: {
-  cronRun: {
-    findMany: vi.fn(async ({ where }: any) => {
-      h.where = where
-      const statuses: string[] = typeof where.status === 'string' ? [where.status] : where.status.in
-      return h.rows.filter((row) => statuses.includes(row.status) && row.startedAt >= where.startedAt.gte).map(({ jobName, startedAt }) => ({ jobName, startedAt }))
-    }),
-  },
+  // The values of the statement, in its order: since, statuses, since, runs per job.
+  $queryRaw: vi.fn(async (_sql: TemplateStringsArray, since: Date, statuses: string[], _since: Date, perJob: number) => {
+    h.statuses = statuses
+    const newest = h.rows.filter((row) => statuses.includes(row.status) && row.startedAt >= since).sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
+    const kept = new Map<string, number>()
+    return newest.filter(({ jobName }) => { kept.set(jobName, (kept.get(jobName) ?? 0) + 1); return kept.get(jobName)! <= perJob }).map(({ jobName, startedAt }) => ({ jobName, startedAt }))
+  }),
   alertRule: { findMany: vi.fn(async () => h.rules), update: vi.fn(async () => ({})) },
   alertEvent: { create: vi.fn(async ({ data }: any) => { h.events.push(data); return data }), updateMany: vi.fn(async () => ({ count: 0 })) },
 } }))
@@ -32,7 +32,7 @@ const NOW = new Date('2026-09-24T12:00:00.000Z').getTime()
 const nightly = (jobName: string, statuses: string[]) =>
   statuses.map((status, i) => ({ jobName, status, startedAt: new Date(NOW - (statuses.length - i) * 24 * HOUR + 6 * HOUR) }))
 
-beforeEach(() => { h.rows = []; h.where = null; h.rules = []; h.events = [] })
+beforeEach(() => { h.rows = []; h.statuses = []; h.rules = []; h.events = [] })
 
 describe('overdue crons — a PARTIAL or NOT_CONFIGURED run is proof the job ran', () => {
   it('a nightly job whose last four runs were PARTIAL is NOT overdue', async () => {
@@ -52,8 +52,7 @@ describe('overdue crons — a PARTIAL or NOT_CONFIGURED run is proof the job ran
       ...nightly('some-job', ['FAILED', 'FAILED', 'RUNNING']),
     ]
     expect(await overdueCronJobs(NOW)).toEqual(['some-job'])
-    const statuses: string[] = typeof h.where.status === 'string' ? [h.where.status] : [...h.where.status.in]
-    expect(statuses.sort()).toEqual(['NOT_CONFIGURED', 'PARTIAL', 'SUCCESS'])
+    expect([...h.statuses].sort()).toEqual(['NOT_CONFIGURED', 'PARTIAL', 'SUCCESS'])
   })
 })
 
