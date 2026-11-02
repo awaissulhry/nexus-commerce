@@ -28,6 +28,7 @@ export const manifest = defineManifest({
   'POST /people/piece-rates/versions/:versionId/confirm': { audiences: ['office'], permission: 'people.piecerates.manage', scope: 'record' },
   'POST /people/piece-rates/publications/:publicationId/withdraw': { audiences: ['office'], permission: 'people.piecerates.manage', scope: 'record' },
   'POST /people/piece-rates/publications/:publicationId/paper-receipts': { audiences: ['office'], permission: 'people.piecerates.manage', scope: 'record' },
+  'GET /people/employees/:employeeId/rate-publications': { audiences: ['office'], permission: 'people.piecerates.view', scope: 'record' },
   'GET /people/piece-rates/sites/:siteId/switch': { audiences: ['office'], permission: 'people.piecerates.view', scope: 'record' },
   'PUT /people/piece-rates/sites/:siteId/switch/preconditions': { audiences: ['office'], permission: 'people.piecerates.manage', scope: 'record' },
   'POST /people/piece-rates/sites/:siteId/switch/start': { audiences: ['office'], permission: 'people.piecerates.switch', scope: 'record' },

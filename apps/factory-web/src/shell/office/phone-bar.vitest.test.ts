@@ -19,8 +19,8 @@ describe('the phone bottom bar: the person\'s 4 tabs and More (B-W2b-05, PLT-162
   it('each role gets its own areas (the ones it opens the most of), drawn in rail order', () => {
     expect(tabsOf('warehouse')).toEqual(['home', 'products', 'purchasing', 'warehouse'])
     expect(tabsOf('sales')).toEqual(['home', 'sales', 'products', 'finance'])
-    // B-W2b-65: People settings is built and the floor supervisor does not open it, so Plant (every page theirs) takes the
-    // fourth tab from People.
+    // B-W2b-61, B-W2b-65: Attendance and People settings are built and the floor supervisor opens neither, so Plant (every
+    // page theirs) takes the fourth tab from People.
     expect(tabsOf('floor_supervisor')).toEqual(['home', 'products', 'production', 'plant'])
     for (const role of ['owner', 'warehouse', 'sales', 'finance', 'quality_inspector'] as const) expect(tabsOf(role).length).toBeLessThanOrEqual(5)
   })

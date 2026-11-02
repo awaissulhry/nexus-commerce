@@ -1,0 +1,733 @@
+{
+  "absence": {
+    "CODED": "Codificata",
+    "MISSING": "Senza codice",
+    "NONE": "—"
+  },
+  "accept": {
+    "body": "L'anomalia resta così com'è, con la tua nota: per questo giorno non viene più segnalata.",
+    "note": "Nota",
+    "submit": "Accetta",
+    "title": "Accetta l'anomalia"
+  },
+  "anomaly": {
+    "DOUBLE_CLOCK_IN": "Entrata timbrata due volte: di nuovo alle {time}.",
+    "FLAGGED_EVENT": {
+      "badge": "Firmata con nome e PIN: badge dimenticato.",
+      "skew": "Tenuta offline mentre l'orologio del tablet sembrava sbagliato."
+    },
+    "LONG_DAY": "Oltre {limit}: {found} tra la prima entrata e l'ultima uscita.",
+    "LONG_DAY_SHORT": "Una giornata oltre le 16 h tra la prima entrata e l'ultima uscita.",
+    "MISSING_CLOCK_IN": "Entrata mancante prima dell'uscita delle {time}.",
+    "MISSING_CLOCK_OUT": {
+      "auto": "Uscita mancante; uscita automatica alle {time}.",
+      "open": "Uscita mancante dopo l'entrata delle {time}."
+    },
+    "NO_BREAK": "Pausa non completa in una giornata lunga ({taken} min fatti).",
+    "NO_SHIFT": "Entrata senza turno pianificato, o in un giorno di riposo.",
+    "SCANS_WITHOUT_CLOCK_IN": "Scansioni senza entrata.",
+    "SHORT_REST": "Riposo dall'ultima uscita sotto il limite."
+  },
+  "anomalyKind": {
+    "DOUBLE_CLOCK_IN": "Doppia entrata",
+    "FLAGGED_EVENT": "Timbratura segnalata",
+    "LONG_DAY": "Oltre 16 h",
+    "MISSING_CLOCK_IN": "Entrata mancante",
+    "MISSING_CLOCK_OUT": "Uscita mancante",
+    "NO_BREAK": "Senza pausa",
+    "NO_SHIFT": "Senza turno",
+    "SCANS_WITHOUT_CLOCK_IN": "Scansioni senza entrata",
+    "SHORT_REST": "Riposo breve"
+  },
+  "band": {
+    "approveClean": "Approva i giorni puliti",
+    "approveCleanCount_one": "Approva {count} giorno pulito",
+    "approveCleanCount_other": "Approva {count} giorni puliti",
+    "close": "Chiudi il mese…",
+    "export": "Esporta questa vista (CSV)",
+    "keys": "Scorciatoie da tastiera",
+    "lul": "Stampa il calendario LUL",
+    "manual": "Inserimento manuale",
+    "more": "Altre azioni",
+    "who": "Chi è presente ora"
+  },
+  "class": {
+    "DAY": "Diurno",
+    "HOLIDAY": "Festivo",
+    "NIGHT": "Notturno"
+  },
+  "close": {
+    "checklist": "Prima di chiudere {month}",
+    "consequence": {
+      "corrections": "Le modifiche dopo la chiusura diventano rettifiche e un export di rettifica.",
+      "lock": "Tutti i giorni del mese si bloccano: nessuno li modifica più.",
+      "seal": "Il calendario LUL viene creato e sigillato; non cambia più."
+    },
+    "corrections_one": "{count} rettifica dopo la chiusura",
+    "corrections_other": "{count} rettifiche dopo la chiusura",
+    "dialogTitle": "Chiudi {month}",
+    "done": "Mese chiuso e calendario sigillato.",
+    "doneUnsealed": "Mese chiuso. Il calendario non è stato salvato: sigillalo dal pannello.",
+    "due_one": "LUL entro il {date} · manca {count} giorno",
+    "due_other": "LUL entro il {date} · mancano {count} giorni",
+    "failed": "Impossibile leggere la chiusura del mese",
+    "goTo": "Vai a {month}",
+    "item": {
+      "ABSENCE_CODES": "Codici di assenza completi",
+      "ANOMALIES_CLEARED": "Anomalie risolte",
+      "DAYS_APPROVED": "Tutti i giorni approvati",
+      "MANUAL_REVIEWED": "Inserimenti manuali controllati",
+      "OVERTIME_DECIDED": "Straordinari decisi",
+      "PRODUCTION_DAYS": "Giorni di produzione chiusi per linea"
+    },
+    "itemLeft_one": "{count} da fare",
+    "itemLeft_other": "{count} da fare",
+    "noReach": "La chiusura del mese è di tutta l'azienda: si apre a chi raggiunge tutti i suoi siti.",
+    "note": {
+      "AGENCY_WORKERS": "Interinali ed esterni sono nel calendario, segnati: il consulente del lavoro dirà se devono restarci.",
+      "CODES_WITHOUT_LUL": "Alcuni codici di assenza non hanno ancora il codice LUL: il calendario stampa il nostro finché il consulente del lavoro non dà il suo.",
+      "TIMESHEETS_NOT_APPROVED": "Alcuni fogli ore non sono approvati: non bloccano la chiusura, e dopo restano così."
+    },
+    "openLul": "Apri il calendario LUL",
+    "overdue_one": "LUL entro il {date} · in ritardo di {count} giorno",
+    "overdue_other": "LUL entro il {date} · in ritardo di {count} giorni",
+    "payroll": "Vai all'export paghe",
+    "payrollLater": "Arriva con la pagina Export paghe.",
+    "seal": "Sigilla il calendario",
+    "sealClock": "Orologio del server Nexus",
+    "sealTitle": "Calendario LUL · {month}",
+    "showMe": "Mostrami",
+    "sitesOff": "Presenze disattivate a: {sites}.",
+    "submit": "Chiudi il mese",
+    "title": "Chiusura del mese",
+    "toConfirmNote": "Questo calendario è generico finché il consulente del lavoro non lo conferma.",
+    "toConfirmTitle": "Da confermare con il consulente del lavoro",
+    "unsealed": "Il mese è chiuso, ma il calendario non è ancora salvato e sigillato.",
+    "verb": "Chiudi {month}"
+  },
+  "col": {
+    "absence": "Assenza",
+    "anomaly": "Anomalia",
+    "approved": "Approvato",
+    "class": "Classe",
+    "clocked": "Timbrato",
+    "date": "Data",
+    "day": "Giorno",
+    "limits": "Controlli dei limiti",
+    "line": "Linea",
+    "manual": "Manuale",
+    "period": "Periodo",
+    "planned": "Turno pianificato",
+    "ready": "Pronto",
+    "request": "Richiesta pianificata",
+    "returned": "Rimandato",
+    "stage": "A chi tocca",
+    "status": "Stato",
+    "team": "Squadra"
+  },
+  "common": {
+    "cancel": "Annulla",
+    "clearFilters": "Togli i filtri",
+    "close": "Chiudi",
+    "no": "No",
+    "retry": "Riprova",
+    "yes": "Sì"
+  },
+  "correct": {
+    "from": "Da",
+    "kind": "Cosa cambia",
+    "minutes": "Nuovo valore (minuti)",
+    "note": "Il calendario sigillato non cambia mai: questa voce gli sta accanto e arriva all'export di rettifica.",
+    "stands": "Ora è {hours} ({minutes} min).",
+    "submit": "Registra la rettifica",
+    "title": "Rettifica un giorno chiuso",
+    "to": "A",
+    "who": "Da chi"
+  },
+  "correctKind": {
+    "ABSENCE": "Assenza",
+    "HOLIDAY": "Ore festive",
+    "NIGHT": "Ore notturne",
+    "ORDINARY": "Ore ordinarie",
+    "OVERTIME_DAY": "Straordinario diurno",
+    "OVERTIME_HOLIDAY": "Straordinario festivo",
+    "OVERTIME_NIGHT": "Straordinario notturno",
+    "PRESENT": "Ore di presenza"
+  },
+  "csv": {
+    "absence": "Assenza",
+    "anomalies": "Anomalie",
+    "clocked": "Timbrato",
+    "date": "Data",
+    "line": "Linea",
+    "manual": "Manuale",
+    "planned": "Turno pianificato",
+    "status": "Stato",
+    "team": "Squadra"
+  },
+  "day": {
+    "absences": "Assenza",
+    "accept": "Accetta con una nota",
+    "anomalies": "Anomalie",
+    "approve": "Approva il giorno",
+    "correct": "Rettifica",
+    "corrections": "Rettifiche dopo la chiusura",
+    "differs": "Questo giorno è diverso dal calendario sigillato.",
+    "document": "Numero del certificato",
+    "event": "Evento",
+    "events": "Timbrature",
+    "figures": "Valori",
+    "fix": "Correggi",
+    "hours": "Ore",
+    "lul": "Codice LUL",
+    "manualNote": "Gli inserimenti manuali sono segnati nel calendario LUL.",
+    "matches": "Questo giorno coincide con il calendario sigillato.",
+    "noEvents": "Nessuna timbratura in questo giorno.",
+    "noLul": "Non ancora",
+    "noun": "giorno",
+    "planned": "Turno pianificato",
+    "reason": "Motivo",
+    "reopen": "Riapri",
+    "source": "Origine",
+    "time": "Ora",
+    "title": "Dettaglio del giorno"
+  },
+  "days": {
+    "addCode": "Aggiungi un codice…",
+    "allAnomalies": "Tutte le anomalie",
+    "allStatuses": "Tutti gli stati",
+    "anomalyFilter": "Anomalia",
+    "approveSelected_one": "Approva {count} giorno pulito",
+    "approveSelected_other": "Approva {count} giorni puliti",
+    "approved_one": "{count} giorno approvato.",
+    "approved_other": "{count} giorni approvati.",
+    "clocked": "Timbrato",
+    "codeFor": "Codice di assenza del {day}",
+    "count_one": "{count} giorno",
+    "count_other": "{count} giorni",
+    "failed": "Impossibile leggere i giorni",
+    "manual": "Manuale",
+    "manualChip": "Giorni manuali",
+    "manualOnly": "Solo manuali",
+    "more": "Mostra altri",
+    "noMatch": "Nessun giorno corrisponde",
+    "noMatchBody": "Niente in questa vista: togli i filtri per vedere il mese.",
+    "noShift": "Nessun turno",
+    "none": "Nessuna presenza per ora",
+    "noneBody": "Le timbrature partono dal reparto (Entrata e uscita).",
+    "noneClean": "Nessun giorno pulito da approvare.",
+    "notClocked": "Non timbrato",
+    "statusFilter": "Stato",
+    "title": "Giorni",
+    "toApproveNote": "I giorni con un'anomalia aperta sono sotto Anomalie aperte.",
+    "willBeHeld_one": "{count} fermo",
+    "willBeHeld_other": "{count} fermi"
+  },
+  "employee": {
+    "closedOn": "Chiuso il {date} (LUL)",
+    "corrected": "Rettificato dopo la chiusura",
+    "noRight": "Le presenze di una persona si leggono qui da HR (people.attendance.view); la persona vede le proprie in reparto.",
+    "none": "Nessuna presenza in questo mese",
+    "note": "Qui gli straordinari sono quelli approvati, per classe. Lo straordinario del giorno qui sotto è quello calcolato, prima dell'approvazione.",
+    "overtimeDay": "Straordinario approvato, diurno",
+    "overtimeHoliday": "Straordinario approvato, festivo",
+    "overtimeNight": "Straordinario approvato, notturno",
+    "title": "Presenze per giorno"
+  },
+  "entry": {
+    "approvedBy": "Approvato da {who}, {at}.",
+    "beyond": "{hours} oltre la richiesta.",
+    "blocks": "Un limite blocca questo straordinario: approvarlo chiede perché resta, e il motivo va nel registro.",
+    "day": "Il giorno è: {status}.",
+    "hours": "Ore",
+    "noun": "voce",
+    "openDay": "Apri il giorno",
+    "override": {
+      "body": "Questo limite blocca lo straordinario. Le ore sono state lavorate: di' perché resta.",
+      "reason": "Perché resta",
+      "submit": "Approva con questo motivo",
+      "title": "Un limite blocca questo straordinario"
+    },
+    "reject": {
+      "submit": "Rifiuta",
+      "title": "Rifiuta lo straordinario"
+    },
+    "rejectedBy": "Rifiutato da {who}, {at}: {reason}",
+    "reopen": {
+      "submit": "Riprendi la decisione",
+      "title": "Riprendi la decisione"
+    },
+    "request": "Richiesta pianificata di {hours}",
+    "title": "Straordinario",
+    "verb": {
+      "approve": "Approva",
+      "reject": "Rifiuta",
+      "reopen": "Riprendi"
+    }
+  },
+  "entryStatus": {
+    "APPROVED": "Approvato",
+    "PENDING": "In attesa",
+    "REJECTED": "Rifiutato"
+  },
+  "event": {
+    "autoReason": "Fine turno più il tempo in Impostazioni persone",
+    "kind": {
+      "BREAK_IN": "Rientro dalla pausa",
+      "BREAK_OUT": "Pausa",
+      "IN": "Entrata",
+      "OUT": "Uscita",
+      "VOID": "Annullata"
+    },
+    "source": {
+      "AUTO": "Uscita automatica",
+      "BADGE": "Badge sul tablet",
+      "MANUAL": "Inserita a mano",
+      "NAME_PIN": "Nome e PIN (badge dimenticato)",
+      "OFFLINE": "Tenuta sul tablet mentre era offline"
+    },
+    "sourceOffSite": {
+      "AUTO": "Uscita automatica · lavoro fuori stabilimento",
+      "BADGE": "Badge sul tablet · lavoro fuori stabilimento",
+      "MANUAL": "Inserita a mano · lavoro fuori stabilimento",
+      "NAME_PIN": "Nome e PIN · lavoro fuori stabilimento",
+      "OFFLINE": "Tenuta sul tablet · lavoro fuori stabilimento"
+    },
+    "void": "Annullata a mano",
+    "voided": "annullata"
+  },
+  "field": {
+    "reason": "Motivo",
+    "reasonCode": "Perché",
+    "reasonHint": "Mai un dato di salute: una malattia è un codice e un numero di certificato.",
+    "reasonPick": "Scegli…"
+  },
+  "figure": {
+    "absence": "Assenza",
+    "break": "Pausa",
+    "holiday": "Festive",
+    "night": "Notturne",
+    "ordinary": "Ordinarie",
+    "overtime": "Straordinario",
+    "present": "Presenza"
+  },
+  "fix": {
+    "at": "Quando",
+    "choice": {
+      "ABSENCE": "Imposta il codice di assenza",
+      "ADD": "Aggiungi una timbratura",
+      "OFF_SITE": "Segna lavoro fuori stabilimento",
+      "REMOVE_ABSENCE": "Togli un'assenza",
+      "VOID": "Annulla un doppione"
+    },
+    "code": "Codice di assenza",
+    "codePick": "Scegli un codice…",
+    "document": "Numero del certificato",
+    "documentHint": "Solo il numero di protocollo, mai il contenuto.",
+    "event": "Evento",
+    "hours": "Ore",
+    "hoursHint": "Vuoto: tutto il turno pianificato.",
+    "note": "Il motivo resta e il giorno è segnato Manuale per sempre.",
+    "removeAbsence": "Assenza",
+    "removePick": "Scegli un'assenza…",
+    "submit": "Salva la correzione",
+    "title": "Correggi un giorno",
+    "voidEvent": "Timbratura",
+    "voidHint": "Resta sul giorno, segnata come annullata.",
+    "voidPick": "Scegli una timbratura…",
+    "what": "Cosa correggere"
+  },
+  "gate": {
+    "closed": {
+      "body": "Si apre quando l'informativa ai lavoratori e la valutazione d'impatto sono registrate e il Titolare la attiva. Fino ad allora qui non si legge né si mostra nulla di nessuna persona.",
+      "law": "Statuto dei Lavoratori art. 4 c.2-3 · GDPR art. 35",
+      "lawPlain": "Gli strumenti che registrano il lavoro richiedono un'informativa ai lavoratori; un rischio per le persone richiede prima una valutazione d'impatto.",
+      "open": "Apri Privacy e informative",
+      "title": "Le presenze sono disattivate in questo sito"
+    },
+    "failed": {
+      "body": "Le regole di questo sito non si leggono, quindi non si legge nulla di nessuna persona. Riprova tra poco.",
+      "title": "Regole del sito non leggibili"
+    },
+    "pickSite": {
+      "body": "Le presenze si leggono un sito alla volta, ognuno con la sua base legale: scegli un sito nella barra in alto.",
+      "title": "Scegli un sito"
+    },
+    "reading": "Lettura delle regole del sito…",
+    "short": "Le presenze sono disattivate in questo sito."
+  },
+  "held": {
+    "closeOpen_one": "{count} voce è ancora aperta.",
+    "closeOpen_other": "{count} voci sono ancora aperte.",
+    "closed": "Questo mese è chiuso.",
+    "correctMinutes": "Scrivi il nuovo valore in minuti interi, da 0 a 1440.",
+    "correctSame": "È il valore attuale: prima cambialo.",
+    "dayApproved": "Questo giorno è già approvato.",
+    "dayClosed": "Il mese di questo giorno è chiuso.",
+    "entryDecided": "Questo straordinario è già deciso.",
+    "fixAbsence": "Scegli l'assenza da togliere.",
+    "fixApproved": "Questo giorno è approvato: prima riaprilo.",
+    "fixCode": "Scegli il codice di assenza.",
+    "fixEvent": "Scegli la timbratura.",
+    "fixHours": "Le ore sono un valore di una giornata, come 7,5.",
+    "fixTime": "Scegli quando è successo.",
+    "limitBlocks": "Un limite li blocca: aprili uno per uno per deciderli.",
+    "manualDate": "Scegli la data.",
+    "manualFuture": "Un inserimento manuale si fa quando il giorno è arrivato.",
+    "manualOrder": "L'uscita viene dopo l'entrata.",
+    "manualPerson": "Cerca la persona.",
+    "manualTimes": "Inserisci un'entrata o un'uscita.",
+    "more_one": "e altro {count}",
+    "more_other": "e altri {count}",
+    "noApprove": "Approvare i giorni richiede il permesso di approvazione (people.attendance.approve).",
+    "noClose": "Chiudere un mese richiede il permesso su tutti i siti (people.attendance.close).",
+    "noFix": "Correggere un giorno richiede il permesso di gestione, e mai sul proprio giorno.",
+    "noPeople": "Cercare una persona richiede people.view.",
+    "noReview": "Approvare gli straordinari richiede il permesso di revisione, e mai i propri.",
+    "noneClean": "Nessun giorno pulito da approvare.",
+    "notRead": "Non ancora letto.",
+    "outOfReach": "Fuori dalla tua portata, o presenze disattivate nel suo sito",
+    "pickSite": "Prima scegli un sito.",
+    "reason": "Di' perché, in poche parole.",
+    "reasonLong": "Resta entro 500 caratteri.",
+    "timesheetDone": "Già approvato da entrambi.",
+    "timesheetNotReady": "Giorni o straordinari del mese sono ancora aperti.",
+    "timesheetNotYours": "Non è alla tua approvazione.",
+    "title": "Approvati: {approved} · gli altri fermi",
+    "typePhrase": "Scrivi: {phrase}",
+    "working": "Operazione in corso…"
+  },
+  "hold": {
+    "close": {
+      "ABSENCE_CODES": "Restano assenze senza codice.",
+      "ALREADY_CLOSED": "Questo mese è già chiuso.",
+      "ANOMALIES_CLEARED": "Ci sono ancora anomalie aperte.",
+      "DAYS_APPROVED": "Ci sono ancora giorni da approvare.",
+      "GATE_OFF": "Un sito con giorni di questo mese ha le presenze disattivate: non si può chiudere.",
+      "MANUAL_REVIEWED": "Ci sono ancora giorni manuali da approvare.",
+      "MONTH_NOT_OVER": "{month} non è ancora finito: si chiude dal giorno dopo l'ultimo.",
+      "NO_DAYS": "In questo mese non ci sono giorni di presenza: niente da chiudere.",
+      "OVERTIME_DECIDED": "Ci sono ancora straordinari da decidere.",
+      "PRODUCTION_DAYS": "Ci sono ancora giorni di produzione aperti su una linea."
+    },
+    "day": {
+      "ALREADY_APPROVED": "Questo giorno è già approvato.",
+      "ANOMALIES_OPEN": "Questo giorno ha anomalie aperte: prima correggile o accettale con una nota.",
+      "CLOSED": "Il mese di questo giorno è chiuso: cambia solo con una rettifica.",
+      "NOT_OVER": "Questo giorno non è finito: approvalo da domani.",
+      "NO_ABSENCE_CODE": "Era pianificato un turno e nessuno ha timbrato: prima imposta il codice di assenza.",
+      "OWN_DAY": "Nessuno approva il proprio giorno di presenza: lo fa un'altra persona.",
+      "RUNNING": "Qualcuno risulta ancora dentro in questo giorno."
+    },
+    "entry": {
+      "DAY_NOT_APPROVED": "Prima approva il giorno: lo straordinario si decide su un giorno approvato.",
+      "MONTH_CLOSED": "Questo mese è chiuso: cambia solo con una rettifica.",
+      "NOT_PENDING": "Questo straordinario è già deciso.",
+      "OWN_OVERTIME": "Nessuno decide il proprio straordinario: lo fa un'altra persona."
+    },
+    "timesheet": {
+      "DAYS_OPEN": "Alcuni giorni non sono ancora approvati.",
+      "MONTH_CLOSED": "Questo mese è chiuso: cambia solo con una rettifica.",
+      "OVERTIME_PENDING": "Alcuni straordinari aspettano una decisione.",
+      "OWN_TIMESHEET": "Nessuno approva il proprio foglio ore: lo fa un'altra persona.",
+      "PERIOD_NOT_OVER": "Il periodo non è ancora finito.",
+      "SAME_PERSON": "Il capo squadra e HR sono due persone diverse: lo approva un'altra persona.",
+      "WRONG_STAGE": "Questo foglio ore non è a questa approvazione."
+    }
+  },
+  "keys": {
+    "approve": "Approva il giorno selezionato",
+    "fix": "Correggi il giorno selezionato",
+    "month": "Mese precedente / successivo",
+    "rollCall": "Apri l'appello"
+  },
+  "law": {
+    "average": "Al massimo 48 ore settimanali in media, sul periodo di riferimento.",
+    "break": "Una pausa quando la giornata supera le sei ore.",
+    "cap": "Lo straordinario ha un tetto annuo (250 ore per legge, salvo diverso contratto).",
+    "evacuation": "Il datore di lavoro organizza l'evacuazione dei lavoratori in caso di emergenza.",
+    "rest": "Almeno 11 ore di riposo consecutivo ogni 24 ore."
+  },
+  "limit": {
+    "DAILY_REST": {
+      "name": "Riposo giornaliero",
+      "ok": "Almeno {limit} di riposo.",
+      "rest": "Riposo di {rest} tra le {from} e le {to}: minimo {limit}.",
+      "short": "Riposo",
+      "span": "Una giornata di {span} ({from}–{to}) lascia meno di {limit} di riposo."
+    },
+    "OVERTIME_YEARLY_CAP": {
+      "name": "Tetto annuo di straordinario",
+      "short": "Tetto",
+      "words": "Straordinario nel {year}: {used} su {limit}."
+    },
+    "WEEKLY_AVERAGE": {
+      "name": "Media settimanale di 48 h",
+      "short": "48 h",
+      "words": "{average} a settimana in media su {weeks} settimane: al massimo {limit} su {months} mesi."
+    }
+  },
+  "limitState": {
+    "NEAR": "vicino",
+    "OK": "ok",
+    "OVER": "superato"
+  },
+  "lul": {
+    "csv": "Scarica il CSV",
+    "failed": "Impossibile aprire il calendario",
+    "noRight": "Aprire il calendario LUL richiede people.attendance.lul.",
+    "none": "Nessun calendario scelto",
+    "noneBody": "Aprilo da Presenze › Chiusura del mese.",
+    "reading": "Apertura del calendario…",
+    "recorded": "Ogni apertura di questo calendario è registrata: nomina ogni persona con le sue ore.",
+    "title": "Calendario LUL"
+  },
+  "manual": {
+    "absence": "Codice di assenza",
+    "chosen": "Scelta: {name}",
+    "date": "Data",
+    "done": "Inserimento aggiunto.",
+    "entry": "Cosa inserire",
+    "note": "Gli inserimenti manuali sono segnati nel LUL.",
+    "offSite": "Lavoro fuori stabilimento",
+    "person": "Persona",
+    "personHint": "Scrivi almeno due lettere del nome o del codice.",
+    "personNone": "Nessuno corrisponde.",
+    "personPick": "Scegli la persona…",
+    "personSearch": "Nome o codice",
+    "submit": "Aggiungi",
+    "times": "Entrata / uscita",
+    "title": "Inserimento manuale"
+  },
+  "monthState": {
+    "CLOSED": "chiuso",
+    "OPEN": "aperto"
+  },
+  "overtime": {
+    "all": "Tutti",
+    "bulkApprove_one": "Approva {count}",
+    "bulkApprove_other": "Approva {count}",
+    "bulkDone_one": "{done} approvato.",
+    "bulkDone_other": "{done} approvati.",
+    "bulkHeld": "{done} approvati · {held} rimasti: aprili per vedere perché.",
+    "count_one": "{count} voce",
+    "count_other": "{count} voci",
+    "failed": "Impossibile leggere gli straordinari",
+    "none": "Nessuno straordinario in attesa",
+    "noneBody": "Lo straordinario compare qui quando il suo giorno è calcolato.",
+    "notPlanned": "Non pianificato",
+    "note": "Lo straordinario si paga solo dopo l'approvazione.",
+    "planned": "Da una richiesta pianificata",
+    "show": "Mostra",
+    "title": "Straordinari da approvare",
+    "waiting": "In attesa"
+  },
+  "privacy": {
+    "days": "I giorni mostrano solo lo stato: nome e ore si aprono una scheda alla volta",
+    "gate": {
+      "closed": "Presenze disattivate in questo sito",
+      "failed": "Regole del sito non leggibili: non si legge nessuna persona",
+      "pickSite": "Ogni sito ha le sue regole: scegli un sito in alto",
+      "reading": "Lettura delle regole del sito…"
+    },
+    "hr": "HR legge il giorno di una persona; un gruppo sotto il minimo non mostra valori",
+    "law": "Statuto dei Lavoratori art. 4 c.2-3 · GDPR art. 5",
+    "lawPlain": "Le presenze sono uno strumento per registrare il lavoro: i lavoratori sono informati, e si tengono solo i dati necessari allo scopo.",
+    "lead": "I capi squadra confermano i giorni, non le ore: le ore restano a HR"
+  },
+  "problem": {
+    "conflict": "Qualcuno l'ha cambiato nel frattempo: è stato riletto, riprova.",
+    "forbidden": "Non puoi aprire questa pagina",
+    "invalid": "Non si può salvare così.",
+    "noPermission": "Le presenze richiedono people.attendance.view, l'appello o l'approvazione dei fogli ore.",
+    "notFound": "Non trovato: potrebbe essere fuori dalla tua portata.",
+    "phrase": "La frase non coincide.",
+    "rateLimited": "Troppi tentativi: aspetta un momento.",
+    "signedOut": "Sessione scaduta: accedi di nuovo.",
+    "unavailable": "Non raggiungibile adesso: riprova."
+  },
+  "reason": {
+    "ABSENCE": "Assenza",
+    "BADGE_PROBLEM": "Problema del badge",
+    "DUPLICATE": "Doppione",
+    "FORGOT_CLOCK_IN": "Entrata dimenticata",
+    "FORGOT_CLOCK_OUT": "Uscita dimenticata",
+    "OFF_SITE": "Lavoro fuori stabilimento",
+    "OTHER": "Altro (di' perché)",
+    "TABLET_PROBLEM": "Problema del tablet"
+  },
+  "refusal": {
+    "ALREADY_RESOLVED": "Questa anomalia è già risolta.",
+    "ALREADY_SEALED": "Questo calendario è già sigillato.",
+    "ALREADY_VOID": "Questa timbratura è già annullata.",
+    "CHANGED": "Qualcuno ha già rettificato questo valore: leggi quello attuale.",
+    "CODE_ARCHIVED": "Questo codice di assenza è archiviato: usane uno attivo.",
+    "DAY_APPROVED": "Questo giorno è approvato: prima riaprilo, con il motivo.",
+    "DAY_CLOSED": "Il mese di questo giorno è chiuso: cambia solo con una rettifica.",
+    "HAS_CLOCK_EVENTS": "Questo giorno ha timbrature: cambialo con Correggi un giorno, con il motivo.",
+    "LIMIT_BLOCKED": "Un limite blocca questo straordinario.",
+    "MONTH_CLOSED": "Questo giorno è in un mese chiuso: rettifica il giorno chiuso.",
+    "NOT_APPROVED": "Questo giorno non è approvato: non c'è nulla da riaprire.",
+    "NOT_CLOSED": "Questo mese non è chiuso.",
+    "NOT_DECIDED": "Questo straordinario non è ancora deciso.",
+    "NOT_VOIDABLE": "Un annullamento non si annulla: inserisci l'ora giusta.",
+    "NO_CHANGE": "È già il valore attuale.",
+    "NO_DAY": "Non è stato inserito nulla per quel giorno.",
+    "NO_SUCH_CODE": "Quell'assenza non è su questo giorno.",
+    "OWN_DAY": "Nessuno decide sulle proprie presenze: lo fa un'altra persona.",
+    "OWN_OVERTIME": "Nessuno decide il proprio straordinario: lo fa un'altra persona.",
+    "OWN_TIMESHEET": "Nessuno approva il proprio foglio ore: lo fa un'altra persona.",
+    "TIMESHEET_APPROVED": "Un foglio ore approvato copre questo giorno: prima rimandalo indietro."
+  },
+  "reopen": {
+    "body": "Il giorno torna aperto e viene ricalcolato; il motivo resta.",
+    "submit": "Riapri",
+    "title": "Riapri il giorno"
+  },
+  "resolution": {
+    "ACCEPTED": "Accettata",
+    "CLEARED": "Sparita",
+    "FIXED": "Corretta"
+  },
+  "roll": {
+    "count_one": "{count} persona · {time}",
+    "count_other": "{count} persone · {time}",
+    "failed": "Impossibile leggere l'appello",
+    "noRight": "L'appello richiede people.attendance.rollcall.",
+    "nobody": "Nessuno risulta dentro adesso.",
+    "note": "Appello: i nomi di chi è dentro ora, per un'evacuazione",
+    "onBreak": "In pausa",
+    "print": "Stampa",
+    "reading": "Lettura di chi è dentro…",
+    "refresh": "Rileggi",
+    "stale": "Offline: questa è l'ultima lista nota, delle {time}.",
+    "title": "Appello · {site}",
+    "who": "Solo sicurezza e HR: mai per altro"
+  },
+  "rule": {
+    "DOUBLE_CLOCK_IN": "Un'entrata mentre si è già dentro: conta la prima.",
+    "FLAGGED_EVENT": "Una timbratura segnalata dal tablet: firmata con nome e PIN, o tenuta offline con l'orologio che sembrava sbagliato.",
+    "LONG_DAY": "Oltre 16 h tra la prima entrata e l'ultima uscita.",
+    "MISSING_CLOCK_IN": "Un'uscita senza un'entrata prima.",
+    "MISSING_CLOCK_OUT": "Un'entrata aperta da più di 13 h non è mai stata chiusa (24 h meno le 11 h di riposo giornaliero).",
+    "MISSING_CLOCK_OUT_AUTO": "L'uscita automatica ha chiuso il giorno a fine turno più il tempo in Impostazioni persone: una persona controlla l'ora vera.",
+    "NO_BREAK": "Oltre le ore del limite con meno pausa di quella richiesta (il limite di orario in vigore).",
+    "NO_SHIFT": "Entrata in un giorno senza turno pianificato (Persone › Turni: il turno, altrimenti quello predefinito).",
+    "SCANS_WITHOUT_CLOCK_IN": "Lavoro registrato in reparto senza entrata.",
+    "SHORT_REST": "Meno riposo del limite dall'ultima uscita (il limite di orario in vigore).",
+    "title": "Come si trova questa anomalia"
+  },
+  "scope": {
+    "allLines": "Tutte le linee",
+    "allTeams": "Tutte le squadre",
+    "line": "Linea",
+    "next": "Mese successivo",
+    "previous": "Mese precedente",
+    "team": "Squadra",
+    "thisMonth": "Questo mese",
+    "title": "Periodo e squadra"
+  },
+  "stage": {
+    "DONE": "Approvato",
+    "HR": "Tocca a HR",
+    "LEAD": "Tocca al capo squadra"
+  },
+  "status": {
+    "APPROVED": "Approvato",
+    "CLOSED": "Bloccato",
+    "NEEDS_FIX": "Da correggere",
+    "OPEN": "Aperto"
+  },
+  "tile": {
+    "ANOMALIES": {
+      "chip": "Anomalie aperte",
+      "label": "Anomalie aperte"
+    },
+    "NO_CODE": {
+      "chip": "Assenze senza codice",
+      "label": "Assenze senza codice"
+    },
+    "TO_APPROVE": {
+      "chip": "Giorni da approvare",
+      "label": "Giorni da approvare"
+    },
+    "clockedIn": {
+      "label": "Dentro adesso"
+    },
+    "failed": "Impossibile leggere i riquadri.",
+    "overtime": {
+      "label": "Straordinari in attesa (h)"
+    },
+    "tooFew": "Troppo poche persone per mostrarlo"
+  },
+  "timesheet": {
+    "absent": "Assente",
+    "anomalies_one": "{count} aperta",
+    "anomalies_other": "{count} aperte",
+    "approveHr": "Approva come HR",
+    "approveLead": "Approva come capo squadra",
+    "changed": "Qualcosa in questo periodo è cambiato dopo l'approvazione: rimandalo indietro per approvarlo su ciò che vale ora.",
+    "days": "Giorni",
+    "daysPresent": "Giorni di presenza",
+    "failed": "Impossibile leggere il foglio ore",
+    "hr": "HR: {who}, {at}",
+    "in": "Entrata",
+    "lead": "Capo squadra: {who}, {at}",
+    "leadView": "Tu confermi i giorni. Le ore restano a HR: la base legale delle presenze non apre le ore di una persona ai capi squadra.",
+    "meta": "{month} · matricola {code} · stampato {at} da {person}",
+    "out": "Uscita",
+    "overtimeApproved": "Straordinario approvato",
+    "overtimePending": "Straordinario in attesa",
+    "overtimeRejected": "Straordinario rifiutato",
+    "presence": "Presenza",
+    "reading": "Lettura del foglio ore…",
+    "returned": "Rimandato da {who}: {reason}",
+    "sendBack": "Rimanda indietro",
+    "sendBackBody": "Le due approvazioni si azzerano e si ricomincia."
+  },
+  "timesheets": {
+    "bulkApprove_one": "Approva {count}",
+    "bulkApprove_other": "Approva {count}",
+    "bulkDone_one": "{done} approvato.",
+    "bulkDone_other": "{done} approvati.",
+    "bulkHeld": "{done} approvati · {held} rimasti: aprili per vedere perché.",
+    "count_one": "{count} foglio ore",
+    "count_other": "{count} fogli ore",
+    "done": "Approvato da entrambi",
+    "failed": "Impossibile leggere i fogli ore",
+    "leadNote": "Confermi i giorni, non le ore: le ore restano a HR.",
+    "none": "Nessun foglio ore per questo mese",
+    "noneBody": "Preparali a mese finito: un foglio ore per ogni persona con presenze.",
+    "noneLead": "HR li prepara a mese finito.",
+    "notReady": "Giorni o straordinari ancora aperti",
+    "prepare": "Prepara {month}",
+    "prepared": "{created} preparati · {existing} già presenti.",
+    "ready": "Pronto da approvare",
+    "returned": "Rimandato",
+    "title": "Fogli ore"
+  },
+  "toConfirm": {
+    "0": "L'impaginazione del calendario, PDF e CSV (questa è generica).",
+    "1": "Il loro codice per ogni assenza: fino ad allora il calendario stampa il nostro.",
+    "2": "Come si segna il riposo: R sta su ogni giorno senza presenza, assenza o turno pianificato.",
+    "3": "Ore decimali (7,50) invece di ore e minuti.",
+    "4": "Che lo straordinario approvato vada per classe (diurno, notturno, festivo), con notturne e festive indicate come \"di cui\".",
+    "5": "Se interinali ed esterni devono stare in questo calendario (sono segnati, non esclusi).",
+    "6": "Per quanto si conserva la nostra copia (qui cinque anni)."
+  },
+  "who": {
+    "area": "Area",
+    "failed": "Impossibile leggere chi è dentro",
+    "line": "Linea",
+    "noLine": "Nessuna linea",
+    "nobody": "Nessuno risulta dentro adesso.",
+    "people": "Persone",
+    "rollCall": "Apri l'appello",
+    "stale": "Offline: l'ultima lista nota, delle {time}.",
+    "title": "Chi è presente ora",
+    "tooFew": "Troppo pochi",
+    "tooFewTotal": "Troppo poche persone per un conteggio",
+    "total_one": "{count} persona dentro ora",
+    "total_other": "{count} persone dentro ora"
+  }
+}

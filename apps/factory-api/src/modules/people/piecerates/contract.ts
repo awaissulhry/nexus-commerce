@@ -203,6 +203,30 @@ export const publishPreviewContract = defineContract({
   },
 })
 
+/** The employee record's Pay tab (B-W2b-62): one person's publications and their own reading; no rate, no figure. */
+export const employeePublicationsContract = defineContract({
+  params: input({ employeeId: id() }),
+  response: {
+    200: output({
+      employeeId: id(),
+      publications: z.array(
+        output({
+          id: id(),
+          versionId: id(),
+          versionNo: z.number().int(),
+          table: output({ code: z.string(), name: z.string() }),
+          state: z.enum(VERSION_STATES),
+          effectiveFrom: businessDate(),
+          publishedAt: instant(),
+          onFloor: z.boolean(),
+          printed: z.boolean(),
+          read: output({ at: instant(), channel: z.enum(['DEVICE', 'PAPER']), device: z.string().nullable() }).nullable(),
+        }),
+      ),
+    }),
+  },
+})
+
 // ---- writes ---------------------------------------------------------------------------------------------------------
 
 const rateInput = input({

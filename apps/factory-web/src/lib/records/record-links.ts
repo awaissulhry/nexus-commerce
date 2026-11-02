@@ -114,6 +114,16 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Team: '/people/employees?view=teams&team=[id]',
   // B-W2b-60 People › Shifts (SCR-263): an overtime request opens in its modal.
   OvertimeRequest: '/people/shifts?open=[id]',
+  // B-W2b-62 People › Piece rates (SCR-158): a rate version, a pay period, a held scan and an entry open in their modals.
+  PieceRateVersion: '/people/piecerates?open=[id]',
+  PayPeriod: '/people/piecerates?period=[id]',
+  HeldScan: '/people/piecerates?resolve=[id]',
+  EarningsEntry: '/people/piecerates?entry=[id]',
+  WorkerStatement: '/people/piecerates/statement/[id]',
+  // B-W2b-61 People › Attendance (SCR-157): a day and an overtime entry open in their modal, a timesheet in its tab.
+  AttendanceDay: '/people/attendance?open=[id]',
+  OvertimeEntry: '/people/attendance?entry=[id]',
+  TimesheetApproval: '/people/attendance/timesheets/[id]',
 })
 
 /**
@@ -222,6 +232,10 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/people/employees': '/people/employees',
   // B-W2b-60: the overtime requests are a section of Shifts (SCR-263).
   '/people/overtime-requests': '/people/shifts',
+  '/people/piece-rates': '/people/piecerates',
+  '/people/pay-periods': '/people/piecerates',
+  // B-W2b-61: Attendance (SCR-157) reads `?month=`, `?tile=`, `?team=`, `?line=`, `?status=`.
+  '/people/attendance': '/people/attendance',
 })
 
 export interface RecordRef {

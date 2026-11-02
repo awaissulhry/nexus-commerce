@@ -311,6 +311,20 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/people/payroll/[id]/file',
   '/people/settings',
   '/people/settings/history',
+  // B-W2b-61: People › Attendance (SCR-157), its roll call, the LUL calendar and a person's timesheet (new tabs).
+  '/people/attendance',
+  '/people/attendance/roll-call',
+  '/people/attendance/lul',
+  '/people/attendance/timesheets/[id]',
+  // B-W2b-64: Efficiency (SCR-161), People reports (SCR-264) and their print tabs.
+  '/people/efficiency',
+  '/people/efficiency/print',
+  '/people/reports',
+  '/people/reports/print',
+  // B-W2b-62: People › Piece rates (SCR-158), the rate sheet and the worker statement (new tabs).
+  '/people/piecerates',
+  '/people/piecerates/rate-sheet',
+  '/people/piecerates/statement/[id]',
 ])
 
 /**

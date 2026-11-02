@@ -670,6 +670,30 @@ describe('the pay period (MES-260), the statement (MES-261) and waiting (MES-148
     expect((await ok('hr', 'GET', `/people/pay-periods/${periodId}/statements`)).statements.every((row: Json) => row.status === 'APPROVED' && !row.stale)).toBe(true)
   })
 
+  it('the statement PDF (B-W2b-62): only with the right, each opening recorded; an approved one stored once, read only through this route', async () => {
+    const [row] = await admin<{ id: string; employeeId: string }>(`SELECT id, "employeeId" FROM "WorkerStatement" WHERE "payPeriodId" = $1 AND status = 'APPROVED' ORDER BY id LIMIT 1`, [periodId])
+    // Without the company's legal data (c.c. art. 2250) no document prints, in words; the seed has none.
+    const refused = await call('hr', 'POST', `/people/statements/${row!.id}/pdf`, {})
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json().error.issues[0].path).toMatch(/^company\//)
+    await admin(`UPDATE "Company" SET "vatNumber" = 'IT00000000000', "fiscalCode" = '00000000000', "reaOffice" = 'BO', "reaNumber" = '000000' WHERE id = (SELECT "companyId" FROM "WorkerStatement" WHERE id = $1)`, [row!.id])
+    const opened = () => admin<{ count: string }>(`SELECT count(*) FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'people.openWorkerStatement' AND "recordId" = $2`, [T, row!.id])
+    const before = Number((await opened())[0]!.count)
+    const first = await call('hr', 'POST', `/people/statements/${row!.id}/pdf`, {})
+    expect(first.statusCode).toBe(200)
+    expect(first.headers['content-type']).toContain('application/pdf')
+    expect(first.rawPayload.subarray(0, 5).toString()).toBe('%PDF-')
+    const [named] = await admin<{ fileId: string }>('SELECT "fileId" FROM "WorkerStatement" WHERE id = $1', [row!.id])
+    expect(named!.fileId).not.toBeNull()
+    const again = await call('hr', 'POST', `/people/statements/${row!.id}/pdf`, {})
+    expect(again.rawPayload.equals(first.rawPayload)).toBe(true)
+    expect((await admin<{ fileId: string }>('SELECT "fileId" FROM "WorkerStatement" WHERE id = $1', [row!.id]))[0]!.fileId).toBe(named!.fileId)
+    expect((await admin<{ count: string }>(`SELECT count(*) FROM "StoredFile" WHERE "recordType" = 'WorkerStatement' AND "recordId" = $1`, [row!.id]))[0]!.count).toBe('1')
+    expect(Number((await opened())[0]!.count)).toBe(before + 2)
+    for (const session of ['managerNoPay', 'recordsNoPay', 'companyB']) expect((await call(session, 'POST', `/people/statements/${row!.id}/pdf`, {})).statusCode, session).toBeGreaterThanOrEqual(403)
+    expect((await call('hr', 'GET', `/files/${named!.fileId}`)).statusCode).toBeGreaterThanOrEqual(403)
+  })
+
   it('the lock is typed, by a person, and final', async () => {
     const detail = await refresh()
     expect(detail.lockPhrase).toBe(`LOCK ${MONTH}`)

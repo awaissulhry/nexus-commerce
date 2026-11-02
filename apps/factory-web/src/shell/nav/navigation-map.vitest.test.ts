@@ -171,10 +171,17 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/people/employees': 'people.view', // GET /people/employees
       // B-W2b-60: People › Shifts.
       '/people/shifts': 'people.shifts.view', // GET /people/shifts/roster
+      // B-W2b-62: People › Piece rates.
+      '/people/piecerates': 'people.piecerates.view', // GET /people/piece-rates
       // B-W2b-65: People › Skills & training and People settings.
       '/people/skills': 'people.skills.view', // GET /people/skills/matrix
       '/people/payroll': 'people.payroll.view', // GET /people/payroll/month
       '/people/settings': 'people.privacy.view', // GET /people/privacy
+      // B-W2b-61: People › Attendance.
+      '/people/attendance': 'people.attendance.view', // GET /people/attendance/days
+      // B-W2b-64: People › Efficiency and People reports.
+      '/people/efficiency': 'people.efficiency.view', // GET /people/efficiency
+      '/people/reports': 'people.attendance.view', // GET /people/reports/attendance
       '/admin': 'companies.view', // the checklist reads the companies
       '/admin/companies': 'companies.view',
       '/admin/devices': 'devices.view',
@@ -385,6 +392,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       final: 'quality.inspections.view',
       machine: 'plant.report', // GET /plant/floor/machines (B-W2a-73)
       clock: 'floor.work', // GET /people/clock/floor (B-W2b-67)
+      myday: 'floor.work', // GET /people/myday (B-W2b-68)
       help: 'floor.work', // GET /production/calls/station (B-W2b-70)
       lineview: 'floor.lead', // the team leader's Line view (B-W2b-70)
       scan: 'floor.work',

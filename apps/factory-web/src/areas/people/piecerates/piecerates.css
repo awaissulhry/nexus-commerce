@@ -1,0 +1,138 @@
+/*
+ * People › Piece rates (SCR-158), the rate sheet and the statement tab, the employee's Pay tab: LAYOUT only (prefix fw-pr8-: fw-pr-
+ * is Production's). The controls are the design system's; semantic tokens only, no colours of their own. No page max-width
+ * (Owner rule 2026-10-29): the sections fill the shell's main area; wide screens put the scheme's cards side by side.
+ */
+.fw-pr8-section,
+.fw-pr8-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-24);
+}
+
+.fw-pr8-stack.tight {
+  gap: var(--nds-space-6);
+}
+
+.fw-pr8-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-pr8-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
+
+.fw-pr8-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
+
+.fw-pr8-hint {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.fw-pr8-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pr8-hidden {
+  color: var(--nds-text-muted);
+}
+
+.fw-pr8-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pr8-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pr8-rate {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) 90px 150px 90px 110px 120px auto;
+  align-items: end;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pr8-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-inline-start: var(--nds-space-16);
+}
+
+.fw-pr8-workers {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.fw-pr8-ack-read {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+/* The rate sheet on paper: the page's frame stays off it. */
+.fw-pr8-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pr8-sheet-table {
+  overflow-x: auto;
+}
+
+.fw-pr8-sheet-sign {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-24);
+  margin-block-start: var(--nds-space-24);
+}
+
+.fw-pr8-sheet-sign span {
+  display: block;
+  padding-block-start: var(--nds-space-24);
+  border-block-end: 1px solid var(--nds-border-strong);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+@media (max-width: 760px) {
+  .fw-pr8-rate {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media print {
+  .fw-pr8-noprint {
+    display: none !important;
+  }
+
+  .fw-pr8-sheet {
+    gap: 8pt;
+  }
+}

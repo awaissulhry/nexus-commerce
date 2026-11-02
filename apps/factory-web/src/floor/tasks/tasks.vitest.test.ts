@@ -146,7 +146,8 @@ describe('every floor task design case draws in both languages', () => {
           expect(html.match(LEFT_KEY)?.[0] ?? null, `${screen.screen}/${item.id} (${locale})`).toBeNull()
           const text = html.replace(/<[^>]+>/g, ' ')
           expect(text.match(/(?<![-\w])\d{6}(?![-\w])|\b[0-9A-HJKMNP-TV-Z]{26}\b/)?.[0] ?? null, `${screen.screen}/${item.id}`).toBeNull()
-          expect(text.match(/€|EUR\s?\d|\$\s?\d/)?.[0] ?? null, `${screen.screen}/${item.id}: money on the floor`).toBeNull()
+          // SCR-171 (B-W2b-68), My day: the one floor screen with money: the worker's own, behind the PIN, under the pay grain.
+          if (screen.screen !== 'SCR-171') expect(text.match(/€|EUR\s?\d|\$\s?\d/)?.[0] ?? null, `${screen.screen}/${item.id}: money on the floor`).toBeNull()
         }
       })
     }

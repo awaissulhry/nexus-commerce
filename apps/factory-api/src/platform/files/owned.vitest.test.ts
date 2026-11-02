@@ -3,7 +3,7 @@ import { assertGenericPath, MODULE_OWNED_FILES, MODULE_READ_FILES, ownerOf, read
 
 describe('record types whose files only their module writes (owned.ts)', () => {
   it('lists the compliance document, the parcel, the privacy notice and DPIA and the type-change review (every kind), the certificate, the lot and the opening-stock reports (CERTIFICATE) and the DDT (FISCAL_ARCHIVE)', () => {
-    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['AttendanceMonthClose', 'Certificate', 'ComplianceDocument', 'Ddt', 'Lot', 'OpeningStock', 'Parcel', 'PayrollExport', 'PrivacyDpia', 'PrivacyNotice', 'SupplierClaim', 'TypeChangeReview'])
+    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['AttendanceMonthClose', 'Certificate', 'ComplianceDocument', 'Ddt', 'Lot', 'OpeningStock', 'Parcel', 'PayrollExport', 'PrivacyDpia', 'PrivacyNotice', 'SupplierClaim', 'TypeChangeReview', 'WorkerStatement'])
     expect(ownerOf('OpeningStock', 'CERTIFICATE')).not.toBeNull()
     expect(ownerOf('OpeningStock', 'ATTACHMENT')).toBeNull()
     expect(ownerOf('PrivacyNotice', 'DOCUMENT')).not.toBeNull()
@@ -30,10 +30,12 @@ describe('record types whose files only their module writes (owned.ts)', () => {
     expect(() => assertGenericPath('Certificate', 'ATTACHMENT', {})).not.toThrow()
   })
 
-  it('reads a closed month\'s LUL calendar only through its module (B-W2b-48), no other record type', () => {
-    expect(Object.keys(MODULE_READ_FILES)).toEqual(['AttendanceMonthClose', 'PayrollExport'])
+  it('reads a closed month\'s LUL calendar (B-W2b-48), a payroll file (B-W2b-54) and a worker statement (B-W2b-62, B-W2b-68) only through their modules, no other record type', () => {
+    expect(Object.keys(MODULE_READ_FILES)).toEqual(['AttendanceMonthClose', 'PayrollExport', 'WorkerStatement'])
     expect(readsThroughModule('AttendanceMonthClose')).toBe(true)
     expect(readsThroughModule('PayrollExport')).toBe(true)
+    // B-W2b-68: one person's pay.
+    expect(readsThroughModule('WorkerStatement')).toBe(true)
     expect(readsThroughModule('Quote')).toBe(false)
     expect(readsThroughModule('constructor')).toBe(false)
   })

@@ -5,6 +5,7 @@ import { reportRows } from '../reports/earnings/report'
 import { baseKey, entryKey, frozenBases, periodMakeUp, piecesAmount, planLedger, samePay, type LedgerRow, type Wanted } from './ledger'
 import { clockAt, clockRuleApplies, lockPhrase, monthAfter, moveRefusal, paidRuleOf, payablePieces, paysOn, periodChecks, rateFor, skillWeightOf, traineeOn, voidedScans, windowsOf, type PeriodFacts, type RateCandidate } from './rules'
 import { statementOf, type PayLine } from './statement'
+import { monthWords, workerStatementDocument } from './statement-document'
 
 /** Earnings and pay periods (B-W2b-43), pure. Figures are made up. The law: c.c. arts. 2100-2101. */
 
@@ -291,5 +292,42 @@ describe('the earnings report (MES-304)', () => {
 
   it('with no pay there is no share', () => {
     expect(reportRows([{ group: 'L1', kind: 'SCAN', employeeId: 'a', pieces: 0, sharePct: null, amount: 0 }])[0]!.makeUpSharePct).toBe(null)
+  })
+})
+
+describe('the worker statement as a document (B-W2b-62; c.c. art. 2101 c.3)', () => {
+  const company = { legalName: 'Officina Esempio S.r.l.', address: { line1: 'Via Finta 1', postalCode: '40100', city: 'Bologna', province: 'BO', country: 'IT' }, vatNumber: 'IT12345670009', fiscalCode: '12345670009', reaOffice: 'BO', reaNumber: '123456', shareCapital: '10000.00', currency: 'EUR' }
+  const summary = {
+    currency: 'EUR',
+    lines: [{ operationCode: 'SEW', operationName: 'Cucitura', pieces: 4, minutes: '60.000', rate: '1.5', sharePct: null, amount: 600 }],
+    time: [{ code: 'WAIT', minutes: '30.000', rate: '0.15', amount: 450 }],
+    corrections: [{ kind: 'ADJUSTMENT' as const, month: '2026-09', words: 'Scansione tardiva', amount: 100 }],
+    attendance: { ordinaryMinutes: 480, approvedOvertimeMinutes: 0 },
+    makeUp: { minutes: 480, ratePerMinute: '0.15', guaranteed: 7200, earned: 1150, amount: 6050 },
+    held: { open: 0, counted: 1, notPaid: 0 },
+    disputes: { open: 0, answered: 0 },
+    defects: { scrap: 0, rework: 1 },
+  }
+  const input = { language: 'it' as const, company, person: { name: 'Giulia Esempio', code: 'D-0001' }, month: '2026-10', revision: 1, status: 'APPROVED' as const, on: '2026-11-02', summary, earningsAmount: 1150, makeUpAmount: 6050 }
+
+  it('says the work, the time, the corrections, the make-up and the total, in the worker\'s language', () => {
+    const it_ = workerStatementDocument(input)
+    expect(it_.title).toBe('Prospetto di cottimo')
+    expect(it_.table.rows).toHaveLength(3)
+    expect(it_.table.rows[0]).toEqual(['SEW', 'Cucitura', '4', '60', '1,50', '€ 6,00'])
+    expect(it_.totals.at(-1)).toMatchObject({ value: '€ 72,00', strong: true })
+    expect(it_.banner).toBeNull()
+    expect(workerStatementDocument({ ...input, language: 'en' }).title).toBe('Piece-work statement')
+  })
+
+  it('a statement not approved says so on its banner; the same statement gives the same metadata', () => {
+    expect(workerStatementDocument({ ...input, status: 'DRAFT' }).banner).toContain('BOZZA')
+    expect(workerStatementDocument({ ...input, status: 'SUPERSEDED' }).banner).toContain('SOSTITUITO')
+    expect(workerStatementDocument(input).meta).toEqual(workerStatementDocument(input).meta)
+    expect(monthWords('2026-10', 'it')).toBe('ottobre 2026')
+  })
+
+  it('refuses a company whose legal data are incomplete', () => {
+    expect(() => workerStatementDocument({ ...input, company: { ...company, vatNumber: null } })).toThrow()
   })
 })
