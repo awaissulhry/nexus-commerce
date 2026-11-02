@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { CheckCheck, MoreHorizontal, ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
 import { Button, Select } from '@nexus/ui/primitives'
@@ -10,7 +11,7 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import type { OfficeScope } from '../../../../shell/scope/scope-model'
 import type { LiveState } from '../../_shared/hooks'
 import type { BlockCounts, DailySheet, FigureAccess, InboxItem, LabourCounts, LabourEdit, LineDay, OffStandardCode, PersonHit, Place } from '../api'
-import { findHeld, itemKey, LABOUR_NAMESPACES, normalHeld, normalTargets, openOf, rowApproveHeld, rowRejectHeld, searchItems, tileKind, TILES, codeWords, type AnswerDraft, type DayTarget, type ItemRecord, type LabourAddress, type LabourCan, type LegalRow, type OpenReason, type Phrase } from '../model'
+import { decidesOneCorrection, findHeld, itemKey, LABOUR_NAMESPACES, normalHeld, normalTargets, openOf, rowApproveHeld, rowRejectHeld, searchItems, tileKind, TILES, codeWords, type AnswerDraft, type DayTarget, type ItemRecord, type LabourAddress, type LabourCan, type LegalRow, type OpenReason, type Phrase } from '../model'
 import { DaysList } from './DaysList'
 import { EditsTimeline } from './EditsTimeline'
 import { ItemDetail } from './ItemDetail'
@@ -164,11 +165,17 @@ function Page({ model, actions }: { model: LabourModel; actions?: LabourActions 
   }, [])
 
   if (!model.can.view) {
+    // B-W2b-73: the row on Today opens the one correction a person may decide; the rest of the page stays theirs to ask for.
+    const words = model.can.correct ? 'page.correctOnly' : 'page.noAccess'
+    const one = decidesOneCorrection(model.can, openOf(model.detail?.key))
     return (
       <div className="fw-lb">
+        {model.notice && <Banner tone={model.notice.tone} title={say(t, model.notice.words)} />}
         <Card padded>
-          <EmptyState icon={<ShieldOff size={24} aria-hidden />} title={t('page.noAccess.title')} description={t('page.noAccess.body')} />
+          <EmptyState icon={<ShieldOff size={24} aria-hidden />} title={t(`${words}.title`)} description={t(`${words}.body`)} action={model.can.correct ? <Link className="fw-lb-link" href={`${model.prefix}/home/today`}>{t('page.correctOnly.today')}</Link> : undefined} />
         </Card>
+        {one && model.detail && <ItemDetail model={model} actions={actions} open={openOf(model.detail.key)} ids={[]} />}
+        {one && <LabourDialogs model={model} actions={actions} />}
       </div>
     )
   }

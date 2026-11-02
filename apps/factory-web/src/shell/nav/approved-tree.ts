@@ -601,6 +601,11 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.supervisor', title: 'Line view', titleIt: 'Vista linea', tile: 'lineview', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor'] },
 ]
 
+/** B-W2b-66: the line TV has no tile: a DISPLAY device goes straight to it, nobody signs in (design floor.display, mode display). */
+export const FLOOR_NO_TILE: ReadonlyArray<{ readonly id: string; readonly title: string; readonly titleIt: string; readonly href: string }> = [
+  { id: 'floor.display', title: 'Line TV board', titleIt: 'Tabellone di linea', href: '/floor/display' },
+]
+
 export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string; readonly scr: readonly string[]; readonly task: string }> = [
   { id: 'links.quote', title: 'Accept a quote', scr: ['SCR-099'], task: 'quote-accept' },
   { id: 'links.document', title: 'Download a document', scr: ['SCR-101'], task: 'shipment-documents' },

@@ -395,7 +395,10 @@
       "clock": "Your time today, breaks, forgot badge",
       "myday": "Your minutes, records and statement. Only you see it.",
       "help": "One tap calls the right person",
-      "lineview": "Calls, what waits, stations"
+      "lineview": "Calls, what waits, stations",
+      "more_one": "1 more tile",
+      "more_other": "{count} more tiles",
+      "back": "To the first tiles"
     },
     "held": {
       "notice": "Read the notice first",
@@ -407,7 +410,9 @@
     "mydayAnswers_one": "{count} answer to your dispute waits",
     "mydayAnswers_other": "{count} answers to your disputes wait",
     "help": "Call for help",
-    "lineview": "Line view"
+    "lineview": "Line view",
+    "more": "More",
+    "back": "Back"
   },
   "scan": {
     "title": "Scan anything",

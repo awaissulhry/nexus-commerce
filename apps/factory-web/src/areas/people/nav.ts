@@ -11,6 +11,9 @@ import type { OfficeAreaNav } from '../../shell/nav/office-nav'
  */
 export const officeArea: OfficeAreaNav = {
   order: 11,
+  // B-W2b-73: Attendance opens for whoever `seesThePage` lets in (attendance/model.ts): a floor supervisor has the roll call, an
+  // emergency tool, and their teams' timesheets, without people.attendance.view; the row gives them nothing more than those.
+  alsoOpens: { 'people-attendance': ['people.attendance.rollcall', 'people.timesheets.team', 'people.timesheets.lead', 'people.timesheets.hr'] },
   area: {
     id: 'people',
     label: 'shell:nav.people.area',

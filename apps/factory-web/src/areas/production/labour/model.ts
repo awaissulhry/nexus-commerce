@@ -212,6 +212,16 @@ export function legalRowOf(site: { id: string; name: string }, rules: SiteFacts 
 /** A person's name came with this record: the API served it (its gate is on), and only then this page says it. */
 export const namesShown = (record: { worker: { name: string } | null; workerHidden: boolean }): boolean => record.worker !== null && !record.workerHidden
 
+/**
+ * B-W2b-73: who decided a block, for its record. A team leader who decided on the tablet is a worker on this record: with the
+ * site's legal gate off the API keeps the name back and says so (`…ByHidden`), and the screen says "a person", never nothing.
+ */
+export function blockDecision(block: Pick<BlockRecord, 'approvedAt' | 'approvedBy' | 'approvedByHidden' | 'rejectedAt' | 'rejectedBy' | 'rejectedByHidden'>): { label: string; who: string | null; hidden: boolean; at: string } | null {
+  if (block.approvedAt) return { label: 'detail.approvedBy', who: block.approvedBy?.name ?? null, hidden: block.approvedByHidden, at: block.approvedAt }
+  if (block.rejectedAt) return { label: 'detail.rejectedBy', who: block.rejectedBy?.name ?? null, hidden: block.rejectedByHidden, at: block.rejectedAt }
+  return null
+}
+
 // ---- words --------------------------------------------------------------------------------------------------------------------
 
 /** An item's age: "45 min", "3 h", "2 d". */
@@ -577,6 +587,12 @@ export const isLabourChange = (type: string): boolean =>
   type === 'production.scan_correction_requested' ||
   type === 'production.scan_correction_decided' ||
   (type.startsWith('production.off_standard_') && type !== 'production.off_standard_code_changed' && type !== 'production.off_standard_started')
+
+/**
+ * B-W2b-73: Today sends a person who decides scan corrections here, and their right alone (production.scan.correct, no
+ * production.labour.view) reads no queue: such a person gets that one correction, nothing else of the page.
+ */
+export const decidesOneCorrection = (can: Pick<LabourCan, 'view' | 'correct'>, open: OpenItem | null): boolean => !can.view && can.correct && open?.kind === 'CORRECTION'
 
 /** The next item after a decision: the same place in the list, else the one before; null: nothing left. */
 export function nextAfter(keys: readonly string[], current: string): string | null {

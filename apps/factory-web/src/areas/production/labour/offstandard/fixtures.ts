@@ -12,6 +12,7 @@ const kind = { kind: 'OFF_STANDARD' as const }
 const open = (entry: typeof BLOCK_NORMAL) => ({ ...kind, open: keyOf(entry) })
 const LONG_RECORD = { kind: 'OFF_STANDARD' as const, block: { ...BLOCK_RECORD, id: BLOCK_LONG.id, unusual: ['LONG', 'TYPED_AFTERWARDS'], minutes: 95, source: 'LEAD', note: 'Inserito dal capo: corso sicurezza.' }, item: BLOCK_LONG }
 const NORMAL_RECORD = { kind: 'OFF_STANDARD' as const, block: BLOCK_RECORD, item: BLOCK_NORMAL }
+const GATE_OFF = { ...NORMAL_RECORD, block: { ...BLOCK_RECORD, worker: null, workerHidden: true, canDecide: false } }
 
 export const designScreen = defineDesignScreen<LabourCase>({
   screen: 'SCR-143',
@@ -22,6 +23,9 @@ export const designScreen = defineDesignScreen<LabourCase>({
     { id: 'selected', label: 'Selected: Approve 1 normal block; the long block cannot be ticked and says why', model: base('production', { ...onlyBlocks, selected: [keyOf(BLOCK_NORMAL_2)] }, kind) },
     { id: 'normal', label: 'A normal block: A approve, R reject, the worker named (gate on)', model: base('production', { ...onlyBlocks, detail: ready(BLOCK_NORMAL, NORMAL_RECORD) }, open(BLOCK_NORMAL)) },
     { id: 'hidden', label: 'The same with the gate off: someone is on it, never who', model: base('production', { ...onlyBlocks, detail: ready(BLOCK_NORMAL, blockOff) }, open(BLOCK_NORMAL)) },
+    { id: 'decided-named', label: 'Approved: who decided, an office user or the gate on', model: base('production', { ...onlyBlocks, detail: ready(BLOCK_NORMAL, { ...NORMAL_RECORD, block: { ...BLOCK_RECORD, status: 'APPROVED', canDecide: false, approvedAt: '2026-11-17T10:00:00.000Z', approvedBy: { id: 'made-up-lead', name: 'Bea Esempio' } } }) }, open(BLOCK_NORMAL)) },
+    { id: 'decided-hidden', label: 'Approved on the tablet with the gate off: "A person", never who, never nothing', model: base('production', { ...onlyBlocks, detail: ready(BLOCK_NORMAL, { ...GATE_OFF, block: { ...GATE_OFF.block, status: 'APPROVED', approvedAt: '2026-11-17T10:00:00.000Z', approvedBy: null, approvedByHidden: true } }) }, open(BLOCK_NORMAL)) },
+    { id: 'rejected-hidden', label: 'Rejected on the tablet with the gate off', model: base('production', { ...onlyBlocks, detail: ready(BLOCK_NORMAL, { ...GATE_OFF, block: { ...GATE_OFF.block, status: 'REJECTED', rejectedAt: '2026-11-17T10:00:00.000Z', rejectedBy: null, rejectedByHidden: true, rejectReason: 'Motivo di prova.' } }) }, open(BLOCK_NORMAL)) },
     { id: 'unusual', label: 'An unusual block: why it is decided on its own', model: base('production', { ...onlyBlocks, detail: ready(BLOCK_LONG, LONG_RECORD) }, open(BLOCK_LONG)) },
     { id: 'own', label: 'One’s own time: held, another person decides', model: base('supervisor', { ...onlyBlocks, detail: ready(BLOCK_NORMAL, { ...NORMAL_RECORD, block: { ...BLOCK_RECORD, own: true, canDecide: false } }) }, open(BLOCK_NORMAL)) },
     { id: 'no-record', label: 'A role that may not read the block: the item only, said so', model: base('hr', { ...onlyBlocks, detail: ready(BLOCK_NORMAL, { kind: 'OFF_STANDARD', block: null, item: BLOCK_NORMAL }) }, open(BLOCK_NORMAL)) },

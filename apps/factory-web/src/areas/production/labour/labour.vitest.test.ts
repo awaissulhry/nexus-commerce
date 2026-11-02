@@ -10,6 +10,8 @@ import { base, BLOCK_LONG, BLOCK_NORMAL, CORRECTION, DAY_READY, designScreen, DI
 import { designScreen as offStandardScreen } from './offstandard/fixtures'
 import {
   addressOf,
+  blockDecision,
+  decidesOneCorrection,
   addressText,
   agePhrase,
   approveHeld,
@@ -41,6 +43,7 @@ import {
   tileKind,
   valueText,
   writeProblem,
+  type ItemRecord,
   type ValueWords,
 } from './model'
 import { ItemDetailBody } from './view/ItemDetail'
@@ -264,6 +267,19 @@ function render(node: ReactNode): string {
 }
 
 describe('the page, drawn', () => {
+  it('B-W2b-73: production.scan.correct alone opens the one correction from Today: no queue, no "no access"', () => {
+    const correctOnly = labourCanOf(['production.scan.correct'])
+    expect(decidesOneCorrection(correctOnly, { kind: 'CORRECTION', id: 'k1' })).toBe(true)
+    expect(decidesOneCorrection(correctOnly, { kind: 'DISPUTE', id: 'd1' })).toBe(false)
+    expect(decidesOneCorrection(correctOnly, null)).toBe(false)
+    expect(decidesOneCorrection(everything, { kind: 'CORRECTION', id: 'k1' })).toBe(false)
+    expect(decidesOneCorrection(labourCanOf([]), { kind: 'CORRECTION', id: 'k1' })).toBe(false)
+    const drawn = (id: string) => render(createElement(LabourView, { model: designScreen.cases.find((entry) => entry.id === id)!.model.model }))
+    expect(drawn('correct-only')).toContain('You decide scan corrections from Today')
+    expect(drawn('correct-only-closed')).toContain('Open Today')
+    expect(drawn('no-permission')).toContain('cannot see Labour')
+  })
+
   const NAME = 'Marta Esempio'
 
   it('puts the legal basis before anything else, and no name or key anywhere in the lists', () => {
@@ -282,6 +298,25 @@ describe('the page, drawn', () => {
     const html = render(createElement(ItemDetailBody, { model: hidden.model, record: open(hidden)! }))
     expect(html).not.toContain(NAME)
     expect(html).toContain('A person is on this record.')
+  })
+
+  it('B-W2b-73: a decider the gate keeps back says "a person", with no key and no name; a name the API served stays', () => {
+    const body = (id: string) => {
+      const entry = offStandardScreen.cases.find((item) => item.id === id)!.model
+      return render(createElement(ItemDetailBody, { model: entry.model, record: (entry.model.detail!.loaded as { value: ItemRecord }).value }))
+    }
+    expect(body('decided-hidden')).toContain('Approved by')
+    expect(body('decided-hidden')).toContain('A person')
+    expect(body('decided-hidden')).not.toContain('detail.')
+    expect(body('rejected-hidden')).toContain('Rejected by')
+    expect(body('rejected-hidden')).toContain('A person')
+    expect(body('decided-named')).toContain('Bea Esempio')
+    expect(body('decided-named')).not.toContain('A person')
+    expect(blockDecision({ approvedAt: null, approvedBy: null, approvedByHidden: false, rejectedAt: null, rejectedBy: null, rejectedByHidden: false })).toBeNull()
+    const italian = offStandardScreen.cases.find((item) => item.id === 'decided-hidden')!.model
+    const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'it', messages: messagesFor('it', [...LABOUR_NAMESPACES, 'shell']) }, createElement(ItemDetailBody, { model: italian.model, record: (italian.model.detail!.loaded as { value: ItemRecord }).value })))
+    expect(html).toContain('Una persona')
+    expect(html).toContain('Approvato da')
   })
 
   it('every design case has made-up data and draws without a raw key', () => {

@@ -57,7 +57,8 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (else the one picked on the screen, else the tenant's; both catalogues come from the layout), runs the idle sign-out
   and the frame's pop-ups, and sends each state to its screen (no device → enrol; nobody → sign-in; a PIN to choose →
   sign-in; just signed in → the notice when due, else Home). Rules without a screen in `floor/model.ts` (mode from the
-  work centre, tiles = mode AND permission, only built pages open) and `floor/scan/scan-model.ts` (the scan router);
+  work centre, tiles = mode AND permission, only built pages open; `homeTiles` = every tile, the scan router reads it,
+  `tilePage` = what one page shows, B-W2b-73: more than six, a More tile) and `floor/scan/scan-model.ts` (the scan router);
   calls in `floor/api.ts`. A step that builds a floor page sets its tile `built` in `TILE_RULES`.
 - `src/floor/tasks/myday/` — SCR-171 My day (B-W2b-68; `/floor/myday`, catalogue `floor-myday`): the one floor screen with money, the worker's own, on a tablet other people can see. The figures live in the container's state only (never `AsOfMemory`, a cache, the queue or storage; the only thing kept is the ids of answers opened, for the tile's badge), and leave with another person (`key`), the tab out of view, the network, Done, and 60 s without a touch (the last 10 hide them). It always opens on the PIN.
 - `src/floor/tasks/scans/` — SCR-090 Operation, the screen every operator uses all shift (B-W2b-69; `/floor/operation`, catalogue
@@ -276,7 +277,8 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `designScreen = defineDesignScreen({ screen: 'SCR-…', title, view, cases })` with made-up data (never real business
   data); `/design` finds it by itself. A view's labels from a manifest are message keys; the view translates them.
 - Navigation: `src/areas/<area>/nav.ts` exports `officeArea = { order, area }` (the DS `AreaNavArea`; labels are
-  `shell:`-style message keys; each row's `permission` is the one its page's API needs). The rail, sub-sidebar, crumbs,
+  `shell:`-style message keys; each row's `permission` is the one its page's API needs; a page more rights open names them in
+  `alsoOpens`, by row id, B-W2b-73: it gives no right). The rail, sub-sidebar, crumbs,
   phone bottom bar and palette all read it; `officeNavFor(can)` filters it per person. A permission not yet declared in
   factory-domain must be in `PENDING_PERMISSIONS` (shell/nav/office-nav.ts) until its step declares it. `order` and the
   words are the approved tree's (`shell/nav/approved-tree.ts`, its W0–W2a part, checked whole by B-W2a-83: Admin is

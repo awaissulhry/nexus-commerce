@@ -249,14 +249,14 @@ function Container() {
       if (open.kind === 'OFF_STANDARD') return { kind: 'OFF_STANDARD', block: can.blocks ? await offStandardBlock(api, open.id) : null, item }
       const request = can.correct ? await correctionRequest(api, open.id) : null
       const scanId = request?.scanId ?? item?.recordId ?? null
-      const record = scanId ? await labourRecord(api, scanId).catch(() => null) : null
+      const record = scanId && can.view ? await labourRecord(api, scanId).catch(() => null) : null
       if (!request && !record) throw new Error('gone')
       const workOrderId = request?.workOrderId ?? item?.workOrder?.id ?? record?.workOrder.id ?? null
       const bundleId = request?.bundleId ?? item?.bundle?.id ?? record?.bundle.id ?? null
       const around = can.workOrders && workOrderId && bundleId ? await scansAround(api, workOrderId, bundleId).catch(() => null) : null
       return { kind: 'CORRECTION', request, record, around }
     },
-    [api, can.blocks, can.correct, can.workOrders],
+    [api, can.blocks, can.correct, can.view, can.workOrders],
   )
 
   const readDetail = useCallback(

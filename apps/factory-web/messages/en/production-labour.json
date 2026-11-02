@@ -19,6 +19,11 @@
     "offline": "Not updating"
   },
   "page": {
+    "correctOnly": {
+      "title": "You decide scan corrections from Today",
+      "body": "Your role decides the floor's corrections one at a time, from Today. The queue, the line days and the changes on this page take “production.labour.view”.",
+      "today": "Open Today"
+    },
     "noAccess": {
       "title": "Your role cannot see Labour & corrections",
       "body": "It takes “production.labour.view”."
@@ -340,6 +345,9 @@
     "answeredBy": "{name}, {when}",
     "corrected": "What the answer changed",
     "rights": "A worker may see and dispute their own records at any time (GDPR arts. 15-16).",
+    "approvedBy": "Approved by",
+    "rejectedBy": "Rejected by",
+    "aPerson": "A person",
     "blockHeld": "This block's record takes “production.offstandard.view”.",
     "unusual": "Decided on its own",
     "running": "Still running",

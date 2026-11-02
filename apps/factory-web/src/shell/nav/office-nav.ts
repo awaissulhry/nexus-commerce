@@ -17,6 +17,11 @@ export interface OfficeAreaNav {
   /** The area's place in the main sidebar, top to bottom: the approved tree's area `order` (Admin 13, at the foot). */
   order: number
   area: AreaNavArea
+  /**
+   * B-W2b-73: by row id, the other permissions that open the same page, beside the row's one `permission` (the DS row holds
+   * one string). The page shows what each of them reads; holding the row gives no right.
+   */
+  alsoOpens?: Readonly<Record<string, readonly string[]>>
 }
 
 /**
@@ -37,9 +42,23 @@ export function officeAreaDeclarations(modules: Readonly<Record<string, OfficeAr
     .sort((a, b) => a.order - b.order || a.area.id.localeCompare(b.area.id))
 }
 
+/** B-W2b-73: `alsoOpens` of every area, by row id. */
+export const ALSO_OPENS: Readonly<Record<string, readonly string[]>> = Object.freeze(Object.assign({}, ...officeAreaDeclarations().map((declaration) => declaration.alsoOpens ?? {})))
+
+/** A row this person opens by one of its other permissions loses its one `permission`, so the DS's filter keeps it. */
+function withAlsoOpens(nav: AreaNav, can: (permission: string) => boolean): AreaNav {
+  const row = (item: AreaNavItem): AreaNavItem => {
+    const opens = ALSO_OPENS[item.id]?.some(can)
+    const { permission, ...open } = item
+    const kept = opens && permission ? open : item
+    return kept.children ? { ...kept, children: kept.children.map(row) } : kept
+  }
+  return { ...nav, areas: nav.areas.map((area) => (area.sections ? { ...area, sections: area.sections.map((section) => ({ ...section, items: section.items.map(row) })) } : area)) }
+}
+
 /** The Office navigation this person may open. */
 export function officeNavFor(can: (permission: string) => boolean, nav: AreaNav = OFFICE_NAV): AreaNav {
-  return areaNavForPerson(nav, { can })
+  return areaNavForPerson(withAlsoOpens(nav, can), { can })
 }
 
 /** The manifest with every label (and screen-reader name) drawn by `t`. Ids, addresses and icons stay. */

@@ -1,6 +1,6 @@
 import { defineDesignScreen } from '../../lib/design/design-screen'
 import { signedInFrame, onFloor } from '../frame/fixtures'
-import { homeTiles, type FloorMode } from '../model'
+import { homeTiles, tilePage, type FloorMode } from '../model'
 import type { OpenItem } from '../tasks/scans/timing'
 import { HomeView, type HomeViewModel } from './view/HomeView'
 
@@ -15,13 +15,20 @@ import { HomeView, type HomeViewModel } from './view/HomeView'
 const OPERATOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'inventory.receive', 'production.cut', 'production.bundles', 'production.scan', 'production.serials', 'shipping.pack']
 const INSPECTOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'production.scan', 'quality.inspections.view', 'quality.inspections.record', 'quality.garments.release']
 
-const home = (mode: FloorMode | null, extra: Partial<HomeViewModel> = {}, permissions = OPERATOR, blocks = false): HomeViewModel => ({
-  frame: signedInFrame('home.title', { showHome: false }),
-  mode,
-  tiles: homeTiles(mode, permissions, blocks),
-  notice: { due: blocks, blocksScans: blocks },
-  ...extra,
-})
+// B-W2b-73: a team leader's floor permissions as they bear on the tiles.
+const LEAD = [...OPERATOR, 'floor.lead', 'plant.report']
+
+const home = (mode: FloorMode | null, extra: Partial<HomeViewModel> = {}, permissions = OPERATOR, blocks = false, page = 0, deviceMode: string | null = null): HomeViewModel => {
+  const shown = tilePage(homeTiles(mode, permissions, blocks, deviceMode), page)
+  return {
+    frame: signedInFrame('home.title', { showHome: false }),
+    mode,
+    tiles: shown.tiles,
+    more: shown.pages > 1 ? shown.more : null,
+    notice: { due: blocks, blocksScans: blocks },
+    ...extra,
+  }
+}
 
 // B-W2b-69: "Unfinished on this tablet". Made-up tickets only.
 const open = (state: OpenItem['state'], extra: Partial<OpenItem> = {}): OpenItem => ({ bundleId: 'b-123', bundleCode: 'B-000123', operation: { id: 'op-30', seq: 30, code: 'SEW-SLV', name: 'Attaccare maniche' }, state, pausedAt: state === 'PAUSED' ? '2026-10-29T10:58:00.000Z' : null, runningSince: state === 'RUNNING' ? '2026-10-29T09:12:00.000Z' : null, pausedAtClockOut: false, ...extra })
@@ -53,6 +60,12 @@ export const designScreen = defineDesignScreen<HomeViewModel>({
       model: { ...home('cutting'), notice: { due: true, blocksScans: false } },
       note: 'A site that records stations only: the notice is shown, nothing is held.',
     },
+    // B-W2b-73: nothing falls off a full Home.
+    { id: 'more-first', label: 'A lead\'s full Home: More', model: home('cutting', {}, LEAD), note: 'More than six: five tiles and More, the Line view and Scan anything on this page.' },
+    { id: 'more-second', label: 'A lead\'s full Home: the second page', model: home('cutting', {}, LEAD, false, 1), note: 'Machine, Clock, Help; Back to the first page.' },
+    { id: 'more-operator', label: 'An operator\'s full Home at the warehouse: the second page', model: home('warehouse', { frame: signedInFrame('home.title', { showHome: false, station: { name: null, site: 'Stabilimento Demo Nord' } }) }, [...OPERATOR, 'sales.returns.receive', 'purchasing.subcontract.kit', 'plant.report'], false, 1), note: 'Clock in & out is never lost to a full Home.' },
+    { id: 'line-tablet', label: 'A line tablet (no station)', model: home(null, { frame: signedInFrame('home.title', { showHome: false, station: { name: null, site: 'Stabilimento Demo Nord' } }) }, LEAD, false, 0, 'LINE'), note: 'No warehouse tile: Clock, the Line view, Scan anything.' },
+    { id: 'phone', label: 'A person\'s own phone', model: home(null, { frame: signedInFrame('home.title', { showHome: false, station: { name: null, site: 'Stabilimento Demo Nord' } }) }, OPERATOR, false, 0, 'PHONE'), note: 'No warehouse tile: Clock, My day, Scan anything.' },
     { id: 'no-tiles', label: 'Nothing to do with this role', model: home('cutting', {}, ['print.view']), note: 'A worker without floor.work: no tile, the words say whom to ask.' },
     { id: 'operator-menu', label: 'Operator menu open', model: home('cutting', { frame: signedInFrame('home.title', { showHome: false, menuOpen: true }) }), note: 'Switch person (scan a badge), the language for this session, Sign out.' },
     { id: 'help', label: 'Help open', model: home('cutting', { frame: signedInFrame('home.title', { showHome: false, helpOpen: true }) }), note: 'W1: words only; calling for help is W2b.' },

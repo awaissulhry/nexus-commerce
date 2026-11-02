@@ -48,8 +48,8 @@ export interface TileRule {
   readonly permission: string
   /** The modes whose stations show it; every mode for Scan. */
   readonly modes: readonly FloorMode[] | 'all'
-  /** B-W2b-67: also on a device with no station's mode (a line tablet, a person's phone). */
-  readonly noStation?: boolean
+  /** B-W2b-67: also on these devices with no station's mode (B-W2b-73: a line tablet and a phone differ, design Modes). */
+  readonly devices?: readonly ('LINE' | 'PHONE')[]
   /** Its page exists in this build: only built tiles open; the others say "coming" (never a dead tile). */
   readonly built: boolean
   /** It takes scans that name the worker: held while the worker notice blocks scans. */
@@ -83,17 +83,17 @@ export const TILE_RULES: readonly TileRule[] = [
   // SCR-179 (B-W2a-73): a machine problem at every station mode (design floor.machine); its API asks plant.report, which
   // every floor role holds (Owner answer H1). Never held by the worker notice: a safety report names the station instead.
   { key: 'machine', permission: 'plant.report', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
-  // SCR-170 (B-W2b-67): Clock in & out on every tablet (a line tablet and a phone too: design floor.clock Modes). Not a scan:
-  // the worker notice does not hold it; the ATTENDANCE gate does, on its page. On a full home the operator's menu still opens it.
-  { key: 'clock', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], noStation: true, built: true, takesScans: false },
+  // SCR-170 (B-W2b-67): Clock in & out on every tablet (design floor.clock Modes: a phone; the build also on a line tablet, the
+  // lead's own). Not a scan: the worker notice does not hold it; the ATTENDANCE gate does, on its page.
+  { key: 'clock', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], devices: ['LINE', 'PHONE'], built: true, takesScans: false },
   // SCR-171 (B-W2b-68): My day at a sewing station and on a person's own phone (design floor.myday Modes); the operator's menu opens it
   // everywhere else. Its figures ask the PIN on the page; floor.work is what its API asks.
-  { key: 'myday', permission: 'floor.work', modes: ['sewing'], noStation: true, built: true, takesScans: false },
+  { key: 'myday', permission: 'floor.work', modes: ['sewing'], devices: ['PHONE'], built: true, takesScans: false },
   // SCR-172 (B-W2b-70): Call for help at every station mode (design floor.help); floor.work sends, and a call always goes out
-  // (never held by the worker notice). The frame's Help button opens it from any screen, so a full home may leave the tile out.
+  // (never held by the worker notice). The frame's Help button opens it from any screen too.
   { key: 'help', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
   // SCR-168 (B-W2b-70): the team leader's Line view, wherever they sign in (design floor.supervisor; floor.lead).
-  { key: 'lineview', permission: 'floor.lead', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], noStation: true, built: true, takesScans: false },
+  { key: 'lineview', permission: 'floor.lead', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], devices: ['LINE', 'PHONE'], built: true, takesScans: false },
   { key: 'scan', permission: 'floor.work', modes: 'all', built: true, takesScans: true },
 ]
 
@@ -107,19 +107,46 @@ export interface HomeTile {
   readonly held: TileHeld
 }
 
+/** B-W2b-70: the Line view (the lead's first job, no other way to it) and Scan anything stay last, on the first page. */
+const KEPT_LAST: readonly TileKey[] = ['lineview', 'scan']
+
 /**
- * The tiles a person sees at a station: the mode's tiles they hold the permission for, then Scan. Held: "Read the
- * notice first" while the notice blocks scans (before "coming": it is the person's to fix), else "coming" for a page
- * not built yet. A person without `floor.work` sees none (nothing to do here).
+ * Every tile a person has here: the mode's tiles they hold the permission for, then Scan. With no station's mode, the tiles of
+ * that device (`devices`; a subcontract station: Scan only). Held: "Read the notice first" while the notice blocks scans
+ * (before "coming": it is the person's to fix), else "coming" for a page not built yet. A person without `floor.work` sees none
+ * (nothing to do here). All of them, however many: the scan router reads this list; `tilePage` cuts what one page shows.
  */
-export function homeTiles(mode: FloorMode | null, permissions: readonly string[], noticeBlocksScans: boolean): HomeTile[] {
+export function homeTiles(mode: FloorMode | null, permissions: readonly string[], noticeBlocksScans: boolean, deviceMode?: string | null): HomeTile[] {
   const held = new Set(permissions)
-  const fits = TILE_RULES.filter((rule) => (rule.modes === 'all' || (mode === null ? rule.noStation === true : rule.modes.includes(mode))) && held.has(rule.permission) && held.has('floor.work'))
-  // B-W2b-70: Scan anything stays last on a full home; the Line view too (the lead's first job, no other way to it).
-  const kept = fits.filter((rule) => rule.key === 'lineview' || rule.key === 'scan')
-  const first = fits.filter((rule) => !kept.includes(rule)).slice(0, MAX_TILES - kept.length)
-  return [...first, ...kept]
-    .map((rule) => ({ key: rule.key, held: noticeBlocksScans && rule.takesScans ? 'notice' : rule.built ? null : 'coming' }))
+  const onThis = (rule: TileRule) => rule.modes === 'all' || (mode === null ? rule.devices?.some((device) => device === deviceMode) === true : rule.modes.includes(mode))
+  const fits = TILE_RULES.filter((rule) => onThis(rule) && held.has(rule.permission) && held.has('floor.work'))
+  const kept = fits.filter((rule) => KEPT_LAST.includes(rule.key))
+  return [...fits.filter((rule) => !kept.includes(rule)), ...kept].map((rule) => ({ key: rule.key, held: noticeBlocksScans && rule.takesScans ? 'notice' : rule.built ? null : 'coming' }))
+}
+
+export interface TilePage {
+  readonly tiles: readonly HomeTile[]
+  /** This page, from 0 (a page past the end is the last one). */
+  readonly page: number
+  readonly pages: number
+  /** The tiles on the next page: 0 on the last one, where the More tile goes back to the first. */
+  readonly more: number
+}
+
+/**
+ * B-W2b-73 (design floor.home "More than six: a 'More' tile opens a second page of tiles"; factory-domain literacy tilePages):
+ * nothing falls off a full Home. Up to six tiles are one page. More: each page holds five and the More tile, the kept tiles on
+ * the first.
+ */
+export function tilePage(tiles: readonly HomeTile[], page: number): TilePage {
+  if (tiles.length <= MAX_TILES) return { tiles, page: 0, pages: 1, more: 0 }
+  const room = MAX_TILES - 1
+  const kept = tiles.filter((tile) => KEPT_LAST.includes(tile.key))
+  const rest = tiles.filter((tile) => !kept.includes(tile))
+  const sheets: (readonly HomeTile[])[] = [[...rest.slice(0, room - kept.length), ...kept]]
+  for (let at = room - kept.length; at < rest.length; at += room) sheets.push(rest.slice(at, at + room))
+  const now = Math.min(Math.max(0, page), sheets.length - 1)
+  return { tiles: sheets[now]!, page: now, pages: sheets.length, more: sheets[now + 1]?.length ?? 0 }
 }
 
 // ---- language (PLT-062: the screen follows the signed-in person; before a sign-in the device's, or the one picked) ----

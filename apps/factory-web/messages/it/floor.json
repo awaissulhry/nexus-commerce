@@ -395,7 +395,10 @@
       "clock": "Il tuo orario di oggi, pause, badge dimenticato",
       "myday": "I tuoi minuti, registrazioni e prospetto. Li vedi solo tu.",
       "help": "Un tocco chiama la persona giusta",
-      "lineview": "Chiamate, in attesa, postazioni"
+      "lineview": "Chiamate, in attesa, postazioni",
+      "more_one": "Un altro riquadro",
+      "more_other": "Altri {count} riquadri",
+      "back": "Ai primi riquadri"
     },
     "held": {
       "notice": "Prima leggi l'informativa",
@@ -407,7 +410,9 @@
     "mydayAnswers_one": "{count} risposta alla tua contestazione",
     "mydayAnswers_other": "{count} risposte alle tue contestazioni",
     "help": "Chiama aiuto",
-    "lineview": "Vista linea"
+    "lineview": "Vista linea",
+    "more": "Altro",
+    "back": "Indietro"
   },
   "scan": {
     "title": "Scansiona",

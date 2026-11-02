@@ -25,7 +25,7 @@ export function bindingOf(device: DeviceInfo): Binding {
     device: device.device.name,
     site: device.site.name,
     station: device.device.station ? `${device.device.station.code} · ${device.device.station.name}` : null,
-    mode: modeOf(device.device.station),
+    mode: modeOf(device.device.station, device.device.mode),
     language: localeOf(device.defaultLocale) ?? 'it',
     deviceMode: device.device.mode ?? 'STATION',
     line: device.line ? `${device.line.code} · ${device.line.name}` : null,

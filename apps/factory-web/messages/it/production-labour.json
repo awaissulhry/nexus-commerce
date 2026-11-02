@@ -19,6 +19,11 @@
     "offline": "Non si aggiorna"
   },
   "page": {
+    "correctOnly": {
+      "title": "Le rettifiche delle scansioni si decidono da Oggi",
+      "body": "Il tuo ruolo decide le rettifiche del reparto una alla volta, da Oggi. La coda, le giornate di linea e le modifiche di questa pagina richiedono “production.labour.view”.",
+      "today": "Apri Oggi"
+    },
     "noAccess": {
       "title": "Il tuo ruolo non può vedere Manodopera e rettifiche",
       "body": "Serve “production.labour.view”."
@@ -340,6 +345,9 @@
     "answeredBy": "{name}, {when}",
     "corrected": "Cosa ha cambiato la risposta",
     "rights": "Un lavoratore può vedere e contestare i propri dati in ogni momento (GDPR artt. 15-16).",
+    "approvedBy": "Approvato da",
+    "rejectedBy": "Rifiutato da",
+    "aPerson": "Una persona",
     "blockHeld": "Il dato di questo blocco richiede “production.offstandard.view”.",
     "unusual": "Si decide da solo",
     "running": "Ancora in corso",
