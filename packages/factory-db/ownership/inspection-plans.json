@@ -1,0 +1,133 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/inspection-plans.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) keeps inspection plans, AQL profiles and the rules that open an inspection, and records and signs inspections and checks, through apps/factory-api's modules/quality/{plans,aql,triggers,incoming,inprocess,amendments} (B-W2b-92, -93, -97 to -101, -111, -123), always through command(); the API keeps staff to the companies and sites their grants reach (a company is a column, not a policy key: the keys are tenant, site and party). The floor (factory_floor_runtime) reads plans, versions, checks and AQL profiles, tenant-wide (the bench shows the plan and picks the profile: words, numbers and office user ids, nothing personal or secret; the …_inspection_plans_w2b_guards triggers read them under the floor's own role), and on its OWN site records incoming inspections with their hides, rolls and components, in-process checks, results and measurements, and decides them (a floor inspector, signed in; a floor session names only a worker). The floor never reads a trigger rule (the worker opens inspections from events) nor an amendment (the office's). Portal and link sessions read nothing here (an inspection report reaches a customer through a link, B-W2b-123). No table here has a money column, so no @grain and no floor or partner wall on one. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "InspectionPlan": {
+      "about": "The office keeps plans (stage, name, owner, where they apply). Every floor device reads the tenant's plans for the bench. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "InspectionPlanVersion": {
+      "about": "The office writes a DRAFT version, a second person approves it, the office retires it. Every floor device reads versions: a record's guard reads the version it names. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "InspectionPlanCheck": {
+      "about": "The office writes, changes and removes the checks of a DRAFT version; approved checks are frozen. Every floor device reads them (the bench lists them, and the guards of results read them).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "AqlProfile": {
+      "about": "The office keeps AQL profiles (critical locked at 0) and the company's default. Every floor device reads them: the bench opens an inspection on a profile. Never deleted, retired with active.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "AqlProfileAssignment": {
+      "about": "The office says which profile a customer or style has; an assignment no longer in force is set inactive. Every floor device reads them to pick the profile at the bench. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "InspectionTrigger": {
+      "about": "The office keeps the ordered rules that open an inspection, and removes them; the worker reads them in the tenant's system context when an event arrives. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "IncomingInspection": {
+      "about": "The office or the site's floor (a floor inspector, signed in) opens the incoming inspection of a lot or of goods back from a workshop, records it and decides it (then frozen) or cancels it; both read the site's. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "IncomingHideResult": {
+      "about": "The inspector (office or the site's floor) records, corrects and removes the hides of an OPEN incoming inspection; both read the site's.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"] }
+      }
+    },
+    "IncomingRollResult": {
+      "about": "The inspector (office or the site's floor) records, corrects and removes the rolls of an OPEN incoming inspection; both read the site's.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"] }
+      }
+    },
+    "IncomingComponentResult": {
+      "about": "The inspector (office or the site's floor) records, corrects and removes the component checks of an OPEN incoming inspection; both read the site's.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"] }
+      }
+    },
+    "InProcessCheck": {
+      "about": "The office or the site's floor records first-piece, cutting, roving and end-of-line checks and decides them; both read the site's (the guard on a scan reads the first-piece hold under the floor's own role). A floor session never names the operator: the API checks the legal gate in the system scope and writes it there. Never deleted. Personal: see \"personal\" (the person = employeeId), behind the PERFORMANCE gate.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": { "workerId": ["PRODUCTION", "PERFORMANCE"] }
+      }
+    },
+    "InspectionCheckResult": {
+      "about": "The inspector (office or the site's floor) records, corrects and removes the results of an OPEN record; both read the site's. After signing a correction is an amendment.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"] }
+      }
+    },
+    "InspectionMeasurement": {
+      "about": "The inspector (office or the site's floor) records, corrects and removes the measurements of an OPEN record; both read the site's. After signing a correction is an amendment.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"] }
+      }
+    },
+    "InspectionAmendment": {
+      "about": "The office asks for a correction of a signed result and a second person answers it, each a new row (QHS-145). Nobody changes or removes a row. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}

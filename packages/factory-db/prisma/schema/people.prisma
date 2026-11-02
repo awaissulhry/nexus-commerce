@@ -109,6 +109,8 @@ model Employee {
   offStandardEntries    OffStandardEntry[]
   labourEdits           LabourEdit[]
   labourDisputes        LabourDispute[]
+  // W2b inspection-plans.prisma (wave 10/16): the in-process checks that name them (behind the legal gate).
+  inProcessChecks       InProcessCheck[]
   dispatchAssignments   DispatchAssignment[]
   crewMemberships       CrewMember[]
   helpCalls             HelpCall[]

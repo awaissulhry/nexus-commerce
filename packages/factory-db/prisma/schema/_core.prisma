@@ -180,6 +180,9 @@ model Company {
   complaints           Complaint[]
   // W2b labour.prisma (wave 7/7): its off-standard and indirect time codes with their pay rules.
   offStandardCodes     OffStandardCode[]
+  // W2b inspection-plans.prisma (wave 10/16): its inspection plans and AQL profiles.
+  inspectionPlans      InspectionPlan[]
+  aqlProfiles          AqlProfile[]
   // calendar.prisma: its calendars (its own and its sites', lines', workshops' and suppliers') and its shift patterns.
   workCalendars        WorkCalendar[]
   shiftPatterns        ShiftPattern[]
@@ -312,6 +315,9 @@ model Site {
   workCalendars       WorkCalendar[]
   reportSubscriptions ReportSubscription[]
   alertRules          AlertRule[]
+  // W2b inspection-plans.prisma (wave 10/16): its incoming inspections and in-process checks.
+  incomingInspections IncomingInspection[]
+  inProcessChecks     InProcessCheck[]
   // W2b time.prisma (wave 5/7): its roster, planned overtime, clock events, attendance days, overtime worked and
   // working-time limits.
   rosterEntries      RosterEntry[]
@@ -390,6 +396,8 @@ model Line {
   teams         Team[]
   loansFrom     LineLoan[] @relation("LineLoanFrom")
   loansTo       LineLoan[] @relation("LineLoanTo")
+  // W2b inspection-plans.prisma (wave 10/16): the in-process checks on it.
+  inProcessChecks InProcessCheck[]
   // W2a planning.prisma: its planned efficiency and people (one row, the line's id).
   capacity LineCapacity[]
   // W2b pay.prisma (schema wave 6/7): its piece-rate tables, the rate publications made on it, its incentive schemes.

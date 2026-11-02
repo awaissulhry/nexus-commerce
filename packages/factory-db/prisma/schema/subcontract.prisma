@@ -272,6 +272,8 @@ model SubcontractReceipt {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   device           Device?                  @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   lines            SubcontractReceiptLine[]
+  // W2b inspection-plans.prisma (wave 10/16): the incoming inspections of what came back.
+  incomingInspections IncomingInspection[]
 
   @@unique([tenantId, subcontractOrderId, seq])
   // The target of the lines' reference: a receipt of the line's own site and work order.

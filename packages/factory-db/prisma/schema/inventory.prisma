@@ -281,6 +281,8 @@ model Lot {
   // quality.prisma: its lab results (the Cr VI result's history) and supplier documents (B-W1-34).
   labResults  LabResult[]
   documents   LotDocument[]
+  // W2b inspection-plans.prisma (wave 10/16): its incoming inspections.
+  incomingInspections IncomingInspection[]
   // W2a ncr.prisma: the nonconformances about it.
   nonconformances Nonconformance[]
   // W2a claims.prisma, subcontract.prisma: the claim lines and kit lines that name it.
@@ -363,6 +365,8 @@ model Hide {
   stockCountLines StockCountLine[]
   // production.prisma: the cut log entries of the hide.
   cutLogs CutLog[] @relation("HideCutLogs")
+  // W2b inspection-plans.prisma (wave 10/16): its rows in incoming inspections.
+  incomingResults IncomingHideResult[]
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   closingCutLog CutLog? @relation("HideClosingCutLog", fields: [tenantId, siteId, closingCutLogId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2a claims.prisma, subcontract.prisma: the claim lines and kit lines that name it.

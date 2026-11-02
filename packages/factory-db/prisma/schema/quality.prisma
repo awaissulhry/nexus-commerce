@@ -108,6 +108,14 @@ model Inspection {
   /// W2b (schema wave 2/7; design quality.inspections "Due", inline): by when it is to be done; null: no date. The
   /// office sets and moves it while OPEN (the floor never does); a decided or cancelled inspection keeps it.
   dueAt                     DateTime? @db.Timestamptz(3)
+  /// W2b (schema wave 10/16, B-W2b-76; QHS-016): the APPROVED version of a FINAL plan it runs on (inspection-plans.prisma),
+  /// frozen on the record: set when it is opened or once while OPEN, never changed or cleared. Null: W1's fixed checklist
+  /// (`checklist`), which stays valid for the inspections opened before plans.
+  planVersionId             String?   @db.Uuid
+  /// The AQL profile the sampling plan above came from, and the ISO 2859-1 code letter of its sample; null: typed by hand
+  /// (W1). Fixed once counting starts (a defect, a result or a measurement is recorded).
+  aqlProfileId              String?   @db.Uuid
+  codeLetter                String?
   /// When it was decided (PASSED or FAILED), and the SHA-256 (hex) of the decision as the inspector signed it (the
   /// e-signature, QHS-058): set exactly then.
   decidedAt         DateTime?        @db.Timestamptz(3)
@@ -131,11 +139,20 @@ model Inspection {
   inspectorWorker Worker?            @relation("InspectionInspector", fields: [tenantId, siteId, inspectorWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2a: the worker it is assigned to (Restrict, as above).
   assignedInspectorWorker Worker?    @relation("InspectionAssignedInspector", fields: [tenantId, siteId, assignedInspectorWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (inspection-plans.prisma): the plan version frozen on it and the AQL profile (Restrict, as above).
+  planVersion     InspectionPlanVersion? @relation(fields: [tenantId, companyId, planVersionId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  aqlProfile      AqlProfile?        @relation(fields: [tenantId, companyId, aqlProfileId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   defects         InspectionDefect[]
   releases        QualityRelease[]
+  // W2b (inspection-plans.prisma): its results by plan check, measurements and amendments.
+  checkResults    InspectionCheckResult[]
+  measurements    InspectionMeasurement[]
+  amendments      InspectionAmendment[]
 
   // The target of the defects' and releases' references: an inspection of the same site and work order.
   @@unique([tenantId, siteId, workOrderId, id])
+  // W2b: the target of the results', measurements' and amendments' references: an inspection of the same site.
+  @@unique([tenantId, siteId, id])
   // One inspection per number in the tenant (NULLs, the W1 history, do not clash).
   @@unique([tenantId, number])
   @@index([tenantId, workOrderId])

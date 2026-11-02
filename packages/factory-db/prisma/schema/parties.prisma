@@ -134,6 +134,8 @@ model Party {
   supplierClaims          SupplierClaim[]
   subcontractedOperations RoutingOperation[]
   subcontractorLocations  Location[]
+  // W2b inspection-plans.prisma (wave 10/16): as a customer, the AQL profiles assigned to it.
+  aqlProfileAssignments   AqlProfileAssignment[]
   subcontractOrders       SubcontractOrder[]
   // W2a schedule.prisma: as a workshop, its slots on the planning board.
   scheduleSlots           ScheduleSlot[]

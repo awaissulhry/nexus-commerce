@@ -23,6 +23,8 @@ describe('model ownership', () => {
       'Alert',
       'AlertEvent',
       'AlertRule',
+      'AqlProfile',
+      'AqlProfileAssignment',
       'AttendanceAnomaly',
       'AttendanceCorrection',
       'AttendanceDay',
@@ -86,11 +88,23 @@ describe('model ownership', () => {
       'IdempotencyReceipt',
       'ImportJob',
       'ImportRow',
+      'InProcessCheck',
       'InboundEmail',
       'InboundWebhook',
       'IncentiveScheme',
+      'IncomingComponentResult',
+      'IncomingHideResult',
+      'IncomingInspection',
+      'IncomingRollResult',
       'Inspection',
+      'InspectionAmendment',
+      'InspectionCheckResult',
       'InspectionDefect',
+      'InspectionMeasurement',
+      'InspectionPlan',
+      'InspectionPlanCheck',
+      'InspectionPlanVersion',
+      'InspectionTrigger',
       'IntegrationAccount',
       'IntegrationCall',
       'InterestReferenceRate',
@@ -484,6 +498,8 @@ describe('model ownership', () => {
           // W2b floor work (wave 7/7): purpose PRODUCTION (what the floor reads), with PAY and PERFORMANCE where pay and
           // one person's figures (behind the legal gate) read them.
           ...['CrewMember', 'DispatchAssignment', 'HelpCall', 'LabourDispute', 'LabourEdit', 'OffStandardEntry', 'OperationChecklistResult', 'OperationScanMember'],
+          // W2b inspection records (wave 10/16): the operator of an in-process check, behind the PERFORMANCE gate.
+          'InProcessCheck',
         ].sort(),
       )
       const employee = map.find((entry) => entry.model === 'Employee')!
@@ -497,7 +513,7 @@ describe('model ownership', () => {
       // work records of wave 7/7 (off-standard time, labour edits, disputes), read through the legal gate.
       const used = new Set(map.flatMap((entry) => Object.values(entry.columns).flat()))
       for (const purpose of used) expect(Object.keys(PERSONAL_PURPOSES)).toContain(purpose)
-      expect(map.filter((entry) => Object.values(entry.columns).flat().includes('PERFORMANCE')).map((entry) => entry.model).sort()).toEqual(['LabourDispute', 'LabourEdit', 'OffStandardEntry'])
+      expect(map.filter((entry) => Object.values(entry.columns).flat().includes('PERFORMANCE')).map((entry) => entry.model).sort()).toEqual(['InProcessCheck', 'LabourDispute', 'LabourEdit', 'OffStandardEntry'])
     })
 
     it('fails on an unknown purpose, a column that does not exist, a subject that is not a uuid column, an empty list', () => {

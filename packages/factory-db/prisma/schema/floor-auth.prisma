@@ -77,6 +77,9 @@ model Device {
   stockMoves     StockMove[]
   // W2a plant.prisma: the machine requests sent from it.
   maintenanceRequests MaintenanceRequest[]
+  // W2b inspection-plans.prisma (wave 10/16): the results and measurements recorded on it.
+  inspectionCheckResults InspectionCheckResult[] @relation("InspectionCheckResultDevice")
+  inspectionMeasurements InspectionMeasurement[] @relation("InspectionMeasurementDevice")
   // production.prisma: the notice acknowledgements, cut logs, bundles and scans recorded on it.
   noticeAcks     WorkerNoticeAck[]
   cutLogs        CutLog[]
@@ -256,6 +259,13 @@ model Worker {
   maintenanceSignedSafe   MaintenanceRequest[] @relation("MaintenanceRequestSignedSafeBy")
   maintenanceJobs         MaintenanceJob[]     @relation("MaintenanceJobAssignee")
   maintenanceHandedBack   MaintenanceJob[]     @relation("MaintenanceJobHandedBackBy")
+  // W2b inspection-plans.prisma (wave 10/16): what they inspected and recorded at the bench, and the in-process checks
+  // that name them as the operator (behind the legal gate).
+  incomingInspected       IncomingInspection[]    @relation("IncomingInspectionInspector")
+  inProcessInspected      InProcessCheck[]        @relation("InProcessCheckInspector")
+  inProcessChecksOf       InProcessCheck[]        @relation("InProcessCheckOperator")
+  inspectionCheckResults  InspectionCheckResult[] @relation("InspectionCheckResultRecorder")
+  inspectionMeasurements  InspectionMeasurement[] @relation("InspectionMeasurementRecorder")
   // The quality releases a floor inspector signed (B-W1-45).
   qualityReleases QualityRelease[]
 
