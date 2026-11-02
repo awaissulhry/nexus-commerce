@@ -4,16 +4,17 @@ import { useEffect, useState } from 'react'
 import { Banner, Field, Stepper } from '@nexus/ui/components'
 import { phraseMatches } from '@nexus/ui/components'
 import { QrCode } from '@nexus/ui/components/QrCode/index'
-import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
+import { Button, Input, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
 import { Countdown, Modal } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
-import { DEVICE_KINDS, PRINTER_KINDS, PRINTER_STATUSES, type Device, type DeviceKind, type Printer, type PrinterKind, type PrinterStatus } from '../../shared/api'
-import { enrolProblems, printerDraft, printerProblems, suggestDeviceName, type EnrolDraft, type EnrolModel, type PrinterDialog, type PrinterDraft, type SiteChoice } from '../model'
+import { DEVICE_KINDS, FLOOR_DEVICE_MODES, PRINTER_KINDS, PRINTER_STATUSES, type Device, type DeviceKind, type FloorDeviceMode, type Printer, type PrinterKind, type PrinterStatus } from '../../shared/api'
+import { enrolProblems, printerDraft, printerProblems, showsLine, suggestDeviceName, type EnrolDraft, type EnrolModel, type PersonChoice, type PrinterDialog, type PrinterDraft, type SiteChoice } from '../model'
 
 /**
- * The Devices dialogs (design 02 admin.devices pop-ups): Enrol a device (a stepper: where it will work → scan this on the
- * tablet, with the one-time QR code and a 15-minute countdown, waiting for the tablet live → ready), Printer (add or
- * change one, with its label stock), and Revoke (typed device name; it ends the device's session at once).
+ * The Devices dialogs (design 02 admin.devices pop-ups): Enrol a device (a stepper: where it will work and what it is for
+ * (B-W2b-67: a station's tablet, a line tablet, a line board, a person's phone, each saying what the tablet will show) →
+ * scan this on the tablet, with the one-time QR code and a 15-minute countdown, waiting for the tablet live → ready),
+ * Printer (add or change one, with its label stock), and Revoke (typed device name; it ends the device's session at once).
  */
 
 const STEPS = ['where', 'scan', 'ready'] as const
@@ -26,6 +27,9 @@ export function EnrolWizard({
   onClose,
   onCreate,
   onRenew,
+  people,
+  peopleHeld,
+  onPeople,
 }: {
   model: EnrolModel | null | undefined
   sites: readonly SiteChoice[]
@@ -34,21 +38,33 @@ export function EnrolWizard({
   onClose: () => void
   onCreate?: (draft: EnrolDraft) => Promise<boolean>
   onRenew?: (device: Device) => void
+  people?: readonly PersonChoice[] | null
+  peopleHeld?: boolean
+  /** A personal phone is being set up at this site: its workers are wanted. */
+  onPeople?: (siteId: string) => void
 }) {
   const t = useT('admin')
   const first = model?.step === 'where' ? (model.siteId ?? sites[0]?.id ?? '') : (sites[0]?.id ?? '')
-  const blank = (siteId: string): EnrolDraft => ({ siteId, stationId: '', name: '', kind: 'TABLET' })
-  const [draft, setDraft] = useState<EnrolDraft>(() => blank(first))
+  const blank = (siteId: string, mode: FloorDeviceMode = 'STATION'): EnrolDraft => ({ siteId, stationId: '', name: '', kind: mode === 'PHONE' ? 'HANDHELD' : 'TABLET', mode, lineId: '', personalWorkerId: '' })
+  const [draft, setDraft] = useState<EnrolDraft>(() => blank(first, model?.step === 'where' ? model.mode : undefined))
   const [named, setNamed] = useState(false)
   const [tried, setTried] = useState(false)
   useEffect(() => {
     if (model?.step === 'where') {
-      setDraft(blank(model.siteId ?? sites[0]?.id ?? ''))
+      setDraft(blank(model.siteId ?? sites[0]?.id ?? '', model.mode))
       setNamed(false)
       setTried(false)
     }
     // The dialog opens fresh for each enrolment.
   }, [model?.step])
+  // The sites may arrive after the dialog opened (`?enrol=1`): the draft takes the one the select shows.
+  useEffect(() => {
+    if (model?.step === 'where' && !draft.siteId && sites[0]) setDraft((current) => ({ ...current, siteId: model.siteId ?? sites[0]!.id }))
+  }, [model, sites, draft.siteId])
+  useEffect(() => {
+    if (model?.step === 'where' && draft.mode === 'PHONE' && draft.siteId) onPeople?.(draft.siteId)
+    // Asked once per site while the phone is being set up.
+  }, [model?.step, draft.mode, draft.siteId])
   if (!model) return null
   const site = sites.find((item) => item.id === draft.siteId)
   const problems = enrolProblems(draft)
@@ -103,7 +119,7 @@ export function EnrolWizard({
             }}
           >
             <Field label={t('devices.field.site')} required error={tried && problems.siteId ? t(problems.siteId) : undefined}>
-              <Select autoFocus value={draft.siteId} onChange={(event) => setDraft({ ...draft, siteId: event.target.value, stationId: '' })}>
+              <Select autoFocus value={draft.siteId} onChange={(event) => setDraft({ ...draft, siteId: event.target.value, stationId: '', lineId: '', personalWorkerId: '' })}>
                 {sites.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
@@ -111,23 +127,76 @@ export function EnrolWizard({
                 ))}
               </Select>
             </Field>
-            <Field label={t('devices.field.station')} hint={t('devices.field.stationHint')}>
-              <Select
-                value={draft.stationId}
-                onChange={(event) => {
-                  const stationId = event.target.value
-                  const station = site?.stations.find((item) => item.id === stationId)
-                  setDraft({ ...draft, stationId, name: named ? draft.name : suggestDeviceName(t(`devices.kind.${draft.kind}`), station?.name) })
-                }}
-              >
-                <option value="">{t('devices.noStation')}</option>
-                {(site?.stations ?? []).map((station) => (
-                  <option key={station.id} value={station.id}>
-                    {station.code} · {station.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            <div role="radiogroup" aria-label={t('devices.field.mode')} className="fw-adm-form">
+              {FLOOR_DEVICE_MODES.map((mode) => (
+                <RadioCard
+                  key={mode}
+                  name="device-mode"
+                  title={t(`devices.deviceMode.${mode}`)}
+                  description={t(`devices.deviceModeShows.${mode}`)}
+                  selected={draft.mode === mode}
+                  checked={draft.mode === mode}
+                  onChange={() => setDraft({ ...draft, mode, stationId: '', lineId: '', personalWorkerId: '', kind: mode === 'PHONE' && draft.kind === 'PC' ? 'HANDHELD' : draft.kind, name: named ? draft.name : '' })}
+                />
+              ))}
+            </div>
+            {draft.mode === 'STATION' && (
+              <Field label={t('devices.field.station')} hint={t('devices.field.stationHint')}>
+                <Select
+                  value={draft.stationId}
+                  onChange={(event) => {
+                    const stationId = event.target.value
+                    const station = site?.stations.find((item) => item.id === stationId)
+                    setDraft({ ...draft, stationId, name: named ? draft.name : suggestDeviceName(t(`devices.kind.${draft.kind}`), station?.name) })
+                  }}
+                >
+                  <option value="">{t('devices.noStation')}</option>
+                  {(site?.stations ?? []).map((station) => (
+                    <option key={station.id} value={station.id}>
+                      {station.code} · {station.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {showsLine(draft.mode) && (
+              <Field label={t('devices.field.line')} required error={tried && problems.lineId ? t(problems.lineId) : undefined} hint={(site?.lines ?? []).length === 0 ? t('devices.noLines') : undefined}>
+                <Select
+                  value={draft.lineId}
+                  onChange={(event) => {
+                    const lineId = event.target.value
+                    const line = site?.lines.find((item) => item.id === lineId)
+                    setDraft({ ...draft, lineId, name: named ? draft.name : suggestDeviceName(t(`devices.deviceMode.${draft.mode}`), line?.name) })
+                  }}
+                >
+                  <option value="">{t('devices.pickLine')}</option>
+                  {(site?.lines ?? []).map((line) => (
+                    <option key={line.id} value={line.id}>
+                      {line.code} · {line.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {draft.mode === 'PHONE' && (
+              <Field label={t('devices.field.person')} required error={tried && problems.personalWorkerId ? t(problems.personalWorkerId) : undefined} hint={peopleHeld ? t('devices.peopleHeld') : t('devices.field.personHint')}>
+                <Select
+                  value={draft.personalWorkerId}
+                  onChange={(event) => {
+                    const personalWorkerId = event.target.value
+                    const person = people?.find((item) => item.id === personalWorkerId)
+                    setDraft({ ...draft, personalWorkerId, name: named ? draft.name : suggestDeviceName(t('devices.deviceMode.PHONE'), person?.name) })
+                  }}
+                >
+                  <option value="">{t('devices.pickPerson')}</option>
+                  {(people ?? []).map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
             <div className="fw-adm-form">
               <Field label={t('devices.field.name')} required error={tried && problems.name ? t(problems.name) : undefined}>
                 <Input
@@ -138,7 +207,7 @@ export function EnrolWizard({
                   }}
                 />
               </Field>
-              <Field label={t('devices.field.kind')}>
+              <Field label={t('devices.field.kind')} error={tried && problems.kind ? t(problems.kind) : undefined}>
                 <Select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value as DeviceKind })}>
                   {DEVICE_KINDS.map((kind) => (
                     <option key={kind} value={kind}>
@@ -148,7 +217,6 @@ export function EnrolWizard({
                 </Select>
               </Field>
             </div>
-            <p className="fw-adm-hint">{t('devices.modeLater')}</p>
           </form>
         )}
         {model.step === 'scan' && (
@@ -179,11 +247,15 @@ export function EnrolWizard({
         )}
         {model.step === 'ready' && (
           <Banner tone="success" title={t('devices.ready', { name: model.device.name })}>
-            <ul className="fw-adm-guards">
-              <li>{t('devices.readyKiosk')}</li>
-              <li>{t('devices.readyCharge')}</li>
-              <li>{t('devices.readyWorkers')}</li>
-            </ul>
+            {model.device.mode === 'PHONE' ? (
+              <p className="fw-adm-hint">{t('devices.readyPhone')}</p>
+            ) : (
+              <ul className="fw-adm-guards">
+                <li>{t('devices.readyKiosk')}</li>
+                <li>{t('devices.readyCharge')}</li>
+                <li>{t(model.device.mode === 'DISPLAY' ? 'devices.readyDisplay' : 'devices.readyWorkers')}</li>
+              </ul>
+            )}
           </Banner>
         )}
       </div>

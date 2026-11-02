@@ -27,9 +27,12 @@ import {
   Unlink,
   Wrench,
 } from 'lucide-react'
+import { speechLang } from '@nexus/factory-domain/auth/floor/literacy'
 import { tagIconSpec } from '@nexus/ui/primitives'
 import { FloorActionBar, FloorButton } from '@nexus/ui/floor'
+import { ReadAloudButton } from '@nexus/ui/floor/ReadAloud/index'
 import { ReasonGrid, type ReasonTile } from '@nexus/ui/floor/ReasonGrid/index'
+import { useDsWords } from '../../../../lib/i18n/ds-parts'
 import { formatNumber, formatTime } from '../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
@@ -45,7 +48,8 @@ import '../reasons.css'
  * "What this is for" first ("Scrap · B-000123 · Op 30 Collar" and the running count), then the reasons as big tiles —
  * icon or example photo, a colour, the word in the worker's language — nine a page, "More reasons" for the rest. Pick one
  * (pause, put last, split, hold, reject) or count (scrap, rework, defects: each tap adds one, − on the tile takes one off).
- * Tap = pick, no long press; arrows move, Enter or Space picks, Esc is Back (the host's keys). ONE picker for every floor
+ * Tap = pick, no long press; arrows move, Enter or Space picks, Esc is Back (the host's keys). B-W2b-67 (D27, MES-188): Read
+ * aloud says the question and the tiles in the language on screen, in the device's own voice. ONE picker for every floor
  * reason: a host (Operation, My work, Bundles' split, the bench's Hold lot dialog, Kits' Receive back) draws
  * `ReasonPickerBody` inside its own frame or dialog with its own action bar, or the whole `ReasonPickerView`. Fetches
  * nothing; the host loads the reasons (`readListReasons`) and keeps the counts.
@@ -122,6 +126,7 @@ export function ReasonPickerBody({ model, onAction, onBack, timeZone }: { model:
   const t = useT('floor-reasons')
   const locale = useLocale()
   const words = useReasonWords()
+  const ds = useDsWords()
   const send = (action: ReasonPickerAction) => onAction?.(action)
   const mode = MODE_OF[model.purpose]
   const state = model.state ?? 'ready'
@@ -162,6 +167,7 @@ export function ReasonPickerBody({ model, onAction, onBack, timeZone }: { model:
             {t('asOf', { time: formatTime(model.asOf, { locale, timeZone }) })}
           </TaskLine>
         ) : null}
+        {state === 'ready' && tiles.length > 0 ? <ReadAloudButton text={() => [question, ...tiles.map((tile) => tile.label)].join('. ')} lang={speechLang(locale)} size="sm" showVoice={false} labels={ds.readAloud} /> : null}
       </TaskCard>
       {model.problem === 'atMost' && model.of ? (
         <TaskLine tone="warning" icon={<TriangleAlert />} alert>

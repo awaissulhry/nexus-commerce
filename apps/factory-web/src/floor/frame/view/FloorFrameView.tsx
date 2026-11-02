@@ -1,12 +1,14 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { House, Languages, LogOut, ScanLine, X } from 'lucide-react'
+import { Clock, House, Languages, LogOut, ScanLine, UserPlus, Users, X } from 'lucide-react'
 import { FloorButton, FloorFrame, FloorHeader, FloorHelpButton, IdleOverlay, OfflineBanner, OperatorChip } from '@nexus/ui/floor'
 import { Modal } from '../../../lib/i18n/ds-parts'
 import { LOCALES, LOCALE_NAMES, type Locale } from '../../../lib/i18n/locales'
 import { formatTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
+import type { CrewView } from '../../api'
+import { CrewStrip } from '../../sign-in/view/CrewStrip'
 import '../../floor.css'
 
 /**
@@ -44,6 +46,10 @@ export interface FrameModel {
   menuOpen?: boolean
   helpOpen?: boolean
   languageOpen?: boolean
+  /** B-W2b-67: the crew strip (null, or left out: one person on the tablet, hidden). */
+  crew?: CrewView | null
+  /** B-W2b-67: the operator menu's own lines: Clock in & out, Add a person, Everyone signs out. */
+  menu?: { clock: boolean; addPerson: boolean; crew: boolean; /** The crew's limit when it is full: Add a person waits, and says why. */ full?: number | null }
   idle?: { warning: boolean; secondsLeft: number }
 }
 
@@ -56,6 +62,10 @@ export type FrameAction =
   | { type: 'sign-out' }
   | { type: 'stay' }
   | { type: 'queue' }
+  | { type: 'clock' }
+  | { type: 'crew-add' }
+  | { type: 'crew-chip'; workerId: string; name: string }
+  | { type: 'crew-end' }
 
 export interface FloorFrameViewProps {
   frame: FrameModel
@@ -158,6 +168,7 @@ export function FloorFrameView({ frame, onFrame, actions, children }: FloorFrame
       }
     >
       <div id="main-content" tabIndex={-1} className="fw-floor-job">
+        {frame.crew ? <CrewStrip crew={frame.crew} signedIn={Boolean(frame.operator)} onAdd={() => send({ type: 'crew-add' })} onChip={(workerId, name) => send({ type: 'crew-chip', workerId, name })} /> : null}
         {children}
       </div>
       <Modal
@@ -175,6 +186,26 @@ export function FloorFrameView({ frame, onFrame, actions, children }: FloorFrame
             {t('frame.menu.switch')}
           </p>
           <LocalePicker label={t('frame.menu.language')} locale={locale} onPick={(next) => send({ type: 'locale', locale: next })} />
+          {frame.menu?.clock || frame.menu?.addPerson ? (
+            <div className="fw-floor-row-actions">
+              {frame.menu.clock ? (
+                <FloorButton size="md" variant="secondary" icon={<Clock />} onClick={() => send({ type: 'clock' })}>
+                  {t('tile.clock')}
+                </FloorButton>
+              ) : null}
+              {frame.menu.addPerson ? (
+                <FloorButton size="md" variant="secondary" icon={<UserPlus />} heldReason={frame.menu.full ? t('crew.full', { max: frame.menu.full }) : undefined} onClick={() => send({ type: 'crew-add' })}>
+                  {t('crew.add')}
+                </FloorButton>
+              ) : null}
+              {frame.menu.crew ? (
+                <FloorButton size="md" variant="secondary" icon={<Users />} onClick={() => send({ type: 'crew-end' })}>
+                  {t('crew.end')}
+                </FloorButton>
+              ) : null}
+            </div>
+          ) : null}
+          {frame.menu?.addPerson && frame.menu.full ? <p className="fw-floor-dialog-line fw-floor-muted">{t('crew.full', { max: frame.menu.full })}</p> : null}
           <div className="fw-floor-dialog-actions">
             <FloorButton size="lg" variant="secondary" icon={<X />} onClick={() => send({ type: 'menu', open: false })}>
               {t('frame.close')}

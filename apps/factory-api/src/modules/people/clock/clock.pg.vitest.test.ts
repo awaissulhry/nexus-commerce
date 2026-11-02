@@ -135,6 +135,13 @@ async function openAttendanceAtA1(): Promise<void> {
 }
 
 describe('the legal gate: nothing is clocked or read while ATTENDANCE is off (Statuto dei Lavoratori art. 4 c.2-3)', () => {
+  it('a tablet nobody is signed in on can ask whether the clock is open; a browser with no device token cannot', async () => {
+    const closed = await kiosk.get('/people/clock/tablet')
+    expect(closed.status, JSON.stringify(closed.body)).toBe(200)
+    expect(closed.body).toEqual({ open: false })
+    expect((await h.app.inject({ method: 'GET', url: '/people/clock/tablet' })).statusCode).toBe(401)
+  })
+
   it('refuses a badge at the kiosk and the floor clock in words, and records nothing', async () => {
     const scan = await kiosk.post('/people/clock/scan', { clientEventId: evt('closed'), badgeCode: badges.operator })
     expect(scan.status, JSON.stringify(scan.body)).toBe(409)
@@ -161,6 +168,7 @@ describe('clocking at the kiosk: a badge, or a name and PIN (MES-223, MES-239; n
   })
 
   it('a badge alone clocks in at the server time; the same tablet event answers once; a second scan within a minute repeats it', async () => {
+    expect((await kiosk.get('/people/clock/tablet')).body).toEqual({ open: true })
     const first = evt('in')
     const scan = await kiosk.post('/people/clock/scan', { clientEventId: first, badgeCode: badges.operator })
     expect(scan.status, JSON.stringify(scan.body)).toBe(201)
