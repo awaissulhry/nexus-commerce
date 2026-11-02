@@ -284,7 +284,7 @@ function Cuts({ value, model }: { value: HideRecord; model: HideRecordModel }) {
       { colId: 'remnant', headerName: t('hd.cuts.col.remnant'), minWidth: 120, flex: 0.7, type: 'rightAligned', cellRenderer: RemnantCell },
       { colId: 'pieces', headerName: t('hd.cuts.col.pieces'), field: 'pieces', minWidth: 90, flex: 0.5, type: 'rightAligned' },
       { colId: 'where', headerName: t('hd.cuts.col.where'), minWidth: 180, flex: 1.1, cellRenderer: WhereCell },
-      ...(value.stationOnly ? [] : [{ colId: 'by', headerName: t('hd.cuts.col.by'), field: 'cutBy', minWidth: 140, flex: 0.9, valueFormatter: (params: { value: unknown }) => (params.value as string | null) ?? '—' } satisfies ColDef<CutRow>]),
+      ...(value.stationOnly ? [] : [{ colId: 'by', headerName: t('hd.cuts.col.by'), field: 'cutBy', minWidth: 140, flex: 0.9, valueGetter: (params: { data?: CutRow }) => params.data?.cutBy ?? (params.data?.cutByHidden ? t('hd.cuts.workerHidden') : '—') } satisfies ColDef<CutRow>]),
       { colId: 'note', headerName: t('hd.cuts.col.note'), field: 'note', minWidth: 140, flex: 1, tooltipField: 'note', valueFormatter: (params) => params.value ?? '—' },
     ]
   }, [t, locale, model.prefix, model.timeZone, value.stationOnly])

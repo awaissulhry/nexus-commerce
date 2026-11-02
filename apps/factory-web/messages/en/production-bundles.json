@@ -314,6 +314,8 @@
     "title": "Scans",
     "hint": "Append-only: a correction is asked from the floor or approved in Labour & corrections, never edited here.",
     "privacy": "Names show only here, inside this one bundle, where the site records workers.",
+    "workerHidden": "A person is on this record",
+    "privacyHidden": "A person is on each of these records. Their name shows only where the site's legal basis is in force.",
     "col": {
       "n": "#",
       "kind": "Kind",

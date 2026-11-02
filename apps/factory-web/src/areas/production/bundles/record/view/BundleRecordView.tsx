@@ -254,7 +254,8 @@ function ScansTab({ model, actions }: { model: BundleRecordModel; actions?: Bund
     )
   }
   const rows: readonly RecordScan[] = scans.value
-  const named = rows.some((scan) => scan.worker !== null)
+  const named = rows.some((scan) => scan.worker !== null || scan.workerHidden)
+  const hidden = rows.some((scan) => scan.workerHidden)
   const seqOf = new Map(rows.map((scan, index) => [scan.id, index + 1]))
   return (
     <Card padded className="fw-pr-card">
@@ -262,7 +263,7 @@ function ScansTab({ model, actions }: { model: BundleRecordModel; actions?: Bund
         <h2 className="fw-pr-h2">{t('scans.title')}</h2>
         <span className="fw-pr-hint">{t('scans.hint')}</span>
       </div>
-      {named && <PrivacyNote level="individual" variant="panel" text={t('scans.privacy')} labels={ds.privacyNote} />}
+      {named && <PrivacyNote level="individual" variant="panel" text={t(hidden ? 'scans.privacyHidden' : 'scans.privacy')} labels={ds.privacyNote} />}
       {rows.length === 0 ? (
         <p className="fw-pr-hint">{t('col.noScan')}</p>
       ) : (
@@ -285,7 +286,7 @@ function ScansTab({ model, actions }: { model: BundleRecordModel; actions?: Bund
               scan.deviceTime ? formatDateTime(scan.deviceTime, { locale }) : '—',
               formatDateTime(scan.serverTime, { locale }),
               scan.station?.code ?? '—',
-              ...(named ? [scan.worker?.name ?? '—'] : []),
+              ...(named ? [scan.worker?.name ?? (scan.workerHidden ? t('scans.workerHidden') : '—')] : []),
               <span key="state" className="fw-bd-tags">
                 {scan.voidedById && <Tag tone="warning">{t('scans.voidedBy', { n: seqOf.get(scan.voidedById) ?? '—' })}</Tag>}
                 {scan.correctsId && <Tag tone="info">{t('scans.voids', { n: seqOf.get(scan.correctsId) ?? '—' })}</Tag>}
