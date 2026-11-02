@@ -3,7 +3,7 @@
  * where none can, "not measurable" in words — never 0 %. Pure.
  */
 import { describe, expect, it } from 'vitest'
-import { notMeasurableWords, rateKey, rateMeasurable, rateOf, ratePercent, type RateFacts } from './review-rate.service.js'
+import { notMeasurableWords, rateKey, rateMeasurable, rateOf, ratePercent, reviewedKeysOf, type RateFacts } from './review-rate.service.js'
 
 const facts = (keys: string[], ebayLinked = false): RateFacts => ({ reviewedKeys: new Set(keys), ebayLinked })
 const sent = (channel: string, marketplace: string | null, followed = false) => ({ channel, marketplace, followed })
@@ -18,6 +18,23 @@ describe('where a review can follow a request', () => {
     expect(rateMeasurable('AMAZON', 'DE', facts([rateKey('AMAZON', 'de')]))).toBe(true)
     expect(rateMeasurable('AMAZON', 'IT', facts([rateKey('AMAZON', 'DE')]))).toBe(false)
     expect(rateMeasurable('SHOPIFY', null, facts(['SHOPIFY|']))).toBe(true)
+  })
+
+  it('Amazon seller feedback never makes a market measurable: only 1–3 star rows about the seller, so no product rate', () => {
+    expect([...reviewedKeysOf([{ channel: 'AMAZON', marketplace: 'IT', kind: 'SELLER' }])]).toEqual([])
+    const rows = [sent('AMAZON', 'IT'), sent('AMAZON', 'IT')]
+    const r = rateOf(rows, { reviewedKeys: reviewedKeysOf([{ channel: 'AMAZON', marketplace: 'IT', kind: 'SELLER' }]), ebayLinked: false })
+    expect(r).toMatchObject({ sent: 2, measured: 0, rate: null })
+    expect(r.words).toMatch(/^Not measurable: Amazon gives no review count/)
+  })
+
+  it('an imported Amazon review opens its market, and so does a row stored before the kind column', () => {
+    expect([...reviewedKeysOf([
+      { channel: 'AMAZON', marketplace: 'DE', kind: 'PRODUCT' },
+      { channel: 'AMAZON', marketplace: 'FR', kind: null },
+      { channel: 'EBAY', marketplace: 'IT', kind: 'SELLER' },
+      { channel: 'SHOPIFY', marketplace: null, kind: 'PRODUCT' },
+    ])]).toEqual(['AMAZON|DE', 'AMAZON|FR', 'EBAY|IT', 'SHOPIFY|'])
   })
 })
 
