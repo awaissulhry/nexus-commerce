@@ -140,6 +140,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/production/cutting': 'production.cutting.view', // GET /production/cutting/cuts (B-W2a-60)
       '/production/scrap': 'production.scrap.view', // GET /production/scrap (B-W2a-60)
       '/production/calls': 'production.calls.view', // GET /production/calls (B-W2b-58)
+      '/production/labour': 'production.labour.view', // GET /production/labour/inbox (B-W2b-57)
       '/production/bundles': 'production.bundles.view', // GET /production/bundles (B-W2b-59)
       '/production/dispatch': 'production.dispatch.view', // GET /production/dispatch/board (B-W2b-56)
       '/production/settings': 'production.settings.view', // GET /production/settings
@@ -297,7 +298,7 @@ describe('record links and list addresses (lib/records/record-links.ts)', () => 
   })
 
   it('a record without a page of its own opens its panels (thread, files, history)', () => {
-    for (const type of ['DepositRequest', 'Ddt', 'ScanCorrectionRequest', 'FloorScanRefusal', 'StoredFile']) {
+    for (const type of ['DepositRequest', 'Ddt', 'FloorScanRefusal', 'StoredFile']) {
       expect(RECORD_PAGES[type], type).toBeUndefined()
       expect(recordAddress({ type, id: 'r1', label: 'R-1', companyId: 'c1' }, OFFICE_PAGES)).toBe(`/records/${type}/r1?label=R-1&company=c1`)
     }
@@ -331,7 +332,8 @@ describe('record links and list addresses (lib/records/record-links.ts)', () => 
   it('a Today row opens its kind\'s page when it has one, else its record', () => {
     expect(attentionAddress('PRIVACY_DUTY', { type: 'Company', id: 'c1' }, OFFICE_PAGES)).toBe('/admin/privacy?company=c1')
     expect(attentionAddress('INVOICE_SDI', { type: 'Invoice', id: 'i1' }, OFFICE_PAGES)).toBe('/finance/invoices/i1')
-    expect(attentionAddress('SCAN_CORRECTION', { type: 'ScanCorrectionRequest', id: 'k1' }, OFFICE_PAGES)).toBe('/records/ScanCorrectionRequest/k1')
+    // B-W2b-57: a correction request is decided on Labour & corrections.
+    expect(attentionAddress('SCAN_CORRECTION', { type: 'ScanCorrectionRequest', id: 'k1' }, OFFICE_PAGES)).toBe('/production/labour?open=CORRECTION:k1')
   })
 })
 

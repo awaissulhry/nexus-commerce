@@ -1,0 +1,545 @@
+{
+  "common": {
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "clearFilters": "Togli i filtri",
+    "more": "Mostra altri",
+    "open": "Apri",
+    "back": "Indietro",
+    "from": "Dal",
+    "to": "Al",
+    "yes": "Sì",
+    "no": "No"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In tempo reale",
+    "offline": "Non si aggiorna"
+  },
+  "page": {
+    "noAccess": {
+      "title": "Il tuo ruolo non può vedere Manodopera e rettifiche",
+      "body": "Serve “production.labour.view”."
+    },
+    "find": "Apri la giornata di una persona…",
+    "payroll": "Esporta i giorni chiusi per le paghe",
+    "lineLabel": "Linea",
+    "lineAll": "Tutte le linee",
+    "lineOption": "{code} · {name}",
+    "approveNormal": "Approva i blocchi normali",
+    "more": "Altre azioni"
+  },
+  "tiles": {
+    "label": "Da decidere, per tipo"
+  },
+  "tile": {
+    "CORRECTION": "Rettifiche da decidere",
+    "DISPUTE": "Contestazioni aperte",
+    "OFF_STANDARD": "Blocchi fuori standard da approvare",
+    "LINE_DAY": "Giorni di linea da chiudere",
+    "held_one": "altri {count} bloccato",
+    "held_other": "altri {count} bloccati"
+  },
+  "bulk": {
+    "approve_one": "Approva {count} blocco normale",
+    "approve_other": "Approva {count} blocchi normali",
+    "close_one": "Chiudi {count} giorno",
+    "close_other": "Chiudi {count} giorni"
+  },
+  "kind": {
+    "CORRECTION": "Rettifica",
+    "DISPUTE": "Contestazione",
+    "OFF_STANDARD": "Blocco fuori standard",
+    "LINE_DAY": "Giorno di linea"
+  },
+  "dayState": {
+    "OPEN": "Aperto",
+    "READY": "Pronto",
+    "CLOSED": "Chiuso"
+  },
+  "legal": {
+    "label": "Base giuridica",
+    "BASIS": "Dati di paga ai sensi della L. 300/1970 art. 4 c.1: {basis} {reference}, registrata il {when} da {name}. Una persona alla volta; le visualizzazioni sono registrate.",
+    "BASIS_noName": "Dati di paga ai sensi della L. 300/1970 art. 4 c.1: {basis} {reference}, registrata il {when}. Una persona alla volta; le visualizzazioni sono registrate.",
+    "ON": "Dati di paga ai sensi della L. 300/1970 art. 4 c.1: la base giuridica di questa sede è in vigore. Una persona alla volta; le visualizzazioni sono registrate.",
+    "GATE_OFF": "I fogli per persona sono disattivati in questa sede: la base giuridica per i dati di lavoro di una persona non è in vigore. I dati dicono dove e cosa, mai chi.",
+    "STATION": "I fogli per persona sono disattivati in questa sede: registra le postazioni, non le persone.",
+    "UNKNOWN": "Non è stato possibile leggere la base giuridica di questa sede: nessun foglio di una persona si apre finché non si legge.",
+    "atSite": "{site}: {text}",
+    "who": "Il lavoratore e le risorse umane vedono la giornata di una persona",
+    "whoLeads": "Il lavoratore, le risorse umane e il suo caposquadra vedono la giornata di una persona",
+    "whoGATE_OFF": "Nessuno apre il foglio di una persona qui",
+    "whoSTATION": "Restano solo i giorni di linea e le rettifiche di postazione",
+    "whoUNKNOWN": "Riprova la pagina",
+    "law": "Statuto dei Lavoratori art. 4",
+    "lawPlain": "Gli strumenti che potrebbero anche controllare i lavoratori richiedono un accordo sindacale o un'autorizzazione dell'Ispettorato, e i lavoratori devono esserne informati prima. I dati di paga di una persona si mostrano solo su questa base, una persona alla volta, e ogni apertura viene registrata.",
+    "rules": "Regole di reparto"
+  },
+  "basis": {
+    "UNION_AGREEMENT": "accordo sindacale",
+    "INL_AUTHORISATION": "autorizzazione dell'Ispettorato del lavoro",
+    "NOT_REQUIRED": "parere legale scritto",
+    "other": "base registrata"
+  },
+  "who": {
+    "named": "Questo dato è di {name}: il nome compare perché la base giuridica della sede è in vigore.",
+    "hidden": "Su questo dato c'è una persona. Il nome compare solo dove la base giuridica della sede è in vigore."
+  },
+  "col": {
+    "kind": "Tipo",
+    "site": "Sede",
+    "line": "Linea",
+    "date": "Data",
+    "work": "Ordine / fascio / operazione",
+    "what": "Cosa cambia",
+    "age": "Attesa",
+    "actions": "Azioni",
+    "coded": "Fuori standard codificato",
+    "anomalies": "Anomalie",
+    "records": "Dichiarazioni",
+    "status": "Stato"
+  },
+  "what": {
+    "block": "{code} · {minutes} min",
+    "day": "Tutto codificato e risolto: pronto da chiudere"
+  },
+  "verb": {
+    "CORRECTION": "Approva",
+    "DISPUTE": "Accogli",
+    "OFF_STANDARD": "Approva",
+    "LINE_DAY": "Chiudi giorno",
+    "reject": "Respingi",
+    "named": "{verb}: {kind}, linea {line}"
+  },
+  "dispute": {
+    "reason": {
+      "WRONG_QUANTITY": "Quantità sbagliata",
+      "WRONG_OPERATION": "Operazione sbagliata",
+      "WRONG_TIME": "Orario sbagliato",
+      "WRONG_CODE": "Codice sbagliato",
+      "NOT_ME": "Non sono io",
+      "OTHER": "Altro"
+    },
+    "noReason": "Nessun motivo indicato",
+    "aboutBlock": "Su un blocco fuori standard",
+    "aboutReport": "Su una dichiarazione",
+    "on": {
+      "FLOOR": "Dal tablet",
+      "OFFICE": "Dall'ufficio"
+    }
+  },
+  "unusual": {
+    "LONG": "Più di un'ora",
+    "TYPED_AFTERWARDS": "Inserito dopo",
+    "BY_SYSTEM": "Chiuso dal sistema",
+    "CHANGED": "Modificato dopo la fine"
+  },
+  "queue": {
+    "label": "Da decidere",
+    "title": "Da decidere",
+    "failed": "Non è stato possibile leggere la coda",
+    "count_one": "{count} elemento",
+    "count_other": "{count} elementi",
+    "search": "Cerca linea, ordine, fascio",
+    "noMatch": {
+      "title": "Nessun risultato",
+      "body": "Togli i filtri per vedere tutta la coda."
+    },
+    "empty": {
+      "title": "Niente da decidere ✓",
+      "body": "Qui arrivano rettifiche, contestazioni, blocchi fuori standard e giorni di linea da chiudere."
+    }
+  },
+  "keys": {
+    "title": "Tasti",
+    "approve": "Approva l'elemento",
+    "reject": "Respingi l'elemento, con un motivo",
+    "next": "Elemento successivo / precedente"
+  },
+  "held": {
+    "busy": "Un momento: si sta salvando l'ultima decisione.",
+    "loading": "Lettura in corso.",
+    "noApprove": "Per approvare un blocco serve “production.offstandard.approve”.",
+    "noCorrect": "Per decidere una rettifica serve “production.scan.correct”.",
+    "noAnswer": "Per rispondere a una contestazione serve “production.labour.answer”.",
+    "noClose": "Per chiudere un giorno serve “production.labour.close”.",
+    "noReopen": "Per riaprire un giorno chiuso serve “production.labour.reopen”.",
+    "noNormal": "Nessun blocco normale in attesa.",
+    "noNormalPicked": "Nessun blocco normale selezionato.",
+    "noDayPicked": "Nessun giorno di linea pronto selezionato.",
+    "tooMany": "Un elenco non mostra di più: restringilo per linea o tipo.",
+    "decided": "Già deciso.",
+    "closedAlready": "Questo giorno è già chiuso.",
+    "dayHeld": "Qualcosa blocca ancora questo giorno: lo vedi qui.",
+    "dayHeldCount_one": "{count} cosa blocca ancora questo giorno.",
+    "dayHeldCount_other": "{count} cose bloccano ancora questo giorno.",
+    "ownDispute": "Questa contestazione riguarda un tuo dato: risponde un'altra persona.",
+    "ownBlock": "È il tuo tempo: decide un'altra persona.",
+    "dayNoReject": "Un giorno di linea si chiude o resta aperto: non c'è nulla da respingere.",
+    "notClosed": "Si riapre solo un giorno chiuso.",
+    "reason": "Scrivi prima il motivo.",
+    "reasonShort": "Scrivi qualcosa in più: almeno tre lettere.",
+    "reasonLong": "Il motivo è troppo lungo.",
+    "noteLong": "La nota è troppo lunga.",
+    "sheetsOff": "I fogli per persona sono disattivati in questa sede.",
+    "noEmployee": "Questa persona non ha una scheda dipendente: nessun foglio da aprire.",
+    "noFigures": "La giornata di una persona la aprono solo il lavoratore, le risorse umane e, dove la sede lo consente, il suo caposquadra.",
+    "noPeople": "La ricerca per nome richiede “people.view”.",
+    "sheetReason": "Indica perché apri la giornata di questa persona.",
+    "pickPerson": "Scegli prima una persona.",
+    "noPayroll": "Persone › Esportazione paghe non è ancora disponibile."
+  },
+  "select": {
+    "oneByOne": "Si decide da solo: aprilo.",
+    "unusual": "Si decide uno alla volta: {why}."
+  },
+  "days": {
+    "title": "Giorni di linea",
+    "hint": "Chiudi il giorno di ogni linea quando il tempo fuori standard è codificato e le anomalie sono risolte; i giorni chiusi vanno in paga.",
+    "stateLabel": "Stato",
+    "stateAll": "Ogni stato",
+    "failed": "Non è stato possibile leggere i giorni di linea",
+    "count_one": "{count} giorno",
+    "count_other": "{count} giorni",
+    "empty": {
+      "title": "Nessun giorno di linea in queste date",
+      "body": "Un giorno compare quando sulla linea è successo qualcosa."
+    },
+    "coded": "Sì",
+    "left_one": "{count} blocco da fare",
+    "left_other": "{count} blocchi da fare",
+    "closedBy": "Chiuso da {name}",
+    "close": "Chiudi giorno",
+    "reopen": "Riapri",
+    "closeNamed": "Chiudi il giorno della linea {line}, {day}",
+    "reopenNamed": "Riapri il giorno della linea {line}, {day}"
+  },
+  "blocker": {
+    "OFF_STANDARD_RUNNING_one": "{count} blocco fuori standard ancora in corso",
+    "OFF_STANDARD_RUNNING_other": "{count} blocchi fuori standard ancora in corso",
+    "OFF_STANDARD_WAITING_one": "{count} blocco fuori standard da approvare",
+    "OFF_STANDARD_WAITING_other": "{count} blocchi fuori standard da approvare",
+    "CORRECTION_WAITING_one": "{count} rettifica da decidere",
+    "CORRECTION_WAITING_other": "{count} rettifiche da decidere",
+    "DISPUTE_OPEN_one": "{count} contestazione aperta",
+    "DISPUTE_OPEN_other": "{count} contestazioni aperte",
+    "REFUSED_SCAN_one": "{count} scansione rifiutata da gestire",
+    "REFUSED_SCAN_other": "{count} scansioni rifiutate da gestire",
+    "ATTENDANCE_ANOMALY_one": "{count} anomalia di presenza",
+    "ATTENDANCE_ANOMALY_other": "{count} anomalie di presenza"
+  },
+  "edits": {
+    "title": "Modifiche ai dati di lavoro",
+    "hint": "Ogni modifica conserva prima e dopo, chi, quando e perché.",
+    "step": "{kind} · {where} · {day}",
+    "noLine": "Nessuna linea",
+    "why": "Perché: {reason}",
+    "by": "Da {name}",
+    "bySystem": "Dal sistema",
+    "named": "su questo dato c'è una persona",
+    "empty": {
+      "title": "Nessuna modifica in queste date",
+      "body": "Qui arriva ogni modifica a un dato di lavoro."
+    },
+    "kindLabel": "Tipo di modifica",
+    "kindAll": "Ogni tipo"
+  },
+  "editKind": {
+    "LABOUR_EDIT": "Modifica di un dato di lavoro",
+    "SCAN_CORRECTION": "Dichiarazione rettificata",
+    "ATTENDANCE_CORRECTION": "Presenza rettificata",
+    "CLOCK_EDIT": "Timbratura modificata"
+  },
+  "change": {
+    "none": "Niente",
+    "more": "+{count}"
+  },
+  "field": {
+    "good": "Buoni",
+    "scrap": "Scarti",
+    "rework": "Rilavorazioni",
+    "codeId": "Codice",
+    "startedAt": "Inizio",
+    "endedAt": "Fine",
+    "workDate": "Data",
+    "status": "Stato",
+    "approvedAt": "Approvato",
+    "rejectedAt": "Respinto",
+    "rejectReason": "Motivo del rifiuto",
+    "clock": "Timbratura",
+    "minutes": "Minuti",
+    "other": "Valore"
+  },
+  "blockStatus": {
+    "OPEN": "In corso",
+    "PENDING": "Da approvare",
+    "APPROVED": "Approvato",
+    "REJECTED": "Respinto"
+  },
+  "clock": {
+    "IN": "Entrata",
+    "OUT": "Uscita",
+    "BREAK_OUT": "Inizio pausa",
+    "BREAK_IN": "Fine pausa",
+    "VOID": "Annullata",
+    "other": "Timbratura"
+  },
+  "age": {
+    "min_one": "{count} min",
+    "min_other": "{count} min",
+    "h_one": "{count} h",
+    "h_other": "{count} h",
+    "d_one": "{count} g",
+    "d_other": "{count} g"
+  },
+  "detail": {
+    "title": {
+      "CORRECTION": "Richiesta di rettifica",
+      "DISPUTE": "Contestazione di un dato",
+      "OFF_STANDARD": "Blocco fuori standard",
+      "LINE_DAY": "Giorno di linea"
+    },
+    "loading": "Lettura…",
+    "dayTitle": "Linea {line}, {day}",
+    "noun": "elemento",
+    "notFound": "Questo elemento non c'è più, o è di una sede che non puoi raggiungere.",
+    "openDay": "Apri la giornata di questa persona",
+    "recordOf": "{bundle} · {operation}",
+    "enteredByLead": "Inserito dal caposquadra",
+    "original": "Il dato originale (non cambia)",
+    "proposed": "La rettifica proposta",
+    "when": "Quando",
+    "where": "Dove",
+    "earned": "Minuti standard maturati",
+    "earnedHint": "Pezzi buoni × i minuti standard dell'operazione.",
+    "noChange": "I conteggi richiesti sono uguali a quelli registrati.",
+    "reason": "Motivo",
+    "status": "Stato",
+    "askedAt": "Richiesta da",
+    "appendOnly": "Approvare aggiunge una riga di rettifica; niente viene sovrascritto.",
+    "steps": "Cosa è successo dopo",
+    "step": "Tipo",
+    "around": "Le scansioni attorno",
+    "aroundHeld": "Le scansioni del fascio richiedono “workorders.view”.",
+    "operation": "Operazione",
+    "station": "Postazione",
+    "voided": "{kind} (annullata)",
+    "disputeAbout": "Cosa dice la persona",
+    "raised": "Aperta",
+    "theirWords": "Le sue parole",
+    "theRecord": "Il dato contestato",
+    "code": "Codice",
+    "minutes": "Minuti",
+    "from": "Da",
+    "to": "A",
+    "entry": "Dato",
+    "recordGone": "Non è stato possibile leggere il dato.",
+    "answer": "La risposta",
+    "answeredBy": "{name}, {when}",
+    "corrected": "Cosa ha cambiato la risposta",
+    "rights": "Un lavoratore può vedere e contestare i propri dati in ogni momento (GDPR artt. 15-16).",
+    "blockHeld": "Il dato di questo blocco richiede “production.offstandard.view”.",
+    "unusual": "Si decide da solo",
+    "running": "Ancora in corso",
+    "source": "Registrato",
+    "note": "Nota",
+    "dayFacts": "Il giorno",
+    "reopened": "Riaperto perché",
+    "holds": "Cosa lo blocca",
+    "dayClosed": "Chiuso: nulla lo blocca.",
+    "nothingHolds": "Nulla lo blocca: si può chiudere.",
+    "history": "Storia"
+  },
+  "requestStatus": {
+    "PENDING": "Da decidere",
+    "APPROVED": "Approvata",
+    "REFUSED": "Rifiutata"
+  },
+  "disputeStatus": {
+    "OPEN": "Aperta",
+    "UPHELD": "Accolta",
+    "REJECTED": "Respinta",
+    "WITHDRAWN": "Ritirata"
+  },
+  "scanKind": {
+    "REPORT": "Dichiarazione",
+    "CORRECTION": "Rettifica",
+    "UNDO": "Annullamento",
+    "other": "Scansione"
+  },
+  "source": {
+    "FLOOR": "In reparto, mentre accadeva",
+    "LEAD": "Inserito dopo",
+    "HELP_CALL": "Da una chiamata di aiuto",
+    "SYSTEM": "Dal sistema"
+  },
+  "dayChange": {
+    "CLOSED": "Chiuso",
+    "REOPENED": "Riaperto"
+  },
+  "reject": {
+    "title": "Respingi",
+    "do": "Respingi",
+    "reason": "Motivo",
+    "reasonHint": "Arriva alla persona così come lo scrivi.",
+    "body": {
+      "CORRECTION": "La dichiarazione resta com'è stata registrata. La persona vede il motivo.",
+      "OFF_STANDARD": "Il blocco resta registrato come respinto e non viene pagato. La persona vede il motivo."
+    }
+  },
+  "answer": {
+    "title": "Rispondi alla contestazione",
+    "outcome": "La risposta",
+    "outcomes": {
+      "UPHELD": "Accolta",
+      "REJECTED": "Respinta"
+    },
+    "do": {
+      "UPHELD": "Accogli",
+      "REJECTED": "Respingi"
+    },
+    "words": "A parole",
+    "wordsHint": "Arriva alla persona così come la scrivi.",
+    "reportHint": "Accogliere non cambia i conteggi: una dichiarazione cambia con la sua rettifica, che il lavoratore chiede e un capo approva.",
+    "blockHint": "Se accogli, puoi correggere il blocco in questo passo: la modifica resta registrata con la contestazione.",
+    "sameCode": "Lascia {code}"
+  },
+  "close": {
+    "title": "Chiudi il giorno di {line}",
+    "titleN_one": "Chiudi {count} giorno",
+    "titleN_other": "Chiudi {count} giorni",
+    "do": "Chiudi giorno",
+    "doN_one": "Chiudi {count} giorno",
+    "doN_other": "Chiudi {count} giorni",
+    "day": "{line}, {day}.",
+    "dayLine": "{line}, {day}",
+    "body": "I giorni chiusi vanno in paga; per riaprire servono il permesso e un motivo.",
+    "note": "Nota",
+    "noteHint": "Facoltativa, resta sul giorno."
+  },
+  "reopen": {
+    "title": "Riapri il giorno di {line}",
+    "do": "Riapri",
+    "body": "{day}. I suoi blocchi e contestazioni tornano modificabili, e la paga lo rilegge quando viene richiuso.",
+    "reason": "Motivo",
+    "reasonHint": "Obbligatorio, resta sul giorno."
+  },
+  "find": {
+    "title": "Apri la giornata di una persona",
+    "do": "Continua",
+    "body": "Una persona, un giorno. Il nome resta in questa finestra; l'apertura della giornata viene registrata.",
+    "name": "Nome o codice dipendente",
+    "none": "Nessuno con questo nome in questa sede.",
+    "day": "Giorno"
+  },
+  "sheet": {
+    "title": "Foglio giornaliero",
+    "close": "Chiudi",
+    "open": "Apri il foglio",
+    "who": "{name}, {day}",
+    "whoHidden": "{day}",
+    "level": "Una persona, un giorno",
+    "logged": "Questa visualizzazione è registrata: chi l'ha aperta, quando e perché restano visibili alle risorse umane e al responsabile della protezione dei dati. Nessun confronto con altri, nessuna esportazione, nessuna stampa.",
+    "reason": "Perché lo apri",
+    "reasonHint": "Registrato con l'apertura.",
+    "pickReason": "Scegli un motivo",
+    "reasons": {
+      "COACHING_ASKED": "Affiancamento chiesto dal lavoratore",
+      "PAY_QUERY": "Una domanda sulla paga",
+      "WORKER_REQUEST": "Richiesta del lavoratore"
+    },
+    "note": "Nota",
+    "attendance": "Presenza",
+    "minutes_one": "{count} minuto",
+    "minutes_other": "{count} minuti",
+    "minutesText": "{minutes} minuti",
+    "noAttendanceDay": "Nessuna giornata di presenza registrata.",
+    "noAttendance": "Non mostrata: in questa sede la finalità presenze è disattivata (Statuto dei Lavoratori art. 4 c.2).",
+    "production": "Minuti di produzione",
+    "pieces": "Pezzi",
+    "piecesValue": "{good} buoni · {scrap} scarti · {rework} rilavorazioni",
+    "offStandard": "Minuti fuori standard",
+    "byCode": "Minuti fuori standard per codice",
+    "blocks": "Blocchi",
+    "exceptions": "Eccezioni",
+    "records": "Dichiarazioni del giorno",
+    "earned": "Minuti",
+    "edits": "Modifiche a questa giornata"
+  },
+  "exception": {
+    "CORRECTION_WAITING_one": "{count} rettifica in attesa",
+    "CORRECTION_WAITING_other": "{count} rettifiche in attesa",
+    "DISPUTE_OPEN_one": "{count} contestazione aperta",
+    "DISPUTE_OPEN_other": "{count} contestazioni aperte",
+    "BLOCK_WAITING_one": "{count} blocco da approvare",
+    "BLOCK_WAITING_other": "{count} blocchi da approvare",
+    "BLOCK_REJECTED_one": "{count} blocco respinto",
+    "BLOCK_REJECTED_other": "{count} blocchi respinti",
+    "RECORD_UNDONE_one": "{count} dichiarazione annullata",
+    "RECORD_UNDONE_other": "{count} dichiarazioni annullate",
+    "ATTENDANCE_ANOMALY_one": "{count} anomalia di presenza",
+    "ATTENDANCE_ANOMALY_other": "{count} anomalie di presenza"
+  },
+  "refusal": {
+    "ALREADY_CLOSED": "Questo giorno è già chiuso.",
+    "NOT_YET": "Questo giorno non è ancora arrivato: si chiude a lavoro finito.",
+    "HELD": "Qualcosa blocca ancora questo giorno: resta aperto finché non è risolto.",
+    "NOT_CLOSED": "Questo giorno non è chiuso.",
+    "DAY_CLOSED": "Il giorno è chiuso (i giorni chiusi vanno in paga): riaprilo prima, con un motivo.",
+    "STATION_SITE": "Questa sede registra le postazioni: non ha dati personali.",
+    "DISPUTE_NOT_OPEN": "Questa contestazione ha già una risposta o è stata ritirata.",
+    "OWN_DISPUTE": "Questa contestazione riguarda un tuo dato: risponde un'altra persona.",
+    "BLOCK_RUNNING": "Il blocco è ancora in corso: gli orari si correggono quando è finito.",
+    "STILL_RUNNING": "Il blocco è ancora in corso: si decide quando è finito.",
+    "NOT_PENDING": "Questo blocco è già stato deciso.",
+    "OWN_TIME": "È il tuo tempo: decide un'altra persona.",
+    "OVERLAPS": "Questi orari si sovrappongono a un altro blocco della stessa persona o postazione.",
+    "CODE_INACTIVE": "Quel codice non è più in uso.",
+    "DECIDED_ALREADY": "Questa rettifica è già stata decisa.",
+    "SELF_APPROVAL": "Hai fatto tu questa scansione o hai chiesto la rettifica: decide un'altra persona.",
+    "TARGET_VOIDED": "La scansione da rettificare è stata annullata o rettificata nel frattempo: respingila, il reparto la richiede.",
+    "GATE": "I fogli per persona sono disattivati in questa sede.",
+    "FIGURES": "La giornata di una persona la aprono solo il lavoratore, le risorse umane e, dove la sede lo consente, il suo caposquadra.",
+    "WORK_ORDER_NOT_OPEN": "L'ordine non è più aperto: le sue dichiarazioni non cambiano.",
+    "PREVIOUS_NOT_REPORTED": "L'operazione precedente non ha ancora passato questo fascio: va dichiarata prima.",
+    "MORE_THAN_BUNDLE": "Questi conteggi superano i pezzi del fascio.",
+    "MORE_THAN_PASSED": "Questi conteggi superano quanto passato dall'operazione precedente.",
+    "LESS_THAN_TAKEN": "Questi conteggi sono meno di quanto ha già preso l'operazione successiva.",
+    "NO_COUNT": "Una dichiarazione richiede almeno un pezzo.",
+    "UNKNOWN_SCAN": "La scansione da rettificare non c'è più.",
+    "SAME_COUNTS": "Questi conteggi sono uguali a quelli dichiarati.",
+    "NEXT_REPORTED": "L'operazione successiva ha già preso questo fascio.",
+    "ON_HOLD": "Il fascio o il suo ordine è in sospeso: si aspetta lo sblocco."
+  },
+  "problem": {
+    "read": "Non è stato possibile leggere. Riprova.",
+    "write": "Non è andato a buon fine. Riprova.",
+    "changed": "Qualcun altro l'ha cambiato nel frattempo: rileggi e decidi.",
+    "refused": "La regola l'ha rifiutato: rileggi.",
+    "forbidden": "Il tuo ruolo non può farlo.",
+    "gone": "Non c'è più, o è di una sede che non puoi raggiungere.",
+    "invalid": "Qualcosa non è valido: controlla e riprova.",
+    "offline": "Nessuna connessione: non è stato inviato nulla."
+  },
+  "notice": {
+    "corrected": "Rettifica approvata: è stata aggiunta una riga di rettifica, niente è stato sovrascritto.",
+    "approved": "Blocco approvato.",
+    "refused": "Rettifica rifiutata: la dichiarazione resta come registrata.",
+    "rejected": "Blocco respinto.",
+    "upheld": "Contestazione accolta.",
+    "upheldCorrected": "Contestazione accolta e blocco corretto.",
+    "disputeRejected": "Contestazione respinta.",
+    "closed_one": "{count} giorno chiuso.",
+    "closed_other": "{count} giorni chiusi.",
+    "closedPartly": "{done} chiusi, {refused} no.",
+    "reopened": "Giorno riaperto.",
+    "approvedN_one": "{count} blocco approvato.",
+    "approvedN_other": "{count} blocchi approvati.",
+    "skipped": "{code}: escluso ({why}).",
+    "skippedOther": "{code}: escluso (è cambiato, è il tuo tempo o il suo giorno è chiuso).",
+    "leftOut_one": "{count} blocco insolito resta da decidere da solo.",
+    "leftOut_other": "{count} blocchi insoliti restano da decidere uno alla volta."
+  }
+}

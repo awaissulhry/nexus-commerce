@@ -95,7 +95,8 @@
     "planned": "Previsti",
     "earned": "Maturati",
     "notScanned": "Non scansionata: nulla la dichiara",
-    "offStandard": "I minuti fuori standard si tengono per linea e giorno, non per ordine di lavoro: si vedono sulla giornata della linea in Manodopera e correzioni.",
+    "offStandard": "I minuti fuori standard si tengono per linea e giorno, non per ordine di lavoro: si vedono sulla giornata della linea in Manodopera e rettifiche.",
+    "toLabour": "Apri Manodopera e rettifiche",
     "neverPerson": "Mai per persona: i minuti di un lavoratore stanno solo nella sua scheda."
   },
   "docs": {

@@ -152,7 +152,7 @@ describe('the labour record per scan with its minutes (MES-201)', () => {
   it('answers what stands of a report, its standard minutes earned, its correction waiting and its dispute; never who while the gate is off', async () => {
     const [undoneId, undoId, standingId] = labour.production.scanIds
     const record = (await ok('viewer', 'GET', `/production/labour/records/${standingId}`)).record
-    expect(record).toMatchObject({ scanId: standingId, state: 'STANDING', workDate: '2026-11-17', counts: { good: 2, scrap: 0, rework: 0 }, earnedMinutes: '193.000', operation: { seq: 20, standardMinutes: '96.5' }, line: { id: lineL1, code: 'L1' }, correctionsWaiting: 1, worker: null, workerHidden: true })
+    expect(record).toMatchObject({ scanId: standingId, state: 'STANDING', workDate: '2026-11-17', counts: { good: 2, scrap: 0, rework: 0 }, earnedMinutes: '193.000', operation: { seq: 20, standardMinutes: '96.5' }, line: { id: lineL1, code: 'L1' }, correctionsWaiting: 1, worker: null, employeeId: null, workerHidden: true })
     expect(record.disputes).toEqual([expect.objectContaining({ id: labour.disputeIds[0], status: 'OPEN' })])
     expect(JSON.stringify(record)).not.toContain(OPERATOR_NAME)
     // An undo voids it: nothing of it counts; its undo answers the same record.
@@ -273,7 +273,7 @@ describe('the worker reads their own records and disputes one (MES-205, MES-206;
 
   it("is answered by the team leader or HR, never by the worker; an upheld block dispute corrects it once its day is reopened", async () => {
     const office = (await ok('supervisor', 'GET', `/production/labour/disputes/${raised.id}`)).dispute
-    expect(office).toMatchObject({ status: 'OPEN', reason: 'WRONG_TIME', worker: null, workerHidden: true, raisedOn: 'FLOOR', canAnswer: true, own: false, record: { code: 'WAIT_MATERIAL', status: 'APPROVED' } })
+    expect(office).toMatchObject({ status: 'OPEN', reason: 'WRONG_TIME', worker: null, employeeId: null, workerHidden: true, raisedOn: 'FLOOR', canAnswer: true, own: false, record: { code: 'WAIT_MATERIAL', status: 'APPROVED' } })
     expect(JSON.stringify(office)).not.toContain(OPERATOR_NAME)
     // The worker's own office user never answers it.
     expect((await ok('operatorUser', 'GET', `/production/labour/disputes/${raised.id}`)).dispute).toMatchObject({ own: true, canAnswer: false })
@@ -367,7 +367,7 @@ describe("the operator's daily sheet, one person inside one record (MES-202; Sta
   })
 
   it('names the worker on one record and shows the minutes on My day once the gate is on', async () => {
-    expect((await ok('viewer', 'GET', `/production/labour/records/${labour.production.scanIds[2]}`)).record).toMatchObject({ worker: { id: operator, name: OPERATOR_NAME }, workerHidden: false })
+    expect((await ok('viewer', 'GET', `/production/labour/records/${labour.production.scanIds[2]}`)).record).toMatchObject({ worker: { id: operator, name: OPERATOR_NAME }, employeeId: await employee(), workerHidden: false })
     const mine = (await tablet.get('/production/labour/floor/mine?from=2026-11-17&to=2026-11-17')).body as Json
     expect(mine).toMatchObject({ minutesShown: true, words: [] })
     expect(mine.records.find((row: Json) => row.scanId === labour.production.scanIds[2]).minutes).toBe('193.000')
