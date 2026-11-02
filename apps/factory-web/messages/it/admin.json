@@ -1885,6 +1885,8 @@
     "people_attendance_close": "Chiudere definitivamente il mese delle presenze di una società e sigillare il suo calendario LUL",
     "people_attendance_correct": "Correggere un giorno di un mese chiuso, con una nuova registrazione e il motivo",
     "people_attendance_lul": "Aprire il calendario LUL di un mese chiuso, con le ore di tutti (ogni apertura è registrata)",
+    "people_efficiency_view": "Vedere l'efficienza per linea e per operazione, la coda di revisione degli standard e il tempo ciclo (mai per persona)",
+    "people_efficiency_review": "Decidere la revisione degli standard: tenere uno standard, cambiarlo o indagare, sempre con un motivo",
     "people_overtime_review": "Approvare o rifiutare lo straordinario lavorato (si paga solo dopo l'approvazione)",
     "people_timesheets_team": "Approvare come responsabile i fogli ore dei team che guidi (i giorni, non le ore)",
     "people_timesheets_lead": "Approvare come responsabile qualsiasi foglio ore raggiungibile e rimandarlo indietro",

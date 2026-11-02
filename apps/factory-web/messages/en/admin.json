@@ -1885,6 +1885,8 @@
     "people_attendance_close": "Close a company's attendance month for good and seal its LUL calendar",
     "people_attendance_correct": "Correct a day of a closed month, with a new entry and its reason",
     "people_attendance_lul": "Open the LUL calendar of a closed month, with everyone's hours (every opening is recorded)",
+    "people_efficiency_view": "See efficiency per line and per operation, the standard review queue and operation cycle time (never per person)",
+    "people_efficiency_review": "Decide the standard review: keep a standard, change it or investigate, always with a reason",
     "people_overtime_review": "Approve or reject the overtime people worked (paid only once approved)",
     "people_timesheets_team": "Approve as the lead the timesheets of the teams you lead (the days, not the hours)",
     "people_timesheets_lead": "Approve as the lead any timesheet in reach, and send one back",
