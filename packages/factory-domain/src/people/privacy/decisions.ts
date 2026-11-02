@@ -32,6 +32,9 @@ export const PERSON_DECISIONS = [
   // B-W2b-42: worked overtime approved, rejected or taken back; a timesheet approved or sent back.
   'OVERTIME_DECISION',
   'TIMESHEET_APPROVAL',
+  // B-W2b-43: a held scan counted or not paid; a worker statement approved.
+  'HELD_SCAN_DECISION',
+  'PAY_STATEMENT_APPROVAL',
 ] as const
 export type PersonDecision = (typeof PERSON_DECISIONS)[number]
 

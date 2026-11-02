@@ -1842,6 +1842,10 @@
     "people_timesheets_team": "Approvare come responsabile i fogli ore dei team che guidi (i giorni, non le ore)",
     "people_timesheets_lead": "Approvare come responsabile qualsiasi foglio ore raggiungibile e rimandarlo indietro",
     "people_timesheets_hr": "Preparare i fogli ore del mese, approvarli dopo il responsabile, rimandarli indietro",
-    "people_limits_manage": "Tenere i limiti di orario: valore, avviso o blocco, chi avvisano"
+    "people_limits_manage": "Tenere i limiti di orario: valore, avviso o blocco, chi avvisano",
+    "people_earnings_view": "Vedere i periodi paga: stato, controlli aperti, scansioni trattenute e cifre per linea (mai una persona)",
+    "people_earnings_records": "Aprire il prospetto e le righe di guadagno di una persona, il registro e il report per lavoratore (ogni apertura è registrata)",
+    "people_earnings_manage": "Eseguire, rivedere e chiudere un periodo paga, decidere le scansioni trattenute, approvare i prospetti, correggere una riga",
+    "people_earnings_review": "Rivedere come responsabile il prospetto di una persona: pezzi e minuti, mai importi"
   }
 }

@@ -305,6 +305,18 @@ const PEOPLE_PIECERATES_ADDS: Readonly<Record<string, readonly Permission[]>> = 
   admin: ['people.piecerates.view'],
   production_manager: ['people.piecerates.view'],
 })
+/**
+ * B-W2b-43 (earnings and pay periods): the administrator, production manager and floor supervisor see the periods, their
+ * states and the held scans with no name (no pay figure: they hold no pay grain); a lead reviews a statement's pieces and
+ * minutes where the site's legal basis lets them. One person's pay (people.earnings.records) and running a period
+ * (people.earnings.manage) are in no template: the Owner holds them through every office permission; an HR role gets them
+ * with the pay grain.
+ */
+const PEOPLE_EARNINGS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.earnings.view'],
+  production_manager: ['people.earnings.view', 'people.earnings.review'],
+  floor_supervisor: ['people.earnings.view', 'people.earnings.review'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -338,6 +350,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_ATTENDANCE_ADDS[key] ?? []) : []),
   // B-W2b-42
   ...(audience === 'office' ? (PEOPLE_OVERTIME_ADDS[key] ?? []) : []),
+  // B-W2b-43
+  ...(audience === 'office' ? (PEOPLE_EARNINGS_ADDS[key] ?? []) : []),
   // B-W2b-49
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? [])]
 /**

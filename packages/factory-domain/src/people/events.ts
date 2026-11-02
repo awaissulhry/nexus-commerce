@@ -18,6 +18,9 @@ import { ANOMALY_KINDS, DAY_CHANGES, DAY_STATUSES } from './attendance/rules'
 import { RULE_KINDS } from './limits/rules'
 import { ENTRY_CHANGES, ENTRY_STATUSES, OVERTIME_CLASSES } from './overtime/rules'
 import { TIMESHEET_CHANGES, TIMESHEET_STATUSES } from './overtime/timesheets'
+// B-W2b-43: earnings and pay periods.
+import { HOLD_STATUSES, STATEMENT_STATUSES } from './earnings/rules'
+import { PERIOD_STATUSES } from './schemes/rules'
 
 /**
  * The people module's events (B-W2b-26 employees and teams; design people.employees "Live": employee.created / updated
@@ -102,6 +105,7 @@ export const events = [
   ...attendanceEvents(),
   // B-W2b-42: overtime worked, timesheets, working-time limits (overtimeEvents, at the end of the file).
   ...overtimeEvents(),
+  ...earningsEvents(),
   defineEvent({
     type: 'employee.created',
     context: 'people',
@@ -441,6 +445,51 @@ function overtimeEvents() {
       description: 'A working-time limit was set or archived for the group, a company or a site.',
       payload: z.strictObject({ ruleId: z.uuid(), companyId: z.uuid().nullable(), siteId: z.uuid().nullable(), kind: z.enum(RULE_KINDS), change: z.enum(['SET', 'ARCHIVED']) }),
       live: { permission: 'people.attendance.view', fields: ['ruleId', 'companyId', 'siteId', 'kind', 'change'] },
+    }),
+  ] as const
+}
+
+/**
+ * B-W2b-43: earnings and pay periods (design people.piecerates "Live": operation.scanned → ledger, batched; attendance.day_approved
+ * → held scans clear; people.reports: pay_period.locked → earnings), emitted by apps/factory-api modules/people/earnings in the
+ * command that makes the change. Ids, states and counts only: never a name, a rate, an amount or a reason.
+ *
+ *   earnings.recorded          entries were added or reversed for a bundle (or by a person's correction), scans held or released
+ *   held_scan.changed          a scan was held, counted or decided not to pay
+ *   pay_period.changed         a period was opened, run, put back, its review started or taken back, or it was locked
+ *   worker_statement.changed   a statement was made, reviewed by the lead or approved
+ *
+ * All reach the office screens of people.earnings.view holders; the floor receives none.
+ */
+function earningsEvents() {
+  return [
+    defineEvent({
+      type: 'earnings.recorded',
+      context: 'people',
+      description: 'The earnings ledger moved: entries added or reversed for a bundle, or a correction by a person; scans held or released.',
+      payload: z.strictObject({ siteId: z.uuid(), bundleId: z.uuid().nullable(), added: z.number().int().min(0), reversed: z.number().int().min(0), held: z.number().int().min(0), released: z.number().int().min(0) }),
+      live: { permission: 'people.earnings.view', fields: ['siteId', 'added', 'reversed', 'held', 'released'] },
+    }),
+    defineEvent({
+      type: 'held_scan.changed',
+      context: 'people',
+      description: 'A scan was held because its worker was not clocked in, counted once the attendance showed it, or decided not to pay.',
+      payload: z.strictObject({ heldScanId: z.uuid(), siteId: z.uuid(), periodId: z.uuid(), status: z.enum(HOLD_STATUSES), change: z.enum(['HELD', 'COUNTED', 'NOT_PAID']) }),
+      live: { permission: 'people.earnings.view', fields: ['heldScanId', 'siteId', 'periodId', 'status', 'change'] },
+    }),
+    defineEvent({
+      type: 'pay_period.changed',
+      context: 'people',
+      description: 'A pay period was opened, run, put back to open, its review started or taken back, or it was locked.',
+      payload: z.strictObject({ periodId: z.uuid(), companyId: z.uuid(), month: z.string().regex(/^\d{4}-\d{2}$/), status: z.enum(PERIOD_STATUSES), change: z.enum(['CREATED', 'RUN', 'REOPENED', 'REVIEW_STARTED', 'REVIEW_TAKEN_BACK', 'LOCKED']) }),
+      live: { permission: 'people.earnings.view', fields: ['periodId', 'companyId', 'month', 'status', 'change'] },
+    }),
+    defineEvent({
+      type: 'worker_statement.changed',
+      context: 'people',
+      description: "A person's statement of a period was made, reviewed by their lead or approved by HR.",
+      payload: z.strictObject({ statementId: z.uuid(), periodId: z.uuid(), siteId: z.uuid(), status: z.enum(STATEMENT_STATUSES), revision: z.number().int().min(1), change: z.enum(['MADE', 'LEAD_REVIEWED', 'APPROVED']) }),
+      live: { permission: 'people.earnings.view', fields: ['statementId', 'periodId', 'siteId', 'status', 'revision', 'change'] },
     }),
   ] as const
 }
