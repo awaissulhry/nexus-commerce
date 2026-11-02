@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { at, DEVICES, inShell, NOW, panels, PREFIX, PRINTERS, SITES, STATIONS } from '../shared/fixtures'
+import { at, DEVICES, inShell, LINES, NOW, panels, PREFIX, PRINTERS, SITES, STATIONS } from '../shared/fixtures'
 import { failed, loaded, loading } from '../shared/model'
 import type { Device } from '../shared/api'
 import type { DeviceRecordModel, DevicesViewModel, SiteChoice } from './model'
@@ -29,7 +29,12 @@ const STATE: Readonly<Record<number, Partial<Device>>> = {
 }
 const STATEFUL: Device[] = DEVICES.map((item, index) => ({ ...item, ...(STATE[index] ?? {}) }))
 
-const sites: SiteChoice[] = SITES.map((site) => ({ id: site.id, name: site.name, companyId: site.companyId, stations: site.id === SITES[0]!.id ? STATIONS.map((station) => ({ id: station.id, code: station.code, name: station.name })) : [] }))
+const LINE = LINES[0]!
+const sites: SiteChoice[] = SITES.map((site) => ({ id: site.id, name: site.name, companyId: site.companyId, stations: site.id === SITES[0]!.id ? STATIONS.map((station) => ({ id: station.id, code: station.code, name: station.name })) : [], lines: site.id === SITES[0]!.id ? LINES.map((line) => ({ id: line.id, code: line.code, name: line.name })) : [] }))
+const PEOPLE = [
+  { id: '0190f0e2-1111-7000-8000-000000000c01', name: 'Ada Demo' },
+  { id: '0190f0e2-1111-7000-8000-000000000c02', name: 'Luca Demo' },
+]
 const CAN = { manage: true, revoke: true, viewPrinters: true, managePrinters: true }
 const ENROLMENT = { code: 'demo-enrolment-code', url: 'https://factory.example.com/floor/enrol#code=DEMO-ONLY', qrSvg: '', expiresAt: '2026-10-29T09:57:00.000Z' }
 const list = (over: Partial<DevicesViewModel> = {}): Case => ({
@@ -57,10 +62,16 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'devices', label: 'Devices', model: list(), note: '"In use" says someone is signed in, never who (Statuto dei Lavoratori art. 4). 1 / 2 switch lists; c enrols. W2a: the app version is marked when it is not the one the server serves; the battery as the tablet said it (low marked).' },
     { id: 'tile-not-seen', label: 'Tile: not seen for 24 h', model: list({ tile: 'notSeen' }) },
     { id: 'printers', label: 'Printers', model: list({ mode: 'printers' }) },
-    { id: 'enrol-where', label: 'Enrol 1: where will it work?', model: list({ enrol: { step: 'where', siteId: SITES[0]!.id } }), note: 'Picking a station suggests the name. The mode (Operator, Cutting…) comes with the floor step.' },
+    { id: 'enrol-where', label: 'Enrol 1: where will it work?', model: list({ enrol: { step: 'where', siteId: SITES[0]!.id } }), note: 'B-W2b-67 (MES-181): the mode, each saying what the tablet will show. Picking a station suggests the name.' },
+    { id: 'enrol-line', label: 'Enrol 1: a line tablet', model: list({ enrol: { step: 'where', siteId: SITES[0]!.id, mode: 'LINE' } }), note: 'It shows one line: anyone signs in; a team leader lands on the Line view.' },
+    { id: 'enrol-display', label: 'Enrol 1: a line board', model: list({ enrol: { step: 'where', siteId: SITES[0]!.id, mode: 'DISPLAY' } }), note: 'Nobody signs in on it: it opens the line TV by itself (SCR-173).' },
+    { id: 'enrol-phone', label: 'Enrol 1: a personal phone', model: list({ enrol: { step: 'where', siteId: SITES[0]!.id, mode: 'PHONE' }, people: PEOPLE }), note: 'MES-186: one person; no station, never kiosk-locked; it never reports where it is.' },
+    { id: 'enrol-phone-held', label: 'Enrol 1: a phone, without workers.view', model: list({ enrol: { step: 'where', siteId: SITES[0]!.id, mode: 'PHONE' }, peopleHeld: true }), note: 'The list stays empty and says why.' },
     { id: 'enrol-scan', label: 'Enrol 2: scan this on the tablet', model: list({ enrol: { step: 'scan', device: DEVICES[3]!, enrolment: ENROLMENT } }), note: 'A made-up address. The page waits for the tablet and moves on by itself.' },
     { id: 'enrol-expired', label: 'Enrol: the code expired', model: list({ enrol: { step: 'scan', device: DEVICES[3]!, enrolment: ENROLMENT, expired: true } }) },
     { id: 'enrol-ready', label: 'Enrol 3: ready', model: list({ enrol: { step: 'ready', device: { ...DEVICES[3]!, status: 'ACTIVE' } } }) },
+    { id: 'enrol-ready-display', label: 'Enrol 3: a line board is ready', model: list({ enrol: { step: 'ready', device: { ...DEVICES[3]!, status: 'ACTIVE', mode: 'DISPLAY' } } }) },
+    { id: 'enrol-ready-phone', label: 'Enrol 3: a personal phone is ready', model: list({ enrol: { step: 'ready', device: { ...DEVICES[3]!, status: 'ACTIVE', mode: 'PHONE' } } }) },
     { id: 'printer-new', label: 'Add a printer', model: list({ mode: 'printers', printer: { kind: 'new', siteId: SITES[0]!.id } }) },
     { id: 'printer-edit', label: 'Change a printer', model: list({ mode: 'printers', printer: { kind: 'edit', printerId: PRINTERS[0]!.id } }) },
     { id: 'devices-selected', label: 'Devices: three ticked, Revoke 3', model: list({ selected: [DEVICES[0]!.id, DEVICES[1]!.id, DEVICES[3]!.id] }), note: 'An enrolled, a silent and a waiting device: Revoke reaches all three.' },
@@ -80,7 +91,10 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'loading', label: 'Loading', model: list({ devices: loading(), printers: loading(), failedPrinters: null, asOf: null }) },
     { id: 'error', label: 'The API did not answer', model: list({ devices: failed('problem.unavailable'), asOf: null }) },
     { id: 'viewer', label: 'A viewer: enrol and add held', model: list({ can: { manage: false, revoke: false, viewPrinters: true, managePrinters: false } }) },
-    { id: 'device-binding', label: 'Device: station & mode', model: device(0) },
+    { id: 'device-binding', label: 'Device: station & mode (in use: mode held)', model: device(0), note: 'B-W2b-67: someone is signed in, so the mode waits: the card says so.' },
+    { id: 'device-mode', label: 'Device: change the mode', model: device(1), note: 'B-W2b-67: station tablet, line tablet, line board or personal phone, while nobody is signed in.' },
+    { id: 'device-display', label: 'Device: a line board', model: device(1, { device: { ...STATEFUL[1]!, mode: 'DISPLAY', stationId: null, lineId: LINE.id, kiosk: { checkedAt: NOW, fullScreen: true, installed: true, homeTest: 'STAYED', looksLocked: true } } }) },
+    { id: 'device-kiosk', label: 'Device: the kiosk check as reported', model: device(1, { tab: 'status', device: { ...STATEFUL[1]!, kiosk: { checkedAt: NOW, fullScreen: true, installed: null, homeTest: 'NOT_TESTED', looksLocked: false } } }), note: 'PLT-227: never "locked": Android does not tell a web app it is pinned.' },
     { id: 'device-status', label: 'Device: status and danger zone', model: device(0, { tab: 'status' }) },
     { id: 'device-silent', label: 'Device: not seen for 3 days', model: device(1, { tab: 'status' }) },
     // B-W2b-24: the network the tablet said and since when someone is signed in on it (never who); an older session from yesterday.

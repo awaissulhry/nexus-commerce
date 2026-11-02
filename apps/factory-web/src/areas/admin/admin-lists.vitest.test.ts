@@ -42,7 +42,7 @@ const LEFT_KEY = /\b(?:common|problem|stepUp|list|lists|record|noAccess|grains|s
 const translator = (locale: Locale) => createTranslator(locale, CATALOGUE[locale].admin ?? {})
 const companies = COMPANIES.map((company) => ({ id: company.id, name: company.legalName, sites: company.sites.map((site) => ({ id: site.id, name: site.name })) }))
 const siteOptions = SITES.map((site) => ({ id: site.id, name: site.name, companyId: site.companyId }))
-const siteChoices = SITES.map((site) => ({ id: site.id, name: site.name, companyId: site.companyId, stations: site.id === SITES[0]!.id ? STATIONS.map((station) => ({ id: station.id, code: station.code, name: station.name })) : [] }))
+const siteChoices = SITES.map((site) => ({ id: site.id, name: site.name, companyId: site.companyId, stations: site.id === SITES[0]!.id ? STATIONS.map((station) => ({ id: station.id, code: station.code, name: station.name })) : [], lines: [] }))
 const structure = { site: SITES[0]!, company: { id: COMPANIES[0]!.id, code: 'DEMO', legalName: COMPANIES[0]!.legalName }, lines: LINES, workCentres: CENTRES, stations: STATIONS }
 type Words = ReturnType<typeof useRoleWords>
 

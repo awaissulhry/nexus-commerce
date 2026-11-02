@@ -7,7 +7,7 @@ import { blockView } from '../numbering/contract'
 /**
  * The floor sync (B-W0-30; PLT-237, PLT-239, PLT-240, PLT-189; design floor.sync SCR-023). No field carries money; no
  * floor answer names a worker (a refused action is the tablet's own, or "another person's", counted); the office sees
- * one refused action's worker by name, inside that record only.
+ * one refused action's worker by name, inside that record only, where the site's PERFORMANCE gate is on.
  */
 
 const clientEventId = () => z.string().regex(CLIENT_EVENT_ID, 'Expected 8 to 64 letters, digits, dots, colons, underscores or hyphens.')
@@ -155,8 +155,10 @@ export const refusedOneContract = defineContract({
     200: output({
       refused: refusedView.extend({
         device: output({ id: id(), name: z.string() }),
-        /** Who sent it, by name, where the site names workers (inside this one record only). */
+        /** Who sent it, by name, where the site names workers and its PERFORMANCE gate is on (inside this one record only). */
         worker: output({ id: id(), name: z.string() }).nullable(),
+        /** The action names a person and the gate keeps back who. */
+        workerHidden: z.boolean(),
         discardedById: id().nullable(),
         /** What the tablet sent. */
         payload: z.record(z.string(), z.unknown()),

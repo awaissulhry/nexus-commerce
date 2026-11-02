@@ -480,7 +480,9 @@
     "pattern": "Pattern area of the sets {area}",
     "station": "Station",
     "correctionOf": "This entry corrects the cut of {when}; the reason is in the history.",
-    "noWorker": "Not recorded at this site"
+    "noWorker": "Not recorded at this site",
+    "workerHidden": "A person is on this record. Their name shows only where the site's legal basis is in force.",
+    "workerHiddenShort": "A person is on this record"
   },
   "hideState": {
     "FULL": "Whole",
@@ -573,6 +575,7 @@
     "oldCodes": "Earlier codes",
     "scans": "Scans per operation",
     "voided": "Taken back",
+    "workerHidden": "A person is on this record",
     "scanKind": {
       "REPORT": "Report",
       "UNDO": "Undo",

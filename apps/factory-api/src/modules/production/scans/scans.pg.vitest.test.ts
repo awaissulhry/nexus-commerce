@@ -16,6 +16,7 @@ import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { lockBundleScans } from './store'
+import { switchOnPerformance } from '../../people/privacy/testing/performance-gate'
 
 /**
  * Operation scans on the floor, offline, with undo and corrections; WIP (B-W1-42; MES-069, MES-090, MES-095, MES-096,
@@ -495,7 +496,13 @@ describe('a correction (MES-096): asked by the one who took it, approved by anot
   let request: Json
 
   it('asks a correction of an older own report, and refuses a second one while it waits', async () => {
+    // The site's PERFORMANCE gate is off (the default): the scan says a person is on it, never who (art. 4 c.1; GATE-LABOUR).
+    const closed = await ok('supervisor', 'GET', `/production/scans/work-orders/${WO.flow.id}/scans?bundleId=${BN.flow[0]!.id}`)
+    expect(closed.scans.find((scan: Json) => scan.operation.seq === 20 && scan.kind === 'REPORT')).toMatchObject({ worker: null, workerHidden: true, station: { code: 'SEW-01' } })
+    expect(JSON.stringify(closed)).not.toContain(A.operatorA1)
+    const gateOff = await switchOnPerformance(admin, { tenantId: A.tenant, companyId: A.companyA, siteId: A.siteA1, byId: A.supervisor })
     const { scans } = await ok('supervisor', 'GET', `/production/scans/work-orders/${WO.flow.id}/scans?bundleId=${BN.flow[0]!.id}`)
+    await gateOff()
     sewn = scans.find((scan: Json) => scan.operation.seq === 20 && scan.kind === 'REPORT')
     expect(sewn).toMatchObject({ goodQuantity: 4, scrapQuantity: 1, worker: { id: A.operatorA1, name: expect.any(String) }, station: { code: 'SEW-01' }, voidedById: null })
     // Same counts and reason: nothing to correct.
@@ -520,8 +527,14 @@ describe('a correction (MES-096): asked by the one who took it, approved by anot
     const { requests } = await ok('supervisor', 'GET', `/production/scans/corrections?status=PENDING&workOrderId=${WO.flow.id}`)
     expect(requests).toEqual([expect.objectContaining({ id: request.id, bundleCode: BN.flow[0]!.code, operation: expect.objectContaining({ seq: 20 }), recorded: expect.objectContaining({ goodQuantity: 4, scrapQuantity: 1 }) })])
     expect(keysOf(requests).filter((name) => /worker|askedBy/i.test(name))).toEqual([])
+    // Gate off: the record says a person asked and a person took the scan, never who.
+    const closed = await ok('supervisor', 'GET', `/production/scans/corrections/${request.id}`)
+    expect(closed.request).toMatchObject({ askedBy: null, askedByHidden: true, askedAt: { code: 'SEW-01' }, scan: { worker: null, workerHidden: true, defects: [{ kind: 'SCRAP', reason: 'STAIN', quantity: 1 }] } })
+    expect(JSON.stringify(closed)).not.toContain(A.operatorA1)
+    const gateOff = await switchOnPerformance(admin, { tenantId: A.tenant, companyId: A.companyA, siteId: A.siteA1, byId: A.supervisor })
     const { request: record } = await ok('supervisor', 'GET', `/production/scans/corrections/${request.id}`)
-    expect(record).toMatchObject({ askedBy: { id: A.operatorA1 }, askedAt: { code: 'SEW-01' }, scan: { worker: { id: A.operatorA1 }, defects: [{ kind: 'SCRAP', reason: 'STAIN', quantity: 1 }] } })
+    await gateOff()
+    expect(record).toMatchObject({ askedBy: { id: A.operatorA1, name: expect.any(String) }, askedByHidden: false, askedAt: { code: 'SEW-01' }, scan: { worker: { id: A.operatorA1, name: expect.any(String) }, workerHidden: false, defects: [{ kind: 'SCRAP', reason: 'STAIN', quantity: 1 }] } })
     expect((await wipOf(WO.flow.id)).correctionsWaiting).toBe(1)
     // The operator's own office account may decide corrections, but not this one.
     const self = await call('operatorOffice', 'POST', `/production/scans/corrections/${request.id}/approve`, {})
@@ -627,8 +640,14 @@ describe('the offline queue (A1 §3.8): a batch in device order, each action acc
     expect(refusals.map((row: Json) => row.code).sort()).toEqual(['MORE_THAN_PASSED', 'OTHER_WORKER', 'PREVIOUS_NOT_REPORTED', 'UNKNOWN_BUNDLE'])
     expect(refusals.find((row: Json) => row.code === 'MORE_THAN_PASSED')).toMatchObject({ action: 'REPORT', bundleId: BN.offline[2]!.id, workOrderId: WO.offline.id, goodQuantity: 3, device: { id: A.sew1, name: 'Sewing tablet 1' }, deviceTime: deviceAt(3180) })
     expect(keysOf(refusals)).not.toContain('worker')
+    // Gate off: the record says a person sent it, never who.
+    const closed = await ok('supervisor', 'GET', `/production/scans/refusals/${refusals[0].id}`)
+    expect(closed.refusal).toMatchObject({ worker: null, workerHidden: true })
+    expect(JSON.stringify(closed)).not.toContain(A.operatorA1)
+    const gateOff = await switchOnPerformance(admin, { tenantId: A.tenant, companyId: A.companyA, siteId: A.siteA1, byId: A.supervisor })
     const { refusal: record } = await ok('supervisor', 'GET', `/production/scans/refusals/${refusals[0].id}`)
-    expect(record.worker).toMatchObject({ id: A.operatorA1 })
+    await gateOff()
+    expect(record).toMatchObject({ worker: { id: A.operatorA1, name: expect.any(String) }, workerHidden: false })
     const mine = await ok('sew1', 'GET', '/production/scans/mine')
     expect(mine.refused.map((row: Json) => row.code).sort()).toEqual(['MORE_THAN_PASSED', 'OTHER_WORKER', 'PREVIOUS_NOT_REPORTED', 'UNKNOWN_BUNDLE'])
     expect(mine.othersRefused).toBe(0)

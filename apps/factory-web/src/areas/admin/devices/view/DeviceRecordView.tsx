@@ -7,18 +7,18 @@ import { Button, Input, Pill, Select, Skeleton, Tag } from '@nexus/ui/primitives
 import { EditModeBar } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
-import type { Device } from '../../shared/api'
+import { FLOOR_DEVICE_MODES, type Device, type FloorDeviceMode } from '../../shared/api'
 import { adminHref, STATUS_TONE } from '../../shared/model'
 import { AdminMessages, dash, NoticeBanner, RecordProblem } from '../../shared/view/parts'
 import { RecordFrame } from '../../shared/view/RecordFrame'
-import { batteryOf, deviceTileMatch, isOutdated, networkKey, type DeviceRecordModel, type DeviceTab } from '../model'
+import { batteryOf, bindingOf, bindingProblem, deviceTileMatch, isOutdated, networkKey, showsLine, type BindingDraft, type DeviceRecordModel, type DeviceTab } from '../model'
 import { inUseSinceWords } from './columns'
 import { EnrolWizard, RevokeConfirm } from './DeviceDialogs'
 
 export type { DeviceRecordModel } from '../model'
 
 export interface DeviceRecordActions {
-  onSave?: (draft: { name: string; stationId: string }) => Promise<boolean>
+  onSave?: (draft: BindingDraft) => Promise<boolean>
   onRenew?: (device: Device) => void
   onEnrolClose?: () => void
   onRevoke?: (open: boolean) => void
@@ -30,7 +30,7 @@ export interface DeviceRecordActions {
 
 /**
  * SCR-013 — a Device record (design 02 admin.devices "Record: Device"): Station & mode (its name and station; moving to
- * another site needs a new enrolment; the mode comes with the floor step), Status (last seen, app version, "in use" —
+ * another site needs a new enrolment; B-W2b-67: the mode, its line or person, changed while nobody is signed in), Status (last seen, app version, "in use" —
  * never who — a new enrolment code for a replaced tablet, Revoke in the danger zone) and Activity. The Printer tab is W1.
  */
 export function DeviceRecordView({ model, actions, panels }: { model: DeviceRecordModel; actions?: DeviceRecordActions; panels?: ReactNode }) {
@@ -115,13 +115,17 @@ function DeviceRecord({ model, actions, panels }: { model: DeviceRecordModel; ac
 function BindingTab({ model, actions }: { model: DeviceRecordModel; actions?: DeviceRecordActions }) {
   const t = useT('admin')
   const device = model.device!
-  const read = useMemo(() => ({ name: device.name, stationId: device.stationId ?? '' }), [device])
+  const read = useMemo(() => bindingOf(device), [device])
   const [draft, setDraft] = useState(model.draft ?? read)
   useEffect(() => setDraft(model.draft ?? read), [read, model.draft])
   const editable = model.can.manage && device.status !== 'REVOKED'
-  const dirty = draft.name !== read.name || draft.stationId !== read.stationId
-  const problem = draft.name.trim() === '' ? 'form.required' : null
+  const dirty = (Object.keys(read) as (keyof BindingDraft)[]).some((key) => draft[key] !== read[key])
+  const problem = bindingProblem(draft)
   const station = model.site?.stations.find((item) => item.id === device.stationId)
+  const line = model.site?.lines.find((item) => item.id === device.lineId)
+  const person = model.people?.find((item) => item.id === device.personalWorkerId)
+  // API rule (B-W2b-52): a mode or a person changes only while nobody is signed in on the device.
+  const modeEditable = editable && !device.inUse
   return (
     <div className="fw-adm-stack">
       <Card header={t('device.binding.title')} description={t('device.binding.hint')} headingLevel={2} padded>
@@ -136,16 +140,18 @@ function BindingTab({ model, actions }: { model: DeviceRecordModel; actions?: De
             <Field label={t('devices.field.site')} hint={t('device.binding.siteHint')}>
               <Input value={model.site?.name ?? '—'} readOnly />
             </Field>
-            <Field label={t('devices.field.station')}>
-              <Select value={draft.stationId} onChange={(event) => setDraft({ ...draft, stationId: event.target.value })}>
-                <option value="">{t('devices.noStation')}</option>
-                {(model.site?.stations ?? []).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.code} · {item.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            {draft.mode !== 'PHONE' && (
+              <Field label={t('devices.field.station')}>
+                <Select value={draft.stationId} onChange={(event) => setDraft({ ...draft, stationId: event.target.value })}>
+                  <option value="">{t('devices.noStation')}</option>
+                  {(model.site?.stations ?? []).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.code} · {item.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
           </div>
         ) : (
           <KeyValue
@@ -160,9 +166,55 @@ function BindingTab({ model, actions }: { model: DeviceRecordModel; actions?: De
           />
         )}
       </Card>
-      <Card header={t('device.mode.title')} headingLevel={2} padded>
-        <Tag tone="info">{t('device.mode.coming')}</Tag>
-        <p className="fw-adm-hint">{t('device.mode.later')}</p>
+      <Card header={t('device.mode.title')} description={t(`devices.deviceModeShows.${device.mode ?? 'STATION'}`)} headingLevel={2} padded>
+        {device.inUse && editable && <Banner tone="info" title={t('device.mode.inUse')} />}
+        {modeEditable ? (
+          <div className="fw-adm-form">
+            <Field label={t('devices.field.mode')}>
+              <Select value={draft.mode} onChange={(event) => setDraft({ ...draft, mode: event.target.value as FloorDeviceMode, lineId: '', personalWorkerId: '' })}>
+                {FLOOR_DEVICE_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {t(`devices.deviceMode.${mode}`)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {showsLine(draft.mode) && (
+              <Field label={t('devices.field.line')} required>
+                <Select value={draft.lineId} onChange={(event) => setDraft({ ...draft, lineId: event.target.value })}>
+                  <option value="">{t('devices.pickLine')}</option>
+                  {(model.site?.lines ?? []).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.code} · {item.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {draft.mode === 'PHONE' && (
+              <Field label={t('devices.field.person')} required hint={model.people ? t('devices.field.personHint') : t('devices.peopleHeld')}>
+                <Select value={draft.personalWorkerId} onChange={(event) => setDraft({ ...draft, personalWorkerId: event.target.value })}>
+                  <option value="">{t('devices.pickPerson')}</option>
+                  {(model.people ?? []).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+          </div>
+        ) : (
+          <KeyValue
+            columns={2}
+            labelCase="sentence"
+            items={[
+              { label: t('devices.field.mode'), value: t(`devices.deviceMode.${device.mode ?? 'STATION'}`) },
+              ...(line ? [{ label: t('devices.field.line'), value: `${line.code} · ${line.name}` }] : []),
+              ...(person ? [{ label: t('devices.field.person'), value: person.name }] : []),
+            ]}
+          />
+        )}
       </Card>
       {editable && dirty && (
         <EditModeBar
@@ -179,6 +231,8 @@ function BindingTab({ model, actions }: { model: DeviceRecordModel; actions?: De
     </div>
   )
 }
+
+const yesNo = (value: boolean | null): 'yes' | 'no' | 'unknown' => (value === null ? 'unknown' : value ? 'yes' : 'no')
 
 function StatusTab({ model, actions }: { model: DeviceRecordModel; actions?: DeviceRecordActions }) {
   const t = useT('admin')
@@ -217,6 +271,8 @@ function StatusTab({ model, actions }: { model: DeviceRecordModel; actions?: Dev
             { label: t('device.health.enrolled'), value: device.enrolledAt ? formatDateTime(device.enrolledAt, { locale }) : '—' },
             // B-W2b-24: the network as the tablet said it; since when someone is signed in (never who).
             { label: t('device.health.network'), value: network ? t(network) : t(device.statusReportedAt ? 'devices.network.unknown' : 'device.health.notReported'), ...(reported ? { hint: reported } : {}) },
+            // B-W2b-67 (PLT-227): the kiosk lock as the tablet last reported it; never "locked": Android does not say.
+            ...(device.mode === 'PHONE' ? [] : [{ label: t('device.kiosk.title'), value: device.kiosk ? [t(`device.kiosk.fullScreen.${yesNo(device.kiosk.fullScreen)}`), t(`device.kiosk.installed.${yesNo(device.kiosk.installed)}`), t(`device.kiosk.home.${device.kiosk.homeTest}`)].join(' · ') : t('device.health.notReported'), ...(device.kiosk ? { hint: t('device.kiosk.at', { at: formatDateTime(device.kiosk.checkedAt, { locale }) }) } : {}) }]),
             { label: t('device.health.inUse'), value: device.inUse ? (inUseSinceWords(device, { t, locale, now }) ?? t('device.health.inUseYes')) : t('device.health.inUseNo'), hint: t('device.health.neverWho') },
             ...(device.revokedAt ? [{ label: t('device.health.revoked'), value: formatDateTime(device.revokedAt, { locale }) }] : []),
           ]}

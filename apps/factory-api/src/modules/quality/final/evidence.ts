@@ -4,6 +4,7 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import { QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { readDocuments, readLabel } from '../../product/compliance/read'
 import { processLabResults } from '../lab/results-store'
 import { readCells, readHeader, type CellRow, type LabelHeader } from '../../production/serials/store'
@@ -112,7 +113,9 @@ export async function evidenceTrail(caller: CommandCaller, query: EvidenceQuery)
       orderBy: [{ serverTime: 'asc' }, { id: 'asc' }],
     })
     const operations = new Map((await db.workOrderOperation.findMany({ where: { workOrderId: header.id }, select: { id: true, seq: true, code: true, name: true } })).map((row) => [row.id, row]))
-    const workerIds = [...new Set([...cuts.map((cut) => cut.workerId), ...scans.map((scan) => scan.workerId)].filter((value): value is string => value !== null))]
+    // Who cut and who scanned: behind the site's PERFORMANCE gate (B-W2b-F3); the trail stands on the station and the time.
+    const who = await workerGateFor(db, header.siteId)
+    const workerIds = [...new Set(who.lookup([...cuts.map((cut) => cut.workerId), ...scans.map((scan) => scan.workerId)]))]
     const workers = new Map((await db.worker.findMany({ where: { id: { in: workerIds } }, select: { id: true, displayName: true } })).map((row) => [row.id, row.displayName]))
     const stationIds = [...new Set([...cuts.map((cut) => cut.stationId), ...scans.map((scan) => scan.stationId)].filter((value): value is string => value !== null))]
     const stations = new Map((await db.station.findMany({ where: { id: { in: stationIds } }, select: { id: true, code: true } })).map((row) => [row.id, row.code]))
@@ -152,7 +155,7 @@ export async function evidenceTrail(caller: CommandCaller, query: EvidenceQuery)
       documents: documents.map((document) => ({ id: document.id, kind: document.kind, language: document.language, revision: document.revision, status: document.status, number: document.number, issuedAt: document.issuedAt, file: document.currentFile ? { id: document.currentFile.id, sha256: document.currentFile.sha256 } : null })),
       certificates: { today: gateToday, date: today },
       lots,
-      cutting: cuts.map((cut) => ({ id: cut.id, hideCode: hides.get(cut.hideId) ?? null, lotId: cut.lotId, areaUsed: cut.areaUsed.toString(), uom: cut.uom, reversal: cut.reversalOfId !== null, worker: cut.workerId ? workers.get(cut.workerId) ?? null : null, station: cut.stationId ? stations.get(cut.stationId) ?? null : null, at: toUtcIso(cut.serverTime) })),
+      cutting: cuts.map((cut) => ({ id: cut.id, hideCode: hides.get(cut.hideId) ?? null, lotId: cut.lotId, areaUsed: cut.areaUsed.toString(), uom: cut.uom, reversal: cut.reversalOfId !== null, worker: who.name(cut.workerId, workers), workerHidden: who.hidden(cut.workerId), station: cut.stationId ? stations.get(cut.stationId) ?? null : null, at: toUtcIso(cut.serverTime) })),
       bundles: bundles.map((bundle) => ({ id: bundle.id, code: bundle.code, workOrderSizeId: bundle.workOrderSizeId, quantity: bundle.quantity, part: bundle.part, status: bundle.status, cutLogIds: bundle.cutLogIds, madeOn: bundle.deviceId ? ('FLOOR' as const) : ('OFFICE' as const), at: toUtcIso(bundle.createdAt) })),
       scans: scans.map((scan) => {
         const operation = operations.get(scan.workOrderOperationId)
@@ -165,13 +168,18 @@ export async function evidenceTrail(caller: CommandCaller, query: EvidenceQuery)
           scrap: scan.scrapQuantity,
           rework: scan.reworkQuantity,
           corrects: scan.correctsId,
-          worker: scan.workerId ? workers.get(scan.workerId) ?? null : null,
+          worker: who.name(scan.workerId, workers),
+          workerHidden: who.hidden(scan.workerId),
           station: scan.stationId ? stations.get(scan.stationId) ?? null : null,
           at: toUtcIso(scan.serverTime),
         }
       }),
-      inspections: inspectionRows.map((row, index) => ({ ...inspectionView(row, defects, { number: header.number, seq: index + 1 }), checklistAnswered: checklistAnswers(row.checklist).length })),
-      releases: releaseViews,
+      // A floor inspector or assignee stays behind the same gate: `kind` says a person on the floor, never who. The records keep their signature.
+      inspections: inspectionRows.map((row, index) => {
+        const view = inspectionView(row, defects, { number: header.number, seq: index + 1 })
+        return { ...view, inspector: { ...view.inspector, workerId: who.id(view.inspector.workerId) }, assigned: view.assigned && { ...view.assigned, workerId: who.id(view.assigned.workerId) }, checklistAnswered: checklistAnswers(row.checklist).length }
+      }),
+      releases: releaseViews.map((view) => ({ ...view, releasedBy: { ...view.releasedBy, workerId: who.id(view.releasedBy.workerId) } })),
       labelPrints: prints.map((row) => ({ id: row.id, kind: row.kind, tracking: row.tracking, workOrderSizeId: row.workOrderSizeId, quantity: row.quantity, batchNumber: row.batchNumber, reason: row.reason, postedBy: row.deviceId ? ('FLOOR' as const) : ('OFFICE' as const), at: toUtcIso(row.createdAt) })),
       shipments: shipmentRows.map((row) => ({ id: row.id, number: row.number, status: row.status, shippedAt: row.shippedAt ? toUtcIso(row.shippedAt) : null, garments: lines.filter((line) => line.shipmentId === row.id).reduce((sum, line) => sum + line.quantity, 0), ddtNumbers: ddts.filter((ddt) => ddt.shipmentId === row.id).map((ddt) => ddt.number) })),
       registerEntries: register.map((entry) => ({ id: entry.id, reference: entry.reference, kind: entry.kind, status: entry.status, risk: entry.risk, reportedAt: toUtcIso(entry.reportedAt) })),

@@ -281,7 +281,8 @@
       "reverses": "Storna un taglio precedente",
       "reversed": "Stornato da una voce successiva",
       "deviceTime": "Orologio del tablet {time}",
-      "office": "Inserito in ufficio"
+      "office": "Inserito in ufficio",
+      "workerHidden": "Su questo dato c'è una persona"
     },
     "daily": {
       "onHold": "In blocco: {reason}",

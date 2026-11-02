@@ -104,7 +104,8 @@
       "station": "Station",
       "mode": "Mode",
       "language": "Language before sign-in",
-      "office": "Change it in the office: Admin › Devices & printers."
+      "office": "Change it in the office: Admin › Devices & printers.",
+      "line": "Line"
     },
     "install": {
       "title": "Install as an app",
@@ -142,17 +143,48 @@
     },
     "kiosk": {
       "title": "Lock the tablet to the app",
-      "step1": "Open the app from the home screen.",
-      "step2": "Android Settings › Security › App pinning: switch it on.",
-      "step3": "Open Recent apps, tap the app's icon, then Pin.",
-      "step4": "To unpin: hold Back and Recent apps together (the office knows the PIN).",
-      "honest": "Android does not tell an app whether it is pinned: press Home to test it."
+      "check": "Check",
+      "honest": "Android does not tell us about pinning: press Home to test it.",
+      "ask": "After pressing Home, did the app stay?",
+      "stayed": "It stayed",
+      "left": "It left",
+      "skip": "No time now? Continue works either way; the office sees what is known.",
+      "step": {
+        "install": "Install the app on the home screen.",
+        "pinning-on": "Android Settings › Security › App pinning: switch it on, with \"Ask for PIN before unpinning\".",
+        "open-app": "Open the app from its icon: it runs full screen.",
+        "pin-app": "Open Recent apps, tap the app's icon, then Pin."
+      },
+      "row": {
+        "fullScreen": "Full screen",
+        "installed": "Installed",
+        "pinned": "Pinned"
+      },
+      "state": {
+        "ok": "Yes",
+        "no": "No",
+        "unknown": "Not known",
+        "pinned": {
+          "ok": "It stayed",
+          "no": "It left",
+          "unknown": "Not known"
+        }
+      },
+      "source": {
+        "TABLET": "The tablet says so.",
+        "PERSON": "As you said: the tablet cannot check it.",
+        "NOBODY": "Nobody knows yet."
+      }
     },
     "done": {
       "title": "Ready",
       "body": "This tablet is {station} at {site}.",
       "bodyNoStation": "This tablet is set up at {site}, with no station.",
-      "signIn": "Go to sign-in"
+      "signIn": "Go to sign-in",
+      "display": "This is the line board of {line}. Nobody signs in on it.",
+      "phone": "Only you sign in on this phone; it never tracks where you are.",
+      "line": "This is the line tablet of {line}.",
+      "board": "Open the line board"
     }
   },
   "signIn": {
@@ -195,7 +227,8 @@
       "rateLimited": "Too many tries on this tablet. Wait a minute.",
       "unavailable": "The factory server does not answer. Try again.",
       "operatorActive": "Someone else is signed in on this tablet. Ask them to sign out.",
-      "pinNeeded": "This site signs in with a badge and a PIN."
+      "pinNeeded": "This site signs in with a badge and a PIN.",
+      "crew": "This person cannot join: four at most on a tablet, or they are on another tablet's crew."
     },
     "signedOut": {
       "idle": "You were signed out after a time without use.",
@@ -221,6 +254,34 @@
         "repeat": "Not one digit six times. Choose another.",
         "run": "Not digits in a row. Choose another."
       }
+    },
+    "clock": {
+      "button": "Clock in or out",
+      "closed": "Clocking is off at this site until the company has finished its legal notice."
+    },
+    "crew": {
+      "frameTitle": "Crew on this station",
+      "title": "Add a person",
+      "body": "The next person scans their badge. They become the active one: every action books to them.",
+      "cancel": "Back",
+      "switchBody": "{name}: scan your badge or type your PIN."
+    },
+    "welcome": {
+      "frameTitle": "Welcome",
+      "loading": "One moment…",
+      "handover": "Handover from the last shift",
+      "handoverLine": "Handover for {line}",
+      "note": "Note",
+      "seen": "Seen",
+      "continue": "Continue",
+      "later": "Not now",
+      "pausedKind": "Paused at clock-out",
+      "pausedStatus": "Paused",
+      "continueQuestion": "Continue bundle {bundle} at Op {seq}?",
+      "resuming": "Resuming…",
+      "refusedTitle": "This bundle cannot continue now",
+      "refused": "{bundle} stays paused. Scan its ticket when you are ready.",
+      "onward": "Go on"
     }
   },
   "notice": {
@@ -331,6 +392,7 @@
       "pack": "Scan garments into cartons, print labels and the DDT",
       "labels": "Print garment labels behind the certificate check",
       "machine": "Report a machine problem; a technician’s jobs",
+      "clock": "Your time today, breaks, forgot badge",
       "help": "One tap calls the right person",
       "lineview": "Calls, what waits, stations"
     },
@@ -339,6 +401,7 @@
       "coming": "Coming soon"
     },
     "machine": "Machine problem",
+    "clock": "Clock in & out",
     "help": "Call for help",
     "lineview": "Line view"
   },
@@ -621,6 +684,7 @@
       "rework_one": "{count} rework",
       "rework_other": "{count} rework",
       "machine": "Machine problem on {code}",
+      "clock": "Clock in, out or a break",
       "start": "Start {code}",
       "pause": "Pause {code}",
       "resume": "Resume {code}",
@@ -707,5 +771,20 @@
         "fix": "It is sent again by itself; if it stays here, ask your team leader."
       }
     }
+  },
+  "crew": {
+    "title": "People on this station",
+    "now": "Now",
+    "tap": "Tap to take over",
+    "add": "Add a person",
+    "end": "Everyone signs out",
+    "full": "{max} people at most on one tablet.",
+    "switchTo": "Take over: {name}"
+  },
+  "deviceMode": {
+    "STATION": "Station tablet",
+    "LINE": "Line tablet",
+    "DISPLAY": "Line board",
+    "PHONE": "Personal phone"
   }
 }

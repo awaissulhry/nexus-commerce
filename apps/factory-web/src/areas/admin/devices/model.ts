@@ -1,4 +1,4 @@
-import type { Device, DeviceKind, Enrolment, Printer, PrinterKind, PrinterStatus } from '../shared/api'
+import type { Device, DeviceKind, Enrolment, FloorDeviceMode, Printer, PrinterKind, PrinterStatus } from '../shared/api'
 import { PRINTER_CODE } from '../shared/api'
 import { reachOf, type BulkReach } from '../shared/reach'
 import { matches, type Loaded, type Notice } from '../shared/model'
@@ -6,8 +6,9 @@ import { matches, type Loaded, type Notice } from '../shared/model'
 /**
  * SCR-013 Devices & printers (design 02 admin.devices; PLT-226, GAP-007, MES-184): the enrolled tablets and phones bound
  * to stations, and the sites' printers, on one page. Enrol a device with a one-time QR code (15 minutes), revoke the
- * ticked ones (or one on its record, typed name), add and change printers, pause or resume the ticked ones. The print queue is W1; a device's mode (Operator, Cutting…) comes with the floor
- * step: the API has no mode yet. Pure: the tiles, the rows, the enrol steps, the printer form's checks.
+ * ticked ones (or one on its record, typed name), add and change printers, pause or resume the ticked ones. The print queue is W1. B-W2b-67 (MES-181,
+ * MES-186): a device's mode is chosen at enrolment and changed on its record while nobody is signed in: a station's tablet, a line tablet, a line board
+ * (nobody signs in; it opens the line TV), a person's own phone. Pure: the tiles, the rows, the enrol steps, the printer form's checks.
  */
 
 export const DEVICE_MODES = ['devices', 'printers'] as const
@@ -57,6 +58,14 @@ export interface SiteChoice {
   name: string
   companyId: string
   stations: ReadonlyArray<{ id: string; code: string; name: string }>
+  /** B-W2b-67: the site's active lines (a line tablet and a line board show one). */
+  lines: ReadonlyArray<{ id: string; code: string; name: string }>
+}
+
+/** A worker a personal phone may be for (a name only inside the dialog and the device's own record). */
+export interface PersonChoice {
+  id: string
+  name: string
 }
 
 export interface DevicesAbilities {
@@ -71,7 +80,7 @@ export interface DevicesAbilities {
 
 /** The enrol wizard: where it will work → scan the code on the tablet → ready. */
 export type EnrolModel =
-  | { step: 'where'; siteId?: string | null }
+  | { step: 'where'; siteId?: string | null; mode?: FloorDeviceMode }
   | { step: 'scan'; device: Device; enrolment: Enrolment | null; expired?: boolean }
   | { step: 'ready'; device: Device }
 
@@ -96,6 +105,9 @@ export interface DevicesViewModel {
   currentVersion?: string | null
   can: DevicesAbilities
   enrol?: EnrolModel | null
+  /** The workers of the wizard's site for a personal phone (null: not read yet); `peopleHeld`: no `workers.view`. */
+  people?: readonly PersonChoice[] | null
+  peopleHeld?: boolean
   printer?: PrinterDialog | null
   /** Rows ticked at first (design fixtures); the view keeps the ticks. */
   selected?: readonly string[]
@@ -141,14 +153,70 @@ export interface EnrolDraft {
   stationId: string
   name: string
   kind: DeviceKind
+  /** B-W2b-67: what it is for; a line tablet and a line board show `lineId`, a phone is for `personalWorkerId`. */
+  mode: FloorDeviceMode
+  lineId: string
+  personalWorkerId: string
 }
+
+/** A device shows a line in these modes (factory-domain MODE_RULES showsLine); a phone names its person. */
+export const showsLine = (mode: FloorDeviceMode): boolean => mode === 'LINE' || mode === 'DISPLAY'
 
 export function enrolProblems(draft: EnrolDraft): Record<string, string> {
   const out: Record<string, string> = {}
   if (!draft.siteId) out.siteId = 'form.required'
   if (draft.name.trim() === '') out.name = 'form.required'
   else if (draft.name.trim().length > 100) out.name = 'form.tooLong'
+  if (showsLine(draft.mode) && !draft.lineId) out.lineId = 'devices.modeProblem.line'
+  if (draft.mode === 'PHONE' && !draft.personalWorkerId) out.personalWorkerId = 'devices.modeProblem.person'
+  if (draft.mode === 'PHONE' && draft.kind === 'PC') out.kind = 'devices.modeProblem.pc'
   return out
+}
+
+/** What POST /auth/floor/devices takes for the draft: only what its mode uses (a phone sits at no station, API rule). */
+export function enrolBody(draft: EnrolDraft): { siteId: string; name: string; kind: DeviceKind; mode: FloorDeviceMode; stationId?: string; lineId?: string; personalWorkerId?: string } {
+  return {
+    siteId: draft.siteId,
+    name: draft.name.trim(),
+    kind: draft.kind,
+    mode: draft.mode,
+    ...(draft.mode === 'STATION' && draft.stationId ? { stationId: draft.stationId } : {}),
+    ...(showsLine(draft.mode) ? { lineId: draft.lineId } : {}),
+    ...(draft.mode === 'PHONE' ? { personalWorkerId: draft.personalWorkerId } : {}),
+  }
+}
+
+/** A device's binding as its record edits it. */
+export interface BindingDraft {
+  name: string
+  stationId: string
+  mode: FloorDeviceMode
+  lineId: string
+  personalWorkerId: string
+}
+
+export const bindingOf = (device: Device): BindingDraft => ({ name: device.name, stationId: device.stationId ?? '', mode: device.mode ?? 'STATION', lineId: device.lineId ?? '', personalWorkerId: device.personalWorkerId ?? '' })
+
+/** The binding's problem (a message key), or null. */
+export function bindingProblem(draft: BindingDraft): string | null {
+  if (draft.name.trim() === '') return 'form.required'
+  if (showsLine(draft.mode) && !draft.lineId) return 'devices.modeProblem.line'
+  if (draft.mode === 'PHONE' && !draft.personalWorkerId) return 'devices.modeProblem.person'
+  return null
+}
+
+/** PATCH's body: the name and station, and the mode, line and person only when they changed (a change needs nobody signed in). */
+export function bindingBody(device: Device, draft: BindingDraft): { version: number; name: string; stationId: string | null; mode?: FloorDeviceMode; lineId?: string | null; personalWorkerId?: string | null } {
+  const read = bindingOf(device)
+  const phone = draft.mode === 'PHONE'
+  return {
+    version: device.version,
+    name: draft.name.trim(),
+    stationId: phone || !draft.stationId ? null : draft.stationId,
+    ...(draft.mode !== read.mode ? { mode: draft.mode } : {}),
+    ...(draft.lineId !== read.lineId ? { lineId: showsLine(draft.mode) ? draft.lineId || null : null } : {}),
+    ...(draft.personalWorkerId !== read.personalWorkerId ? { personalWorkerId: phone ? draft.personalWorkerId || null : null } : {}),
+  }
 }
 
 /** A device's name from its station ("Tablet · Cutting table 1"). */
@@ -238,5 +306,7 @@ export interface DeviceRecordModel {
   currentVersion?: string | null
   dockOpen?: boolean
   /** A binding draft (fixture). */
-  draft?: { name: string; stationId: string } | null
+  draft?: BindingDraft | null
+  /** The site's workers for a personal phone (null: not read, or no `workers.view`). */
+  people?: readonly PersonChoice[] | null
 }

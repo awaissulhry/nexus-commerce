@@ -17,6 +17,7 @@ import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET, LOCAL_PIN_PEPPER } from '../../../env'
 import { createOfficeAuth } from '../../../platform/auth/sessions/office-auth'
+import { switchOnPerformance } from '../../people/privacy/testing/performance-gate'
 
 /**
  * Checks before a scan counts (B-W2b-46; MES-070, MES-097, MES-098, MES-114; design floor.operation "Checks before it
@@ -375,9 +376,17 @@ describe("STRICT holds in W1's words; a team leader overrides with their PIN and
     expect(again.statusCode, again.body).toBe(200)
     expect(again.json()).toMatchObject({ replayed: true, scan: { id: body.scan.id }, override: { guards: ['SKIPPED_OPERATION'] } })
 
-    // One record: the scan's worker and the team leader by name, the reason.
+    // Gate off (the default): one record says a person is on it and a team leader overrode, never who (art. 4 c.1).
+    const closed = await ok('supervisor', 'GET', `/production/guards/flags/${body.scan.id}`)
+    expect(closed.flag).toMatchObject({ worker: null, workerHidden: true, overridden: { lead: null, leadHidden: true, reasonCode: 'EARLIER_LATE' } })
+    expect(JSON.stringify(closed)).not.toContain(A.operatorA1)
+    expect(JSON.stringify(closed)).not.toContain(A.leadA1)
+    expect(JSON.stringify(closed)).not.toContain('Seed Worker')
+    // Gate on: the scan's worker and the team leader by name, the reason.
+    const gateOff = await switchOnPerformance(admin, { tenantId: A.tenant, companyId: A.companyA, siteId: A.siteA1, byId: A.supervisor })
     const one = await ok('supervisor', 'GET', `/production/guards/flags/${body.scan.id}`)
-    expect(one.flag).toMatchObject({ worker: { id: A.operatorA1, name: 'Seed Worker A1-1' }, overridden: { lead: { id: A.leadA1, name: 'Seed Worker A1-2' }, reasonCode: 'EARLIER_LATE', reason: 'The earlier operation is recorded later' }, station: { code: 'QC-01' } })
+    await gateOff()
+    expect(one.flag).toMatchObject({ worker: { id: A.operatorA1, name: 'Seed Worker A1-1' }, workerHidden: false, overridden: { lead: { id: A.leadA1, name: 'Seed Worker A1-2' }, leadHidden: false, reasonCode: 'EARLIER_LATE', reason: 'The earlier operation is recorded later' }, station: { code: 'QC-01' } })
     const list = await ok('supervisor', 'GET', `/production/guards/flags?siteId=${A.siteA1}&kind=OVERRIDDEN`)
     expect(list.flags.map((flag: Json) => flag.scanId)).toContain(body.scan.id)
     expect(keysOf(list).filter((key) => /worker|lead|person/i.test(key))).toEqual([])

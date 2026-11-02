@@ -1327,10 +1327,13 @@
       "station": "Postazione",
       "stationHint": "Facoltativa: si può spostare dopo su una postazione dello stesso stabilimento.",
       "name": "Nome",
-      "kind": "Tipo"
+      "kind": "Tipo",
+      "mode": "A cosa serve",
+      "line": "Linea",
+      "person": "Persona",
+      "personHint": "Solo questa persona vi accede."
     },
     "noStation": "Ancora nessuna postazione",
-    "modeLater": "La sua modalità (Operatore, Taglio, Magazzino…) arriva con il passo del reparto: il server non ha ancora la modalità.",
     "scanBody": "Su {name} apri la fotocamera o la pagina iniziale di Nexus Factory e inquadra questo codice. Funziona una volta, per 15 minuti.",
     "qrLabel": "Codice di registrazione per {name}",
     "expiresIn": "Valido ancora {left}",
@@ -1376,7 +1379,30 @@
         "revoke_one": "{count} dispositivo revocato",
         "revoke_other": "{count} dispositivi revocati"
       }
-    }
+    },
+    "deviceMode": {
+      "STATION": "Tablet di postazione",
+      "LINE": "Tablet di linea",
+      "DISPLAY": "Tabellone di linea",
+      "PHONE": "Telefono personale"
+    },
+    "deviceModeShows": {
+      "STATION": "A una postazione: i riquadri del suo lavoro; una squadra fino a quattro può condividerlo.",
+      "LINE": "Per una linea: accede chiunque; un capo squadra parte dalla Vista linea.",
+      "DISPLAY": "La TV di linea: non accede nessuno; apre il tabellone da solo.",
+      "PHONE": "Il telefono di una persona: mai bloccato, e non traccia mai dove si trova."
+    },
+    "modeProblem": {
+      "line": "Scegli la linea che mostra.",
+      "person": "Scegli la persona a cui serve.",
+      "pc": "Un telefono personale è un palmare o un tablet, non un PC."
+    },
+    "pickLine": "Scegli una linea",
+    "pickPerson": "Scegli una persona",
+    "noLines": "Questo stabilimento non ha ancora una linea attiva: aggiungila in Sistema › Società e stabilimenti.",
+    "peopleHeld": "Il tuo ruolo non elenca i lavoratori: chiedi a chi li gestisce.",
+    "readyDisplay": "Non vi accede nessuno: apre il tabellone di linea da solo, anche dopo un'interruzione di corrente.",
+    "readyPhone": "Solo quella persona accede da questo telefono; non traccia mai dove si trova."
   },
   "printers": {
     "add": "Aggiungi stampante",
@@ -1468,8 +1494,7 @@
     },
     "mode": {
       "title": "Modalità",
-      "coming": "Arriva con il passo del reparto",
-      "later": "La modalità (Operatore, Taglio, Magazzino, Imballo, Collaudo, Capo reparto, Schermo) sceglie le tessere che il tablet mostra; arriva con il passo del reparto. Le stampanti predefinite di un dispositivo arrivano in W1."
+      "inUse": "C'è qualcuno dentro: la modalità cambia quando non c'è nessuno."
     },
     "health": {
       "title": "Funziona?",
@@ -1491,6 +1516,25 @@
     },
     "done": {
       "saved": "Salvato."
+    },
+    "kiosk": {
+      "title": "Blocco kiosk",
+      "at": "Riferito il {at}",
+      "fullScreen": {
+        "yes": "Schermo intero",
+        "no": "Non a schermo intero",
+        "unknown": "Schermo intero non noto"
+      },
+      "installed": {
+        "yes": "Installata",
+        "no": "Non installata",
+        "unknown": "Installazione non nota"
+      },
+      "home": {
+        "STAYED": "Prova Home: è rimasta (come ha detto la persona)",
+        "LEFT": "Prova Home: è uscita (come ha detto la persona)",
+        "NOT_TESTED": "Prova Home non fatta"
+      }
     }
   },
   "area": {

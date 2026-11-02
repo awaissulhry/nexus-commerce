@@ -307,6 +307,12 @@ describe('crew mode on one station tablet (PLT-059)', { timeout: 60_000 }, () =>
     const elsewhere = await second.browser.post('/floor/crew/join', { badgeCode: people[1]!.badgeCode, pin: PIN })
     expect(elsewhere.status).toBe(409)
     expect(elsewhere.body.error.message).toContain('another tablet')
+    // B-W2b-67: nor open one there: a member signed in on a third tablet gets the words, not the database's refusal.
+    const third = await tablet({ stationId: site.loneStationId })
+    expect((await signIn(third, people[1]!)).status).toBe(200)
+    const opening = await third.browser.post('/floor/crew/join', { badgeCode: people[4]!.badgeCode, pin: PIN })
+    expect(opening.status, JSON.stringify(opening.body)).toBe(409)
+    expect(opening.body.error.message).toContain('another tablet')
   })
 
   it('leave: the active one signs out of the crew, nobody is active until a member signs in again; end: everyone signs out', async () => {

@@ -398,6 +398,17 @@ export async function scanClock(auth: OfficeAuth, request: FastifyRequest, body:
   return { created: !recorded.replayed && !recorded.repeated, answer: await answerOf(caller, person, recorded, offline) }
 }
 
+/**
+ * GET /people/clock/tablet (public: the device token; B-W2b-67): whether the device's site clocks at all, so a tablet
+ * nobody is signed in on says the clock is closed before anyone scans a badge. The gate's state only, nothing of a person.
+ */
+export async function tabletClock(auth: OfficeAuth, request: FastifyRequest): Promise<{ open: boolean }> {
+  const place = await requireDevice(auth, request)
+  const system = asContext(request, systemContext(place.device.tenantId, String(request.id)))
+  const { gate } = await system.withClient((db) => legalGateFor(db, place.device.siteId, 'ATTENDANCE'))
+  return { open: gate !== null }
+}
+
 // ---- the offline queue ---------------------------------------------------------------------------------------------------------
 
 /**
