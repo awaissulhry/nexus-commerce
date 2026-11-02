@@ -202,6 +202,8 @@ export interface DayFigures {
   readonly ordinaryMinutes: number
   readonly overtimeMinutes: number
   readonly nightMinutes: number
+  /** B-W2b-42: the overtime worked at night, in whole overtime units (not stored: the overtime entries' NIGHT class). */
+  readonly nightOvertimeMinutes: number
   readonly holidayMinutes: number
   readonly absenceMinutes: number
 }
@@ -451,9 +453,13 @@ export function computeDay(input: DayInput): ComputedDay {
   const unit = Math.max(1, settings.overtimeUnitMinutes)
   const overtime = Math.floor(Math.max(0, present - ordinary) / unit) * unit
   let nightMs = 0
+  // B-W2b-42: what was worked outside the planned shift, for the overtime's night class.
+  const beyondShift = planned && dayShift ? minus(worked, [{ start: dayShift.startsAt.getTime(), end: dayShift.endsAt.getTime() }]) : worked
+  let nightBeyondMs = 0
   for (const day of [plusDays(date, -1), date, plusDays(date, 1)]) {
     const window = { start: localInstant(day, ATTENDANCE_RULES.nightStartMinute, timeZone).getTime(), end: localInstant(day, 1440 + ATTENDANCE_RULES.nightEndMinute, timeZone).getTime() }
     nightMs += total(intersect(worked, window))
+    nightBeyondMs += total(intersect(beyondShift, window))
   }
   const holiday = plan.kind === 'OFF' ? present : 0
 
@@ -511,6 +517,7 @@ export function computeDay(input: DayInput): ComputedDay {
       ordinaryMinutes: capDay(ordinary),
       overtimeMinutes: capDay(overtime),
       nightMinutes: capDay(minutesOf(nightMs)),
+      nightOvertimeMinutes: capDay(Math.min(overtime, Math.floor(minutesOf(nightBeyondMs) / unit) * unit)),
       holidayMinutes: capDay(holiday),
       absenceMinutes: capDay(input.absenceMinutes.reduce((sum, minutes) => sum + minutes, 0)),
     },

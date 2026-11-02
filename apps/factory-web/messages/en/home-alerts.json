@@ -11,6 +11,10 @@
     "alerts.INVOICE_DEADLINE.LATE": "The goods of DDT {label} were due to be invoiced by {dueDate}: {days} days late.",
     "alerts.INTEGRATION_FAILING": "Connection {label} has not worked for {hours} hours: its last call failed.",
     "alerts.INTEGRATION_FAILING.NEVER": "Connection {label} has never worked: no call has succeeded in the {hours} hours since it was set up.",
+    "alerts.WORKING_TIME_LIMIT": "Site {label}: someone is close to or over a working-time limit.",
+    "alerts.WORKING_TIME_LIMIT.OVERTIME_YEARLY_CAP": "Site {label}: someone is close to or over the yearly overtime cap.",
+    "alerts.WORKING_TIME_LIMIT.DAILY_REST": "Site {label}: someone is under the minimum rest, or would be before their next shift.",
+    "alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE": "Site {label}: someone is close to or over the weekly average of working hours.",
     "alerts.UNKNOWN": "Alert on {label}."
   },
   "refused": {
@@ -156,7 +160,8 @@
       "PO_NOT_CONFIRMED": "{record} not confirmed",
       "CERTIFICATE_EXPIRING": "{record} expiring",
       "INVOICE_DEADLINE": "{record}: invoice deadline near",
-      "INTEGRATION_FAILING": "{record} is failing"
+      "INTEGRATION_FAILING": "{record} is failing",
+      "WORKING_TIME_LIMIT": "{record}: working-time limit close"
     },
     "snooze": "Snooze",
     "assign": "Assign",
