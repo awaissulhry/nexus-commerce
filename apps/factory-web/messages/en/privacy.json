@@ -394,6 +394,63 @@
       "internal": "Something went wrong. Try again; if it happens again, tell the administrator.",
       "stepUpClosed": "Not done: the code was not given.",
       "copy": "The address could not be copied: select it and copy it by hand."
+    },
+    "rules": {
+      "title": "People data rules",
+      "intro": "Set in People › People settings; here they are only read.",
+      "failed": "Couldn't load the People data rules",
+      "retry": "Try again",
+      "pack": "Information pack",
+      "packNone": "Not due: no automated system decides about a worker.",
+      "packDue": "Due: an automated system decides about workers.",
+      "purposes": "What people data may be used for",
+      "purpose": "Purpose",
+      "floor": "On the floor",
+      "floorYes": "Yes",
+      "floorNo": "No",
+      "gate": "Switch",
+      "gated": "Per site, off until a person switches it on",
+      "notGated": "No switch",
+      "sites": "The switches per site",
+      "site": "Site",
+      "ATTENDANCE": "Attendance",
+      "PERFORMANCE": "One person's work figures",
+      "on": "On",
+      "off": "Off",
+      "settingsLink": "Change them in People › People settings",
+      "factTitle": {
+        "PURPOSE_TAGS": "Purpose tags",
+        "FIELD_TAGS": "Personal-field tags",
+        "LEGAL_GATE": "The legal gate",
+        "GROUPS": "Groups",
+        "ONE_PERSON": "One person's figures",
+        "PERSON_DECIDES": "A person decides"
+      },
+      "fact": {
+        "PURPOSE_TAGS": "Every personal field of the People and floor records carries the purposes it may be used for; a use outside them is refused.",
+        "FIELD_TAGS": "The tags drive who reads each field: portals and links never read a personal field, the floor only for production, attendance and safety.",
+        "LEGAL_GATE": "Attendance and one person's work figures open per site only with their legal basis, the worker notice and the impact assessment on record; every site starts with both off.",
+        "GROUPS": "People figures show per line, team or shift, never per person; a group under the minimum size shows nothing.",
+        "ONE_PERSON": "The worker and the roles People settings name, and the team lead only where the site's basis covers leads; every opening is recorded.",
+        "PERSON_DECIDES": "No automated system decides about a worker: suggestions never act alone, a person decides."
+      },
+      "law": {
+        "PURPOSE_TAGS": "GDPR art. 5(1)(b); L. 300/1970 art. 4",
+        "FIELD_TAGS": "GDPR art. 25",
+        "LEGAL_GATE": "L. 300/1970 art. 4 c.1-3; GDPR arts. 13, 35",
+        "GROUPS": "L. 300/1970 art. 4; GDPR art. 5(1)(c)",
+        "ONE_PERSON": "L. 300/1970 art. 4",
+        "PERSON_DECIDES": "D.Lgs. 152/1997 art. 1-bis; GDPR art. 22; AI Act Annex III 4(b)"
+      },
+      "purposeName": {
+        "EMPLOYMENT": "Employment",
+        "ATTENDANCE": "Attendance",
+        "PERFORMANCE": "Work figures",
+        "PAY": "Pay",
+        "SAFETY": "Safety",
+        "PRODUCTION": "Production"
+      },
+      "lawPlain": "The rule this comes from."
     }
   }
 }

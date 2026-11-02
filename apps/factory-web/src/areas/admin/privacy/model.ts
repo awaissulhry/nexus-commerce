@@ -1,7 +1,7 @@
 import { labelProblems, publishProblems, requiredLanguages } from '@nexus/factory-domain/privacy/notices'
 import { activityProblems, cleanList, dpiaStoreProblems } from '@nexus/factory-domain/privacy/records'
 import { isApiError, issuePath } from '../../../lib/api/errors'
-import type { Activity, ActivityFields, AckPerson, CompanyOverview, CompanyRef, Dpia, DpiaList, DutyKey, Notice, NoticeAcks, NoticeKind } from './api'
+import type { Activity, ActivityFields, AckPerson, CompanyOverview, CompanyRef, Dpia, DpiaList, DutyKey, Notice, NoticeAcks, NoticeKind, PeopleRules } from './api'
 
 /**
  * Admin › Privacy & notices (SCR-086; design admin.privacy; GDPR arts. 13, 28, 30, 35; L. 300/1970 art. 4 c.3), pure:
@@ -21,11 +21,13 @@ export interface PrivacyCan {
   files: boolean
   /** Upload a PDF (a notice's language, the signed DPIA). */
   upload: boolean
+  /** people.privacy.view: People data rules. */
+  peopleRules: boolean
 }
 
 export function privacyCan(permissions: readonly string[]): PrivacyCan {
   const held = new Set(permissions)
-  return { view: held.has('privacy.view'), manage: held.has('privacy.manage'), files: held.has('files.read'), upload: held.has('privacy.manage') && held.has('files.upload') }
+  return { view: held.has('privacy.view'), manage: held.has('privacy.manage'), files: held.has('files.read'), upload: held.has('privacy.manage') && held.has('files.upload'), peopleRules: held.has('people.privacy.view') }
 }
 
 export const VIEWS = ['notices', 'dpia', 'register'] as const
@@ -426,6 +428,8 @@ export type PrivacyDialog =
 export interface PrivacyViewModel {
   prefix: string
   can: PrivacyCan
+  /** People data rules (read-only; absent without people.privacy.view). */
+  peopleRules: Read<PeopleRules>
   view: PrivacyViewName
   /** The companies the person's privacy.view reaches (from the overview). */
   overview: Read<CompanyOverview[]>

@@ -70,10 +70,10 @@ describe('people: the area and who may do what', () => {
     const rows = (officeArea.area.sections ?? []).flatMap((section) => section.items.map((item) => item.href))
     expect(rows).toEqual(['/people/employees', '/people/attendance', '/people/shifts', '/people/skills', '/people/piecerates', '/people/payroll', '/people/efficiency', '/people/reports', '/people/settings'])
     const people = OFFICE_NAV.areas.find((area) => area.id === 'people')!
-    expect((people.sections ?? []).flatMap((section) => section.items.map((item) => item.href))).toEqual(['/people/employees', '/people/shifts'])
+    expect((people.sections ?? []).flatMap((section) => section.items.map((item) => item.href))).toEqual(['/people/employees', '/people/shifts', '/people/skills', '/people/settings'])
     // A page step that adds its address to OFFICE_PAGES makes its row appear by itself.
-    const later = builtRowsOnly({ view: 'office', areas: [officeArea.area] }, new Set([...OFFICE_PAGES, '/people/skills']))
-    expect((later.areas[0]!.sections ?? []).flatMap((section) => section.items.map((item) => item.href))).toEqual(['/people/employees', '/people/shifts', '/people/skills'])
+    const later = builtRowsOnly({ view: 'office', areas: [officeArea.area] }, new Set([...OFFICE_PAGES, '/people/attendance']))
+    expect((later.areas[0]!.sections ?? []).flatMap((section) => section.items.map((item) => item.href))).toEqual(['/people/employees', '/people/attendance', '/people/shifts', '/people/skills', '/people/settings'])
   })
 
   it('People sits after Finance and before Plant; HR and the production manager see Employees, sales and a lead-only role do not', () => {
