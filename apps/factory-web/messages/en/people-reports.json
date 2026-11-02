@@ -1,0 +1,156 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "settings": "Open People settings",
+    "noMatch": "Nothing matches your search.",
+    "search": "Search the report"
+  },
+  "section": {
+    "privacy": "What you see here",
+    "attendance": "Attendance report",
+    "earnings": "Earnings report"
+  },
+  "band": {
+    "arrange": "Arrange",
+    "more": "More actions",
+    "exportAttendance": "Export attendance (CSV)",
+    "exportEarnings": "Export earnings (CSV)",
+    "print": "Print or save as PDF",
+    "send": "Send to labour consultant (secure link)"
+  },
+  "held": {
+    "noReport": "The report isn't on the page yet."
+  },
+  "scope": {
+    "label": "Scope",
+    "month": "Month"
+  },
+  "tooFew": "Too few people",
+  "privacy": {
+    "level": "Lines, teams and months · no person",
+    "who": "One person's month opens one record at a time",
+    "minimum_one": "A group of fewer than {count} person shows “—”, and a total that would give it away is hidden.",
+    "minimum_other": "A group of fewer than {count} people shows “—”, and a total that would give it away is hidden.",
+    "onePerson": "A row is a group, so it opens nothing. One person's month is in the employee's record.",
+    "workers": "You may also open the earnings per worker. Each opening is recorded; it stays on this page and goes into no file and no print.",
+    "failed": "We couldn't read this site's rules."
+  },
+  "attendance": {
+    "group": "Line or team",
+    "people": "People",
+    "ordinary": "Ordinary hours",
+    "overtimeDay": "Overtime, day",
+    "overtimeNight": "Overtime, night",
+    "overtimeHoliday": "Overtime, holiday",
+    "night": "Night hours",
+    "holiday": "Holiday hours",
+    "noGroup": "No line or team",
+    "noRight": "HR only",
+    "noRightBody": "This report needs people.attendance.view.",
+    "pickSite": "Choose a site in the top bar",
+    "pickSiteBody": "The attendance report is one site's.",
+    "gateOff": "Attendance is off at this site",
+    "gateOffBody": "The site's attendance purpose is off, so no attendance figure exists to report (Statuto dei Lavoratori art. 4 c.2).",
+    "failed": "We couldn't read the attendance report",
+    "empty": "Nothing recorded for {month}.",
+    "tableLabel": "Hours by type per line or team",
+    "count_one": "{count} group",
+    "count_other": "{count} groups",
+    "groupBy": "Group by",
+    "by": {
+      "line": "Line",
+      "team": "Team"
+    },
+    "team": "Team",
+    "allTeams": "All teams",
+    "final": "The month is closed: only a correction changes these figures.",
+    "open": "The month is not closed: its figures can still change, and overtime counts once it is approved.",
+    "total_one": "Total: {count} person · ordinary {ordinary} h · overtime {overtime} h · absences {absent} h",
+    "total_other": "Total: {count} people · ordinary {ordinary} h · overtime {overtime} h · absences {absent} h",
+    "totalHidden": "No total: it would give away a group of too few people."
+  },
+  "match": {
+    "NOT_CLOSED": "{month} is not closed yet: there is no LUL calendar to match",
+    "NOT_SEALED": "{month} is closed, but its LUL calendar is not sealed yet",
+    "MATCHES": "Matches the closed LUL for {month} ✓",
+    "DIFFERS_one": "Differs in {count} cell from the closed LUL for {month}",
+    "DIFFERS_other": "Differs in {count} cells from the closed LUL for {month}",
+    "show": "Show"
+  },
+  "differences": {
+    "title": "What differs from the LUL for {month}",
+    "failed": "We couldn't read the differences",
+    "none": "Nothing differs any more.",
+    "tableLabel": "Cells that differ from the closed calendar",
+    "day": "Day",
+    "kind": "Cell",
+    "open": "Open the day"
+  },
+  "kind": {
+    "PRESENT": "Present",
+    "ORDINARY": "Ordinary",
+    "NIGHT": "Night",
+    "HOLIDAY": "Holiday",
+    "OVERTIME_DAY": "Overtime, day",
+    "OVERTIME_NIGHT": "Overtime, night",
+    "OVERTIME_HOLIDAY": "Overtime, holiday",
+    "ABSENCE": "Absence"
+  },
+  "day": {
+    "title": "Closed day",
+    "employee": "Open the employee",
+    "closedNow": "Closed {closed} h · now {now} h",
+    "corrections": "Corrections",
+    "when": "When",
+    "who": "Who",
+    "change": "Change (h)",
+    "why": "Why"
+  },
+  "earnings": {
+    "line": "Line",
+    "month": "Month",
+    "worker": "Worker",
+    "people": "People",
+    "pieces": "Pieces",
+    "earnings": "Earnings",
+    "makeUp": "Make-up",
+    "share": "Make-up share",
+    "noLine": "No line",
+    "noGrain": "Needs the pay grain",
+    "noGrainBody": "Earnings figures are seen only with the pay grain.",
+    "workersOpen": "Earnings per worker: this opening is recorded",
+    "backToLines": "Back to lines",
+    "workersNote": "It stays on this page: no file, no print, no address. Rows come by name, never by amount.",
+    "tableLabel": "Earnings, make-up and make-up share",
+    "count_one": "{count} row",
+    "count_other": "{count} rows",
+    "groupBy": "Group by",
+    "byLine": "Line",
+    "byMonth": "Month",
+    "to": "Until",
+    "toMonth": "Until {month}",
+    "openWorkers": "Open per worker",
+    "failed": "We couldn't read the earnings report",
+    "empty": "No earnings in this period.",
+    "foot": "Amounts in the ledger's currency. A group under the minimum size shows no figure."
+  },
+  "send": {
+    "title": "Send report",
+    "download": "Download the CSV",
+    "openPdf": "Open the PDF",
+    "send": "Send link",
+    "report": "Report",
+    "recipient": "Recipient's e-mail",
+    "expiry": "Link expires after",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "format": "Format",
+    "heldPay": "Pay figures never leave through a link. Give the consultant the payroll file from Payroll export.",
+    "heldNoLink": "A secure link can't carry a report yet: it carries only the payroll file. Save the file here and give it yourself."
+  },
+  "print": {
+    "title": "People report · {month}",
+    "earningsRange": "Earnings",
+    "privacy": "Lines, teams and months only. No person is named here."
+  }
+}

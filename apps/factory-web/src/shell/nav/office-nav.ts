@@ -307,6 +307,11 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/people/skills/print',
   '/people/settings',
   '/people/settings/history',
+  // B-W2b-64: Efficiency (SCR-161), People reports (SCR-264) and their print tabs.
+  '/people/efficiency',
+  '/people/efficiency/print',
+  '/people/reports',
+  '/people/reports/print',
 ])
 
 /**

@@ -452,7 +452,9 @@ export const OFFICE: readonly TreeArea[] = [
         ],
       },
       // B-W2b-65: Skills & training (SCR-160) and People settings (SCR-265).
-      { label: 'Skills & pay', labelIt: 'Competenze e paghe', hideLabel: false, pages: [{ id: 'people.skills', title: 'Skills & training', titleIt: 'Competenze e formazione', wave: 'W2b', href: '/people/skills' }] },
+      { label: 'Skills & pay', labelIt: 'Competenze e paghe', hideLabel: false, pages: [{ id: 'people.skills', title: 'Skills & training', titleIt: 'Competenze e formazione', wave: 'W2b', href: '/people/skills' }, /* B-W2b-64 */ { id: 'people.efficiency', title: 'Efficiency', titleIt: 'Efficienza', wave: 'W2b', href: '/people/efficiency' }] },
+      // B-W2b-64: People reports (SCR-264).
+      { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'people.reports', title: 'People reports', titleIt: 'Report persone', wave: 'W2b', href: '/people/reports' }] },
       { label: 'Settings', labelIt: 'Impostazioni', hideLabel: false, pages: [{ id: 'people.settings', title: 'People settings', titleIt: 'Impostazioni persone', wave: 'W2b', href: '/people/settings' }] },
     ],
   },

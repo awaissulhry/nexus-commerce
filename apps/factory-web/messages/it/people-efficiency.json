@@ -1,0 +1,326 @@
+{
+  "common": {
+    "loading": "Caricamento…",
+    "cancel": "Annulla",
+    "waitsForPrivacy": "Si legge dopo che la pagina ha detto cosa mostra."
+  },
+  "section": {
+    "privacy": "Cosa vedi qui",
+    "tiles": "Totali del periodo",
+    "trend": "Linee nel tempo",
+    "lines": "Linee",
+    "operations": "Previsto e reale per operazione",
+    "review": "Coda di revisione degli standard",
+    "individual": "Dati di una persona"
+  },
+  "band": {
+    "arrange": "Disponi",
+    "more": "Altre azioni",
+    "export": "Esporta (livello linea)",
+    "print": "Stampa report di linea"
+  },
+  "scope": {
+    "label": "Ambito",
+    "line": "Linea",
+    "allLines": "Tutte le linee",
+    "style": "Modello",
+    "allStyles": "Tutti i modelli",
+    "compare": "Confronta col periodo precedente"
+  },
+  "updates_one": "{count} aggiornamento · Mostra",
+  "updates_other": "{count} aggiornamenti · Mostra",
+  "privacy": {
+    "pill": "Totali di linea · dati individuali riservati",
+    "failed": "Non siamo riusciti a leggere cosa questa sede ti lascia vedere",
+    "failedBody": "Non si legge altro finché non è detto. Riprova.",
+    "pickSite": "Scegli una sede nella barra in alto",
+    "pickSiteBody": "Le regole di privacy e la base giuridica sono della sede: non si legge nulla per tutte le sedi insieme.",
+    "gateOff": "Nessuno vede i dati di una persona in questa sede: non è registrata alcuna base giuridica",
+    "youOnRequest": "Puoi aprire i dati di una persona su richiesta; ogni apertura è registrata",
+    "workerHr": "Il lavoratore e le risorse umane vedono i dati di una persona su richiesta; ogni apertura è registrata",
+    "lines_one": "Vedi linee e operazioni. Un gruppo di meno di {count} persona mostra «—»: troppo poche persone per mostrarlo senza identificarle.",
+    "lines_other": "Vedi linee e operazioni. Un gruppo di meno di {count} persone mostra «—»: troppo poche persone per mostrarlo senza identificarle.",
+    "hrOpen": "Risorse umane: una persona su richiesta, con uno scopo; l'apertura è registrata e visibile alle risorse umane e al DPO.",
+    "hrClosed": "Una persona: non in questa sede. Finché qui non è registrata una base giuridica (accordo sindacale o autorizzazione dell'Ispettorato), la pagina non può mostrare nessuna persona.",
+    "worker": "Lavoratore: i propri dati in reparto, in La mia giornata."
+  },
+  "tile": {
+    "efficiency": "Efficienza di linea",
+    "onStandard": "Efficienza sul lavoro standard",
+    "earned": "Minuti maturati",
+    "attended": "Minuti di presenza",
+    "offStandard": "Minuti fuori standard"
+  },
+  "tileHint": {
+    "efficiency": "Maturati ÷ minuti di presenza",
+    "onStandard": "Maturati ÷ minuti di lavoro standard",
+    "earned": "Capi buoni × lo standard",
+    "attended": "Dai giorni di presenza",
+    "offStandard": "Codificati, quindi non attribuiti alle persone"
+  },
+  "tiles": {
+    "period": "{from} – {to}. Solo le linee mostrate.",
+    "delta": "{delta} sul periodo precedente",
+    "failed": "Non siamo riusciti a leggere i totali",
+    "comparedWith": "Confronto con {from} – {to}.",
+    "nothingBefore": "Niente da confrontare: nessuna linea mostrata tra {from} e {to}."
+  },
+  "notes": {
+    "attendanceOff": "I minuti di presenza non sono mostrati: lo scopo presenze di questa sede è spento (Statuto dei Lavoratori art. 4 c.2). I minuti maturati contano comunque.",
+    "provisional": "I minuti di presenza sono provvisori: alcuni giorni non sono ancora approvati.",
+    "hiddenLines_one": "{count} linea con troppo poche persone resta fuori anche dai totali: un totale la rivelerebbe.",
+    "hiddenLines_other": "{count} linee con troppo poche persone restano fuori anche dai totali: un totale le rivelerebbe.",
+    "traineeDays_one": "{count} giorno di apprendistato è escluso da entrambi i lati dei dati di linea.",
+    "traineeDays_other": "{count} giorni di apprendistato sono esclusi da entrambi i lati dei dati di linea."
+  },
+  "how": {
+    "title": "Come si calcola l'efficienza",
+    "formulas": "Formule",
+    "sources": "Fonti",
+    "exclusions": "Cosa resta fuori",
+    "formula": {
+      "line": "Efficienza di linea = minuti maturati ÷ minuti di presenza.",
+      "onStandard": "Efficienza sul lavoro standard = minuti maturati ÷ minuti di lavoro standard (presenza meno i minuti codificati fuori standard e indiretti).",
+      "planned": "Efficienza prevista = minuti maturati ÷ minuti di turno previsti per le persone della linea.",
+      "earned": "Minuti maturati = capi buoni delle dichiarazioni valide × minuti standard dell'operazione sull'ordine di lavoro.",
+      "actual": "Minuti reali per capo = minuti-persona dei tratti chiusi ÷ capi dichiarati; le pause restano fuori."
+    },
+    "source": {
+      "scans": "Scansioni e tempi di produzione",
+      "blocks": "Blocchi fuori standard",
+      "days": "Giorni di presenza",
+      "standards": "Gli standard di ogni revisione del ciclo"
+    },
+    "exclusion": {
+      "trainees": "Giorni di apprendistato: da entrambi i lati dei dati di linea. Fasci lavorati da un apprendista: dalle operazioni.",
+      "oneTap": "Dichiarazioni con un tocco: non hanno tempi, quindi contano come minuti maturati e non come minuti reali.",
+      "offStandard": "Codici fuori standard: i blocchi respinti restano fuori; gli altri si tolgono dai minuti di lavoro standard.",
+      "outside": "Lavoro fatto fuori: la dichiarazione di un rientro da terzista.",
+      "groups": "Ogni gruppo sotto la dimensione minima, anche dai totali."
+    }
+  },
+  "trend": {
+    "hint": "Un grafico per linea rispetto al suo obiettivo; mai una serie per persona. Un giorno con troppo poche persone è un vuoto, non uno zero.",
+    "efficiency": "Efficienza di linea",
+    "target": "Obiettivo",
+    "chartOf": "Efficienza di linea di {line} per giorno",
+    "hiddenDays_one": "{count} giorno nascosto: troppo poche persone.",
+    "hiddenDays_other": "{count} giorni nascosti: troppo poche persone.",
+    "noTarget": "Nessun obiettivo per questa linea in Pianificazione.",
+    "failed": "Non siamo riusciti a leggere le linee nel tempo",
+    "noAttendance": "Nessuna efficienza di linea senza minuti di presenza",
+    "empty": "Nessuna linea ha lavorato in questo periodo."
+  },
+  "lines": {
+    "line": "Linea",
+    "people": "Persone",
+    "planned": "Efficienza prevista",
+    "noLine": "Nessuna linea",
+    "tableLabel": "Efficienza per linea",
+    "count_one": "{count} linea",
+    "count_other": "{count} linee",
+    "failed": "Non siamo riusciti a leggere le linee",
+    "empty": "Nessun dato in questo periodo."
+  },
+  "tooFew": {
+    "short": "Troppo poche persone",
+    "long": "Troppo poche persone per mostrarlo senza identificarle.",
+    "settings": "Dimensione minima del gruppo in Impostazioni persone",
+    "why": "Un gruppo sotto il minimo mostrerebbe il lavoro di una persona, quindi resta nascosto ovunque."
+  },
+  "operations": {
+    "style": "Modello",
+    "operation": "Operazione",
+    "smv": "Minuti standard",
+    "actual": "Media reale",
+    "bundles": "Fasci contati",
+    "difference": "Differenza",
+    "trend": "Giorni",
+    "state": "Stato",
+    "days": "Giorni mostrati",
+    "daysHidden_one": "{count} giorno nascosto: troppo poche persone",
+    "daysHidden_other": "{count} giorni nascosti: troppo poche persone",
+    "lastDecision": "Ultima decisione",
+    "noDecision": "Nessuna finora",
+    "send": "Manda alla revisione dello standard",
+    "sendCount_one": "Manda {count} alla revisione dello standard",
+    "sendCount_other": "Manda {count} alla revisione dello standard",
+    "inProducts": "Apri in Prodotti",
+    "popFailed": "Non siamo riusciti a leggere questa operazione",
+    "openPop": "Apri {operation}",
+    "spark": "Differenza dallo standard per giorno, {operation}",
+    "sparkEmpty": "Nessun giorno da mostrare",
+    "tableLabel": "Minuti previsti e reali per operazione",
+    "count_one": "{count} operazione",
+    "count_other": "{count} operazioni",
+    "dayFilter": "Giorno",
+    "allDays": "Tutti i giorni del periodo",
+    "failed": "Non siamo riusciti a leggere le operazioni",
+    "empty": "Nessuna operazione cronometrata in questo periodo.",
+    "hidden_one": "{count} operazione nascosta: troppo poche persone.",
+    "hidden_other": "{count} operazioni nascoste: troppo poche persone.",
+    "trainees_one": "{count} fascio lavorato da un apprendista non è contato.",
+    "trainees_other": "{count} fasci lavorati da un apprendista non sono contati.",
+    "untimed_one": "{count} dichiarazione con un tocco non ha tempi, quindi non è nei minuti reali.",
+    "untimed_other": "{count} dichiarazioni con un tocco non hanno tempi, quindi non sono nei minuti reali.",
+    "rule": "Revisione: oltre il {percent} % dallo standard, in entrambe le direzioni, su almeno {bundles} fasci.",
+    "dayShown": "La griglia mostra solo {day}."
+  },
+  "state": {
+    "WITHIN": "Nella tolleranza",
+    "REVIEW": "Da rivedere",
+    "TOO_FEW_BUNDLES": "Troppo pochi fasci",
+    "TOO_FEW_PEOPLE": "Troppo poche persone"
+  },
+  "decision": {
+    "KEEP": "Mantieni",
+    "CHANGE": "Cambia",
+    "INVESTIGATE": "Indaga",
+    "SEND": "Mandata in revisione"
+  },
+  "review": {
+    "smvActual": "Standard → reale",
+    "since": "Dal",
+    "why": "In coda perché",
+    "reason": {
+      "OFF_STANDARD": "Fuori dal suo standard",
+      "INVESTIGATING": "Sotto indagine",
+      "SENT": "Mandata a mano"
+    },
+    "leftOut_one": "{count} operazione fuori standard resta fuori",
+    "leftOut_other": "{count} operazioni fuori standard restano fuori",
+    "leftOutMost": "Troppo poche persone ci hanno lavorato per mostrarle senza identificarle: con una persona per operazione può essere gran parte della coda, quindi questa lista non è il quadro completo. È il costo della regola (Statuto dei Lavoratori art. 4): quelle operazioni si possono rivedere solo quando ci lavorano più persone, o con una dimensione minima più bassa.",
+    "leftOutSome": "Troppo poche persone ci hanno lavorato per mostrarle senza identificarle.",
+    "tableLabel": "Operazioni da rivedere",
+    "count_one": "{count} da rivedere",
+    "count_other": "{count} da rivedere",
+    "failed": "Non siamo riusciti a leggere la coda di revisione",
+    "empty": "Niente da rivedere.",
+    "emptyLeftOut": "Niente che si possa mostrare: vedi sopra cosa resta fuori.",
+    "rule": "Oltre il {percent} % dallo standard, in entrambe le direzioni, su almeno {bundles} fasci degli ultimi {days} giorni.",
+    "reasonLabel": "Motivo (resta con la decisione)",
+    "title": "Revisione dello standard",
+    "noun": "operazione",
+    "figures": "Dati",
+    "window": "{from} – {to}",
+    "notOnQueue": "Non in coda",
+    "history": "Storia",
+    "noHistory": "Nessuna decisione finora.",
+    "decision": "Decisione",
+    "proposed": "Nuovo standard, minuti per capo",
+    "changeNote": "Questo registra cosa deve diventare lo standard. Cambia con una nuova revisione del ciclo in Prodotti, e le tariffe seguono solo come la legge consente.",
+    "law": "Codice civile art. 2101",
+    "lawPlain": "Le tariffe di cottimo cambiano solo se cambiano le condizioni di lavoro, e con preavviso.",
+    "record": "Registra la decisione",
+    "startRevision": "Avvia la nuova revisione in Prodotti",
+    "done": {
+      "KEEP": "Mantenuto: lo standard resta e l'operazione esce dalla coda.",
+      "CHANGE": "Registrato. Lo standard cambia con una nuova revisione.",
+      "INVESTIGATE": "Registrato: resta in coda finché qualcuno decide."
+    },
+    "proposedWas": "proposto {minutes}"
+  },
+  "history": {
+    "KEEP": "{who} ha mantenuto lo standard",
+    "CHANGE": "{who} ha deciso di cambiare lo standard",
+    "INVESTIGATE": "{who} ha avviato un'indagine",
+    "SEND": "{who} l'ha mandata in revisione"
+  },
+  "bulk": {
+    "keep_one": "Mantieni {count}",
+    "keep_other": "Mantieni {count}",
+    "investigate_one": "Indaga {count}",
+    "investigate_other": "Indaga {count}",
+    "done": {
+      "KEEP_one": "{count} standard mantenuto.",
+      "KEEP_other": "{count} standard mantenuti.",
+      "INVESTIGATE_one": "{count} operazione sotto indagine.",
+      "INVESTIGATE_other": "{count} operazioni sotto indagine."
+    }
+  },
+  "sent": {
+    "done_one": "{count} operazione mandata alla revisione dello standard.",
+    "done_other": "{count} operazioni mandate alla revisione dello standard."
+  },
+  "held": {
+    "reading": "Sto ancora leggendo i dati.",
+    "noReview": "Il tuo ruolo non può decidere la revisione degli standard.",
+    "busy": "Un momento…",
+    "pickDecision": "Scegli prima Mantieni, Cambia o Indaga.",
+    "proposed": "Scrivi il nuovo standard in minuti per capo, per esempio 1,25.",
+    "reason": "Di' perché: una decisione su uno standard resta col suo motivo.",
+    "reasonLong": "Tieni il motivo entro 500 caratteri.",
+    "pickPerson": "Scegli prima la persona.",
+    "pickPurpose": "Di' prima lo scopo.",
+    "noteLong": "Tieni la nota entro 500 caratteri.",
+    "oneAtATime": "I suoi dati sono nascosti: aprila e decidi da sola."
+  },
+  "refused": {
+    "gatePerformance": "La base giuridica della sede per i dati di una persona è spenta: non è stato mostrato né registrato nulla.",
+    "gateAttendance": "Lo scopo presenze di questa sede è spento.",
+    "notAllowed": "L'efficienza di una persona la vedono solo il lavoratore e le risorse umane (Statuto dei Lavoratori art. 4).",
+    "REVIEW_MOVED": "Qualcuno ha deciso su questa operazione dopo che l'hai aperta. È stata riletta: controlla, poi decidi.",
+    "TOO_FEW_PEOPLE": "Troppo poche persone hanno lavorato su questa operazione per rivederla senza identificarle.",
+    "STATION_SITE": "In questa sede i dati di reparto nominano le postazioni, non le persone: non esiste il dato di una persona.",
+    "reason": "Di' perché apri i dati di questa persona.",
+    "range": "Scegli un periodo più breve: al massimo {days} giorni."
+  },
+  "individual": {
+    "view": "Vedi una persona",
+    "gateOff": "Non in questa sede: qui non è registrata alcuna base giuridica (Statuto dei Lavoratori art. 4 c.1), quindi nessuna persona si può mostrare, cercare o scegliere.",
+    "notYours": "I dati di una persona li vedono solo il lavoratore e le risorse umane, quindi qui non c'è nessuno da scegliere.",
+    "available": "Si apre una persona alla volta, con uno scopo. Nessun confronto con altri, nessuna esportazione, nessuna stampa."
+  },
+  "person": {
+    "titleOf": "{name}: efficienza giornaliera",
+    "another": "Scegli un'altra persona",
+    "show": "Mostra i dati",
+    "recorded": "Questa vista è registrata e visibile alle risorse umane e al DPO",
+    "period": "{from} – {to} · scopo: {purpose}",
+    "empty": "Nessun lavoro cronometrato da sola in questo periodo",
+    "emptyBody": "L'apertura è stata comunque registrata.",
+    "tableLabel": "I giorni di questa persona",
+    "day": "Giorno",
+    "pieces": "Capi",
+    "timed": "Minuti cronometrati",
+    "efficiency": "Efficienza",
+    "denominator": "Qui l'efficienza è maturati ÷ minuti cronometrati della persona, non minuti di presenza: la presenza serve alle presenze.",
+    "traineeDays_one": "{count} giorno di apprendistato escluso.",
+    "traineeDays_other": "{count} giorni di apprendistato esclusi.",
+    "sharedReports_one": "{count} dichiarazione condivisa con altri esclusa.",
+    "sharedReports_other": "{count} dichiarazioni condivise con altri escluse.",
+    "noExport": "Nessun confronto, nessuna esportazione, nessuna stampa. Chiudendo questa finestra i dati si dimenticano.",
+    "noRegister": "Qui non puoi scegliere una persona",
+    "noRegisterBody": "Per scegliere serve il registro del personale (people.view).",
+    "who": "Persona",
+    "search": "Nome o matricola",
+    "purpose": "Scopo",
+    "pickPurpose": "Scegli lo scopo",
+    "note": "Nota (facoltativa)",
+    "scope": "Periodo: {from} – {to}, quello della pagina."
+  },
+  "purpose": {
+    "COACHING_ASKED": "Affiancamento chiesto dal lavoratore",
+    "PAY_QUERY": "Una domanda sulla paga",
+    "WORKER_REQUEST": "Richiesta del lavoratore stesso"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "keep": "mantieni",
+    "change": "cambia",
+    "investigate": "indaga",
+    "moves": "operazione seguente e precedente nella revisione"
+  },
+  "arrange": {
+    "title": "Disponi Efficienza",
+    "titleReports": "Disponi Report persone",
+    "list": "Sezioni",
+    "hint": "Le sezioni spuntate si vedono, in quest'ordine. Cosa vedi qui resta per prima.",
+    "apply": "Applica"
+  },
+  "print": {
+    "title": "Report di linea",
+    "period": "Periodo",
+    "privacy": "Solo totali di linea. Qui nessuna persona è nominata o contata."
+  }
+}

@@ -174,6 +174,9 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       // B-W2b-65: People › Skills & training and People settings.
       '/people/skills': 'people.skills.view', // GET /people/skills/matrix
       '/people/settings': 'people.privacy.view', // GET /people/privacy
+      // B-W2b-64: People › Efficiency and People reports.
+      '/people/efficiency': 'people.efficiency.view', // GET /people/efficiency
+      '/people/reports': 'people.attendance.view', // GET /people/reports/attendance
       '/admin': 'companies.view', // the checklist reads the companies
       '/admin/companies': 'companies.view',
       '/admin/devices': 'devices.view',
