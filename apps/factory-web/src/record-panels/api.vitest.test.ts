@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createApiClient } from '../lib/api/client'
-import { listFiles, postNote, requestUpload, sendEmail, setThreadStatus, timelineEntrySchema } from './api'
+import { listFiles, messageSchema, postNote, requestUpload, sendEmail, setThreadStatus, timelineEntrySchema } from './api'
 import { parseLiveData } from './live'
 import { sendNotice } from './RecordPanels'
 import { apiErrorFrom } from '../lib/api/errors'
@@ -132,6 +132,18 @@ describe('the live stream', () => {
     expect(parseLiveData('not json')).toBeNull()
     expect(parseLiveData('{"fields":{}}')).toBeNull()
     expect(parseLiveData('{"type":"x"}')).toEqual({ type: 'x', fields: {} })
+  })
+})
+
+describe('the thread answer (B-W2b-F4)', () => {
+  const note = { id: 'm1', direction: 'INTERNAL_NOTE', audience: 'OFFICE', channel: 'APP', body: 'x', bodyHtml: null, attachments: [], at: '2026-10-28T10:00:00.000Z' }
+
+  it('takes a floor note the legal gate keeps back: no id, no name, and the message says so', () => {
+    expect(messageSchema.parse({ ...note, author: { kind: 'WORKER', id: null, name: null }, authorHidden: true })).toMatchObject({ author: { kind: 'WORKER', id: null, name: null }, authorHidden: true })
+  })
+
+  it('a portal answer carries no flag: nobody is hidden', () => {
+    expect(messageSchema.parse({ ...note, author: { kind: 'USER', name: null } }).authorHidden).toBe(false)
   })
 })
 

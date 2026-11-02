@@ -556,6 +556,40 @@ describe('a floor worker on the timeline stays behind the PERFORMANCE gate (B-W2
     expect(entry(ids.officeNote!)).toMatchObject({ author: { kind: 'USER', id: author, name: 'Ada Author' }, authorHidden: false })
   }
 
+  const threadRead = async (session: string) => {
+    const response = await call(session, 'GET', `/threads/Site/${siteOne}`)
+    expect(response.statusCode, response.body).toBe(200)
+    const messages = response.json().messages as Json[]
+    return { raw: response.body, message: (id: string) => messages.find((row) => row.id === id)! }
+  }
+  const threadClosed = async (session: string) => {
+    const { raw, message } = await threadRead(session)
+    expect(raw).not.toContain(worker)
+    expect(raw).not.toContain(WORKER_NAME)
+    expect(message(ids.message!)).toMatchObject({ author: { kind: 'WORKER', id: null, name: null }, authorHidden: true, body: 'Hide marked at the table.' })
+    expect(message(ids.officeNote!)).toMatchObject({ author: { kind: 'USER', id: author, name: 'Ada Author' }, authorHidden: false })
+  }
+
+  it('the thread read, gate off: a floor note has no id and no name, and says a person wrote it; an office user stays', async () => {
+    await threadClosed('reader')
+    await threadClosed('author')
+  })
+
+  it('the thread read, gate on: the author as it was; gate off again: nothing again', async () => {
+    const gateOff = await switchOnPerformance(admin, { tenantId: tenantA, companyId: companyOne, siteId: siteOne, byId: author })
+    const { raw, message } = await threadRead('reader')
+    expect(raw).toContain(WORKER_NAME)
+    expect(message(ids.message!)).toMatchObject({ author: { kind: 'WORKER', id: worker, name: WORKER_NAME }, authorHidden: false })
+    await gateOff()
+    await threadClosed('reader')
+  })
+
+  it('a portal reads no floor note and no flag: the gate is the office\'s', async () => {
+    const { messages } = await thread('partner-one', 'Quote', quote)
+    expect(messages.length).toBeGreaterThan(0)
+    expect(messages.every((row: Json) => !('authorHidden' in row) && !('id' in row.author))).toBe(true)
+  })
+
   it('gate off: no id and no name in the raw answer, with threads.read alone or with audit.read, and the row says a person did it', async () => {
     await closed('reader', false)
     await closed('author', true)

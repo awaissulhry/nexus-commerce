@@ -294,6 +294,17 @@ export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
       note: 'The design system\'s PDF viewer with this app\'s pdf.js.',
     },
     {
+      id: 'conversation-person',
+      label: "A floor note: the site's legal gate keeps back the worker, the message says a person wrote it (B-W2b-F4)",
+      model: {
+        ...base,
+        messages: {
+          items: [message(10, { direction: 'INTERNAL_NOTE', at: at(28, 9, 15), authorKind: 'WORKER', authorName: null, authorHidden: true, body: 'Pelle segnata al taglio, avvisare il capo reparto.' }), message(3, { direction: 'INTERNAL_NOTE', at: at(23, 8, 30), authorName: 'Carlo Prova', body: 'Il certificato precedente scade a dicembre: serve il rinnovo.' })],
+          more: false,
+        },
+      },
+    },
+    {
       id: 'history',
       label: 'History',
       model: { ...base, tab: 'history' },

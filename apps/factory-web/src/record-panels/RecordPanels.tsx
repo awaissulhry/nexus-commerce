@@ -559,6 +559,7 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
         channel: message.channel,
         authorKind: message.author.kind,
         authorName: message.author.name,
+        authorHidden: message.authorHidden,
         at: message.at,
         body: message.body,
         mentions: (message.mentions ?? []).map((id) => names.get(id) ?? null),

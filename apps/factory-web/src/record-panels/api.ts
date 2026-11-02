@@ -48,6 +48,7 @@ export const messageSchema = z.object({
   audience: z.enum(MESSAGE_AUDIENCES),
   channel: z.enum(MESSAGE_CHANNELS),
   author: z.object({ kind: z.enum(AUTHOR_KINDS), id: z.string().nullable().optional(), name: z.string().nullable() }),
+  authorHidden: z.boolean().default(false),
   body: z.string(),
   bodyHtml: z.string().nullable(),
   mentions: z.array(z.string()).optional(),

@@ -137,6 +137,8 @@ export interface PanelMessage {
   authorKind: AuthorKind
   /** Null: a system message, or a writer the reader may not see. */
   authorName: string | null
+  /** A floor worker wrote it and the site's legal gate keeps back who: the message says a person did. */
+  authorHidden?: boolean
   /** ISO instant (UTC). */
   at: string
   body: string

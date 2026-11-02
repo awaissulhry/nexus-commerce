@@ -59,6 +59,8 @@ export const messageView = output({
     id: id().nullable().optional(),
     name: z.string().nullable(),
   }),
+  /** Office only: a floor worker wrote it and the site's PERFORMANCE gate keeps back who (no id, no name). */
+  authorHidden: z.boolean().optional(),
   body: z.string(),
   /** The sanitised HTML of an inbound mail; null otherwise. */
   bodyHtml: z.string().nullable(),
