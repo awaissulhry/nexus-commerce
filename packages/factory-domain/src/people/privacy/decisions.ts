@@ -34,6 +34,9 @@ export const PERSON_DECISIONS = [
   'TIMESHEET_APPROVAL',
   // B-W2b-48: a company's month closed: the days of everyone in it locked.
   'ATTENDANCE_MONTH_CLOSE',
+  // B-W2b-43: a held scan counted or not paid; a worker statement approved.
+  'HELD_SCAN_DECISION',
+  'PAY_STATEMENT_APPROVAL',
 ] as const
 export type PersonDecision = (typeof PERSON_DECISIONS)[number]
 
