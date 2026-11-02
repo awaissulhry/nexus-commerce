@@ -8,7 +8,7 @@ import { DetailModal, Timeline } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
 import type { AroundScan, BlockRecord, Change, CorrectionRequest, DayRecord, Dispute, LabourRecord } from '../api'
-import { approveHeld, blockerPhrase, closeDayHeld, codedPhrase, codeWords, dayOpenHeld, dayTarget, minutesText, reopenDayHeld, rejectHeld, type ItemRecord, type OpenItem } from '../model'
+import { approveHeld, blockDecision, blockerPhrase, closeDayHeld, codedPhrase, codeWords, dayOpenHeld, dayTarget, minutesText, reopenDayHeld, rejectHeld, type ItemRecord, type OpenItem } from '../model'
 import type { LabourActions, LabourModel } from './LabourView'
 import { ChangeList, dayText, DayPill, KindPill, say, useLabourT, useValueWords, WhoNote, type Words } from './parts'
 
@@ -304,6 +304,7 @@ function BlockBody({ model, block }: { model: LabourModel; block: BlockRecord | 
   const place = { locale, timeZone: model.timeZone }
   if (!block) return <Banner tone="info" title={t('detail.blockHeld')} />
   const code = codeWords(block.code.code, model.codes, locale) ?? block.code.code
+  const decided = blockDecision(block)
   return (
     <div className="fw-lb-detail">
       <WhoNote record={block} />
@@ -323,6 +324,7 @@ function BlockBody({ model, block }: { model: LabourModel; block: BlockRecord | 
           { label: t('detail.where'), value: [block.station?.code, block.line?.code].filter(Boolean).join(' · ') || '—' },
           { label: t('detail.source'), value: t(`source.${block.source}`) },
           { label: t('detail.status'), value: <Pill tone={STATUS_TONE[block.status] ?? 'neutral'}>{t(`blockStatus.${block.status}`)}</Pill>, hint: block.rejectReason ?? undefined },
+          ...(decided ? [{ label: t(decided.label), value: decided.who ?? (decided.hidden ? t('detail.aPerson') : '—'), hint: formatDateTime(decided.at, place) }] : []),
           ...(block.note ? [{ label: t('detail.note'), value: block.note }] : []),
         ]}
       />

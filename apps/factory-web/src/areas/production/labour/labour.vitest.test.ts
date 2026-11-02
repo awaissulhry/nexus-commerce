@@ -10,6 +10,7 @@ import { base, BLOCK_LONG, BLOCK_NORMAL, CORRECTION, DAY_READY, designScreen, DI
 import { designScreen as offStandardScreen } from './offstandard/fixtures'
 import {
   addressOf,
+  blockDecision,
   decidesOneCorrection,
   addressText,
   agePhrase,
@@ -42,6 +43,7 @@ import {
   tileKind,
   valueText,
   writeProblem,
+  type ItemRecord,
   type ValueWords,
 } from './model'
 import { ItemDetailBody } from './view/ItemDetail'
@@ -296,6 +298,25 @@ describe('the page, drawn', () => {
     const html = render(createElement(ItemDetailBody, { model: hidden.model, record: open(hidden)! }))
     expect(html).not.toContain(NAME)
     expect(html).toContain('A person is on this record.')
+  })
+
+  it('B-W2b-73: a decider the gate keeps back says "a person", with no key and no name; a name the API served stays', () => {
+    const body = (id: string) => {
+      const entry = offStandardScreen.cases.find((item) => item.id === id)!.model
+      return render(createElement(ItemDetailBody, { model: entry.model, record: (entry.model.detail!.loaded as { value: ItemRecord }).value }))
+    }
+    expect(body('decided-hidden')).toContain('Approved by')
+    expect(body('decided-hidden')).toContain('A person')
+    expect(body('decided-hidden')).not.toContain('detail.')
+    expect(body('rejected-hidden')).toContain('Rejected by')
+    expect(body('rejected-hidden')).toContain('A person')
+    expect(body('decided-named')).toContain('Bea Esempio')
+    expect(body('decided-named')).not.toContain('A person')
+    expect(blockDecision({ approvedAt: null, approvedBy: null, approvedByHidden: false, rejectedAt: null, rejectedBy: null, rejectedByHidden: false })).toBeNull()
+    const italian = offStandardScreen.cases.find((item) => item.id === 'decided-hidden')!.model
+    const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'it', messages: messagesFor('it', [...LABOUR_NAMESPACES, 'shell']) }, createElement(ItemDetailBody, { model: italian.model, record: (italian.model.detail!.loaded as { value: ItemRecord }).value })))
+    expect(html).toContain('Una persona')
+    expect(html).toContain('Approvato da')
   })
 
   it('every design case has made-up data and draws without a raw key', () => {
