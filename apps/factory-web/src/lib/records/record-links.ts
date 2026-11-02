@@ -26,6 +26,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Operation: '/products/operations/[id]',
   SizeScale: '/products/sizes/[id]',
   WorkOrder: '/production/work-orders/[id]',
+  // B-W2b-59: a bundle's record (SCR-259: progress, scans, quality, ticket).
+  Bundle: '/production/bundles/[id]',
   // Quality › Inspections (SCR-076); a release is reviewed in its DetailModal on the list (design §2.3).
   Inspection: '/quality/inspections/[id]',
   QualityRelease: '/quality/inspections?open=[id]',
@@ -137,6 +139,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/production/work-orders': '/production/work-orders',
   // B-W2b-58: the help calls (`?view=`, `?tile=`, `?kind=` as the API reads them).
   '/production/calls': '/production/calls',
+  // B-W2b-59: the bundles (`?stuck=true`, `?place=LINE`, `?status=VOID` as the API reads them).
+  '/production/bundles': '/production/bundles',
   // B-W2b-56: the dispatch board (`?site=`, `?line=`, `?date=`).
   '/production/dispatch': '/production/dispatch',
   // The pages read the API's own filters from the address (`?onHold=true`, `?waitingRelease=true`, `?status=OPEN`).

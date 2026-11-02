@@ -26,6 +26,8 @@ export const SCAN_HEADER = {
   siteId: true,
   number: true,
   batchNumber: true,
+  // B-W2b-69: the operation screen's Rush flag.
+  rush: true,
   status: true,
   kind: true,
   styleId: true,

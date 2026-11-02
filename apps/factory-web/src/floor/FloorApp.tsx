@@ -80,6 +80,8 @@ export interface FloorStore {
   installPrompt: InstallPrompt | null
   /** The frame of a screen: its model and its actions (`queue`: the queue's own screen, no "Open queue"). */
   frame: (titleKey: string, options?: { showHome?: boolean; queue?: boolean }) => { frame: FrameModel; onFrame: (action: FrameAction) => void }
+  /** B-W2b-70: where this tablet opens for this person: Home, or the Line view on a LINE tablet of a team leader. */
+  landing: string
   /** The offline queue: actions saved here first, sent in order (queue/queue.ts). */
   queue: FloorQueue
   queueSnapshot: QueueSnapshot
@@ -125,6 +127,9 @@ const SIGN_IN = '/floor/sign-in'
 const NOTICE = '/floor/notice'
 const HOME = '/floor'
 const SYNC = '/floor/sync'
+/** B-W2b-70: Call for help (SCR-172), the frame's Help button; the Line view (SCR-168), where a LINE tablet lands. */
+const HELP = '/floor/help'
+const LINE_VIEW = '/floor/lineview'
 /** B-W2b-66: a DISPLAY device's page (SCR-173). */
 const DISPLAY = '/floor/display'
 /** While the app is open, the queue tries to send this often (it sends at once when the network comes back). */
@@ -333,7 +338,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
       if (pathname !== SIGN_IN) router.replace(SIGN_IN)
       return
     }
-    if (pathname === SIGN_IN && !pendingSwitch) router.replace(me.notice.due ? NOTICE : HOME)
+    if (pathname === SIGN_IN && !pendingSwitch) router.replace(me.notice.due ? NOTICE : device.rules?.landing === 'LINE_VIEW' && me.permissions.includes('floor.lead') ? LINE_VIEW : HOME)
   }, [load.status, device, me, pathname, pendingSwitch, router])
 
   // B-W2b-66: nobody presses Try again on a wall screen: while the server does not answer, the app keeps asking.
@@ -377,6 +382,8 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
           case 'menu':
             return setUi((current) => ({ ...current, menu: action.open }))
           case 'help':
+            // B-W2b-70 (design floor.help: two taps from any screen): signed in, Help is Call for help; before a sign-in, the words.
+            if (me && action.open) return router.push(HELP)
             return setUi((current) => ({ ...current, help: action.open }))
           case 'language':
             return setUi((current) => ({ ...current, language: action.open }))
@@ -435,6 +442,7 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     switched,
     installPrompt,
     frame,
+    landing: device?.rules?.landing === 'LINE_VIEW' && me?.permissions.includes('floor.lead') ? LINE_VIEW : HOME,
     queue,
     queueSnapshot,
     shellQueue,

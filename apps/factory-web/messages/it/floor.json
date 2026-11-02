@@ -19,7 +19,7 @@
     "helpDialog": {
       "title": "Aiuto",
       "body": "Chiedi al tuo capoturno, o all'ufficio.",
-      "later": "La chiamata di aiuto dal tablet arriva più avanti."
+      "later": "Accedi per chiamare aiuto da questo tablet."
     },
     "languageDialog": {
       "title": "Lingua",
@@ -291,6 +291,17 @@
         "inspect": "Nessuna rete: collaudi e rilasci aspettano la rete (prendono il numero dall'ufficio). Le scansioni restano salvate sul tablet.",
         "serials": "Nessuna rete: i seriali dei capi e le loro etichette aspettano la rete (li dà l'ufficio). Il resto del lavoro resta salvato sul tablet."
       }
+    },
+    "resume": {
+      "title": "Da finire su questo tablet",
+      "paused": "In pausa",
+      "running": "In corso",
+      "continue": "Continua",
+      "line": {
+        "paused": "Op {seq} {name} · dalle {time}",
+        "running": "Op {seq} {name} · dalle {time}",
+        "clockOut": "Op {seq} {name} · in pausa all'uscita, {time}"
+      }
     }
   },
   "tile": {
@@ -319,13 +330,17 @@
       "final": "Controlla, firma e rilascia i capi",
       "pack": "Scansiona i capi nei cartoni, stampa etichette e DDT",
       "labels": "Stampa le etichette capo, solo con certificato valido",
-      "machine": "Segnala un guasto; gli interventi del tecnico"
+      "machine": "Segnala un guasto; gli interventi del tecnico",
+      "help": "Un tocco chiama la persona giusta",
+      "lineview": "Chiamate, in attesa, postazioni"
     },
     "held": {
       "notice": "Prima leggi l'informativa",
       "coming": "In arrivo"
     },
-    "machine": "Guasto macchina"
+    "machine": "Guasto macchina",
+    "help": "Chiama aiuto",
+    "lineview": "Vista linea"
   },
   "scan": {
     "title": "Scansiona",
@@ -550,7 +565,8 @@
       "final": "Rifiutata",
       "again": "Si reinvia da sola",
       "others_one": "Un'altra persona ha {count} azione rifiutata: la vede il capo squadra.",
-      "others_other": "Un'altra persona ha {count} azioni rifiutate: le vede il capo squadra."
+      "others_other": "Un'altra persona ha {count} azioni rifiutate: le vede il capo squadra.",
+      "lineView": "Conflitti di invio: Vista linea"
     },
     "waiting": {
       "title": "In attesa, in ordine di invio",
@@ -604,7 +620,22 @@
       "scrap_other": "{count} scarti",
       "rework_one": "{count} da rilavorare",
       "rework_other": "{count} da rilavorare",
-      "machine": "Guasto su {code}"
+      "machine": "Guasto su {code}",
+      "start": "Inizia {code}",
+      "pause": "Pausa {code}",
+      "resume": "Riprendi {code}",
+      "handBack": "Restituisci {code}",
+      "partial_one": "{code}: {count} pezzo finora",
+      "partial_other": "{code}: {count} pezzi finora",
+      "tick": "Un passo spuntato",
+      "note": "Un commento su un ordine di lavoro",
+      "noBundleStart": "Tempo senza fascio iniziato",
+      "noBundleEnd": "Tempo senza fascio finito",
+      "call": "Chiamata di aiuto",
+      "callAnswer": "Risposta a una chiamata",
+      "handover": "Nota di consegna",
+      "onBehalf_one": "Inserimento per conto di altri: {code} · {count} buono",
+      "onBehalf_other": "Inserimento per conto di altri: {code} · {count} buoni"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

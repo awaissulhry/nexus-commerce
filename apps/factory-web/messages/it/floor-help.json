@@ -1,0 +1,115 @@
+{
+  "title": "Chiama aiuto",
+  "loading": "Lettura delle chiamate della postazione…",
+  "asOf": "Da questo tablet, alle {time}: la rete non c'è.",
+  "offline": "Nessuna rete: la chiamata aspetta su questo tablet. Chiama a voce o usa la lampada di linea.",
+  "tiles": {
+    "title": "Di chi hai bisogno?",
+    "none": "Questo stabilimento non ha ancora chiamate di aiuto. Chiedi all'ufficio.",
+    "oneTap": "Un tocco chiama",
+    "waiting": "Salvata su questo tablet"
+  },
+  "status": {
+    "SENT": "Inviata",
+    "SEEN": "Vista",
+    "ON_THE_WAY": "In arrivo",
+    "SOLVED": "Risolta",
+    "CANCELLED": "Annullata"
+  },
+  "card": {
+    "kind": "La tua chiamata",
+    "elapsed": "In attesa"
+  },
+  "fact": {
+    "station": "Postazione",
+    "sent": "Inviata alle",
+    "who": "Chi",
+    "nobody": "Ancora nessuno"
+  },
+  "who": {
+    "office": "L'ufficio",
+    "someone": "Qualcuno"
+  },
+  "progress": {
+    "title": "Chi sta arrivando",
+    "SENT": "Inviata",
+    "SEEN": "Vista",
+    "ON_THE_WAY": "In arrivo",
+    "SOLVED": "Risolta"
+  },
+  "call": {
+    "gone": "Questa chiamata è chiusa."
+  },
+  "queued": {
+    "title": "{type}: chiamata salvata",
+    "sending": "La stiamo inviando. Appena l'ufficio la riceve vedi chi arriva.",
+    "refused": "L'ufficio ha rifiutato questa chiamata",
+    "refusedFix": "Apri In attesa di invio per sapere perché."
+  },
+  "details": {
+    "title": "Aggiungi dettagli (facoltativo)",
+    "lead": "Prima chiama, poi spiega. Le tue parole vanno sulla chiamata aperta.",
+    "words": "Che cosa non va?",
+    "photo": "Aggiungi una foto",
+    "send": "Aggiungi alla chiamata",
+    "done": "Le tue parole sono sulla chiamata.",
+    "failed": "Le parole non sono state aggiunte. Riprova."
+  },
+  "closed": {
+    "SOLVED": "{type}: risolta",
+    "CANCELLED": "{type}: chiamata annullata"
+  },
+  "cancel": {
+    "title": "Annullare questa chiamata?",
+    "coming": "{name} sta arrivando. Annullare comunque?",
+    "nobody": "Non arriverà nessuno.",
+    "keep": "Tieni la chiamata",
+    "confirm": "Annulla chiamata"
+  },
+  "action": {
+    "back": "Indietro",
+    "tiles": "Di chi hai bisogno?",
+    "home": "Home",
+    "cancel": "Annulla",
+    "solved": "Risolto",
+    "details": "Aggiungi dettagli",
+    "machine": "Di' che cosa ha la macchina",
+    "incident": "Segnala un infortunio"
+  },
+  "held": {
+    "noStation": "Questo tablet non appartiene a una postazione: la chiamata ne ha bisogno. Chiedi all'ufficio.",
+    "photo": "Le foto sulle chiamate non sono ancora pronte: scrivilo a parole.",
+    "detailsOffline": "Le parole su una chiamata richiedono la rete.",
+    "incident": "La segnalazione di infortuni arriva con una versione successiva: avvisa il tuo capo squadra.",
+    "details": {
+      "offline": "Le parole su una chiamata richiedono la rete.",
+      "empty": "Scrivi prima qualche parola."
+    }
+  },
+  "refusal": {
+    "NO_STATION": {
+      "message": "Questo tablet non appartiene a una postazione.",
+      "fix": "Chiedi all'ufficio di impostarla."
+    },
+    "OTHER_STATION": {
+      "message": "Solo un capo squadra chiama per un'altra postazione.",
+      "fix": "Chiama da questa postazione o chiedi al capo squadra."
+    },
+    "TYPE_INACTIVE": {
+      "message": "Questa chiamata non è più disponibile.",
+      "fix": "Scegli un'altra casella."
+    },
+    "NOT_THIS_STATION": {
+      "message": "Questa chiamata è di un'altra postazione.",
+      "fix": "Chiudila dalla sua postazione."
+    },
+    "SOLVED": {
+      "message": "Questa chiamata è già risolta.",
+      "fix": "Non serve altro."
+    },
+    "CANCELLED": {
+      "message": "Questa chiamata è stata annullata.",
+      "fix": "Chiama di nuovo se ti serve ancora aiuto."
+    }
+  }
+}

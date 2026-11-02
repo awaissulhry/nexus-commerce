@@ -53,6 +53,9 @@ export const workOrderRowSchema = z.object({
   dueDate: z.string().nullable(),
   daysLate: z.number().nullable(),
   priority: z.number(),
+  // B-W2b-59: the rush flag and the work order it was split from (B-W2b-51's list).
+  rush: z.boolean().optional(),
+  splitFrom: z.object({ id: z.string(), number: z.string() }).nullable().optional(),
   releasedAt: z.string().nullable(),
   createdAt: z.string(),
 })
@@ -67,6 +70,8 @@ export interface ListQuery {
   late?: boolean
   /** B-W2b-13 (PLT-167): due on the days a relative word covers (`this-week`); the API resolves it with its today. */
   due?: RelativeDay | null
+  /** B-W2b-59 (MES-009): rush work orders only (the quick filter's flag). */
+  rush?: boolean
   q?: string
   salesOrderId?: string
   cursor?: string | null
@@ -80,6 +85,7 @@ export function listWorkOrders(api: ApiClient, query: ListQuery, signal?: AbortS
       open: query.open ? 'true' : undefined,
       late: query.late ? 'true' : undefined,
       due: query.due ?? undefined,
+      rush: query.rush ? 'true' : undefined,
       q: query.q?.trim() || undefined,
       salesOrderId: query.salesOrderId,
       cursor: query.cursor ?? undefined,
@@ -139,6 +145,10 @@ export const workOrderSchema = z.object({
   dueDate: z.string().nullable(),
   daysLate: z.number().nullable(),
   priority: z.number(),
+  // B-W2b-59: the rush flag; the work order it was split from and those split from it (the genealogy, B-W2b-51).
+  rush: z.boolean().optional(),
+  splitFrom: z.object({ id: z.string(), number: z.string(), status }).nullable().optional(),
+  splits: z.array(z.object({ id: z.string(), number: z.string(), status, pieces: z.number() })).optional(),
   note: z.string().nullable(),
   release: z
     .object({
@@ -235,7 +245,7 @@ export function getReleaseCheck(api: ApiClient, id: string, signal?: AbortSignal
   return api.get(`/production/work-orders/${encodeURIComponent(id)}/release-check`, { schema: releaseCheckSchema, signal })
 }
 
-export async function updateWorkOrder(api: ApiClient, id: string, body: { version: number; dueDate?: string | null; priority?: number; note?: string | null }): Promise<WorkOrder> {
+export async function updateWorkOrder(api: ApiClient, id: string, body: { version: number; dueDate?: string | null; priority?: number; rush?: boolean; note?: string | null }): Promise<WorkOrder> {
   return (await api.request('PATCH', `/production/work-orders/${encodeURIComponent(id)}`, { body, schema: oneWorkOrder, idempotencyKey: newIdempotencyKey() })).workOrder
 }
 

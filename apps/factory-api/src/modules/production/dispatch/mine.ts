@@ -27,7 +27,8 @@ import { cardAt, dispatchWorld, materialFlags, planView, type DayCard, type Disp
  *   GET /production/dispatch/floor/line  the team leader's line view (MES-028, MES-031; design floor.supervisor "Stations",
  *                                        production.dispatch.view): the line's load and each station's queue, with the work
  *                                        to reassign. No name and no figure per person (Owner answer F2): a station says
- *                                        "Reassign", never who is away, and why never exists here
+ *                                        "Reassign", never who is away, and why never exists here; `signedIn` says whether
+ *                                        anyone is signed in at the station (B-W2b-70: "nobody signed in"), never who
  *
  * The queue reads in the floor's own scope (published plans only: Owner answer P3); the material flag, the calendars and
  * the clock through the tenant's system view, after the checks: the floor role reads none of them.
@@ -59,6 +60,15 @@ export function nextOf<Entry extends { readonly state: string; readonly sequence
   return entries.find((entry) => entry.state === 'READY') ?? entries.find((entry) => entry.state === 'WAITING_FOR_PREVIOUS' && entry.sequence.rule === 'FREE') ?? null
 }
 
+/** The day's cards that name this person: their rows' work, and whatever queues at the stations they are the operator of. */
+export function cardsOfPerson(world: Pick<DispatchWorld, 'rows' | 'stations' | 'cards'>, workerId: string) {
+  const mine = world.rows.filter((row) => row.workerId === workerId)
+  const ownStations = new Set(mine.flatMap((row) => (assignmentKindOf(row) === 'STATION_OPERATOR' ? [row.stationId!] : [])))
+  const stations = world.stations.filter((station) => ownStations.has(station.id))
+  const stationFor = (card: DayCard) => stations.find((station) => cardAt(card, { kind: 'STATION', id: station.id, lineId: station.lineId, workCentreId: station.workCentreId }, world.stations))
+  return { stationFor, cards: world.cards.filter((card) => card.rows.some((row) => row.workerId === workerId) || stationFor(card) !== undefined) }
+}
+
 /** GET /production/dispatch/mine. */
 export async function myWork(caller: CommandCaller) {
   const context = floorOf(caller)
@@ -75,13 +85,10 @@ export async function myWork(caller: CommandCaller) {
   const { site, world } = read
   const base = { site: { id: site.id, code: site.code, name: site.name, timeZone: site.timezone }, asOf: toUtcIso(now), day: world.today, version: world.plan ? planView(world.plan) : null }
   if (world.subject !== 'WORKER') return { ...base, current: null, next: null, entries: [], words: DISPATCH_REFUSALS.SITE_NAMES_NO_WORKERS.message }
-  const mine = world.rows.filter((row) => row.workerId === context.actorId)
-  if (mine.length === 0) return { ...base, current: null, next: null, entries: [], words: 'Nothing is assigned to you today. Scan a bundle to work on it.' }
-  // Their rows' work, and whatever queues at the stations they are the operator of (what the plan put there too).
-  const ownStations = new Set(mine.flatMap((row) => (assignmentKindOf(row) === 'STATION_OPERATOR' ? [row.stationId!] : [])))
-  const stations = world.stations.filter((station) => ownStations.has(station.id))
-  const stationFor = (card: DayCard) => stations.find((station) => cardAt(card, { kind: 'STATION', id: station.id, lineId: station.lineId, workCentreId: station.workCentreId }, world.stations))
-  const cards = sortCards(world.cards.filter((card) => card.rows.some((row) => row.workerId === context.actorId) || stationFor(card) !== undefined))
+  if (!world.rows.some((row) => row.workerId === context.actorId)) return { ...base, current: null, next: null, entries: [], words: 'Nothing is assigned to you today. Scan a bundle to work on it.' }
+  const person = cardsOfPerson(world, context.actorId)
+  const { stationFor } = person
+  const cards = sortCards(person.cards)
   const flags = await systemView(caller).withClient((db: Reader) => materialFlags(db, site, cards.map((card) => card.workOrder.id)))
   // Their running or paused work comes first ("current one on top").
   const running = new Set(
@@ -120,6 +127,7 @@ export async function floorLine(caller: CommandCaller, query: { readonly lineId?
     const flags = await materialFlags(db, site, onLine.map((card) => card.workOrder.id))
     const opOf = new Map(world.cards.map((card) => [card.operation.id, card]))
     const rowsOf = (stationId: string) => world.rows.filter((row) => row.stationId === stationId && row.workerId !== null)
+    const signedIn = await stationsWithSomeone(db, stations.map((station) => station.id), now)
     return {
       line: { id: line.id, code: line.code, name: line.name },
       site: { id: site.id, code: site.code, name: site.name, timeZone: site.timezone },
@@ -139,12 +147,19 @@ export async function floorLine(caller: CommandCaller, query: { readonly lineId?
             })
           : []
         const material = worstMaterial(cards.flatMap((card) => (flags.get(card.workOrder.id) ? [flags.get(card.workOrder.id)!.state] : [])))
-        return { id: station.id, code: station.code, name: station.name, work: { cards: cards.length, pieces: cards.reduce((sum, card) => sum + card.pieces, 0), minutes: sumMinutes(queued.map((card) => card.minutes)) }, material: material ? { state: material, ...MATERIAL_LOOK[material] } : null, reassign }
+        return { id: station.id, code: station.code, name: station.name, signedIn: signedIn.has(station.id), work: { cards: cards.length, pieces: cards.reduce((sum, card) => sum + card.pieces, 0), minutes: sumMinutes(queued.map((card) => card.minutes)) }, material: material ? { state: material, ...MATERIAL_LOOK[material] } : null, reassign }
       }),
       mayManage,
       mayWriteHandover: may(context, PRODUCTION_DISPATCH_HANDOVER, scope),
     }
   })
+}
+
+/** The stations with someone signed in on a tablet of theirs now (Owner answer F2: yes or no, never who). */
+async function stationsWithSomeone(db: Reader, stationIds: readonly string[], now: Date): Promise<ReadonlySet<string>> {
+  if (stationIds.length === 0) return new Set()
+  const live = await db.floorSession.findMany({ where: { endedAt: null, idleExpiresAt: { gt: now }, endsAt: { gt: now }, device: { stationId: { in: [...stationIds] } } }, select: { device: { select: { stationId: true } } } })
+  return new Set(live.flatMap((session) => (session.device.stationId ? [session.device.stationId] : [])))
 }
 
 /** The line a tablet belongs to: its own (a line tablet or display), else its station's. */

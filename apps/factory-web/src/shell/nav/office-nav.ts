@@ -271,6 +271,13 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/scrap',
   // B-W2b-58: Production › Floor control › Help calls (SCR-142).
   '/production/calls',
+  // B-W2b-59: Production › Cutting room › Bundles (SCR-259), a bundle and its ticket PDF (a new tab, no navigation row).
+  '/production/bundles',
+  '/production/bundles/[id]',
+  '/production/bundles/[id]/ticket',
+  // B-W2b-59: the traveller PDF of one work order and of several (new tabs, no navigation row).
+  '/production/work-orders/[id]/traveller',
+  '/production/work-orders/travellers',
   // B-W2b-56: Production › Dispatch (SCR-138) and its print window (a new tab, no navigation row).
   '/production/dispatch',
   '/production/dispatch/print',

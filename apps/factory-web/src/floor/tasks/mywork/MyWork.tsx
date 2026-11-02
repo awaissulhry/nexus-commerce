@@ -12,22 +12,27 @@ import { readScan } from '../../scan/scan-model'
 import { fetchListReasons, keptListReasons } from '../reasons/api'
 import type { PickerReason } from '../reasons/model'
 import type { ReasonPickerAction, ReasonPickerModel } from '../reasons/view/ReasonPicker'
+import { queuedView } from '../shared/queued'
 import { TASK_ROUTES, taskForScan } from '../routes'
-import { fetchStationQueue, keptStationQueue } from './api'
-import { arranged, listChanged, PUT_LAST_KEY, putLastIn, readPutLast, withPutLast, type DispatchList, type PutLast } from './model'
-import { MyWorkView, type MyWorkAction, type MyWorkStep } from './view/MyWorkView'
+import { fetchMyMessages, fetchStationHelp, fetchWorkList, keptMyMessages, keptStationHelp, keptWorkList } from './api'
+import { arranged, changedRows, helpHeld, helpPayload, listChanged, materialTile, PUT_LAST_KEY, putLastIn, readPutLast, readSeen, SEEN_KEY, withPutLast, withSeen, type DispatchList, type MyMessages, type PutLast, type StationHelp } from './model'
+import { MyWorkView, type MyWorkAction, type MyWorkCall, type MyWorkStep } from './view/MyWorkView'
 
 /**
- * The live SCR-089 (`/floor/mywork`): the station's queue (`GET /production/dispatch/station`) read on view, again when
+ * The live SCR-089 (`/floor/mywork`): the list to work from (the person's, else the station's queue: `fetchWorkList`) read on view, again when
  * the live channel says the floor's list may have moved (a plan published, a bundle reported, a hold placed or lifted,
  * a work order's status) or the stream comes back, every 30 s while in view, and on Try again. A fresher list never replaces the one on screen by
  * itself: it waits behind "List changed · Show". A scan here opens the station's job with the label (Home's scan router).
  * "I can't find it" → Put it last with a reason tile from the office's PAUSE list (`GET /reasons?list=PAUSE`), kept on
  * this tablet only (browser storage, wrapped: the office's plan never changes from the floor, Owner answer P3).
+ *
+ * B-W2b-71: "For your work" reads the open messages on the same beat; which ones were opened stays on this tablet (browser
+ * storage, wrapped), never per person. Call for help: Material goes through the tablet's queue (kind `andon.call.send`): one
+ * tap, online or not; who to call was read earlier in the visit, and the call says its two ticks.
  */
 
 /** The live changes after which the station's list may differ (each a hint: the screen reads again). */
-const MOVES = new Set(['planning.schedule_published', 'production.scan_recorded', 'quality.hold_placed', 'quality.hold_released', 'workorder.status_changed'])
+const MOVES = new Set(['planning.schedule_published', 'production.scan_recorded', 'quality.hold_placed', 'quality.hold_released', 'workorder.status_changed', 'dispatch.assignment_changed'])
 /**
  * While the screen is in view it also reads again on this beat: the live rules of those events ask office permissions
  * (planning.view, workorders.view, quality.holds.view) that no floor role holds, so today they never reach a tablet
@@ -52,12 +57,28 @@ function savePutLast(items: readonly PutLast[]): void {
   }
 }
 
+function loadSeen(): string[] {
+  try {
+    return readSeen(window.localStorage.getItem(SEEN_KEY))
+  } catch {
+    return []
+  }
+}
+
+function saveSeen(ids: readonly string[]): void {
+  try {
+    window.localStorage.setItem(SEEN_KEY, JSON.stringify(ids))
+  } catch {
+    // Private window or blocked storage: the marks live for this visit only.
+  }
+}
+
 export function FloorMyWork() {
   const store = useFloor()
   const router = useRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('tile.mywork', { showHome: true })
-  const { me, api, online, sessionEnded } = store
+  const { me, api, online, sessionEnded, queue, queueSnapshot } = store
   const allowed = Boolean(me?.permissions.includes('floor.work'))
   const [step, setStep] = useState<MyWorkStep>(allowed ? { kind: 'loading' } : { kind: 'noPermission' })
   const [shown, setShown] = useState<DispatchList | null>(null)
@@ -67,16 +88,59 @@ export function FloorMyWork() {
   const [putLast, setPutLast] = useState<PutLast[]>([])
   const [cantFind, setCantFind] = useState<string | null>(null)
   const [putLastDone, setPutLastDone] = useState<{ slotId: string } | null>(null)
+  const [messages, setMessages] = useState<MyMessages | null>(null)
+  const [messagesAsOf, setMessagesAsOf] = useState<string | null>(null)
+  const [messagesFailed, setMessagesFailed] = useState(false)
+  const [seen, setSeen] = useState<string[]>([])
+  const [help, setHelp] = useState<StationHelp | null>(null)
+  const [helpProblem, setHelpProblem] = useState<'reading' | 'offline' | 'failed' | null>('reading')
+  const [called, setCalled] = useState<{ id: string | null; number: string; seq: number } | null>(null)
   const shownRef = useRef<DispatchList | null>(null)
   shownRef.current = shown
 
-  useEffect(() => setPutLast(loadPutLast()), [])
+  useEffect(() => {
+    setPutLast(loadPutLast())
+    setSeen(loadSeen())
+  }, [])
+
+  /** The open messages: a failed read keeps what this tablet read, with its time. */
+  const readMessages = useCallback(async () => {
+    if (!allowed) return
+    const answer = await fetchMyMessages(api)
+    if (answer.ok) {
+      setMessages(answer.value)
+      setMessagesAsOf(null)
+      setMessagesFailed(false)
+      return
+    }
+    if (answer.problem.kind === 'signedOut') return void sessionEnded()
+    const kept = keptMyMessages()
+    setMessages(kept?.value ?? null)
+    setMessagesAsOf(kept?.asOf ?? null)
+    setMessagesFailed(!kept)
+  }, [allowed, api, sessionEnded])
+
+  /** Who to call for material: read once on view and when the dialog opens; offline it stays what this tablet read. */
+  const readHelp = useCallback(async () => {
+    if (!allowed) return
+    const answer = await fetchStationHelp(api)
+    if (answer.ok) {
+      setHelp(answer.value)
+      setHelpProblem(null)
+      return
+    }
+    if (answer.problem.kind === 'signedOut') return void sessionEnded()
+    const kept = keptStationHelp()
+    setHelp(kept?.value ?? null)
+    setHelpProblem(kept ? null : answer.problem.kind === 'offline' ? 'offline' : 'failed')
+  }, [allowed, api, sessionEnded])
 
   /** Reads the queue: the first answer goes on screen; a later one that differs waits behind "List changed · Show". */
   const read = useCallback(
     async (show: boolean) => {
       if (!allowed) return
-      const answer = await fetchStationQueue(api)
+      void readMessages()
+      const answer = await fetchWorkList(api)
       if (answer.ok) {
         setProblem(null)
         setAsOf(null)
@@ -90,7 +154,7 @@ export function FloorMyWork() {
       }
       if (answer.problem.kind === 'signedOut') return void sessionEnded()
       // Offline, or the office did not answer: the queue this tablet read earlier, with its time.
-      const kept = keptStationQueue()
+      const kept = keptWorkList()
       if (kept && shownRef.current === null) {
         setShown(kept.value)
         setAsOf(kept.asOf)
@@ -98,12 +162,13 @@ export function FloorMyWork() {
       setProblem(answer.problem.kind === 'offline' ? 'offline' : 'error')
       setStep((current) => (current.kind === 'loading' ? { kind: 'list' } : current))
     },
-    [allowed, api, sessionEnded],
+    [allowed, api, sessionEnded, readMessages],
   )
 
   useEffect(() => {
     void read(true)
-  }, [read])
+    void readHelp()
+  }, [read, readHelp])
 
   // Back online: read again (the list shown stays until "Show").
   useEffect(() => {
@@ -165,6 +230,37 @@ export function FloorMyWork() {
     [shown, putLast, online, api, sessionEnded],
   )
 
+  // ---- Call for help: Material -------------------------------------------------------------------------------------------
+
+  const sentCall = called?.id ? queuedView(queueSnapshot, called.id) : null
+  const sentTicks = sentCall?.ticks ?? null
+  // Once the office has it, the station's open call is what the dialog says next.
+  useEffect(() => {
+    if (sentTicks === 'recorded' || sentTicks === 'refused') void readHelp()
+  }, [sentTicks, readHelp])
+
+  const call: MyWorkCall | null = called ? { number: called.number, seq: called.seq, ticks: sentTicks ?? (called.id ? 'saved' : 'refused'), refusal: sentCall?.refusal?.code ?? null } : null
+  const held = called?.id && (sentTicks === 'saved' || sentTicks === 'sending') ? 'waiting' : helpHeld({ help, problem: helpProblem })
+
+  const sendHelp = async () => {
+    const view = shown ? arranged(shown, putLast) : null
+    const row = view ? [view.next, ...view.queue].find((entry) => entry?.entry.slotId === cantFind) : null
+    const tile = materialTile(help)
+    if (!row || !tile || held) return
+    const about = { number: row.entry.workOrder.number, seq: row.entry.operation.seq }
+    setCantFind(null)
+    // The line that says where the call stands is on the list (a row's card has none).
+    setStep({ kind: 'list' })
+    try {
+      const item = await queue.enqueue('andon.call.send', helpPayload(tile.type.id, row.entry))
+      setCalled({ id: item.clientEventId, ...about })
+      feedback('success')
+    } catch {
+      setCalled({ id: null, ...about })
+      feedback('error')
+    }
+  }
+
   const reasonDone = () => {
     if (step.kind !== 'reason') return
     const picked = step.picker.reasons.find((reason) => reason.id === step.picker.value)
@@ -198,7 +294,14 @@ export function FloorMyWork() {
 
   const back = () => {
     setCantFind(null)
-    setStep(allowed ? { kind: 'list' } : { kind: 'noPermission' })
+    setStep(step.kind === 'message' ? { kind: 'messages' } : allowed ? { kind: 'list' } : { kind: 'noPermission' })
+  }
+
+  const openMessage = (id: string) => {
+    const next = withSeen(seen, id)
+    setSeen(next)
+    saveSeen(next)
+    setStep({ kind: 'message', id })
   }
 
   const onAction = (action: MyWorkAction) => {
@@ -223,7 +326,15 @@ export function FloorMyWork() {
         }
         return
       case 'cantFind':
+        if (action.slotId && online) void readHelp()
         return setCantFind(action.slotId)
+      case 'help':
+        return void sendHelp()
+      case 'messages':
+        setPutLastDone(null)
+        return setStep({ kind: 'messages' })
+      case 'message':
+        return openMessage(action.id)
       case 'putLast':
         setCantFind(null)
         return void openReasons(action.slotId)
@@ -236,7 +347,7 @@ export function FloorMyWork() {
 
   useFloorKeys({
     enter: step.kind === 'reason' ? reasonDone : null,
-    escape: cantFind !== null ? null : step.kind === 'entry' || step.kind === 'reason' ? back : () => router.push('/floor'),
+    escape: cantFind !== null ? null : step.kind === 'entry' || step.kind === 'reason' || step.kind === 'messages' || step.kind === 'message' ? back : () => router.push('/floor'),
   })
 
   if (!me) return null
@@ -251,10 +362,17 @@ export function FloorMyWork() {
         problem,
         asOf,
         changed: fresh !== null,
+        pending: fresh && shown ? changedRows(shown, fresh) : 0,
         cantFind,
         putLastDone,
         held: me.notice.blocksScans,
         mode: modeOf(me.device.station),
+        messages,
+        seen,
+        messagesAsOf: messagesAsOf ?? (!online && messages ? messages.asOf : null),
+        messagesFailed,
+        helpHeld: held,
+        call,
       }}
       onFrame={onFrame}
       onAction={onAction}

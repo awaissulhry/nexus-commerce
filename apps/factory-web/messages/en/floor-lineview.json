@@ -1,0 +1,308 @@
+{
+  "title": "Line view",
+  "loading": "Reading your line…",
+  "asOf": "From this tablet, as of {time}: the network is down.",
+  "noLine": {
+    "title": "This tablet belongs to no line",
+    "body": "The Line view shows one line. Ask the office to set this tablet's line."
+  },
+  "now": {
+    "title": "My line now",
+    "shift": "Shift {shift}",
+    "asOf": "as of {time}",
+    "output": "Output today",
+    "wip": "Bundles in work",
+    "calls": "Open calls",
+    "machines": "Machines down",
+    "dhu": "DHU",
+    "pace": {
+      "ON_PACE": "On pace",
+      "BEHIND": "Behind the target",
+      "NO_TARGET": "No target today"
+    },
+    "stuck_one": "{count} stuck",
+    "stuck_other": "{count} stuck",
+    "noStuck": "None stuck",
+    "callsOpen": "Waiting for an answer",
+    "noCalls": "None open",
+    "machinesDown": "Down now",
+    "machinesFine": "All running",
+    "noDhu": "Nothing checked yet",
+    "defects_one": "{count} defect",
+    "defects_other": "{count} defects"
+  },
+  "calls": {
+    "title": "Calls",
+    "none": "No open calls.",
+    "unknown": "The calls could not be read now. They come back by themselves.",
+    "saved": "Saved on this tablet"
+  },
+  "status": {
+    "SENT": "Sent",
+    "SEEN": "Seen",
+    "ON_THE_WAY": "On the way",
+    "SOLVED": "Solved",
+    "CANCELLED": "Cancelled"
+  },
+  "waiting": {
+    "title": "Waiting for you",
+    "none": "Nothing waits for you.",
+    "unknown": "Part of this list could not be read now. It comes back by itself.",
+    "corrections": "Corrections of a report are decided in the Office: Home › Approvals.",
+    "scrap_one": "{bundle}: {count} piece of scrap over the limit",
+    "scrap_other": "{bundle}: {count} pieces of scrap over the limit",
+    "block_one": "{code}: {count} minute",
+    "block_other": "{code}: {count} minutes",
+    "conflict": "{bundle}: reported on two tablets",
+    "state": {
+      "own": "Yours: another person decides",
+      "withOffice": "With the office"
+    },
+    "count_one": "{count} item",
+    "count_other": "{count} items"
+  },
+  "stations": {
+    "title": "Stations",
+    "none": "This line has no stations.",
+    "machineDown": "Machine down",
+    "CALLING": "Calling",
+    "COMING": "Help on the way",
+    "material": "Waiting for material",
+    "nobody": "Nobody signed in",
+    "clear": "All clear",
+    "notIn": "{work}: not clocked in"
+  },
+  "keys": {
+    "move": "Move between rows",
+    "open": "Open the row",
+    "back": "Back"
+  },
+  "fact": {
+    "op": "Op {seq} {name}",
+    "operation": "Operation",
+    "station": "Station",
+    "noStation": "No station",
+    "workOrder": "Work order",
+    "good": "Good",
+    "scrap": "Scrap",
+    "rework": "Rework",
+    "limit": "Limit",
+    "reasons": "Reasons",
+    "from": "From",
+    "to": "To",
+    "minutes": "Minutes",
+    "tablet": "Tablet"
+  },
+  "scrap": {
+    "kind": "Scrap over the limit",
+    "waits": "Waits for you"
+  },
+  "block": {
+    "kind": "Time without a bundle",
+    "waits": "Waits for you"
+  },
+  "conflict": {
+    "title": "{bundle}: which report stands?",
+    "recorded": "Recorded first",
+    "refused": "Refused later",
+    "office": "The office",
+    "keep": "The report recorded first stands. Why?",
+    "send": "The office decides: it corrects the recorded report, the original stays. Why?",
+    "reason": {
+      "SAME_WORK": "Both tablets reported the same work",
+      "SCANNED_TWICE": "Scanned again by mistake",
+      "WRONG_TABLET": "Reported on the wrong tablet",
+      "COUNTS_WRONG": "The recorded counts are wrong",
+      "OTHER_STATION": "It was done at another station"
+    }
+  },
+  "reject": {
+    "title": "Why?",
+    "words": "Say why"
+  },
+  "pin": {
+    "title": "Sign with your PIN",
+    "meaning": {
+      "scrap": "You approve this scrap: it goes on to be posted. Your signature is kept with the record.",
+      "block": "You decide this time. Your signature is kept with the record.",
+      "conflict": "The report recorded first stands and the other is set aside. Your signature is kept with the record."
+    }
+  },
+  "done": {
+    "decided": "Done. Nothing else waits for you.",
+    "next": "Done. This is the next one.",
+    "reassigned": "Work reassigned.",
+    "handover": "Note saved."
+  },
+  "reassign": {
+    "title": "Reassign the work of {station}",
+    "to": "Give it to {name}",
+    "why": "Why this person?",
+    "loading": "Reading who can take it…",
+    "none": "Nobody can take this work now.",
+    "clocked": "People clocked in now.",
+    "pick": "Who takes it?",
+    "heldPerson": "Not allowed on this work."
+  },
+  "handover": {
+    "title": "Note for the next shift · {shift}",
+    "last": "Last note · {shift} · {day}",
+    "topics": "What is it about?",
+    "text": "A few words",
+    "wall": "The next shift reads this, and it shows on the line's wall screen. Name nobody."
+  },
+  "topic": {
+    "PROBLEMS": "Problems",
+    "HALF_DONE_BUNDLES": "Half-done bundles",
+    "MACHINES": "Machines",
+    "MATERIAL": "Material",
+    "QUALITY": "Quality",
+    "OTHER": "Other"
+  },
+  "behalf": {
+    "lead": "Record work for someone who could not scan. Which station?",
+    "station": "Stations",
+    "offline": "No network: the entry is saved on this tablet, and only a bundle this tablet can read can be scanned.",
+    "nobody": "Nobody can be named now: their notice must be acknowledged first.",
+    "person": "Who did the work?",
+    "scan": "Scan the bundle",
+    "scanHint": "The ticket of the bundle they worked on.",
+    "read": "Read {code}",
+    "type": "Type the code",
+    "operation": "{bundle}: which operation?",
+    "operationList": "Operations",
+    "reason": "Why did they not scan?",
+    "summary_one": "{bundle}: {count} good",
+    "summary_other": "{bundle}: {count} good",
+    "mark": "Marked: entered by the team leader.",
+    "override": "This check needs another team leader. They pick the reason, scan their badge and type their PIN.",
+    "overrideReason": "Why does it go through?",
+    "badge": "Scan the other team leader's badge",
+    "badgeHint": "You cannot sign this yourself.",
+    "pin": "The other team leader's PIN",
+    "pinMeaning": "You let this entry through. Your signature is kept with the record.",
+    "entered_one": "{bundle}: {count} good entered",
+    "entered_other": "{bundle}: {count} good entered",
+    "undone": "Entry undone."
+  },
+  "camera": {
+    "start": "Use the camera",
+    "stop": "Stop the camera",
+    "error": "The camera did not start. Type the code."
+  },
+  "counts": {
+    "good": "Good",
+    "of_one": "of {count}",
+    "of_other": "of {count}",
+    "scrap": "Scrap, by reason",
+    "rework": "Rework, by reason"
+  },
+  "pad": {
+    "less": "One less",
+    "more": "One more",
+    "clear": "Clear",
+    "back": "Back",
+    "empty": "No number yet"
+  },
+  "action": {
+    "back": "Back",
+    "home": "Home",
+    "onMyWay": "On my way",
+    "solved": "Solved",
+    "approve": "Approve",
+    "reject": "Reject",
+    "sendReject": "Reject",
+    "keepRecorded": "Keep the recorded one",
+    "toOffice": "Send to the office",
+    "reassign": "Reassign",
+    "handover": "Write handover note",
+    "behalf": "Scan on behalf",
+    "saveNote": "Save the note",
+    "next": "Next",
+    "enter": "Enter it",
+    "another": "Another entry",
+    "toLine": "Line view"
+  },
+  "held": {
+    "offline": "This needs the network: it signs a record. It waits until the network is back.",
+    "saved": "Your answer is saved on this tablet.",
+    "noAnswer": "Your role does not answer calls.",
+    "own": "This is your own work: another team leader decides it.",
+    "withOffice": "You sent this to the office: it decides there.",
+    "reject": {
+      "tile": "Pick a reason first.",
+      "words": "Write why first."
+    },
+    "note": {
+      "empty": "Pick a topic or write a few words first.",
+      "long": "The note is too long."
+    },
+    "counts": {
+      "nothing": "Count at least one piece.",
+      "atMost_one": "At most {count} piece.",
+      "atMost_other": "At most {count} pieces."
+    },
+    "behalf": {
+      "station": "Pick the station first.",
+      "person": "Pick the person first.",
+      "bundle": "Scan the bundle first.",
+      "reason": "Pick a reason first.",
+      "note": "Write why first."
+    }
+  },
+  "refusal": {
+    "other": "This cannot be done.",
+    "SOLVED": {
+      "message": "This call is solved already.",
+      "fix": "Nothing more to do."
+    },
+    "CANCELLED": {
+      "message": "This call was cancelled.",
+      "fix": "Nothing more to do."
+    },
+    "ALREADY_ON_THE_WAY": {
+      "message": "Someone is on the way already.",
+      "fix": "Read the list again."
+    },
+    "DECIDED_ALREADY": {
+      "message": "This was decided already.",
+      "fix": "Go on to the next one."
+    },
+    "SELF_DECISION": {
+      "message": "You cannot decide your own work.",
+      "fix": "Ask another team leader."
+    },
+    "BEHALF_SELF": {
+      "message": "You cannot enter your own work on behalf.",
+      "fix": "Report it on your own scan."
+    },
+    "BEHALF_NO_NOTICE": {
+      "message": "This person has not acknowledged the notice yet.",
+      "fix": "They acknowledge it at their next sign-in."
+    },
+    "OVERRIDE_SELF": {
+      "message": "You cannot sign your own entry.",
+      "fix": "Ask another team leader to sign."
+    },
+    "NOT_QUALIFIED": {
+      "message": "This person has no skill for this work.",
+      "fix": "Pick someone else."
+    },
+    "NOT_AUTHORISED": {
+      "message": "This person may not use this machine.",
+      "fix": "Pick someone else."
+    },
+    "OVERRIDE_REASON_NEEDED": {
+      "message": "This person needs a reason.",
+      "fix": "Write why."
+    },
+    "STALE": {
+      "message": "This changed meanwhile.",
+      "fix": "Go back and read it again."
+    },
+    "OTHER_KIND": {
+      "message": "This station does not do this kind of work.",
+      "fix": "Go back and pick a station of the operation's kind of work."
+    }
+  }
+}

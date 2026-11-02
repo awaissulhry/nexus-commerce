@@ -4,6 +4,7 @@ import type { LiveState } from '../../_shared/hooks'
 import type { Phrase, ProductionCan, RecordTab, SizeLayer, StepKind } from '../../_shared/model'
 import type { DailyActions, DailyModel } from '../daily/model'
 import type { LabourModel } from '../labour/model'
+import type { SplitActions, SplitModel } from '../every-shift/use-split'
 
 /** SCR-070 … SCR-072 — the work order studio's view model (WorkOrderRecordView draws it and fetches nothing). */
 
@@ -68,6 +69,8 @@ export interface WorkOrderRecordModel {
   daily?: DailyModel
   /** B-W2a-72: the Labour & cost tab (the work order's cost from the ledger; cost grain only). */
   labour?: LabourModel
+  /** B-W2b-59: Split work order (a DRAFT), while its dialog is open. */
+  split?: SplitModel | null
   /** Design cases: what the panels show (the page mounts the live panels instead). */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: a dialog's typed reason, the overview's fields in edit, a draft's grid being edited. */
@@ -84,7 +87,7 @@ export interface WorkOrderRecordActions {
   onRelease?: (overrideReason: string | null) => void
   onMove?: (move: Exclude<StepKind, 'release'>) => void
   onCancel?: (reason: string) => void
-  onSaveDetails?: (details: { dueDate: string | null; priority: number }) => void
+  onSaveDetails?: (details: { dueDate: string | null; priority: number; rush: boolean }) => void
   onSaveSizes?: (grid: Record<string, Record<string, number>>) => void
   onDirty?: (part: 'details' | 'sizes', dirty: boolean) => void
   onSizeLayer?: (layer: SizeLayer) => void
@@ -98,4 +101,7 @@ export interface WorkOrderRecordActions {
   daily?: DailyActions
   /** B-W2a-72: read the Labour & cost tab again. */
   onRetryLabour?: () => void
+  /** B-W2b-59: Split work order. */
+  onOpenSplit?: () => void
+  split?: SplitActions
 }
