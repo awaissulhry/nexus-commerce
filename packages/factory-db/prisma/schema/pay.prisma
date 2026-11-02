@@ -25,9 +25,9 @@
 //   - The payroll provider's file layout (Zucchetti or another) is DATA the tenant uploads (PayrollExportLayout), never a
 //     vendor format in this public code; the generic CSV is a layout row too.
 //
-// Money (plan A1 §2.6): every rate and amount is `@grain wages` (the W0 grain for piece rates and earnings,
-// factory-domain auth/grains; the W2b plan calls it "pay"): HR and the worker only. No floor or partner role reads any
-// table of this file.
+// Money (plan A1 §2.6): every rate and amount is `@grain pay` (the grain B-W2b-34 added for piece rates and earnings,
+// factory-domain auth/grains, `money.pay` in every contract; behind the partner wall of src/ownership.ts): HR and the
+// worker only. No floor or partner role reads any table of this file.
 //
 // Personal data (GDPR arts. 4, 5(1)(c); PLT-207, PLT-209): a row about one person names them by `employeeId` (people.prisma
 // Employee), and the floor sign-in that did the work by `workerId` where the floor is involved; never a name (the name
@@ -41,7 +41,7 @@
 // fixed by more than one kind of record (an attendance day, a clock correction); wave 7 is not on main yet.
 //
 // Who sees what (ownership/pay.json): the office reads and writes (the API asks the people permissions of B-W2b-34,
-// -38, -43, -54 and the wages grain); the floor, portal, link and platform sessions read nothing here: a worker's reading
+// -38, -43, -54 and the pay grain); the floor, portal, link and platform sessions read nothing here: a worker's reading
 // of the rates on the tablet, their own earnings and statement go through the API in the tenant's system scope once the
 // floor session is checked (B-W2b-34, B-W2b-68), never through the floor role's grants. EarningsEntry and
 // RateAcknowledgement are append-only. Nothing else is deleted but a DRAFT rate version's entries, a DRAFT rate version
@@ -170,10 +170,10 @@ model PieceRateEntry {
   /// The standard minutes per piece: required (above 0) for SMV_RATE, optional for FIXED.
   standardMinutes Decimal?        @db.Decimal(10, 3)
   /// SMV_RATE only: the pay of one standard minute, 0 or more.
-  /// @grain wages
+  /// @grain pay
   ratePerMinute   Decimal?        @db.Decimal(18, 6)
   /// The pay of one piece, 0 or more, in the table's currency (SMV_RATE: standardMinutes × ratePerMinute, rounded).
-  /// @grain wages
+  /// @grain pay
   ratePerPiece    Decimal         @db.Decimal(18, 6)
   note            String?
   version         Int             @default(1)
@@ -319,10 +319,10 @@ model IncentiveScheme {
   /// Where the guaranteed pay comes from, and its rate per hour present (both before ACTIVE): the make-up (MES-257)
   /// tops a period's piece pay up to it.
   guaranteedBasis        GuaranteedPayBasis    @default(UNDECIDED)
-  /// @grain wages
+  /// @grain pay
   guaranteedHourlyRate   Decimal?              @db.Decimal(18, 6)
   /// A trainee's guaranteed rate per hour, when trainees have their own.
-  /// @grain wages
+  /// @grain pay
   traineeHourlyRate      Decimal?              @db.Decimal(18, 6)
   /// TEAM_INCENTIVE: how a team's earnings are split among its members (MES-259).
   teamSplit              TeamSplitBasis?
@@ -525,9 +525,9 @@ enum PayPeriodStatus {
 }
 
 /// One line of the earnings ledger (MES-256; design "Earnings ledger"): a worker's pay for one scan (SCAN), their share
-/// of a team's scan (TEAM_SPLIT), the period's make-up to guaranteed pay (MAKE_UP), paid time off standard such as
-/// waiting (OFF_STANDARD, MES-148), or an adjustment with its reason; in the pay period it is paid in, dated by the day
-/// of the work. Never changed or removed (the …_pay_w2b_guards triggers, for every login): a correction is a reversal
+/// of a team's scan (TEAM_SPLIT), the period's make-up to guaranteed pay (MAKE_UP), the period's standard-minute bonus
+/// (BONUS, MES-253), paid time off standard such as waiting (OFF_STANDARD, MES-148), or an adjustment with its reason; in
+/// the pay period it is paid in, dated by the day of the work. Never changed or removed (the …_pay_w2b_guards triggers, for every login): a correction is a reversal
 /// (`reversalOfId`, the opposite amount, at most one) and a new entry; work of a LOCKED period is paid in a later one that
 /// names it (`correctsPeriodId`). One entry per event (`idempotencyKey`, unique: `scan:<scanId>`, `team:<scanId>:<worker>`,
 /// `makeup:<periodId>:<worker>`, `offstd:<id>` …). A held scan never pays until it is counted; a piece-pay figure is
@@ -551,17 +551,18 @@ model EarningsEntry {
   operationScanId  String?      @db.Uuid
   /// SCAN, TEAM_SPLIT: the rate it was paid at (a published version in force on the work day, the scan's operation).
   rateEntryId      String?      @db.Uuid
-  /// SCAN, TEAM_SPLIT: the pieces paid; MAKE_UP, OFF_STANDARD: the minutes paid. A reversal: the opposite.
+  /// SCAN, TEAM_SPLIT: the pieces paid; MAKE_UP, OFF_STANDARD: the minutes paid; BONUS: the standard minutes earned
+  /// above the threshold. A reversal: the opposite.
   pieces           Int?
   minutes          Decimal?     @db.Decimal(10, 3)
-  /// The rate applied: per piece (SCAN, TEAM_SPLIT) or per minute (MAKE_UP, OFF_STANDARD).
-  /// @grain wages
+  /// The rate applied: per piece (SCAN, TEAM_SPLIT) or per minute (MAKE_UP, OFF_STANDARD; BONUS, when one applies).
+  /// @grain pay
   rate             Decimal?     @db.Decimal(18, 6)
   /// TEAM_SPLIT: the worker's share of the team's pay for the scan, percent (above 0, at most 100).
   sharePct         Decimal?     @db.Decimal(7, 4)
-  /// Minor units of `currency`: 0 or more for a SCAN, TEAM_SPLIT, MAKE_UP or OFF_STANDARD entry; any sign for an
+  /// Minor units of `currency`: 0 or more for a SCAN, TEAM_SPLIT, MAKE_UP, OFF_STANDARD or BONUS entry; any sign for an
   /// ADJUSTMENT; the opposite of the entry a reversal reverses.
-  /// @grain wages
+  /// @grain pay
   amount           Int
   /// ISO 4217.
   currency         String       @default("EUR")
@@ -614,6 +615,8 @@ enum EarningsKind {
   OFF_STANDARD
   /// A correction typed by HR, with its reason.
   ADJUSTMENT
+  /// A STANDARD_MINUTE_BONUS scheme's bonus for the period: the standard minutes earned above the threshold (MES-253).
+  BONUS
 }
 
 /// A scan held because the worker was not clocked in when they took it (MES-264; design "Held scans"): it pays nothing
@@ -698,12 +701,12 @@ model WorkerStatement {
   status         WorkerStatementStatus @default(DRAFT)
   /// The statement's lines: [{ operationCode, operationName, pieces, minutes, rate, amount }] and the make-up, held scans
   /// and disputes; required to approve.
-  /// @grain wages
+  /// @grain pay
   summary        Json?
   /// Minor units of `currency`: the period's earnings (any sign: corrections) and make-up (0 or more); required to approve.
-  /// @grain wages
+  /// @grain pay
   earningsAmount Int?
-  /// @grain wages
+  /// @grain pay
   makeUpAmount   Int?
   /// ISO 4217.
   currency       String                @default("EUR")
@@ -752,6 +755,13 @@ model PayrollExportLayout {
   /// "decimalSeparator"?, "dateFormat"?, "encoding"?, "headerRow"? }: at least one column, each with a key; FIXED_WIDTH:
   /// each with a whole width above 0.
   definition  Json
+  /// The confirmation that a provider layout matches the consultant's sample (GATE-PAYROLL; design "The consultant's
+  /// confirmation"): the day, the office user who recorded it, and the name the consultant goes by (someone outside
+  /// Nexus, so a name and no id). A day exactly with who; B-W2b-54 keeps it in `definition.confirmation` until B-W2b-89
+  /// moves it here. A new record of the layout takes it away (the API's rule).
+  confirmedOn     DateTime? @db.Date
+  confirmedById   String?   @db.Uuid
+  confirmedByName String?
   status      MasterStatus      @default(ACTIVE)
   note        String?
   version     Int               @default(1)
@@ -808,9 +818,12 @@ model PayrollExport {
   /// The checks before export (design "2 · Checks"): [{ "code": "EMPLOYEE_CODES", "blocking": true, "passed": true,
   /// "count"?: 0 }]; to export, every blocking one passed (a warning may stand).
   checks         Json                @default("[]")
+  /// The corrections of closed days it carried (time.prisma AttendanceCorrection ids, no foreign key: a list inside one
+  /// record, frozen with the export). B-W2b-54 keeps them in the CARRIED row of `checks` until B-W2b-89 moves them here.
+  correctionsCarried String[]          @default([]) @db.Uuid
   /// The values it sends, per employee code (design "4 · Preview"; a correction shows from → to against them):
   /// [{ "employeeCode": "…", "code": "ORD", "quantity"?: "…", "amount"?: 0 }].
-  /// @grain wages
+  /// @grain pay
   values         Json                @default("[]")
   /// Set exactly from EXPORTED on: who made it, and when.
   exportedAt     DateTime?           @db.Timestamptz(3)

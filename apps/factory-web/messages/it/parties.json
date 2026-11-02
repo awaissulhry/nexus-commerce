@@ -37,7 +37,8 @@
     "BRAND": "Marchio",
     "SUPPLIER": "Fornitore",
     "SUBCONTRACTOR": "Terzista",
-    "CARRIER": "Corriere"
+    "CARRIER": "Corriere",
+    "CONSULTANT": "Consulente del lavoro"
   },
   "kind": {
     "ORGANISATION": "Azienda",

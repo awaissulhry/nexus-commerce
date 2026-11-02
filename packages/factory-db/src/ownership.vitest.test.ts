@@ -419,6 +419,10 @@ describe('model ownership', () => {
           '  costMinor    Int',
           '  /// @grain margin',
           '  marginMinor  Int',
+          '  /// @grain wages',
+          '  wageMinor    Int',
+          '  /// @grain pay',
+          '  payMinor     Int',
           '  /// For the office only.',
           '  /// @internal',
           '  internalNote String?',
@@ -442,10 +446,12 @@ describe('model ownership', () => {
       },
     })
 
-    it('finds the cost, margin, wages and internal-note columns from the schema markers; prices stay readable', () => {
+    it('finds the cost, margin, wages, pay and internal-note columns from the schema markers; prices stay readable', () => {
       expect(partnerWalledColumns(quotes[0]!)).toEqual([
         { column: 'costMinor', why: 'a cost (@grain cost)' },
         { column: 'marginMinor', why: 'a margin (@grain margin)' },
+        { column: 'wageMinor', why: 'wages (@grain wages)' },
+        { column: 'payMinor', why: 'pay (@grain pay)' },
         { column: 'internalNote', why: 'an internal note (@internal)' },
       ])
     })
@@ -454,9 +460,11 @@ describe('model ownership', () => {
       expect(problems([...loadOwnership(), classify([])], [...loadSchema(), ...quotes])).toEqual([
         'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column costMinor is a cost (@grain cost), behind the partner wall; add it to hiddenColumns',
         'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column marginMinor is a margin (@grain margin), behind the partner wall; add it to hiddenColumns',
+        'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column wageMinor is wages (@grain wages), behind the partner wall; add it to hiddenColumns',
+        'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column payMinor is pay (@grain pay), behind the partner wall; add it to hiddenColumns',
         'ownership/example-quotes.json: ExampleQuote: factory_partner_runtime: column internalNote is an internal note (@internal), behind the partner wall; add it to hiddenColumns',
       ])
-      expect(problems([...loadOwnership(), classify(['costMinor', 'marginMinor', 'internalNote'])], [...loadSchema(), ...quotes])).toEqual([])
+      expect(problems([...loadOwnership(), classify(['costMinor', 'marginMinor', 'wageMinor', 'payMinor', 'internalNote'])], [...loadSchema(), ...quotes])).toEqual([])
     })
 
     it('holds on the real schema: the link note is hidden from the partner role', () => {
