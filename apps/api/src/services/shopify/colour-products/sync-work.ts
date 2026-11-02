@@ -13,6 +13,19 @@ export class ColourSyncBusyError extends WorkspaceScopeError {
   constructor() { super('This colour family is already syncing. Try again when that run ends.') }
 }
 const LEASE_MS = 15 * 60_000 // Renewed before and after each Shopify call; that client times out after 60 seconds.
+const RETRY_MS = 30_000
+/**
+ * Stock that waits for a person (offer-sync.service.ts) does not clear by trying again. Thirteen families retried every
+ * 30 seconds from 2026-10-15: 9 GB a day read and 5.5 GB a day sent (2026-11-02). A person's full sync or size-map save
+ * still runs the family at once.
+ */
+const STOCK_WAIT_RETRY_MS = 60 * 60_000
+const STOCK_WAIT = /\S+: Shopify stock waits: [A-Z_]+\. [^.]*\./g
+
+/** How long a failed sync waits. Any other error in the same run keeps the short wait: it may clear by itself. */
+export function colourRetryDelayMs(error: string) {
+  return error.includes('Shopify stock waits:') && !error.replace(STOCK_WAIT, '').trim() ? STOCK_WAIT_RETRY_MS : RETRY_MS
+}
 const active = new AsyncLocalStorage<ColourClaim>()
 const coordinate = (d: ColourCoordinate) => ({ familyId: d.familyId, channelConnectionId: d.accountId, marketplace: d.marketplace, aliasKey: d.aliasKey ?? '' })
 
@@ -67,7 +80,7 @@ export async function finishColourSync(claim: ColourClaim, done: boolean, error?
   await prisma.$transaction(async tx => {
     // A new edit's deadline and error must never be replaced by an older run's result.
     await tx.shopifyColourSync.updateMany({ where: { id: claim.id, leaseToken: claim.leaseToken, revision: claim.revision },
-      data: done ? { dueAt: null, lastError: null } : error ? { dueAt: new Date(Date.now() + 30_000), lastError: error.slice(0, 2000) } : {} })
+      data: done ? { dueAt: null, lastError: null } : error ? { dueAt: new Date(Date.now() + colourRetryDelayMs(error)), lastError: error.slice(0, 2000) } : {} })
     await tx.shopifyColourSync.updateMany({ where: { id: claim.id, leaseToken: claim.leaseToken }, data: { leaseToken: null, leaseUntil: null } })
   })
 }

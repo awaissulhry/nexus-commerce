@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { planColourProducts } from '@nexus/shared/shopify-colour-products'
 const state = vi.hoisted(() => ({ db: null as any, d: null as any, family: null as any, remote: null as any, sizes: ['S', 'M'], order: ['S', 'M'],
-  calls: [] as string[], stock: [] as string[], failStock: '', lostCreate: false, gone: false, mode: 'live', next: 30, linked: 0, createdPrices: [] as string[] }))
+  calls: [] as string[], stock: [] as string[], failStock: '', failWith: 'stock failed', lostCreate: false, gone: false, mode: 'live', next: 30, linked: 0, createdPrices: [] as string[] }))
 vi.mock('@nexus/database', async original => {
   const { formulaDatabase } = await import('../../../test-support/formula-database.js')
   state.db = await formulaDatabase()
@@ -15,7 +15,7 @@ vi.mock('../admin-client.js', async original => ({ ...await original<any>(), sho
 vi.mock('../offer-sync.service.js', () => ({ syncNativeShopifyOffer: async (item: any) => {
   const refusal = (await import('@nexus/shared/push-lock')).assertPushAllowed(item.channelListing)
   if (refusal) throw new Error(refusal.sentence)
-  if (state.failStock === item.product.sku) throw new Error('stock failed')
+  if (state.failStock === item.product.sku) throw new Error(state.failWith)
   state.stock.push(item.product.sku)
 } }))
 vi.mock('./link.service.js', () => ({ linkColourProducts: async () => { state.linked++; return { link: { written: 0 } } } }))
@@ -54,6 +54,7 @@ import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-conte
 import { syncColourProducts } from './sync.service.js'
 import { startFullColourSync } from './full-sync.service.js'
 import { processColourSyncs, queueColourChecks } from '../../../workers/shopify-colour-sync.worker.js'
+import { colourRetryDelayMs } from './sync-work.js'
 const scoped = <T>(fn: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, fn)
 const rows = () => scoped(() => prisma.channelListing.findMany({ where: { channelConnectionId: state.d.accountId, productId: { not: state.d.familyId } }, include: { product: true }, orderBy: { product: { sku: 'asc' } } }))
 const run = () => scoped(() => syncColourProducts(state.d.familyId, { accountId: state.d.accountId }))
@@ -64,7 +65,7 @@ beforeAll(async () => {
 afterAll(async () => { await state.db?.close() })
 beforeEach(async () => {
   seq++
-  Object.assign(state, { sizes: ['S', 'M'], order: ['S', 'M'], calls: [], stock: [], failStock: '', lostCreate: false, gone: false, mode: 'live', next: 30, linked: 0 })
+  Object.assign(state, { sizes: ['S', 'M'], order: ['S', 'M'], calls: [], stock: [], failStock: '', failWith: 'stock failed', lostCreate: false, gone: false, mode: 'live', next: 30, linked: 0 })
   await scoped(async () => {
     await prisma.shopifyColourSync.deleteMany({})
     await prisma.channelConnection.updateMany({ data: { isActive: false } })
@@ -174,6 +175,33 @@ it('the durable handler retries failed stock after a process stop and clears wor
   expect(await scoped(() => processColourSyncs())).toEqual({ claimed: 1, done: 1, failed: 0 })
   expect(state.stock).toEqual([state.family.variants[1].sku])
   expect((await scoped(() => prisma.shopifyColourSync.findUniqueOrThrow({ where: { id: failed.id } }))).dueAt).toBeNull()
+})
+it('stock that waits for a person retries after an hour, any other failure after 30 seconds', async () => {
+  const failOnce = async (failWith: string) => {
+    await scoped(() => prisma.shopifyColourSync.updateMany({ data: { dueAt: new Date(0), lastError: null } }))
+    Object.assign(state, { failStock: state.family.variants[1].sku, failWith })
+    const before = Date.now()
+    expect(await scoped(() => processColourSyncs())).toEqual({ claimed: 1, done: 0, failed: 1 })
+    const row = await scoped(() => prisma.shopifyColourSync.findFirstOrThrow({ where: { familyId: state.d.familyId } }))
+    return row.dueAt!.getTime() - before
+  }
+  expect(await failOnce("Shopify stock waits: UNCOUNTED. Review the listing's stock controls.")).toBeGreaterThan(59 * 60_000)
+  expect(await failOnce('stock failed')).toBeLessThan(60_000)
+  // The five-minute sweep does not pull the wait forward.
+  await failOnce("Shopify stock waits: UNCOUNTED. No stock location is routed to this listing.")
+  const waiting = await scoped(() => prisma.shopifyColourSync.findFirstOrThrow({ where: { familyId: state.d.familyId } }))
+  await scoped(() => queueColourChecks())
+  expect((await scoped(() => prisma.shopifyColourSync.findFirstOrThrow({ where: { familyId: state.d.familyId } }))).dueAt).toEqual(waiting.dueAt)
+})
+it('only a run where every error is a stock wait gets the long wait', () => {
+  const wait = (sku: string, kind = 'UNCOUNTED') => `${sku}: Shopify stock waits: ${kind}. Review the listing's stock controls.`
+  const hour = colourRetryDelayMs(wait('A-1'))
+  expect(hour).toBe(60 * 60_000)
+  expect(colourRetryDelayMs([wait('A-1'), wait('B-2', 'PAUSED'), wait('C-3', 'FBA_EXCLUDED')].join(' '))).toBe(hour)
+  expect(colourRetryDelayMs('A-1: Shopify stock waits: UNCOUNTED. No stock location is routed to this listing.')).toBe(hour)
+  expect(colourRetryDelayMs(`${wait('A-1')} B-2: stock failed`)).toBe(30_000)
+  expect(colourRetryDelayMs(`B-2: Shopify returned 502 ${wait('A-1')}`)).toBe(30_000)
+  expect(colourRetryDelayMs('A-1: stock failed')).toBe(30_000)
 })
 it('the sweep queues every store and alias without moving an existing debounce deadline', async () => {
   await scoped(async () => {
