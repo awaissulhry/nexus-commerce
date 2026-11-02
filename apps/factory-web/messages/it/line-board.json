@@ -1,0 +1,93 @@
+{
+  "title": "Tabellone della linea {line}",
+  "shift": "Turno: {shift}",
+  "noShift": "Nessun turno ora",
+  "updated": "Aggiornato {time}",
+  "viewOf": "Vista {view} di {count}",
+  "stale": "Non si aggiorna dalle {time}",
+  "output": {
+    "title": "Produzione di oggi",
+    "doneOfTarget": "Fatti / obiettivo della linea oggi",
+    "doneNoTarget": "Fatti oggi · nessun obiettivo impostato",
+    "soFar": "Obiettivo finora: {count}",
+    "hours": "Ora per ora",
+    "noHours": "Nessuna ora lavorativa oggi",
+    "hour": "{hour}: {done} fatti, obiettivo {target}",
+    "hourShort": "{hour}: {done} fatti, obiettivo {target}, sotto obiettivo",
+    "hourNoTarget": "{hour}: {done} fatti, nessun obiettivo",
+    "hourlyTarget": "Obiettivo orario"
+  },
+  "pace": {
+    "ON_PACE": "In linea",
+    "BEHIND": "In ritardo",
+    "NO_TARGET": "Nessun obiettivo"
+  },
+  "stations": {
+    "title": "Postazioni",
+    "none": "Questa linea non ha postazioni",
+    "material": "in attesa di materiale",
+    "state": {
+      "MACHINE_DOWN": "Macchina ferma",
+      "CALLING": "Chiamata",
+      "COMING": "Aiuto in arrivo",
+      "CLEAR": "Tutto ok"
+    }
+  },
+  "wip": {
+    "title": "Lavoro in corso",
+    "bundles_one": "fascio",
+    "bundles_other": "fasci",
+    "stuck_one": "fascio fermo",
+    "stuck_other": "fasci fermi",
+    "none": "Niente in attesa su questa linea",
+    "opBundles_one": "{count} fascio",
+    "opBundles_other": "{count} fasci",
+    "opStuck_one": "{count} fermo",
+    "opStuck_other": "{count} fermi",
+    "pile": "Accumulo"
+  },
+  "quality": {
+    "title": "Qualità",
+    "dhu": "DHU oggi",
+    "none": "Nessun capo finito oggi",
+    "counts_one": "{count} difetto su {units} capi",
+    "counts_other": "{count} difetti su {units} capi"
+  },
+  "note": {
+    "title": "Dal caposquadra",
+    "topic": {
+      "PROBLEMS": "Problemi",
+      "HALF_DONE_BUNDLES": "Fasci a metà",
+      "MACHINES": "Macchine",
+      "MATERIAL": "Materiale",
+      "QUALITY": "Qualità",
+      "OTHER": "Altro"
+    }
+  },
+  "state": {
+    "loading": {
+      "title": "Apertura del tabellone",
+      "body": "Lettura della linea…"
+    },
+    "offline": {
+      "title": "Il tabellone non è raggiungibile",
+      "body": "Continua a riprovare da solo."
+    },
+    "notABoard": {
+      "title": "Questo dispositivo non è un tabellone",
+      "body": "Imposta la modalità Display in Sistema › Dispositivi e stampanti."
+    },
+    "noLine": {
+      "title": "Nessuna linea su questo tabellone",
+      "body": "Scegli la linea di questo schermo in Sistema › Dispositivi e stampanti."
+    },
+    "noAccess": {
+      "title": "Non puoi aprire questo tabellone",
+      "body": "Chiedi a un amministratore l'accesso ai tabelloni di questo sito."
+    },
+    "signedOut": {
+      "title": "Questo schermo non è più configurato",
+      "body": "Registralo di nuovo da Sistema › Dispositivi e stampanti."
+    }
+  }
+}

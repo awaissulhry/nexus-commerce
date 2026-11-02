@@ -7,6 +7,7 @@ import { TARGET_LIMITS } from '@nexus/factory-domain/production/boards/targets'
 import { FLOOR_TONES } from '@nexus/factory-domain/auth/floor/literacy'
 import { STATION_CALL_STATES } from '@nexus/factory-domain/production/calls/rules'
 import { notMoney } from '@nexus/factory-domain/money/marked'
+import { trackedRow } from '../bundles/contract'
 
 /**
  * Line targets and boards' routes (B-W2b-50; MES-084, MES-161, MES-162, MES-166, ANA-007; design production.floor "Hour by
@@ -162,6 +163,12 @@ export const heatmapContract = defineContract({
       capped: z.boolean(),
     }),
   },
+})
+
+/** B-W2b-66: the bundles behind one cell of the map (design production.floor pop:fn-cell): no lineId is the row of no line. */
+export const heatCellContract = defineContract({
+  querystring: input({ siteId: id(), lineId: id().optional(), code: z.string().trim().min(1).max(60) }),
+  response: { 200: output({ asOf: z.string(), bundles: z.array(trackedRow), capped: z.boolean() }) },
 })
 
 // ---- the line TV board (ANA-007, MES-166) ----------------------------------------------------------------------------------

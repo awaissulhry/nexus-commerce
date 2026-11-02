@@ -1,0 +1,93 @@
+{
+  "title": "Line board {line}",
+  "shift": "Shift: {shift}",
+  "noShift": "No shift now",
+  "updated": "Updated {time}",
+  "viewOf": "View {view} of {count}",
+  "stale": "Not updating since {time}",
+  "output": {
+    "title": "Output today",
+    "doneOfTarget": "Done / line target today",
+    "doneNoTarget": "Done today · no target set",
+    "soFar": "Target so far: {count}",
+    "hours": "Hour by hour",
+    "noHours": "No working hours today",
+    "hour": "{hour}: {done} done, target {target}",
+    "hourShort": "{hour}: {done} done, target {target}, short",
+    "hourNoTarget": "{hour}: {done} done, no target",
+    "hourlyTarget": "Hourly target"
+  },
+  "pace": {
+    "ON_PACE": "On pace",
+    "BEHIND": "Behind",
+    "NO_TARGET": "No target"
+  },
+  "stations": {
+    "title": "Stations",
+    "none": "This line has no stations",
+    "material": "waiting for material",
+    "state": {
+      "MACHINE_DOWN": "Machine down",
+      "CALLING": "Calling",
+      "COMING": "Help on the way",
+      "CLEAR": "Clear"
+    }
+  },
+  "wip": {
+    "title": "Work in progress",
+    "bundles_one": "bundle",
+    "bundles_other": "bundles",
+    "stuck_one": "stuck bundle",
+    "stuck_other": "stuck bundles",
+    "none": "Nothing waiting on this line",
+    "opBundles_one": "{count} bundle",
+    "opBundles_other": "{count} bundles",
+    "opStuck_one": "{count} stuck",
+    "opStuck_other": "{count} stuck",
+    "pile": "Pile"
+  },
+  "quality": {
+    "title": "Quality",
+    "dhu": "DHU today",
+    "none": "No garment finished yet today",
+    "counts_one": "{count} defect in {units} garments",
+    "counts_other": "{count} defects in {units} garments"
+  },
+  "note": {
+    "title": "From the team leader",
+    "topic": {
+      "PROBLEMS": "Problems",
+      "HALF_DONE_BUNDLES": "Half-done bundles",
+      "MACHINES": "Machines",
+      "MATERIAL": "Material",
+      "QUALITY": "Quality",
+      "OTHER": "Other"
+    }
+  },
+  "state": {
+    "loading": {
+      "title": "Opening the line board",
+      "body": "Reading the line…"
+    },
+    "offline": {
+      "title": "The line board is not reachable",
+      "body": "It keeps trying by itself."
+    },
+    "notABoard": {
+      "title": "This device is not a line board",
+      "body": "Set its mode to Display in Admin › Devices & printers."
+    },
+    "noLine": {
+      "title": "No line on this board",
+      "body": "Choose the line this screen shows in Admin › Devices & printers."
+    },
+    "noAccess": {
+      "title": "You cannot open this line board",
+      "body": "Ask an administrator for access to the line boards at this site."
+    },
+    "signedOut": {
+      "title": "This screen is no longer set up",
+      "body": "Enrol it again from Admin › Devices & printers."
+    }
+  }
+}

@@ -68,7 +68,7 @@ function rowView(row: Tracked, stations: Awaited<ReturnType<typeof stationsOf>>,
   }
 }
 
-async function rowsOf(db: Reader, rows: readonly Tracked[]) {
+export async function rowsOf(db: Reader, rows: readonly Tracked[]) {
   const stations = await stationsOf(db, rows.map((row) => row.lastScan?.stationId ?? null))
   const hides = await hidesOf(db, [...new Set(rows.flatMap((row) => row.bundle.cutLogIds))])
   return rows.map((row) => rowView(row, stations, hides))

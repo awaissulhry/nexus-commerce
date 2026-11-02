@@ -65,6 +65,9 @@ export const lineCardSchema = z.object({
   output: z.number(),
   outputPct: z.number().nullable(),
   bottleneck: z.object({ workOrderId: z.string(), workOrderNumber: z.string(), operationId: z.string(), seq: z.number(), code: z.string(), name: z.string(), waiting: z.number() }).nullable(),
+  // B-W2b-66: the open help calls, and the people absent: a number only (null: attendance is off, or the line is too small).
+  openCalls: z.number(),
+  absent: z.number().nullable(),
   stations: z.array(z.object({ id: z.string(), code: z.string(), name: z.string(), signedIn: z.boolean(), machinesDown: z.array(z.object({ assetNumber: z.string(), status: z.enum(MACHINE_DOWN) })) })),
 })
 export type LineCard = z.infer<typeof lineCardSchema>

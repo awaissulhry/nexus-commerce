@@ -9,7 +9,7 @@ import { laneKey } from '@nexus/factory-domain/production/reports/daily'
 import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
 import { BUNDLE_COLUMNS } from '../bundles/store'
 import { MAX_TRACKED } from '../bundles/tracked'
-import { stationsOf, stuckLimitsOf, trackBundles } from '../bundles/track'
+import { stationsOf, stuckLimitsOf, trackBundles, type Tracked } from '../bundles/track'
 import { readDaily, type ReportSite } from '../reports/daily'
 import { downtimeReasons, reasonWordsOf, targetsOf, type LineRow, type Reader, type ReasonRow, type TargetRow } from './store'
 
@@ -129,8 +129,13 @@ export const totalsView = (totals: DayTotals) => ({ ...totals, paceLook: PACE_LO
 
 // ---- the bundles waiting (the heat map, the TV's WIP) ---------------------------------------------------------------------
 
+/** A waiting bundle with its tracked row (B-W2b-66: the bundles behind one cell of the map). */
+export interface WaitingRow extends WaitingBundle {
+  readonly tracked: Tracked
+}
+
 export interface Waiting {
-  readonly waiting: readonly WaitingBundle[]
+  readonly waiting: readonly WaitingRow[]
   readonly capped: boolean
   readonly stuckLimitHours: number
 }
@@ -154,12 +159,12 @@ export async function waitingOfSite(db: Reader, siteId: string, now: Date, lineI
   const allocated = new Map(
     (await db.workOrder.findMany({ where: { id: { in: unique(tracked.map((row) => row.workOrder.id)) } }, select: { id: true, lineId: true } })).map((row) => [row.id, row.lineId]),
   )
-  const waiting: WaitingBundle[] = []
+  const waiting: WaitingRow[] = []
   for (const row of tracked) {
     const next = row.place.next
     if ((row.place.place !== 'LINE' && row.place.place !== 'CUTTING') || !next) continue
     const scannedOn = row.lastScan?.stationId ? (stations.get(row.lastScan.stationId)?.lineId ?? null) : null
-    waiting.push({ lineId: scannedOn ?? allocated.get(row.workOrder.id) ?? null, operation: { code: next.code, name: next.name, seq: next.seq }, pieces: row.bundle.quantity, stuck: row.stuck.stuck })
+    waiting.push({ lineId: scannedOn ?? allocated.get(row.workOrder.id) ?? null, operation: { code: next.code, name: next.name, seq: next.seq }, pieces: row.bundle.quantity, stuck: row.stuck.stuck, tracked: row })
   }
   const limit = (await stuckLimitsOf(db, [siteId])).get(siteId)!
   return { waiting, capped: rows.length > MAX_TRACKED, stuckLimitHours: limit }

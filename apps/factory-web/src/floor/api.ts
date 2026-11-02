@@ -31,6 +31,8 @@ export const deviceInfoSchema = z.object({
   signIn: z.object({ badgeOnly: z.boolean() }),
   operatorSignedIn: z.boolean(),
   roster: z.array(workerRef),
+  // B-W2b-66: where the device goes first (B-W2b-52's mode rules); LINE_BOARD opens the line TV.
+  rules: z.object({ landing: z.string() }).optional(),
 })
 export type DeviceInfo = z.infer<typeof deviceInfoSchema>
 

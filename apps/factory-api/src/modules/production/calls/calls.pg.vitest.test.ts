@@ -81,6 +81,7 @@ const RESPONDER: Permission[] = ['floor.work', 'floor.lead', 'production.calls.v
 const SESSIONS: Record<string, SessionContext> = {
   manager: office(A.tenant, [grant(ALL)], A.actor),
   viewer: office(A.tenant, [grant(['production.calls.view'])]),
+  floorNow: office(A.tenant, [grant(['workorders.view'])]),
   companyB: office(A.tenant, [grant(ALL, [A.companyB])]),
   otherTenant: office(B.tenant, [grant(ALL)]),
   operator: floorAt(A.sewTablet, A.operator, ['floor.work']),
@@ -295,6 +296,8 @@ describe('the line view and the line TV (MES-147)', () => {
     expect(board.canAnswer).toBe(true)
     expect(keysOf(board).filter((key) => PERSON_KEYS.test(key))).toEqual([])
     expect((await ok('manager', 'GET', `/production/calls/board?lineId=${A.lineL1}`)).stations).toHaveLength(2)
+    // B-W2b-66: Floor now's line card counts the same open calls.
+    expect((await ok('floorNow', 'GET', `/production/reports/lines?siteId=${A.siteA1}`)).lines.find((line: Json) => line.id === A.lineL1).openCalls).toBe(board.calls.length)
     expect((await call('manager', 'GET', '/production/calls/board')).statusCode).toBe(400)
     expect((await call('operator', 'GET', '/production/calls/board')).statusCode).toBe(403)
   })
