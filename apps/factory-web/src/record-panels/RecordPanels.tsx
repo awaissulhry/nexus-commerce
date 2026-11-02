@@ -569,7 +569,7 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
 
   const panelTimeline: PanelTimelineEntry[] | null =
     timeline.items?.map((entry): PanelTimelineEntry => {
-      if (entry.kind === 'message') return { kind: 'message', id: entry.id, at: entry.at, direction: entry.direction, channel: entry.channel, authorName: entry.author.name, excerpt: entry.excerpt, attachmentCount: entry.attachmentCount }
+      if (entry.kind === 'message') return { kind: 'message', id: entry.id, at: entry.at, direction: entry.direction, channel: entry.channel, authorName: entry.author.name, authorHidden: entry.authorHidden, excerpt: entry.excerpt, attachmentCount: entry.attachmentCount }
       if (entry.kind === 'file') return { kind: 'file', id: entry.id, at: entry.at, name: entry.originalName, fileKind: entry.fileKind, status: entry.status, visibility: entry.visibility }
       const before = entry.before ?? null
       const after = entry.after ?? null
@@ -578,8 +578,9 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
         id: entry.id,
         at: entry.at,
         action: entry.action,
-        actorName: names.get(entry.actor.id) ?? null,
+        actorName: entry.actor.id ? (names.get(entry.actor.id) ?? null) : null,
         actorAudience: entry.actor.audience,
+        actorHidden: entry.actorHidden,
         status: entry.status,
         fields: entry.fields,
         values: before === null && after === null ? null : { before, after },

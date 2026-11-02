@@ -60,7 +60,7 @@ function stepOf(entry: PanelTimelineEntry, t: Translate, locale: Locale, model: 
   const when = <time dateTime={entry.at}>{formatDateTime(entry.at, { locale })}</time>
   const party = model.party?.name || t('message.theParty')
   if (entry.kind === 'message') {
-    const who = entry.authorName ?? t('message.author.SYSTEM')
+    const who = entry.authorHidden ? t('history.person') : (entry.authorName ?? t('message.author.SYSTEM'))
     const label =
       entry.direction === 'INTERNAL_NOTE'
         ? t('history.message.note', { who })
@@ -94,7 +94,7 @@ function stepOf(entry: PanelTimelineEntry, t: Translate, locale: Locale, model: 
       ),
     }
   }
-  const who = entry.actorName ?? t(`history.actor.${entry.actorAudience}`)
+  const who = entry.actorHidden ? t('history.person') : (entry.actorName ?? t(`history.actor.${entry.actorAudience}`))
   // The status move has its own line: it is not repeated among the values.
   const values = changedValues(entry).filter((value) => !(entry.status && value.field === 'status'))
   return {

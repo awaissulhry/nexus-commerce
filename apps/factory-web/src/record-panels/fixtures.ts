@@ -305,6 +305,21 @@ export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
       model: { ...base, tab: 'history', timelineFilter: 'change', timeline: { items: TIMELINE.filter((entry) => entry.kind === 'change'), more: true } },
     },
     {
+      id: 'history-person',
+      label: "History: the site's legal gate keeps back a floor worker, the row says a person did it (B-W2b-F4)",
+      model: {
+        ...base,
+        tab: 'history',
+        timeline: {
+          items: [
+            { kind: 'message', id: mid(10), at: at(28, 9, 15), direction: 'INTERNAL_NOTE', channel: 'APP', authorName: null, authorHidden: true, excerpt: 'Pelle segnata al taglio, avvisare il capo reparto.', attachmentCount: 0 },
+            { kind: 'change', id: '0190f0e2-9999-7000-8000-000000000004', at: at(28, 9), action: 'production.tickChecklistStep', actorName: null, actorAudience: 'FLOOR', actorHidden: true, status: null, fields: ['stepId'], values: null, reason: null },
+          ],
+          more: false,
+        },
+      },
+    },
+    {
       id: 'note-added',
       label: 'Note added',
       model: { ...base, notice: { key: 'notice.noteAdded', tone: 'success' } },

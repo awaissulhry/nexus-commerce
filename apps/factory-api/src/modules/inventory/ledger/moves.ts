@@ -1,4 +1,4 @@
-import type { Prisma, StockMoveReason, Uom } from '@nexus/factory-db'
+import type { FactoryClient, Prisma, StockMoveReason, Uom } from '@nexus/factory-db'
 import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
@@ -11,6 +11,7 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import { ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import { workerGatesFor } from '../../people/privacy/worker-gate'
 import { mayAt, officeContextOf, seesCost, siteFor, stockContextOf } from './access'
 import type { MoveView } from './contract'
 import { completeKeys, LEDGER_SELECT, lockStock, postMoves, readBalances, type MoveDraft, type PostedMove } from './post-moves'
@@ -282,12 +283,21 @@ const LIST_SELECT = {
   reversals: { select: { id: true } },
 } as const satisfies Prisma.StockMoveSelect
 
+/** "Who posted them", as the gate allows: a worker's floor moves answer only where the site's PERFORMANCE gate is open, or the filter would say what the list keeps back. */
+async function authorWhere(db: FactoryClient, createdById: string): Promise<Prisma.StockMoveWhereInput> {
+  const sites = (await db.stockMove.findMany({ where: { createdById, deviceId: { not: null } }, distinct: ['siteId'], select: { siteId: true } })).map((row) => row.siteId)
+  const gates = await workerGatesFor(db, sites)
+  return { createdById, OR: [{ deviceId: null }, { siteId: { in: sites.filter((siteId) => gates.at(siteId).open) } }] }
+}
+
 /**
  * The moves the caller may see (its companies and sites), newest first (by id: UUIDv7, the posting order), with the
- * filters of SCR-064; their values only for a caller with the cost grain (read only then).
+ * filters of SCR-064; their values only for a caller with the cost grain (read only then). A floor move's author is a
+ * worker: behind the site's PERFORMANCE gate (B-W2b-F4, `createdByHidden`), each site's gate read once.
  */
 export async function listMoves(caller: CommandCaller, query: ListMovesQuery) {
   const context = officeContextOf(caller)
+  const author = query.createdById ? await caller.withClient((client) => authorWhere(client, query.createdById!)) : {}
   const where: Prisma.StockMoveWhereInput = {
     AND: [
       scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.StockMoveWhereInput,
@@ -298,7 +308,7 @@ export async function listMoves(caller: CommandCaller, query: ListMovesQuery) {
       query.hideId ? { hideId: query.hideId } : {},
       query.locationId ? { OR: [{ fromLocationId: query.locationId }, { toLocationId: query.locationId }] } : {},
       query.reason ? { reason: query.reason } : {},
-      query.createdById ? { createdById: query.createdById } : {},
+      author,
       query.from ? { occurredAt: { gte: parseInstant(query.from)! } } : {},
       query.to ? { occurredAt: { lt: parseInstant(query.to)! } } : {},
       query.cursor ? { id: { lt: query.cursor } } : {},
@@ -306,6 +316,7 @@ export async function listMoves(caller: CommandCaller, query: ListMovesQuery) {
   }
   const rows = await caller.withClient((client) => client.stockMove.findMany({ where, select: LIST_SELECT, orderBy: { id: 'desc' }, take: query.limit + 1 }))
   const page = rows.slice(0, query.limit)
+  const gates = await caller.withClient((client) => workerGatesFor(client, page.filter((row) => row.deviceId !== null).map((row) => row.siteId)))
   const withCost = seesCost(context)
   const valuations = withCost && page.length > 0
     ? new Map(
@@ -319,6 +330,7 @@ export async function listMoves(caller: CommandCaller, query: ListMovesQuery) {
   return {
     moves: page.map((row) => {
       const valuation = valuations.get(row.id)
+      const author = gates.at(row.siteId).author(row.createdById, row.deviceId !== null)
       return {
         id: row.id,
         companyId: row.companyId,
@@ -348,7 +360,8 @@ export async function listMoves(caller: CommandCaller, query: ListMovesQuery) {
         toLocation: row.toLocation,
         reversedById: row.reversals[0]?.id ?? null,
         createdAt: toUtcIso(row.createdAt),
-        createdById: row.createdById,
+        createdById: author.id,
+        createdByHidden: author.hidden,
         deviceId: row.deviceId,
         ...(withCost
           ? {

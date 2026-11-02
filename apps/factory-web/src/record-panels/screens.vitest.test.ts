@@ -137,4 +137,15 @@ describe('every design case draws in both languages with no key left on screen',
     expect(html).toContain('Internal note')
     expect(html).toContain('Email to Marchio Demo S.r.l.')
   })
+
+  it('a worker the legal gate keeps back is a person in the history, in both languages (B-W2b-F4)', () => {
+    const model = panelsScreen.cases.find((item) => item.id === 'history-person')!.model
+    const en = render(panelsScreen as DesignScreen<unknown>, model, 'en')
+    expect(en).toContain('A person added an internal note')
+    expect(en).toContain('A person:')
+    expect(en).not.toContain('Nexus Factory added')
+    const it_ = render(panelsScreen as DesignScreen<unknown>, model, 'it')
+    expect(it_).toContain('Una persona ha aggiunto una nota interna')
+    expect(it_).toContain('Una persona:')
+  })
 })
