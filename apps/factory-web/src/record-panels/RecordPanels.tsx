@@ -27,6 +27,7 @@ import { useLiveChanges } from './live'
 import {
   contentTypeOf,
   liveParts,
+  noteReachesFloor,
   parseAddresses,
   uploadProblem,
   type ComposerDraft,
@@ -319,7 +320,7 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     try {
       if (draft.mode === 'note') await postNote(api, key, { body: draft.body, mentions: draft.mentions, attachments: draft.attachments })
       else await sendEmail(api, key, { to: parseAddresses(draft.to).valid, subject: draft.subject.trim() || undefined, body: draft.body, attachments: draft.attachments })
-      setNotice({ key: draft.mode === 'note' ? 'notice.noteAdded' : 'notice.emailQueued', tone: 'success' })
+      setNotice({ key: draft.mode === 'note' ? (noteReachesFloor(record.type) ? 'notice.noteAddedFloor' : 'notice.noteAdded') : 'notice.emailQueued', tone: 'success' })
       void loadThread()
       void loadEmails()
       void loadTimeline()

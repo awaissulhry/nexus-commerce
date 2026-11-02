@@ -8,18 +8,19 @@
   "status": {
     "station": "{station}",
     "plan": "piano v{number}",
-    "asOf": "aggiornato alle {time}"
+    "asOf": "aggiornato alle {time}",
+    "person": "Il mio elenco"
   },
   "fromTablet": "Da questo tablet",
-  "changed": "Elenco cambiato · Mostra",
   "upcoming": "Nuovo piano v{number} dalle {time}",
   "next": {
     "title": "Prossimo",
-    "type": "Prossimo",
+    "type": "Ordine",
     "none": {
       "title": "Ancora niente di pronto",
       "body": "Ogni lavoro qui aspetta qualcosa: il perché è nell'elenco. Scansiona un fascio per lavorarlo."
-    }
+    },
+    "current": "In corso"
   },
   "then": {
     "title": "Poi",
@@ -53,18 +54,26 @@
   "waitingHere_other": "{count} pezzi qui",
   "scanToStart": "Scansiona il fascio per iniziarlo.",
   "fact": {
-    "style": "Modello",
     "due": "Consegna",
     "planned": "Previsto per",
-    "waiting": "In attesa qui"
+    "waiting": "In attesa qui",
+    "station": "Postazione"
   },
   "cantFind": {
     "open": "Non lo trovo",
     "title": "Non lo trovi?",
-    "body": "Mettilo in fondo e passa al prossimo, oppure chiedi aiuto.",
+    "body": "Chiedi aiuto, oppure mettilo in fondo e vai avanti con il prossimo.",
     "help": "Chiedi aiuto: materiale",
-    "helpHeld": "La chiamata di aiuto arriva con un prossimo aggiornamento: chiedi al tuo capo reparto.",
-    "putLast": "Metti in fondo"
+    "putLast": "Metti in fondo",
+    "held": {
+      "reading": "Sto controllando chi chiamare…",
+      "offline": "Questo tablet è senza rete e non sa ancora chi chiamare: chiedi al capo squadra.",
+      "failed": "L'ufficio non risponde, quindi da qui non si può chiamare nessuno: chiedi al capo squadra.",
+      "noStation": "Una chiamata parte da una postazione e questo tablet non ne ha una: chiedi al capo squadra.",
+      "noType": "Questo stabilimento non ha ancora una chiamata per il materiale: la imposta l'ufficio (Produzione › Regole di reparto).",
+      "open": "C'è già una chiamata per il materiale aperta a questa postazione: qualcuno è stato avvisato.",
+      "waiting": "La tua chiamata per il materiale è salvata su questo tablet: parte quando torna la rete."
+    }
   },
   "putLast": {
     "done": "Fatto",
@@ -98,6 +107,10 @@
     "allDone": {
       "title": "Tutto il previsto qui è fatto",
       "body": "Scansiona un fascio per lavorarlo."
+    },
+    "warehouse": {
+      "title": "Qui non c'è ancora l'elenco dei compiti di magazzino",
+      "body": "Arriva con il prelievo e la messa a stock. Lavora dai riquadri della Home. Se questo tablet appartiene a una postazione, lo colloca l'ufficio (Sistema › Dispositivi e stampanti)."
     }
   },
   "noPermission": {
@@ -106,6 +119,62 @@
   },
   "keys": {
     "rows": "Passa da un lavoro all'altro",
-    "open": "Apri il lavoro selezionato"
+    "open": "Apri il lavoro selezionato",
+    "messages": "Spostati tra i messaggi",
+    "openMessage": "Apri il messaggio selezionato"
+  },
+  "material": {
+    "IN_STOCK": "Materiale disponibile",
+    "ON_THE_WAY": "Materiale in arrivo",
+    "MISSING": "Materiale mancante",
+    "NOT_KNOWN": "Materiale non noto",
+    "card": {
+      "IN_STOCK": "Materiale di quest'ordine: disponibile",
+      "ON_THE_WAY": "Materiale di quest'ordine: in arrivo",
+      "MISSING": "Materiale di quest'ordine: manca qualcosa",
+      "NOT_KNOWN": "Materiale di quest'ordine: non noto",
+      "expected": "Materiale di quest'ordine: in arrivo, previsto il {date}"
+    }
+  },
+  "foryou": {
+    "title": "Per il tuo lavoro",
+    "messages": "Messaggi",
+    "messagesCount_one": "{count} messaggio da leggere",
+    "messagesCount_other": "{count} messaggi da leggere",
+    "failed": "Non è stato possibile leggere i messaggi. Compaiono qui quando l'ufficio risponde."
+  },
+  "messages": {
+    "title": "Messaggi sui tuoi ordini",
+    "unread": "Nuovo",
+    "read": "Letto",
+    "count_one": "{count} messaggio",
+    "count_other": "{count} messaggi",
+    "fromTablet": "Da questo tablet, aggiornato alle {time}",
+    "none": {
+      "title": "Nessun messaggio aperto",
+      "body": "Torna al tuo lavoro."
+    }
+  },
+  "message": {
+    "kind": "Messaggio su",
+    "at": "Scritto",
+    "from": {
+      "OFFICE": "Dall'ufficio",
+      "FLOOR": "Da un'altra postazione"
+    },
+    "cut": "Il resto del messaggio è in ufficio.",
+    "gone": {
+      "title": "Questo messaggio non è più aperto",
+      "body": "Torna all'elenco."
+    }
+  },
+  "call": {
+    "said": "Aiuto chiamato: materiale per {number} · Op {seq}.",
+    "refused": "La chiamata per il materiale di {number} · Op {seq} non è partita: chiedi al capo squadra.",
+    "refusal": {
+      "NO_STATION": "La chiamata per il materiale non è partita: questo tablet non ha una postazione.",
+      "OTHER_STATION": "La chiamata per il materiale non è partita: solo un capo squadra chiama per un'altra postazione.",
+      "TYPE_INACTIVE": "La chiamata per il materiale non è partita: l'ufficio l'ha disattivata. Chiedi al capo squadra."
+    }
   }
 }

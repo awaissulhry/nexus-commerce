@@ -12,6 +12,7 @@ import {
   contentTypeOf,
   fileGroups,
   liveParts,
+  noteReachesFloor,
   MAX_BODY_LENGTH,
   parseAddresses,
   retentionFacts,
@@ -214,5 +215,12 @@ describe('live refresh: only this record, only the parts that changed', () => {
     expect(liveParts({ type: 'thread.message_posted', fields: { recordType: 'Certificate', recordId: 'r2' } }, record)).toEqual([])
     expect(liveParts({ type: 'thread.message_posted', fields: { recordType: 'Quote', recordId: 'r1' } }, record)).toEqual([])
     expect(liveParts({ type: 'email.inbound_sorted', fields: { recordType: 'Certificate', recordId: 'r1' } }, record)).toEqual([])
+  })
+})
+
+describe('who an internal note reaches (B-W2b-71)', () => {
+  it("a work order's notes reach the tablets working on it; every other record's stay in the office", () => {
+    expect(noteReachesFloor('WorkOrder')).toBe(true)
+    expect(noteReachesFloor('Quote')).toBe(false)
   })
 })

@@ -199,8 +199,11 @@ function floorOf(caller: CommandCaller): FloorContext {
   return context
 }
 
-/** GET /production/dispatch/station (floor, floor.work): the device's own station's list, in the floor's scope. */
-export async function stationDispatch(caller: CommandCaller) {
+/**
+ * GET /production/dispatch/station (floor, floor.work): the device's own station's list, in the floor's scope. Whoever needs
+ * only its work orders (B-W2b-71, the tablet's messages) leaves the material flag out: it nets the site's plan.
+ */
+export async function stationDispatch(caller: CommandCaller, options: { readonly material?: boolean } = {}) {
   const context = floorOf(caller)
   const now = serverClock.now()
   return caller.withClient(async (db) => {
@@ -220,6 +223,6 @@ export async function stationDispatch(caller: CommandCaller) {
         words: 'This tablet is not placed at a station: ask the office to place it at one. Scan a bundle to work on it.',
       }
     }
-    return listFor(db, { kind: 'STATION', id: station.id, code: station.code, name: station.name, lineId: station.lineId, workCentreId: station.workCentreId, site: device.site }, now, (ids) => systemView(caller).withClient((system: Reader) => materialFlags(system, device.site, ids)))
+    return listFor(db, { kind: 'STATION', id: station.id, code: station.code, name: station.name, lineId: station.lineId, workCentreId: station.workCentreId, site: device.site }, now, (ids) => (options.material === false ? Promise.resolve(new Map()) : systemView(caller).withClient((system: Reader) => materialFlags(system, device.site, ids))))
   })
 }
