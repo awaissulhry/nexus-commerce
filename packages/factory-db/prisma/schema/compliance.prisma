@@ -66,6 +66,8 @@ model Certificate {
   successor           Certificate?          @relation("CertificateRenewal", fields: [tenantId, successorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   renews              Certificate?          @relation("CertificateRenewal")
   typeChangeReviews   TypeChangeReview[]
+  // W2b inspection-plans.prisma (wave 10/16): the incoming component checks made against it.
+  incomingComponentResults IncomingComponentResult[]
   // W2b (schema wave 2/7): its renewals' application log, and the renewals it is the new certificate of.
   renewalLog          CertificateRenewal[]  @relation("CertificateRenewalOf")
   renewalLogAsNew     CertificateRenewal[]  @relation("CertificateRenewalNew")

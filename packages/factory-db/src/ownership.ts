@@ -19,8 +19,8 @@ import type { SchemaModel } from './schema-models'
  * wherever the table has a site key, the partner role always by party.
  *
  * The partner wall (plan A1 §2.2, §2.6; features PLT-007, PLT-035): portal and one-off link sessions
- * (factory_partner_runtime) never read or write a cost, margin or wages column, nor an internal note. Such a column is
- * marked in the schema (`/// @grain cost|margin|wages` above it, which check-money-grains requires of every
+ * (factory_partner_runtime) never read or write a cost, margin, wages or pay column, nor an internal note. Such a column is
+ * marked in the schema (`/// @grain cost|margin|wages|pay` above it, which check-money-grains requires of every
  * money-looking column; `/// @internal` for an office-only note), and every partner access to its table must list it in
  * hiddenColumns, so the column grants leave it out. A price column (`@grain price`) stays readable: the party scope
  * keeps the partner to its own documents, and the API drops prices for a link whose purpose shows none.
@@ -38,6 +38,7 @@ export const PARTNER_WALL_TAGS: Readonly<Record<string, string>> = {
   '@grain cost': 'a cost (@grain cost)',
   '@grain margin': 'a margin (@grain margin)',
   '@grain wages': 'wages (@grain wages)',
+  '@grain pay': 'pay (@grain pay)',
   '@internal': 'an internal note (@internal)',
 }
 

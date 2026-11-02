@@ -24,7 +24,7 @@ describe('number kinds and periods', () => {
   })
 
   it("lets the floor number goods receipts, lots, inspections, releases, holds and NCRs: document kinds, never a fiscal one", () => {
-    expect([...FLOOR_DOCUMENT_KINDS].sort()).toEqual(['GOODS_RECEIPT', 'HOLD', 'INSPECTION', 'LOT', 'NCR', 'RELEASE'])
+    expect([...FLOOR_DOCUMENT_KINDS].sort()).toEqual(['GOODS_RECEIPT', 'HOLD', 'INCOMING_INSPECTION', 'INSPECTION', 'LOT', 'NCR', 'RELEASE'])
     for (const kind of FLOOR_DOCUMENT_KINDS) {
       expect(isDocumentKind(kind)).toBe(true)
       expect(isFiscalKind(kind)).toBe(false)

@@ -1,5 +1,5 @@
 // Parties (plan A1 §2.4 A; features SAL-001, SAL-003, SAL-004, SAL-005, SAL-006, SCM-001, SAL-285): the customers,
-// brands, suppliers, subcontractors and carriers of the tenant. ONE record per business partner, whatever it does for
+// brands, suppliers, subcontractors, carriers and labour consultants of the tenant. ONE record per business partner, whatever it does for
 // us: its roles say so (the old app's PartyKind became a list of roles: one company can be customer AND supplier).
 // apps/factory-api's modules/parties writes them (B-W1-07; the measurement profiles B-W1-18), always through command().
 //
@@ -74,6 +74,8 @@ model Party {
   measurementProfiles MeasurementProfile[]
   // W2b people.prisma (wave 4/7): as an agency, the agency workers it employs.
   agencyEmployees     Employee[]           @relation("EmployeeAgency")
+  // W2b people.prisma: the companies whose labour consultant it is.
+  consultantSettings  PeopleSettings[]     @relation("PeopleSettingsConsultant")
   // product.prisma: the items it supplies by default, the styles made for it as a brand, the BOM lines bought from it.
   suppliedItems       Item[]
   brandStyles         Style[]
@@ -134,6 +136,8 @@ model Party {
   supplierClaims          SupplierClaim[]
   subcontractedOperations RoutingOperation[]
   subcontractorLocations  Location[]
+  // W2b inspection-plans.prisma (wave 10/16): as a customer, the AQL profiles assigned to it.
+  aqlProfileAssignments   AqlProfileAssignment[]
   subcontractOrders       SubcontractOrder[]
   // W2a schedule.prisma: as a workshop, its slots on the planning board.
   scheduleSlots           ScheduleSlot[]
@@ -160,6 +164,8 @@ enum PartyRole {
   SUBCONTRACTOR
   /// It carries our goods.
   CARRIER
+  /// Our labour consultant: the payroll files go to it (people.prisma PeopleSettings). Neither a customer nor a supplier.
+  CONSULTANT
 }
 
 /// PROSPECT → ACTIVE ⇄ BLOCKED; ARCHIVED when no longer used (never deleted).

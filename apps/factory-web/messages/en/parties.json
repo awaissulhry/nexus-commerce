@@ -37,7 +37,8 @@
     "BRAND": "Brand",
     "SUPPLIER": "Supplier",
     "SUBCONTRACTOR": "Subcontractor",
-    "CARRIER": "Carrier"
+    "CARRIER": "Carrier",
+    "CONSULTANT": "Labour consultant"
   },
   "kind": {
     "ORGANISATION": "Company",

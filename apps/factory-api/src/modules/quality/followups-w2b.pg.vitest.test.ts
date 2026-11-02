@@ -149,6 +149,14 @@ describe('hold numbers and who releases a hold (Z5:01)', () => {
     const found = await ok('viewer', 'GET', `/quality/holds?q=${encodeURIComponent(hold.number.slice(-4))}`)
     expect(found.holds.map((row: Json) => row.id)).toEqual([hold.id])
     expect((await ok('viewer', 'GET', '/quality/holds?q=NO-SUCH-HOLD')).holds).toEqual([])
+    // B-W2b-F1: a new hold comes numbered (the seeded one too), so a hold placed before numbering is written past the
+    // guards: a copy of the seeded hold without its number (its hide is held already, so the copy blocks nothing new).
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(`INSERT INTO "QualityHold" SELECT * FROM jsonb_populate_record(NULL::"QualityHold", (SELECT to_jsonb(h) || jsonb_build_object('id', $1::uuid, 'number', NULL) FROM "QualityHold" h WHERE h.number = 'HLD-2026-0001'))`, [newId()])
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
     const all = await ok('viewer', 'GET', '/quality/holds?status=ALL')
     expect(all.holds.filter((row: Json) => row.number === null).length).toBeGreaterThan(0)
   })
