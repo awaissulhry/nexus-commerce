@@ -550,6 +550,7 @@
     "pickSite": "One person's figures follow each site's rules: choose a site at the top",
     "reading": "Reading the site's rules…",
     "record": "One person: the data the work needs — no pay, attendance or health on this record",
+    "recordAttendance": "One person's attendance, the same as the LUL calendar: behind the site's attendance gate, no pay or health",
     "register": "HR register: names, job and team — never pay, attendance, health or a figure about one person's work",
     "unread": "The site's rules could not be read: no individual figure is shown",
     "workerHr": "One person's figures are seen only by the worker and HR",
@@ -722,6 +723,7 @@
   },
   "tab": {
     "activity": "Activity",
+    "attendance": "Attendance",
     "documents": "Documents",
     "job": "Job & team",
     "profile": "Profile",
