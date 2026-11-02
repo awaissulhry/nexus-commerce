@@ -139,6 +139,8 @@ export interface PanelMessage {
   authorName: string | null
   /** A floor worker wrote it and the site's legal gate keeps back who: the message says a person did. */
   authorHidden?: boolean
+  /** The tablets read this note too (B-W2b-F5): the office ticked "For the floor", or the floor wrote it. */
+  forFloor?: boolean
   /** ISO instant (UTC). */
   at: string
   body: string
@@ -226,10 +228,10 @@ export interface Loaded<T> {
 }
 
 /**
- * A work order's internal notes reach the tablets working on it (B-W2b-71; design floor.mywork "For your work": the open
- * messages on my work orders), so the composer and its notice say so; every other record's notes stay in the office.
+ * Only a work order has tablets working on it, so only its composer offers the tick "For the floor" (B-W2b-F5). A note stays
+ * in the office unless its writer ticks it; ticked, the tablets read it on My work (B-W2b-71). The API holds the same rule.
  */
-export const noteReachesFloor = (recordType: string): boolean => recordType === 'WorkOrder'
+export const noteMayGoToFloor = (recordType: string): boolean => recordType === 'WorkOrder'
 
 export interface RecordPanelsViewModel {
   record: PanelRecord
@@ -258,6 +260,8 @@ export interface RecordPanelsViewModel {
   composerMode?: ComposerMode
   /** Text already in the composer (design fixtures). */
   composerText?: string
+  /** The tick "For the floor" starts on (design fixtures). */
+  composerForFloor?: boolean
   /** The composer is sending. */
   sending?: boolean
   /** B-W2a-40: the record's open tasks (the Tasks tab; absent: a host without tasks, no tab). */
@@ -414,6 +418,8 @@ export interface ComposerDraft {
   subject: string
   mentions: readonly string[]
   attachments: readonly string[]
+  /** A note the tablets read too: the tick, on a work order only. */
+  forFloor: boolean
 }
 
 /**

@@ -27,7 +27,6 @@ import { useLiveChanges } from './live'
 import {
   contentTypeOf,
   liveParts,
-  noteReachesFloor,
   parseAddresses,
   uploadProblem,
   type ComposerDraft,
@@ -107,6 +106,7 @@ export function sendNotice(error: unknown): Notice {
     if (paths.some((path) => path === 'body/subject')) return { key: 'notice.noSubject', tone: 'danger' }
     if (paths.some((path) => path.startsWith('body/attachments'))) return { key: 'notice.attachmentsRefused', tone: 'danger' }
     if (paths.some((path) => path.startsWith('body/mentions'))) return { key: 'notice.mentionsRefused', tone: 'danger' }
+    if (paths.some((path) => path === 'body/forFloor')) return { key: 'notice.floorRefused', tone: 'danger' }
   }
   return writeNotice(error, 'notice.sendConflict')
 }
@@ -318,9 +318,9 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     setSending(true)
     setNotice(null)
     try {
-      if (draft.mode === 'note') await postNote(api, key, { body: draft.body, mentions: draft.mentions, attachments: draft.attachments })
+      if (draft.mode === 'note') await postNote(api, key, { body: draft.body, mentions: draft.mentions, attachments: draft.attachments, forFloor: draft.forFloor })
       else await sendEmail(api, key, { to: parseAddresses(draft.to).valid, subject: draft.subject.trim() || undefined, body: draft.body, attachments: draft.attachments })
-      setNotice({ key: draft.mode === 'note' ? (noteReachesFloor(record.type) ? 'notice.noteAddedFloor' : 'notice.noteAdded') : 'notice.emailQueued', tone: 'success' })
+      setNotice({ key: draft.mode === 'note' ? (draft.forFloor ? 'notice.noteAddedFloor' : 'notice.noteAdded') : 'notice.emailQueued', tone: 'success' })
       void loadThread()
       void loadEmails()
       void loadTimeline()
@@ -560,6 +560,7 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
         authorKind: message.author.kind,
         authorName: message.author.name,
         authorHidden: message.authorHidden,
+        forFloor: message.forFloor,
         at: message.at,
         body: message.body,
         mentions: (message.mentions ?? []).map((id) => names.get(id) ?? null),

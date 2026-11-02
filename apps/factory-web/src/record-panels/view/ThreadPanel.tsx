@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AtSign, Lock, Mail, MailOpen, Paperclip, Send, X } from 'lucide-react'
+import { AtSign, Lock, Mail, MailOpen, Paperclip, Send, Tablet, X } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { ReplyComposer } from '@nexus/ui/patterns'
 import { Button, Checkbox, Input, SegmentedControl, Spinner, Tag } from '@nexus/ui/primitives'
@@ -18,7 +18,7 @@ import {
   mentionQuery,
   mentionsInText,
   mentionSuggestions,
-  noteReachesFloor,
+  noteMayGoToFloor,
   type ComposerDraft,
   type ComposerMode,
   type EmailStatus,
@@ -44,7 +44,8 @@ const sizeWords = (bytes: number, locale: string) =>
  * The thread of a record (COL-001, COL-003, COL-024): the composer — an INTERNAL NOTE (the office only) or an EMAIL TO
  * THE PARTY (sent as the person, shared with the party, replies come back here) — then the messages, newest first. An
  * internal note and a shared message never look alike: each carries its mark (a lock, or the party's name) and its own
- * edge, so nobody reads a note as something the customer saw.
+ * edge, so nobody reads a note as something the customer saw. On a work order one tick, off by default, sends a note to the
+ * tablets too; a note that went there says so in the thread (B-W2b-F5).
  */
 export function ThreadPanel({ model, actions }: { model: RecordPanelsViewModel; actions?: RecordPanelsActions }) {
   const t = useT('records')
@@ -64,6 +65,7 @@ export function ThreadPanel({ model, actions }: { model: RecordPanelsViewModel; 
   // B-W2a-40: `@Name` typed in a note mentions that person too (with the picker's); a typed one the person took off stays off.
   const [unmentioned, setUnmentioned] = useState<string[]>([])
   const [attachments, setAttachments] = useState<string[]>([])
+  const [floorTick, setFloorTick] = useState(model.composerForFloor ?? false)
   useEffect(() => setTo(defaultTo), [defaultTo])
 
   const files = useMemo(() => model.files.items ?? [], [model.files.items])
@@ -88,7 +90,9 @@ export function ThreadPanel({ model, actions }: { model: RecordPanelsViewModel; 
     setMentions((list) => list.filter((item) => item !== id))
     if (typed.includes(id)) setUnmentioned((list) => [...list, id])
   }
-  const draft: ComposerDraft = { mode, body, to, subject, mentions: mode === 'note' ? allMentions : [], attachments }
+  const floorOffered = mode === 'note' && noteMayGoToFloor(model.record.type)
+  const forFloor = floorOffered && floorTick
+  const draft: ComposerDraft = { mode, body, to, subject, mentions: mode === 'note' ? allMentions : [], attachments, forFloor }
   const hasMail = (model.messages.items ?? []).some((message) => message.channel === 'EMAIL')
   const held = composerHeld(draft, { threadClosed: closed, sending: model.sending ?? false, files, hasMail })
   const heldText = held ? t(held.key, held.params) : null
@@ -102,6 +106,7 @@ export function ThreadPanel({ model, actions }: { model: RecordPanelsViewModel; 
       setUnmentioned([])
       setAttachments([])
       setSubject('')
+      setFloorTick(false)
     })
   }
 
@@ -186,10 +191,17 @@ export function ThreadPanel({ model, actions }: { model: RecordPanelsViewModel; 
             ) : null}
           </div>
 
+          {floorOffered && (
+            <div className="fw-rp-floor-tick">
+              <Checkbox label={t('composer.forFloor.label')} checked={floorTick} onChange={(event) => setFloorTick(event.target.checked)} />
+              <p className="fw-rp-muted fw-rp-small">{t('composer.forFloor.hint')}</p>
+            </div>
+          )}
+
           <ReplyComposer
             title={mode === 'note' ? t('composer.title.note') : t('composer.title.email', { party: partyName })}
             label={mode === 'note' ? t('composer.title.note') : t('composer.title.email', { party: partyName })}
-            ruleLine={mode === 'note' ? t(noteReachesFloor(model.record.type) ? 'composer.rule.noteFloor' : 'composer.rule.note', { party: partyName || t('composer.rule.noParty') }) : t('composer.rule.email', { party: partyName })}
+            ruleLine={mode === 'note' ? t(forFloor ? 'composer.rule.noteFloor' : 'composer.rule.note', { party: partyName || t('composer.rule.noParty') }) : t('composer.rule.email', { party: partyName })}
             placeholder={mode === 'note' ? t('composer.placeholder.note') : t('composer.placeholder.email')}
             value={body}
             onChange={setBody}
@@ -291,6 +303,12 @@ function MessageItem({ message, model, actions }: { message: PanelMessage; model
             {internal ? <Lock size={12} className="fw-rp-tag-icon" aria-hidden /> : message.direction === 'OUTBOUND' ? <Send size={12} className="fw-rp-tag-icon" aria-hidden /> : <Mail size={12} className="fw-rp-tag-icon" aria-hidden />}
             {kind}
           </Tag>
+          {message.forFloor && (
+            <Tag tone="neutral">
+              <Tablet size={12} className="fw-rp-tag-icon" aria-hidden />
+              {t('message.forFloor')}
+            </Tag>
+          )}
           {message.email && <Tag tone={EMAIL_TONE[message.email.status]}>{t(`message.email.${message.email.status}`)}</Tag>}
           <time className="fw-rp-muted fw-rp-small" dateTime={message.at}>
             {formatDateTime(message.at, { locale })}

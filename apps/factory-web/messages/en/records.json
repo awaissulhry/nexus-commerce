@@ -21,6 +21,7 @@
   "notice": {
     "noteAdded": "Note added. Only the office sees it.",
     "noteAddedFloor": "Note added. The office sees it, and the tablets working on this order.",
+    "floorRefused": "Nothing was saved: only a note on a work order can go to the floor.",
     "emailQueued": "Email queued. It goes out in a moment; its state shows on the message.",
     "closed": "Thread closed. Nobody can write in it until it is reopened.",
     "reopened": "Thread reopened.",
@@ -66,7 +67,7 @@
     },
     "rule": {
       "note": "Only people in the office see an internal note: {party} never does.",
-      "noteFloor": "The office and the tablets working on this order see an internal note: {party} never does.",
+      "noteFloor": "The office and the tablets working on this order see this note: {party} never does.",
       "noParty": "the customer or supplier",
       "email": "Sent from your company's address, as you. {party} sees it, and their reply comes back to this thread."
     },
@@ -77,6 +78,10 @@
     "send": {
       "note": "Add note",
       "email": "Send email"
+    },
+    "forFloor": {
+      "label": "For the floor",
+      "hint": "The tablets working on this order read it. No prices."
     },
     "to": "To",
     "toHint": "Addresses separated by commas.",
@@ -142,6 +147,7 @@
       "COMPLAINED": "Marked as spam",
       "FAILED": "Not sent"
     },
+    "forFloor": "For the floor",
     "emailTo": "To {to} · {subject}",
     "mentioned": "Mentioned: {names}",
     "attachments": "Attached files"

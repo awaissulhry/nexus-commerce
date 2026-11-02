@@ -46,12 +46,14 @@ const store = newId()
 const quote = newId()
 const otherQuote = newId()
 const lateQuote = newId()
+const floorQuote = newId()
 
 /** The made-up quotes: their company and party (a quote may get its party later). */
 const quotes = new Map<string, { companyId: string; partyId: string | null }>([
   [quote, { companyId: companyOne, partyId: partyOne }],
   [otherQuote, { companyId: companyOne, partyId: partyOne }],
   [lateQuote, { companyId: companyOne, partyId: null }],
+  [floorQuote, { companyId: companyOne, partyId: partyOne }],
 ])
 
 const grant = (permissions: Grant['permissions'], companies: Grant['companies'] = 'all'): Grant => ({ permissions, companies, sites: 'all', parties: 'all' })
@@ -308,6 +310,37 @@ describe('internal notes never reach a party (COL-003)', () => {
     expect(row!.partyId).toBe(partyTwo)
     expect((await thread('partner-two', 'Quote', lateQuote)).messages.map((message: Json) => message.body)).toEqual(['Still you.', 'Now we know you.'])
     await expect(admin('UPDATE "Thread" SET "partyId" = $1 WHERE id = $2', [partyOne, row!.id])).rejects.toThrow(/set once and never changes/)
+  })
+})
+
+describe('a note for the floor (B-W2b-F5): the tick belongs to a work order', () => {
+  it('refuses the tick on any other record in words, writes nothing, and takes the same note without it', async () => {
+    const refused = await call('author', 'POST', `/threads/Quote/${floorQuote}/notes`, { body: 'For the floor, please.', forFloor: true })
+    expect(refused.statusCode, refused.body).toBe(400)
+    expect(refused.json().error.issues).toEqual([{ path: 'body/forFloor', message: 'Only a note on a work order can go to the floor.' }])
+    expect((await thread('author', 'Quote', floorQuote)).messages).toEqual([])
+    const { message } = await note('author', 'Quote', floorQuote, { body: 'For the office.', forFloor: false })
+    expect(message.forFloor).toBe(false)
+  })
+
+  it('answers a person who may not write as before, whatever the tick says', async () => {
+    expect((await call('reader', 'POST', `/threads/Quote/${floorQuote}/notes`, { body: 'Not mine to write.', forFloor: true })).statusCode).toBe(403)
+  })
+
+  it('tells the office, and no party, whether a note went to the floor', async () => {
+    await sendToParty(floorQuote, 'Here is your quote.')
+    const seen = await thread('author', 'Quote', floorQuote)
+    expect(seen.messages.map((message: Json) => message.forFloor)).toEqual([false, false])
+    expect((await thread('partner-one', 'Quote', floorQuote)).messages.map((message: Json) => 'forFloor' in message)).toEqual([false])
+  })
+
+  it('holds in the seam too: nothing but an internal note of a work order goes to the floor', async () => {
+    await expect(
+      command(office(), { name: 'threads.postNote', input: { seam: floorQuote } }, async (tools) => {
+        const { thread: row } = await ensureThread(tools, { type: 'Quote', id: floorQuote }, author)
+        return writeMessage(tools, row, { direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'SYSTEM', id: null, name: null }, bodyText: 'Not for a tablet.', forFloor: true })
+      }),
+    ).rejects.toThrow(/Only a note on a work order/)
   })
 })
 
