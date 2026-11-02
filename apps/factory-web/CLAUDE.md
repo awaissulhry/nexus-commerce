@@ -59,6 +59,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   sign-in; just signed in → the notice when due, else Home). Rules without a screen in `floor/model.ts` (mode from the
   work centre, tiles = mode AND permission, only built pages open) and `floor/scan/scan-model.ts` (the scan router);
   calls in `floor/api.ts`. A step that builds a floor page sets its tile `built` in `TILE_RULES`.
+- `src/floor/tasks/myday/` — SCR-171 My day (B-W2b-68; `/floor/myday`, catalogue `floor-myday`): the one floor screen with money, the worker's own, on a tablet other people can see. The figures live in the container's state only (never `AsOfMemory`, a cache, the queue or storage; the only thing kept is the ids of answers opened, for the tile's badge), and leave with another person (`key`), the tab out of view, the network, Done, and 60 s without a touch (the last 10 hide them). It always opens on the PIN.
 - `src/floor/tasks/scans/` — SCR-090 Operation, the screen every operator uses all shift (B-W2b-69; `/floor/operation`, catalogue
   `floor-scans`): `model.ts` (W1: counts, report, undo, correction), `timing.ts` (the bundle's clock, what the tablet knows after a
   queued action), `checks.ts` (findings, the quantity rule, steps, lots, why Finish waits), `stack.ts`, `indirect.ts`, `notes.ts`, all

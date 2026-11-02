@@ -393,6 +393,7 @@
       "labels": "Stampa le etichette capo, solo con certificato valido",
       "machine": "Segnala un guasto; gli interventi del tecnico",
       "clock": "Il tuo orario di oggi, pause, badge dimenticato",
+      "myday": "I tuoi minuti, registrazioni e prospetto. Li vedi solo tu.",
       "help": "Un tocco chiama la persona giusta",
       "lineview": "Chiamate, in attesa, postazioni"
     },
@@ -402,6 +403,9 @@
     },
     "machine": "Guasto macchina",
     "clock": "Timbratura",
+    "myday": "La mia giornata",
+    "mydayAnswers_one": "{count} risposta alla tua contestazione",
+    "mydayAnswers_other": "{count} risposte alle tue contestazioni",
     "help": "Chiama aiuto",
     "lineview": "Vista linea"
   },

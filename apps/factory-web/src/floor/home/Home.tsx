@@ -9,6 +9,7 @@ import { homeTiles, modeOf } from '../model'
 import { heldWorkOf } from '../queue/actions'
 import { readScan } from '../scan/scan-model'
 import { TASK_ROUTES, taskForScan, taskOfTile } from '../tasks/routes'
+import { useMyDayBadge } from '../tasks/myday/badge'
 import { fetchOpenWork } from '../tasks/scans/api'
 import { resumeRows, type OpenItem } from '../tasks/scans/timing'
 import { HomeView, type HomeAction } from './view/HomeView'
@@ -34,6 +35,8 @@ export function FloorHome() {
   const { me, api, online } = store
   const scans = Boolean(me?.permissions.includes('production.scan'))
   const person = me?.worker.id ?? null
+  // B-W2b-68: a dispute answered shows on the My day tile; read per person, nothing held for the next one.
+  const answers = useMyDayBadge(api, Boolean(online && me?.permissions.includes('floor.work')), person)
   useEffect(() => {
     if (!scans || !online) return
     let live = true
@@ -93,6 +96,7 @@ export function FloorHome() {
         lowNumbers: store.shellQueue.lowNumbers,
         // One person's open work never reaches the next person on the tablet.
         resume: open && scans && open.person === person ? { items: open.items, asOf: online ? null : open.asOf } : null,
+        mydayAnswers: answers,
       }}
       onFrame={onFrame}
       onAction={(action) => void onAction(action)}
