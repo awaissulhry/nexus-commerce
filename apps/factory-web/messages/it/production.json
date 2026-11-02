@@ -103,17 +103,7 @@
     "export_one": "Esporta {count} (CSV)",
     "export_other": "Esporta {count} (CSV)",
     "release_one": "Rilascia {count}",
-    "release_other": "Rilascia {count}",
-    "releaseHeld_one": "{count} selezionato non è una bozza: si rilasciano solo le bozze",
-    "releaseHeld_other": "{count} selezionati non sono bozze: si rilasciano solo le bozze",
-    "releaseTitle_one": "Rilascia {count} ordine",
-    "releaseTitle_other": "Rilascia {count} ordini",
-    "releaseBody": "Ogni ordine viene ricontrollato al rilascio: la specifica viene congelata e riceve un numero di lotto. Quello che il controllo trattiene resta in bozza, con il motivo.",
-    "releaseRun_one": "Rilascia {count}",
-    "releaseRun_other": "Rilascia {count}",
-    "releaseDone": "{released} di {count} rilasciati.",
-    "released": "Rilasciato · lotto {batch}",
-    "held": "Ancora in bozza: {checks}"
+    "release_other": "Rilascia {count}"
   },
   "held": {
     "noManage": "Puoi vedere gli ordini, non modificarli (workorders.manage)",
@@ -207,6 +197,7 @@
     "operations": "Fasi e WIP",
     "quality": "Qualità",
     "labour": "Manodopera e costo",
+    "documents": "Documenti",
     "activity": "Attività",
     "problems_one": "{count} controllo blocca il rilascio",
     "problems_other": "{count} controlli bloccano il rilascio"

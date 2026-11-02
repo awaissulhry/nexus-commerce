@@ -6,6 +6,7 @@ import { PART_LOADING, type WorkOrderRecordModel } from './record-model'
 import { AVAILABILITY, DAILY_ROLE_OF, dailyFor, heldWorkOrder, HOLD, HOLD_RECORD, releaseCheckW2a } from '../daily/demo/fixtures'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
 import { LABOUR, labourAs } from '../labour/fixtures'
+import type { SplitModel } from '../every-shift/use-split'
 
 /**
  * SCR-070 — the work order studio (design production.workorders "Record: Work order") with made-up data only: a draft
@@ -66,6 +67,22 @@ export function RecordDesign({ model }: { model: RecordCase }) {
 }
 
 const draft = (role: Role, kind: 'blocked' | 'material' | 'ready' | 'noRevision', over: Partial<WorkOrderRecordModel> = {}) => recordCase(role, 'DRAFT', { check: ready(releaseCheck(kind)), ...over })
+
+// B-W2b-59: Split work order (made-up pieces and materials).
+const DRAFT_CELL = workOrder('DRAFT').cells[0]!
+const SPLIT: SplitModel = {
+  draft: { moves: { [DRAFT_CELL.id]: 2 }, dueDate: '2026-11-20', priority: '0', rush: false, note: '' },
+  preview: {
+    refusal: null,
+    problems: [],
+    numberPreview: 'WO-00013',
+    parent: { pieces: 22, cells: [], materials: [{ itemId: 'm1', itemCode: 'PEL-NERA', itemName: 'Pelle nera', itemColourId: null, colourCode: 'BLK', baseUom: 'FT2', planned: '554.4000' }] },
+    child: { pieces: 2, cells: [], materials: [{ itemId: 'm1', itemCode: 'PEL-NERA', itemName: 'Pelle nera', itemColourId: null, colourCode: 'BLK', baseUom: 'FT2', planned: '50.4000' }] },
+  },
+  reading: false,
+  busy: false,
+  problem: null,
+}
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-070',
@@ -144,5 +161,17 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2a-labour-draft', label: 'W2a · Labour & cost of a draft: nothing costed before the release', model: draft('manager', 'ready', { tab: 'labour', labour: labourAs('finance', null) }) },
     { id: 'w2a-labour-loading', label: 'W2a · Labour & cost reading', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', { value: null, problem: null }) }) },
     { id: 'w2a-labour-error', label: "W2a · Labour & cost couldn't load: Try again (the rest of the record stays usable)", model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', { value: null, problem: 'problem.unavailable' }) }) },
+    // ---- B-W2b-59: rush, split, the traveller, minutes ----
+    { id: 'w2b-rush', label: 'W2b · A rush work order: the flag in the band, on Overview, edited beside the priority', model: recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { rush: true, priority: 6 }) } }) },
+    { id: 'w2b-split-from', label: 'W2b · The genealogy: split from WO-00001, and what was split from it', model: recordCase('manager', 'DRAFT', { workOrder: { status: 'ready', value: workOrder('DRAFT', { splitFrom: { id: 'wo-parent', number: 'WO-00001', status: 'DRAFT' }, splits: [{ id: 'wo-child', number: 'WO-00003', status: 'DRAFT', pieces: 4 }] }) } }) },
+    { id: 'w2b-split', label: 'W2b · Split work order (a draft): the pieces to move, the preview of each side, its own due date', model: draft('manager', 'ready', { split: SPLIT }) },
+    { id: 'w2b-split-empty', label: 'W2b · Split work order: held until a piece moves', model: draft('manager', 'ready', { split: { ...SPLIT, draft: { ...SPLIT.draft, moves: {} }, preview: null } }) },
+    { id: 'w2b-split-over', label: 'W2b · Split work order: a size moves more than it has', model: draft('manager', 'ready', { split: { ...SPLIT, draft: { ...SPLIT.draft, moves: { [DRAFT_CELL.id]: DRAFT_CELL.quantity + 1 } }, preview: null } }) },
+    { id: 'w2b-split-refused', label: 'W2b · Split work order refused (changed meanwhile): said inside the dialog', model: draft('manager', 'ready', { split: { ...SPLIT, problem: { key: 'production-every-shift:split.changed' } } }) },
+    { id: 'w2b-split-held', label: 'W2b · In progress: Split held in ⋯ with the reason (the release froze the sizes)', model: recordCase('manager', 'IN_PROGRESS') },
+    { id: 'w2b-documents', label: 'W2b · Documents: the traveller, the tickets, the style revision', model: recordCase('manager', 'IN_PROGRESS', { tab: 'documents' }) },
+    { id: 'w2b-documents-draft', label: 'W2b · Documents of a draft: the traveller says the sizes are not frozen', model: draft('manager', 'ready', { tab: 'documents' }) },
+    { id: 'w2b-minutes', label: 'W2b · Labour & cost › Minutes: planned and earned per operation, work order totals only; the cost below for those who may', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR) }) },
+    { id: 'w2b-minutes-no-cost', label: 'W2b · Minutes without the cost grain: the minutes stay, the cost says why not', model: recordCase('manager', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('manager', LABOUR) }) },
   ],
 })

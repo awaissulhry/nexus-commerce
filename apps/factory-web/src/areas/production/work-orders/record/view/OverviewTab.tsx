@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, Circle, Pencil, XCircle } from 'lucide-react'
 import { Banner, Card, Field, KeyValue, ProgressBar } from '@nexus/ui/components'
 import { SizeGridEditor, SizeGridView } from '@nexus/ui/grid'
-import { Button, Input, SegmentedControl, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, SegmentedControl, Spinner, Tag } from '@nexus/ui/primitives'
 import { DateField } from '../../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
@@ -15,6 +16,7 @@ import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-mod
 import { PartState } from './WorkOrderRecordView'
 import { beforeRelease, readinessView } from '../../daily/model'
 import { HoldsCard, ReadinessLine } from '../../daily/view/DailyParts'
+import { SHIFT_NAMESPACE } from '../../every-shift/model'
 
 /**
  * Overview & release (design wo-release, wo-frozen, wo-facts, wo-sizes-mini): a draft's release check (each condition
@@ -123,19 +125,23 @@ function FactsCard({ workOrder, model, actions }: { workOrder: WorkOrder; model:
   const [editing, setEditing] = useState(!!model.draft?.editing)
   const [dueDate, setDueDate] = useState(model.draft?.dueDate ?? workOrder.dueDate ?? '')
   const [priority, setPriority] = useState(model.draft?.priority ?? String(workOrder.priority))
+  // B-W2b-59 (MES-009): the rush flag beside the priority.
+  const ts = useT(SHIFT_NAMESPACE)
+  const [rush, setRush] = useState(workOrder.rush ?? false)
   useEffect(() => {
     if (!editing) {
       setDueDate(workOrder.dueDate ?? '')
       setPriority(String(workOrder.priority))
+      setRush(workOrder.rush ?? false)
     }
-  }, [editing, workOrder.dueDate, workOrder.priority])
+  }, [editing, workOrder.dueDate, workOrder.priority, workOrder.rush])
   const priorityValue = Number(priority)
   const priorityBad = priority.trim() === '' || !Number.isInteger(priorityValue) || priorityValue < -1000 || priorityValue > 1000
-  const dirty = editing && (dueDate !== (workOrder.dueDate ?? '') || priority !== String(workOrder.priority))
+  const dirty = editing && (dueDate !== (workOrder.dueDate ?? '') || priority !== String(workOrder.priority) || rush !== (workOrder.rush ?? false))
   useEffect(() => actions?.onDirty?.('details', dirty), [dirty])
   const save = () => {
     if (priorityBad || !dirty || model.busy) return
-    actions?.onSaveDetails?.({ dueDate: dueDate || null, priority: priorityValue })
+    actions?.onSaveDetails?.({ dueDate: dueDate || null, priority: priorityValue, rush })
     setEditing(false)
   }
   // ⌘S saves while editing.
@@ -169,6 +175,7 @@ function FactsCard({ workOrder, model, actions }: { workOrder: WorkOrder; model:
           <Field label={t('overview.priority')} hint={t('overview.priorityHint')} error={priorityBad ? t('overview.priorityBad') : undefined}>
             <Input type="number" inputMode="numeric" value={priority} onChange={(event) => setPriority(event.target.value)} />
           </Field>
+          <Checkbox checked={rush} onChange={(event) => setRush(event.target.checked)} label={ts('rush.label')} />
           <div className="fw-pr-actions">
             <Button size="sm" variant="primary" heldReason={priorityBad ? t('overview.priorityBad') : !dirty ? t('held.nothingChanged') : model.busy ? t('held.busy') : null} onClick={save} aria-keyshortcuts="Meta+S Control+S">
               {model.busy ? <Spinner size={12} /> : null} {t('common.save')}
@@ -187,7 +194,9 @@ function FactsCard({ workOrder, model, actions }: { workOrder: WorkOrder; model:
             { label: t('overview.site'), value: `${workOrder.site.code} · ${workOrder.site.name}` },
             { label: t('overview.customers'), value: [...new Set(workOrder.orders.map((order) => order.partyName))].join(', ') || '—', hint: workOrder.orders.map((order) => order.number).join(' · ') },
             { label: t('overview.due'), value: workOrder.dueDate ? formatDate(`${workOrder.dueDate}T12:00:00Z`, { locale }) : '—', hint: workOrder.daysLate && workOrder.daysLate > 0 ? t('list.daysLate', { count: workOrder.daysLate }) : undefined },
-            { label: t('overview.priority'), value: String(workOrder.priority) },
+            { label: t('overview.priority'), value: workOrder.rush ? ts('rush.priority', { priority: workOrder.priority }) : String(workOrder.priority) },
+            ...(workOrder.splitFrom ? [{ label: ts('split.fromLabel'), value: <Link className="fw-pr-link" href={`${model.prefix}/production/work-orders/${workOrder.splitFrom.id}`}>{workOrder.splitFrom.number}</Link> }] : []),
+            ...(workOrder.splits?.length ? [{ label: ts('split.toLabel'), value: <span className="fw-pr-inline">{workOrder.splits.map((split) => <Link key={split.id} className="fw-pr-link" href={`${model.prefix}/production/work-orders/${split.id}`}>{ts('split.child', { number: split.number, count: split.pieces })}</Link>)}</span> }] : []),
             { label: t('overview.released'), value: at(workOrder.release?.at ?? null) },
             { label: t('overview.started'), value: at(workOrder.startedAt) },
             { label: t('overview.completed'), value: at(workOrder.completedAt) },

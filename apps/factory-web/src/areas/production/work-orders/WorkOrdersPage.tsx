@@ -4,21 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { DEFAULT_TIME_ZONE } from '../../../lib/i18n/format'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
+import { newIdempotencyKey } from '../../../lib/api/client'
 import { WithMessages } from '../../../record-panels/i18n'
 import {
   countWorkOrders,
   createWorkOrder,
   findOrders,
   getOpenLines,
-  getWorkOrder,
   listWorkOrders,
-  releaseWorkOrder,
   type OrderOption,
   type WorkOrderCounts,
   type WorkOrderRow,
 } from '../_shared/api'
 import { useCoalesced, useLive } from '../_shared/hooks'
-import { abilitiesOf, liveTouches, readProblem, releaseRefusalCodes, viewFromAddress, viewQuery, writeProblem, type ListView } from '../_shared/model'
+import { abilitiesOf, liveTouches, readProblem, viewFromAddress, viewQuery, writeProblem, type ListView } from '../_shared/model'
 import { daysLate } from '@nexus/factory-domain/production/work-orders/machine'
 import { isRelativeDay, type RelativeDay } from '@nexus/factory-domain/views/quick/relative'
 import { modeOfAddress, type ListMode } from '../../../list-frame/w2b/model'
@@ -26,23 +25,27 @@ import { linesOfStyle, NO_NEW_ORDER, openGridOf, stylesOf, type BulkReleaseModel
 import { WorkOrdersListView } from './view/WorkOrdersListView'
 import { getReadiness, holdReasons, placeHold, type ReadinessRow } from './daily/api'
 import { DAILY_NAMESPACE, dailyCan, dailyProblem, NO_DAILY, READINESS_STATUSES, type DailyModel } from './daily/model'
+import { applyRowsOf } from '@nexus/factory-domain/views/bulk/rules'
+import { applyRelease, previewRelease } from './every-shift/api'
+import { SHIFT_NAMESPACE } from './every-shift/model'
 
 /**
  * `/w/<company>/production/work-orders` (SCR-069): reads the work orders of the saved view (`?view=`, default open) and
  * the search (`?q=`), 50 a page with "Show more" (cursor), the tiles' counts, and keeps them live (workorder.* and
  * production.* events wait behind "N updates · Show": rows never move under the cursor). `?new=1` opens New work order.
  * `?new=1&order=<number>` opens it with that sales order chosen (the order studio's Make work orders).
- * Bulk: Export N (the selected rows through the shared export engine, B-W2b-13), Edit N (due date and priority through
- * the review, then Undo) and Release N (one release per draft, in turn, each with its version; the API checks each one
- * again and says what holds it). B-W2b-13: `?mode=board|calendar|cards` (the list frame's modes) and `?due=<relative
- * day>` (the quick filter; the API resolves the word with its today); the due date and priority edit in the grid.
+ * Bulk: Export N (the selected rows through the shared export engine, B-W2b-13), Edit N (due date, priority and rush through
+ * the review, then Undo) and Release N (B-W2b-59: the API's preview of the rows as they are now, with what holds each,
+ * then each release through its own command). B-W2b-13: `?mode=board|calendar|cards` (the list frame's modes) and
+ * `?due=<relative day>` (the quick filter; the API resolves the word with its today); the due date and priority edit in
+ * the grid. B-W2b-59: `?rush=true` (the quick filter).
  */
 const MODES: readonly ListMode[] = ['table', 'board', 'calendar', 'cards']
 /** Today in the site's zone (YYYY-MM-DD): the calendar's today and the days late after a save. */
 const romeDay = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: DEFAULT_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 export function WorkOrdersPage() {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, 'lists']}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists']}>
       <WorkOrdersContainer />
     </WithMessages>
   )
@@ -61,6 +64,7 @@ function WorkOrdersContainer() {
   const mode = modeOfAddress(params, MODES)
   const dueWord = params?.get('due') ?? null
   const due: RelativeDay | null = isRelativeDay(dueWord) ? dueWord : null
+  const rush = params?.get('rush') === 'true'
   const newAsked = params?.get('new') === '1'
   // `?new=1&order=<number>` (the sales order studio's "Make work orders"): the dialog opens with that order chosen.
   const autoPick = useRef<string | null>(newAsked ? (params?.get('order')?.trim() || null) : null)
@@ -74,6 +78,7 @@ function WorkOrdersContainer() {
   const [notice, setNotice] = useState<WorkOrdersListModel['notice']>(null)
   const [newOrder, setNewOrder] = useState<NewWorkOrderModel | null>(null)
   const [release, setRelease] = useState<BulkReleaseModel | null>(null)
+  const releaseKey = useRef(newIdempotencyKey())
   const readId = useRef(0)
   // B-W2a-46: the readiness word per row (one read per page of rows) and Hold N.
   const dcan = useMemo(() => dailyCan(session.permissions), [session.permissions])
@@ -81,28 +86,30 @@ function WorkOrdersContainer() {
   const [daily, setDaily] = useState<DailyModel>(() => NO_DAILY(dcan))
 
   const address = useCallback(
-    (next: { view?: ListView; q?: string; new?: boolean; mode?: ListMode; due?: RelativeDay | null }) => {
+    (next: { view?: ListView; q?: string; new?: boolean; mode?: ListMode; due?: RelativeDay | null; rush?: boolean }) => {
       const query = new URLSearchParams()
       const nextView = next.view ?? view
       const nextQ = next.q ?? q
       const nextMode = next.mode ?? mode
       const nextDue = next.due === undefined ? due : next.due
+      const nextRush = next.rush ?? rush
       if (nextView !== 'open') query.set('view', nextView)
       if (nextQ.trim()) query.set('q', nextQ.trim())
       if (nextDue) query.set('due', nextDue)
+      if (nextRush) query.set('rush', 'true')
       if (nextMode !== 'table') query.set('mode', nextMode)
       if (next.new) query.set('new', '1')
       const qs = query.toString()
       return `${pathname}${qs ? `?${qs}` : ''}`
     },
-    [pathname, view, q, mode, due],
+    [pathname, view, q, mode, due, rush],
   )
 
   const load = useCallback(async () => {
     const id = ++readId.current
     setRows((current) => ({ ...current, problem: null, items: current.items }))
     try {
-      const page = await listWorkOrders(api, { ...viewQuery(view, q), due })
+      const page = await listWorkOrders(api, { ...viewQuery(view, q), due, rush })
       if (id !== readId.current) return
       setRows({ items: page.workOrders, more: page.nextCursor !== null, problem: null })
       setCursor(page.nextCursor)
@@ -115,7 +122,7 @@ function WorkOrdersContainer() {
     countWorkOrders(api)
       .then((answer) => id === readId.current && setCounts(answer))
       .catch(() => id === readId.current && setCounts(null))
-  }, [api, view, q, due])
+  }, [api, view, q, due, rush])
 
   useEffect(() => {
     setRows({ items: null, more: false, problem: null })
@@ -140,13 +147,13 @@ function WorkOrdersContainer() {
   const more = useCallback(async () => {
     if (!cursor) return
     try {
-      const page = await listWorkOrders(api, { ...viewQuery(view, q, cursor), due })
+      const page = await listWorkOrders(api, { ...viewQuery(view, q, cursor), due, rush })
       setRows((current) => ({ items: [...(current.items ?? []), ...page.workOrders.filter((row) => !current.items?.some((seen) => seen.id === row.id))], more: page.nextCursor !== null, problem: null }))
       setCursor(page.nextCursor)
     } catch (error) {
       setNotice({ tone: 'danger', words: { key: readProblem(error) } })
     }
-  }, [api, cursor, view, q, due])
+  }, [api, cursor, view, q, due, rush])
 
   // Live: a work order changed somewhere → "N updates · Show" (the tiles follow at once: they never move the cursor).
   const recount = useCoalesced(() => {
@@ -242,29 +249,31 @@ function WorkOrdersContainer() {
           if (row.id !== rowId) return row
           const dueDate = 'due' in after ? ((after.due as string | null) ?? null) : row.dueDate
           const priority = typeof after.priority === 'number' ? after.priority : row.priority
-          return { ...row, dueDate, priority, version, daysLate: daysLate(row.status, dueDate, romeDay()) }
+          const rushed = typeof after.rush === 'string' ? after.rush === 'RUSH' : row.rush
+          return { ...row, dueDate, priority, rush: rushed, version, daysLate: daysLate(row.status, dueDate, romeDay()) }
         }) ?? null,
     }))
   }, [])
 
-  const runRelease = useCallback(async () => {
-    if (!release || release.running) return
-    setRelease({ ...release, running: true })
-    const results: BulkReleaseModel['results'] = {}
-    for (const row of release.rows) {
-      try {
-        // The version as it is now (a draft may have changed since the list was read).
-        const current = await getWorkOrder(api, row.id)
-        const released = await releaseWorkOrder(api, row.id, { version: current.version })
-        results[row.id] = { state: 'released', batchNumber: released.batchNumber }
-      } catch (error) {
-        const codes = releaseRefusalCodes(error)
-        results[row.id] = codes.length > 0 ? { state: 'held', codes } : { state: 'failed', words: writeProblem(error) }
-      }
-      setRelease((state) => (state ? { ...state, results: { ...results } } : state))
-    }
-    setRelease((state) => (state ? { ...state, running: false, done: true, results: { ...results } } : state))
-    void load()
+  // B-W2b-59 (MES-017): Release N — the preview reads each row as it is now, Save releases each through its own command.
+  const readRelease = useCallback(
+    (ids: readonly string[]) => {
+      setRelease((state) => (state ? { ...state, preview: null, state: { phase: 'reading' } } : state))
+      previewRelease(api, ids)
+        .then((preview) => setRelease((state) => (state ? { ...state, preview, state: { phase: 'ready' } } : state)))
+        .catch((error: unknown) => setRelease((state) => (state ? { ...state, state: { phase: 'failed', words: { key: readProblem(error) } } } : state)))
+    },
+    [api],
+  )
+  const runRelease = useCallback(() => {
+    if (!release?.preview || release.state.phase !== 'ready') return
+    setRelease({ ...release, state: { phase: 'saving' } })
+    applyRelease(api, applyRowsOf(release.preview), releaseKey.current)
+      .then((results) => {
+        setRelease((state) => (state ? { ...state, state: { phase: 'done', results } } : state))
+        void load()
+      })
+      .catch((error: unknown) => setRelease((state) => (state ? { ...state, state: { phase: 'failed', words: writeProblem(error) } } : state)))
   }, [api, release, load])
 
   const model: WorkOrdersListModel = {
@@ -274,6 +283,7 @@ function WorkOrdersContainer() {
     q,
     mode,
     due,
+    rush,
     today: romeDay(),
     rows,
     counts,
@@ -299,12 +309,16 @@ function WorkOrdersContainer() {
         onOpen: (id) => router.push(`${prefix}/production/work-orders/${id}`),
         onMode: (next) => router.replace(address({ mode: next })),
         onDue: (next) => router.replace(address({ due: next })),
+        onRush: (next) => router.replace(address({ rush: next })),
         onSaved: saved,
         onReleaseMany: (ids) => {
           const picked = (rows.items ?? []).filter((row: WorkOrderRow) => ids.includes(row.id))
-          setRelease({ rows: picked.map((row) => ({ id: row.id, number: row.number, styleCode: row.styleCode })), running: false, done: false, results: {} })
+          releaseKey.current = newIdempotencyKey()
+          setRelease({ rows: picked.map((row) => ({ id: row.id, number: row.number, styleCode: row.styleCode })), preview: null, state: { phase: 'reading' } })
+          readRelease(ids)
         },
-        onRunRelease: () => void runRelease(),
+        onRunRelease: runRelease,
+        onRetryRelease: () => release && readRelease(release.rows.map((row) => row.id)),
         onCloseRelease: () => setRelease(null),
         onDismissNotice: () => setNotice(null),
         daily: {

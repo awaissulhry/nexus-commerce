@@ -1,0 +1,402 @@
+{
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "close": "Close"
+  },
+  "held": {
+    "noAct": "This needs {permission}",
+    "noPrint": "Printing labels needs {permission}",
+    "pickFirst": "Tick the bundles first",
+    "oneSite": "Reprint one site at a time: each site has its own printers",
+    "reprintVoid_one": "{count} selected is void: a void bundle has no new ticket",
+    "reprintVoid_other": "{count} selected are void: a void bundle has no new ticket",
+    "reprintNotOpen_one": "{count} selected belongs to a work order that is not open",
+    "reprintNotOpen_other": "{count} selected belong to work orders that are not open",
+    "voidAlready": "This bundle is void already",
+    "voidNotOpen": "Its work order is not open: bundles change only while it is released or in progress",
+    "voidScanned_one": "{count} scan names this bundle: undo or correct it instead",
+    "voidScanned_other": "{count} scans name this bundle: undo or correct them instead",
+    "noFindings": "Reviewing findings needs {permission}",
+    "findingFinal": "This finding was reviewed already: that is final",
+    "busy": "Working on it…",
+    "noWho": "Only the owner opens this: it needs {permission}",
+    "ticketVoid": "A void bundle has no new ticket",
+    "ticketNotOpen": "Its work order is not open: tickets change only while it is released or in progress"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline: reconnecting"
+  },
+  "noAccess": {
+    "title": "You cannot see the bundles",
+    "body": "This page needs {permission}."
+  },
+  "tile": {
+    "active": "Active",
+    "stuck": "No scan for {hours} h",
+    "stuckAny": "No scan past the limit",
+    "replaced": "Tickets replaced today",
+    "onHold": "On hold",
+    "subcontractor": "At a subcontractor",
+    "capped": "More bundles than one read follows: the tiles count the newest. Choose a site in the top bar."
+  },
+  "place": {
+    "line": "Line · {seq} {code}",
+    "lineAny": "On the line",
+    "subcontractor": "Subcontractor · {number}",
+    "subcontractorAny": "At a subcontractor",
+    "rework": "Quality · rework",
+    "hold": "Quality · on hold",
+    "cutting": "Cutting",
+    "finished": "Finished",
+    "void": "Void",
+    "next": "Next: {seq} {code}"
+  },
+  "stuck": {
+    "for": "{hours} h with no scan (limit {limit} h)"
+  },
+  "col": {
+    "bundle": "Bundle",
+    "workOrder": "Work order",
+    "style": "Style",
+    "colour": "Colour",
+    "size": "Size",
+    "part": "Part",
+    "pieces": "Pieces",
+    "place": "Place now",
+    "lastScan": "Last scan",
+    "status": "Status",
+    "replaced": "Replaced codes",
+    "hides": "Hides and lot",
+    "site": "Site",
+    "more": "More",
+    "noScan": "No scan yet",
+    "whole": "Whole garments",
+    "splitOff": "Split off a bundle",
+    "piecesCount_one": "{count} piece",
+    "piecesCount_other": "{count} pieces"
+  },
+  "status": {
+    "ACTIVE": "Active",
+    "VOID": "Void"
+  },
+  "view": {
+    "active": "Active (not finished)",
+    "stuck": "No scan past the limit",
+    "cutting": "In cutting",
+    "line": "On the line",
+    "quality": "In quality",
+    "onHold": "On hold",
+    "subcontractor": "At a subcontractor",
+    "finished": "Finished",
+    "void": "Void",
+    "all": "All"
+  },
+  "list": {
+    "table": "Bundles",
+    "search": "Search or scan a ticket",
+    "viewLabel": "Rows",
+    "count_one": "{count} bundle",
+    "count_other": "{count} bundles",
+    "countMore_one": "{count} bundle shown, more below",
+    "countMore_other": "{count} bundles shown, more below",
+    "failed": "The bundles could not be read",
+    "noMatch": {
+      "title": "No rows match these filters",
+      "body": "Clear the filters, or scan another ticket."
+    },
+    "clearFilters": "Clear filters",
+    "empty": {
+      "title": "No bundles yet",
+      "body": "They are made at the cutting table."
+    },
+    "more": "Show 50 more",
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "rowMenu": "More for {code}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "openWorkOrder": "Open the work order",
+    "reprint_one": "Reprint {count} ticket",
+    "reprint_other": "Reprint {count} tickets",
+    "reprintNone": "Reprint tickets",
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)",
+    "fileName": "bundles",
+    "keysTitle": "Keys of this list"
+  },
+  "reprint": {
+    "asPdf": "No printer: a PDF in this browser",
+    "printersFailed": "The site's printers could not be read: the ticket can still be made as a PDF."
+  },
+  "void": {
+    "title": "Void bundle {code}",
+    "body": "Scans no longer take it, its coupons go with it and its pieces are back in cut, not in bundles. This cannot be undone.",
+    "reason": "Why",
+    "reasonShort": "Say why in 3 to 200 characters",
+    "go": "Void bundle",
+    "open": "Void bundle…",
+    "done": "Bundle voided."
+  },
+  "patterns": {
+    "title": "Scan-pattern checks",
+    "days_one": "Last {count} day",
+    "days_other": "Last {count} days",
+    "law": "Used after informing workers (L. 300/1970 art. 4). Reviewed in aggregate first. These are patterns to talk about, not scores.",
+    "lawLabel": "The law behind these checks",
+    "lawName": "Statuto dei Lavoratori art. 4",
+    "lawPlain": "Equipment that could also watch workers needs a union agreement or an authorisation, and workers must be told. These checks look at bundles and places, never at one person's output.",
+    "failed": "The checks could not be read",
+    "none": "Nothing found in these days.",
+    "noLine": "No line",
+    "openCount_one": "{count} finding: {kind}. Open the bundle",
+    "openCount_other": "{count} findings: {kind}. Open the bundles",
+    "col": {
+      "line": "Line",
+      "operation": "Operation",
+      "kind": "What was seen",
+      "open": "To review",
+      "reviewed": "Reviewed",
+      "dismissed": "Dismissed"
+    }
+  },
+  "checks": {
+    "STATION_SITE": "Not available: this site records stations, not people.",
+    "NO_BASIS": "Not available: this site has no legal basis on record.",
+    "GATE_CLOSED": "Off: the performance purpose is not switched on at this site.",
+    "UNKNOWN": "The site's checks could not be read."
+  },
+  "kind": {
+    "BUNCHED_AT_SHIFT_END": "Scans bunched at shift end",
+    "MOVED_NOT_SCANNED": "Moved but not scanned",
+    "GAP_BELOW_STANDARD": "Gap shorter than the standard allows"
+  },
+  "seen": {
+    "BUNCHED_AT_SHIFT_END": "{scans} scans in {minutes} minutes around the end of a shift",
+    "MOVED_NOT_SCANNED": "Reported at operation {reached}, operation {missing} has no scan",
+    "GAP_BELOW_STANDARD": "{gap} minutes for {pieces} pieces, the standard asks at least {standard}"
+  },
+  "finding": {
+    "OPEN": "To review",
+    "REVIEWED": "Reviewed",
+    "DISMISSED": "Dismissed",
+    "menu": "More for {code}",
+    "open": "Open the bundle",
+    "markReviewed": "Mark reviewed",
+    "dismiss": "Dismiss",
+    "who": "Show who…",
+    "col": {
+      "bundle": "Bundle",
+      "workOrder": "Work order",
+      "seen": "What was seen",
+      "when": "When",
+      "status": "Status",
+      "more": "More"
+    },
+    "failed": "The findings could not be read",
+    "none": "No findings here any more.",
+    "subtitle": "The bundles behind this count, never the people.",
+    "table": "Findings",
+    "count_one": "{count} finding",
+    "count_other": "{count} findings",
+    "countMore_one": "{count} finding shown, more below",
+    "countMore_other": "{count} findings shown, more below",
+    "reviewMany_one": "Mark {count} reviewed",
+    "reviewMany_other": "Mark {count} reviewed",
+    "reviewed_one": "{count} finding marked reviewed.",
+    "reviewed_other": "{count} findings marked reviewed.",
+    "dismissed_one": "Finding dismissed.",
+    "dismissed_other": "Findings dismissed.",
+    "dismissTitle": "Dismiss the finding on {code}",
+    "dismissNote": "Why it is dismissed"
+  },
+  "review": {
+    "failed": "The review could not be saved.",
+    "changed": "Someone reviewed this finding first: read it again.",
+    "noteNeeded": "A dismissal says why"
+  },
+  "who": {
+    "title": "Show who · {code}",
+    "show": "Show",
+    "logged": "This view is logged",
+    "oneFinding": "Who looked, at which finding, why and whom it showed goes in the audit log. One finding at a time.",
+    "basis": "Legal basis on record: {kind}, {reference} ({when})",
+    "basisKind": {
+      "UNION_AGREEMENT": "union agreement",
+      "INL_AUTHORISATION": "labour inspectorate authorisation",
+      "NOT_REQUIRED": "no authorisation needed"
+    },
+    "noScans": "No scan of this bundle in the finding's window.",
+    "table": "The scans behind this finding",
+    "col": {
+      "when": "When",
+      "operation": "Operation",
+      "worker": "Worker",
+      "station": "Station",
+      "good": "Good",
+      "scrap": "Scrap",
+      "rework": "Rework"
+    },
+    "noWorker": "Not named",
+    "purpose": "Why you need the names",
+    "purposeWord": {
+      "TALK_WITH_THE_WORKER": "To talk with the worker about this finding",
+      "WORKER_ASKED": "The worker asked",
+      "PAY_QUERY": "A pay query"
+    },
+    "note": "A note for the log (optional)",
+    "heldPurpose": "Choose why you need the names",
+    "failed": "The names could not be read.",
+    "gone": "This finding is no longer there."
+  },
+  "scanKind": {
+    "REPORT": "Report",
+    "UNDO": "Undo",
+    "CORRECTION": "Correction"
+  },
+  "record": {
+    "back": "Bundles",
+    "title": "Bundle",
+    "loading": "Reading the bundle…",
+    "state": {
+      "forbidden": {
+        "title": "You cannot see this bundle",
+        "body": "This page needs {permission}."
+      },
+      "not_found": {
+        "title": "This bundle does not exist",
+        "body": "It may be in another company."
+      },
+      "error": {
+        "title": "The bundle could not be read"
+      }
+    },
+    "backToList": "Back to the bundles",
+    "more": "More",
+    "tab": {
+      "progress": "Progress",
+      "scans": "Scans",
+      "quality": "Quality",
+      "ticket": "Ticket"
+    },
+    "tabs": "The bundle's tabs",
+    "voided": "Voided {when}: {reason}"
+  },
+  "progress": {
+    "title": "Operations in order",
+    "none": "The work order has no scanned operation.",
+    "state": {
+      "DONE": "Done",
+      "HERE": "Here",
+      "NOT_REACHED": "Not reached"
+    },
+    "good_one": "{count} good",
+    "good_other": "{count} good",
+    "scrap_one": "{count} scrap",
+    "scrap_other": "{count} scrap",
+    "rework_one": "{count} rework",
+    "rework_other": "{count} rework",
+    "where": "Where it is",
+    "place": "Place now",
+    "next": "Next",
+    "since": "Since"
+  },
+  "scans": {
+    "noRight": {
+      "title": "You cannot see this bundle's scans",
+      "body": "The scans need {permission}."
+    },
+    "failed": "The scans could not be read",
+    "loading": "Reading the scans…",
+    "title": "Scans",
+    "hint": "Append-only: a correction is asked from the floor or approved in Labour & corrections, never edited here.",
+    "privacy": "Names show only here, inside this one bundle, where the site records workers.",
+    "col": {
+      "n": "#",
+      "kind": "Kind",
+      "operation": "Operation",
+      "good": "Good",
+      "scrap": "Scrap",
+      "rework": "Rework",
+      "reason": "Scrap reason",
+      "device": "Device time",
+      "server": "Server time",
+      "station": "Station",
+      "worker": "Worker",
+      "state": "Notes"
+    },
+    "voidedBy": "Voided by #{n}",
+    "voids": "Voids #{n}",
+    "approved": "Approved"
+  },
+  "quality": {
+    "holds": "Holds",
+    "noHolds": "No hold on this bundle or its work order.",
+    "holdOne": "hold",
+    "holdMany": "holds",
+    "reworks": "Rework",
+    "noReworks": "No rework for this bundle.",
+    "reworkName": "{count} pieces · {status}",
+    "reworkOne": "rework",
+    "reworkMany": "reworks",
+    "genealogy": "Genealogy",
+    "shades": "Shades: {shades}",
+    "treeLabel": "Genealogy of bundle {code}"
+  },
+  "tree": {
+    "bundle": "Bundle",
+    "hide": "Hide",
+    "lot": "Lot",
+    "serial": "Garment",
+    "child": "Split off",
+    "parent": "Split from"
+  },
+  "ticket": {
+    "pdf": "Ticket PDF",
+    "title": "The current ticket",
+    "reprint": "Reprint…",
+    "name": "Ticket {code}",
+    "workOrder": "Work order",
+    "operations": "Operations",
+    "qr": "QR code of ticket {code}",
+    "code": {
+      "barcode": "Barcode of ticket {code}",
+      "qr": "QR code of ticket {code}"
+    },
+    "voided": "This bundle is void: no scan takes this ticket.",
+    "replaced": "Replaced codes",
+    "noReplaced": "This is the first ticket.",
+    "replacedHint": "Scanning an old code says it was replaced.",
+    "reprints": "Reprints",
+    "col": {
+      "when": "When",
+      "new": "New code",
+      "old": "Old code",
+      "reason": "Why",
+      "where": "Where",
+      "state": "State",
+      "error": "Problem",
+      "code": "Code",
+      "operation": "Operation"
+    },
+    "jobs": "Print history",
+    "noJobsRight": "The print history needs {permission}.",
+    "noJobs": "Nothing printed yet.",
+    "jobFailed": "The printer refused it",
+    "coupons": "Coupons per operation"
+  },
+  "pdf": {
+    "noRight": {
+      "title": "You cannot print tickets",
+      "body": "A ticket PDF needs {permission}."
+    },
+    "title": "Ticket",
+    "held": "The PDF is not ready yet",
+    "print": "Print",
+    "storedNowhere": "Made on request and stored nowhere.",
+    "loading": "Making the PDF…"
+  }
+}
