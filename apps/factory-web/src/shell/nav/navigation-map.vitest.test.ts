@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
@@ -8,7 +11,7 @@ import { areaSubNavGroups, findAreaNavPlace, type AreaNav, type AreaNavItem } fr
 import { NEW_VERBS } from '../../areas/home/today/model'
 import { PANELS } from '../../areas/home/today/panels'
 import { SEARCH_TYPES } from '../../areas/search/model'
-import { FLOOR_MODES, homeTiles, MAX_TILES, TILE_KEYS, TILE_RULES, type FloorMode, type TileKey } from '../../floor/model'
+import { FLOOR_MODES, homeTiles, MAX_TILES, TILE_KEYS, tilePage, TILE_RULES, type FloorMode, type TileKey } from '../../floor/model'
 import { LABEL_TYPES, type ScanRead } from '../../floor/scan/scan-model'
 import { TASK_ROUTES, taskForScan, taskOfTile } from '../../floor/tasks/routes'
 import { LOCALES, type Locale } from '../../lib/i18n/locales'
@@ -17,7 +20,7 @@ import { attentionAddress, hasRecordPage, LIST_PAGES, listAddress, RECORD_PAGES,
 import { permissionCheck } from '../../lib/session/session'
 import { LINK_TASK_RULES, LINK_TASKS, linkKinds, linkTaskOf } from '../../links/_nav/link-types'
 import { matchPages } from '../palette/palette-model'
-import { FLOOR, FRAME, LINKS, OFFICE, type TreePage } from './approved-tree'
+import { FLOOR, FLOOR_NO_TILE, FRAME, LINKS, OFFICE, type TreePage } from './approved-tree'
 import { FRAME_PAGES, OFFICE_NAV, OFFICE_PAGES, officeAreaDeclarations, officeNavFor, palettePages, translateNav } from './office-nav'
 
 /**
@@ -366,8 +369,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
   it('each tile in the station modes the tree gives it, the build\'s two named differences apart', () => {
     // Operation also at the inspection bench (the floor tasks' decision: a routing's scanned INSPECTION operation). My
     // work (B-W2a-74): at the packing bench too (the dispatch list is per station), not at the warehouse (a device with no
-    // station has no queue; the warehouse's task inbox, SCM-274, is W2b — and a seventh warehouse tile would push Scan
-    // anything off Home, MAX_TILES).
+    // station has no queue: the warehouse's task inbox, SCM-274, is W2b-5).
     const added: Partial<Record<TileKey, readonly FloorMode[]>> = { operation: ['inspection'], mywork: ['packing'] }
     const removed: Partial<Record<TileKey, readonly FloorMode[]>> = { mywork: ['warehouse'] }
     for (const page of FLOOR) {
@@ -400,23 +402,42 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
     for (const rule of TILE_RULES) expect(everything, rule.key).toContain(rule.permission)
   })
 
-  it('a station shows its mode\'s tiles in order, at most six, each with its word in both languages', () => {
+  it('a station shows its mode\'s tiles in order, at most six a page, each with its word in both languages', () => {
     const keys = (mode: FloorMode) => homeTiles(mode, everything, false).map((tile) => tile.key)
     expect(Object.fromEntries(FLOOR_MODES.map((mode) => [mode, keys(mode)]))).toEqual({
-      // B-W2b-70: a full home keeps the Line view and Scan anything; the frame's Help button opens Call for help from any screen.
-      cutting: ['mywork', 'operation', 'cut', 'bundles', 'lineview', 'scan'],
-      sewing: ['mywork', 'operation', 'machine', 'clock', 'lineview', 'scan'],
-      packing: ['mywork', 'operation', 'labels', 'pack', 'lineview', 'scan'],
-      inspection: ['mywork', 'operation', 'final', 'machine', 'lineview', 'scan'],
-      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'lineview', 'scan'],
+      // B-W2b-70: the Line view and Scan anything stay on the first page; B-W2b-73: the rest of a full home on the More tile's page.
+      cutting: ['mywork', 'operation', 'cut', 'bundles', 'machine', 'clock', 'help', 'lineview', 'scan'],
+      sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'help', 'lineview', 'scan'],
+      packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'help', 'lineview', 'scan'],
+      inspection: ['mywork', 'operation', 'final', 'machine', 'clock', 'help', 'lineview', 'scan'],
+      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'help', 'lineview', 'scan'],
     })
-    for (const mode of FLOOR_MODES) expect(keys(mode).length).toBeLessThanOrEqual(MAX_TILES)
+    for (const mode of FLOOR_MODES) {
+      const first = tilePage(homeTiles(mode, everything, false), 0)
+      expect(first.tiles.length + (first.pages > 1 ? 1 : 0)).toBeLessThanOrEqual(MAX_TILES)
+      expect(first.tiles.map((tile) => tile.key).slice(-2)).toEqual(['lineview', 'scan'])
+    }
+    // Devices with no station's mode (design Modes: phone, supervisor). The build's differences from the tree, named: Clock on a
+    // line tablet (the lead's own, B-W2b-67); the Line view on a lead's phone (wherever they sign in, B-W2b-70); no My work on
+    // a phone (its rows open jobs that need a station). A subcontract station: Scan only.
+    const onDevice = (device: string) => homeTiles(null, everything, false, device).map((tile) => tile.key)
+    expect(onDevice('LINE')).toEqual(['clock', 'lineview', 'scan'])
+    expect(onDevice('PHONE')).toEqual(['clock', 'myday', 'lineview', 'scan'])
+    expect(onDevice('STATION')).toEqual(['scan'])
     for (const locale of LOCALES) {
       const floor = CATALOGUE[locale].floor ?? {}
       for (const key of TILE_KEYS) {
         expect(floor[`tile.${key}`], `${locale} tile.${key}`).toBeTruthy()
         if (key !== 'scan') expect(floor[`tile.hint.${key}`], `${locale} tile.hint.${key}`).toBeTruthy()
       }
+      for (const key of ['tile.more', 'tile.back', 'tile.hint.back', 'tile.hint.more_one', 'tile.hint.more_other']) expect(floor[key], `${locale} ${key}`).toBeTruthy()
+    }
+  })
+
+  it('a floor page with no tile has its page, and is opened by its device, never by a tile', () => {
+    for (const page of FLOOR_NO_TILE) {
+      expect(existsSync(join(dirname(fileURLToPath(import.meta.url)), '../../app/(floor)', page.href, 'page.tsx')), page.id).toBe(true)
+      expect(TILE_RULES.map((rule) => `/floor/${rule.key}`)).not.toContain(page.href)
     }
   })
 

@@ -9,6 +9,7 @@ import { createDevice, createPrinter, failedJobs, getSite, listCompanies, listDe
 import { runBulk, type BulkResult } from '../shared/bulk'
 import { bulkNotice } from '../shared/reach'
 import { adminHref, failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
+import { plantPlaces } from '../../plant/_shared/api'
 import { enrolBody, printerBody, type DevicesMode, type DeviceTile, type EnrolModel, type PersonChoice, type PrinterDialog, type SiteChoice } from './model'
 import { fetchFloorVersion } from './version'
 import { DevicesView } from './view/DevicesView'
@@ -19,8 +20,15 @@ export const ENROL_POLL_MS = 3000
 /**
  * The sites with their stations, for the enrol and printer dialogs: the companies' active sites (`GET /org/companies`)
  * and each site's stations (`GET /org/sites/:id`). Shared by the Devices page and a device's record.
+ * B-W2b-73: a floor supervisor keeps the floor's devices but holds neither of those reads; `plant.view` serves them the same
+ * places of the sites they reach (`GET /plant/places`), so no right is added. A person with neither has no site to pick.
  */
-export async function siteChoices(api: ReturnType<typeof useOfficeApi>): Promise<SiteChoice[]> {
+export async function siteChoices(api: ReturnType<typeof useOfficeApi>, held: ReadonlySet<string>): Promise<SiteChoice[]> {
+  if (!(held.has('companies.view') && held.has('sites.view'))) {
+    if (!held.has('plant.view')) return []
+    const places = await plantPlaces(api)
+    return places.map(({ id, name, companyId, stations, lines }) => ({ id, name, companyId, stations: stations.map(({ id, code, name }) => ({ id, code, name })), lines: lines.map(({ id, code, name }) => ({ id, code, name })) }))
+  }
   const companies = await listCompanies(api)
   const sites = companies.flatMap((company) => company.sites.filter((site) => site.status === 'ACTIVE'))
   return Promise.all(
@@ -113,7 +121,7 @@ export function DevicesPage() {
           )
         : Promise.resolve(),
       held.has('print.view') ? failedJobs(api).then((jobs) => setFailedPrinters(new Set(jobs.map((job) => job.printerId)).size), () => setFailedPrinters(null)) : Promise.resolve(),
-      held.has('companies.view') && held.has('sites.view') ? siteChoices(api).then(setSites, () => undefined) : Promise.resolve(),
+      siteChoices(api, held).then(setSites, () => undefined),
       fetchFloorVersion().then(setCurrentVersion),
     ])
     setAsOf(new Date().toISOString())

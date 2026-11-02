@@ -47,8 +47,8 @@ export function DeviceRecord({ deviceId }: { deviceId: string }) {
       const found = (await listDevices(api)).find((item) => item.id === deviceId) ?? null
       setDevice(found)
       setProblem(found ? null : 'problem.notFound')
-      if (found && held.has('companies.view') && held.has('sites.view')) {
-        const choices = await siteChoices(api).catch(() => [])
+      if (found) {
+        const choices = await siteChoices(api, held).catch(() => [])
         setSite(choices.find((item) => item.id === found.siteId) ?? null)
       }
       // B-W2b-67: a personal phone names its person; the names come only here, inside the device's own record.

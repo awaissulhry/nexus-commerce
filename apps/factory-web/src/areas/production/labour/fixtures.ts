@@ -108,6 +108,8 @@ export const LEGAL = {
 
 const template = (key: string): string[] => [...(templateOf(key)?.permissions ?? []), 'home.view']
 export const ROLES = {
+  // B-W2b-73: a made-up custom role: decides scan corrections, keeps no labour records.
+  correctOnly: ['home.view', 'production.scan.correct'],
   production: template('production_manager'),
   supervisor: template('floor_supervisor'),
   readOnly: template('read_only'),
@@ -383,6 +385,8 @@ export const designScreen = defineDesignScreen<LabourCase>({
     { id: 'loading', label: 'Loading', model: base('production', { rows: { items: null, more: false, limitReached: false, problem: null }, counts: null, blocks: null, legal: null, days: { items: null, from: null, to: null, problem: null }, edits: { items: null, from: null, to: null, more: false, limitReached: false, problem: null }, asOf: null }) },
     { id: 'error', label: 'The reads failed: in words, Try again', model: base('production', { rows: { items: null, more: false, limitReached: false, problem: 'problem.offline' }, counts: null, days: { items: null, from: null, to: null, problem: 'problem.offline' }, edits: { items: null, from: null, to: null, more: false, limitReached: false, problem: 'problem.offline' } }) },
     { id: 'no-permission', label: 'Sales: no permission (production.labour.view)', model: base('sales') },
+    { id: 'correct-only', label: 'A custom role, production.scan.correct alone: the row on Today opens that correction', model: base('correctOnly', { detail: { key: `CORRECTION:${CORRECTION.id}`, loaded: { status: 'ready', value: { ...CORRECTION_RECORD, record: null, around: null } } } }, { open: `CORRECTION:${CORRECTION.id}` }), note: 'B-W2b-73: no queue, no line days, no changes: the page reads none of them for this person.' },
+    { id: 'correct-only-closed', label: 'The same role with no correction open: back to Today', model: base('correctOnly', { notice: { tone: 'success', words: { key: 'notice.corrected' } } }) },
   ],
 })
 

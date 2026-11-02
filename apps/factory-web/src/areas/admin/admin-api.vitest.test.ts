@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { createApiClient, type ApiClient } from '../../lib/api/client'
 import { isApiError } from '../../lib/api/errors'
+import { siteChoices } from './devices/DevicesPage'
 import { COMPANIES, DEVICES, ROLES, USERS, WORKERS } from './shared/fixtures'
 import { createCompany, createDevice, createSite, editCompany, editStation, giveRole, invite, issueBadge, listCompanies, listRoles, listUsers, putFloorSettings, resetPin, revokeDevice } from './shared/api'
 import { runWithStepUp, StepUpCancelled } from './shared/step-up'
@@ -29,6 +31,26 @@ function mockApi(answers: Array<{ status: number; body: unknown }>): { api: ApiC
 }
 
 const stepUpRefusal = { status: 403, body: { error: { code: 'forbidden', message: 'Step-up required.', issues: [{ path: 'stepUp', message: 'fresh code' }] } } }
+
+describe('the sites the enrol and printer dialogs offer', () => {
+  const place = { id: 'x', code: 'X', name: 'Place X' }
+  const SITE = { id: 's1', companyId: 'c1', code: 'N', name: 'Sede Nord', lines: [place], workCentres: [place], stations: [{ ...place, id: 'st1', lineId: null, workCentreId: 'x' }] }
+
+  it('B-W2b-73: a floor supervisor (devices.manage, plant.view, neither org read) gets the sites from the plant\'s places', async () => {
+    const { api, calls } = mockApi([{ status: 200, body: { sites: [SITE] } }])
+    expect(await siteChoices(api, new Set(templateOf('floor_supervisor')!.permissions))).toEqual([{ id: 's1', name: 'Sede Nord', companyId: 'c1', stations: [{ id: 'st1', code: 'X', name: 'Place X' }], lines: [place] }])
+    expect(calls.map((call) => call.url)).toEqual(['/api/plant/places'])
+  })
+
+  it('whoever holds both org reads keeps them; a person with neither source asks nothing', async () => {
+    const { api, calls } = mockApi([{ status: 200, body: { companies: [] } }])
+    expect(await siteChoices(api, new Set(['companies.view', 'sites.view', 'plant.view']))).toEqual([])
+    expect(calls.map((call) => call.url)).toEqual(['/api/org/companies'])
+    const none = mockApi([])
+    expect(await siteChoices(none.api, new Set(['devices.manage', 'companies.view']))).toEqual([])
+    expect(none.calls).toEqual([])
+  })
+})
 
 describe('the org calls (platform/admin/org)', () => {
   it('lists the tree with archived rows when asked, with the company header', async () => {

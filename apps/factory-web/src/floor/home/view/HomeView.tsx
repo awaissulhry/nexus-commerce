@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { CircleAlert, ClipboardList, Clock, CloudOff, Factory, Hash, Layers, LifeBuoy, ListTodo, Package, PackageOpen, Pause, Play, ScanLine, Scissors, ScrollText, ShieldCheck, Shirt, Tag, Undo2, UserRound, UserRoundCheck, Users, Wrench } from 'lucide-react'
+import { ArrowLeft, CircleAlert, ClipboardList, Clock, CloudOff, Factory, Hash, Layers, LayoutGrid, LifeBuoy, ListTodo, Package, PackageOpen, Pause, Play, ScanLine, Scissors, ScrollText, ShieldCheck, Shirt, Tag, Undo2, UserRound, UserRoundCheck, Users, Wrench } from 'lucide-react'
 import type { ScanIdKind } from '@nexus/factory-domain/numbering/kinds'
 import { FloorButton, FloorTile, FloorTileGrid, ScanInput, type CameraScanner } from '@nexus/ui/floor'
 import { FloorCard } from '@nexus/ui/floor/FloorCard/index'
@@ -16,7 +16,7 @@ import { FloorState } from '../../frame/view/FloorState'
 /**
  * SCR-022 — the floor home inside the floor frame (design floor.home; PLT-035, PLT-036): a scan strip on top (a scan
  * here opens the right card at once: Scan anything, SCR-024), then at most six tiles — the station's mode AND the
- * person's floor permissions, fail closed. Only a tile whose page exists opens; every other one says "Coming soon" on
+ * person's floor permissions, fail closed; more than six: a More tile opens the next page of tiles. Only a tile whose page exists opens; every other one says "Coming soon" on
  * the tile (never a dead tile). While the worker notice blocks scans, every scan tile says "Read the notice first" and
  * a card opens the notice. Offline (B-W0-30): one line says what goes on (every queued action is saved on this tablet)
  * and what waits for the network at this station (receipts, inspections and releases take their number from the office
@@ -27,6 +27,8 @@ export interface HomeViewModel {
   frame: FrameModel
   mode: FloorMode | null
   tiles: readonly HomeTile[]
+  /** B-W2b-73: the tiles on the next page (0: this is the last, More goes back); null: one page, no More tile. */
+  more?: number | null
   notice: { due: boolean; blocksScans: boolean }
   /** Right after a badge switched the person: who left, who is on. */
   switched?: { from: string; to: string } | null
@@ -43,7 +45,7 @@ export interface HomeViewModel {
   timeZone?: string
 }
 
-export type HomeAction = { type: 'tile'; key: TileKey } | { type: 'scan'; code: string } | { type: 'notice' } | { type: 'continue'; code: string }
+export type HomeAction = { type: 'tile'; key: TileKey } | { type: 'more' } | { type: 'scan'; code: string } | { type: 'notice' } | { type: 'continue'; code: string }
 
 export interface HomeViewProps {
   model: HomeViewModel
@@ -189,6 +191,7 @@ export function HomeView({ model, onAction, onFrame, camera }: HomeViewProps) {
                 {...(tile.key === 'myday' && model.mydayAnswers ? { count: model.mydayAnswers, countLabel: t('tile.mydayAnswers', { count: model.mydayAnswers }) } : {})}
               />
             ))}
+            {model.more === undefined || model.more === null ? null : <FloorTile key="more" icon={model.more > 0 ? <LayoutGrid /> : <ArrowLeft />} label={t(model.more > 0 ? 'tile.more' : 'tile.back')} hint={model.more > 0 ? t('tile.hint.more', { count: model.more }) : t('tile.hint.back')} tone="neutral" onPress={() => send({ type: 'more' })} />}
           </FloorTileGrid>
         )}
       </div>

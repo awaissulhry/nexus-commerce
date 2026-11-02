@@ -285,8 +285,8 @@ export function FloorMyWork() {
   const onScan = async (code: string) => {
     if (!me) return
     const read = readScan(code, me.scanTag)
-    const mode = modeOf(me.device.station)
-    const task = taskForScan(mode, read, homeTiles(mode, me.permissions, me.notice.blocksScans))
+    const mode = modeOf(me.device.station, me.device.mode)
+    const task = taskForScan(mode, read, homeTiles(mode, me.permissions, me.notice.blocksScans, me.device.mode))
     if (task) return store.openWith(TASK_ROUTES[task], read.code)
     if (read.kind !== 'badge') return store.openScan(code)
     if (await store.switchTo(read.code)) feedback('error')
@@ -366,7 +366,7 @@ export function FloorMyWork() {
         cantFind,
         putLastDone,
         held: me.notice.blocksScans,
-        mode: modeOf(me.device.station),
+        mode: modeOf(me.device.station, me.device.mode),
         messages,
         seen,
         messagesAsOf: messagesAsOf ?? (!online && messages ? messages.asOf : null),

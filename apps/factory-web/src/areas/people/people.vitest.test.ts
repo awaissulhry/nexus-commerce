@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { EMPLOYEE_KINDS, EMPLOYEE_TILES, LIFECYCLES, NEXT_STEPS } from '@nexus/factory-domain/people/employees/rules'
 import { LEAVER_STEP_KINDS } from '@nexus/factory-domain/people/leavers/rules'
 import { MOVE_CONFLICTS } from '@nexus/factory-domain/people/teams/rules'
+import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { createApiClient, type ApiClient } from '../../lib/api/client'
 import { ApiError } from '../../lib/api/errors'
@@ -13,7 +14,8 @@ import { createTranslator, messagesFor } from '../../lib/i18n/messages'
 import { I18nProvider } from '../../lib/i18n/provider'
 import { LIST_PAGES, recordAddress } from '../../lib/records/record-links'
 import { permissionCheck } from '../../lib/session/session'
-import { OFFICE_NAV, OFFICE_PAGES, officeNavFor } from '../../shell/nav/office-nav'
+import { firstOfficePage, OFFICE_NAV, OFFICE_PAGES, officeNavFor } from '../../shell/nav/office-nav'
+import { attendanceCan, seesThePage } from './attendance/model'
 import { applyMoves, createEmployee, createLoan, listEmployees, startLeaving, updateEmployee, whatYouSee } from './_shared/api'
 import { EMPLOYEE_LIST, LEAVER, PEOPLE } from './_shared/fixtures'
 import {
@@ -82,6 +84,28 @@ describe('people: the area and who may do what', () => {
     expect(sees('floor_supervisor')).toBe(true)
     expect(sees('sales')).toBe(false)
     expect(sees('quality_inspector')).toBe(false)
+  })
+
+  it('B-W2b-73: Attendance has a row for whoever its page lets in (a supervisor\'s roll call), and the row gives no right', () => {
+    const rows = (permissions: readonly string[]) => (officeNavFor(permissionCheck([...permissions])).areas.find((area) => area.id === 'people')?.sections ?? []).flatMap((section) => section.items.map((item) => item.id))
+    const supervisor = template('floor_supervisor')
+    expect(supervisor).not.toContain('people.attendance.view')
+    expect(rows(supervisor)).toContain('people-attendance')
+    // People reports reads the same permission and has no other way in: still no row.
+    expect(rows(supervisor)).not.toContain('people-reports')
+    expect(attendanceCan(supervisor).view).toBe(false)
+    const others = officeArea.alsoOpens?.['people-attendance'] ?? []
+    expect(others.length).toBeGreaterThan(0)
+    const declared = new Set<string>(FACTORY_PERMISSIONS.assignable.map((definition) => definition.name))
+    for (const permission of others) {
+      expect(declared.has(permission), permission).toBe(true)
+      // Each name opens the page: the row and `seesThePage` say the same.
+      expect(seesThePage(attendanceCan([permission])), permission).toBe(true)
+      expect(rows([permission]), permission).toEqual(['people-attendance'])
+      expect(firstOfficePage(officeNavFor(permissionCheck([permission])), { areaId: 'people' }), permission).toBe('/people/attendance')
+    }
+    expect(rows(template('sales'))).toEqual([])
+    expect(rows(['people.view'])).toEqual(['people-employees'])
   })
 
   it('reads the rights by name: the HR register, My team, each manage, imports, the lines and the audit', () => {

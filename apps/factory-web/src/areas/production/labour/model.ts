@@ -578,6 +578,12 @@ export const isLabourChange = (type: string): boolean =>
   type === 'production.scan_correction_decided' ||
   (type.startsWith('production.off_standard_') && type !== 'production.off_standard_code_changed' && type !== 'production.off_standard_started')
 
+/**
+ * B-W2b-73: Today sends a person who decides scan corrections here, and their right alone (production.scan.correct, no
+ * production.labour.view) reads no queue: such a person gets that one correction, nothing else of the page.
+ */
+export const decidesOneCorrection = (can: Pick<LabourCan, 'view' | 'correct'>, open: OpenItem | null): boolean => !can.view && can.correct && open?.kind === 'CORRECTION'
+
 /** The next item after a decision: the same place in the list, else the one before; null: nothing left. */
 export function nextAfter(keys: readonly string[], current: string): string | null {
   const at = keys.indexOf(current)

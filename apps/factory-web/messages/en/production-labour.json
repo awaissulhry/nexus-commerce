@@ -19,6 +19,11 @@
     "offline": "Not updating"
   },
   "page": {
+    "correctOnly": {
+      "title": "You decide scan corrections from Today",
+      "body": "Your role decides the floor's corrections one at a time, from Today. The queue, the line days and the changes on this page take “production.labour.view”.",
+      "today": "Open Today"
+    },
     "noAccess": {
       "title": "Your role cannot see Labour & corrections",
       "body": "It takes “production.labour.view”."

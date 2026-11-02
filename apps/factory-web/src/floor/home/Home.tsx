@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { zxingCamera } from '../camera'
 import { useFloor } from '../FloorApp'
-import { homeTiles, modeOf } from '../model'
+import { homeTiles, modeOf, tilePage } from '../model'
 import { heldWorkOf } from '../queue/actions'
 import { readScan } from '../scan/scan-model'
 import { TASK_ROUTES, taskForScan, taskOfTile } from '../tasks/routes'
@@ -32,11 +32,14 @@ export function FloorHome() {
   const { frame, onFrame } = store.frame('home.title')
   const [refused, setRefused] = useState(false)
   const [open, setOpen] = useState(KEPT)
+  const [page, setPage] = useState(0)
   const { me, api, online } = store
   const scans = Boolean(me?.permissions.includes('production.scan'))
   const person = me?.worker.id ?? null
   // B-W2b-68: a dispute answered shows on the My day tile; read per person, nothing held for the next one.
   const answers = useMyDayBadge(api, Boolean(online && me?.permissions.includes('floor.work')), person)
+  // B-W2b-73: the next person starts on the first page of tiles.
+  useEffect(() => setPage(0), [person])
   useEffect(() => {
     if (!scans || !online) return
     let live = true
@@ -51,7 +54,8 @@ export function FloorHome() {
   }, [api, online, scans, person])
   if (!me) return null
   const mode = modeOf(me.device.station, me.device.mode)
-  const tiles = homeTiles(mode, me.permissions, me.notice.blocksScans)
+  const tiles = homeTiles(mode, me.permissions, me.notice.blocksScans, me.device.mode)
+  const shown = tilePage(tiles, page)
 
   const onAction = async (action: HomeAction) => {
     switch (action.type) {
@@ -62,6 +66,8 @@ export function FloorHome() {
         if (task && tiles.some((tile) => tile.key === action.key && tile.held === null)) router.push(TASK_ROUTES[task])
         return
       }
+      case 'more':
+        return setPage(shown.more > 0 ? shown.page + 1 : 0)
       case 'notice':
         return router.push('/floor/notice')
       case 'continue':
@@ -88,7 +94,8 @@ export function FloorHome() {
       model={{
         frame,
         mode,
-        tiles,
+        tiles: shown.tiles,
+        more: shown.pages > 1 ? shown.more : null,
         notice: { due: me.notice.due, blocksScans: me.notice.blocksScans },
         switched: store.switched,
         badgeRefused: refused,

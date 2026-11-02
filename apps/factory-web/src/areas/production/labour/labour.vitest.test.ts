@@ -10,6 +10,7 @@ import { base, BLOCK_LONG, BLOCK_NORMAL, CORRECTION, DAY_READY, designScreen, DI
 import { designScreen as offStandardScreen } from './offstandard/fixtures'
 import {
   addressOf,
+  decidesOneCorrection,
   addressText,
   agePhrase,
   approveHeld,
@@ -264,6 +265,19 @@ function render(node: ReactNode): string {
 }
 
 describe('the page, drawn', () => {
+  it('B-W2b-73: production.scan.correct alone opens the one correction from Today: no queue, no "no access"', () => {
+    const correctOnly = labourCanOf(['production.scan.correct'])
+    expect(decidesOneCorrection(correctOnly, { kind: 'CORRECTION', id: 'k1' })).toBe(true)
+    expect(decidesOneCorrection(correctOnly, { kind: 'DISPUTE', id: 'd1' })).toBe(false)
+    expect(decidesOneCorrection(correctOnly, null)).toBe(false)
+    expect(decidesOneCorrection(everything, { kind: 'CORRECTION', id: 'k1' })).toBe(false)
+    expect(decidesOneCorrection(labourCanOf([]), { kind: 'CORRECTION', id: 'k1' })).toBe(false)
+    const drawn = (id: string) => render(createElement(LabourView, { model: designScreen.cases.find((entry) => entry.id === id)!.model.model }))
+    expect(drawn('correct-only')).toContain('You decide scan corrections from Today')
+    expect(drawn('correct-only-closed')).toContain('Open Today')
+    expect(drawn('no-permission')).toContain('cannot see Labour')
+  })
+
   const NAME = 'Marta Esempio'
 
   it('puts the legal basis before anything else, and no name or key anywhere in the lists', () => {
