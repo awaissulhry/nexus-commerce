@@ -66,6 +66,14 @@ export function audienceOf(direction: MessageDirection): MessageAudience {
   return direction === 'INTERNAL_NOTE' ? 'OFFICE' : 'PARTNER'
 }
 
+/**
+ * A note for the tablets (B-W2b-F5; the Owner's rule: no money on the floor, and nothing reads a note's words). A note stays
+ * in the office unless its writer ticks "For the floor", and only a work order has tablets working on it. The floor's own
+ * comments are written for the floor.
+ */
+export const noteMayGoToFloor = (recordType: string): boolean => recordType === 'WorkOrder'
+export const FLOOR_NOTE_REFUSAL = 'Only a note on a work order can go to the floor.'
+
 /** The longest text of one message, and the most people one note mentions and files one message attaches. */
 export const MAX_BODY_LENGTH = 20_000
 export const MAX_MENTIONS = 20

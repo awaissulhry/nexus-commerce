@@ -138,6 +138,48 @@ describe('every design case draws in both languages with no key left on screen',
     expect(html).toContain('Email to Marchio Demo S.r.l.')
   })
 
+  const caseOf = (id: string) => panelsScreen.cases.find((item) => item.id === id)!.model
+  const tick = (html: string) => /fw-rp-floor-tick[^]*?(<input[^>]*>)/.exec(html)?.[1] ?? ''
+
+  it('a note on a work order stays in the office with the tick off, in both languages (B-W2b-F5)', () => {
+    const en = render(panelsScreen as DesignScreen<unknown>, caseOf('work-order-note'), 'en')
+    expect(en).toContain('For the floor')
+    expect(en).toContain('The tablets working on this order read it. No prices.')
+    expect(en).toContain('Only people in the office see an internal note')
+    expect(en).not.toContain('The office and the tablets working on this order see this note')
+    expect(tick(en)).toBe('<input type="checkbox"/>')
+    expect(en).toContain('Note added. Only the office sees it.')
+    const it_ = render(panelsScreen as DesignScreen<unknown>, caseOf('work-order-note'), 'it')
+    expect(it_).toContain('Per il reparto')
+    expect(it_).toContain('Niente prezzi.')
+    expect(it_).toContain('Una nota interna la vede solo l&#x27;ufficio')
+  })
+
+  it('with the tick on the composer and the notice say the tablets see it too, in both languages (B-W2b-F5)', () => {
+    const en = render(panelsScreen as DesignScreen<unknown>, caseOf('work-order-note-floor'), 'en')
+    expect(en).toContain('The office and the tablets working on this order see this note')
+    expect(en).not.toContain('Only people in the office see an internal note')
+    expect(tick(en)).toBe('<input type="checkbox" checked=""/>')
+    expect(en).toContain('Note added. The office sees it, and the tablets working on this order.')
+    const it_ = render(panelsScreen as DesignScreen<unknown>, caseOf('work-order-note-floor'), 'it')
+    expect(it_).toContain('Questa nota la vedono l&#x27;ufficio e i tablet che lavorano quest&#x27;ordine')
+  })
+
+  it('a note shows in the thread whether it went to the floor (B-W2b-F5)', () => {
+    const notes = (html: string) => html.split('fw-rp-message is-internal').slice(1)
+    const en = notes(render(panelsScreen as DesignScreen<unknown>, caseOf('work-order-note'), 'en'))
+    expect(en).toHaveLength(3)
+    expect(en.map((note) => note.includes('For the floor'))).toEqual([true, true, false])
+    const it_ = notes(render(panelsScreen as DesignScreen<unknown>, caseOf('work-order-note'), 'it'))
+    expect(it_.map((note) => note.includes('Per il reparto'))).toEqual([true, true, false])
+  })
+
+  it('offers the tick on a work order only (B-W2b-F5)', () => {
+    const html = render(panelsScreen as DesignScreen<unknown>, caseOf('conversation'), 'en')
+    expect(html).not.toContain('fw-rp-floor-tick')
+    expect(html).toContain('Only people in the office see an internal note')
+  })
+
   it('a worker the legal gate keeps back is a person in the thread, in both languages (B-W2b-F4)', () => {
     const model = panelsScreen.cases.find((item) => item.id === 'conversation-person')!.model
     const en = render(panelsScreen as DesignScreen<unknown>, model, 'en')

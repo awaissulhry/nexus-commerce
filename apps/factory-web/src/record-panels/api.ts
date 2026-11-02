@@ -49,6 +49,7 @@ export const messageSchema = z.object({
   channel: z.enum(MESSAGE_CHANNELS),
   author: z.object({ kind: z.enum(AUTHOR_KINDS), id: z.string().nullable().optional(), name: z.string().nullable() }),
   authorHidden: z.boolean().default(false),
+  forFloor: z.boolean().default(false),
   body: z.string(),
   bodyHtml: z.string().nullable(),
   mentions: z.array(z.string()).optional(),
@@ -165,10 +166,10 @@ export function listFiles(api: ApiClient, record: RecordKey, signal?: AbortSigna
   return api.get('/files', { query: { recordType: record.type, recordId: record.id }, schema: z.object({ files: z.array(fileSchema) }), signal })
 }
 
-/** POST /threads/<type>/<id>/notes: an internal note (COL-003: never reaches a party). */
-export function postNote(api: ApiClient, record: RecordKey, input: { body: string; mentions: readonly string[]; attachments: readonly string[] }): Promise<unknown> {
+/** POST /threads/<type>/<id>/notes: an internal note (COL-003: never reaches a party). `forFloor`: a work order's, the tablets read it too. */
+export function postNote(api: ApiClient, record: RecordKey, input: { body: string; mentions: readonly string[]; attachments: readonly string[]; forFloor?: boolean }): Promise<unknown> {
   return api.post(`${recordPath(record.type, record.id)}/notes`, {
-    body: { body: input.body, mentions: [...input.mentions], attachments: [...input.attachments] },
+    body: { body: input.body, mentions: [...input.mentions], attachments: [...input.attachments], ...(input.forFloor ? { forFloor: true } : {}) },
     idempotencyKey: newIdempotencyKey(),
   })
 }

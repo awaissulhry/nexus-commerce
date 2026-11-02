@@ -49,13 +49,16 @@ let otherWorkOrder: string
 let sewing: string
 
 const OFFICE: Permission[] = ['production.dispatch.view', 'production.dispatch.manage', 'workorders.view', 'threads.read', 'threads.post', 'threads.manage']
+const FOR_FLOOR = { forFloor: true }
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const floorGrant = (permissions: Permission[]): Grant[] => [{ permissions, companies: [companyA], sites: [siteA1], parties: 'all' }]
 const officeUser = newId()
 const SESSIONS: Record<string, SessionContext> = {
   supervisor: { audience: 'office', tenantId: T, actorId: officeUser, grants: [grant(OFFICE)] },
+  readOnly: { audience: 'office', tenantId: T, actorId: officeUser, grants: [grant(['threads.read'])] },
   operatorTablet: { audience: 'floor', tenantId: T, actorId: operator, siteId: siteA1, deviceId: sewingTablet, grants: floorGrant(['floor.work']) },
   otherStation: { audience: 'floor', tenantId: T, actorId: lead, siteId: siteA1, deviceId: secondTablet, grants: floorGrant(['floor.work']) },
+  commenter: { audience: 'floor', tenantId: T, actorId: lead, siteId: siteA1, deviceId: secondTablet, grants: floorGrant(['production.scan']) },
   shelf: { audience: 'floor', tenantId: T, actorId: lead, siteId: siteA1, deviceId: shelfTablet, grants: floorGrant(['floor.work']) },
   noWork: { audience: 'floor', tenantId: T, actorId: operator, siteId: siteA1, deviceId: sewingTablet, grants: floorGrant(['production.dispatch.view']) },
 }
@@ -77,12 +80,12 @@ const assign = (body: Json) => ok('supervisor', 'POST', '/production/dispatch/as
 const move = (body: Json) => ok('supervisor', 'POST', '/production/dispatch/moves', { date: DAY, ...body })
 
 /** A message of the thread by SQL: what the API's own write cannot make (an old note, another author, a mail). */
-async function writeRaw(workOrderId: string, row: { kind?: string; authorId?: string | null; authorName?: string | null; direction?: string; channel?: string; audience?: string; text: string; at?: Date }) {
+async function writeRaw(workOrderId: string, row: { kind?: string; authorId?: string | null; authorName?: string | null; direction?: string; channel?: string; audience?: string; text: string; at?: Date; forFloor?: boolean }) {
   const threadId = (await admin<{ id: string }>(`SELECT id FROM "Thread" WHERE "tenantId" = $1 AND "recordType" = 'WorkOrder' AND "recordId" = $2`, [T, workOrderId]))[0]!.id
   await admin(
-    `INSERT INTO "Message" (id, "tenantId", "threadId", direction, audience, channel, "authorKind", "authorId", "authorName", "bodyText", at)
-     VALUES ($1, $2, $3, $4::"MessageDirection", $5::"MessageAudience", $6::"MessageChannel", $7::"MessageAuthorKind", $8, $9, $10, $11)`,
-    [newId(), T, threadId, row.direction ?? 'INTERNAL_NOTE', row.audience ?? 'OFFICE', row.channel ?? 'APP', row.kind ?? 'USER', row.authorId ?? (row.kind ? null : officeUser), row.authorName ?? 'Made-up Office Person', row.text, row.at ?? NOW],
+    `INSERT INTO "Message" (id, "tenantId", "threadId", direction, audience, channel, "authorKind", "authorId", "authorName", "bodyText", at, "forFloor")
+     VALUES ($1, $2, $3, $4::"MessageDirection", $5::"MessageAudience", $6::"MessageChannel", $7::"MessageAuthorKind", $8, $9, $10, $11, $12)`,
+    [newId(), T, threadId, row.direction ?? 'INTERNAL_NOTE', row.audience ?? 'OFFICE', row.channel ?? 'APP', row.kind ?? 'USER', row.authorId ?? (row.kind ? null : officeUser), row.authorName ?? 'Made-up Office Person', row.text, row.at ?? NOW, row.forFloor ?? true],
   )
 }
 
@@ -107,6 +110,12 @@ beforeAll(async () => {
   workOrder = operations[0]!.workOrderId
   otherWorkOrder = (await admin<{ id: string }>(`SELECT id FROM "WorkOrder" WHERE "tenantId" = $1 AND number = 'SEED-WO-0002'`, [T]))[0]!.id
   await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status, "requireMfa", "updatedAt") VALUES ($1, $2, $3, 'Made-up Office Person', 'ACTIVE', false, now())`, [officeUser, T, `mywork-${run}@example.com`])
+  // The team leader acknowledges the worker notice in force, as on a tablet (a copy of the operator's acknowledgement).
+  await admin(
+    `INSERT INTO "WorkerNoticeAck" (id, "tenantId", "siteId", "workerId", "noticeId", "noticeVersion", locale, "noticeSha256", channel, "deviceId", "deviceTime", "serverTime", "createdById")
+     SELECT $1, "tenantId", "siteId", $2, "noticeId", "noticeVersion", locale, "noticeSha256", channel, "deviceId", now(), now(), $2 FROM "WorkerNoticeAck" WHERE "workerId" = $3 LIMIT 1`,
+    [newId(), lead, operator],
+  )
   app = await buildApp(
     { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
@@ -129,7 +138,7 @@ describe('the messages on my work orders', () => {
   })
 
   it("lists the office's note on a work order in the station's queue, with where it comes from and never who", async () => {
-    await ok('supervisor', 'POST', `/threads/WorkOrder/${workOrder}/notes`, { body: 'Use the reinforced thread on this order.' }, 201)
+    await ok('supervisor', 'POST', `/threads/WorkOrder/${workOrder}/notes`, { body: 'Use the reinforced thread on this order.', ...FOR_FLOOR }, 201)
     const [message, ...rest] = await messages()
     expect(rest).toEqual([])
     expect(message).toMatchObject({ workOrder: { id: workOrder, number: 'SEED-WO-0001' }, from: 'OFFICE', text: 'Use the reinforced thread on this order.', cut: false, at: NOW.toISOString() })
@@ -139,7 +148,7 @@ describe('the messages on my work orders', () => {
 
   it("does not reach a tablet at no station that the day names for nothing, and a note on a work order off the lists reaches nobody", async () => {
     expect(await messages('shelf')).toEqual([])
-    await ok('supervisor', 'POST', `/threads/WorkOrder/${otherWorkOrder}/notes`, { body: 'About a draft nobody works on.' }, 201)
+    await ok('supervisor', 'POST', `/threads/WorkOrder/${otherWorkOrder}/notes`, { body: 'About a draft nobody works on.', ...FOR_FLOOR }, 201)
     expect((await messages()).map((message) => message.workOrder.id)).toEqual([workOrder])
   })
 
@@ -198,5 +207,62 @@ describe('the messages on my work orders', () => {
     expect((await call('noWork', 'GET', '/production/dispatch/mine/messages')).statusCode).toBe(403)
     expect((await call('supervisor', 'GET', '/production/dispatch/mine/messages')).statusCode).toBe(403)
     expect((await call('operatorTablet', 'GET', `/threads/WorkOrder/${workOrder}`)).statusCode).toBe(403)
+  })
+})
+
+describe('a note reaches the tablets only when a person ticks for the floor (B-W2b-F5)', () => {
+  const texts = async () => (await messages()).map((message) => message.text)
+  const thread = async () => (await ok('supervisor', 'GET', `/threads/WorkOrder/${workOrder}`)).messages as Json[]
+
+  it('keeps a note with no tick in the office: the thread has it, a tablet does not', async () => {
+    await ok('supervisor', 'POST', `/threads/WorkOrder/${workOrder}/notes`, { body: 'Made-up office words, no tick.' }, 201)
+    await ok('supervisor', 'POST', `/threads/WorkOrder/${workOrder}/notes`, { body: 'Made-up office words, tick off.', forFloor: false }, 201)
+    const seen = await texts()
+    expect(seen).not.toContain('Made-up office words, no tick.')
+    expect(seen).not.toContain('Made-up office words, tick off.')
+    const written = (await thread()).filter((message) => /no tick|tick off/.test(message.body))
+    expect(written.map((message) => message.forFloor)).toEqual([false, false])
+  })
+
+  it('sends a ticked note to the tablet, and the thread says it went there', async () => {
+    const posted = await ok('supervisor', 'POST', `/threads/WorkOrder/${workOrder}/notes`, { body: 'Made-up office words, ticked.', ...FOR_FLOOR }, 201)
+    expect(posted.message.forFloor).toBe(true)
+    expect((await messages()).find((message) => message.id === posted.message.id)).toMatchObject({ from: 'OFFICE', text: 'Made-up office words, ticked.' })
+    expect((await thread()).find((row) => row.id === posted.message.id)?.forFloor).toBe(true)
+    const [audit] = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "recordType" = 'Message' AND "recordId" = $1`, [posted.message.id])
+    expect(audit!.after.forFloor).toBe(true)
+  })
+
+  it("keeps out a note the column's default holds, and a system note on the thread", async () => {
+    const threadId = (await admin<{ id: string }>(`SELECT id FROM "Thread" WHERE "tenantId" = $1 AND "recordType" = 'WorkOrder' AND "recordId" = $2`, [T, workOrder]))[0]!.id
+    await admin(
+      `INSERT INTO "Message" (id, "tenantId", "threadId", direction, audience, channel, "authorKind", "authorId", "authorName", "bodyText", at) VALUES ($1, $2, $3, 'INTERNAL_NOTE', 'OFFICE', 'APP', 'USER', $4, 'Made-up Office Person', 'A note from before the tick.', $5)`,
+      [newId(), T, threadId, officeUser, NOW],
+    )
+    await writeRaw(workOrder, { kind: 'SYSTEM', authorName: null, text: 'A note the system wrote for the office.', forFloor: false })
+    const seen = await texts()
+    expect(seen).toContain('Made-up office words, ticked.')
+    expect(seen).not.toContain('A note from before the tick.')
+    expect(seen).not.toContain('A note the system wrote for the office.')
+  })
+
+  it('still shows the comment of another station, written on the floor through its own route', async () => {
+    const posted = await ok('commenter', 'POST', `/production/floor-notes/work-orders/${workOrder}`, { clientEventId: `f5-${run}`, tileCode: 'STITCHING_DIFFERS', note: 'Left sleeve' }, 201)
+    const [row] = await admin<{ forFloor: boolean; authorKind: string }>(`SELECT "forFloor", "authorKind"::text AS "authorKind" FROM "Message" WHERE id = $1`, [posted.messageId])
+    expect(row).toEqual({ forFloor: true, authorKind: 'WORKER' })
+    const shown = (await messages()).find((message) => message.id === posted.messageId)
+    expect(shown).toMatchObject({ from: 'FLOOR', text: expect.stringContaining('Left sleeve') })
+  })
+
+  it('takes the tick only from someone who may write here, and never from a tablet', async () => {
+    const before = await texts()
+    expect((await call('readOnly', 'POST', `/threads/WorkOrder/${workOrder}/notes`, { body: 'I may only read.', ...FOR_FLOOR })).statusCode).toBe(403)
+    expect((await call('operatorTablet', 'POST', `/threads/WorkOrder/${workOrder}/notes`, { body: 'A tablet may not write here.', ...FOR_FLOOR })).statusCode).toBe(403)
+    expect(await texts()).toEqual(before)
+  })
+
+  it('keeps a message append-only: the tick cannot be set or taken off afterwards, by anyone', async () => {
+    await expect(admin(`UPDATE "Message" SET "forFloor" = false WHERE "tenantId" = $1 AND "forFloor"`, [T])).rejects.toThrow(/append-only/)
+    await expect(admin(`UPDATE "Message" SET "forFloor" = true WHERE "tenantId" = $1 AND NOT "forFloor"`, [T])).rejects.toThrow(/append-only/)
   })
 })

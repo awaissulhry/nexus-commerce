@@ -12,7 +12,7 @@ import {
   contentTypeOf,
   fileGroups,
   liveParts,
-  noteReachesFloor,
+  noteMayGoToFloor,
   MAX_BODY_LENGTH,
   parseAddresses,
   retentionFacts,
@@ -41,7 +41,7 @@ const file = (id: string, extra: Partial<PanelFile> = {}): PanelFile => ({
   createdAt: '2026-10-28T10:00:00.000Z',
   ...extra,
 })
-const draft = (extra: Partial<ComposerDraft> = {}): ComposerDraft => ({ mode: 'note', body: 'Hello', to: '', subject: '', mentions: [], attachments: [], ...extra })
+const draft = (extra: Partial<ComposerDraft> = {}): ComposerDraft => ({ mode: 'note', body: 'Hello', to: '', subject: '', mentions: [], attachments: [], forFloor: false, ...extra })
 const context = { threadClosed: false, sending: false, files: [] as PanelFile[], hasMail: true }
 
 describe('the composer: internal note vs email to the party (COL-003, COL-024)', () => {
@@ -218,9 +218,9 @@ describe('live refresh: only this record, only the parts that changed', () => {
   })
 })
 
-describe('who an internal note reaches (B-W2b-71)', () => {
-  it("a work order's notes reach the tablets working on it; every other record's stay in the office", () => {
-    expect(noteReachesFloor('WorkOrder')).toBe(true)
-    expect(noteReachesFloor('Quote')).toBe(false)
+describe('who an internal note reaches (B-W2b-F5)', () => {
+  it('only a work order offers the tick for the floor', () => {
+    expect(noteMayGoToFloor('WorkOrder')).toBe(true)
+    expect(noteMayGoToFloor('Quote')).toBe(false)
   })
 })

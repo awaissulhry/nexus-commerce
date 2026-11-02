@@ -10,7 +10,9 @@ import { events as threadEvents } from '@nexus/factory-domain/threads/events'
 import {
   audienceOf,
   cleanBody,
+  FLOOR_NOTE_REFUSAL,
   newReplyToken,
+  noteMayGoToFloor,
   noteProblems,
   threadMachine,
   uniqueIds,
@@ -41,7 +43,8 @@ import { resolveRecord, type RecordScope } from './records'
  *   note       POST …/notes (threads.postNote): an internal note. The record's thread is made with the first message
  *              (one per record, also when two first notes race), from the record's own company, site and party.
  *              Mentions name people who can read the thread (an event each); attachments are AVAILABLE files of the
- *              same record that the writer may read.
+ *              same record that the writer may read. A note stays in the office unless its writer says `forFloor`, on a
+ *              work order only: then the tablets working on it read it too (B-W2b-F5; production/dispatch mywork-messages).
  *   status     PUT …/status (threads.setStatus): close a thread to new notes, or reopen it.
  *
  * The email steps write through the same seam inside their own commands: `ensureThread` and `writeMessage` with
@@ -85,8 +88,8 @@ const MESSAGE_COMMON = {
   attachmentFileIds: true,
   at: true,
 } as const satisfies Prisma.MessageSelect
-const MESSAGE_OFFICE = { ...MESSAGE_COMMON, authorId: true, mentionedUserIds: true } as const satisfies Prisma.MessageSelect
-type MessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_COMMON }> & { authorId?: string | null; mentionedUserIds?: string[] }
+const MESSAGE_OFFICE = { ...MESSAGE_COMMON, authorId: true, mentionedUserIds: true, forFloor: true } as const satisfies Prisma.MessageSelect
+type MessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_COMMON }> & { authorId?: string | null; mentionedUserIds?: string[]; forFloor?: boolean }
 
 const FILE_COMMON = {
   id: true,
@@ -183,7 +186,7 @@ function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, Attachm
     audience: row.audience,
     channel: row.channel,
     author: { kind: row.authorKind, ...('authorId' in row ? { id: authorHidden ? null : (row.authorId ?? null) } : {}), name: authorHidden ? null : row.authorName },
-    ...('authorId' in row ? { authorHidden } : {}),
+    ...('authorId' in row ? { authorHidden, forFloor: row.forFloor ?? false } : {}),
     body: row.bodyText,
     bodyHtml: row.bodyHtml,
     ...('mentionedUserIds' in row ? { mentions: row.mentionedUserIds ?? [] } : {}),
@@ -334,6 +337,8 @@ export interface MessageInput {
   readonly mentions?: readonly string[]
   /** Checked files (`attachmentProblems`). */
   readonly attachments?: readonly string[]
+  /** The tablets read it too (B-W2b-F5): an internal note of a work order only. Default: it stays in the office. */
+  readonly forFloor?: boolean
   readonly emailMessageId?: string | null
   /** When it entered the thread. Default: the command's time. */
   readonly at?: Date
@@ -350,6 +355,8 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
   const mentions = uniqueIds(input.mentions)
   const attachments = uniqueIds(input.attachments)
   if (mentions.length > 0 && input.direction !== 'INTERNAL_NOTE') throw new ApiError('internal_error', 'Only an internal note mentions people.')
+  const forFloor = input.forFloor ?? false
+  if (forFloor && (input.direction !== 'INTERNAL_NOTE' || !noteMayGoToFloor(thread.recordType))) throw new ApiError('internal_error', FLOOR_NOTE_REFUSAL)
   const id = newId()
   const at = input.at ?? tools.now
   const row = await tools.tx.message.create({
@@ -367,6 +374,7 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
       bodyHtml: input.bodyHtml ?? null,
       mentionedUserIds: mentions,
       attachmentFileIds: attachments,
+      forFloor,
       emailMessageId: input.emailMessageId ?? null,
       at,
       createdAt: tools.now,
@@ -379,7 +387,7 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
     recordId: id,
     companyId: thread.companyId,
     siteId: thread.siteId,
-    after: { threadId: thread.id, recordType: thread.recordType, recordId: thread.recordId, direction: input.direction, audience, channel: input.channel, attachments, mentions },
+    after: { threadId: thread.id, recordType: thread.recordType, recordId: thread.recordId, direction: input.direction, audience, channel: input.channel, attachments, mentions, forFloor },
   })
   const about = { threadId: thread.id, messageId: id, recordType: thread.recordType, recordId: thread.recordId }
   const where = { subject: thread.recordId, companyId: thread.companyId, siteId: thread.siteId }
@@ -474,6 +482,8 @@ export interface NoteInput {
   readonly body: string
   readonly mentions?: readonly string[] | undefined
   readonly attachments?: readonly string[] | undefined
+  /** "For the floor" (B-W2b-F5): a work order's only. */
+  readonly forFloor?: boolean | undefined
 }
 
 /** POST /threads/<type>/<id>/notes (threads.postNote): an internal note, the thread made with the first one. */
@@ -481,12 +491,13 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
-  const draft = { bodyText: cleanBody(input.body), mentions: uniqueIds(input.mentions), attachments: uniqueIds(input.attachments) }
+  const draft = { bodyText: cleanBody(input.body), mentions: uniqueIds(input.mentions), attachments: uniqueIds(input.attachments), forFloor: input.forFloor ?? false }
   const problems = noteProblems(draft)
   if (problems.length > 0) throw new ValidationError('The note is not valid.', problems)
   const { scope } = await caller.withClient((client) => officeRecord(client, record))
   if (!can(actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
   if (!can(actor, THREADS_POST, scope)) throw new ForbiddenError()
+  if (draft.forFloor && !noteMayGoToFloor(record.type)) throw new ValidationError('The note is not valid.', [{ path: 'body/forFloor', message: FLOOR_NOTE_REFUSAL }])
 
   const { result } = await command(
     caller,
@@ -509,6 +520,7 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
         bodyText: draft.bodyText,
         mentions: draft.mentions,
         attachments: draft.attachments,
+        forFloor: draft.forFloor,
       })
       const current = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: THREAD_OFFICE })
       const attachments = await visibleAttachments(tools.tx, context, message.attachmentFileIds)

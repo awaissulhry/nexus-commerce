@@ -8,7 +8,8 @@
 // Who sees what (COL-003: internal notes never reach a customer): a message is for the OFFICE only (every internal
 // note) or shared with the record's party (PARTNER: what was sent to them or came from them). `partyId` is set on a
 // message exactly when it is shared, and is then the thread's party (the second reference below pins it), so the
-// partner role's policy (partyId = its party) reads only the shared messages of its own records. The floor reads none.
+// partner role's policy (partyId = its party) reads only the shared messages of its own records. The floor's role reads
+// none; a tablet is served the notes of a work order that are `forFloor` by the API, after the floor's checks (B-W2b-F5).
 //
 // A thread's company, site and party are the record's own, read from the record when the thread is made (a resolver
 // per record type in the API), never sent by the caller. Messages are append-only (a correction is a new message);
@@ -83,7 +84,8 @@ model Message {
   /// key. Null on every internal note.
   partyId           String?           @db.Uuid
   direction         MessageDirection
-  /// OFFICE: staff only (every internal note). PARTNER: shared with the thread's party (sent to it or received from it).
+  /// OFFICE: staff only (every internal note; `forFloor` says when the tablets read one too). PARTNER: shared with the
+  /// thread's party (sent to it or received from it).
   audience          MessageAudience
   channel           MessageChannel
   authorKind        MessageAuthorKind
@@ -98,6 +100,11 @@ model Message {
   bodyHtml          String?
   /// The office users this internal note notifies (an event per user). Hidden from the partner role.
   mentionedUserIds  String[]          @default([]) @db.Uuid
+  /// True: the tablets working on the work order read this internal note too (B-W2b-F5): its writer in the office ticked
+  /// "For the floor", or the floor wrote it. False, the default, for every other message: it stays in the office. Set
+  /// when it is written, like the rest of the message. Hidden from the partner role.
+  /// @internal
+  forFloor          Boolean           @default(false)
   /// The record's files attached to it, in order (StoredFile ids; files are never deleted, only marked DELETED). Each
   /// reader sees only the ones its own file rules let it see.
   attachmentFileIds String[]          @default([]) @db.Uuid
