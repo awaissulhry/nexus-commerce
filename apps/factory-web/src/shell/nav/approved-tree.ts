@@ -277,6 +277,8 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'production.floor', title: 'Floor now', titleIt: 'Reparto ora', wave: 'W1', href: '/production/floor' },
           { id: 'production.workorders', title: 'Work orders', titleIt: 'Ordini di produzione', wave: 'W1', href: '/production/work-orders' },
+          // W2b: B-W2b-56 Dispatch (SCR-138).
+          { id: 'production.dispatch', title: 'Dispatch', titleIt: 'Assegnazione lavoro', wave: 'W2b', href: '/production/dispatch' },
         ],
       },
       // W2a: B-W2a-60 Cutting (SCR-238) and Scrap & rework (SCR-140).
@@ -298,6 +300,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'production.scrap', title: 'Scrap & rework', titleIt: 'Scarti e rilavorazioni', wave: 'W2a', href: '/production/scrap' },
           // W2b: B-W2b-58 Help calls (SCR-142).
           { id: 'production.calls', title: 'Help calls', titleIt: 'Chiamate di aiuto', wave: 'W2b', href: '/production/calls' },
+          // W2b: B-W2b-57 Labour & corrections (SCR-139, SCR-143).
+          { id: 'production.labour', title: 'Labour & corrections', titleIt: 'Manodopera e rettifiche', wave: 'W2b', href: '/production/labour' },
         ],
       },
       {

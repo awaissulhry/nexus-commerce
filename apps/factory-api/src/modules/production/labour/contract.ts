@@ -208,6 +208,8 @@ const recordView = output({
   steps: z.array(output({ scanId: id(), kind: z.enum(['CORRECTION', 'UNDO']), at: instant(), counts, approvedBy: someone.nullable(), reason: z.string().nullable() })),
   /** Who it is about: only where the site records workers and its PERFORMANCE legal gate is on (art. 4 c.1). */
   worker: someone.nullable(),
+  /** B-W2b-57: that worker's employee record, for "Open this person's day" (POST /production/labour/sheets): behind the same gate. */
+  employeeId: id().nullable(),
   /** A worker is on the record but not shown: the site's legal gate for one person's work figures is off (the default). */
   workerHidden: z.boolean(),
   /** B-W2b-47: a team leader entered it for someone who could not scan. */
@@ -251,6 +253,8 @@ const disputeView = output({
   raisedAt: instant(),
   raisedOn: z.enum(['FLOOR', 'OFFICE']),
   worker: someone.nullable(),
+  /** B-W2b-57: that worker's employee record, for "Open this person's day": behind the same gate. */
+  employeeId: id().nullable(),
   workerHidden: z.boolean(),
   record: disputeSummary.nullable(),
   /** The labour edits that answered it. */

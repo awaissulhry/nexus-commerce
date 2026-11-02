@@ -100,6 +100,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   ReworkOrder: '/production/scrap?open=rework:[id]',
   // B-W2b-58: a help call opens in its DetailModal on Production › Help calls (SCR-142; the bell's call alerts).
   HelpCall: '/production/calls?open=[id]',
+  // B-W2b-57: a correction request, a dispute and an off-standard block open in their DetailModal on Labour & corrections.
+  ScanCorrectionRequest: '/production/labour?open=CORRECTION:[id]',
+  LabourDispute: '/production/labour?open=DISPUTE:[id]',
+  OffStandardEntry: '/production/labour?open=OFF_STANDARD:[id]',
   // Planning › Planning settings (SCR-124, B-W2a-59): a calendar opens on Calendars & shifts, a shift pattern in its editor.
   WorkCalendar: '/planning/settings?tab=calendars&cal=[id]',
   ShiftPattern: '/planning/settings?tab=calendars&pattern=[id]',
@@ -141,8 +145,12 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/production/work-orders': '/production/work-orders',
   // B-W2b-58: the help calls (`?view=`, `?tile=`, `?kind=` as the API reads them).
   '/production/calls': '/production/calls',
+  // B-W2b-57: the queue (`?kind=`, `?line=`; the API's `lineId` is the page's `line`).
+  '/production/labour/inbox': '/production/labour',
   // B-W2b-59: the bundles (`?stuck=true`, `?place=LINE`, `?status=VOID` as the API reads them).
   '/production/bundles': '/production/bundles',
+  // B-W2b-56: the dispatch board (`?site=`, `?line=`, `?date=`).
+  '/production/dispatch': '/production/dispatch',
   // The pages read the API's own filters from the address (`?onHold=true`, `?waitingRelease=true`, `?status=OPEN`).
   '/quality/inspections': '/quality/inspections',
   // B-W2a-68: the NCR list and board (SCR-144; `?view=`, `?q=`, `?site=`, `?mode=board`, New NCR `?new=1&from=&id=`).

@@ -99,6 +99,7 @@
       "main": "Main",
       "floor": "Floor now",
       "workOrders": "Work orders",
+      "dispatch": "Dispatch",
       "settings": "Settings",
       "floorRules": "Floor rules & codes",
       "reports": "Reports",
@@ -108,7 +109,8 @@
       "bundles": "Bundles",
       "floorControl": "Floor control",
       "scrap": "Scrap & rework",
-      "calls": "Help calls"
+      "calls": "Help calls",
+      "labour": "Labour & corrections"
     },
     "quality": {
       "area": "Quality",
