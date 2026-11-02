@@ -16,12 +16,16 @@ const FILES_READ = 'files.read' satisfies Permission
  *   QUOTE_ACCEPT   Quote           accept, decline   accept, decline (1)    price   accept: needed  accept, when known
  *   PO_CONFIRM     PurchaseOrder   confirm, decline  confirm, decline (1)   none    optional        no
  *   DOCUMENT_VIEW  StoredFile,     none              every open (20)        price   no              no
- *                  Shipment
+ *                  Shipment,
+ *                  PayrollExport
  *   DEPOSIT_INFO   DepositRequest  none              every open (20)        price   no              no
  *
  * A DOCUMENT_VIEW session also reads files (files.read, over the link's company and party): platform/files lets a link
  * see only the files shared with its party's links that are its record or belong to it (audienceSees), behind the
- * partner role's wall. The shipping module's link of a Shipment shows its DDT, DoC and leaflet copies (B-W1-49).
+ * partner role's wall. The shipping module's link of a Shipment shows its DDT, DoC and leaflet copies (B-W1-49). A link of a
+ * PayrollExport (B-W2b-54; MES-274) brings the labour consultant the month's file: its files are shared with nobody, the
+ * generic file routes never find them, and only that module's link route hands them out (the design's SECURE_FILE purpose
+ * is a schema need). Its party id is the export's own: the consultant is no Party (PartyRole has no such value).
  *
  * The price grain goes only to purposes that show the party its OWN document (its quote, its invoice, its deposit
  * request: the party scope of the session makes it its own). A PO_CONFIRM link holds no grain at all: the supplier
@@ -117,8 +121,8 @@ export const PURPOSE_RULES: Readonly<Record<LinkPurpose, PurposeRule>> = Object.
   }),
   DOCUMENT_VIEW: rule({
     purpose: 'DOCUMENT_VIEW',
-    description: 'The customer or supplier opens one of its own documents (an invoice copy, a DDT, a declaration of conformity), or the documents of one of its shipments, to read or download them.',
-    recordTypes: ['StoredFile', 'Shipment'],
+    description: 'The customer or supplier opens one of its own documents (an invoice copy, a DDT, a declaration of conformity), or the documents of one of its shipments, to read or download them; the labour consultant downloads a payroll file.',
+    recordTypes: ['StoredFile', 'Shipment', 'PayrollExport'],
     actions: { open: counted('none') },
     grains: ['price'],
     expiryDays: { default: 30, max: 365 },

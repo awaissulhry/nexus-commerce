@@ -1,0 +1,733 @@
+{
+  "absence": {
+    "CODED": "Coded",
+    "MISSING": "No code",
+    "NONE": "—"
+  },
+  "accept": {
+    "body": "The anomaly stands as it is, with your note: it is not raised again for this day.",
+    "note": "Note",
+    "submit": "Accept",
+    "title": "Accept the anomaly"
+  },
+  "anomaly": {
+    "DOUBLE_CLOCK_IN": "Clocked in twice: again at {time}.",
+    "FLAGGED_EVENT": {
+      "badge": "Signed by name and PIN: the badge was forgotten.",
+      "skew": "Kept offline while the tablet's clock looked wrong."
+    },
+    "LONG_DAY": "Over {limit}: {found} from the first clock-in to the last clock-out.",
+    "LONG_DAY_SHORT": "A day over 16 h from the first clock-in to the last clock-out.",
+    "MISSING_CLOCK_IN": "Clock-in missing before the clock-out at {time}.",
+    "MISSING_CLOCK_OUT": {
+      "auto": "Clock-out missing; automatic clock-out at {time}.",
+      "open": "Clock-out missing after the clock-in at {time}."
+    },
+    "NO_BREAK": "No full break in a long day ({taken} min taken).",
+    "NO_SHIFT": "Clocked in with no shift planned, or on a day off.",
+    "SCANS_WITHOUT_CLOCK_IN": "Scans without a clock-in.",
+    "SHORT_REST": "Rest since the last clock-out is under the limit."
+  },
+  "anomalyKind": {
+    "DOUBLE_CLOCK_IN": "Double clock-in",
+    "FLAGGED_EVENT": "Flagged event",
+    "LONG_DAY": "Over 16 h",
+    "MISSING_CLOCK_IN": "Missing clock-in",
+    "MISSING_CLOCK_OUT": "Missing clock-out",
+    "NO_BREAK": "No break",
+    "NO_SHIFT": "No shift",
+    "SCANS_WITHOUT_CLOCK_IN": "Scans without clock-in",
+    "SHORT_REST": "Short rest"
+  },
+  "band": {
+    "approveClean": "Approve clean days",
+    "approveCleanCount_one": "Approve {count} clean day",
+    "approveCleanCount_other": "Approve {count} clean days",
+    "close": "Close month…",
+    "export": "Export this view (CSV)",
+    "keys": "Keyboard shortcuts",
+    "lul": "Print LUL calendar",
+    "manual": "Manual entry",
+    "more": "More actions",
+    "who": "Who is in now"
+  },
+  "class": {
+    "DAY": "Day",
+    "HOLIDAY": "Holiday",
+    "NIGHT": "Night"
+  },
+  "close": {
+    "checklist": "Before closing {month}",
+    "consequence": {
+      "corrections": "Changes after the close become corrections and a correction export.",
+      "lock": "Every day of the month locks: nothing changes it any more.",
+      "seal": "The LUL calendar is made and sealed; it never changes."
+    },
+    "corrections_one": "{count} correction since the close",
+    "corrections_other": "{count} corrections since the close",
+    "dialogTitle": "Close {month}",
+    "done": "Month closed and calendar sealed.",
+    "doneUnsealed": "Month closed. The calendar could not be stored: seal it from the panel.",
+    "due_one": "LUL due by {date} · {count} day left",
+    "due_other": "LUL due by {date} · {count} days left",
+    "failed": "Couldn't read the month close",
+    "goTo": "Go to {month}",
+    "item": {
+      "ABSENCE_CODES": "Absence codes complete",
+      "ANOMALIES_CLEARED": "Anomalies cleared",
+      "DAYS_APPROVED": "All days approved",
+      "MANUAL_REVIEWED": "Manual entries reviewed",
+      "OVERTIME_DECIDED": "Overtime decided",
+      "PRODUCTION_DAYS": "Production days closed per line"
+    },
+    "itemLeft_one": "{count} left",
+    "itemLeft_other": "{count} left",
+    "noReach": "The month close is the whole company's: it opens to people who reach every site of it.",
+    "note": {
+      "AGENCY_WORKERS": "Agency and external people are on the calendar, marked: the labour consultant says if they belong there.",
+      "CODES_WITHOUT_LUL": "Some absence codes have no LUL code yet: the calendar prints our own code until the labour consultant gives theirs.",
+      "TIMESHEETS_NOT_APPROVED": "Some timesheets are not approved: they do not hold the close, and stay as they are after it."
+    },
+    "openLul": "Open the LUL calendar",
+    "overdue_one": "LUL due by {date} · {count} day late",
+    "overdue_other": "LUL due by {date} · {count} days late",
+    "payroll": "Go to Payroll export",
+    "payrollLater": "Comes with the Payroll export page.",
+    "seal": "Seal the calendar",
+    "sealClock": "Nexus server clock",
+    "sealTitle": "LUL calendar · {month}",
+    "showMe": "Show me",
+    "sitesOff": "Attendance is off at: {sites}.",
+    "submit": "Close month",
+    "title": "Month close",
+    "toConfirmNote": "This calendar is generic until the labour consultant confirms it.",
+    "toConfirmTitle": "Still to confirm with the labour consultant",
+    "unsealed": "The month is closed, but its calendar is not stored and sealed yet.",
+    "verb": "Close {month}"
+  },
+  "col": {
+    "absence": "Absence",
+    "anomaly": "Anomaly",
+    "approved": "Approved",
+    "class": "Class",
+    "clocked": "Clocked",
+    "date": "Date",
+    "day": "Day",
+    "limits": "Limit checks",
+    "line": "Line",
+    "manual": "Manual",
+    "period": "Period",
+    "planned": "Planned shift",
+    "ready": "Ready",
+    "request": "Planned request",
+    "returned": "Sent back",
+    "stage": "Whose turn",
+    "status": "Status",
+    "team": "Team"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "clearFilters": "Clear filters",
+    "close": "Close",
+    "no": "No",
+    "retry": "Try again",
+    "yes": "Yes"
+  },
+  "correct": {
+    "from": "From",
+    "kind": "What changes",
+    "minutes": "New figure (minutes)",
+    "note": "The sealed calendar never changes: this entry stands beside it and reaches the correction export.",
+    "stands": "Stands at {hours} ({minutes} min).",
+    "submit": "Record correction",
+    "title": "Correct a closed day",
+    "to": "To",
+    "who": "By"
+  },
+  "correctKind": {
+    "ABSENCE": "Absence",
+    "HOLIDAY": "Holiday hours",
+    "NIGHT": "Night hours",
+    "ORDINARY": "Ordinary hours",
+    "OVERTIME_DAY": "Day overtime",
+    "OVERTIME_HOLIDAY": "Holiday overtime",
+    "OVERTIME_NIGHT": "Night overtime",
+    "PRESENT": "Hours present"
+  },
+  "csv": {
+    "absence": "Absence",
+    "anomalies": "Anomalies",
+    "clocked": "Clocked",
+    "date": "Date",
+    "line": "Line",
+    "manual": "Manual",
+    "planned": "Planned shift",
+    "status": "Status",
+    "team": "Team"
+  },
+  "day": {
+    "absences": "Absence",
+    "accept": "Accept with a note",
+    "anomalies": "Anomalies",
+    "approve": "Approve day",
+    "correct": "Correct",
+    "corrections": "Corrections after the close",
+    "differs": "This day differs from the sealed calendar.",
+    "document": "Certificate number",
+    "event": "Event",
+    "events": "Clock events",
+    "figures": "Figures",
+    "fix": "Fix",
+    "hours": "Hours",
+    "lul": "LUL code",
+    "manualNote": "Manual entries are marked in the LUL calendar.",
+    "matches": "This day matches the sealed calendar.",
+    "noEvents": "No clock event on this day.",
+    "noLul": "None yet",
+    "noun": "day",
+    "planned": "Planned shift",
+    "reason": "Reason",
+    "reopen": "Reopen",
+    "source": "Source",
+    "time": "Time",
+    "title": "Day detail"
+  },
+  "days": {
+    "addCode": "Add a code…",
+    "allAnomalies": "All anomalies",
+    "allStatuses": "All statuses",
+    "anomalyFilter": "Anomaly",
+    "approveSelected_one": "Approve {count} clean day",
+    "approveSelected_other": "Approve {count} clean days",
+    "approved_one": "{count} day approved.",
+    "approved_other": "{count} days approved.",
+    "clocked": "Clocked",
+    "codeFor": "Absence code of {day}",
+    "count_one": "{count} day",
+    "count_other": "{count} days",
+    "failed": "Couldn't read the days",
+    "manual": "Manual",
+    "manualChip": "Manual days",
+    "manualOnly": "Manual only",
+    "more": "Show more",
+    "noMatch": "No day matches",
+    "noMatchBody": "Nothing in this view: clear the filters to see the month.",
+    "noShift": "No shift",
+    "none": "No attendance yet",
+    "noneBody": "Clock-ins start on the floor (Clock in & out).",
+    "noneClean": "No clean day to approve.",
+    "notClocked": "Not clocked",
+    "statusFilter": "Status",
+    "title": "Days",
+    "toApproveNote": "Days with an open anomaly are under Open anomalies.",
+    "willBeHeld_one": "{count} held",
+    "willBeHeld_other": "{count} held"
+  },
+  "employee": {
+    "closedOn": "Closed on {date} (LUL)",
+    "corrected": "Corrected after the close",
+    "noRight": "HR reads one person's attendance here (people.attendance.view); the person sees their own on the floor.",
+    "none": "No attendance this month",
+    "note": "Overtime here is the approved one, by class. A day's overtime below is what was computed, before any approval.",
+    "overtimeDay": "Approved overtime, day",
+    "overtimeHoliday": "Approved overtime, holiday",
+    "overtimeNight": "Approved overtime, night",
+    "title": "Attendance by day"
+  },
+  "entry": {
+    "approvedBy": "Approved by {who}, {at}.",
+    "beyond": "{hours} beyond the request.",
+    "blocks": "A limit blocks this overtime: approving it asks why it stands, and the reason goes on the record.",
+    "day": "The day is: {status}.",
+    "hours": "Hours",
+    "noun": "entry",
+    "openDay": "Open the day",
+    "override": {
+      "body": "This limit blocks the overtime. The hours were worked: say why it stands.",
+      "reason": "Why it stands",
+      "submit": "Approve with this reason",
+      "title": "A limit blocks this overtime"
+    },
+    "reject": {
+      "submit": "Reject",
+      "title": "Reject overtime"
+    },
+    "rejectedBy": "Rejected by {who}, {at}: {reason}",
+    "reopen": {
+      "submit": "Take the decision back",
+      "title": "Take the decision back"
+    },
+    "request": "Planned request of {hours}",
+    "title": "Overtime",
+    "verb": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "reopen": "Take back"
+    }
+  },
+  "entryStatus": {
+    "APPROVED": "Approved",
+    "PENDING": "Waiting",
+    "REJECTED": "Rejected"
+  },
+  "event": {
+    "autoReason": "Shift end plus the time in People settings",
+    "kind": {
+      "BREAK_IN": "Back from break",
+      "BREAK_OUT": "Break",
+      "IN": "Clock-in",
+      "OUT": "Clock-out",
+      "VOID": "Voided"
+    },
+    "source": {
+      "AUTO": "Automatic clock-out",
+      "BADGE": "Badge on a tablet",
+      "MANUAL": "Entered by hand",
+      "NAME_PIN": "Name and PIN (forgot the badge)",
+      "OFFLINE": "Kept on the tablet while offline"
+    },
+    "sourceOffSite": {
+      "AUTO": "Automatic clock-out · work outside the plant",
+      "BADGE": "Badge on a tablet · work outside the plant",
+      "MANUAL": "Entered by hand · work outside the plant",
+      "NAME_PIN": "Name and PIN · work outside the plant",
+      "OFFLINE": "Kept on the tablet · work outside the plant"
+    },
+    "void": "Voided by hand",
+    "voided": "voided"
+  },
+  "field": {
+    "reason": "Reason",
+    "reasonCode": "Why",
+    "reasonHint": "Never a health detail: a sickness is a code and a certificate number.",
+    "reasonPick": "Choose…"
+  },
+  "figure": {
+    "absence": "Absence",
+    "break": "Break",
+    "holiday": "Holiday",
+    "night": "Night",
+    "ordinary": "Ordinary",
+    "overtime": "Overtime",
+    "present": "Present"
+  },
+  "fix": {
+    "at": "When",
+    "choice": {
+      "ABSENCE": "Set absence code",
+      "ADD": "Add a clock event",
+      "OFF_SITE": "Mark work outside the plant",
+      "REMOVE_ABSENCE": "Remove an absence",
+      "VOID": "Void a duplicate"
+    },
+    "code": "Absence code",
+    "codePick": "Choose a code…",
+    "document": "Certificate number",
+    "documentHint": "The protocol number only, never what it says.",
+    "event": "Event",
+    "hours": "Hours",
+    "hoursHint": "Blank: the whole planned shift.",
+    "note": "The reason is kept and the day is marked Manual for good.",
+    "removeAbsence": "Absence",
+    "removePick": "Choose an absence…",
+    "submit": "Save fix",
+    "title": "Fix a day",
+    "voidEvent": "Clock event",
+    "voidHint": "It stays on the day, marked void.",
+    "voidPick": "Choose an event…",
+    "what": "What to fix"
+  },
+  "gate": {
+    "closed": {
+      "body": "It opens when the worker notice and the impact assessment are on record and the Owner switches it on. Until then nothing about any person is read or shown here.",
+      "law": "Statuto dei Lavoratori art. 4 c.2-3 · GDPR art. 35",
+      "lawPlain": "Tools that record work need a notice to the workers; a risk to people needs an impact assessment first.",
+      "open": "Open Privacy & notices",
+      "title": "Attendance is off at this site"
+    },
+    "failed": {
+      "body": "This site's rules could not be read, so nothing about any person is read. Try again in a moment.",
+      "title": "The site's rules could not be read"
+    },
+    "pickSite": {
+      "body": "Attendance is read one site at a time, each with its own legal basis: choose a site in the top bar.",
+      "title": "Choose a site"
+    },
+    "reading": "Still reading the site's rules…",
+    "short": "Attendance is off at this site."
+  },
+  "held": {
+    "closeOpen_one": "{count} item is still open.",
+    "closeOpen_other": "{count} items are still open.",
+    "closed": "This month is closed.",
+    "correctMinutes": "Give the new figure in whole minutes, 0 to 1440.",
+    "correctSame": "This is the figure that stands: change it first.",
+    "dayApproved": "This day is approved already.",
+    "dayClosed": "This day's month is closed.",
+    "entryDecided": "This overtime is decided already.",
+    "fixAbsence": "Choose the absence to remove.",
+    "fixApproved": "This day is approved: reopen it first.",
+    "fixCode": "Choose the absence code.",
+    "fixEvent": "Choose the clock event.",
+    "fixHours": "Hours are a figure of a day, like 7,5.",
+    "fixTime": "Choose when it happened.",
+    "limitBlocks": "A limit blocks these: open each one to decide it.",
+    "manualDate": "Choose the date.",
+    "manualFuture": "A manual entry is made once the day has come.",
+    "manualOrder": "The clock-out comes after the clock-in.",
+    "manualPerson": "Find the person.",
+    "manualTimes": "Enter a clock-in or a clock-out.",
+    "more_one": "and {count} more",
+    "more_other": "and {count} more",
+    "noApprove": "Approving days needs the approve right (people.attendance.approve).",
+    "noClose": "Closing a month needs the close right over every site (people.attendance.close).",
+    "noFix": "Fixing a day needs the manage right, and never on your own day.",
+    "noPeople": "Finding a person needs people.view.",
+    "noReview": "Approving overtime needs the review right, and never your own.",
+    "noneClean": "No clean day to approve.",
+    "notRead": "Not read yet.",
+    "outOfReach": "Out of your reach, or attendance is off at its site",
+    "pickSite": "Choose a site first.",
+    "reason": "Say why, in a few words.",
+    "reasonLong": "Keep it to 500 characters.",
+    "timesheetDone": "Approved by both already.",
+    "timesheetNotReady": "Days or overtime of this month are still open.",
+    "timesheetNotYours": "It is not at your approval.",
+    "title": "Approved: {approved} · the rest held",
+    "typePhrase": "Type: {phrase}",
+    "working": "Working on it…"
+  },
+  "hold": {
+    "close": {
+      "ABSENCE_CODES": "Absences without a code are left.",
+      "ALREADY_CLOSED": "This month is closed already.",
+      "ANOMALIES_CLEARED": "Anomalies are still open.",
+      "DAYS_APPROVED": "Days are still to approve.",
+      "GATE_OFF": "A site holding days of this month has attendance off: it cannot close.",
+      "MANUAL_REVIEWED": "Manual days are still to approve.",
+      "MONTH_NOT_OVER": "{month} is not over yet: it closes from the day after its last day.",
+      "NO_DAYS": "There is no attendance day in this month: nothing to close.",
+      "OVERTIME_DECIDED": "Overtime is still waiting for a decision.",
+      "PRODUCTION_DAYS": "Production days are still open on a line."
+    },
+    "day": {
+      "ALREADY_APPROVED": "This day is approved already.",
+      "ANOMALIES_OPEN": "This day has anomalies open: fix them or accept them with a note first.",
+      "CLOSED": "This day's month is closed: it changes only by a correction.",
+      "NOT_OVER": "This day is not over yet: approve it from tomorrow.",
+      "NO_ABSENCE_CODE": "A shift was planned and nobody clocked in: set the absence code first.",
+      "OWN_DAY": "Nobody approves their own attendance day: another person does.",
+      "RUNNING": "Someone is still clocked in on this day."
+    },
+    "entry": {
+      "DAY_NOT_APPROVED": "Approve the day first: overtime is decided on an approved day.",
+      "MONTH_CLOSED": "This month is closed: it changes only by a correction.",
+      "NOT_PENDING": "This overtime is decided already.",
+      "OWN_OVERTIME": "Nobody decides their own overtime: another person does."
+    },
+    "timesheet": {
+      "DAYS_OPEN": "Some days are not approved yet.",
+      "MONTH_CLOSED": "This month is closed: it changes only by a correction.",
+      "OVERTIME_PENDING": "Some overtime waits for a decision.",
+      "OWN_TIMESHEET": "Nobody approves their own timesheet: another person does.",
+      "PERIOD_NOT_OVER": "The period is not over yet.",
+      "SAME_PERSON": "The lead and HR are two different people: another person approves it.",
+      "WRONG_STAGE": "This timesheet is not at this approval."
+    }
+  },
+  "keys": {
+    "approve": "Approve the focused day",
+    "fix": "Fix the focused day",
+    "month": "Previous / next month",
+    "rollCall": "Open the roll call"
+  },
+  "law": {
+    "average": "At most 48 hours a week on average, over the reference period.",
+    "break": "A break once the working day passes six hours.",
+    "cap": "Overtime has a yearly cap (250 hours by law unless the contract says otherwise).",
+    "evacuation": "The employer organises the evacuation of workers in an emergency.",
+    "rest": "At least 11 hours of consecutive rest every 24 hours."
+  },
+  "limit": {
+    "DAILY_REST": {
+      "name": "Daily rest",
+      "ok": "At least {limit} of rest.",
+      "rest": "Rest of {rest} between {from} and {to}: minimum {limit}.",
+      "short": "Rest",
+      "span": "A working day of {span} ({from}–{to}) leaves less than {limit} of rest."
+    },
+    "OVERTIME_YEARLY_CAP": {
+      "name": "Yearly overtime cap",
+      "short": "Cap",
+      "words": "Overtime in {year}: {used} of {limit}."
+    },
+    "WEEKLY_AVERAGE": {
+      "name": "48 h weekly average",
+      "short": "48 h",
+      "words": "{average} a week on average over {weeks} weeks: at most {limit} over {months} months."
+    }
+  },
+  "limitState": {
+    "NEAR": "near",
+    "OK": "fine",
+    "OVER": "over"
+  },
+  "lul": {
+    "csv": "Download CSV",
+    "failed": "Couldn't open the calendar",
+    "noRight": "Opening the LUL calendar needs people.attendance.lul.",
+    "none": "No calendar chosen",
+    "noneBody": "Open it from Attendance › Month close.",
+    "reading": "Opening the calendar…",
+    "recorded": "Each opening of this calendar is recorded: it names every person with their hours.",
+    "title": "LUL calendar"
+  },
+  "manual": {
+    "absence": "Absence code",
+    "chosen": "Chosen: {name}",
+    "date": "Date",
+    "done": "Entry added.",
+    "entry": "What to enter",
+    "note": "Manual entries are marked in the LUL.",
+    "offSite": "Work outside the plant",
+    "person": "Person",
+    "personHint": "Type at least two letters of the name or code.",
+    "personNone": "Nobody matches.",
+    "personPick": "Choose the person…",
+    "personSearch": "Name or code",
+    "submit": "Add entry",
+    "times": "In / out",
+    "title": "Manual entry"
+  },
+  "monthState": {
+    "CLOSED": "closed",
+    "OPEN": "open"
+  },
+  "overtime": {
+    "all": "All",
+    "bulkApprove_one": "Approve {count}",
+    "bulkApprove_other": "Approve {count}",
+    "bulkDone_one": "{done} approved.",
+    "bulkDone_other": "{done} approved.",
+    "bulkHeld": "{done} approved · {held} left: open each one to see why.",
+    "count_one": "{count} entry",
+    "count_other": "{count} entries",
+    "failed": "Couldn't read the overtime",
+    "none": "No overtime waiting",
+    "noneBody": "Overtime appears here once its day is computed.",
+    "notPlanned": "Nobody planned it",
+    "note": "Overtime is paid only after approval.",
+    "planned": "From a planned request",
+    "show": "Show",
+    "title": "Overtime to approve",
+    "waiting": "Waiting"
+  },
+  "privacy": {
+    "days": "Days show their state only: a name and the hours open one record at a time",
+    "gate": {
+      "closed": "Attendance is off at this site",
+      "failed": "The site's rules could not be read: no person is read",
+      "pickSite": "Each site has its own rules: choose a site at the top",
+      "reading": "Reading the site's rules…"
+    },
+    "hr": "HR reads one person's day; a group under the minimum shows no figure",
+    "law": "Statuto dei Lavoratori art. 4 c.2-3 · GDPR art. 5",
+    "lawPlain": "Attendance is a tool to record work: the workers are told, and only the data the purpose needs is kept.",
+    "lead": "Leads confirm days, not hours: the hours stay with HR"
+  },
+  "problem": {
+    "conflict": "Someone changed this meanwhile: it was read again, try once more.",
+    "forbidden": "You may not open this",
+    "invalid": "This cannot be saved as it is.",
+    "noPermission": "Attendance needs people.attendance.view, the roll call or a timesheet approval.",
+    "notFound": "Not found: it may be out of your reach.",
+    "phrase": "The phrase does not match.",
+    "rateLimited": "Too many tries: wait a moment.",
+    "signedOut": "You are signed out: sign in again.",
+    "unavailable": "Not reachable right now: try again."
+  },
+  "reason": {
+    "ABSENCE": "Absence",
+    "BADGE_PROBLEM": "Badge problem",
+    "DUPLICATE": "Duplicate",
+    "FORGOT_CLOCK_IN": "Forgot to clock in",
+    "FORGOT_CLOCK_OUT": "Forgot to clock out",
+    "OFF_SITE": "Work outside the plant",
+    "OTHER": "Other (say why)",
+    "TABLET_PROBLEM": "Tablet problem"
+  },
+  "refusal": {
+    "ALREADY_RESOLVED": "This anomaly is resolved already.",
+    "ALREADY_SEALED": "This calendar is sealed already.",
+    "ALREADY_VOID": "This clock event is voided already.",
+    "CHANGED": "Someone corrected this figure first: read what stands now.",
+    "CODE_ARCHIVED": "This absence code is archived: use an active one.",
+    "DAY_APPROVED": "This day is approved: reopen it first, with the reason.",
+    "DAY_CLOSED": "This day's month is closed: it changes only by a correction.",
+    "HAS_CLOCK_EVENTS": "This day has clock events: change it with Fix a day, with the reason.",
+    "LIMIT_BLOCKED": "A limit blocks this overtime.",
+    "MONTH_CLOSED": "This day is in a closed month: correct the closed day instead.",
+    "NOT_APPROVED": "This day is not approved: there is nothing to reopen.",
+    "NOT_CLOSED": "This month is not closed.",
+    "NOT_DECIDED": "This overtime is not decided yet.",
+    "NOT_VOIDABLE": "A void is not voided: enter the right time instead.",
+    "NO_CHANGE": "This is the figure that stands already.",
+    "NO_DAY": "Nothing was entered for that day.",
+    "NO_SUCH_CODE": "That absence is not on this day.",
+    "OWN_DAY": "Nobody decides about their own attendance: another person does.",
+    "OWN_OVERTIME": "Nobody decides their own overtime: another person does.",
+    "OWN_TIMESHEET": "Nobody approves their own timesheet: another person does.",
+    "TIMESHEET_APPROVED": "An approved timesheet covers this day: send it back first."
+  },
+  "reopen": {
+    "body": "The day goes back to open and is computed again; the reason is kept.",
+    "submit": "Reopen",
+    "title": "Reopen the day"
+  },
+  "resolution": {
+    "ACCEPTED": "Accepted",
+    "CLEARED": "Gone",
+    "FIXED": "Fixed"
+  },
+  "roll": {
+    "count_one": "{count} person · {time}",
+    "count_other": "{count} people · {time}",
+    "failed": "Couldn't read the roll call",
+    "noRight": "The roll call needs people.attendance.rollcall.",
+    "nobody": "Nobody is clocked in now.",
+    "note": "Roll call: the names of who is in now, for an evacuation",
+    "onBreak": "On break",
+    "print": "Print",
+    "reading": "Reading who is in…",
+    "refresh": "Read again",
+    "stale": "Offline: this is the last known list, from {time}.",
+    "title": "Roll call · {site}",
+    "who": "Safety and HR only: never for anything else"
+  },
+  "rule": {
+    "DOUBLE_CLOCK_IN": "A clock-in while already clocked in: the first one counts.",
+    "FLAGGED_EVENT": "A clock event the tablet flagged: signed by name and PIN, or kept offline while its clock looked wrong.",
+    "LONG_DAY": "Over 16 h from the first clock-in to the last clock-out.",
+    "MISSING_CLOCK_IN": "A clock-out with no clock-in before it.",
+    "MISSING_CLOCK_OUT": "A clock-in open for more than 13 h was never closed (24 h less the 11 h of daily rest).",
+    "MISSING_CLOCK_OUT_AUTO": "The automatic clock-out closed the day at shift end plus the time in People settings: a person checks the real time.",
+    "NO_BREAK": "Over the hours of the limit with less break than it asks (the working-time limit in force).",
+    "NO_SHIFT": "Clocked in on a day with no shift planned (People › Shifts: the roster, else the default shift).",
+    "SCANS_WITHOUT_CLOCK_IN": "Work recorded on the floor while not clocked in.",
+    "SHORT_REST": "Less rest than the limit since the last clock-out (the working-time limit in force).",
+    "title": "How this anomaly is found"
+  },
+  "scope": {
+    "allLines": "All lines",
+    "allTeams": "All teams",
+    "line": "Line",
+    "next": "Next month",
+    "previous": "Previous month",
+    "team": "Team",
+    "thisMonth": "This month",
+    "title": "Period and team"
+  },
+  "stage": {
+    "DONE": "Approved",
+    "HR": "HR's turn",
+    "LEAD": "Lead's turn"
+  },
+  "status": {
+    "APPROVED": "Approved",
+    "CLOSED": "Locked",
+    "NEEDS_FIX": "To fix",
+    "OPEN": "Open"
+  },
+  "tile": {
+    "ANOMALIES": {
+      "chip": "Open anomalies",
+      "label": "Open anomalies"
+    },
+    "NO_CODE": {
+      "chip": "Absences without a code",
+      "label": "Absences without a code"
+    },
+    "TO_APPROVE": {
+      "chip": "Days to approve",
+      "label": "Days to approve"
+    },
+    "clockedIn": {
+      "label": "Clocked in now"
+    },
+    "failed": "The tiles couldn't be read.",
+    "overtime": {
+      "label": "Overtime waiting approval (h)"
+    },
+    "tooFew": "Too few people to show"
+  },
+  "timesheet": {
+    "absent": "Absent",
+    "anomalies_one": "{count} open",
+    "anomalies_other": "{count} open",
+    "approveHr": "Approve as HR",
+    "approveLead": "Approve as lead",
+    "changed": "Something in this period changed after the approval: send it back so it is approved on what stands now.",
+    "days": "Days",
+    "daysPresent": "Days present",
+    "failed": "Couldn't read the timesheet",
+    "hr": "HR: {who}, {at}",
+    "in": "In",
+    "lead": "Lead: {who}, {at}",
+    "leadView": "You confirm the days. The hours stay with HR: the attendance basis does not open one person's hours to leads.",
+    "meta": "{month} · code {code} · printed {at} by {person}",
+    "out": "Out",
+    "overtimeApproved": "Overtime approved",
+    "overtimePending": "Overtime waiting",
+    "overtimeRejected": "Overtime rejected",
+    "presence": "Presence",
+    "reading": "Reading the timesheet…",
+    "returned": "Sent back by {who}: {reason}",
+    "sendBack": "Send back",
+    "sendBackBody": "Both approvals are cleared and it starts again."
+  },
+  "timesheets": {
+    "bulkApprove_one": "Approve {count}",
+    "bulkApprove_other": "Approve {count}",
+    "bulkDone_one": "{done} approved.",
+    "bulkDone_other": "{done} approved.",
+    "bulkHeld": "{done} approved · {held} left: open each one to see why.",
+    "count_one": "{count} timesheet",
+    "count_other": "{count} timesheets",
+    "done": "Approved by both",
+    "failed": "Couldn't read the timesheets",
+    "leadNote": "You confirm days, not hours: the hours stay with HR.",
+    "none": "No timesheet for this month",
+    "noneBody": "Prepare them once the month is over: a timesheet per person with attendance.",
+    "noneLead": "HR prepares them once the month is over.",
+    "notReady": "Days or overtime still open",
+    "prepare": "Prepare {month}",
+    "prepared": "{created} prepared · {existing} there already.",
+    "ready": "Ready to approve",
+    "returned": "Sent back",
+    "title": "Timesheets"
+  },
+  "toConfirm": {
+    "0": "The layout of the calendar, PDF and CSV (this one is generic).",
+    "1": "Their absence code per absence: until then the calendar prints our own code.",
+    "2": "How a rest day is marked: R stands on any day with no presence, no absence and no planned shift.",
+    "3": "Decimal hours (7,50) rather than hours and minutes.",
+    "4": "That approved overtime goes by class (day, night, holiday), with night and holiday hours shown as \"of which\".",
+    "5": "Whether agency and external people belong on this calendar (they are marked, not left out).",
+    "6": "How long our copy is kept (five years here)."
+  },
+  "who": {
+    "area": "Area",
+    "failed": "Couldn't read who is in",
+    "line": "Line",
+    "noLine": "No line",
+    "nobody": "Nobody is clocked in now.",
+    "people": "People",
+    "rollCall": "Open roll call",
+    "stale": "Offline: the last known list, from {time}.",
+    "title": "Who is in now",
+    "tooFew": "Too few to show",
+    "tooFewTotal": "Too few people to show a count",
+    "total_one": "{count} person in now",
+    "total_other": "{count} people in now"
+  }
+}

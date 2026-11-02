@@ -37,12 +37,14 @@ import {
   type PrivacyViewName,
   type RegisterFilter,
 } from '../model'
+import { PeopleRulesPanel } from './PeopleRulesPanel'
 import { PrivacyDialogs, type DialogActions } from './PrivacyDialogs'
 import '../privacy.css'
 
 export type { PrivacyViewModel } from '../model'
 
 export interface PrivacyActions extends DialogActions {
+  onPeopleRulesRetry?: () => void
   onCompany?: (companyId: string) => void
   onView?: (view: PrivacyViewName) => void
   onRetry?: () => void
@@ -235,6 +237,7 @@ function Privacy({ model, actions }: { model: PrivacyViewModel; actions?: Privac
       ) : (
         <>
           <Duties model={model} overview={overview} lines={lines} actions={actions} />
+          {model.can.peopleRules && <PeopleRulesPanel prefix={model.prefix} read={model.peopleRules} {...(actions?.onPeopleRulesRetry ? { onRetry: actions.onPeopleRulesRetry } : {})} />}
           <SegmentedControl
             ariaLabel={t('pv.views.label')}
             value={model.view}

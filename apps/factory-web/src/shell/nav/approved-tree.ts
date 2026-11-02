@@ -448,9 +448,13 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: true,
         pages: [
           { id: 'people.employees', title: 'Employees', titleIt: 'Dipendenti', wave: 'W2b', href: '/people/employees' },
+          { id: 'people.attendance', title: 'Attendance', titleIt: 'Presenze', wave: 'W2b', href: '/people/attendance' },
           { id: 'people.shifts', title: 'Shifts', titleIt: 'Turni', wave: 'W2b', href: '/people/shifts' },
         ],
       },
+      // B-W2b-65: Skills & training (SCR-160) and People settings (SCR-265).
+      { label: 'Skills & pay', labelIt: 'Competenze e paghe', hideLabel: false, pages: [{ id: 'people.skills', title: 'Skills & training', titleIt: 'Competenze e formazione', wave: 'W2b', href: '/people/skills' }] },
+      { label: 'Settings', labelIt: 'Impostazioni', hideLabel: false, pages: [{ id: 'people.settings', title: 'People settings', titleIt: 'Impostazioni persone', wave: 'W2b', href: '/people/settings' }] },
     ],
   },
   // W2a: B-W2a-53 the Plant area (Owner answer T2), its Maintenance pages: Machine requests (SCR-148), Maintenance jobs

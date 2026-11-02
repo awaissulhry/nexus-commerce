@@ -30,6 +30,8 @@ import {
 import { fieldOf, minutesOfHours, ORDER_KEY, peopleCan, problemOf, readProblem, TIME_ZONE } from '../../_shared/model'
 import type { Loaded, Notice, SightState } from '../../_shared/parts'
 import { useEmployeeDialogs } from '../use-dialogs'
+import { EmployeeSkills } from '../../skills/record/EmployeeSkills'
+import { EmployeeAttendance } from '../../attendance/employee/EmployeeAttendance'
 import { EMPLOYEE_TABS, personOf, type EditDraft, type EmployeeRecordModel, type EmployeeTab, type Rows } from '../view-model'
 import { EmployeeRecordView } from './view/EmployeeRecordView'
 
@@ -281,6 +283,7 @@ export function EmployeeRecord({ employeeId }: { employeeId: string }) {
     tab,
     loaded,
     sight,
+    attendance: siteId ? <EmployeeAttendance employeeId={employeeId} siteId={siteId} /> : null,
     asOf,
     live,
     edit,
@@ -297,6 +300,7 @@ export function EmployeeRecord({ employeeId }: { employeeId: string }) {
   return (
     <EmployeeRecordView
       model={model}
+      skills={tab === 'skills' ? <EmployeeSkills employeeId={employeeId} /> : null}
       actions={{
         onRetry: () => void load(),
         onEdit: startEdit,

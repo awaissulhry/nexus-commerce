@@ -33,6 +33,8 @@ const panel = output({
   sites: z.array(output({ siteId: id(), code: z.string(), name: z.string(), gateOpen: z.boolean() })),
   /** Corrections made after the close (the payroll's correction export reads them). */
   corrections: count,
+  /** B-W2b-54: those the month's latest payroll file did not carry ("Payroll correction pending"). */
+  payrollCorrectionsPending: count,
   /** The DocumentSeal, after the close. */
   seal: output({ closedAt: instant(), closedBy: z.string().nullable(), sealed: z.boolean(), sha256: z.string().nullable(), fileId: id().nullable() }).nullable(),
   confirm: output({ phrases: output({ en: z.string(), it: z.string() }), consequences: z.string() }),

@@ -303,6 +303,15 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2b-60: People › Shifts (SCR-263) and the roster for the notice board (a new tab).
   '/people/shifts',
   '/people/shifts/print',
+  '/people/skills',
+  '/people/skills/print',
+  '/people/settings',
+  '/people/settings/history',
+  // B-W2b-61: People › Attendance (SCR-157), its roll call, the LUL calendar and a person's timesheet (new tabs).
+  '/people/attendance',
+  '/people/attendance/roll-call',
+  '/people/attendance/lul',
+  '/people/attendance/timesheets/[id]',
 ])
 
 /**
