@@ -99,6 +99,7 @@
       "main": "Principali",
       "floor": "Reparto ora",
       "workOrders": "Ordini di produzione",
+      "dispatch": "Assegnazione lavoro",
       "settings": "Impostazioni",
       "floorRules": "Regole di reparto",
       "reports": "Report",
@@ -108,7 +109,8 @@
       "bundles": "Fasci",
       "floorControl": "Controllo reparto",
       "scrap": "Scarti e rilavorazioni",
-      "calls": "Chiamate di aiuto"
+      "calls": "Chiamate di aiuto",
+      "labour": "Manodopera e rettifiche"
     },
     "quality": {
       "area": "Qualità",

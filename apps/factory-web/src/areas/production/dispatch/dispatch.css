@@ -1,0 +1,278 @@
+/*
+ * Production › Dispatch (SCR-138) LAYOUT: the head, the cards per line with their stations, the board's section, the dialogs'
+ * forms and the print window. The cards, load bars, columns and tags are the design system's (Card, LoadBar, PlanningBoard in
+ * its columns layout); semantic tokens only. No page max-width (Owner rule 2026-10-29): the lines and the stations take as
+ * many columns as the width gives.
+ */
+.fw-dp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dp-status,
+.fw-dp-actions,
+.fw-dp-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-dp-status {
+  color: var(--nds-text-muted);
+}
+
+.fw-dp-date {
+  width: 150px;
+}
+
+.fw-dp-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dp-h2,
+.fw-dp-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-medium);
+  min-width: 0;
+}
+
+.fw-dp-lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+  gap: var(--nds-space-12);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-dp-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-dp-line.is-chosen {
+  outline: 2px solid var(--nds-border-strong);
+  outline-offset: -1px;
+}
+
+.fw-dp-line-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dp-words,
+.fw-dp-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-dp-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.fw-dp-stations {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: var(--nds-space-4) 0 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-dp-station {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  padding: var(--nds-space-4) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.fw-dp-station.is-flagged .fw-dp-station-name strong {
+  color: var(--nds-warning-text);
+}
+
+.fw-dp-station-name,
+.fw-dp-station-who {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-dp-station-who,
+.fw-dp-who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+
+.fw-dp-operator {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+/* The board: every station in view; the columns wrap instead of scrolling sideways (the DS writes them on one row). */
+.fw-dp-board .nds-pb-columns {
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--nds-pb-col-min), 100%), 1fr)) !important;
+}
+
+/* A card says all the design asks of it (order, operation, style, bundles, pieces, due): its line wraps. */
+.fw-dp-board .nds-pb-card-detail {
+  white-space: normal;
+}
+
+/* A station has no capacity of its own: its column says its queue, no bar and no percent; an empty one says nothing. */
+.fw-dp-board .nds-pb-column-load .nds-loadbar-value,
+.fw-dp-board .nds-pb-column-load .nds-loadbar-track {
+  display: none;
+}
+
+.fw-dp-board .nds-pb-column:has(.nds-pb-column-list:empty) .nds-loadbar-minutes {
+  visibility: hidden;
+}
+
+.fw-dp-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-dp-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+  margin: 0;
+}
+
+.fw-dp-fact {
+  min-width: 0;
+}
+
+.fw-dp-fact dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-dp-verbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.fw-dp-bundles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-dp-legend {
+  padding: 0;
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-dp-bundle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  gap: var(--nds-space-4) var(--nds-space-8);
+  max-height: 260px;
+  overflow: auto;
+}
+
+/* Under the width that holds a station on one row, its parts stack. */
+@media (max-width: 640px) {
+  .fw-dp-station {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .fw-dp-station-who {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* The print window: one paper per line or station. */
+.fw-dp-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-dp-paper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dp-paper-title {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-dp-paper-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-dp-print-button {
+  align-self: flex-start;
+}
+
+@media print {
+  .fw-topbar,
+  .h10-rail,
+  .fw-office-subheader,
+  .nds-bottombar,
+  .fw-system-banner,
+  .fw-dp-print-button {
+    display: none !important;
+  }
+
+  .fw-dp-paper {
+    break-after: page;
+  }
+
+  .fw-dp-paper:last-child {
+    break-after: auto;
+  }
+
+  .fw-dp-paper-section {
+    break-inside: avoid-page;
+  }
+}

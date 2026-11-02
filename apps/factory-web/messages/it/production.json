@@ -646,6 +646,7 @@
     "correctionsWaiting_one": "{count} richiesta di correzione attende una decisione.",
     "correctionsWaiting_other": "{count} richieste di correzione attendono una decisione.",
     "toToday": "Apri Oggi",
+    "toLabour": "Apri Manodopera e rettifiche",
     "correctionsHint": "La scansione originale resta; una correzione approvata aggiunge una riga."
   },
   "quality": {

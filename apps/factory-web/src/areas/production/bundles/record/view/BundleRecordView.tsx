@@ -260,7 +260,17 @@ function ScansTab({ model, actions }: { model: BundleRecordModel; actions?: Bund
     <Card padded className="fw-pr-card">
       <div className="fw-pr-card-head">
         <h2 className="fw-pr-h2">{t('scans.title')}</h2>
-        <span className="fw-pr-hint">{t('scans.hint')}</span>
+        <span className="fw-pr-hint">
+          {t('scans.hint')}
+          {model.can.labour && (
+            <>
+              {' '}
+              <Link className="fw-pr-link" href={`${model.prefix}/production/labour?kind=CORRECTION`}>
+                {t('scans.toLabour')}
+              </Link>
+            </>
+          )}
+        </span>
       </div>
       {named && <PrivacyNote level="individual" variant="panel" text={t('scans.privacy')} labels={ds.privacyNote} />}
       {rows.length === 0 ? (

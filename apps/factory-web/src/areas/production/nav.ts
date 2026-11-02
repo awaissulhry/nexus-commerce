@@ -1,4 +1,4 @@
-import { Activity, BarChart3, BellRing, ClipboardList, Factory, Layers, Recycle, Scissors, SlidersHorizontal } from 'lucide-react'
+import { Activity, BarChart3, BellRing, ClipboardCheck, ClipboardList, Factory, Kanban, Layers, Recycle, Scissors, SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -26,6 +26,8 @@ export const officeArea: OfficeAreaNav = {
           { id: 'production-floor', label: 'shell:nav.production.floor', href: '/production/floor', icon: Activity, permission: 'workorders.view' },
           // SCR-069 … SCR-072: the list and the work order studio.
           { id: 'production-work-orders', label: 'shell:nav.production.workOrders', href: '/production/work-orders', icon: ClipboardList, permission: 'workorders.view' },
+          // B-W2b-56: Dispatch (SCR-138, design production.dispatch): load against minutes, lanes by line and station, assign and move.
+          { id: 'production-dispatch', label: 'shell:nav.production.dispatch', href: '/production/dispatch', icon: Kanban, permission: 'production.dispatch.view' },
         ],
       },
       {
@@ -46,6 +48,8 @@ export const officeArea: OfficeAreaNav = {
           { id: 'production-scrap', label: 'shell:nav.production.scrap', href: '/production/scrap', icon: Recycle, permission: 'production.scrap.view' },
           // B-W2b-58: Help calls (SCR-142, design production.calls): the calls with response and resolve times, who is called.
           { id: 'production-calls', label: 'shell:nav.production.calls', href: '/production/calls', icon: BellRing, permission: 'production.calls.view' },
+          // B-W2b-57: Labour & corrections (SCR-139, SCR-143, design production.labour): the legal basis, one queue, line days, the changes.
+          { id: 'production-labour', label: 'shell:nav.production.labour', href: '/production/labour', icon: ClipboardCheck, permission: 'production.labour.view' },
         ],
       },
       {

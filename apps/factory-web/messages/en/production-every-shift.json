@@ -96,6 +96,7 @@
     "earned": "Earned",
     "notScanned": "Not scanned: nothing reports it",
     "offStandard": "Off-standard minutes are kept per line and day, not per work order: see them on the line's day in Labour & corrections.",
+    "toLabour": "Open Labour & corrections",
     "neverPerson": "Never per person: a worker's minutes live only in their own record."
   },
   "docs": {
