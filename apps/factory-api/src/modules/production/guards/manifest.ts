@@ -9,6 +9,8 @@ import { defineManifest } from '../../../core/manifest'
  */
 export const manifest = defineManifest({
   'GET /production/guards/check': { audiences: ['office', 'floor'], permission: 'production.scan', scope: 'record' },
+  // B-W2b-69: a scanned lot read before the report (design "a wrong item is refused").
+  'GET /production/guards/lot': { audiences: ['office', 'floor'], permission: 'production.scan', scope: 'record' },
   'POST /production/guards/override': { audiences: ['floor'], permission: 'production.scan', scope: 'record' },
   'GET /production/guards/flags': { audiences: ['office'], permission: 'production.scan.correct', scope: 'record' },
   'GET /production/guards/flags/:scanId': { audiences: ['office'], permission: 'production.scan.correct', scope: 'record' },

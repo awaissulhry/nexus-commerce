@@ -1,12 +1,20 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
-import { floorRead, type TaskOutcome } from '../shared/task-api'
+import { presignedSchema } from '../../../record-panels/api'
+import { putToStore, sha256Hex } from '../../../record-panels/store'
+import { floorRead, floorWrite, seg, type TaskOutcome } from '../shared/task-api'
+import type { OperationCheck, OperationSteps } from './checks'
+import type { OffStandardBlock, OffStandardFloor, OffStandardTile } from './indirect'
 import type { BundleCard, CorrectionTarget } from './model'
+import { TIMING_KINDS, type OpenItem, type Timing } from './timing'
 
 /**
  * SCR-090's reads (apps/factory-api modules/production/scans, floor + production.scan): the bundle card of a scanned
- * ticket, and the person's own reports today (for "Ask a correction"). Its writes are queued (factory-domain floor-sync
- * `production.scan.report | undo | ask`, through the tablet's queue: they work offline), so none is here.
+ * ticket, and the person's own reports today (for "Ask a correction"). Its reports are queued (factory-domain floor-sync
+ * `production.scan.report | undo | ask`, through the tablet's queue: they work offline). B-W2b-69 adds what the API of
+ * B-W2b-29, -40, -46 and -47 answers at the operation: the bundle's clock, the checks, the steps, a scanned lot, the person's
+ * open work, the no-bundle tiles; and the writes that answer at once while online (a timing action, a tile, a stack) and the
+ * two that only exist online (a team leader's override, a picture going up).
  */
 
 const kind = z.enum(['REPORT', 'UNDO', 'CORRECTION'])
@@ -37,7 +45,7 @@ export const cardSchema = z.object({
     colourwayName: z.string(),
     size: z.string(),
   }),
-  workOrder: z.object({ id: z.string(), number: z.string(), batchNumber: z.string().nullable(), status: z.string(), siteId: z.string(), style: z.object({ code: z.string(), name: z.string() }) }),
+  workOrder: z.object({ id: z.string(), number: z.string(), batchNumber: z.string().nullable(), status: z.string(), rush: z.boolean().optional(), siteId: z.string(), style: z.object({ code: z.string(), name: z.string() }) }),
   station: z.object({ id: z.string(), code: z.string(), name: z.string(), kind: z.string() }).nullable(),
   operations: z.array(
     operationRef.extend({
@@ -134,4 +142,209 @@ const reasonsSchema = z.object({ reasons: z.array(reason) })
 export async function fetchReasons(api: ApiClient): Promise<TaskOutcome<readonly z.infer<typeof reason>[]>> {
   const answer = await floorRead(api, '/production/scans/reasons', { schema: reasonsSchema })
   return answer.ok ? { ok: true, value: answer.value.reasons } : answer
+}
+
+// ---- the bundle at the operation (B-W2b-40, -46, -47) ----------------------------------------------------------------------------
+
+const timingSchema = z.object({
+  state: z.enum(['NOT_STARTED', 'RUNNING', 'PAUSED', 'REPORTED']),
+  mine: z.boolean(),
+  startedAt: z.string().nullable(),
+  runningSince: z.string().nullable(),
+  secondsBefore: z.number(),
+  pausedAt: z.string().nullable(),
+  pauseReasonCode: z.string().nullable(),
+  pausedAtClockOut: z.boolean(),
+  piecesSoFar: z.number(),
+  people: z.number(),
+  actions: z.array(z.enum(TIMING_KINDS)),
+}) satisfies z.ZodType<Timing>
+
+/** The bundle's clock at the operation (never a pace or a target), with the server's time for the skew. */
+export async function fetchTiming(api: ApiClient, code: string, operationId: string): Promise<TaskOutcome<{ readonly timing: Timing; readonly serverTime: string }>> {
+  return floorRead(api, '/production/terminal/state', { query: { code, workOrderOperationId: operationId }, schema: z.object({ timing: timingSchema, serverTime: z.string() }) })
+}
+
+const askedSchema = z.object({ itemId: z.string(), code: z.string(), name: z.string() })
+const checkSchema = z.object({
+  modes: z.object({ quantityGuard: z.enum(['FREE', 'WARN', 'STRICT']), skippedOperationRule: z.enum(['FREE', 'WARN', 'STRICT']) }),
+  expected: z.number().nullable(),
+  beyondBundle: z.boolean(),
+  findings: z.array(z.object({ kind: z.enum(['QUANTITY', 'SKIPPED_OPERATION', 'WRONG_BUNDLE']), mode: z.enum(['WARN', 'STRICT']), code: z.string(), message: z.string(), fix: z.string(), overridable: z.boolean() })),
+  components: z.object({ asked: z.array(askedSchema), traceable: z.array(askedSchema.extend({ asked: z.boolean() })) }),
+  overrideReasons: z.array(z.object({ code: z.string(), label: z.object({ it: z.string(), en: z.string() }), needsNote: z.boolean() })),
+}) satisfies z.ZodType<OperationCheck>
+
+/** The checks of a bundle at an operation; with `counts`, for the counts on the pads (default: all good of what reached it). */
+export function fetchCheck(api: ApiClient, code: string, operationId: string, counts?: { readonly good: number; readonly scrap: number; readonly rework: number }): Promise<TaskOutcome<OperationCheck>> {
+  return floorRead(api, '/production/guards/check', { query: { code, workOrderOperationId: operationId, ...counts }, schema: checkSchema })
+}
+
+const stepsSchema = z.object({
+  steps: z.array(z.object({ code: z.string(), words: z.string(), required: z.boolean(), tick: z.object({ outcome: z.enum(['DONE', 'NOT_APPLICABLE']), at: z.string(), mine: z.boolean(), by: z.string().nullable() }).nullable() })),
+  open: z.number(),
+}) satisfies z.ZodType<OperationSteps>
+
+export function fetchSteps(api: ApiClient, code: string, operationId: string): Promise<TaskOutcome<OperationSteps>> {
+  return floorRead(api, '/production/checklists/state', { query: { code, workOrderOperationId: operationId }, schema: stepsSchema })
+}
+
+export interface LotAnswer {
+  readonly lot: { readonly code: string; readonly itemId: string; readonly itemCode: string } | null
+  readonly refusal: { readonly code: string; readonly message: string; readonly fix: string } | null
+}
+
+/** A scanned lot before the report: the row ticks, or a wrong item is refused in the report's words. */
+export function checkLot(api: ApiClient, query: { readonly code: string; readonly bundle: string; readonly workOrderOperationId: string }): Promise<TaskOutcome<LotAnswer>> {
+  return floorRead(api, '/production/guards/lot', { query, schema: z.object({ lot: z.object({ code: z.string(), itemId: z.string(), itemCode: z.string() }).nullable(), refusal: z.object({ code: z.string(), message: z.string(), fix: z.string() }).nullable() }) })
+}
+
+const openSchema = z.object({
+  items: z.array(
+    z.object({
+      bundleId: z.string(),
+      bundleCode: z.string(),
+      operation: operationRef,
+      state: z.enum(['NOT_STARTED', 'RUNNING', 'PAUSED', 'REPORTED']),
+      pausedAt: z.string().nullable(),
+      runningSince: z.string().nullable(),
+      pausedAtClockOut: z.boolean(),
+    }),
+  ),
+  serverTime: z.string(),
+})
+
+/** The person's open work: running first, then paused (Home's "Unfinished on this tablet", the scan step's Continue). */
+export async function fetchOpenWork(api: ApiClient): Promise<TaskOutcome<readonly OpenItem[]>> {
+  const answer = await floorRead(api, '/production/terminal/open', { schema: openSchema })
+  return answer.ok ? { ok: true, value: answer.value.items } : answer
+}
+
+/** The tablet's crew: the people a team operation names (MES-094). Empty: one operator. */
+export async function fetchCrew(api: ApiClient): Promise<TaskOutcome<readonly string[]>> {
+  const answer = await floorRead(api, '/floor/crew', { schema: z.object({ crew: z.object({ members: z.array(z.object({ workerId: z.string() })) }).nullable() }) })
+  return answer.ok ? { ok: true, value: answer.value.crew?.members.map((member) => member.workerId) ?? [] } : answer
+}
+
+/** Whether these bundles may be joined into garments (MES-078, shades). Needs production.bundles. */
+export async function fetchSetCheck(api: ApiClient, bundleIds: readonly string[]): Promise<TaskOutcome<{ readonly ok: boolean }>> {
+  return floorRead(api, '/production/bundles/sets/check', { query: { bundleIds: bundleIds.join(',') }, schema: z.object({ ok: z.boolean() }) })
+}
+
+// ---- timing: one tap, answered at once while online ------------------------------------------------------------------------------
+
+const timingAnswer = z.object({
+  scan: z.object({ serverTime: z.string() }),
+  timing: timingSchema,
+  qualification: z.object({ mode: z.literal('WARN'), message: z.string(), fix: z.string() }).nullable(),
+})
+export type TimingAnswer = z.infer<typeof timingAnswer>
+
+const TIMING_ROUTES = { start: 'start', pause: 'pause', resume: 'resume', handBack: 'hand-back', partial: 'partial' } as const
+export type TimingRoute = keyof typeof TIMING_ROUTES
+
+/** A timing action online; its client id is the Idempotency-Key. Refused in words; `offline`: the screen queues the same action. */
+export function postTiming(api: ApiClient, route: TimingRoute, clientScanId: string, body: Readonly<Record<string, unknown>>): Promise<TaskOutcome<TimingAnswer>> {
+  return floorWrite(api, 'POST', `/production/terminal/${TIMING_ROUTES[route]}`, { body: { ...body, clientScanId }, schema: timingAnswer, idempotencyKey: clientScanId })
+}
+
+// ---- the team leader's override: only online, the server checks the PIN ------------------------------------------------------------
+
+export type OverrideLead = { readonly badgeCode: string } | { readonly workerId: string }
+
+interface OverrideSign {
+  readonly lead: OverrideLead
+  readonly pin: string
+  readonly reasonCode: string
+  readonly note?: string
+}
+
+const overridden = z.object({ scan: z.object({ id: z.string(), serverTime: z.string() }) })
+
+/** The held report, as it would have been sent, with the team leader's PIN and reason (the PIN goes in the body and nowhere else). */
+export function overrideReport(api: ApiClient, clientScanId: string, report: Readonly<Record<string, unknown>>, sign: OverrideSign): Promise<TaskOutcome<z.infer<typeof overridden>>> {
+  return floorWrite(api, 'POST', '/production/guards/override', {
+    body: { report: { ...report, clientScanId }, lead: { ...sign.lead, pin: sign.pin }, reasonCode: sign.reasonCode, ...(sign.note ? { note: sign.note } : {}) },
+    schema: overridden,
+    idempotencyKey: clientScanId,
+  })
+}
+
+/** The held Start (a skill the person lacks), with the team leader's PIN and reason. */
+export function overrideStart(api: ApiClient, clientScanId: string, start: Readonly<Record<string, unknown>>, sign: OverrideSign): Promise<TaskOutcome<TimingAnswer>> {
+  return floorWrite(api, 'POST', '/production/terminal/start/override', {
+    body: { start: { ...start, clientScanId }, lead: { ...sign.lead, pin: sign.pin }, reasonCode: sign.reasonCode, ...(sign.note ? { note: sign.note } : {}) },
+    schema: timingAnswer,
+    idempotencyKey: clientScanId,
+  })
+}
+
+// ---- several bundles at once -------------------------------------------------------------------------------------------------------
+
+const severalAnswer = z.object({
+  items: z.array(z.object({ clientScanId: z.string(), status: z.enum(['accepted', 'duplicate', 'refused']), refusal: z.object({ code: z.string(), message: z.string(), fix: z.string(), final: z.boolean() }).nullable() })),
+  finished: z.number(),
+  refused: z.number(),
+  good: z.number(),
+  scrap: z.number(),
+  rework: z.number(),
+})
+export type SeveralAnswer = z.infer<typeof severalAnswer>
+
+/** One tap over the stack: each bundle its own report; a refused one stays with its words. Online only: offline each bundle queues. */
+export function finishSeveral(api: ApiClient, items: readonly Record<string, unknown>[]): Promise<TaskOutcome<SeveralAnswer>> {
+  return floorWrite(api, 'POST', '/production/several-bundles/finish', { body: { items }, schema: severalAnswer })
+}
+
+// ---- no bundle: what are you doing? ------------------------------------------------------------------------------------------------
+
+const tileSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  kind: z.enum(['OFF_STANDARD', 'INDIRECT']),
+  labelIt: z.string(),
+  labelEn: z.string(),
+  labelI18n: z.record(z.string(), z.string()),
+  icon: z.string().nullable(),
+  colour: z.string().nullable(),
+}) satisfies z.ZodType<OffStandardTile>
+const blockSchema = z.object({ id: z.string(), code: tileSchema, startedAt: z.string() }) satisfies z.ZodType<OffStandardBlock>
+
+export async function fetchOffStandard(api: ApiClient): Promise<TaskOutcome<OffStandardFloor>> {
+  const answer = await floorRead(api, '/production/offstandard/floor', { schema: z.object({ running: blockSchema.nullable(), codes: z.array(tileSchema) }) })
+  return answer.ok ? { ok: true, value: { running: answer.value.running, codes: answer.value.codes } } : answer
+}
+
+export async function startOffStandard(api: ApiClient, clientEventId: string, codeId: string): Promise<TaskOutcome<OffStandardBlock>> {
+  const answer = await floorWrite(api, 'POST', '/production/offstandard/floor/start', { body: { clientEventId, codeId }, schema: z.object({ block: blockSchema }), idempotencyKey: clientEventId })
+  return answer.ok ? { ok: true, value: answer.value.block } : answer
+}
+
+export async function endOffStandard(api: ApiClient, clientEventId: string): Promise<TaskOutcome<null>> {
+  const answer = await floorWrite(api, 'POST', '/production/offstandard/floor/end', { body: { clientEventId }, schema: z.object({ block: z.object({ id: z.string() }) }), idempotencyKey: clientEventId })
+  return answer.ok ? { ok: true, value: null } : answer
+}
+
+// ---- a picture or a clip for a note ------------------------------------------------------------------------------------------------
+
+const announced = z.object({ file: z.object({ id: z.string() }), upload: presignedSchema })
+
+/**
+ * A photo or clip onto the work order (`POST /production/floor-notes/work-orders/:id/files`): announced with its size and SHA-256,
+ * its bytes PUT straight to the store, then confirmed; the note then names it. Each step's failure stops it.
+ */
+export async function uploadNoteFile(api: ApiClient, workOrderId: string, file: Blob, name: string, durationSeconds?: number): Promise<TaskOutcome<{ readonly fileId: string }>> {
+  const base = `/production/floor-notes/work-orders/${seg(workOrderId)}/files`
+  const bytes = await file.arrayBuffer()
+  const sha256 = await sha256Hex(bytes)
+  const contentType = (file.type || 'image/jpeg').split(';')[0]!.trim()
+  const first = await floorWrite(api, 'POST', base, { body: { originalName: name, contentType, sizeBytes: bytes.byteLength, sha256, ...(durationSeconds !== undefined ? { durationSeconds } : {}) }, schema: announced })
+  if (!first.ok) return first
+  try {
+    await putToStore(first.value.upload, bytes)
+  } catch {
+    return { ok: false, problem: { kind: 'unavailable' } }
+  }
+  const done = await floorWrite(api, 'POST', `${base}/${seg(first.value.file.id)}/complete`, { schema: z.object({ file: z.object({ id: z.string() }) }) })
+  return done.ok ? { ok: true, value: { fileId: done.value.file.id } } : done
 }

@@ -145,7 +145,7 @@ export async function bundleCard(caller: CommandCaller, query: { readonly code: 
     scanned: code,
     refusal: ticket ? { code: ticket.code, message: ticket.message } : !isOpen(card.workOrder.status) ? { code: 'WORK_ORDER_NOT_OPEN' as const, message: `Work order ${card.workOrder.number} is ${card.workOrder.status}; its bundles are scanned only while it is released or in progress.` } : null,
     bundle: { id: card.bundle.id, code: card.bundle.code, status: card.bundle.status, quantity: card.bundle.quantity, part: card.bundle.part, workOrderSizeId: card.bundle.workOrderSizeId, colourwayCode: label?.colourwayCode ?? '', colourwayName: label?.colourwayName ?? '', size: label?.size ?? '' },
-    workOrder: { id: card.workOrder.id, number: card.workOrder.number, batchNumber: card.workOrder.batchNumber, status: card.workOrder.status, siteId: card.workOrder.siteId, style: card.style ?? { code: '', name: '' } },
+    workOrder: { id: card.workOrder.id, number: card.workOrder.number, batchNumber: card.workOrder.batchNumber, status: card.workOrder.status, rush: card.workOrder.rush, siteId: card.workOrder.siteId, style: card.style ?? { code: '', name: '' } },
     station: card.station ? { id: card.station.id, code: card.station.code, name: card.station.name, kind: card.station.kind } : null,
     operations: card.operations,
     next: card.next,

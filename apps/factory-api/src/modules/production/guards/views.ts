@@ -5,6 +5,7 @@ import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayRange, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { parseScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import {
+  componentDecision,
   componentsAsked,
   guardFindings,
   OVERRIDABLE_REFUSALS,
@@ -22,7 +23,7 @@ import { bundleFlowOf } from '../bundles/flow'
 import { readBundleByCode } from '../bundles/store'
 import { floorOrOffice, mayScan, officeOf, scanWorkOrder } from '../scans/access'
 import { deviceStationOf, readBundleScans, readHeader, readOperations, readScan, readStations, workerNames } from '../scans/store'
-import { componentFacts, FLAGGED_ACTION, guardRows, guardRowsOfScan, guardSettingsFor, lineFacts, OVERRIDDEN_ACTION, tracedOfLot, tracedOfWorkOrder, TRACED_ACTION, type GuardAuditRow } from './store'
+import { componentFacts, FLAGGED_ACTION, guardRows, guardRowsOfScan, guardSettingsFor, lineFacts, OVERRIDDEN_ACTION, scannedLots, tracedOfLot, tracedOfWorkOrder, TRACED_ACTION, type GuardAuditRow } from './store'
 
 /**
  * The checks' reads (B-W2b-46):
@@ -93,6 +94,31 @@ export async function checkBundle(caller: CommandCaller, query: { readonly code:
         traceable: facts.materials.filter((material) => material.tracking === 'LOT').map((material) => ({ itemId: material.itemId, code: material.code, name: material.name, asked: asked.some((entry) => entry.itemId === material.itemId) })),
       },
     }
+  })
+}
+
+/**
+ * A lot scanned at the operation, before the report (B-W2b-69; MES-114): the decision of the report itself for this one lot
+ * (componentDecision: not a lot of this site, not a material of this garment, not released), so the tablet refuses a wrong
+ * item at the scan, in the words the report would use; how many garments it covers is the report's check.
+ */
+export async function checkLot(caller: CommandCaller, query: { readonly code: string; readonly bundle: string; readonly workOrderOperationId: string }) {
+  const context = floorOrOffice(caller)
+  const typed = query.bundle.trim().toUpperCase()
+  const scan = parseScanId(typed, { tenantTag: tenantTag(context.tenantId), types: ['BUNDLE'] })
+  if (!scan.ok && scan.problem !== 'format') throw new ValidationError(scan.message, [{ path: 'querystring/bundle', message: scan.message }])
+  return caller.withClient(async (db) => {
+    const bundle = await readBundleByCode(db, scan.ok ? scan.text : typed)
+    const workOrder = bundle ? await readHeader(db, bundle.workOrderId) : null
+    if (!bundle || !workOrder || !mayScan(context, PRODUCTION_SCAN, workOrder)) throw new NotFoundError('Not a bundle ticket of this site: scan the bundle’s ticket.')
+    const operation = (await readOperations(db, workOrder.id)).find((candidate) => candidate.id === query.workOrderOperationId)
+    if (!operation) throw new NotFoundError('Not an operation of this bundle’s work order.')
+    const facts = await componentFacts(db, { styleId: workOrder.styleId, workOrderId: workOrder.id, workOrderSizeId: bundle.workOrderSizeId })
+    const scanned = await scannedLots(db, workOrder.siteId, [{ code: query.code, garments: 1 }])
+    const decision = componentDecision({ asked: [], materials: facts.materials, scanned, garments: 1, operation })
+    if (!decision.ok) return { lot: null, refusal: { code: decision.refusal.code, message: decision.refusal.message, fix: decision.refusal.fix } }
+    const line = decision.lines[0]!
+    return { lot: { code: line.lotCode, itemId: line.itemId, itemCode: line.itemCode }, refusal: null }
   })
 }
 

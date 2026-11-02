@@ -1,9 +1,10 @@
 'use client'
 
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, Check, CircleAlert, CircleCheckBig, ClipboardPen, Clock, CloudOff, House, Layers, MessageSquareWarning, ScanLine, Send, ShieldOff, TriangleAlert, Wrench, X } from 'lucide-react'
+import { ArrowLeft, Camera, Check, CircleAlert, CircleCheckBig, ClipboardPen, Clock, CloudOff, Coffee, Flame, Hand, House, Layers, MessageSquareWarning, Minus, Pause, Play, Plus, ScanLine, Send, ShieldAlert, ShieldOff, TriangleAlert, UserRoundCheck, Wrench, X } from 'lucide-react'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, FloorTile, FloorTileGrid, QuantityPad, ScanInput, type CameraScanner, type FloorAction, type FloorActions } from '@nexus/ui/floor'
-import { Modal } from '../../../../lib/i18n/ds-parts'
+import { Field } from '@nexus/ui/components'
+import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatNumber, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Translate } from '../../../../lib/i18n/messages'
@@ -15,6 +16,20 @@ import type { TaskProblem } from '../../shared/task-api'
 import { HeldLine, ListFooter, ProblemState, TaskCard, TaskLine, Ticks, UndoStrip, type TickState } from '../../shared/view/TaskParts'
 import { fromScanReason } from '../../reasons/model'
 import { ReasonPickerBody, type ReasonPickerAction, type ReasonPickerModel } from '../../reasons/view/ReasonPicker'
+import type { PickerList, PickerReason } from '../../reasons/model'
+import { componentRows, garmentsOn, overridable, quantityRule, toldFindings, workHold, type GuardLine, type LotLine, type OperationCheck, type OperationSteps, type StepOutcome } from '../checks'
+import type { OffStandardBlock, OffStandardTile } from '../indirect'
+import { noteHeld, type NoteDraft } from '../notes'
+import type { StackRow } from '../stack'
+import { stackTotals } from '../stack'
+import { barOf, piecesLeft, resumeRows, type OpenItem, type Timing } from '../timing'
+import { ComponentsPanel } from './ComponentsPanel'
+import { IndirectTiles, RunningBlock } from './IndirectView'
+import { NoteBody, type NoteAction } from './NoteView'
+import { OverrideDialog, type OverrideAction, type OverrideModel } from './OverrideDialog'
+import { StackBody, type StackAction, type StackLine } from './StackView'
+import { StepsPanel } from './StepsPanel'
+import { TimingPanel } from './TimingPanel'
 import {
   CORRECTION_REASONS,
   finishHeld,
@@ -25,7 +40,9 @@ import {
   reworkOf,
   scrapOf,
   correctionHeld,
+  totalOf,
   totalOfTarget,
+  touched,
   type BundleCard,
   type CardOperation,
   type CardReason,
@@ -43,15 +60,51 @@ import '../scans.css'
  * one tap on Finish), see it saved on this tablet and then recorded by the office, undo it until the next scan or two
  * minutes, then ask a correction. One job per step; the frame's banner says what waits for the network. Never another
  * person's numbers or name (Statuto dei Lavoratori art. 4), never money.
+ *
+ * B-W2b-69, the screen every shift: Start, Pause, Resume, Pieces so far and Hand back around the bundle's own clock (Finish stays
+ * one tap with or without a Start, F3), the checks before it counts as a red screen with the team leader's override, the lots to
+ * scan and the steps to tick when the operation asks them (and only then), several bundles at once with size buttons, no-bundle
+ * time, a photo or comment on the work order, and counts stepped without typing (MES-106). Every action answers in colour, with
+ * vibration and sound together (MES-108, the DS confirmFeedback: the container flashes `#fw-op-flash`).
  */
 
 export type CountsOpen = 'scrap' | 'rework' | 'good' | null
+
+/** What the API said about the bundle at this operation, beyond the card (all of it may be missing offline). */
+export interface Work {
+  readonly timing: Timing | null
+  /** Tablet clock − server clock (ms). */
+  readonly skewMs: number
+  readonly check: OperationCheck | null
+  readonly steps: OperationSteps | null
+  readonly lots: readonly LotLine[]
+  /** The last lot scanned was refused. */
+  readonly lotRefusal: { readonly code: string; readonly message: string; readonly fix: string | null } | null
+  /** A lot was read offline (the office checks it when the report arrives). */
+  readonly lotsUnchecked?: boolean
+  /** The site's skill rule only warns: said once at Start. */
+  readonly qualification?: { readonly message: string } | null
+}
+
+export const NO_WORK: Work = Object.freeze({ timing: null, skewMs: 0, check: null, steps: null, lots: Object.freeze([]) as readonly LotLine[], lotRefusal: null })
+
+export type CountsStep = { readonly kind: 'counts'; readonly card: BundleCard; readonly operation: CardOperation; readonly counts: Counts; readonly open: CountsOpen; readonly asOf: string | null; readonly problem?: 'atMost' | null; readonly busy?: boolean; readonly work?: Work }
 
 export type OperationStep =
   | { readonly kind: 'scan' }
   | { readonly kind: 'loading'; readonly code: string }
   | { readonly kind: 'pick'; readonly card: BundleCard; readonly options: readonly CardOperation[]; readonly asOf: string | null }
-  | { readonly kind: 'counts'; readonly card: BundleCard; readonly operation: CardOperation; readonly counts: Counts; readonly open: CountsOpen; readonly asOf: string | null; readonly problem?: 'atMost' | null; readonly busy?: boolean }
+  | CountsStep
+  /** A check holds it: why, what to do, and the team leader's override when one lifts it (`target`: the report, or a Start). */
+  | { readonly kind: 'guard'; readonly from: CountsStep; readonly lines: readonly GuardLine[]; readonly target: 'report' | 'start' }
+  /** Pause asks a reason (the one picker, PAUSE list); a reason that asks more takes a few words. */
+  | { readonly kind: 'pause'; readonly from: CountsStep; readonly list: PickerList; readonly picked: string | null; readonly words: string; readonly busy?: boolean }
+  /** Pieces so far: another person may continue the bundle. */
+  | { readonly kind: 'pieces'; readonly from: CountsStep; readonly value: number | null; readonly busy?: boolean }
+  | { readonly kind: 'stack'; readonly rows: readonly StackRow[]; readonly size: string | null; readonly line?: StackLine | null; readonly busy?: boolean; readonly mismatch?: boolean }
+  /** No bundle: the tiles; null: not read (offline with nothing kept, or reading). */
+  | { readonly kind: 'indirect'; readonly codes: readonly OffStandardTile[] | null }
+  | { readonly kind: 'note'; readonly from: CountsStep; readonly draft: NoteDraft }
   | { readonly kind: 'already'; readonly card: BundleCard; readonly operation: CardOperation; readonly report: CardReport; readonly undo: boolean }
   | { readonly kind: 'refused'; readonly code: string; readonly message: string; readonly fix: string | null; readonly card: BundleCard | null; readonly scanned: string }
   | { readonly kind: 'wrongType'; readonly type: LabelType; readonly code: string }
@@ -77,6 +130,16 @@ export interface LastStrip {
   readonly undoTicks?: TickState | null
   /** The refusal's words when the office refused it. */
   readonly refusal?: string | null
+  /** A stack finished at once: how many bundles (`bundleCode` then says nothing). */
+  readonly bundles?: number
+}
+
+/** What the screen just did that is not a report: pieces so far, a hand back, a note. */
+export interface DoneLine {
+  readonly kind: 'pieces' | 'handBack' | 'note'
+  readonly bundleCode: string
+  readonly count?: number
+  readonly ticks: TickState | null
 }
 
 export interface OperationViewModel {
@@ -90,6 +153,18 @@ export interface OperationViewModel {
   held?: boolean
   /** "Leave this count?" (a scan while counts are typed). */
   leave?: { readonly bundleCode: string; readonly operationSeq: number; readonly scrap: number; readonly rework: number } | null
+  /** The person's open work (the scan step's Continue). */
+  resume?: readonly OpenItem[]
+  /** A no-bundle block running here. */
+  running?: { readonly block: OffStandardBlock; readonly skewMs: number } | null
+  override?: OverrideModel | null
+  /** "Hand back?" (no undo: said once). */
+  handBack?: { readonly bundleCode: string; readonly operationSeq: number } | null
+  /** "Leave this stack?" (several scans would go). */
+  stackLeave?: { readonly bundles: number; readonly good: number } | null
+  done?: DoneLine | null
+  /** The pause reasons this tablet read (their words on a paused bundle). */
+  pauseReasons?: readonly PickerReason[]
   timeZone?: string
 }
 
@@ -111,6 +186,40 @@ export type OperationAction =
   | { type: 'retry' }
   | { type: 'home' }
   | { type: 'leave'; leave: boolean }
+  // B-W2b-69
+  | { type: 'start' }
+  | { type: 'pause' }
+  | { type: 'pausePick'; id: string }
+  | { type: 'pauseWords'; words: string }
+  | { type: 'pauseSend' }
+  | { type: 'resume' }
+  | { type: 'notAllGood' }
+  | { type: 'pickerSwitch' }
+  | { type: 'stepGood'; delta: 1 | -1 }
+  | { type: 'pieces' }
+  | { type: 'piecesValue'; value: number | null }
+  | { type: 'piecesSend' }
+  | { type: 'handBack' }
+  | { type: 'handBackConfirm'; confirm: boolean }
+  | { type: 'tick'; code: string; outcome: StepOutcome }
+  | { type: 'lot'; code: string }
+  | { type: 'lotStep'; code: string; delta: 1 | -1 }
+  | { type: 'lotDrop'; code: string }
+  | { type: 'override' }
+  | { type: 'changeCounts' }
+  | { type: 'stackOpen' }
+  | { type: 'stackFinish' }
+  | { type: 'stackLeave'; leave: boolean }
+  | { type: 'indirectOpen' }
+  | { type: 'indirectPick'; id: string }
+  | { type: 'indirectDone' }
+  | { type: 'noteOpen' }
+  | { type: 'notePost' }
+  | { type: 'noteBack' }
+  | { type: 'continue'; code: string }
+  | OverrideAction
+  | StackAction
+  | NoteAction
 
 export interface OperationViewProps {
   model: OperationViewModel
@@ -172,6 +281,8 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
   const scanAnother: FloorAction = { label: shared('action.scanAnother'), icon: <ScanLine />, onPress: () => send({ type: 'back' }) }
 
   let actions: FloorActions | null = null
+  // A held main action says why on screen too, not only to a screen reader.
+  let barWords: string | null = null
   let body: ReactNode = null
 
   // The scan field is the scan step's job. On every other step the container reads a scanner's burst without a field
@@ -189,6 +300,9 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
   )
 
   const refusalWords = (params: Record<string, string | number>) => (code: string) => (KNOWN.has(code) ? { message: t(`refusal.${code}.message`, params), fix: t(`refusal.${code}.fix`, params) } : null)
+  // A check's words: the screen's own for a code it knows (the API's are English), never a person's name.
+  const guardWords = (code: string, message: string) => refusalWords({ code: '', scanned: '', number: '', status: '', seq: '', operation: '' })(code)?.message ?? message
+  const guardFix = (code: string, fix: string | null) => refusalWords({ code: '', scanned: '', number: '', status: '', seq: '', operation: '' })(code)?.fix ?? fix
 
   switch (step.kind) {
     case 'noPermission':
@@ -200,18 +314,46 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
       body = (
         <>
           {model.receipt && model.last ? <Receipt last={model.last} t={t} shared={shared} send={send} /> : null}
+          {model.done ? <DoneStrip done={model.done} t={t} /> : null}
+          {model.running ? <RunningBlock block={model.running.block} skewMs={model.running.skewMs} t={t} onDone={() => send({ type: 'indirectDone' })} /> : null}
+          {resumeRows(model.resume ?? []).length > 0 ? (
+            <FloorList label={t('resume.title')}>
+              {resumeRows(model.resume ?? []).map((item) => (
+                <FloorListRow
+                  key={`${item.bundleId}:${item.operation.id}`}
+                  icon={item.state === 'PAUSED' ? <Pause /> : <Play />}
+                  tone={item.state === 'PAUSED' ? 'warning' : 'info'}
+                  title={t(`resume.${item.state}`, { code: item.bundleCode, seq: item.operation.seq, time: time(item.pausedAt ?? item.runningSince ?? '') })}
+                  status={t('resume.continue')}
+                  onPress={() => send({ type: 'continue', code: item.bundleCode })}
+                />
+              ))}
+            </FloorList>
+          ) : null}
           {scanField()}
           {model.held ? (
             <TaskLine tone="warning" icon={<TriangleAlert />}>
               {floor('tile.held.notice')}
             </TaskLine>
           ) : (
-            <div className="fw-scans-invite">
-              <span className="fw-floor-hero" aria-hidden="true">
-                <Layers />
-              </span>
-              <p className="fw-floor-lead">{t('scan.empty')}</p>
-            </div>
+            <>
+              <div className="fw-scans-more">
+                <FloorButton size="lg" block variant="secondary" icon={<Layers />} onClick={() => send({ type: 'stackOpen' })}>
+                  {t('stack.open')}
+                </FloorButton>
+                <FloorButton size="lg" block variant="secondary" icon={<Coffee />} onClick={() => send({ type: 'indirectOpen' })}>
+                  {t('indirect.open')}
+                </FloorButton>
+              </div>
+              {model.running || model.done || model.receipt ? null : (
+                <div className="fw-scans-invite">
+                  <span className="fw-floor-hero" aria-hidden="true">
+                    <Layers />
+                  </span>
+                  <p className="fw-floor-lead">{t('scan.empty')}</p>
+                </div>
+              )}
+            </>
           )}
         </>
       )
@@ -332,16 +474,23 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
       break
 
     case 'counts': {
+      const work = step.work ?? NO_WORK
       const expected = step.operation.expected ?? step.card.bundle.quantity
+      const ceiling = step.card.bundle.quantity
       const good = goodOf(step.counts, expected)
-      const held = finishHeld(step.counts, step.operation.expected)
-      const heldWords = held ? t(`finish.held.${held}`, { count: expected }) : step.busy ? t('finish.busy') : null
+      const asked = work.check?.components.asked ?? []
+      const held = finishHeld(step.counts, step.operation.expected, ceiling)
+      const hold = held ? null : workHold({ steps: work.steps, asked, lots: work.lots, counts: step.counts, expected })
+      const heldWords = held ? t(`finish.held.${held}`, { count: ceiling }) : step.busy ? t('finish.busy') : hold ? t(`finish.work.${hold.key}`, hold) : null
+      const finish: FloorAction = { label: t('finish.label', { count: good }), icon: <Check />, onPress: () => send({ type: 'finish' }), heldReason: heldWords, id: 'finish' }
+      barWords = heldWords
       const kind = pickerKindOf(step.open)
       if (kind) {
         // Scrap or Rework opened the reason picker: Done goes back to the counts, Finish stays one tap away.
         actions = [
           { label: reasonsT('done'), icon: <ArrowLeft />, variant: 'secondary', onPress: () => send({ type: 'open', what: null }) },
-          { label: t('finish.label', { count: good }), icon: <Check />, onPress: () => send({ type: 'finish' }), heldReason: heldWords },
+          { label: t(kind === 'SCRAP' ? 'counts.rework' : 'counts.scrap'), icon: kind === 'SCRAP' ? <Wrench /> : <TriangleAlert />, variant: 'secondary', onPress: () => send({ type: 'pickerSwitch' }) },
+          finish,
         ]
         const picker = pickerOf({ bundleCode: step.card.bundle.code, operation: step.operation, kind, reasons: step.card.reasons, counts: step.counts, expected, problem: step.problem ?? null })
         body = (
@@ -352,20 +501,195 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
         )
         break
       }
-      actions = [
-        { label: t('counts.scrap'), icon: <TriangleAlert />, variant: step.open === 'scrap' ? 'warning' : 'secondary', onPress: () => send({ type: 'open', what: step.open === 'scrap' ? null : 'scrap' }) },
-        { label: t('counts.rework'), icon: <Wrench />, variant: step.open === 'rework' ? 'warning' : 'secondary', onPress: () => send({ type: 'open', what: step.open === 'rework' ? null : 'rework' }) },
-        { label: t('finish.label', { count: good }), icon: <Check />, onPress: () => send({ type: 'finish' }), heldReason: heldWords },
-      ]
+      const bar = barOf(work.timing)
+      const notAllGood: FloorAction = { label: t('timing.notAllGood'), icon: <TriangleAlert />, onPress: () => send({ type: 'notAllGood' }) }
+      actions =
+        bar === 'running'
+          ? [{ label: t('timing.pause'), icon: <Pause />, onPress: () => send({ type: 'pause' }) }, notAllGood, finish]
+          : bar === 'paused'
+            ? [notAllGood, finish, { label: t('timing.resume'), icon: <Play />, onPress: () => send({ type: 'resume' }), id: 'resume' }]
+            : bar === 'other'
+              ? [notAllGood, finish]
+              : [{ label: t('timing.start'), icon: <Play />, onPress: () => send({ type: 'start' }) }, notAllGood, finish]
+      const total = totalOf(step.counts, expected)
+      const rule = quantityRule(work.check, total)
+      const told = toldFindings(work.check)
+      const mine = bar === 'running' || bar === 'paused'
       body = (
         <>
           {model.last ? <LastLine last={model.last} t={t} shared={shared} send={send} /> : null}
+          {model.done ? <DoneStrip done={model.done} t={t} /> : null}
           <div className="fw-task-split">
-            <BundleFacts card={step.card} operation={step.operation} asOf={step.asOf} t={t} shared={shared} locale={locale} time={time} />
-            <CountsPanel counts={step.counts} expected={expected} open={step.open} problem={step.problem ?? null} t={t} locale={locale} send={send} />
+            <div className="fw-floor-stack">
+              <BundleFacts card={step.card} operation={step.operation} asOf={step.asOf} t={t} shared={shared} locale={locale} time={time} />
+              <TimingPanel timing={work.timing} skewMs={work.skewMs} reasons={model.pauseReasons ?? []} />
+              {work.qualification ? (
+                <TaskLine tone="warning" icon={<ShieldAlert />}>
+                  {t('timing.qualification')}
+                </TaskLine>
+              ) : null}
+              {told.map((finding) => (
+                <TaskLine key={finding.code} tone="warning" icon={<TriangleAlert />}>
+                  {t('guard.told', { what: guardWords(finding.code, finding.message) })}
+                </TaskLine>
+              ))}
+            </div>
+            <div className="fw-floor-stack">
+              {/* What the operation asks first: Finish waits for it, so it never hides under the counts. */}
+              {work.steps ? <StepsPanel list={work.steps} t={t} time={time} onTick={(code, outcome) => send({ type: 'tick', code, outcome })} /> : null}
+              <ComponentsPanel rows={componentRows(asked, work.lots, garmentsOn(step.counts, expected))} garments={garmentsOn(step.counts, expected)} refusal={work.lotRefusal ? { message: guardWords(work.lotRefusal.code, work.lotRefusal.message), fix: guardFix(work.lotRefusal.code, work.lotRefusal.fix) } : null} unchecked={Boolean(work.lotsUnchecked)} t={t} camera={camera} onLot={(code) => send({ type: 'lot', code })} onStep={(code, delta) => send({ type: 'lotStep', code, delta })} onDrop={(code) => send({ type: 'lotDrop', code })} />
+              <CountsPanel counts={step.counts} expected={expected} ceiling={ceiling} open={step.open} problem={step.problem ?? null} t={t} locale={locale} send={send} stepper />
+              {rule ? (
+                <TaskLine tone="warning" icon={<TriangleAlert />}>
+                  {t(`counts.rule.${rule}`, { count: step.operation.expected ?? expected })}
+                </TaskLine>
+              ) : null}
+              <div className="fw-scans-more">
+                {mine ? (
+                  <>
+                    <FloorButton size="lg" block variant="secondary" icon={<Hand />} heldReason={piecesLeft(step.card.bundle.quantity, work.timing) < 1 ? t('timing.noPieces') : null} onClick={() => send({ type: 'pieces' })}>
+                      {t('timing.piecesOpen')}
+                    </FloorButton>
+                    <FloorButton size="lg" block variant="secondary" icon={<ArrowLeft />} onClick={() => send({ type: 'handBack' })}>
+                      {t('timing.handBack')}
+                    </FloorButton>
+                  </>
+                ) : (
+                  <FloorButton size="lg" block variant="secondary" icon={<Layers />} heldReason={touched(step.counts) ? t('stack.heldCounts') : null} onClick={() => send({ type: 'stackOpen' })}>
+                    {t('stack.add')}
+                  </FloorButton>
+                )}
+                <FloorButton size="lg" block variant="secondary" icon={<Camera />} onClick={() => send({ type: 'noteOpen' })}>
+                  {t('note.open')}
+                </FloorButton>
+              </div>
+            </div>
           </div>
         </>
       )
+      break
+    }
+
+    case 'guard': {
+      const { from, lines, target } = step
+      const lift = overridable(lines)
+      // Back is the counts (change them, or scan another ticket from there); a line no override lifts ends here.
+      actions = lift
+        ? [
+            { label: shared('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'changeCounts' }) },
+            { label: t('guard.override'), icon: <UserRoundCheck />, onPress: () => send({ type: 'override' }), heldReason: model.online ? null : t('override.offline') },
+          ]
+        : [home, scanAnother]
+      body = (
+        <FloorState tone="danger" icon={<ShieldAlert />} title={t('guard.title')} text={!lift ? t('guard.noLift') : target === 'report' ? t('guard.liftReport') : t('guard.lift')} alert>
+          <p className="fw-floor-card-code">{from.card.bundle.code}</p>
+          <p className="fw-scans-op">
+            {t('opCode', { seq: from.operation.seq, code: from.operation.code })} · {from.operation.name}
+          </p>
+          {lines.map((line) => (
+            <div key={line.code} className="fw-scans-guard-line">
+              <p className="fw-floor-state-text">{guardWords(line.code, line.message)}</p>
+              {guardFix(line.code, line.fix) ? <p className="fw-floor-muted">{guardFix(line.code, line.fix)}</p> : null}
+            </div>
+          ))}
+        </FloorState>
+      )
+      break
+    }
+
+    case 'pause': {
+      const picked = step.list.reasons.find((reason) => reason.id === step.picked) ?? null
+      const needsWords = Boolean(picked?.needsDetail)
+      const wordsHeld = !picked ? t('pause.choose') : needsWords && !step.words.trim() ? t('pause.needsWords') : step.busy ? t('finish.busy') : null
+      barWords = wordsHeld
+      actions = [
+        { label: shared('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'back' }) },
+        { label: t('timing.pause'), icon: <Pause />, onPress: () => send({ type: 'pauseSend' }), heldReason: wordsHeld },
+      ]
+      const picker: ReasonPickerModel = { purpose: 'pause', subject: `${step.from.card.bundle.code} · ${t('opShort', { seq: step.from.operation.seq })}`, reasons: step.list.reasons, state: step.list.state, value: step.picked, asOf: step.list.asOf }
+      body = (
+        <>
+          <ReasonPickerBody model={picker} onAction={(action) => (action.type === 'pick' ? send({ type: 'pausePick', id: action.id }) : undefined)} onBack={() => send({ type: 'back' })} timeZone={model.timeZone} />
+          {needsWords ? (
+            <Field label={t('pause.words')} htmlFor="fw-scans-pause-words">
+              <Textarea id="fw-scans-pause-words" value={step.words} limit={200} maxLength={200} rows={2} autoFocus onChange={(event) => send({ type: 'pauseWords', words: event.target.value })} />
+            </Field>
+          ) : null}
+        </>
+      )
+      break
+    }
+
+    case 'pieces': {
+      const most = piecesLeft(step.from.card.bundle.quantity, step.from.work?.timing ?? null)
+      const sendHeld = step.value === null || step.value < 1 ? t('timing.piecesEmpty') : step.value > most ? t('counts.atMost', { count: most }) : step.busy ? t('finish.busy') : null
+      barWords = sendHeld
+      actions = [
+        { label: shared('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'back' }) },
+        { label: t('timing.piecesSend'), icon: <Check />, onPress: () => send({ type: 'piecesSend' }), heldReason: sendHeld },
+      ]
+      body = (
+        <section className="fw-floor-stack" aria-labelledby="fw-scans-pieces">
+          <h2 id="fw-scans-pieces" className="fw-floor-section-title">
+            {t('timing.piecesTitle', { code: step.from.card.bundle.code })}
+          </h2>
+          <p className="fw-floor-muted">{t('timing.piecesHint')}</p>
+          <QuantityPad
+            label={t('timing.piecesOpen')}
+            value={step.value}
+            onChange={(value) => send({ type: 'piecesValue', value })}
+            min={1}
+            max={most}
+            expected={most}
+            expectedLabel={(count) => t('counts.of', { count })}
+            decimalSeparator={locale === 'it' ? ',' : '.'}
+            decrementLabel={t('pad.less')}
+            incrementLabel={t('pad.more')}
+            clearLabel={t('pad.clear')}
+            backLabel={t('pad.back')}
+            emptyLabel={t('pad.empty')}
+            rangeLabel={(_min, max) => t('counts.atMost', { count: max ?? most })}
+            autoFocus
+          />
+        </section>
+      )
+      break
+    }
+
+    case 'stack': {
+      const totals = stackTotals(step.rows)
+      const stackHeld = step.rows.length === 0 ? t('stack.heldEmpty') : step.mismatch ? t('stack.heldShade') : step.rows.some((row) => row.refusal) ? t('stack.heldRefused') : step.busy ? t('finish.busy') : null
+      barWords = stackHeld
+      actions = [
+        { label: shared('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'back' }) },
+        { label: t('stack.finish', { count: totals.bundles, good: formatNumber(totals.good, locale) }), icon: <Check />, onPress: () => send({ type: 'stackFinish' }), heldReason: stackHeld },
+      ]
+      body = <StackBody rows={step.rows} size={step.size} line={step.line ?? null} online={model.online} refusalText={(refusal) => `${guardWords(refusal.code, refusal.message)} ${guardFix(refusal.code, refusal.fix) ?? ''}`.trim()} t={t} camera={camera} send={send} />
+      break
+    }
+
+    case 'indirect':
+      actions = [{ label: shared('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'back' }) }]
+      body = (
+        <section className="fw-floor-stack" aria-labelledby="fw-scans-indirect">
+          <h2 id="fw-scans-indirect" className="fw-floor-section-title">
+            {t('indirect.question')}
+          </h2>
+          <IndirectTiles codes={step.codes} online={model.online} t={t} onPick={(id) => send({ type: 'indirectPick', id })} />
+        </section>
+      )
+      break
+
+    case 'note': {
+      const noteWait = noteHeld(step.draft)
+      if (step.draft.capture === null) {
+        barWords = noteWait ? t(`note.held.${noteWait}`) : null
+        actions = [
+          { label: shared('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'noteBack' }) },
+          { label: t('note.post'), icon: <Send />, onPress: () => send({ type: 'notePost' }), heldReason: noteWait ? t(`note.held.${noteWait}`) : null },
+        ]
+      }
+      body = <NoteBody draft={step.draft} subject={`${step.from.card.bundle.code} · ${t('opShort', { seq: step.from.operation.seq })}`} online={model.online} t={t} send={send} />
       break
     }
 
@@ -485,8 +809,8 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
   const showStrip = model.last && !(model.receipt && step.kind === 'scan') && (step.kind === 'scan' || step.kind === 'loading' || step.kind === 'wrongType' || step.kind === 'notOnTablet' || step.kind === 'unknownCode' || step.kind === 'pick')
 
   return (
-    <FloorFrameView frame={model.frame} onFrame={onFrame} actions={actions ? <FloorActionBar label={t('title')} actions={actions} /> : undefined}>
-      <div className="fw-floor-stack">
+    <FloorFrameView frame={model.frame} onFrame={onFrame} actions={actions ? <FloorActionBar label={t('title')} actions={actions} start={barWords ? <span className="fw-scans-bar-words">{barWords}</span> : undefined} /> : undefined}>
+      <div id="fw-op-flash" className="fw-floor-stack">
         {showStrip ? <LastLine last={model.last!} t={t} shared={shared} send={send} /> : null}
         {body}
       </div>
@@ -510,6 +834,41 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
           </div>
         ) : null}
       </Modal>
+      <Modal open={Boolean(model.handBack)} onClose={() => send({ type: 'handBackConfirm', confirm: false })} title={t('timing.handBackTitle')} size="sm" className="fw-floor-dialog">
+        {model.handBack ? (
+          <div className="fw-floor-dialog-body">
+            <p className="fw-floor-dialog-line">
+              <span className="fw-floor-code">{model.handBack.bundleCode}</span> · {t('opShort', { seq: model.handBack.operationSeq })}
+            </p>
+            <p className="fw-floor-dialog-line fw-floor-muted">{t('timing.handBackBody')}</p>
+            <div className="fw-floor-dialog-actions">
+              <FloorButton size="lg" variant="secondary" icon={<X />} onClick={() => send({ type: 'handBackConfirm', confirm: false })}>
+                {t('leave.keep')}
+              </FloorButton>
+              <FloorButton size="lg" variant="primary" icon={<Check />} autoFocus onClick={() => send({ type: 'handBackConfirm', confirm: true })}>
+                {t('timing.handBack')}
+              </FloorButton>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+      <Modal open={Boolean(model.stackLeave)} onClose={() => send({ type: 'stackLeave', leave: false })} title={t('stack.leaveTitle')} size="sm" className="fw-floor-dialog">
+        {model.stackLeave ? (
+          <div className="fw-floor-dialog-body">
+            <p className="fw-floor-dialog-line">{t('stack.total', { count: model.stackLeave.bundles, good: formatNumber(model.stackLeave.good, locale) })}</p>
+            <p className="fw-floor-dialog-line fw-floor-muted">{t('stack.leaveBody')}</p>
+            <div className="fw-floor-dialog-actions">
+              <FloorButton size="lg" variant="secondary" icon={<X />} onClick={() => send({ type: 'stackLeave', leave: true })}>
+                {t('stack.leave')}
+              </FloorButton>
+              <FloorButton size="lg" variant="primary" icon={<Check />} autoFocus onClick={() => send({ type: 'stackLeave', leave: false })}>
+                {t('stack.keep')}
+              </FloorButton>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+      <OverrideDialog model={model.override ?? null} send={send} words={guardWords} />
     </FloorFrameView>
   )
 }
@@ -526,7 +885,13 @@ function Receipt({ last, t, shared, send }: { last: LastStrip; t: Translate; sha
       </span>
       <span className="fw-scans-receipt-text">
         <span className="fw-scans-receipt-what">
-          <span className="fw-floor-code">{last.bundleCode}</span> · {t('opShort', { seq: last.operationSeq })} · {countsText(t, last)}
+          {last.bundles ? (
+            t('stack.done', { count: last.bundles, what: countsText(t, last) })
+          ) : (
+            <>
+              <span className="fw-floor-code">{last.bundleCode}</span> · {t('opShort', { seq: last.operationSeq })} · {countsText(t, last)}
+            </>
+          )}
         </span>
         {last.ticks ? <Ticks state={last.ticks} /> : null}
         {last.refusal ? <span className="fw-floor-muted">{last.refusal}</span> : null}
@@ -540,9 +905,14 @@ function Receipt({ last, t, shared, send }: { last: LastStrip; t: Translate; sha
   )
 }
 
+/** Pieces so far, a hand back or a note: what was just done, with its ticks. */
+function DoneStrip({ done, t }: { done: DoneLine; t: Translate }) {
+  return <UndoStrip text={t(`done.${done.kind}`, { code: done.bundleCode, count: done.count ?? 0 })} ticks={done.ticks} />
+}
+
 /** The last action strip: Undo while its window is open, then Ask a correction. */
 function LastLine({ last, t, shared, send }: { last: LastStrip; t: Translate; shared: Translate; send: (action: OperationAction) => void }) {
-  const what = `${last.bundleCode} · ${t('opShort', { seq: last.operationSeq })} · ${countsText(t, last)}`
+  const what = last.bundles ? t('stack.done', { count: last.bundles, what: countsText(t, last) }) : `${last.bundleCode} · ${t('opShort', { seq: last.operationSeq })} · ${countsText(t, last)}`
   if (last.undo === 'undone') return <UndoStrip text={t('undo.done', { what })} ticks={last.undoTicks ?? null} />
   if (last.undo === 'open') return <UndoStrip text={what} ticks={last.ticks} onUndo={() => send({ type: 'undo' })} undoLabel={shared('undo.label')} />
   return (
@@ -569,6 +939,11 @@ function BundleFacts({ card, operation, asOf, t, shared, locale, time }: { card:
       flags={
         <>
           <p className="fw-scans-size">{colourSize}</p>
+          {card.workOrder.rush ? (
+            <TaskLine tone="danger" icon={<Flame />}>
+              {t('fact.rush')}
+            </TaskLine>
+          ) : null}
           {operation ? (
             <p className="fw-scans-op">
               {t('opCode', { seq: operation.seq, code: operation.code })} · {operation.name}
@@ -627,15 +1002,19 @@ function PickTiles({ options, t, onPick }: { options: readonly CardOperation[]; 
 function CountsPanel({
   counts,
   expected,
+  ceiling = expected,
   open,
   problem,
   t,
   locale,
   send,
   withButtons,
+  stepper,
 }: {
   counts: Counts
   expected: number
+  /** The most a report takes (the bundle's own pieces); above what passed the site's rule decides. */
+  ceiling?: number
   open: CountsOpen
   problem: 'atMost' | null
   t: Translate
@@ -643,6 +1022,8 @@ function CountsPanel({
   send: (action: OperationAction) => void
   /** Scrap and Rework as buttons here (the correction: the action bar holds Back and Send). */
   withButtons?: boolean
+  /** − and + on Good: a count without typing (MES-106). */
+  stepper?: boolean
 }) {
   const good = goodOf(counts, expected)
   const scrap = scrapOf(counts)
@@ -671,8 +1052,17 @@ function CountsPanel({
       </span>
     </FloorButton>
   )
+  // "+ and − step the focused counter" (design floor.operation keys).
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!stepper || open === 'good' || event.ctrlKey || event.metaKey || event.altKey) return
+    const delta = event.key === '+' ? 1 : event.key === '-' ? -1 : null
+    if (delta === null) return
+    event.preventDefault()
+    send({ type: 'stepGood', delta })
+  }
+  const most = Math.max(0, ceiling - scrap - rework)
   return (
-    <section className="fw-floor-stack" aria-labelledby="fw-scans-counts">
+    <section className="fw-floor-stack" aria-labelledby="fw-scans-counts" onKeyDown={onKeyDown}>
       <h2 id="fw-scans-counts" className="fw-floor-section-title">
         {t('counts.title')}
       </h2>
@@ -681,9 +1071,19 @@ function CountsPanel({
         {counter('scrap', scrap, <TriangleAlert />)}
         {counter('rework', rework, <Wrench />)}
       </div>
+      {stepper && open !== 'good' ? (
+        <div className="fw-scans-stepper" role="group" aria-label={t('counts.stepGood')}>
+          <FloorButton size="lg" block variant="secondary" icon={<Minus />} heldReason={good <= 0 ? t('counts.least') : null} onClick={() => send({ type: 'stepGood', delta: -1 })}>
+            {t('counts.oneLess')}
+          </FloorButton>
+          <FloorButton size="lg" block variant="secondary" icon={<Plus />} heldReason={good >= most ? t('counts.atMost', { count: ceiling }) : null} onClick={() => send({ type: 'stepGood', delta: 1 })}>
+            {t('counts.oneMore')}
+          </FloorButton>
+        </div>
+      ) : null}
       {problem ? (
         <TaskLine tone="warning" icon={<TriangleAlert />} alert>
-          {t('counts.atMost', { count: expected })}
+          {t('counts.atMost', { count: ceiling })}
         </TaskLine>
       ) : null}
       {open === 'good' ? (
@@ -692,7 +1092,7 @@ function CountsPanel({
           value={good}
           onChange={(value) => send({ type: 'good', value })}
           min={0}
-          max={maxGood(counts, expected)}
+          max={maxGood(counts, ceiling)}
           expected={expected}
           expectedLabel={(count) => t('counts.of', { count })}
           quickValues={[{ value: maxGood(counts, expected), label: t('counts.allLeft') }]}
@@ -702,7 +1102,7 @@ function CountsPanel({
           clearLabel={t('pad.clear')}
           backLabel={t('pad.back')}
           emptyLabel={t('pad.empty')}
-          rangeLabel={(_min, max) => t('counts.atMost', { count: max ?? expected })}
+          rangeLabel={(_min, max) => t('counts.atMost', { count: max ?? ceiling })}
           onConfirm={() => send({ type: 'open', what: null })}
           confirmLabel={t('pad.done')}
           autoFocus
