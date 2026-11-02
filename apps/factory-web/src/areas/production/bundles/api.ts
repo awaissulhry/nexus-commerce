@@ -163,6 +163,7 @@ export const recordScanSchema = z.object({
   deviceTime: z.string().nullable(),
   serverTime: z.string(),
   worker: z.object({ id: z.string(), name: z.string() }).nullable(),
+  workerHidden: z.boolean().optional(),
   station: stationRef.nullable(),
   approvedById: z.string().nullable(),
   voidedById: z.string().nullable(),

@@ -5,7 +5,8 @@ import { PRODUCTION_LABOUR_VIEW } from '@nexus/factory-domain/production/labour/
 import { readDisputeMessage, reportOf, type LabourRecord } from '@nexus/factory-domain/production/labour/rules'
 import { isOnBehalfEntry } from '@nexus/factory-domain/production/onbehalf/rules'
 import type { CommandCaller } from '../../../core/command'
-import { legalGateFor, type GateReader } from '../../people/privacy/gate'
+import type { GateReader } from '../../people/privacy/gate'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { officeOf, reaches } from './access'
 import { bundlesById, chainsOf, COUNT_KINDS, devicesById, employeesOfWorkers, linesById, peopleNames, recordsFor, SCAN, sitesById, stationsById, toLabourScan, workOrdersById, type OperationRow, type Reader } from './store'
 
@@ -19,11 +20,6 @@ import { bundlesById, chainsOf, COUNT_KINDS, devicesById, employeesOfWorkers, li
  * (PERFORMANCE, Statuto dei Lavoratori art. 4 c.1; GATE-LABOUR): off (the default), the record says a person is on it
  * (`workerHidden`), never who. Office only (production.labour.view).
  */
-
-/** The site's PERFORMANCE legal gate is in force now (B-W2b-27's legalGateFor). Office reads. */
-export async function performanceOpen(db: Reader, siteId: string): Promise<boolean> {
-  return (await legalGateFor(db as GateReader, siteId, 'PERFORMANCE')).open
-}
 
 /** A record's line: its station's, else its station-less tablet's (B-W2b-52). */
 export async function recordPlaces(db: Reader, records: readonly Pick<LabourRecord, 'stationId' | 'deviceId'>[]) {
@@ -60,7 +56,7 @@ export async function recordOf(caller: CommandCaller, scanId: string) {
     const bundle = (await bundlesById(db, [record.bundleId])).get(record.bundleId)
     const workOrder = (await workOrdersById(db, [record.workOrderId])).get(record.workOrderId)
     const places = await recordPlaces(db, [record])
-    const shown = record.workerId !== null && (await performanceOpen(db, site.id))
+    const shown = record.workerId !== null && (await workerGateFor(db as GateReader, site.id)).open
     const names = await peopleNames(db, [shown ? record.workerId : null, ...record.steps.map((step) => step.approvedById)])
     // B-W2b-57: "Open this person's day" names the employee record; only where the worker is shown.
     const employees = await employeesOfWorkers(db, [shown ? record.workerId : null])

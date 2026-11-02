@@ -25,9 +25,11 @@ import {
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
+import type { GateReader } from '../../people/privacy/gate'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { officeOf, refuse } from './access'
 import type { CorrectBody, ListBlocksQuery, RecordBlockBody } from './contract'
-import { blocksAround, BLOCK, closedDays, lockBlock, performanceGateOpen, dayKey, editedBlocks, editsOf, linesById, peopleNames, readBlock, readBlocks, readCode, sitesById, stationsById, workerOf, workerUsers, type BlockRow, type CodeRow, type Reader, type Subject } from './store'
+import { blocksAround, BLOCK, closedDays, lockBlock, dayKey, editedBlocks, editsOf, linesById, peopleNames, readBlock, readBlocks, readCode, sitesById, stationsById, workerOf, workerUsers, type BlockRow, type CodeRow, type Reader, type Subject } from './store'
 import { dayColumn, isoDay, rowFactsOf, rowOf } from './views'
 import { endBlock, insertBlock } from './writes'
 
@@ -152,7 +154,7 @@ export async function recordOf(db: Reader, block: BlockRow, viewer: { readonly a
   const someone = (id: string | null) => (id ? { id, name: names.get(id) ?? '' } : null)
   const own = (await involvedOf(db, block)).has(viewer.actorId)
   // One person's record of work: their name only where the site's PERFORMANCE gate is on (art. 4 c.1; GATE-LABOUR).
-  const shown = block.workerId !== null && (await performanceGateOpen(db, block.siteId))
+  const shown = block.workerId !== null && (await workerGateFor(db as GateReader, block.siteId)).open
   const json = (value: Prisma.JsonValue): Record<string, unknown> => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {})
   return {
     ...rowOf(block, facts),

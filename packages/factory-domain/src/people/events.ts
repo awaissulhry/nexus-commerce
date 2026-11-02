@@ -20,6 +20,8 @@ import { ANOMALY_KINDS, DAY_CHANGES, DAY_STATUSES } from './attendance/rules'
 import { RULE_KINDS } from './limits/rules'
 import { ENTRY_CHANGES, ENTRY_STATUSES, OVERTIME_CLASSES } from './overtime/rules'
 import { TIMESHEET_CHANGES, TIMESHEET_STATUSES } from './overtime/timesheets'
+// B-W2b-48: the month close and the LUL calendar.
+import { CORRECTION_KINDS } from './close/rules'
 
 /**
  * The people module's events (B-W2b-26 employees and teams; design people.employees "Live": employee.created / updated
@@ -104,6 +106,8 @@ export const events = [
   ...attendanceEvents(),
   // B-W2b-42: overtime worked, timesheets, working-time limits (overtimeEvents, at the end of the file).
   ...overtimeEvents(),
+  // B-W2b-48: the month close and the LUL calendar (closeEvents, at the end of the file).
+  ...closeEvents(),
   // B-W2b-44: the standard review (no person, no figure).
   defineEvent({
     type: 'standard_review.decided',
@@ -451,6 +455,43 @@ function overtimeEvents() {
       description: 'A working-time limit was set or archived for the group, a company or a site.',
       payload: z.strictObject({ ruleId: z.uuid(), companyId: z.uuid().nullable(), siteId: z.uuid().nullable(), kind: z.enum(RULE_KINDS), change: z.enum(['SET', 'ARCHIVED']) }),
       live: { permission: 'people.attendance.view', fields: ['ruleId', 'companyId', 'siteId', 'kind', 'change'] },
+    }),
+  ] as const
+}
+
+/**
+ * B-W2b-48: the month close and the LUL calendar (design people.attendance "Month close", people.reports "attendance.
+ * month_closed → match check"), emitted by apps/factory-api modules/people/close in the command that makes the change. Ids,
+ * months and kinds only: never a name, a minute figure or a reason about a person.
+ *
+ *   attendance.month_closed   a company's month closed for good (how many days it locked)
+ *   attendance.lul_sealed     the month's LUL calendar was stored and sealed
+ *   attendance.day_corrected  a closed day's figure was corrected by a new entry (the payroll's correction export reads it)
+ *
+ * All reach the office screens of people.attendance.view holders; the floor receives none.
+ */
+function closeEvents() {
+  return [
+    defineEvent({
+      type: 'attendance.month_closed',
+      context: 'people',
+      description: "A company's attendance month was closed for good: its days are locked, and it changes only by corrections.",
+      payload: z.strictObject({ closeId: z.uuid(), companyId: z.uuid(), month: z.string().regex(/^\d{4}-\d{2}$/), days: z.number().int().min(0) }),
+      live: { permission: 'people.attendance.view', fields: ['closeId', 'companyId', 'month', 'days'] },
+    }),
+    defineEvent({
+      type: 'attendance.lul_sealed',
+      context: 'people',
+      description: "A closed month's LUL attendance calendar was stored and sealed by its SHA-256.",
+      payload: z.strictObject({ closeId: z.uuid(), companyId: z.uuid(), month: z.string().regex(/^\d{4}-\d{2}$/) }),
+      live: { permission: 'people.attendance.view', fields: ['closeId', 'companyId', 'month'] },
+    }),
+    defineEvent({
+      type: 'attendance.day_corrected',
+      context: 'people',
+      description: "A figure of a closed day was corrected by a new entry with its reason, for the payroll's correction export.",
+      payload: z.strictObject({ correctionId: z.uuid(), closeId: z.uuid(), dayId: z.uuid(), siteId: z.uuid(), employeeId: z.uuid(), kind: z.enum(CORRECTION_KINDS) }),
+      live: { permission: 'people.attendance.view', fields: ['correctionId', 'closeId', 'dayId', 'siteId', 'kind'] },
     }),
   ] as const
 }

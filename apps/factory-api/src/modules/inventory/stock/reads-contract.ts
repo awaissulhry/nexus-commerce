@@ -14,7 +14,7 @@ import { reservationView } from '../reservations/contract'
  * this number" summed by reason. Office only, inventory.stock.view, read only: nothing here writes. Quantities are
  * decimal strings with four decimals in the item's base unit unless a `uom` names another. Values are marked with the
  * cost grain: a caller without it never receives them. A floor worker is never named in a list (Owner answer W1); one
- * record (a move, a hide's cut) names the worker only where the site records workers.
+ * record (a move, a hide's cut) names the worker only where the site records workers and its PERFORMANCE gate is on.
  */
 
 const uom = z.enum(UOMS)
@@ -145,8 +145,10 @@ const cutRow = output({
   pieces: z.number().int(),
   station: named.nullable(),
   device: output({ id: id(), name: z.string() }).nullable(),
-  /** The worker who cut it: only where the site records workers (this one record), else null. */
+  /** The worker who cut it: only where the site records workers and its PERFORMANCE gate is on (this one record), else null. */
   cutBy: z.string().nullable(),
+  /** The cut names a person and the gate keeps back who. */
+  cutByHidden: z.boolean(),
   note: z.string().nullable(),
   reversalOfId: id().nullable(),
   reversedById: id().nullable(),
@@ -425,8 +427,10 @@ export const ledgerMoveContract = defineContract({
         idempotencyKey: z.string(),
         receiptLineId: id().nullable(),
         workOrderId: id().nullable(),
-        /** The worker, in this one record, only where the site records workers; else null. */
+        /** The worker, in this one record, only where the site records workers and its PERFORMANCE gate is on; else null. */
         worker: z.string().nullable(),
+        /** A floor move names a person and the gate keeps back who. */
+        workerHidden: z.boolean(),
         stationOnly: z.boolean(),
       }),
       /** The move it reverses, or the one reversing it. */

@@ -59,6 +59,8 @@ export const messageView = output({
     id: id().nullable().optional(),
     name: z.string().nullable(),
   }),
+  /** Office only: a floor worker wrote it and the site's PERFORMANCE gate keeps back who (no id, no name). */
+  authorHidden: z.boolean().optional(),
   body: z.string(),
   /** The sanitised HTML of an inbound mail; null otherwise. */
   bodyHtml: z.string().nullable(),
@@ -116,7 +118,8 @@ export const setStatusContract = defineContract({
   response: { 200: output({ thread: threadView }) },
 })
 
-const actorView = output({ audience: z.enum(['OFFICE', 'FLOOR', 'PARTNER', 'LINK', 'SYSTEM']), id: id() })
+/** `id` is null for a floor worker the site's PERFORMANCE gate keeps back (B-W2b-F4): `actorHidden`. */
+const actorView = output({ audience: z.enum(['OFFICE', 'FLOOR', 'PARTNER', 'LINK', 'SYSTEM']), id: id().nullable() })
 
 /** One entry of the record's timeline (COL-002): a message, a change (an audit row of the record) or a file. */
 export const timelineEntry = z.discriminatedUnion('kind', [
@@ -129,6 +132,8 @@ export const timelineEntry = z.discriminatedUnion('kind', [
     audience: z.enum(MESSAGE_AUDIENCES),
     channel: z.enum(MESSAGE_CHANNELS),
     author: output({ kind: z.enum(AUTHOR_KINDS), id: id().nullable(), name: z.string().nullable() }),
+    /** A floor worker wrote it and the site's PERFORMANCE gate keeps back who (no id, no name). */
+    authorHidden: z.boolean(),
     /** The start of its text, one line. */
     excerpt: z.string(),
     attachmentCount: z.number().int(),
@@ -141,11 +146,13 @@ export const timelineEntry = z.discriminatedUnion('kind', [
     /** The command (`files.completeUpload`). */
     action: z.string(),
     actor: actorView,
+    /** A floor worker did it and the site's PERFORMANCE gate keeps back who. */
+    actorHidden: z.boolean(),
     /** The status move it recorded, if any. */
     status: output({ from: z.string().nullable(), to: z.string().nullable() }).nullable(),
     /** The fields it changed; money ones only with their grain. */
     fields: z.array(z.string()),
-    /** The values, only with audit.read over the row (and money only with its grain); null otherwise. */
+    /** The values, only with audit.read over the row (and money only with its grain), and not while the gate keeps back a worker the row is about; null otherwise. */
     before: grainedJson(),
     after: grainedJson(),
     reason: z.string().nullable(),

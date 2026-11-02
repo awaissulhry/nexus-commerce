@@ -276,6 +276,7 @@
       "quarantined": "File {name} rifiutato dall'archivio",
       "detail": "{kind} · {audiences}"
     },
+    "person": "Una persona",
     "actor": {
       "OFFICE": "Qualcuno dell'ufficio",
       "FLOOR": "Il reparto",

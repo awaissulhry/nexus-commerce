@@ -7,6 +7,7 @@ import { INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permission
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { scanSubjectFor } from '../../production/settings/subject'
 import { mayAt, officeContextOf } from '../ledger/access'
 import { viewsOf } from '../reservations/read'
@@ -257,7 +258,9 @@ export async function hideRecord(caller: CommandCaller, hideId: string) {
       reservedFor(client, [hide.id]),
     ])
     const stationOnly = subject === 'STATION'
-    const workerIds = stationOnly ? [] : [...new Set(cuts.flatMap((cut) => (cut.workerId ? [cut.workerId] : [])))]
+    // Who cut it: where the site records workers and its PERFORMANCE gate is on (B-W2b-F3); off, the row says a person is on it.
+    const who = await workerGateFor(client, hide.siteId)
+    const workerIds = stationOnly ? [] : [...new Set(who.lookup(cuts.map((cut) => cut.workerId)))]
     const workers = new Map((workerIds.length > 0 ? await client.worker.findMany({ where: { id: { in: workerIds } }, select: { id: true, displayName: true } }) : []).map((worker) => [worker.id, worker.displayName]))
     const located1 = located.get(hide.id)
     const place = mainPlace(located1)
@@ -296,7 +299,8 @@ export async function hideRecord(caller: CommandCaller, hideId: string) {
         pieces: cut.pieces.reduce((sum, piece) => sum + piece.pieces, 0),
         station: cut.station,
         device: cut.device,
-        cutBy: !stationOnly && cut.workerId ? (workers.get(cut.workerId) ?? null) : null,
+        cutBy: !stationOnly ? who.name(cut.workerId, workers) : null,
+        cutByHidden: !stationOnly && who.hidden(cut.workerId),
         note: cut.note,
         reversalOfId: cut.reversalOfId,
         reversedById: cut.reversals[0]?.id ?? null,

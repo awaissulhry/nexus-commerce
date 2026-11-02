@@ -127,10 +127,12 @@ export const flagContract = defineContract({
         operation: operationRef,
         counts: output({ good: z.number().int(), scrap: z.number().int(), rework: z.number().int() }),
         station: ref.nullable(),
-        /** The scan's worker, where the site names workers (one record). */
+        /** The scan's worker, where the site names workers and its PERFORMANCE gate is on (one record). */
         worker: person.nullable(),
+        /** The scan names a person and the gate keeps back who. */
+        workerHidden: z.boolean(),
         warned: z.array(guardWords),
-        overridden: output({ guards: z.array(guardWords), lead: person.nullable(), reasonCode: z.string(), reason: z.string(), note: z.string().nullable() }).nullable(),
+        overridden: output({ guards: z.array(guardWords), lead: person.nullable(), leadHidden: z.boolean(), reasonCode: z.string(), reason: z.string(), note: z.string().nullable() }).nullable(),
         components: z.array(component),
       }),
     }),

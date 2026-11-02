@@ -12,6 +12,7 @@ import { buildApp } from '../../core/app'
 import { callerFor, command } from '../../core/command'
 import { testAuthenticator, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
+import { switchOnPerformance } from '../../modules/people/privacy/testing/performance-gate'
 import { useThreadRecords, type RecordScope } from './records'
 import { attachmentProblems, ensureThread, writeMessage } from './threads'
 
@@ -504,5 +505,108 @@ describe('the record timeline (COL-002)', () => {
     expect(reader.find((entry) => entry.id === ids.change2)).toMatchObject({ fields: ['note'], before: null, after: null, reason: null })
     expect(reader.find((entry) => entry.id === ids.change1)).toMatchObject({ status: { from: 'DRAFT', to: 'ACTIVE' }, before: null })
     expect(reader.some((entry) => entry.kind === 'file')).toBe(false)
+  })
+})
+
+describe('a floor worker on the timeline stays behind the PERFORMANCE gate (B-W2b-F4)', () => {
+  const worker = newId()
+  const WORKER_NAME = 'Made-up Floor Person'
+  const ids: Record<string, string> = {}
+  const change = async (name: string, audience: string, actorId: string, after: unknown) => {
+    ids[name] = newId()
+    await admin(
+      `INSERT INTO "AuditLog" (id, "tenantId", "companyId", "siteId", audience, "actorId", action, "recordType", "recordId", after, "requestId")
+       VALUES ($1, $2, $3, $4, $5::"AuditAudience", $6, 'production.madeUp', 'Site', $4, $7::jsonb, $8)`,
+      [ids[name], tenantA, companyOne, siteOne, audience, actorId, JSON.stringify(after), newId()],
+    )
+  }
+  const read = async (session: string) => {
+    const response = await call(session, 'GET', `/threads/Site/${siteOne}/timeline`)
+    expect(response.statusCode, response.body).toBe(200)
+    const entries = response.json().entries as Json[]
+    return { raw: response.body, entry: (id: string) => entries.find((row) => row.id === id)! }
+  }
+
+  beforeAll(async () => {
+    await admin(`INSERT INTO "Worker" (id, "tenantId", "companyId", "siteId", "displayName") VALUES ($1, $2, $3, $4, $5)`, [worker, tenantA, companyOne, siteOne, WORKER_NAME])
+    await change('floor', 'FLOOR', worker, { workerId: worker, pieces: 3 })
+    // A floor note's row is written as the system: only its values say who.
+    await change('system', 'SYSTEM', newId(), { nested: [{ workerIds: [worker] }] })
+    await change('office', 'OFFICE', author, { note: 'Nobody on the floor.' })
+    await change('assigned', 'OFFICE', author, { workerId: worker })
+    const { result } = await command(office(), { name: 'production.postFloorNote', input: { siteOne } }, async (tools) => {
+      const { thread: row } = await ensureThread(tools, { type: 'Site', id: siteOne }, null)
+      const message = await writeMessage(tools, row, { direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'WORKER', id: worker, name: WORKER_NAME }, bodyText: 'Hide marked at the table.', attachments: [] })
+      return { id: message.id }
+    })
+    ids.message = result.id
+    ids.officeNote = (await note('author', 'Site', siteOne, { body: 'From the office.' })).message.id
+  })
+
+  const closed = async (session: string, values: boolean) => {
+    const { raw, entry } = await read(session)
+    expect(raw).not.toContain(worker)
+    expect(raw).not.toContain(WORKER_NAME)
+    expect(entry(ids.floor!)).toMatchObject({ actor: { audience: 'FLOOR', id: null }, actorHidden: true, before: null, after: null, fields: ['pieces', 'workerId'] })
+    expect(entry(ids.message!)).toMatchObject({ author: { kind: 'WORKER', id: null, name: null }, authorHidden: true, excerpt: 'Hide marked at the table.' })
+    expect(entry(ids.system!)).toMatchObject({ actor: { audience: 'SYSTEM' }, actorHidden: false, after: null })
+    expect(entry(ids.assigned!)).toMatchObject({ actor: { audience: 'OFFICE', id: author }, actorHidden: false, after: null })
+    // An office user stays as they are: the actor, the note, and the values of a row that names no worker.
+    expect(entry(ids.office!)).toMatchObject({ actor: { audience: 'OFFICE', id: author }, actorHidden: false, after: values ? { note: 'Nobody on the floor.' } : null })
+    expect(entry(ids.officeNote!)).toMatchObject({ author: { kind: 'USER', id: author, name: 'Ada Author' }, authorHidden: false })
+  }
+
+  const threadRead = async (session: string) => {
+    const response = await call(session, 'GET', `/threads/Site/${siteOne}`)
+    expect(response.statusCode, response.body).toBe(200)
+    const messages = response.json().messages as Json[]
+    return { raw: response.body, message: (id: string) => messages.find((row) => row.id === id)! }
+  }
+  const threadClosed = async (session: string) => {
+    const { raw, message } = await threadRead(session)
+    expect(raw).not.toContain(worker)
+    expect(raw).not.toContain(WORKER_NAME)
+    expect(message(ids.message!)).toMatchObject({ author: { kind: 'WORKER', id: null, name: null }, authorHidden: true, body: 'Hide marked at the table.' })
+    expect(message(ids.officeNote!)).toMatchObject({ author: { kind: 'USER', id: author, name: 'Ada Author' }, authorHidden: false })
+  }
+
+  it('the thread read, gate off: a floor note has no id and no name, and says a person wrote it; an office user stays', async () => {
+    await threadClosed('reader')
+    await threadClosed('author')
+  })
+
+  it('the thread read, gate on: the author as it was; gate off again: nothing again', async () => {
+    const gateOff = await switchOnPerformance(admin, { tenantId: tenantA, companyId: companyOne, siteId: siteOne, byId: author })
+    const { raw, message } = await threadRead('reader')
+    expect(raw).toContain(WORKER_NAME)
+    expect(message(ids.message!)).toMatchObject({ author: { kind: 'WORKER', id: worker, name: WORKER_NAME }, authorHidden: false })
+    await gateOff()
+    await threadClosed('reader')
+  })
+
+  it('a portal reads no floor note and no flag: the gate is the office\'s', async () => {
+    const { messages } = await thread('partner-one', 'Quote', quote)
+    expect(messages.length).toBeGreaterThan(0)
+    expect(messages.every((row: Json) => !('authorHidden' in row) && !('id' in row.author))).toBe(true)
+  })
+
+  it('gate off: no id and no name in the raw answer, with threads.read alone or with audit.read, and the row says a person did it', async () => {
+    await closed('reader', false)
+    await closed('author', true)
+  })
+
+  it('gate on: the read as it was; gate off again: nothing again', async () => {
+    const gateOff = await switchOnPerformance(admin, { tenantId: tenantA, companyId: companyOne, siteId: siteOne, byId: author })
+    const { raw, entry } = await read('author')
+    expect(raw).toContain(WORKER_NAME)
+    expect(entry(ids.floor!)).toMatchObject({ actor: { audience: 'FLOOR', id: worker }, actorHidden: false, after: { workerId: worker, pieces: 3 } })
+    expect(entry(ids.system!)).toMatchObject({ after: { nested: [{ workerIds: [worker] }] } })
+    expect(entry(ids.assigned!)).toMatchObject({ after: { workerId: worker } })
+    expect(entry(ids.message!)).toMatchObject({ author: { kind: 'WORKER', id: worker, name: WORKER_NAME }, authorHidden: false })
+    // threads.read alone: the actor, never the values (audit.read's).
+    const plain = await read('reader')
+    expect(plain.entry(ids.floor!)).toMatchObject({ actor: { audience: 'FLOOR', id: worker }, actorHidden: false, after: null })
+    await gateOff()
+    await closed('author', true)
   })
 })

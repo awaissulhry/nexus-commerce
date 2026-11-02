@@ -192,7 +192,10 @@ export const moveRow = moveView.omit({ valued: true }).extend({
   /** The move that reverses this one, if any. */
   reversedById: id().nullable(),
   createdAt: instant(),
+  /** Who posted it: an office user, or on a floor move the worker, while the site's PERFORMANCE gate is open. */
   createdById: id().nullable(),
+  /** A floor worker posted it and the gate keeps back who. */
+  createdByHidden: z.boolean(),
   deviceId: id().nullable(),
   /** Its value (only with the cost grain); null when it has none (a transfer, no cost, a floor move not valued yet). */
   valuation: money.cost(
@@ -216,7 +219,7 @@ export const listMovesContract = defineContract({
     /** Moves into or out of this location. */
     locationId: id().optional(),
     reason: reason.optional(),
-    /** Who posted them. */
+    /** Who posted them. A worker's floor moves answer only where the site's PERFORMANCE gate is open. */
     createdById: id().optional(),
     /** Happened at or after / before (device time for floor scans). */
     from: instant().optional(),

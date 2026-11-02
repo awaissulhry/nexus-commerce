@@ -29,7 +29,8 @@ import { blocksAround, BLOCK, closedDays, dayKey, lockBlock, readBlock, readCode
 import { scanSubjectFor } from '../settings/subject'
 import { floorOf, officeOf, reaches, refuse } from './access'
 import type { AnswerBody, RaiseBody, WithdrawBody } from './contract'
-import { performanceOpen } from './records'
+import type { GateReader } from '../../people/privacy/gate'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { bundlesById, chainsOf, COUNT_KINDS, dayColumn, isoDay, jsonObject, lineOfScan, linesById, peopleNames, recordsFor, SCAN, sitesById, toLabourScan, usersOfPerson, type Reader } from './store'
 
 /**
@@ -137,7 +138,7 @@ async function summaryOf(db: Reader, row: DisputeRow, now: Date) {
 
 async function disputeAnswer(db: Reader, row: DisputeRow, viewer: { readonly actorId: string; readonly mayAnswer: boolean }) {
   const now = new Date()
-  const shown = await performanceOpen(db, row.siteId)
+  const shown = (await workerGateFor(db as GateReader, row.siteId)).open
   const edits = await db.labourEdit.findMany({ where: { disputeId: row.id }, select: { id: true, before: true, after: true, reason: true, createdAt: true, createdById: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
   const names = await peopleNames(db, [shown ? row.workerId : null, row.answeredById, ...edits.map((edit) => edit.createdById)])
   const someone = (id: string | null) => (id ? { id, name: names.get(id) ?? '' } : null)

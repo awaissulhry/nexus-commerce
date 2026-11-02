@@ -297,7 +297,7 @@ function BundleDetail({ data, workOrder, model, actions }: { data: WorkOrderBund
                 String(scan.goodQuantity),
                 String(scan.scrapQuantity),
                 String(scan.reworkQuantity),
-                [scan.station?.code, scan.worker?.name].filter(Boolean).join(' · ') || '—',
+                [scan.station?.code, scan.worker?.name ?? (scan.workerHidden ? t('bundles.workerHidden') : null)].filter(Boolean).join(' · ') || '—',
               ],
             }))}
           />

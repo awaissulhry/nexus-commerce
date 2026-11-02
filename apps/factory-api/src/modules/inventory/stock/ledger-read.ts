@@ -10,6 +10,7 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
+import { workerGateFor } from '../../people/privacy/worker-gate'
 import { scanSubjectFor } from '../../production/settings/subject'
 import { mayAt, officeContextOf, seesCost } from '../ledger/access'
 import { fixed, SCOPE } from './read-kit'
@@ -307,7 +308,7 @@ export async function ledgerCounts(caller: CommandCaller, query: { readonly site
   })
 }
 
-/** One move (the DetailModal): every field, its value, its reversal or original, and the worker where the site names one. */
+/** One move (the DetailModal): every field, its value, its reversal or original, and the worker where the site names one and its PERFORMANCE gate is on. */
 export async function ledgerMove(caller: CommandCaller, moveId: string) {
   const context = officeContextOf(caller)
   const move = isUuid(moveId) ? await caller.withClient((client) => client.stockMove.findUnique({ where: { id: moveId }, select: ROW_SELECT })) : null
@@ -317,14 +318,14 @@ export async function ledgerMove(caller: CommandCaller, moveId: string) {
     const extras = await extrasFor(client, [move, ...related], context, null)
     const subject = await scanSubjectFor(client, move.siteId)
     const stationOnly = subject === 'STATION'
-    let worker: string | null = null
-    if (move.deviceId && move.createdById && !stationOnly) {
-      worker = (await client.worker.findUnique({ where: { id: move.createdById }, select: { displayName: true } }))?.displayName ?? null
-    }
+    const who = await workerGateFor(client, move.siteId)
+    const floorMover = move.deviceId && !stationOnly ? move.createdById : null
+    const [mover] = who.lookup([floorMover])
+    const worker = mover ? ((await client.worker.findUnique({ where: { id: mover }, select: { displayName: true } }))?.displayName ?? null) : null
     const original = move.reversalOfId ? related.find((row) => row.id === move.reversalOfId) : undefined
     const reversal = move.reversals[0] ? related.find((row) => row.id === move.reversals[0]!.id) : undefined
     return {
-      move: { ...rowOf(move, extras), idempotencyKey: move.idempotencyKey, receiptLineId: move.receiptLineId, workOrderId: move.workOrderId, worker, stationOnly },
+      move: { ...rowOf(move, extras), idempotencyKey: move.idempotencyKey, receiptLineId: move.receiptLineId, workOrderId: move.workOrderId, worker, workerHidden: who.hidden(floorMover), stationOnly },
       original: original ? rowOf(original, extras) : null,
       reversal: reversal ? rowOf(reversal, extras) : null,
     }
