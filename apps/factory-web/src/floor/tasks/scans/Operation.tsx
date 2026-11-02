@@ -16,7 +16,8 @@ import { listBeforeRead, readListReasons } from '../reasons/api'
 import type { PickerReason } from '../reasons/model'
 import {
   checkLot,
-  endOffStandard,
+  offStandardEndOrKeep,
+  offStandardStartOrKeep,
   fetchCard,
   fetchCheck,
   fetchCrew,
@@ -30,8 +31,7 @@ import {
   finishSeveral,
   overrideReport,
   overrideStart,
-  postTiming,
-  startOffStandard,
+  timingOrKeep,
   uploadNoteFile,
   type OverrideLead,
   type TimingAnswer,
@@ -516,16 +516,11 @@ export function FloorOperation() {
     acting.current = true
     const body = { code: from.card.bundle.code, workOrderOperationId: from.operation.id, ...extra }
     try {
-      if (online) {
-        const answer = await postTiming(api, route, newIdempotencyKey(), body)
-        if (answer.ok) return { answer: answer.value, queuedId: null, at: new Date() }
-        if (answer.problem.kind !== 'offline') {
-          timingRefused(from, answer.problem, route === 'start' ? 'start' : null)
-          return null
-        }
-      }
-      const item = await queue.enqueue(`production.scan.${route}`, body)
-      return { answer: null, queuedId: item.clientEventId, at: new Date(item.occurredAt) }
+      const sent = await timingOrKeep(api, queue, online, route, body)
+      if (sent.kept) return { answer: null, queuedId: sent.kept.clientEventId, at: new Date(sent.kept.occurredAt) }
+      if (sent.answer.ok) return { answer: sent.answer.value, queuedId: null, at: new Date() }
+      timingRefused(from, sent.answer.problem, route === 'start' ? 'start' : null)
+      return null
     } catch {
       feedback('error')
       setStep({ kind: 'problem', problem: { kind: 'unavailable' }, code: from.card.bundle.code })
@@ -676,7 +671,8 @@ export function FloorOperation() {
     // Offline: one queued report per bundle, in the order scanned.
     try {
       let queued: string | null = null
-      for (const row of rows) queued = (await queue.enqueue('production.scan.report', reportPayload(row.card, row.operation.id, row.counts, expectedOf(row)))).clientEventId
+      // Each row under the id the online try used: a stack whose answer was lost is answered, never reported twice.
+      for (const row of rows) queued = (await queue.enqueue('production.scan.report', reportPayload(row.card, row.operation.id, row.counts, expectedOf(row)), row.clientScanId)).clientEventId
       const totals = stackTotals(rows)
       stacked({ finished: totals.bundles, good: totals.good, scrap: totals.scrap, rework: totals.rework }, queued)
       setReceipt(true)
@@ -692,36 +688,24 @@ export function FloorOperation() {
   const pickIndirect = async (id: string) => {
     const tile = tiles?.find((entry) => entry.id === id)
     if (!tile) return
-    if (online) {
-      const answer = await startOffStandard(api, newIdempotencyKey(), tile.id)
-      if (answer.ok) {
-        setRunning({ block: answer.value, skewMs: 0 })
-        feedback('success')
-        return setStep({ kind: 'scan' })
-      }
-      if (answer.problem.kind === 'signedOut') return void sessionEnded()
-      if (answer.problem.kind !== 'offline') {
-        feedback('error')
-        return setStep(answer.problem.kind === 'refused' ? { kind: 'refused', code: answer.problem.code, message: answer.problem.message, fix: answer.problem.fix, card: null, scanned: '' } : { kind: 'problem', problem: answer.problem, code: null })
-      }
+    const sent = await offStandardStartOrKeep(api, queue, online, tile.id)
+    if (sent.answer && !sent.answer.ok) {
+      const { problem } = sent.answer
+      if (problem.kind === 'signedOut') return void sessionEnded()
+      feedback('error')
+      return setStep(problem.kind === 'refused' ? { kind: 'refused', code: problem.code, message: problem.message, fix: problem.fix, card: null, scanned: '' } : { kind: 'problem', problem, code: null })
     }
-    const item = await queue.enqueue('production.offStandard.start', { codeId: tile.id })
-    setRunning({ block: startedBlock(tile, new Date(item.occurredAt)), skewMs: 0 })
+    setRunning({ block: sent.kept ? startedBlock(tile, new Date(sent.kept.occurredAt)) : sent.answer.value, skewMs: 0 })
     feedback('success')
     setStep({ kind: 'scan' })
   }
 
   const endIndirect = async () => {
-    if (online) {
-      const answer = await endOffStandard(api, newIdempotencyKey())
-      if (answer.ok) {
-        setRunning(null)
-        return void feedback('success')
-      }
-      if (answer.problem.kind === 'signedOut') return void sessionEnded()
-      if (answer.problem.kind !== 'offline') return void feedback('error')
+    const sent = await offStandardEndOrKeep(api, queue, online)
+    if (sent.answer && !sent.answer.ok) {
+      if (sent.answer.problem.kind === 'signedOut') return void sessionEnded()
+      return void feedback('error')
     }
-    await queue.enqueue('production.offStandard.end', {})
     setRunning(null)
     feedback('success')
   }

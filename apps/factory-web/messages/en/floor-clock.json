@@ -51,7 +51,7 @@
   },
   "unavailable": {
     "title": "The clock does not answer",
-    "body": "Nothing was recorded. Try again in a moment; if the network is down, the tablet keeps your clocking."
+    "body": "Try again in a moment; if the network is down, the tablet keeps your clocking."
   },
   "receipt": {
     "IN": "Clocked in at {time}.",
@@ -64,7 +64,7 @@
     "wrong": "This badge or PIN does not open this tablet. Ask your team leader.",
     "notBadge": "That is not a badge. Scan your badge.",
     "rateLimited": "Too many tries. Wait a minute, then scan again.",
-    "unavailable": "Nothing was recorded. Try again in a moment."
+    "unavailable": "The clock does not answer. Try again in a moment."
   },
   "refusal": {
     "ALREADY_IN": {

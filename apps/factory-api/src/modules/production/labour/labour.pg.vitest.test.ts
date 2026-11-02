@@ -346,6 +346,9 @@ describe("the operator's daily sheet, one person inside one record (MES-202; Sta
     const e1 = await employee()
     const closed = await no('hr', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: '2026-11-17', reason: 'PAY_QUERY' }, 409)
     expect(refusalOf(closed)).toBe('gate/PERFORMANCE')
+    // B-W2b-77: the closed gate says nothing of who exists: an id that finds nobody gets that same answer.
+    const nobody = await no('hr', 'POST', '/production/labour/sheets', { employeeId: newId(), workDate: '2026-11-17', reason: 'PAY_QUERY' }, 409)
+    expect({ ...nobody, requestId: null }).toEqual({ ...closed, requestId: null })
     expect(refusalOf(await no('operatorUser', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: '2026-11-17' }, 409))).toBe('gate/PERFORMANCE')
     await openGate('PERFORMANCE')
     // HR not named in People settings yet: not allowed.
@@ -364,6 +367,35 @@ describe("the operator's daily sheet, one person inside one record (MES-202; Sta
     expect(audit).toEqual([expect.objectContaining({ actorId: hrUserId, after: expect.objectContaining({ purpose: 'PERFORMANCE', as: 'FIGURE_ROLE', reason: 'PAY_QUERY' }) })])
     // The worker opens their own, no reason asked.
     expect((await ok('operatorUser', 'POST', '/production/labour/sheets', { employeeId: e1, workDate: '2026-11-17' })).as).toBe('SELF')
+  })
+
+  it("keeps no figure in the idempotency receipt: the opening is recorded, the sheet is read after it (B-W2b-77)", async () => {
+    const e1 = await employee()
+    const body = { employeeId: e1, workDate: '2026-11-17', reason: 'WORKER_REQUEST' }
+    const sameKey = `t-${run}-sheet-receipt`
+    const open = () => app.inject({ method: 'POST', url: '/production/labour/sheets', headers: { 'x-test-session': 'hr', 'idempotency-key': sameKey }, payload: body })
+    const openings = async () => (await admin(`SELECT id FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'people.openPersonFigures' AND "idempotencyKey" = $2`, [T, sameKey])).length
+    const first = await open()
+    expect(first.statusCode, first.body).toBe(200)
+    expect(first.json().sheet).toMatchObject({ pieces: { good: 2 }, productionMinutes: '193.000' })
+    const receipts = await admin<{ response: unknown }>(`SELECT response FROM "IdempotencyReceipt" WHERE scope = 'production.labourSheetOpen' AND key = $1`, [sameKey])
+    expect(receipts).toEqual([{ response: { result: { recorded: true } } }])
+    expect(await openings()).toBe(1)
+    // A repeat (a lost answer) reads the day anew and records no second opening.
+    const again = await open()
+    expect(again.statusCode, again.body).toBe(200)
+    expect(again.json().sheet).toEqual(first.json().sheet)
+    expect(await openings()).toBe(1)
+    // The gate goes off: a repeat of the same key gets the closed gate; nothing is left to answer from.
+    await admin(`UPDATE "PeopleLegalGate" SET "switchedOffAt" = now(), "switchedOffById" = $3, "switchOffReason" = 'made-up test' WHERE "siteId" = $1 AND purpose = $2 AND "switchedOffAt" IS NULL`, [siteA1, 'PERFORMANCE', actors.manager])
+    const closed = await open()
+    expect(closed.statusCode, closed.body).toBe(409)
+    expect(refusalOf(closed.json().error)).toBe('gate/PERFORMANCE')
+    await openGate('PERFORMANCE')
+    // A dispute's answer names the worker and the record's counts: its receipt keeps neither.
+    const answers = await admin<{ response: unknown }>(`SELECT response FROM "IdempotencyReceipt" WHERE scope = 'production.labourDisputeAnswer'`)
+    expect(answers.length).toBeGreaterThan(0)
+    for (const row of answers) expect(row.response).toEqual({ result: { answered: true } })
   })
 
   it('names the worker on one record and shows the minutes on My day once the gate is on', async () => {

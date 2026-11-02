@@ -3,6 +3,7 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can, holds } from '@nexus/factory-domain/core/permissions'
 import { businessDayStart, businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { OPEN_REASON_WORDS, OPEN_REASONS, openReasonProblems, personFigureAccess, type FigureAccess, type FigureDecision, type OpenReason } from '@nexus/factory-domain/people/privacy/figures'
+import { gateClosedWords } from '@nexus/factory-domain/people/privacy/gate'
 import type { GatePurpose } from '@nexus/factory-domain/people/privacy/purposes'
 import { PEOPLE_FIGURES_VIEW } from '@nexus/factory-domain/people/privacy/permissions'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
@@ -21,6 +22,10 @@ import { privacySettingsFor } from './groups'
  *   personFiguresAccess(caller, employeeId, purpose)   who the viewer is to the person (SELF, FIGURE_ROLE, LEAD) or
  *                                                      why not (GATE_CLOSED, NOT_ALLOWED); 404 for a person out of
  *                                                      the viewer's reach. Office user or floor worker.
+ *   figuresAccessBehindGate(caller, employeeId, purpose)
+ *                                                      the same for an office route that takes a person's id: null (the
+ *                                                      closed gate's answer) for a real person and for an id that finds
+ *                                                      nobody alike, so a closed gate never tells who exists
  *   requirePersonFigures(access)                       the refusal in words (409 `gate/<PURPOSE>` when the site's gate is
  *                                                      off, 403 `figures/NOT_ALLOWED`)
  *   openPersonFiguresInCommand(tools, access, why)     writes the opening down (audit people.openPersonFigures: who,
@@ -129,6 +134,35 @@ export async function personFiguresAccess(caller: CommandCaller, employeeId: str
   return { employee, purpose, decision, gate, minimumGroupSize: facts.settings.minimumGroupSize }
 }
 
+/** A site where the viewer may open figures has the purpose off: whoever is behind that gate stays unknown to them. */
+async function gateClosedInReach(caller: CommandCaller, context: OfficeContext, purpose: GatePurpose): Promise<boolean> {
+  const actor = actorOf(context)
+  return caller.withClient(async (client) => {
+    const sites = await client.site.findMany({ select: { id: true, companyId: true } })
+    for (const site of sites) {
+      if (can(actor, PEOPLE_FIGURES_VIEW, { companyId: site.companyId, siteId: site.id }) && !(await legalGateFor(client, site.id, purpose)).open) return true
+    }
+    return false
+  })
+}
+
+/**
+ * personFiguresAccess for an office route that takes a person's id (B-W2b-77), with no answer that tells a person exists while
+ * their gate is off. The gate is the person's site's, so a 404 for an id that finds nobody beside the closed gate's answer for
+ * a real person would say who exists. Null: the viewer is behind a closed gate, and the route gives the closed gate's answer,
+ * the same for both. With no gate off in the viewer's reach there is nobody to hide, and an id that finds nobody stays a 404.
+ */
+export async function figuresAccessBehindGate(caller: CommandCaller, employeeId: string, purpose: GatePurpose): Promise<PersonFiguresAccess | null> {
+  try {
+    const access = await personFiguresAccess(caller, employeeId, purpose)
+    return !access.decision.allowed && access.decision.code === 'GATE_CLOSED' ? null : access
+  } catch (error) {
+    const viewer = viewerOf(caller)
+    if (error instanceof NotFoundError && viewer.kind === 'user' && (await gateClosedInReach(caller, viewer.context, purpose))) return null
+    throw error
+  }
+}
+
 /** The refusal of a decision that does not allow: 409 `gate/<PURPOSE>` (the site's gate is off) or 403 `figures/NOT_ALLOWED`. */
 export function requirePersonFigures(access: PersonFiguresAccess): FigureAccess {
   const { decision } = access
@@ -163,7 +197,9 @@ export const reasonChoices = (decision: FigureDecision) =>
 
 /** people.figures.view: who the viewer is to this person's figures for the purpose, before anything is opened. */
 export async function accessOf(caller: CommandCaller, employeeId: string, purpose: GatePurpose) {
-  const access = await personFiguresAccess(caller, employeeId, purpose)
+  const access = await figuresAccessBehindGate(caller, employeeId, purpose)
+  // One answer behind a closed gate, and it names no site: the person's site would tell that they exist.
+  if (!access) return { employeeId, siteId: null, purpose, allowed: false, as: null, refusal: 'GATE_CLOSED' as const, needsReason: false, reasons: [], words: [gateClosedWords(purpose)] }
   const { decision } = access
   return {
     employeeId: access.employee.id,
@@ -194,7 +230,8 @@ export interface OpenBody {
  * computes them (B-W2b-44, -45, -61), which asks the same access in its own read.
  */
 export async function openPersonFigures(caller: CommandCaller, employeeId: string, body: OpenBody, idempotencyKey?: string) {
-  const access = await personFiguresAccess(caller, employeeId, body.purpose)
+  const access = await figuresAccessBehindGate(caller, employeeId, body.purpose)
+  if (!access) throw gateClosedError(body.purpose)
   const as = requirePersonFigures(access)
   const problems = openReasonProblems(access.decision, body.reason, body.note)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)

@@ -50,7 +50,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   floor action that may queue (factory-domain floor-sync QUEUED_ACTIONS) is saved in IndexedDB first (queue.ts:
   `store.queue.enqueue(kind, payload)`; a bundle's ticket numbered from the tablet's own BUNDLE block) and sent in
   order to `POST /floor/sync` when the network is back, on view, after each action and every 20 s; receipts,
-  inspections, releases and serials never queue (Home says what waits). The shell's banner counts come from
+  inspections, releases and serials never queue (Home says what waits). A screen that tries the route first falls back to
+  the queue through `queue/online-first.ts` (or `enqueue(kind, payload, clientEventId)` itself): the try and the retry are
+  ONE client id, because a network failure says nothing of the office (B-W2b-77). The shell's banner counts come from
   `floor/shell/banner.ts`; dev builds expose the queue as `window.__nexusFloorQueue` for the live check (never in a
   production build). One client root (`floor/FloorApp.tsx`, mounted by the group's
   layout) knows the device (`GET /floor/device`) and the operator (`GET /floor/me`), speaks the operator's language

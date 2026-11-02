@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { presignedSchema } from '../../../record-panels/api'
 import { putToStore, sha256Hex } from '../../../record-panels/store'
+import { onlineFirst, type KeepsActions } from '../../queue/online-first'
 import { floorRead, floorWrite, seg, type TaskOutcome } from '../shared/task-api'
 import type { OperationCheck, OperationSteps } from './checks'
 import type { OffStandardBlock, OffStandardFloor, OffStandardTile } from './indirect'
@@ -248,6 +249,10 @@ export function postTiming(api: ApiClient, route: TimingRoute, clientScanId: str
   return floorWrite(api, 'POST', `/production/terminal/${TIMING_ROUTES[route]}`, { body: { ...body, clientScanId }, schema: timingAnswer, idempotencyKey: clientScanId })
 }
 
+/** The action, online first: a network failure keeps it on the tablet under the id the try used, so a lost answer never comes back ALREADY_RUNNING. */
+export const timingOrKeep = (api: ApiClient, queue: KeepsActions, online: boolean, route: TimingRoute, body: Readonly<Record<string, unknown>>) =>
+  onlineFirst(queue, { online, kind: `production.scan.${route}`, payload: body, attempt: (clientScanId) => postTiming(api, route, clientScanId, body) })
+
 // ---- the team leader's override: only online, the server checks the PIN ------------------------------------------------------------
 
 export type OverrideLead = { readonly badgeCode: string } | { readonly workerId: string }
@@ -324,6 +329,14 @@ export async function endOffStandard(api: ApiClient, clientEventId: string): Pro
   const answer = await floorWrite(api, 'POST', '/production/offstandard/floor/end', { body: { clientEventId }, schema: z.object({ block: z.object({ id: z.string() }) }), idempotencyKey: clientEventId })
   return answer.ok ? { ok: true, value: null } : answer
 }
+
+/** A tile, online first (a network failure keeps it under the id the try used). */
+export const offStandardStartOrKeep = (api: ApiClient, queue: KeepsActions, online: boolean, codeId: string) =>
+  onlineFirst(queue, { online, kind: 'production.offStandard.start', payload: { codeId }, attempt: (clientEventId) => startOffStandard(api, clientEventId, codeId) })
+
+/** Done on the running block, online first (a network failure keeps it under the id the try used). */
+export const offStandardEndOrKeep = (api: ApiClient, queue: KeepsActions, online: boolean) =>
+  onlineFirst(queue, { online, kind: 'production.offStandard.end', payload: {}, attempt: (clientEventId) => endOffStandard(api, clientEventId) })
 
 // ---- a picture or a clip for a note ------------------------------------------------------------------------------------------------
 

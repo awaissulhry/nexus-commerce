@@ -51,7 +51,7 @@
   },
   "unavailable": {
     "title": "La timbratura non risponde",
-    "body": "Non è stato registrato nulla. Riprova tra poco; se manca la rete, il tablet conserva la timbratura."
+    "body": "Riprova tra poco; se manca la rete, il tablet conserva la timbratura."
   },
   "receipt": {
     "IN": "Entrata timbrata alle {time}.",
@@ -64,7 +64,7 @@
     "wrong": "Questo badge o PIN non apre questo tablet. Chiedi al capo squadra.",
     "notBadge": "Questo non è un badge. Scansiona il tuo badge.",
     "rateLimited": "Troppi tentativi. Aspetta un minuto, poi riprova.",
-    "unavailable": "Non è stato registrato nulla. Riprova tra poco."
+    "unavailable": "La timbratura non risponde. Riprova tra poco."
   },
   "refusal": {
     "ALREADY_IN": {

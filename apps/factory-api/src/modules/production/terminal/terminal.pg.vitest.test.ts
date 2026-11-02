@@ -317,3 +317,46 @@ describe('offline: the timing kinds in the floor queue', () => {
     expect(new Date(pause.deviceTime).toISOString()).toBe(pausedAt)
   })
 })
+
+describe('an answer lost on its way back (B-W2b-77): the online try and its retry are one action', () => {
+  const retry = (clientEventId: string, kind: string, payload: Json) => ok('op', 'POST', '/floor/sync', { events: [{ clientEventId, seq: 1, kind, occurredAt: new Date().toISOString(), workerId: operator, payload }] })
+  const refusals = () => admin('SELECT code FROM "FloorRefusedAction" WHERE "tenantId" = $1 AND "deviceId" = $2', [T, tablets.sew])
+  const timed = async (scanId: string) => (await outbox('production.operation_timed', wo1)).filter((row) => row.payload.scanId === scanId)
+  let free: string
+
+  beforeAll(async () => {
+    // The operator's open work of the tests above is given back: the cases below start clean.
+    await ok('op', 'POST', '/production/terminal/hand-back', { clientScanId: cid('clean'), bundleId: bundles[4] }, 201)
+    free = await bundle(`W2B40-BN-LOST-${run}`)
+  })
+
+  it('a Start the office recorded, retried from the queue under its id: one START, no ALREADY_RUNNING; the same for Pause and Resume', async () => {
+    const before = (await refusals()).length
+    const start = cid('lost-start')
+    const started = await ok('op', 'POST', '/production/terminal/start', { clientScanId: start, bundleId: free }, 201)
+    const first = await retry(start, 'production.scan.start', { bundleId: free })
+    expect(first.events[0]).toMatchObject({ status: 'duplicate', refusal: null, result: { type: 'OperationScan', id: started.scan.id } })
+    const pause = cid('lost-pause')
+    await ok('op', 'POST', '/production/terminal/pause', { clientScanId: pause, bundleId: free, reasonCode: 'MATERIAL_WAIT' }, 201)
+    expect((await retry(pause, 'production.scan.pause', { bundleId: free, reasonCode: 'MATERIAL_WAIT' })).events[0]).toMatchObject({ status: 'duplicate', refusal: null })
+    const resume = cid('lost-resume')
+    await ok('op', 'POST', '/production/terminal/resume', { clientScanId: resume, bundleId: free }, 201)
+    expect((await retry(resume, 'production.scan.resume', { bundleId: free })).events[0]).toMatchObject({ status: 'duplicate', refusal: null })
+    expect((await rowsOf(free)).map((row) => row.kind)).toEqual(['START', 'PAUSE', 'RESUME'])
+    expect(await timed(started.scan.id)).toHaveLength(1)
+    expect(await refusals()).toHaveLength(before)
+    await ok('op', 'POST', '/production/terminal/hand-back', { clientScanId: cid('done'), bundleId: free }, 201)
+  })
+
+  it('the retry may be read while the try still runs: whichever comes first records, neither is refused, one START', async () => {
+    for (let round = 0; round < 4; round += 1) {
+      const raced = await bundle(`W2B40-BN-RACE-${round}-${run}`)
+      const id = cid('raced')
+      const [online, queued] = await Promise.all([call('op', 'POST', '/production/terminal/start', { clientScanId: id, bundleId: raced }), retry(id, 'production.scan.start', { bundleId: raced })])
+      expect([200, 201], online.body).toContain(online.statusCode)
+      expect(queued.events[0], JSON.stringify(queued)).toMatchObject({ refusal: null, result: { type: 'OperationScan' } })
+      expect((await rowsOf(raced)).map((row) => row.kind)).toEqual(['START'])
+      await ok('op', 'POST', '/production/terminal/hand-back', { clientScanId: cid('done'), bundleId: raced }, 201)
+    }
+  })
+})

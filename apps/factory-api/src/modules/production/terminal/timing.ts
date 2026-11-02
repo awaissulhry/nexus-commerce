@@ -274,10 +274,13 @@ export async function timeOperation(caller: CommandCaller, action: TimingKind, i
     if (ready) refuseScan(ready)
   }
   const deviceTime = input.occurredAt ? parseInstant(input.occurredAt) : null
+  // The tablet's time is not part of "the same request": an online try has none, its retry from the queue has. When the try
+  // is still running, the retry waits on the locks and then answers from the try's receipt.
+  const { occurredAt: _tabletTime, ...same } = input
   try {
     const { result, replayed } = await command(
       caller,
-      { name: COMMAND[action], idempotencyKey: keyOf(context, input.clientScanId), input: { ...input, bundleId: bundle.id }, ...(deviceTime ? { deviceTime } : {}) },
+      { name: COMMAND[action], idempotencyKey: keyOf(context, input.clientScanId), input: { ...same, bundleId: bundle.id }, ...(deviceTime ? { deviceTime } : {}) },
       (tools) => timeInCommand(tools, { action, input, bundle, scanned, workOrder, facts, deviceTime, override: options.override }),
     )
     if (!replayed && action === 'START') await startsWorkOrder(caller, workOrder, result.scan.id)

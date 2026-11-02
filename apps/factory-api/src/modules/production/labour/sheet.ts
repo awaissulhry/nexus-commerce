@@ -4,8 +4,9 @@ import { openReasonProblems } from '@nexus/factory-domain/people/privacy/figures
 import { changesOf, dailySheetOf, STATION_SITE, type SheetAttendance } from '@nexus/factory-domain/production/labour/rules'
 import { minutesOf } from '@nexus/factory-domain/production/offstandard/rules'
 import { command, type CommandCaller } from '../../../core/command'
-import { openPersonFiguresInCommand, personFiguresAccess, requirePersonFigures } from '../../people/privacy/access'
-import { gateClosedError, legalGateFor, type GateReader } from '../../people/privacy/gate'
+import { serverClock } from '../../../core/time'
+import { figuresAccessBehindGate, openPersonFiguresInCommand, requirePersonFigures } from '../../people/privacy/access'
+import { gateClosedError, legalGateFor, requireLegalGate, type GateReader } from '../../people/privacy/gate'
 import { codesById } from '../offstandard/store'
 import { scanSubjectFor } from '../settings/subject'
 import { officeOf, refuse } from './access'
@@ -20,8 +21,10 @@ import { bundlesById, dayColumn, dayRange, jsonObject, recordsFor, SCAN, sitesBy
  * through the People privacy gate (B-W2b-27): the site's legal gate for one person's work figures (PERFORMANCE, Statuto dei
  * Lavoratori art. 4 c.1) on, and the viewer the worker, a role People settings name (HR) or, where the site allows it, the
  * worker's team lead; someone else's sheet takes a reason. ONE command writes the opening down (audit
- * people.openPersonFigures: who, whose, purpose, why) and answers the sheet. Off (the default): 409 `gate/PERFORMANCE` in
- * words, for everyone. A site that records stations has no personal sheet (409 STATION_SITE).
+ * people.openPersonFigures: who, whose, purpose, why). Its answer says only that: a command's answer stays in the
+ * idempotency receipt until the purge, past the opening and past the gate, so the sheet is read after it, the gate asked
+ * again, and a repeat reads the sheet anew. Off (the default): 409 `gate/PERFORMANCE` in words, for everyone, for a real
+ * person and for an id that finds nobody alike. A site that records stations has no personal sheet (409 STATION_SITE).
  *
  * Attendance minutes show only where the site's ATTENDANCE legal gate is on too (art. 4 c.2); else the sheet says so.
  */
@@ -35,7 +38,7 @@ interface SheetPerson {
   readonly workerIds: readonly string[]
 }
 
-/** One person's day, read inside the opening command (the records of their floor sign-ins, their blocks, their attendance). */
+/** One person's day, read right after the opening command (the records of their floor sign-ins, their blocks, their attendance). */
 export async function sheetOf(db: Reader, person: SheetPerson, workDate: BusinessDate, now: Date) {
   const range = dayRange(workDate, workDate, person.timezone)
   const reports = person.workerIds.length === 0 ? [] : await db.operationScan.findMany({ where: { workerId: { in: [...person.workerIds] }, kind: 'REPORT', serverTime: { gte: range.start, lt: range.end } }, select: SCAN, orderBy: [{ serverTime: 'asc' }, { id: 'asc' }] })
@@ -88,10 +91,11 @@ export async function sheetOf(db: Reader, person: SheetPerson, workDate: Busines
 
 const LOGGED = "This view is logged: who opened this person's day, when and why are recorded and visible to HR and the data protection officer. No comparison with others, no export, no print."
 
-/** POST /production/labour/sheets: open one person's daily sheet (the opening is the command; the sheet is its answer). */
+/** POST /production/labour/sheets: open one person's daily sheet (the opening is the command; the sheet is read after it). */
 export async function openSheet(caller: CommandCaller, body: SheetBody, idempotencyKey?: string) {
   officeOf(caller)
-  const access = await personFiguresAccess(caller, body.employeeId, 'PERFORMANCE')
+  const access = await figuresAccessBehindGate(caller, body.employeeId, 'PERFORMANCE')
+  if (!access) throw gateClosedError('PERFORMANCE')
   const as = requirePersonFigures(access)
   const problems = openReasonProblems(access.decision, body.reason, body.note)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
@@ -103,21 +107,24 @@ export async function openSheet(caller: CommandCaller, body: SheetBody, idempote
     const workers = await db.worker.findMany({ where: { employeeId: access.employee.id }, select: { id: true } })
     return { employeeId: access.employee.id, name: employee.displayName, companyId: access.employee.companyId, siteId: site.id, timezone: site.timezone, workerIds: workers.map((row) => row.id) } satisfies SheetPerson
   })
-  const { result } = await command(caller, { name: 'production.labourSheetOpen', idempotencyKey, input: body }, async (tools) => {
+  await command(caller, { name: 'production.labourSheetOpen', idempotencyKey, input: body }, async (tools) => {
     // The gate read again inside the command: switched off since the check, nothing is opened.
     const { gate } = await legalGateFor(tools.tx, person.siteId, 'PERFORMANCE')
     if (!gate) throw gateClosedError('PERFORMANCE')
     openPersonFiguresInCommand(tools, { ...access, gate }, { reason: body.reason, note: body.note })
-    const read = await sheetOf(tools.tx, person, body.workDate, tools.now)
-    return {
-      person: { employeeId: person.employeeId, name: person.name },
-      siteId: person.siteId,
-      workDate: body.workDate,
-      as,
-      ...read,
-      words: [LOGGED, ...(read.attendanceShown ? [] : ["Attendance minutes are not shown: this site's attendance purpose is off (Statuto dei Lavoratori art. 4 c.2)."])],
-      recorded: true as const,
-    }
+    return { recorded: true }
   })
-  return result
+  const read = await caller.withClient(async (db) => {
+    await requireLegalGate(db, person.siteId, 'PERFORMANCE')
+    return sheetOf(db, person, body.workDate, serverClock.now())
+  })
+  return {
+    person: { employeeId: person.employeeId, name: person.name },
+    siteId: person.siteId,
+    workDate: body.workDate,
+    as,
+    ...read,
+    words: [LOGGED, ...(read.attendanceShown ? [] : ["Attendance minutes are not shown: this site's attendance purpose is off (Statuto dei Lavoratori art. 4 c.2)."])],
+    recorded: true as const,
+  }
 }

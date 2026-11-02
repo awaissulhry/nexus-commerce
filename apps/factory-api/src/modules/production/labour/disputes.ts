@@ -237,7 +237,7 @@ async function correctBlock(tools: CommandTools, dispute: DisputeRow, correction
 export async function answerDispute(caller: CommandCaller, disputeId: string, body: AnswerBody, idempotencyKey?: string) {
   const { context, site } = await officeDispute(caller, disputeId, PRODUCTION_LABOUR_ANSWER)
   const answer = body.answer.trim()
-  const { result } = await command(caller, { name: 'production.labourDisputeAnswer', idempotencyKey, input: { disputeId, ...body } }, async (tools) => {
+  await command(caller, { name: 'production.labourDisputeAnswer', idempotencyKey, input: { disputeId, ...body } }, async (tools) => {
     // A decision about a worker's record is a person's (D.Lgs. 152/1997 art. 1-bis; GDPR art. 22).
     const actorId = assertPersonDecides(tools.context, 'LABOUR_CORRECTION')
     const row = await lockDispute(tools, disputeId, body.version)
@@ -249,10 +249,10 @@ export async function answerDispute(caller: CommandCaller, disputeId: string, bo
     await tools.tx.labourDispute.update({ where: { id: row.id }, data: { status: body.outcome, answer, answeredAt: tools.now, answeredById: actorId, updatedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
     tools.audit({ recordType: 'LabourDispute', recordId: row.id, companyId: site.companyId, siteId: row.siteId, before: { status: 'OPEN' }, after: { status: body.outcome, corrected: body.correction !== undefined }, reason: answer })
     tools.emit({ type: 'labour_dispute.answered', subject: row.id, companyId: site.companyId, siteId: row.siteId, payload: { disputeId: row.id, siteId: row.siteId, lineId: row.lineId, workDate: isoDay(row.workDate), outcome: body.outcome, corrected: body.correction !== undefined } })
-    const saved = (await readDispute(tools.tx, row.id))!
-    return { dispute: await disputeAnswer(tools.tx, saved, { actorId: context.actorId, mayAnswer: true }) }
+    return { answered: true }
   })
-  return result
+  // The answer names the worker and their record's counts: read after the command, so none of it stays in the idempotency receipt (B-W2b-77).
+  return { dispute: await caller.withClient(async (db) => disputeAnswer(db, (await readDispute(db, disputeId))!, { actorId: context.actorId, mayAnswer: true })) }
 }
 
 // ---- the floor: raise and withdraw -----------------------------------------------------------------------------------
