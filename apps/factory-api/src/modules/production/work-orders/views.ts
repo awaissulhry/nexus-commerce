@@ -45,7 +45,7 @@ async function releaseOf(db: Reader, workOrder: Header) {
 }
 
 /** The frozen rows of a released work order, in the shape the builder plans them. */
-async function frozenSpec(db: Reader, workOrder: Header, parts: SpecParts): Promise<{ operations: (PlannedOperation & { id: string })[]; materials: PlannedMaterial[] }> {
+async function frozenSpec(db: Reader, workOrder: Header, parts: SpecParts): Promise<{ operations: (Omit<PlannedOperation, 'routingSeq'> & { id: string; routingSeq: number | null })[]; materials: PlannedMaterial[] }> {
   const ops = await db.workOrderOperation.findMany({
     where: { workOrderId: workOrder.id },
     select: { id: true, seq: true, routingSeq: true, code: true, name: true, standardMinutes: true, scanRequired: true, workCentreId: true },
@@ -64,7 +64,7 @@ async function frozenSpec(db: Reader, workOrder: Header, parts: SpecParts): Prom
       id: op.id,
       seq: op.seq,
       routingSeq: op.routingSeq,
-      stepId: stepOf.get(op.routingSeq)?.id ?? '',
+      stepId: op.routingSeq === null ? '' : (stepOf.get(op.routingSeq)?.id ?? ''),
       code: op.code,
       name: op.name,
       standardMinutes: decimalText(op.standardMinutes.toString()),

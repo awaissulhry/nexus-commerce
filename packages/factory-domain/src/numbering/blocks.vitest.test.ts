@@ -10,7 +10,7 @@ const hide = (ref: number, tenant = TENANT) => formatScanId({ type: 'HIDE', tena
 
 describe('scan-id kinds', () => {
   it('are number kinds of their own: one tenant-wide counter each, never a document series', () => {
-    expect(SCAN_ID_KINDS).toEqual(['BUNDLE', 'HIDE', 'GARMENT_SERIAL'])
+    expect(SCAN_ID_KINDS).toEqual(['BUNDLE', 'HIDE', 'GARMENT_SERIAL', 'COUPON'])
     expect(SCAN_ID_KINDS.every((kind) => NUMBER_KINDS.includes(kind))).toBe(true)
     expect(DOCUMENT_KINDS).toContain('GOODS_RECEIPT')
     expect(DOCUMENT_KINDS).toContain('LOT')
@@ -18,7 +18,7 @@ describe('scan-id kinds', () => {
     expect(DOCUMENT_KINDS.length + SCAN_ID_KINDS.length).toBe(NUMBER_KINDS.length)
     expect(['INVOICE', 'LOT'].every(isDocumentKind)).toBe(true)
     expect(['HIDE', 'nope', 3].some(isDocumentKind)).toBe(false)
-    expect(SCAN_TYPE_OF).toEqual({ BUNDLE: 'BUNDLE', HIDE: 'HIDE', GARMENT_SERIAL: 'SERIAL' })
+    expect(SCAN_TYPE_OF).toEqual({ BUNDLE: 'BUNDLE', HIDE: 'HIDE', GARMENT_SERIAL: 'SERIAL', COUPON: 'COUPON' })
   })
 })
 
@@ -40,6 +40,9 @@ describe('ranges and codes', () => {
     // 32 is "10" in base 32.
     expect(codes[1]).toMatch(new RegExp(`^SN-${TAG}-000010-.$`))
     expect(scanCodes(TENANT, 'BUNDLE', { fromRef: 7, toRef: 7 })).toEqual([formatScanId({ type: 'BUNDLE', tenantTag: TAG, ref: 7 })])
+    // W2b-2: a coupon prints CP-…, from a counter of its own; one printed as BN-… before it reads as it always did.
+    expect(scanCodes(TENANT, 'COUPON', { fromRef: 7, toRef: 7 })).toEqual([formatScanId({ type: 'COUPON', tenantTag: TAG, ref: 7 })])
+    expect(scanCodes(TENANT, 'COUPON', { fromRef: 7, toRef: 7 })[0]).toMatch(/^CP-/)
   })
 })
 

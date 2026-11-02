@@ -31,6 +31,8 @@ const TYPE_OF: Readonly<Record<ScanType, LabelType>> = {
   CARTON: 'carton',
   LOCATION: 'location',
   WORK_ORDER: 'workOrder',
+  // A coupon is a bundle's, for one operation (CP-…).
+  COUPON: 'bundle',
 }
 
 export type ScanRead =

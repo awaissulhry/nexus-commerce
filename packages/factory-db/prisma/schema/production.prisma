@@ -83,6 +83,10 @@ model ProductionSettings {
   scrapApprovalLimit     Int?
   bundleCodeMode         BundleCodeMode     @default(ONE_CODE)
   stuckBundleHours       Int                @default(4)
+  /// W2b-2 (B-W2b-74; MES-024): an operation the worker has no skill or machine authorisation for: told (WARN, the
+  /// default the API has answered so far), held for a team leader's PIN (STRICT) or let through (FREE). Read by the API's
+  /// qualificationRuleFor from B-W2b-81 on, edited as one more floor rule.
+  qualificationRule      FloorRuleMode      @default(WARN)
   version                Int                @default(1)
   createdAt              DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
@@ -180,6 +184,8 @@ model WorkOrder {
   labelTemplate LabelTemplate?       @relation(fields: [tenantId, labelTemplateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   sizes         WorkOrderSize[]
   operations    WorkOrderOperation[]
+  // W2b-2 labour.prisma (B-W2b-74): the off-standard time lost on it.
+  offStandardEntries OffStandardEntry[]
   materials     WorkOrderMaterial[]
   cutLogs       CutLog[]
   bundles       Bundle[]
@@ -307,7 +313,9 @@ model WorkOrderSize {
 /// One operation of a work order (A1 §2.4 E): a step of its revision's routing (code, name and standard minutes as the
 /// revision has them), mapped to a work centre of the work order's site of the step's kind. The floor scans bundles at
 /// it. Added and removed only while the work order is DRAFT; afterwards only its work centre changes (another of the
-/// same kind).
+/// same kind). W2b-2 (B-W2b-74; MES-086): or an unplanned operation, added to a RELEASED or IN_PROGRESS work order with a
+/// reason: no routing step (routingSeq null) but an operation of the library (operationId), copied from it; scanned, paid
+/// and costed like a step. MES-005's freeze stays for the routing's copies; once added it is frozen the same way.
 model WorkOrderOperation {
   id              String   @id @db.Uuid
   tenantId        String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -317,15 +325,23 @@ model WorkOrderOperation {
   styleRevisionId String   @db.Uuid
   /// Its place in the work order's routing, unique per work order.
   seq             Int
-  /// The revision's routing step it is (RoutingOperation.seq).
-  routingSeq      Int
+  /// The revision's routing step it is (RoutingOperation.seq); null: an unplanned operation.
+  routingSeq      Int?
+  /// W2b-2 (B-W2b-74; MES-086): an unplanned operation's operation of the library (exactly when routingSeq is null) and
+  /// why it was added (a code, no spaces: factory-domain production/extraops EXTRA_REASON_CODES; with OTHER the words are
+  /// the audit row's, as today).
+  operationId     String?  @db.Uuid
+  unplannedReason String?
   /// The routing step's code, name and standard minutes per garment, as copied (the …_production_guards trigger keeps
-  /// them equal).
+  /// them equal); an unplanned operation's, as copied from the library when it was added.
   code            String
   name            String
   standardMinutes Decimal  @db.Decimal(10, 3)
   /// Every bundle is scanned at it.
   scanRequired    Boolean  @default(true)
+  /// W2b-2 (B-W2b-74; MES-025): the routing step's parallel group, as copied (the same trigger keeps it equal); null on
+  /// an unplanned operation.
+  parallelGroup   Int?
   /// A work centre of the site, of the routing step's kind.
   workCentreId    String   @db.Uuid
   version         Int      @default(1)
@@ -334,7 +350,10 @@ model WorkOrderOperation {
   createdById     String?  @db.Uuid
 
   workOrder        WorkOrder        @relation(fields: [tenantId, siteId, styleRevisionId, workOrderId], references: [tenantId, siteId, styleRevisionId, id], onDelete: Restrict, onUpdate: Restrict)
-  routingOperation RoutingOperation @relation(fields: [tenantId, styleRevisionId, routingSeq], references: [tenantId, revisionId, seq], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the revision.
+  routingOperation RoutingOperation? @relation(fields: [tenantId, styleRevisionId, routingSeq], references: [tenantId, revisionId, seq], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-2 (B-W2b-74): an unplanned operation's operation of the library (Restrict: as above, for tenantId).
+  libraryOperation Operation?       @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   workCentre       WorkCentre       @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   scans            OperationScan[]
   correctionRequests ScanCorrectionRequest[]
@@ -665,6 +684,8 @@ model OperationScan {
   heldScans          HeldScan[]
   // W2b labour.prisma (wave 7/7): the members of a team operation (MES-091) its START, RESUME, PARTIAL or REPORT names.
   members            OperationScanMember[]
+  // W2b-2 labour.prisma (B-W2b-74): the approval its scrap above the site's limit waits for (MES-128).
+  scrapApprovals     ScrapApproval[]
   worker      Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   station     Station?           @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device      Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -783,6 +804,9 @@ model ScrapReason {
   icon        String?
   colour      String?
   needsDetail Boolean    @default(false)
+  /// W2b-2 (B-W2b-74; MES-258): who is at fault, for pay: read by B-W2b-84; the office sets it (the labour consultant
+  /// says what each means for pay).
+  fault       ScrapFault @default(UNKNOWN)
   /// Tiles are shown in this order (lower first).
   sortOrder   Int        @default(0)
   active      Boolean    @default(true)
@@ -794,6 +818,16 @@ model ScrapReason {
   lines OperationScanDefect[]
 
   @@unique([tenantId, kind, code])
+}
+
+/// Who a scrap or rework reason's garments are put down to, for pay (W2b-2, B-W2b-74; MES-258).
+enum ScrapFault {
+  /// The person who worked on them.
+  OWN
+  /// Someone or something else: the material, the machine, an earlier operation.
+  OTHERS
+  /// Not said (every reason until the office sets it).
+  UNKNOWN
 }
 
 /// One scrap or rework line (B-W1-42; MES-090): how many garments one reason took, of a scan (its REPORT or CORRECTION

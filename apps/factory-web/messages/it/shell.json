@@ -297,7 +297,8 @@
     "SERIAL": "numero di serie",
     "CARTON": "collo",
     "LOCATION": "ubicazione",
-    "WORK_ORDER": "ordine di lavoro"
+    "WORK_ORDER": "ordine di lavoro",
+    "COUPON": "tagliando del fascio"
   },
   "links": {
     "language": "Lingua",

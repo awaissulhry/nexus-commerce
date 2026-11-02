@@ -87,6 +87,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `factory_quality_hold_number_guard`, wave 1's `factory_shipment_guard`, shipping's `factory_shipment_line_guard`, the
    final release's `factory_garment_serial_guard` and wave 6's `factory_ppe_register_entry_guard`, and fills the new
    column for carrier returns received before it),
+   `…_followups_floor_w2b_guards` (W2b wave 8/16, B-W2b-74: COUPON a scan-id
+   kind, unplanned operations and the parallel group's frozen copy, a floor session's decision of a correction, scrap
+   approvals, the work order of an off-standard block, what a material call asks, an unplanned operation's piece rate; it
+   redefines numbering's `factory_number_series_document_kind` and `factory_number_block_guard`, production's
+   `factory_work_order_operation_guard` and the scan records' `factory_scan_correction_request_guard`, and recreates
+   `OffStandardEntry_edit_recorded` with the work order among its facts),
    `…_inspection_plans_w2b_guards` (W2b wave 10/16: plans and versions (a second person approves, then frozen with their
    checks), AQL profiles (critical locked at 0) and assignments, the rules that open an inspection, incoming inspections with
    hides, rolls and components, in-process checks, results, measurements, amendments append-only; no W1 inspection or release

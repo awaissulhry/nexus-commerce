@@ -183,6 +183,8 @@ model OffStandardEntry {
   /// (helpCallId, exactly then), SYSTEM the API on its own (an open block closed at clock-out).
   source         OffStandardSource
   helpCallId     String?              @db.Uuid
+  /// W2b-2 (B-W2b-74): the work order the time was lost on, if any (off-standard minutes per work order).
+  workOrderId    String?              @db.Uuid
   /// The site's day it started in (Site.timezone), and when it started and ended (null: running).
   workDate       DateTime             @db.Date
   startedAt      DateTime             @db.Timestamptz(3)
@@ -216,14 +218,16 @@ model OffStandardEntry {
   worker   Worker?         @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   employee Employee?       @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   helpCall HelpCall?       @relation(fields: [tenantId, siteId, helpCallId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder WorkOrder?     @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device   Device?         @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, deviceId, clientEventId])
-  // A line's day (its close), a worker's day, a call's waiting.
+  // A line's day (its close), a worker's day, a call's waiting, a work order's lost time.
   @@index([tenantId, lineId, workDate])
   @@index([tenantId, workerId, workDate])
   @@index([tenantId, employeeId, workDate])
   @@index([tenantId, helpCallId])
+  @@index([tenantId, workOrderId])
 }
 
 enum OffStandardSource {
@@ -569,6 +573,56 @@ model CrewMember {
   @@index([tenantId, crewSessionId])
   @@index([tenantId, workerId])
   @@index([tenantId, employeeId])
+}
+
+/// A scan's scrap above the site's limit (W2b-2, B-W2b-74; MES-128): a floor REPORT whose scrap is above the limit in force
+/// when it was taken waits for the team leader before it posts (a replacement, a scrap of stock, the cost): WAITING →
+/// APPROVED | REFUSED, once, on the tablet or in the office, never by who took the scan (four eyes). B-W2b-53 keeps the
+/// decision in audit rows; B-W2b-81 moves it here. A row whose scan was voided since waits for nothing: its reader asks
+/// whether the scan stands (factory-domain production/scrap/approval), and a voided scan's row is not decided. One per scan
+/// (`key`); never deleted.
+model ScrapApproval {
+  id          String              @id @db.Uuid
+  tenantId    String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String              @db.Uuid
+  scanId      String              @db.Uuid
+  /// The limit in force when the scan was taken, in pieces (from 1): a later change of the site's limit leaves it.
+  limitPieces Int
+  status      ScrapApprovalStatus @default(WAITING)
+  /// Decided exactly when APPROVED or REFUSED: where, when, and by whom (FLOOR: the worker signed in with the PIN; OFFICE:
+  /// the office user).
+  decidedOn   ScrapDecidedOn?
+  decidedAt   DateTime?           @db.Timestamptz(3)
+  decidedById String?             @db.Uuid
+  /// REFUSED: the reason tile (factory-domain production/scrap/approval SCRAP_REFUSAL_REASONS; no spaces), required.
+  reasonCode  String?
+  /// The decider's words (OTHER asks for them).
+  note        String?
+  /// `scrap:<scanId>`, unique in the tenant: one row per scan.
+  key         String
+  version     Int                 @default(1)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?             @db.Uuid
+
+  scan OperationScan @relation(fields: [tenantId, siteId, scanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  // What waits, per site (the team leader's list, the scrap page's tile).
+  @@index([tenantId, siteId, status])
+  @@index([tenantId, scanId])
+}
+
+enum ScrapApprovalStatus {
+  WAITING
+  APPROVED
+  REFUSED
+}
+
+/// Where a scrap approval was decided.
+enum ScrapDecidedOn {
+  FLOOR
+  OFFICE
 }
 
 /// The floor checks of production.prisma's ProductionSettings (MES-025, MES-097, MES-098): what a check does when it
