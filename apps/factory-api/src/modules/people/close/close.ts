@@ -32,7 +32,8 @@ import { assertPersonDecides } from '../privacy/decide'
 import { gateClosedError } from '../privacy/gate'
 import type { CloseBody, MonthQuery, MonthsQuery, OpenLulBody } from './contract'
 import { renderLulPdf } from './lul-pdf'
-import { closeOfMonth, CLOSE_SELECT, codesById, companyFor, earliestToday, gatesOf, lineDaysLeft, monthDays, monthFactsOf, monthOfClose, periodOfMonth, placeOf, reachesCompany, type CloseRow, type Gates, type Place } from './store'
+import { closeOfMonth, CLOSE_SELECT, codesById, companyFor, earliestToday, gatesOf, lineDaysLeft, monthDays, monthFactsOf, monthOfClose, periodOfMonth, placeOf, previousMonth, reachesCompany, type CloseRow, type Gates, type Place } from './store'
+import { correctionsNotCarried } from '../payroll/pending'
 
 /**
  * The month close (B-W2b-48; MES-231; D.L. 112/2008 art. 39; design people.attendance "Month close", typed confirm "Close
@@ -89,6 +90,7 @@ async function panelOf(db: Client, context: OfficeContext, place: Place, month: 
     days: facts.days,
     sites: place.sites.map((site) => ({ siteId: site.id, code: site.code, name: site.name, gateOpen: gates.open.some((entry) => entry.id === site.id) })),
     corrections,
+    payrollCorrectionsPending: closed ? await correctionsNotCarried(db, place, month, now) : 0,
     seal: closed && close ? { closedAt: iso(close.closedAt)!, closedBy: close.closedById ? (names.get(close.closedById) ?? null) : null, sealed: close.lulFileId !== null, sha256: close.lulSha256, fileId: close.lulFileId } : null,
     confirm: { phrases: closePhrases(month), consequences: CLOSE_CONSEQUENCES },
     /** The calendar's layout is generic until the labour consultant confirms it (GATE-PAYROLL). */
@@ -109,13 +111,6 @@ export async function monthPanel(caller: CommandCaller, query: MonthQuery) {
     const month = query.month ?? previousMonth(place, serverClock.now())
     return panelOf(db, context, place, month, serverClock.now())
   })
-}
-
-const previousMonth = (place: Place, now: Date): string => {
-  const today = earliestToday(place, now)
-  const year = Number(today.slice(0, 4))
-  const month = Number(today.slice(5, 7))
-  return month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, '0')}`
 }
 
 /** GET /people/month-close/months: the company's closes, newest first (no person; nothing without a close row). */

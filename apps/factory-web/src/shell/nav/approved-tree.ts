@@ -448,6 +448,7 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: true,
         pages: [
           { id: 'people.employees', title: 'Employees', titleIt: 'Dipendenti', wave: 'W2b', href: '/people/employees' },
+          { id: 'people.attendance', title: 'Attendance', titleIt: 'Presenze', wave: 'W2b', href: '/people/attendance' },
           { id: 'people.shifts', title: 'Shifts', titleIt: 'Turni', wave: 'W2b', href: '/people/shifts' },
         ],
       },

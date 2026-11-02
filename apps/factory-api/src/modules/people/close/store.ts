@@ -65,6 +65,14 @@ export function earliestToday(place: Place, now: Date): BusinessDate {
   return place.sites.map((site) => businessDate(now, site.timezone)).sort()[0] ?? businessDate(now)
 }
 
+/** The month before this one, at the sites' earliest "today". */
+export const previousMonth = (place: Place, now: Date): string => {
+  const today = earliestToday(place, now)
+  const year = Number(today.slice(0, 4))
+  const month = Number(today.slice(5, 7))
+  return month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, '0')}`
+}
+
 export interface Gates {
   readonly open: readonly PlaceSite[]
   readonly off: readonly PlaceSite[]

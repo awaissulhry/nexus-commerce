@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { ReviewState } from '@nexus/ui/patterns'
 import type { OfficeScope } from '../../../shell/scope/scope-model'
 import type { AuditEntry, Employee, EmployeeCounts, EmployeeKind, EmployeeRecord, Leaver, LeaverStep, LeavingPreview, LineCheck, MoveRow, Ref, SiteLine, Team, TeamMember, UnlinkedWorker } from '../_shared/api'
@@ -168,7 +169,7 @@ export interface DialogActions {
 
 // ---- the record ----------------------------------------------------------------------------------------------------------------
 
-export const EMPLOYEE_TABS = ['profile', 'job', 'skills', 'documents', 'activity'] as const
+export const EMPLOYEE_TABS = ['profile', 'job', 'attendance', 'skills', 'documents', 'activity'] as const
 export type EmployeeTab = (typeof EMPLOYEE_TABS)[number]
 
 /** The record's explicit edit (Profile › Identity, Job & team › Job), as typed. */
@@ -208,6 +209,8 @@ export interface EmployeeRecordModel {
   /** J / K: the employees before and after this one in the list last opened. */
   neighbours: { prev: string | null; next: string | null }
   timeZone: string
+  /** B-W2b-61: the Attendance tab, a container of its own behind the site's gate (a design case passes its view). */
+  attendance?: ReactNode
 }
 
 export interface EmployeeRecordActions {

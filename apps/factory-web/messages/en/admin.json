@@ -1895,6 +1895,9 @@
     "people_earnings_view": "See the pay periods: status, what is still open, held scans and figures per line (never one person)",
     "people_earnings_records": "Open one person's statement and earnings lines, the ledger and the report per worker (each opening is recorded)",
     "people_earnings_manage": "Run, review and lock a pay period, decide held scans, approve statements, correct an entry",
-    "people_earnings_review": "Review a person's statement as their lead: pieces and minutes, never money"
+    "people_earnings_review": "Review a person's statement as their lead: pieces and minutes, never money",
+    "people_payroll_view": "See a month's payroll export as counts, never one person's figures",
+    "people_payroll_records": "Open the values per employee code and the files of a payroll export",
+    "people_payroll_manage": "Keep the payroll codes and layouts, make payroll exports and send them by secure link"
   }
 }

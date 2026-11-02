@@ -174,6 +174,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       // B-W2b-65: People › Skills & training and People settings.
       '/people/skills': 'people.skills.view', // GET /people/skills/matrix
       '/people/settings': 'people.privacy.view', // GET /people/privacy
+      // B-W2b-61: People › Attendance.
+      '/people/attendance': 'people.attendance.view', // GET /people/attendance/days
       // B-W2b-64: People › Efficiency and People reports.
       '/people/efficiency': 'people.efficiency.view', // GET /people/efficiency
       '/people/reports': 'people.attendance.view', // GET /people/reports/attendance
@@ -442,7 +444,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
 describe('the link-type registry (links/_nav/link-types.ts)', () => {
   it('every purpose × record type a link can have opens its task page or, by name, the link frame', () => {
     const frame = linkKinds().filter((kind) => linkTaskOf({ purpose: kind.purpose, record: { type: kind.recordType } }) === null)
-    expect(frame).toEqual([{ purpose: 'DOCUMENT_VIEW', recordType: 'StoredFile' }])
+    expect(frame).toEqual([{ purpose: 'DOCUMENT_VIEW', recordType: 'StoredFile' }, { purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport' }])
     for (const rule of LINK_TASK_RULES) expect(PURPOSE_RULES[rule.purpose].recordTypes, rule.task).toContain(rule.recordType)
     expect(LINK_TASK_RULES.map((rule) => rule.task).sort()).toEqual([...LINK_TASKS].sort())
   })
