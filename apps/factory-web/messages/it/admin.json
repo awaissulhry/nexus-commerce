@@ -1701,6 +1701,8 @@
     "production_scan": "Dichiarare i mazzetti fatti in una fase",
     "production_scan_correct": "Decidere le correzioni delle scansioni del reparto",
     "production_scan_override": "Sbloccare una scansione trattenuta con il proprio PIN (caposquadra)",
+    "production_scan_behalf": "Registrare un rapporto per chi non ha potuto scansionare (caposquadra)",
+    "production_extraops_add": "Aggiungere un'operazione non prevista a un ordine di produzione",
     "production_serials": "Stampare le etichette dei capi all'ultima fase",
     "quality_inspections_view": "Vedere le ispezioni finali e i controlli di rilascio",
     "quality_inspections_record": "Registrare un'ispezione finale",

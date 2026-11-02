@@ -3,6 +3,7 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PRODUCTION_LABOUR_VIEW } from '@nexus/factory-domain/production/labour/permissions'
 import { readDisputeMessage, reportOf, type LabourRecord } from '@nexus/factory-domain/production/labour/rules'
+import { isOnBehalfEntry } from '@nexus/factory-domain/production/onbehalf/rules'
 import type { CommandCaller } from '../../../core/command'
 import { legalGateFor, type GateReader } from '../../people/privacy/gate'
 import { officeOf, reaches } from './access'
@@ -84,6 +85,8 @@ export async function recordOf(caller: CommandCaller, scanId: string) {
         steps: record.steps.map((step) => ({ scanId: step.scanId, kind: step.kind, at: toUtcIso(step.at), counts: step.counts, approvedBy: someone(step.approvedById), reason: step.reason })),
         worker: shown ? someone(record.workerId) : null,
         workerHidden: record.workerId !== null && !shown,
+        // B-W2b-47 (MES-099): the team leader entered it for someone who could not scan (the reason is on the scan).
+        enteredByLead: isOnBehalfEntry(root.reason),
         disputes: disputes.map((row) => ({ id: row.id, status: row.status, reason: readDisputeMessage(row.message).reason, raisedAt: toUtcIso(row.createdAt) })),
         correctionsWaiting,
       },
