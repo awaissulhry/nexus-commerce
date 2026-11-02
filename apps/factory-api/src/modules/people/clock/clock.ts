@@ -132,7 +132,8 @@ export async function clockViewOf(caller: CommandCaller, person: Person, now: Da
   }))
   const shift = shiftToShow(shifts, standing, now, site.timezone)
   const from = todayFrom(standing, now, site.timezone)
-  const minutes = minutesSoFar(facts, { from, now, fixedBreaks: settings.fixedBreaks && shift ? shift.breaks : [] })
+  // Every planned break of the days around: `shift` is null once the person clocked out after their shift, and the break still counts.
+  const minutes = minutesSoFar(facts, { from, now, fixedBreaks: settings.fixedBreaks ? shifts.flatMap((planned) => planned.breaks) : [] })
   const next = settings.fixedBreaks ? nextBreakOf(shift, now) : null
   const openShift = standing.openSince ? shiftForClockIn(shifts, standing.openSince) : null
   const counted = new Set(countedEvents(facts).map((fact) => fact.id))
