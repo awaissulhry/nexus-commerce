@@ -13,7 +13,7 @@ import { createTranslator, messagesFor } from '../../lib/i18n/messages'
 import { I18nProvider } from '../../lib/i18n/provider'
 import { LIST_PAGES, recordAddress } from '../../lib/records/record-links'
 import { permissionCheck } from '../../lib/session/session'
-import { builtRowsOnly, OFFICE_NAV, OFFICE_PAGES, officeNavFor } from '../../shell/nav/office-nav'
+import { OFFICE_NAV, OFFICE_PAGES, officeNavFor } from '../../shell/nav/office-nav'
 import { applyMoves, createEmployee, createLoan, listEmployees, startLeaving, updateEmployee, whatYouSee } from './_shared/api'
 import { EMPLOYEE_LIST, LEAVER, PEOPLE } from './_shared/fixtures'
 import {
