@@ -1,12 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { DEFAULT_TIME_ZONE, formatNumber } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { zxingCamera } from '../../camera'
-import { useFloor } from '../../FloorApp'
+import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { readScan } from '../../scan/scan-model'
 import { AsOfMemory, codeKey } from '../shared/as-of'
@@ -59,7 +58,7 @@ type Then = { readonly kind: 'workOrder' } | { readonly kind: 'scan' } | { reado
 
 export function FloorCut() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const t = useT('floor-cutting')
   const locale = useLocale()

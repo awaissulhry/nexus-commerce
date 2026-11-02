@@ -1,12 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useConfirmFeedback } from '@nexus/ui/floor'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { readFromStore } from '../../../record-panels/store'
 import { zxingCamera } from '../../camera'
-import { useFloor } from '../../FloorApp'
+import { useFloor, useFloorRouter } from '../../FloorApp'
 import { useFloorKeys } from '../../keys'
 import { readScan } from '../../scan/scan-model'
 import { listBeforeRead, readListReasons } from '../reasons/api'
@@ -54,7 +53,7 @@ const REJECT_LISTS = ['REWORK'] as const
 
 export function FloorKits() {
   const store = useFloor()
-  const router = useRouter()
+  const router = useFloorRouter()
   const feedback = useConfirmFeedback()
   const { frame, onFrame } = store.frame('tile.kits', { showHome: true })
   const { me, api, online, sessionEnded } = store

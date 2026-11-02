@@ -1,6 +1,7 @@
 {
   "brand": "Nexus Factory",
   "frame": {
+    "moveHeld": "This page opens when the network is back. Nothing here is lost.",
     "home": "Home",
     "help": "Help",
     "close": "Close",
