@@ -1789,6 +1789,8 @@
     "quality_plans_view": "See the inspection plans, their versions and checklists",
     "quality_plans_manage": "Keep the inspection plans and write their drafts",
     "quality_plans_approve": "Approve another person's draft with an e-signature",
+    "quality_inprocess_view": "See in-process checks (first piece, cutting, roving, end of line) and the line's DHU",
+    "quality_inprocess_record": "Record in-process checks and sign a first piece (PIN or code)",
     "views_save": "Save and share own views of a list",
     "views_manage": "Share views with everyone and set a role's default",
     "views_export": "Export a list to CSV or Excel",

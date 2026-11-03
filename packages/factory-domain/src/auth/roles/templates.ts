@@ -366,6 +366,20 @@ const AQL_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
   production_manager: ['quality.aql.view'],
   sales: ['quality.aql.view'],
 })
+/**
+ * B-W2b-99 (in-process checks, QHS-039 … QHS-042, MES-127; design floor.inline modes inspection and supervisor): the
+ * quality inspector, the production manager and the floor supervisor open, record and sign checks in the office; on the
+ * floor the floor inspector and the team leader do at their own site. Owner and read-only from every().
+ */
+const INPROCESS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.inprocess.view', 'quality.inprocess.record'],
+  production_manager: ['quality.inprocess.view', 'quality.inprocess.record'],
+  floor_supervisor: ['quality.inprocess.view', 'quality.inprocess.record'],
+})
+const INPROCESS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  floor_inspector: ['quality.inprocess.view', 'quality.inprocess.record'],
+  team_leader: ['quality.inprocess.view', 'quality.inprocess.record'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -412,7 +426,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-49
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? []),
   // B-W2b-93
-  ...(audience === 'office' ? (AQL_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (AQL_ADDS[key] ?? []) : []),
+  // B-W2b-99
+  ...((audience === 'office' ? INPROCESS_ADDS : INPROCESS_FLOOR_ADDS)[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

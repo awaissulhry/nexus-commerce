@@ -57,6 +57,7 @@ import { events as dispatch } from '../dispatch/events'
 import { events as labour } from '../labour/events'
 // B-W2b-92: inspection plans (a plan changed, a version approved).
 import { events as qualityPlans } from '../quality-plans/events'
+import { events as qualityInprocess } from '../quality-inprocess/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -181,7 +182,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-49
   ...dispatch,
   // B-W2b-92
-  ...qualityPlans] as const satisfies readonly EventDefinition[]
+  ...qualityPlans,
+  ...qualityInprocess] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

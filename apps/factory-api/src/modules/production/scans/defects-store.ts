@@ -25,20 +25,22 @@ export async function writeDefects(tools: CommandTools, owner: Owner & { readonl
       kind: line.kind,
       reasonCode: line.reason,
       quantity: line.quantity,
+      // B-W2b-99 (MES-127): the operation it is charged to, when said.
+      causedAtOperationId: line.causedAtOperationId ?? null,
       serverTime: tools.now,
       createdById: owner.createdById,
     })),
   })
 }
 
-const sorted = (lines: DefectLine[]) => lines.sort((a, b) => (a.kind === b.kind ? a.reason.localeCompare(b.reason) : a.kind === 'SCRAP' ? -1 : 1))
+const sorted = (lines: DefectLine[]) => lines.sort((a, b) => (a.kind === b.kind ? (a.reason === b.reason ? (a.causedAtOperationId ?? '').localeCompare(b.causedAtOperationId ?? '') : a.reason.localeCompare(b.reason)) : a.kind === 'SCRAP' ? -1 : 1))
 
 /** The lines of these scans (a scan without any: an empty list). */
 export async function readDefects(db: Reader, scanIds: readonly string[]): Promise<Map<string, DefectLine[]>> {
   const lines = new Map<string, DefectLine[]>(scanIds.map((id) => [id, []]))
   if (scanIds.length === 0) return lines
-  const rows = await db.operationScanDefect.findMany({ where: { scanId: { in: [...new Set(scanIds)] } }, select: { scanId: true, kind: true, reasonCode: true, quantity: true } })
-  for (const row of rows) lines.get(row.scanId!)?.push({ kind: row.kind, reason: row.reasonCode, quantity: row.quantity })
+  const rows = await db.operationScanDefect.findMany({ where: { scanId: { in: [...new Set(scanIds)] } }, select: { scanId: true, kind: true, reasonCode: true, quantity: true, causedAtOperationId: true } })
+  for (const row of rows) lines.get(row.scanId!)?.push({ kind: row.kind, reason: row.reasonCode, quantity: row.quantity, ...(row.causedAtOperationId ? { causedAtOperationId: row.causedAtOperationId } : {}) })
   for (const list of lines.values()) sorted(list)
   return lines
 }
@@ -47,8 +49,8 @@ export async function readDefects(db: Reader, scanIds: readonly string[]): Promi
 export async function readRequestDefects(db: Reader, requestIds: readonly string[]): Promise<Map<string, DefectLine[]>> {
   const lines = new Map<string, DefectLine[]>(requestIds.map((id) => [id, []]))
   if (requestIds.length === 0) return lines
-  const rows = await db.operationScanDefect.findMany({ where: { correctionRequestId: { in: [...new Set(requestIds)] } }, select: { correctionRequestId: true, kind: true, reasonCode: true, quantity: true } })
-  for (const row of rows) lines.get(row.correctionRequestId!)?.push({ kind: row.kind, reason: row.reasonCode, quantity: row.quantity })
+  const rows = await db.operationScanDefect.findMany({ where: { correctionRequestId: { in: [...new Set(requestIds)] } }, select: { correctionRequestId: true, kind: true, reasonCode: true, quantity: true, causedAtOperationId: true } })
+  for (const row of rows) lines.get(row.correctionRequestId!)?.push({ kind: row.kind, reason: row.reasonCode, quantity: row.quantity, ...(row.causedAtOperationId ? { causedAtOperationId: row.causedAtOperationId } : {}) })
   for (const list of lines.values()) sorted(list)
   return lines
 }

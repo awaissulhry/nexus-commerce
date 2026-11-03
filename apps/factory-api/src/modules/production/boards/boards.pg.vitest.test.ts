@@ -351,7 +351,8 @@ describe('the line TV board (ANA-007, MES-166): line totals only, nobody signed 
     expect(preview.wip).toMatchObject({ bundles: 4, pieces: 11, stuck: 0, capped: false })
     expect(preview.wip.operations.find((operation: Json) => operation.code === ops.qc!.code)).toMatchObject({ bundles: 4, level: 'HIGH' })
     // DHU: 1 scrapped + 1 to rework over 9 good + 1 scrapped = 20.0.
-    expect(preview.quality).toEqual({ dhu: '20.0', defects: 2, units: 10 })
+    // B-W2b-99: no end-of-line check on L1 that day, so the board keeps the W2b-1 estimate and says so.
+    expect(preview.quality).toEqual({ dhu: '20.0', defects: 2, units: 10, source: 'ESTIMATE' })
     expect(preview.note).toMatchObject({ shiftLabel: 'Morning', topics: ['MACHINES'], text: 'SEW-01 waits for the technician.' })
   })
 

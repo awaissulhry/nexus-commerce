@@ -46,6 +46,10 @@ import { reportOnBehalf } from '../../modules/production/onbehalf/report'
 import { DispatchRefusedError } from '../../modules/production/dispatch/access'
 import { writeHandoverBody } from '../../modules/production/dispatch/contract'
 import { writeHandover } from '../../modules/production/dispatch/handover'
+// B-W2b-99: a roving result or an end-of-line pass or defect recorded in one step from the floor's queue.
+import { InProcessRefusedError } from '../../modules/quality/inprocess/access'
+import { openCheck } from '../../modules/quality/inprocess/checks'
+import { openContract } from '../../modules/quality/inprocess/contract'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -79,6 +83,8 @@ import { writeHandover } from '../../modules/production/dispatch/handover'
  *                                         order's thread, with the files confirmed before it was sent)
  *   andon.handover.write                  modules/production/dispatch writeHandover (B-W2b-49: a line's note of a shift; the
  *                                         tablet's time picks the shift)
+ *   quality.inprocess.record              modules/quality/inprocess openCheck with its `decision` (B-W2b-99: a roving result or
+ *                                         an end-of-line pass or defect, one step; a first piece is signed online, never queued)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -115,6 +121,7 @@ export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof ClockRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix, final: error.refusal.final })
   if (error instanceof TimingRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix, final: error.refusal.final })
   if (error instanceof DispatchRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
+  if (error instanceof InProcessRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
     return first ? moduleRefusal({ code: first.code, message: first.message, fix: first.fix }) : moduleRefusal({ code: 'NUMBER_REFUSED', message: error.message })
@@ -267,6 +274,15 @@ async function applyFloorNote(caller: CommandCaller, event: QueuedEvent): Promis
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'Message', id: result.messageId } }
 }
 
+/** B-W2b-99: a queued roving or end-of-line check, recorded in one step through its own command (the key: `<device>.<client event id>`). */
+async function applyInProcess(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const body = parsed(openContract.body, event.payload)
+  if (!body.ok) return refusedBy(body.refusal)
+  if (!body.value.decision || (body.value.kind !== 'ROVING' && body.value.kind !== 'END_OF_LINE')) return refusedBy(badEventRefusal('only a roving or end-of-line check recorded in one step is kept offline (a first piece is signed online).'))
+  const result = await openCheck(caller, body.value, key)
+  return { status: 'accepted', result: { type: 'InProcessCheck', id: result.check.id } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -307,6 +323,8 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
         return await applyFloorNote(caller, event)
       case 'andon.handover.write':
         return await applyHandover(caller, event, context.key)
+      case 'quality.inprocess.record':
+        return await applyInProcess(caller, event, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

@@ -226,6 +226,11 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
     // B-W2b-49: the line and the shift; never a word of the note.
     case 'andon.handover.write':
       return { code: text(p.shiftLabel, 40), target: text(p.lineId, 40) }
+    // B-W2b-99: which check and what it found, the pieces looked at; never who, never the note.
+    case 'quality.inprocess.record': {
+      const pieces = whole((p.decision as { pieces?: unknown } | null | undefined)?.pieces)
+      return { code: text(p.kind, 20), target: text((p.decision as { outcome?: unknown } | null | undefined)?.outcome, 20), ...(pieces !== undefined ? { quantity: pieces } : {}), ...(workOrderId ? { workOrderId } : {}) }
+    }
   }
 }
 
