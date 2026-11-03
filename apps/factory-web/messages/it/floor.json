@@ -716,7 +716,8 @@
       "callAnswer": "Risposta a una chiamata",
       "handover": "Nota di consegna",
       "onBehalf_one": "Inserimento per conto di altri: {code} · {count} buono",
-      "onBehalf_other": "Inserimento per conto di altri: {code} · {count} buoni"
+      "onBehalf_other": "Inserimento per conto di altri: {code} · {count} buoni",
+      "progress": "Avanzamento di una segnalazione guasto"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

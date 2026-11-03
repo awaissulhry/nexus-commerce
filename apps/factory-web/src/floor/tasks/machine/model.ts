@@ -1,6 +1,7 @@
 import { JOB_MOVE_RULES, statusAfterReport } from '@nexus/factory-domain/plant/rules'
 import type { Locale } from '../../../lib/i18n/locales'
 import type { FloorJob, FloorMachine, FloorRequest, JobRecord, MachineAfter, MachineStatus, SafeAfter, StationMachine, Symptom, TechnicianMove } from './api'
+import type { TakenMedia } from './depth'
 
 /**
  * The machine problem and the technician's job (SCR-179; design floor.machine; Owner answer H1) — the screen's rules, pure:
@@ -8,23 +9,25 @@ import type { FloorJob, FloorMachine, FloorRequest, JobRecord, MachineAfter, Mac
  * tablet knows, the symptom tiles of a machine (an unsafe symptom locks the machine at once; "Other" asks for words), what
  * holds the report, the queued report's payload and the machine's state it will cause, the station's banner in our words
  * (never the API's English), which moves a technician may make on a job now and why one is held, the requests of a job
- * that wait for a technician's sign-safe, the hand-back's words (fixed English phrases: the office's job record reads the
- * same in any language) and the machine's state after it. Nothing here names a person or holds money.
+ * that wait for a technician's sign-safe and the machine's state after a hand-back (the one-screen close, the photos and
+ * voice notes and the progress after the report are B-W2b-102's: depth.ts). Nothing here names a person or holds money.
  */
 
 // ---- where the screen opens -------------------------------------------------------------------------------------------
 
-export const PLANT_FLOOR = { report: 'plant.report', work: 'plant.jobs.work', signSafe: 'plant.signSafe' } as const
+export const PLANT_FLOOR = { report: 'plant.report', work: 'plant.jobs.work', signSafe: 'plant.signSafe', lead: 'floor.lead' } as const
 
 export interface MachineCan {
   readonly report: boolean
   readonly work: boolean
   readonly signSafe: boolean
+  /** B-W2b-102 (QHS-180): the line lead confirms a handed-back machine works (floor.lead). */
+  readonly lead: boolean
 }
 
 export function machineCan(permissions: readonly string[]): MachineCan {
   const held = new Set(permissions)
-  return { report: held.has(PLANT_FLOOR.report), work: held.has(PLANT_FLOOR.work), signSafe: held.has(PLANT_FLOOR.signSafe) }
+  return { report: held.has(PLANT_FLOOR.report), work: held.has(PLANT_FLOOR.work), signSafe: held.has(PLANT_FLOOR.signSafe), lead: held.has(PLANT_FLOOR.lead) }
 }
 
 /** The technician (maintenance mode) opens on My jobs; everyone else on "Which machine?". */
@@ -106,9 +109,11 @@ export interface ReportDraft {
   readonly words: string
   /** Marked unsafe by the person (Owner answer H1: anyone at the station may); an unsafe symptom marks it by itself. */
   readonly unsafe: boolean
+  /** B-W2b-102 (QHS-189): photos and voice notes taken with the report, sent once the office has it (depth.ts). */
+  readonly media: readonly TakenMedia[]
 }
 
-export const EMPTY_DRAFT: ReportDraft = Object.freeze({ symptomId: null, words: '', unsafe: false })
+export const EMPTY_DRAFT: ReportDraft = Object.freeze({ symptomId: null, words: '', unsafe: false, media: [] })
 
 /** The draft's symptom, or null. */
 export const pickedSymptom = (machine: Pick<StationMachine, 'symptoms'>, draft: ReportDraft): Symptom | null => machine.symptoms.find((entry) => entry.id === draft.symptomId) ?? null
@@ -172,9 +177,6 @@ export function moveHeld(job: Pick<FloorJob, 'ownership' | 'open'>, can: Pick<Ma
 /** The requests behind a job that still lock its machine: each waits for a technician's sign-safe (H1). */
 export const lockingRequests = (record: Pick<JobRecord, 'requests'>): FloorRequest[] => record.requests.filter((request) => request.locking)
 
-/** Photos the reporters added (the office shows them; the floor may not open files). */
-export const photosOf = (requests: readonly Pick<FloorRequest, 'photos'>[]): number => requests.reduce((total, request) => total + request.photos, 0)
-
 /** The reporters' own words, oldest first, without blanks or repeats. */
 export const reporterWords = (requests: readonly Pick<FloorRequest, 'description' | 'reportedAt'>[]): string[] =>
   [...new Set([...requests].sort((a, b) => a.reportedAt.localeCompare(b.reportedAt)).map((request) => request.description?.trim() ?? '').filter(Boolean))]
@@ -204,46 +206,10 @@ export function ageParts(minutes: number): { key: 'age.minutes' | 'age.hours' | 
   return { key: 'age.days', params: { count: Math.floor(value / (24 * 60)) } }
 }
 
-// ---- hand back ---------------------------------------------------------------------------------------------------------
-
-/** What the technician did (design floor.machine "close": action tiles), sent as fixed English words the office reads. */
-export const WORK_DONE = {
-  adjusted: 'Adjusted',
-  replaced: 'Replaced a part',
-  cleaned: 'Cleaned and lubricated',
-  other: 'Other',
-} as const
-export type WorkDoneCode = keyof typeof WORK_DONE
-export const WORK_DONE_CODES = Object.keys(WORK_DONE) as WorkDoneCode[]
-
-export interface HandBackDraft {
-  readonly done: WorkDoneCode | null
-  readonly words: string
-  readonly after: MachineAfter | null
-}
-
-export const EMPTY_HAND_BACK: HandBackDraft = Object.freeze({ done: null, words: '', after: null })
-
-/** The hand-back's words: the tile's phrase, then what the technician wrote ("Other" is the words alone). */
-export function workDoneText(draft: Pick<HandBackDraft, 'done' | 'words'>): string {
-  const words = draft.words.trim()
-  if (!draft.done) return words
-  if (draft.done === 'other') return words
-  return words ? `${WORK_DONE[draft.done]}: ${words}`.slice(0, WORDS_MAX) : WORK_DONE[draft.done]
-}
+// ---- hand back (the one-screen close of B-W2b-102: depth.ts) ------------------------------------------------------------
 
 /** Why a machine state after the hand-back is held, or null: running only once nothing locks it (H1). */
 export const afterHeld = (after: MachineAfter, machine: Pick<FloorMachine, 'locked'>): string | null => (after === 'RUNNING' && machine.locked ? 'held.signFirst' : null)
-
-/** Why the hand-back cannot be sent now, or null. */
-export function handBackHeld(draft: HandBackDraft, machine: Pick<FloorMachine, 'locked'>, online: boolean, busy = false): string | null {
-  if (!online) return 'held.offline'
-  if (busy) return 'held.busy'
-  if (!draft.done) return 'held.whatDone'
-  if (draft.done === 'other' && draft.words.trim() === '') return 'held.words'
-  if (!draft.after) return 'held.after'
-  return afterHeld(draft.after, machine)
-}
 
 // ---- sign safe (H1) ----------------------------------------------------------------------------------------------------
 
@@ -269,7 +235,33 @@ export function signHeld(draft: SignDraft, can: Pick<MachineCan, 'signSafe'>, on
 
 // ---- the API's refusals in our words ------------------------------------------------------------------------------------
 
-/** The plant refusal codes this screen says in its own words (`refusal.<CODE>.message` + `.fix`); others: the API's. */
-export const KNOWN_REFUSALS = ['RETIRED', 'SYMPTOM_INACTIVE', 'SYMPTOM_OTHER_CLASS', 'DETAIL_NEEDED', 'NO_REPORTER', 'LOCKED_UNSAFE', 'NOT_UNSAFE', 'SIGNED_ALREADY', 'MOVE_NOT_ALLOWED', 'NOT_YOUR_JOB'] as const
+/**
+ * The plant refusal codes this screen says in its own words (`refusal.<CODE>.message` + `.fix`); others: the API's. B-W2b-102:
+ * the codes of factory-domain plant/requests DEPTH_REFUSALS a floor route answers (progress, the floor's lock rule, the line
+ * lead, files); the office's (H1_HELD, LOCKED_ALREADY, MERGE_NOTHING, ORDER_INCOMPLETE) never reach a tablet.
+ */
+export const KNOWN_REFUSALS = [
+  'RETIRED',
+  'SYMPTOM_INACTIVE',
+  'SYMPTOM_OTHER_CLASS',
+  'DETAIL_NEEDED',
+  'NO_REPORTER',
+  'LOCKED_UNSAFE',
+  'NOT_UNSAFE',
+  'SIGNED_ALREADY',
+  'MOVE_NOT_ALLOWED',
+  'NOT_YOUR_JOB',
+  // B-W2b-102 (DEPTH_REFUSALS of B-W2b-96)
+  'ALREADY_ACKNOWLEDGED',
+  'ON_THE_WAY_ALREADY',
+  'NOT_ON_THE_WAY_NOW',
+  'NOT_FIXED_YET',
+  'WORKS_CONFIRMED',
+  'CLOSED_WITHOUT_JOB',
+  'LOCK_NOT_ALLOWED',
+  'NOT_HANDED_BACK',
+  'LEAD_CONFIRMED',
+  'FILES_CLOSED',
+] as const
 
 export const isKnownRefusal = (code: string): boolean => (KNOWN_REFUSALS as readonly string[]).includes(code)
