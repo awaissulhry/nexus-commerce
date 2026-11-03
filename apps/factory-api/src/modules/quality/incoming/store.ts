@@ -100,15 +100,6 @@ export const readLot = (db: Pick<Reader, 'lot'>, id: string): Promise<LotRow | n
 export const readResults = (db: Pick<Reader, 'incomingHideResult'>, inspectionId: string): Promise<ResultRow[]> =>
   db.incomingHideResult.findMany({ where: { incomingInspectionId: inspectionId }, select: RESULT_COLUMNS, orderBy: [{ seq: 'asc' }, { id: 'asc' }] })
 
-/**
- * The lot's lock: one writer opens an incoming inspection of a lot at a time, so the count of OPEN ones read after it is
- * the truth (the database does not refuse a second OPEN row: its isolation test copies one). THE SAME KEY as the
- * inspection triggers' handler (B-W2b-101, modules/quality/triggers `lockIncomingSubject`), so a person and a rule never
- * open two of one lot at once. Once B-W2b-101 is on main, import its helper and drop this copy.
- */
-export const lockIncomingSubject = (tx: CommandTx, subjectId: string) =>
-  tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.incoming-inspection', current_setting('factory.tenant_id', true), ${subjectId}::text), 0))`
-
 /** The lot as the caller may reach it with the permission (not found outside its view; forbidden without the permission). */
 export async function lotFor(caller: CommandCaller, lotId: string, permission: Permission): Promise<{ lot: LotRow; context: Inspector }> {
   const context = inspectorOf(caller)

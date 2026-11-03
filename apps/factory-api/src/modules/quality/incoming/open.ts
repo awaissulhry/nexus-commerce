@@ -16,7 +16,9 @@ import { aqlPlanFor } from '../aql/chain'
 import { chipsOf } from '../plans/store'
 import { postedBy, signerOf } from '../final/access'
 import { incomingView } from './views'
-import { lockIncomingSubject, lotFor, readIncoming, type LotRow, type Reader } from './store'
+import { lotFor, readIncoming, type LotRow, type Reader } from './store'
+// The lot's lock: THE SAME KEY as the inspection triggers' handler (B-W2b-101), so a person and a rule never open two of one lot.
+import { lockIncomingSubject } from '../triggers/open'
 
 /**
  * Scanning a lot and opening its incoming inspection (B-W2b-98; QHS-025 "Leather lot sampling"; design floor.incoming
