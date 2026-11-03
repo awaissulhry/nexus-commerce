@@ -70,6 +70,8 @@
       "requests": "Richieste di intervento",
       "jobs": "Interventi",
       "machines": "Macchine e attrezzature",
+      "safety": "Salute e sicurezza",
+      "calendar": "Scadenzario sicurezza",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni stabilimento"
     },
@@ -119,6 +121,7 @@
       "holds": "Blocchi",
       "settings": "Impostazioni",
       "defects": "Difetti e destinazioni",
+      "rules": "Regole qualità",
       "problems": "Problemi",
       "ncr": "Non conformità",
       "complaints": "Reclami"

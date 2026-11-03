@@ -10,17 +10,44 @@ import { JOB_TYPES, MANUAL_JOB_SOURCES, PRIORITIES } from '../../_shared/api'
 import { assigneeWords, labelOf } from '../../_shared/model'
 import { MachinePill, say, useWords } from '../../_shared/parts'
 import { AssigneeField } from '../../_shared/AssigneeField'
+import { closeHeld } from '../../requests/depth/model'
 import type { JobsListActions, JobsListModel } from '../view-model'
+import { HandBackDialog } from './HandBackDialog'
 
 /**
  * The jobs list's dialogs (design plant.jobs): New job (`c`, `?new=1`: the machine — its asset number typed or scanned
  * into the field, or found by make and model —, the type, the problem, the priority, the source, a technician of the
  * machine's site, the due time, planned or new) and Assign jobs (the selection's technician old → new per job, one
- * site at a time, all or none). Submit held with its reason in words until it may go.
+ * site at a time, all or none) and, B-W2b-140, Hand back (a drop on the board's Hand-back lane: the one-screen close).
+ * Submit held with its reason in words until it may go.
  */
 export function JobDialogs({ model, actions }: { model: JobsListModel; actions?: JobsListActions }) {
   if (!model.dialog) return null
+  if (model.dialog.kind === 'handBack') return <BoardHandBack model={model} actions={actions} />
   return model.dialog.kind === 'new' ? <NewJobDialog model={model} actions={actions} /> : <AssignDialog model={model} actions={actions} />
+}
+
+/** B-W2b-140: the Hand back dialog over the board (a drop on Hand-back), the job's own record read as it opens. */
+function BoardHandBack({ model, actions }: { model: JobsListModel; actions?: JobsListActions }) {
+  const t = useWords()
+  const dialog = model.dialog as Extract<NonNullable<JobsListModel['dialog']>, { kind: 'handBack' }>
+  const value = dialog.loaded.status === 'ready' ? dialog.loaded.value : null
+  const can = { work: model.can.work && (value?.canWork ?? false) }
+  const heldKey = value ? closeHeld(dialog.draft, value.job, value.close, can, dialog.busy) : 'held.busy'
+  return (
+    <HandBackDialog
+      number={dialog.number}
+      loaded={dialog.loaded}
+      draft={dialog.draft}
+      held={heldKey ? t(heldKey) : null}
+      busy={dialog.busy}
+      problem={dialog.problem}
+      onDraft={actions?.onCloseDraft}
+      onSubmit={actions?.onSubmitDialog}
+      onClose={actions?.onDialogClose}
+      onRetry={actions?.onRetryHandBack}
+    />
+  )
 }
 
 function NewJobDialog({ model, actions }: { model: JobsListModel; actions?: JobsListActions }) {

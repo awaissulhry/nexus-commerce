@@ -1,7 +1,11 @@
-import type { JobChange, JobMove, JobRecord, JobTiles, JobType, Machine, MachineAfter, MaintenanceJob, ManualJobSource, Priority, Technicians } from '../_shared/api'
+import type { CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
+import type { JobChange, JobMove, JobTiles, JobType, Machine, MaintenanceJob, ManualJobSource, Priority, Technicians } from '../_shared/api'
 import type { LiveState } from '../_shared/hooks'
 import type { JobsAddress, PlantCan, Words } from '../_shared/model'
-import type { Loaded, Notice } from '../_shared/parts'
+import type { Loaded, Notice, StepUpState } from '../_shared/parts'
+import type { DeepJobRecord, MediaCategory } from '../requests/depth/api'
+import type { CloseDraft, MediaView } from '../requests/depth/model'
+import type { SignSafeDraft } from '../requests/view-model'
 
 /**
  * The ONE view model of Plant › Maintenance jobs (SCR-149: the list or the board, New job, Assign jobs) and of a job's
@@ -44,9 +48,21 @@ export interface NewJobDraft {
   plan: boolean
 }
 
+/** The Hand back dialog (B-W2b-140; design pop:close): the one-screen close of one job, its record read when it opens. */
+export interface HandBackDialogState {
+  kind: 'handBack'
+  jobId: string
+  number: string
+  loaded: Loaded<DeepJobRecord>
+  draft: CloseDraft
+  busy: boolean
+  problem: Words | null
+}
+
 export type JobsDialog =
   | { kind: 'new'; draft: NewJobDraft; found: Machine[] | null; searching: boolean; busy: boolean; problem: Words | null }
   | { kind: 'assign'; jobs: MaintenanceJob[]; assignee: string; busy: boolean; problem: Words | null }
+  | HandBackDialogState
 
 export interface JobsListModel {
   prefix: string
@@ -94,6 +110,9 @@ export interface JobsListActions {
   onNewDraft?: (patch: Partial<NewJobDraft>) => void
   onFindMachine?: (text: string) => void
   onAssignee?: (assignee: string) => void
+  /** The Hand back dialog's draft (B-W2b-140) and a failed read of its job again. */
+  onCloseDraft?: (patch: Partial<CloseDraft>) => void
+  onRetryHandBack?: () => void
   onSubmitDialog?: () => void
   onExport?: (ids: readonly string[]) => void
   onDismissNotice?: () => void
@@ -101,7 +120,7 @@ export interface JobsListActions {
 
 // ---- the record ---------------------------------------------------------------------------------------------------------------
 
-export const JOB_TABS = ['problem', 'handback', 'activity'] as const
+export const JOB_TABS = ['problem', 'photos', 'handback', 'activity'] as const
 export type JobTab = (typeof JOB_TABS)[number]
 
 export interface JobEditDraft {
@@ -112,18 +131,24 @@ export interface JobEditDraft {
   due: string
 }
 
-export interface HandBackDraft {
-  workDone: string
-  machineAfter: MachineAfter | null
-}
+export type JobRecordDialog =
+  | { kind: 'cancel'; reason: string; busy: boolean; problem: Words | null }
+  /** B-W2b-140: the one-screen close in a dialog (the record's primary, `h`). */
+  | { kind: 'handBack'; busy: boolean; problem: Words | null }
+  /** B-W2b-140: Sign safe from the Unsafe lock panel (then a fresh code). */
+  | { kind: 'signSafe'; draft: SignSafeDraft; busy: boolean; problem: Words | null }
 
-export type JobRecordDialog = { kind: 'cancel'; reason: string; busy: boolean; problem: Words | null }
+/** A photo or voice note being added (B-W2b-140): the camera open, sending, or failed with Try again. */
+export type Capture =
+  | { state: 'camera'; category: MediaCategory }
+  | { state: 'sending'; kind: 'PHOTO' | 'AUDIO' }
+  | { state: 'failed'; kind: 'PHOTO' | 'AUDIO'; words: Words }
 
 export interface JobRecordModel {
   prefix: string
   can: PlantCan
   tab: JobTab
-  loaded: Loaded<JobRecord>
+  loaded: Loaded<DeepJobRecord>
   timeZone: string
   now: string
   live: LiveState
@@ -132,10 +157,17 @@ export interface JobRecordModel {
   /** The side panel's explicit edit (null: not editing). */
   edit: JobEditDraft | null
   editBusy: boolean
-  handBack: HandBackDraft
+  /** The one-screen close (the Hand-back tab and the Hand back dialog share it). */
+  handBack: CloseDraft
   busy: boolean
   dialog: JobRecordDialog | null
   notice: Notice | null
+  /** B-W2b-140: the job's and its requests' photos and voice notes, each with its address once read. */
+  media: MediaView[]
+  /** The photo shown full size (an index into the photos that could be read), or null. */
+  lightbox: number | null
+  capture: Capture | null
+  stepUp: StepUpState
   /** Design cases: the record panels' view (the live page mounts the real panels). */
   dockOpen?: boolean
 }
@@ -147,8 +179,23 @@ export interface JobRecordActions {
   onEditDraft?: (patch: Partial<JobEditDraft>) => void
   onEditCancel?: () => void
   onEditApply?: () => void
-  onHandBackDraft?: (patch: Partial<HandBackDraft>) => void
+  onHandBackDraft?: (patch: Partial<CloseDraft>) => void
   onHandBack?: () => void
+  /** B-W2b-140: the Hand back dialog (the record's primary, `h`). */
+  onOpenHandBack?: () => void
+  /** B-W2b-140: the line lead confirms the machine works. */
+  onConfirmLead?: () => void
+  onSignSafe?: () => void
+  onSignSafeDraft?: (patch: Partial<SignSafeDraft>) => void
+  onSubmitStepUp?: (code: string) => void
+  onCancelStepUp?: () => void
+  onPhoto?: (index: number | null) => void
+  /** Open the camera for a photo before / after the work; null closes it. */
+  onCamera?: (category: MediaCategory | null) => void
+  onPhotoTaken?: (photo: CapturedPhoto) => void
+  /** A voice note picked (or recorded by the phone through the file picker). */
+  onVoicePicked?: (file: File) => void
+  onRetryUpload?: () => void
   onCancelJob?: () => void
   onDialogDraft?: (reason: string) => void
   onDialogClose?: () => void

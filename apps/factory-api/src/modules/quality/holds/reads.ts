@@ -21,6 +21,8 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { heldRoles } from '../../../platform/auth/roles/access'
+import type { HoldNextStep } from '@nexus/factory-domain/quality/holds/depth'
+import { heldStockOf } from './depth'
 import { officeOf, releaseChecksFor } from './holds'
 import { placerMayReleaseOf } from './settings'
 import { HOLD_COLUMNS, holdView, idsOfCodes, quantityWords, readHold, readSubjects, viewFactsOf, type Subject } from './store'
@@ -56,6 +58,9 @@ export interface ListQuery {
   readonly quarantine?: HoldQuarantine | undefined
   /** B-W2b-17: a hold's number, or part of it ("HLD-2026-0091", "0091"). */
   readonly q?: string | undefined
+  /** B-W2b-114: one lane of the hold board; the holds of one hold by genealogy. */
+  readonly nextStep?: HoldNextStep | undefined
+  readonly groupId?: string | undefined
 }
 
 function whereOf(caller: CommandCaller, query: ListQuery): Prisma.QualityHoldWhereInput {
@@ -74,6 +79,8 @@ function whereOf(caller: CommandCaller, query: ListQuery): Prisma.QualityHoldWhe
       query.system ? { placedById: null, placedByWorkerId: null } : {},
       query.quarantine ? { quarantine: query.quarantine } : {},
       query.q?.trim() ? { number: { contains: query.q.trim(), mode: 'insensitive' } } : {},
+      query.nextStep ? { nextStep: query.nextStep } : {},
+      query.groupId ? { groupId: query.groupId } : {},
     ],
   }
 }
@@ -132,6 +139,8 @@ export async function getHold(caller: CommandCaller, holdId: string) {
       workOrders,
       release: { checks, releasable: mayRelease && releasable(checks.filter((check) => check.key !== 'STATEMENT')), mayRelease, placerMayRelease: rule.placerMayRelease },
       canChange: row.status === 'ACTIVE' && can(actorOf(context), QUALITY_HOLDS_PLACE, { companyId: row.companyId, siteId: row.siteId }),
+      // B-W2b-114 (QHS-078): where held stock lies and the site's quarantine places (the move's popover and its confirm).
+      stock: await heldStockOf(client, row),
     }
   })
 }

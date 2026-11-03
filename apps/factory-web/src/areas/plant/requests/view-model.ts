@@ -1,8 +1,10 @@
 import type { CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
-import type { CloseReason, JobType, Machine, MaintenanceRequest, Priority, RequestRecord, RequestTiles, SafeAfter, Symptom, Technician } from '../_shared/api'
+import type { CloseReason, JobType, Machine, Priority, RequestTiles, SafeAfter, Symptom, Technician } from '../_shared/api'
 import type { LiveState } from '../_shared/hooks'
 import type { PlantCan, RequestsAddress, Words } from '../_shared/model'
 import type { Loaded, Notice, StepUpState } from '../_shared/parts'
+import type { DeepRequest, DeepRequestRecord, MachineLock } from './depth/api'
+import type { MediaView, MergeDraft, MergeGroup } from './depth/model'
 
 /**
  * The ONE view model of Plant › Machine requests (SCR-148) and the actions it reports. The container
@@ -17,7 +19,7 @@ export interface SiteChoice {
 
 export interface RequestRows {
   /** null while the first read runs. */
-  items: MaintenanceRequest[] | null
+  items: DeepRequest[] | null
   /** The queue read its first 200 (unsafe first, then the oldest) and more wait. */
   truncated: boolean
   /** A list paged by a cursor (All, Done) has more. */
@@ -26,18 +28,18 @@ export interface RequestRows {
   problem: string | null
 }
 
-/** A photo of the open request: its address once read (null while reading or when it could not be read). */
-export interface PhotoView {
-  id: string
-  name: string
-  src: string | null
+/** A section read on its own (the locks, the duplicates): null while reading; a message key when the read failed. */
+export interface SectionRead<T> {
+  items: T[] | null
+  problem: string | null
 }
 
 export interface RequestDetailModel {
   id: string
-  loaded: Loaded<RequestRecord>
-  photos: PhotoView[]
-  /** The photo shown full size (Lightbox), or null. */
+  loaded: Loaded<DeepRequestRecord>
+  /** Its photos and voice notes (B-W2b-140), each with its address once read. */
+  media: MediaView[]
+  /** The photo shown full size (Lightbox; an index into the photos that could be read), or null. */
   lightbox: number | null
   busy: boolean
   /** What went wrong with the last decision, in words (a refusal names its code). */
@@ -86,7 +88,8 @@ export type RequestDialog =
   | { kind: 'makeJob'; draft: MakeJobDraft; technicians: Technician[] | null; floorListed: boolean; techniciansProblem: string | null; openJob: { id: string; number: string } | null; busy: boolean; problem: Words | null }
   | { kind: 'close'; draft: CloseDraft; machineDown: boolean; busy: boolean; problem: Words | null }
   | { kind: 'signSafe'; draft: SignSafeDraft; busy: boolean; problem: Words | null }
-  | { kind: 'merge'; into: MaintenanceRequest; busy: boolean; problem: Words | null }
+  | { kind: 'mergeMany'; group: MergeGroup; draft: MergeDraft; busy: boolean; problem: Words | null }
+  | { kind: 'lock'; note: string; busy: boolean; problem: Words | null }
   | { kind: 'report'; draft: ReportDraft; found: Machine[] | null; searching: boolean; symptoms: Symptom[] | null; busy: boolean; problem: Words | null }
 
 export interface RequestsListModel {
@@ -95,6 +98,10 @@ export interface RequestsListModel {
   address: Pick<RequestsAddress, 'view' | 'tile' | 'siteId'>
   sites: SiteChoice[]
   rows: RequestRows
+  /** The machines locked as unsafe now (B-W2b-140: always first on the page). */
+  locks: SectionRead<MachineLock>
+  /** The possible duplicates (B-W2b-140: several reports on one machine). */
+  duplicates: SectionRead<MergeGroup>
   tiles: RequestTiles | null
   asOf: string | null
   live: LiveState
@@ -127,7 +134,17 @@ export interface RequestsListActions {
   onMakeJob?: () => void
   onClose?: () => void
   onSignSafe?: () => void
-  onMerge?: (into: MaintenanceRequest) => void
+  onRetryLocks?: () => void
+  onRetryDuplicates?: () => void
+  /** Merge requests (B-W2b-140): a group, with a target asked for (`JOB:<id>` / `REQUEST:<id>`) or the suggestion. */
+  onMergeGroup?: (group: MergeGroup, target?: string | null) => void
+  onMergeDraft?: (draft: MergeDraft) => void
+  /** Lock as unsafe (B-W2b-140, L). */
+  onLock?: () => void
+  onLockNote?: (note: string) => void
+  /** The requester's progress (B-W2b-140): a technician on the way, it works again. */
+  onOnTheWay?: () => void
+  onWorks?: () => void
   onDialogClose?: () => void
   onMakeJobDraft?: (patch: Partial<MakeJobDraft>) => void
   onCloseDraft?: (patch: Partial<CloseDraft>) => void

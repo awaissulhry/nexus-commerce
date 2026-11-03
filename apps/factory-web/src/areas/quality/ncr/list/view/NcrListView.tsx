@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Download, Kanban, List, MoreHorizontal, Plus, UserPlus } from 'lucide-react'
+import { Download, GitPullRequestArrow, Kanban, List, MoreHorizontal, Plus, UserPlus } from 'lucide-react'
 import { EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
 import { BoardView, type BoardCard, type BoardLane } from '@nexus/ui/grid/views/board/index'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
@@ -20,7 +20,8 @@ import { BOARD_LANES, type NcrCard, type NcrSummary } from '../../api'
 import { cardHeld, laneHeld, NCR_TILES, NCR_VIEWS, nameOf, STAGE_TONE, type NcrView } from '../../model'
 import { zoneWords, ContainmentDue, DecidedBar, KeysDialog, NcrMessages, NcrStepUp, NoticeLine, QuantityText, SeverityTag, StagePill, useNcrWords } from '../../parts'
 import { CloseNcrDialog } from '../../view/CloseNcrDialog'
-import type { NcrListActions, NcrListModel } from '../view-model'
+import { EscalateDialog } from '../../view/EscalateDialog'
+import { bulkEscalateHeld, costText, escalatableOf, rowEscalateHeld, type NcrListActions, type NcrListModel } from '../view-model'
 import { AssignDialog } from './AssignDialog'
 import { ContainmentTimeDialog } from './ContainmentTimeDialog'
 import { NewNcrDialog } from './NewNcrDialog'
@@ -34,7 +35,9 @@ export type { NcrListActions, NcrListModel } from '../view-model'
  * the API's own filters. A list on the shared list frame — NCR, title, source, stage, severity, defect, style and size,
  * lot or serial, supplier, quantity with its "decided" bar, owner, containment due, age — or the same rows as a board by
  * stage (D19: drag or keys; a move whose rule is not met is refused with the reason; a drop on Closed opens the closing
- * signature). New NCR (`c`, also raised from a record by address), Assign owner N, Export N (CSV).
+ * signature). New NCR (`c`, also raised from a record by address), Assign owner N, Export N (CSV). B-W2b-113: the CAPA
+ * column (the CAPA each NCR is escalated to) and the Cost column (the cost grain only), the row verbs Escalate to CAPA and
+ * Print NCR, the selection's "Escalate N to one CAPA" and the key e (the shared Escalate to CAPA dialog, pop:ncr-capa).
  */
 export function NcrListView({ model, actions }: { model: NcrListModel; actions?: NcrListActions }) {
   return (
@@ -62,13 +65,18 @@ function NcrList({ model, actions }: { model: NcrListModel; actions?: NcrListAct
   const sites = model.sites ?? []
   const allSites = sites.length > 1 && model.address.siteId === null
 
-  // c: New NCR; b: list ⇄ board (design kb); ? on the board: its keys — never while typing, in a dialog or a menu.
+  // c: New NCR; b: list ⇄ board; e: escalate the selection (else the focused row) to a CAPA (design kb); ? on the board:
+  // its keys — never while typing, in a dialog or a menu.
+  const escalateKey = useRef<() => void>(() => undefined)
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!isPageKey(event) || model.dialog || model.close || keysOpen) return
+      if (!isPageKey(event) || model.dialog || model.close || model.escalate || keysOpen) return
       if (event.key === 'c' && model.can.raise) {
         event.preventDefault()
         actions?.onNew?.()
+      } else if (event.key === 'e' && model.address.mode === 'list') {
+        event.preventDefault()
+        escalateKey.current()
       } else if (event.key === 'b') {
         event.preventDefault()
         actions?.onMode?.(model.address.mode === 'board' ? 'list' : 'board')
@@ -80,7 +88,7 @@ function NcrList({ model, actions }: { model: NcrListModel; actions?: NcrListAct
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [model.dialog, model.close, model.can.raise, model.address.mode, keysOpen, actions])
+  }, [model.dialog, model.close, model.escalate, model.can.raise, model.address.mode, keysOpen, actions])
 
   const act = useRef(actions)
   act.current = actions
@@ -150,8 +158,22 @@ function NcrList({ model, actions }: { model: NcrListModel; actions?: NcrListAct
     const DueCell = ({ data }: ICellRendererParams<NcrSummary>) => (data ? <ContainmentDue ncr={data} now={model.now} /> : null)
     const AgeCell = ({ data }: ICellRendererParams<NcrSummary>) => (data ? <span className="fw-q-num">{data.ageDays === 0 ? t('age.today') : t('age.days', { count: data.ageDays })}</span> : null)
     const SiteCell = ({ data }: ICellRendererParams<NcrSummary>) => <span className="fw-q-code">{data ? (sites.find((site) => site.id === data.siteId)?.code ?? '—') : ''}</span>
-    const MoreCell = ({ data }: ICellRendererParams<NcrSummary>) =>
+    // B-W2b-113: the CAPA it is escalated to (a link to its record), and its cost (the cost grain; the API sends it only then).
+    const CapaCell = ({ data }: ICellRendererParams<NcrSummary>) =>
       data ? (
+        data.capa ? (
+          <Link className="fw-q-link fw-q-code" href={`${model.prefix}${recordAddress({ type: 'Capa', id: data.capa.id, label: data.capa.number, companyId: data.companyId }, OFFICE_PAGES)}`}>
+            {data.capa.number}
+          </Link>
+        ) : (
+          <span className="fw-q-hint">—</span>
+        )
+      ) : null
+    const CostCell = ({ data }: ICellRendererParams<NcrSummary>) => (data ? <span className="fw-q-num fw-ncr-cost">{costText(data.cost, data.currency ?? model.currency ?? 'EUR', lang)}</span> : null)
+    const MoreCell = ({ data }: ICellRendererParams<NcrSummary>) => {
+      if (!data) return null
+      const escalateHeld = say(rowEscalateHeld(data, model.can))
+      return (
         <Menu
           label={<MoreHorizontal size={16} aria-hidden />}
           align="right"
@@ -159,10 +181,13 @@ function NcrList({ model, actions }: { model: NcrListModel; actions?: NcrListAct
           items={[
             { id: 'open', label: t('list.open'), href: href(data) },
             { id: 'tab', label: t('common.openNewTab'), href: href(data), target: '_blank' },
+            { id: 'escalate', label: t('list.escalate'), disabled: !!escalateHeld, description: escalateHeld ?? undefined, onSelect: () => act.current?.onEscalate?.([{ id: data.id, number: data.number }]) },
+            { id: 'printNcr', label: t('list.printNcr'), onSelect: () => act.current?.onPrintNcr?.(data.id) },
             { id: 'copy', label: t('common.copyNumber'), onSelect: () => act.current?.onCopy?.(data.number) },
           ]}
         />
-      ) : null
+      )
+    }
     const list: ColDef<NcrSummary>[] = [
       { colId: 'number', headerName: t('col.number'), minWidth: 140, flex: 0.6, cellRenderer: NumberCell },
       { colId: 'title', headerName: t('col.title'), minWidth: 200, flex: 1.4, cellRenderer: TitleCell },
@@ -177,21 +202,35 @@ function NcrList({ model, actions }: { model: NcrListModel; actions?: NcrListAct
       { colId: 'lot', headerName: t('col.lot'), minWidth: 124, flex: 0.55, cellRenderer: LotCell },
       { colId: 'supplier', headerName: t('col.supplier'), minWidth: 124, flex: 0.55, cellRenderer: SupplierCell },
       { colId: 'age', headerName: t('col.age'), minWidth: 84, flex: 0.3, cellRenderer: AgeCell },
+      { colId: 'capa', headerName: t('col.capa'), minWidth: 124, flex: 0.5, cellRenderer: CapaCell },
+      ...(model.can.cost ? [{ colId: 'cost', headerName: t('col.cost'), minWidth: 110, flex: 0.45, type: 'rightAligned', cellRenderer: CostCell } satisfies ColDef<NcrSummary>] : []),
       { colId: 'more', headerName: t('col.actions'), minWidth: 84, maxWidth: 84, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
     if (allSites) list.splice(1, 0, { colId: 'site', headerName: t('col.site'), minWidth: 90, flex: 0.3, cellRenderer: SiteCell })
     return list
-  }, [t, lang, model.prefix, model.people, model.now, sites, allSites])
+  }, [t, say, lang, model.prefix, model.people, model.now, model.can, model.currency, sites, allSites])
 
   if (!model.can.view) return <NoAccess title={t('list.noAccessTitle')} body={t('list.noAccessBody')} />
 
   const items = model.rows.items ?? []
   const picked = items.filter((row) => selected.includes(row.id))
   const pickedOpen = picked.filter((row) => row.stage !== 'CLOSED' && row.stage !== 'CANCELLED')
+  // B-W2b-113: the picked NCRs that may go to one CAPA (e: these, else the focused row).
+  const pickedEscalate = escalatableOf(picked, model.can)
+  escalateKey.current = () => {
+    if (pickedEscalate.length > 0) {
+      if (!bulkEscalateHeld(picked, model.can, model.live === 'offline')) actions?.onEscalate?.(pickedEscalate.map((row) => ({ id: row.id, number: row.number })))
+      return
+    }
+    const focusedId = typeof document === 'undefined' ? null : ((document.activeElement as HTMLElement | null)?.closest('[row-id]')?.getAttribute('row-id') ?? null)
+    const row = items.find((entry) => entry.id === focusedId)
+    if (row && !rowEscalateHeld(row, model.can)) actions?.onEscalate?.([{ id: row.id, number: row.number }])
+  }
   const filtered = model.address.view !== 'open' || model.address.siteId !== null || model.address.q.trim() !== ''
   const ownKeys: ListKey[] = [
     { keys: ['c'], does: t('keys.new') },
     { keys: ['b'], does: t('keys.board') },
+    { keys: ['e'], does: t('keys.escalate') },
   ]
   // The board's own keys (the DS board view's), in ONE information icon under it, never as a line of text (Owner rule
   // 2026-10-29).
@@ -407,6 +446,15 @@ function NcrList({ model, actions }: { model: NcrListModel; actions?: NcrListAct
                 >
                   <UserPlus size={13} aria-hidden /> <SelectionLabel>{t('list.assign', { count: pickedOpen.length })}</SelectionLabel>
                 </Button>
+                <Button
+                  size="sm"
+                  aria-label={t('list.escalateMany', { count: pickedEscalate.length })}
+                  aria-keyshortcuts="e"
+                  heldReason={say(bulkEscalateHeld(picked, model.can, model.live === 'offline'))}
+                  onClick={() => actions?.onEscalate?.(pickedEscalate.map((row) => ({ id: row.id, number: row.number })))}
+                >
+                  <GitPullRequestArrow size={13} aria-hidden /> <SelectionLabel>{t('list.escalateMany', { count: pickedEscalate.length })}</SelectionLabel>
+                </Button>
                 <Button size="sm" aria-label={t('common.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
                   <Download size={13} aria-hidden /> <SelectionLabel>{t('common.export', { count: picked.length })}</SelectionLabel>
                 </Button>
@@ -428,6 +476,7 @@ function NcrList({ model, actions }: { model: NcrListModel; actions?: NcrListAct
       {model.dialog?.kind === 'assign' && <AssignDialog dialog={model.dialog} people={model.people} actions={actions} />}
       {model.dialog?.kind === 'containmentTime' && <ContainmentTimeDialog dialog={model.dialog} offline={model.live === 'offline'} actions={actions} />}
       {model.close && <CloseNcrDialog model={model.close} actions={actions?.close} />}
+      {model.escalate && <EscalateDialog model={model.escalate} actions={actions?.escalate} />}
       <NcrStepUp state={model.stepUp} onSubmit={(code) => actions?.onStepUpSubmit?.(code)} onCancel={() => actions?.onStepUpCancel?.()} />
       {keysOpen && <KeysDialog own={board ? [...ownKeys, ...boardKeys] : ownKeys} frame={!board} onClose={() => setKeysOpen(false)} />}
     </div>

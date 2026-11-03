@@ -198,6 +198,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/quality/holds',
   '/quality/holds/[id]/tag',
   '/quality/defects',
+  // B-W2b-118: Quality › Settings › Quality rules (SCR-260).
+  '/quality/settings',
   // B-W2a-68: Quality › Problems › Nonconformances (SCR-144 list and board, SCR-145 the NCR record).
   '/quality/ncr',
   '/quality/ncr/[id]',
@@ -314,6 +316,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/plant/machines/tags',
   // B-W2a-73: Plant › Settings › Plant settings (SCR-241, its W2a section: the symptoms on the floor).
   '/plant/settings',
+  // B-W2b-120: Plant › Health & safety › Safety calendar (SCR-267), its organisation chart and calendar prints (new tabs).
+  '/plant/calendar',
+  '/plant/calendar/organisation',
+  '/plant/calendar/print',
   // B-W2b-55: People › Employees (SCR-084), an employee (SCR-085), the badge sheet and the staff list print (new tabs).
   '/people/employees',
   '/people/employees/[id]',
@@ -380,7 +386,7 @@ export const OFFICE_NAV: AreaNav = builtRowsOnly({ view: 'office', areas: office
  * shell opens it on a plain click; ⌘-click does as always). An office entry never lands on one. A W2b window page (the
  * line TV's office preview) adds its address here.
  */
-export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display'])
+export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')

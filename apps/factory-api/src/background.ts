@@ -76,6 +76,8 @@ import { firstLoadCatchUpCron, writeStepsAll } from './platform/imports/guided/c
 import { costCatchUpCron } from './modules/costing/actual/catch-up'
 // B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
 import { loadReports } from './modules/insights/reports/registry'
+// B-W2b-120: the safety calendar's sources, so the worker can export the calendar (platform/exports/sources/safety-calendar.ts).
+import { loadSources as loadCalendarSources } from './modules/safety/calendar/registry'
 // B-W2b-41: stuck bundles told once per wait; the scan-pattern checks (only at sites whose checks are ON).
 import { scanFindingsCron, stuckBundlesCron } from './modules/production/bundles/jobs'
 // B-W2b-40: a clock-out pauses the person's running work (MES-117).
@@ -88,6 +90,8 @@ import { escalationCron } from './modules/plant/requests/escalation'
 import { capaRemindersCron } from './modules/quality/capa/reminders'
 // B-W2b-124: the reminders of statutory machine checks whose window opened.
 import { checkRemindersCron } from './modules/plant/statutory/reminders'
+// B-W2b-118: quality alert rules fire at once on a hold, a critical NCR, a safety complaint, and by the cron after a wait or before a date.
+import { alertRulesCron, alertRulesHandler } from './modules/quality/rules/firing'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -139,8 +143,12 @@ const W2B_42_HANDLERS: readonly EventHandler[] = overtimeHandlers()
 const W2B_43_HANDLERS: readonly EventHandler[] = earningsHandlers()
 // B-W2b-101: a receipt posted, a workshop's goods back, a scan → the company's inspection rules open what they pick.
 const W2B_101_HANDLERS: readonly EventHandler[] = inspectionTriggerHandlers()
+// B-W2b-118: a hold placed, a critical NCR raised, a safety complaint → the quality alert rules with no wait fire.
+const W2B_118_HANDLERS: readonly EventHandler[] = [alertRulesHandler()]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
+// B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
+await loadCalendarSources(fileURLToPath(new URL('.', import.meta.url)))
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {
@@ -205,7 +213,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
@@ -246,6 +254,8 @@ if (mode === 'worker') {
   crons.push(capaRemindersCron({ database, log }))
   // B-W2b-124: hourly, the statutory checks whose reminder window opened, once per due date (QHS-205).
   crons.push(checkRemindersCron({ database, log }))
+  // B-W2b-118: every 5 minutes, the quality alert rules whose wait was crossed or whose date step was reached fire (QHS-154).
+  crons.push(alertRulesCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

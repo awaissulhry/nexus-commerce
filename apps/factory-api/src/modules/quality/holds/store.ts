@@ -13,6 +13,7 @@ import {
   type HoldSubjectType,
   type SubjectFact,
 } from '@nexus/factory-domain/quality/holds/rules'
+import type { HoldNextStep } from '@nexus/factory-domain/quality/holds/depth'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../../core/command'
 import { reasonWords } from '../../../platform/reasons/service'
@@ -57,6 +58,9 @@ export const HOLD_COLUMNS = {
   closedById: true,
   closeNote: true,
   note: true,
+  /** B-W2b-114: the hold board's lane (office only: a floor query never names it) and the hold by genealogy it is part of. */
+  nextStep: true,
+  groupId: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -185,7 +189,32 @@ export interface HoldViewFacts {
   readonly owners: ReadonlyMap<string, string>
   /** The holds' sites (B-W2a-67: the list's Site column). */
   readonly sites: ReadonlyMap<string, { readonly id: string; readonly code: string; readonly name: string }>
+  /** B-W2b-114: the holds by genealogy the holds are part of (the suspect record they started from). */
+  readonly groups?: ReadonlyMap<string, HoldGroupFact>
   readonly now: Date
+}
+
+/** B-W2b-114: a hold by genealogy as a hold's view names it: the suspect record it started from. */
+export interface HoldGroupFact {
+  readonly id: string
+  readonly sourceType: string
+  readonly sourceId: string
+  /** The lot's code or the hide's tag (null when it is not found). */
+  readonly sourceCode: string | null
+}
+
+/** B-W2b-114: the hold groups of these ids with their suspect record's code. */
+export async function groupFactsOf(db: Reader, groupIds: readonly (string | null)[]): Promise<Map<string, HoldGroupFact>> {
+  const ids = [...new Set(groupIds.filter((id): id is string => id !== null))]
+  if (ids.length === 0) return new Map()
+  const rows = await db.qualityHoldGroup.findMany({ where: { id: { in: ids } }, select: { id: true, sourceType: true, sourceId: true } })
+  const lotIds = rows.filter((row) => row.sourceType === 'Lot').map((row) => row.sourceId)
+  const hideIds = rows.filter((row) => row.sourceType === 'Hide').map((row) => row.sourceId)
+  const codes = new Map<string, string>([
+    ...(lotIds.length > 0 ? await db.lot.findMany({ where: { id: { in: lotIds } }, select: { id: true, code: true } }) : []).map((row) => [row.id, row.code] as const),
+    ...(hideIds.length > 0 ? await db.hide.findMany({ where: { id: { in: hideIds } }, select: { id: true, code: true } }) : []).map((row) => [row.id, row.code] as const),
+  ])
+  return new Map(rows.map((row) => [row.id, { id: row.id, sourceType: row.sourceType, sourceId: row.sourceId, sourceCode: codes.get(row.sourceId) ?? null }]))
 }
 
 /** A hold as the list and the record show it (no worker's name; office users by id). */
@@ -233,6 +262,10 @@ export function holdView(row: HoldRow, facts: HoldViewFacts) {
     closedById: row.closedById,
     closeNote: row.closeNote,
     note: row.note,
+    /** B-W2b-114: the hold board's lane. */
+    nextStep: row.nextStep as HoldNextStep,
+    /** B-W2b-114: the hold by genealogy it is part of (null: placed on its own). */
+    group: row.groupId ? (facts.groups?.get(row.groupId) ?? { id: row.groupId, sourceType: '', sourceId: row.groupId, sourceCode: null }) : null,
     version: row.version,
     createdAt: toUtcIso(row.createdAt),
     updatedAt: toUtcIso(row.updatedAt),
@@ -252,5 +285,5 @@ export async function viewFactsOf(db: Reader, rows: readonly HoldRow[], now: Dat
   const owners = new Map((ownerIds.length > 0 ? await db.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, displayName: true } }) : []).map((user) => [user.id, user.displayName]))
   const siteIds = [...new Set(rows.map((row) => row.siteId))]
   const sites = new Map((siteIds.length > 0 ? await db.site.findMany({ where: { id: { in: siteIds } }, select: { id: true, code: true, name: true } }) : []).map((site) => [site.id, site]))
-  return { subjects, reasons: await holdReasonWords(db), locations, owners, sites, now }
+  return { subjects, reasons: await holdReasonWords(db), locations, owners, sites, groups: await groupFactsOf(db, rows.map((row) => row.groupId)), now }
 }

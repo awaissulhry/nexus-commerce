@@ -1,6 +1,9 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { canFor, inShell, NOW, PREFIX, SITE, SITE_SOUTH, TIME_ZONE, WORK_ORDERS, type RoleCase } from '../../../_shared/stock/fixtures'
+import { canFor, inShell, NOW, PREFIX, ROLE_PERMISSIONS, SITE, SITE_SOUTH, TIME_ZONE, WORK_ORDERS, type RoleCase } from '../../../_shared/stock/fixtures'
+import { dashboardModel, findModel, FIND_ANSWER, MOVABLE_IDS, MOVE_TO, moveModel, REMNANT_RECORD, REMNANT_ROWS, REMNANT_TOTALS, remnantsModel } from '../demo/w2b/fixtures'
+import { emptyDraft } from '../find/find-model'
+import { HIDE_PHOTOS, lightboxOn } from '../photos/fixtures'
 import { HIDE_COUNTS, HIDE_HOLDS, HIDE_MATCHING, HIDE_ROWS, printDialog, printedDialog, PRINTERS } from '../demo/fixtures'
 import { dailyFor, HOLD_REASONS, PM_CAN, PM_DAILY, reserveDialog, writeOffDialog } from '../../lots/demo/daily/fixtures'
 import { reserveHides, scrapTarget } from '../../lots/shared/daily'
@@ -16,7 +19,10 @@ import { HidesListView } from './view/HidesListView'
  * tags (printer, copies, PDF fallback, job states with Retry) and Export, a lot filter from the lot record, and the page's
  * states. B-W2a-64: the Reserved tile and view, "Reserved for" (one done: release it), held hides with the hold's reason,
  * Reserve N hides to a work order (searching, the list, picked, hides left out, refused, done, no work orders) and Scrap
- * N hides (held: reserved or on hold; ready with a photo and an NCR; done). Roles: Owner, Warehouse (reserves and scraps),
+ * N hides (held: reserved or on hold; ready with a photo and an NCR; done). B-W2b-131: Find hides for a job (for a work order:
+ * the proposal chosen, the running area; by article; mixing shades held or with the override's reason; a shade refusal; done),
+ * Move N hides (left out with why, the place, the results), the Remnants tile as pieces and the Remnants view as the tagged
+ * pieces (one opened with its history), the Photo column and its Lightbox (hd-photo). Roles: Owner, Warehouse (reserves and scraps),
  * Quality (scraps, does not reserve), Production manager (reserves), Read-only (no print right), Sales and Admin (no
  * inventory.stock.view).
  */
@@ -26,7 +32,7 @@ interface HidesCase {
   list: HidesListModel
 }
 
-const NO_FILTERS: HideFilters = { lotId: null, grade: null, shade: null, locationId: null }
+const NO_FILTERS: HideFilters = { lotId: null, grade: null, shade: null, locationId: null, itemId: null, itemColourId: null }
 const inStock = HIDE_ROWS.filter((row) => row.state !== 'CONSUMED' && row.state !== 'SCRAPPED')
 
 function listCase(role: RoleCase, over: Partial<HidesListModel> = {}, view: HideView = DEFAULT_HIDE_VIEW): HidesCase {
@@ -54,6 +60,10 @@ function listCase(role: RoleCase, over: Partial<HidesListModel> = {}, view: Hide
       updates: 0,
       timeZone: TIME_ZONE,
       print: null,
+      // B-W2b-131: the dashboard hidden here (SCR-134 shows it), the remnant pieces' tile, Move… by the role's right.
+      dashboard: dashboardModel({ open: false, cost: daily.cost }),
+      remnantTotals: REMNANT_TOTALS,
+      canTransfer: (ROLE_PERMISSIONS[role] as readonly string[]).includes('inventory.transfer'),
       ...over,
     },
   }
@@ -122,6 +132,61 @@ export const designScreen = defineDesignScreen<HidesCase>({
       model: listCase('owner', { writeOff: writeOffDialog(scrapTarget(scrapRows, {}, null), { withCost: true, done: { writeOffId: scrapRows[0]!.id, moves: 2, value: { amount: 38_220, currency: 'EUR' }, photo: 'sent', ncr: { state: 'sent', id: scrapRows[0]!.id, number: 'NC-D-0004' }, overReserved: 0 } }) }),
     },
     { id: 'scrap-done-failed', label: 'B-W2a-64 — Scrapped, but the photo and the NCR failed: each with Try again', model: listCase('warehouse', { writeOff: writeOffDialog(scrapTarget(scrapRows, {}, null), { done: { writeOffId: scrapRows[0]!.id, moves: 2, value: null, photo: 'failed', ncr: { state: 'failed', id: null, number: null }, overReserved: 1 } }) }) },
+    { id: 'find', label: 'B-W2b-131 — Find hides for a job (WO-D-0031): one shade lot proposed, 4 hides chosen covering the need, the other lot and an out-of-shade remnant below', model: listCase('warehouse', { find: findModel() }) },
+    { id: 'find-start', label: 'B-W2b-131 — Find hides: nothing asked yet (pick a work order or an article and the area)', model: listCase('warehouse', { find: findModel({ draft: emptyDraft('workOrder'), result: null, chosen: [] }) }) },
+    {
+      id: 'find-article',
+      label: 'B-W2b-131 — Find by article and area: 150 ft² asked, the work order to reserve for picked under the list',
+      model: listCase('warehouse', { find: findModel({ draft: { ...emptyDraft('article'), articleKey: `${FIND_ANSWER.item.id}|${FIND_ANSWER.colour!.id}`, area: '150', uom: 'FT2', workOrderId: WORK_ORDERS.b.id }, result: { value: { ...FIND_ANSWER, workOrder: null, ordersShadeLots: [], need: { baseArea: '150.0000', source: 'ASKED' } }, problem: null } }) }),
+    },
+    {
+      id: 'find-short',
+      label: 'B-W2b-131 — Find: two hides chosen, short of the need (said in words)',
+      model: listCase('warehouse', { find: findModel({ chosen: FIND_ANSWER.proposal!.hideIds.slice(0, 2) }) }),
+    },
+    {
+      id: 'find-mix-held',
+      label: 'B-W2b-131 — Find: a hide of another shade lot chosen — Reserve held (no shade override)',
+      model: listCase('warehouse', { find: findModel({ chosen: [...FIND_ANSWER.proposal!.hideIds, FIND_ANSWER.lots[1]!.hides[0]!.hideId] }) }),
+    },
+    {
+      id: 'find-mix-override',
+      label: 'B-W2b-131 — Find: mixing shades with the override: the reason asked, kept with the reservation',
+      model: listCase('owner', { find: findModel({ chosen: [...FIND_ANSWER.proposal!.hideIds, FIND_ANSWER.lots[1]!.hides[0]!.hideId], can: { reserve: true, override: true, workOrders: true, grades: true }, overrideReason: 'Concordato con il cliente: pannelli interni' }) }),
+    },
+    {
+      id: 'find-refused',
+      label: 'B-W2b-131 — Reserve refused: a hide is of another shade lot (SHADE_LOT, in our words, naming it)',
+      model: listCase('warehouse', { find: findModel({ problem: { key: 'find.refusal.SHADE_LOT', params: { count: 1, hides: FIND_ANSWER.lots[1]!.hides[0]!.hideCode } } }) }),
+    },
+    { id: 'find-none', label: 'B-W2b-131 — Find: no free hide matches', model: listCase('warehouse', { find: findModel({ result: { value: { ...FIND_ANSWER, lots: [], outOfShade: [], proposal: null }, problem: null }, chosen: [] }) }) },
+    { id: 'find-error', label: "B-W2b-131 — Find: the hides couldn't be found (Try again)", model: listCase('warehouse', { find: findModel({ result: { value: null, problem: 'stock:problem.offline' }, chosen: [] }) }) },
+    { id: 'find-which-leather', label: 'B-W2b-131 — Find: the work order cuts two leathers — pick the leather (asked in words)', model: listCase('warehouse', { find: findModel({ result: { value: null, problem: 'find.problem.whichLeather' }, chosen: [] }) }) },
+    { id: 'find-no-reserve', label: 'B-W2b-131 — Quality: finds hides, Reserve held in words (no inventory.reserve)', model: listCase('quality', { find: findModel({ can: { reserve: false, override: true, workOrders: true, grades: true } }) }) },
+    { id: 'find-done', label: 'B-W2b-131 — Reserved: 4 hides for WO-D-0031', model: listCase('warehouse', { find: findModel({ done: { count: 4, workOrder: WORK_ORDERS.a.number } }) }) },
+    { id: 'move-selected', label: 'B-W2b-131 — Three hides selected: Move 3… beside Print, Reserve, Scrap', model: listCase('warehouse', { selected: MOVABLE_IDS }) },
+    { id: 'move', label: 'B-W2b-131 — Move 3 hides: one at the cutting table left out with why, the place picked', model: listCase('warehouse', { move: moveModel({ toLocationId: MOVE_TO }) }) },
+    { id: 'move-pick', label: 'B-W2b-131 — Move: the place not picked yet (Move held in words)', model: listCase('warehouse', { move: moveModel() }) },
+    {
+      id: 'move-done',
+      label: 'B-W2b-131 — Moved: one moved, one refused (the stock was not there any more), each said',
+      model: listCase('warehouse', { move: moveModel({ toLocationId: MOVE_TO, results: { [MOVABLE_IDS[0]!]: { moved: true }, [MOVABLE_IDS[1]!]: { moved: false, problem: { key: 'stock:problem.notEnough' } } } }) }),
+    },
+    { id: 'move-no-right', label: 'B-W2b-131 — Quality: Move held in words (no inventory.transfer)', model: listCase('quality', { selected: MOVABLE_IDS, canTransfer: false }) },
+    { id: 'remnants', label: 'B-W2b-131 — Remnants view: the tagged pieces (RM tags), pieces beside area, the smallest piece kept', model: listCase('warehouse', { remnants: remnantsModel() }, 'remnants') },
+    { id: 'remnant-open', label: 'B-W2b-131 — One remnant piece opened: its facts and history (a floor action by its audience only)', model: listCase('warehouse', { remnants: remnantsModel({ open: { id: REMNANT_ROWS[0]!.id, value: REMNANT_RECORD, problem: null } }) }, 'remnants') },
+    { id: 'remnants-empty', label: 'B-W2b-131 — Remnants view: no pieces in stock', model: listCase('warehouse', { remnantTotals: [], remnants: remnantsModel({ rows: { items: [], more: false, problem: null }, totals: [] }) }, 'remnants') },
+    { id: 'remnants-error', label: "B-W2b-131 — Remnants view: the pieces couldn't be read", model: listCase('warehouse', { remnantTotals: null, remnants: remnantsModel({ rows: { items: null, more: false, problem: 'problem.offline' }, totals: null }) }, 'remnants') },
+    {
+      id: 'photos',
+      label: 'B-W2b-131 — The Photo column (files.read): the newest photo of a hide, — where none',
+      model: listCase('owner', { photos: { canRead: true, byHide: { [inStock[0]!.id]: HIDE_PHOTOS, [inStock[2]!.id]: HIDE_PHOTOS.slice(1) }, loading: false, problem: null } }),
+    },
+    {
+      id: 'photo-lightbox',
+      label: 'B-W2b-131 — A Thumbnail pressed: the hide photo (photo 2 of 3) with its place and time',
+      model: listCase('owner', { photos: { canRead: true, byHide: { [inStock[0]!.id]: HIDE_PHOTOS }, loading: false, problem: null }, lightbox: lightboxOn(inStock[0]!.id, inStock[0]!.code, 1) }),
+    },
     { id: 'read-only', label: 'Read-only: a hide selected, Print held in words (no print right)', model: listCase('readOnly', { selected: [inStock[0]!.id] }) },
     { id: 'scan', label: 'A scanned tag (several hits filter the list)', model: listCase('warehouse', { q: 'HD-DM', rows: { items: inStock.slice(0, 4), more: false, problem: null } }, 'all') },
     { id: 'keys', label: 'The keys (footer icon, ?)', model: listCase('warehouse', { helpOpen: true }) },

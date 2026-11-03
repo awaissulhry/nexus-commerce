@@ -1,5 +1,10 @@
 import type { Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
+import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import { asMoney } from '@nexus/factory-domain/money/marked'
+import { QUALITY_CAPA_VIEW } from '@nexus/factory-domain/quality/capa/permissions'
+import type { CapaStatus } from '@nexus/factory-domain/quality/capa/rules'
+import type { ConcessionStatus } from '@nexus/factory-domain/quality/ncr/concession'
 import { stockActionWords, type DefectClass, type DispositionFollowUp, type DispositionMove, type DispositionOutcome } from '@nexus/factory-domain/quality/defects/rules'
 import {
   ageDays,
@@ -14,12 +19,16 @@ import {
   type NcrStage,
 } from '@nexus/factory-domain/quality/ncr/rules'
 import type { CommandTx } from '../../../core/command'
+import { actorOf, type OfficeContext } from '../../../core/context'
+import { CAPA_COLUMNS } from '../capa/store'
 
 /**
  * The NCR module's reads (B-W2a-47): the rows (every read names its columns), the facts the stage checks read (its
  * actions, decisions and the holds it decides) and the views of the list, the board and the record. Any client: the
- * command's or the caller's (row-level security scopes both). No cost, no price, no worker's name in a list; the record
- * names who found it (an office user or a worker of the site: their ids).
+ * command's or the caller's (row-level security scopes both). No price, no worker's name in a list; the record names who
+ * found it (an office user or a worker of the site: their ids). B-W2b-113: a summary names the CAPA it is escalated to
+ * (read with the CAPA module's columns, shown only to a reader of that CAPA) and its cost (the sum of its cost lines, read
+ * only for a reader with the cost grain at its site, and marked money.cost).
  */
 
 export type Reader = CommandTx
@@ -69,6 +78,9 @@ export const NCR_COLUMNS = {
   createdAt: true,
   updatedAt: true,
   createdById: true,
+  // B-W2b-113: the cause (ncr-what "cause (W2b)") and the CAPA it is escalated to (B-W2b-108 writes it).
+  causeCodeId: true,
+  capaId: true,
 } as const satisfies Prisma.NonconformanceSelect
 export type NcrRow = Prisma.NonconformanceGetPayload<{ select: typeof NCR_COLUMNS }>
 
@@ -164,8 +176,15 @@ export async function activeHoldCount(db: Reader, ncrId: string): Promise<number
   return db.qualityHold.count({ where: { ncrId, status: 'ACTIVE' } })
 }
 
-/** Everything the summaries name, read once for many NCRs. */
-export async function summaryFactsOf(db: Reader, rows: readonly NcrRow[]) {
+/** B-W2b-113: does the reader see money of the cost grain at the NCR's site? */
+export const seesCost = (context: OfficeContext, row: { readonly companyId: string; readonly siteId: string }): boolean =>
+  can(actorOf(context), 'money.cost' as Permission, { companyId: row.companyId, siteId: row.siteId })
+
+/**
+ * Everything the summaries name, read once for many NCRs. `context` (B-W2b-113): the reader, for the CAPA (shown when they
+ * may see it) and the cost (read only with the cost grain); without it neither is read.
+ */
+export async function summaryFactsOf(db: Reader, rows: readonly NcrRow[], context?: OfficeContext) {
   const ids = (pick: (row: NcrRow) => string | null) => [...new Set(rows.map(pick).filter((value): value is string => value !== null))]
   const ncrIds = rows.map((row) => row.id)
   // One query after another: never Promise.all on one transaction client.
@@ -178,7 +197,17 @@ export async function summaryFactsOf(db: Reader, rows: readonly NcrRow[]) {
   const suppliers = await db.party.findMany({ where: { id: { in: ids((row) => row.supplierId) } }, select: { id: true, code: true, legalName: true, tradeName: true } })
   const actions = await readActions(db, ncrIds)
   const decisions = await readDecisions(db, ncrIds)
+  const capaIds = context ? ids((row) => row.capaId) : []
+  const capas = capaIds.length === 0 ? [] : await db.capa.findMany({ where: { id: { in: capaIds } }, select: CAPA_COLUMNS })
+  const visibleCapas = context ? capas.filter((capa) => can(actorOf(context), QUALITY_CAPA_VIEW, { companyId: capa.companyId, ...(capa.customerId ? { partyId: capa.customerId } : {}) })) : []
+  const costed = context ? rows.filter((row) => seesCost(context, row)).map((row) => row.id) : []
+  const sums = costed.length === 0 ? [] : await db.ncrCostLine.groupBy({ by: ['ncrId'], where: { ncrId: { in: costed } }, _sum: { amount: true } })
+  const companies = rows.length === 0 ? [] : await db.company.findMany({ where: { id: { in: ids((row) => row.companyId) } }, select: { id: true, currency: true } })
   return {
+    currencies: new Map(companies.map((row) => [row.id, row.currency])),
+    capas: new Map(visibleCapas.map((row) => [row.id, row])),
+    costs: new Map(sums.map((row) => [row.ncrId, row._sum.amount ?? 0])),
+    costed: new Set(costed),
     defects: new Map(defects.map((row) => [row.id, row])),
     styles: new Map(styles.map((row) => [row.id, row])),
     colourways: new Map(colourways.map((row) => [row.id, row])),
@@ -204,6 +233,7 @@ export function ncrSummary(row: NcrRow, facts: SummaryFacts, now: Date) {
   const item = row.itemId ? facts.items.get(row.itemId) : undefined
   const lot = row.lotId ? facts.lots.get(row.lotId) : undefined
   const supplier = row.supplierId ? facts.suppliers.get(row.supplierId) : undefined
+  const capa = row.capaId ? facts.capas.get(row.capaId) : undefined
   return {
     id: row.id,
     number: row.number,
@@ -244,6 +274,10 @@ export function ncrSummary(row: NcrRow, facts: SummaryFacts, now: Date) {
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    capa: capa ? { id: capa.id, number: capa.number, status: capa.status as CapaStatus } : null,
+    currency: facts.currencies.get(row.companyId) ?? 'EUR',
+    // Only for a reader with the cost grain (the serializer drops it for anyone else too); null: no cost line yet.
+    ...(facts.costed.has(row.id) ? { cost: asMoney('cost', facts.costs.has(row.id) ? facts.costs.get(row.id)! : null) } : {}),
   }
 }
 export type NcrSummaryView = ReturnType<typeof ncrSummary>
@@ -341,3 +375,86 @@ export async function decisionViews(db: Reader, decisions: readonly DecisionRow[
     }
   })
 }
+
+// ---- B-W2b-113: concessions and cost lines ------------------------------------------------------------------------------
+
+export const CONCESSION_COLUMNS = {
+  id: true,
+  siteId: true,
+  ncrId: true,
+  seq: true,
+  partyId: true,
+  contactId: true,
+  ask: true,
+  proposal: true,
+  status: true,
+  askedAt: true,
+  askedById: true,
+  answer: true,
+  answeredAt: true,
+  answeredBy: true,
+  answerFileId: true,
+  recordedById: true,
+  version: true,
+  createdAt: true,
+  createdById: true,
+} as const satisfies Prisma.NcrConcessionSelect
+export type ConcessionRow = Prisma.NcrConcessionGetPayload<{ select: typeof CONCESSION_COLUMNS }>
+
+export const readConcessions = (db: Reader, ncrId: string): Promise<ConcessionRow[]> => db.ncrConcession.findMany({ where: { ncrId }, select: CONCESSION_COLUMNS, orderBy: { seq: 'asc' } })
+
+/** The concessions of an NCR as the record shows them (QHS-085): the customer and contact by name, the answer's file. */
+export async function concessionViews(db: Reader, ncrId: string) {
+  const rows = await readConcessions(db, ncrId)
+  if (rows.length === 0) return []
+  const parties = await db.party.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.partyId))] } }, select: { id: true, code: true, legalName: true, tradeName: true } })
+  const contactIds = rows.flatMap((row) => (row.contactId ? [row.contactId] : []))
+  const contacts = contactIds.length === 0 ? [] : await db.partyContact.findMany({ where: { id: { in: contactIds } }, select: { id: true, name: true, email: true } })
+  const fileIds = rows.flatMap((row) => (row.answerFileId ? [row.answerFileId] : []))
+  const files = fileIds.length === 0 ? [] : await db.storedFile.findMany({ where: { id: { in: fileIds } }, select: { id: true, originalName: true, status: true } })
+  const partyOf = new Map(parties.map((row) => [row.id, row]))
+  const contactOf = new Map(contacts.map((row) => [row.id, row]))
+  const fileOf = new Map(files.map((row) => [row.id, row]))
+  return rows.map((row) => {
+    const party = partyOf.get(row.partyId)
+    const contact = row.contactId ? contactOf.get(row.contactId) : undefined
+    const file = row.answerFileId ? fileOf.get(row.answerFileId) : undefined
+    return {
+      id: row.id,
+      seq: row.seq,
+      party: { id: row.partyId, code: party?.code ?? '', name: party ? (party.tradeName ?? party.legalName) : '' },
+      contact: contact ? { id: contact.id, name: contact.name, email: contact.email } : null,
+      ask: row.ask,
+      proposal: row.proposal,
+      status: row.status as ConcessionStatus,
+      askedAt: row.askedAt.toISOString(),
+      askedById: row.askedById,
+      answer: row.answer,
+      answeredAt: row.answeredAt?.toISOString() ?? null,
+      answeredBy: row.answeredBy,
+      answerFile: file ? { id: file.id, originalName: file.originalName, status: file.status } : row.answerFileId ? { id: row.answerFileId, originalName: '', status: 'UNKNOWN' } : null,
+      recordedById: row.recordedById,
+      version: row.version,
+    }
+  })
+}
+
+export const COST_LINE_COLUMNS = {
+  id: true,
+  siteId: true,
+  ncrId: true,
+  seq: true,
+  kind: true,
+  source: true,
+  description: true,
+  amount: true,
+  recordType: true,
+  recordId: true,
+  version: true,
+  createdAt: true,
+  createdById: true,
+  updatedAt: true,
+} as const satisfies Prisma.NcrCostLineSelect
+export type CostLineRow = Prisma.NcrCostLineGetPayload<{ select: typeof COST_LINE_COLUMNS }>
+
+export const readCostLines = (db: Reader, ncrId: string): Promise<CostLineRow[]> => db.ncrCostLine.findMany({ where: { ncrId }, select: COST_LINE_COLUMNS, orderBy: { seq: 'asc' } })

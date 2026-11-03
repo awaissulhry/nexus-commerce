@@ -73,6 +73,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   answer at once online (a refusal is a screen) and queue the same action when the network is gone; the report, a tick and a note
   always queue; an override and a picture only exist online (held with the reason). `floor/home/` shows the person's open work
   ("Unfinished on this tablet", `/production/terminal/open`; never carried to the next person on the tablet).
+- `src/floor/tasks/cutting/` — SCR-094 Cut a hide (W1 B-W1-40; B-W2b-110 on B-W2b-103's API): the hide check in depth on the card (`model.ts cardCheck`: the office's `checks` with the thickness measured at the table counted in; words from facts in `view/check-words.ts`, never the API's English); a warning no lead passed STOPS the card ("Cut anyway" instead of "+ 1 set"; the size buttons pick the first set); `view/AnywayDialog.tsx` = pop:hidecut.override (what differs, reason tile, lead's badge or name + PIN), online only (`api.ts cutAnyway`, the cut's client id as Idempotency-Key, never queued): the signature records ONE set at once, the rest of the hide queues as before; the photo of the hide (DS PhotoCapture via `view/HidePhoto.tsx`, online upload, the next cut names it) and the thickness pad (it goes with every cut of the hide this visit).
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
@@ -144,6 +145,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   lots, Cr VI results, the lot release; PPE register SCR-113): their shared parts are `areas/quality/_shared/` (record
   frame, CheckList = the DS CheckList over the gate in words, step-up hook + DS StepUpModal, live hook, `qualityCan`, the lot schema);
   catalogues `quality`, `lab`, `register`.
+- `src/areas/quality/settings/` — Quality › Settings › Quality rules (B-W2b-118; SCR-260 `/quality/settings?scope=all&rule=<id>|new`, catalogue `quality-rules`): whose rules (this company / every company; a company follows every company where it keeps nothing), Separation of duties and four-eyes (radio cards, the conditions, the customers, the hold release; EditModeBar ⌘S; a looser rule = `model.ts dutiesLooseningsOf` → the confirm in words with the reason → the step-up), Result rules, Who signs always (locked and fixed rules with their why, scans per site, the separations every role keeps), Alerts and escalation (the list frame, the rule dialog, Test: send to me). `RECORD_PAGES.QualityAlertRule`. B-W2b-118 also builds the Severity, Causes and Leather grades tabs of `areas/quality/defects/` (`vocabulary.ts`, `view/VocabularyTabs.tsx`, catalogue `defects-vocab`).
 - `src/areas/quality/complaints/` — Quality › Problems › Complaints (B-W2a-65; SCR-113-complaints list, SCR-113-complaint the record; catalogue `complaints`): `?view=new|safety|dueSoon|open|answeredMonth|closed|all` (the tiles = named filters), `?category=` `?severity=` `?mine=1` `?q=`, `?new=1` Log complaint (a scanned serial fills customer, garment, order, shipment through `POST /quality/complaints/preview`; photos after logging through the generic files routes), `?open=<id>` the triage DetailModal (J / K over the NEW queue; Safety asks `ComplaintSafetyConfirm`, which names who is told from `/quality/complaints/people`); the danger safety banner (one at a time, never timed out; Acknowledge = the owner's `quality.complaints.acknowledge`); the record `?tab=complaint|linked|activity` (`?do=ncr|register` from the list's verbs; NCR via POST /quality/ncr from Complaint, repair via POST /sales/repairs {complaintId}); held steps are the API's `held/<CODE>` in words (`held.<CODE>`).
 - B-W2a-40 (every day at Home): `src/areas/home/notifications/` (SCR-005, `/home/notifications?tab=&state=`, catalogue
   `home-notifications`; the shell's bell is `shell/office/use-bell.ts`: ONE `GET /notifications/counts` when the shell
@@ -251,6 +253,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `plant.request.progress` under the try's id, its key `<device>.<id>`), the technician's queue, the line lead's confirm, the
   one-screen close (factory-domain plant/jobs/close tiles), files opened through `GET /plant/floor/files/:id/download`;
   `INCIDENT_PAGE` in depth.ts is the hook B-W2b-137 sets.
+  B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
+  schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
+  a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up
+  fixtures, depth.css): SCR-148 the locked machines first (`GET /plant/requests/locks`, one banner each), Possible
+  duplicates + Merge requests (`POST /plant/requests/merge`, the ONE merge path: D and "Merge into this" open it), Lock as
+  unsafe (L), what the reporter sees (On my way, It works again), photos and voice notes (`view/MediaList.tsx`); SCR-149 the
+  Hand back dialog (board drop, the record's primary, `h`; `jobs/view/CloseForm.tsx` is the ONE close form, also the tab),
+  the record's Unsafe lock panel with Sign safe (`requests/view/SignSafeDialog.tsx`, the ONE sign-safe dialog), the Photos
+  tab (plant files routes, before / after), Line lead confirms. The containers sit inside `PlantMessages` (they speak too).
 - The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
   write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
   and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):

@@ -145,7 +145,8 @@ describe('raising an NCR from anywhere (QHS-080, QHS-081)', () => {
     expect(record.ncr.containmentDueAt).not.toBeNull()
     expect(record.links.map((link: Json) => [link.recordType, link.label])).toEqual([['Lot', 'Lot SEED-LOT-LIN-01']])
     expect(record.next).toMatchObject({ stage: 'CONTAINED', ready: false })
-    expect(record.may).toEqual({ manage: true, approve: true, close: false, raise: true })
+    // B-W2b-113: cost (the cost grain) and escalate (quality.capa.view) are not this session's.
+    expect(record.may).toEqual({ manage: true, approve: true, close: false, raise: true, cost: false, escalate: false })
     const created = (await events('ncr.created')).find((payload) => payload.ncrId === record.ncr.id)
     expect(created).toMatchObject({ number: record.ncr.number, source: 'SUPPLIER', sourceType: 'Lot', severity: 'MAJOR', lotId: lining.id, holdIds: [], registerEntryId: null })
   })
@@ -198,19 +199,21 @@ describe('containment, decisions by quantity, carrying out and closing (QHS-082,
     ;({ record: ncr } = await ok('qa', 'POST', `${url()}/decisions`, { version: ncr.ncr.version, dispositionCodeId: codes.SCRAP, quantity: '5', note: 'The shrunk end of the roll' }, 201))
     const decided = await refused('qa', 'POST', `${url()}/stage`, { version: ncr.ncr.version, to: 'DECIDED' }, 409)
     expect(decided.message).toBe('5 of 20 M decided · 15 left: decide the rest first.')
-    ;({ record: ncr } = await ok('qa', 'POST', `${url()}/decisions`, { version: ncr.ncr.version, dispositionCodeId: codes.REGRADE, quantity: '15' }, 201))
+    // B-W2b-113 (B-W2b-90's safety rule): a critical NCR is never regraded to second quality either; the rest goes to quarantine.
+    expect(paths(await refused('qa', 'POST', `${url()}/decisions`, { version: ncr.ncr.version, dispositionCodeId: codes.REGRADE, quantity: '15' }, 400))).toEqual(['body/dispositionCodeId'])
+    ;({ record: ncr } = await ok('qa', 'POST', `${url()}/decisions`, { version: ncr.ncr.version, dispositionCodeId: codes.QUARANTINE, quantity: '15' }, 201))
     expect(ncr.decisions.map((row: Json) => [row.seq, row.disposition.code, row.quantity, row.state])).toEqual([
       [1, 'SCRAP', '5', expect.any(String)],
-      [2, 'REGRADE', '15', expect.any(String)],
+      [2, 'QUARANTINE', '15', expect.any(String)],
     ])
     expect((await events('ncr.decision_changed')).filter((payload) => payload.ncrId === ncr.ncr.id).map((payload) => payload.change)).toEqual(['ADDED', 'ADDED'])
   })
 
   it('a decision that needs approval waits for another person (four eyes), then the NCR is decided', async () => {
-    // SCRAP asks for approval on a critical NCR; REGRADE's value rule (500.00) is not met by 15 M of the lining's cost.
+    // SCRAP asks for approval on a critical NCR; QUARANTINE has no approval rule.
     expect(ncr.decisions.map((decision: Json) => [decision.disposition.code, decision.approvalRequired, decision.state])).toEqual([
       ['SCRAP', true, 'WAITING_APPROVAL'],
-      ['REGRADE', false, 'TO_CARRY_OUT'],
+      ['QUARANTINE', false, 'TO_CARRY_OUT'],
     ])
     expect((await refused('qa2', 'POST', `${url()}/decisions/${ncr.decisions[1].id}/approve`, { version: ncr.decisions[1].version }, 409)).message).toBe('This decision needs no approval.')
     const own = await refused('qa', 'POST', `${url()}/decisions/${ncr.decisions[0].id}/approve`, { version: ncr.decisions[0].version }, 409)
@@ -239,17 +242,17 @@ describe('containment, decisions by quantity, carrying out and closing (QHS-082,
     expect((await refused('qa', 'POST', `${url()}/close`, { version: ncr.ncr.version, note: 'All done' }, 403)).code).toBe('forbidden')
     const early = await close(qa1, ncr.ncr.id, 'All done', 409)
     expect(early.error.issues.map((issue: Json) => issue.path)).toEqual(['stage/CARRIED_OUT'])
-    const regrade = ncr.decisions[1]
-    answer = await ok('qa', 'POST', `${url()}/decisions/${regrade.id}/carry-out`, { version: regrade.version, stock: { lines: [{ lotId: lining.id, itemId: lining.itemId, fromLocationId: places['A1-STORE-01'], quantity: '15' }], toLocationId: places['A1-QUA'] } })
+    const quarantine = ncr.decisions[1]
+    answer = await ok('qa', 'POST', `${url()}/decisions/${quarantine.id}/carry-out`, { version: quarantine.version, stock: { lines: [{ lotId: lining.id, itemId: lining.itemId, fromLocationId: places['A1-STORE-01'], quantity: '15' }], toLocationId: places['A1-QUA'] } })
     ncr = answer.record
     expect(ncr.closing).toMatchObject({ ready: true })
     const holdId = ncr.containment[1].hold.id
-    const closed = await close(qa1, ncr.ncr.id, 'Scrapped the shrunk end, the rest is second quality.')
-    expect(closed.record.ncr).toMatchObject({ stage: 'CLOSED', closedById: qa1.id, closeNote: 'Scrapped the shrunk end, the rest is second quality.', closeSignatureSha256: closed.signature })
+    const closed = await close(qa1, ncr.ncr.id, 'Scrapped the shrunk end, the rest is quarantined.')
+    expect(closed.record.ncr).toMatchObject({ stage: 'CLOSED', closedById: qa1.id, closeNote: 'Scrapped the shrunk end, the rest is quarantined.', closeSignatureSha256: closed.signature })
     expect(closed.signature).toMatch(/^[0-9a-f]{64}$/)
     expect(closed.holdsClosed).toEqual([holdId])
     const [hold] = await admin<Json>(`SELECT status::text, "ncrId", "closeNote" FROM "QualityHold" WHERE id = $1`, [holdId])
-    expect(hold).toEqual({ status: 'CLOSED', ncrId: ncr.ncr.id, closeNote: `Decided in ${ncr.ncr.number}: Scrapped the shrunk end, the rest is second quality.` })
+    expect(hold).toEqual({ status: 'CLOSED', ncrId: ncr.ncr.id, closeNote: `Decided in ${ncr.ncr.number}: Scrapped the shrunk end, the rest is quarantined.` })
     expect((await events('ncr.stage_changed')).filter((payload) => payload.ncrId === ncr.ncr.id).map((payload) => payload.to)).toEqual(['CONTAINED', 'DECIDED', 'CLOSED'])
     expect((await refused('qa', 'PATCH', url(), { version: closed.record.ncr.version, ownerId: null }, 409)).message).toBe('The NCR is closed: it never changes.')
   })

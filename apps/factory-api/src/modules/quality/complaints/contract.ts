@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { REGISTER_RISKS } from '@nexus/factory-domain/compliance/register/rules'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
 import { money } from '@nexus/factory-domain/money/marked'
+import { CAPA_STATUSES, CAPA_TYPES } from '@nexus/factory-domain/quality/capa/rules'
+import { ANSWER_LIMITS, ANSWER_TEMPLATES, ANSWER_VIAS } from '@nexus/factory-domain/quality/complaints/answer'
 import {
   COMPLAINT_ACTIONS,
   COMPLAINT_CATEGORIES,
@@ -73,8 +76,27 @@ export const complaintRow = output({
   register: registerRef.nullable(),
   /** The NCRs raised from it or linked to it, with quality.ncr.view only. */
   ncrs: z.array(output({ id: id(), number: z.string(), stage: z.string() })),
+  /** B-W2b-113: the CAPA it is escalated to (a CAPA not cancelled; the CAPA module's reads), with quality.capa.view over it only. */
+  capa: output({ id: id(), number: z.string(), status: z.enum(CAPA_STATUSES) }).nullable(),
   /** A short first line of the customer's words (the record has them whole). */
   summary: z.string(),
+})
+
+/** B-W2b-113: a file of the complaint that goes with the answer letter (shared: the customer's party may get it by mail). */
+const answerFile = output({ id: id(), originalName: z.string(), kind: z.string(), status: z.string(), shared: z.boolean() })
+
+/** B-W2b-113 (QHS-116; design cmp-ans): the answer letter as written, and the version sent. */
+export const answerView = output({
+  template: z.enum(ANSWER_TEMPLATES).nullable(),
+  language: z.enum(DOCUMENT_LANGUAGES).nullable(),
+  text: z.string().nullable(),
+  files: z.array(answerFile),
+  /** The letter sent (null: not sent, or answered another way — by phone — or taken back to investigating). */
+  sent: output({ documentId: id(), version: z.number().int(), language: z.string(), fileId: id(), at: instant(), byId: id().nullable(), via: z.enum(ANSWER_VIAS) }).nullable(),
+  /** Every version kept, newest first (a letter taken back keeps its versions). */
+  versions: z.array(output({ id: id(), version: z.number().int(), language: z.string(), fileId: id(), createdAt: instant(), createdById: id().nullable() })),
+  /** The customer's language for the letter (theirs when Italian or English, else Italian). */
+  suggestedLanguage: z.enum(DOCUMENT_LANGUAGES),
 })
 
 /** GET /quality/complaints/:complaintId — every tab of the record. */
@@ -106,6 +128,13 @@ export const complaintView = complaintRow.extend({
   suggestedAnswerDueOn: businessDate().nullable(),
   actions: z.array(output({ action: z.enum(COMPLAINT_ACTIONS), allowed: z.boolean(), held: z.enum(HELD_CODES).nullable() })),
   people: z.array(person),
+  /** B-W2b-113 (design cmp-inv): what the investigation found and the root cause, in words (office only: never printed or sent). */
+  findings: z.string().nullable(),
+  rootCause: z.string().nullable(),
+  /** B-W2b-113: the CAPA it is escalated to, with its title; `capaElsewhere`: escalated to a CAPA the reader may not see. */
+  capaRecord: output({ id: id(), number: z.string(), title: z.string(), type: z.enum(CAPA_TYPES), status: z.enum(CAPA_STATUSES) }).nullable(),
+  capaElsewhere: z.boolean(),
+  answer: answerView,
 })
 
 const oneComplaint = output({ complaint: complaintView })
@@ -312,4 +341,62 @@ export const unlinkContract = defineContract({
   params: input({ complaintId: id(), recordType: z.enum(COMPLAINT_LINK_TYPES), recordId: id() }),
   querystring: input({ version: z.coerce.number().int().min(1) }),
   response: { 200: withWarnings },
+})
+
+// ---- B-W2b-113: the investigation and the answer letter (design cmp-inv, cmp-ans, cmp-letter) --------------------------
+
+/** The investigation's words (empty or null clears one): from TRIAGED on, with quality.complaints.manage. */
+export const investigationContract = defineContract({
+  params: complaintParams,
+  body: input({ version, findings: z.string().max(ANSWER_LIMITS.findings * 2).nullish(), rootCause: z.string().max(ANSWER_LIMITS.rootCause * 2).nullish() }),
+  response: { 200: oneComplaint },
+})
+
+/** The letter as written (the template the person started from, its language, its words, the complaint's files with it). */
+export const saveAnswerContract = defineContract({
+  params: complaintParams,
+  body: input({
+    version,
+    template: z.enum(ANSWER_TEMPLATES).nullish(),
+    language: z.enum(DOCUMENT_LANGUAGES).nullish(),
+    text: z.string().max(ANSWER_LIMITS.text * 2).nullish(),
+    fileIds: z.array(id()).max(ANSWER_LIMITS.files).optional(),
+  }),
+  response: { 200: oneComplaint },
+})
+
+/** What a send would do now: the customer's contacts with an e-mail (the suggested first), the subject and words, why not yet. */
+export const answerCheckContract = defineContract({
+  params: complaintParams,
+  response: {
+    200: output({
+      ready: z.boolean(),
+      problems: z.array(issue),
+      recipients: z.array(output({ contactId: id(), name: z.string(), email: z.string(), language: z.string().nullable(), suggested: z.boolean() })),
+      language: z.enum(DOCUMENT_LANGUAGES),
+      subject: z.string(),
+      message: z.string(),
+    }),
+  },
+})
+
+/** The letter as the customer would get it, with the "preview" banner: made in memory, stored nowhere. */
+export const answerLetterContract = defineContract({ params: complaintParams, querystring: input({ language: z.enum(DOCUMENT_LANGUAGES).optional() }), response: {} })
+
+/**
+ * Send = review then send (never by itself): the letter kept as a version (GeneratedDocument COMPLAINT_ANSWER, shared with
+ * the customer's party), mailed on the complaint's thread to the contacts chosen (FAKE e-mail locally and in tests) with the
+ * complaint's files that go with it, and the complaint ANSWERED (who, when, how) in the same command.
+ */
+export const sendAnswerContract = defineContract({
+  params: complaintParams,
+  body: input({
+    version,
+    contactIds: z.array(id()).min(1).max(ANSWER_LIMITS.recipients),
+    cc: z.array(z.email()).max(ANSWER_LIMITS.recipients).optional(),
+    subject: text(ANSWER_LIMITS.subject).nullish(),
+    /** The mail's own words in place of the standard ones (the letter goes as the PDF). */
+    message: text(4000).nullish(),
+  }),
+  response: { 200: output({ complaint: complaintView, emailId: id(), document: output({ id: id(), version: z.number().int(), fileId: id() }) }) },
 })
