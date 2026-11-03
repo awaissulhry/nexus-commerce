@@ -86,6 +86,8 @@ model SubcontractOrder {
   // W2b (B-W2b-01): the bundles that went out with its kit, and what came back.
   bundles    SubcontractBundle[]
   receipts   SubcontractReceipt[]
+  // W2b-2 cutting.prisma (wave 13/16): the secondary processes it takes outside.
+  secondaryProcesses SecondaryProcess[]
   // W2a payables.prisma, cost-ledger.prisma (wave 7/7): the subcontractor's invoice lines that bill it, their matches,
   // and the work-order cost entries of its work.
   supplierInvoiceLines   SupplierInvoiceLine[]

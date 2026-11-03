@@ -1,0 +1,187 @@
+// Corrective actions (W2b schema wave 11/16; B-W2b-79; features QHS-087, QHS-093, QHS-094, QHS-096; design quality.capa with
+// its record "CAPA" (Problem, Actions, Report, Activity) and its popups capa-new, capa-action, and ncr-capa on the NCR page):
+// a numbered CAPA or 8D record, what it came from, and its corrective and preventive actions with their reminders and
+// escalation. apps/factory-api's modules/quality/capa writes them (B-W2b-108), always through command().
+//
+// Stages (the design's board): a CAPA goes PLAN → ACT → CHECK → CLOSED, an 8D goes D1 … D8 → CLOSED; inside its own stages a
+// record moves either way (a team goes back from D5 to D4), CLOSED only from its last stage, once every action is done or
+// cancelled and at least one is done; CANCELLED from any stage (raised by mistake). CLOSED and CANCELLED are final and
+// never change. Root cause (D4's why chain and fishbone), effectiveness and staged approval are W3: no column here. The
+// containment of D3 is not kept here either: the screen reads it live from the NCRs it came from.
+//
+// Links are recordType + recordId: its sources (an NCR, a complaint, an audit once audits exist). An NCR also names its
+// CAPA (ncr.prisma Nonconformance.capaId); the source row comes first and stays as long as the NCR names it. The 8D PDF is
+// a version of gendocs.prisma's GeneratedDocument (kind EIGHT_D), a view of this record, never a copy to keep in step.
+// Evidence of an action is a note or files of the row (StoredFile recordType "CapaAction").
+//
+// A CAPA belongs to a company, not a site: one CAPA takes NCRs of several sites and complaints, which have no site.
+//
+// Who sees what (ownership/capa.json): the office only. The floor reads nothing here (an action owner is an office user).
+// Portal and link sessions read nothing here: an 8D reaches a customer as a shared document (W2b-3). No money column.
+
+/// What a corrective action record is.
+enum CapaType {
+  CAPA
+  /// An 8D, usually for a customer (QHS-094).
+  EIGHT_D
+}
+
+/// How urgent a CAPA is (the design's Priority column).
+enum CapaPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+/// Where a CAPA or an 8D stands: the stages of its type, then CLOSED or CANCELLED.
+enum CapaStatus {
+  /// CAPA: Plan → Act → Check.
+  PLAN
+  ACT
+  CHECK
+  /// 8D: the eight disciplines (D1 team, D2 problem, D3 containment, D4 root cause, D5-D7 actions, D8 closure).
+  D1
+  D2
+  D3
+  D4
+  D5
+  D6
+  D7
+  D8
+  CLOSED
+  /// Raised by mistake.
+  CANCELLED
+}
+
+/// One CAPA or 8D (QHS-093): what it is about, who follows it up with which team and by when, the problem statement and
+/// where it stands. Never deleted.
+model Capa {
+  id             String        @id @db.Uuid
+  tenantId       String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId      String        @db.Uuid
+  /// Its number from the company's CAPA series (CAPA-2026-0007; allocateNumber when it is opened), unique in the company;
+  /// never changes.
+  number         String
+  /// Never changes: the stages depend on it.
+  type           CapaType
+  title          String
+  /// The office user who follows it up.
+  ownerId        String        @db.Uuid
+  /// D1, the team: [{ "userId": "<uuid>", "role": "<words>" }], office users, each once.
+  team           Json          @default("[]")
+  /// When it is due.
+  dueOn          DateTime      @db.Date
+  priority       CapaPriority  @default(NORMAL)
+  /// The customer an 8D is written for; null: internal.
+  customerId     String?       @db.Uuid
+  /// D2, the problem statement: what, where, when and how many, in words.
+  problemWhat    String?
+  problemWhere   String?
+  problemWhen    String?
+  problemHowMany String?
+  status         CapaStatus
+  /// CLOSED: when, by whom, and the closing words (D8). All three exactly when CLOSED.
+  closedAt       DateTime?     @db.Timestamptz(3)
+  closedById     String?       @db.Uuid
+  closeNote      String?
+  /// CANCELLED: when and why.
+  cancelledAt    DateTime?     @db.Timestamptz(3)
+  cancelReason   String?
+  version        Int           @default(1)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?       @db.Uuid
+
+  company         Company          @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  customer        Party?           @relation(fields: [tenantId, customerId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sources         CapaSource[]
+  actions         CapaAction[]
+  // ncr.prisma: the NCRs escalated to it.
+  nonconformances Nonconformance[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the NCRs' reference: a CAPA of the same company.
+  @@unique([tenantId, companyId, id])
+  // The target of its sources' and actions' references.
+  @@unique([tenantId, id])
+  // The list, its tiles and the board.
+  @@index([tenantId, status, dueOn])
+  @@index([tenantId, customerId])
+}
+
+/// One record a CAPA came from (QHS-087): an NCR, a complaint or an audit, by type and id. One row per record is the
+/// module's (a unique key with the record type cannot be copied by the generated isolation tests, as NcrLink). Added and
+/// removed while the CAPA is open; the audit log keeps a removed one.
+model CapaSource {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  capaId      String   @db.Uuid
+  /// Nonconformance or Complaint (of the CAPA's company: the trigger checks it), or Audit (no table yet).
+  recordType  String
+  recordId    String   @db.Uuid
+  /// Why it was escalated ("repeat defect", "critical", "customer complaint"), in words.
+  note        String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  capa Capa @relation(fields: [tenantId, capaId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, capaId])
+  // Which CAPAs a record went to (the NCR's and the complaint's links).
+  @@index([tenantId, recordType, recordId])
+}
+
+/// What an action does (the design's Actions tab).
+enum CapaActionKind {
+  CORRECTIVE
+  PREVENTIVE
+}
+
+/// OPEN → DONE | CANCELLED (both final).
+enum CapaActionStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+/// One corrective or preventive action of a CAPA (QHS-096): what to do, who and by when, the reminders sent so far (through
+/// tasks), whom it escalates to and when it did, and how it ended. Written while the CAPA is open. Cancelled, never deleted.
+model CapaAction {
+  id             String           @id @db.Uuid
+  tenantId       String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  capaId         String           @db.Uuid
+  /// 1, 2, 3 … in the CAPA.
+  seq            Int
+  kind           CapaActionKind
+  /// What to do, in words.
+  description    String
+  /// The office user who does it, and by when.
+  ownerId        String           @db.Uuid
+  dueOn          DateTime         @db.Date
+  status         CapaActionStatus @default(OPEN)
+  /// How many reminders went out, and the last one's time (both move together, only forward).
+  remindersSent  Int              @default(0)
+  lastRemindedAt DateTime?        @db.Timestamptz(3)
+  /// The escalation path: the office user it goes to when overdue; null: the audience of the company's rule
+  /// (quality.prisma QualityAlertRule CAPA_ACTION_OVERDUE).
+  escalateToId   String?          @db.Uuid
+  /// When it escalated: set once.
+  escalatedAt    DateTime?        @db.Timestamptz(3)
+  /// DONE: when, by whom, and its evidence: a note or files of the row.
+  doneAt         DateTime?        @db.Timestamptz(3)
+  doneById       String?          @db.Uuid
+  evidenceNote   String?
+  /// CANCELLED: why.
+  cancelReason   String?
+  version        Int              @default(1)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?          @db.Uuid
+
+  capa Capa @relation(fields: [tenantId, capaId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, capaId, seq])
+  // What is due and overdue (the reminders' cron, the tiles).
+  @@index([tenantId, status, dueOn])
+}

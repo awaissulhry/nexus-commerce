@@ -9,6 +9,9 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { DEFECT_CLASSES, DISPOSITION_FOLLOW_UPS, DISPOSITION_OUTCOMES, QUALITY_STAGES } from '@nexus/factory-domain/quality/defects/rules'
 import { STANDARD_DISPOSITIONS, STARTER_LIBRARY } from '@nexus/factory-domain/quality/defects/standard'
+import { CAUSE_PROCESSES, STARTER_CAUSES } from '@nexus/factory-domain/quality/defects/causes'
+import { STARTER_GRADES } from '@nexus/factory-domain/quality/defects/grades'
+import { SAFETY_RULE } from '@nexus/factory-domain/quality/defects/severity'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { callerFor, command } from '../../../core/command'
@@ -29,6 +32,14 @@ import { postDispositionInCommand } from './stock'
  *     move and follow-up are its outcome's; the standard codes on a bare tenant;
  *   - a disposition's stock move posts through the ledger: a quarantine TRANSFER of held stock, a SCRAP, an ISSUE refused
  *     while a hold holds the stock, no move for use-as-is.
+ * B-W2b-90's defect vocabulary (QHS-002, QHS-004, QHS-006, QHS-007), on the same database (one migration for the folder):
+ *   - the severity classes with the safety rule (critical locked at 0, its law);
+ *   - the cause codes: the seed's eight with how often each is used, a code and its process fixed, retired when used,
+ *     deleted when not, the starter set on a bare tenant;
+ *   - the leather grades with the hide defects of the library's hide category; a grade retired, never deleted; A-D on a
+ *     bare tenant;
+ *   - the vocabulary in the person's language (the worker's on the floor, the one asked in the office), English standing
+ *     in where a code has no words, and the codes each floor language still lacks.
  * Run with `node scripts/factory/run-pg-tests.mjs modules/quality/defects`.
  */
 
@@ -77,7 +88,7 @@ async function refused(session: string, method: Method, url: string, payload: un
 const paths = (error: Json): string[] => (error.issues ?? []).map((issue: Json) => String(issue.path))
 const library = async (session = 'keeper') => ok(session, 'GET', '/quality/defects')
 const defectIn = (view: Json, code: string): Json => (view.categories as Json[]).flatMap((category) => [category, ...category.defects]).find((row: Json) => row.code === code)!
-const events = async (type: string) => (await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = $2 ORDER BY "occurredAt", id`, [A.tenant, type])).map((row) => row.payload)
+const events = async (type: string, tenantId = A.tenant) => (await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = $2 ORDER BY "occurredAt", id`, [tenantId, type])).map((row) => row.payload)
 const enumOf = async (name: string) => (await admin<{ value: string }>(`SELECT unnest(enum_range(NULL::"${name}"))::text AS value`)).map((row) => row.value)
 
 beforeAll(async () => {
@@ -275,5 +286,195 @@ describe('a disposition moves the stock through the ledger (QHS-005)', () => {
     await expect(run({ dispositionCodeId: await codeId('USE_AS_IS'), siteId: A.siteA1, lines: [{ itemId: lot!.itemId, lotId: lot!.lotId, fromLocationId: lot!.locationId, quantity: '1' }], reference: 'X', note: 'y' })).rejects.toMatchObject({ message: 'USE_AS_IS moves no stock: send no lines.' })
     const rework = await run({ dispositionCodeId: await codeId('REWORK'), siteId: A.siteA1, lines: [], reference: 'X', note: 'y' })
     expect(rework.result).toMatchObject({ moves: [], followUp: 'REWORK_ORDER' })
+  })
+})
+
+// ---- B-W2b-90: the defect vocabulary ---------------------------------------------------------------------------------
+
+const vocabularyEvents = async (list: string, tenantId = A.tenant) => (await events('quality.vocabulary_changed', tenantId)).filter((payload) => payload.list === list).map((payload) => `${payload.change} ${payload.codes.join(',')}`)
+const one = async (sql: string, values: unknown[]) => Number((await admin<{ n: string }>(sql, values))[0]!.n)
+
+describe('the severity classes with the safety rule (QHS-002)', () => {
+  it('reads critical, major and minor; critical is locked at an acceptance number of 0 with its law', async () => {
+    const view = await ok('viewer', 'GET', '/quality/severity')
+    expect(view.classes.map((entry: Json) => entry.class)).toEqual([...DEFECT_CLASSES])
+    const critical = await one(`SELECT count(*)::text AS n FROM "DefectCode" WHERE "tenantId" = $1 AND active AND "parentId" IS NOT NULL AND severity = 'CRITICAL'`, [A.tenant])
+    expect(critical).toBeGreaterThan(0)
+    expect(view.classes[0]).toMatchObject({ class: 'CRITICAL', rank: 0, acceptanceNumber: 0, locked: true, law: expect.stringMatching(/2016\/425/), words: { it: 'Critico', en: 'Critical' }, defects: critical })
+    expect(view.classes[1]).toMatchObject({ class: 'MAJOR', acceptanceNumber: null, locked: false, law: null })
+    expect(view.safetyRule).toMatchObject({ en: SAFETY_RULE.en, it: SAFETY_RULE.it, law: expect.stringMatching(/2016\/425/) })
+    expect(view.editable).toBe(false)
+    expect((await refused('nobody', 'GET', '/quality/severity', undefined, 403)).code).toBe('forbidden')
+    expect((await call('floor', 'GET', '/quality/severity')).statusCode).toBe(403)
+  })
+})
+
+describe('the cause codes (QHS-004)', () => {
+  it('the processes are the database\'s', async () => {
+    expect(await enumOf('CauseProcess')).toEqual([...CAUSE_PROCESSES])
+  })
+
+  it('reads the seed\'s eight in order with their process and how often inspection defects and NCRs name each', async () => {
+    const view = await ok('viewer', 'GET', '/quality/causes')
+    expect(view.causes.map((row: Json) => row.code)).toEqual(STARTER_CAUSES.map((cause) => cause.code))
+    const used = (code: string) => one(
+      `SELECT ((SELECT count(*) FROM "InspectionDefect" d JOIN "CauseCode" c ON c.id = d."causeCodeId" WHERE c."tenantId" = $1 AND c.code = $2) + (SELECT count(*) FROM "Nonconformance" n JOIN "CauseCode" c ON c.id = n."causeCodeId" WHERE c."tenantId" = $1 AND c.code = $2))::text AS n`,
+      [A.tenant, code],
+    )
+    const mat = view.causes.find((row: Json) => row.code === 'MAT-FAULT')
+    expect(mat).toMatchObject({ process: 'MATERIAL', processWords: { it: 'Materiale', en: 'Material' }, active: true, usedCount: await used('MAT-FAULT'), missingLanguages: [] })
+    expect(mat.usedCount).toBeGreaterThan(0)
+    expect(mat.labelI18n.ro).toBeTruthy()
+    expect(view.causes.find((row: Json) => row.code === 'SEW-ERROR').usedCount).toBe(await used('SEW-ERROR'))
+    expect(view.processes).toHaveLength(8)
+    expect(view).toMatchObject({ languages: [], starterMissing: [], canManage: false })
+    expect((await ok('keeper', 'GET', '/quality/causes')).canManage).toBe(true)
+    expect((await refused('nobody', 'GET', '/quality/causes', undefined, 403)).code).toBe('forbidden')
+  })
+
+  it('adds a code with its process; a free code, a known process; only a keeper of the whole group', async () => {
+    const { cause } = await ok('keeper', 'POST', '/quality/causes', { code: 'stitch-tension', process: 'SEWING', labelIt: 'Tensione del filo', labelEn: 'Thread tension' }, 201)
+    expect(cause).toMatchObject({ code: 'STITCH-TENSION', process: 'SEWING', sortOrder: 80, usedCount: 0, active: true, version: 1 })
+    expect((await refused('keeper', 'POST', '/quality/causes', { code: 'SEW-ERROR', process: 'SEWING', labelIt: 'x', labelEn: 'y' }, 409)).message).toBe('Cause code SEW-ERROR is taken.')
+    expect(paths(await refused('keeper', 'POST', '/quality/causes', { code: 'BAD CODE', process: 'SEWING', labelIt: ' ', labelEn: 'y' }, 400))).toEqual(['body/code', 'body/labelIt'])
+    expect((await refused('keeper', 'POST', '/quality/causes', { code: 'KNIT', process: 'KNITTING', labelIt: 'x', labelEn: 'y' }, 400)).code).toBe('validation_failed')
+    expect((await refused('companyKeeper', 'POST', '/quality/causes', { code: 'MINE', process: 'DESIGN', labelIt: 'x', labelEn: 'y' }, 403)).message).toMatch(/whole group/)
+    expect(await vocabularyEvents('CAUSES')).toEqual(['CREATED STITCH-TENSION'])
+  })
+
+  it('changes words at the version read; never the code or the process; retires a used code and makes it active again', async () => {
+    const view = await ok('keeper', 'GET', '/quality/causes')
+    const tension = view.causes.find((row: Json) => row.code === 'STITCH-TENSION')
+    const { cause } = await ok('keeper', 'PATCH', `/quality/causes/${tension.id}`, { version: tension.version, labelI18n: { ro: 'Tensiunea firului' }, sortOrder: 85 })
+    expect(cause).toMatchObject({ labelI18n: { ro: 'Tensiunea firului' }, sortOrder: 85, version: 2 })
+    expect((await refused('keeper', 'PATCH', `/quality/causes/${tension.id}`, { version: 1, labelEn: 'Tension' }, 409)).code).toBe('conflict')
+    expect((await refused('keeper', 'PATCH', `/quality/causes/${tension.id}`, { version: 2, process: 'CUTTING' }, 400)).code).toBe('validation_failed')
+    const mat = view.causes.find((row: Json) => row.code === 'MAT-FAULT')
+    const retired = await ok('keeper', 'PATCH', `/quality/causes/${mat.id}`, { version: mat.version, active: false })
+    expect(retired.cause.active).toBe(false)
+    expect(retired.retireWords).toBe(`Cause code MAT-FAULT is used on ${mat.usedCount} ${mat.usedCount === 1 ? 'record' : 'records'}; it stays on them and leaves the pickers.`)
+    expect(((await ok('floor', 'GET', '/quality/vocabulary')).causes as Json[]).map((row) => row.code)).not.toContain('MAT-FAULT')
+    expect((await ok('keeper', 'GET', '/quality/causes?active=false')).causes.map((row: Json) => row.code)).toEqual(['MAT-FAULT'])
+    await ok('keeper', 'PATCH', `/quality/causes/${mat.id}`, { version: retired.cause.version, active: true })
+    expect(await vocabularyEvents('CAUSES')).toEqual(['CREATED STITCH-TENSION', 'EDITED STITCH-TENSION', 'RETIRED MAT-FAULT', 'REACTIVATED MAT-FAULT'])
+  })
+
+  it('deletes only a code nothing names', async () => {
+    const view = await ok('keeper', 'GET', '/quality/causes')
+    const sew = view.causes.find((row: Json) => row.code === 'SEW-ERROR')
+    expect((await refused('keeper', 'DELETE', `/quality/causes/${sew.id}?version=${sew.version}`, undefined, 409)).message).toMatch(/^Cause code SEW-ERROR is used on \d+ records?: retire it instead/)
+    const { cause } = await ok('keeper', 'POST', '/quality/causes', { code: 'TYPO', process: 'DESIGN', labelIt: 'Refuso', labelEn: 'Typo' }, 201)
+    expect((await refused('keeper', 'DELETE', `/quality/causes/${cause.id}?version=9`, undefined, 409)).code).toBe('conflict')
+    expect(await ok('keeper', 'DELETE', `/quality/causes/${cause.id}?version=1`)).toEqual({ deleted: cause.id, code: 'TYPO' })
+    expect((await ok('keeper', 'GET', '/quality/causes')).causes.map((row: Json) => row.code)).not.toContain('TYPO')
+    expect((await vocabularyEvents('CAUSES')).slice(-1)).toEqual(['DELETED TYPO'])
+  })
+
+  it('gives a bare tenant the starter set, once', async () => {
+    expect((await ok('keeperB', 'GET', '/quality/causes')).starterMissing).toEqual(STARTER_CAUSES.map((cause) => cause.code))
+    expect((await ok('keeperB', 'POST', '/quality/causes/starter', {})).added).toEqual(STARTER_CAUSES.map((cause) => cause.code))
+    const view = await ok('keeperB', 'GET', '/quality/causes')
+    expect(view.causes.map((row: Json) => `${row.code} ${row.process} ${row.sortOrder}`).slice(0, 2)).toEqual(['MAT-FAULT MATERIAL 10', 'SUP-SPEC SUPPLIER 20'])
+    expect(view.starterMissing).toEqual([])
+    expect((await ok('keeperB', 'POST', '/quality/causes/starter', {})).added).toEqual([])
+    expect(await vocabularyEvents('CAUSES', tenantB)).toEqual([`STARTER_ADDED ${STARTER_CAUSES.map((cause) => cause.code).join(',')}`])
+  })
+})
+
+describe('the leather grades and hide defects (QHS-006)', () => {
+  it('reads grades A-D with their usable share and use, and the hide defects of the library\'s hide category', async () => {
+    const view = await ok('viewer', 'GET', '/quality/grades')
+    expect(view.grades.map((row: Json) => `${row.code} ${row.usableShare}`)).toEqual(['A 85.00', 'B 72.00', 'C 60.00', 'D 45.00'])
+    const usedB = await one(
+      `SELECT ((SELECT count(*) FROM "Hide" WHERE "gradeId" = g.id) + (SELECT count(*) FROM "ItemGradeRule" WHERE "gradeId" = g.id) + (SELECT count(*) FROM "HideMark" WHERE "zoneGradeId" = g.id)
+              + (SELECT count(*) FROM "Remnant" WHERE "gradeId" = g.id) + (SELECT count(*) FROM "IncomingHideResult" WHERE "gradeRecordType" = 'LeatherGrade' AND "gradeRecordId" = g.id))::text AS n
+         FROM "LeatherGrade" g WHERE g."tenantId" = $1 AND g.code = 'B'`,
+      [A.tenant],
+    )
+    expect(usedB).toBeGreaterThan(0)
+    expect(view.grades[1]).toMatchObject({ code: 'B', usedCount: usedB, active: true })
+    const [leather] = await admin<{ icon: string; colour: string }>(`SELECT icon, colour FROM "DefectCode" WHERE "tenantId" = $1 AND code = 'LEATHER'`, [A.tenant])
+    expect(leather?.icon).toBeTruthy()
+    expect(view.hideCategory).toMatchObject({ code: 'LEATHER', icon: leather!.icon, colour: leather!.colour })
+    expect(view.hideDefects.map((row: Json) => row.code)).toEqual(['SHADE-DIFF', 'HIDE-SCAR', 'GRAIN-CRACK', 'LOOSE-GRAIN'])
+    // A hide defect without an icon of its own shows its category's.
+    expect(view.hideDefects[1]).toMatchObject({ code: 'HIDE-SCAR', icon: leather!.icon, colour: leather!.colour, severity: 'MAJOR', stages: ['INCOMING', 'CUTTING'] })
+    expect(view).toMatchObject({ hideStages: ['INCOMING', 'CUTTING'], starterMissing: [], canManage: false })
+  })
+
+  it('adds a grade; a free short code and a share from 0 to 100; changes it; retires it (never deleted)', async () => {
+    const { grade } = await ok('keeper', 'POST', '/quality/grades', { code: 'e', labelIt: 'Scarto', labelEn: 'Reject', usableShare: '20' }, 201)
+    expect(grade).toMatchObject({ code: 'E', usableShare: '20.00', sortOrder: 5, usedCount: 0 })
+    expect((await refused('keeper', 'POST', '/quality/grades', { code: 'A', labelIt: 'x', labelEn: 'y', usableShare: '1' }, 409)).message).toBe('Grade A is taken.')
+    expect(paths(await refused('keeper', 'POST', '/quality/grades', { code: 'F F', labelIt: 'x', labelEn: 'y', usableShare: '120' }, 400))).toEqual(['body/code', 'body/usableShare'])
+    const { grade: changed } = await ok('keeper', 'PATCH', `/quality/grades/${grade.id}`, { version: grade.version, usableShare: '30.5', labelI18n: { ro: 'Rebut' } })
+    expect(changed).toMatchObject({ usableShare: '30.50', labelI18n: { ro: 'Rebut' }, version: 2 })
+    expect((await refused('keeper', 'PATCH', `/quality/grades/${grade.id}`, { version: 2, code: 'F' }, 400)).code).toBe('validation_failed')
+    const retired = await ok('keeper', 'PATCH', `/quality/grades/${grade.id}`, { version: 2, active: false })
+    expect(retired).toMatchObject({ grade: { active: false }, retireWords: 'Grade E is not used yet: retiring it takes it out of the pickers.' })
+    expect(((await ok('floor', 'GET', '/quality/vocabulary')).grades as Json[]).map((row) => row.code)).toEqual(['A', 'B', 'C', 'D'])
+    expect((await refused('companyKeeper', 'PATCH', `/quality/grades/${grade.id}`, { version: 3, active: true }, 403)).code).toBe('forbidden')
+    // A grade is never deleted, for every login.
+    await expect(admin(`DELETE FROM "LeatherGrade" WHERE id = $1`, [grade.id])).rejects.toThrow(/retired, never deleted/)
+    expect(await vocabularyEvents('GRADES')).toEqual(['CREATED E', 'EDITED E', 'RETIRED E'])
+  })
+
+  it('gives a bare tenant grades A-D, once; its hide defects come with the defects\' starter set', async () => {
+    expect((await ok('keeperB', 'POST', '/quality/grades/starter', {})).added).toEqual(STARTER_GRADES.map((grade) => grade.code))
+    const view = await ok('keeperB', 'GET', '/quality/grades')
+    expect(view.grades.map((row: Json) => `${row.code} ${row.usableShare} ${row.sortOrder}`)).toEqual(['A 85.00 1', 'B 72.00 2', 'C 60.00 3', 'D 45.00 4'])
+    // Tenant B took the defects' starter set above: its LEATHER category is the hide category.
+    expect(view.hideDefects.map((row: Json) => row.code)).toEqual(['SHADE-DIFF', 'HIDE-SCAR', 'GRAIN-CRACK', 'LOOSE-GRAIN'])
+    expect((await ok('keeperB', 'POST', '/quality/grades/starter', {})).added).toEqual([])
+  })
+})
+
+describe('the vocabulary in the person\'s language (QHS-007)', () => {
+  beforeAll(async () => {
+    // Site A1's tablets read Romanian too, and its operator reads Romanian (made up for the test).
+    await admin(`UPDATE "Site" SET "floorLocales" = ARRAY['it', 'en', 'ro'] WHERE id = $1`, [A.siteA1])
+    await admin(`UPDATE "Worker" SET locale = 'ro' WHERE id = $1`, [id('worker:A1:operator')])
+  })
+
+  it('answers the floor in the worker\'s language, English standing in where a code has none', async () => {
+    const view = await ok('floor', 'GET', '/quality/vocabulary?stage=FINAL')
+    expect(view.language).toBe('ro')
+    expect(view.languages).toEqual(['it', 'en', 'ro'])
+    expect(view.classes[0]).toMatchObject({ class: 'CRITICAL', label: 'Critical', locked: true, missing: true })
+    const label = view.defects.find((row: Json) => row.code === 'LABEL-WRONG')
+    const [labels] = await admin<{ icon: string }>(`SELECT icon FROM "DefectCode" WHERE "tenantId" = $1 AND code = 'LABEL'`, [A.tenant])
+    expect(label).toMatchObject({ label: 'Wrong or missing label', missing: true, severity: 'CRITICAL', classLocked: true, classes: ['CRITICAL'], category: { code: 'LABEL' }, icon: labels!.icon })
+    expect(view.defects.find((row: Json) => row.code === 'STAIN')).toMatchObject({ classLocked: false, classes: ['CRITICAL', 'MAJOR', 'MINOR'] })
+    expect(view.defects.map((row: Json) => row.code)).not.toContain('HIDE-SCAR')
+    expect(view.hideDefects.map((row: Json) => row.code)).toEqual(['SHADE-DIFF', 'HIDE-SCAR', 'GRAIN-CRACK', 'LOOSE-GRAIN'])
+    const mat = view.causes.find((row: Json) => row.code === 'MAT-FAULT')
+    expect(mat).toMatchObject({ missing: false, process: 'MATERIAL', processLabel: 'Material' })
+    expect(mat.label).not.toBe('Material fault')
+    expect(view.causes.find((row: Json) => row.code === 'STITCH-TENSION')).toMatchObject({ label: 'Tensiunea firului', missing: false })
+    expect(view.grades.find((row: Json) => row.code === 'B')).toMatchObject({ label: 'Second choice', missing: true, usableShare: '72.00' })
+    expect(view.grades.find((row: Json) => row.code === 'A').missing).toBe(false)
+  })
+
+  it('answers the office in the language asked, else Italian; any office session reads it', async () => {
+    const it = await ok('nobody', 'GET', '/quality/vocabulary?stage=INCOMING')
+    expect(it.language).toBe('it')
+    expect(it.defects.every((row: Json) => row.stages.length === 0 || row.stages.includes('INCOMING'))).toBe(true)
+    expect(it.defects.find((row: Json) => row.code === 'HIDE-SCAR')).toMatchObject({ label: 'Cicatrice o marchio', missing: false })
+    expect(it.grades.find((row: Json) => row.code === 'A')).toMatchObject({ label: 'Prima scelta', missing: false })
+    expect(it.classes[0]).toMatchObject({ label: 'Critico', missing: false })
+    const en = await ok('viewer', 'GET', '/quality/vocabulary?language=en')
+    expect(en.causes.find((row: Json) => row.code === 'MAT-FAULT')).toMatchObject({ label: 'Material fault', processLabel: 'Material', missing: false })
+    expect((await ok('keeperB', 'GET', '/quality/vocabulary?language=ro')).grades.every((row: Json) => row.missing)).toBe(true)
+  })
+
+  it('lists per floor language the active codes with no words in it', async () => {
+    const { languages } = await ok('viewer', 'GET', '/quality/vocabulary/coverage')
+    expect(languages).toHaveLength(1)
+    expect(languages[0]).toMatchObject({ language: 'ro', sites: 1, complete: false })
+    expect(languages[0].missing.GRADES).toEqual(['B', 'C', 'D'])
+    expect(languages[0].missing.CAUSES).toEqual([])
+    expect(languages[0].missing.DEFECTS).toEqual(expect.arrayContaining(['SEAM', 'THREAD-END', 'LABEL-WRONG']))
+    expect((await call('floor', 'GET', '/quality/vocabulary/coverage')).statusCode).toBe(403)
+    expect((await refused('nobody', 'GET', '/quality/vocabulary/coverage', undefined, 403)).code).toBe('forbidden')
   })
 })

@@ -25,10 +25,15 @@
 // shipment are not released, packed or shipped. A held work order's floor work waits on the work order's own ON_HOLD
 // status (production.prisma, wave 5/7), which the hold's command sets beside it.
 //
-// Who sees what (ownership/holds.json): the office reads and writes. The floor reads the defect library (the bench's
-// and the reason tiles' pickers) and its site's holds (every floor write the hold guards check reads them), places a
-// hold at the bench, confirms the quarantine move and releases with the inspector's PIN; it never sees a disposition
-// code (an NCR's decision is the office's). Portal and link sessions read nothing here.
+// W2b schema wave 11/16 (B-W2b-79): cause codes (QHS-004; design quality.defects "Cause codes"), the process a defect comes
+// from, picked on inspection defects and NCRs; and the hold group (QHS-075; design quality.holds "Hold by genealogy"): one
+// decision to hold what was made from a suspect record, kept as one QualityHold per kind of record and site, grouped.
+//
+// Who sees what (ownership/holds.json): the office reads and writes. The floor reads the defect library and the cause
+// codes (the bench's and the reason tiles' pickers) and its site's holds (every floor write the hold guards check reads
+// them), places a hold at the bench, confirms the quarantine move and releases with the inspector's PIN; it never sees a
+// disposition code (an NCR's decision is the office's) or a hold group (the board's and the recall's, office work).
+// Portal and link sessions read nothing here.
 
 /// A stage of the factory a defect is found at, or an NCR was found at.
 enum QualityStage {
@@ -98,6 +103,50 @@ model DefectCode {
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from its defects, inspection defects and NCRs.
+  @@unique([tenantId, id])
+}
+
+/// The process a cause belongs to (QHS-004; design quality.defects "Cause codes").
+enum CauseProcess {
+  MATERIAL
+  SUPPLIER
+  CUTTING
+  SEWING
+  FINISHING
+  HANDLING
+  DESIGN
+  MEASUREMENT
+}
+
+/// One cause code (W2b, B-W2b-79; QHS-004): why a defect happened, with the process that answers for it and its words
+/// in every floor language. A code never changes; a code in use is retired (inactive), only a code nothing names is
+/// deleted (the references refuse the rest).
+model CauseCode {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// No spaces ("STITCH-TENSION"); unique in the tenant. Never changes.
+  code        String
+  labelIt     String
+  labelEn     String
+  /// The words in the other floor languages of the tenant's sites (Site.floorLocales): { "ro": "…" }.
+  labelI18n   Json         @default("{}")
+  /// Never changes (reports group by it).
+  process     CauseProcess
+  /// Pickers show the list in this order (lower first).
+  sortOrder   Int          @default(0)
+  /// Retired codes leave the pickers and stay on what names them.
+  active      Boolean      @default(true)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  // quality.prisma, ncr.prisma: the inspection defects and the nonconformances that name it.
+  inspectionDefects InspectionDefect[]
+  nonconformances   Nonconformance[]
+
+  @@unique([tenantId, code])
+  // The target of the inspection defects' and NCRs' tenant-safe references.
   @@unique([tenantId, id])
 }
 
@@ -180,6 +229,15 @@ enum QualityHoldStatus {
   CLOSED
 }
 
+/// Where a hold stands on the hold board (W2b, B-W2b-79; QHS-077; design quality.holds "Hold board"): the next step a person
+/// drags it to. Releasing and closing stay the hold's own status, never a lane.
+enum HoldNextStep {
+  NEW
+  INVESTIGATING
+  WAITING_DECISION
+  READY_TO_RELEASE
+}
+
 /// The move of held stock to a quarantine place (QHS-078).
 enum HoldQuarantine {
   /// Nothing to move (a work order, a serial, a shipment), or the stock stays where it is.
@@ -247,6 +305,15 @@ model QualityHold {
   closedById             String?           @db.Uuid
   closeNote              String?
   note                   String?
+  /// W2b (B-W2b-79; QHS-075): the hold by genealogy it is part of, of the same company. Set when it is placed, or once
+  /// later while it is ACTIVE; never changed or cleared (the …_quality_problems_w2b_guards trigger).
+  groupId                String?           @db.Uuid
+  /// W2b (B-W2b-79; QHS-077): its lane on the hold board, set by the office while the hold is ACTIVE (W2a's guard freezes a
+  /// released or closed hold). Office only: the floor neither reads nor writes it (ownership/holds.json hides it). The
+  /// default is the database's (dbgenerated, as tenantId's), so a hold placed at the bench names no lane: Prisma would
+  /// send a plain @default(NEW) itself, and the floor has no grant on the column. A new hold is NEW. Written as a cast from text:
+  /// Prisma reads a bare 'NEW'::"HoldNextStep" back as @default(NEW) and the replay would never match.
+  nextStep               HoldNextStep      @default(dbgenerated("('NEW'::text)::\"HoldNextStep\""))
   version                Int               @default(1)
   createdAt              DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
@@ -258,11 +325,49 @@ model QualityHold {
   releasedByWorker   Worker?         @relation("QualityHoldReleasedBy", fields: [tenantId, siteId, releasedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   quarantineLocation Location?       @relation(fields: [tenantId, siteId, quarantineLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   ncr                Nonconformance? @relation(fields: [tenantId, siteId, ncrId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (B-W2b-79): Restrict, as above: SetNull would also clear tenantId and companyId.
+  group              QualityHoldGroup? @relation(fields: [tenantId, companyId, groupId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, status])
   @@index([tenantId, ncrId])
+  @@index([tenantId, groupId])
   // W2b: one hold per number in the tenant (NULLs, the holds placed before numbering, do not clash).
   @@unique([tenantId, number])
   // What is on hold: the guards' and the API's lookup of the ACTIVE holds of a record.
   @@index([subjectIds(ops: ArrayOps)], type: Gin)
+}
+
+/// One hold by genealogy (W2b, B-W2b-79; QHS-075; design quality.holds "Hold by genealogy"): the suspect record it starts
+/// from, why, who decided it and when, and the counts the person saw. The goods themselves are its QualityHold rows, one
+/// per kind of record and site, which block and release as any hold; "Extend hold" adds rows and moves the counts. Only
+/// the counts change. Never deleted. Numbers its holds, not itself.
+model QualityHoldGroup {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// A company, not a site: what was made from a lot can lie at several of its sites.
+  companyId   String   @db.Uuid
+  /// The suspect record it starts from (Lot, Hide, a protector lot): its type and id.
+  sourceType  String
+  sourceId    String   @db.Uuid
+  /// Why: a code of the HOLD reason list (reasons.prisma ReasonCode, kept as text), and words.
+  reasonCode  String
+  reasonNote  String?
+  /// What it reached: { "<what>": <whole number from 0> } ({ "WorkOrder": 4, "garments": 126, "shippedGarments": 18,
+  /// "customers": 2 }), as the tree of factory-domain counts them; shipped goods are counted, never held here.
+  counts      Json     @default("{}")
+  placedAt    DateTime @db.Timestamptz(3)
+  /// The office user who placed it; null: the system.
+  placedById  String?  @db.Uuid
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  company Company       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  holds   QualityHold[]
+
+  // The target of the holds' reference: a hold of the same company.
+  @@unique([tenantId, companyId, id])
+  // Which genealogy holds a suspect record started.
+  @@index([tenantId, sourceType, sourceId])
 }

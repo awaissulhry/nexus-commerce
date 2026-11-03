@@ -23,6 +23,9 @@ export const NUMBER_KINDS = [
   'RETURN',
   'LOT',
   'BATCH',
+  // W2b-2 wave 13/16 (factory-db numbering.prisma): cut orders (CO-…) and cut tickets (CT-…), office document kinds.
+  'CUT_ORDER',
+  'CUT_TICKET',
   'PPE_REGISTER',
   'BUNDLE',
   'HIDE',
@@ -39,6 +42,8 @@ export const NUMBER_KINDS = [
   // W2a wave 6 (factory-db numbering.prisma): nonconformance reports (NCR-…) and maintenance jobs (MJ-…).
   'NCR',
   'MAINTENANCE_JOB',
+  // W2b wave 11/16 (factory-db numbering.prisma): CAPAs and 8Ds (CAPA-…).
+  'CAPA',
   // W2a wave 7 (factory-db numbering.prisma): accounting export batches (EXP-…).
   'ACCOUNTING_EXPORT',
   // W2b wave 2 (factory-db numbering.prisma): quality holds (HLD-…).
@@ -183,6 +188,8 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   RETURN: 'RMA',
   LOT: 'LOT',
   BATCH: 'BT',
+  CUT_ORDER: 'CO',
+  CUT_TICKET: 'CT',
   PPE_REGISTER: 'REG',
   INSPECTION: 'INS',
   RELEASE: 'REL',
@@ -193,6 +200,7 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   COUNT: 'CNT',
   NCR: 'NCR',
   MAINTENANCE_JOB: 'MJ',
+  CAPA: 'CAPA',
   ACCOUNTING_EXPORT: 'EXP',
   HOLD: 'HLD',
   INCOMING_INSPECTION: 'IIN',

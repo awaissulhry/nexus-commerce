@@ -30,8 +30,8 @@ export const QUALIFICATION_MODES = ['FREE', 'WARN', 'STRICT'] as const
 export type QualificationMode = (typeof QUALIFICATION_MODES)[number]
 
 /**
- * The rule while a site has none of its own (no column yet: Production › Floor rules per site, B-W2b-53, will hold it):
- * WARN, so a site whose matrix is still being filled is told, not stopped.
+ * The rule while a site has none of its own (ProductionSettings.qualificationRule, edited in Production › Floor rules per
+ * site, B-W2b-81): WARN, so a site whose matrix is still being filled is told, not stopped.
  */
 export const DEFAULT_QUALIFICATION_MODE: QualificationMode = 'WARN'
 

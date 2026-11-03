@@ -31,6 +31,7 @@ import { officeOf, refuse } from './access'
 import type { CorrectBody, ListBlocksQuery, RecordBlockBody } from './contract'
 import { blocksAround, BLOCK, closedDays, lockBlock, dayKey, editedBlocks, editsOf, linesById, peopleNames, readBlock, readBlocks, readCode, sitesById, stationsById, workerOf, workerUsers, type BlockRow, type CodeRow, type Reader, type Subject } from './store'
 import { dayColumn, isoDay, rowFactsOf, rowOf } from './views'
+import { blockableWorkOrder } from './work-order'
 import { endBlock, insertBlock } from './writes'
 
 /**
@@ -460,6 +461,8 @@ export async function recordBlock(caller: CommandCaller, body: RecordBlockBody, 
       subject = { workerId: worker.id, stationId: station?.id ?? null }
       employeeId = worker.employeeId
     }
+    const workOrderId = body.workOrderId ?? null
+    if (workOrderId && !(await blockableWorkOrder(tools.tx, site.id, workOrderId))) throw new ValidationError('The work order is not valid.', [{ path: 'body/workOrderId', message: 'Not a work order of this site, or still a draft or cancelled.' }])
     const lineId = station?.lineId ?? body.lineId ?? null
     const workDate = dayColumn(businessDate(startedAt, site.timezone))
     await refuseClosedDay(tools.tx, { lineId, workDate })
@@ -474,6 +477,7 @@ export async function recordBlock(caller: CommandCaller, body: RecordBlockBody, 
       employeeId,
       code,
       source: 'LEAD',
+      workOrderId,
       startedAt,
       endedAt,
       note: body.note ?? null,

@@ -74,6 +74,8 @@ export const blockRow = output({
   /** The block names a worker (the site records workers): who, only on its own record. */
   named: z.boolean(),
   helpCallId: id().nullable(),
+  /** B-W2b-81: the work order the time belongs to, when the block has one. */
+  workOrderId: id().nullable(),
   /** Why it is not approved with others at once (empty: a normal block). */
   unusual: z.array(z.enum(UNUSUAL_REASONS)),
   /** When it was approved or rejected. */
@@ -219,6 +221,8 @@ export const recordBlockContract = defineContract({
     stationId: id().optional(),
     /** The line it was spent for when no station says it. */
     lineId: id().optional(),
+    /** B-W2b-81: the work order the time belongs to: of this site, not a draft or cancelled. */
+    workOrderId: id().optional(),
     startedAt: instant(),
     endedAt: instant(),
     note: note().optional(),
@@ -226,6 +230,24 @@ export const recordBlockContract = defineContract({
   response: { 201: output({ block: blockRecord }) },
 })
 export type RecordBlockBody = z.infer<typeof recordBlockContract.body>
+
+/** B-W2b-81: a work order's off-standard time (the Labour tab): per state and per code, never per person. */
+export const workOrderMinutesContract = defineContract({
+  params: input({ workOrderId: id() }),
+  response: {
+    200: output({
+      workOrderId: id(),
+      /** Whole minutes of its blocks that were not rejected (a running block: so far). */
+      minutes: z.number().int().min(0),
+      approved: z.number().int().min(0),
+      waiting: z.number().int().min(0),
+      running: z.number().int().min(0),
+      blocks: z.number().int().min(0),
+      /** Most minutes first. */
+      codes: z.array(output({ code: tileView, minutes: z.number().int().min(0), blocks: z.number().int().min(0) })),
+    }),
+  },
+})
 
 export const approveContract = defineContract({
   params: blockParams,

@@ -45,6 +45,8 @@ model Role {
   // views.prisma, alerts.prisma: the saved views shared with its holders, the alert rules that tell them.
   savedViews  SavedView[]
   alertRules  AlertRule[]
+  // W2b quality.prisma (wave 11/16): the quality alert rules that tell them.
+  qualityAlertRules QualityAlertRule[]
 
   @@unique([tenantId, key])
   // The target of the tenant-safe references from the assignments.

@@ -11,6 +11,7 @@ import { useLocale } from '../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import type { CallRecord } from '../api'
+import { callAskWords } from '../../../../lib/line-board/model'
 import { ackHeld, callTitleParts, closeHeld, comeHeld, jobHeld, offersJob, personPhrase, RESOLUTIONS, type StepState } from '../model'
 import type { CallsActions, CallsModel } from './CallsView'
 import { Duration, say, StatusPill, TypeCell, useCallsT, WaitingTag } from './parts'
@@ -137,6 +138,7 @@ export function CallDetailBody({ model, call, place }: { model: CallsModel; call
     if (!done.has('ON_THE_WAY')) steps.push({ key: 'ON_THE_WAY:next', label: t('step.ON_THE_WAY'), tone: 'neutral', at: null })
     steps.push({ key: 'SOLVED:next', label: t('step.SOLVED'), tone: 'neutral', at: null })
   }
+  const asks = callAskWords(call, place.locale)
   const resolution = call.resolutionCode ? ((RESOLUTIONS as readonly string[]).includes(call.resolutionCode) ? t(`resolution.${call.resolutionCode}`) : call.resolutionCode) : null
   const outcomeHref = call.outcome ? `${model.prefix}${recordAddress({ type: call.outcome.recordType, id: call.outcome.recordId }, OFFICE_PAGES)}` : null
 
@@ -182,6 +184,7 @@ export function CallDetailBody({ model, call, place }: { model: CallsModel; call
               { label: t('detail.response'), value: <Duration seconds={call.times.responseSeconds} empty={call.open ? t('list.notYet') : '—'} /> },
               { label: t('detail.onTheWay'), value: <Duration seconds={call.times.onTheWaySeconds} empty={call.open ? t('list.notYet') : '—'} /> },
               { label: t('detail.resolve'), value: <Duration seconds={call.times.resolveSeconds} empty={call.open ? t('list.notYet') : '—'} /> },
+              ...(asks ? [{ label: t('detail.asks'), value: asks }] : []),
               ...(call.note ? [{ label: t('detail.note'), value: call.note }] : []),
               ...(resolution || call.resolutionNote ? [{ label: t('detail.resolution'), value: resolution ?? '—', hint: call.resolutionNote ?? undefined }] : []),
               {

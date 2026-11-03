@@ -10,8 +10,11 @@
 // { type: "Complaint", id }: one entry per complaint, the register's partial unique index); it closes only once that
 // entry exists, and its alert stays until the owner acknowledged it (the …_sales_w2a_guards triggers, for every login).
 // Its photos are StoredFile rows with recordType "Complaint"; the mail with the customer is its record thread. An NCR or
-// a CAPA links to it from its side (recordType + recordId, wave 6/7 and later); the investigation and the answer letter
-// are W2b.
+// a CAPA links to it from its side (recordType + recordId: NcrLink, CapaSource).
+//
+// W2b schema wave 11/16 (B-W2b-79; QHS-116; design quality.complaints "Investigation", "Answer"): the findings and the root
+// cause in words, and the answer letter: its template, language, words and attachments while it is written, and once sent
+// the version sent (gendocs.prisma COMPLAINT_ANSWER), by whom and how. Never sent by itself: a person reviews and sends.
 //
 // Who sees what (ownership/complaints.json): the office reads and writes; the floor and the portal read nothing here (the
 // customer's claims pages and links are W2b). Never deleted: a complaint logged by mistake is closed with its reason.
@@ -61,8 +64,25 @@ model Complaint {
   safetyRaisedAt         DateTime?          @db.Timestamptz(3)
   safetyAcknowledgedAt   DateTime?          @db.Timestamptz(3)
   safetyAcknowledgedById String?            @db.Uuid
-  /// When the customer was answered: set from ANSWERED on (the answer letter is W2b).
+  /// When the customer was answered: set from ANSWERED on; going back to INVESTIGATING clears it.
   answeredAt             DateTime?          @db.Timestamptz(3)
+  /// W2b (B-W2b-79; QHS-116): what the investigation found and the root cause, in words, from TRIAGED on. For the office
+  /// only (the answer letter says what the customer reads).
+  /// @internal
+  findings               String?
+  /// @internal
+  rootCause              String?
+  /// W2b (B-W2b-79): the answer letter being written, frozen while ANSWERED: the document template's name, the customer's
+  /// language (two lower-case letters), its words and the files that go with it (an inspection report, the 8D).
+  answerTemplate         String?
+  answerLanguage         String?
+  answerText             String?
+  answerFileIds          String[]           @default([]) @db.Uuid
+  /// The letter sent: its COMPLAINT_ANSWER version, who sent it and how: all three or none, only with answeredAt (a
+  /// complaint answered by phone has none), and going back to INVESTIGATING clears them (the versions stay).
+  answerDocumentId       String?            @db.Uuid
+  answeredById           String?            @db.Uuid
+  answeredVia            ComplaintAnswerChannel?
   /// Set exactly when CLOSED.
   closedAt               DateTime?          @db.Timestamptz(3)
   closeReason            String?
@@ -81,6 +101,8 @@ model Complaint {
   salesOrder   SalesOrder?          @relation(fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   rma          ReturnAuthorisation? @relation(fields: [tenantId, companyId, partyId, returnId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   style        Style?               @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (B-W2b-79; Restrict, as above).
+  answerDocument GeneratedDocument? @relation(fields: [tenantId, answerDocumentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // returns.prisma: the repairs made for it.
   repairOrders RepairOrder[]
 
@@ -90,6 +112,12 @@ model Complaint {
   // The complaints list and its tiles (new to triage, answer due, safety open).
   @@index([tenantId, status, answerDueOn])
   @@index([tenantId, partyId])
+}
+
+/// How an answer letter went out (W2b, B-W2b-79; design cmp-ans "email or portal").
+enum ComplaintAnswerChannel {
+  EMAIL
+  PORTAL
 }
 
 /// How a complaint came in (design cmp-grid "Channel").

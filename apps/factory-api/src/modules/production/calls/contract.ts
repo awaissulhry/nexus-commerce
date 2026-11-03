@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { businessDate, defineContract, id, input, instant, output, quantity } from '@nexus/factory-domain/core/contracts'
 import {
   CALL_KINDS,
   CALL_LIMITS,
@@ -7,6 +7,9 @@ import {
   CALL_STEPS,
   CALL_TILES,
   CALL_VIEWS,
+  isRequestedQuantity,
+  MATERIAL_REASONS,
+  MAX_REQUESTED_QUANTITY,
   OUTCOME_TYPES,
   RESOLUTION_CODE,
   STATION_CALL_STATES,
@@ -28,6 +31,8 @@ const csv = <T extends readonly [string, ...string[]]>(values: T) =>
     .pipe(z.array(z.enum(values)))
 const note = (max: number) => z.string().trim().min(1).max(max)
 const words = z.record(z.string(), z.string())
+/** What a material call asks (B-W2b-81; MES-137): a tile's code and how much; each told once. */
+const request = { reasonCode: z.enum(MATERIAL_REASONS).optional(), requestedQuantity: quantity().refine(isRequestedQuantity, { message: `Expected a quantity above 0, at most ${MAX_REQUESTED_QUANTITY}.` }).optional() }
 const place = output({ id: id(), code: z.string(), name: z.string() })
 const person = output({ kind: z.enum(['USER', 'WORKER']), name: z.string().nullable() })
 const typeWords = { labelIt: z.string(), labelEn: z.string(), labelI18n: words, icon: z.string().nullable(), colour: z.string().nullable() }
@@ -74,6 +79,9 @@ export const callOut = output({
   bundle: output({ id: id(), code: z.string() }).nullable(),
   responderTeam: place.nullable(),
   note: z.string().nullable(),
+  /** B-W2b-81 (MES-137): what a material call asks: a tile of MATERIAL_REASONS and how much (decimal text, no unit). */
+  reasonCode: z.string().nullable(),
+  requestedQuantity: z.string().nullable(),
   sentAt: z.string(),
   seenAt: z.string().nullable(),
   onTheWayAt: z.string().nullable(),
@@ -131,6 +139,8 @@ const sendBody = input({
   workOrderId: id().optional(),
   bundleId: id().optional(),
   note: note(CALL_LIMITS.note).optional(),
+  /** B-W2b-81: a material call's reason and quantity, at once; one tap sends none, "Add details" tells them after. */
+  ...request,
   /** When it was tapped on the tablet (a queued call sent later); kept when believable. */
   occurredAt: instant().optional(),
 })
@@ -149,7 +159,8 @@ const callAnswer = output({ call: callRecordOut, replayed: z.boolean() })
 
 export const detailsContract = defineContract({
   params: callParams,
-  body: input({ version: version().optional(), note: note(CALL_LIMITS.note) }),
+  /** Words, a material call's reason and quantity (B-W2b-81), or both; the words replace, the reason and quantity are told once. */
+  body: input({ version: version().optional(), note: note(CALL_LIMITS.note).optional(), ...request }).refine((body) => body.note !== undefined || body.reasonCode !== undefined || body.requestedQuantity !== undefined, { message: 'Say something: words, a reason or a quantity.' }),
   response: { 200: callAnswer },
 })
 

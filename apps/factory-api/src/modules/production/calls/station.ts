@@ -2,7 +2,8 @@ import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
-import { CALL_REFUSALS, sentAtOf, stepChange, stepRefusal, type CallKind, type CallStatus, type CallStep } from '@nexus/factory-domain/production/calls/rules'
+import { decimalText } from '@nexus/factory-domain/product/units/units'
+import { CALL_REFUSALS, requestRefusal, sentAtOf, stepChange, stepRefusal, type CallKind, type CallStatus, type CallStep } from '@nexus/factory-domain/production/calls/rules'
 import { command, StaleVersionError, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf, type FloorContext } from '../../../core/context'
 import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
@@ -24,7 +25,8 @@ import { callByClientEvent, callRecord, devicePlaceOf, lockCall, openCallOf, rea
  *                                                  extra material"), its line, the caller where the site names workers;
  *                                                  the same type open at the station answers that call (200, existing),
  *                                                  never a second one (MES-143); its client event id once per device
- *   POST /production/calls/station/:id/details     words added to the open call (call first, explain after)
+ *   POST /production/calls/station/:id/details     words added to the open call (call first, explain after); a material
+ *                                                  call's reason tile and quantity (B-W2b-81; MES-137), each told once
  *   POST /production/calls/station/:id/solve       "It's solved" by the station itself (the tablet that sent it, or one at
  *   POST /production/calls/station/:id/cancel      its station); nothing else is marked (nobody was seen coming)
  *
@@ -108,6 +110,8 @@ export async function sendCall(caller: CommandCaller, body: SendBody, key?: stri
   const open = await caller.withClient((db) => openCallOf(db, station.id, type.id))
   if (open) return answer(open, true, false)
   if (!type.active) refuse(CALL_REFUSALS.TYPE_INACTIVE)
+  const refused = requestRefusal({ kind: type.kind as CallKind, current: { reasonCode: null, requestedQuantity: null }, reasonCode: body.reasonCode, requestedQuantity: body.requestedQuantity, hasWords: Boolean(body.note) })
+  if (refused) refuse(refused)
   if (body.bundleId && !body.workOrderId) throw bodyIssue('workOrderId', 'Name the work order of the bundle.')
   if (body.workOrderId) {
     const workOrder = await caller.withClient((db) => db.workOrder.findUnique({ where: { id: body.workOrderId }, select: { siteId: true } }))
@@ -142,6 +146,8 @@ export async function sendCall(caller: CommandCaller, body: SendBody, key?: stri
             workOrderId: body.workOrderId ?? null,
             bundleId: body.bundleId ?? null,
             note: body.note ?? null,
+            reasonCode: body.reasonCode ?? null,
+            requestedQuantity: body.requestedQuantity ?? null,
             status: 'SENT',
             sentAt,
             deviceId: context.deviceId,
@@ -158,7 +164,7 @@ export async function sendCall(caller: CommandCaller, body: SendBody, key?: stri
           recordType: 'HelpCall',
           recordId: id,
           ...scope,
-          after: { typeId: type.id, code: type.code, stationId: station.id, lineId: station.lineId, workerId: named?.workerId ?? null, workOrderId: body.workOrderId ?? null, bundleId: body.bundleId ?? null, note: body.note ?? null, sentAt: toUtcIso(sentAt), deviceId: context.deviceId },
+          after: { typeId: type.id, code: type.code, stationId: station.id, lineId: station.lineId, workerId: named?.workerId ?? null, workOrderId: body.workOrderId ?? null, bundleId: body.bundleId ?? null, note: body.note ?? null, reasonCode: body.reasonCode ?? null, requestedQuantity: body.requestedQuantity ?? null, sentAt: toUtcIso(sentAt), deviceId: context.deviceId },
         })
         tools.emit({
           type: 'help_call.raised',
@@ -168,7 +174,7 @@ export async function sendCall(caller: CommandCaller, body: SendBody, key?: stri
         })
         // MES-148: the station's waiting books to the type's off-standard code while the call is open (B-W2b-29's writes).
         if (type.offStandardCodeId && station.id === place.stationId) {
-          await startWaitingInCommand(tools, { tenantId: context.tenantId, site: place.site, station, codeId: type.offStandardCodeId, named, callId: id, at: sentAt, deviceId: context.deviceId })
+          await startWaitingInCommand(tools, { tenantId: context.tenantId, site: place.site, station, codeId: type.offStandardCodeId, named, callId: id, workOrderId: body.workOrderId ?? null, at: sentAt, deviceId: context.deviceId })
         }
         return { call: await callRecord(tx, (await readCall(tx, id))!, context, tools.now), existing: false }
       },
@@ -194,20 +200,24 @@ async function stationsCall(caller: CommandCaller, context: FloorContext, callId
   return call
 }
 
-/** POST /production/calls/station/:callId/details: words added to the open call. */
-export async function addDetails(caller: CommandCaller, callId: string, body: { readonly version?: number | undefined; readonly note: string }, key?: string) {
+const requestOf = (call: Pick<CallRow, 'reasonCode' | 'requestedQuantity'>) => ({ reasonCode: call.reasonCode, requestedQuantity: call.requestedQuantity === null ? null : decimalText(call.requestedQuantity.toString()) })
+
+/** POST /production/calls/station/:callId/details: words added to the open call, a material call's reason and quantity. */
+export async function addDetails(caller: CommandCaller, callId: string, body: { readonly version?: number | undefined; readonly note?: string | undefined; readonly reasonCode?: string | undefined; readonly requestedQuantity?: string | undefined }, key?: string) {
   const context = floorOf(caller)
   const known = await stationsCall(caller, context, callId)
-  const refusal = stepRefusal({ status: known.status as CallStatus, sentAt: known.sentAt, seenAt: known.seenAt, onTheWayAt: known.onTheWayAt }, 'CANCELLED')
+  const judge = (call: CallRow) => stepRefusal({ status: call.status as CallStatus, sentAt: call.sentAt, seenAt: call.seenAt, onTheWayAt: call.onTheWayAt }, 'CANCELLED') ?? requestRefusal({ kind: call.type.kind as CallKind, current: requestOf(call), reasonCode: body.reasonCode, requestedQuantity: body.requestedQuantity, hasWords: Boolean(body.note ?? call.note) })
+  const refusal = judge(known)
   if (refusal) refuse(refusal)
   const { result, replayed } = await command(caller, { name: 'production.addCallDetails', idempotencyKey: key, input: { callId, ...body }, record: { type: 'HelpCall', id: callId, ...(body.version !== undefined ? { expectedVersion: body.version } : {}) } }, async (tools) => {
     const { tx, now } = tools
     const call = (await lockCall(tx, callId))!
-    const again = stepRefusal({ status: call.status as CallStatus, sentAt: call.sentAt, seenAt: call.seenAt, onTheWayAt: call.onTheWayAt }, 'CANCELLED')
+    const again = judge(call)
     if (again) refuse(again)
-    await tx.helpCall.update({ where: { id: callId }, data: { note: body.note, updatedAt: now }, select: { id: true } })
+    const change = { ...(body.note === undefined ? {} : { note: body.note }), ...(body.reasonCode === undefined ? {} : { reasonCode: body.reasonCode }), ...(body.requestedQuantity === undefined ? {} : { requestedQuantity: body.requestedQuantity }) }
+    await tx.helpCall.update({ where: { id: callId }, data: { ...change, updatedAt: now }, select: { id: true } })
     const scope = { companyId: call.station.companyId, siteId: call.siteId }
-    tools.audit({ recordType: 'HelpCall', recordId: callId, ...scope, before: { note: call.note }, after: { note: body.note } })
+    tools.audit({ recordType: 'HelpCall', recordId: callId, ...scope, before: { note: call.note, ...requestOf(call) }, after: change })
     tools.emit({ type: 'help_call.changed', subject: callId, ...scope, payload: { callId, stationId: call.stationId, lineId: call.lineId, change: 'DETAILS', outcomeRecordType: null } })
     return { call: await callRecord(tx, (await readCall(tx, callId))!, context, now) }
   })

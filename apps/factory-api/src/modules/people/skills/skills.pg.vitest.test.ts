@@ -267,7 +267,7 @@ describe('the qualification check (MES-024, MES-246)', () => {
   it('dispatch\'s pre-check: qualified, not qualified (a missing skill warns by the default rule), a kept class holds without its authorisation', async () => {
     // E1 at the cutting station on the cutting operation: signed off in cutting, authorised on the press (kept at A1 now).
     const e1 = (await ok('viewer', 'GET', `/people/skills/check?employeeId=${people.employeeIds.e1}&workOrderOperationId=${production.operationIds.cut}&stationId=${T.stationCut}`)).check
-    expect(e1).toMatchObject({ outcome: 'QUALIFIED', decision: 'ALLOW', person: { name: 'Seed Employee One' }, operation: { code: 'SEED-CUT-LEA', workOrderOperationId: production.operationIds.cut }, rule: { mode: 'WARN', isDefault: true } })
+    expect(e1).toMatchObject({ outcome: 'QUALIFIED', decision: 'ALLOW', person: { name: 'Seed Employee One' }, operation: { code: 'SEED-CUT-LEA', workOrderOperationId: production.operationIds.cut }, rule: { mode: 'WARN', isDefault: false } })
     expect(e1.machines.map((machine: Json) => machine.machineClass.code).sort()).toEqual(['CLICKING_PRESS', 'CUTTING_TABLE'])
     expect(e1.requirements.filter((requirement: Json) => requirement.kind === 'AUTHORISATION').map((requirement: Json) => [requirement.code, requirement.state])).toEqual(
       expect.arrayContaining([['CLICKING_PRESS', 'AUTHORISED'], ['CUTTING_TABLE', 'NOT_KEPT']]),
@@ -315,6 +315,23 @@ describe('the qualification check (MES-024, MES-246)', () => {
     expect((await ok('floorLead', 'GET', `/people/skills/floor/check?workerId=${T.operator}&operationId=${T.operationCut}`)).check.person.workerId).toBe(T.operator)
     expect((await call('floorOperator', 'GET', `/people/skills/floor/check?workerId=${T.lead}&operationId=${T.operationCut}`)).statusCode).toBe(403)
     expect((await call('viewer', 'GET', `/people/skills/floor/check?operationId=${T.operationCut}`)).statusCode).toBe(403)
+  })
+
+  it('the site\'s rule, not a constant (B-W2b-81): STRICT holds a missing skill for a team leader, FREE lets it go; an authorisation holds whatever the rule', async () => {
+    const setRule = (mode: string) => admin(`UPDATE "ProductionSettings" SET "qualificationRule" = $1::"FloorRuleMode" WHERE id = $2`, [mode, T.siteA1])
+    const missing = `/people/skills/check?employeeId=${people.employeeIds.e2}&operationId=${T.operationCut}`
+    const context = { audience: 'office' as const, tenantId: T.tenant, actorId: newId(), grants: [grant(MANAGE)], requestId: newId() }
+    await setRule('STRICT')
+    expect((await ok('viewer', 'GET', missing)).check).toMatchObject({ outcome: 'NOT_QUALIFIED', decision: 'HOLD', overridable: true, rule: { mode: 'STRICT' } })
+    await withContextClient(h.database, context, async (db) => {
+      const held = await qualificationCheck(db, { employeeId: people.employeeIds.e2, operationId: T.operationCut })
+      // What the tablet's START reads: terminal/timing.ts turns it into the overridable NOT_QUALIFIED.
+      expect(qualificationGuard(held)).toMatchObject({ mode: 'STRICT', overridable: true })
+    })
+    await setRule('FREE')
+    expect((await ok('viewer', 'GET', missing)).check).toMatchObject({ decision: 'ALLOW', rule: { mode: 'FREE' } })
+    expect((await ok('viewer', 'GET', `${missing}&stationId=${T.stationCut}`)).check).toMatchObject({ decision: 'HOLD', overridable: false })
+    await setRule('WARN')
   })
 
   it('the loan dialog: "Can do n of m operations on line L1"', async () => {

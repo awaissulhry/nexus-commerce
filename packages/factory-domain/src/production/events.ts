@@ -73,7 +73,8 @@ import { ON_BEHALF_REASON_CODES } from './onbehalf/rules'
  *   production.scan_finding_reviewed        B-W2b-41: one finding reviewed or dismissed
  *   production.bundle_rules_changed         B-W2b-41: a site's bundle code mode or stuck limit changed
  *   production.floor_rules_changed          B-W2b-53: a site's floor checks changed (the quantity guard, the sequence,
- *                                           the scrap approval limit); Floor rules & codes and the site's tablets re-read
+ *                                           the scrap approval limit, B-W2b-81: the qualification rule); Floor rules &
+ *                                           codes and the site's tablets re-read
  *   production.scrap_over_limit_decided     B-W2b-53: a scan's scrap above the site's limit was approved (it posts) or
  *                                           refused, by a team leader on the tablet or in the office (MES-128)
  *   production.scan_entered_on_behalf       B-W2b-47: a team leader recorded a report for someone who could not scan, with
@@ -732,13 +733,14 @@ export const events = [
   defineEvent({
     type: 'production.floor_rules_changed',
     context: 'production',
-    description: "A site's floor checks changed: the quantity guard, the sequence (skipped operations) or the scrap approval limit.",
+    description: "A site's floor checks changed: the quantity guard, the sequence (skipped operations), the scrap approval limit or the qualification rule.",
     payload: z.strictObject({
       siteId: z.uuid(),
       fields: z.array(z.enum(FLOOR_RULE_FIELDS)).min(1),
       quantityGuard: z.enum(FLOOR_RULE_MODES),
       skippedOperationRule: z.enum(FLOOR_RULE_MODES),
       scrapApprovalLimit: z.number().int().min(1).nullable(),
+      qualificationRule: z.enum(FLOOR_RULE_MODES),
     }),
     live: { permission: 'production.settings.view', floor: 'floor.work', fields: ['siteId', 'fields'] },
   }),

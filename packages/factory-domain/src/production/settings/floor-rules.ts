@@ -1,6 +1,7 @@
 import type { Issue } from '../../core/errors'
 import { FLOOR_SESSION } from '../../auth/floor/session'
 import { ONLINE_ONLY_ACTIONS } from '../../floor-sync/kinds'
+import { DEFAULT_QUALIFICATION_MODE } from '../../people/skills/qualification'
 import { MAX_BUNDLE_SIZE } from '../bundles/rules'
 import { CLOCK_FLAG_MS, CLOCK_WARN_MS, UNDO_WINDOW_MS } from '../scans/rules'
 
@@ -22,6 +23,9 @@ import { CLOCK_FLAG_MS, CLOCK_WARN_MS, UNDO_WINDOW_MS } from '../scans/rules'
  *   bundleCodeMode        one bundle code at every operation or a coupon per operation (MES-067): read here, changed by
  *                         the bundles step (B-W2b-41).
  *   stuckBundleHours      a bundle with no scan for this long is stuck (1-720, default 4): read here, the bundles step's.
+ *   qualificationRule     a missing or Learning-only skill (B-W2b-81; MES-024): FREE not checked, WARN the work goes on and
+ *                         the team leader is told, STRICT held for a team leader's override (their PIN and a reason).
+ *                         Default WARN. A class of machine kept under authorisation always holds, whatever the rule (MES-246).
  *
  * The other rules of the design's section are not per site yet, and the answers say so (the per-site columns are a schema
  * follow-up, named in the step's notes): the undo window (UNDO_WINDOW_MS, the scans' rule), the device clock check
@@ -49,6 +53,7 @@ export interface FloorChecks {
   readonly scrapApprovalLimit: number | null
   readonly bundleCodeMode: BundleCodeMode
   readonly stuckBundleHours: number
+  readonly qualificationRule: FloorRuleMode
 }
 
 /** The schema's defaults (factory-db production.prisma): a site without floor rules runs on them. */
@@ -58,6 +63,7 @@ export const DEFAULT_FLOOR_CHECKS: FloorChecks = Object.freeze({
   scrapApprovalLimit: null,
   bundleCodeMode: 'ONE_CODE',
   stuckBundleHours: 4,
+  qualificationRule: DEFAULT_QUALIFICATION_MODE,
 })
 
 export const isFloorRuleMode = (value: unknown): value is FloorRuleMode => (FLOOR_RULE_MODES as readonly unknown[]).includes(value)
@@ -71,11 +77,12 @@ export function floorChecksOf(row: Partial<FloorChecks> | null | undefined): Flo
     scrapApprovalLimit: row.scrapApprovalLimit ?? null,
     bundleCodeMode: row.bundleCodeMode ?? DEFAULT_FLOOR_CHECKS.bundleCodeMode,
     stuckBundleHours: row.stuckBundleHours ?? DEFAULT_FLOOR_CHECKS.stuckBundleHours,
+    qualificationRule: row.qualificationRule ?? DEFAULT_FLOOR_CHECKS.qualificationRule,
   })
 }
 
 /** The rules this step's change keeps (the bundle code mode and the stuck hours are the bundles step's). */
-export const FLOOR_RULE_FIELDS = ['quantityGuard', 'skippedOperationRule', 'scrapApprovalLimit'] as const
+export const FLOOR_RULE_FIELDS = ['quantityGuard', 'skippedOperationRule', 'scrapApprovalLimit', 'qualificationRule'] as const
 export type FloorRuleField = (typeof FLOOR_RULE_FIELDS)[number]
 
 export interface FloorRulesChange {
@@ -83,13 +90,14 @@ export interface FloorRulesChange {
   readonly skippedOperationRule?: FloorRuleMode | undefined
   /** null: scrap needs no approval. */
   readonly scrapApprovalLimit?: number | null | undefined
+  readonly qualificationRule?: FloorRuleMode | undefined
 }
 
 /** What is wrong with a change of the rules (paths name the body fields); nothing named at all is a problem too. */
 export function floorRulesChangeProblems(change: FloorRulesChange): Issue[] {
   const problems: Issue[] = []
   if (FLOOR_RULE_FIELDS.every((field) => change[field] === undefined)) problems.push({ path: 'body', message: 'Name at least one rule to change.' })
-  for (const field of ['quantityGuard', 'skippedOperationRule'] as const) {
+  for (const field of ['quantityGuard', 'skippedOperationRule', 'qualificationRule'] as const) {
     const value = change[field]
     if (value !== undefined && !isFloorRuleMode(value)) problems.push({ path: `body/${field}`, message: 'Expected FREE, WARN or STRICT.' })
   }
@@ -107,6 +115,7 @@ export function changedChecks(before: FloorChecks, change: FloorRulesChange): Fl
     ...(change.quantityGuard === undefined ? {} : { quantityGuard: change.quantityGuard }),
     ...(change.skippedOperationRule === undefined ? {} : { skippedOperationRule: change.skippedOperationRule }),
     ...(change.scrapApprovalLimit === undefined ? {} : { scrapApprovalLimit: change.scrapApprovalLimit }),
+    ...(change.qualificationRule === undefined ? {} : { qualificationRule: change.qualificationRule }),
   })
 }
 
@@ -130,6 +139,13 @@ export const SEQUENCE_WORDS: Readonly<Record<FloorRuleMode, string>> = Object.fr
   STRICT: "Strict sequence: a scan that skips a required operation waits for a team leader's override with their PIN and a reason.",
 })
 
+/** The qualification rule in words (B-W2b-81): the floor rules' form and answer, dispatch and the check all say these. */
+export const QUALIFICATION_RULE_WORDS: Readonly<Record<FloorRuleMode, string>> = Object.freeze({
+  FREE: 'Skills are not checked at this site. A class of machine kept under authorisation still needs one.',
+  WARN: 'A missing skill warns: the work may go on with a reason, and the team leader is told. A class of machine kept under authorisation always needs one.',
+  STRICT: 'A missing skill holds the work: a team leader may override it with their PIN and a reason. A class of machine kept under authorisation always needs one.',
+})
+
 export function scrapLimitWords(limit: number | null): string {
   return limit === null
     ? 'Scrap needs no approval, whatever the count.'
@@ -138,7 +154,7 @@ export function scrapLimitWords(limit: number | null): string {
 
 /** Each rule in words, in the form's order. */
 export function floorChecksWords(checks: FloorChecks): string[] {
-  return [QUANTITY_GUARD_WORDS[checks.quantityGuard], SEQUENCE_WORDS[checks.skippedOperationRule], scrapLimitWords(checks.scrapApprovalLimit)]
+  return [QUANTITY_GUARD_WORDS[checks.quantityGuard], SEQUENCE_WORDS[checks.skippedOperationRule], scrapLimitWords(checks.scrapApprovalLimit), QUALIFICATION_RULE_WORDS[checks.qualificationRule]]
 }
 
 /** What a change means from now on, one sentence per changed rule (nothing changed: none). */
@@ -148,6 +164,7 @@ export function floorRulesChangeWords(before: FloorChecks, after: FloorChecks): 
     if (field === 'quantityGuard') words.push(`From now on: ${QUANTITY_GUARD_WORDS[after.quantityGuard]}`)
     if (field === 'skippedOperationRule') words.push(`From now on: ${SEQUENCE_WORDS[after.skippedOperationRule]}`)
     if (field === 'scrapApprovalLimit') words.push(`From now on: ${scrapLimitWords(after.scrapApprovalLimit)}`)
+    if (field === 'qualificationRule') words.push(`From now on: ${QUALIFICATION_RULE_WORDS[after.qualificationRule]}`)
   }
   if (words.length > 0) words.push('Scans already taken keep what they recorded.')
   return words
