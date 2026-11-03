@@ -1,0 +1,141 @@
+/*
+ * Machine requests and Maintenance jobs in depth (B-W2b-140) LAYOUT: the locked machines' banners stacked first, the
+ * possible duplicates side by side on wide screens, the photos and voice notes of a job, the tiles of the one-screen
+ * close. The controls are the design system's; semantic tokens only. No page max-width (Owner rule 2026-10-29).
+ */
+.fw-pd-locks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pd-dupes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pd-dupe-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  padding: var(--nds-space-4) 0;
+  border-bottom: 1px solid var(--nds-border);
+  min-width: 0;
+}
+
+.fw-pd-linkish {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nds-text-link);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-pd-linkish:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+
+.fw-pd-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-pd-pick > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+/* ---- photos and voice notes ---- */
+.fw-pd-media {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pd-media-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  min-width: 0;
+}
+
+.fw-pd-media-item .fw-pl-photo img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+}
+
+.fw-pd-media-item .fw-pl-photo {
+  width: 100%;
+}
+
+.fw-pd-voices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-pd-voices > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pd-voices audio {
+  width: min(100%, 360px);
+  height: 36px;
+}
+
+.fw-pd-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---- the one-screen close: the tiles beside the rest on a wide screen ---- */
+.fw-pd-close {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (max-width: 899px) {
+  .fw-pd-close {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

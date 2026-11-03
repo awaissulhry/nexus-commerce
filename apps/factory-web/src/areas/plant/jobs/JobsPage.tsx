@@ -10,7 +10,9 @@ import { companyPrefix } from '../../../lib/session/session'
 import { assignJobs, createJob, getMachine, jobTiles, listJobs, listMachines, moveJob, plantPlaces, plantTechnicians, updateJob, type JobChange, type JobMove, type JobTiles, type MaintenanceJob } from '../_shared/api'
 import { downloadText, useCoalesced, useLive } from '../_shared/hooks'
 import { assigneeFields, assigneeWords, csvText, instantOf, isJobEvent, jobsAddressOf, jobsAddressText, jobsQuery, labelOf, plantCan, problemOf, readProblem, TIME_ZONE, type JobsAddress } from '../_shared/model'
-import { useWords, type Notice } from '../_shared/parts'
+import { getDeepJob, handBackJob } from '../requests/depth/api'
+import { closeBody, closeDraftOf, depthProblemOf } from '../requests/depth/model'
+import { PlantMessages, useWords, type Notice } from '../_shared/parts'
 import type { CellState, JobRows, JobsDialog, JobsListModel, SiteChoice, TechniciansBySite } from './view-model'
 import { JobsView } from './view/JobsView'
 
@@ -18,10 +20,16 @@ import { JobsView } from './view/JobsView'
  * `/w/<company>/plant/jobs` (SCR-149): the saved row (`?view=`), the site (`?site=`), one machine (`?machine=`), list or
  * board (`?mode=board`), New job (`?new=1`); pages of 50 with "Show more"; the tiles; live job changes behind "N updates ·
  * Show" (the tiles follow at once). Inline priority, due and technician autosave with the job's version; a board move is
- * the job's own move (plan, start, wait, reopen, close); a drop on Hand-back opens the job's close form.
+ * the job's own move (plan, start, wait, reopen, close); a drop on Hand-back opens the Hand back dialog (B-W2b-140: the
+ * one-screen close over the board, the job's record read as it opens).
  */
 export function JobsPage() {
-  return <JobsContainer />
+  // The container speaks too (the CSV's header, a notice's words): the plant catalogue around it, not only its view.
+  return (
+    <PlantMessages>
+      <JobsContainer />
+    </PlantMessages>
+  )
 }
 
 const PAGE = 50
@@ -166,9 +174,9 @@ function JobsContainer() {
   const [moving, setMoving] = useState<string | null>(null)
   const boardMove = useCallback(
     async (job: MaintenanceJob, move: JobMove): Promise<boolean> => {
-      // A hand-back is the job's one-screen close: its Hand-back tab (design "Hand-back opens the close form").
+      // A hand-back is the job's one-screen close: the Hand back dialog over the board (design pop:close "Board drop on Hand-back").
       if (move === 'handBack') {
-        router.push(`${prefix}/plant/jobs/${encodeURIComponent(job.id)}?tab=handback`)
+        openHandBack(job.id, job.number)
         return false
       }
       setMoving(job.id)
@@ -185,11 +193,25 @@ function JobsContainer() {
         setMoving(null)
       }
     },
-    [api, router, prefix, replaceRow, refreshTiles],
+    [api, replaceRow, refreshTiles],
   )
 
   // ---- dialogs --------------------------------------------------------------------------------------------------------------
   const [dialog, setDialog] = useState<JobsDialog | null>(null)
+  const handBackRead = useRef(0)
+  const readHandBack = useCallback(
+    (jobId: string) => {
+      const read = ++handBackRead.current
+      getDeepJob(api, jobId)
+        .then((value) => read === handBackRead.current && setDialog((current) => (current?.kind === 'handBack' && current.jobId === jobId ? { ...current, loaded: { status: 'ready', value }, draft: closeDraftOf(value.close) } : current)))
+        .catch((error: unknown) => read === handBackRead.current && setDialog((current) => (current?.kind === 'handBack' && current.jobId === jobId ? { ...current, loaded: isApiError(error) && error.kind === 'not_found' ? { status: 'notFound' } : isApiError(error) && error.kind === 'forbidden' ? { status: 'forbidden' } : { status: 'error', problem: readProblem(error) } } : current)))
+    },
+    [api],
+  )
+  function openHandBack(jobId: string, number: string) {
+    setDialog({ kind: 'handBack', jobId, number, loaded: { status: 'loading' }, draft: closeDraftOf(null), busy: false, problem: null })
+    readHandBack(jobId)
+  }
   useEffect(() => {
     if (address.isNew && can.view) {
       setDialog((current) =>
@@ -227,7 +249,14 @@ function JobsContainer() {
     if (!dialog || dialog.busy) return
     setDialog({ ...dialog, busy: true, problem: null } as JobsDialog)
     try {
-      if (dialog.kind === 'new') {
+      if (dialog.kind === 'handBack') {
+        if (dialog.loaded.status !== 'ready') return
+        const answer = await handBackJob(api, dialog.jobId, closeBody(dialog.draft, dialog.loaded.value.job.version))
+        replaceRow(answer.job)
+        setDialog(null)
+        setNotice({ tone: 'success', words: { key: 'done.move.handBack', params: { number: answer.job.number } } })
+        refreshTiles()
+      } else if (dialog.kind === 'new') {
         const draft = dialog.draft
         const job = await createJob(api, {
           machineId: draft.machine!.id,
@@ -249,7 +278,7 @@ function JobsContainer() {
         refreshTiles()
       }
     } catch (error) {
-      setDialog((current) => (current ? { ...current, busy: false, problem: problemOf(error) } : current))
+      setDialog((current) => (current ? { ...current, busy: false, problem: depthProblemOf(error) } : current))
     }
   }, [dialog, api, router, prefix, replaceRow, refreshTiles])
 
@@ -326,6 +355,8 @@ function JobsContainer() {
         onNewDraft: (patch) => setDialog((current) => (current?.kind === 'new' ? { ...current, draft: { ...current.draft, ...patch } } : current)),
         onFindMachine: findMachine,
         onAssignee: (assignee) => setDialog((current) => (current?.kind === 'assign' ? { ...current, assignee } : current)),
+        onCloseDraft: (patch) => setDialog((current) => (current?.kind === 'handBack' ? { ...current, draft: { ...current.draft, ...patch } } : current)),
+        onRetryHandBack: () => dialog?.kind === 'handBack' && readHandBack(dialog.jobId),
         onSubmitDialog: () => void submitDialog(),
         onExport: exportRows,
         onDismissNotice: () => setNotice(null),
