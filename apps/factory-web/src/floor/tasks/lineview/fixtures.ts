@@ -1,15 +1,15 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { BOARD } from '../../../lib/line-board/fixtures'
 import { onFloor, signedInFrame } from '../../frame/fixtures'
-import type { BehalfOptions, BlockRow, Conflict, ConflictDecisions, FloorLine, Handover, LineCall, Operators, RefusalTile, ScrapRow } from './api'
+import type { BehalfOptions, BlockRow, Conflict, ConflictDecisions, CorrectionRecord, CorrectionRow, FloorLine, Handover, LineCall, Operators, RefusalTile, ScrapRow } from './api'
 import { EMPTY_BEHALF, EMPTY_HANDOVER, EMPTY_OVERRIDE, lineCan, waitingItems, type BehalfDraft } from './model'
 import { LineViewScreen, type LineStep, type LineViewModel } from './view/LineViewScreen'
 
 /**
  * SCR-168's cases (B-W2b-70; design floor.supervisor; Owner answer F2): My line now with Calls, Waiting for you and Stations
  * (busy, empty, offline as of, parts that could not be read, updates waiting behind Show, a role that may not answer), each
- * decision (scrap over the limit, a time block, a sync conflict side by side, the reject tiles, the PIN, a wrong PIN, one's
- * own, refused, the next item), Reassign, the handover note, scan on behalf from the station to the override. Made-up plant,
+ * decision (scrap over the limit, a time block, a sync conflict side by side, a correction of a report with its one record,
+ * the reject tiles, the PIN, a wrong PIN, one's own, refused, the next item), Reassign, the handover note, scan on behalf from the station to the override. Made-up plant,
  * stations and people: no output per station, no figure per person, no money.
  */
 
@@ -26,12 +26,18 @@ const BLOCK: BlockRow = { id: 'block-1', version: 2, line: LINE_PLACE, station: 
 const side = (name: string, n: number, serverTime: string, good: number) => ({ deviceName: name, station: station(n), serverTime, good, scrap: 0, rework: 0 })
 const CONFLICT: Conflict = { id: 'refused-1', state: 'OPEN', workOrder: { number: 'WO-0041' }, bundle: { code: 'B-000124' }, operation: { seq: 20, name: 'Preparazione' }, refused: side('Tablet CUC-02', 2, '2026-10-29T09:02:00.000Z', 20), recorded: { ...side('Tablet CUC-04', 4, '2026-10-29T08:58:00.000Z', 19), corrected: false }, version: 1 }
 
-const WAITING = waitingItems([SCRAP], [BLOCK], [CONFLICT, { ...CONFLICT, id: 'refused-2', state: 'WITH_OFFICE', bundle: { code: 'B-000125' } }], 'line-1')
+const CORRECTION: CorrectionRow = { id: 'request-1', version: 1, at: '2026-10-29T08:40:00.000Z', workOrder: { id: 'wo-1', number: 'WO-0041' }, bundle: { id: 'bn-2', code: 'B-000126' }, operation: { seq: 30, name: 'Cucitura maniche' }, station: { id: 'st-4', code: 'CUC-04' }, line: { id: 'line-1', code: 'L1' }, recorded: { good: 19, scrap: 1, rework: 0, at: '2026-10-29T08:12:00.000Z' }, asked: { good: 20, scrap: 0, rework: 0 }, own: false }
+const RECORD: CorrectionRecord = { ...CORRECTION, status: 'PENDING', reason: 'La macchia è venuta via con la pulizia.', person: 'Bruna Demo', reasons: [], recordedReasons: [{ code: 'STAIN', quantity: 1, labelIt: 'Macchia', labelEn: 'Stain', labelI18n: {} }] }
+
+const WAITING = waitingItems([SCRAP], [BLOCK], [CONFLICT, { ...CONFLICT, id: 'refused-2', state: 'WITH_OFFICE', bundle: { code: 'B-000125' } }], 'line-1', [CORRECTION])
 const [FIRST] = waitingItems([], [BLOCK], [], 'line-1')
 const SCRAP_ITEM = waitingItems([SCRAP], [], [], null)[0]!
 const CONFLICT_ITEM = waitingItems([], [], [CONFLICT], null)[0]!
+const CORRECTION_ITEM = waitingItems([], [], [], null, [CORRECTION])[0]!
+const OWN_CORRECTION = { ...CORRECTION_ITEM, row: { ...CORRECTION, own: true } } as typeof CORRECTION_ITEM
 
 const TILES: RefusalTile[] = [{ code: 'REWORK_INSTEAD', labelIt: 'Si può rilavorare', labelEn: 'Can be reworked', needsDetail: false }, { code: 'WRONG_COUNT', labelIt: 'Conteggio sbagliato', labelEn: 'Wrong count', needsDetail: false }, { code: 'WRONG_REASON', labelIt: 'Motivo sbagliato', labelEn: 'Wrong reason', needsDetail: false }, { code: 'OTHER', labelIt: 'Altro', labelEn: 'Other', needsDetail: true }]
+const CORRECTION_TILES: RefusalTile[] = [{ code: 'RECORDED_RIGHT', labelIt: 'Il conteggio registrato è giusto', labelEn: 'The recorded count is right', needsDetail: false }, { code: 'COUNTS_WRONG', labelIt: 'I nuovi conteggi sono sbagliati', labelEn: 'The new counts are wrong', needsDetail: false }, { code: 'WRONG_REPORT', labelIt: 'Non è la segnalazione da correggere', labelEn: 'This is not the report to correct', needsDetail: false }, { code: 'OTHER', labelIt: 'Altro', labelEn: 'Other', needsDetail: true }]
 const look = { icon: 'copy', tone: 'info' as const }
 const DECISIONS: ConflictDecisions = [
   { decision: 'KEEP_RECORDED', look, signs: true, reasons: [{ code: 'SAME_WORK', look }, { code: 'SCANNED_TWICE', look }, { code: 'WRONG_TABLET', look }] },
@@ -70,6 +76,7 @@ const model = (step: LineStep, extra: Partial<LineViewModel> = {}): LineViewMode
   waitingPending: 0,
   waitingUnknown: false,
   tiles: TILES,
+  correctionTiles: CORRECTION_TILES,
   decisions: DECISIONS,
   asOf: null,
   ticks: null,
@@ -129,6 +136,21 @@ export const designScreen = defineDesignScreen<LineViewModel>({
     { id: 'conflict', label: 'A sync conflict: both reports side by side', model: model({ kind: 'decide', item: CONFLICT_ITEM, stage: 'look' }) },
     { id: 'conflict-keep', label: 'Keep the recorded one: a reason tile, then the PIN', model: model({ kind: 'decide', item: CONFLICT_ITEM, stage: 'keep' }) },
     { id: 'conflict-send', label: 'Send to the office: a reason tile', model: model({ kind: 'decide', item: CONFLICT_ITEM, stage: 'send', tile: 'COUNTS_WRONG' }) },
+
+    { id: 'correction', label: 'A correction: old → new counts; its one record names the person where the scan does', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'look', record: RECORD }), note: 'The name is here only: never in the list (Owner answer W1), never with a figure about the person.' },
+    { id: 'correction-station', label: 'A correction at a site that records the station only: nobody named', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'look', record: { ...RECORD, person: null } }) },
+    { id: 'correction-next', label: 'A correction is the next item after a decision, its counts and reasons changed', model: model({ kind: 'decide', item: { ...CORRECTION_ITEM, row: { ...CORRECTION, asked: { good: 18, scrap: 1, rework: 1 } } } as typeof CORRECTION_ITEM, stage: 'look', done: true, record: { ...RECORD, asked: { good: 18, scrap: 1, rework: 1 }, reasons: [{ code: 'STAIN', quantity: 1, labelIt: 'Macchia', labelEn: 'Stain', labelI18n: {} }, { code: 'RESTITCH', quantity: 1, labelIt: 'Da ricucire', labelEn: 'To restitch', labelI18n: {} }] } }) },
+    { id: 'correction-reading', label: 'A correction opening: held until its record is read', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'look' }) },
+    { id: 'correction-unread', label: 'A correction whose record could not be read: held, says so', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'look', recordUnread: true }) },
+    { id: 'correction-own', label: 'Your own report or ask: held, another person decides (four eyes)', model: model({ kind: 'decide', item: OWN_CORRECTION, stage: 'look', record: { ...RECORD, own: true } }) },
+    { id: 'correction-offline', label: 'A correction offline: the decision is held with the reason', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'look', record: RECORD }, { online: false }) },
+    { id: 'correction-reject', label: 'Reject a correction: a reason tile', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'reject', record: RECORD }) },
+    { id: 'correction-reject-other', label: 'Reject a correction: Other asks for words', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'reject', record: RECORD, tile: 'OTHER', words: '' }) },
+    { id: 'correction-pin', label: 'Approve a correction: the PIN signs; the original stays', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'pin', record: RECORD, act: { type: 'approve' } }) },
+    { id: 'correction-pin-reject', label: 'Reject a correction: the PIN signs here too', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'pin', record: RECORD, act: { type: 'reject', tile: 'RECORDED_RIGHT', words: null } }) },
+    { id: 'correction-refused-self', label: 'Refused: the person took the report (four eyes)', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'look', record: RECORD, problem: { kind: 'refused', code: 'SELF_APPROVAL', message: 'Four eyes.', fix: null } }) },
+    { id: 'correction-refused-counts', label: 'Refused: the next operation took more than this leaves', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'look', record: RECORD, problem: { kind: 'refused', code: 'LESS_THAN_TAKEN', message: 'Fewer than taken.', fix: null } }) },
+    { id: 'correction-decided', label: 'Decided already by the office or another team leader', model: model({ kind: 'decide', item: CORRECTION_ITEM, stage: 'look', problem: { kind: 'refused', code: 'DECIDED_ALREADY', message: '', fix: null } }) },
 
     { id: 'reassign', label: 'Reassign: who may take it; no figure, one held, one with a warning', model: model({ kind: 'reassign', station: 'CUC-06', row: ROW, people: OPERATORS, chosen: null, reason: '' }) },
     { id: 'reassign-why', label: 'Reassign with a warning: a reason is asked', model: model({ kind: 'reassign', station: 'CUC-06', row: ROW, people: OPERATORS, chosen: OPERATORS.operators[1]!, reason: '' }) },

@@ -11,8 +11,8 @@ import { floorRead, floorWrite, seg, type TaskOutcome } from '../shared/task-api
  * The Line view's calls (B-W2b-70 on the API of B-W2b-35, -49, -50, -52, -53, -29, -47; design floor.supervisor SCR-168):
  * the line's numbers and stations (`GET /production/boards/tv`), its open calls (`GET /production/calls/board`), the
  * stations' Reassign and "nobody signed in" (`GET /production/dispatch/floor/line`), what waits for the team leader
- * (scrap over the limit, off-standard blocks, sync conflicts), the handover notes and scan on behalf. Line totals only: no
- * output per station, no figure per person, no money (Owner answer F2). Each answer is checked against the fields the
+ * (scrap over the limit, off-standard blocks, sync conflicts, corrections of a report: B-W2b-83), the handover notes and scan
+ * on behalf. Line totals only: no output per station, no figure per person, no money (Owner answer F2). Each answer is checked against the fields the
  * screen reads. Answering a call, a handover note and an entry on behalf may queue (the container's `queue.enqueue`); a
  * decision signed with the PIN and a reassign need the network.
  */
@@ -108,6 +108,28 @@ export type ConflictDecisions = z.infer<typeof decisions>
 const conflicts = z.object({ conflicts: z.array(conflict), decisions })
 export type Conflicts = z.infer<typeof conflicts>
 
+// B-W2b-83 (MES-096): the list names nobody; the one record the decision opens names who took the scan, where it names someone.
+const correctionCounts = { good: z.number(), scrap: z.number(), rework: z.number() }
+const correctionRow = z.object({
+  id: z.string(),
+  version: z.number(),
+  at: z.string(),
+  workOrder: z.object({ id: z.string(), number: z.string() }),
+  bundle: z.object({ id: z.string(), code: z.string() }),
+  operation: z.object({ seq: z.number(), name: z.string() }),
+  station: z.object({ id: z.string(), code: z.string() }).nullable(),
+  line: z.object({ id: z.string(), code: z.string() }).nullable(),
+  recorded: z.object({ ...correctionCounts, at: z.string() }),
+  asked: z.object(correctionCounts),
+  own: z.boolean(),
+})
+export type CorrectionRow = z.infer<typeof correctionRow>
+const correctionsAnswer = z.object({ rows: z.array(correctionRow), refusalTiles: z.array(refusalTile) })
+export type CorrectionsWaiting = z.infer<typeof correctionsAnswer>
+const correctionReason = z.object({ code: z.string(), quantity: z.number(), labelIt: z.string(), labelEn: z.string(), labelI18n: words })
+const correctionRecord = correctionRow.extend({ status: z.enum(['PENDING', 'APPROVED', 'REFUSED']), reason: z.string(), person: z.string().nullable(), reasons: z.array(correctionReason), recordedReasons: z.array(correctionReason) })
+export type CorrectionRecord = z.infer<typeof correctionRecord>
+
 // ---- reads --------------------------------------------------------------------------------------------------------------
 
 export const readBoard = (api: ApiClient): Promise<TaskOutcome<LineBoard>> => floorRead(api, '/production/boards/tv', { schema: boardSchema })
@@ -116,6 +138,12 @@ export const readFloorLine = (api: ApiClient): Promise<TaskOutcome<FloorLine>> =
 export const readScrap = (api: ApiClient): Promise<TaskOutcome<ScrapWaiting>> => floorRead(api, '/production/scrap/floor/waiting', { schema: scrapWaiting })
 export const readBlocks = (api: ApiClient): Promise<TaskOutcome<z.infer<typeof blocksAnswer>>> => floorRead(api, '/production/offstandard/floor/lead', { schema: blocksAnswer })
 export const readConflicts = (api: ApiClient): Promise<TaskOutcome<Conflicts>> => floorRead(api, '/floor/sync/conflicts', { schema: conflicts })
+export const readCorrections = (api: ApiClient): Promise<TaskOutcome<CorrectionsWaiting>> => floorRead(api, '/production/scans/floor/corrections', { schema: correctionsAnswer })
+const oneCorrection = z.object({ request: correctionRecord })
+export const readCorrection = async (api: ApiClient, id: string): Promise<TaskOutcome<CorrectionRecord>> => {
+  const answer = await floorRead(api, `/production/scans/floor/corrections/${seg(id)}`, { schema: oneCorrection })
+  return answer.ok ? { ok: true, value: answer.value.request } : answer
+}
 
 // ---- decisions (the PIN: 403 `stepUp` until it is proved, then the same act with the same key) ---------------------------
 
@@ -127,6 +155,9 @@ export const refuseScrap = (api: ApiClient, row: Pick<ScrapRow, 'scanId'>, reaso
 export const approveBlock = (api: ApiClient, row: Pick<BlockRow, 'id' | 'version'>, key: string) => floorWrite(api, 'POST', `/production/offstandard/floor/lead/${seg(row.id)}/approve`, { body: { version: row.version }, schema: anything, idempotencyKey: key })
 export const rejectBlock = (api: ApiClient, row: Pick<BlockRow, 'id' | 'version'>, reason: string, key: string) =>
   floorWrite(api, 'POST', `/production/offstandard/floor/lead/${seg(row.id)}/reject`, { body: { version: row.version, reason }, schema: anything, idempotencyKey: key })
+export const approveCorrection = (api: ApiClient, row: Pick<CorrectionRow, 'id' | 'version'>, key: string) => floorWrite(api, 'POST', `/production/scans/floor/corrections/${seg(row.id)}/approve`, { body: { version: row.version }, schema: anything, idempotencyKey: key })
+export const refuseCorrection = (api: ApiClient, row: Pick<CorrectionRow, 'id' | 'version'>, reason: string, note: string | null, key: string) =>
+  floorWrite(api, 'POST', `/production/scans/floor/corrections/${seg(row.id)}/refuse`, { body: { version: row.version, reason, ...(note ? { note } : {}) }, schema: anything, idempotencyKey: key })
 export const decideConflict = (api: ApiClient, row: Pick<Conflict, 'id' | 'version'>, decision: ConflictDecisions[number]['decision'], reason: string, key: string) =>
   floorWrite(api, 'POST', `/floor/sync/conflicts/${seg(row.id)}/decide`, { body: { decision, reason, version: row.version }, schema: anything, idempotencyKey: key })
 

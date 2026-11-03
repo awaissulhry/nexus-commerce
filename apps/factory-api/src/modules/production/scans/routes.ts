@@ -23,6 +23,11 @@ import {
   workOrderWipContract,
 } from './contract'
 import { approveCorrection, correctionOf, listCorrections, refuseCorrection } from './corrections'
+// B-W2b-83 (MES-096): a team leader decides a correction on the tablet, with the PIN.
+import { floorApproveContract, floorCorrectionContract, floorCorrectionsContract, floorRefuseContract } from './contract'
+import { floorApproveCorrection, floorCorrection, floorCorrections, floorRefuseCorrection } from './corrections'
+import { requireFloorStepUp } from '../../../platform/auth/floor/step-up'
+import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { manifest } from './manifest'
 import { reportReceiptLine } from './outside'
 import { siteWip, workOrderWip } from './progress'
@@ -83,6 +88,18 @@ export default defineRoutes('production.scans', manifest, async (app) => {
 
   app.post('/production/scans/corrections/:requestId/refuse', { schema: refuseContract }, async (request, reply) =>
     reply.code(201).send(await refuseCorrection(request, request.params.requestId, request.body, idempotencyKeyFrom(request))),
+  )
+
+  app.get('/production/scans/floor/corrections', { schema: floorCorrectionsContract }, async (request) => floorCorrections(request))
+
+  app.get('/production/scans/floor/corrections/:requestId', { schema: floorCorrectionContract }, async (request) => floorCorrection(request, request.params.requestId))
+
+  app.post('/production/scans/floor/corrections/:requestId/approve', { schema: floorApproveContract }, async (request, reply) =>
+    reply.code(201).send(await floorApproveCorrection(request, request.params.requestId, request.body, { stepUp: () => requireFloorStepUp(officeAuthOf(app), request), idempotencyKey: idempotencyKeyFrom(request) })),
+  )
+
+  app.post('/production/scans/floor/corrections/:requestId/refuse', { schema: floorRefuseContract }, async (request, reply) =>
+    reply.code(201).send(await floorRefuseCorrection(request, request.params.requestId, request.body, { stepUp: () => requireFloorStepUp(officeAuthOf(app), request), idempotencyKey: idempotencyKeyFrom(request) })),
   )
 
   app.get('/production/scans/refusals', { schema: refusalsContract }, async (request) => listRefusals(request, request.query))
