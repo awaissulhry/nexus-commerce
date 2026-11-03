@@ -1938,6 +1938,8 @@
     "people_payroll_manage": "Gestire codici e tracciati paghe, fare le esportazioni e inviarle con link sicuro",
     "safety_view": "Vedere lo scadenzario sicurezza (ogni scadenza di legge, le visite mediche solo come numeri) e l'organigramma della sicurezza con nomine e comunicazioni RLS",
     "safety_organisation_manage": "Nominare persone e contatti esterni ai ruoli della sicurezza, registrare la firma del nominato, chiudere un incarico, registrare la comunicazione RLS inviata all'INAIL",
-    "safety_calendar_manage": "Aggiungere, modificare, segnare come fatte e annullare le scadenze inserite nello scadenzario, con le loro evidenze"
+    "safety_calendar_manage": "Aggiungere, modificare, segnare come fatte e annullare le scadenze inserite nello scadenzario, con le loro evidenze",
+    "safety_risk_manage": "Gestire le valutazioni dei rischi (DVR): congelare le versioni del consulente, registrare le firme su carta, conservare il sigillo; le misure del programma di miglioramento",
+    "safety_risk_sign": "Firmare di persona una versione della valutazione dei rischi per il ruolo della sicurezza che si ricopre (con un codice nuovo)"
   }
 }

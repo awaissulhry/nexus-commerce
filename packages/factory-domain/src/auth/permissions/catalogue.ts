@@ -166,6 +166,8 @@ import { QUALITY_DOCUMENTS_DEFINITIONS, QUALITY_DOCUMENTS_PERMISSIONS } from '..
 // B-W2b-120: the safety organisation and the safety calendar (safety.view | organisation.manage | calendar.manage).
 import { SAFETY_DEFINITIONS, SAFETY_PERMISSIONS } from '../../safety/organisation/permissions'
 import { SAFETY_CALENDAR_DEFINITIONS, SAFETY_CALENDAR_PERMISSIONS } from '../../safety/calendar/permissions'
+// B-W2b-122: the risk assessment, the DVR (safety.risk.manage | sign).
+import { SAFETY_RISK_DEFINITIONS, SAFETY_RISK_PERMISSIONS } from '../../safety/risk/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -609,6 +611,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-120: the safety organisation and the safety calendar.
   SAFETY_DEFINITIONS,
   SAFETY_CALENDAR_DEFINITIONS,
+  // B-W2b-122: the risk assessment, the DVR.
+  SAFETY_RISK_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -775,6 +779,8 @@ for (const name of PLANT_CHECKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared
 for (const name of [...QUALITY_AMENDMENTS_PERMISSIONS, ...QUALITY_DOCUMENTS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-120: the safety organisation and the safety calendar.
 for (const name of [...SAFETY_PERMISSIONS, ...SAFETY_CALENDAR_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-122: the risk assessment, the DVR.
+for (const name of SAFETY_RISK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

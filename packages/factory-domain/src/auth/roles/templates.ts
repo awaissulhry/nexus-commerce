@@ -490,6 +490,16 @@ const SAFETY_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.free
   maintenance: ['safety.view'],
   floor_supervisor: ['safety.view'],
 })
+/**
+ * B-W2b-122 (the risk assessment, the DVR; QHS-230, QHS-234; design plant.risk): the safety officer keeps the assessments,
+ * freezes the consultant's versions, records signed papers and keeps the improvement plan (no money: a measure's cost is the
+ * cost grain it does not hold), and signs for the role it holds (an in-house RSPP); the occupational doctor signs a version
+ * for its own role. A measure's owner moves their own measure with safety.view. Office only; owner from every().
+ */
+const RISK_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.risk.manage', 'safety.risk.sign'],
+  company_doctor: ['safety.risk.sign'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -556,7 +566,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-123
   ...(audience === 'office' ? (AMENDMENTS_DOCUMENTS_ADDS[key] ?? []) : []),
   // B-W2b-120
-  ...(audience === 'office' ? (SAFETY_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (SAFETY_ADDS[key] ?? []) : []),
+  // B-W2b-122
+  ...(audience === 'office' ? (RISK_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
