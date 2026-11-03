@@ -142,6 +142,8 @@ import { PRODUCTION_BOARDS_DEFINITIONS, PRODUCTION_BOARDS_FLOOR_PERMISSIONS, PRO
 import { PRODUCTION_DISPATCH_DEFINITIONS, PRODUCTION_DISPATCH_FLOOR_PERMISSIONS, PRODUCTION_DISPATCH_PERMISSIONS } from '../../production/dispatch/permissions'
 // B-W2b-93: AQL profiles and the AQL calculator (quality.aql.view | manage).
 import { QUALITY_AQL_DEFINITIONS, QUALITY_AQL_PERMISSIONS } from '../../quality/aql/permissions'
+// B-W2b-92: inspection plans (quality.plans.view | manage | approve).
+import { QUALITY_PLANS_DEFINITIONS, QUALITY_PLANS_PERMISSIONS } from '../../quality/plans/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -561,6 +563,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCTION_DISPATCH_DEFINITIONS,
   // B-W2b-93: AQL profiles and the AQL calculator.
   QUALITY_AQL_DEFINITIONS,
+  // B-W2b-92: inspection plans.
+  QUALITY_PLANS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -699,6 +703,8 @@ for (const name of PRODUCTION_BOARDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 for (const name of PRODUCTION_DISPATCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-93: AQL profiles and the AQL calculator.
 for (const name of QUALITY_AQL_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-92: inspection plans.
+for (const name of QUALITY_PLANS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
