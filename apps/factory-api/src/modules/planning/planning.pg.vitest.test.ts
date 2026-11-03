@@ -343,7 +343,8 @@ describe('two runs of one site never overlap (PLN-062)', () => {
     const before = (await latest()).run.id
     usePlanningRunTimeout(1)
     try {
-      expect((await call('planner', 'POST', '/planning/runs', { siteId: A.siteA1 })).statusCode).toBe(500)
+      // A transaction past its timeout answers 503 "busy, try again" since B-W2b-F2 (errors.ts); the run is still FAILED.
+      expect((await call('planner', 'POST', '/planning/runs', { siteId: A.siteA1 })).statusCode).toBe(503)
     } finally {
       usePlanningRunTimeout(undefined)
     }
