@@ -136,7 +136,7 @@ export const designScreen = defineDesignScreen<CalendarCase>({
       id: 'month-day',
       label: 'Another day chosen',
       model: base('safety', {}, { day: '2026-10-28' }),
-      note: 'The statutory forklift check: kept on Preventive & statutory checks, a page not built yet: the item says so and links to its machine.',
+      note: 'The statutory forklift check opens its plan on Preventive & statutory checks (B-W2b-142).',
     },
     {
       id: 'list',

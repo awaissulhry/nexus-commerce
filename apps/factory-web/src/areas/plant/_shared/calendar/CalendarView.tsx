@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useRef, type DragEvent, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CALENDAR_GRID_WORDS, CalendarGrid, type CalendarGridWords, type CalendarKind } from '@nexus/ui/components/CalendarGrid/index'
 import { DueCell } from '@nexus/ui/components/DueCell/index'
@@ -47,7 +47,21 @@ export interface CalendarViewProps {
   loading?: boolean
   /** Under the agenda: the host's note (a source that could not be read). */
   note?: ReactNode
+  /**
+   * B-W2b-142 ("Drag a chip to reschedule"): an agenda item that `canMove` drags onto a day of the month; the drop calls
+   * `onMove(item, day)` (the host asks the new date's reason in its own dialog). Optional: without it nothing drags. The
+   * keyboard way is the host's own (its Move dialog); `hint` says so under the agenda.
+   */
+  move?: { canMove: (item: CalendarViewItem) => boolean; onMove: (item: CalendarViewItem, day: string) => void; hint?: string } | null
   className?: string
+}
+
+/** The day (`YYYY-MM-DD`) of the calendar cell under a drag, or null (a cell carries its day in `data-cal-date`). */
+export function dropDayOf(target: EventTarget | null): string | null {
+  const element = target as HTMLElement | null
+  if (!element || typeof element.closest !== 'function') return null
+  const day = element.closest<HTMLElement>('[data-cal-date]')?.dataset.calDate ?? null
+  return day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null
 }
 
 export function CalendarView(props: CalendarViewProps) {
@@ -69,11 +83,50 @@ function useGridWords(): CalendarGridWords {
   return useMemo(() => ({ ...(Object.fromEntries(GRID_KEYS.map((key) => [key, kit(`calendar.${key}`)])) as unknown as CalendarGridWords), list: t('grid.list'), listEmpty: t('grid.listEmpty') }), [kit, t])
 }
 
-function Calendar({ label, items, month, onMonth, today, selectedDay, onDay, onOpen, hrefOf, loading = false, note, className }: CalendarViewProps) {
+function Calendar({ label, items, month, onMonth, today, selectedDay, onDay, onOpen, hrefOf, loading = false, note, move, className }: CalendarViewProps) {
   const t = useT('plant-calendar-view')
   const locale = useLocale()
   const words = useGridWords()
   const byDay = useMemo(() => itemsByDay(items ?? []), [items])
+  // A drag in progress (the item's key) and the day cell it is over (marked with an attribute the part's CSS draws).
+  const dragged = useRef<string | null>(null)
+  const marked = useRef<HTMLElement | null>(null)
+  const mark = (element: HTMLElement | null) => {
+    if (marked.current === element) return
+    marked.current?.removeAttribute('data-fw-drop')
+    element?.setAttribute('data-fw-drop', '')
+    marked.current = element
+  }
+  const endDrag = () => {
+    dragged.current = null
+    mark(null)
+  }
+  const dropTarget = (target: EventTarget | null): HTMLElement | null => {
+    const element = target as HTMLElement | null
+    return element && typeof element.closest === 'function' ? element.closest<HTMLElement>('[data-cal-date]') : null
+  }
+  const draggedItem = (): CalendarViewItem | null => (dragged.current ? ((items ?? []).find((entry) => entry.key === dragged.current) ?? null) : null)
+  const gridDrops = move
+    ? {
+        onDragOver: (event: DragEvent<HTMLDivElement>) => {
+          if (!dragged.current || !dropDayOf(event.target)) return
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'move'
+          mark(dropTarget(event.target))
+        },
+        onDragLeave: (event: DragEvent<HTMLDivElement>) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) mark(null)
+        },
+        onDrop: (event: DragEvent<HTMLDivElement>) => {
+          const item = draggedItem()
+          const day = dropDayOf(event.target)
+          endDrag()
+          if (!item || !day) return
+          event.preventDefault()
+          if (day !== item.date) move.onMove(item, day)
+        },
+      }
+    : {}
   const kinds: CalendarKind[] = useMemo(() => [...DAY_KINDS.map((kind) => ({ id: kind, label: t(`kind.${kind}`), tone: KIND_TONE[kind], pattern: KIND_PATTERN[kind] })), { id: 'none', label: t('kind.none') }], [t])
   const days = useMemo(
     () =>
@@ -94,7 +147,7 @@ function Calendar({ label, items, month, onMonth, today, selectedDay, onDay, onO
 
   return (
     <div className={['fw-cv', className ?? ''].filter(Boolean).join(' ')}>
-      <div className="fw-cv-grid">
+      <div className="fw-cv-grid" {...gridDrops}>
         <CalendarGrid
           label={label}
           kinds={kinds}
@@ -132,8 +185,25 @@ function Calendar({ label, items, month, onMonth, today, selectedDay, onDay, onO
               <ul className="fw-cv-list">
                 {agenda.map((item) => {
                   const href = hrefOf?.(item) ?? null
+                  const movable = !!move && move.canMove(item)
                   return (
-                    <li key={item.key} className="fw-cv-item" data-state={item.state}>
+                    <li
+                      key={item.key}
+                      className="fw-cv-item"
+                      data-state={item.state}
+                      {...(movable
+                        ? {
+                            draggable: true,
+                            'data-movable': '',
+                            onDragStart: (event: DragEvent<HTMLLIElement>) => {
+                              dragged.current = item.key
+                              event.dataTransfer.effectAllowed = 'move'
+                              event.dataTransfer.setData('text/plain', item.title)
+                            },
+                            onDragEnd: endDrag,
+                          }
+                        : {})}
+                    >
                       <DueState state={item.state} date={item.date} today={today} />
                       <span className="fw-cv-what">
                         {href ? (
@@ -159,6 +229,7 @@ function Calendar({ label, items, month, onMonth, today, selectedDay, onDay, onO
           <p className="fw-cv-note">{t('agenda.pick')}</p>
         )}
         {loading && items !== null && <p className="fw-cv-note">{t('agenda.reading')}</p>}
+        {move?.hint && agenda.some((item) => move.canMove(item)) && <p className="fw-cv-note">{move.hint}</p>}
         {note}
       </section>
     </div>

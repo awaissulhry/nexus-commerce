@@ -70,6 +70,7 @@
       "requests": "Machine requests",
       "jobs": "Maintenance jobs",
       "machines": "Machines & tools",
+      "preventive": "Preventive & statutory checks",
       "safety": "Health & safety",
       "calendar": "Safety calendar",
       "settingsGroup": "Settings",

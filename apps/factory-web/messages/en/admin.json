@@ -1950,6 +1950,7 @@
     "safety_incidents_view": "See incidents, near misses and hazards anonymised: what, when, where, severity, actions, photos and the INAIL deadlines (never the person or the injury)",
     "safety_incidents_report": "Report an incident, a near miss or a hazard from the office, with the people involved",
     "safety_incidents_manage": "Keep the incidents: correct the report, severity, seen by safety, actions made into a job, a measure or a training session, close, reopen, cancel, photos",
-    "safety_incidents_people": "Protected: see and correct the people involved and their injuries, keep the INAIL filings (certificate, filed with the protocol number, receipt); each view is recorded"
+    "safety_incidents_people": "Protected: see and correct the people involved and their injuries, keep the INAIL filings (certificate, filed with the protocol number, receipt); each view is recorded",
+    "safety_rolesheets_manage": "Keep the role risk sheets (scheda mansione): risks, PPE kit, courses and health surveillance per role; apply a sheet after reading what it changes for the people in the role"
   }
 }

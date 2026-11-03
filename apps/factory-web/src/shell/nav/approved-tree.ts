@@ -483,6 +483,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'plant.requests', title: 'Machine requests', titleIt: 'Richieste di intervento', wave: 'W2a', href: '/plant/requests' },
           { id: 'plant.jobs', title: 'Maintenance jobs', titleIt: 'Interventi', wave: 'W2a', href: '/plant/jobs' },
           { id: 'plant.machines', title: 'Machines & tools', titleIt: 'Macchine e attrezzature', wave: 'W2a', href: '/plant/machines' },
+          // B-W2b-142: Preventive & statutory checks (SCR-266).
+          { id: 'plant.preventive', title: 'Preventive & statutory checks', titleIt: 'Manutenzione programmata e verifiche', wave: 'W2b', href: '/plant/preventive' },
         ],
       },
       // B-W2b-120: Health & safety ships its Safety calendar (SCR-267); the other Health & safety pages join with their steps.

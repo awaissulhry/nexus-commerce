@@ -552,6 +552,14 @@ const QUALITY_REPORTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Ob
   floor_supervisor: ['quality.reports.view'],
   buyer: ['quality.reports.view'],
 })
+/**
+ * B-W2b-128 (role risk sheets, QHS-236; design plant.risk "Role sheets"; Owner answer H2): the safety officer types the 6 to
+ * 10 role sheets (risks, PPE kit, courses, whether the role needs health surveillance) and applies them. Which sheet a person
+ * is in stays the HR record's (people.employees.manage). Office only; owner from every(); read_only gets none (no read added).
+ */
+const ROLESHEETS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.rolesheets.manage'],
+})
 // B-W2b-132: the leather and cut plan — the planner (the design's role) changes a style's cutting loss from its cuts (into the
 // draft revision) or dismisses the proposal with a reason. The owner from every().
 const LEATHER_PLAN_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
@@ -634,6 +642,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (INCIDENTS_ADDS[key] ?? []) : []),
   // B-W2b-138
   ...(audience === 'office' ? (QUALITY_REPORTS_ADDS[key] ?? []) : []),
+  // B-W2b-128
+  ...(audience === 'office' ? (ROLESHEETS_ADDS[key] ?? []) : []),
   // B-W2b-132
   ...(audience === 'office' ? (LEATHER_PLAN_ADDS[key] ?? []) : [])]
 /**
