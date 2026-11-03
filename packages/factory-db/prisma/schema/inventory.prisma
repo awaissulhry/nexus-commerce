@@ -294,6 +294,8 @@ model Lot {
   shadeGroups         ShadeGroup[]
   fabricRolls         FabricRoll[]
   garmentProtectors   GarmentProtectorLot[]
+  // W2b-2 cutting.prisma (wave 13/16): the recut tickets cut from it (the same shade lot).
+  recutTickets        CutTicket[]
   // W2a ncr.prisma: the nonconformances about it.
   nonconformances Nonconformance[]
   // W2a claims.prisma, subcontract.prisma: the claim lines and kit lines that name it.

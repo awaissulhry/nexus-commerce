@@ -156,6 +156,9 @@ model Item {
   // W2b leather.prisma (wave 12/16): what each grade means for it, and its shade groups.
   gradeRules      ItemGradeRule[]
   shadeGroups     ShadeGroup[]
+  // W2b-2 cutting.prisma (wave 13/16): the cut orders that cut it, and the downgrades that keep garments as it (second quality).
+  cutOrders       CutOrder[]
+  secondQualityDowngrades GarmentDowngrade[] @relation("GarmentDowngradeItem")
   // supply.prisma: the purchase order lines that buy it and the planning runs' requirements of it.
   purchaseOrderLines   PurchaseOrderLine[]
   materialRequirements MaterialRequirement[]
@@ -300,6 +303,8 @@ model ItemColour {
   supplierItems        SupplierItem[]
   // W2b leather.prisma (wave 12/16): the shade groups of this colour.
   shadeGroups          ShadeGroup[]
+  // W2b-2 cutting.prisma (wave 13/16): the cut orders that cut the material in this colour.
+  cutOrders            CutOrder[]
   supplierClaimLines   SupplierClaimLine[]
   subcontractKitLines  SubcontractKitLine[]
 
@@ -556,6 +561,8 @@ model Variant {
   colourway Colourway @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2a: its finished-goods item (one at most).
   items     Item[]
+  // W2b-2 cutting.prisma (wave 13/16): the garments kept as this SKU in second quality.
+  garmentDowngrades GarmentDowngrade[]
 
   @@unique([tenantId, sku])
   @@unique([tenantId, gtin])
@@ -600,6 +607,8 @@ model StyleRevision {
   salesOrderLines SalesOrderLine[]
   // production.prisma: the work orders released with it as their frozen specification.
   workOrders      WorkOrder[]
+  // W2b-2 cutting.prisma (wave 13/16): its pattern pieces (frozen with it).
+  patternPieces   PatternPiece[]
   // quality.prisma: the PPE register entries about garments made to it.
   ppeRegisterEntries PpeRegisterEntry[]
   // W2a compliance.prisma: the type-change reviews of this revision, and those that compare a revision with it.
@@ -667,6 +676,8 @@ model BomLine {
   colours    BomLineColour[]
   // production.prisma: the work orders' planned materials of the line.
   workOrderMaterials WorkOrderMaterial[]
+  // W2b-2 cutting.prisma (wave 13/16): the pattern pieces cut from the line.
+  patternPieces      PatternPiece[]
 
   @@unique([tenantId, revisionId, seq])
   // The target of the size rows' reference: a line of the same revision.

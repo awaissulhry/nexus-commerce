@@ -1,0 +1,686 @@
+// The cutting room (W2b schema wave 13/16, B-W2b-85; features MES-034, MES-037, MES-038, MES-039, MES-041, MES-043, MES-044,
+// MES-045, MES-046, MES-047, MES-048, MES-053, MES-055, MES-060, MES-063, MES-064, MES-132, MES-133, PRD-219; design
+// production.cutting "Cut orders", "Lays", "Reconcile cut", floor.fabriccut, floor.hidecut, products.styles "Pattern pieces",
+// production.scrap "Downgrade to second quality"): cut orders over several work orders, their tickets, fabric lays roll by roll,
+// the ply check, ply stickers, fabric used, the reconciliation per size, recut tickets, secondary processes, the trolley to
+// sewing, pattern pieces and second quality. W2a had no cut order: a "cut" was one work order's leather (B-W2a-60).
+//
+// Two paths, kept apart. LEATHER: a cut order groups work orders of one leather article (and colour); its hides are reserved
+// (reservations.prisma) and cut one by one in the cut log (production.prisma CutLog, which gains the photo, the thickness and
+// the overrides of the cutting rules here). FABRIC: a cut order has one marker (its size ratio per cell on the lines) and is
+// spread in lays, roll by roll (Lay, LayRoll), counted at both ends, cut, ply-numbered (PlyRun) and confirmed (CutConsumption).
+// Nothing on the leather path reads a lay table, so the fabric tables can stay empty in a factory that cuts no lays.
+//
+// What a cut order cuts is its lines: one work order cell (colourway and size) each, with the garments it cuts for the cell.
+// The reconciliation (MES-045) freezes, per line, what was ordered and what was cut once the cut order is cut; nothing in it is
+// changed afterwards (append-only). A ticket (MES-041) is scanned at the start and at the end of cutting: one per lay of a
+// fabric cut order, one per leather cut order, and one per recut (MES-044: replacement panels that join the original bundle).
+//
+// Stock stays the ledger's (W1): a lay names its rolls and what it took off them, but the roll's length left is kept by the
+// module that cuts (leather.prisma FabricRoll), and every move names its lot (and hide), as before. No cost, price, margin or
+// wages column here: consumption is in units, and the valuation ledger prices it.
+//
+// Workers (Statuto dei Lavoratori art. 4; Owner answers W1, F2): no row here names the worker who spread, cut, counted or
+// carried; the cut log keeps W1's rule (the signed-in worker, or the station). The lead who allowed "Cut anyway" is named on
+// that one cut log entry, as an approval is, never as a figure, filter or total.
+//
+// Who sees what (ownership/cutting.json): the office plans and closes cut orders, tickets and the reconciliation; the floor of
+// the cut order's site reads them, moves a ticket, a lay and its cut order on, spreads rolls, prints ply stickers, confirms the
+// fabric used, loads and receives trolleys and moves secondary processes. Pattern pieces are product data: the office keeps
+// them on a draft revision (frozen with it, as the BOM), the floor reads them tenant-wide. Portal and link sessions read
+// nothing here. The rules are the hand-written …_cutting_room_w2b_guards triggers, for every login.
+
+/// What a cut order cuts.
+enum CutOrderKind {
+  /// Hides of one leather article, cut one by one (the cut log).
+  LEATHER
+  /// Fabric of one article, spread in lays from its rolls and cut by a marker.
+  FABRIC
+}
+
+/// PLANNED → RELEASED | CANCELLED; RELEASED → IN_PROGRESS | PLANNED | CANCELLED; IN_PROGRESS → CUT; CUT → RECONCILED.
+/// RECONCILED and CANCELLED are final.
+enum CutOrderStatus {
+  /// Lines and the marker are being put together.
+  PLANNED
+  /// Tickets may be printed and work may start.
+  RELEASED
+  /// The first ticket was scanned at a table.
+  IN_PROGRESS
+  /// Everything is cut (a fabric cut order: every lay CUT or CANCELLED, one at least CUT).
+  CUT
+  /// Every line has its reconciliation (MES-045).
+  RECONCILED
+  CANCELLED
+}
+
+/// A cut order (MES-034; design production.cutting "Cut orders", pop "New cut order"): work orders of the same material and
+/// colour cut together at one table, leather by hide or fabric by lay. Numbered from the company's CUT_ORDER series. Never
+/// deleted (CANCELLED with a reason).
+model CutOrder {
+  id             String         @id @db.Uuid
+  tenantId       String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that cuts: the site's.
+  companyId      String         @db.Uuid
+  siteId         String         @db.Uuid
+  /// From the company's CUT_ORDER series, unique in the company. Fixed.
+  number         String
+  /// Fixed.
+  kind           CutOrderKind
+  /// The material cut: a leather article tracked by HIDE (LEATHER) or a fabric tracked by LOT (FABRIC). Fixed.
+  itemId         String         @db.Uuid
+  /// The material's colour, when it comes in colours: every line's cell takes the material in it. Fixed.
+  itemColourId   String?        @db.Uuid
+  /// The cutting table (a station of the site); null: not yet given one.
+  stationId      String?        @db.Uuid
+  /// FABRIC: the marker every lay is cut by (MES-034; CAD import is Later, MES-035): its name, its length (above 0, in M, CM
+  /// or MM, both or neither), its usable width and the plot as a file. Required from RELEASED on; set while PLANNED. LEATHER:
+  /// none of it.
+  markerName     String?
+  markerLength   Decimal?       @db.Decimal(18, 4)
+  markerUom      Uom?
+  markerWidthCm  Decimal?       @db.Decimal(10, 2)
+  markerFileId   String?        @db.Uuid
+  dueDate        DateTime?      @db.Date
+  status         CutOrderStatus @default(PLANNED)
+  /// Set exactly from RELEASED on (kept when CANCELLED after a release, cleared when it goes back to PLANNED).
+  releasedAt     DateTime?      @db.Timestamptz(3)
+  releasedById   String?        @db.Uuid
+  /// Set exactly from CUT on.
+  cutAt          DateTime?      @db.Timestamptz(3)
+  /// Set exactly when RECONCILED: when, and the office user who reconciled it.
+  reconciledAt   DateTime?      @db.Timestamptz(3)
+  reconciledById String?        @db.Uuid
+  /// Set exactly when CANCELLED, with the reason.
+  cancelledAt    DateTime?      @db.Timestamptz(3)
+  cancelReason   String?
+  note           String?
+  version        Int            @default(1)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?        @db.Uuid
+
+  site            Site                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  item            Item                @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, itemId and siteId.
+  itemColour      ItemColour?         @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  station         Station?            @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  markerFile      StoredFile?         @relation("CutOrderMarkerFile", fields: [tenantId, markerFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines           CutOrderLine[]
+  tickets         CutTicket[]
+  lays            Lay[]
+  consumptions    CutConsumption[]
+  reconciliations CutReconciliation[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of its parts' site-safe references.
+  @@unique([tenantId, siteId, id])
+  // What waits and what runs, per site (the Cutting tiles).
+  @@index([tenantId, siteId, status])
+}
+
+/// One line of a cut order (MES-034, MES-037): one work order cell (colourway and size) and the garments the cut order cuts
+/// for it. FABRIC: the marker's garments of the cell per ply (its size ratio) and the plies it takes, ratio × plies = its
+/// garments. A cell is on a cut order once (the API keeps it so: a key of ids alone cannot be copied by the generated
+/// isolation tests). Written, changed and removed only while the cut order is PLANNED.
+model CutOrderLine {
+  id              String   @id @db.Uuid
+  tenantId        String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String   @db.Uuid
+  cutOrderId      String   @db.Uuid
+  /// Its place on the cut order, unique per cut order.
+  seq             Int
+  /// A work order of the cut order's site, RELEASED or IN_PROGRESS when added, and its cell; the cell takes the cut order's
+  /// material (and colour) in its planned materials.
+  workOrderId     String   @db.Uuid
+  workOrderSizeId String   @db.Uuid
+  /// Garments of the cell, from 1 to the cell's quantity.
+  quantity        Int
+  /// FABRIC, both: garments of the cell in one ply of the marker (from 1) and the plies (from 1); ratio × plies = quantity.
+  /// LEATHER: neither.
+  ratio           Int?
+  plies           Int?
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?  @db.Uuid
+
+  cutOrder        CutOrder            @relation(fields: [tenantId, siteId, cutOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize   WorkOrderSize       @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  reconciliations CutReconciliation[]
+
+  @@unique([tenantId, cutOrderId, seq])
+  // The target of the reconciliation's reference: a line of the same site and cut order.
+  @@unique([tenantId, siteId, cutOrderId, id])
+  // The cut orders of a work order.
+  @@index([tenantId, workOrderId])
+}
+
+/// A ticket cuts a cut order (a lay of it), or recuts replacement panels.
+enum CutTicketKind {
+  /// One per lay of a fabric cut order, one per leather cut order (MES-041).
+  CUT
+  /// Replacement panels of one cell and part, which join the original bundle (MES-044; production.prisma ReplacementRequest).
+  RECUT
+}
+
+/// OPEN → STARTED → DONE; OPEN and STARTED → VOID. DONE and VOID are final.
+enum CutTicketStatus {
+  /// Printed, waiting at the table.
+  OPEN
+  /// Scanned at the start of cutting.
+  STARTED
+  /// Scanned again at the end of cutting.
+  DONE
+  /// Made by mistake or replaced: no scan takes it any more.
+  VOID
+}
+
+/// A cut ticket (MES-041, MES-044; design floor.fabriccut "Cut ticket", "Recut tickets"): what the cutter starts from and
+/// scans at the start and at the end. Numbered from the company's CUT_TICKET series; its scan code is what the label's
+/// barcode says. Never deleted (VOID).
+model CutTicket {
+  id              String          @id @db.Uuid
+  tenantId        String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId       String          @db.Uuid
+  siteId          String          @db.Uuid
+  /// From the company's CUT_TICKET series, unique in the company. Fixed.
+  number          String
+  /// What the label's barcode says, no spaces, unique in the tenant. Fixed.
+  scanCode        String
+  /// Fixed.
+  kind            CutTicketKind
+  /// CUT: its cut order, and (fabric) its lay; at most one ticket that is not VOID per lay, and per leather cut order. RECUT:
+  /// neither. Fixed.
+  cutOrderId      String?         @db.Uuid
+  layId           String?         @db.Uuid
+  /// RECUT: the work order, its cell, the original bundle the panels join (an ACTIVE bundle of the cell), the part (as the
+  /// pattern names it; null: whole garments), the sets to cut (from 1), and where to cut them from: a lot of the material
+  /// (the same shade lot, item and lot together) and/or end bits. CUT: none of it. Fixed.
+  workOrderId     String?         @db.Uuid
+  workOrderSizeId String?         @db.Uuid
+  bundleId        String?         @db.Uuid
+  part            String?
+  quantity        Int?
+  lotItemId       String?         @db.Uuid
+  lotId           String?         @db.Uuid
+  endBits         Boolean         @default(false)
+  status          CutTicketStatus @default(OPEN)
+  /// The last time its label was printed.
+  printedAt       DateTime?       @db.Timestamptz(3)
+  /// Set exactly from STARTED on (DONE included; kept when VOID), and exactly when DONE.
+  startedAt       DateTime?       @db.Timestamptz(3)
+  doneAt          DateTime?       @db.Timestamptz(3)
+  /// Set exactly when VOID, with the reason.
+  voidedAt        DateTime?       @db.Timestamptz(3)
+  voidReason      String?
+  version         Int             @default(1)
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?         @db.Uuid
+
+  site                Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  cutOrder            CutOrder?            @relation(fields: [tenantId, siteId, cutOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  lay                 Lay?                 @relation(fields: [tenantId, siteId, cutOrderId, layId], references: [tenantId, siteId, cutOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize       WorkOrderSize?       @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle              Bundle?              @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot                 Lot?                 @relation(fields: [tenantId, siteId, lotItemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  // production.prisma: the replacement it recuts (ReplacementRequest.recutTicketId).
+  replacementRequests ReplacementRequest[]
+
+  @@unique([tenantId, companyId, number])
+  @@unique([tenantId, scanCode])
+  // The target of the replacements' site-safe reference.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, cutOrderId])
+  // The recuts waiting, per site (the Recut tickets list).
+  @@index([tenantId, siteId, kind, status])
+}
+
+/// PLANNED → SPREADING → CHECKED → CUT; CHECKED → SPREADING (a roll added after the count); PLANNED, SPREADING and CHECKED →
+/// CANCELLED. CUT and CANCELLED are final.
+enum LayStatus {
+  PLANNED
+  /// Rolls are being spread (the lay report, MES-038).
+  SPREADING
+  /// The plies were counted at both ends and agree with the plies spread (MES-039).
+  CHECKED
+  CUT
+  CANCELLED
+}
+
+/// One lay of a fabric cut order (MES-038, MES-039; design production.cutting "Lays", floor.fabriccut "Spread the lay", "Count
+/// the plies at both ends"): plies spread by the cut order's marker. Its rolls are LayRoll rows. The plies are counted at
+/// both ends before the cut: a difference blocks it, so CHECKED and CUT hold two equal counts that are the plies spread.
+model Lay {
+  id            String    @id @db.Uuid
+  tenantId      String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId        String    @db.Uuid
+  /// A FABRIC cut order. Fixed.
+  cutOrderId    String    @db.Uuid
+  /// Its number on the cut order, unique per cut order. Fixed.
+  seq           Int
+  /// The plies planned, from 1; changes until it is counted.
+  plies         Int
+  /// The length spread, above 0, in M, CM or MM, both or neither.
+  layLength     Decimal?  @db.Decimal(18, 4)
+  lengthUom     Uom?
+  /// The ply counts at the left and right ends and when they were taken: all three exactly from CHECKED on, equal, and the
+  /// plies its rolls gave (MES-039). A count that differs is refused at the table and stored nowhere.
+  plyCountLeft  Int?
+  plyCountRight Int?
+  checkedAt     DateTime? @db.Timestamptz(3)
+  status        LayStatus @default(PLANNED)
+  /// Set exactly when CUT.
+  cutAt         DateTime? @db.Timestamptz(3)
+  /// Set exactly when CANCELLED, with the reason.
+  cancelledAt   DateTime? @db.Timestamptz(3)
+  cancelReason  String?
+  note          String?
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?   @db.Uuid
+
+  cutOrder     CutOrder         @relation(fields: [tenantId, siteId, cutOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  rolls        LayRoll[]
+  plyRuns      PlyRun[]
+  tickets      CutTicket[]
+  consumptions CutConsumption[]
+
+  @@unique([tenantId, cutOrderId, seq])
+  // The target of its rolls' and ply runs' site-safe references.
+  @@unique([tenantId, siteId, id])
+  // The target of the tickets' and the consumption's references: a lay of the same site and cut order.
+  @@unique([tenantId, siteId, cutOrderId, id])
+}
+
+/// One roll spread in a lay (MES-038, MES-037; the lay report): the plies it gave, its splices, the length lost at its end and
+/// the roll end returned to stock, in the roll's own unit. Rolls of one lay are of one shade (mixing shade groups is refused)
+/// and of the cut order's material and colour. Written, changed and removed (Undo last roll) only while the lay is PLANNED or
+/// SPREADING. The roll's length left is the cutting module's to keep (leather.prisma FabricRoll), in the same command.
+model LayRoll {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String   @db.Uuid
+  layId       String   @db.Uuid
+  /// Its place in the lay, unique per lay.
+  seq         Int
+  /// A roll of the lay's site (leather.prisma FabricRoll).
+  rollId      String   @db.Uuid
+  /// Plies from this roll, from 1.
+  plies       Int
+  /// Splices made in it, from 0.
+  splices     Int      @default(0)
+  /// The length lost at the roll's end and the roll end returned to stock, each from 0 up to the roll's length, in its unit.
+  endLoss     Decimal  @default(0) @db.Decimal(18, 4)
+  endReturned Decimal  @default(0) @db.Decimal(18, 4)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  lay  Lay        @relation(fields: [tenantId, siteId, layId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  roll FabricRoll @relation(fields: [tenantId, siteId, rollId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, layId, seq])
+  // The lays a roll went into.
+  @@index([tenantId, rollId])
+}
+
+/// PLANNED → PRINTED → VOID; PLANNED → VOID. VOID is final.
+enum PlyRunStatus {
+  PLANNED
+  PRINTED
+  /// Thrown away (a misprint): a new run replaces it.
+  VOID
+}
+
+/// A ply and part numbering run of a lay (MES-043; design floor.fabriccut "Ply stickers"): stickers that number each ply from
+/// `firstPly` to `lastPly` for each of its parts, so one garment's parts come from one ply (one shade). Written once the lay
+/// is counted (CHECKED or CUT); only its print state changes.
+model PlyRun {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String       @db.Uuid
+  layId       String       @db.Uuid
+  /// Its number on the lay, unique per lay.
+  seq         Int
+  /// The plies numbered, from 1 up to the plies counted.
+  firstPly    Int
+  lastPly     Int
+  /// The parts each ply's pieces are numbered for, as the pattern names them: at least one, none blank, none twice.
+  parts       String[]
+  /// Stickers in the run, from 1.
+  labelCount  Int
+  status      PlyRunStatus @default(PLANNED)
+  /// Set exactly from PRINTED on (kept when VOID).
+  printedAt   DateTime?    @db.Timestamptz(3)
+  /// Set exactly when VOID, with the reason.
+  voidedAt    DateTime?    @db.Timestamptz(3)
+  voidReason  String?
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  lay Lay @relation(fields: [tenantId, siteId, layId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, layId, seq])
+}
+
+/// What one line of a cut order was cut against what it ordered (MES-045; design production.cutting pop "Reconcile cut"):
+/// written once the cut order is CUT, one per line (its key), and never changed: the cut order is RECONCILED when every line
+/// has one. A difference says why (a reason code). Material issued, used and returned are the stock ledger's and the
+/// consumption's, read at the reconciliation, not copied here.
+/// @append-only
+model CutReconciliation {
+  id                 String   @id @db.Uuid
+  tenantId           String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId             String   @db.Uuid
+  cutOrderId         String   @db.Uuid
+  cutOrderLineId     String   @db.Uuid
+  /// `reconciliation:<cutOrderLineId>`, unique in the tenant: one per line.
+  key                String
+  /// The line's garments, as ordered.
+  orderedQuantity    Int
+  /// Garments cut for the line, from 0, and of them recut (replacement panels), from 0 up to the cut.
+  cutQuantity        Int
+  recutQuantity      Int      @default(0)
+  /// Why cut differs from ordered: a code (no spaces), exactly when they differ.
+  varianceReasonCode String?
+  note               String?
+  reconciledAt       DateTime @db.Timestamptz(3)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  createdById        String?  @db.Uuid
+
+  cutOrder CutOrder     @relation(fields: [tenantId, siteId, cutOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  line     CutOrderLine @relation(fields: [tenantId, siteId, cutOrderId, cutOrderLineId], references: [tenantId, siteId, cutOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, cutOrderId])
+}
+
+/// The material a cut used, at cut finish (MES-046; design floor.fabriccut "Fabric used"): the estimate (marker × plies, or the
+/// BOM), the cut-log figure (the lay's rolls, or the cut log's areas) and what the cutter confirmed or corrected. One per lay of
+/// a fabric cut order, once the lay is CUT; one per leather cut order (its key). Changes until the cut order is RECONCILED.
+model CutConsumption {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String    @db.Uuid
+  cutOrderId  String    @db.Uuid
+  /// FABRIC: the lay (CUT); LEATHER: none. Fixed.
+  layId       String?   @db.Uuid
+  /// `consumption:<layId>` (fabric) or `consumption:<cutOrderId>` (leather), unique in the tenant. Fixed.
+  key         String
+  /// A length unit (M, CM, MM) for fabric, an area unit (M2, DM2, FT2) for leather. Fixed.
+  uom         Uom
+  /// The estimate and the cut-log figure, from 0.
+  estimated   Decimal   @db.Decimal(18, 4)
+  recorded    Decimal   @db.Decimal(18, 4)
+  /// What the cutter confirmed or corrected, from 0, with when: both or neither.
+  confirmed   Decimal?  @db.Decimal(18, 4)
+  confirmedAt DateTime? @db.Timestamptz(3)
+  /// Why the confirmed figure differs from the cut-log figure, in words.
+  note        String?
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?   @db.Uuid
+
+  cutOrder CutOrder @relation(fields: [tenantId, siteId, cutOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and cutOrderId.
+  lay      Lay?     @relation(fields: [tenantId, siteId, cutOrderId, layId], references: [tenantId, siteId, cutOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, cutOrderId])
+}
+
+/// A secondary process after cutting (MES-047).
+enum SecondaryProcessKind {
+  FUSING
+  PERFORATION
+  PRINT
+  EMBROIDERY
+  OTHER
+}
+
+/// Where a secondary process is done.
+enum SecondaryProcessPlace {
+  /// At a work centre of the site.
+  IN_HOUSE
+  /// At a workshop, under a subcontract order of the work order.
+  OUTSIDE
+}
+
+/// WAITING → IN_PROGRESS → DONE; WAITING and IN_PROGRESS → CANCELLED. DONE and CANCELLED are final.
+enum SecondaryProcessStatus {
+  WAITING
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+/// One secondary process of a bundle after cutting (MES-047; design floor.fabriccut "Send to sewing": fusing, perforation, print
+/// or embroidery as a route step), in house or outside. Never deleted (CANCELLED).
+model SecondaryProcess {
+  id                 String                 @id @db.Uuid
+  tenantId           String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId             String                 @db.Uuid
+  /// The work order and its bundle (ACTIVE when the process is added). Fixed.
+  workOrderId        String                 @db.Uuid
+  bundleId           String                 @db.Uuid
+  /// Its place among the bundle's processes, unique per bundle.
+  seq                Int
+  kind               SecondaryProcessKind
+  place              SecondaryProcessPlace
+  /// IN_HOUSE: the work centre of the site it is done at (null: not yet given); OUTSIDE: none.
+  workCentreId       String?                @db.Uuid
+  /// OUTSIDE: the subcontract order of the work order that takes it (null until it is sent); IN_HOUSE: none.
+  subcontractOrderId String?                @db.Uuid
+  /// Garments of the bundle it is done on, from 1 to the bundle's quantity.
+  quantity           Int
+  status             SecondaryProcessStatus @default(WAITING)
+  /// Set from IN_PROGRESS on (DONE included; kept when CANCELLED), and exactly when DONE.
+  startedAt          DateTime?              @db.Timestamptz(3)
+  doneAt             DateTime?              @db.Timestamptz(3)
+  /// Set exactly when CANCELLED, with the reason.
+  cancelledAt        DateTime?              @db.Timestamptz(3)
+  cancelReason       String?
+  note               String?
+  version            Int                    @default(1)
+  createdAt          DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?                @db.Uuid
+
+  bundle           Bundle            @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and workOrderId.
+  workCentre       WorkCentre?       @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  subcontractOrder SubcontractOrder? @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, bundleId, seq])
+  @@index([tenantId, workOrderId])
+  // What waits, per site.
+  @@index([tenantId, siteId, status])
+}
+
+/// LOADING → SENT | CANCELLED; SENT → RECEIVED. RECEIVED and CANCELLED are final.
+enum CutIssueStatus {
+  /// Bundles are being scanned onto the trolley.
+  LOADING
+  /// On its way to the line.
+  SENT
+  /// The line scanned the trolley's label.
+  RECEIVED
+  CANCELLED
+}
+
+/// A trolley of bundles sent from cutting to a sewing line (MES-048; design floor.fabriccut "Send to sewing"): scanned onto the
+/// trolley, sent, and confirmed at the line by scanning the trolley's label; a bundle not received there is a difference.
+model CutIssue {
+  id           String         @id @db.Uuid
+  tenantId     String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String         @db.Uuid
+  siteId       String         @db.Uuid
+  /// The trolley's label ("T-3"), no spaces. Fixed. One trolley on one open issue at a time is the API's (a code shared by
+  /// two rows cannot be copied by the generated isolation tests).
+  trolleyCode  String
+  /// An ACTIVE line of the site; changes only while LOADING.
+  lineId       String         @db.Uuid
+  status       CutIssueStatus @default(LOADING)
+  /// Set exactly from SENT on (kept when RECEIVED), and exactly when RECEIVED.
+  sentAt       DateTime?      @db.Timestamptz(3)
+  receivedAt   DateTime?      @db.Timestamptz(3)
+  /// Set exactly when CANCELLED, with the reason.
+  cancelledAt  DateTime?      @db.Timestamptz(3)
+  cancelReason String?
+  /// The differences, in words.
+  note         String?
+  version      Int            @default(1)
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?        @db.Uuid
+
+  site  Site           @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  line  Line           @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines CutIssueLine[]
+
+  // The target of its lines' site-safe reference.
+  @@unique([tenantId, siteId, id])
+  // The trolleys on their way, per site and line.
+  @@index([tenantId, siteId, status])
+  @@index([tenantId, lineId])
+}
+
+/// One bundle on a trolley (MES-048): added and removed only while the trolley is LOADING (a bundle once per trolley is the
+/// API's); `receivedAt` is when the line confirmed it, set once, after the trolley was sent.
+model CutIssueLine {
+  id          String    @id @db.Uuid
+  tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String    @db.Uuid
+  cutIssueId  String    @db.Uuid
+  /// An ACTIVE bundle of the site when added, and its work order. Fixed.
+  workOrderId String    @db.Uuid
+  bundleId    String    @db.Uuid
+  receivedAt  DateTime? @db.Timestamptz(3)
+  note        String?
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?   @db.Uuid
+
+  issue  CutIssue @relation(fields: [tenantId, siteId, cutIssueId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle Bundle   @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, cutIssueId])
+  @@index([tenantId, bundleId])
+}
+
+/// The grain or stretch direction a pattern piece is cut along.
+enum PatternGrain {
+  /// Along the grain (fabric: the warp; leather: the backbone).
+  ALONG
+  /// Across it.
+  ACROSS
+  /// On the bias (45°).
+  BIAS
+  /// Any direction.
+  ANY
+}
+
+/// One pattern piece of a style revision (PRD-219, MES-055; design products.styles "Pattern pieces"): the piece, how many a
+/// garment takes, the BOM line (material) it is cut from, the lowest leather grade it may be cut from, its grain and the sizes
+/// it is in. Revision-bound like the BOM: written, changed and removed only while the revision is DRAFT (the …_product_guards
+/// part rule), frozen once released; a new revision copies them (the product module).
+model PatternPiece {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId     String       @db.Uuid
+  revisionId  String       @db.Uuid
+  /// Its place in the list, unique per revision.
+  seq         Int
+  /// The piece as the pattern names it ("Front left", "Sleeve"), unique per revision; cut log pieces name it as their part.
+  name        String
+  /// Pieces per garment, from 1.
+  quantity    Int
+  /// The BOM line of the same revision it is cut from; null: not tied to one line.
+  bomLineId   String?      @db.Uuid
+  /// The lowest leather grade it may be cut from (MES-055): only on a piece of a leather line; null: any grade.
+  minGradeId  String?      @db.Uuid
+  grain       PatternGrain @default(ANY)
+  /// The sizes it is in: codes of the style's range, none twice; empty: every size.
+  sizes       String[]     @default([])
+  note        String?
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  revision StyleRevision @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and revisionId.
+  bomLine  BomLine?      @relation(fields: [tenantId, revisionId, bomLineId], references: [tenantId, revisionId, id], onDelete: Restrict, onUpdate: Restrict)
+  minGrade LeatherGrade? @relation(fields: [tenantId, minGradeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, revisionId, seq])
+  @@unique([tenantId, revisionId, name])
+}
+
+/// Garments of one cell sent to second quality instead of scrap (MES-133; design production.scrap "Downgrade to second quality";
+/// ESPR: no destruction of unsold apparel): how many, why, and what they are stocked as, a second-quality item or the SKU
+/// (variant) itself. What it came from: a bundle, a rework, a scan. A wrong row is withdrawn (when, by whom, why), never
+/// changed or deleted.
+model GarmentDowngrade {
+  id                  String    @id @db.Uuid
+  tenantId            String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's company and site.
+  companyId           String    @db.Uuid
+  siteId              String    @db.Uuid
+  workOrderId         String    @db.Uuid
+  /// The cell (colourway and size).
+  workOrderSizeId     String    @db.Uuid
+  /// Where they came from, each optional: a bundle of the cell, a rework of the cell, a scan of the work order.
+  bundleId            String?   @db.Uuid
+  reworkOrderId       String?   @db.Uuid
+  sourceScanId        String?   @db.Uuid
+  /// Garments, from 1 to the cell's quantity.
+  quantity            Int
+  /// Why: a code (no spaces), with the words when needed.
+  reasonCode          String
+  note                String?
+  /// What they are stocked as, exactly one: an item of kind FINISHED kept for second quality, or a SKU of the work order's style.
+  secondQualityItemId String?   @db.Uuid
+  variantId           String?   @db.Uuid
+  /// Withdrawn: when, by whom and why, all three or none, once.
+  voidedAt            DateTime? @db.Timestamptz(3)
+  voidedById          String?   @db.Uuid
+  voidReason          String?
+  version             Int       @default(1)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?   @db.Uuid
+
+  site              Site           @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize     WorkOrderSize  @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and workOrderId.
+  bundle            Bundle?        @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  reworkOrder       ReworkOrder?   @relation(fields: [tenantId, siteId, workOrderId, reworkOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  sourceScan        OperationScan? @relation(fields: [tenantId, siteId, sourceScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  secondQualityItem Item?          @relation("GarmentDowngradeItem", fields: [tenantId, secondQualityItemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  variant           Variant?       @relation(fields: [tenantId, variantId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, siteId, createdAt])
+}
+
+/// A warning of the cutting table that a lead overrode with "Cut anyway" (MES-053, MES-055, MES-063, MES-064; B-W2b-103).
+enum CutOverrideKind {
+  /// Another shade (dye batch or shade group) than the work order's other hides (MES-053).
+  SHADE
+  /// Not the hide reserved for the work order: another article, colour, lot or grade (MES-063).
+  WRONG_HIDE
+  /// Thickness outside the style's specification (MES-064).
+  THICKNESS
+  /// A grade below a pattern piece's minimum (MES-055).
+  GRADE
+}

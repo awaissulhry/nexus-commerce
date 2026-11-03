@@ -305,6 +305,10 @@ model WorkOrderSize {
   // W2a rework.prisma: the rework of its garments and the replacements of its scrap.
   reworkOrders        ReworkOrder[]
   replacementRequests ReplacementRequest[]
+  // W2b-2 cutting.prisma (wave 13/16): the cut order lines that cut it, its recut tickets, its garments sent to second quality.
+  cutOrderLines       CutOrderLine[]
+  recutTickets        CutTicket[]
+  garmentDowngrades   GarmentDowngrade[]
 
   @@unique([tenantId, workOrderId, colourwayId, size])
   // The target of the materials', cut pieces' and bundles' references: a cell of the same site and work order.
@@ -452,10 +456,24 @@ model CutLog {
   /// The device's clock, kept for the record; serverTime orders rows.
   deviceTime      DateTime? @db.Timestamptz(3)
   serverTime      DateTime  @default(now()) @db.Timestamptz(3)
+  /// W2b-2 (B-W2b-85, wave 13/16; MES-060, MES-064, MES-053, MES-055, MES-063): the cutting table's checks, written with the
+  /// entry (a reversal has none of them). The photo of the hide on the table before the cut (a file; no faces, COL-017); the
+  /// thickness measured, in mm, above 0 and below 100; the warnings a lead overrode with "Cut anyway" (none twice), and then
+  /// exactly one lead (a worker of the site other than the cutter, by the PIN, or an office user) and the reason in words.
+  photoFileId          String?           @db.Uuid
+  measuredThicknessMm  Decimal?          @db.Decimal(6, 2)
+  overrides            CutOverrideKind[] @default([])
+  overrideLeadWorkerId String?           @db.Uuid
+  overrideLeadUserId   String?           @db.Uuid
+  overrideReason       String?
   createdById     String?   @db.Uuid
 
   workOrder  WorkOrder     @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   hide       Hide          @relation("HideCutLogs", fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-2 (wave 13/16): the hide's photo and the lead who overrode a warning (Restrict, not Prisma's SetNull default for an
+  // optional relation: that would also clear tenantId and siteId).
+  photo        StoredFile? @relation("CutLogPhoto", fields: [tenantId, photoFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  overrideLead Worker?     @relation("CutLogOverrideLead", fields: [tenantId, siteId, overrideLeadWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   reversalOf CutLog?       @relation("CutLogReversal", fields: [tenantId, siteId, reversalOfId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   reversals  CutLog[]      @relation("CutLogReversal")
@@ -562,6 +580,12 @@ model Bundle {
   children      Bundle[]        @relation("BundleSplit")
   // W2a rework.prisma: the rework of the garments it carries.
   reworkOrders  ReworkOrder[]
+  // W2b-2 cutting.prisma (wave 13/16): the recut tickets whose panels join it, its secondary processes, its trolley rows and its
+  // garments sent to second quality.
+  recutTickets       CutTicket[]
+  secondaryProcesses SecondaryProcess[]
+  cutIssueLines      CutIssueLine[]
+  garmentDowngrades  GarmentDowngrade[]
   // W2b subcontract.prisma (B-W2b-01): its trips to workshops, and what came back of it.
   subcontractBundles      SubcontractBundle[]
   subcontractReceiptLines SubcontractReceiptLine[]
@@ -682,6 +706,8 @@ model OperationScan {
   // W2a rework.prisma: the rework its rework count opened, the replacements of its scrap.
   reworkOrders        ReworkOrder[]
   replacementRequests ReplacementRequest[]
+  // W2b-2 cutting.prisma (wave 13/16): the garments it found that went to second quality.
+  garmentDowngrades   GarmentDowngrade[]
   // W2a cost-ledger.prisma (wave 7/7): the labour (or scrap) it posted to its work order's cost ledger.
   /// @not-money the relation to the cost ledger (the rows carry the grain)
   costEntries        WorkOrderCostEntry[]

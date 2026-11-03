@@ -330,6 +330,11 @@ model Site {
   // W2b leather.prisma (wave 12/16): its remnants and fabric rolls.
   remnants            Remnant[]
   fabricRolls         FabricRoll[]
+  // W2b-2 cutting.prisma (wave 13/16): its cut orders, cut tickets, trolleys to sewing and garments sent to second quality.
+  cutOrders           CutOrder[]
+  cutTickets          CutTicket[]
+  cutIssues           CutIssue[]
+  garmentDowngrades   GarmentDowngrade[]
   // W2b time.prisma (wave 5/7): its roster, planned overtime, clock events, attendance days, overtime worked and
   // working-time limits.
   rosterEntries      RosterEntry[]
@@ -423,6 +428,8 @@ model Line {
   // W2a production.prisma, schedule.prisma: the work orders allocated to it, its slots on the planning board.
   workOrders    WorkOrder[]
   scheduleSlots ScheduleSlot[]
+  // W2b-2 cutting.prisma (wave 13/16): the trolleys of bundles sent to it from cutting.
+  cutIssues     CutIssue[]
   // W2b floor-auth.prisma, labour.prisma, andon.prisma (wave 7/7): the line and display devices that show it, its days
   // and their off-standard time, edits and disputes, its dispatch, hourly targets, handover notes and help calls.
   devices             Device[]
@@ -463,6 +470,8 @@ model WorkCentre {
   capacity WorkCentreCapacity[]
   // production.prisma: the work order operations mapped to it.
   workOrderOperations WorkOrderOperation[]
+  // W2b-2 cutting.prisma (wave 13/16): the secondary processes done at it.
+  secondaryProcesses  SecondaryProcess[]
   // W2a plant.prisma: its machines.
   machines            Machine[]
   // calendar.prisma: its calendar (a workshop's).
@@ -517,6 +526,9 @@ model Station {
   // production.prisma: the cut logs and scans that name the station (a site that records stations, not workers).
   cutLogs        CutLog[]
   operationScans OperationScan[]
+  // W2b-2 cutting.prisma, rework.prisma (wave 13/16): the cut orders cut at it (a table), the rework scanned in at it (repair).
+  cutOrders      CutOrder[]
+  repairReworks  ReworkOrder[]
   // W2a plant.prisma: the machines standing at it and the requests it reported.
   machines            Machine[]
   maintenanceRequests MaintenanceRequest[]

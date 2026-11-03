@@ -11,6 +11,7 @@ import { seed as seedCapa } from '../seed/capa'
 import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
 import { seed as seedCosting } from '../seed/costing'
+import { seed as seedCutting } from '../seed/cutting'
 import { seed as seedEmail } from '../seed/email'
 import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
@@ -256,6 +257,9 @@ beforeAll(async () => {
   // The leather and roll stock schema of W2b (wave 12/16).
   await seedLeather({ db: factory, namespace: 'iso-a' })
   await seedLeather({ db: factory, namespace: 'iso-b' })
+  // The cutting room schema of W2b (wave 13/16).
+  await seedCutting({ db: factory, namespace: 'iso-a' })
+  await seedCutting({ db: factory, namespace: 'iso-b' })
   // W2b-2 (B-W2b-74): a floor session inserts only an unplanned operation, so the first operation of tenant A's first site is
   // one, on its work order in progress (the seeds leave a work order's operations to their routing, every test reads them).
   await db.admin.query(
@@ -318,8 +322,15 @@ it('covers every classified table and every runtime role', () => {
     'CostingSettings',
     'CrewMember',
     'CrewSession',
+    'CutConsumption',
+    'CutIssue',
+    'CutIssueLine',
     'CutLog',
     'CutLogPiece',
+    'CutOrder',
+    'CutOrderLine',
+    'CutReconciliation',
+    'CutTicket',
     'Ddt',
     'DdtCancellation',
     'DefectCode',
@@ -342,6 +353,7 @@ it('covers every classified table and every runtime role', () => {
     'FloorSession',
     'FloorSettings',
     'FloorSyncEvent',
+    'GarmentDowngrade',
     'GarmentLabelPrint',
     'GarmentProtectorLot',
     'GarmentSerial',
@@ -391,6 +403,8 @@ it('covers every classified table and every runtime role', () => {
     'LabourDispute',
     'LabourEdit',
     'LabourRate',
+    'Lay',
+    'LayRoll',
     'LeatherGrade',
     'LeaverCase',
     'LeaverStep',
@@ -446,6 +460,7 @@ it('covers every classified table and every runtime role', () => {
     'PartyPriceListAssignment',
     'PartyTaxIdentity',
     'PasswordReset',
+    'PatternPiece',
     'PayPeriod',
     'PayablesSettings',
     'Payment',
@@ -467,6 +482,7 @@ it('covers every classified table and every runtime role', () => {
     'PlanningException',
     'PlanningRun',
     'PlanningSettings',
+    'PlyRun',
     'PpeRegisterEntry',
     'PriceList',
     'PriceListEntry',
@@ -535,6 +551,7 @@ it('covers every classified table and every runtime role', () => {
     'SdiNotification',
     'SdiSubmission',
     'SearchEntry',
+    'SecondaryProcess',
     'SecretValue',
     'Session',
     'ShadeGroup',
