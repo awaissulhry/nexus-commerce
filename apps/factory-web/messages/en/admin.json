@@ -1837,6 +1837,8 @@
     "quality_complaints_log": "Log a customer complaint",
     "quality_complaints_manage": "Triage, follow up and close customer complaints",
     "quality_complaints_acknowledge": "Acknowledge a safety complaint's alert (the owner)",
+    "quality_aql_view": "See AQL profiles, where they apply and the AQL calculator",
+    "quality_aql_manage": "Keep AQL profiles (critical stays 0) and assign them to customers and styles",
     "numbering_override": "Type a number for a migrated document (never a fiscal series; clashes refused, reason kept)",
     "people_view": "See the employees, teams, loans to other lines and leaver steps (never pay, attendance or health)",
     "people_team_view": "See the teams you lead or belong to (My team)",
