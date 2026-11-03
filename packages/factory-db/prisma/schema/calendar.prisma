@@ -134,6 +134,8 @@ model ShiftPattern {
   calendarDays CalendarDay[]
   // W2b people.prisma (wave 4/7): the people who normally work it.
   employees    Employee[]
+  // W2b safety.prisma (wave 15/16): the first-aid and fire teams of its shift.
+  safetyAppointments SafetyAppointment[]
   // W2b time.prisma (wave 5/7): the roster shifts taken from it.
   rosterEntries RosterEntry[]
 

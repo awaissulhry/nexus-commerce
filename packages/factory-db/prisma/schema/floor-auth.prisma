@@ -102,6 +102,9 @@ model Device {
   // W2b time.prisma (wave 5/7): the clock events and overtime answers recorded on it.
   clockEvents        ClockEvent[]
   overtimeAgreements OvertimeAgreement[]
+  // W2b safety.prisma (wave 15/16): the training attendances signed and the PPE receipts signed on it.
+  trainingAttendances TrainingAttendance[]
+  ppeIssues           PpeIssue[]
   // floor-sync.prisma: its queue's recorded events and refused actions.
   syncEvents      FloorSyncEvent[]
   refusedActions  FloorRefusedAction[]
@@ -236,6 +239,14 @@ model Worker {
   // W2b time.prisma (wave 5/7): the worker's clock events and overtime answers on the site's tablets.
   clockEvents            ClockEvent[]
   overtimeAgreements     OvertimeAgreement[]
+  // W2b safety.prisma (wave 15/16): the DVR versions they signed with the PIN, their training attendances and the ones
+  // they countersigned as the trainer, the instruction entries they signed, the PPE they handed over and received.
+  riskAssessmentSignatures        RiskAssessmentSignature[] @relation("RiskAssessmentSignatureWorker")
+  trainingAttendancesSigned        TrainingAttendance[]      @relation("TrainingAttendanceSigner")
+  trainingAttendancesCountersigned TrainingAttendance[]      @relation("TrainingAttendanceCountersigner")
+  instructionRecordsSigned         InstructionRecord[]       @relation("InstructionRecordSigner")
+  ppeIssuesGiven                   PpeIssue[]                @relation("PpeIssueGiver")
+  ppeIssuesSigned                  PpeIssue[]                @relation("PpeIssueSigner")
   // W2b (wave 7/7) floor-auth.prisma, labour.prisma, andon.prisma (a site that names workers): the phone that is theirs,
   // the team operations they were a member of, the steps they ticked, their off-standard time, the edits of their labour
   // records and their disputes, their dispatch, their crews, the help calls they sent.
