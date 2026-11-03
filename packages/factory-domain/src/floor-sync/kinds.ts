@@ -51,6 +51,8 @@ export const FLOOR_SYNC_KINDS = [
   // B-W2b-96: a machine request's progress from the floor (QHS-180): a technician acknowledges it or is on the way, the
   // station confirms the machine works again (design floor.machine "Works offline").
   'plant.request.progress',
+  // B-W2b-99: a roving result or an end-of-line pass or defect recorded in one step (design floor.inline "Works offline").
+  'quality.inprocess.record',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -98,6 +100,8 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'andon.handover.write': { kind: 'andon.handover.write', permission: 'production.dispatch.handover', numbers: null, what: "Write a line's handover note" },
   // B-W2b-96: every floor role reports (plant.report); the module asks plant.jobs.work again for a technician's step.
   'plant.request.progress': { kind: 'plant.request.progress', permission: 'plant.report', numbers: null, what: "A machine request's progress: acknowledged, on the way, works again" },
+  // B-W2b-99: a first piece is signed with the PIN at once, so it stays online; a roving or end-of-line result queues.
+  'quality.inprocess.record': { kind: 'quality.inprocess.record', permission: 'quality.inprocess.record', numbers: null, what: 'Record a roving or end-of-line check' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const

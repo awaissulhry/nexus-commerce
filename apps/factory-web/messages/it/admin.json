@@ -1792,6 +1792,8 @@
     "quality_plans_approve": "Approvare con firma elettronica la bozza di un'altra persona",
     "quality_triggers_view": "Vedere le regole che aprono le ispezioni da sole e la loro anteprima",
     "quality_triggers_manage": "Gestire le regole che aprono le ispezioni da sole (quando, per cosa, piano, ogni quanto)",
+    "quality_inprocess_view": "Vedere i controlli in linea (primo capo, taglio, itinerante, fine linea) e il DHU della linea",
+    "quality_inprocess_record": "Registrare i controlli in linea e firmare il primo capo (PIN o codice)",
     "views_save": "Salvare e condividere le proprie viste di un elenco",
     "views_manage": "Condividere viste con tutti e impostare la vista predefinita di un ruolo",
     "views_export": "Esportare un elenco in CSV o Excel",

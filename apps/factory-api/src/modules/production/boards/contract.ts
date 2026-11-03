@@ -201,7 +201,8 @@ const boardOut = output({
     operations: z.array(output({ code: z.string(), name: z.string(), bundles: z.number().int(), pieces: z.number().int(), stuck: z.number().int(), level: z.enum(HEAT_LEVELS), pile: z.boolean() })),
     capped: z.boolean(),
   }),
-  quality: output({ dhu: z.string().nullable(), defects: z.number().int(), units: z.number().int() }),
+  // B-W2b-99: `source` END_OF_LINE (the line's end-of-line checks of the day) or ESTIMATE (W2b-1: scrap and rework scans).
+  quality: output({ dhu: z.string().nullable(), defects: z.number().int(), units: z.number().int(), source: z.enum(['END_OF_LINE', 'ESTIMATE']) }),
   /** The team leader's note: the line's latest handover note of the day; null hides the panel. */
   note: output({ shiftLabel: z.string(), topics: z.array(z.string()), text: z.string().nullable(), at: z.string() }).nullable(),
 })
