@@ -15,7 +15,8 @@ export const events = [
       fileId: z.uuid(),
       recordType: z.string(),
       recordId: z.uuid(),
-      kind: z.enum(['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE', 'FISCAL_ARCHIVE']),
+      // B-W2b-96: AUDIO (a voice note of a machine request or job, QHS-189; FileKind since B-W2b-86).
+      kind: z.enum(['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO']),
     }),
     live: { permission: 'files.read', fields: ['recordType', 'recordId'] },
   }),

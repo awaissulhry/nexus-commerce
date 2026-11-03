@@ -13,6 +13,8 @@ import { RESTORE_DRILL_RULES } from '../../timers/restore-drill'
 import { CALL_RULES } from '../../../modules/production/calls/notices'
 // B-W2b-42: a working-time limit alert to the roles the limit names.
 import { LIMIT_RULES } from '../../../modules/people/limits/notices'
+// B-W2b-96: a machine request routed to a team or technician, and escalated to a person.
+import { ROUTING_RULES } from '../../../modules/plant/requests/notices'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -29,4 +31,6 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-W2b-35: a station called for help (ALERT to the responder team's office members).
   ...CALL_RULES,
   // B-W2b-42: a working-time limit alert (ALERT to the roles the limit names).
-  ...LIMIT_RULES])
+  ...LIMIT_RULES,
+  // B-W2b-96: a machine request routed (ASSIGNMENT to the team's or technician's office accounts), escalated (ALERT).
+  ...ROUTING_RULES])

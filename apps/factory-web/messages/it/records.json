@@ -211,14 +211,16 @@
       "DOCUMENT": "Documento",
       "PHOTO": "Foto",
       "CERTIFICATE": "Certificato",
-      "FISCAL_ARCHIVE": "Archivio fiscale"
+      "FISCAL_ARCHIVE": "Archivio fiscale",
+      "AUDIO": "Nota vocale"
     },
     "kindHint": {
       "ATTACHMENT": "PDF, immagini, Word, Excel, OpenDocument, CSV o testo; fino a 25 MB.",
       "DOCUMENT": "PDF, Word, Excel, OpenDocument o CSV; fino a 25 MB.",
       "PHOTO": "JPEG, PNG, WebP o HEIC; fino a 15 MB.",
       "CERTIFICATE": "PDF, JPEG o PNG; fino a 20 MB.",
-      "FISCAL_ARCHIVE": "PDF, XML o .p7m firmato; fino a 20 MB. Conservato dieci anni."
+      "FISCAL_ARCHIVE": "PDF, XML o .p7m firmato; fino a 20 MB. Conservato dieci anni.",
+      "AUDIO": "Audio WebM, Ogg, MP4, MP3, AAC o WAV; fino a 10 MB."
     },
     "held": {
       "noRead": "Per aprire i file serve un altro ruolo.",

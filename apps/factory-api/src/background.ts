@@ -80,6 +80,8 @@ import { loadReports } from './modules/insights/reports/registry'
 import { scanFindingsCron, stuckBundlesCron } from './modules/production/bundles/jobs'
 // B-W2b-40: a clock-out pauses the person's running work (MES-117).
 import { pauseAtClockOutHandler } from './modules/production/terminal/clock-out'
+// B-W2b-96: machine requests nobody acknowledged escalate by their routing rule.
+import { escalationCron } from './modules/plant/requests/escalation'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -230,6 +232,8 @@ if (mode === 'worker') {
   crons.push(costCatchUpCron({ database, log }))
   // B-W2b-41: every 15 minutes the stuck bundles (MES-168); hourly the scan-pattern checks about bundles (MES-075).
   crons.push(stuckBundlesCron({ database, log }), scanFindingsCron({ database, log }))
+  // B-W2b-96: every minute, the routed machine requests nobody acknowledged in time escalate (QHS-179).
+  crons.push(escalationCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

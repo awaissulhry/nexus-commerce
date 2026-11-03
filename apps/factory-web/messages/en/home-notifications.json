@@ -227,7 +227,9 @@
       },
       "plant": {
         "reported": "A machine problem was reported on {record}: {title}",
-        "unsafe": "{record} was marked unsafe ({title}): it stays do-not-use until a technician signs it safe"
+        "unsafe": "{record} was marked unsafe ({title}): it stays do-not-use until a technician signs it safe",
+        "routed": "A machine problem on {record} was sent to you: {title}",
+        "escalated": "Nobody has acknowledged the machine problem on {record} yet: {title}"
       },
       "alert": {
         "raised": "Alert on {record}: {title}"

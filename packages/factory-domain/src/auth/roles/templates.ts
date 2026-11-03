@@ -57,7 +57,8 @@ const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales
  */
 const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   planner: ['plant.view'],
-  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage'],
+  // B-W2b-96: plant.settings.manage (a site's request routing and unsafe-lock settings) for the production manager.
+  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.settings.manage'],
   floor_supervisor: ['plant.view', 'plant.report', 'plant.requests.triage'],
   operator: ['plant.report'],
   cutting_operator: ['plant.report'],
@@ -353,6 +354,29 @@ const HIDES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freez
   warehouse: ['inventory.hides.manage'],
   quality_inspector: ['inventory.hides.manage'],
 })
+/**
+ * B-W2b-92 (inspection plans, QHS-008, QHS-009, QHS-016; design quality.plans): quality keeps the plans and approves another
+ * person's draft (never one it wrote); the production manager reads them and may be the second person who approves (a small
+ * factory has one quality person); the floor supervisor reads them and prints a checklist for a bench without a tablet.
+ * Office only (a bench reads the version its record runs on through GET /quality/plan-versions/:id). Owner and read-only
+ * from every().
+ */
+const QUALITY_PLANS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.plans.view', 'quality.plans.manage', 'quality.plans.approve'],
+  production_manager: ['quality.plans.view', 'quality.plans.approve'],
+  floor_supervisor: ['quality.plans.view'],
+})
+/**
+ * B-W2b-93 (AQL profiles and the AQL calculator, QHS-020, QHS-021; design quality.plans pl-aql, pl-calc): quality keeps
+ * the companies' AQL profiles and assigns them to customers and styles; the production manager and sales read which
+ * profile a customer or a style has (sales.customers "customer AQL profiles"). Office only; the owner and read-only take
+ * theirs from every(). Applying a profile to an inspection is quality.inspections.record (B-W1-45), unchanged.
+ */
+const AQL_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.aql.view', 'quality.aql.manage'],
+  production_manager: ['quality.aql.view'],
+  sales: ['quality.aql.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -394,10 +418,17 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_EARNINGS_ADDS[key] ?? []) : []),
   // B-W2b-54
   ...(audience === 'office' ? (PEOPLE_PAYROLL_ADDS[key] ?? []) : []),
+<<<<<<< HEAD
   // B-W2b-94
   ...(audience === 'office' ? (HIDES_ADDS[key] ?? []) : []),
+=======
+  // B-W2b-92
+  ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
+>>>>>>> origin/main
   // B-W2b-49
-  ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? [])]
+  ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-93
+  ...(audience === 'office' ? (AQL_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -865,7 +896,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Maintenance',
     description: 'Keeps the machines running: the machine register and its classes and symptoms, the requests from the stations and the maintenance jobs; signs a machine marked unsafe safe again; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'sites.view', 'workers.view', 'parties.view', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.jobs.work', 'plant.signSafe'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'sites.view', 'workers.view', 'parties.view', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.jobs.work', 'plant.signSafe',
+      // B-W2b-96: the site's request routing and unsafe-lock settings.
+      'plant.settings.manage'],
     grains: [],
   }),
   template('read_only', {

@@ -226,6 +226,9 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
     // B-W2b-49: the line and the shift; never a word of the note.
     case 'andon.handover.write':
       return { code: text(p.shiftLabel, 40), target: text(p.lineId, 40) }
+    // B-W2b-96: the step (ACKNOWLEDGE, ON_THE_WAY, WORKS_AGAIN) and the request it is about; never who.
+    case 'plant.request.progress':
+      return { code: text(p.step, 20), target: text(p.requestId, 40) }
   }
 }
 

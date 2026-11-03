@@ -55,6 +55,10 @@ model Employee {
   department            String?
   /// The role (mansione) as the company calls it; its role risk sheet comes with Plant › Risk assessment (W2b-2).
   jobRole               String?
+  /// W2b safety.prisma (wave 15/16): the role risk sheet of the person's role, a sheet of their site (ACTIVE when set):
+  /// their courses, PPE kit and surveillance needs come from it (Owner answer H2). jobRole stays the HR record's text. A
+  /// move to another site clears or replaces it in the same update.
+  roleSheetId           String?           @db.Uuid
   /// The line the person normally works on, on their site.
   homeLineId            String?           @db.Uuid
   contract              EmployeeContract?
@@ -76,6 +80,8 @@ model Employee {
   homeLine            Line?                  @relation("EmployeeHomeLine", fields: [tenantId, siteId, homeLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   defaultShiftPattern ShiftPattern?          @relation(fields: [tenantId, defaultShiftPatternId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   user                User?                  @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b safety.prisma (wave 15/16). Restrict, not Prisma's SetNull default: that would also clear tenantId and siteId.
+  roleSheet           RoleSheet?             @relation(fields: [tenantId, siteId, roleSheetId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // floor-auth.prisma: the person's floor sign-in, one per site at most.
   workers             Worker[]
   teamMemberships     TeamMember[]
@@ -92,6 +98,15 @@ model Employee {
   routingRulesEscalateTo     RequestRoutingRule[] @relation("RequestRoutingRuleEscalateTo")
   routingRulesEscalateAgain  RequestRoutingRule[] @relation("RequestRoutingRuleEscalateAgainTo")
   maintenanceRequestsRouted  MaintenanceRequest[] @relation("MaintenanceRequestRoutedEmployee")
+  // W2b safety.prisma (wave 15/16): the safety roles they hold, the sessions they trained, their attendances, training
+  // records and instruction entries, the instruction they gave and the PPE they received.
+  safetyAppointments    SafetyAppointment[]
+  trainingSessionsTrained TrainingSession[]    @relation("TrainingSessionTrainer")
+  trainingAttendances   TrainingAttendance[]   @relation("TrainingAttendee")
+  trainingRecords       TrainingRecord[]       @relation("TrainingRecordPerson")
+  instructionRecords    InstructionRecord[]    @relation("InstructionRecordPerson")
+  instructionsGiven     InstructionRecord[]    @relation("InstructionRecordInstructor")
+  ppeIssues             PpeIssue[]
   // W2b time.prisma (wave 5/7): the person's roster, overtime answers, clock events, attendance days and their anomalies,
   // absences, overtime worked, timesheets and corrections of closed days.
   rosterEntries         RosterEntry[]
@@ -129,6 +144,8 @@ model Employee {
   @@unique([tenantId, siteId, id])
   @@index([tenantId, siteId])
   @@index([tenantId, homeLineId])
+  // W2b safety.prisma (wave 15/16): the people in a role.
+  @@index([tenantId, roleSheetId])
 }
 
 /// What kind of worker a person is (design people.employees "Type"; a home worker, MES-212, is Later).
