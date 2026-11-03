@@ -354,6 +354,16 @@ const HIDES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freez
   warehouse: ['inventory.hides.manage'],
   quality_inspector: ['inventory.hides.manage'],
 })
+
+/**
+ * B-W2b-100 (one shade lot per order; SCM-206): the production manager and the quality inspector let a hide of another shade
+ * lot into an order that asks one (with the reason). The warehouse picks and reserves, and is refused in words. Office only;
+ * Owner from every(). One line per template.
+ */
+const SHADE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['inventory.shade.override'],
+  quality_inspector: ['inventory.shade.override'],
+})
 /**
  * B-W2b-92 (inspection plans, QHS-008, QHS-009, QHS-016; design quality.plans): quality keeps the plans and approves another
  * person's draft (never one it wrote); the production manager reads them and may be the second person who approves (a small
@@ -417,6 +427,24 @@ const INPROCESS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Ob
   floor_inspector: ['quality.inprocess.view', 'quality.inprocess.record'],
   team_leader: ['quality.inprocess.view', 'quality.inprocess.record'],
 })
+/**
+ * B-W2b-107 (rolls, protector lots and consumables; SCM-260, SCM-261; design warehouse.lots, floor.operation "Trace
+ * protectors and lots per garment"): the warehouse, which keeps the rolls, and the quality inspector, who measures their
+ * width and shrinkage and sorts their shade, correct what a roll is; tagging, issuing, moving, scrapping and correcting a roll
+ * stay the ledger's permissions those roles already hold. Production (the manager and the floor supervisor) and quality
+ * record which protector lot a batch or a garment holds, and the operators and team leaders do it on the line's tablet;
+ * only the office withdraws a wrong record. Owner from every().
+ */
+const ROLLS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  warehouse: ['inventory.rolls.manage'],
+  quality_inspector: ['inventory.rolls.manage', 'inventory.protectors.record'],
+  production_manager: ['inventory.protectors.record'],
+  floor_supervisor: ['inventory.protectors.record'],
+})
+const ROLLS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  operator: ['inventory.protectors.record'],
+  team_leader: ['inventory.protectors.record'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -460,6 +488,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_PAYROLL_ADDS[key] ?? []) : []),
   // B-W2b-94
   ...(audience === 'office' ? (HIDES_ADDS[key] ?? []) : []),
+  // B-W2b-100
+  ...(audience === 'office' ? (SHADE_ADDS[key] ?? []) : []),
   // B-W2b-92
   ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
   // B-W2b-49
@@ -471,7 +501,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-98
   ...((audience === 'office' ? INCOMING_ADDS : INCOMING_FLOOR_ADDS)[key] ?? []),
   // B-W2b-99
-  ...((audience === 'office' ? INPROCESS_ADDS : INPROCESS_FLOOR_ADDS)[key] ?? [])]
+  ...((audience === 'office' ? INPROCESS_ADDS : INPROCESS_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-107
+  ...((audience === 'office' ? ROLLS_ADDS : ROLLS_FLOOR_ADDS)[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

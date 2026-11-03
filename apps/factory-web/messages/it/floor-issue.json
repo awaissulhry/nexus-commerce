@@ -57,6 +57,28 @@
     "toIssue": "{quantity} da consegnare",
     "need": "richiesti, {unit}"
   },
+  "hides": {
+    "title": "Scegli le pelli",
+    "listLabel": "Pelli da prendere per {line}",
+    "progress_one": "{count} pelle · {area} di {need} {unit}",
+    "progress_other": "{count} pelli · {area} di {need} {unit}",
+    "running_one": "→ {count} pelle · {area} di {need} {unit}",
+    "running_other": "→ {count} pelli · {area} di {need} {unit}",
+    "area": "superficie",
+    "remnant": "Ritaglio",
+    "grade": "Scelta {grade}",
+    "sameShade": "Stesso lotto di tonalità",
+    "otherShade": "Altro lotto di tonalità",
+    "otherShadeCount_one": "{count} pelle di un altro lotto di tonalità o fuori tonalità non è proposta: la sua scansione è rifiutata.",
+    "otherShadeCount_other": "{count} pelli di un altro lotto di tonalità o fuori tonalità non sono proposte: la loro scansione è rifiutata.",
+    "next": "Prossima: {code} in {location}"
+  },
+  "shade": {
+    "lot": "Lotto {lot}",
+    "lotShade": "Lotto {lot}, tonalità {shade}",
+    "cutFrom": "Tagliato da {lot}",
+    "mixed": "Lotti di tonalità misti: {lots}"
+  },
   "held": {
     "title": "Da non consegnare",
     "row": "{lot} · {item}: {reason} ({quantity})",
@@ -181,6 +203,22 @@
     "NOTHING_AT_WORK_ORDER": {
       "message": "L'ordine di lavoro non ha più niente di questo.",
       "fix": "Rileggi la lista: forse un altro tablet l'ha già reso."
+    },
+    "SHADE_LOT": {
+      "message": "Questa pelle è di un altro lotto di tonalità rispetto a quello da cui si taglia l'ordine.",
+      "fix": "Prendi una pelle dello stesso lotto di tonalità (in cima all'elenco), o chiedi all'ufficio."
+    },
+    "OUT_OF_SHADE": {
+      "message": "Questa pelle è fuori tonalità: non va in nessun ordine che chiede un solo lotto di tonalità.",
+      "fix": "Mettila da parte e prendi un'altra pelle."
+    },
+    "REMNANT_TOO_SMALL": {
+      "message": "Questo pezzo è più piccolo del ritaglio minimo che si tiene: è scarto.",
+      "fix": "Chiudi la pelle senza ritaglio."
+    },
+    "REMNANT_GONE_ON": {
+      "message": "Il ritaglio è andato avanti (consegnato, tagliato o scartato): non si riprende.",
+      "fix": "Chiedi all'ufficio."
     }
   },
   "unit": {
@@ -266,7 +304,8 @@
     "done": {
       "whole": "Tornato a magazzino: {code} · {quantity} → {place}.",
       "remnant": "Tornato a magazzino come ritaglio: {code} · {quantity} → {place}.",
-      "part": "Tornato a magazzino: {code} · {quantity} → {place}."
+      "part": "Tornato a magazzino: {code} · {quantity} → {place}.",
+      "remnantTag": "Etichetta del ritaglio {code}"
     },
     "keepsLabel": "Tiene la sua etichetta: non ne serve una nuova.",
     "tag": {

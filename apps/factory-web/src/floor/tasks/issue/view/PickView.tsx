@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Check, CircleAlert, CircleSlash, ClipboardList, Package, PackageCheck, PackageMinus, Scissors, ScanLine, Undo2, X } from 'lucide-react'
+import { Check, CircleAlert, CircleSlash, ClipboardList, Layers, Package, PackageCheck, PackageMinus, Scissors, ScanLine, Undo2, X } from 'lucide-react'
 import { FloorActionBar, FloorList, FloorListRow, QuantityPad, ScanInput, qtyHeldReason, type CameraScanner, type FloorAction, type FloorActions } from '@nexus/ui/floor'
 import { formatDate, formatNumber, formatTime } from '../../../../lib/i18n/format'
 import type { Translate } from '../../../../lib/i18n/messages'
@@ -10,7 +10,7 @@ import { FloorFrameView, type FrameAction, type FrameModel } from '../../../fram
 import { FloorState } from '../../../frame/view/FloorState'
 import type { TaskProblem } from '../../shared/task-api'
 import { HeldLine, ListFooter, ProblemState, TaskCard, TaskLine, Ticks, UndoStrip } from '../../shared/view/TaskParts'
-import { coveredCount, ISSUE_REFUSAL_WORDS, lineName, num, SCREEN_REFUSALS, undoStock, type PadBounds, type PickLine, type PickList, type PickWorkOrderRow } from '../model'
+import { coveredCount, hideChoices, hideProgress, ISSUE_REFUSAL_WORDS, lineName, num, otherShadeHides, SCREEN_REFUSALS, shadeOfLine, undoStock, type PadBounds, type PickLine, type PickList, type PickWorkOrderRow } from '../model'
 import { returnRows } from '../returns'
 import { returnStep, type PickReturnModel, type ReturnAction } from './ReturnStep'
 import '../issue.css'
@@ -26,6 +26,11 @@ import '../issue.css'
  *
  * W2a (B-W2a-75, SCM-216): Return unused, the list's secondary action — what the work order holds goes back to stock (a
  * cut hide as a remnant with its area and a new tag): ./ReturnStep.tsx.
+ *
+ * W2b (B-W2b-100; SCM-214, SCM-206): Choose hides — a leather line says its hides beside the area against the need ("4 hides
+ * · 96.2 of 110 ft²") and the shade lot the work order is cut from; the hides to take next follow, the order's own shade lot
+ * first, each with the running area if it is taken. The scan is still the action; a hide of another shade lot is refused
+ * in words (the office may let it through). A remnant's own tag (RM-…) is scanned like its hide's.
  */
 
 export interface PickPad {
@@ -298,6 +303,7 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
               onScan={(code) => send({ type: 'scan', code })}
             />
           )}
+          {!pad ? <ChooseHides list={list} t={t} amount={amount} figure={(value) => formatNumber(value, locale, { maximumFractionDigits: 2 })} /> : null}
           <section className="fw-floor-stack" aria-labelledby="fw-pick-need">
             <h2 id="fw-pick-need" className="fw-floor-subtitle">
               {t('list.title')}
@@ -335,13 +341,29 @@ export function PickView({ model, onAction, onFrame, camera }: PickViewProps) {
   )
 }
 
+/** B-W2b-100: "4 hides · 96.2 of 110 ft²" — a leather line's hides beside its area against the need. */
+export function hidesWords(t: Translate, figure: (value: number) => string, unit: string, progress: { count: number; issued: number; planned: number }): string {
+  return t('hides.progress', { count: progress.count, area: figure(progress.issued), need: figure(progress.planned), unit })
+}
+
+/** B-W2b-100: the shade lot a line's work order is cut from, in words; mixed when two or more. */
+function shadeWords(t: Translate, line: PickLine): string | null {
+  const shade = shadeOfLine(line)
+  if (!shade) return null
+  const one = (lot: { lotCode: string; shadeLabel: string | null }) => (lot.shadeLabel ? t('shade.lotShade', { lot: lot.lotCode, shade: lot.shadeLabel }) : t('shade.lot', { lot: lot.lotCode }))
+  return shade.mixed ? t('shade.mixed', { lots: shade.lots.map(one).join('; ') }) : t('shade.cutFrom', { lot: one(shade.lots[0]!) })
+}
+
 function LineRow({ line, t, amount, figure, selected, onMaterial }: { line: PickLine; t: Translate; amount: (value: number, uom: string) => string; figure: (value: number) => string; selected: boolean; onMaterial?: () => void }) {
   const next = line.usable.candidates[0]
   const toIssue = num(line.toIssue)
   const usable = num(line.usable.onHand)
+  const progress = hideProgress(line)
   const meta = [
-    t('line.issued', { issued: amount(num(line.issued), line.baseUom), planned: amount(num(line.planned), line.baseUom) }),
-    !line.covered && next ? t('line.next', { code: next.hideCode ?? next.lotCode ?? line.itemCode, location: next.locationCode }) : null,
+    progress ? hidesWords(t, figure, unitWord(t, line.baseUom), progress) : t('line.issued', { issued: amount(num(line.issued), line.baseUom), planned: amount(num(line.planned), line.baseUom) }),
+    progress ? shadeWords(t, line) : null,
+    // B-W2b-100: a leather line's next hide is the order's own shade lot first, not always the oldest.
+    !line.covered && next ? t(progress ? 'hides.next' : 'line.next', { code: next.remnant?.code ?? next.hideCode ?? next.lotCode ?? line.itemCode, location: next.locationCode }) : null,
     !line.covered && line.tracking === 'NONE' && usable > 0 ? t('line.tapMaterial') : null,
   ]
     .filter(Boolean)
@@ -358,6 +380,60 @@ function LineRow({ line, t, amount, figure, selected, onMaterial }: { line: Pick
       selected={selected}
       onPress={onMaterial}
     />
+  )
+}
+
+/**
+ * B-W2b-100 (SCM-214): Choose hides — per leather line not covered, the hides to take next with the running area if each is
+ * taken ("→ 5 hides · 148.6 of 410 ft²"), the work order's own shade lot first; a hide of another shade lot says so (its
+ * scan is refused under one shade lot per order). Read-only: the scan issues.
+ */
+function ChooseHides({ list, t, amount, figure }: { list: PickList; t: Translate; amount: (value: number, uom: string) => string; figure: (value: number) => string }) {
+  const oneShade = (list.shadeRule ?? 'ORDER') === 'ORDER'
+  const lines = list.lines.map((line) => ({ line, choices: hideChoices(line, oneShade) })).filter((entry) => entry.choices.length > 0)
+  if (lines.length === 0) return null
+  return (
+    <section className="fw-floor-stack" aria-labelledby="fw-pick-hides">
+      <h2 id="fw-pick-hides" className="fw-floor-subtitle">
+        {t('hides.title')}
+      </h2>
+      {lines.map(({ line, choices }) => {
+        const unit = unitWord(t, line.baseUom)
+        const progress = hideProgress(line)!
+        const shade = shadeWords(t, line)
+        return (
+          <div key={line.key} className="fw-floor-stack">
+            <p className="fw-floor-muted">
+              {lineName(line)} · {hidesWords(t, figure, unit, progress)}
+              {shade ? ` · ${shade}` : ''}
+            </p>
+            <FloorList label={t('hides.listLabel', { line: lineName(line) })}>
+              {choices.map((choice) => (
+                <FloorListRow
+                  key={choice.code}
+                  icon={choice.remnantCode ? <Layers /> : <Scissors />}
+                  tone={choice.covers ? 'success' : 'neutral'}
+                  title={<span className="fw-floor-code">{choice.code}</span>}
+                  meta={[
+                    choice.remnantCode ? t('hides.remnant') : null,
+                    choice.lotCode ? (choice.shadeLabel ? t('shade.lotShade', { lot: choice.lotCode, shade: choice.shadeLabel }) : t('shade.lot', { lot: choice.lotCode })) : null,
+                    choice.grade ? t('hides.grade', { grade: choice.grade }) : null,
+                    choice.locationCode,
+                    choice.sameShade === true ? t('hides.sameShade') : choice.sameShade === false ? t('hides.otherShade') : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  status={t('hides.running', { count: choice.runningCount, area: figure(choice.runningArea), need: figure(progress.planned), unit })}
+                  count={amount(choice.area, line.baseUom)}
+                  countLabel={t('hides.area')}
+                />
+              ))}
+            </FloorList>
+            {otherShadeHides(line, oneShade) > 0 ? <p className="fw-floor-muted">{t('hides.otherShadeCount', { count: otherShadeHides(line, oneShade) })}</p> : null}
+          </div>
+        )
+      })}
+    </section>
   )
 }
 

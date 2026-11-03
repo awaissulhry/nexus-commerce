@@ -7,6 +7,11 @@ import type { ScanRead } from '../../scan/scan-model'
  * pad's bounds (never more than is on hand, never more than the line still needs: an over-issue is the office's), the
  * words of the last issue and of the undo strip. Quantities are the API's decimal strings in the item's base unit; they
  * are only shown and compared here, never valued (no money on the floor). Pure, so the tests hold them.
+ *
+ * B-W2b-100 (SCM-214, SCM-206; design floor.pick sec "scan-issue": "Choose hides (W2b): running area against the need"): a
+ * leather line shows its hides beside the area issued against the need ("4 hides · 96.2 of 110 ft²"), the shade lot the
+ * work order is cut from, and the hides to take next — the work order's own shade lot first — each with the running area
+ * if it is taken. A remnant's tag (RM-…) issues it like its hide's tag.
  */
 
 export interface PickWorkOrderRow {
@@ -29,6 +34,19 @@ export interface PickCandidate {
   readonly grade: string | null
   readonly locationCode: string
   readonly onHand: string
+  /** B-W2b-100: the hide's shade (group label or W1 text), out of shade, its remnant tag, of the work order's shade lot. */
+  readonly shadeLabel?: string | null
+  readonly outOfShade?: boolean
+  readonly remnant?: { readonly id: string; readonly code: string } | null
+  /** Of the shade lot the work order holds already; null: it holds no hide of the line yet. */
+  readonly sameShade?: boolean | null
+}
+
+/** B-W2b-100: a shade lot the work order holds of a leather line. */
+export interface PickShadeLot {
+  readonly key: string
+  readonly lotCode: string
+  readonly shadeLabel: string | null
 }
 
 export interface PickHeld {
@@ -59,6 +77,10 @@ export interface PickLine {
   readonly held: readonly PickHeld[]
   /** What the work order holds per lot and hide (issued minus returned); `returnable` = it less what was cut (B-W2a-75). */
   readonly atWorkOrder: readonly { readonly lotId: string | null; readonly lotCode: string | null; readonly hideId: string | null; readonly hideCode: string | null; readonly quantity: string; readonly cut: string; readonly returnable: string }[]
+  /** B-W2b-100: a leather line's hides at the work order (null for other lines; absent from an older answer). */
+  readonly hides?: { readonly count: number } | null
+  /** B-W2b-100: the shade lots the work order is cut from (two or more: mixed). */
+  readonly shadeLots?: readonly PickShadeLot[]
 }
 
 export interface PickUndo {
@@ -85,6 +107,8 @@ export interface PickList {
   readonly lines: readonly PickLine[]
   /** The person's own last issue to this work order, while it may be undone. */
   readonly undo: PickUndo | null
+  /** B-W2b-100: the site's shade rule (ORDER: a hide of another shade lot is refused, the office may let it through). */
+  readonly shadeRule?: string
 }
 
 // ---- numbers -----------------------------------------------------------------------------------------------------------
@@ -125,8 +149,10 @@ const same = (a: string | null | undefined, b: string) => (a ?? '').trim().toUpp
 export function stockOfScan(list: PickList, read: ScanRead): ScannedStock {
   const code = read.code
   if (read.kind === 'label' && read.type === 'hide') return { kind: 'hide', code, line: list.lines.find((line) => line.usable.candidates.some((row) => same(row.hideCode, code))) ?? null }
+  // B-W2b-100: a remnant's own tag (RM-…) is issued like its hide's: whole, by the scan.
+  if (read.kind === 'label' && read.type === 'remnant') return { kind: 'hide', code, line: list.lines.find((line) => line.usable.candidates.some((row) => same(row.remnant?.code, code))) ?? null }
   for (const line of list.lines) {
-    if (line.usable.candidates.some((row) => same(row.hideCode, code))) return { kind: 'hide', code, line }
+    if (line.usable.candidates.some((row) => same(row.hideCode, code) || same(row.remnant?.code, code))) return { kind: 'hide', code, line }
     const lot = line.usable.candidates.filter((row) => row.hideCode === null && same(row.lotCode, code))
     if (lot.length > 0) return { kind: 'quantity', code: lot[0]!.lotCode ?? code, line, onHand: lot.reduce((sum, row) => sum + num(row.onHand), 0), label: lot[0]!.lotCode ?? code }
     if (line.tracking === 'NONE' && same(line.itemCode, code)) return { kind: 'quantity', code: line.itemCode, line, onHand: num(line.usable.onHand), label: line.itemCode }
@@ -185,6 +211,110 @@ export function withLine(list: PickList, key: string, after: { planned: string; 
   }
 }
 
+// ---- B-W2b-100: choose hides at the pick (SCM-214) and one shade lot per order (SCM-206) ---------------------------------
+
+/** A leather line's hides beside its area against the need: "4 hides · 96.2 of 110 ft²"; null for any other line. */
+export interface HideProgress {
+  readonly count: number
+  readonly issued: number
+  readonly planned: number
+  readonly covers: boolean
+}
+
+export function hideProgress(line: PickLine): HideProgress | null {
+  if (line.tracking !== 'HIDE') return null
+  const count = line.hides?.count ?? line.atWorkOrder.filter((row) => row.hideId !== null && num(row.quantity) > 0).length
+  return { count, issued: num(line.issued), planned: num(line.planned), covers: num(line.issued) >= num(line.planned) }
+}
+
+/** A hide to take next, with what the line would hold if it is taken (the running area against the need). */
+export interface HideChoice {
+  /** What to scan: the remnant's own tag when it has one, else the hide's tag. */
+  readonly code: string
+  readonly hideCode: string | null
+  readonly remnantCode: string | null
+  readonly lotCode: string | null
+  readonly shadeLabel: string | null
+  /** Of the work order's own shade lot (true), of another one (false: the issue is refused under one shade per order), or nothing held yet (null). */
+  readonly sameShade: boolean | null
+  readonly outOfShade: boolean
+  readonly grade: string | null
+  readonly area: number
+  readonly locationCode: string
+  /** The line's hides and area with this one and those above it taken. */
+  readonly runningCount: number
+  readonly runningArea: number
+  readonly covers: boolean
+}
+
+/** At most this many hides are suggested per line (the rest: "and N more"). */
+export const MAX_CHOICES = 6
+
+/**
+ * The hides to take next for a leather line not covered yet: the API's order (the work order's own shade lot first, then
+ * oldest first), leaving out while the work order asks one shade lot the hides its scan would refuse (out of shade, another
+ * shade lot — while it holds none yet, another than the first hide suggested), until the running area reaches the need (then
+ * one more is never suggested). Empty for any other line or a covered one.
+ */
+export function hideChoices(line: PickLine, oneShade = true): HideChoice[] {
+  const progress = hideProgress(line)
+  if (!progress || line.covered) return []
+  const choices: HideChoice[] = []
+  let count = progress.count
+  let area = progress.issued
+  let first: string | null = null
+  for (const row of line.usable.candidates) {
+    if (!row.hideId || choices.length >= MAX_CHOICES || area >= progress.planned) break
+    if (oneShade && !offeredUnderOneShade(row, first)) continue
+    first ??= shadeLotOf(row)
+    count += 1
+    area += num(row.onHand)
+    choices.push({
+      code: row.remnant?.code ?? row.hideCode ?? '',
+      hideCode: row.hideCode,
+      remnantCode: row.remnant?.code ?? null,
+      lotCode: row.lotCode,
+      shadeLabel: row.shadeLabel ?? null,
+      sameShade: row.sameShade ?? null,
+      outOfShade: row.outOfShade ?? false,
+      grade: row.grade,
+      area: num(row.onHand),
+      locationCode: row.locationCode,
+      runningCount: count,
+      runningArea: area,
+      covers: area >= progress.planned,
+    })
+  }
+  return choices
+}
+
+/** A candidate's shade lot as the screen tells them apart: its lot and its shade. */
+const shadeLotOf = (row: PickCandidate): string => `${row.lotId ?? '-'}|${(row.shadeLabel ?? '').trim().toUpperCase()}`
+
+/**
+ * Under one shade lot per order a hide the scan would refuse is not suggested: out of shade, another shade lot than the work
+ * order's, or — while it holds none yet — another shade lot than the first hide suggested (the first scan sets it).
+ */
+function offeredUnderOneShade(row: PickCandidate, first: string | null): boolean {
+  if ((row.outOfShade ?? false) || row.sameShade === false) return false
+  return row.sameShade === true || first === null || shadeLotOf(row) === first
+}
+
+/** How many usable hides of a leather line are not suggested under one shade lot per order (out of shade, or of another shade lot). */
+export function otherShadeHides(line: PickLine, oneShade = true): number {
+  if (!oneShade || line.tracking !== 'HIDE') return 0
+  const hides = line.usable.candidates.filter((row) => row.hideId !== null)
+  const lead = hides.find((row) => offeredUnderOneShade(row, null))
+  const first = lead && lead.sameShade !== true ? shadeLotOf(lead) : null
+  return hides.filter((row) => !offeredUnderOneShade(row, first)).length
+}
+
+/** The shade lot the work order is cut from, in one line ("LOT-7 · 2"), or null; `mixed` when it holds two or more. */
+export function shadeOfLine(line: PickLine): { readonly lots: readonly PickShadeLot[]; readonly mixed: boolean } | null {
+  const lots = line.shadeLots ?? []
+  return lots.length === 0 ? null : { lots, mixed: lots.length > 1 }
+}
+
 /** The refusal codes the screen has its own words for (factory-domain inventory/issue/rules REFUSALS; the rest: the API's). */
 export const ISSUE_REFUSAL_WORDS = [
   'WORK_ORDER_NOT_OPEN',
@@ -204,6 +334,11 @@ export const ISSUE_REFUSAL_WORDS = [
   // B-W2a-75: Return unused (the API's return refusals).
   'MORE_THAN_AT_WORK_ORDER',
   'NOTHING_AT_WORK_ORDER',
+  // B-W2b-100: one shade lot per order, and a piece too small to be a remnant.
+  'SHADE_LOT',
+  'OUT_OF_SHADE',
+  'REMNANT_TOO_SMALL',
+  'REMNANT_GONE_ON',
 ] as const
 
 /** B-W2a-75: the refusals the screen says on its own (no API code): a code Return unused does not find at the work order. */

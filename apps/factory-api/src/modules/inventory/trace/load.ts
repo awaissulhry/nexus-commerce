@@ -113,7 +113,7 @@ export async function loadTraceFacts(client: FactoryClient, start: StartRecord, 
   let materialKits: KitRow[] = []
   if (forward && (start.kind === 'LOT' || start.kind === 'HIDE')) {
     const material = start.kind === 'HIDE' ? { hideId: start.id } : { lotId: start.id }
-    const moves = await client.stockMove.findMany({ where: { ...material, companyId, reason: { in: ['ISSUE', 'RETURN'] }, workOrderId: { not: null } }, select: ISSUE_SELECT })
+    const moves = await client.stockMove.findMany({ where: { ...material, companyId, reason: { in: ['ISSUE', 'RETURN', 'REMNANT'] }, workOrderId: { not: null } }, select: ISSUE_SELECT })
     const cuts = await client.cutLog.findMany({ where: material, select: { id: true, workOrderId: true, hideId: true, lotId: true, reversalOfId: true } })
     materialKits = (await client.subcontractOrder.findMany({ where: { companyId, kitLines: { some: { ...material, status: 'SENT' } } }, select: KIT_SELECT })) as KitRow[]
     const reach = workOrdersOfMaterial(
@@ -174,7 +174,7 @@ export async function loadTraceFacts(client: FactoryClient, start: StartRecord, 
     ...(forward && start.kind === 'HIDE' ? [{ hideId: start.id }] : []),
   ]
   const issues = issueWhere.length
-    ? await client.stockMove.findMany({ where: { companyId, reason: { in: ['ISSUE', 'RETURN'] }, workOrderId: { not: null }, OR: issueWhere }, select: ISSUE_SELECT, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }] })
+    ? await client.stockMove.findMany({ where: { companyId, reason: { in: ['ISSUE', 'RETURN', 'REMNANT'] }, workOrderId: { not: null }, OR: issueWhere }, select: ISSUE_SELECT, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }] })
     : []
   const orders = wos.length ? ((await client.subcontractOrder.findMany({ where: { workOrderId: { in: wos }, companyId }, select: KIT_SELECT })) as KitRow[]) : []
   const subcontracts = [...new Map([...orders, ...materialKits].map((row) => [row.id, subcontractOf(row)])).values()]

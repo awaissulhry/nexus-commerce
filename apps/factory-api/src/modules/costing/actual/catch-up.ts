@@ -26,7 +26,8 @@ import { unique, type Reader } from './store'
 /** Work orders per tenant and night; the rest waits for the next night. */
 export const MAX_CATCH_UP_WORK_ORDERS = 200
 
-const VALUED_REASONS = ['ISSUE', 'RETURN', 'SCRAP', 'PRODUCTION_RECEIPT'] as const
+// B-W2b-100: a REMNANT takes its material off the work order, as a RETURN does.
+const VALUED_REASONS = ['ISSUE', 'RETURN', 'REMNANT', 'SCRAP', 'PRODUCTION_RECEIPT'] as const
 
 /** The work orders of the tenant with a source that has no cost entry yet (at most `take`, by id). */
 export async function waitingWorkOrderIds(db: Reader, take: number): Promise<string[]> {

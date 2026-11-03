@@ -13,6 +13,8 @@ import { LOCATION_STATUSES } from './locations/rules'
 // B-W2b-94: hides as stock.
 import { GRADE_RULE_CHANGES, GRADING_CHANGES } from './hides/changes'
 import { AREA_OUTCOMES } from './hides/measure'
+// B-W2b-100: remnant stock.
+import { REMNANT_CAUSES, REMNANT_SOURCES, REMNANT_STATES } from './remnants/rules'
 
 /**
  * The inventory module's events (plan A1 §3.4; SCM-189). apps/factory-api's modules/inventory/ledger `postMoves` emits
@@ -20,6 +22,11 @@ import { AREA_OUTCOMES } from './hides/measure'
  * adjustments, counts, scraps, reversals). `valued` says whether the command valued the move already: the office and
  * the system value their moves in the same command; the floor cannot see costs, so its moves that enter or leave the
  * site's stock are valued afterwards by the worker's `inventory.valueFloorMoves` handler. Never a cost in a payload.
+ *
+ * Remnants (B-W2b-100, modules/inventory/remnants): `inventory.remnant_tagged` once per offcut that became stock with its own
+ * tag (a REMNANT move back from a work order, or a W1 remnant tagged by the office), `inventory.remnant_changed` once per
+ * state a piece takes with its hide (issued, back in stock, used, scrapped, void). They reach the office's hides and stock
+ * screens (inventory.stock.view) and the site's pick screens (inventory.issue).
  *
  * Picking (B-W1-39, modules/inventory/issue): `inventory.issued` once per issue to a work order (its moves; the worker's
  * `inventory.startWorkOrderOnIssue` handler moves a RELEASED work order to IN_PROGRESS on it), `inventory.returned` once
@@ -127,6 +134,8 @@ export const events = [
       baseQuantity: decimal(),
       /** The hide's state after the return (REMNANT once part of it stayed with the work order). */
       hideState: z.enum(HIDE_STATES).nullable(),
+      /** B-W2b-100: the remnant tag the part that came back got (a REMNANT move), else null. */
+      remnantId: z.uuid().nullable().optional(),
       postedBy: z.enum(['OFFICE', 'FLOOR', 'SYSTEM']),
     }),
     live: { permission: 'inventory.issue', floor: 'inventory.issue', fields: ['workOrderId', 'number', 'itemId', 'lotId', 'hideId'] },
@@ -140,7 +149,8 @@ export const events = [
       number: z.string(),
       /** The issue or return reversed (its first move). */
       reversedId: z.uuid(),
-      of: z.enum(['ISSUE', 'RETURN']),
+      // B-W2b-100: a REMNANT (a part of a hide that came back with a tag of its own) is reversed here too.
+      of: z.enum(['ISSUE', 'RETURN', 'REMNANT']),
       /** The poster's own last issue, undone before its next action (else a reversal by the office). */
       undo: z.boolean(),
       moveIds: z.array(z.uuid()).min(1),
@@ -446,5 +456,40 @@ export const events = [
       moveId: z.uuid().nullable(),
     }),
     live: { permission: 'inventory.stock.view', fields: ['hideId', 'lotId', 'itemId', 'outcome'] },
+  }),
+  defineEvent({
+    type: 'inventory.remnant_tagged',
+    context: 'inventory',
+    description: 'A usable offcut of a hide became stock with a tag of its own (RM-…): back from a work order at the pick, set aside at the cutting table, or a W1 remnant tagged by the office.',
+    payload: z.strictObject({
+      remnantId: z.uuid(),
+      code: z.string(),
+      hideId: z.uuid(),
+      lotId: z.uuid(),
+      itemId: z.uuid(),
+      /** The REMNANT move that put it into stock (a W1 RETURN for a backfilled tag). */
+      moveId: z.uuid(),
+      workOrderId: z.uuid().nullable(),
+      locationId: z.uuid(),
+      baseArea: decimal(),
+      source: z.enum(REMNANT_SOURCES),
+    }),
+    live: { permission: 'inventory.stock.view', floor: 'inventory.issue', fields: ['remnantId', 'code', 'hideId', 'lotId', 'itemId'] },
+  }),
+  defineEvent({
+    type: 'inventory.remnant_changed',
+    context: 'inventory',
+    description: "A remnant's state moved with its hide: issued, back in stock, used by a cut, scrapped, or void once its move was reversed.",
+    payload: z.strictObject({
+      remnantId: z.uuid(),
+      code: z.string(),
+      hideId: z.uuid(),
+      from: z.enum(REMNANT_STATES),
+      to: z.enum(REMNANT_STATES),
+      cause: z.enum(REMNANT_CAUSES),
+      /** The work order the hide was issued to or came back from, when there is one. */
+      workOrderId: z.uuid().nullable(),
+    }),
+    live: { permission: 'inventory.stock.view', floor: 'inventory.issue', fields: ['remnantId', 'code', 'hideId', 'from', 'to'] },
   }),
 ] as const

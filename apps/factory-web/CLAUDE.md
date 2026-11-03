@@ -245,6 +245,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Office and the Floor share), and the floor's `floor/tasks/machine/` (SCR-179 `/floor/machine`, tile `machine`, catalogue
   `floor-machine`: which machine → symptom tiles (DS ReasonGrid) → the report queued as `plant.report`; a technician's My
   jobs, the job, start / wait / hand back / take back, sign safe with the PIN; Scan anything's machine card).
+  B-W2b-102 (`depth.ts`, `view/{MediaParts,ProgressParts,CloseBody}.tsx`): a photo or voice note with the report (kept in the page,
+  sent to the request the queue's receipt names; the voice recorder is composed), "Reported here" and one report's progress
+  (`GET /plant/floor/requests[/:id]`; Seen / On my way / It works through `stepOrKeep`: online first, queued as
+  `plant.request.progress` under the try's id, its key `<device>.<id>`), the technician's queue, the line lead's confirm, the
+  one-screen close (factory-domain plant/jobs/close tiles), files opened through `GET /plant/floor/files/:id/download`;
+  `INCIDENT_PAGE` in depth.ts is the hook B-W2b-137 sets.
 - The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
   write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
   and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):

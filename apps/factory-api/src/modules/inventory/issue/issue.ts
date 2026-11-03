@@ -3,7 +3,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-d
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
-import { issueDecision, returnDecision, reversalRefusal, undoRefusal, type HideState, type Refusal } from '@nexus/factory-domain/inventory/issue/rules'
+import { issueDecision, PICKED_REASONS, returnDecision, reversalRefusal, undoRefusal, type HideState, type Refusal } from '@nexus/factory-domain/inventory/issue/rules'
 import { quantityText, reversalOf } from '@nexus/factory-domain/inventory/ledger/moves'
 import { baseQuantityOf } from '@nexus/factory-domain/inventory/ledger/units'
 import { INVENTORY_ISSUE, INVENTORY_ISSUE_OVER, INVENTORY_REVERSE } from '@nexus/factory-domain/inventory/permissions'
@@ -16,6 +16,11 @@ import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contra
 import { latestMoveOf, PickRefusedError, pickingWorkOrder, readGroup } from './picking'
 import { giveBackIssue, reservedForIssue, ReservedForOtherError } from '../reservations/consume'
 import { holdOnIssue } from '../../quality/holds/checks'
+// B-W2b-100: one shade lot per order (SCM-206) and remnant stock (SCM-254).
+import { asksOneShadePerOrder, shadeRefusal } from '@nexus/factory-domain/inventory/reservations/shade'
+import { remnantSizeRefusal } from '@nexus/factory-domain/inventory/remnants/rules'
+import { heldShades, shadeFactsOf, shadeOverrideOf, shadeRuleFor } from '../reservations/shade'
+import { assertRemnantMoveReversible, remnantsOnClose, remnantsOnIssue, remnantsOnIssueReversed, remnantsOnMoveReversed, remnantsOnWholeReturn, tagRemnantInCommand } from '../remnants/lifecycle'
 import {
   itemUnitsOf,
   lockHideCuts,
@@ -48,9 +53,15 @@ import {
  *              over-issue only with a reason and inventory.issue.over (the office). A hide two tablets scan at once is
  *              issued once: the stock lock lets one through, the other is told it is already issued.
  *   return     office and floor: the unused part, measured, to a location of the site; a hide that left part of itself
- *              becomes a REMNANT.
+ *              becomes a REMNANT. B-W2b-100 (SCM-254): that part comes back as a REMNANT move (RETURN's twin) with a tag of
+ *              its own (RM-…, ../remnants/lifecycle.ts), refused in words below the minimum remnant; a hide back whole is
+ *              a RETURN (a tagged remnant keeps its tag).
  *   undo       office and floor: the poster's own last issue, before its next stock action.
  *   reversal   office (inventory.reverse, with the reason): any issue or return of a work order.
+ *
+ * B-W2b-100 (SCM-206): with the site's shade rule ORDER (the default), a hide of another shade lot than the work order holds
+ * or has reserved, or of the out-of-shade group, is refused (`refusal/SHADE_LOT` | `OUT_OF_SHADE`) unless the office gives
+ * `shadeOverrideReason` with inventory.shade.override. A tagged remnant issued is ISSUED, and its undo gives it back.
  *
  * Every write records its moves' audit rows (postMoves) and one row on the work order, and emits `inventory.issued`,
  * `inventory.returned` or `inventory.pick_reversed`. The first issue to a RELEASED work order says so in its event, and
@@ -96,6 +107,11 @@ async function resolveStock(tx: CommandTx, workOrder: PickHeader, ref: StockRef,
   const code = ref.code?.trim()
   if (code) {
     hide = await tx.hide.findFirst({ where: { code }, select: HIDE_COLUMNS })
+    // B-W2b-100 (SCM-254): a remnant's own tag (RM-…) names its hide: issued like the hide's tag.
+    if (!hide) {
+      const remnant = await tx.remnant.findFirst({ where: { code: code.toUpperCase() }, select: { hideId: true } })
+      if (remnant) hide = (await readHides(tx, [remnant.hideId])).get(remnant.hideId) ?? null
+    }
     if (!hide) lot = await tx.lot.findFirst({ where: { code }, select: LOT_COLUMNS })
     if (!hide && !lot) itemId = (await tx.item.findFirst({ where: { code }, select: { id: true } }))?.id ?? null
     if (!hide && !lot && !itemId) throw notFound()
@@ -158,6 +174,8 @@ export interface IssueInput extends StockRef {
   readonly fromLocationId?: string | undefined
   /** An over-issue (the office, inventory.issue.over): why. */
   readonly overIssueReason?: string | undefined
+  /** B-W2b-100: a hide of another shade lot issued anyway (the office, inventory.shade.override): why. */
+  readonly shadeOverrideReason?: string | undefined
   /** When it happened, by the device's clock (a floor scan sent later). Default now. */
   readonly occurredAt?: string | undefined
   /** B-W2a-F8: the reason an issue dated inside a SOFT-locked month is posted anyway. */
@@ -186,7 +204,15 @@ export interface IssueResult {
  * issued, B-W1-40): the work order's issue lock, the rules, postMoves, the audit row on the work order and the event.
  * `key` is the command's (its moves' keys are `<key>:<n>`).
  */
-export async function issueInCommand(tools: CommandTools, workOrderId: string, body: IssueInput, key: string, path = 'body'): Promise<IssueResult> {
+export async function issueInCommand(
+  tools: CommandTools,
+  workOrderId: string,
+  body: IssueInput,
+  key: string,
+  path = 'body',
+  // B-W2b-100: the cutting table checks the shade itself (a warning a lead may pass: B-W2b-103), so its scan skips it here.
+  options: { readonly shade?: boolean } = {},
+): Promise<IssueResult> {
   const context = contextOf(tools)
   const workOrder = await lockedWorkOrder(tools, workOrderId)
   const { tx } = tools
@@ -227,6 +253,20 @@ export async function issueInCommand(tools: CommandTools, workOrderId: string, b
   if (!decision.ok) {
     if (decision.refusal.code === 'NOTHING_ON_HAND' && hide) throw await alreadyIssued(tx, hide)
     refused(decision.refusal)
+  }
+  // B-W2b-100 (SCM-206): one shade lot per order, checked against what the work order holds and has reserved of the leather.
+  let shadeOverride: string | null = null
+  if (hide && options.shade !== false) {
+    const rule = await shadeRuleFor(tx, workOrder.siteId)
+    if (asksOneShadePerOrder(rule)) {
+      const held = await heldShades(tx, { siteId: workOrder.siteId, workOrderId: workOrder.id, salesOrderLineId: null, itemId: item.id, itemColourId })
+      const fact = (await shadeFactsOf(tx, [hide.id])).get(hide.id)!
+      const refusal = shadeRefusal(rule, `work order ${workOrder.number}`, held, fact)
+      if (refusal) {
+        shadeOverride = shadeOverrideOf(tools.context, { companyId: workOrder.companyId, siteId: workOrder.siteId }, body.shadeOverrideReason, `${path}/shadeOverrideReason`)
+        if (!shadeOverride) refused(refusal)
+      }
+    }
   }
 
   // Where it is taken from: a hide from every location holding it (whole), a quantity location by location by code.
@@ -281,6 +321,8 @@ export async function issueInCommand(tools: CommandTools, workOrderId: string, b
 
   const baseQuantity = sumOf(moves)
   await reserved.consume(moves.map((move) => move.id), baseQuantity)
+  // B-W2b-100: the hide's tagged pieces in stock go with it.
+  if (hide) await remnantsOnIssue(tools, hide.id, workOrder.id)
   const startsWorkOrder = workOrder.status === 'RELEASED'
   const issue = {
     id: moves[0]!.id,
@@ -301,8 +343,12 @@ export async function issueInCommand(tools: CommandTools, workOrderId: string, b
     recordId: workOrder.id,
     companyId: workOrder.companyId,
     siteId: workOrder.siteId,
-    after: { issueId: issue.id, moveIds: moves.map((move) => move.id), itemId: item.id, itemColourId, lotId: issue.lotId, hideId: issue.hideId, baseQuantity, overIssue: decision.overIssue },
-    ...(decision.overIssue && reason ? { reason } : {}),
+    after: { issueId: issue.id, moveIds: moves.map((move) => move.id), itemId: item.id, itemColourId, lotId: issue.lotId, hideId: issue.hideId, baseQuantity, overIssue: decision.overIssue, ...(shadeOverride ? { shadeOverride: true } : {}) },
+    // The over-issue's reason and (B-W2b-100) the shade override's, both kept when both were given.
+    ...(() => {
+      const why = [decision.overIssue && reason ? reason : null, shadeOverride ? `Shade rule overridden: ${shadeOverride}` : null].filter((part): part is string => part !== null)
+      return why.length > 0 ? { reason: why.join(' · ') } : {}
+    })(),
   })
   tools.emit({
     type: 'inventory.issued',
@@ -393,12 +439,17 @@ export async function returnStock(caller: CommandCaller, workOrderId: string, bo
         baseQuantity: measured.baseQuantity,
       })
       if (!decision.ok) refused(decision.refusal)
+      // B-W2b-100 (SCM-254): a part of a hide comes back as a REMNANT with its own tag — not below the minimum remnant.
+      if (hide && decision.reason === 'REMNANT') {
+        const small = remnantSizeRefusal({ hideCode: hide.code, baseArea: measured.baseQuantity, baseUom: item.baseUom })
+        if (small) refused({ code: 'REMNANT_TOO_SMALL', message: small.message })
+      }
       const [move] = await postMoves(
         tools,
         [
           {
             siteId: workOrder.siteId,
-            reason: 'RETURN',
+            reason: decision.reason,
             itemId: item.id,
             itemColourId,
             lotId: lot?.id ?? null,
@@ -424,13 +475,22 @@ export async function returnStock(caller: CommandCaller, workOrderId: string, bo
         await tx.hide.update({ where: { id: hide.id }, data: { state: hideState, version: { increment: 1 } }, select: { id: true } })
         tools.audit({ action: 'inventory.hideState', recordType: 'Hide', recordId: hide.id, companyId: workOrder.companyId, siteId: workOrder.siteId, before: { state: hide.state }, after: { state: hideState } })
       }
+      // B-W2b-100: the hide's issued pieces are used (a part came back: a new tag) or back in stock whole.
+      let remnant: { id: string; code: string; baseArea: string } | null = null
+      if (hide && decision.reason === 'REMNANT') {
+        await remnantsOnClose(tools, hide.id, workOrder.id)
+        const row = await tagRemnantInCommand(tools, { move: move!, hide: { id: hide.id, lotId: hide.lotId, itemId: hide.itemId }, baseUom: item.baseUom, source: 'RETURN', note: body.note ?? null })
+        remnant = { id: row.id, code: row.code, baseArea: row.baseArea.toFixed(4) }
+      } else if (hide) {
+        await remnantsOnWholeReturn(tools, hide.id, workOrder.id, body.toLocationId)
+      }
       tools.audit({
         action: 'inventory.return',
         recordType: 'WorkOrder',
         recordId: workOrder.id,
         companyId: workOrder.companyId,
         siteId: workOrder.siteId,
-        after: { returnId: move!.id, itemId: item.id, itemColourId, lotId: move!.lotId, hideId: move!.hideId, baseQuantity: move!.baseQuantity, toLocationId: body.toLocationId, hideState },
+        after: { returnId: move!.id, reason: decision.reason, itemId: item.id, itemColourId, lotId: move!.lotId, hideId: move!.hideId, baseQuantity: move!.baseQuantity, toLocationId: body.toLocationId, hideState, remnantId: remnant?.id ?? null },
       })
       tools.emit({
         type: 'inventory.returned',
@@ -448,10 +508,11 @@ export async function returnStock(caller: CommandCaller, workOrderId: string, bo
           toLocationId: body.toLocationId,
           baseQuantity: move!.baseQuantity,
           hideState,
+          remnantId: remnant?.id ?? null,
           postedBy: postedBy(context).audience,
         },
       })
-      return { return: { id: move!.id, workOrderId: workOrder.id, number: workOrder.number, hideState, move: move! } }
+      return { return: { id: move!.id, workOrderId: workOrder.id, number: workOrder.number, hideState, move: move!, remnant } }
     },
   )
   return result
@@ -465,7 +526,7 @@ const UNDO_NOTE = 'Undone by the poster before the next action (issued by mistak
 async function pickedMove(caller: CommandCaller, moveId: string, permission: typeof INVENTORY_ISSUE | typeof INVENTORY_REVERSE): Promise<{ context: StockContext; move: LedgerRow }> {
   const context = stockContextOf(caller)
   const move = isUuid(moveId) ? await caller.withClient((client) => client.stockMove.findUnique({ where: { id: moveId }, select: LEDGER_SELECT })) : null
-  if (!move || !move.workOrderId || (move.reason !== 'ISSUE' && move.reason !== 'RETURN') || !mayAt(context, permission, move)) throw new NotFoundError('Issue not found.')
+  if (!move || !move.workOrderId || !PICKED_REASONS.includes(move.reason) || !mayAt(context, permission, move)) throw new NotFoundError('Issue not found.')
   await pickingWorkOrder(caller, move.workOrderId, permission)
   return { context, move }
 }
@@ -497,6 +558,8 @@ async function reverseGroup(tools: CommandTools, original: LedgerRow, options: {
     const undo = undoRefusal(picked, latest)
     if (undo) refused(undo)
   }
+  // B-W2b-100: a REMNANT's tag must still lie where it came back (else the reversal is refused in words).
+  if (original.reason === 'REMNANT') await assertRemnantMoveReversible(tx, moves.map((move) => move.id))
   const drafts: MoveDraft[] = moves.map((move) => ({
     ...reversalOf({ ...move, quantity: move.quantity.toString(), baseQuantity: move.baseQuantity.toString() }, options.note),
     uom: move.uom,
@@ -522,6 +585,9 @@ async function reverseGroup(tools: CommandTools, original: LedgerRow, options: {
     )
   }
   const posted = await postMoves(tools, drafts, { key: options.key, issuePath: () => 'body' })
+  // B-W2b-100: the hide's tagged pieces follow (after the mirror moves: a piece goes VOID only once its move is reversed).
+  if (original.hideId && original.reason === 'ISSUE') await remnantsOnIssueReversed(tools, original.hideId, workOrder.id)
+  else if (original.hideId) for (const move of moves) await remnantsOnMoveReversed(tools, move)
   tools.audit({
     action: options.undo ? 'inventory.undoIssue' : 'inventory.reverseIssue',
     recordType: 'WorkOrder',
@@ -540,13 +606,13 @@ async function reverseGroup(tools: CommandTools, original: LedgerRow, options: {
       workOrderId: workOrder.id,
       number: workOrder.number,
       reversedId: moves[0]!.id,
-      of: original.reason as 'ISSUE' | 'RETURN',
+      of: original.reason as 'ISSUE' | 'RETURN' | 'REMNANT',
       undo: options.undo,
       moveIds: posted.map((move) => move.id),
       postedBy: postedBy(context).audience,
     },
   })
-  return { reversal: { reversedId: moves[0]!.id, of: original.reason as 'ISSUE' | 'RETURN', workOrderId: workOrder.id, number: workOrder.number, baseQuantity: sumOf(posted), moves: posted } }
+  return { reversal: { reversedId: moves[0]!.id, of: original.reason as 'ISSUE' | 'RETURN' | 'REMNANT', workOrderId: workOrder.id, number: workOrder.number, baseQuantity: sumOf(posted), moves: posted } }
 }
 
 /** The poster's own last issue, undone before its next stock action (the floor's Undo strip; the office's own too). */

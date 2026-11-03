@@ -7,7 +7,7 @@ import { postWorkOrderCosts, type PostScope } from './post'
  * its ledger is posted (./post.ts, ONE writer), in the event's tenant's system context, with a key made from the event
  * (a repeated event or a retried job posts nothing twice; the entries' own keys make sure of it too):
  *
- *   inventory.moved            an ISSUE, RETURN, SCRAP or PRODUCTION_RECEIPT of a work order (or its reversal); a floor
+ *   inventory.moved            an ISSUE, RETURN, REMNANT, SCRAP or PRODUCTION_RECEIPT of a work order (or its reversal); a floor
  *                              move not valued yet is valued first (the same command as inventory.valueFloorMoves, once)
  *   production.scan_recorded   a report (labour, its scrap) and the scan an undo or a correction voids (their reversal)
  *   production.rework_moved    a rework DONE with scrap
@@ -18,7 +18,8 @@ import { postWorkOrderCosts, type PostScope } from './post'
  *
  * Listed in background.ts HANDLERS for the worker: ...costingHandlers().
  */
-const COSTED = new Set(['ISSUE', 'RETURN', 'SCRAP', 'PRODUCTION_RECEIPT'])
+// B-W2b-100: + REMNANT (RETURN's twin: the material comes off the work order).
+const COSTED = new Set(['ISSUE', 'RETURN', 'REMNANT', 'SCRAP', 'PRODUCTION_RECEIPT'])
 
 export function costingHandlers(): EventHandler[] {
   return [

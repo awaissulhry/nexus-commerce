@@ -47,7 +47,16 @@
     "signFirst": "In funzione solo dopo che un tecnico ha firmato la macchina sicura.",
     "noSign": "Solo un tecnico firma di nuovo sicura una macchina.",
     "checked": "Di' cosa hai controllato.",
-    "photo": "Le foto dal tablet arriveranno più avanti: l'ufficio può aggiungerne una alla richiesta."
+    "mediaOffline": "Una foto o una nota vocale ha bisogno della rete. La segnalazione si salva comunque su questo tablet.",
+    "mediaFull": "Questa segnalazione ha già tutte le foto e note vocali che può avere.",
+    "mediaClosed": "Questa segnalazione non prende più foto: è stata unita a un'altra o chiusa.",
+    "worksDone": "È già stato confermato che funziona.",
+    "worksClosed": "Chiusa senza intervento: non c'è niente da confermare.",
+    "worksLocked": "Bloccata come non sicura: prima un tecnico la firma sicura.",
+    "worksNotFixed": "Non ancora riparata: conferma quando il tecnico ha riconsegnato la macchina.",
+    "stepDone": "Già fatto, o non possibile ora.",
+    "failure": "Tocca cosa si è guastato.",
+    "incident": "La segnalazione di infortuni arriva con una versione successiva: avvisa subito il tuo caposquadra."
   },
   "status": {
     "RUNNING": "In funzione",
@@ -72,7 +81,13 @@
     "reopen": "Riprendi il lavoro",
     "signSafe": "Firma sicura",
     "retry": "Riprova",
-    "reportAs": "Segnala come:"
+    "reportAs": "Segnala come:",
+    "follow": "Seguila",
+    "works": "Funziona",
+    "acknowledge": "Vista",
+    "onTheWay": "Sto arrivando",
+    "leadConfirm": "Caposquadra: funziona",
+    "incident": "Segnala un infortunio"
   },
   "symptom": {
     "title": "Cosa non va?",
@@ -83,7 +98,6 @@
     "unsafe": "Non è sicura: bloccala",
     "unsafeOn": "Segnata non sicura",
     "unsafeBySymptom": "Questo sintomo blocca la macchina da solo.",
-    "photo": "Aggiungi una foto",
     "unsafeBody": "{machine} sarà subito da non usare: nessuno potrà lavorarci finché un tecnico non la firma sicura.",
     "locks": "Blocca la macchina",
     "saysWords": "Dillo in poche parole",
@@ -134,7 +148,9 @@
   "keys": {
     "next": "Intervento successivo",
     "open": "Apri l'intervento",
-    "back": "Indietro"
+    "back": "Indietro",
+    "nextReport": "Segnalazione successiva",
+    "openReport": "Apri la segnalazione"
   },
   "done": {
     "started": "{job} iniziato: {machine} risulta in manutenzione.",
@@ -142,11 +158,14 @@
     "reopened": "{job} è di nuovo in corso.",
     "signed": "{machine} è firmata sicura.",
     "handedBack": "{job} riconsegnato: lo chiude l'ufficio.",
-    "tile": {
-      "adjusted": "Regolata",
-      "replaced": "Sostituito un pezzo",
-      "cleaned": "Pulita e lubrificata",
-      "other": "Altro"
+    "leadConfirmed": "{job}: il caposquadra ha confermato che {machine} funziona.",
+    "request": {
+      "works": "Grazie: la manutenzione sa che {machine} funziona di nuovo.",
+      "acknowledged": "Vista: la postazione sa che la manutenzione se ne occupa.",
+      "onTheWay": "Stai arrivando: la postazione vede che un tecnico arriva.",
+      "leadConfirmed": "Confermato come caposquadra: {machine} funziona.",
+      "added": "Aggiunta alla segnalazione.",
+      "kept": "Salvato su questo tablet: arriva alla manutenzione quando torna la rete."
     }
   },
   "job": {
@@ -159,7 +178,8 @@
     "overdue": "in ritardo",
     "last": "Gli ultimi interventi sulla macchina",
     "lastNone": "Nessun intervento precedente su questa macchina.",
-    "repeat": "{count} guasti negli ultimi 30 giorni: cerca la causa."
+    "repeat": "{count} guasti negli ultimi 30 giorni: cerca la causa.",
+    "leadConfirmed": "Il caposquadra ha confermato che funziona alle {time}."
   },
   "handBack": {
     "title": "Riconsegna {job} · {machine}",
@@ -195,15 +215,15 @@
     "symptom": "Sintomo",
     "problem": "L'intervento",
     "reporters": "Segnalato come",
-    "photos": "Foto",
-    "photosValue_one": "{count} foto: apri la richiesta in ufficio",
-    "photosValue_other": "{count} foto: apri la richiesta in ufficio",
-    "noPhotos": "Nessuna",
     "priority": "Priorità",
     "waiting": "In attesa da",
     "where": "Dove",
     "openJobs": "Interventi aperti",
-    "openRequests": "Guasti aperti"
+    "openRequests": "Guasti aperti",
+    "words": "Parole",
+    "machineNow": "Macchina ora",
+    "job": "Intervento",
+    "timeSpent": "Tempo sull'intervento"
   },
   "age": {
     "minutes_one": "{count} min",
@@ -252,6 +272,147 @@
     "NOT_YOUR_JOB": {
       "message": "Questo intervento è assegnato a un altro tecnico.",
       "fix": "Lavora gli interventi assegnati a te o a nessuno; lo riassegna l'ufficio."
+    },
+    "ALREADY_ACKNOWLEDGED": {
+      "message": "La manutenzione ha già visto questa richiesta.",
+      "fix": "Di' Sto arrivando quando vai alla macchina."
+    },
+    "ON_THE_WAY_ALREADY": {
+      "message": "Un tecnico sta già arrivando a questa macchina.",
+      "fix": "Rileggila."
+    },
+    "NOT_ON_THE_WAY_NOW": {
+      "message": "Questa richiesta è unita a un'altra o chiusa: nessuno ci va ora.",
+      "fix": "Apri la richiesta a cui è unita, o torna indietro."
+    },
+    "NOT_FIXED_YET": {
+      "message": "La macchina non è ancora riparata, o un tecnico non l'ha firmata sicura.",
+      "fix": "Conferma quando il tecnico l'ha riconsegnata."
+    },
+    "WORKS_CONFIRMED": {
+      "message": "È già stato confermato che la macchina funziona di nuovo.",
+      "fix": "Rileggila."
+    },
+    "CLOSED_WITHOUT_JOB": {
+      "message": "Questa richiesta è stata chiusa senza intervento: non c'è niente da confermare.",
+      "fix": "Segnala un nuovo guasto se la macchina ancora non funziona."
+    },
+    "LOCK_NOT_ALLOWED": {
+      "message": "In questo stabilimento bloccano una macchina solo i capisquadra e i tecnici.",
+      "fix": "Avvisa subito il tuo caposquadra: la blocca lui."
+    },
+    "NOT_HANDED_BACK": {
+      "message": "L'intervento non è riconsegnato: il caposquadra conferma quando lo è.",
+      "fix": "Conferma quando il tecnico ha riconsegnato la macchina."
+    },
+    "LEAD_CONFIRMED": {
+      "message": "Il caposquadra ha già confermato questo intervento.",
+      "fix": "Rileggilo."
+    },
+    "FILES_CLOSED": {
+      "message": "Questa segnalazione o intervento non prende più foto o note vocali.",
+      "fix": "Aggiungile alla nuova segnalazione o al nuovo intervento della macchina."
     }
+  },
+  "media": {
+    "title": "Foto e note vocali",
+    "optional": "Una foto o una nota vocale, se aiuta",
+    "addPhoto": "Aggiungi una foto",
+    "addVoice": "Aggiungi una nota vocale",
+    "photo": "Foto",
+    "photoBefore": "Foto prima del lavoro",
+    "photoAfter": "Foto dopo il lavoro",
+    "voice": "Nota vocale",
+    "photoFor": "Una foto di {machine}",
+    "voiceFor": "Una nota vocale su {machine}",
+    "taken": "Fatte con questa segnalazione",
+    "sent": "In invio alla manutenzione",
+    "stored": "Foto e note vocali",
+    "remove": "Togli {name}",
+    "none": "Ancora nessuna foto o nota vocale.",
+    "look": "Guarda",
+    "listen": "Ascolta",
+    "lookAt": "Guarda: {what}",
+    "listenTo": "Ascolta: {what}",
+    "opening": "Apertura…",
+    "openFailed": "Non si è potuta aprire. Riprova quando torna la rete.",
+    "close": "Chiudi",
+    "uploading": "Invio in corso…",
+    "failed": "Non è stata inviata. Rifalla, o riprova quando torna la rete.",
+    "afterReport": "Vanno alla manutenzione appena la segnalazione è registrata: tieni aperta questa schermata finché non sono aggiunte.",
+    "waitReport": "Partono appena la manutenzione ha la segnalazione: tieni aperta questa schermata.",
+    "dropped": "Le foto e le note vocali fatte con questa segnalazione non sono state inviate."
+  },
+  "upload": {
+    "waiting": "aspetta la segnalazione",
+    "sending": "in invio…",
+    "added": "aggiunta",
+    "failed": "non aggiunta"
+  },
+  "voice": {
+    "hint": "Di' cosa vedi o senti, al massimo {count} secondi. Mai il nome di una persona.",
+    "recording": "Registrazione in corso…",
+    "left": "Tempo rimasto",
+    "review": "La tua nota vocale",
+    "failed": "Il microfono non è partito. Consentilo in Android, oppure scrivi poche parole.",
+    "start": "Inizia a registrare",
+    "stop": "Ferma",
+    "again": "Registra di nuovo",
+    "use": "Usala",
+    "cancel": "Annulla"
+  },
+  "reported": {
+    "title": "Segnalati qui",
+    "at": "segnalato alle {time}",
+    "count_one": "{count} segnalazione in corso",
+    "count_other": "{count} segnalazioni in corso"
+  },
+  "queue": {
+    "title": "Richieste in questo stabilimento",
+    "empty": "Nessuna richiesta aperta in questo stabilimento.",
+    "toMe": "inviata a te",
+    "escalated": "passata oltre: non vista in tempo",
+    "count_one": "{count} richiesta aperta",
+    "count_other": "{count} richieste aperte"
+  },
+  "progress": {
+    "title": "Avanzamento",
+    "step": {
+      "REPORTED": "Segnalato",
+      "ACKNOWLEDGED": "Vista dalla manutenzione",
+      "ON_THE_WAY": "Un tecnico sta arrivando",
+      "FIXED": "Riparata: il tecnico l'ha riconsegnata",
+      "WORKS": "Funziona di nuovo: confermato",
+      "CLOSED": "Chiusa senza intervento"
+    },
+    "row": {
+      "REPORTED": "In attesa della manutenzione",
+      "ACKNOWLEDGED": "Vista dalla manutenzione",
+      "ON_THE_WAY": "Tecnico in arrivo",
+      "FIXED": "Riparata: funziona?",
+      "WORKS": "Funziona di nuovo"
+    },
+    "routed": {
+      "TEAM": "Inviata alla squadra di manutenzione",
+      "TECHNICIAN": "Inviata a un tecnico"
+    },
+    "locked": "{machine} è bloccata come non sicura: un tecnico la firma sicura prima che qualcuno dica che funziona.",
+    "merged": "Questa segnalazione è stata unita a un'altra di {machine}: vedi l'avanzamento di quella.",
+    "closed": "La manutenzione ha chiuso questa segnalazione senza intervento: non c'è niente da confermare.",
+    "escalated": "Non vista in tempo: è stata passata oltre.",
+    "askWorks": "{machine} è stata riconsegnata. Funziona? Tocca Funziona."
+  },
+  "request": {
+    "type": "Segnalazione · {time}",
+    "offline": "La rete non c'è: Funziona, Vista e Sto arrivando si salvano su questo tablet e partono quando torna."
+  },
+  "close": {
+    "failure": "Cosa si è guastato?",
+    "time": "Tempo sull'intervento: {age} dall'inizio (lo conta l'ufficio).",
+    "notStarted": "Non iniziato: nessun tempo contato.",
+    "photoBefore": "Foto prima",
+    "photoAfter": "Foto dopo",
+    "photoBeforeFor": "{machine} prima del lavoro",
+    "photoAfterFor": "{machine} dopo il lavoro"
   }
 }
