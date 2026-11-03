@@ -63,6 +63,8 @@ import { events as qualityPlans } from '../quality-plans/events'
 import { events as qualityFinal } from '../quality-final/events'
 // B-W2b-101: inspection triggers (a rule changed, a rule opened an inspection).
 import { events as qualityTriggers } from '../quality-triggers/events'
+// B-W2b-98: the incoming inspection, hide by hide (opened, recorded, decided, cancelled).
+import { events as qualityIncoming } from '../quality-incoming/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -191,7 +193,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-97
   ...qualityFinal,
   // B-W2b-101
-  ...qualityTriggers] as const satisfies readonly EventDefinition[]
+  ...qualityTriggers,
+  // B-W2b-98
+  ...qualityIncoming] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

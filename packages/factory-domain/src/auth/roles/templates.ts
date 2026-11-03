@@ -387,6 +387,22 @@ const QUALITY_TRIGGERS_ADDS: Readonly<Record<string, readonly Permission[]>> = O
   production_manager: ['quality.triggers.view'],
   floor_supervisor: ['quality.triggers.view'],
 })
+/**
+ * B-W2b-98 (incoming inspection hide by hide, QHS-025, QHS-028, QHS-034, MES-054; design floor.incoming, quality.inspections
+ * "Incoming"): quality inspects a lot and signs the decision, in the office or on the inspection tablet at the dock (the
+ * floor inspector, with the PIN); the warehouse that received the lot, the buyer who claims its shortfall or returns its
+ * rejected hides and the production manager read it. Releasing the lot stays quality.lots.release (Owner answer W3). Owner
+ * and read-only from every().
+ */
+const INCOMING_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.incoming.view', 'quality.incoming.record'],
+  warehouse: ['quality.incoming.view'],
+  buyer: ['quality.incoming.view'],
+  production_manager: ['quality.incoming.view'],
+})
+const INCOMING_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  floor_inspector: ['quality.incoming.view', 'quality.incoming.record'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -437,7 +453,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-93
   ...(audience === 'office' ? (AQL_ADDS[key] ?? []) : []),
   // B-W2b-101
-  ...(audience === 'office' ? (QUALITY_TRIGGERS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (QUALITY_TRIGGERS_ADDS[key] ?? []) : []),
+  // B-W2b-98
+  ...((audience === 'office' ? INCOMING_ADDS : INCOMING_FLOOR_ADDS)[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
