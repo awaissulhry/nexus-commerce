@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify'
 import { MODE_RULES } from '@nexus/factory-domain/auth/floor/modes'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
-import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { businessDate, businessDayRange, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { boardNoteOf } from '@nexus/factory-domain/production/boards/board'
 import { heatMap } from '@nexus/factory-domain/production/boards/heatmap'
 import { hourLabel } from '@nexus/factory-domain/production/boards/targets'
@@ -18,6 +18,8 @@ import { devicePlaceOf } from '../calls/store'
 import { assertMay, contextOf, knownLine, may, officeOf, readerOf, refuse, type BoardContext } from './access'
 import { hourView, lineDays, shiftView, stationStates, totalsView, waitingOfSite } from './facts'
 import { activeLinesOf, notesOf, reasonWordsOf, siteRow, siteView, type LineRow, type Reader } from './store'
+// B-W2b-99: the line's DHU from its end-of-line checks (QHS-042), replacing the estimate once the line has one that day.
+import { lineQualityOf } from './quality'
 
 /**
  * The line boards' reads (B-W2b-50; MES-161, MES-162, MES-166, ANA-007):
@@ -179,7 +181,7 @@ async function boardOf(db: Reader, line: LineRow, now: Date) {
       operations: map.columns.map((column, index) => ({ ...row.cells[index]!, name: column.name })),
       capped,
     },
-    quality: lineDay.quality,
+    quality: await lineQualityOf(db, line.id, businessDayRange(day, site.timezone), lineDay.quality),
     note: note ? { shiftLabel: note.shiftLabel, topics: [...note.topics], text: note.text, at: toUtcIso(note.updatedAt) } : null,
   }
 }

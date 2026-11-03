@@ -9,14 +9,12 @@ import {
   defaultSafeAfter,
   EMPTY_DRAFT,
   firstStep,
-  handBackHeld,
   isUnsafe,
   lockingRequests,
   machineByTag,
   machineCan,
   moveHeld,
   movesOf,
-  photosOf,
   problemBeyond,
   reportHeld,
   reportPayload,
@@ -25,7 +23,6 @@ import {
   statusKey,
   statusOnArrival,
   symptomTiles,
-  workDoneText,
 } from './model'
 
 /** The machine problem's rules (SCR-179, B-W2a-73): made-up machines, symptoms and jobs. */
@@ -57,7 +54,8 @@ describe('where the screen opens and which machine', () => {
   it('a technician opens on My jobs, anyone else on Which machine', () => {
     expect(firstStep(TECHNICIAN)).toBe('jobs')
     expect(firstStep(OPERATOR)).toBe('which')
-    expect(machineCan(['floor.work'])).toEqual({ report: false, work: false, signSafe: false })
+    expect(machineCan(['floor.work'])).toEqual({ report: false, work: false, signSafe: false, lead: false })
+    expect(machineCan(['floor.work', 'floor.lead']).lead).toBe(true)
   })
 
   it('finds a scanned tag among the machines the tablet read, in any case', () => {
@@ -97,12 +95,12 @@ describe('the report', () => {
   })
 
   it('queues the API’s body: the machine by id and tag, the symptom, the words, unsafe only when marked, down from the action', () => {
-    expect(reportPayload(machine(), { symptomId: 'NOISE', words: '  ', unsafe: false }, false)).toEqual({ machineId: 'm1', assetNumber: 'DEMO-SEW-21', symptomId: 'NOISE', down: false })
-    expect(reportPayload(machine(), { symptomId: null, words: ' Smoke from the motor ', unsafe: true }, true)).toEqual({ machineId: 'm1', assetNumber: 'DEMO-SEW-21', description: 'Smoke from the motor', unsafe: true, down: true })
+    expect(reportPayload(machine(), { ...EMPTY_DRAFT, symptomId: 'NOISE', words: '  ' }, false)).toEqual({ machineId: 'm1', assetNumber: 'DEMO-SEW-21', symptomId: 'NOISE', down: false })
+    expect(reportPayload(machine(), { ...EMPTY_DRAFT, words: ' Smoke from the motor ', unsafe: true }, true)).toEqual({ machineId: 'm1', assetNumber: 'DEMO-SEW-21', description: 'Smoke from the motor', unsafe: true, down: true })
     expect(reportPayload(machine(), EMPTY_DRAFT, true)).not.toHaveProperty('symptomId')
     // The queue's kind is the plant's own permission, and the office's lists name the machine's tag, never the person.
     expect(QUEUED_ACTIONS['plant.report'].permission).toBe('plant.report')
-    expect(summaryOf('plant.report', reportPayload(machine(), { symptomId: 'NOISE', words: '', unsafe: false }, true))).toEqual({ code: 'DEMO-SEW-21' })
+    expect(summaryOf('plant.report', reportPayload(machine(), { ...EMPTY_DRAFT, symptomId: 'NOISE' }, true))).toEqual({ code: 'DEMO-SEW-21' })
   })
 
   it('knows the state the report will cause (factory-domain statusAfterReport)', () => {
@@ -127,6 +125,7 @@ const job = (extra: Partial<FloorJob> = {}): FloorJob => ({
   status: 'IN_PROGRESS',
   startedAt: null,
   handedBack: null,
+  leadConfirmed: null,
   requestIds: [],
   ageMinutes: 5,
   open: true,
@@ -152,29 +151,20 @@ describe('the technician’s job', () => {
     expect(moveHeld(job(), OPERATOR, true)).toBe('held.noWork')
   })
 
-  it('lists the requests that still lock the machine, the photos, the reporters’ own words', () => {
+  it('lists the requests that still lock the machine and the reporters’ own words', () => {
     const requests = [
-      { locking: true, photos: 2, description: ' Cover fell off ', reportedAt: '2026-10-31T08:00:00.000Z' },
-      { locking: false, photos: 1, description: 'Cover fell off', reportedAt: '2026-10-31T08:05:00.000Z' },
-      { locking: false, photos: 0, description: null, reportedAt: '2026-10-31T07:00:00.000Z' },
+      { locking: true, description: ' Cover fell off ', reportedAt: '2026-10-31T08:00:00.000Z' },
+      { locking: false, description: 'Cover fell off', reportedAt: '2026-10-31T08:05:00.000Z' },
+      { locking: false, description: null, reportedAt: '2026-10-31T07:00:00.000Z' },
     ]
     expect(lockingRequests({ requests: requests as never }).length).toBe(1)
-    expect(photosOf(requests)).toBe(3)
     expect(reporterWords(requests)).toEqual(['Cover fell off'])
   })
 
-  it('hands back with the tile’s fixed words; running held while the machine is locked (H1)', () => {
-    expect(workDoneText({ done: 'replaced', words: ' New cover ' })).toBe('Replaced a part: New cover')
-    expect(workDoneText({ done: 'adjusted', words: '' })).toBe('Adjusted')
-    expect(workDoneText({ done: 'other', words: 'Rewired the pedal' })).toBe('Rewired the pedal')
+  it('holds running after the hand-back while the machine is locked (H1)', () => {
     expect(afterHeld('RUNNING', { locked: true })).toBe('held.signFirst')
     expect(afterHeld('DO_NOT_USE', { locked: true })).toBeNull()
-    expect(handBackHeld({ done: null, words: '', after: null }, { locked: false }, true)).toBe('held.whatDone')
-    expect(handBackHeld({ done: 'other', words: ' ', after: 'RUNNING' }, { locked: false }, true)).toBe('held.words')
-    expect(handBackHeld({ done: 'cleaned', words: '', after: null }, { locked: false }, true)).toBe('held.after')
-    expect(handBackHeld({ done: 'cleaned', words: '', after: 'RUNNING' }, { locked: true }, true)).toBe('held.signFirst')
-    expect(handBackHeld({ done: 'cleaned', words: '', after: 'RUNNING' }, { locked: false }, false)).toBe('held.offline')
-    expect(handBackHeld({ done: 'cleaned', words: '', after: 'RUNNING' }, { locked: false }, true)).toBeNull()
+    expect(afterHeld('RUNNING', { locked: false })).toBeNull()
   })
 
   it('signs safe only with what was checked, online, as a technician; under maintenance while the job is started', () => {

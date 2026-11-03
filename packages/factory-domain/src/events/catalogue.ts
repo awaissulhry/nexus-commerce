@@ -65,6 +65,7 @@ import { events as qualityFinal } from '../quality-final/events'
 import { events as qualityTriggers } from '../quality-triggers/events'
 // B-W2b-98: the incoming inspection, hide by hide (opened, recorded, decided, cancelled).
 import { events as qualityIncoming } from '../quality-incoming/events'
+import { events as qualityInprocess } from '../quality-inprocess/events'
 // B-W2b-107: rolls, protector lots and consumables (a roll tagged and changed, a protector lot recorded and withdrawn, a pack).
 import { events as inventoryRolls } from '../inventory-rolls/events'
 import type { EventDefinition } from './define'
@@ -198,6 +199,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...qualityTriggers,
   // B-W2b-98
   ...qualityIncoming,
+  // B-W2b-99
+  ...qualityInprocess,
   // B-W2b-107
   ...inventoryRolls] as const satisfies readonly EventDefinition[]
 

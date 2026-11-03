@@ -142,6 +142,10 @@ export const SCAN_REFUSALS = [
   'CHECKLIST_REPORTED',
   // B-W2b-82 (MES-086): an unplanned operation counts good garments only.
   'UNPLANNED_GOOD_ONLY',
+  // B-W2b-99 (QHS-039, MES-127; quality/inprocess): the run waits for its first piece; a defect charged to an operation of
+  // another work order.
+  'FIRST_PIECE',
+  'CHARGED_OPERATION_UNKNOWN',
 ] as const
 export type ScanRefusalCode = (typeof SCAN_REFUSALS)[number]
 
@@ -268,6 +272,17 @@ export interface DefectLine {
   readonly kind: DefectKind
   readonly reason: string
   readonly quantity: number
+  /**
+   * B-W2b-99 (MES-127; design floor.reasons "Which operation caused it?"): the operation of the same work order the defect
+   * is charged to, per operation and never per worker; left out: not said.
+   */
+  readonly causedAtOperationId?: string | null | undefined
+}
+
+/** B-W2b-99: a line charged to an operation names one of the work order's (the database refuses another). */
+export function chargedOperationRefusal(lines: readonly DefectLine[], operationIds: readonly string[]): ScanRefusal | null {
+  const unknown = lines.find((line) => line.causedAtOperationId && !operationIds.includes(line.causedAtOperationId))
+  return unknown ? refusal('CHARGED_OPERATION_UNKNOWN', 'The defect is charged to an operation that is not of this work order.', 'Pick the operation that caused it from the tiles on the screen.') : null
 }
 
 export interface Counts {
@@ -289,10 +304,12 @@ export function normaliseDefects(lines: readonly DefectLine[], reasons: readonly
     if (!known) {
       return { ok: false, refusal: refusal('UNKNOWN_REASON', `${line.reason} is not a ${line.kind === 'SCRAP' ? 'scrap' : 'rework'} reason of this factory.`, 'Pick a reason from the list on the screen.') }
     }
-    const key = `${line.kind}|${line.reason}`
-    merged.set(key, { kind: line.kind, reason: line.reason, quantity: (merged.get(key)?.quantity ?? 0) + line.quantity })
+    // B-W2b-99: a line charged to an operation stays its own line (the same reason charged elsewhere is another line).
+    const charged = line.causedAtOperationId ?? null
+    const key = `${line.kind}|${line.reason}|${charged ?? ''}`
+    merged.set(key, { kind: line.kind, reason: line.reason, quantity: (merged.get(key)?.quantity ?? 0) + line.quantity, ...(charged ? { causedAtOperationId: charged } : {}) })
   }
-  const sorted = [...merged.values()].sort((a, b) => (a.kind === b.kind ? a.reason.localeCompare(b.reason) : a.kind === 'SCRAP' ? -1 : 1))
+  const sorted = [...merged.values()].sort((a, b) => (a.kind === b.kind ? (a.reason === b.reason ? (a.causedAtOperationId ?? '').localeCompare(b.causedAtOperationId ?? '') : a.reason.localeCompare(b.reason)) : a.kind === 'SCRAP' ? -1 : 1))
   const sum = (kind: DefectKind) => sorted.filter((line) => line.kind === kind).reduce((total, line) => total + line.quantity, 0)
   return { ok: true, lines: sorted, scrap: sum('SCRAP'), rework: sum('REWORK') }
 }
@@ -304,7 +321,7 @@ export function scrapReasonColumn(lines: readonly DefectLine[]): string | null {
 }
 
 const sameLines = (a: readonly DefectLine[], b: readonly DefectLine[]): boolean =>
-  a.length === b.length && a.every((line, index) => line.kind === b[index]!.kind && line.reason === b[index]!.reason && line.quantity === b[index]!.quantity)
+  a.length === b.length && a.every((line, index) => line.kind === b[index]!.kind && line.reason === b[index]!.reason && line.quantity === b[index]!.quantity && (line.causedAtOperationId ?? null) === (b[index]!.causedAtOperationId ?? null))
 
 // ---- words ---------------------------------------------------------------------------------------------------------------------------
 

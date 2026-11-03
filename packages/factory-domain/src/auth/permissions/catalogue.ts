@@ -19,6 +19,8 @@ import { INVENTORY_DISCREPANCIES_DEFINITIONS, INVENTORY_DISCREPANCIES_PERMISSION
 import { INVENTORY_RESERVATION_PERMISSIONS } from '../../inventory/reservations/permissions'
 // B-W2b-94: hides as stock (inventory.hides.manage: a hide's grade, shade group, thickness and defects; its re-measure).
 import { INVENTORY_HIDES_DEFINITIONS, INVENTORY_HIDES_PERMISSIONS } from '../../inventory/hides/permissions'
+// B-W2b-100: one shade lot per order (inventory.shade.override: a hide of another shade lot let through with the reason).
+import { INVENTORY_SHADE_DEFINITIONS, INVENTORY_SHADE_PERMISSIONS } from '../../inventory/reservations/permissions'
 import { INVOICES_DEFINITIONS, INVOICES_PERMISSIONS } from '../../invoicing/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
@@ -150,6 +152,8 @@ import { QUALITY_PLANS_DEFINITIONS, QUALITY_PLANS_PERMISSIONS } from '../../qual
 import { QUALITY_TRIGGERS_DEFINITIONS, QUALITY_TRIGGERS_PERMISSIONS } from '../../quality/triggers/permissions'
 // B-W2b-98: the incoming inspection of a lot, hide by hide (quality.incoming.view | record).
 import { QUALITY_INCOMING_DEFINITIONS, QUALITY_INCOMING_FLOOR_PERMISSIONS, QUALITY_INCOMING_PERMISSIONS } from '../../quality/incoming/permissions'
+// B-W2b-99: in-process checks (quality.inprocess.view | record).
+import { QUALITY_INPROCESS_DEFINITIONS, QUALITY_INPROCESS_FLOOR_PERMISSIONS, QUALITY_INPROCESS_PERMISSIONS } from '../../quality/inprocess/permissions'
 // B-W2b-107: rolls, protector lots and consumables (inventory.rolls.manage; inventory.protectors.record, shared with the floor).
 import { INVENTORY_ROLLS_DEFINITIONS, INVENTORY_ROLLS_FLOOR_PERMISSIONS, INVENTORY_ROLLS_PERMISSIONS } from '../../inventory/rolls/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
@@ -444,6 +448,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_DISCREPANCIES_DEFINITIONS,
   // B-W2b-94: hides as stock.
   INVENTORY_HIDES_DEFINITIONS,
+  // B-W2b-100: one shade lot per order.
+  INVENTORY_SHADE_DEFINITIONS,
   SHIPPING_DEFINITIONS,
   SHIPPING_LABELS_DEFINITIONS,
   PARTIES_DEFINITIONS,
@@ -579,6 +585,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_TRIGGERS_DEFINITIONS,
   // B-W2b-98: the incoming inspection, hide by hide.
   QUALITY_INCOMING_DEFINITIONS,
+  // B-W2b-99: in-process checks.
+  QUALITY_INPROCESS_DEFINITIONS,
   // B-W2b-107: rolls, protector lots and consumables.
   INVENTORY_ROLLS_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -617,6 +625,8 @@ export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PR
   ...PRODUCTION_DISPATCH_FLOOR_PERMISSIONS,
   // B-W2b-98: the inspection tablet at the dock inspects a lot hide by hide and signs the decision with the PIN.
   ...QUALITY_INCOMING_FLOOR_PERMISSIONS,
+  // B-W2b-99: the floor inspector and the team leader record in-process checks at their own site.
+  ...QUALITY_INPROCESS_FLOOR_PERMISSIONS,
   // B-W2b-107: the line's tablet records which protector lot a batch or garment holds (EN 1621).
   ...INVENTORY_ROLLS_FLOOR_PERMISSIONS])
 
@@ -654,6 +664,8 @@ for (const name of VIEWS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name))
 for (const name of INVENTORY_DISCREPANCIES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-94: hides as stock.
 for (const name of INVENTORY_HIDES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-100: one shade lot per order.
+for (const name of INVENTORY_SHADE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-32: global search.
 for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-35: the plant.
@@ -731,6 +743,8 @@ for (const name of QUALITY_PLANS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of QUALITY_TRIGGERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-98: the incoming inspection.
 for (const name of QUALITY_INCOMING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-99: in-process checks.
+for (const name of QUALITY_INPROCESS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-107: rolls, protector lots and consumables.
 for (const name of INVENTORY_ROLLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

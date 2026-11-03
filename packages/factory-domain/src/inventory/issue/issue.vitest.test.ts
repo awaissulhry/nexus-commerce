@@ -91,11 +91,14 @@ describe('issue (SCM-215): only usable stock of the work order, up to what it st
 describe('return (SCM-216): what the work order did not use, measured', () => {
   const facts = { workOrder: { number: 'WO-00001' }, label: 'LEATHER BLK', baseUom: 'FT2', atWorkOrder: '53.2', cut: '0', hide: { code: 'H-1', state: 'FULL' as const }, baseQuantity: '53.2' }
 
-  it('takes a hide back whole, or its remnant (then REMNANT)', () => {
-    expect(returnDecision(facts)).toEqual({ ok: true, hideState: 'FULL' })
-    expect(returnDecision({ ...facts, cut: '40', baseQuantity: '9.5' })).toEqual({ ok: true, hideState: 'REMNANT' })
-    expect(returnDecision({ ...facts, hide: { code: 'H-1', state: 'PARTLY_CUT' }, cut: '40', baseQuantity: '13.2' })).toEqual({ ok: true, hideState: 'REMNANT' })
-    expect(returnDecision({ ...facts, hide: null, label: 'LINING GRY', baseQuantity: '2' })).toEqual({ ok: true, hideState: null })
+  // B-W2b-100 (SCM-254): a part of a hide comes back as a REMNANT move (its own tag); a hide back whole, and a lot, as a RETURN.
+  it('takes a hide back whole (RETURN), or its remnant (then REMNANT, a REMNANT move)', () => {
+    expect(returnDecision(facts)).toEqual({ ok: true, hideState: 'FULL', reason: 'RETURN' })
+    expect(returnDecision({ ...facts, cut: '40', baseQuantity: '9.5' })).toEqual({ ok: true, hideState: 'REMNANT', reason: 'REMNANT' })
+    expect(returnDecision({ ...facts, hide: { code: 'H-1', state: 'PARTLY_CUT' }, cut: '40', baseQuantity: '13.2' })).toEqual({ ok: true, hideState: 'REMNANT', reason: 'REMNANT' })
+    expect(returnDecision({ ...facts, hide: null, label: 'LINING GRY', baseQuantity: '2' })).toEqual({ ok: true, hideState: null, reason: 'RETURN' })
+    // A tagged remnant issued and back uncut keeps its tag: a RETURN, and the hide stays a REMNANT.
+    expect(returnDecision({ ...facts, hide: { code: 'H-1', state: 'REMNANT' } })).toEqual({ ok: true, hideState: 'REMNANT', reason: 'RETURN' })
   })
 
   it('never more than the work order holds, less what was cut', () => {

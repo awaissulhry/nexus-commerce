@@ -29,6 +29,7 @@ import { demandWords, lockReservations, readDemands, readKeyFacts, reserveKeyOf,
 import { mayAt, officeContextOf, seesCost, siteFor } from './access'
 import { completeKeys, LEDGER_SELECT, postMoves, type MoveDraft } from './post-moves'
 import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
+import { remnantsOnScrap } from '../remnants/lifecycle'
 
 /**
  * Write-off (B-W2a-11; SCM-193; design warehouse.moves › Write off, warehouse.hides › Scrap N hides): stock that is
@@ -166,6 +167,8 @@ export async function writeOff(caller: CommandCaller, body: WriteOffInput, idemp
     for (const hide of hides.values()) {
       await tx.hide.update({ where: { id: hide.id }, data: { state: 'SCRAPPED', version: { increment: 1 } }, select: { id: true } })
       tools.audit({ action: 'inventory.hideState', recordType: 'Hide', recordId: hide.id, companyId: site.companyId, siteId: site.id, before: { state: hide.state }, after: { state: 'SCRAPPED' }, reason: note })
+      // B-W2b-100: its tagged remnant in stock is scrapped with it.
+      await remnantsOnScrap(tools, hide.id, note)
     }
 
     // What the write-off leaves over-reserved (the stock screens show it; the reservations stay).

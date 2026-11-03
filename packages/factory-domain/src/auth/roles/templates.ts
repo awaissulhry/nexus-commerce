@@ -354,6 +354,16 @@ const HIDES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freez
   warehouse: ['inventory.hides.manage'],
   quality_inspector: ['inventory.hides.manage'],
 })
+
+/**
+ * B-W2b-100 (one shade lot per order; SCM-206): the production manager and the quality inspector let a hide of another shade
+ * lot into an order that asks one (with the reason). The warehouse picks and reserves, and is refused in words. Office only;
+ * Owner from every(). One line per template.
+ */
+const SHADE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['inventory.shade.override'],
+  quality_inspector: ['inventory.shade.override'],
+})
 /**
  * B-W2b-92 (inspection plans, QHS-008, QHS-009, QHS-016; design quality.plans): quality keeps the plans and approves another
  * person's draft (never one it wrote); the production manager reads them and may be the second person who approves (a small
@@ -402,6 +412,20 @@ const INCOMING_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.fr
 })
 const INCOMING_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   floor_inspector: ['quality.incoming.view', 'quality.incoming.record'],
+})
+/**
+ * B-W2b-99 (in-process checks, QHS-039 … QHS-042, MES-127; design floor.inline modes inspection and supervisor): the
+ * quality inspector, the production manager and the floor supervisor open, record and sign checks in the office; on the
+ * floor the floor inspector and the team leader do at their own site. Owner and read-only from every().
+ */
+const INPROCESS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.inprocess.view', 'quality.inprocess.record'],
+  production_manager: ['quality.inprocess.view', 'quality.inprocess.record'],
+  floor_supervisor: ['quality.inprocess.view', 'quality.inprocess.record'],
+})
+const INPROCESS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  floor_inspector: ['quality.inprocess.view', 'quality.inprocess.record'],
+  team_leader: ['quality.inprocess.view', 'quality.inprocess.record'],
 })
 /**
  * B-W2b-107 (rolls, protector lots and consumables; SCM-260, SCM-261; design warehouse.lots, floor.operation "Trace
@@ -464,6 +488,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_PAYROLL_ADDS[key] ?? []) : []),
   // B-W2b-94
   ...(audience === 'office' ? (HIDES_ADDS[key] ?? []) : []),
+  // B-W2b-100
+  ...(audience === 'office' ? (SHADE_ADDS[key] ?? []) : []),
   // B-W2b-92
   ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
   // B-W2b-49
@@ -474,6 +500,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (QUALITY_TRIGGERS_ADDS[key] ?? []) : []),
   // B-W2b-98
   ...((audience === 'office' ? INCOMING_ADDS : INCOMING_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-99
+  ...((audience === 'office' ? INPROCESS_ADDS : INPROCESS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-107
   ...((audience === 'office' ? ROLLS_ADDS : ROLLS_FLOOR_ADDS)[key] ?? [])]
 /**

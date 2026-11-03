@@ -60,6 +60,8 @@ export const WHAT_KEY = {
   'production.floorNote.post': 'note',
   'production.offStandard.start': 'noBundleStart',
   'production.offStandard.end': 'noBundleEnd',
+  // B-W2b-102: a machine request's progress (Seen, On my way, It works) kept on the tablet.
+  'plant.request.progress': 'progress',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

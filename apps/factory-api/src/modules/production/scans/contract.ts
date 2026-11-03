@@ -25,9 +25,10 @@ const status = z.enum(WORK_ORDER_STATUSES)
 const kind = z.enum(['REPORT', 'UNDO', 'CORRECTION'])
 const count = () => z.number().int().min(0).max(100_000)
 const clientScanId = () => z.string().regex(CLIENT_SCAN_ID, 'Expected 8 to 64 letters, digits, dots, colons, underscores or hyphens.')
-const defectIn = input({ reason: z.string().regex(REASON_CODE), quantity: z.number().int().min(1).max(100_000) })
+// B-W2b-99 (MES-127): `causedAtOperationId`, the operation of the same work order the defect is charged to (per operation, never per worker).
+const defectIn = input({ reason: z.string().regex(REASON_CODE), quantity: z.number().int().min(1).max(100_000), causedAtOperationId: id().nullable().optional() })
 const defects = () => z.array(defectIn).max(60).optional()
-const defectLine = output({ kind: z.enum(DEFECT_KINDS), reason: z.string(), quantity: z.number().int() })
+const defectLine = output({ kind: z.enum(DEFECT_KINDS), reason: z.string(), quantity: z.number().int(), causedAtOperationId: id().nullable().optional() })
 
 const operationRef = output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string() })
 
@@ -205,6 +206,14 @@ export const cardContract = defineContract({
       choose: z.array(id()),
       hint: output({ code: z.string(), message: z.string(), fix: z.string() }).nullable(),
       reasons: z.array(reason),
+      // B-W2b-99 (QHS-039): which operations wait for the work order's first piece, whether this is its bundle, the words.
+      firstPiece: output({
+        heldOperationIds: z.array(id()),
+        firstBundle: z.boolean(),
+        check: output({ id: id(), status: z.enum(['OPEN', 'DECIDED', 'CANCELLED']), outcome: z.string().nullable(), outcomeWords: output({ it: z.string(), en: z.string() }).nullable(), workOrderOperationId: id().nullable() }).nullable(),
+        message: z.string().nullable(),
+        fix: z.string().nullable(),
+      }).nullable(),
     }),
   },
 })
