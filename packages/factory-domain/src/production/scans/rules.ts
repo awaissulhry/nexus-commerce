@@ -638,10 +638,13 @@ export interface CorrectionApprovalFacts extends CorrectionCountFacts {
   readonly approverInvolved: boolean
 }
 
-/** Why an approval of a correction request is refused, or null (the refusal of a request is always allowed while PENDING). */
+/** Four eyes (MES-096): who took the scan or asked its correction decides nothing of it, approving or refusing. */
+export const selfApprovalRefusal = (): ScanRefusal => refusal('SELF_APPROVAL', 'You took this scan or asked its correction: another person decides it (four eyes, MES-096).', 'Ask another lead or the production manager.')
+
+/** Why an approval of a correction request is refused, or null (a refusal of a request needs it PENDING and another person). */
 export function correctionApprovalRefusal(facts: CorrectionApprovalFacts): ScanRefusal | null {
   if (facts.status !== 'PENDING') return refusal('DECIDED_ALREADY', `This correction was ${facts.status.toLowerCase()} already.`, 'Reload the list.')
-  if (facts.approverInvolved) return refusal('SELF_APPROVAL', 'You took this scan or asked its correction: another person decides it (four eyes, MES-096).', 'Ask another lead or the production manager.')
+  if (facts.approverInvolved) return selfApprovalRefusal()
   const target = facts.target
   if (!target) return unknownScanRefusal()
   if (!isOpen(facts.workOrder.status)) return workOrderNotOpen(facts.workOrder)

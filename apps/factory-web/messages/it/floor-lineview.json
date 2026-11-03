@@ -48,12 +48,12 @@
     "title": "Aspettano te",
     "none": "Nulla aspetta te.",
     "unknown": "Una parte di questo elenco non si legge ora. Torna da sola.",
-    "corrections": "Le correzioni di una segnalazione si decidono in Ufficio: Home › Approvazioni.",
     "scrap_one": "{bundle}: {count} pezzo di scarto oltre il limite",
     "scrap_other": "{bundle}: {count} pezzi di scarto oltre il limite",
     "block_one": "{code}: {count} minuto",
     "block_other": "{code}: {count} minuti",
     "conflict": "{bundle}: segnalato su due tablet",
+    "correction": "{bundle}: correzione di una segnalazione",
     "state": {
       "own": "Tuo: decide un'altra persona",
       "withOffice": "All'ufficio"
@@ -91,7 +91,11 @@
     "from": "Dalle",
     "to": "Alle",
     "minutes": "Minuti",
-    "tablet": "Tablet"
+    "tablet": "Tablet",
+    "person": "Persona",
+    "reported": "Segnalata alle",
+    "reasonsBefore": "Motivi registrati",
+    "why": "Perché è chiesta"
   },
   "scrap": {
     "kind": "Scarto oltre il limite",
@@ -116,6 +120,12 @@
       "OTHER_STATION": "Fatto in un'altra postazione"
     }
   },
+  "correction": {
+    "kind": "Correzione di una segnalazione",
+    "waits": "Aspetta te",
+    "reading": "Sto leggendo questa richiesta…",
+    "unread": "Questa richiesta non si legge ora. Torna indietro e riaprila."
+  },
   "reject": {
     "title": "Perché?",
     "words": "Scrivi il perché"
@@ -125,7 +135,9 @@
     "meaning": {
       "scrap": "Approvi questo scarto: va avanti alla registrazione. La tua firma resta con il documento.",
       "block": "Decidi su questo tempo. La tua firma resta con il documento.",
-      "conflict": "Resta la segnalazione registrata per prima, l'altra è messa da parte. La tua firma resta con il documento."
+      "conflict": "Resta la segnalazione registrata per prima, l'altra è messa da parte. La tua firma resta con il documento.",
+      "correction": "Approvi questa correzione: un nuovo documento prende il posto del conteggio e l'originale resta. La tua firma resta con il documento.",
+      "correctionRefused": "Rifiuti questa correzione: la segnalazione resta com'è. La tua firma resta con il documento."
     }
   },
   "done": {
@@ -248,7 +260,8 @@
       "bundle": "Scansiona prima il fascio.",
       "reason": "Scegli prima un motivo.",
       "note": "Scrivi prima il perché."
-    }
+    },
+    "record": "Leggi prima la richiesta: non è ancora su questa schermata."
   },
   "refusal": {
     "other": "Non si può fare.",
@@ -303,6 +316,52 @@
     "OTHER_KIND": {
       "message": "Questa postazione non fa questo tipo di lavoro.",
       "fix": "Torna indietro e scegli una postazione del tipo di lavoro dell'operazione."
+    }
+  },
+  "correctionRefusal": {
+    "SELF_APPROVAL": {
+      "message": "Questa segnalazione è tua o hai chiesto tu questa correzione.",
+      "fix": "Decide un altro capo squadra o l'ufficio."
+    },
+    "TARGET_VOIDED": {
+      "message": "La segnalazione è stata annullata o corretta dopo la richiesta.",
+      "fix": "Rifiutala: la persona chiede di nuovo sulla segnalazione valida."
+    },
+    "LESS_THAN_TAKEN": {
+      "message": "L'operazione dopo ha preso più pezzi di quanti ne lascia questa correzione.",
+      "fix": "Rifiutala, o fai correggere prima l'operazione dopo."
+    },
+    "MORE_THAN_PASSED": {
+      "message": "Conta più pezzi di quanti ne ha passati l'operazione prima.",
+      "fix": "Rifiutala, o fai correggere prima l'operazione prima."
+    },
+    "MORE_THAN_BUNDLE": {
+      "message": "Conta più pezzi di quanti ne ha il fascio.",
+      "fix": "Rifiutala: la persona riconta."
+    },
+    "PREVIOUS_NOT_REPORTED": {
+      "message": "L'operazione prima di questa non è ancora segnalata.",
+      "fix": "Falla segnalare prima; questa richiesta resta in attesa."
+    },
+    "NO_COUNT": {
+      "message": "Non conta nessun pezzo.",
+      "fix": "Rifiutala: la persona riconta."
+    },
+    "SAME_COUNTS": {
+      "message": "I conteggi e i motivi sono gli stessi della segnalazione.",
+      "fix": "Rifiutala: non c'è nulla da cambiare."
+    },
+    "UNKNOWN_SCAN": {
+      "message": "La segnalazione indicata non risulta.",
+      "fix": "Rifiutala."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "Questo ordine di lavoro non è più in corso.",
+      "fix": "Chiedi all'ufficio."
+    },
+    "ON_HOLD": {
+      "message": "Questo fascio o il suo ordine di lavoro è sospeso.",
+      "fix": "Si potrà decidere quando la qualità toglie la sospensione."
     }
   }
 }
