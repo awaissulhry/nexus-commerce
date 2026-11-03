@@ -11,7 +11,8 @@ import { SCAN_QUARANTINE_REASONS } from './scan/rules'
  * every login. Pure TypeScript with no I/O, so it can move to factory-domain/src/files with the files lane.
  */
 
-export const FILE_KINDS = ['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE', 'FISCAL_ARCHIVE'] as const
+// W2b (wave 14/16, B-W2b-86): AUDIO, a voice note of a maintenance request or job (QHS-189), follows the database enum.
+export const FILE_KINDS = ['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO'] as const
 export type FileKind = (typeof FILE_KINDS)[number]
 export const FILE_STATUSES = ['PENDING_UPLOAD', 'AVAILABLE', 'QUARANTINED', 'DELETED'] as const
 export type FileStatus = (typeof FILE_STATUSES)[number]
@@ -42,6 +43,8 @@ export const KIND_RULES: Readonly<Record<FileKind, { readonly contentTypes: read
   CERTIFICATE: { contentTypes: [PDF, 'image/jpeg', 'image/png'], maxBytes: 20 * MIB },
   // FatturaPA XML, its signed .p7m form, and PDF copies of invoices, DDTs and signed quotes.
   FISCAL_ARCHIVE: { contentTypes: [PDF, 'application/xml', 'text/xml', 'application/pkcs7-mime'], maxBytes: 20 * MIB },
+  // A voice note recorded on a tablet or a phone (B-W2b-86; QHS-189).
+  AUDIO: { contentTypes: ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/aac', 'audio/wav'], maxBytes: 10 * MIB },
 })
 
 /**

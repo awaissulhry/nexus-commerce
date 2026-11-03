@@ -301,6 +301,14 @@ model Site {
   machines                Machine[]
   maintenanceRequests     MaintenanceRequest[]
   maintenanceJobs         MaintenanceJob[]
+  // W2b plantcare.prisma (wave 14/16): its machines' check plans, results and status history, its clicking dies, its plant
+  // rules and request routing.
+  machineCheckPlans       MachineCheckPlan[]
+  machineCheckResults     MachineCheckResult[]
+  machineStatusEvents     MachineStatusEvent[]
+  clickingDies            ClickingDie[]
+  plantSettings           PlantSettings[]
+  requestRoutingRules     RequestRoutingRule[]
   // production.prisma: its garment label prints (B-W1-44) and bundle ticket reprints.
   garmentLabelPrints      GarmentLabelPrint[]
   bundleReprints          BundleReprint[]

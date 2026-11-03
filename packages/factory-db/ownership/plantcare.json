@@ -1,0 +1,65 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/plantcare.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the reminders of due checks, the escalation of requests) keeps check types, plans and results, clicking dies, the plant rules and request routing of each site through apps/factory-api's modules/plant (B-W2b-96, -124, -136), always through command(); the API keeps staff to the companies and sites their grants reach (a company is a column, not a policy key: the keys are tenant, site and party). The floor (factory_floor_runtime) of a site reads its clicking dies without their cost (the cutting room finds the die), its plant rules (who may lock, whether a lock opens a hazard report) and its routing rules (a report from the station is routed in the station's own command); it inserts a machine's status event only through the machine's own trigger, when it marks a machine down or unsafe or a technician moves it, and never reads the history. Check types, plans and results are the office's: the floor neither reads nor writes them. Portal and link sessions read nothing here. Nobody deletes a row here but an unused routing rule: a check type is retired, a plan ended, a die retired, and a check result and a status event are append-only (`@append-only`, scripts/factory/check-append-only.mjs: no update or delete grant, and their triggers refuse UPDATE, DELETE and TRUNCATE for every login). The only money column is ClickingDie.purchaseCost (@grain cost), hidden from the floor. No personal entry: a routing rule names the team or technician requests go to and the people they escalate to, as the people they are, inside the one rule, never as a figure; a status event names no person at all (Statuto dei Lavoratori art. 4). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "MachineCheckType": {
+      "about": "The tenant's kinds of statutory and periodic checks (Plant settings, Statutory check types). The office keeps them; a code never changes, a type is retired, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "MachineCheckPlan": {
+      "about": "One check type on one machine with its interval and next due date. The office makes, moves and ends plans; the scheduler records the reminders it sent.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "MachineCheckResult": {
+      "about": "The register of checks done (D.Lgs. 81/2008 art. 71 c.9), append-only. The office records a result with its report (a file of the row); a correction is a new row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "MachineStatusEvent": {
+      "about": "Every change of a machine's status, append-only, written by the machine's trigger in the command that moves the machine: the office reads it (the machine's Status & downtime tab), the site's floor only inserts it through that trigger (a report, a sign-safe, a job's start or hand-back).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["insert"], "scopedBy": ["site"] }
+      }
+    },
+    "ClickingDie": {
+      "about": "The cutting dies of a site's cutting room. The office registers, moves and retires them; the site's floor reads them without their cost.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["purchaseCost"] }
+      }
+    },
+    "PlantSettings": {
+      "about": "The plant rules of a site: who may lock, who may sign safe (both kept at Owner answer H1 by the database), a hazard report on lock. The office keeps them; the site's floor reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "RequestRoutingRule": {
+      "about": "Where a site's machine requests go and who they escalate to. The office keeps the ordered list and deletes a rule no request names; the site's floor reads it to route a report made at the station.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}
