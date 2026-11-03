@@ -13,6 +13,7 @@ import {
   type MachineAfter,
   type MachineStatus,
 } from '@nexus/factory-domain/plant/rules'
+import { progressOf } from '@nexus/factory-domain/plant/requests/progress'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandTools, CommandTx } from '../../core/command'
 import type { PlantContext } from './access'
@@ -27,6 +28,8 @@ import type { PlantContext } from './access'
  */
 
 export type Reader = Pick<CommandTx, 'machine' | 'machineClass' | 'machineSymptom' | 'maintenanceRequest' | 'maintenanceJob' | 'user' | 'worker' | 'storedFile' | 'station' | '$queryRaw'>
+/** B-W2b-96: the office also reads the teams and technicians a request was routed to (the floor never reads them). */
+type OfficeReader = Reader & Partial<Pick<CommandTx, 'team' | 'employee'>>
 
 // ---- words of the lists ---------------------------------------------------------------------------------------------
 
@@ -247,6 +250,19 @@ export const REQUEST_COLUMNS = {
   status: true,
   acknowledgedAt: true,
   acknowledgedById: true,
+  // B-W2b-96 (wave 14/16 columns): who acknowledged on the floor, the progress, the routing and its escalation.
+  acknowledgedByWorkerId: true,
+  onTheWayAt: true,
+  onTheWayById: true,
+  onTheWayByWorkerId: true,
+  confirmedWorksAt: true,
+  confirmedWorksById: true,
+  confirmedWorksByWorkerId: true,
+  routingRuleId: true,
+  routedTeamId: true,
+  routedEmployeeId: true,
+  escalationLevel: true,
+  escalatedAt: true,
   jobId: true,
   mergedIntoId: true,
   closedAt: true,
@@ -262,7 +278,9 @@ export const REQUEST_COLUMNS = {
   machine: { select: { id: true, assetNumber: true, status: true, classId: true, machineClass: { select: CLASS_BRIEF } } },
   symptom: { select: SYMPTOM_BRIEF },
   station: { select: { id: true, code: true, name: true } },
-  job: { select: { id: true, number: true, status: true } },
+  job: { select: { id: true, number: true, status: true, handedBackAt: true } },
+  // B-W2b-96: a merged request follows the progress of the request it joined (QHS-180, QHS-181).
+  mergedInto: { select: { status: true, acknowledgedAt: true, onTheWayAt: true, confirmedWorksAt: true, closedAt: true, job: { select: { status: true, handedBackAt: true } } } },
 } as const satisfies Prisma.MaintenanceRequestSelect
 export type RequestRow = Prisma.MaintenanceRequestGetPayload<{ select: typeof REQUEST_COLUMNS }>
 
@@ -307,16 +325,35 @@ export async function duplicatesOf(db: Pick<Reader, 'maintenanceRequest'>, rows:
   return new Map(rows.map((row) => [row.id, Math.max(0, (open.get(row.machineId) ?? 0) - (isOpenRequest(row.status) ? 1 : 0))]))
 }
 
+/**
+ * B-W2b-96: where requests were routed, in the office: a team by its name; a technician (an employee) by name inside one
+ * record, in a list only when they are an office user (as every office user in a list); the floor reads neither.
+ */
+async function routedNamesOf(db: OfficeReader, rows: readonly RequestRow[], record: boolean) {
+  const teamIds = [...new Set(rows.map((row) => row.routedTeamId).filter((id): id is string => id !== null))]
+  const employeeIds = [...new Set(rows.map((row) => row.routedEmployeeId).filter((id): id is string => id !== null))]
+  const teams = new Map<string, string>()
+  const employees = new Map<string, string>()
+  if (teamIds.length > 0 && db.team) for (const team of await db.team.findMany({ where: { id: { in: teamIds } }, select: { id: true, code: true, name: true } })) teams.set(team.id, `${team.code} ${team.name}`)
+  if (employeeIds.length > 0 && db.employee) {
+    for (const employee of await db.employee.findMany({ where: { id: { in: employeeIds } }, select: { id: true, displayName: true, userId: true } })) if (record || employee.userId !== null) employees.set(employee.id, employee.displayName)
+  }
+  return { teams, employees }
+}
+
 /** Requests as a list row or a record shows them. */
 export async function requestViews(db: Reader, rows: readonly RequestRow[], context: PlantContext, now: Date, options: ViewOptions = { record: false }) {
   const office = context.audience === 'office'
-  const users = office ? await namesOf(db, rows.flatMap((row) => [row.reportedById, row.acknowledgedById, row.closedById, row.signedSafeById])) : new Map<string, string>()
-  const workers = office && options.record ? await workerNamesOf(db, rows.flatMap((row) => [row.reportedByWorkerId, row.signedSafeByWorkerId])) : new Map<string, string>()
+  const users = office ? await namesOf(db, rows.flatMap((row) => [row.reportedById, row.acknowledgedById, row.closedById, row.signedSafeById, row.onTheWayById, row.confirmedWorksById])) : new Map<string, string>()
+  const workers = office && options.record ? await workerNamesOf(db, rows.flatMap((row) => [row.reportedByWorkerId, row.signedSafeByWorkerId, row.acknowledgedByWorkerId, row.onTheWayByWorkerId, row.confirmedWorksByWorkerId])) : new Map<string, string>()
+  const routed = office ? await routedNamesOf(db as OfficeReader, rows, options.record) : { teams: new Map<string, string>(), employees: new Map<string, string>() }
   const duplicates = await duplicatesOf(db, rows)
+  // B-W2b-96: the photos and the voice notes (QHS-189), each counted on its own.
   const photos = new Map<string, number>()
+  const voiceNotes = new Map<string, number>()
   if (rows.length > 0) {
-    for (const row of await db.storedFile.groupBy({ by: ['recordId'], where: { recordType: 'MaintenanceRequest', recordId: { in: rows.map((entry) => entry.id) }, status: 'AVAILABLE' }, _count: { _all: true } })) {
-      photos.set(row.recordId, row._count._all)
+    for (const row of await db.storedFile.groupBy({ by: ['recordId', 'kind'], where: { recordType: 'MaintenanceRequest', recordId: { in: rows.map((entry) => entry.id) }, status: 'AVAILABLE', kind: { in: ['PHOTO', 'AUDIO'] } }, _count: { _all: true } })) {
+      ;(row.kind === 'AUDIO' ? voiceNotes : photos).set(row.recordId, row._count._all)
     }
   }
   const person = (userId: string | null, workerId: string | null, station: RequestRow['station'] | null): Person | null => {
@@ -339,7 +376,7 @@ export async function requestViews(db: Reader, rows: readonly RequestRow[], cont
     station: row.station ? { id: row.station.id, code: row.station.code, name: row.station.name } : null,
     status: row.status,
     acknowledgedAt: row.acknowledgedAt ? toUtcIso(row.acknowledgedAt) : null,
-    acknowledgedBy: row.acknowledgedById ? person(row.acknowledgedById, null, null) : null,
+    acknowledgedBy: row.acknowledgedById || row.acknowledgedByWorkerId ? person(row.acknowledgedById, row.acknowledgedByWorkerId, null) : null,
     job: row.job ? { id: row.job.id, number: row.job.number, status: row.job.status } : null,
     mergedIntoId: row.mergedIntoId,
     closedAt: row.closedAt ? toUtcIso(row.closedAt) : null,
@@ -353,8 +390,48 @@ export async function requestViews(db: Reader, rows: readonly RequestRow[], cont
     locking: row.unsafe && row.signedSafeAt === null,
     duplicates: duplicates.get(row.id) ?? 0,
     photos: photos.get(row.id) ?? 0,
+    voiceNotes: voiceNotes.get(row.id) ?? 0,
+    progress: progressView(row, person),
+    routing: {
+      routedTo: row.routedTeamId
+        ? { kind: 'TEAM' as const, id: office ? row.routedTeamId : null, name: routed.teams.get(row.routedTeamId) ?? null }
+        : row.routedEmployeeId
+          ? { kind: 'TECHNICIAN' as const, id: office && options.record ? row.routedEmployeeId : null, name: routed.employees.get(row.routedEmployeeId) ?? null }
+          : null,
+      ruleId: office ? row.routingRuleId : null,
+      escalationLevel: row.escalationLevel,
+      escalatedAt: row.escalatedAt ? toUtcIso(row.escalatedAt) : null,
+    },
     version: row.version,
   }))
+}
+
+/** B-W2b-96: the progress the reporter sees (QHS-180): acknowledged, on the way, fixed, works again; who, as a person view. */
+function progressView(row: RequestRow, person: (userId: string | null, workerId: string | null, station: RequestRow['station'] | null) => Person | null) {
+  const progress = progressOf({
+    status: row.status,
+    acknowledgedAt: row.acknowledgedAt,
+    onTheWayAt: row.onTheWayAt,
+    confirmedWorksAt: row.confirmedWorksAt,
+    closedAt: row.closedAt,
+    job: row.job,
+    unsafe: row.unsafe,
+    signedSafeAt: row.signedSafeAt,
+    target: row.mergedInto,
+  })
+  const iso = (at: Date | null) => (at ? toUtcIso(at) : null)
+  return {
+    step: progress.step,
+    acknowledgedAt: iso(progress.acknowledgedAt),
+    onTheWayAt: iso(progress.onTheWayAt),
+    onTheWayBy: row.onTheWayAt ? person(row.onTheWayById, row.onTheWayByWorkerId, null) : null,
+    fixedAt: iso(progress.fixedAt),
+    worksAt: iso(progress.worksAt),
+    /** Who confirmed it works: a person, or the station (neither named). */
+    worksBy: row.confirmedWorksAt ? (person(row.confirmedWorksById, row.confirmedWorksByWorkerId, null) ?? person(null, null, row.station)) : null,
+    closedWithoutJob: progress.closedWithoutJob,
+    canConfirm: progress.canConfirm,
+  }
 }
 
 // ---- jobs ------------------------------------------------------------------------------------------------------------
@@ -380,6 +457,12 @@ export const JOB_COLUMNS = {
   handedBackByWorkerId: true,
   workDone: true,
   machineAfter: true,
+  // B-W2b-96 (wave 14/16 columns): the one-screen close and the line lead's confirmation (QHS-190, QHS-180).
+  failureCode: true,
+  minutesSpent: true,
+  leadConfirmedAt: true,
+  leadConfirmedById: true,
+  leadConfirmedByWorkerId: true,
   closedAt: true,
   closedById: true,
   cancelledAt: true,
@@ -413,8 +496,8 @@ export const ownershipOf = (job: Pick<JobRow, 'assigneeId' | 'assigneeWorkerId'>
 /** Jobs as a list row or a record shows them. */
 export async function jobViews(db: Reader, rows: readonly JobRow[], context: PlantContext, now: Date, options: ViewOptions = { record: false }) {
   const office = context.audience === 'office'
-  const users = office ? await namesOf(db, rows.flatMap((row) => [row.assigneeId, row.handedBackById, row.closedById, row.createdById])) : new Map<string, string>()
-  const workers = office && options.record ? await workerNamesOf(db, rows.flatMap((row) => [row.assigneeWorkerId, row.handedBackByWorkerId])) : new Map<string, string>()
+  const users = office ? await namesOf(db, rows.flatMap((row) => [row.assigneeId, row.handedBackById, row.closedById, row.createdById, row.leadConfirmedById])) : new Map<string, string>()
+  const workers = office && options.record ? await workerNamesOf(db, rows.flatMap((row) => [row.assigneeWorkerId, row.handedBackByWorkerId, row.leadConfirmedByWorkerId])) : new Map<string, string>()
   const locks = await locksOf(db, [...new Set(rows.map((row) => row.machineId))])
   const person = (userId: string | null, workerId: string | null): Person | null => {
     if (userId) return { kind: 'USER', id: office ? userId : null, name: office ? (users.get(userId) ?? null) : null }
@@ -447,7 +530,11 @@ export async function jobViews(db: Reader, rows: readonly JobRow[], context: Pla
     overdue: isOverdue(row, now),
     status: row.status,
     startedAt: row.startedAt ? toUtcIso(row.startedAt) : null,
-    handedBack: row.handedBackAt ? { at: toUtcIso(row.handedBackAt), by: person(row.handedBackById, row.handedBackByWorkerId)!, workDone: row.workDone!, machineAfter: row.machineAfter! as MachineAfter } : null,
+    handedBack: row.handedBackAt
+      ? { at: toUtcIso(row.handedBackAt), by: person(row.handedBackById, row.handedBackByWorkerId)!, workDone: row.workDone!, machineAfter: row.machineAfter! as MachineAfter, failureCode: row.failureCode, minutesSpent: row.minutesSpent }
+      : null,
+    /** B-W2b-96: the line lead confirmed the machine works (QHS-180). */
+    leadConfirmed: row.leadConfirmedAt ? { at: toUtcIso(row.leadConfirmedAt), by: person(row.leadConfirmedById, row.leadConfirmedByWorkerId)! } : null,
     closedAt: row.closedAt ? toUtcIso(row.closedAt) : null,
     closedBy: row.closedById ? person(row.closedById, null) : null,
     cancelledAt: row.cancelledAt ? toUtcIso(row.cancelledAt) : null,

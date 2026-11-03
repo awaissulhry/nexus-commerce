@@ -211,14 +211,16 @@
       "DOCUMENT": "Document",
       "PHOTO": "Photo",
       "CERTIFICATE": "Certificate",
-      "FISCAL_ARCHIVE": "Fiscal archive"
+      "FISCAL_ARCHIVE": "Fiscal archive",
+      "AUDIO": "Voice note"
     },
     "kindHint": {
       "ATTACHMENT": "PDF, pictures, Word, Excel, OpenDocument, CSV or text; up to 25 MB.",
       "DOCUMENT": "PDF, Word, Excel, OpenDocument or CSV; up to 25 MB.",
       "PHOTO": "JPEG, PNG, WebP or HEIC; up to 15 MB.",
       "CERTIFICATE": "PDF, JPEG or PNG; up to 20 MB.",
-      "FISCAL_ARCHIVE": "PDF, XML or signed .p7m; up to 20 MB. Kept for ten years."
+      "FISCAL_ARCHIVE": "PDF, XML or signed .p7m; up to 20 MB. Kept for ten years.",
+      "AUDIO": "WebM, Ogg, MP4, MP3, AAC or WAV sound; up to 10 MB."
     },
     "held": {
       "noRead": "Opening files needs another role.",

@@ -21,4 +21,8 @@ export const manifest = defineManifest({
   'POST /plant/jobs/:jobId/wait': { audiences: ['office', 'floor'], permission: 'plant.jobs.work', scope: 'record' },
   'POST /plant/jobs/:jobId/hand-back': { audiences: ['office', 'floor'], permission: 'plant.jobs.work', scope: 'record' },
   'POST /plant/jobs/:jobId/reopen': { audiences: ['office', 'floor'], permission: 'plant.jobs.work', scope: 'record' },
+  // B-W2b-96: the line lead confirms in the office (QHS-180); the job's photos and voice notes (QHS-189).
+  'POST /plant/jobs/:jobId/confirm': { audiences: ['office'], permission: 'plant.requests.triage', scope: 'record' },
+  'POST /plant/jobs/:jobId/files': { audiences: ['office', 'floor'], permission: 'plant.jobs.work', scope: 'record' },
+  'POST /plant/jobs/:jobId/files/:fileId/complete': { audiences: ['office', 'floor'], permission: 'plant.jobs.work', scope: 'record' },
 })

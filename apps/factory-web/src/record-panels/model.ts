@@ -7,8 +7,8 @@
  * match them is a `contract` error in the client (api.ts), never half-read.
  */
 
-/** apps/factory-api platform/files/rules.ts FILE_KINDS. */
-export const FILE_KINDS = ['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE', 'FISCAL_ARCHIVE'] as const
+/** apps/factory-api platform/files/rules.ts FILE_KINDS (B-W2b-96: AUDIO, a voice note of a machine request or job, QHS-189). */
+export const FILE_KINDS = ['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO'] as const
 export type FileKind = (typeof FILE_KINDS)[number]
 /** platform/files/rules.ts FILE_STATUSES. */
 export const FILE_STATUSES = ['PENDING_UPLOAD', 'AVAILABLE', 'QUARANTINED', 'DELETED'] as const
@@ -50,6 +50,8 @@ export const MAX_EMAIL_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const MIB = 1_048_576
 const PDF = 'application/pdf'
 const IMAGES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
+/** platform/files/rules.ts KIND_RULES.AUDIO. */
+const AUDIO_TYPES = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/aac', 'audio/wav']
 const OFFICE_DOCUMENTS = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -67,7 +69,11 @@ export const KIND_RULES: Readonly<Record<FileKind, { readonly contentTypes: read
   PHOTO: { contentTypes: IMAGES, maxBytes: 15 * MIB },
   CERTIFICATE: { contentTypes: [PDF, 'image/jpeg', 'image/png'], maxBytes: 20 * MIB },
   FISCAL_ARCHIVE: { contentTypes: [PDF, 'application/xml', 'text/xml', 'application/pkcs7-mime'], maxBytes: 20 * MIB },
+  AUDIO: { contentTypes: AUDIO_TYPES, maxBytes: 10 * MIB },
 }
+
+/** B-W2b-96 (QHS-189): the records a voice note is added to; elsewhere the panel does not offer AUDIO (it still lists one). */
+export const AUDIO_RECORD_TYPES: readonly string[] = ['MaintenanceRequest', 'MaintenanceJob']
 
 /** How long fiscal documents are kept at least (c.c. art. 2220; DPR 600/1973 art. 22), as the API sets it. */
 export const FISCAL_RETENTION_YEARS = 10
@@ -582,7 +588,8 @@ export function uploadChoices(input: { can: Pick<PanelAbilities, 'share'>; party
     if (input.party) audiences.push('PARTNER', 'LINK')
   }
   const owned = ownedKinds(input.record.type)
-  return { kinds: FILE_KINDS.filter((kind) => !owned.includes(kind)), owned, audiences }
+  const audio = AUDIO_RECORD_TYPES.includes(input.record.type)
+  return { kinds: FILE_KINDS.filter((kind) => !owned.includes(kind) && (kind !== 'AUDIO' || audio)), owned, audiences }
 }
 
 /** The problem with a picked file before it is announced (a message key and parameters), or null. */
@@ -610,6 +617,13 @@ const BY_EXTENSION: Readonly<Record<string, string>> = {
   txt: 'text/plain',
   xml: 'application/xml',
   p7m: 'application/pkcs7-mime',
+  // B-W2b-96: voice notes.
+  webm: 'audio/webm',
+  ogg: 'audio/ogg',
+  m4a: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  aac: 'audio/aac',
+  wav: 'audio/wav',
 }
 
 /** The content type of a file the browser did not type (a .p7m, a .heic on some systems), from its extension. */
