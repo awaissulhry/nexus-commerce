@@ -156,6 +156,8 @@ model Machine {
   statusEvents MachineStatusEvent[]
   // W2b safety.prisma (wave 15/16): the instruction given on it.
   instructionRecords InstructionRecord[]
+  // W2b health.prisma (wave 16/16): the incidents it was involved in.
+  incidents    Incident[]
   jobs         MaintenanceJob[]
 
   @@unique([tenantId, assetNumber])
@@ -266,6 +268,8 @@ model MaintenanceRequest {
   job                MaintenanceJob?      @relation(fields: [tenantId, siteId, jobId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   mergedInto         MaintenanceRequest?  @relation("MaintenanceRequestMerge", fields: [tenantId, siteId, mergedIntoId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   merged             MaintenanceRequest[] @relation("MaintenanceRequestMerge")
+  // W2b health.prisma (wave 16/16): the incidents whose immediate action it is (an unsafe machine locked).
+  incidents          Incident[]
 
   // The target of the merges' reference: a request of the same site.
   @@unique([tenantId, siteId, id])
@@ -381,6 +385,8 @@ model MaintenanceJob {
   leadConfirmedByWorker Worker?             @relation("MaintenanceJobLeadConfirmedBy", fields: [tenantId, siteId, leadConfirmedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   checkResult        MachineCheckResult?  @relation(fields: [tenantId, siteId, checkResultId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   requests           MaintenanceRequest[]
+  // W2b health.prisma (wave 16/16): the incident actions made into this job.
+  incidentActions    IncidentAction[]
 
   @@unique([tenantId, companyId, number])
   // The target of the requests' reference: a job of the same site.

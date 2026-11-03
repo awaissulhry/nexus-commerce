@@ -16,6 +16,10 @@ import {
   waitJobContract,
 } from '../contract'
 import { assignJobs, createJob, jobCounts, jobRecord, listJobs, moveJob, updateJob } from './jobs'
+// B-W2b-96
+import { announceJobFileContract, completeJobFileContract, confirmJobContract } from '../requests/contract-depth'
+import { announceMedia, completeMedia } from '../requests/files'
+import { confirmJob } from './confirm'
 import { manifest } from './manifest'
 
 /**
@@ -45,4 +49,9 @@ export default defineRoutes('plant.jobs', manifest, async (app) => {
   app.post('/plant/jobs/:jobId/reopen', { schema: reopenJobContract }, async (request) => moveJob(request, request.params.jobId, 'reopen', request.body, idempotencyKeyFrom(request)))
   app.post('/plant/jobs/:jobId/close', { schema: closeJobContract }, async (request) => moveJob(request, request.params.jobId, 'close', request.body, idempotencyKeyFrom(request)))
   app.post('/plant/jobs/:jobId/cancel', { schema: cancelJobContract }, async (request) => moveJob(request, request.params.jobId, 'cancel', request.body, idempotencyKeyFrom(request)))
+
+  // ---- B-W2b-96 -------------------------------------------------------------------------------------------------------
+  app.post('/plant/jobs/:jobId/confirm', { schema: confirmJobContract }, async (request) => confirmJob(request, request.params.jobId, request.body, idempotencyKeyFrom(request)))
+  app.post('/plant/jobs/:jobId/files', { schema: announceJobFileContract }, async (request, reply) => reply.code(201).send(await announceMedia(request, 'MaintenanceJob', request.params.jobId, request.body, idempotencyKeyFrom(request))))
+  app.post('/plant/jobs/:jobId/files/:fileId/complete', { schema: completeJobFileContract }, async (request) => completeMedia(request, 'MaintenanceJob', request.params.jobId, request.params.fileId, idempotencyKeyFrom(request)))
 })

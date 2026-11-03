@@ -1,7 +1,8 @@
 import type { Prisma, RequestCloseReason } from '@nexus/factory-db'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { PLANT_REPORT, PLANT_REQUESTS_TRIAGE, PLANT_SIGN_SAFE, PLANT_VIEW } from '@nexus/factory-domain/plant/permissions'
+import { PLANT_JOBS_WORK, PLANT_REPORT, PLANT_REQUESTS_TRIAGE, PLANT_SIGN_SAFE, PLANT_VIEW } from '@nexus/factory-domain/plant/permissions'
+import { onTheWayRefusal, type TrailKind } from '@nexus/factory-domain/plant/requests/progress'
 import {
   defaultJobType,
   defaultPriority,
@@ -34,11 +35,15 @@ import {
   type RequestTile,
   type SafeAfter,
 } from '@nexus/factory-domain/plant/rules'
+import { lockRefusal } from '@nexus/factory-domain/plant/requests/lock'
+import { pickRule, routingOf } from '@nexus/factory-domain/plant/requests/routing'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { hasAcknowledgedNotice, scanSubjectFor } from '../../production/settings/subject'
 import { assertMay, assertMayWrite, assertVersion, bodyIssue, byOf, contextOf, may, officeOf, refused, scopeOf, type PlantContext } from '../access'
 import { stationWordsAt } from '../checks'
 import { checkAssignee, makeJobInCommand } from '../making'
+import { mediaOf } from './files'
+import { lockerOf, lockSettingsOf } from './settings-read'
 import {
   jobViews,
   lockJob,
@@ -114,75 +119,117 @@ export async function report(caller: CommandCaller, body: ReportBody, idempotenc
   if (body.machineId && body.assetNumber && normalAssetNumber(body.assetNumber) !== found.assetNumber) throw bodyIssue('assetNumber', 'The tag scanned is of another machine than the one named.')
   const deviceStationId = context.audience === 'floor' ? ((await caller.withClient((client) => client.device.findUnique({ where: { id: context.deviceId }, select: { stationId: true } })))?.stationId ?? null) : null
   const description = body.description?.trim() || null
-
   const { result, replayed } = await command(caller, { name: 'plant.report', idempotencyKey, input: body }, async (tools) => {
-    const { tx, now } = tools
-    const machine = (await lockMachine(tx, context, found.id))!
-    const symptom = body.symptomId ? await tx.machineSymptom.findUnique({ where: { id: body.symptomId }, select: { id: true, code: true, classId: true, active: true, unsafe: true, needsDetail: true, labelEn: true } }) : null
-    if (body.symptomId && !symptom) throw bodyIssue('symptomId', 'Not a symptom of the group.')
-    const refusal = reportRefusal({ machine: { assetNumber: machine.assetNumber, status: machine.status as MachineStatus, classId: machine.classId }, symptom, description })
-    if (refusal) refused(refusal)
-    const unsafe = isUnsafeReport({ symptomUnsafe: symptom?.unsafe ?? false, markedUnsafe: body.unsafe ?? false })
-
-    // Who reported it: an office user; on the floor the worker (where the site records workers) or the station.
-    let reporter: { reportedById: string | null; reportedByWorkerId: string | null; stationId: string | null }
-    if (context.audience === 'office') reporter = { reportedById: context.actorId, reportedByWorkerId: null, stationId: null }
-    else {
-      const scanSubject = await scanSubjectFor(tx, machine.siteId)
-      const acknowledged = scanSubject === 'WORKER' ? await hasAcknowledgedNotice(tx, machine.siteId, context.actorId) : false
-      const subject = floorReporter({ scanSubject, workerId: context.actorId, workerAcknowledged: acknowledged, deviceStationId, machineStationId: machine.stationId })
-      if (!subject.ok) refused(subject.refusal)
-      reporter = { reportedById: null, reportedByWorkerId: subject.ok ? subject.reportedByWorkerId : null, stationId: subject.ok ? subject.stationId : null }
-    }
-
-    const id = newId()
-    const reportedAt = reportedAtOf(body.occurredAt ? new Date(body.occurredAt) : null, now)
-    const data: Prisma.MaintenanceRequestUncheckedCreateInput = {
-      id,
-      companyId: machine.companyId,
-      siteId: machine.siteId,
-      machineId: machine.id,
-      symptomId: symptom?.id ?? null,
-      description,
-      unsafe,
-      reportedAt,
-      ...reporter,
-      deviceId: context.audience === 'floor' ? context.deviceId : null,
-      createdAt: now,
-      updatedAt: now,
-      createdById: context.audience === 'office' ? context.actorId : null,
-    }
-    await tx.maintenanceRequest.create({ data, select: { id: true } })
-    const scope = { companyId: machine.companyId, siteId: machine.siteId }
-    tools.audit({
-      action: 'plant.report',
-      recordType: 'MaintenanceRequest',
-      recordId: id,
-      ...scope,
-      after: { machineId: machine.id, symptomId: data.symptomId, description, unsafe, down: body.down, reportedAt: reportedAt.toISOString(), reportedById: reporter.reportedById, reportedByWorkerId: reporter.reportedByWorkerId, stationId: reporter.stationId, deviceId: data.deviceId },
-    })
-    const to = statusAfterReport({ status: machine.status as MachineStatus, unsafe, down: body.down })
-    if (to) {
-      const words = symptom?.labelEn ?? description
-      await moveMachine(tools, machine, to, {
-        reason: to === 'DO_NOT_USE' ? unsafeReason(words, localTime(reportedAt)) : `Down: ${words ?? 'a problem was reported'} (reported ${localTime(reportedAt)}).`.slice(0, 500),
-        cause: 'REPORT',
-        recordType: 'MaintenanceRequest',
-        recordId: id,
-        by: byOf(context),
-      })
-    }
-    const openOnMachine = await tx.maintenanceRequest.count({ where: { machineId: machine.id, status: { in: [...OPEN_REQUEST_STATUSES] }, id: { not: id } } })
-    tools.emit({
-      type: 'maintenance_request.reported',
-      subject: id,
-      ...scope,
-      payload: { requestId: id, machineId: machine.id, assetNumber: machine.assetNumber, symptomId: symptom?.id ?? null, symptomCode: symptom?.code ?? null, unsafe, down: body.down, stationId: reporter.stationId, openOnMachine, by: byOf(context) },
-    })
-    const [request] = await requestViews(tx, [(await readRequest(tx, id))!], context, now)
-    return { request: request!, machine: await machineAnswer(tx, context, machine.id), words: await stationWordsAt(tx, reporter.stationId ?? machine.stationId, machine.id) }
+    const machine = (await lockMachine(tools.tx, context, found.id))!
+    const made = await reportInCommand(tools, context, machine, { symptomId: body.symptomId, description, unsafe: body.unsafe ?? false, down: body.down, occurredAt: body.occurredAt, deviceStationId })
+    const [request] = await requestViews(tools.tx, [(await readRequest(tools.tx, made.id))!], context, tools.now)
+    return { request: request!, machine: await machineAnswer(tools.tx, context, machine.id), words: await stationWordsAt(tools.tx, made.stationId ?? machine.stationId, machine.id) }
   })
   return { ...result, replayed }
+}
+
+export interface ReportInput {
+  readonly symptomId?: string | undefined
+  readonly description: string | null
+  readonly unsafe: boolean
+  readonly down: boolean
+  readonly occurredAt?: string | undefined
+  /** The floor device's station (null in the office). */
+  readonly deviceStationId: string | null
+  /** B-W2b-96: the request an office lock was made from ("Lock as unsafe"), for its event. */
+  readonly fromRequestId?: string | null | undefined
+}
+
+/**
+ * The report inside the caller's command, its machine row locked by the caller: the symptom and the rules, who reported it,
+ * the request (B-W2b-96: routed by the site's rules in its INSERT, QHS-179; an unsafe one only when the site's lock
+ * settings let this person lock, H1: anyone), the machine's status, the events (B-W2b-96: maintenance_request.locked for an
+ * unsafe one, with the site's hazard report setting, QHS-183). Answers the new request's id and the station it names.
+ */
+export async function reportInCommand(tools: CommandTools, context: PlantContext, machine: MachineRow, input: ReportInput): Promise<{ readonly id: string; readonly stationId: string | null }> {
+  const { tx, now } = tools
+  const description = input.description
+  const symptom = input.symptomId ? await tx.machineSymptom.findUnique({ where: { id: input.symptomId }, select: { id: true, code: true, classId: true, active: true, unsafe: true, needsDetail: true, labelEn: true } }) : null
+  if (input.symptomId && !symptom) throw bodyIssue('symptomId', 'Not a symptom of the group.')
+  const refusal = reportRefusal({ machine: { assetNumber: machine.assetNumber, status: machine.status as MachineStatus, classId: machine.classId }, symptom, description })
+  if (refusal) refused(refusal)
+  const unsafe = isUnsafeReport({ symptomUnsafe: symptom?.unsafe ?? false, markedUnsafe: input.unsafe })
+  // B-W2b-96 (QHS-183): the site's lock settings (no row: Owner answer H1) say who may lock.
+  const settings = await lockSettingsOf(tx, machine.siteId)
+  if (unsafe) {
+    const lock = lockRefusal(settings, lockerOf(context))
+    if (lock) refused(lock)
+  }
+
+  // Who reported it: an office user; on the floor the worker (where the site records workers) or the station.
+  let reporter: { reportedById: string | null; reportedByWorkerId: string | null; stationId: string | null }
+  if (context.audience === 'office') reporter = { reportedById: context.actorId, reportedByWorkerId: null, stationId: null }
+  else {
+    const scanSubject = await scanSubjectFor(tx, machine.siteId)
+    const acknowledged = scanSubject === 'WORKER' ? await hasAcknowledgedNotice(tx, machine.siteId, context.actorId) : false
+    const subject = floorReporter({ scanSubject, workerId: context.actorId, workerAcknowledged: acknowledged, deviceStationId: input.deviceStationId, machineStationId: machine.stationId })
+    if (!subject.ok) refused(subject.refusal)
+    reporter = { reportedById: null, reportedByWorkerId: subject.ok ? subject.reportedByWorkerId : null, stationId: subject.ok ? subject.stationId : null }
+  }
+
+  // B-W2b-96 (QHS-179): where it goes, by the first active rule of the site for the machine's class.
+  const rules = await tx.requestRoutingRule.findMany({ where: { siteId: machine.siteId, active: true }, select: { id: true, seq: true, machineClassId: true, active: true, teamId: true, technicianId: true } })
+  const routing = routingOf(pickRule(rules, machine.classId))
+
+  const id = newId()
+  const reportedAt = reportedAtOf(input.occurredAt ? new Date(input.occurredAt) : null, now)
+  const data: Prisma.MaintenanceRequestUncheckedCreateInput = {
+    id,
+    companyId: machine.companyId,
+    siteId: machine.siteId,
+    machineId: machine.id,
+    symptomId: symptom?.id ?? null,
+    description,
+    unsafe,
+    reportedAt,
+    ...reporter,
+    ...routing,
+    deviceId: context.audience === 'floor' ? context.deviceId : null,
+    createdAt: now,
+    updatedAt: now,
+    createdById: context.audience === 'office' ? context.actorId : null,
+  }
+  await tx.maintenanceRequest.create({ data, select: { id: true } })
+  const scope = { companyId: machine.companyId, siteId: machine.siteId }
+  tools.audit({
+    action: 'plant.report',
+    recordType: 'MaintenanceRequest',
+    recordId: id,
+    ...scope,
+    after: { machineId: machine.id, symptomId: data.symptomId, description, unsafe, down: input.down, reportedAt: reportedAt.toISOString(), reportedById: reporter.reportedById, reportedByWorkerId: reporter.reportedByWorkerId, stationId: reporter.stationId, deviceId: data.deviceId, ...routing, ...(input.fromRequestId ? { lockedFromRequestId: input.fromRequestId } : {}) },
+  })
+  const to = statusAfterReport({ status: machine.status as MachineStatus, unsafe, down: input.down })
+  if (to) {
+    const words = symptom?.labelEn ?? description
+    await moveMachine(tools, machine, to, {
+      reason: to === 'DO_NOT_USE' ? unsafeReason(words, localTime(reportedAt)) : `Down: ${words ?? 'a problem was reported'} (reported ${localTime(reportedAt)}).`.slice(0, 500),
+      cause: 'REPORT',
+      recordType: 'MaintenanceRequest',
+      recordId: id,
+      by: byOf(context),
+    })
+  }
+  const openOnMachine = await tx.maintenanceRequest.count({ where: { machineId: machine.id, status: { in: [...OPEN_REQUEST_STATUSES] }, id: { not: id } } })
+  tools.emit({
+    type: 'maintenance_request.reported',
+    subject: id,
+    ...scope,
+    payload: { requestId: id, machineId: machine.id, assetNumber: machine.assetNumber, symptomId: symptom?.id ?? null, symptomCode: symptom?.code ?? null, unsafe, down: input.down, stationId: reporter.stationId, openOnMachine, by: byOf(context) },
+  })
+  if (unsafe) {
+    tools.emit({
+      type: 'maintenance_request.locked',
+      subject: id,
+      ...scope,
+      payload: { requestId: id, machineId: machine.id, assetNumber: machine.assetNumber, fromRequestId: input.fromRequestId ?? null, hazardReport: settings.hazardReportOnLock, by: byOf(context) },
+    })
+  }
+  return { id, stationId: reporter.stationId }
 }
 
 // ---- triage ---------------------------------------------------------------------------------------------------------------
@@ -462,15 +509,43 @@ export async function requestRecord(caller: CommandCaller, requestId: string) {
     const [request] = await requestViews(client, [row], context, now, { record: true })
     const others = await client.maintenanceRequest.findMany({ where: { machineId: row.machineId, status: { in: [...OPEN_REQUEST_STATUSES] }, id: { not: row.id } }, orderBy: [{ reportedAt: 'asc' }, { id: 'asc' }], select: REQUEST_COLUMNS })
     const photos = await client.storedFile.findMany({ where: { recordType: 'MaintenanceRequest', recordId: row.id, status: 'AVAILABLE' }, orderBy: { createdAt: 'asc' }, select: { id: true, originalName: true, contentType: true } })
+    const card = (await machineCard(client, context, row.machineId, now, { lastJobs: 5 }))!
     return {
       request: request!,
-      card: (await machineCard(client, context, row.machineId, now, { lastJobs: 5 }))!,
+      card,
       duplicates: await requestViews(client, others, context, now),
       photos,
+      // B-W2b-96: the photos and voice notes by kind (QHS-189), the routing and progress trail (QHS-179, QHS-180), what
+      // this person may do now (on the way, confirm it works, lock the machine: QHS-183).
+      files: await mediaOf(client, 'MaintenanceRequest', row.id),
+      trail: trailOf(request!),
+      canGo: may(context, PLANT_JOBS_WORK, row) && onTheWayRefusal(row) === null,
+      canConfirm: request!.progress.canConfirm && may(context, PLANT_REPORT, row),
+      canLock: !card.machine.locked && card.machine.status !== 'RETIRED' && may(context, PLANT_REPORT, row),
       canTriage: isOpenRequest(row.status) && may(context, PLANT_REQUESTS_TRIAGE, row),
       canSignSafe: row.unsafe && row.signedSafeAt === null && may(context, PLANT_SIGN_SAFE, row),
     }
   })
+}
+
+type RequestView = Awaited<ReturnType<typeof requestViews>>[number]
+
+/**
+ * B-W2b-96: the request's trail in time order (design plant.requests "Routing and escalation trail (Timeline)"): reported,
+ * routed, escalated (its last level), acknowledged, on the way, its job, merged or closed, signed safe, fixed, works again.
+ */
+function trailOf(request: RequestView) {
+  const entries: { kind: string; at: string; level?: number }[] = [{ kind: 'REPORTED', at: request.reportedAt }]
+  if (request.routing.routedTo) entries.push({ kind: 'ROUTED', at: request.reportedAt })
+  if (request.routing.escalatedAt) entries.push({ kind: 'ESCALATED', at: request.routing.escalatedAt, level: request.routing.escalationLevel })
+  if (request.acknowledgedAt) entries.push({ kind: 'ACKNOWLEDGED', at: request.acknowledgedAt })
+  if (request.progress.onTheWayAt) entries.push({ kind: 'ON_THE_WAY', at: request.progress.onTheWayAt })
+  if (request.status === 'MERGED' && request.closedAt) entries.push({ kind: 'MERGED', at: request.closedAt })
+  if (request.status === 'CLOSED' && request.closedAt) entries.push({ kind: 'CLOSED', at: request.closedAt })
+  if (request.signedSafe) entries.push({ kind: 'SIGNED_SAFE', at: request.signedSafe.at })
+  if (request.progress.fixedAt && request.status !== 'CLOSED') entries.push({ kind: 'FIXED', at: request.progress.fixedAt })
+  if (request.progress.worksAt) entries.push({ kind: 'WORKS_AGAIN', at: request.progress.worksAt })
+  return entries.sort((a, b) => a.at.localeCompare(b.at)).map((entry) => ({ kind: entry.kind as TrailKind, at: entry.at, level: entry.level ?? null }))
 }
 
 /** The open requests of a machine (the floor's machine card and the office's). */

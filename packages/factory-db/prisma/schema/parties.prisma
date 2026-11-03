@@ -126,6 +126,8 @@ model Party {
   safetyAppointments       SafetyAppointment[] @relation("SafetyAppointmentOutsideParty")
   trainingSessionsProvided TrainingSession[]   @relation("TrainingSessionProvider")
   ppeItemsSupplied         PpeItem[]           @relation("PpeItemSupplier")
+  // W2b health.prisma (wave 16/16): the chemicals it supplies.
+  chemicalsSupplied        Chemical[]          @relation("ChemicalSupplier")
   // pricing.prisma: its default payment terms and price list (Restrict, not Prisma's SetNull default for an optional
   // relation: that would also clear tenantId).
   termsOfPayment       PaymentTerms?        @relation(fields: [tenantId, paymentTermsId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
