@@ -14,7 +14,15 @@ import { problemKey } from '../../_shared/model'
 import { RecordProblem, RecordSkeleton } from '../../_shared/parts'
 import {
   acknowledgeComplaint,
+  answerCheck,
+  answerLetterBytes,
   changeComplaint,
+  complaintFiles,
+  fileAddress,
+  saveAnswer,
+  saveInvestigation,
+  sendAnswer,
+  shareWithCustomer,
   closeComplaint,
   complaintPeople,
   findGarmentByEvidence,
@@ -43,10 +51,32 @@ import {
   type SiteOption,
   type StyleOption,
 } from '../api'
-import { complaintsCan, isStale, linkRefusalKey, linkTypeKey, raisesSafety, refusalKey, romeToday, triageDraftOf, triageProblems } from '../model'
+import {
+  answerBody,
+  answerDraftOf,
+  complaintsCan,
+  investigationBody,
+  investigationDraftOf,
+  isStale,
+  linkRefusalKey,
+  linkTypeKey,
+  previewProblemKey,
+  raisesSafety,
+  refusalKey,
+  romeToday,
+  sendBodyOf,
+  sendDraftOf,
+  sendRefusalKey,
+  templateWords,
+  triageDraftOf,
+  triageProblems,
+  withTemplate,
+  type AnswerDraft,
+  type InvestigationDraft,
+} from '../model'
 import type { Notice, PhotoView, TriageModel } from '../view-model'
 import { ComplaintsMessages, useWords } from '../view/parts'
-import { RECORD_TABS, type FactsDraft, type LinkOptions, type RecordDialog } from './view-model'
+import { IDLE_ANSWER, RECORD_TABS, type AnswerModel, type FactsDraft, type LinkOptions, type RecordDialog } from './view-model'
 import { ComplaintRecordView } from './view/ComplaintRecordView'
 
 /**
@@ -143,10 +173,14 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
   // B-W2b-17: Link…'s choices for the type picked, and the NCRs raised from this complaint (their Unlink is held).
   const [linkOptions, setLinkOptions] = useState<LinkOptions | null>(null)
   const [raisedFrom, setRaisedFrom] = useState<readonly string[] | null>(null)
+  // B-W2b-113: the investigation in edit mode and the Answer tab (the letter as typed, the files, the preview, the check).
+  const [investigation, setInvestigation] = useState<{ draft: InvestigationDraft; busy: boolean; problem: string | null } | null>(null)
+  const [answer, setAnswer] = useState<AnswerModel>(IDLE_ANSWER)
   const busy = useRef(false)
   const triageKey = useRef<string | null>(null)
+  const sendKey = useRef<string | null>(null)
   const quietRef = useRef(false)
-  quietRef.current = dialog !== null || edit !== null || triage !== null
+  quietRef.current = dialog !== null || edit !== null || triage !== null || investigation !== null || answer.draft !== null
 
   const load = useCallback(async () => {
     try {
@@ -247,6 +281,42 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
       live = false
     }
   }, [api, complaint, linkType])
+
+  // B-W2b-113: on the Answer tab, the complaint's files that may go with the letter (files.read).
+  const loadFiles = useCallback(async () => {
+    if (!can.filesRead) return
+    try {
+      const files = await complaintFiles(api, complaintId)
+      setAnswer((current) => ({ ...current, files }))
+    } catch {
+      setAnswer((current) => ({ ...current, files: [] }))
+    }
+  }, [api, can.filesRead, complaintId])
+  useEffect(() => {
+    if (tab === 'answer') void loadFiles()
+  }, [loadFiles, tab])
+
+  // The letter as the customer would get it, read when the tab opens with a saved letter, and after each save.
+  const savedText = complaint?.answer.text ?? null
+  const savedLanguage = complaint?.answer.language ?? null
+  const loadPreview = useCallback(async () => {
+    if (!savedText) {
+      setAnswer((current) => ({ ...current, preview: { status: 'idle' } }))
+      return
+    }
+    setAnswer((current) => ({ ...current, preview: { status: 'loading' } }))
+    try {
+      const data = await answerLetterBytes(api, complaintId, savedLanguage)
+      setAnswer((current) => ({ ...current, preview: { status: 'ready', data, language: savedLanguage ?? 'it' } }))
+    } catch (error) {
+      setAnswer((current) => ({ ...current, preview: { status: 'error', problem: previewProblemKey(error) } }))
+    }
+  }, [api, complaintId, savedLanguage, savedText])
+  const version = complaint?.version ?? 0
+  useEffect(() => {
+    if (tab === 'answer') void loadPreview()
+    // Read again when the saved letter (the complaint's version) changes.
+  }, [loadPreview, tab, version])
 
   // `?do=ncr|register` (the list's verbs) opens the step once the complaint is read; then the address forgets it.
   const asked = params?.get('do') ?? null
@@ -444,6 +514,36 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
           const answer = dialog.type === 'GarmentSerial' ? await changeComplaint(api, complaint, { serial: null }) : await unlinkFromComplaint(api, complaint, { recordType: dialog.type, recordId: dialog.recordId }, key)
           return { complaint: answer.complaint, words: { key: 'links.done.unlinked', params: { label: dialog.label } } }
         })
+      } else if (dialog.kind === 'send') {
+        const check = answer.check
+        const draft = dialog.draft
+        if (!check || !draft || busy.current) return
+        sendKey.current ??= newIdempotencyKey()
+        const key = sendKey.current
+        busy.current = true
+        setDialogBusy(true)
+        setDialogProblem(null)
+        sendAnswer(api, complaint, sendBodyOf(check, draft), key)
+          .then((sent) => {
+            sendKey.current = null
+            setComplaint(sent.complaint)
+            setAsOf(new Date().toISOString())
+            setDialog(null)
+            setChangedAt(null)
+            setAnswer((current) => ({ ...current, draft: null, check: null, checkProblem: null }))
+            setNotice({ tone: 'success', words: { key: 'done.answerSent', params: { number, version: sent.document.version } } })
+          })
+          .catch(async (error: unknown) => {
+            sendKey.current = null
+            if (isStale(error)) {
+              await load()
+              setDialogProblem('refusal.conflict')
+            } else setDialogProblem(sendRefusalKey(error))
+          })
+          .finally(() => {
+            busy.current = false
+            setDialogBusy(false)
+          })
       } else if (dialog.kind === 'repair') {
         const key = newIdempotencyKey()
         void write(async () => {
@@ -452,8 +552,81 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
         })
       }
     },
-    [api, can.inspectionsView, complaint, dialog, linkOptions, linkWrite, t, write],
+    [answer.check, api, can.inspectionsView, complaint, dialog, linkOptions, linkWrite, load, t, write],
   )
+
+  // ---- B-W2b-113: the investigation and the answer letter ------------------------------------------------------------------
+  const saveInvestigationNow = useCallback(async () => {
+    if (!investigation || !complaint || investigation.busy) return
+    setInvestigation({ ...investigation, busy: true, problem: null })
+    try {
+      const next = await saveInvestigation(api, complaint, investigationBody(investigation.draft))
+      setComplaint(next)
+      setInvestigation(null)
+      setAsOf(new Date().toISOString())
+      setNotice({ tone: 'success', words: { key: 'done.investigationSaved', params: { number: next.number } } })
+    } catch (error) {
+      if (isStale(error)) await load()
+      setInvestigation((current) => (current ? { ...current, busy: false, problem: isStale(error) ? 'refusal.conflict' : refusalKey(error) } : current))
+    }
+  }, [api, complaint, investigation, load])
+
+  const answerDraft = useCallback((change: (draft: AnswerDraft) => { draft: AnswerDraft; keptWords?: boolean }) => {
+    if (!complaint) return
+    setAnswer((current) => {
+      const result = change(current.draft ?? answerDraftOf(complaint))
+      return { ...current, draft: result.draft, keptWords: result.keptWords ?? current.keptWords, problem: null }
+    })
+  }, [complaint])
+
+  const saveAnswerNow = useCallback(async () => {
+    if (!complaint || !answer.draft || answer.busy) return
+    setAnswer((current) => ({ ...current, busy: true, problem: null }))
+    try {
+      const next = await saveAnswer(api, complaint, answerBody(answer.draft))
+      setComplaint(next)
+      setAsOf(new Date().toISOString())
+      setAnswer((current) => ({ ...current, busy: false, draft: null, keptWords: false }))
+      setNotice({ tone: 'success', words: { key: 'done.answerSaved', params: { number: next.number } } })
+    } catch (error) {
+      if (isStale(error)) await load()
+      setAnswer((current) => ({ ...current, busy: false, problem: isStale(error) ? 'refusal.conflict' : refusalKey(error) }))
+    }
+  }, [answer.busy, answer.draft, api, complaint, load])
+
+  const shareFile = useCallback(
+    async (fileId: string) => {
+      if (!complaint || answer.sharing) return
+      const file = answer.files?.find((entry) => entry.id === fileId)
+      if (!file) return
+      setAnswer((current) => ({ ...current, sharing: fileId, problem: null }))
+      try {
+        await shareWithCustomer(api, file, complaint.party.id)
+        await loadFiles()
+        await load()
+        setNotice({ tone: 'success', words: { key: 'done.fileShared', params: { name: file.originalName } } })
+      } catch (error) {
+        setAnswer((current) => ({ ...current, problem: refusalKey(error) }))
+      } finally {
+        setAnswer((current) => ({ ...current, sharing: null }))
+      }
+    },
+    [answer.files, answer.sharing, api, complaint, load, loadFiles],
+  )
+
+  const openSend = useCallback(() => {
+    if (!complaint) return
+    sendKey.current = null
+    setDialogProblem(null)
+    setDialog({ kind: 'send', draft: null })
+    setAnswer((current) => ({ ...current, check: null, checkProblem: null }))
+    answerCheck(api, complaint.id)
+      .then((check) => {
+        setAnswer((current) => ({ ...current, check }))
+        setDialog((current) => (current?.kind === 'send' ? { kind: 'send', draft: sendDraftOf(check) } : current))
+      })
+      .catch((error) => setAnswer((current) => ({ ...current, checkProblem: refusalKey(error) })))
+  }, [api, complaint])
 
   const saveEdit = useCallback(async () => {
     if (!edit || !complaint || edit.busy) return
@@ -499,6 +672,7 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
     hrefs[`${type}:${id}`] = `${prefix}${recordAddress({ type, id, label, companyId: complaint.companyId }, built)}`
   }
   for (const ncr of complaint.ncrs) add('Nonconformance', ncr.id, ncr.number)
+  if (complaint.capaRecord) add('Capa', complaint.capaRecord.id, complaint.capaRecord.number)
   for (const repair of complaint.repairs) add('RepairOrder', repair.id, repair.number)
   if (complaint.return) add('ReturnAuthorisation', complaint.return.id, complaint.return.number)
   if (complaint.shipment) add('Shipment', complaint.shipment.id, complaint.shipment.number)
@@ -510,7 +684,7 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
 
   return (
     <ComplaintRecordView
-      model={{ prefix, can, tab, complaint, photos, asOf, live, offline, today, notice, changedAt, edit, styles, dialog, dialogBusy, dialogProblem, sites, triage: triageModel, dockOpen, hrefs, linkOptions, raisedFrom }}
+      model={{ prefix, can, tab, complaint, photos, asOf, live, offline, today, notice, changedAt, edit, styles, dialog, dialogBusy, dialogProblem, sites, triage: triageModel, dockOpen, hrefs, linkOptions, raisedFrom, investigation, answer }}
       panels={panels}
       actions={{
         onTriage: openTriage,
@@ -564,6 +738,26 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
         onTriageSave: () => void saveTriage(false),
         onTriageConfirmSafety: () => void saveTriage(true),
         onTriageCancelSafety: () => setTriage((current) => (current ? { ...current, confirmSafety: false } : current)),
+        onInvestigationEdit: (on) => setInvestigation(on ? { draft: investigationDraftOf(complaint), busy: false, problem: null } : null),
+        onInvestigationDraft: (patch) => setInvestigation((current) => (current ? { ...current, draft: { ...current.draft, ...patch } } : current)),
+        onInvestigationSave: () => void saveInvestigationNow(),
+        onAnswerTemplate: (template) => answerDraft((draft) => withTemplate(draft, { template }, complaint)),
+        onAnswerLanguage: (language) => answerDraft((draft) => withTemplate(draft, { language }, complaint)),
+        onAnswerUseTemplate: () => answerDraft((draft) => ({ draft: draft.template ? { ...draft, text: templateWords(draft.template, draft.language, complaint) } : draft, keptWords: false })),
+        onAnswerText: (text) => answerDraft((draft) => ({ draft: { ...draft, text } })),
+        onAnswerFile: (fileId, on) => answerDraft((draft) => ({ draft: { ...draft, fileIds: on ? [...new Set([...draft.fileIds, fileId])] : draft.fileIds.filter((id) => id !== fileId) } })),
+        onAnswerShare: (fileId) => void shareFile(fileId),
+        onAnswerSave: () => void saveAnswerNow(),
+        onAnswerDiscard: () => setAnswer((current) => ({ ...current, draft: null, keptWords: false, problem: null })),
+        onPreview: () => void loadPreview(),
+        onOpenFile: (fileId) => {
+          fileAddress(api, fileId).then(
+            (url) => window.open(url, '_blank', 'noopener'),
+            (error: unknown) => setNotice({ tone: 'warning', words: { key: refusalKey(error) } }),
+          )
+        },
+        onSend: openSend,
+        onSendDraft: (patch) => setDialog((current) => (current?.kind === 'send' && current.draft ? { kind: 'send', draft: { ...current.draft, ...patch } } : current)),
       }}
     />
   )

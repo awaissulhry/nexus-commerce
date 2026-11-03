@@ -54,13 +54,14 @@ describe('scrap & rework: address and saved views', () => {
       q: 'wo',
       open: 'rework:0190f0e2-2727-7000-8000-000000000001',
       replace: null,
+      downgrade: null,
     })
     expect(address('view=x&period=1&kind=y&by=z&open=nonsense')).toMatchObject({ view: 'all', period: '30', kind: null, by: 'reason', open: null })
     expect(addressText(address())).toBe('')
     expect(addressText({ ...address(), view: 'today', group: 'STAIN' })).toBe('?view=today&group=STAIN')
     expect(periodFrom('all', 0)).toBeNull()
     expect(periodFrom('7', Date.parse('2026-10-30T00:00:00Z'))).toBe('2026-10-23T00:00:00.000Z')
-    expect(SCRAP_VIEWS).toEqual(['all', 'today', 'rework', 'approve', 'recuts'])
+    expect(SCRAP_VIEWS).toEqual(['all', 'today', 'rework', 'approve', 'recuts', 'second'])
   })
 
   it('the saved views pick their rows: today’s scrap, open rework, waiting approval, recuts to cut', () => {

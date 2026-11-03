@@ -91,7 +91,22 @@ export const showsOnBanner = (facts: SafetyFacts & { readonly status: ComplaintS
 
 // ---- the steps a person takes, held with a code the screens put in words -------------------------------------------
 
-export const COMPLAINT_ACTIONS = ['edit', 'triage', 'startInvestigation', 'markAnswered', 'reopenInvestigation', 'close', 'acknowledge', 'register', 'createNcr', 'makeRepair'] as const
+export const COMPLAINT_ACTIONS = [
+  'edit',
+  'triage',
+  'startInvestigation',
+  'markAnswered',
+  'reopenInvestigation',
+  'close',
+  'acknowledge',
+  'register',
+  'createNcr',
+  'makeRepair',
+  // B-W2b-113 (QHS-116): the investigation, the answer letter written and sent.
+  'investigate',
+  'writeAnswer',
+  'sendAnswer',
+] as const
 export type ComplaintAction = (typeof COMPLAINT_ACTIONS)[number]
 
 /**
@@ -106,6 +121,8 @@ export type ComplaintAction = (typeof COMPLAINT_ACTIONS)[number]
  *   NOT_IN_REGISTER      a safety complaint closes only once its PPE register entry exists
  *   IN_REGISTER          it is in the PPE register already
  *   NO_STYLE             the PPE register keeps an entry per style: name the garment's style first
+ *   ANSWER_SENT          B-W2b-113: the letter went out and the complaint is answered: back to investigating to change it
+ *   NO_ANSWER            B-W2b-113: the letter has no words yet (or no language): write it first
  */
 export const HELD_CODES = [
   'NO_PERMISSION',
@@ -120,6 +137,9 @@ export const HELD_CODES = [
   'NOT_IN_REGISTER',
   'IN_REGISTER',
   'NO_STYLE',
+  // B-W2b-113
+  'ANSWER_SENT',
+  'NO_ANSWER',
 ] as const
 export type HeldCode = (typeof HELD_CODES)[number]
 
@@ -129,6 +149,9 @@ export interface ActionFacts extends SafetyFacts {
   readonly inRegister: boolean
   /** The step's permission, per action (the API answers can() over the complaint's company and customer). */
   readonly may: Readonly<Record<ComplaintAction, boolean>>
+  /** B-W2b-113: the letter written so far (its words and language), for sendAnswer. */
+  readonly answerText?: string | null | undefined
+  readonly answerLanguage?: string | null | undefined
 }
 
 export interface ActionState {
@@ -183,6 +206,21 @@ export function complaintActions(facts: ActionFacts): ActionState[] {
     state('register', registerHeld(facts)),
     state('createNcr', closed),
     state('makeRepair', closed),
+    // B-W2b-113: the investigation from TRIAGED on; the letter written and sent until it is answered (then frozen).
+    state('investigate', facts.status === 'CLOSED' ? 'CLOSED' : facts.status === 'NEW' ? 'NOT_TRIAGED' : null),
+    state('writeAnswer', facts.status === 'CLOSED' ? 'CLOSED' : facts.status === 'NEW' ? 'NOT_TRIAGED' : facts.status === 'ANSWERED' ? 'ANSWER_SENT' : null),
+    state(
+      'sendAnswer',
+      facts.status === 'CLOSED'
+        ? 'CLOSED'
+        : facts.status === 'NEW'
+          ? 'NOT_TRIAGED'
+          : facts.status === 'ANSWERED'
+            ? 'ANSWER_SENT'
+            : !facts.answerText || facts.answerText.trim() === '' || !facts.answerLanguage
+              ? 'NO_ANSWER'
+              : null,
+    ),
   ]
 }
 
@@ -274,7 +312,29 @@ export function evidenceOf(facts: { readonly serial: string | null; readonly bat
 }
 
 /** The fields a change names (complaint.changed's `fields`). */
-export const CHANGED_FIELDS = ['customerRef', 'contactId', 'channel', 'receivedAt', 'description', 'salesOrderId', 'shipmentId', 'returnId', 'styleId', 'size', 'serial', 'batchNumber', 'internalNote', 'category', 'severity', 'ownerId', 'answerDueOn'] as const
+export const CHANGED_FIELDS = [
+  'customerRef',
+  'contactId',
+  'channel',
+  'receivedAt',
+  'description',
+  'salesOrderId',
+  'shipmentId',
+  'returnId',
+  'styleId',
+  'size',
+  'serial',
+  'batchNumber',
+  'internalNote',
+  'category',
+  'severity',
+  'ownerId',
+  'answerDueOn',
+  // B-W2b-113 (QHS-116): the investigation's words and the answer letter (written, or a version kept).
+  'findings',
+  'rootCause',
+  'answer',
+] as const
 export type ChangedField = (typeof CHANGED_FIELDS)[number]
 
 // ---- W2b follow-ups (B-W2b-17) ---------------------------------------------------------------------------------------

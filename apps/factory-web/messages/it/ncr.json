@@ -240,7 +240,8 @@
   "keys": {
     "title": "Scorciatoie da tastiera",
     "new": "Nuova non conformità",
-    "board": "Passa da elenco a lavagna"
+    "board": "Passa da elenco a lavagna",
+    "escalate": "Porta in CAPA (le righe scelte, altrimenti quella con il fuoco)"
   },
   "close": {
     "title": "Chiudi {number}",
@@ -298,7 +299,16 @@
     "foot": "Una riga apre la non conformità. Scegli righe per assegnare un responsabile o esportarle.",
     "boardFoot": "La lavagna mostra le stesse righe per stato; Chiusa mostra gli ultimi 30 giorni.",
     "printFilters": "Righe: {rows} · Stabilimento: {site} · Ricerca: {search}",
-    "heldAssignOffline": "Offline: assegna quando torni in linea."
+    "heldAssignOffline": "Offline: assegna quando torni in linea.",
+    "escalate": "Porta in CAPA…",
+    "escalateMany_one": "Porta {count} in una CAPA",
+    "escalateMany_other": "Porta {count} in una CAPA",
+    "printNcr": "Stampa NC (PDF)",
+    "heldEscalateRight": "Il tuo ruolo non porta le NC in CAPA (quality.ncr.manage e quality.capa.view).",
+    "heldEscalated": "{number} è già in {capa}.",
+    "heldEscalateNone": "Nessuna delle NC scelte può andare in una CAPA (annullata o già in una CAPA).",
+    "heldEscalateMax": "Al massimo 50 NC per volta in una CAPA.",
+    "heldEscalateOffline": "Fuori linea: si porta in CAPA quando la fabbrica risponde di nuovo."
   },
   "view": {
     "open": "Aperte",
@@ -340,7 +350,9 @@
     "due": "Scadenza contenimento",
     "age": "Età",
     "site": "Stabilimento",
-    "actions": "Azioni"
+    "actions": "Azioni",
+    "capa": "CAPA",
+    "cost": "Costo"
   },
   "csv": {
     "number": "N. NC",
@@ -361,7 +373,9 @@
     "owner": "Responsabile",
     "due": "Scadenza contenimento",
     "found": "Trovata il",
-    "site": "Stabilimento"
+    "site": "Stabilimento",
+    "capa": "CAPA",
+    "cost": "Costo"
   },
   "new": {
     "title": "Nuova non conformità",
@@ -512,5 +526,65 @@
       "notFound": "{number}: non si trova più",
       "other": "{number}: rifiutata dalla fabbrica"
     }
+  },
+  "escalate": {
+    "titleOne": "Porta {number} in CAPA",
+    "titleMany": "Porta {count} NC in una CAPA",
+    "intro": "Una CAPA raccoglie più NC della stessa azienda: collegale a una CAPA aperta o aprine una nuova. La causa radice e le azioni si seguono lì.",
+    "reading": "Lettura di ciò che porta ogni NC…",
+    "failed": "Non è stato possibile leggere cosa farebbe il passaggio in CAPA",
+    "rowsLabel": "Le NC",
+    "reasons": "Suggerita da",
+    "noReason": "nessuna regola (portala in CAPA se il problema richiede una causa radice)",
+    "reason": {
+      "CRITICAL": "Critica",
+      "REPEAT_DEFECT": "Difetto ripetuto",
+      "CUSTOMER": "Reclamo del cliente",
+      "SAFETY": "Sicurezza"
+    },
+    "code": {
+      "ESCALATED_ELSEWHERE": "{number} è già in {capa}: resta lì.",
+      "NCR_CANCELLED": "{number} è annullata: non va in nessuna CAPA.",
+      "NCR_KEEPS_CAPA": "{number} è decisa e resta legata alla CAPA annullata in cui era stata portata.",
+      "NO_PERMISSION": "Per portare {number} in CAPA serve il diritto di seguire le NC nel suo stabilimento (quality.ncr.manage).",
+      "OTHER": "{number} non può andare ora."
+    },
+    "willGo_one": "Va {count} NC su {total}; le altre restano come sono.",
+    "willGo_other": "Vanno {count} NC su {total}; le altre restano come sono.",
+    "mode": "Come",
+    "modeLink": "Collega a una CAPA aperta",
+    "modeNew": "Aprine una nuova",
+    "capa": "CAPA aperta",
+    "capaSearch": "Cerca una CAPA per numero o titolo",
+    "customer": "per {name}",
+    "noCapas": "Nessuna CAPA aperta di questa azienda a cui puoi aggiungere: aprine una nuova.",
+    "type": "Tipo",
+    "typeName": {
+      "CAPA": "Azione correttiva (CAPA)",
+      "EIGHT_D": "8D per un cliente"
+    },
+    "newTitle": "Titolo",
+    "due": "Scadenza",
+    "dueHint": "Il giorno entro cui la CAPA deve essere conclusa (oggi o dopo).",
+    "submit_one": "Porta {count} NC",
+    "submit_other": "Porta {count} NC",
+    "held": {
+      "reading": "Sto ancora leggendo cosa porta ogni NC.",
+      "failed": "Non è stato possibile leggere cosa farebbe il passaggio: riprova.",
+      "companies": "Le NC scelte sono di aziende diverse: una CAPA raccoglie le NC di una sola azienda.",
+      "none": "Nessuna di queste NC può andare in una CAPA ora.",
+      "noManage": "Il tuo ruolo non gestisce le CAPA di questa azienda (quality.capa.manage): chiedi a chi può.",
+      "noCapas": "Non c’è una CAPA aperta a cui collegare: aprine una nuova.",
+      "pick": "Scegli prima la CAPA aperta.",
+      "title": "Scrivi prima il titolo della nuova CAPA.",
+      "titleLong": "Il titolo ha al massimo 160 caratteri.",
+      "due": "Scegli il giorno di scadenza."
+    },
+    "done_one": "{count} NC portata in {capa}.",
+    "done_other": "{count} NC portate in {capa}.",
+    "openCapa": "Apri {capa}",
+    "refused": "Il passaggio in CAPA è stato rifiutato così com’è.",
+    "refusedHeld": "Una NC non può più andare in questa CAPA (è stata portata altrove o cambiata nel frattempo): l’elenco è stato riletto.",
+    "refusedStale": "La CAPA è cambiata nel frattempo: è stata riletta. Controllala e riprova."
   }
 }

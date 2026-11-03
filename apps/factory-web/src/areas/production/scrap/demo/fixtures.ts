@@ -4,8 +4,8 @@ import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../..
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
 import type { Replacement } from '../../cutting/api'
-import type { ScrapRow, ScrapTiles } from '../api'
-import { scrapCanOf, type ScrapCan } from '../model'
+import type { Downgrade, DowngradeOptions, Repair, ScrapRow, ScrapTiles } from '../api'
+import { scrapCanOf, withDowngrades, type ScrapCan, type SecondTotals } from '../model'
 
 /**
  * Made-up data for the design cases of SCR-140 (Scrap & rework, its detail and Replace scrapped quantity): invented
@@ -21,8 +21,8 @@ export const TODAY_START = Date.parse('2026-10-29T23:00:00.000Z')
 
 const BASE = ['home.view', 'threads.read', 'threads.post', 'files.read']
 export const ROLES = {
-  owner: [...OWNER_PERMISSIONS, 'workorders.view', 'production.scrap.view', 'production.scrap', 'production.scrap.approve', 'production.cutting.view', 'money.cost'],
-  manager: [...BASE, 'workorders.view', 'production.scrap.view', 'production.scrap', 'production.scrap.approve', 'production.cutting.view', 'production.rework'],
+  owner: [...OWNER_PERMISSIONS, 'workorders.view', 'production.scrap.view', 'production.scrap', 'production.scrap.approve', 'production.cutting.view', 'money.cost', /* B-W2b-126 */ 'production.downgrade'],
+  manager: [...BASE, 'workorders.view', 'production.scrap.view', 'production.scrap', 'production.scrap.approve', 'production.cutting.view', 'production.rework', /* B-W2b-126 */ 'production.downgrade'],
   planner: [...BASE, 'workorders.view', 'production.scrap.view', 'production.scrap.approve'],
   inspector: [...BASE, 'workorders.view', 'production.scrap.view', 'production.rework'],
   finance: [...BASE, 'production.scrap.view', 'money.cost'],
@@ -137,3 +137,116 @@ const reduction = (n: number, workOrder: typeof WO31, createdBy: { id: string; n
 })
 /** Row 2's request was asked by the signed-in person (Carlo Prova): he never decides it; row 3's by Bea Esempio. */
 export const REDUCTIONS: Replacement[] = [reduction(3, WO31, ASKER), reduction(4, WO29, { id: uid('1616', 1), name: 'Bea Esempio' })]
+
+// ---- B-W2b-126: second quality (MES-133) and the repair station (MES-132), made up -------------------------------------------
+
+const SQ_PLACE = { id: uid('3131', 2), code: 'DEMO-SQ', name: 'Seconda scelta demo' }
+const FG_PLACE = { id: uid('3131', 1), code: 'DEMO-FG', name: 'Prodotti finiti demo' }
+const SQ_ITEM = { id: uid('8888', 7), code: 'DEMO-JKT-01-2Q', name: 'Giacca pelle demo, seconda scelta' }
+
+const downgrade = (n: number, over: Partial<Downgrade>): Downgrade => ({
+  id: uid('3232', n),
+  companyId: uid('0101', 1),
+  siteId: uid('0202', 1),
+  workOrder: WO31,
+  cell: { id: uid('9191', 2), colourwayCode: 'NER', size: '50' },
+  bundle: { id: uid('1818', 4), code: 'DEMO-BN-0004', part: null },
+  source: { type: 'SCAN', id: uid('2626', 4) },
+  quantity: 1,
+  reasonCode: 'LEATHER_FLAW',
+  note: 'Cicatrice rimarginata sul dietro (demo)',
+  target: 'SKU',
+  item: null,
+  sku: { id: uid('7171', 1), sku: 'DEMO-JKT-01-NER-50' },
+  place: SQ_PLACE,
+  moveId: uid('3333', 90 + n),
+  withdrawnMoveId: null,
+  withdrawn: null,
+  version: 1,
+  createdAt: at(30, 9, 5),
+  ...over,
+})
+
+/** Row 4's hole sent to second quality as its SKU (today); a rework's scrap kept as an item, then withdrawn (yesterday). */
+export const DOWNGRADES: Downgrade[] = [
+  downgrade(1, {}),
+  downgrade(2, {
+    source: { type: 'REWORK', id: uid('2727', 2) },
+    bundle: { id: uid('1818', 7), code: 'DEMO-BN-0007', part: null },
+    reasonCode: 'STITCHING',
+    note: null,
+    target: 'ITEM',
+    item: SQ_ITEM,
+    sku: null,
+    withdrawnMoveId: uid('3333', 99),
+    withdrawn: { at: at(29, 17, 40), reason: 'Riparato dopo: torna in produzione (demo)' },
+    version: 2,
+    createdAt: at(29, 16, 50),
+  }),
+]
+export const ROWS_WITH_SECOND: ScrapRow[] = withDowngrades(ROWS, DOWNGRADES)
+/** Today and the period: one garment (the withdrawn row counts nowhere). */
+export const SECOND_TOTALS: SecondTotals = { today: 1, period: 1 }
+
+/** What row 1 (two stained garments of DEMO-BN-0001) can still send: both; a protective jacket. */
+export const OPTIONS: DowngradeOptions = {
+  source: { type: 'SCAN', id: uid('2626', 1) },
+  workOrder: { id: WO31.id, number: WO31.number, status: WO31.status },
+  cell: { id: uid('9191', 2), colourwayCode: 'NER', size: '50' },
+  bundle: { id: uid('1818', 1), code: 'DEMO-BN-0001', part: null },
+  scrapped: 2,
+  downgraded: 0,
+  left: 2,
+  approval: null,
+  ppe: true,
+  sku: { variantId: uid('7171', 1), sku: 'DEMO-JKT-01-NER-50' },
+  items: [SQ_ITEM],
+  places: [
+    { ...FG_PLACE, kind: 'FINISHED_GOODS', finishedGoods: true },
+    { ...SQ_PLACE, kind: 'WAREHOUSE', finishedGoods: false },
+  ],
+  reasons: ['LEATHER_FLAW', 'SHADE', 'STAIN', 'STITCHING', 'ALIGNMENT', 'MEASUREMENT', 'OTHER'],
+  held: null,
+  may: true,
+}
+/** Row 2's sleeve: a cut piece is not a garment (held before anything is chosen). */
+export const OPTIONS_PIECE: DowngradeOptions = {
+  ...OPTIONS,
+  source: { type: 'SCAN', id: uid('2626', 2) },
+  bundle: { id: uid('1818', 2), code: 'DEMO-BN-0002', part: 'sleeve' },
+  scrapped: 1,
+  left: 1,
+  held: { code: 'NOT_A_GARMENT', message: 'A cut piece (sleeve) is not a garment: only whole garments go to second quality.' },
+}
+
+/** The rework in progress (row 6): scanned in at the repair station 12 minutes ago; who did it is behind the gate. */
+export const REPAIR: Repair = {
+  reworkId: uid('2727', 1),
+  workOrder: { id: WO31.id, number: WO31.number },
+  status: 'IN_PROGRESS',
+  state: 'IN_REPAIR',
+  repairInAt: at(30, 9, 18),
+  repairOutAt: null,
+  station: { id: uid('6767', 9), code: 'REP-01' },
+  minutes: 12,
+  goodQuantity: 0,
+  scrapQuantity: 0,
+  scannedInBy: null,
+  scannedOutBy: null,
+  workerHidden: true,
+}
+/** The rework scrapped after its repair (row 7), with the site's PERFORMANCE gate open: who scanned is named (made up). */
+export const REPAIR_DONE: Repair = {
+  ...REPAIR,
+  reworkId: uid('2727', 2),
+  status: 'DONE',
+  state: null,
+  repairInAt: at(29, 15, 40),
+  repairOutAt: at(29, 16, 18),
+  minutes: 38,
+  goodQuantity: 0,
+  scrapQuantity: 1,
+  scannedInBy: { id: uid('1919', 1), name: 'Dario Esempio' },
+  scannedOutBy: { id: uid('1919', 1), name: 'Dario Esempio' },
+  workerHidden: false,
+}

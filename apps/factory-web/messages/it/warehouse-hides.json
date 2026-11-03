@@ -1,0 +1,273 @@
+{
+  "band": {
+    "more": "Altro per le pelli",
+    "dashboardOn": "Mostra il cruscotto della pelle",
+    "dashboardOff": "Nascondi il cruscotto della pelle"
+  },
+  "filter": {
+    "article": "Articolo",
+    "articleColour": "Articolo e colore"
+  },
+  "tile": {
+    "noRemnants": "nessun pezzo a magazzino"
+  },
+  "photo": {
+    "col": "Foto",
+    "alt": "Foto della pelle {code}",
+    "open_one": "Pelle {code}: {count} foto",
+    "open_other": "Pelle {code}: {count} foto"
+  },
+  "dash": {
+    "title": "Cruscotto della pelle",
+    "two": "{hides} · {area}",
+    "hides_one": "{count} pelle",
+    "hides_other": "{count} pelli",
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "noColour": "senza colore",
+    "sums": "In tutto",
+    "failed": "Non è stato possibile leggere questo riquadro",
+    "area": {
+      "title": "Superficie a magazzino per articolo e colore",
+      "label": "Superficie a magazzino per articolo e colore",
+      "valueLabel": "Valore della superficie per articolo e colore",
+      "series": "Che cosa mostrano le barre",
+      "seriesArea": "Superficie",
+      "seriesValue": "Valore della superficie",
+      "valueHeld": "Il valore della superficie richiede l'accesso ai costi (money.cost): vedi solo le superfici.",
+      "empty": "Nessuna pelle a magazzino",
+      "emptyBody": "Le pelli ricevute in questo stabilimento compaiono qui, per articolo e colore.",
+      "hint": "Premi un articolo per vedere le sue pelli nell'elenco sotto; premilo di nuovo per vederle tutte."
+    },
+    "mix": {
+      "title": "Scelte per lotto",
+      "label": "Quanto resta di ogni lotto, per scelta",
+      "grade": "{code} · {label}",
+      "ungraded": "Senza scelta",
+      "empty": "Nessun lotto con pelli a magazzino",
+      "emptyBody": "Un lotto compare qui quando le sue pelli vengono ricevute.",
+      "hint": "Le barre mostrano quanto resta a magazzino. Premi un lotto per vedere le sue pelli sotto."
+    },
+    "remnants": {
+      "title": "Superficie dei ritagli",
+      "none": "Nessun ritaglio a magazzino",
+      "hint": "Ritagli etichettati (etichette RM) tenuti a magazzino per le parti piccole.",
+      "open": "Vedi i ritagli"
+    },
+    "outside": {
+      "title": "Presso i terzisti",
+      "label": "Pelle presso i terzisti, per laboratorio e articolo",
+      "none": "Nessuna pelle presso un terzista"
+    },
+    "onHold": {
+      "title": "Bloccata",
+      "label": "Pelle bloccata, per articolo e colore",
+      "none": "Nessuna pelle bloccata",
+      "lotNotReleased": "Lotto non rilasciato",
+      "qualityHold": "Blocco qualità"
+    },
+    "yield": {
+      "title": "Resa, ultimi {days} giorni, per modello e lotto del fornitore",
+      "label": "Resa per modello e lotto del fornitore",
+      "empty": "Nessun taglio in questi giorni",
+      "emptyBody": "La resa compare quando sono state tagliate pelli negli ultimi {days} giorni.",
+      "hint": "Superficie dei pezzi tagliati rispetto alla superficie usata dai tagli. Mai per tagliatore: solo per modello e lotto del fornitore.",
+      "supplierLot": "lotto del fornitore {ref}",
+      "planned": "prevista {pct} %",
+      "held": "La resa richiede il diritto della sala taglio (production.cutting.view)."
+    }
+  },
+  "find": {
+    "open": "Trova pelli per un lavoro",
+    "title": "Trova pelli per un lavoro",
+    "subtitle": "Prima le pelli di un solo lotto di tonalità, con la superficie progressiva rispetto al fabbisogno.",
+    "close": "Chiudi",
+    "modeLabel": "Trova pelli",
+    "mode": {
+      "workOrder": "Per un ordine di lavoro",
+      "article": "Per articolo e superficie"
+    },
+    "workOrder": "Ordine di lavoro",
+    "reserveFor": "Prenota per l'ordine di lavoro",
+    "searchWorkOrders": "Cerca ordini di lavoro per numero o modello",
+    "workOrdersFailed": "Non è stato possibile leggere gli ordini di lavoro.",
+    "searching": "Ricerca in corso…",
+    "noWorkOrders": "Nessun ordine di lavoro aperto corrisponde",
+    "pickWorkOrder": "Scegli un ordine di lavoro",
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "noRightWorkOrders": "Non puoi vedere gli ordini di lavoro (workorders.view): cerca per articolo e superficie.",
+    "pickSite": "Scegli uno stabilimento",
+    "article": "Articolo e colore",
+    "articlesFailed": "Non è stato possibile leggere gli articoli.",
+    "noArticles": "Nessuna pelle a magazzino in questo stabilimento",
+    "pickArticle": "Scegli un articolo",
+    "area": "Superficie necessaria",
+    "areaHintWorkOrder": "Lasciala vuota per usare quanto serve ancora all'ordine di lavoro.",
+    "areaHint": "Lasciala vuota per elencare ogni pelle senza fabbisogno.",
+    "unit": "Unità",
+    "shadeGroup": "Gruppo di tonalità",
+    "shadeGroupHint": "I gruppi dei lotti trovati compaiono dopo la prima ricerca.",
+    "anyShade": "Qualsiasi tonalità",
+    "minGrade": "Scelta minima",
+    "gradesHeld": "Le scelte richiedono il diritto sui materiali (product.materials.view).",
+    "anyGrade": "Qualsiasi scelta",
+    "find": "Trova",
+    "intro": "Scegli un ordine di lavoro, oppure un articolo e la superficie necessaria, poi premi Trova.",
+    "failed": "Non è stato possibile trovare le pelli",
+    "forWorkOrder": "{number}: {article}",
+    "forArticle": "{article}",
+    "need": "Servono {area}",
+    "noNeed": "Nessuna superficie richiesta: sono elencate tutte le pelli",
+    "cutFrom": "Già tagliato da {lots}",
+    "rule": {
+      "ORDER": "Un solo lotto di tonalità per ordine di lavoro",
+      "GARMENT": "Un solo lotto di tonalità per capo",
+      "OFF": "Le tonalità si possono mescolare"
+    },
+    "listLabel": "Pelli trovate",
+    "count_one": "{count} pelle trovata",
+    "count_other": "{count} pelli trovate",
+    "none": "Nessuna pelle corrisponde",
+    "noneBody": "Nessuna pelle libera di questo articolo nello stabilimento: prova un'altra scelta o un altro gruppo di tonalità.",
+    "chosen": "Scelte: {hides} · {area}",
+    "covers": "Scelte: {hides} · {area} di {need} ✓",
+    "short": "Scelte: {hides} · {area} di {need}: mancano {short}",
+    "mixWarning": "Queste pelli mescolano lotti di tonalità: il motivo qui sotto resta con la prenotazione.",
+    "mixHeld": "Queste pelli mescolano lotti di tonalità: solo chi ha la deroga sulla tonalità può prenotarle. Scegli pelli di un solo lotto.",
+    "overrideReason": "Perché mescolare lotti di tonalità",
+    "overrideHint": "Resta con la prenotazione: chi ha acconsentito e perché.",
+    "note": "Nota",
+    "reserve_one": "Prenota {count} pelle",
+    "reserve_other": "Prenota {count} pelli",
+    "done_one": "{count} pelle prenotata per {workOrder}.",
+    "done_other": "{count} pelli prenotate per {workOrder}.",
+    "remnant": "Ritaglio {code}",
+    "shade": "Tonalità {shade}",
+    "unsorted": "Non smistata",
+    "tag": {
+      "proposed": "Lotto proposto",
+      "mixes": "Altro lotto di tonalità",
+      "outOfShade": "Fuori tonalità",
+      "ordersOwn": "Lotto dell'ordine"
+    },
+    "col": {
+      "hide": "Pelle",
+      "lot": "Lotto e tonalità",
+      "grade": "Scelta",
+      "left": "Superficie residua",
+      "running": "Superficie progressiva",
+      "place": "Dove"
+    },
+    "held": {
+      "pickWorkOrder": "Scegli prima un ordine di lavoro.",
+      "pickArticle": "Scegli prima un articolo.",
+      "pickSite": "Scegli prima uno stabilimento.",
+      "area": "Scrivi la superficie come numero, per esempio 44 o 44,5.",
+      "noReserve": "Non puoi prenotare la merce (inventory.reserve).",
+      "busy": "Prenotazione in corso…",
+      "findFirst": "Prima trova le pelli.",
+      "none": "Scegli almeno una pelle.",
+      "workOrder": "Scegli l'ordine di lavoro per cui prenotare.",
+      "shadeMix": "Queste pelli mescolano lotti di tonalità: scegli pelli di un solo lotto.",
+      "overrideReason": "Scrivi perché i lotti di tonalità si possono mescolare (almeno 3 caratteri)."
+    },
+    "refusal": {
+      "SHADE_LOT_one": "{hides} è di un altro lotto di tonalità rispetto all'ordine di lavoro: prenota pelli di un solo lotto.",
+      "SHADE_LOT_other": "{hides} sono di un altro lotto di tonalità rispetto all'ordine di lavoro: prenota pelli di un solo lotto.",
+      "OUT_OF_SHADE_one": "{hides} è fuori tonalità: non va in nessun ordine che chiede una sola tonalità.",
+      "OUT_OF_SHADE_other": "{hides} sono fuori tonalità: non vanno in nessun ordine che chiede una sola tonalità.",
+      "override": "Solo chi ha la deroga sulla tonalità può mescolare lotti di tonalità."
+    },
+    "leather": "Pelle (l’ordine di lavoro ne taglia più di una)",
+    "problem": {
+      "whichLeather": "Questo ordine di lavoro taglia più di una pelle a pezzi: scegli la pelle, poi premi Trova."
+    }
+  },
+  "move": {
+    "title_one": "Sposta {count} pelle",
+    "title_other": "Sposta {count} pelli",
+    "bulk_one": "Sposta {count}…",
+    "bulk_other": "Sposta {count}…",
+    "go_one": "Sposta {count} pelle",
+    "go_other": "Sposta {count} pelli",
+    "intro": "Ogni pelle si sposta intera da dove si trova al posto che scegli, con un trasferimento suo. Le pelli al tavolo di taglio si muovono con il taglio.",
+    "hides": "Pelli",
+    "from": "da {place}",
+    "ok": "Si sposta intera",
+    "there": "Già lì",
+    "moved": "Spostata",
+    "refused": "Rifiutata: {why}",
+    "leftOut": "Esclusa: {why}",
+    "to": "Sposta in",
+    "placesFailed": "Non è stato possibile leggere i posti.",
+    "pickPlace": "Scegli un posto",
+    "note": "Nota",
+    "noteHint": "Facoltativa: perché si spostano.",
+    "done_one": "{count} pelle spostata in {place}.",
+    "done_other": "{count} pelli spostate in {place}.",
+    "doneSome": "{moved} spostate, {refused} rifiutate: ogni pelle dice perché.",
+    "why": {
+      "gone": "non ne resta niente",
+      "notHere": "niente di lei è in un posto dello stabilimento (al tavolo di taglio o usata)",
+      "noPlace": "nessun posto la contiene"
+    },
+    "held": {
+      "noRight": "Non puoi spostare la merce (inventory.transfer).",
+      "pick": "Scegli almeno una pelle.",
+      "oneSite": "Scegli pelli di un solo stabilimento.",
+      "busy": "Spostamento in corso…",
+      "done": "Inviato.",
+      "place": "Scegli il posto in cui spostarle.",
+      "none": "Nessuna pelle da spostare: ognuna è esclusa o è già lì."
+    }
+  },
+  "rem": {
+    "tableLabel": "Ritagli",
+    "count_one": "{count} pezzo",
+    "count_other": "{count} pezzi",
+    "countMore_one": "{count} pezzo mostrato, altri da leggere",
+    "countMore_other": "{count} pezzi mostrati, altri da leggere",
+    "failed": "Non è stato possibile leggere i ritagli",
+    "empty": "Nessun ritaglio a magazzino",
+    "emptyBody": "Una parte di pelle che torna da un taglio riceve un'etichetta RM e compare qui.",
+    "minimum": "pezzo più piccolo tenuto: {area}",
+    "minimumFixed": "pezzo più piccolo tenuto: {area} (uguale in ogni stabilimento finché non diventa un'impostazione)",
+    "outOfShade": "Fuori tonalità",
+    "byFloor": "in reparto",
+    "bySystem": "dal sistema",
+    "state": {
+      "IN_STOCK": "A magazzino",
+      "ISSUED": "Prelevato",
+      "USED": "Usato",
+      "SCRAPPED": "Scartato",
+      "VOID": "Annullato"
+    },
+    "reason": {
+      "REMNANT": "Tornato da un taglio",
+      "OTHER": "Tornato da un ordine di lavoro"
+    },
+    "action": {
+      "TAGGED": "Etichettato",
+      "STATE": "Stato cambiato",
+      "MOVED": "Spostato"
+    },
+    "col": {
+      "tag": "Etichetta del ritaglio",
+      "hide": "Pelle e lotto",
+      "article": "Articolo",
+      "shade": "Tonalità",
+      "grade": "Scelta",
+      "area": "Superficie",
+      "place": "Dove",
+      "from": "Tornato da"
+    },
+    "record": {
+      "title": "Ritaglio {code}",
+      "loading": "Lettura del pezzo…",
+      "failed": "Non è stato possibile leggere il pezzo",
+      "history": "Storia",
+      "noHistory": "Nulla di registrato su questo pezzo da quando è stato etichettato."
+    }
+  }
+}

@@ -39,14 +39,16 @@
     "toApprove": "Riduzioni da approvare",
     "recuts": "Sostituzioni da tagliare",
     "downgraded": "Declassati a seconda scelta",
-    "downgradedLater": "Arriva più avanti (W2b)"
+    "downgradedHint": "nel periodo · {today} oggi",
+    "downgradedUnread": "Non letto: riprova"
   },
   "view": {
     "all": "Tutte le righe",
     "today": "Scarti di oggi",
     "rework": "Rilavorazioni aperte",
     "approve": "In attesa di approvazione",
-    "recuts": "Ritagli da fare"
+    "recuts": "Ritagli da fare",
+    "second": "Seconda scelta"
   },
   "period": {
     "7": "Ultimi 7 giorni",
@@ -56,7 +58,8 @@
   },
   "kind": {
     "SCRAP": "Scarto",
-    "REWORK": "Rilavorazione"
+    "REWORK": "Rilavorazione",
+    "SECOND": "Seconda scelta"
   },
   "rework": {
     "OPEN": "Aperta",
@@ -178,7 +181,9 @@
       "SCRAP_one": "Scarto di {count} pezzo · {number}",
       "SCRAP_other": "Scarto di {count} pezzi · {number}",
       "REWORK_one": "Rilavorazione di {count} pezzo · {number}",
-      "REWORK_other": "Rilavorazione di {count} pezzi · {number}"
+      "REWORK_other": "Rilavorazione di {count} pezzi · {number}",
+      "SECOND_one": "Seconda scelta {count} capo · {number}",
+      "SECOND_other": "Seconda scelta {count} capi · {number}"
     },
     "reason": "Motivo",
     "operation": "Fase",
@@ -259,5 +264,104 @@
     "notAPart": "Quella parte non è una parte di questo capo.",
     "selfDecision": "L’hai chiesta tu: decide un’altra persona.",
     "wrongState": "Nel frattempo è stata decisa. Le righe sono state rilette."
+  },
+  "second": {
+    "open": "Seconda scelta…",
+    "title": "Passa a seconda scelta",
+    "go": "Passa a seconda scelta",
+    "espr": "I capi entrano in magazzino come seconda scelta invece di essere scartati: l’abbigliamento invenduto non si distrugge (ESPR UE).",
+    "readFailed": "Non è stato possibile leggere cosa può ancora passare da questa riga.",
+    "body": "{left} dei {scrapped} capi scartati possono passare a seconda scelta ({downgraded} già passati) · {cell}.",
+    "quantity": "Capi",
+    "quantityHint": "Da 1 a {max}.",
+    "reason": "Perché seconda scelta",
+    "reasonCode": {
+      "LEATHER_FLAW": "Difetto della pelle",
+      "SHADE": "Tonalità diversa",
+      "STAIN": "Macchia che non va via",
+      "STITCHING": "Cucitura visibile",
+      "ALIGNMENT": "Allineamento",
+      "MEASUREMENT": "Misure fuori tolleranza",
+      "OTHER": "Altro (scrivi perché)"
+    },
+    "note": "Nota",
+    "noteRequired": "Perché (obbligatorio per Altro)",
+    "target": "Tenuti come",
+    "targetSku": "Lo stesso SKU ({sku})",
+    "targetSkuHint": "In un posto di seconda scelta fuori dai prodotti finiti, così non parte mai come prima scelta.",
+    "targetItem": "Un articolo di seconda scelta",
+    "targetItemHint": "Un articolo finito tenuto per la seconda scelta, senza uno SKU suo.",
+    "item": "Articolo di seconda scelta",
+    "pick": "Scegli…",
+    "place": "Posto",
+    "placeHint": "Dove vanno i capi.",
+    "placeHintSku": "Un posto fuori dai prodotti finiti (per lo SKU i posti dei prodotti finiti non si scelgono).",
+    "finishedGoods": "prodotti finiti",
+    "ppe": "Il difetto non tocca la protezione",
+    "ppeHint": "È abbigliamento di protezione: seconda scelta solo se cuciture, protezioni e zone anti-abrasione non sono toccate. Un difetto di sicurezza si scarta.",
+    "section": "Seconda scelta",
+    "keptAs": "Tenuti come",
+    "keptSku": "SKU {sku}",
+    "keptItem": "Articolo {item}",
+    "noMove": "Nessun movimento di magazzino (riga più vecchia)",
+    "withdrawnAt": "Ritirato",
+    "withdrawn": "Ritirato",
+    "withdraw": "Ritira…",
+    "withdrawReason": "Perché viene ritirato",
+    "withdrawHint": "I capi escono di nuovo dal posto; la riga resta, segnata come ritirata.",
+    "withdrawGo": "Ritira",
+    "held": {
+      "notScrap": "Solo i capi scartati passano a seconda scelta.",
+      "part": "Un pezzo tagliato ({part}) non è un capo: sostituiscilo con un ritaglio.",
+      "covered": "Tutti i capi di questa riga sono già passati a seconda scelta.",
+      "quantity": "Capi da 1 a {max}.",
+      "reason": "Scegli perché i capi passano a seconda scelta.",
+      "item": "Scegli l’articolo di seconda scelta.",
+      "noItems": "Nessun articolo finito è tenuto per la seconda scelta: aggiungilo in Prodotto › Materiali, o tieni lo SKU.",
+      "place": "Scegli il posto dove vanno i capi.",
+      "general": "Questa riga ora non può passare a seconda scelta.",
+      "isSecond": "Questi capi sono passati a seconda scelta: niente da sostituire qui."
+    },
+    "refusal": {
+      "NOT_SCRAP": "Quella riga non ha scartato capi: solo i capi scartati passano a seconda scelta.",
+      "NOT_A_GARMENT": "Un pezzo tagliato non è un capo: solo i capi interi passano a seconda scelta. Sostituisci il pezzo con un ritaglio.",
+      "NOT_A_REASON": "Scegli un motivo dell’elenco.",
+      "REASON_WORDS": "Scrivi perché i capi passano a seconda scelta.",
+      "SCRAP_WAITS_APPROVAL": "Questo scarto supera il limite e aspetta l’approvazione del capo linea: prima non passa niente a seconda scelta.",
+      "SCRAP_REFUSED": "Il capo linea ha rifiutato questo conteggio di scarto: non c’è niente di scartato da passare a seconda scelta.",
+      "PPE_CONFIRM": "È abbigliamento di protezione: conferma che il difetto non tocca la protezione, oppure scartalo.",
+      "NO_SKU": "Questa cella non ha ancora uno SKU: tieni i capi come articolo di seconda scelta.",
+      "SKU_IN_FINISHED_GOODS": "Tenuti come SKU, i capi vanno in un posto fuori dai prodotti finiti, così non partono mai come prima scelta.",
+      "NOT_A_SECOND_QUALITY_ITEM": "Quell’articolo non è tenuto per la seconda scelta: scegli un articolo finito senza SKU suo, contato a pezzi.",
+      "ALREADY_WITHDRAWN": "Questo passaggio a seconda scelta è già ritirato.",
+      "GARMENTS_MOVED": "I capi non sono più tutti nel loro posto: riportali prima, o correggi lì il magazzino."
+    },
+    "notice": {
+      "done_one": "{count} capo di {number} è passato a seconda scelta.",
+      "done_other": "{count} capi di {number} sono passati a seconda scelta.",
+      "withdrawn_one": "Il passaggio a seconda scelta di {count} capo di {number} è stato ritirato.",
+      "withdrawn_other": "Il passaggio a seconda scelta di {count} capi di {number} è stato ritirato."
+    }
+  },
+  "repair": {
+    "section": "Postazione di riparazione",
+    "failed": "Non è stato possibile leggere la riparazione.",
+    "state": "Dove si trova",
+    "stateOf": {
+      "WAITING": "In attesa della postazione di riparazione",
+      "IN_REPAIR": "In riparazione",
+      "OUT": "Riparato e uscito",
+      "NONE": "Non passato dalla postazione di riparazione"
+    },
+    "station": "Postazione",
+    "in": "Entrato",
+    "out": "Uscito",
+    "minutes": "Minuti di riparazione",
+    "minutesValue_one": "{count} min",
+    "minutesValue_other": "{count} min",
+    "minutesHint": "Per rilavorazione: separati dal cottimo, mai per persona.",
+    "result": "Uscito",
+    "resultValue": "{good} buoni, {scrap} scartati",
+    "hidden": "Una persona l’ha scansionato: chi è si vede solo dove vale la base legale dello stabilimento per i dati di rendimento."
   }
 }

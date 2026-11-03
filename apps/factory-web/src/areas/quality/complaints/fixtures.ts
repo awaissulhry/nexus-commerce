@@ -258,5 +258,11 @@ export const designScreen = defineDesignScreen<DesignModel>({
       label: 'A receipt after a safety triage',
       model: { role: 'owner', list: listModel('owner', { notice: { tone: 'warning', words: { key: 'done.safetyRaised', params: { number: 'CMP-DEMO-0012', reference: 'REG-DEMO-0007' } } } }) },
     },
+    {
+      id: 'w2b-capa-column',
+      label: 'W2b — the CAPA column filled: CMP-DEMO-0012 → 8D-DEMO-0002, CMP-DEMO-0010 → CAPA-DEMO-0003',
+      model: { role: 'owner', list: listModel('owner') },
+      note: 'B-W2b-113: the CAPA a complaint is escalated to (the CAPA module\'s reads), a link to the CAPA; "—" when none.',
+    },
   ],
 })

@@ -19,7 +19,8 @@ const STEPS = ['OPEN', 'CONTAINED', 'DECIDED', 'CLOSED'] as const
  * an explicit save (the DS EditModeBar, ⌘S) while the NCR is open or contained and the person follows NCRs up; read-only
  * text after it is decided (said in a banner). The garment zone is the design's GarmentZoneMap (new), composed as a zone
  * picker in words until the DS has the map. Photos are the NCR's own files (kind PHOTO). The aside: the Stepper, what the
- * next stage still needs, the owner, the containment countdown, the PPE register entry.
+ * next stage still needs, the owner, the containment countdown, the PPE register entry. B-W2b-113: the cause (a code of
+ * the cause list, ncr-what "cause (W2b)") and the CAPA it is escalated to.
  */
 export function ProblemTab({ model, record, words, actions }: { model: NcrRecordModel; record: NcrRecord; words: RecordWords; actions?: NcrRecordActions }) {
   const { t, r, say, person, when, locale } = words
@@ -35,6 +36,9 @@ export function ProblemTab({ model, record, words, actions }: { model: NcrRecord
   const set = (patch: Partial<ProblemDraft>) => actions?.onDraft?.(patch)
   const file = useRef<HTMLInputElement>(null)
   const defects = model.choices.defects.items
+  // B-W2b-113 (ncr-what "cause (W2b)"): the cause code of the list (quality.causes).
+  const causes = model.choices.causes.items
+  const causeLabel = ncr.cause ? `${ncr.cause.code} · ${locale.startsWith('it') ? ncr.cause.labelIt : ncr.cause.labelEn}` : ''
   const defectLabel = ncr.defect ? `${ncr.defect.code} · ${locale.startsWith('it') ? ncr.defect.labelIt : ncr.defect.labelEn}` : t('new.defectNone')
   const people = model.people ?? []
   const ownerOptions = ncr.ownerId && !people.some((entry) => entry.id === ncr.ownerId) ? [{ id: ncr.ownerId, name: person(ncr.ownerId), me: false }, ...people] : people
@@ -106,6 +110,17 @@ export function ProblemTab({ model, record, words, actions }: { model: NcrRecord
                     ))}
                   </Select>
                 </Field>
+                <Field label={r('problem.cause')} hint={model.choices.causes.problem ? r('problem.causesFailed') : r('problem.causeHint')}>
+                  <Select value={draft.causeCodeId} onFocus={() => actions?.onNeed?.('causes')} onChange={(event) => set({ causeCodeId: event.target.value })}>
+                    <option value="">{r('problem.causeNone')}</option>
+                    {ncr.cause && !causes?.some((entry) => entry.id === ncr.cause?.id) && <option value={ncr.cause.id}>{causeLabel}</option>}
+                    {(causes ?? []).map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {`${entry.code} · ${locale.startsWith('it') ? entry.labelIt : entry.labelEn}`}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
                 <Field label={t('new.zone')} hint={t('new.zoneHint')}>
                   <Select value={draft.zone} onChange={(event) => set({ zone: event.target.value })}>
                     <option value="">{t('new.zoneNone')}</option>
@@ -153,6 +168,7 @@ export function ProblemTab({ model, record, words, actions }: { model: NcrRecord
                   { label: t('col.quantity'), value: <QuantityText ncr={ncr} /> },
                   { label: t('new.severity'), value: <SeverityTag severity={ncr.severity} /> },
                   { label: t('new.defect'), value: defectLabel },
+                  { label: r('problem.cause'), value: ncr.cause ? causeLabel : r('problem.causeNone') },
                   { label: t('new.zone'), value: zoneWords(t, ncr.zone) ?? t('new.zoneNone') },
                   { label: t('new.foundAt'), value: t(`foundAt.${ncr.foundAt}`) },
                   { label: r('problem.foundOn'), value: when(ncr.foundOn) },
@@ -262,6 +278,8 @@ export function ProblemTab({ model, record, words, actions }: { model: NcrRecord
                 { label: t('new.owner'), value: person(ncr.ownerId) },
                 { label: r('problem.containmentDue'), value: <ContainmentDue ncr={ncr} now={model.now} /> },
                 { label: r('side.register'), value: record.register ? <Link className="fw-q-link" href={recordHref(model.prefix, { type: 'PpeRegisterEntry', id: record.register.id, label: record.register.reference })}>{record.register.reference}</Link> : ncr.style?.ppe ? r('side.registerNone') : r('side.registerNotPpe') },
+                // B-W2b-113: the CAPA it is escalated to (the CAPA module's reads).
+                { label: r('side.capa'), value: record.capaRecord ? <Link className="fw-q-link" href={recordHref(model.prefix, { type: 'Capa', id: record.capaRecord.id, label: record.capaRecord.number })}>{`${record.capaRecord.number} · ${record.capaRecord.title}`}</Link> : record.capaElsewhere ? r('side.capaElsewhere') : r('side.capaNone') },
               ]}
             />
             {ncr.stage === 'CLOSED' && <p className="fw-q-hint">{r('side.closed', { when: when(ncr.closedAt), who: person(ncr.closedById), note: ncr.closeNote ?? '—' })}</p>}

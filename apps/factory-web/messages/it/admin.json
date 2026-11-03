@@ -1178,6 +1178,18 @@
       "technician": {
         "name": "Manutentore",
         "description": "Esegue gli interventi di manutenzione con un dispositivo registrato e dichiara di nuovo sicura una macchina segnalata non sicura con il PIN; non vede importi."
+      },
+      "hr": {
+        "name": "Risorse umane",
+        "description": "Il registro del personale e le Persone: dipendenti, squadre, turni, presenze e chiusura del mese, competenze, compensi e il file paghe; scadenzario e organigramma della sicurezza; vede la paga dei lavoratori, non prezzi né costi."
+      },
+      "safety_officer": {
+        "name": "Responsabile sicurezza",
+        "description": "Il responsabile o addetto del servizio di prevenzione (RSPP o ASPP): organigramma della sicurezza e comunicazione RLS, scadenzario e sue scadenze, macchine e loro verifiche (in lettura); non vede importi."
+      },
+      "company_doctor": {
+        "name": "Medico competente",
+        "description": "Il medico competente: scadenzario e organigramma della sicurezza; i giudizi di idoneità arrivano con le pagine della sorveglianza sanitaria, mai una diagnosi; non vede importi."
       }
     },
     "bulk": {
@@ -1587,7 +1599,8 @@
     "security": "Sicurezza e stato del sistema",
     "receivables": "Crediti e solleciti",
     "payables": "Fatture fornitori",
-    "people": "Persone"
+    "people": "Persone",
+    "safety": "Sicurezza sul lavoro"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1766,6 +1779,8 @@
     "calendars_manage": "Cambiare i calendari di azienda, stabilimento e linea",
     "calendars_suppliers_manage": "Cambiare i calendari di fornitori e terzisti",
     "production_rework": "Mandare capi in rilavorazione e chiuderla",
+    "production_repair": "Vedere le riparazioni e scansionare i fasci in entrata e in uscita alla postazione di riparazione",
+    "production_downgrade": "Passare a seconda scelta i capi scartati e ritirare un passaggio",
     "production_scrap_view": "Vedere scarti e rilavorazioni",
     "production_scrap": "Registrare scarti e chiedere sostituzioni",
     "production_scrap_approve": "Approvare riduzioni d'ordine",
@@ -1861,6 +1876,8 @@
     "quality_amendments_sign": "Firmare o rifiutare la correzione chiesta da un'altra persona (mai la propria); la firma chiede un codice nuovo",
     "quality_documents_make": "Conservare il rapporto di un'ispezione finale firmata e il certificato di conformità di una spedizione in PDF (nessun prezzo, costo o paga)",
     "quality_documents_share": "Mettere un rapporto o un certificato conservato sul link dei documenti di una spedizione e inviare quel link",
+    "quality_rules_view": "Vedere le regole qualità: chi può firmare cosa, le regole di avviso ed escalation, come si contano i risultati",
+    "quality_alerts_manage": "Tenere le regole di avviso ed escalation della qualità e mandarsi una prova di una regola",
     "quality_reports_view": "Vedere i report qualità di un sito: resa al primo passaggio, DHU, AQL finale, non conformità aperte, azioni correttive in tempo, blocchi vecchi, andamento e confronto per linea, operazione, fornitore e modello (solo dai record che si possono vedere; mai per persona)",
     "numbering_override": "Digitare il numero di un documento migrato (mai una serie fiscale; doppioni rifiutati, motivo conservato)",
     "people_view": "Vedere dipendenti, squadre, prestiti ad altre linee e passi di uscita (mai paghe, presenze o salute)",
@@ -1923,6 +1940,15 @@
     "people_earnings_review": "Rivedere come responsabile il prospetto di una persona: pezzi e minuti, mai importi",
     "people_payroll_view": "Vedere l'esportazione paghe del mese in conteggi, mai i dati di una persona",
     "people_payroll_records": "Aprire i valori per matricola e i file di un'esportazione paghe",
-    "people_payroll_manage": "Gestire codici e tracciati paghe, fare le esportazioni e inviarle con link sicuro"
+    "people_payroll_manage": "Gestire codici e tracciati paghe, fare le esportazioni e inviarle con link sicuro",
+    "safety_view": "Vedere lo scadenzario sicurezza (ogni scadenza di legge, le visite mediche solo come numeri) e l'organigramma della sicurezza con nomine e comunicazioni RLS",
+    "safety_organisation_manage": "Nominare persone e contatti esterni ai ruoli della sicurezza, registrare la firma del nominato, chiudere un incarico, registrare la comunicazione RLS inviata all'INAIL",
+    "safety_calendar_manage": "Aggiungere, modificare, segnare come fatte e annullare le scadenze inserite nello scadenzario, con le loro evidenze",
+    "safety_risk_manage": "Gestire le valutazioni dei rischi (DVR): congelare le versioni del consulente, registrare le firme su carta, conservare il sigillo; le misure del programma di miglioramento",
+    "safety_risk_sign": "Firmare di persona una versione della valutazione dei rischi per il ruolo della sicurezza che si ricopre (con un codice nuovo)",
+    "safety_incidents_view": "Vedere infortuni, quasi incidenti e pericoli in forma anonima: cosa, quando, dove, gravità, azioni, foto e le scadenze INAIL (mai la persona o la lesione)",
+    "safety_incidents_report": "Segnalare un infortunio, un quasi incidente o un pericolo dall’ufficio, con le persone coinvolte",
+    "safety_incidents_manage": "Gestire le segnalazioni: correggerle, gravità, presa visione della sicurezza, azioni trasformate in intervento, misura o sessione di formazione, chiudere, riaprire, annullare, foto",
+    "safety_incidents_people": "Dati protetti: vedere e correggere le persone coinvolte e le loro lesioni, gestire le comunicazioni INAIL (certificato, invio con numero di protocollo, ricevuta); ogni consultazione è registrata"
   }
 }

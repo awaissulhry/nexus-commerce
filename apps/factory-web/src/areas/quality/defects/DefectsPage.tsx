@@ -67,6 +67,26 @@ import {
 } from './model'
 import { DefectsView } from './view/DefectsView'
 import { zoneWords } from './zones/zones'
+import {
+  addStarterCauses,
+  addStarterGrades,
+  createCause,
+  createGrade,
+  deleteCause,
+  editCause,
+  editGrade,
+  readCauses,
+  readCoverage,
+  readGrades,
+  readSeverity,
+  type Cause,
+  type Causes,
+  type Coverage,
+  type Grade,
+  type Grades,
+  type Severity,
+} from './api'
+import { fieldOfVocabularyEdit, newCauseBody, newCauseProblems, newGradeBody, newGradeProblems, NEW_CAUSE, NEW_GRADE, vocabularyChange, vocabularyProblemOf, type VocabularyField } from './vocabulary'
 
 const reading = <T,>(): ReadOf<T> => ({ value: null, problem: null })
 const ready = <T,>(value: T): ReadOf<T> => ({ value, problem: null })
@@ -110,6 +130,11 @@ export function DefectsPage() {
   const [thumbs, setThumbs] = useState<Readonly<Record<string, string>>>({})
   const asked = useRef<Set<string>>(new Set())
   const createKey = useRef<string | null>(null)
+  // B-W2b-118: the W2b tabs' reads, each when its tab is first shown (and again on a live change).
+  const [severity, setSeverity] = useState<ReadOf<Severity>>(reading())
+  const [causes, setCauses] = useState<ReadOf<Causes>>(reading())
+  const [grades, setGrades] = useState<ReadOf<Grades>>(reading())
+  const [coverage, setCoverage] = useState<Coverage | null>(null)
 
   const writeAddress = useCallback(
     (change: Partial<Address>) => {
@@ -145,6 +170,31 @@ export function DefectsPage() {
     void loadDispositions()
   }, [loadLibrary, loadDispositions])
 
+  const loadVocab = useCallback(async () => {
+    if (!canView) return
+    const tab = address.tab
+    try {
+      if (tab === 'severity') setSeverity(ready(await readSeverity(api)))
+      if (tab === 'causes') setCauses(ready(await readCauses(api)))
+      if (tab === 'grades') setGrades(ready(await readGrades(api)))
+      setAsOf(new Date().toISOString())
+    } catch (error) {
+      const problem = readProblemOf(error)
+      if (tab === 'severity') setSeverity(failed(problem))
+      if (tab === 'causes') setCauses(failed(problem))
+      if (tab === 'grades') setGrades(failed(problem))
+    }
+    if (tab === 'causes' || tab === 'grades') {
+      // The words missing per other floor language: a note above the list, never a refusal.
+      readCoverage(api)
+        .then((answer) => setCoverage(answer))
+        .catch(() => setCoverage(null))
+    }
+  }, [address.tab, api, canView])
+  useEffect(() => {
+    if (address.tab === 'severity' || address.tab === 'causes' || address.tab === 'grades') void loadVocab()
+  }, [address.tab, loadVocab])
+
   // The pictures' addresses (thumbnails and the drawer), each asked once.
   useEffect(() => {
     const ids = allCodes(library.value)
@@ -166,6 +216,7 @@ export function DefectsPage() {
     () => {
       void loadLibrary()
       void loadDispositions()
+      void loadVocab()
     },
   )
 
@@ -174,8 +225,10 @@ export function DefectsPage() {
     if (!address.isNew || dialog) return
     if (address.tab === 'defects' && library.value?.canManage) openNewDefect(null)
     if (address.tab === 'dispositions' && dispositions.value?.canManage) openNewDisposition()
+    if (address.tab === 'causes' && causes.value?.canManage) openNewCause()
+    if (address.tab === 'grades' && grades.value?.canManage) openNewGrade()
     // Only the address and the reads open it.
-  }, [address.isNew, address.tab, library.value, dispositions.value])
+  }, [address.isNew, address.tab, library.value, dispositions.value, causes.value, grades.value])
 
   // A tab change clears the selection (each list has its own).
   useEffect(() => setSelected([]), [address.tab])
@@ -420,6 +473,130 @@ export function DefectsPage() {
     }
   }, [api, loadDispositions])
 
+  // ---- B-W2b-118: the cause codes and the leather grades ----
+  const withVocab = (list: 'causes' | 'grades', row: Cause | Grade) => {
+    if (list === 'causes') setCauses((current) => (current.value ? ready({ ...current.value, causes: current.value.causes.map((entry) => (entry.id === row.id ? (row as Cause) : entry)) }) : current))
+    else setGrades((current) => (current.value ? ready({ ...current.value, grades: current.value.grades.map((entry) => (entry.id === row.id ? (row as Grade) : entry)) }) : current))
+  }
+  const saveVocab = useCallback(
+    async (list: 'causes' | 'grades', row: Cause | Grade, field: VocabularyField, value: unknown) => {
+      const change = vocabularyChange(row, field, value)
+      if (!change) return
+      if ('problem' in change) {
+        setMark(row.id, field, { state: 'refused', problem: change.problem })
+        return
+      }
+      const markField = fieldOfVocabularyEdit(change.edit)
+      setMark(row.id, markField, { state: 'saving' })
+      try {
+        const answer = list === 'causes' ? (await editCause(api, row.id, row.version, change.edit, newIdempotencyKey())).cause : (await editGrade(api, row.id, row.version, change.edit, newIdempotencyKey())).grade
+        withVocab(list, answer)
+        setMark(row.id, markField, { state: 'saved' })
+      } catch (error) {
+        const problem = vocabularyProblemOf(error)
+        setMark(row.id, markField, { state: problem.unknown ? 'unknown' : 'refused', problem: problem.key })
+        if (problem.key === 'problem.stale' || problem.key === 'problem.gone') void loadVocab()
+      }
+    },
+    [api, loadVocab],
+  )
+  const bulkVocab = useCallback(
+    async (list: 'causes' | 'grades', active: boolean) => {
+      const rows: (Cause | Grade)[] = list === 'causes' ? (causes.value?.causes ?? []) : (grades.value?.grades ?? [])
+      const picked = rows.filter((row) => selected.includes(row.id) && row.active !== active)
+      if (picked.length === 0) return
+      setBusy(true)
+      const refused: { code: string; key: string }[] = []
+      for (const row of picked) {
+        try {
+          const answer = list === 'causes' ? (await editCause(api, row.id, row.version, { active }, newIdempotencyKey())).cause : (await editGrade(api, row.id, row.version, { active }, newIdempotencyKey())).grade
+          withVocab(list, answer)
+        } catch (error) {
+          refused.push({ code: row.code, key: vocabularyProblemOf(error).key })
+        }
+      }
+      setBusy(false)
+      setNotice({ key: active ? 'done.restored' : 'done.retired', params: { count: picked.length - refused.length }, tone: refused.length > 0 ? 'warning' : 'success', ...(refused.length > 0 ? { refused } : {}) })
+    },
+    [api, causes.value, grades.value, selected],
+  )
+  function openNewCause() {
+    createKey.current = null
+    setDialog({ kind: 'new-cause', draft: NEW_CAUSE, problems: newCauseProblems(NEW_CAUSE, (causes.value?.causes ?? []).map((row) => row.code)), problem: null, shown: false })
+  }
+  function openNewGrade() {
+    createKey.current = null
+    setDialog({ kind: 'new-grade', draft: NEW_GRADE, problems: newGradeProblems(NEW_GRADE, (grades.value?.grades ?? []).map((row) => row.code)), problem: null, shown: false })
+  }
+  const createVocab = useCallback(async () => {
+    if (dialog?.kind !== 'new-cause' && dialog?.kind !== 'new-grade') return
+    const taken = dialog.kind === 'new-cause' ? (causes.value?.causes ?? []).map((row) => row.code) : (grades.value?.grades ?? []).map((row) => row.code)
+    const problems = dialog.kind === 'new-cause' ? newCauseProblems(dialog.draft, taken) : newGradeProblems(dialog.draft, taken)
+    if (Object.keys(problems).length > 0) {
+      setDialog({ ...dialog, problems, shown: true } as DefectsDialog)
+      return
+    }
+    setBusy(true)
+    createKey.current ??= newIdempotencyKey()
+    try {
+      if (dialog.kind === 'new-cause') {
+        const answer = await createCause(api, newCauseBody(dialog.draft), createKey.current)
+        setNotice({ key: 'done.addedCause', params: { code: answer.cause.code }, tone: 'success' })
+      } else {
+        const answer = await createGrade(api, newGradeBody(dialog.draft), createKey.current)
+        setNotice({ key: 'done.addedGrade', params: { code: answer.grade.code }, tone: 'success' })
+      }
+      createKey.current = null
+      setDialog(null)
+      await loadVocab()
+    } catch (error) {
+      if (!isApiError(error) || error.kind !== 'unavailable') createKey.current = null
+      const problem = vocabularyProblemOf(error)
+      setDialog({ ...dialog, problem: problem.key, shown: true } as DefectsDialog)
+    } finally {
+      setBusy(false)
+    }
+  }, [api, causes.value, dialog, grades.value, loadVocab])
+  const confirmDeleteCause = useCallback(async () => {
+    if (dialog?.kind !== 'delete-cause') return
+    const row = causes.value?.causes.find((entry) => entry.id === dialog.id)
+    if (!row) return
+    setBusy(true)
+    try {
+      await deleteCause(api, row.id, row.version, newIdempotencyKey())
+      setNotice({ key: 'done.deleted', params: { code: row.code }, tone: 'success' })
+      setSelected((current) => current.filter((id) => id !== row.id))
+      await loadVocab()
+    } catch (error) {
+      setNotice({ key: vocabularyProblemOf(error).key, tone: 'danger' })
+    } finally {
+      setBusy(false)
+      setDialog(null)
+    }
+  }, [api, causes.value, dialog, loadVocab])
+  const starterVocab = useCallback(
+    async (list: 'causes' | 'grades') => {
+      setBusy(true)
+      try {
+        const answer = list === 'causes' ? await addStarterCauses(api, newIdempotencyKey()) : await addStarterGrades(api, newIdempotencyKey())
+        setNotice({ key: 'done.starter', params: { count: answer.added.length }, tone: 'success' })
+        await loadVocab()
+      } catch (error) {
+        setNotice({ key: vocabularyProblemOf(error).key, tone: 'danger' })
+      } finally {
+        setBusy(false)
+      }
+    },
+    [api, loadVocab],
+  )
+  const exportVocab = (list: 'causes' | 'grades', ids: readonly string[] | null) => {
+    const rows: (Cause | Grade)[] = list === 'causes' ? (causes.value?.causes ?? []) : (grades.value?.grades ?? [])
+    const picked = rows.filter((row) => !ids || ids.includes(row.id))
+    const head = list === 'causes' ? ['csv.code', 'csv.it', 'csv.en', 'csv.used', 'csv.status'] : ['csv.code', 'csv.it', 'csv.en', 'csv.used', 'csv.status']
+    const lines = [csvLine([...head.map((key) => t(key)), ...(list === 'causes' ? [locale === 'it' ? 'Processo' : 'Process'] : [locale === 'it' ? 'Resa %' : 'Usable %'])]), ...picked.map((row) => csvLine([row.code, row.labelIt, row.labelEn, row.usedCount, t(row.active ? 'status.active' : 'status.retired'), 'process' in row ? (locale === 'it' ? row.processWords.it : row.processWords.en) : row.usableShare]))]
+    downloadText(`${list === 'causes' ? 'cause-codes' : 'leather-grades'}-${new Date().toISOString().slice(0, 10)}.csv`, lines.join('\n'))
+  }
+
   // ---- export ----
   const exportLibrary = (ids: readonly string[] | null) => {
     const rows = libraryRows(library.value, ids ? 'all' : address.view, ids ? '' : address.q).filter((row) => !ids || ids.includes(row.id))
@@ -450,6 +627,7 @@ export function DefectsPage() {
     dialog,
     picture,
     thumbs,
+    vocab: { severity, causes, grades, coverage },
   }
 
   return (
@@ -498,6 +676,19 @@ export function DefectsPage() {
         onExportLibrary: exportLibrary,
         onExportDispositions: exportDispositions,
         onDismissNotice: () => setNotice(null),
+        onVocabCell: (list, row, field, value) => void saveVocab(list, row, field, value),
+        onVocabBulkActive: (list, active) => void bulkVocab(list, active),
+        onExportVocab: exportVocab,
+        onStarterVocab: (list) => void starterVocab(list),
+        onNewCause: openNewCause,
+        onNewGrade: openNewGrade,
+        onCauseDraft: (draft) => dialog?.kind === 'new-cause' && setDialog({ ...dialog, draft, problems: newCauseProblems(draft, (causes.value?.causes ?? []).map((row) => row.code)), problem: null }),
+        onGradeDraft: (draft) => dialog?.kind === 'new-grade' && setDialog({ ...dialog, draft, problems: newGradeProblems(draft, (grades.value?.grades ?? []).map((row) => row.code)), problem: null }),
+        onCreateCause: () => void createVocab(),
+        onCreateGrade: () => void createVocab(),
+        onDeleteCause: (id) => setDialog({ kind: 'delete-cause', id }),
+        onConfirmDeleteCause: () => void confirmDeleteCause(),
+        onRetryVocab: () => void loadVocab(),
       }}
     />
   )

@@ -1,0 +1,328 @@
+{
+  "noAccess": {
+    "title": "You cannot open Quality rules",
+    "body": "It needs the permission quality.rules.view. An administrator gives it in Admin › Roles & permissions (the quality inspector, production manager and floor supervisor roles hold it)."
+  },
+  "head": {
+    "intro": "Who may sign what, who is told of what and how fast, and how results are counted. A looser rule asks for a fresh code; a stricter one never does.",
+    "reload": "Read the rules again",
+    "more": "More actions"
+  },
+  "scope": {
+    "label": "Whose rules",
+    "company": "This company ({company})",
+    "all": "Every company",
+    "companyHint": "This company follows the rules of every company wherever it keeps nothing of its own; what it keeps here is added to them.",
+    "allHint": "These rules apply to every company that keeps nothing of its own. Changing them needs a role over every company."
+  },
+  "common": {
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "close": "Close",
+    "loading": "Reading…"
+  },
+  "live": {
+    "changedTitle": "Someone changed these rules meanwhile",
+    "changedBody": "Read them again before you save: your unsaved changes are dropped.",
+    "reload": "Read again"
+  },
+  "stepUp": {
+    "title": "Confirm with your code",
+    "confirm": "Apply the looser rule",
+    "loosen": "A looser rule of who may sign what takes effect once you confirm it with a fresh code from your authenticator."
+  },
+  "card": {
+    "failed": "These rules could not be read",
+    "changedAt": "Changed {time}",
+    "neverChanged": "Never changed here: the rules above are the defaults and what is inherited.",
+    "apply": "Save",
+    "locked": "Always on",
+    "fixed": "Fixed"
+  },
+  "source": {
+    "COMPANY": "set for this company",
+    "TENANT": "as for every company",
+    "DEFAULT": "the default"
+  },
+  "held": {
+    "noRight": "Changing these rules needs quality.settings.manage for this company.",
+    "noRightAll": "Changing the rules of every company needs quality.settings.manage over every company.",
+    "offline": "No connection: changes wait until the page is back online.",
+    "busy": "Wait: the last change is still being saved.",
+    "reading": "Wait: the page is still reading.",
+    "noAlertRight": "Keeping alert rules needs quality.alerts.manage.",
+    "pickRows": "Tick the rules first.",
+    "allOn": "Every ticked rule is on already.",
+    "allOff": "Every ticked rule is off already.",
+    "starterAll": "The suggested rules are rules of every company: they need quality.alerts.manage over every company."
+  },
+  "duties": {
+    "title": "Separation of duties and four-eyes",
+    "description": "Who may sign what.",
+    "release": {
+      "question": "Who releases finished garments?",
+      "alone": "The inspector who signed may release alone",
+      "aloneHint": "When they made none of the garments. A second person only when a condition below asks it.",
+      "always": "Every release needs a second person",
+      "alwaysHint": "After the inspector's signature, someone else always releases.",
+      "default": "Nothing set: the inspector who made none of the garments releases alone (the default)."
+    },
+    "follow": "As for every company",
+    "followNow": "Now: {rule}",
+    "rule": {
+      "WHEN_REQUIRED": "The inspector releases alone",
+      "ALWAYS": "Every release needs a second person"
+    },
+    "conditions": {
+      "question": "A second person is also needed for",
+      "oneRecord": "An overridden result and a conditional release are one record (a pass over a computed fail): one tick covers both."
+    },
+    "condition": {
+      "OVERRIDE": "Overridden results and conditional releases",
+      "CUSTOMER": "The garments of the customers listed here"
+    },
+    "conditionFromAll": "The rules of every company ask this: change it under Every company.",
+    "coveredByAlways": "Every release needs a second person already.",
+    "customers": {
+      "label": "Customers listed here",
+      "none": "No customer listed.",
+      "remove": "Take {name} off the list",
+      "fromAll": "Listed for every company",
+      "noPicker": "Adding a customer needs parties.view.",
+      "add": "Add a customer",
+      "pick_one": "Pick a customer ({count})",
+      "pick_other": "Pick a customer ({count})"
+    },
+    "hold": {
+      "question": "Who releases a hold?",
+      "someoneElse": "Someone other than the person who placed it",
+      "someoneElseHint": "The person who placed a hold never releases it.",
+      "placer": "The person who placed it may release it too",
+      "placerHint": "For a factory with one quality person on a shift.",
+      "followPlacer": "Now: the person who placed it may release it",
+      "followSomeoneElse": "Now: someone else releases it",
+      "placerShort": "The placer may release",
+      "someoneElseShort": "Someone else releases"
+    },
+    "loosens_one": "This change loosens {count} rule: it asks for the reason and a fresh code",
+    "loosens_other": "This change loosens {count} rules: it asks for the reason and a fresh code",
+    "applyLoosen": "Save the looser rule…"
+  },
+  "loosen": {
+    "title": "Confirm a looser rule",
+    "apply": "Apply",
+    "reason": "Why",
+    "reasonHint": "Kept with the change in the audit trail.",
+    "codeHint": "Apply asks for a fresh code from your authenticator.",
+    "reasonHeld": "Say why first, in at least 3 characters.",
+    "reasonLong": "At most 1000 characters.",
+    "code": {
+      "RELEASE_ALONE": "From now on an inspector who made none of the garments releases alone.",
+      "OVERRIDE_ALONE": "From now on one person can release overridden results and conditional releases.",
+      "CUSTOMER_ALONE": "From now on the listed customers' garments no longer need a second person.",
+      "CUSTOMERS_REMOVED": "From now on the garments of {count} customer(s) taken off the list no longer need a second person.",
+      "PLACER_RELEASES": "From now on the person who placed a hold may release it too."
+    }
+  },
+  "results": {
+    "title": "Result rules",
+    "description": "How results are computed and counted.",
+    "stop": {
+      "question": "When a sample already rejects the lot",
+      "finish": "Finish the whole sample",
+      "finishHint": "Every unit of the sample is inspected, also after a class rejects the lot.",
+      "stop": "Stop at the reject number",
+      "stopHint": "Once a class reaches its reject number, the inspection may be signed failed.",
+      "followStop": "Now: stop at the reject number",
+      "followFinish": "Now: finish the whole sample",
+      "planWins": "An inspection plan version that says otherwise wins."
+    },
+    "undo": {
+      "label": "Undo window after a bench scan",
+      "hint": "From {min} to {max} seconds; 0: a bench scan is never undone.",
+      "unit": "s",
+      "follow": "As for every company",
+      "default": "The default (10 seconds)"
+    },
+    "undoRange": "The undo window is a whole number of seconds from 0 to 300."
+  },
+  "signers": {
+    "title": "Who signs, always",
+    "description": "The rules that are not settings, with their why."
+  },
+  "monitoring": {
+    "title": "Who floor records name (the maker check)",
+    "none": "No site to show.",
+    "WORKER": "Scans record the worker: the maker check reads the scans",
+    "STATION": "Station only: the maker check is a signed statement",
+    "where": "Set per site in",
+    "link": "Production › Floor rules & codes"
+  },
+  "separations": {
+    "title": "Separations every role keeps",
+    "who": {
+      "INSPECTOR": "Inspector.",
+      "OPERATOR": "Operator.",
+      "MAINTENANCE": "Maintenance.",
+      "PEOPLE": "People office."
+    },
+    "broken": "A custom role does not keep it: {roles}. Change the role in Admin › Roles & permissions.",
+    "how": "The system roles keep every separation (a test holds them to it); one record's own checks refuse a person who made the goods, wrote the plan or placed the hold."
+  },
+  "alerts": {
+    "title": "Alerts and escalation",
+    "description": "Who gets what and how fast.",
+    "table": "Alert and escalation rules",
+    "count_one": "{count} rule",
+    "count_other": "{count} rules",
+    "add": "Add rule",
+    "failed": "The alert rules could not be read",
+    "capaNote": "Corrective actions: the escalation is a task in the people's own tasks.",
+    "everyCompany": "Every company",
+    "shadowed": "Not for this company: it keeps its own rules of this event.",
+    "neverFired": "Never fired",
+    "fired7d_one": "{count} time in 7 days",
+    "fired7d_other": "{count} times in 7 days",
+    "on": "On",
+    "off": "Off",
+    "switchOffOf": "Switch off the rule {rule}",
+    "switchOnOf": "Switch on the rule {rule}",
+    "howTold": "A rule rings the bell of the people it names who may see the record; e-mail reaches them only through their daily digest, when they keep it on. Nothing reaches a customer or a supplier.",
+    "empty": {
+      "title": "No alert rule yet",
+      "body_one": "Start from the suggested rule, or add your own.",
+      "body_other": "Start from the {count} suggested rules, or add your own."
+    }
+  },
+  "event": {
+    "HOLD_PLACED": "Hold placed",
+    "CRITICAL_NCR": "Critical NCR",
+    "SAFETY_COMPLAINT": "Safety complaint",
+    "INSPECTION_WAITING": "Inspection waiting",
+    "CERTIFICATE_EXPIRING": "Certificate expiring",
+    "RELEASE_WAITING_SECOND_PERSON": "Release waiting for the second person",
+    "CAPA_ACTION_OVERDUE": "Corrective action overdue"
+  },
+  "row": {
+    "view": "Open",
+    "edit": "Edit",
+    "test": "Test: send to me",
+    "testHint": "Rings your bell once with this rule's words.",
+    "remove": "Remove",
+    "menu": "Actions of the rule {rule}"
+  },
+  "col": {
+    "event": "When",
+    "sentence": "The rule",
+    "where": "For",
+    "fired": "Last fired",
+    "enabled": "On",
+    "actions": "Actions"
+  },
+  "bulk": {
+    "on": "Switch on {count}",
+    "off": "Switch off {count}",
+    "remove": "Remove {count}"
+  },
+  "starter": {
+    "title_one": "{count} suggested rule is missing",
+    "title_other": "{count} suggested rules are missing",
+    "add_one": "Add the suggested rule",
+    "add_other": "Add the {count} suggested rules"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "save": "Save the card you changed",
+    "add": "Add rule",
+    "dialog": "Save, in a dialog",
+    "close": "Close a dialog"
+  },
+  "ruleDialog": {
+    "titleNew": "Add an alert rule",
+    "titleEdit": "Alert rule",
+    "save": "Save rule",
+    "add": "Add rule",
+    "event": "When",
+    "where": "For",
+    "fixed": "Fixed once the rule is added.",
+    "who": "Tell",
+    "owner": "{owner}",
+    "role": "Everyone with a role",
+    "both": "The owner and everyone with a role",
+    "nobodyNamed": "A certificate names nobody: the rule tells a role.",
+    "roleLabel": "Role",
+    "pickRole": "Pick a role",
+    "days": "Days before the last valid day",
+    "daysHint": "Up to 6 numbers from 1 to 730, e.g. 180, 90, 30. Once each, only the latest one reached.",
+    "wait": "Waiting longer than",
+    "waitEvent": "After",
+    "waitCapa": "Overdue by more than",
+    "waitHint": "Told once, when the record has waited this long.",
+    "waitEventHint": "0: at once. More: once, if it is still so after this long.",
+    "waitNumber": "How long",
+    "waitUnit": "Unit",
+    "bell": "The bell",
+    "bellAlways": "The bell is always on.",
+    "email": "E-mail too",
+    "enabled": "Rule on",
+    "emailHow": "E-mail reaches a person through their daily digest of the bell, when they keep it on.",
+    "capaHow": "A corrective action escalates as a task to these people (the corrective action keeps its reminders).",
+    "sentence": "The rule says",
+    "problem": {
+      "roleId": "Pick the role it tells.",
+      "audience": "A certificate names nobody: tell a role.",
+      "wait": "A whole number, at most 30 days.",
+      "days": "Give 1 to 6 different numbers of days from 1 to 730.",
+      "channels": "The bell is always on.",
+      "event": "Pick what the rule watches.",
+      "companyId": "Pick a company you keep rules for."
+    }
+  },
+  "unit": {
+    "minutes": "minutes",
+    "hours": "hours",
+    "days": "days"
+  },
+  "remove": {
+    "title_one": "Remove {count} rule?",
+    "title_other": "Remove {count} rules?",
+    "confirm_one": "Remove {count} rule",
+    "confirm_other": "Remove {count} rules",
+    "body_one": "Nobody is told by it any more. The audit trail keeps what it was.",
+    "body_other": "Nobody is told by them any more. The audit trail keeps what they were."
+  },
+  "problem": {
+    "failed": "Something went wrong: try again.",
+    "stale": "Someone changed this meanwhile: it was read again; make your change again.",
+    "conflict": "This clashes with what is stored: read the page again.",
+    "reason": "Say why, in at least 3 characters.",
+    "changedMeanwhile": "The rules in force changed meanwhile: read them again, then loosen them with the reason and a fresh code.",
+    "customers": "Only customers are listed, each once.",
+    "invalid": "The change was refused as it is.",
+    "forbidden": "You may not change this.",
+    "stepUp": "The looser rule needs a fresh code.",
+    "gone": "This rule is no longer there.",
+    "signedOut": "You are signed out: sign in again.",
+    "offline": "No answer from the server: we do not know whether it was saved. Try again.",
+    "read": "The server did not answer as expected.",
+    "readForbidden": "You may not read this (quality.rules.view).",
+    "ruleGone": "The rule the address names is no longer there."
+  },
+  "done": {
+    "duties": "Who may sign what is saved.",
+    "dutiesLoosened": "The looser rule is saved, with your reason.",
+    "results": "The result rules are saved.",
+    "ruleSaved": "The rule is saved.",
+    "ruleAdded": "The rule is added.",
+    "switchedOn_one": "{count} rule switched on.",
+    "switchedOn_other": "{count} rules switched on.",
+    "switchedOff_one": "{count} rule switched off.",
+    "switchedOff_other": "{count} rules switched off.",
+    "removed_one": "{count} rule removed.",
+    "removed_other": "{count} rules removed.",
+    "tested": "A test is on its way to your bell.",
+    "starter_one": "{count} suggested rule added.",
+    "starter_other": "{count} suggested rules added."
+  }
+}

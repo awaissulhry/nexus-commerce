@@ -11,12 +11,18 @@
     "from": "From the {source}",
     "ppe": "PPE",
     "closedBanner": "Closed {when} by {who}: it never changes.",
-    "cancelledBanner": "Cancelled: {reason}"
+    "cancelledBanner": "Cancelled: {reason}",
+    "escalate": "Escalate to CAPA…",
+    "report": "NCR report (PDF)",
+    "reportHint": "Opens in a new tab, as a preview",
+    "keepReport": "Keep a version of the report",
+    "capa": "CAPA {number}"
   },
   "tab": {
     "problem": "Problem & evidence",
     "containment": "Containment",
     "disposition": "Disposition",
+    "cost": "Cost",
     "linked": "Linked records",
     "activity": "Activity"
   },
@@ -57,7 +63,11 @@
     "heldTitle": "Say what is wrong first.",
     "heldTitleLong": "At most 160 characters in the title.",
     "heldQuantity": "Say how much is affected (above 0, at most 4 decimals).",
-    "heldSuspect": "The suspect quantity: a number with at most 4 decimals."
+    "heldSuspect": "The suspect quantity: a number with at most 4 decimals.",
+    "cause": "Cause",
+    "causeHint": "From the cause list (Quality settings). Read-only once decided.",
+    "causeNone": "No cause named",
+    "causesFailed": "The cause list could not be read."
   },
   "fact": {
     "style": "Style · colour · size",
@@ -93,7 +103,10 @@
     "registerNone": "Not in the register yet (by itself when critical or found by the customer).",
     "registerNotPpe": "Not a PPE style: no register entry.",
     "cancelled": "Cancelled: {reason}",
-    "closed": "Closed {when} by {who}. Note: {note}"
+    "closed": "Closed {when} by {who}. Note: {note}",
+    "capa": "Corrective action",
+    "capaElsewhere": "Escalated to a CAPA you do not see",
+    "capaNone": "Not escalated"
   },
   "kind": {
     "HOLD_STOCK": "Hold stock",
@@ -313,7 +326,7 @@
     "heldClaim": "Pick the claim first.",
     "heldClaimReason": "Pick the claim's reason first.",
     "heldClaimLot": "The NCR names no lot: a claim opened here needs the lot whose goods go back.",
-    "gapGarmentScrap": "Garments still in work are scrapped at the scan, or decide Rework and scrap there: an NCR cannot post their scrap yet.",
+    "gapGarmentScrap": "Garments still in work have no stock to move: remove this decision, decide Rework instead and create the rework order with \"Scrap them all\".",
     "gapNoStock": "The NCR names no lot or material in stock: there is nothing to move from here.",
     "gapNoWorkOrder": "The NCR names no work order: name it on Problem & evidence first.",
     "gapNoSupplier": "The NCR names no supplier: a claim needs one."
@@ -337,7 +350,10 @@
     "reinspection": "The reworked garments are inspected again before release.",
     "submit": "Create rework order",
     "heldOperation": "Pick the operation first.",
-    "done": "Decision {seq}: the rework order is open."
+    "done": "Decision {seq}: the rework order is open.",
+    "scrapAll": "Scrap them all (garments still in work)",
+    "scrapAllHint": "The rework order is recorded done at once with every garment scrapped: its scrap goes to the cost ledger as the rework's.",
+    "doneScrap": "Decision {seq}: the garments are scrapped through their rework order."
   },
   "remove": {
     "title": "Remove decision {seq}",
@@ -369,7 +385,9 @@
     "unlinked": "The record is unlinked.",
     "notUnlinked": "The record was not unlinked.",
     "noteDecision": "Carries out decision {seq}",
-    "noteLine": "Line {seq} of the return"
+    "noteLine": "Line {seq} of the return",
+    "capa": "Corrective action (CAPA)",
+    "capaNone": "Not escalated to a CAPA: use ⋯ Escalate to CAPA… in the band."
   },
   "link": {
     "title": "Link a record",
@@ -404,5 +422,187 @@
     "description": "What the entry says",
     "submit": "Open the entry",
     "done": "The PPE register entry is open and linked."
+  },
+  "capaStatus": {
+    "PLAN": "Plan",
+    "ACT": "Act",
+    "CHECK": "Check",
+    "D1": "D1 team",
+    "D2": "D2 problem",
+    "D3": "D3 containment",
+    "D4": "D4 root cause",
+    "D5": "D5 corrective actions",
+    "D6": "D6 actions in place",
+    "D7": "D7 prevention",
+    "D8": "D8 closure",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "file": {
+    "notOpened": "The file could not be opened."
+  },
+  "report": {
+    "versions": "Report versions",
+    "none": "No version kept yet: ⋯ Keep a version of the report.",
+    "col": {
+      "version": "Version",
+      "language": "Language",
+      "kept": "Kept"
+    },
+    "version": "Version {version}",
+    "language": {
+      "it": "Italian",
+      "en": "English"
+    },
+    "open": "Open",
+    "hint": "The report never shows a cost, a worker or the customer's concession. Sharing it with a supplier or a customer comes with the portal.",
+    "kept": "Version {version} of the report is kept.",
+    "same": "The report has not changed: version {version} stays the current one.",
+    "notKept": "The report could not be kept."
+  },
+  "escalate": {
+    "heldAlready": "Escalated to {number} already.",
+    "heldElsewhere": "Escalated to a CAPA you do not see.",
+    "heldCancelled": "A cancelled NCR is not escalated.",
+    "heldNoRight": "Escalating needs quality.ncr.manage and quality.capa.view.",
+    "done_one": "The NCR is escalated to {number}.",
+    "done_other": "{count} NCRs are escalated to {number}."
+  },
+  "cost": {
+    "title": "Cost of this NCR",
+    "body": "Material, labour, rework time, scrap value and freight: computed from the decisions and the rework, or typed. Seen only with the cost grain.",
+    "forbidden": "You need the cost grain to see costs",
+    "forbiddenBody": "An NCR's cost is shown only to people whose role sees costs (the cost grain) at its site.",
+    "failed": "The cost could not be read.",
+    "upToDate": "The computed lines are up to date.",
+    "heldAdding": "Finish the line you are writing first.",
+    "kind": {
+      "MATERIAL": "Material",
+      "LABOUR": "Labour",
+      "REWORK_TIME": "Rework time",
+      "SCRAP_VALUE": "Scrap value",
+      "FREIGHT": "Freight",
+      "OTHER": "Other"
+    },
+    "record": {
+      "NcrDispositionLine": "Decision",
+      "ReworkOrder": "Rework order",
+      "StockMove": "Stock move",
+      "other": "Record"
+    },
+    "computed": "Computed",
+    "computedFrom": "Computed from {record} {label}",
+    "typed": "Typed",
+    "cellKind": "Kind of line {seq}",
+    "cellWords": "Words of line {seq}",
+    "cellAmount": "Amount of line {seq}",
+    "removeOne": "Remove line {seq}",
+    "remove": "Remove",
+    "readOnly": "Read-only",
+    "compute": "Compute again",
+    "add": "Add a line",
+    "stale": "The computed lines are not up to date: {add} to add, {change} changed, {remove} gone. Compute again.",
+    "waitingRework": "its scrap is not in the cost ledger yet.",
+    "waitingDecision": "its goods are not valued yet (computed once carried out or once the stock has a value).",
+    "empty": "No cost yet",
+    "emptyBody": "Add a line, or compute the lines from the decisions and the rework.",
+    "label": "Cost lines",
+    "col": {
+      "kind": "Kind",
+      "words": "What",
+      "source": "Source",
+      "amount": "Amount"
+    },
+    "newLabel": "New cost line",
+    "otherHint": "Say what it is.",
+    "amountIn": "Amount ({currency})",
+    "saveNew": "Add the line",
+    "total": "Total",
+    "chargeTitle": "Charge to the supplier",
+    "chargeBody": "A debit note to the supplier comes with Finance. Today the supplier claim of a \"Return to supplier\" decision asks for a credit.",
+    "charge": "Charge to supplier",
+    "chargeHeld": "There are no debit notes yet: open the supplier claim from a \"Return to supplier\" decision to ask for a credit.",
+    "foot": "Labour shows its total only, never a rate. Amounts never reach the floor, a supplier or a customer.",
+    "heldAmount": "Write the amount (for example 12.50).",
+    "heldOther": "Say what the cost is.",
+    "heldLong": "At most 200 characters.",
+    "heldClosed": "The NCR is closed: its cost never changes.",
+    "heldCancelled": "The NCR is cancelled: its cost never changes.",
+    "added": "The cost line is added.",
+    "notAdded": "The cost line could not be added.",
+    "notSaved": "The cost line could not be saved.",
+    "notRemoved": "The cost line could not be removed.",
+    "removed": "Line {seq} is removed.",
+    "notComputed": "The cost could not be computed again.",
+    "computedDone": "The computed lines are up to date.",
+    "typedHint": "Typed by a person: it saves line by line.",
+    "waitingTitle_one": "One record is not valued yet",
+    "waitingTitle_other": "{count} records are not valued yet"
+  },
+  "concession": {
+    "title": "Concession asked of the customer",
+    "body": "Ask the customer to accept a deviation; record their written answer with its file. Their own link page comes with the portal.",
+    "ask": "Ask a concession…",
+    "none": "No concession asked.",
+    "foot": "Nothing is sent to the customer from here: ask them by mail or on the thread, then record their answer.",
+    "col": {
+      "ask": "Asked",
+      "customer": "Customer",
+      "state": "Answer"
+    },
+    "proposalLine": "We propose: {proposal}",
+    "noContact": "No contact named",
+    "status": {
+      "ASKED": "Waiting for the answer",
+      "ACCEPTED": "Accepted",
+      "REFUSED": "Refused"
+    },
+    "answeredLine": "Answered by {who} · {when}",
+    "askedLine": "Asked by {who} · {when}",
+    "answer": "Record the answer…",
+    "openAnswer": "Their answer",
+    "noFile": "No file",
+    "askTitle": "Ask a concession",
+    "askSubmit": "Ask the concession",
+    "askBody": "A concession is never asked on a critical NCR. The customer is told by you: this records the ask.",
+    "customerFind": "Find the customer",
+    "customerPlaceholder": "Name or code",
+    "customer": "Customer",
+    "customersFailed": "The customers could not be read.",
+    "customersNone": "No customer found.",
+    "customerPick": "Pick the customer",
+    "contact": "Person asked",
+    "contactNone": "Nobody named",
+    "askField": "The deviation",
+    "askHint": "What the customer is asked to accept (for example \"Shade slightly darker\").",
+    "proposalField": "What we propose",
+    "proposalHint": "A discount, a delivery as they are, a later replacement…",
+    "answerTitle": "The answer to concession {seq}",
+    "answerSubmit": "Record the answer",
+    "answerAbout": "\"{ask}\", asked of {customer}.",
+    "answerKind": "Their answer",
+    "acceptedHint": "They accept the deviation as proposed.",
+    "refusedHint": "They refuse it: say why, in their words.",
+    "answeredBy": "Who answered for them",
+    "answeredAt": "When they answered",
+    "answerWords": "Their words",
+    "whyHint": "Required when refused.",
+    "file": "Their written answer (file)",
+    "fileHint": "A PDF or a photo of their answer: kept with the concession.",
+    "heldClosed": "The NCR is closed: no concession is asked any more.",
+    "heldCancelled": "The NCR is cancelled: no concession is asked.",
+    "heldCritical": "A critical defect is never sold under a concession (safety rule).",
+    "heldNoParties": "Asking a concession needs parties.view to pick the customer.",
+    "heldParty": "Pick the customer first.",
+    "heldAsk": "Say the deviation first.",
+    "heldProposal": "Say what we propose first.",
+    "heldLong": "At most 1000 characters each.",
+    "heldAnsweredBy": "Write who answered for the customer.",
+    "heldWhy": "Say why they refused.",
+    "heldWhen": "Say when they answered.",
+    "heldAnswered": "The answer is recorded already: it never changes.",
+    "asked": "The concession is recorded as asked.",
+    "accepted": "Concession {seq}: accepted.",
+    "refused": "Concession {seq}: refused."
   }
 }

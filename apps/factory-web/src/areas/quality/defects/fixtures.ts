@@ -4,6 +4,8 @@ import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { inShell, NOW, type RoleCase } from '../_shared/fixtures'
 import type { Dispositions, Library } from './api'
 import { DISPOSITIONS, DISPOSITIONS_EMPTY, DISPOSITIONS_NO_COST, DISPOSITIONS_STANDARD, LEATHER, LIBRARY, LIBRARY_EMPTY, LIBRARY_STARTER, PICTURE_ID, PICTURE_SRC, SAFETY, SEAMS } from './demo/fixtures'
+import { CAUSES, CAUSES_EMPTY, CAUSES_FULL, COVERAGE, GRADES, GRADES_EMPTY, SEVERITY } from './demo/vocabulary'
+import { NEW_CAUSE, NEW_GRADE, newCauseProblems, newGradeProblems } from './vocabulary'
 import {
   EMPTY_PICTURE,
   markKey,
@@ -23,7 +25,7 @@ import { DefectsView } from './view/DefectsView'
  * reviews: the library tree, a cell saving and refused, retire of a used code, delete held, the drawer (picture, zone on
  * the garment map, stages, upload under way), Add defect with its problems, the dispositions with the stock action in
  * words and the approval rule (the amount only with the cost grain), Add disposition, the starter and standard offers,
- * the W2b tabs held, offline, live updates, and the role cases. In the browser the address, ticks, drawer and dialogs work
+ * the W2b tabs (B-W2b-118: severity, causes, leather grades and hide defects), offline, live updates, and the role cases. In the browser the address, ticks, drawer and dialogs work
  * for real (the wrapper keeps them).
  */
 
@@ -72,12 +74,19 @@ const page = (over: Partial<DefectsModel> = {}, role: RoleCase = 'owner'): Desig
       dialog: null,
       picture: EMPTY_PICTURE,
       thumbs: { [PICTURE_ID]: PICTURE_SRC },
+      // B-W2b-118: the W2b tabs' reads.
+      vocab: { severity: { value: SEVERITY, problem: null }, causes: { value: { ...CAUSES, canManage: can }, problem: null }, grades: { value: { ...GRADES, canManage: can }, problem: null }, coverage: COVERAGE },
       ...over,
     },
   }
 }
 
 const tabDisp = (over: Partial<DefectsModel> = {}, role: RoleCase = 'owner') => page({ address: address({ tab: 'dispositions' }), ...over }, role)
+// B-W2b-118: the W2b tabs.
+const tab = (name: 'severity' | 'causes' | 'grades', over: Partial<DefectsModel> = {}, role: RoleCase = 'owner') => page({ address: address({ tab: name }), ...over }, role)
+const vocabWith = (role: RoleCase, change: Partial<NonNullable<DefectsModel['vocab']>>) => ({ ...page({}, role).model.vocab!, ...change })
+const newCause = (draft = NEW_CAUSE, shown = false, problem: string | null = null): DefectsDialog => ({ kind: 'new-cause', draft, problems: newCauseProblems(draft, CAUSES.causes.map((row) => row.code)), problem, shown })
+const newGrade = (draft = NEW_GRADE, shown = false): DefectsDialog => ({ kind: 'new-grade', draft, problems: newGradeProblems(draft, GRADES.grades.map((row) => row.code)), problem: null, shown })
 
 const newDefect = (draft = NEW_DEFECT, shown = false, problem: string | null = null): DefectsDialog => ({ kind: 'new-defect', draft, problems: newDefectProblems(draft, LIBRARY), problem, shown })
 const newDisposition = (draft = NEW_DISPOSITION, shown = false): DefectsDialog => ({ kind: 'new-disposition', draft, problems: newDispositionProblems(draft, DISPOSITIONS.dispositions.map((row) => row.code), true), problem: null, shown })
@@ -101,6 +110,11 @@ function DefectsDesign({ model: design }: { model: DesignModel }) {
         onDefectDraft: (draft) => current.dialog?.kind === 'new-defect' && set({ dialog: { ...current.dialog, draft, problems: newDefectProblems(draft, current.library.value) } }),
         onDispositionDraft: (draft) => current.dialog?.kind === 'new-disposition' && set({ dialog: { ...current.dialog, draft, problems: newDispositionProblems(draft, [], current.seesCost) } }),
         onRetire: (ids) => set({ dialog: { kind: 'retire', ids } }),
+        onNewCause: () => set({ dialog: newCause() }),
+        onNewGrade: () => set({ dialog: newGrade() }),
+        onCauseDraft: (draft) => current.dialog?.kind === 'new-cause' && set({ dialog: { ...current.dialog, draft, problems: newCauseProblems(draft, CAUSES.causes.map((row) => row.code)) } }),
+        onGradeDraft: (draft) => current.dialog?.kind === 'new-grade' && set({ dialog: { ...current.dialog, draft, problems: newGradeProblems(draft, GRADES.grades.map((row) => row.code)) } }),
+        onDeleteCause: (id) => set({ dialog: { kind: 'delete-cause', id } }),
         onDelete: (id) => set({ dialog: { kind: 'delete', id } }),
         onDismissNotice: () => set({ notice: null }),
       },
@@ -182,5 +196,29 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'loading', label: 'Loading', model: page({ library: { value: null, problem: null }, dispositions: { value: null, problem: null }, asOf: null, live: 'connecting' }) },
     { id: 'error', label: "The API didn't answer (never an empty library)", model: page({ library: { value: null, problem: 'problem.offline' }, dispositions: { value: null, problem: 'problem.offline' }, asOf: null, live: 'offline' }) },
     { id: 'dispositions-error', label: 'Dispositions could not be read', model: tabDisp({ dispositions: { value: null, problem: 'problem.read' } }) },
+    // B-W2b-118: Severity, Causes, Leather grades.
+    { id: 'severity', label: 'Severity: critical, major, minor; the critical class locked with its law', model: tab('severity') },
+    { id: 'severity-loading', label: 'Severity loading', model: tab('severity', { vocab: vocabWith('owner', { severity: { value: null, problem: null } }) }) },
+    { id: 'causes', label: 'Causes: each code with its words (Italian, English, Romanian), its process, how often used; 2 starter codes missing; Romanian words missing on 2', model: tab('causes') },
+    {
+      id: 'causes-cells',
+      label: 'Causes: cells saving, refused (with why) and unknown',
+      model: tab('causes', { marks: { [markKey(CAUSES.causes[0]!.id, 'labelEn')]: { state: 'saving' }, [markKey(CAUSES.causes[1]!.id, 'lang:ro')]: { state: 'refused', problem: 'problem.tooLong' }, [markKey(CAUSES.causes[3]!.id, 'active')]: { state: 'unknown', problem: 'problem.offline' } } }),
+    },
+    { id: 'causes-selected', label: 'Causes: two ticked (Retire 2 · Restore held · Export 2)', model: tab('causes', { selected: [CAUSES.causes[0]!.id, CAUSES.causes[1]!.id] }) },
+    { id: 'causes-complete', label: 'Causes: every starter code there', model: tab('causes', { vocab: vocabWith('owner', { causes: { value: CAUSES_FULL, problem: null }, coverage: null }) }) },
+    { id: 'causes-empty', label: 'Causes: none yet (start from the 8 starter codes)', model: tab('causes', { vocab: vocabWith('owner', { causes: { value: CAUSES_EMPTY, problem: null }, coverage: null }) }) },
+    { id: 'causes-new', label: 'Add cause: empty (held with the first problem)', model: tab('causes', { dialog: newCause() }) },
+    { id: 'causes-new-problems', label: 'Add cause: problems at their fields (code taken, no process)', model: tab('causes', { dialog: newCause({ ...NEW_CAUSE, code: 'DEMO-SEW', labelIt: 'Cucitura storta', labelEn: '' }, true) }) },
+    { id: 'causes-new-ready', label: 'Add cause: ready', model: tab('causes', { dialog: newCause({ code: 'DEMO-GLUE', process: 'FINISHING', labelIt: 'Colla in eccesso (demo)', labelEn: 'Too much glue (demo)' }) }) },
+    { id: 'causes-delete', label: 'Delete an unused cause (never undone)', model: tab('causes', { dialog: { kind: 'delete-cause', id: CAUSES.causes[4]!.id } }) },
+    { id: 'causes-read-only', label: 'Production manager: reads the causes, every change held with why', model: tab('causes', {}, 'production') },
+    { id: 'causes-error', label: 'Causes could not be read', model: tab('causes', { vocab: vocabWith('owner', { causes: { value: null, problem: 'problem.offline' } }) }) },
+    { id: 'grades', label: 'Leather grades A–D with the usable share, D retired; the hide defects with their icons', model: tab('grades') },
+    { id: 'grades-cells', label: 'Leather grades: a share saved, a share refused (120 %)', model: tab('grades', { marks: { [markKey(GRADES.grades[1]!.id, 'usableShare')]: { state: 'refused', problem: 'problem.usableShare' }, [markKey(GRADES.grades[2]!.id, 'usableShare')]: { state: 'saving' } } }) },
+    { id: 'grades-new', label: 'Add grade: code, words, usable share', model: tab('grades', { dialog: newGrade({ code: 'E', labelIt: 'Scarto (demo)', labelEn: 'Reject (demo)', usableShare: '30' }) }) },
+    { id: 'grades-new-problems', label: 'Add grade: problems (code taken, a share of 120)', model: tab('grades', { dialog: newGrade({ code: 'A', labelIt: 'Prima', labelEn: 'First', usableShare: '120' }, true) }) },
+    { id: 'grades-empty', label: 'Leather grades: none yet, no LEATHER category in the library', model: tab('grades', { vocab: vocabWith('owner', { grades: { value: GRADES_EMPTY, problem: null }, coverage: null }) }) },
+    { id: 'grades-read-only', label: 'Floor supervisor: reads the grades and the hide defects', model: tab('grades', {}, 'supervisor') },
   ],
 })

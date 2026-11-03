@@ -1,0 +1,81 @@
+/*
+ * CalendarView (B-W2b-120, the Plant area part) LAYOUT: the month and the chosen day's agenda side by side on a wide
+ * screen, the agenda under the month on a narrow one. The part fills its container (no max-width); semantic tokens only.
+ */
+.fw-cv {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-cv-grid,
+.fw-cv-agenda,
+.fw-cv-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cv-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-cv-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-cv-note {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cv-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-8) 0;
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-cv-item:last-child {
+  border-bottom: 0;
+}
+
+.fw-cv-what {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-cv-due {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-cv-meta {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cv-open {
+  color: var(--nds-text-link);
+}
+
+@media (max-width: 1100px) {
+  .fw-cv {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

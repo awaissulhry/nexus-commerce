@@ -30,6 +30,7 @@ import { listSources } from '../../../purchasing/suppliers/sources/api'
 import { sourcesCan, type SourcesRead, type SupplierPricesModel } from '../../../purchasing/suppliers/sources/model'
 import { readProblem as sourcesProblem } from '../../../_shared/buying/model'
 import type { MaterialDialog, MaterialLoad, MaterialRecordViewModel } from './record-model'
+import { useGrades } from './grades/use-grades'
 import { MaterialRecordView } from './view/MaterialRecordView'
 
 /**
@@ -136,8 +137,15 @@ function Container({ materialId }: { materialId: string }) {
   const loadSourcesRef = useRef(loadSources)
   loadSourcesRef.current = loadSources
 
+  // B-W2b-131 (PRD-031): a leather's grades and usable area, read while Properties & grades shows it.
+  const grades = useGrades({ api, materialId, enabled: tab === 'properties' && current?.kind === 'LEATHER', archived: current?.status === 'ARCHIVED' })
+  const reloadGrades = useRef(grades.reload)
+  reloadGrades.current = grades.reload
+
   useLiveChanges({
     onChange: (change) => {
+      // B-W2b-131: a grade rule of this material changed elsewhere: the section reads again (never during our own write).
+      if (change.type === 'inventory.grade_rule_changed' && change.fields.itemId === materialId) reloadGrades.current()
       // B-W2a-69: a source of this material changed in Purchasing: the read-only Supplier prices are read again.
       if (change.type.startsWith('supplier_item.') && change.fields.itemId === materialId && tabRef.current === 'suppliers') loadSourcesRef.current()
       if (!change.type.startsWith('material.') || writing.current) return
@@ -173,7 +181,7 @@ function Container({ materialId }: { materialId: string }) {
   }
 
   const supplierPrices: SupplierPricesModel = { prefix, can: { view: sourceCan.view, cost: sourceCan.cost }, read: sources, defaultSupplier: current?.defaultSupplier ?? null }
-  const model: MaterialRecordViewModel = { prefix, can, tab, material, libraryColours, certificates, lots, stock, suppliers, save, busy, notice, changed, dialog, refused, supplierPrices }
+  const model: MaterialRecordViewModel = { prefix, can, tab, material, libraryColours, certificates, lots, stock, suppliers, save, busy, notice, changed, dialog, refused, supplierPrices, grades: grades.model }
 
   return (
     <MaterialRecordView
@@ -210,6 +218,7 @@ function Container({ materialId }: { materialId: string }) {
         onDialog: setDialog,
         onDismissNotice: () => setNotice(null),
         onRetrySupplierPrices: loadSources,
+        grades: grades.actions,
       }}
     />
   )

@@ -2,7 +2,8 @@
  * The kinds of change the B-W2a-47 events name (quality/events.ts declares the events; their payloads use these lists).
  *
  *   ncr.changed               the fields of the NCR that changed (its content, owner, containment due time, links,
- *                             its PPE register entry)
+ *                             its PPE register entry); B-W2b-113: its cause, its cost lines (never an amount), its
+ *                             concessions asked of the customer, a version of its report kept
  *   ncr.containment_changed   ADDED | CHANGED | DONE | CANCELLED
  *   ncr.decision_changed      ADDED | CHANGED | REMOVED | APPROVED | CARRIED_OUT
  */
@@ -31,6 +32,11 @@ export const NCR_CHANGED_FIELDS = [
   'containmentDueAt',
   'links',
   'register',
+  // B-W2b-113 (QHS-085, QHS-086; ncr-what "cause (W2b)", ncr-pdf).
+  'causeCodeId',
+  'cost',
+  'concessions',
+  'report',
 ] as const
 export type NcrChangedField = (typeof NCR_CHANGED_FIELDS)[number]
 

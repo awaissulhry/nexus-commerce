@@ -3,6 +3,7 @@ import type { SupplierPricesModel } from '../../../purchasing/suppliers/sources/
 import type { LibraryCan, Notice, Read, WriteProblem } from '../../library/model'
 import type { ColourInput, CoveringCertificate, LibraryColour, MaterialColour, MaterialPatch, MaterialStock, MaterialView, SupplierRow } from '../api'
 import type { MaterialTab } from '../model'
+import type { GradesActions, GradesModel } from './grades/grades-model'
 
 /** A record read: loading, the material, or why there is none. */
 export type MaterialLoad =
@@ -42,6 +43,8 @@ export interface MaterialRecordViewModel {
   refused: WriteProblem | null
   /** B-W2a-69: Purchasing's approved sources of this material (Suppliers & prices › Supplier prices, read only). */
   supplierPrices?: SupplierPricesModel
+  /** B-W2b-131: Properties & grades › Grades and usable area of a leather (idle for any other kind). */
+  grades?: GradesModel
 }
 
 export interface MaterialRecordActions {
@@ -60,4 +63,6 @@ export interface MaterialRecordActions {
   onDismissNotice?: () => void
   /** B-W2a-69: read the Supplier prices again after a failed read. */
   onRetrySupplierPrices?: () => void
+  /** B-W2b-131: the Grades and usable area section's cells and row moves. */
+  grades?: GradesActions
 }

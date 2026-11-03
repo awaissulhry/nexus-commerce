@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, Check, CircleAlert, CircleCheckBig, CircleHelp, CloudOff, Flame, House, ListEnd, ListTodo, MapPinOff, MessageSquare, MessageSquareText, PackageSearch, PauseCircle, RotateCcw, ScanLine, ShieldOff, Siren, Ban, Clock, TriangleAlert, Truck, Warehouse, X } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, CircleCheckBig, CircleHelp, CloudOff, Flame, House, ListEnd, ListTodo, MapPinOff, MessageSquare, MessageSquareText, PackageSearch, PauseCircle, RotateCcw, ScanLine, ShieldOff, Siren, Ban, Clock, TriangleAlert, Truck, Warehouse, Wrench, X } from 'lucide-react'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, FloorTile, FloorTileGrid, ScanInput, type CameraScanner, type FloorActions } from '@nexus/ui/floor'
 import { FloorCard } from '@nexus/ui/floor/FloorCard/index'
 import { FloorListUpdates } from '@nexus/ui/floor/FloorListUpdates/index'
@@ -17,6 +17,9 @@ import type { FloorMode } from '../../../model'
 import { ListFooter, TaskLine, Ticks, type TickState } from '../../shared/view/TaskParts'
 import { ReasonPickerBody, useDoneHeld, type ReasonPickerAction, type ReasonPickerModel } from '../../reasons/view/ReasonPicker'
 import { arranged, emptyOf, excerptOf, leftOf, MATERIAL_TONE, putLastWords, STATE_TONE, unreadCount, type DispatchEntry, type DispatchList, type HelpHeld, type MaterialFlag, type MyMessages, type PutLast, type QueueRow, type WorkMessage } from '../model'
+// B-W2b-126: the repair queue (MES-132).
+import { repairHeld, repairTile, type RepairQueue } from '../repair/model'
+import { RepairCard, RepairLine, RepairList, RepairOut, RepairUnread, type RepairLineModel } from '../repair/view/RepairViews'
 import '../mywork.css'
 
 /**
@@ -42,6 +45,10 @@ export type MyWorkStep =
   | { readonly kind: 'messages' }
   /** One message, whole, with Read aloud. */
   | { readonly kind: 'message'; readonly id: string }
+  /** B-W2b-126: the repair queue; one repair's card; how a repair came out (scan out). */
+  | { readonly kind: 'repair' }
+  | { readonly kind: 'repairItem'; readonly reworkId: string }
+  | { readonly kind: 'repairOut'; readonly reworkId: string; readonly code: string | null; readonly good: number | null }
   | { readonly kind: 'noPermission' }
 
 export interface MyWorkViewModel {
@@ -78,6 +85,16 @@ export interface MyWorkViewModel {
   helpHeld?: HelpHeld | null
   /** The call just sent from here. */
   call?: MyWorkCall | null
+  /** B-W2b-126: the repair queue as this tablet shows it (null: not read, or no production.repair). */
+  repair?: RepairQueue | null
+  /** The queue comes from this tablet (offline, or the office did not answer): as of when. */
+  repairAsOf?: string | null
+  /** The queue could not be read and none is kept. */
+  repairProblem?: 'offline' | 'error' | null
+  /** What the last repair scan did. */
+  repairLine?: RepairLineModel | null
+  /** A scan is on its way. */
+  repairBusy?: boolean
 }
 
 export interface MyWorkCall {
@@ -102,6 +119,13 @@ export type MyWorkAction =
   | { type: 'messages' }
   | { type: 'message'; id: string }
   | { type: 'help' }
+  | { type: 'repair' }
+  | { type: 'repairOpen'; reworkId: string }
+  | { type: 'repairStart'; reworkId: string }
+  | { type: 'repairGood'; value: number | null }
+  | { type: 'repairAllGood' }
+  | { type: 'repairConfirm' }
+  | { type: 'repairRetry' }
 
 export interface MyWorkViewProps {
   model: MyWorkViewModel
@@ -235,15 +259,27 @@ export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps
 
   const openMessages = model.messages?.messages ?? []
   const unread = unreadCount(openMessages, model.seen ?? [])
+  // B-W2b-126: the repair queue's tile (this station's repairs, else the site's), hidden at zero.
+  const repairCount = repairTile(model.repair ?? null)
   const forYourWork =
-    unread > 0 ? (
+    unread > 0 || repairCount ? (
       // Design "For your work": a count as a chip, hidden at zero. "New instructions" joins it with W2b-4.
       <section className="fw-floor-stack fw-mywork-foryou" aria-labelledby="fw-mywork-foryou">
         <h2 id="fw-mywork-foryou" className="fw-floor-section-title">
           {t('foryou.title')}
         </h2>
         <FloorTileGrid label={t('foryou.title')} columns={2}>
-          <FloorTile icon={<MessageSquareText />} label={t('foryou.messages')} count={formatNumber(unread, locale)} countLabel={t('foryou.messagesCount', { count: unread })} tone="primary" onPress={() => send({ type: 'messages' })} />
+          {unread > 0 ? <FloorTile icon={<MessageSquareText />} label={t('foryou.messages')} count={formatNumber(unread, locale)} countLabel={t('foryou.messagesCount', { count: unread })} tone="primary" onPress={() => send({ type: 'messages' })} /> : null}
+          {repairCount ? (
+            <FloorTile
+              icon={<Wrench />}
+              label={t('foryou.repair')}
+              count={formatNumber(repairCount.count, locale)}
+              countLabel={t(repairCount.here ? 'foryou.repairHere' : 'foryou.repairSite', { count: repairCount.count })}
+              tone={repairCount.here ? 'primary' : 'neutral'}
+              onPress={() => send({ type: 'repair' })}
+            />
+          ) : null}
         </FloorTileGrid>
       </section>
     ) : model.messagesFailed ? (
@@ -330,6 +366,47 @@ export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps
       break
     }
 
+    // B-W2b-126: the repair queue, one repair, and how it came out.
+    case 'repair':
+      actions = [back]
+      body = (
+        <>
+          {scanField}
+          {model.repairLine ? <RepairLine line={model.repairLine} /> : null}
+          {model.repair ? <RepairList queue={model.repair} asOf={model.repairAsOf ?? null} timeZone={timeZone} onOpen={(reworkId) => send({ type: 'repairOpen', reworkId })} /> : model.repairProblem ? <RepairUnread problem={model.repairProblem} onRetry={() => send({ type: 'repairRetry' })} /> : <p className="fw-floor-muted" aria-busy="true">{t('loading')}</p>}
+        </>
+      )
+      break
+
+    case 'repairItem': {
+      const row = model.repair?.rows.find((entry) => entry.reworkId === step.reworkId) ?? null
+      actions = [back]
+      body = (
+        <>
+          {scanField}
+          {model.repairLine ? <RepairLine line={model.repairLine} /> : null}
+          {row ? (
+            <RepairCard row={row} asOf={model.repairAsOf ?? null} timeZone={timeZone} onStartWithout={!row.bundle && !repairHeld(row) && !model.repairBusy ? () => send({ type: 'repairStart', reworkId: row.reworkId }) : undefined} />
+          ) : (
+            <FloorState tone="info" icon={<CircleCheckBig />} title={t('repair.gone.title')} text={t('repair.gone.body')} />
+          )}
+        </>
+      )
+      break
+    }
+
+    case 'repairOut': {
+      const row = model.repair?.rows.find((entry) => entry.reworkId === step.reworkId) ?? null
+      actions = [back]
+      const held = row ? (repairHeld(row) ? t(`repair.held.${repairHeld(row)}`) : model.repairBusy ? t('repair.busy') : null) : t('repair.gone.title')
+      body = row ? (
+        <RepairOut row={row} good={step.good} onGood={(value) => send({ type: 'repairGood', value })} onAllGood={() => send({ type: 'repairAllGood' })} onConfirm={() => send({ type: 'repairConfirm' })} heldReason={held} />
+      ) : (
+        <FloorState tone="info" icon={<CircleCheckBig />} title={t('repair.gone.title')} text={t('repair.gone.body')} />
+      )
+      break
+    }
+
     case 'reason':
       actions = [back, { label: t('putLast.done'), icon: <Check />, onPress: () => send({ type: 'reasonDone' }), heldReason: reasonHeld }]
       body = <ReasonPickerBody model={step.picker} onAction={(action) => send({ type: 'reason', action })} onBack={() => send({ type: 'back' })} timeZone={timeZone} />
@@ -358,8 +435,9 @@ export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps
             </FloorState>
           ) : null}
           {model.problem === 'offline' && !list ? <FloorState tone="warning" icon={<CloudOff />} title={shared('notOnTablet.title')} text={t('offline.body')} alert /> : null}
-          {list && empty ? <EmptyState kind={empty} list={list} t={t} time={time} /> : null}
+          {/* B-W2b-126: For your work above an empty list too (a repair station's own queue is often empty): never below the fold. */}
           {empty || !list ? forYourWork : null}
+          {list && empty ? <EmptyState kind={empty} list={list} t={t} time={time} /> : null}
           {list && view && !empty ? (
             <>
               {forYourWork}
