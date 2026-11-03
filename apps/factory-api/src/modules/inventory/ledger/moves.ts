@@ -15,6 +15,7 @@ import { workerGatesFor } from '../../people/privacy/worker-gate'
 import { mayAt, officeContextOf, seesCost, siteFor, stockContextOf } from './access'
 import type { MoveView } from './contract'
 import { completeKeys, LEDGER_SELECT, lockStock, postMoves, readBalances, type MoveDraft, type PostedMove } from './post-moves'
+import { remnantsOnScrapReversed } from '../remnants/lifecycle'
 
 /**
  * The stock ledger's own commands (SCM-189, SCM-192, SCM-193; A2 SCR-064) and the moves list (SCM-195). Each write is
@@ -151,7 +152,8 @@ export async function reverse(caller: CommandCaller, moveId: string, body: { rea
   const context = officeContextOf(caller)
   const original = isUuid(moveId) ? await caller.withClient((client) => client.stockMove.findUnique({ where: { id: moveId }, select: { ...LEDGER_SELECT, reversals: { select: { id: true } } } })) : null
   if (!original || !mayAt(context, INVENTORY_REVERSE, original)) throw new NotFoundError('Stock move not found.')
-  if (original.reason === 'ISSUE' || original.reason === 'RETURN') {
+  // B-W2b-100: a REMNANT (a part of a hide back from a work order, with its tag) is RETURN's twin.
+  if (original.reason === 'ISSUE' || original.reason === 'RETURN' || original.reason === 'REMNANT') {
     // Giving an issued hide back to stock must leave what was already cut of it (the cut log's area check runs only when a
     // cut is logged): the pick list's reversal checks it under the cut log's own lock (modules/inventory/issue).
     throw new InvalidStateError(
@@ -189,6 +191,8 @@ async function reopenScrappedHide(tools: CommandTools, of: { readonly hideId: st
   if (!hide.previousState) throw new InvalidStateError(`Hide ${hide.code} was scrapped before the state it had was kept: it stays SCRAPPED, and its scrap is not reversed.`)
   await tools.tx.hide.update({ where: { id: hide.id }, data: { state: hide.previousState, previousState: null, version: { increment: 1 } }, select: { id: true } })
   tools.audit({ action: 'inventory.hideState', recordType: 'Hide', recordId: hide.id, companyId: of.companyId, siteId: of.siteId, before: { state: 'SCRAPPED' }, after: { state: hide.previousState }, reason: note.trim() })
+  // B-W2b-100: its tagged remnant scrapped with it is in stock again.
+  await remnantsOnScrapReversed(tools, hide.id, note.trim())
   return { id: hide.id, code: hide.code, state: hide.previousState }
 }
 

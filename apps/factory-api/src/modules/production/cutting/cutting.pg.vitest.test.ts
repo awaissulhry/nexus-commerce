@@ -595,7 +595,12 @@ describe('Hide done (MES-058, SCM-253): the remnant back to stock as a REMNANT, 
     expect(response.statusCode, response.body).toBe(201)
     const done = response.json()
     expect(done.cut).toMatchObject({ areaUsed: '1.8400', remnantArea: '5.0000', pieces: [] })
-    expect(done.remnant).toMatchObject({ reason: 'RETURN', toLocationId: A.cutRack, quantity: '5.0000', workOrderId: WO.remnant.id, idempotencyKey: `production.cut.remnant:${done.cut.id}` })
+    // B-W2b-100 (SCM-254): a REMNANT move (RETURN's twin) and the piece's own tag (RM-…), in stock where it went.
+    expect(done.remnant).toMatchObject({ reason: 'REMNANT', toLocationId: A.cutRack, quantity: '5.0000', workOrderId: WO.remnant.id, idempotencyKey: `production.cut.remnant:${done.cut.id}` })
+    expect(done.remnantTag.code).toMatch(/^RM-/)
+    expect(await admin(`SELECT code, state, "locationId", "baseArea"::text AS area, "moveId" FROM "Remnant" WHERE "hideId" = $1`, [hides.H07!.id])).toEqual([
+      { code: done.remnantTag.code, state: 'IN_STOCK', locationId: A.cutRack, area: '5.0000', moveId: done.remnant.id },
+    ])
     expect(done.hide).toMatchObject({ state: 'REMNANT', left: '0.0000', closed: true })
     expect(await hideState(hides.H07!.id)).toBe('REMNANT')
     expect(await onHand(A.cutRack, hides.H07!.id)).toBe('5.0000')
@@ -630,6 +635,8 @@ describe('Hide done (MES-058, SCM-253): the remnant back to stock as a REMNANT, 
     expect(response.json()).toMatchObject({ reversedId: view.undo.id, remnantReturnReversed: true, hide: { state: 'PARTLY_CUT', left: '6.8400' } })
     expect(await onHand(A.cutRack, hides.H07!.id)).toBe('0.0000')
     expect(await hideState(hides.H07!.id)).toBe('PARTLY_CUT')
+    // B-W2b-100: the remnant's tag goes VOID with its move's reversal.
+    expect((await admin(`SELECT state FROM "Remnant" WHERE "hideId" = $1`, [hides.H07!.id])).map((row) => row.state)).toEqual(['VOID'])
   })
 
   let closing: Json

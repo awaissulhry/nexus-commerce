@@ -201,7 +201,8 @@ export const pickLotOf = (lot: LotRow): PickLot => ({
   dyeBatch: lot.dyeBatch,
 })
 
-export const HIDE_COLUMNS = { id: true, siteId: true, lotId: true, itemId: true, code: true, state: true, grade: true, version: true } as const satisfies Prisma.HideSelect
+// B-W2b-100: + its shade (W1 text) and shade group, for the shade rule and the pick list.
+export const HIDE_COLUMNS = { id: true, siteId: true, lotId: true, itemId: true, code: true, state: true, grade: true, shade: true, shadeGroupId: true, version: true } as const satisfies Prisma.HideSelect
 export type HideRow = Prisma.HideGetPayload<{ select: typeof HIDE_COLUMNS }>
 
 export async function readHides(db: Reader, hideIds: readonly string[]): Promise<Map<string, HideRow>> {

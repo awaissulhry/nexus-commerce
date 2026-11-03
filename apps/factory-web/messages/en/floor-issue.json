@@ -57,6 +57,28 @@
     "toIssue": "{quantity} to issue",
     "need": "needed, {unit}"
   },
+  "hides": {
+    "title": "Choose hides",
+    "listLabel": "Hides to take next for {line}",
+    "progress_one": "{count} hide · {area} of {need} {unit}",
+    "progress_other": "{count} hides · {area} of {need} {unit}",
+    "running_one": "→ {count} hide · {area} of {need} {unit}",
+    "running_other": "→ {count} hides · {area} of {need} {unit}",
+    "area": "area",
+    "remnant": "Remnant",
+    "grade": "Grade {grade}",
+    "sameShade": "Same shade lot",
+    "otherShade": "Another shade lot",
+    "otherShadeCount_one": "{count} hide of another shade lot or out of shade is not offered: its scan is refused.",
+    "otherShadeCount_other": "{count} hides of another shade lot or out of shade are not offered: their scan is refused.",
+    "next": "Next: {code} at {location}"
+  },
+  "shade": {
+    "lot": "Lot {lot}",
+    "lotShade": "Lot {lot}, shade {shade}",
+    "cutFrom": "Cut from {lot}",
+    "mixed": "Mixed shade lots: {lots}"
+  },
   "held": {
     "title": "Not to issue",
     "row": "{lot} · {item}: {reason} ({quantity})",
@@ -181,6 +203,22 @@
     "NOTHING_AT_WORK_ORDER": {
       "message": "The work order holds none of this any more.",
       "fix": "Read the list again: another tablet may have returned it."
+    },
+    "SHADE_LOT": {
+      "message": "This hide is of another shade lot than the one the work order is cut from.",
+      "fix": "Take a hide of the same shade lot (listed first), or ask the office."
+    },
+    "OUT_OF_SHADE": {
+      "message": "This hide is out of shade: it goes in no order that asks one shade lot.",
+      "fix": "Put it aside and take another hide."
+    },
+    "REMNANT_TOO_SMALL": {
+      "message": "This piece is smaller than the smallest remnant kept: it is waste.",
+      "fix": "Close the hide without a remnant."
+    },
+    "REMNANT_GONE_ON": {
+      "message": "The remnant went on (issued, cut or scrapped): this is not taken back.",
+      "fix": "Ask the office."
     }
   },
   "unit": {
@@ -266,7 +304,8 @@
     "done": {
       "whole": "Back to stock: {code} · {quantity} → {place}.",
       "remnant": "Back to stock as a remnant: {code} · {quantity} → {place}.",
-      "part": "Back to stock: {code} · {quantity} → {place}."
+      "part": "Back to stock: {code} · {quantity} → {place}.",
+      "remnantTag": "Remnant tag {code}"
     },
     "keepsLabel": "It keeps its label: no new one is needed.",
     "tag": {

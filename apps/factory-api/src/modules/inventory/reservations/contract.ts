@@ -2,7 +2,10 @@ import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output, quantity } from '@nexus/factory-domain/core/contracts'
 import { ITEM_TRACKINGS } from '@nexus/factory-domain/inventory/ledger/moves'
 import { MAX_RESERVATION_LINES, RESERVATION_KINDS, RESERVATION_STATUSES } from '@nexus/factory-domain/inventory/reservations/rules'
+import { SHADE_RULES } from '@nexus/factory-domain/inventory/reservations/shade'
+import { AREA_UOMS } from '@nexus/factory-domain/inventory/hides/area'
 import { LOT_QUALITY_STATUSES } from '@nexus/factory-domain/inventory/stock/overview'
+import { notMoney } from '@nexus/factory-domain/money/marked'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 
 /**
@@ -72,6 +75,11 @@ export const reserveContract = defineContract({
     /** Default the work order's due date, the order line's promised (else requested) date. */
     needDate: businessDate().optional(),
     note: z.string().trim().max(500).nullish(),
+    /**
+     * B-W2b-100 (SCM-206): hides of another shade lot than the demand's (or of the out-of-shade group) are reserved anyway, with
+     * this reason (inventory.shade.override). Without it such a line is refused (`refusal/SHADE_LOT` | `OUT_OF_SHADE`).
+     */
+    shadeOverrideReason: z.string().max(500).optional(),
     lines: z
       .array(
         input({
@@ -152,6 +160,85 @@ export const availabilityContract = defineContract({
         }),
       ),
       reservations: z.array(reservationView),
+    }),
+  },
+})
+
+// ---- B-W2b-100: find hides for a job (SCM-257, SCM-206) -------------------------------------------------------------------
+
+const foundHide = output({
+  hideId: id(),
+  hideCode: z.string(),
+  lotId: id(),
+  lotCode: z.string(),
+  shadeGroupId: id().nullable(),
+  /** The shade group's label, else the W1 shade text; null: not sorted. */
+  shadeLabel: z.string().nullable(),
+  outOfShade: z.boolean(),
+  /** Its grade by record, else its W1 text. */
+  grade: z.string().nullable(),
+  state: z.string(),
+  /** On hand at the site, base unit. */
+  left: z.string(),
+  /** The lot's area up to and with this hide, in the lot's order (largest first). */
+  running: z.string(),
+  /** In the proposal (the first lot's hides that reach the need). */
+  proposed: z.boolean(),
+  locationCodes: z.array(z.string()),
+  /** Its remnant tag (RM-…) when it is a tagged remnant in stock. */
+  remnant: output({ id: id(), code: z.string() }).nullable(),
+})
+const words = output({ it: z.string(), en: z.string() })
+
+export const findHidesContract = defineContract({
+  querystring: input({
+    /** Without a work order: the site (default the only one the caller reaches). */
+    siteId: id().optional(),
+    /** By a work order: its leather line, its need and its shade lot. */
+    workOrderId: id().optional(),
+    /** The article (required without a work order; picks the leather when the work order plans several). */
+    itemId: id().optional(),
+    itemColourId: id().optional(),
+    shadeGroupId: id().optional(),
+    /** The lowest grade taken (its tile order); ungraded hides only without it. */
+    minGradeId: id().optional(),
+    /** The area needed (replaces the work order's need), in `uom` (default the base unit). */
+    area: quantity().optional(),
+    uom: z.enum(AREA_UOMS).optional(),
+  }),
+  response: {
+    200: output({
+      site: output({ id: id() }),
+      item: output({ id: id(), code: z.string(), name: z.string(), baseUom: z.string() }),
+      colour: named.nullable(),
+      /** By a work order: what it plans, holds (issued net of returns) and still has reserved of the leather, base unit. */
+      workOrder: output({ id: id(), number: z.string(), planned: z.string().nullable(), issued: z.string().nullable(), reserved: z.string().nullable() }).nullable(),
+      /** The leathers the work order plans by the hide (to pick one when there are several). */
+      leathers: z.array(output({ itemId: id(), itemColourId: id().nullable() })),
+      need: output({ baseArea: z.string().nullable(), source: z.enum(['ASKED', 'WORK_ORDER']).nullable() }),
+      rule: z.enum(SHADE_RULES),
+      /** The shade lots the work order holds or has reserved already. */
+      ordersShadeLots: z.array(output({ lotCode: z.string(), shadeLabel: z.string().nullable() })),
+      lots: z.array(
+        output({
+          key: z.string(),
+          lotId: id(),
+          lotCode: z.string(),
+          shadeGroupId: id().nullable(),
+          shadeLabel: z.string().nullable(),
+          words,
+          count: z.number().int(),
+          /** The lot's area at the site (base unit): an area, not money. */
+          total: notMoney(z.string()),
+          covers: z.boolean(),
+          ordersOwn: z.boolean(),
+          /** Taking it would mix shades in the order. */
+          shadeWarning: z.boolean(),
+          hides: z.array(foundHide),
+        }),
+      ),
+      outOfShade: z.array(foundHide),
+      proposal: output({ lotKey: z.string(), hideIds: z.array(id()), count: z.number().int(), area: z.string(), covers: z.boolean(), words }).nullable(),
     }),
   },
 })

@@ -10,7 +10,8 @@ import type { Reader } from './store'
  */
 export async function workOrdersOf(client: Reader, lotId: string) {
   const moves = await client.stockMove.findMany({
-    where: { lotId, reason: { in: ['ISSUE', 'RETURN'] } },
+    // B-W2b-100: a REMNANT (a part of a hide back from the work order, with its tag) is a return.
+    where: { lotId, reason: { in: ['ISSUE', 'RETURN', 'REMNANT'] } },
     select: { id: true, reason: true, workOrderId: true, baseQuantity: true, reversalOfId: true, hideId: true },
     orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
   })
