@@ -75,6 +75,8 @@ import { events as plantStatutory } from '../plant-statutory/events'
 // B-W2b-123: amendments of signed results; the inspection report and the certificate of conformity.
 import { events as qualityAmendments } from '../quality-amendments/events'
 import { events as qualityDocuments } from '../quality-documents/events'
+// B-W2b-120: safety at work (the safety organisation, the RLS notice, the safety calendar's deadlines).
+import { events as safety } from '../safety/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -216,7 +218,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...plantStatutory,
   // B-W2b-123
   ...qualityAmendments,
-  ...qualityDocuments] as const satisfies readonly EventDefinition[]
+  ...qualityDocuments,
+  // B-W2b-120
+  ...safety] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

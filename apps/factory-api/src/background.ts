@@ -76,6 +76,8 @@ import { firstLoadCatchUpCron, writeStepsAll } from './platform/imports/guided/c
 import { costCatchUpCron } from './modules/costing/actual/catch-up'
 // B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
 import { loadReports } from './modules/insights/reports/registry'
+// B-W2b-120: the safety calendar's sources, so the worker can export the calendar (platform/exports/sources/safety-calendar.ts).
+import { loadSources as loadCalendarSources } from './modules/safety/calendar/registry'
 // B-W2b-41: stuck bundles told once per wait; the scan-pattern checks (only at sites whose checks are ON).
 import { scanFindingsCron, stuckBundlesCron } from './modules/production/bundles/jobs'
 // B-W2b-40: a clock-out pauses the person's running work (MES-117).
@@ -141,6 +143,8 @@ const W2B_43_HANDLERS: readonly EventHandler[] = earningsHandlers()
 const W2B_101_HANDLERS: readonly EventHandler[] = inspectionTriggerHandlers()
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
+// B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
+await loadCalendarSources(fileURLToPath(new URL('.', import.meta.url)))
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {

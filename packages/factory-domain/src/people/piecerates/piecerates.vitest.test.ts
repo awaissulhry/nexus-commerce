@@ -190,7 +190,8 @@ describe('the pay grain (W2b plan §6, §11: HR and the worker only)', () => {
     expect(GRAINS).toContain('pay')
     expect(grainOfSchema(money.pay(z.string()))).toBe('pay')
     const office = ROLE_TEMPLATES.filter((template) => template.audience === 'office' && template.grains.includes('pay')).map((template) => template.key)
-    expect(office).toEqual(['owner'])
+    // B-W2b-120: the HR template (W2b plan §11: "a new `pay` grain (HR and the worker)").
+    expect(office).toEqual(['owner', 'hr'])
     expect(templateOf('finance')!.grains).not.toContain('pay')
     expect(FLOOR_GRAINS).toContain('pay')
     expect(['operator', 'cutting_operator', 'floor_inspector', 'team_leader'].every((key) => templateOf(key)!.grains.includes('pay'))).toBe(true)
