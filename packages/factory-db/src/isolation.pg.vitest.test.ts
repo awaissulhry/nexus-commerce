@@ -23,6 +23,7 @@ import { seed as seedInspectionPlans } from '../seed/inspection-plans'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedInventory } from '../seed/inventory'
 import { seed as seedLabour } from '../seed/labour'
+import { seed as seedLeather } from '../seed/leather'
 import { seed as seedLinks } from '../seed/links'
 import { seed as seedMoney } from '../seed/money'
 import { seed as seedNumbering } from '../seed/numbering'
@@ -248,6 +249,9 @@ beforeAll(async () => {
   // The inspection plans and records schema of W2b (wave 10/16).
   await seedInspectionPlans({ db: factory, namespace: 'iso-a' })
   await seedInspectionPlans({ db: factory, namespace: 'iso-b' })
+  // The leather and roll stock schema of W2b (wave 12/16).
+  await seedLeather({ db: factory, namespace: 'iso-a' })
+  await seedLeather({ db: factory, namespace: 'iso-b' })
   // W2b-2 (B-W2b-74): a floor session inserts only an unplanned operation, so the first operation of tenant A's first site is
   // one, on its work order in progress (the seeds leave a work order's operations to their routing, every test reads them).
   await db.admin.query(
@@ -323,6 +327,7 @@ it('covers every classified table and every runtime role', () => {
     'Employee',
     'EmployeeSkill',
     'ExportJob',
+    'FabricRoll',
     'FirstLoadStep',
     'FloorRefusedAction',
     'FloorScanRefusal',
@@ -330,6 +335,7 @@ it('covers every classified table and every runtime role', () => {
     'FloorSettings',
     'FloorSyncEvent',
     'GarmentLabelPrint',
+    'GarmentProtectorLot',
     'GarmentSerial',
     'GeneratedDocument',
     'GoodsReceipt',
@@ -339,6 +345,8 @@ it('covers every classified table and every runtime role', () => {
     'HelpCall',
     'HelpCallType',
     'Hide',
+    'HideMark',
+    'HideMeasure',
     'IdempotencyReceipt',
     'ImportJob',
     'ImportRow',
@@ -367,6 +375,7 @@ it('covers every classified table and every runtime role', () => {
     'InvoiceLine',
     'Item',
     'ItemColour',
+    'ItemGradeRule',
     'ItemPlanning',
     'LabResult',
     'LabelTemplate',
@@ -374,6 +383,7 @@ it('covers every classified table and every runtime role', () => {
     'LabourDispute',
     'LabourEdit',
     'LabourRate',
+    'LeatherGrade',
     'LeaverCase',
     'LeaverStep',
     'Line',
@@ -480,6 +490,7 @@ it('covers every classified table and every runtime role', () => {
     'ReceivablesSettings',
     'RecordFollower',
     'Refund',
+    'Remnant',
     'RepairOrder',
     'RepairStageEvent',
     'ReplacementRequest',
@@ -514,6 +525,7 @@ it('covers every classified table and every runtime role', () => {
     'SearchEntry',
     'SecretValue',
     'Session',
+    'ShadeGroup',
     'ShiftPattern',
     'ShiftSegment',
     'Shipment',

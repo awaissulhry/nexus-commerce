@@ -71,6 +71,7 @@ function outside(reason: StockMoveReason, end: 'from' | 'to'): LedgerRow['from']
       return 'OPENING'
     case 'ISSUE':
     case 'RETURN':
+    case 'REMNANT':
       return 'WORK_ORDER'
     case 'COUNT':
       return 'COUNT'
@@ -346,7 +347,7 @@ export interface ExplainQuery {
 }
 
 // PRODUCTION_RECEIPT (W2a wave 5, finished goods) too: without it the sum would leave a gap where there is none.
-const REASON_ORDER: readonly StockMoveReason[] = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT']
+const REASON_ORDER: readonly StockMoveReason[] = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'REMNANT', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT']
 
 /**
  * "Why is it 84.20 m²": the figure of one stock key (a site's stock, or one location's) as the sum of its moves by reason

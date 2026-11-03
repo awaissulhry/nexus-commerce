@@ -194,7 +194,8 @@
     "PRODUCTION_RECEIPT": "Prodotti finiti da ordine di lavoro",
     "CUSTOMER_RETURN": "Reso da cliente",
     "SUPPLIER_RETURN": "Reso a fornitore",
-    "SHIPMENT": "Spedizione"
+    "SHIPMENT": "Spedizione",
+    "REMNANT": "Ritaglio da ordine"
   },
   "print": {
     "title": "Valorizzazione del magazzino · {company} · al {day}",

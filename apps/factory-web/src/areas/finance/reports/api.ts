@@ -20,7 +20,7 @@ export type ValuationMethod = (typeof VALUATION_METHODS)[number]
 export const COSTING_METHODS = ['UNDECIDED', 'STANDARD', 'MOVING_AVERAGE', 'FIFO'] as const
 export type CostingMethod = (typeof COSTING_METHODS)[number]
 // W2b (B-W2b-01): CUSTOMER_RETURN, SUPPLIER_RETURN, SHIPMENT (factory-domain STOCK_MOVE_REASONS).
-export const MOVE_REASONS = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT', 'CUSTOMER_RETURN', 'SUPPLIER_RETURN', 'SHIPMENT'] as const
+export const MOVE_REASONS = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT', 'CUSTOMER_RETURN', 'SUPPLIER_RETURN', 'SHIPMENT', 'REMNANT'] as const
 export type MoveReason = (typeof MOVE_REASONS)[number]
 
 const cost = <T extends z.ZodTypeAny>(schema: T) => schema.optional()

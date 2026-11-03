@@ -92,6 +92,8 @@ model DefectCode {
   inspectionDefects InspectionDefect[]
   // W2b inspection-plans.prisma (wave 10/16): the in-process checks that found it.
   inProcessChecks   InProcessCheck[]
+  // W2b leather.prisma (wave 12/16): the marks of it on hides.
+  hideMarks         HideMark[]
   nonconformances   Nonconformance[]
 
   @@unique([tenantId, code])

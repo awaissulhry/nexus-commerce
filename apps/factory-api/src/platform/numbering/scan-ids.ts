@@ -24,7 +24,7 @@ import { ApiError } from '../../core/errors'
 
 /**
  * Scan ids for the floor (design 02-sections-floor "tags print offline from numbers reserved per tablet"; features
- * PLT-126, PLT-237): the BUNDLE, HIDE, GARMENT_SERIAL and COUPON kinds, ONE tenant-wide counter each (a scan id carries the
+ * PLT-126, PLT-237): the BUNDLE, HIDE, GARMENT_SERIAL, COUPON, ROLL and REMNANT kinds, ONE tenant-wide counter each (a scan id carries the
  * tenant's tag, never the company). The counter is the tenant's ledger of blocks (NumberBlock); the rules are
  * factory-domain numbering/blocks, and the …_numbering_floor_guards triggers hold them for every login.
  *

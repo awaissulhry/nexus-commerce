@@ -6,6 +6,7 @@ import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testi
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant } from '@nexus/factory-domain/core/permissions'
+import { DEVICE_BLOCK_SIZE } from '@nexus/factory-domain/numbering/blocks'
 import type { ScanIdKind } from '@nexus/factory-domain/numbering/kinds'
 import { formatScanId, parseScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { seed as seedCore, type CoreSeed } from '../../../../../packages/factory-db/seed/_core'
@@ -28,7 +29,8 @@ import { allocateScanIds, closeBlock, reserveBlock, ScanIdsRefusedError, topUpBl
  * used (useScanIds: inside its own blocks, once each), the guard triggers for every login, and the routes.
  *
  * Seeds: _core, auth, floor-auth and numbering-blocks for two tenants. Each tenant's tablets A1 and B1 hold the seeded
- * blocks BUNDLE and HIDE 1–200 (A1) and 201–400 (B1), GARMENT_SERIAL 1–500 and 501–1000; hide tags 1 and 2 of A1's
+ * blocks BUNDLE, HIDE and COUPON 1–200 (A1) and 201–400 (B1), GARMENT_SERIAL 1–500 and 501–1000, ROLL and REMNANT 1–100
+ * and 101–200 (W2b wave 12/16); hide tags 1 and 2 of A1's
  * block and 201 of B1's are used.
  */
 
@@ -191,9 +193,12 @@ describe("a tablet's blocks", () => {
       ['HIDE', 200, 0],
       ['GARMENT_SERIAL', 500, 0],
       ['COUPON', 200, 0],
+      ['ROLL', 100, 0],
+      ['REMNANT', 100, 0],
     ])
-    for (const block of first.reserved) expect(block.fromRef).toBeGreaterThan(400)
-    expect(first.blocks).toHaveLength(4)
+    // Above both seeded tablets' blocks of its kind.
+    for (const block of first.reserved) expect(block.fromRef).toBeGreaterThan(2 * DEVICE_BLOCK_SIZE[block.kind as ScanIdKind])
+    expect(first.blocks).toHaveLength(6)
     // Enough left: nothing reserved, the check is audited.
     const enough = await topUpBlocks(as(floor(tablet, siteA1)), [{ kind: 'HIDE' }], newId())
     expect(enough.reserved).toEqual([])
@@ -205,8 +210,8 @@ describe("a tablet's blocks", () => {
     // Three live HIDE blocks: no fourth.
     expect((await topUpBlocks(as(floor(tablet, siteA1)), [{ kind: 'HIDE', remaining: 0 }], newId())).reserved).toEqual([])
     expect((await admin('SELECT count(*)::int AS n FROM "NumberBlock" WHERE "deviceId" = $1 AND kind = \'HIDE\'', [tablet]))[0]).toEqual({ n: 3 })
-    // Every reservation is audited on its block.
-    expect(await admin('SELECT count(*)::int AS n FROM "AuditLog" WHERE action = \'numbering.reserveBlock\' AND after->>\'deviceId\' = $1', [tablet])).toEqual([{ n: 6 }])
+    // Every reservation is audited on its block: one per kind at the first top-up (six), then two HIDE blocks.
+    expect(await admin('SELECT count(*)::int AS n FROM "AuditLog" WHERE action = \'numbering.reserveBlock\' AND after->>\'deviceId\' = $1', [tablet])).toEqual([{ n: 8 }])
   })
 
   it('the office reserves a block for an active tablet it may manage, and closes one with a reason', async () => {

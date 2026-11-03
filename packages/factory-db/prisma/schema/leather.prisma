@@ -1,0 +1,399 @@
+// Leather and roll stock (W2b schema wave 12/16, B-W2b-80; features PRD-031, QHS-006, SCM-249, SCM-250, SCM-254, SCM-258,
+// SCM-260, SCM-261, SCM-263, MES-054, QHS-025, QHS-028; design warehouse.hides, products.materials "Grades and usable
+// area", quality.defects "Leather grades and hide defects", floor.incoming, floor.hidecut, floor.fabriccut): hides, offcuts
+// and rolls as stock with their own tags and marks. W1 has one hide table with free text.
+//
+// Grades: LeatherGrade is the tenant's one vocabulary, for incoming and cutting alike; ItemGradeRule says what a grade means
+// for one article (its usable share, the panels that may use it). A grade's usable share is the default; the article's rule
+// wins. A hide's usable-area estimate (SCM-250) is its area × that share, worked out by the reader, never stored.
+//
+// Hide.grade and Hide.shade keep their text, so W1's labels and history stay valid: a hide with no gradeId or shadeGroupId is
+// a W1 hide. Once one is set, the text says the same as the record (the …_leather_stock_w2b_guards trigger), so everything
+// that reads the text goes on reading the truth.
+//
+// Measures: HideMeasure is append-only. Hide.area is what came in and what the ledger holds; it never changes (a correction
+// is an adjustment move, W1's rule). A re-measure records what we found against what the tannery declared; the difference
+// and any claim are the reader's (B-W2b-94).
+//
+// Remnants: an offcut worth keeping is tagged stock of its own, RM-… (a scan-id kind). Its stock is still the ledger's, under
+// its hide: a Remnant names the REMNANT move (or W1's RETURN) that put it into stock, and a hide may give several pieces. The
+// ledger stays the truth; a Remnant is the tag, the piece's area and where it lies.
+//
+// Rolls: a FabricRoll is a tagged part of its lot (RL-…, a scan-id kind). The ledger stays per lot, as in W1 (StockMove names
+// no roll), so `lengthLeft` is stored on the roll and kept by the module that cuts from it (B-W2b-107, -85, the lay report).
+//
+// Consumables by pack (SCM-263): Item.packSize and packUom. Their minimum and maximum per site are ItemPlanning's method
+// MIN_MAX (W2a wave 4), which is already one row per site × item × colour.
+//
+// Who sees what (ownership/leather.json): the office keeps grades, rules and shade groups, and the floor reads them (the
+// tiles at incoming and at the cutting table). Marks, measures, remnants, rolls and protector lots are written by the office
+// and by the floor of their site. Portal and link sessions read nothing here. No table here has a cost, price, margin or
+// wages column: a remnant's value is its hide's lot cost × its area, in the valuation ledger.
+
+/// A leather grade (QHS-006, PRD-031; design "Grades A-D"): the tenant's one list for incoming and cutting. Retired
+/// (`active` false), never deleted: hides and remnants keep it. Words as DefectCode: in Italian, in English, and in the other
+/// floor languages.
+model LeatherGrade {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// "A", "B", "C", "D": no spaces, unique in the tenant. Never changes: Hide.grade copies it.
+  code        String
+  labelIt     String
+  labelEn     String
+  /// The words in the other floor languages of the tenant's sites (Site.floorLocales): { "ro": "…" }.
+  labelI18n   Json     @default("{}")
+  /// The share of a hide of this grade that can be cut, percent, 0 to 100: the default when an article has no rule.
+  usableShare Decimal  @db.Decimal(5, 2)
+  /// Pickers and tiles show the list in this order (lower first).
+  sortOrder   Int      @default(0)
+  /// Retired grades leave the pickers and stay on what names them.
+  active      Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  rules     ItemGradeRule[]
+  hides     Hide[]
+  remnants  Remnant[]
+  hideMarks HideMark[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references.
+  @@unique([tenantId, id])
+}
+
+/// What a grade means for one leather article (PRD-031; design products.materials "Grades and usable area"): its usable
+/// share and the panels that may use it. At most one active rule per article and grade (a partial unique index of
+/// …_leather_stock_w2b_guards); a grade the article no longer takes is retired, never deleted.
+model ItemGradeRule {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// An article tracked by HIDE. Fixed.
+  itemId      String   @db.Uuid
+  /// Fixed.
+  gradeId     String   @db.Uuid
+  /// The share of a hide of this article and grade that can be cut, percent, 0 to 100.
+  usableShare Decimal  @db.Decimal(5, 2)
+  /// The panels that may use the grade ("sleeve", "yoke"); empty: every panel. In words until a style's pattern pieces
+  /// name their lowest grade (PatternPiece, B-W2b-85).
+  panels      String[] @default([])
+  active      Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  item  Item         @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  grade LeatherGrade @relation(fields: [tenantId, gradeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, itemId])
+}
+
+/// What a mark on a hide is.
+enum HideMarkKind {
+  /// A defect at one point: a hole, a scar, a vein, a brand mark (its defect code; the zone it lies in, when known).
+  DEFECT
+  /// A quality zone (A, B, C …) of the hide, drawn on the map (its grade, its outline).
+  ZONE
+}
+
+/// One defect or quality zone on a hide (MES-054; the HideMap of floor.incoming): where on the hide's outline or photo, from
+/// 0 to 1 on each axis. Known defects keep bad panels off the hide and are evidence for a claim, so a wrong mark is withdrawn
+/// (voidedAt, with who and why), never changed or deleted. Marks made in an incoming inspection are also on its hide result
+/// (IncomingHideResult.marks); this table is what stays with the hide.
+model HideMark {
+  id                   String       @id @db.Uuid
+  tenantId             String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String       @db.Uuid
+  /// The hide's lot, and the hide.
+  lotId                String       @db.Uuid
+  hideId               String       @db.Uuid
+  kind                 HideMarkKind
+  /// The point on the hide (a ZONE: where its grade letter is drawn), from 0 to 1.
+  x                    Decimal      @db.Decimal(6, 5)
+  y                    Decimal      @db.Decimal(6, 5)
+  /// A ZONE's outline: the points in order, each from 0 to 1: [{ "x": 0.1, "y": 0.2 }, …]. Empty for a DEFECT.
+  outline              Json         @default("[]")
+  /// A DEFECT's code, exactly: a defect of the library, not a category.
+  defectCodeId         String?      @db.Uuid
+  /// A ZONE's grade, exactly; on a DEFECT, the zone it lies in, when known.
+  zoneGradeId          String?      @db.Uuid
+  /// The photo it was marked on, a file of the hide; null: the hide's outline.
+  photoFileId          String?      @db.Uuid
+  /// The incoming inspection it was made in; null: at the cutting table or in the office.
+  incomingInspectionId String?      @db.Uuid
+  note                 String?
+  /// Withdrawn: when, by whom and why, all three or none, once. A withdrawn mark stays on the record and leaves the map.
+  voidedAt             DateTime?    @db.Timestamptz(3)
+  voidedById           String?      @db.Uuid
+  voidReason           String?
+  version              Int          @default(1)
+  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The office user or floor worker who made it.
+  createdById          String?      @db.Uuid
+
+  hide       Hide                @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  defectCode DefectCode?         @relation(fields: [tenantId, defectCodeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  zoneGrade  LeatherGrade?       @relation(fields: [tenantId, zoneGradeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  photo      StoredFile?         @relation("HideMarkPhoto", fields: [tenantId, photoFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // An inspection of the hide's own lot.
+  inspection IncomingInspection? @relation(fields: [tenantId, siteId, lotId, incomingInspectionId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, hideId])
+  @@index([tenantId, incomingInspectionId])
+}
+
+/// One measure of a hide against what the tannery declared (SCM-249, QHS-025): leather is paid by area, and this is the
+/// evidence of a short-measured lot. A lot's figure is the sum of its hides' rows. Hide.area never changes with it: a
+/// correction of stock is an adjustment move (W1's rule). A wrong measure is followed by a new row.
+/// @append-only
+model HideMeasure {
+  id                   String    @id @db.Uuid
+  tenantId             String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String    @db.Uuid
+  /// The hide's lot, and the hide.
+  lotId                String    @db.Uuid
+  hideId               String    @db.Uuid
+  /// The tannery's declared area, when known, and the area we measured, above 0, in the same area unit (M2, DM2, FT2).
+  declaredArea         Decimal?  @db.Decimal(18, 4)
+  measuredArea         Decimal   @db.Decimal(18, 4)
+  areaUom              Uom
+  /// The incoming inspection it was measured in; null: a re-measure on its own.
+  incomingInspectionId String?   @db.Uuid
+  /// By whom: an office user or a floor worker, exactly one. Shown only inside this record, never as a filter, group or
+  /// total (Owner answer W1).
+  measuredById         String?   @db.Uuid
+  measuredByWorkerId   String?   @db.Uuid
+  /// The floor device it was recorded on.
+  deviceId             String?   @db.Uuid
+  measuredAt           DateTime  @db.Timestamptz(3)
+  note                 String?
+  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
+  createdById          String?   @db.Uuid
+
+  hide             Hide                @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  // An inspection of the hide's own lot.
+  inspection       IncomingInspection? @relation(fields: [tenantId, siteId, lotId, incomingInspectionId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  measuredByWorker Worker?             @relation(fields: [tenantId, siteId, measuredByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device           Device?             @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, hideId, measuredAt])
+  @@index([tenantId, lotId])
+}
+
+/// A shade group against the master swatch (QHS-028, PRD colour standard): the tiles 1, 2, 3 and "out of shade" of
+/// floor.incoming. It is an article's, in one colour or any (every lot of it sorted against one swatch), or one lot's (lotId):
+/// all the pieces of one order come from one group (Q18 (a), B-W2b-100's setting). Retired (`active` false), never deleted.
+model ShadeGroup {
+  id            String   @id @db.Uuid
+  tenantId      String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The article, tracked by HIDE or LOT. Fixed.
+  itemId        String   @db.Uuid
+  /// The colour it is of; null: any colour of the article. A lot's group is of the lot's colour. Fixed.
+  itemColourId  String?  @db.Uuid
+  /// One lot's group, with the lot's site, both or neither: null: the article's, on every site. Fixed. Not a policy key: the
+  /// floor reads an article's groups, which have no site, so the table is tenant-wide.
+  lotSiteId     String?  @db.Uuid
+  lotId         String?  @db.Uuid
+  /// What the tile says ("1", "2", "3"): unique in its article, colour and lot (a second, partial index holds it where
+  /// colour or lot is null). Hide.shade and FabricRoll.shade copy it.
+  label         String
+  /// The group of pieces that do not match: they go in no order that asks one shade.
+  outOfShade    Boolean  @default(false)
+  /// The master swatch: a photo of it, a file of this group, and the physical one's reference ("Swatch 12, shelf 3").
+  swatchFileId  String?  @db.Uuid
+  swatchRef     String?
+  /// Tiles show the groups in this order (lower first).
+  sortOrder     Int      @default(0)
+  active        Boolean  @default(true)
+  note          String?
+  version       Int      @default(1)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?  @db.Uuid
+
+  item        Item        @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and itemId.
+  itemColour  ItemColour? @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot         Lot?        @relation(fields: [tenantId, lotSiteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  swatchFile  StoredFile? @relation("ShadeGroupSwatch", fields: [tenantId, swatchFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  hides       Hide[]
+  fabricRolls FabricRoll[]
+
+  @@unique([tenantId, itemId, itemColourId, lotId, label])
+  // The target of the tenant-safe references.
+  @@unique([tenantId, id])
+  @@index([tenantId, lotId])
+}
+
+/// IN_STOCK → ISSUED | SCRAPPED | VOID; ISSUED → IN_STOCK | USED; USED → ISSUED; SCRAPPED → IN_STOCK. VOID is final.
+enum RemnantState {
+  /// In stock, at its place.
+  IN_STOCK
+  /// At a work order; it comes back (IN_STOCK), or is used up (USED).
+  ISSUED
+  /// Cut. Comes back to ISSUED only when the cut that used it is reversed. What is left of it is a new Remnant, with a new tag.
+  USED
+  /// Comes back only when the SCRAP move is reversed.
+  SCRAPPED
+  /// It never was: the move that put it into stock was reversed.
+  VOID
+}
+
+/// An offcut as stock (SCM-254, MES-058; design floor.hidecut "Hide done"): the tag printed at the cutting table, its area,
+/// grade and place. Its stock is the ledger's, under its hide. Its shape photo is a file of the row (StoredFile recordType
+/// "Remnant"). The area never changes: when a remnant is cut, what is left of it is a new Remnant. Never deleted (VOID).
+model Remnant {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that owns the stock: the site's.
+  companyId   String       @db.Uuid
+  siteId      String       @db.Uuid
+  /// The hide's lot, and the hide it came from. Fixed.
+  lotId       String       @db.Uuid
+  hideId      String       @db.Uuid
+  /// Our tag (RM-…, factory-domain numbering/scan-id type REMNANT), unique in the tenant; printed and scanned. Fixed.
+  code        String
+  /// The piece's area, above 0, in an area unit (M2, DM2, FT2), and in the item's base unit. Fixed.
+  area        Decimal      @db.Decimal(18, 4)
+  areaUom     Uom
+  baseArea    Decimal      @db.Decimal(18, 4)
+  /// Its grade, when it differs from the hide's or the hide has a record of one; null: read the hide's.
+  gradeId     String?      @db.Uuid
+  /// Where it lies, on its site: required while IN_STOCK.
+  locationId  String?      @db.Uuid
+  state       RemnantState @default(IN_STOCK)
+  /// The REMNANT move (or W1's RETURN) that put it into stock: never a reversal; its hide; enters the remnant's place when
+  /// made; the live pieces of one move never add up to more than the move. Fixed.
+  moveId      String       @db.Uuid
+  note        String?
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  site     Site          @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  hide     Hide          @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  grade    LeatherGrade? @relation(fields: [tenantId, gradeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  location Location?     @relation(fields: [tenantId, siteId, locationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  move     StockMove     @relation(fields: [tenantId, siteId, moveId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, hideId])
+  @@index([tenantId, moveId])
+  @@index([tenantId, siteId, state])
+}
+
+/// A roll's state: what its length left says, or that it left the stock.
+enum FabricRollState {
+  /// Untouched: lengthLeft = length.
+  FULL
+  /// Cut from: 0 < lengthLeft < length.
+  PARTIAL
+  /// An end of roll kept as a remnant (SCM-260): 0 < lengthLeft < length.
+  END
+  /// Nothing left: lengthLeft = 0.
+  CONSUMED
+  SCRAPPED
+  /// Sent back to the supplier.
+  RETURNED
+}
+
+/// A fabric roll (SCM-260; design floor.fabriccut, production.cutting "rolls by shade, width and shrinkage group"): a tagged
+/// part of its lot, with its length, width, shade and shrinkage. The ledger stays per lot: a roll is the tag and the length
+/// left, kept by the module that cuts from it. IncomingRollResult names it by recordType + recordId (wave 10 came first), and
+/// a lay (LayRoll, B-W2b-85) names it by a key. Never deleted.
+model FabricRoll {
+  id                     String          @id @db.Uuid
+  tenantId               String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that owns the stock: the site's.
+  companyId              String          @db.Uuid
+  siteId                 String          @db.Uuid
+  /// The lot's item, tracked by LOT. Fixed.
+  itemId                 String          @db.Uuid
+  /// The dye lot it came in. Fixed.
+  lotId                  String          @db.Uuid
+  /// Our tag (RL-…, factory-domain numbering/scan-id type ROLL), unique in the tenant; printed and scanned. Fixed.
+  code                   String
+  /// The supplier's number on the roll.
+  supplierRollRef        String?
+  /// The length received, above 0, in a length unit (M, CM, MM), the same as the lot's stock. Fixed: a correction is an
+  /// adjustment move on the lot and a new lengthLeft.
+  length                 Decimal         @db.Decimal(18, 4)
+  uom                    Uom
+  /// What is left, from 0 to `length`, in `uom`. The state says the same.
+  lengthLeft             Decimal         @db.Decimal(18, 4)
+  /// The usable width, above 0.
+  widthCm                Decimal?        @db.Decimal(10, 2)
+  /// The shade, as text and (when sorted against the swatch) the group: the text is the group's label, as on a hide.
+  shade                  String?
+  shadeGroupId           String?         @db.Uuid
+  /// Shrinkage measured on it, percent, 0 to 100, along and across, and the group the cutting room lays it with ("S1").
+  shrinkageLengthPercent Decimal?        @db.Decimal(5, 2)
+  shrinkageWidthPercent  Decimal?        @db.Decimal(5, 2)
+  shrinkageGroup         String?
+  /// Defects seen, in words; the 4-point counters are the incoming inspection's.
+  defects                String?
+  /// Where it lies, on its site; null while it is at a work order.
+  locationId             String?         @db.Uuid
+  state                  FabricRollState @default(FULL)
+  note                   String?
+  version                Int             @default(1)
+  createdAt              DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById            String?         @db.Uuid
+
+  site       Site        @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot        Lot         @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  shadeGroup ShadeGroup? @relation(fields: [tenantId, shadeGroupId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  location   Location?   @relation(fields: [tenantId, siteId, locationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, code])
+  // The target of a lay's reference (B-W2b-85): a roll of the lay's own site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, lotId])
+  @@index([tenantId, siteId, state])
+}
+
+/// Which protector lot a garment holds (SCM-261; EN 1621-1, -2; Reg. (EU) 2016/425): one row per work order (a batch: every
+/// garment of it may hold the lot) or per garment serial, and per protector lot, so a recall of a protector lot finds its
+/// garments. The lot's own certificate is its LotDocument (PPE_CERTIFICATE). It records what was built in, so a lot held after
+/// the fact can still be recorded. A wrong row is withdrawn by the office (voidedAt, with who and why), never changed or deleted.
+model GarmentProtectorLot {
+  id              String    @id @db.Uuid
+  tenantId        String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String    @db.Uuid
+  /// The batch: never a DRAFT work order.
+  workOrderId     String    @db.Uuid
+  /// The one garment, a serial of the work order; null: the whole batch.
+  garmentSerialId String?   @db.Uuid
+  /// The protector: an item of kind PROTECTOR, or marked as a PPE component.
+  itemId          String    @db.Uuid
+  /// A lot of that item, on the work order's site.
+  lotId           String    @db.Uuid
+  /// Where in the garment ("shoulder", "elbow", "back"), when it matters.
+  placement       String?
+  /// Withdrawn: when, by whom and why, all three or none, once.
+  voidedAt        DateTime? @db.Timestamptz(3)
+  voidedById      String?   @db.Uuid
+  voidReason      String?
+  version         Int       @default(1)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?   @db.Uuid
+
+  workOrder     WorkOrder      @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and workOrderId.
+  garmentSerial GarmentSerial? @relation(fields: [tenantId, siteId, workOrderId, garmentSerialId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot           Lot            @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, lotId])
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, garmentSerialId])
+}
