@@ -208,6 +208,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const team = await client.team.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
     return team ? { companyId: team.companyId, siteId: team.siteId, partyId: null } : null
   },
+  // B-W2b-108 (modules/quality/capa; the CAPA's Activity tab, its reminder and escalation tasks): the company it belongs
+  // to, no site (one CAPA takes NCRs of several sites), and the customer an 8D is written for; internal CAPAs no party.
+  Capa: async (client, id) => {
+    const capa = await client.capa.findUnique({ where: { id }, select: { companyId: true, customerId: true } })
+    return capa ? { companyId: capa.companyId, siteId: null, partyId: capa.customerId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

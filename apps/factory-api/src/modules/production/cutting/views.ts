@@ -26,6 +26,8 @@ import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { workerGateFor } from '../../people/privacy/worker-gate'
+// B-W2b-103: the hide check per work order (./checks.ts).
+import { evaluateChecks, readCheckFacts } from './checks'
 import { cuttingWorkOrder, entryView, mayCut } from './cut'
 import {
   CUT_HEADER,
@@ -248,6 +250,12 @@ export async function scanHide(caller: CommandCaller, query: { readonly code: st
       } else if (!refusal && left.lte(0)) {
         refusal = { code: 'NOTHING_LEFT', message: `Hide ${hide.code} has nothing left for work order ${workOrder.number}: all of it was cut.` }
       }
+      // B-W2b-103: the hide check against this work order, for the card (every piece of its leather; no thickness typed yet).
+      let checks = null
+      if (refusal === null) {
+        const result = evaluateChecks(await readCheckFacts(db, { workOrder, hide, lot, item }), null)
+        checks = { warnings: result.warnings, standing: result.standing, passed: [...result.passed], shade: result.shade, thickness: result.thickness, grade: result.grade, reserved: result.reserved, photo: { required: false } }
+      }
       workOrders.push({
         id: workOrder.id,
         number: workOrder.number,
@@ -256,6 +264,7 @@ export async function scanHide(caller: CommandCaller, query: { readonly code: st
         left: text(left),
         cuttable: refusal === null,
         refusal,
+        checks,
         cells: cells.flatMap((cell) => {
           const state = materialCell(planned, piecesOf(pieces, cell.id), cell, material)
           return state ? [{ id: cell.id, colourwayCode: cell.colourwayCode, size: cell.size, quantity: cell.quantity, ...state }] : []
@@ -334,7 +343,7 @@ export async function cutLog(caller: CommandCaller, workOrderId: string) {
     // The office sees who cut an entry where the site names workers (an agreement on record, B-W1-37) and its PERFORMANCE gate is on; the floor never.
     const who = await workerGateFor(db, workOrder.siteId)
     const workers = new Map(
-      (await db.worker.findMany({ where: { id: { in: [...new Set(who.lookup(all.entries.map((entry) => entry.workerId)))] } }, select: { id: true, displayName: true } })).map((worker) => [worker.id, { id: worker.id, name: worker.displayName }]),
+      (await db.worker.findMany({ where: { id: { in: [...new Set(who.lookup(all.entries.flatMap((entry) => [entry.workerId, entry.overrideLeadWorkerId])))] } }, select: { id: true, displayName: true } })).map((worker) => [worker.id, { id: worker.id, name: worker.displayName }]),
     )
     const stations = await readStations(db, [...new Set(all.entries.flatMap((entry) => (entry.stationId ? [entry.stationId] : [])))])
     const cellLabels = new Map(cells.map((cell) => [cell.id, cell]))
@@ -360,6 +369,9 @@ export async function cutLog(caller: CommandCaller, workOrderId: string) {
           closing: hideOf.get(entry.hideId)?.closingCutLogId === entry.id,
           worker: who.id(entry.workerId) ? (workers.get(entry.workerId!) ?? null) : null,
           workerHidden: who.hidden(entry.workerId),
+          // B-W2b-103: the lead who signed "Cut anyway", by the same gate.
+          overrideLead: who.id(entry.overrideLeadWorkerId) ? (workers.get(entry.overrideLeadWorkerId!) ?? null) : null,
+          overrideLeadHidden: who.hidden(entry.overrideLeadWorkerId),
           station: entry.stationId ? (stations.get(entry.stationId) ?? null) : null,
           cells: [...new Set(pieces.filter((piece) => piece.cutLogId === entry.id).map((piece) => piece.cellId))].map((cellId) => ({
             workOrderSizeId: cellId,

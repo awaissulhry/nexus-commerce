@@ -234,6 +234,15 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       const pieces = whole((p.decision as { pieces?: unknown } | null | undefined)?.pieces)
       return { code: text(p.kind, 20), target: text((p.decision as { outcome?: unknown } | null | undefined)?.outcome, 20), ...(pieces !== undefined ? { quantity: pieces } : {}), ...(workOrderId ? { workOrderId } : {}) }
     }
+    // B-W2b-106: what was recorded and on which inspection (a count's units added or set, how many rows); never who, never a
+    // value, a note or a mark.
+    case 'quality.final.record':
+    case 'quality.incoming.record':
+    case 'quality.inprocess.results': {
+      const rows = Array.isArray(p.results) ? p.results.length : Array.isArray(p.measurements) ? p.measurements.length : Array.isArray(p.defects) ? p.defects.length : undefined
+      const counted = whole(p.add) ?? whole(p.inspected) ?? rows
+      return { code: kind === 'quality.inprocess.results' ? 'RESULTS' : text(p.what, 20), target: text(p.inspectionId, 40) ?? text(p.checkId, 40), ...(counted !== undefined ? { quantity: counted } : {}) }
+    }
   }
 }
 
