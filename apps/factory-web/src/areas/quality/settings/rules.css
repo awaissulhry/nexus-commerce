@@ -1,0 +1,236 @@
+/*
+ * Quality › Settings › Quality rules (SCR-260): layout only, semantic --nds-* tokens. The page fills the shell's main area
+ * (no max-width): who may sign what beside the result rules and the fixed rules on a wide screen, one column below 1100px;
+ * the alert rules below, full width.
+ */
+
+.fw-qr-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .fw-qr-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-qr-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-qr-card {
+  min-width: 0;
+}
+
+.fw-qr-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-qr-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-qr-question {
+  margin: 0 0 var(--nds-space-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-qr-hint,
+.fw-qr-changed {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-qr-changed {
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-qr-held,
+.fw-qr-problem {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-warning-text);
+}
+
+.fw-qr-problem {
+  color: var(--nds-danger-text);
+}
+
+.fw-qr-inforce,
+.fw-qr-row,
+.fw-qr-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-qr-source,
+.fw-qr-sub {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.fw-qr-customers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-6);
+}
+
+.fw-qr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-2) var(--nds-space-6);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+  font-size: var(--nds-font-size-sm);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-qr-chip.is-inherited {
+  color: var(--nds-text-2);
+}
+
+.fw-qr-lines {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+
+.fw-qr-lines.is-strong {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-qr-locked {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qr-signing,
+.fw-qr-sites,
+.fw-qr-separations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-qr-signing li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qr-signing-text {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.fw-qr-sites li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qr-separations li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nds-space-6);
+  align-items: start;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qr-separations li.is-broken {
+  color: var(--nds-warning-text);
+}
+
+.fw-qr-broken {
+  display: block;
+  margin-top: var(--nds-space-2);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-qr-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-4) 0;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.fw-qr-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--nds-text-link);
+  font: inherit;
+  cursor: pointer;
+}
+
+.fw-qr-link:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+
+.fw-qr-dialog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-qr-wait {
+  width: 6rem;
+}
+
+.fw-qr-keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-qr-keys div {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-qr-keys dd {
+  margin: 0;
+}

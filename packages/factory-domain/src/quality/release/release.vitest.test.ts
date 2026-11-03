@@ -98,8 +98,10 @@ describe('four eyes as a setting (Owner answer Q1 (a))', () => {
   })
 
   it('the company rule wins, the lists of both apply; loosening is ALWAYS → WHEN_REQUIRED or a customer taken off', () => {
-    expect(fourEyesInForce(null, null)).toEqual({ rule: 'WHEN_REQUIRED', source: 'DEFAULT', partyIds: [] })
-    expect(fourEyesInForce({ releaseFourEyes: null, secondPersonPartyIds: ['p2'] }, { releaseFourEyes: 'ALWAYS', secondPersonPartyIds: ['p1', 'p2'] })).toEqual({ rule: 'ALWAYS', source: 'TENANT', partyIds: ['p1', 'p2'] })
+    expect(fourEyesInForce(null, null)).toEqual({ rule: 'WHEN_REQUIRED', source: 'DEFAULT', partyIds: [], conditions: ['CUSTOMER', 'OVERRIDE'] })
+    expect(fourEyesInForce({ releaseFourEyes: null, secondPersonPartyIds: ['p2'] }, { releaseFourEyes: 'ALWAYS', secondPersonPartyIds: ['p1', 'p2'] })).toEqual({ rule: 'ALWAYS', source: 'TENANT', partyIds: ['p1', 'p2'], conditions: ['CUSTOMER', 'OVERRIDE'] })
+    // B-W2b-118: the conditions as the trigger reads them (a row's list, the company's and the tenant's together).
+    expect(fourEyesInForce({ releaseFourEyes: null, secondPersonPartyIds: [], fourEyesConditions: [] }, { releaseFourEyes: null, secondPersonPartyIds: [], fourEyesConditions: ['CUSTOMER'] }).conditions).toEqual(['CUSTOMER'])
     expect(fourEyesInForce({ releaseFourEyes: 'WHEN_REQUIRED', secondPersonPartyIds: [] }, { releaseFourEyes: 'ALWAYS', secondPersonPartyIds: [] }).source).toBe('COMPANY')
     expect(isFourEyesLoosening({ releaseFourEyes: 'ALWAYS', secondPersonPartyIds: [] }, { releaseFourEyes: null, secondPersonPartyIds: [] })).toBe(true)
     expect(isFourEyesLoosening({ releaseFourEyes: null, secondPersonPartyIds: ['p1'] }, { releaseFourEyes: 'ALWAYS', secondPersonPartyIds: [] })).toBe(true)

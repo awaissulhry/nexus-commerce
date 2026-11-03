@@ -111,7 +111,9 @@
     "standard_one": "{count} standard code added.",
     "standard_other": "{count} standard codes added.",
     "starter_one": "{count} code of the starter set added.",
-    "starter_other": "{count} codes of the starter set added."
+    "starter_other": "{count} codes of the starter set added.",
+    "addedCause": "Cause {code} added.",
+    "addedGrade": "Grade {code} added."
   },
   "drawer": {
     "categorySub_one": "A category of {count} defect",
@@ -331,7 +333,10 @@
     "stale": "Someone changed this code meanwhile: it was read again; make your change once more.",
     "stockMoveReason": "This outcome does not allow that stock move.",
     "tooLong": "At most 80 characters.",
-    "zone": "Pick a zone of the garment map."
+    "zone": "Pick a zone of the garment map.",
+    "full": "The list is full: retire or delete some codes first.",
+    "process": "Pick the process that answers for it.",
+    "usableShare": "A percent from 0 to 100, at most two decimals (72,5)."
   },
   "readOnly": {
     "title": "You can read the library, not change it"

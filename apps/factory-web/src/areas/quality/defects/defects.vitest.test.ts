@@ -49,7 +49,9 @@ const OPEN_SEAM = SEAMS.defects[0]!
 describe('the address', () => {
   it('reads the tab, the rows, the search, the open code and ?new=1; writes only what differs', () => {
     expect(addressOf(params('tab=dispositions&new=1'))).toMatchObject({ tab: 'dispositions', isNew: true, view: 'all' })
-    expect(addressOf(params('tab=severity&view=retired&q=seam&open=x'))).toEqual({ tab: 'defects', view: 'retired', q: 'seam', open: 'x', isNew: false })
+    // B-W2b-118: Severity, Causes and Leather grades are built tabs now; an unknown tab reads as Defects.
+    expect(addressOf(params('tab=severity&view=retired&q=seam&open=x'))).toEqual({ tab: 'severity', view: 'retired', q: 'seam', open: 'x', isNew: false })
+    expect(addressOf(params('tab=nonsense'))).toMatchObject({ tab: 'defects' })
     expect(addressOf(null)).toEqual({ tab: 'defects', view: 'all', q: '', open: null, isNew: false })
     expect(queryOf({ tab: 'defects' })).toBe('')
     expect(queryOf({ tab: 'dispositions', view: 'active', q: 'a b', open: 'id' })).toBe('?tab=dispositions&view=active&q=a+b&open=id')

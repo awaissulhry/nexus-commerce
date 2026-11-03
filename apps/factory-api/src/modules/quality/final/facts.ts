@@ -4,6 +4,7 @@ import { classificationOf, complianceChecks, documentLanguages, documentStatus, 
 import { inspectionLabel } from '@nexus/factory-domain/quality/final/rules'
 import {
   fourEyesInForce,
+  isFourEyesCondition,
   lotHolds,
   releaseChecks,
   releaseRefusalIssues,
@@ -134,7 +135,8 @@ export async function certificateOf(db: Reader, header: Pick<LabelHeader, 'style
 
 export async function ruleInForce(db: Reader, tenantId: string, companyId: string): Promise<FourEyesInForce> {
   const rows = await fourEyesRows(db, tenantId, companyId)
-  const row = (value: typeof rows.company) => (value ? { releaseFourEyes: (value.releaseFourEyes ?? null) as FourEyesRule | null, secondPersonPartyIds: value.secondPersonPartyIds ?? [] } : null)
+  // B-W2b-118: with the row's fourEyesConditions, so the gate says a second person only where the database asks one.
+  const row = (value: typeof rows.company) => (value ? { releaseFourEyes: (value.releaseFourEyes ?? null) as FourEyesRule | null, secondPersonPartyIds: value.secondPersonPartyIds ?? [], fourEyesConditions: value.fourEyesConditions.filter(isFourEyesCondition) } : null)
   return fourEyesInForce(row(rows.company), row(rows.tenant))
 }
 
@@ -197,7 +199,7 @@ export async function cellGate(db: Reader, input: GateInput): Promise<CellGate> 
   const lots = (await lotsOfWorkOrder(db, header.id)).filter(lotHolds)
   const makers = await makersOf(db, header.id)
   const rule = await ruleInForce(db, input.tenantId, header.companyId)
-  const reasons = secondPersonReasons({ overridden: Boolean(inspection?.overrideReason), rule: rule.rule, customerListed: rule.partyIds.includes(cell.partyId) })
+  const reasons = secondPersonReasons({ overridden: Boolean(inspection?.overrideReason), rule: rule.rule, customerListed: rule.partyIds.includes(cell.partyId), conditions: rule.conditions })
   const facts: ReleaseFacts = {
     workOrder: { number: header.number, status: header.status },
     inspection: inspection ? { label: inspectionLabel(header.number, seq, inspection.number), status: inspection.status, lotSize: inspection.lotSize, releasedFrom: fromIt } : null,

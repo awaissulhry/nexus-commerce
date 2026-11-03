@@ -5,7 +5,7 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { QUALITY_SETTINGS_MANAGE } from '@nexus/factory-domain/quality/lab/permissions'
 import { QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/permissions'
 import { reasonProblem } from '@nexus/factory-domain/quality/final/rules'
-import { FOUR_EYES_WORDS, fourEyesInForce, isFourEyesLoosening, type FourEyesRow, type FourEyesRule } from '@nexus/factory-domain/quality/release/rules'
+import { fourEyesInForce, fourEyesWords, isFourEyesCondition, isFourEyesLoosening, type FourEyesRow, type FourEyesRule } from '@nexus/factory-domain/quality/release/rules'
 import { command, StaleVersionError, type CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayWrite } from '../../product/materials/store'
@@ -30,7 +30,7 @@ import { fourEyesRows, type Reader } from './store'
  */
 
 type Row = Awaited<ReturnType<typeof fourEyesRows>>['company']
-const fourEyesOf = (row: Row): FourEyesRow | null => (row ? { releaseFourEyes: (row.releaseFourEyes ?? null) as FourEyesRule | null, secondPersonPartyIds: row.secondPersonPartyIds ?? [] } : null)
+const fourEyesOf = (row: Row): FourEyesRow | null => (row ? { releaseFourEyes: (row.releaseFourEyes ?? null) as FourEyesRule | null, secondPersonPartyIds: row.secondPersonPartyIds ?? [], fourEyesConditions: row.fourEyesConditions.filter(isFourEyesCondition) } : null)
 
 async function assertCompany(caller: CommandCaller, companyId: string): Promise<void> {
   const context = officeOf(caller)
@@ -49,7 +49,7 @@ async function ruleView(db: Reader, tenantId: string, companyId: string | null) 
   const parties = listed.length ? new Map((await db.party.findMany({ where: { id: { in: listed.map((entry) => entry.id) } }, select: { id: true, code: true, legalName: true, tradeName: true } })).map((row) => [row.id, row])) : new Map()
   return {
     companyId,
-    inForce: { rule: inForce.rule, source: inForce.source, words: FOUR_EYES_WORDS[inForce.rule] },
+    inForce: { rule: inForce.rule, source: inForce.source, words: fourEyesWords(inForce.rule, inForce.conditions) },
     own: own && ownRow ? { releaseFourEyes: own.releaseFourEyes, secondPersonPartyIds: [...own.secondPersonPartyIds], updatedAt: toUtcIso(ownRow.updatedAt) } : null,
     version: ownRow?.version ?? 0,
     customers: listed.map((entry) => {

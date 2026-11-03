@@ -15,6 +15,8 @@ import { CALL_RULES } from '../../../modules/production/calls/notices'
 import { LIMIT_RULES } from '../../../modules/people/limits/notices'
 // B-W2b-96: a machine request routed to a team or technician, and escalated to a person.
 import { ROUTING_RULES } from '../../../modules/plant/requests/notices'
+// B-W2b-118: a quality alert rule fired (ALERT to its audience; a test to the person who asked).
+import { QUALITY_ALERT_RULES } from '../../../modules/quality/rules/notices'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -33,4 +35,6 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-W2b-42: a working-time limit alert (ALERT to the roles the limit names).
   ...LIMIT_RULES,
   // B-W2b-96: a machine request routed (ASSIGNMENT to the team's or technician's office accounts), escalated (ALERT).
-  ...ROUTING_RULES])
+  ...ROUTING_RULES,
+  // B-W2b-118: a quality alert rule fired (ALERT to the rule's audience, or the person who tested it).
+  ...QUALITY_ALERT_RULES])

@@ -1874,6 +1874,8 @@
     "quality_amendments_sign": "Firmare o rifiutare la correzione chiesta da un'altra persona (mai la propria); la firma chiede un codice nuovo",
     "quality_documents_make": "Conservare il rapporto di un'ispezione finale firmata e il certificato di conformità di una spedizione in PDF (nessun prezzo, costo o paga)",
     "quality_documents_share": "Mettere un rapporto o un certificato conservato sul link dei documenti di una spedizione e inviare quel link",
+    "quality_rules_view": "Vedere le regole qualità: chi può firmare cosa, le regole di avviso ed escalation, come si contano i risultati",
+    "quality_alerts_manage": "Tenere le regole di avviso ed escalation della qualità e mandarsi una prova di una regola",
     "numbering_override": "Digitare il numero di un documento migrato (mai una serie fiscale; doppioni rifiutati, motivo conservato)",
     "people_view": "Vedere dipendenti, squadre, prestiti ad altre linee e passi di uscita (mai paghe, presenze o salute)",
     "people_team_view": "Vedere le squadre che guidi o di cui fai parte (La mia squadra)",

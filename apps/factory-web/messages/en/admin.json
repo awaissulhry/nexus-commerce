@@ -1874,6 +1874,8 @@
     "quality_amendments_sign": "Sign or refuse a correction another person asked for (never your own); signing asks for a fresh code",
     "quality_documents_make": "Keep a signed final inspection's report and a shipment's certificate of conformity as a PDF (no price, cost or pay)",
     "quality_documents_share": "Put a kept report or certificate on a shipment's documents link and mail that link",
+    "quality_rules_view": "See the quality rules: who may sign what, the alert and escalation rules, how results are counted",
+    "quality_alerts_manage": "Keep the quality alert and escalation rules and send a test of a rule to yourself",
     "numbering_override": "Type a number for a migrated document (never a fiscal series; clashes refused, reason kept)",
     "people_view": "See the employees, teams, loans to other lines and leaver steps (never pay, attendance or health)",
     "people_team_view": "See the teams you lead or belong to (My team)",

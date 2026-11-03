@@ -350,7 +350,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Settings',
         labelIt: 'Impostazioni',
         hideLabel: false,
-        pages: [{ id: 'quality.defects', title: 'Defects & dispositions', titleIt: 'Difetti e destinazioni', wave: 'W2a', href: '/quality/defects' }],
+        pages: [
+          { id: 'quality.defects', title: 'Defects & dispositions', titleIt: 'Difetti e destinazioni', wave: 'W2a', href: '/quality/defects' },
+          // W2b: B-W2b-118 Quality rules (SCR-260).
+          { id: 'quality.settings', title: 'Quality rules', titleIt: 'Regole qualità', wave: 'W2b', href: '/quality/settings' },
+        ],
       },
     ],
   },
