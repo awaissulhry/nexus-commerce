@@ -242,7 +242,8 @@ describe('leavers', () => {
       else await run(office(), `UPDATE "LeaverStep" SET status = 'DONE', "doneAt" = now(), "recordType" = 'PayrollExport', "recordId" = $2::uuid WHERE id = $1::uuid`, id, randomUUID())
     }
     expect(await run(office(), `UPDATE "LeaverCase" SET status = 'DONE', "closedAt" = now() WHERE id = $1::uuid`, open)).toBe(1)
-    await expect(run(office(), `UPDATE "LeaverCase" SET "lastWorkingDay" = '2026-12-01' WHERE id = $1::uuid`, open)).rejects.toThrow(/is DONE; it never changes again/)
+    // The seed counts E4's last day from the clock: a day after it always differs (a fixed date could be the same one).
+    await expect(run(office(), `UPDATE "LeaverCase" SET "lastWorkingDay" = "lastWorkingDay" + 1 WHERE id = $1::uuid`, open)).rejects.toThrow(/is DONE; it never changes again/)
     await expect(run(office(), `UPDATE "LeaverStep" SET status = 'OPEN', "doneAt" = NULL, "doneById" = NULL, "skipReason" = NULL WHERE id = $1::uuid`, byKind.EXIT_VISIT)).rejects.toThrow(/its steps no longer change/)
     await expect(admin('DELETE FROM "LeaverCase" WHERE id = $1', [open])).rejects.toThrow(/is never deleted/)
   })
