@@ -1,0 +1,273 @@
+{
+  "band": {
+    "more": "More for hides",
+    "dashboardOn": "Show the leather dashboard",
+    "dashboardOff": "Hide the leather dashboard"
+  },
+  "filter": {
+    "article": "Article",
+    "articleColour": "Article and colour"
+  },
+  "tile": {
+    "noRemnants": "no pieces in stock"
+  },
+  "photo": {
+    "col": "Photo",
+    "alt": "Photo of hide {code}",
+    "open_one": "Hide {code}: {count} photo",
+    "open_other": "Hide {code}: {count} photos"
+  },
+  "dash": {
+    "title": "Leather dashboard",
+    "two": "{hides} · {area}",
+    "hides_one": "{count} hide",
+    "hides_other": "{count} hides",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "noColour": "no colour",
+    "sums": "Together",
+    "failed": "This panel couldn't be read",
+    "area": {
+      "title": "Area on hand by article and colour",
+      "label": "Area on hand by article and colour",
+      "valueLabel": "Area value by article and colour",
+      "series": "What the bars show",
+      "seriesArea": "Area",
+      "seriesValue": "Area value",
+      "valueHeld": "The area value needs cost access (money.cost): you see areas only.",
+      "empty": "No leather on hand",
+      "emptyBody": "Hides received at this site show here, per article and colour.",
+      "hint": "Press an article to show its hides in the list below; press it again to show every hide."
+    },
+    "mix": {
+      "title": "Grade mix per lot",
+      "label": "What is left of each lot, per grade",
+      "grade": "{code} · {label}",
+      "ungraded": "Not graded",
+      "empty": "No lot with hides in stock",
+      "emptyBody": "A lot shows here once its hides are received.",
+      "hint": "Bars show what is left in stock. Press a lot to show its hides below."
+    },
+    "remnants": {
+      "title": "Remnant area",
+      "none": "No remnant pieces in stock",
+      "hint": "Tagged offcuts (RM tags) kept as stock for small parts.",
+      "open": "See the remnant pieces"
+    },
+    "outside": {
+      "title": "At subcontractors",
+      "label": "Leather at subcontractors, per workshop and article",
+      "none": "No leather at a subcontractor"
+    },
+    "onHold": {
+      "title": "On hold",
+      "label": "Leather on hold, per article and colour",
+      "none": "No leather on hold",
+      "lotNotReleased": "Lot not released",
+      "qualityHold": "Quality hold"
+    },
+    "yield": {
+      "title": "Yield, last {days} days, by style and supplier lot",
+      "label": "Yield by style and supplier lot",
+      "empty": "No cut in these days",
+      "emptyBody": "The yield shows once hides were cut in the last {days} days.",
+      "hint": "Pattern area cut against the area the cuts used. Never by cutter: per style and supplier lot only.",
+      "supplierLot": "supplier lot {ref}",
+      "planned": "planned {pct} %",
+      "held": "The yield needs the cutting room right (production.cutting.view)."
+    }
+  },
+  "find": {
+    "open": "Find hides for a job",
+    "title": "Find hides for a job",
+    "subtitle": "Hides from one shade lot first, with the running area against the need.",
+    "close": "Close",
+    "modeLabel": "Find hides",
+    "mode": {
+      "workOrder": "For a work order",
+      "article": "By article and area"
+    },
+    "workOrder": "Work order",
+    "reserveFor": "Reserve for the work order",
+    "searchWorkOrders": "Search work orders by number or style",
+    "workOrdersFailed": "The work orders couldn't be read.",
+    "searching": "Searching…",
+    "noWorkOrders": "No open work order matches",
+    "pickWorkOrder": "Pick a work order",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "noRightWorkOrders": "You can't see work orders (workorders.view): find by article and area.",
+    "pickSite": "Pick a site",
+    "article": "Article and colour",
+    "articlesFailed": "The articles couldn't be read.",
+    "noArticles": "No leather in stock at this site",
+    "pickArticle": "Pick an article",
+    "area": "Area needed",
+    "areaHintWorkOrder": "Leave it empty to use what the work order still needs.",
+    "areaHint": "Leave it empty to list every hide without a need.",
+    "unit": "Unit",
+    "shadeGroup": "Shade group",
+    "shadeGroupHint": "The groups of the lots found show after the first search.",
+    "anyShade": "Any shade",
+    "minGrade": "Minimum grade",
+    "gradesHeld": "Grades need the materials right (product.materials.view).",
+    "anyGrade": "Any grade",
+    "find": "Find",
+    "intro": "Pick a work order, or an article and the area needed, then press Find.",
+    "failed": "The hides couldn't be found",
+    "forWorkOrder": "{number}: {article}",
+    "forArticle": "{article}",
+    "need": "Need {area}",
+    "noNeed": "No area asked: every hide is listed",
+    "cutFrom": "Already cut from {lots}",
+    "rule": {
+      "ORDER": "One shade lot per work order",
+      "GARMENT": "One shade lot per garment",
+      "OFF": "Shades may mix"
+    },
+    "listLabel": "Hides found",
+    "count_one": "{count} hide found",
+    "count_other": "{count} hides found",
+    "none": "No hide matches",
+    "noneBody": "No free hide of this article at the site: try another grade or shade group.",
+    "chosen": "Chosen: {hides} · {area}",
+    "covers": "Chosen: {hides} · {area} of {need} ✓",
+    "short": "Chosen: {hides} · {area} of {need}: {short} short",
+    "mixWarning": "These hides mix shade lots: the reason below is kept with the reservation.",
+    "mixHeld": "These hides mix shade lots: only a person with the shade override can reserve them. Choose hides of one lot.",
+    "overrideReason": "Why mix shade lots",
+    "overrideHint": "Kept with the reservation: who agreed and why.",
+    "note": "Note",
+    "reserve_one": "Reserve {count} hide",
+    "reserve_other": "Reserve {count} hides",
+    "done_one": "{count} hide reserved for {workOrder}.",
+    "done_other": "{count} hides reserved for {workOrder}.",
+    "remnant": "Remnant {code}",
+    "shade": "Shade {shade}",
+    "unsorted": "Not sorted",
+    "tag": {
+      "proposed": "Proposed lot",
+      "mixes": "Other shade lot",
+      "outOfShade": "Out of shade",
+      "ordersOwn": "The order's lot"
+    },
+    "col": {
+      "hide": "Hide",
+      "lot": "Lot and shade",
+      "grade": "Grade",
+      "left": "Area left",
+      "running": "Running area",
+      "place": "Where"
+    },
+    "held": {
+      "pickWorkOrder": "Pick a work order first.",
+      "pickArticle": "Pick an article first.",
+      "pickSite": "Pick a site first.",
+      "area": "Type the area as a number, for example 44 or 44,5.",
+      "noReserve": "You can't reserve stock (inventory.reserve).",
+      "busy": "Reserving…",
+      "findFirst": "Find the hides first.",
+      "none": "Choose at least one hide.",
+      "workOrder": "Pick the work order to reserve for.",
+      "shadeMix": "These hides mix shade lots: choose hides of one lot.",
+      "overrideReason": "Say why the shade lots may mix (at least 3 characters)."
+    },
+    "refusal": {
+      "SHADE_LOT_one": "{hides} is of another shade lot than the work order's: reserve hides of one lot.",
+      "SHADE_LOT_other": "{hides} are of another shade lot than the work order's: reserve hides of one lot.",
+      "OUT_OF_SHADE_one": "{hides} is out of shade: it goes in no order that asks one shade.",
+      "OUT_OF_SHADE_other": "{hides} are out of shade: they go in no order that asks one shade.",
+      "override": "Only a person with the shade override may mix shade lots."
+    },
+    "leather": "Leather (the work order cuts several)",
+    "problem": {
+      "whichLeather": "This work order cuts more than one leather by the hide: pick the leather, then press Find."
+    }
+  },
+  "move": {
+    "title_one": "Move {count} hide",
+    "title_other": "Move {count} hides",
+    "bulk_one": "Move {count}…",
+    "bulk_other": "Move {count}…",
+    "go_one": "Move {count} hide",
+    "go_other": "Move {count} hides",
+    "intro": "Each hide moves whole from where it lies to the place you pick, as its own transfer. Hides at the cutting table move with the cut.",
+    "hides": "Hides",
+    "from": "from {place}",
+    "ok": "Moves whole",
+    "there": "Already there",
+    "moved": "Moved",
+    "refused": "Refused: {why}",
+    "leftOut": "Left out: {why}",
+    "to": "Move to",
+    "placesFailed": "The places couldn't be read.",
+    "pickPlace": "Pick a place",
+    "note": "Note",
+    "noteHint": "Optional: why they move.",
+    "done_one": "{count} hide moved to {place}.",
+    "done_other": "{count} hides moved to {place}.",
+    "doneSome": "{moved} moved, {refused} refused: each hide says why.",
+    "why": {
+      "gone": "nothing is left of it",
+      "notHere": "nothing of it lies at a place of the site (at the cutting table or used)",
+      "noPlace": "no place holds it"
+    },
+    "held": {
+      "noRight": "You can't move stock (inventory.transfer).",
+      "pick": "Choose at least one hide.",
+      "oneSite": "Choose hides of one site.",
+      "busy": "Moving…",
+      "done": "Sent.",
+      "place": "Pick the place to move them to.",
+      "none": "No hide to move: each is left out or already there."
+    }
+  },
+  "rem": {
+    "tableLabel": "Remnant pieces",
+    "count_one": "{count} piece",
+    "count_other": "{count} pieces",
+    "countMore_one": "{count} piece shown, more to read",
+    "countMore_other": "{count} pieces shown, more to read",
+    "failed": "The remnant pieces couldn't be read",
+    "empty": "No remnant pieces in stock",
+    "emptyBody": "A part of a hide that comes back from a cut gets an RM tag and shows here.",
+    "minimum": "smallest piece kept: {area}",
+    "minimumFixed": "smallest piece kept: {area} (the same at every site until it becomes a setting)",
+    "outOfShade": "Out of shade",
+    "byFloor": "on the floor",
+    "bySystem": "by the system",
+    "state": {
+      "IN_STOCK": "In stock",
+      "ISSUED": "Issued",
+      "USED": "Used",
+      "SCRAPPED": "Scrapped",
+      "VOID": "Void"
+    },
+    "reason": {
+      "REMNANT": "Back from a cut",
+      "OTHER": "Back from a work order"
+    },
+    "action": {
+      "TAGGED": "Tagged",
+      "STATE": "State changed",
+      "MOVED": "Moved"
+    },
+    "col": {
+      "tag": "Remnant tag",
+      "hide": "Hide and lot",
+      "article": "Article",
+      "shade": "Shade",
+      "grade": "Grade",
+      "area": "Area",
+      "place": "Where",
+      "from": "Came back from"
+    },
+    "record": {
+      "title": "Remnant {code}",
+      "loading": "Reading the piece…",
+      "failed": "The piece couldn't be read",
+      "history": "History",
+      "noHistory": "Nothing recorded on this piece since it was tagged."
+    }
+  }
+}

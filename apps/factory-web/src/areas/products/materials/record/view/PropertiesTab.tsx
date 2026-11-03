@@ -12,6 +12,8 @@ import { ReadField, SaveBar } from '../../../library/parts'
 import type { MaterialView } from '../../api'
 import { compositionSum, numberText, plain } from '../../model'
 import type { MaterialRecordActions, MaterialRecordViewModel } from '../record-model'
+import { NO_GRADES } from '../grades/grades-model'
+import { GradesSection } from '../grades/view/GradesSection'
 
 interface Properties {
   animalSpecies: string
@@ -73,37 +75,42 @@ export function PropertiesTab({ material, model, actions }: { material: Material
   const leather = material.kind === 'LEATHER'
   const refused = (field: string) => (model.refused && refusedField(model.refused.paths, field) ? t('newMaterial.refused') : undefined)
   const held = sum !== null && sum !== 100 ? t('material.props.held.sum', { sum: numberText(sum, locale, 2) }) : null
+  // B-W2b-131 (PRD-031): a leather's grades and usable area, below the properties (its own reads and saves per cell).
+  const grades = <GradesSection model={model.grades ?? NO_GRADES} actions={actions?.grades} libraryManage={model.can.materialsManage} />
 
   if (!editable)
     return (
-      <div className="fw-lib-pair">
-        <Card header={t('material.props.title')} description={t('material.readOnly')}>
-          <div className="fw-lib-form-grid">
-            {leather && (
-              <>
-                <ReadField label={t('material.animalSpecies')} value={material.animalSpecies} />
-                <ReadField label={t('material.tannage')} value={material.tannage ? t(`tannage.${material.tannage}`) : null} />
-                <ReadField label={t('material.grade')} value={material.grade} />
-                <ReadField label={t('material.finish')} value={material.finish} />
-                <ReadField label={t('material.thickness')} value={material.thicknessMinMm ? `${numberText(Number(material.thicknessMinMm), locale, 2)}–${numberText(Number(material.thicknessMaxMm ?? material.thicknessMinMm), locale, 2)} mm` : null} />
-              </>
+      <div className="fw-lib-stack">
+        <div className="fw-lib-pair">
+          <Card header={t('material.props.title')} description={t('material.readOnly')}>
+            <div className="fw-lib-form-grid">
+              {leather && (
+                <>
+                  <ReadField label={t('material.animalSpecies')} value={material.animalSpecies} />
+                  <ReadField label={t('material.tannage')} value={material.tannage ? t(`tannage.${material.tannage}`) : null} />
+                  <ReadField label={t('material.grade')} value={material.grade} />
+                  <ReadField label={t('material.finish')} value={material.finish} />
+                  <ReadField label={t('material.thickness')} value={material.thicknessMinMm ? `${numberText(Number(material.thicknessMinMm), locale, 2)}–${numberText(Number(material.thicknessMaxMm ?? material.thicknessMinMm), locale, 2)} mm` : null} />
+                </>
+              )}
+              <ReadField label={t('material.animalOrigin')} value={t(material.animalOrigin ? 'common.yes' : 'common.no')} />
+            </div>
+          </Card>
+          <Card header={t('material.props.composition')}>
+            {material.composition && material.composition.length > 0 ? (
+              <ul className="fw-lib-list">
+                {material.composition.map((share) => (
+                  <li key={share.fibre}>
+                    {numberText(Number(share.percent), locale, 2)} % {share.fibre}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="fw-lib-hint">{t('material.props.noComposition')}</p>
             )}
-            <ReadField label={t('material.animalOrigin')} value={t(material.animalOrigin ? 'common.yes' : 'common.no')} />
-          </div>
-        </Card>
-        <Card header={t('material.props.composition')}>
-          {material.composition && material.composition.length > 0 ? (
-            <ul className="fw-lib-list">
-              {material.composition.map((share) => (
-                <li key={share.fibre}>
-                  {numberText(Number(share.percent), locale, 2)} % {share.fibre}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="fw-lib-hint">{t('material.props.noComposition')}</p>
-          )}
-        </Card>
+          </Card>
+        </div>
+        {grades}
       </div>
     )
 
@@ -190,6 +197,7 @@ export function PropertiesTab({ material, model, actions }: { material: Material
           </Button>
         </div>
       </Card>
+      {grades}
       {count > 0 && <SaveBar count={count} onDiscard={() => setDraft(base)} onSave={() => void actions?.onSave?.(patch)} held={held} busy={model.busy} saveLabel={t('material.save')} />}
     </div>
   )

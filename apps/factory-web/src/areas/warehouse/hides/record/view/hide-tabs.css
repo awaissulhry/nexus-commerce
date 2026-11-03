@@ -1,0 +1,110 @@
+/*
+ * The hide record's Measurements & grade and Defects & photos tabs (B-W2b-131) — LAYOUT only: the form's fields side by
+ * side, the area line with its button, the photo tiles. The controls are the design system's; semantic tokens only. No
+ * page max-width (Owner rule 2026-10-29): the tabs fill the main area; wide screens put the cards side by side
+ * (fw-wl-split from warehouse-lots.css), a phone stacks them.
+ */
+.fw-hr-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-hr-form .is-wide {
+  grid-column: 1 / -1;
+}
+
+.fw-hr-area {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-hr-area-words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-hr-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-hr-photo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-hr-photo-open {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.fw-hr-photo-open img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fw-hr-photo-open:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+
+.fw-hr-photo-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nds-space-6);
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  text-align: center;
+  padding: var(--nds-space-8);
+}
+
+.fw-hr-uploads {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-hr-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}

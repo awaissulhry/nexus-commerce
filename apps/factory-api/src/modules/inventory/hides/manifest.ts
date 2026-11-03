@@ -16,4 +16,7 @@ export const manifest = defineManifest({
   'POST /inventory/hides/:hideId/measures': { audiences: ['office'], permission: 'inventory.hides.manage', scope: 'record' },
   'GET /inventory/lots/:lotId/area-check': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
   'GET /inventory/leather/grade-mix': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
+  // B-W2b-131 (SCM-285): the leather dashboard's own reads (./dashboard.ts); photos also need files.read (the handler).
+  'GET /inventory/leather/dashboard': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
+  'GET /inventory/leather/photos': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
 })
