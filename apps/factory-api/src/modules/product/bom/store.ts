@@ -14,6 +14,8 @@ import { actorOf, type RequestContext } from '../../../core/context'
 import { ApiError } from '../../../core/errors'
 import { contextOf, mayWrite } from '../materials/store'
 import { readOperations, readSteps, type OperationFacts, type StepRecord } from '../routing/read'
+// B-W2b-95: a line a pattern piece names is not removed, nor turned into a material its graded pieces cannot take.
+import { assertNoPiecesUse, assertPiecesFollowMaterial } from '../pieces/guards'
 import { lockStyle } from '../styles/store'
 
 /**
@@ -562,6 +564,8 @@ export async function writeLine(tools: CommandTools, target: PartsTarget, line: 
     note: line.note,
     routingSeq: line.routingSeq ?? null,
   }
+  // B-W2b-95: a material change keeps every graded pattern piece of the line on leather (409 naming them).
+  if (before && before.itemId !== line.itemId) await assertPiecesFollowMaterial(tx, before, line.itemId)
   let storedCells = before ? [...before.colours] : []
   if (before && before.itemId !== line.itemId && storedCells.length > 0) {
     const { count } = await tx.bomLineColour.deleteMany({ where: { bomLineId: lineId } })
@@ -606,6 +610,8 @@ export async function writeLine(tools: CommandTools, target: PartsTarget, line: 
 /** Removes a draft's line with its size quantities and grid cells. */
 export async function deleteLine(tools: CommandTools, line: LineRecord): Promise<void> {
   const { tx } = tools
+  // B-W2b-95: no pattern piece is cut from it (the key's Restrict would refuse it without saying which).
+  await assertNoPiecesUse(tx, line)
   if (line.colours.length > 0) removed((await tx.bomLineColour.deleteMany({ where: { bomLineId: line.id } })).count, line.colours.length, 'grid cells')
   if (line.sizes.length > 0) removed((await tx.bomLineSize.deleteMany({ where: { bomLineId: line.id } })).count, line.sizes.length, 'size quantities')
   removed((await tx.bomLine.deleteMany({ where: { id: line.id } })).count, 1, 'BOM line')

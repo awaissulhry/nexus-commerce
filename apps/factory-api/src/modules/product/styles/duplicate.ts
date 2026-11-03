@@ -35,6 +35,7 @@ import { readLines } from '../bom/store'
 import { mayWrite } from '../materials/store'
 import { readSubcontracts, readSteps } from '../routing/read'
 import { insertSteps } from '../routing/store'
+import { copyPiecesInCommand, lineMapBySeq } from '../pieces/copy'
 import { applyMatrixPlan, emitSkus } from './skus'
 import {
   assertMayWrite,
@@ -243,6 +244,8 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
     let revisionRow: Prisma.StyleRevisionGetPayload<{ select: typeof REVISION_COLUMNS }> | null = null
     let bomLines = 0
     let routingSteps = 0
+    // B-W2b-95: the pattern pieces copied with the BOM (what was left out or cleared goes in the revision's audit row).
+    let pieces: Awaited<ReturnType<typeof copyPiecesInCommand>> | null = null
     const label = parts.includes('LABELS')
     if (needsRevision(parts)) {
       const revisionId = newId()
@@ -272,7 +275,8 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
         )
       }
       if (parts.includes('BOM') && revision) {
-        const copied = copyBomLines(await readLines(tx, revision.id), colourwayMap, range.sizes, newId)
+        const sourceLines = await readLines(tx, revision.id)
+        const copied = copyBomLines(sourceLines, colourwayMap, range.sizes, newId)
         if (copied.dropped > 0) notes.push(leftOutNote('BOM_LINES_LEFT_OUT', { count: copied.dropped }))
         const lines = copied.lines
         bomLines = lines.length
@@ -304,6 +308,9 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
           const cells = lines.flatMap((line) => line.colours.map((cell) => ({ id: newId(), styleId: id, revisionId, bomLineId: line.id, itemId: line.itemId, colourwayId: cell.colourwayId, itemColourId: cell.itemColourId, ...stamp })))
           if (cells.length > 0) await tx.bomLineColour.createMany({ data: cells })
         }
+        // B-W2b-95: the pieces AFTER the lines they name (a line left out leaves its pieces without a line); the copy's range.
+        const copyRange = (await tx.style.findUniqueOrThrow({ where: { id }, select: { sizes: true } })).sizes
+        pieces = await copyPiecesInCommand(tools, { revisionId: revision.id }, { styleId: id, revisionId }, lineMapBySeq(sourceLines, lines), copyRange)
       }
     }
 
@@ -326,7 +333,7 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
     })
     tools.audit({ recordType: 'Style', recordId: styleId, companyId, after: { copiedTo: { styleId: id, code: style.code, parts } } })
     if (revisionRow) {
-      tools.audit({ recordType: 'StyleRevision', recordId: revisionRow.id, companyId, after: { styleId: id, revision: 1, status: 'DRAFT', changeNote: revisionRow.changeNote, copiedFrom: from, lines: bomLines, routingSteps, labelTemplateId: revisionRow.labelTemplateId } })
+      tools.audit({ recordType: 'StyleRevision', recordId: revisionRow.id, companyId, after: { styleId: id, revision: 1, status: 'DRAFT', changeNote: revisionRow.changeNote, copiedFrom: from, lines: bomLines, routingSteps, ...(pieces ? { pieces } : {}), labelTemplateId: revisionRow.labelTemplateId } })
     }
     tools.emit({ type: 'style.duplicated', subject: id, companyId, payload: { styleId: id, code: style.code, sourceStyleId: styleId, sourceCode: source.code, sourceRevisionId: from.revisionId, parts } })
     return { style: await styleViewInTx(tx, id), revision: revisionRow ? revisionViewOf(revisionRow) : null, copied, notes: notes.map(copyNoteWords), noteCodes: notes.map((note) => ({ ...note, sizes: [...note.sizes] })) }

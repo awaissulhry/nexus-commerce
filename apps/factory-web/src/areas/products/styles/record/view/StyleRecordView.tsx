@@ -146,7 +146,7 @@ function ReadyRecord({ style, model, actions, panels }: { style: StyleView; mode
       ) : (
         t(`tab.${tab}`)
       ),
-    count: tab === 'variants' ? style.skuCount : tab === 'bom' && bom ? bom.lines.length : null,
+    count: tab === 'variants' ? style.skuCount : tab === 'bom' && bom ? bom.lines.length : tab === 'files' && model.pieces?.part.status === 'ready' ? model.pieces.part.value.pieces.length : null,
   }))
 
   const primary =
@@ -198,7 +198,7 @@ function ReadyRecord({ style, model, actions, panels }: { style: StyleView; mode
 
   const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
   const showDock = model.dockOpen && model.tab !== 'activity' && !!activity
-  const frozenTab = (model.tab === 'bom' || model.tab === 'routing' || model.tab === 'compliance') && revision && !editableRevision(style, revision)
+  const frozenTab = (model.tab === 'bom' || model.tab === 'routing' || model.tab === 'compliance' || model.tab === 'files') && revision && !editableRevision(style, revision)
   const ppe = style.ppeCategory !== 'NOT_PPE'
 
   return (
