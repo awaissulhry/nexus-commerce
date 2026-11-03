@@ -738,6 +738,29 @@ describe('the pay period (MES-260), the statement (MES-261) and waiting (MES-148
   })
 })
 
+describe('a late team share of a locked month (B-W2b-84: found in B-W2b-43)', () => {
+  it('stays when the period it is paid in starts its review: the run takes back only its own month', async () => {
+    const lockedId = (await admin<{ id: string }>(`SELECT id FROM "PayPeriod" WHERE "tenantId" = $1 AND "companyId" = $2 AND "periodStart" = $3::date`, [T, companyA, `${MONTH}-01`]))[0]!.id
+    const bundleId = await bundle()
+    const teamScan = await scan({ bundleId, at: local('13:00', D3), good: 2, workerId: worker.b, earn: false })
+    for (const [workerId, employeeId] of [[worker.b, employee.b], [worker.c, employee.c]] as const) await admin('INSERT INTO "OperationScanMember" (id, "tenantId", "siteId", "scanId", "workerId", "employeeId") VALUES ($1, $2, $3, $4, $5, $6)', [newId(), T, siteA1, teamScan, workerId, employeeId])
+    await earn(bundleId)
+    const shares = await admin<{ id: string; payPeriodId: string; correctsPeriodId: string; amount: number }>(`SELECT id, "payPeriodId", "correctsPeriodId", amount FROM "EarningsEntry" WHERE "operationScanId" = $1 AND kind = 'TEAM_SPLIT' AND "reversalOfId" IS NULL ORDER BY amount`, [teamScan])
+    // The month is locked: the handler books the shares at once, in the first period not locked, naming the month.
+    expect(shares.map((row) => [row.correctsPeriodId, row.amount])).toEqual([[lockedId, 100], [lockedId, 200]])
+    const later = shares[0]!.payPeriodId
+    expect(later).not.toBe(lockedId)
+    let row = (await admin<{ version: number; status: string }>('SELECT version, status::text FROM "PayPeriod" WHERE id = $1', [later]))[0]!
+    if (row.status === 'REVIEW') row = { ...row, version: (await ok('hr', 'POST', `/people/pay-periods/${later}/review/back`, { version: row.version, reason: 'A late team scan of a locked month (made up)' })).period.version }
+    const run = await ok('hr', 'POST', `/people/pay-periods/${later}/run`, { version: row.version })
+    await ok('hr', 'POST', `/people/pay-periods/${later}/review`, { version: run.period.version })
+    expect(await admin('SELECT id FROM "EarningsEntry" WHERE "reversalOfId" = ANY($1::uuid[])', [shares.map((share) => share.id)])).toEqual([])
+    const statement = (await admin<{ id: string }>(`SELECT id FROM "WorkerStatement" WHERE "payPeriodId" = $1 AND "employeeId" = $2 AND status <> 'SUPERSEDED' ORDER BY revision DESC`, [later, employee.b]))[0]!
+    const opened = await ok('hr', 'POST', `/people/statements/${statement.id}/open`, {})
+    expect(opened.corrections.map((line: Json) => [line.kind, line.month, line.amount])).toEqual(expect.arrayContaining([['TEAM_SPLIT', MONTH, 100]]))
+  })
+})
+
 describe('corrections and the ledger (MES-256)', () => {
   it('the ledger grid is for those with the right, names nobody and refuses a filter by person', async () => {
     const page = await ok('hr', 'GET', `/people/earnings/ledger?kind=SCAN&limit=20&lineId=${lineL1}`)

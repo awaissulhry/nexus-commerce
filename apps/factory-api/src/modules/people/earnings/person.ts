@@ -341,7 +341,9 @@ export async function syncPersonInCommand(tools: CommandTools, facts: PayFacts, 
   const wanted = computed.filter((draft) => !frozen.has(draft.key))
   const wantedKeys = new Set(wanted.map((draft) => draft.key))
   if (options.book) {
-    const plan = planLedger(existing.map(ledgerRowOf), wanted, (key) => isPeriodFamily(key) && familyRows.some((row) => baseKey(row.idempotencyKey) === key))
+    // The run takes back only figures of its own month nobody wants any more: a late line of a LOCKED month booked here by
+    // the handler (a team share, correctsPeriodId set) is no figure this run computes, so it stays (B-W2b-84; it was reversed).
+    const plan = planLedger(existing.map(ledgerRowOf), wanted, (key) => isPeriodFamily(key) && familyRows.some((row) => baseKey(row.idempotencyKey) === key && row.correctsPeriodId === null))
     const moved = await applyPlan(tools, person.companyId, plan, existing, PERIOD_FIGURE_WORDS)
     added += moved.added
     reversed += moved.reversed
