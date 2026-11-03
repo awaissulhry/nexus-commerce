@@ -158,6 +158,9 @@ import { QUALITY_INPROCESS_DEFINITIONS, QUALITY_INPROCESS_FLOOR_PERMISSIONS, QUA
 import { INVENTORY_ROLLS_DEFINITIONS, INVENTORY_ROLLS_FLOOR_PERMISSIONS, INVENTORY_ROLLS_PERMISSIONS } from '../../inventory/rolls/permissions'
 // B-W2b-108: corrective actions, CAPA and 8D (quality.capa.view | manage).
 import { QUALITY_CAPA_DEFINITIONS, QUALITY_CAPA_PERMISSIONS } from '../../quality/capa/permissions'
+// B-W2b-120: the safety organisation and the safety calendar (safety.view | organisation.manage | calendar.manage).
+import { SAFETY_DEFINITIONS, SAFETY_PERMISSIONS } from '../../safety/organisation/permissions'
+import { SAFETY_CALENDAR_DEFINITIONS, SAFETY_CALENDAR_PERMISSIONS } from '../../safety/calendar/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -593,6 +596,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_ROLLS_DEFINITIONS,
   // B-W2b-108: corrective actions, CAPA and 8D.
   QUALITY_CAPA_DEFINITIONS,
+  // B-W2b-120: the safety organisation and the safety calendar.
+  SAFETY_DEFINITIONS,
+  SAFETY_CALENDAR_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -753,6 +759,8 @@ for (const name of QUALITY_INPROCESS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 for (const name of INVENTORY_ROLLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-108: corrective actions, CAPA and 8D.
 for (const name of QUALITY_CAPA_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-120: the safety organisation and the safety calendar.
+for (const name of [...SAFETY_PERMISSIONS, ...SAFETY_CALENDAR_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

@@ -70,6 +70,8 @@
       "requests": "Machine requests",
       "jobs": "Maintenance jobs",
       "machines": "Machines & tools",
+      "safety": "Health & safety",
+      "calendar": "Safety calendar",
       "settingsGroup": "Settings",
       "settings": "Plant settings"
     },

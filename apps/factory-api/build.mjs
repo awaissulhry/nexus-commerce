@@ -30,6 +30,9 @@ const indexers = indexerFiles(source).map((file) => relative(workspace, file))
 // B-W2a-79: the standard reports, one file per report, found by folder when the insights routes register.
 const { reportFiles } = await tsImport('./src/modules/insights/reports/report-files.ts', import.meta.url)
 const reports = reportFiles(source).map((file) => relative(workspace, file))
+// B-W2b-120: the safety calendar's sources, one file per kind of deadline, found by folder when the calendar routes register.
+const { sourceFiles } = await tsImport('./src/modules/safety/calendar/source-files.ts', import.meta.url)
+const calendarSources = sourceFiles(source).map((file) => relative(workspace, file))
 
 /** Bare imports stay external, except the workspace's own @nexus/* packages. */
 const externalPackages = {
@@ -44,7 +47,7 @@ const externalPackages = {
 rmSync(new URL('./dist', import.meta.url), { recursive: true, force: true })
 const result = await build({
   absWorkingDir: workspace,
-  entryPoints: ['src/index.ts', 'src/background.ts', ...routes, ...indexers, ...reports],
+  entryPoints: ['src/index.ts', 'src/background.ts', ...routes, ...indexers, ...reports, ...calendarSources],
   outbase: 'src',
   outdir: 'dist',
   bundle: true,
@@ -70,4 +73,4 @@ if (doubled.length > 0) {
   for (const [input, outputs] of doubled) console.error(`  ${input}: ${outputs.join(', ')}`)
   process.exit(1)
 }
-console.log(`build: dist/index.js + dist/background.js + ${routes.length} routes file(s) + ${indexers.length} search indexer(s) + ${reports.length} report(s); ${outputsOf.size} modules, each in exactly one output`)
+console.log(`build: dist/index.js + dist/background.js + ${routes.length} routes file(s) + ${indexers.length} search indexer(s) + ${reports.length} report(s) + ${calendarSources.length} calendar source(s); ${outputsOf.size} modules, each in exactly one output`)
