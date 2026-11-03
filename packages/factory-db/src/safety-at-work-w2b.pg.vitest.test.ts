@@ -478,6 +478,8 @@ describe('PPE for workers', () => {
     await expect(document('RiskAssessmentVersion', seeded.versionIds.v1, 'DVR_FROZEN', A.companyB, A.siteB, v1File)).rejects.toThrow(/company and site of its RiskAssessmentVersion/)
     await expect(document('RiskAssessmentVersion', seeded.versionIds.v1, 'PPE_RECEIPT', A.company, A.site, v1File)).rejects.toThrow(/a PPE receipt a PpeIssue's/)
     expect(await document('RiskAssessmentVersion', seeded.versionIds.v1, 'DVR_FROZEN', A.company, A.site, v1File)).toBe(1)
-    for (const table of ['PpeKitLine', 'RoleSheetItem', 'InstructionRecord', 'RlsNotice', 'RiskMeasure']) await expect(admin(`TRUNCATE "${table}"`), table).rejects.toThrow(/refused/)
+    for (const table of ['PpeKitLine', 'RoleSheetItem', 'InstructionRecord', 'RlsNotice']) await expect(admin(`TRUNCATE "${table}"`), table).rejects.toThrow(/refused/)
+    // B-W2b-91: an incident action references a measure, so RiskMeasure is truncated only together with IncidentAction (refused too).
+    await expect(admin('TRUNCATE "RiskMeasure", "IncidentAction"'), 'RiskMeasure').rejects.toThrow(/refused/)
   })
 })

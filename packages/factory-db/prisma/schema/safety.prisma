@@ -88,6 +88,9 @@ model SafetyAppointment {
   shiftPattern   ShiftPattern? @relation(fields: [tenantId, shiftPatternId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   rlsNotices     RlsNotice[]
   dvrSignatures  RiskAssessmentSignature[]
+  // W2b health.prisma (wave 16/16): the health plans and fitness judgements a doctor's appointment set.
+  healthPlans       HealthPlan[]       @relation("HealthPlanDoctor")
+  fitnessJudgements FitnessJudgement[] @relation("FitnessJudgementDoctor")
 
   // The targets of the notices' and signatures' company-safe references.
   @@unique([tenantId, id])
@@ -418,7 +421,11 @@ model RiskMeasure {
   assessment RiskAssessment         @relation(fields: [tenantId, companyId, siteId, assessmentId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and assessmentId.
   dvrVersion RiskAssessmentVersion? @relation(fields: [tenantId, assessmentId, versionId], references: [tenantId, assessmentId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b health.prisma (wave 16/16): the incident actions made into this measure.
+  incidentActions IncidentAction[]
 
+  // W2b health.prisma (wave 16/16): the target of the incident actions' site-safe reference.
+  @@unique([tenantId, siteId, id])
   @@index([tenantId, assessmentId])
   @@index([tenantId, companyId, status, dueOn])
 }
@@ -472,6 +479,9 @@ model RoleSheet {
   requirements TrainingRequirement[]
   // people.prisma: the people in the role.
   employees    Employee[]
+  // W2b health.prisma (wave 16/16): the role's health surveillance plan, the visits planned for it.
+  healthPlans  HealthPlan[]
+  healthVisits HealthVisit[]         @relation("HealthVisitRole")
 
   @@unique([tenantId, siteId, code])
   // The targets of the items', kit lines', requirements' and people's references.
@@ -643,6 +653,8 @@ model TrainingSession {
   provider    Party?               @relation("TrainingSessionProvider", fields: [tenantId, providerPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   attendances TrainingAttendance[]
   records     TrainingRecord[]
+  // W2b health.prisma (wave 16/16): the incident actions made into this session.
+  incidentActions IncidentAction[]
 
   // The targets of the attendances' and records' references.
   @@unique([tenantId, siteId, id])
