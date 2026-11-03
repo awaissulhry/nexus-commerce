@@ -343,6 +343,16 @@ const PEOPLE_EARNINGS_ADDS: Readonly<Record<string, readonly Permission[]>> = Ob
 const PEOPLE_PAYROLL_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   admin: ['people.payroll.view', 'people.payroll.records', 'people.payroll.manage'],
 })
+/**
+ * B-W2b-94 (hides as stock; SCM-249, SCM-250; design warehouse.hides record "Measurements & grade"): the warehouse, which keeps
+ * the hides, and the quality inspector, who grades them, correct a hide's grade, shade group, thickness and defects and measure
+ * a whole hide again against the tannery's area (correcting its stock is inventory.adjust: the warehouse's). Office only; Owner
+ * from every(). One line per template.
+ */
+const HIDES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  warehouse: ['inventory.hides.manage'],
+  quality_inspector: ['inventory.hides.manage'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -384,6 +394,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_EARNINGS_ADDS[key] ?? []) : []),
   // B-W2b-54
   ...(audience === 'office' ? (PEOPLE_PAYROLL_ADDS[key] ?? []) : []),
+  // B-W2b-94
+  ...(audience === 'office' ? (HIDES_ADDS[key] ?? []) : []),
   // B-W2b-49
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? [])]
 /**
