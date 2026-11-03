@@ -84,6 +84,17 @@ describe('the values (MES-267)', () => {
     expect(facts.some((fact) => fact.code === 'MAKE_UP')).toBe(false)
   })
 
+  it('carries a standard-minute bonus as its own code, an amount alone; pieces no scheme paid travel nowhere (B-W2b-84)', () => {
+    const facts = earningFacts([
+      { kind: 'BONUS', correctsPeriodId: null, currency: 'EUR', amount: 3600, pieces: null, minutes: '240.000' },
+      { kind: 'SCAN', correctsPeriodId: null, currency: 'EUR', amount: 0, pieces: 60, minutes: null },
+    ])
+    expect(facts.find((fact) => fact.code === 'BONUS')).toMatchObject({ amount: 3600 })
+    const [row] = personValues([person('a', 'M1', { earnings: facts })], MAPPING, (code) => code)
+    expect(row!.values.map((item) => [item.code, item.unit, item.quantity, item.amount])).toEqual([['BONUS', null, null, 3600]])
+    expect(row!.values[0]!.meaning).toBe('Standard-minute bonus')
+  })
+
   it('sums per code across people, hours by their minutes, and tells who carries pay', () => {
     const values = [value({}), value({ employeeCode: 'M2', minutes: 445, quantity: '7.42' }), value({ kind: 'EARNING', code: 'PIECE', unit: 'PIECES', quantity: '3', minutes: null, amount: 450, currency: 'EUR' }), value({ employeeCode: 'M2', kind: 'EARNING', code: 'PIECE', unit: 'PIECES', quantity: '2', minutes: null, amount: 300, currency: 'EUR' })]
     const sums = codeSums(values)

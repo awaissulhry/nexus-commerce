@@ -3,8 +3,8 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
+import { stepBefore } from '@nexus/factory-domain/product/routing/parallel'
 import { dispatchOrder, dispatchState } from '@nexus/factory-domain/planning/schedule/dispatch'
-import type { MaterialFlag } from '@nexus/factory-domain/production/dispatch/material'
 import { laneFirst, sequenceOf } from '@nexus/factory-domain/production/dispatch/rules'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
@@ -19,7 +19,7 @@ import { materialView } from './board'
 import type { OfficeDispatchQuery } from './contract'
 import { entryOfCard, nextOf } from './mine'
 import { assignmentsOf } from './store'
-import { cardAt, dispatchWorld, materialFlags, plannedOperations, WORK_ORDER_SELECT, type WorkOrderRow } from './world'
+import { cardAt, dispatchWorld, materialFlags, NO_MATERIAL_FLAGS, plannedOperations, WORK_ORDER_SELECT, type MaterialFlags, type WorkOrderRow } from './world'
 
 /**
  * The dispatch list per line or station (B-W2a-34; MES-021; design floor.mywork "Next" and "Then"; Owner answer P3): what
@@ -64,7 +64,7 @@ async function centreName(db: Reader, id: string | null) {
   return id ? db.workCentre.findUnique({ where: { id }, select: { id: true, code: true, name: true } }) : null
 }
 
-type FlagsOf = (workOrderIds: readonly string[]) => Promise<ReadonlyMap<string, MaterialFlag>>
+type FlagsOf = (workOrderIds: readonly string[]) => Promise<MaterialFlags>
 
 /** The list of one target. */
 async function listFor(db: Reader, target: Target, now: Date, flagsOf: FlagsOf) {
@@ -101,7 +101,8 @@ async function listFor(db: Reader, target: Target, now: Date, flagsOf: FlagsOf) 
   const entries = picked.map(({ slot, operationId, garments }) => {
     const workOrder = byId.get(slot.workOrderId)!
     const operation = workOrder.operations.find((candidate) => candidate.id === operationId)!
-    const previous = [...workOrder.operations].reverse().find((candidate) => candidate.seq < operation.seq) ?? null
+    // B-W2b-88: the step before (of a parallel group before it, the last); a sibling is never before it.
+    const previous = stepBefore(workOrder.operations, operation).at(-1) ?? null
     const flow = wips.get(workOrder.id)!.operations.find((row) => row.operationId === operation.id)
     const done = Math.min(garments, (flow?.good ?? 0) + (flow?.scrap ?? 0))
     const sequenceFacts = { operation: { seq: operation.seq, name: operation.name }, previous: previous ? { seq: previous.seq, name: previous.name } : null }
@@ -144,7 +145,7 @@ async function listFor(db: Reader, target: Target, now: Date, flagsOf: FlagsOf) 
   const placed = world ? world.cards.filter((card) => touched.has(card.operation.id) && cardAt(card, target, stations)) : []
   const flags = await flagsOf([...new Set([...entries.map((entry) => entry.view.workOrder.id), ...placed.map((card) => card.workOrder.id)])])
   const rows = [
-    ...entries.filter((entry) => !touched.has(entry.view.operation.id)).map((entry) => ({ key: entry.key, order: null as number | null, view: { ...entry.view, material: materialView(flags.get(entry.view.workOrder.id)) } })),
+    ...entries.filter((entry) => !touched.has(entry.view.operation.id)).map((entry) => ({ key: entry.key, order: null as number | null, view: { ...entry.view, material: materialView(flags.of(entry.view.workOrder.id, entry.view.operation.id)) } })),
     ...placed.map((card) => ({
       key: { rush: card.workOrder.rush, priority: card.workOrder.priority, dueDate: card.workOrder.dueDate ? dayOf(card.workOrder.dueDate) : null, startAt: card.slot?.startAt.getTime() ?? 0, seq: card.operation.seq, workOrderNumber: card.workOrder.number },
       order: card.order,
@@ -223,6 +224,6 @@ export async function stationDispatch(caller: CommandCaller, options: { readonly
         words: 'This tablet is not placed at a station: ask the office to place it at one. Scan a bundle to work on it.',
       }
     }
-    return listFor(db, { kind: 'STATION', id: station.id, code: station.code, name: station.name, lineId: station.lineId, workCentreId: station.workCentreId, site: device.site }, now, (ids) => (options.material === false ? Promise.resolve(new Map()) : systemView(caller).withClient((system: Reader) => materialFlags(system, device.site, ids))))
+    return listFor(db, { kind: 'STATION', id: station.id, code: station.code, name: station.name, lineId: station.lineId, workCentreId: station.workCentreId, site: device.site }, now, (ids) => (options.material === false ? Promise.resolve(NO_MATERIAL_FLAGS) : systemView(caller).withClient((system: Reader) => materialFlags(system, device.site, ids))))
   })
 }

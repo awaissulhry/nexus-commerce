@@ -50,7 +50,7 @@ export async function placeOf(tools: CommandTools, companyId: string, day: Busin
 
 /** One line for the ledger: what it pays (Wanted) and what it rests on. */
 export interface EntryDraft extends Wanted {
-  readonly kind: 'SCAN' | 'TEAM_SPLIT' | 'MAKE_UP' | 'OFF_STANDARD' | 'ADJUSTMENT'
+  readonly kind: 'SCAN' | 'TEAM_SPLIT' | 'MAKE_UP' | 'OFF_STANDARD' | 'ADJUSTMENT' | 'BONUS'
   readonly siteId: string
   readonly employeeId: string
   readonly workerId: string

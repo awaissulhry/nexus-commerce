@@ -227,8 +227,11 @@ export function MyWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps
     )
   }
 
-  /** The material flag on a card: it is the work order's, and it says so. */
-  const materialCardWords = (material: MaterialFlag) => (material.state === 'ON_THE_WAY' && material.date ? t('material.card.expected', { date: day(material.date) }) : t(`material.card.${material.state}`))
+  /** The material flag on a card: the operation's own (B-W2b-88) or the work order's, and it says which. */
+  const materialCardWords = (material: MaterialFlag) => {
+    const group = material.scope === 'OPERATION' ? 'material.cardOp' : 'material.card'
+    return material.state === 'ON_THE_WAY' && material.date ? t(`${group}.expected`, { date: day(material.date) }) : t(`${group}.${material.state}`)
+  }
 
   const openMessages = model.messages?.messages ?? []
   const unread = unreadCount(openMessages, model.seen ?? [])

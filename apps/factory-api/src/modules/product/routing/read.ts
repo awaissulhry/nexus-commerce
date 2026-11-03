@@ -28,6 +28,8 @@ export const STEP_COLUMNS = {
   standardMinutes: true,
   scanRequired: true,
   instructions: true,
+  // B-W2b-88 (MES-025): side by side steps.
+  parallelGroup: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -90,6 +92,7 @@ const stepOf = (row: StepRow): StepRecord => ({
   standardMinutes: text(row.standardMinutes),
   scanRequired: row.scanRequired,
   instructions: row.instructions,
+  parallelGroup: row.parallelGroup,
   version: row.version,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,

@@ -513,7 +513,10 @@
     "MINUTES_NOT_POSITIVE": "Operazione {step}: i minuti devono essere maggiori di 0.",
     "NO_SCAN_POINT": "Nessuna operazione è scansionata: il reparto ne ha bisogno di almeno una.",
     "OPERATION_ARCHIVED": "Operazione {step}: archiviata nella libreria (il ciclo la mantiene).",
-    "LAST_STEP_NOT_SCANNED": "L’ultima operazione non è scansionata: il lotto si assegna all’ultima scansionata."
+    "LAST_STEP_NOT_SCANNED": "L’ultima operazione non è scansionata: il lotto si assegna all’ultima scansionata.",
+    "PARALLEL_GROUP_SPLIT": "Operazione {step}: il suo gruppo in parallelo è diviso da altre operazioni. Avvicina le operazioni del gruppo.",
+    "FINAL_SIDE_BY_SIDE": "L’operazione {step} è quella finale (dove si assegna il lotto): resta da sola, non in parallelo.",
+    "PARALLEL_GROUP_ALONE": "L’operazione {step} è da sola nel suo gruppo in parallelo: si fa come le altre finché un’altra non si aggiunge."
   },
   "complianceCheck": {
     "REVISION": {
@@ -998,7 +1001,8 @@
       "wastage": "Scarto",
       "gross": "Con scarto",
       "depends": "Varia per",
-      "actions": "Azioni"
+      "actions": "Azioni",
+      "operation": "Operazione"
     },
     "bySize": "taglia",
     "byColour": "variante",
@@ -1092,7 +1096,12 @@
         "material": "Scegli un materiale.",
         "qty": "Scrivi una quantità sopra 0.",
         "wastage": "Lo scarto va da 0 a 60 %."
-      }
+      },
+      "operation": "Operazione che la usa",
+      "operationHint": "In reparto i suoi componenti si chiedono solo a questa operazione, e il dispatch mostra il suo materiale su questa operazione. Lascia «Qualsiasi operazione» se la usano più operazioni.",
+      "operationNoRouting": "Questa revisione non ha ancora operazioni: aggiungile prima in Operazioni (ciclo).",
+      "operationLoading": "Lettura delle operazioni di questa revisione…",
+      "noOperation": "Qualsiasi operazione (non collegata)"
     },
     "import": {
       "open": "Importa distinta",
@@ -1112,7 +1121,9 @@
       "xlsxHint": "Le colonne dell’importazione: modificalo e reimportalo.",
       "csvHint": "Le stesse colonne in un file CSV.",
       "pdfHint": "Un foglio interno da stampare (senza prezzi)."
-    }
+    },
+    "operationAt": "Op {step}",
+    "noOperation": "Qualsiasi operazione"
   },
   "routing": {
     "loading": "Lettura del ciclo…",
@@ -1155,7 +1166,8 @@
       "minutes": "Minuti standard",
       "scanned": "Scansionata",
       "actions": "Azioni",
-      "subcontracted": "Terzista"
+      "subcontracted": "Terzista",
+      "parallel": "In parallelo"
     },
     "final": "finale",
     "archivedOp": "archiviata nella libreria",
@@ -1184,7 +1196,17 @@
     "addHeld": "Spunta almeno un’operazione.",
     "instructionsTitle": "Istruzioni · {step}",
     "instructions": "Istruzioni",
-    "instructionsHint": "Come si fa per questo modello: il cartellino e lo schermo di reparto la mostrano."
+    "instructionsHint": "Come si fa per questo modello: il cartellino e lo schermo di reparto la mostrano.",
+    "parallel": {
+      "none": "In sequenza",
+      "group": "Gruppo {group}",
+      "groupOf": "Gruppo {group} ({steps})",
+      "newGroup": "Nuovo gruppo {group}",
+      "with": "In parallelo con {steps}",
+      "of": "In parallelo: operazione {step}",
+      "hint": "Le operazioni di uno stesso gruppo si fanno in parallelo e contano come un solo passo: in reparto nessuna risulta saltata e il dispatch le mostra affiancate. Le operazioni di un gruppo stanno una dopo l’altra; l’operazione finale resta da sola."
+    },
+    "removeUsed": "La riga distinta {lines} dice che questa operazione la usa: in Materiali (distinta) collegala prima a un’altra operazione o a nessuna."
   },
   "cost": {
     "loading": "Calcolo del costo…",

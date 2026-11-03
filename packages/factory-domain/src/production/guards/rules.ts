@@ -1,8 +1,9 @@
 import type { ItemTracking } from '../../product/materials/rules'
 import type { GarmentTracking } from '../serials/rules'
+import { stepBefore } from '../../product/routing/parallel'
 import {
   countsTotal,
-  nextScanned,
+  nextStep,
   operationLabel,
   scannedOperations,
   sewnOperationOf,
@@ -32,6 +33,10 @@ import {
  *               The garments the earlier operations passed are then the last reported one's (or the bundle's).
  *               An unplanned operation (B-W2b-82, ../scans/rules) is no required step: it is never skipped, never the
  *               operation "before" another one, and neither check applies at it: it counts up to the bundle's own garments.
+ *   parallel    B-W2b-88 (MES-025): operations of one parallel group count as ONE step: no skip finding between siblings
+ *               (one is never "before" another); a report after the group is checked against every operation of it (each
+ *               one not reported is skipped; what reached it is the lowest good of those reported), and a late report
+ *               inside a group against the step after the group.
  *   wrong       MES-070: the bundle's work order is allocated to another line than the station's (WorkOrder.lineId, the
  *               allocation board), and that line has a station of the operation's kind: held for a team leader's
  *               override (no site rule: always STRICT). "Not at this station" (another kind of work), "not next"
@@ -45,6 +50,9 @@ import {
  *               1621 protectors): every garment that goes on from it (good and rework) carries one lot of each. Any
  *               operation may record lots of the cell's lot-traced materials. A wrong item, an unknown lot, a lot not
  *               released or a count that does not cover the garments is refused; no override (PPE traceability).
+ *               B-W2b-88: a BOM line may name the routing step that uses it (BomLine.routingSeq): its component is then
+ *               asked at THAT operation (not at the sewn one) and may be recorded only there; a line that names no step
+ *               keeps the rule above. A scan asks only its own components.
  * Every finding and refusal is in words with ONE fix; none names a person (Statuto dei Lavoratori art. 4).
  */
 
@@ -98,27 +106,42 @@ const withOverride = (fix: string, mode: 'WARN' | 'STRICT'): string => (mode ===
 // ---- what the earlier operations passed -----------------------------------------------------------------------------------------
 
 export interface PassedTo {
-  /** The scanned operation right before this one, or null at the first. */
+  /** The scanned operation right before this one (of a parallel group before it, the last), or null at the first. */
   readonly previous: ScanOperation | null
-  /** The nearest earlier scanned operation with a standing report (whose good the bundle carries), or null. */
+  /**
+   * The nearest earlier scanned step with a standing report, whose good the bundle carries (of a parallel group, its
+   * reported operation with the lowest good), or null.
+   */
   readonly from: ScanOperation | null
   /** The garments that reached this operation: `from`'s standing good, or the bundle's garments. */
   readonly passed: number
-  /** The scanned operations between `from` and this one with no standing report, in routing order. */
+  /** The scanned operations between `from` and this one with no standing report (in that group too), in routing order. */
   readonly skipped: readonly ScanOperation[]
 }
 
-/** What reached the operation for the bundle, walking back through the scanned operations to the last reported one. */
-export function passedTo(operations: readonly ScanOperation[], operation: Pick<ScanOperation, 'seq' | 'unplanned'>, bundleQuantity: number, standing: ReadonlyMap<string, ScanFact>, bundleId: string): PassedTo {
+/**
+ * What reached the operation for the bundle, walking back step by step through the scanned operations to the last
+ * reported one (B-W2b-88: a parallel group is one step; its siblings are never before this operation).
+ */
+export function passedTo(operations: readonly ScanOperation[], operation: Pick<ScanOperation, 'seq' | 'unplanned' | 'parallelGroup'>, bundleQuantity: number, standing: ReadonlyMap<string, ScanFact>, bundleId: string): PassedTo {
   if (operation.unplanned) return { previous: null, from: null, passed: bundleQuantity, skipped: [] }
-  const earlier = scannedOperations(operations).filter((candidate) => candidate.seq < operation.seq)
+  const scanned = scannedOperations(operations)
   const skipped: ScanOperation[] = []
-  for (const candidate of [...earlier].reverse()) {
-    const scan = standing.get(standingKey(bundleId, candidate.id))
-    if (scan) return { previous: earlier.at(-1) ?? null, from: candidate, passed: scan.goodQuantity, skipped: skipped.reverse() }
-    skipped.push(candidate)
+  let previous: ScanOperation | null = null
+  let cursor: Pick<ScanOperation, 'seq' | 'parallelGroup'> = operation
+  for (let step = stepBefore(scanned, cursor); step.length > 0; step = stepBefore(scanned, cursor)) {
+    previous ??= step.at(-1)!
+    const reported = step.filter((candidate) => standing.has(standingKey(bundleId, candidate.id)))
+    if (reported.length > 0) {
+      let from = reported[0]!
+      for (const candidate of reported) if (standing.get(standingKey(bundleId, candidate.id))!.goodQuantity <= standing.get(standingKey(bundleId, from.id))!.goodQuantity) from = candidate
+      const missing = step.filter((candidate) => !reported.includes(candidate))
+      return { previous, from, passed: standing.get(standingKey(bundleId, from.id))!.goodQuantity, skipped: [...missing, ...skipped] }
+    }
+    skipped.unshift(...step)
+    cursor = step[0]!
   }
-  return { previous: earlier.at(-1) ?? null, from: null, passed: bundleQuantity, skipped: skipped.reverse() }
+  return { previous, from: null, passed: bundleQuantity, skipped }
 }
 
 // ---- the findings ------------------------------------------------------------------------------------------------------------------
@@ -205,10 +228,17 @@ export function guardFindings(facts: GuardFacts): GuardResult {
     })
   }
 
-  const next = nextScanned(facts.operations, facts.operation.id)
-  const taken = next ? facts.standing.get(standingKey(facts.bundleId, next.id)) : undefined
-  if (next && taken && facts.counts.good < totalOf(taken) && counted(quantityGuard)) {
-    const took = totalOf(taken)
+  // B-W2b-88: of a parallel group after it, the operation that took the most.
+  let next: ScanOperation | null = null
+  let took = 0
+  for (const candidate of nextStep(facts.operations, facts.operation.id)) {
+    const taken = facts.standing.get(standingKey(facts.bundleId, candidate.id))
+    if (taken && totalOf(taken) > took) {
+      next = candidate
+      took = totalOf(taken)
+    }
+  }
+  if (next && facts.counts.good < took && counted(quantityGuard)) {
     findings.push({
       kind: 'QUANTITY',
       mode: quantityGuard,
@@ -285,6 +315,19 @@ export function overrideRefusal(facts: { readonly leadId: string; readonly opera
 
 // ---- components and lots at the operation ----------------------------------------------------------------------------------------------
 
+/**
+ * B-W2b-88: where the cell's BOM lines of a material are used, seen from the operation of the report: `here` (a line
+ * names this operation's routing step), `untied` (a line names no step), `elsewhere` (the operations other lines name).
+ */
+export interface ComponentUse {
+  readonly here: boolean
+  readonly untied: boolean
+  readonly elsewhere: readonly Pick<ScanOperation, 'seq' | 'name'>[]
+}
+
+/** Every line of the material names no step: the rule before B-W2b-88. */
+export const UNTIED_USE: ComponentUse = Object.freeze({ here: false, untied: true, elsewhere: Object.freeze([]) })
+
 /** A planned material of the bundle's cell (WorkOrderMaterial → Item). */
 export interface ComponentMaterial {
   readonly itemId: string
@@ -293,6 +336,14 @@ export interface ComponentMaterial {
   readonly tracking: ItemTracking
   /** A component that is part of the protection (Item.isPpeComponent, or an EN 1621 protector by kind). */
   readonly ppe: boolean
+  /** B-W2b-88: where its BOM lines are used, from the report's operation; left out: no line names a step. */
+  readonly use?: ComponentUse | undefined
+}
+
+/** B-W2b-88: a lot of it may be recorded at the report's operation (a line of it names this operation, or no step). */
+export const usableHere = (material: Pick<ComponentMaterial, 'use'>): boolean => {
+  const use = material.use ?? UNTIED_USE
+  return use.here || use.untied
 }
 
 /** A lot the operator scanned for some of the garments, as the database has it (null: no lot of that code at the site). */
@@ -310,10 +361,20 @@ export interface TracedComponent {
   readonly garments: number
 }
 
-/** The components the operation asks to scan: the cell's PPE components traced by lot, at the sewn operation of a style traced per garment. */
+/**
+ * The components the operation asks to scan, for a style traced per garment: the cell's PPE components traced by lot whose
+ * BOM line names this operation (B-W2b-88), and at the sewn operation those whose line names no step.
+ */
 export function componentsAsked(facts: { readonly operations: readonly ScanOperation[]; readonly operation: Pick<ScanOperation, 'id'>; readonly garmentTracking: GarmentTracking; readonly materials: readonly ComponentMaterial[] }): ComponentMaterial[] {
-  if (facts.garmentTracking !== 'SERIAL' || sewnOperationOf(facts.operations)?.id !== facts.operation.id) return []
-  return facts.materials.filter((material) => material.ppe && material.tracking === 'LOT').sort((a, b) => a.code.localeCompare(b.code))
+  if (facts.garmentTracking !== 'SERIAL') return []
+  const sewn = sewnOperationOf(facts.operations)?.id === facts.operation.id
+  return facts.materials
+    .filter((material) => {
+      if (!material.ppe || material.tracking !== 'LOT') return false
+      const use = material.use ?? UNTIED_USE
+      return use.here || (use.untied && sewn)
+    })
+    .sort((a, b) => a.code.localeCompare(b.code))
 }
 
 /** The garments that go on from a report (they carry the components on): good and rework. */
@@ -337,6 +398,11 @@ export function componentDecision(facts: {
     if (!entry.lot) return { ok: false, refusal: refusal('UNKNOWN_LOT', `${entry.code} is not a lot of this site.`, "Scan the lot's label again, or ask your team leader.") }
     const material = facts.materials.find((candidate) => candidate.itemId === entry.lot!.itemId && candidate.tracking === 'LOT')
     if (!material) return { ok: false, refusal: refusal('WRONG_COMPONENT', `Lot ${entry.lot.code} is not a material of this garment traced by lot.`, 'Take it away and scan the lot of the component in your hand.') }
+    if (!usableHere(material)) {
+      // B-W2b-88: the BOM ties every line of it to other operations: its lots are scanned there.
+      const at = (material.use?.elsewhere ?? []).map(operationLabel).join(', ')
+      return { ok: false, refusal: refusal('WRONG_COMPONENT', `Lot ${entry.lot.code} is ${material.code} ${material.name}, used at ${at || 'another operation'}, not at Op ${facts.operation.seq} ${facts.operation.name}.`, `Scan it at ${at || 'that operation'}.`) }
+    }
     if (entry.lot.qualityStatus !== 'RELEASED') {
       const state = entry.lot.qualityStatus === 'QUARANTINE' ? 'in quarantine' : entry.lot.qualityStatus.toLowerCase()
       return { ok: false, refusal: refusal('LOT_NOT_RELEASED', `Lot ${entry.lot.code} is ${state}: only a released lot goes into a garment.`, 'Use a released lot, or ask quality to release this one; the queue sends it again.', false) }

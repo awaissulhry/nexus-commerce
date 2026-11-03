@@ -1,11 +1,12 @@
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { MinorUnits } from '@nexus/factory-domain/core/money'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
-import { entryKey, baseKey, frozenBases, isPeriodFamily, isScanFamily, periodMakeUp, planLedger, type PaidDay } from '@nexus/factory-domain/people/earnings/ledger'
-import { isPaidScan, LATE_DAYS, paidRuleOf, payablePieces, paysOn, PERIOD_FIGURE_WORDS, rateFor, traineeOn, voidedScans, type TraineeSpan } from '@nexus/factory-domain/people/earnings/rules'
+import { entryKey, baseKey, frozenBases, isPeriodFamily, isScanFamily, othersCodeOf, periodBonus, periodMakeUp, planLedger, type BonusWork, type PaidDay } from '@nexus/factory-domain/people/earnings/ledger'
+import { BONUS_PIECES_WORDS, defectsByFault, isPaidScan, LATE_DAYS, paidRuleOf, payablePieces, paysOn, PERIOD_FIGURE_WORDS, rateFor, traineeOn, voidedScans, type TraineeSpan } from '@nexus/factory-domain/people/earnings/rules'
 import { statementOf, type BuiltStatement, type PayLine } from '@nexus/factory-domain/people/earnings/statement'
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
-import { averagePerMinuteOf, paidTimeOf } from '@nexus/factory-domain/people/schemes/pay'
+import { averagePerMinuteOf, defectMinutesOf, defectPayOf, paidTimeOf } from '@nexus/factory-domain/people/schemes/pay'
+import { paysByPiece, type SchemeRow } from '@nexus/factory-domain/people/schemes/rules'
 import { minutesOf } from '@nexus/factory-domain/production/offstandard/rules'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTools } from '../../../core/command'
@@ -13,7 +14,7 @@ import { actorIdOf, dateOf, dayOf, dayOrNull } from '../employees/access'
 import type { Client, PersonRow } from '../attendance/store'
 import { applyPlan, placeOf, type EntryDraft } from './ledger'
 import { syncBundleInCommand, teamDrafts } from './scans'
-import { decimalOf, entriesOfKeys, ENTRY_SELECT, ledgerRowOf, membersOfScans, momentOf, monthOfPeriod, SCAN_SELECT, workOfScans, type EntryRecord, type PayFacts, type PeriodRecord, type ScanRecord } from './store'
+import { decimalOf, defectsOfScans, entriesOfKeys, ENTRY_SELECT, ledgerRowOf, membersOfScans, momentOf, monthOfPeriod, SCAN_SELECT, workOfScans, type EntryRecord, type PayFacts, type PeriodRecord, type ScanRecord } from './store'
 
 /**
  * One person's period (B-W2b-43; MES-260, MES-261, MES-148; c.c. arts. 2100-2101). ONE place computes it, for the preview,
@@ -28,6 +29,12 @@ import { decimalOf, entriesOfKeys, ENTRY_SELECT, ledgerRowOf, membersOfScans, mo
  *                piece-pay window, each day under the scheme of its line
  *   make-up      periodMakeUp: guaranteed − (pieces + team shares + paid time); work of an earlier month paid now and
  *                adjustments do not count towards it (factory-domain schemes/pay earnedForMakeUp)
+ *   fault        (B-W2b-84) rework and scrap of the person's own scans whose reasons put them down to others: paid time
+ *                (OFF_STANDARD, `others:`), the garments' standard minutes at the scheme's othersFaultPay. The reasons'
+ *                fault is read as it stands at each run, so a bundle with scrap or rework is synced again first
+ *   bonus        (B-W2b-84) days under a standard-minute bonus scheme: their guaranteed pay whole (the make-up: the pieces
+ *                pay nothing by the piece there), and the BONUS of the standard minutes their work earned above the
+ *                threshold. Waiting, rework and scrap are inside those minutes: no paid time on such a day
  *
  * The preview books scans only: team shares, paid time and the make-up move with every late scan, and an append-only ledger
  * must not carry each preview's guess. They are shown on the DRAFT statement, and booked when the review starts (`book`).
@@ -48,7 +55,7 @@ function monthRange(period: PeriodRecord): { readonly from: Date; readonly to: D
 }
 
 /** The person's scans of the month, by their floor sign-ins, and what stands on them: which bundles need the sync. */
-async function ownScans(db: Client, facts: PayFacts, workerIds: readonly string[], period: PeriodRecord): Promise<{ readonly scans: ScanRecord[]; readonly stale: readonly { bundleId: string; workOrderOperationId: string }[] }> {
+async function ownScans(db: Client, facts: PayFacts, workerIds: readonly string[], period: PeriodRecord, companyId: string): Promise<{ readonly scans: ScanRecord[]; readonly stale: readonly { bundleId: string; workOrderOperationId: string }[] }> {
   if (workerIds.length === 0) return { scans: [], stale: [] }
   const { from, to } = monthRange(period)
   const first = dayOf(period.periodStart)
@@ -61,10 +68,19 @@ async function ownScans(db: Client, facts: PayFacts, workerIds: readonly string[
   }
   const ids = scans.map((scan) => scan.id)
   const [paid, holds] = await Promise.all([
-    ids.length === 0 ? [] : db.earningsEntry.findMany({ where: { operationScanId: { in: ids }, reversalOfId: null }, select: { operationScanId: true, id: true, reversedBy: { select: { id: true } } } }),
+    ids.length === 0 ? [] : db.earningsEntry.findMany({ where: { operationScanId: { in: ids }, reversalOfId: null }, select: { operationScanId: true, id: true, kind: true, amount: true, reversedBy: { select: { id: true } } } }),
     ids.length === 0 ? [] : db.heldScan.findMany({ where: { operationScanId: { in: ids } }, select: { operationScanId: true, status: true } }),
   ])
   const livePaid = new Set(paid.filter((row) => row.reversedBy.length === 0).map((row) => row.operationScanId))
+  // B-W2b-84: a scan a bonus scheme covers, still paid by the piece (booked before the ledger knew the bonus), is put right.
+  const pricedLive = paid.filter((row) => row.reversedBy.length === 0 && row.kind === 'SCAN' && row.amount > 0)
+  const pricedScans = scans.filter((scan) => pricedLive.some((row) => row.operationScanId === scan.id))
+  const pricedWork = await workOfScans(db, pricedScans)
+  const bonusPriced = new Set<string>()
+  for (const scan of pricedScans) {
+    const day = await facts.dayAt(scan.siteId, momentOf(scan))
+    if (!paysByPiece(await facts.schemeFor(companyId, pricedWork.get(scan.id)?.lineId ?? null, day))) bonusPriced.add(scan.id)
+  }
   const holdBy = new Map(holds.map((row) => [row.operationScanId, row.status]))
   const voided = voidedScans(scans)
   const seen = new Set<string>()
@@ -74,7 +90,9 @@ async function ownScans(db: Client, facts: PayFacts, workerIds: readonly string[
     const isVoided = voided.has(scan.id)
     const hold = holdBy.get(scan.id)
     const settled = hold === 'NOT_PAID' || (hold !== 'OPEN' && (isVoided ? !livePaid.has(scan.id) : livePaid.has(scan.id)))
-    if (settled) continue
+    // Scrap and rework pay by their reasons' fault as it stands now: such a bundle is synced at every run.
+    const faultsMove = !isVoided && scan.scrapQuantity + scan.reworkQuantity > 0
+    if (settled && !faultsMove && !bonusPriced.has(scan.id)) continue
     const key = `${scan.bundleId}|${scan.workOrderOperationId}`
     if (seen.has(key)) continue
     seen.add(key)
@@ -151,9 +169,78 @@ async function paidMinutes(db: Client, facts: PayFacts, person: PersonRow, perio
   return { days: out, ordinary, overtime: extra }
 }
 
-const line = (entry: EntryRecord, work: { code: string; name: string; standardMinutes: string } | null, code: string | null, corrects: ReadonlyMap<string, string>): PayLine => ({
-  // BONUS is in the schema (B-W2b-75), but nothing books one before B-W2b-84: it widens PayLine and drops this `as`.
-  kind: entry.kind as PayLine['kind'],
+/** Rework or scrap of one of the person's scans that its reasons put down to others: the minutes to pay as time. */
+interface OthersFault {
+  readonly scan: ScanRecord
+  readonly what: 'REWORK' | 'SCRAP'
+  readonly day: BusinessDate
+  readonly minutes: number
+  readonly scheme: SchemeRow
+  readonly workerId: string
+}
+
+/**
+ * The person's own standing scans of the month (not a team's: a team's rework and scrap pay nothing by themselves, as before)
+ * whose rework or scrap their reasons put down to others (MES-258; ScrapReason.fault): the garments' standard minutes, inside
+ * the window, on a scan not held, under a scheme that pays by the piece. Counts: the garments put down to others.
+ */
+async function othersFaultOf(db: Client, facts: PayFacts, period: PeriodRecord, scans: readonly ScanRecord[]): Promise<{ readonly lines: OthersFault[]; readonly scrap: number; readonly rework: number }> {
+  const voided = voidedScans(scans)
+  const standing = scans.filter((scan) => isPaidScan(scan.kind) && !voided.has(scan.id) && scan.scrapQuantity + scan.reworkQuantity > 0)
+  if (standing.length === 0) return { lines: [], scrap: 0, rework: 0 }
+  const [defects, members, work, holds] = await Promise.all([
+    defectsOfScans(db, standing.map((scan) => scan.id)),
+    membersOfScans(db, standing),
+    workOfScans(db, standing),
+    db.heldScan.findMany({ where: { operationScanId: { in: standing.map((scan) => scan.id) } }, select: { operationScanId: true, status: true } }),
+  ])
+  const first = dayOf(period.periodStart)
+  const last = dayOf(period.periodEnd)
+  const lines: OthersFault[] = []
+  let scrap = 0
+  let rework = 0
+  for (const scan of standing) {
+    const faults = defectsByFault(scan, defects.get(scan.id) ?? [])
+    scrap += faults.SCRAP.OTHERS
+    rework += faults.REWORK.OTHERS
+    if ((members.get(scan.id) ?? []).length >= 2 || !scan.workerId) continue
+    const hold = holds.find((row) => row.operationScanId === scan.id)
+    if (hold && hold.status !== 'COUNTED') continue
+    const day = await facts.dayAt(scan.siteId, momentOf(scan))
+    const site = await facts.site(scan.siteId)
+    if (day < first || day > last || !paysOn(site.windows, day)) continue
+    const scanWork = work.get(scan.id)!
+    const scheme = await facts.schemeFor(site.companyId, scanWork.lineId, day)
+    if (!scheme || !paysByPiece(scheme)) continue
+    for (const what of ['REWORK', 'SCRAP'] as const) {
+      const minutes = defectMinutesOf(faults[what].OTHERS, scanWork.standardMinutes)
+      if (minutes > 0) lines.push({ scan, what, day, minutes, scheme, workerId: scan.workerId })
+    }
+  }
+  return { lines, scrap, rework }
+}
+
+/** What each scan line of the month is worth to a standard-minute bonus (B-W2b-84): this month's SCAN lines and team shares. */
+async function bonusWorkOf(db: Client, facts: PayFacts, companyId: string, rows: readonly EntryRecord[], shares: readonly EntryDraft[]): Promise<BonusWork[]> {
+  const scanLines = rows.filter((row) => row.kind === 'SCAN' && row.correctsPeriodId === null && row.operationScanId !== null && row.pieces !== null && row.rate !== null)
+  const ids = [...new Set([...scanLines.map((row) => row.operationScanId!), ...shares.flatMap((draft) => (draft.operationScanId ? [draft.operationScanId] : []))])]
+  if (ids.length === 0) return []
+  const work = await workOfScans(db, await db.operationScan.findMany({ where: { id: { in: ids } }, select: SCAN_SELECT }))
+  const out: BonusWork[] = []
+  const add = async (scanId: string, day: BusinessDate, pieces: number, rate: string, sharePct: string | null) => {
+    const scanWork = work.get(scanId)
+    if (!scanWork) return
+    const scheme = await facts.schemeFor(companyId, scanWork.lineId, day)
+    if (scheme && !paysByPiece(scheme)) out.push({ scheme, pieces, standardMinutes: scanWork.standardMinutes, rate, sharePct })
+  }
+  for (const row of scanLines) await add(row.operationScanId!, dayOf(row.workDate), row.pieces!, row.rate!.toString(), null)
+  for (const draft of shares) if (draft.operationScanId && draft.pieces !== null && draft.rate !== null) await add(draft.operationScanId, draft.workDate, draft.pieces, draft.rate, draft.sharePct ?? null)
+  return out
+}
+
+const line = (entry: EntryRecord, work: { code: string; name: string; standardMinutes: string } | null, code: string | null, corrects: ReadonlyMap<string, string>, measuresBonus: boolean): PayLine => ({
+  kind: entry.kind,
+  measuresBonus,
   operationCode: work?.code ?? null,
   operationName: work?.name ?? null,
   standardMinutes: work?.standardMinutes ?? null,
@@ -171,7 +258,7 @@ const line = (entry: EntryRecord, work: { code: string; name: string; standardMi
 export async function syncPersonInCommand(tools: CommandTools, facts: PayFacts, period: PeriodRecord, person: PersonRow, options: { readonly book: boolean }): Promise<PersonRun> {
   const { tx } = tools
   const workers = await tx.worker.findMany({ where: { employeeId: person.id }, select: { id: true, siteId: true } })
-  const { scans, stale } = await ownScans(tx, facts, workers.map((row) => row.id), period)
+  const { scans, stale } = await ownScans(tx, facts, workers.map((row) => row.id), period, person.companyId)
   let added = 0
   let reversed = 0
   for (const ref of stale) {
@@ -200,7 +287,19 @@ export async function syncPersonInCommand(tools: CommandTools, facts: PayFacts, 
   const shareEarned = shares.reduce((sum, draft) => sum + draft.amount, 0)
   const pieceEarned = scanEarned + shareEarned
   const presentTotal = minutes ? minutes.days.reduce((sum, day) => sum + day.minutes, 0) : 0
-  const average = averagePerMinuteOf({ earned: Math.max(0, pieceEarned), minutes: Math.max(0, presentTotal - blockMinutes), currency })
+  // Rework and scrap caused by others are time off standard work, as waiting is: not in the average's minutes.
+  const others = await othersFaultOf(tx, facts, period, scans)
+  const othersMinutes = others.lines.reduce((sum, item) => sum + item.minutes, 0)
+  const average = averagePerMinuteOf({ earned: Math.max(0, pieceEarned), minutes: Math.max(0, presentTotal - blockMinutes - othersMinutes), currency })
+  // A block of an earlier month already paid in its own period is that period's figure: "late" is a block decided after the
+  // lock, never paid yet (B-W2b-84: the run re-priced paid blocks at the guaranteed rate, and a block priced the same was shown
+  // on the statement but not booked, so the statement stopped matching the ledger and the period could not lock).
+  const lateIds = blocks.filter((row) => dayOf(row.workDate) < first).map((row) => row.id)
+  const paidElsewhere = new Set(
+    lateIds.length === 0
+      ? []
+      : (await tx.earningsEntry.findMany({ where: { sourceType: 'OffStandardEntry', sourceId: { in: lateIds }, reversalOfId: null, reversedBy: { none: {} }, payPeriodId: { not: period.id } }, select: { sourceId: true } })).map((row) => row.sourceId),
+  )
   const time: EntryDraft[] = []
   for (const block of blocks) {
     const day = dayOf(block.workDate)
@@ -209,6 +308,7 @@ export async function syncPersonInCommand(tools: CommandTools, facts: PayFacts, 
     const paidMinutesOf = minutesOf(block.startedAt, block.endedAt)
     if (!code || !block.workerId || !paysOn(site.windows, day) || paidMinutesOf === 0) continue
     const late = day < first
+    if (late && paidElsewhere.has(block.id)) continue
     if (late) {
       // An earlier month: only once it is locked, and into the first period open after it.
       const place = await placeOf(tools, person.companyId, day)
@@ -216,9 +316,15 @@ export async function syncPersonInCommand(tools: CommandTools, facts: PayFacts, 
     }
     const scheme = await facts.schemeFor(person.companyId, block.lineId ?? person.homeLineId, day)
     const rule = scheme ? paidRuleOf({ waiting: block.source === 'HELP_CALL' || waitingCodes.has(block.codeId), payRule: code.payRule as 'AVERAGE' | 'BASE' | 'UNPAID' }, scheme) : null
-    if (!scheme || !rule) continue
+    // A bonus scheme's guaranteed pay covers every minute present, this block's too.
+    if (!scheme || !rule || !paysByPiece(scheme)) continue
     const paid = paidTimeOf(scheme, { rule, minutes: paidMinutesOf, averagePerMinute: late ? null : average })
     time.push({ key: entryKey.block(block.id), kind: 'OFF_STANDARD', siteId: block.siteId, employeeId: person.id, workerId: block.workerId, workDate: day, pieces: null, minutes: new Dec(paid.minutes).toFixed(3), rate: paid.ratePerMinute, amount: paid.amount, currency: scheme.currency, sourceType: 'OffStandardEntry', sourceId: block.id })
+  }
+  for (const item of others.lines) {
+    const paid = defectPayOf(item.scheme, { what: item.what, fault: 'OTHERS', pieces: 0, ratePerPiece: '0', minutes: item.minutes, averagePerMinute: average })
+    if (paid.pays !== 'TIME') continue
+    time.push({ key: entryKey.others(item.scan.id, item.what), kind: 'OFF_STANDARD', siteId: item.scan.siteId, employeeId: person.id, workerId: item.workerId, workDate: item.day, pieces: null, minutes: new Dec(paid.time.minutes).toFixed(3), rate: paid.time.ratePerMinute, amount: paid.amount, currency: item.scheme.currency, sourceType: 'OperationScan', sourceId: item.scan.id })
   }
   const timeEarned = time.filter((draft) => draft.workDate >= first).reduce((sum, draft) => sum + draft.amount, 0)
 
@@ -230,15 +336,24 @@ export async function syncPersonInCommand(tools: CommandTools, facts: PayFacts, 
       ? [{ key: entryKey.makeUp(period.id, person.id), kind: 'MAKE_UP', siteId: makeUpDay.siteId, employeeId: person.id, workerId: workers.find((worker) => worker.siteId === makeUpDay.siteId)!.id, workDate: makeUpDay.day, pieces: null, minutes: new Dec(makeUp.minutes).toFixed(3), rate: makeUp.ratePerMinute, amount: makeUp.makeUp, currency }]
       : []
 
+  // The standard-minute bonus, on the same day as the make-up. No minutes present (no clock): none (BONUS_NO_CLOCK holds the review).
+  const bonus = minutes ? periodBonus(minutes.days, await bonusWorkOf(tx, facts, person.companyId, ledger, shares)) : null
+  const bonusDrafts: EntryDraft[] =
+    bonus && bonus.amount > 0 && new Dec(bonus.bonusMinutes).greaterThan(0) && makeUpDay
+      ? [{ key: entryKey.bonus(period.id, person.id), kind: 'BONUS', siteId: makeUpDay.siteId, employeeId: person.id, workerId: workers.find((worker) => worker.siteId === makeUpDay.siteId)!.id, workDate: makeUpDay.day, pieces: null, minutes: bonus.bonusMinutes, rate: null, amount: bonus.amount, currency }]
+      : []
+
   // A source a person corrected pays no more by itself: neither here nor on the statement.
-  const computed = [...shares, ...time, ...makeUpDrafts]
+  const computed = [...shares, ...time, ...makeUpDrafts, ...bonusDrafts]
   const familyRows = ledger.filter((row) => !row.reversalOfId && isPeriodFamily(baseKey(row.idempotencyKey)))
   const existing = await entriesOfKeys(tx, [...computed.map((draft) => draft.key), ...familyRows.map((row) => row.idempotencyKey)])
   const frozen = frozenBases(existing.map(ledgerRowOf))
   const wanted = computed.filter((draft) => !frozen.has(draft.key))
   const wantedKeys = new Set(wanted.map((draft) => draft.key))
   if (options.book) {
-    const plan = planLedger(existing.map(ledgerRowOf), wanted, (key) => isPeriodFamily(key) && familyRows.some((row) => baseKey(row.idempotencyKey) === key))
+    // The run takes back only figures of its own month nobody wants any more: a late line of a LOCKED month booked here by
+    // the handler (a team share, correctsPeriodId set) is no figure this run computes, so it stays (B-W2b-84; it was reversed).
+    const plan = planLedger(existing.map(ledgerRowOf), wanted, (key) => isPeriodFamily(key) && familyRows.some((row) => baseKey(row.idempotencyKey) === key && row.correctsPeriodId === null))
     const moved = await applyPlan(tools, person.companyId, plan, existing, PERIOD_FIGURE_WORDS)
     added += moved.added
     reversed += moved.reversed
@@ -257,7 +372,8 @@ export async function syncPersonInCommand(tools: CommandTools, facts: PayFacts, 
   const corrected = new Map((correctedIds.length === 0 ? [] : await tx.payPeriod.findMany({ where: { id: { in: correctedIds } }, select: { id: true, periodStart: true } })).map((row) => [row.id, monthOfPeriod(row)]))
   const blockCode = new Map(blocks.map((row) => [row.id, codeBy.get(row.codeId)?.code ?? null]))
   const lines: PayLine[] = [
-    ...kept.map((row) => line(row, row.operationScanId ? (work.get(row.operationScanId) ?? null) : null, row.sourceId ? (blockCode.get(row.sourceId) ?? null) : null, corrected)),
+    // A reversal is marked by the line it reverses: the ledger's one writer gave a bonus scheme's pieces BONUS_PIECES_WORDS.
+    ...kept.map((row) => line(row, row.operationScanId ? (work.get(row.operationScanId) ?? null) : null, (row.sourceId ? (blockCode.get(row.sourceId) ?? null) : null) ?? othersCodeOf(reversalBase(row, rows)), corrected, (row.reversalOfId ? rows.find((other) => other.id === row.reversalOfId) : row)?.reason === BONUS_PIECES_WORDS)),
     ...wanted
       .filter((draft) => draft.kind !== 'MAKE_UP')
       .map((draft): PayLine => {
@@ -272,9 +388,10 @@ export async function syncPersonInCommand(tools: CommandTools, facts: PayFacts, 
           rate: draft.rate,
           sharePct: draft.sharePct ?? null,
           amount: draft.amount,
-          code: draft.sourceId ? (blockCode.get(draft.sourceId) ?? null) : null,
+          code: (draft.sourceId ? (blockCode.get(draft.sourceId) ?? null) : null) ?? othersCodeOf(draft.key),
           correctsMonth: draft.workDate < first ? draft.workDate.slice(0, 7) : null,
           words: null,
+          measuresBonus: draft.reason === BONUS_PIECES_WORDS,
         }
       }),
   ]
@@ -290,7 +407,8 @@ export async function syncPersonInCommand(tools: CommandTools, facts: PayFacts, 
     makeUp: makeUp ? { minutes: makeUp.minutes, ratePerMinute: makeUp.ratePerMinute, guaranteed: makeUp.guaranteed, earned: makeUp.earned, amount: wanted.some((draft) => draft.kind === 'MAKE_UP') ? makeUp.makeUp : 0 } : null,
     held: { open: heldOf('OPEN'), counted: heldOf('COUNTED'), notPaid: heldOf('NOT_PAID') },
     disputes: { open: disputeOf('OPEN'), answered: disputeOf('UPHELD') + disputeOf('REJECTED') },
-    defects: { scrap: standing.reduce((sum, scan) => sum + scan.scrapQuantity, 0), rework: standing.reduce((sum, scan) => sum + scan.reworkQuantity, 0) },
+    defects: { scrap: standing.reduce((sum, scan) => sum + scan.scrapQuantity, 0), rework: standing.reduce((sum, scan) => sum + scan.reworkQuantity, 0), othersScrap: others.scrap, othersRework: others.rework },
+    bonus: bonus ? { ...bonus, amount: wanted.some((draft) => draft.kind === 'BONUS') ? bonus.amount : 0 } : null,
   })
   const statementId = await writeStatement(tools, period, person, built, month)
   return { statementId, added, reversed, built }

@@ -1,7 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { ItemTracking } from '@nexus/factory-domain/product/materials/rules'
-import { guardSettingsOf, type ComponentMaterial, type GuardSettings, type ScannedLot } from '@nexus/factory-domain/production/guards/rules'
+import { guardSettingsOf, type ComponentMaterial, type ComponentUse, type GuardSettings, type ScannedLot } from '@nexus/factory-domain/production/guards/rules'
 import type { GarmentTracking } from '@nexus/factory-domain/production/serials/rules'
 import type { WorkCentreKind } from '@nexus/factory-domain/product/routing/operations'
 import type { CommandTx } from '../../../core/command'
@@ -63,15 +63,32 @@ export async function lineFacts(db: Reader, input: { readonly stationId: string 
   }
 }
 
-/** The style's garment tracking and the lot-relevant planned materials of the bundle's cell (WorkOrderMaterial → Item). */
-export async function componentFacts(db: Reader, input: { readonly styleId: string; readonly workOrderId: string; readonly workOrderSizeId: string }): Promise<{ readonly garmentTracking: GarmentTracking; readonly materials: ComponentMaterial[] }> {
+/**
+ * The style's garment tracking and the lot-relevant planned materials of the bundle's cell (WorkOrderMaterial → Item), each
+ * with where its BOM lines are used seen from the report's operation (B-W2b-88: BomLine.routingSeq ↔ the work order's
+ * frozen operation of that routing step; an unplanned operation names no step, so nothing is "here").
+ */
+export async function componentFacts(
+  db: Reader,
+  input: { readonly styleId: string; readonly workOrderId: string; readonly workOrderSizeId: string; readonly operationId: string },
+): Promise<{ readonly garmentTracking: GarmentTracking; readonly materials: ComponentMaterial[] }> {
   const style = await db.style.findUnique({ where: { id: input.styleId }, select: { garmentTracking: true } })
-  const planned = await db.workOrderMaterial.findMany({ where: { workOrderId: input.workOrderId, workOrderSizeId: input.workOrderSizeId }, select: { itemId: true } })
+  const planned = await db.workOrderMaterial.findMany({ where: { workOrderId: input.workOrderId, workOrderSizeId: input.workOrderSizeId }, select: { itemId: true, bomLineId: true } })
   const itemIds = [...new Set(planned.map((row) => row.itemId))]
   const items = itemIds.length > 0 ? await db.item.findMany({ where: { id: { in: itemIds } }, select: { id: true, code: true, name: true, kind: true, tracking: true, isPpeComponent: true }, orderBy: { code: 'asc' } }) : []
+  const lineIds = [...new Set(planned.map((row) => row.bomLineId))]
+  const lines = lineIds.length > 0 ? await db.bomLine.findMany({ where: { id: { in: lineIds } }, select: { id: true, routingSeq: true } }) : []
+  const stepOfLine = new Map(lines.map((line) => [line.id, line.routingSeq]))
+  const operations = await db.workOrderOperation.findMany({ where: { workOrderId: input.workOrderId }, select: { id: true, seq: true, name: true, routingSeq: true }, orderBy: { seq: 'asc' } })
+  const own = operations.find((operation) => operation.id === input.operationId)?.routingSeq ?? null
+  const useOf = (itemId: string): ComponentUse => {
+    const steps = new Set(planned.filter((row) => row.itemId === itemId).map((row) => stepOfLine.get(row.bomLineId) ?? null))
+    const elsewhere = operations.filter((operation) => operation.routingSeq !== null && operation.routingSeq !== own && steps.has(operation.routingSeq)).map((operation) => ({ seq: operation.seq, name: operation.name }))
+    return { here: own !== null && steps.has(own), untied: steps.has(null), elsewhere }
+  }
   return {
     garmentTracking: (style?.garmentTracking ?? 'BATCH') as GarmentTracking,
-    materials: items.map((item) => ({ itemId: item.id, code: item.code, name: item.name, tracking: item.tracking as ItemTracking, ppe: item.isPpeComponent || item.kind === 'PROTECTOR' })),
+    materials: items.map((item) => ({ itemId: item.id, code: item.code, name: item.name, tracking: item.tracking as ItemTracking, ppe: item.isPpeComponent || item.kind === 'PROTECTOR', use: useOf(item.id) })),
   }
 }
 

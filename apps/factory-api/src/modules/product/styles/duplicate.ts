@@ -260,6 +260,17 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
         select: REVISION_COLUMNS,
       })
       tools.emit({ type: 'style.revision_created', subject: id, companyId, payload: { styleId: id, code: style.code, revisionId, revision: 1 } })
+      // B-W2b-88: the routing BEFORE the BOM: a line names its step by place (BomLine.routingSeq's key).
+      if (parts.includes('ROUTING') && revision) {
+        const steps = copyRoutingSteps(await readSteps(tx, revision.id), await readSubcontracts(tx, revision.id), newId)
+        routingSteps = steps.length
+        await insertSteps(
+          tools,
+          { styleId: id, revisionId },
+          steps.map((entry) => entry.step),
+          new Map(steps.flatMap((entry) => (entry.subcontract ? [[entry.step.id, entry.subcontract] as const] : []))),
+        )
+      }
       if (parts.includes('BOM') && revision) {
         const copied = copyBomLines(await readLines(tx, revision.id), colourwayMap, range.sizes, newId)
         if (copied.dropped > 0) notes.push(leftOutNote('BOM_LINES_LEFT_OUT', { count: copied.dropped }))
@@ -283,6 +294,8 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
               colourwayId: line.colourwayId,
               supplierId: line.supplierId,
               note: line.note,
+              // B-W2b-88: the step that uses it, by place (the copied routing keeps every place); none without the routing.
+              routingSeq: parts.includes('ROUTING') ? (line.routingSeq ?? null) : null,
               ...stamp,
             })),
           })
@@ -291,16 +304,6 @@ export async function duplicateStyle(caller: CommandCaller, styleId: string, bod
           const cells = lines.flatMap((line) => line.colours.map((cell) => ({ id: newId(), styleId: id, revisionId, bomLineId: line.id, itemId: line.itemId, colourwayId: cell.colourwayId, itemColourId: cell.itemColourId, ...stamp })))
           if (cells.length > 0) await tx.bomLineColour.createMany({ data: cells })
         }
-      }
-      if (parts.includes('ROUTING') && revision) {
-        const steps = copyRoutingSteps(await readSteps(tx, revision.id), await readSubcontracts(tx, revision.id), newId)
-        routingSteps = steps.length
-        await insertSteps(
-          tools,
-          { styleId: id, revisionId },
-          steps.map((entry) => entry.step),
-          new Map(steps.flatMap((entry) => (entry.subcontract ? [[entry.step.id, entry.subcontract] as const] : []))),
-        )
       }
     }
 

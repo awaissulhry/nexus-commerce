@@ -13,7 +13,7 @@ import { knownSite, may, officeOf } from './access'
 import { attendanceOfDay, lineLoads, lineMinutesOf, stationOperators, type AttendanceOfDay } from './facts'
 import { levelsOfBoard, type LevelsOf } from './levels'
 import { activeLinesOf, dayOf, workerNames, type AssignmentRow, type Reader, type StationRow } from './store'
-import { dispatchWorld, materialFlags, planView, type DayCard, type DispatchWorld } from './world'
+import { dispatchWorld, materialFlags, planView, type DayCard, type DispatchWorld, type MaterialFlags } from './world'
 
 /**
  * The dispatch board (B-W2b-49; MES-023, -026, -027, -028, -031; design production.dispatch SCR-138): GET
@@ -27,7 +27,7 @@ import { dispatchWorld, materialFlags, planView, type DayCard, type DispatchWorl
  * station.
  */
 
-export const materialView = (flag: MaterialFlag | undefined) => (flag ? { state: flag.state, word: flag.word, label: flag.label, date: flag.date, words: flag.words, ...MATERIAL_LOOK[flag.state] } : null)
+export const materialView = (flag: MaterialFlag | null) => (flag ? { state: flag.state, word: flag.word, label: flag.label, date: flag.date, words: flag.words, scope: flag.scope, ...MATERIAL_LOOK[flag.state] } : null)
 
 /** Rush first, the board's order, then the W2a order. */
 export function sortCards<Card extends DayCard>(cards: readonly Card[]): Card[] {
@@ -62,7 +62,7 @@ function operatorView(row: AssignmentRow, operationId: string | null, lineId: st
   }
 }
 
-function cardView(card: DayCard, world: DispatchWorld, flags: ReadonlyMap<string, MaterialFlag>, named: Named) {
+function cardView(card: DayCard, world: DispatchWorld, flags: MaterialFlags, named: Named) {
   const station = card.stationId ? world.stations.find((row) => row.id === card.stationId) : undefined
   const lineId = station?.lineId ?? card.lineId
   const rows = named.namesWorkers ? card.rows.filter((row) => row.workerId !== null) : []
@@ -74,6 +74,7 @@ function cardView(card: DayCard, world: DispatchWorld, flags: ReadonlyMap<string
     workOrder: { id: card.workOrder.id, number: card.workOrder.number, status: card.workOrder.status, priority: card.workOrder.priority, rush: card.workOrder.rush, dueDate: card.workOrder.dueDate ? dayOf(card.workOrder.dueDate) : null, style: card.workOrder.style, holdReason: card.workOrder.holdReason },
     operation: { id: card.operation.id, seq: card.operation.seq, code: card.operation.code, name: card.operation.name, workCentreId: card.operation.workCentreId },
     previous: card.previous ? { seq: card.previous.seq, code: card.previous.code, name: card.previous.name } : null,
+    parallel: card.parallel ? { group: card.parallel.group, with: card.parallel.with.map((operation) => ({ id: operation.id, seq: operation.seq, code: operation.code, name: operation.name })) } : null,
     stationId: card.stationId,
     lineId,
     bundles: card.bundleIds.map((id) => ({ id, code: world.bundles.get(id)?.code ?? '', garments: world.bundles.get(id)?.garments ?? 0 })),
@@ -84,7 +85,7 @@ function cardView(card: DayCard, world: DispatchWorld, flags: ReadonlyMap<string
     state: card.state,
     words: card.words,
     sequence: card.sequence,
-    material: materialView(flags.get(card.workOrder.id)),
+    material: materialView(flags.of(card.workOrder.id, card.operation.id)),
     order: card.order,
     counted: card.counted,
     movable: card.workOrder.status !== 'DRAFT',
@@ -93,7 +94,7 @@ function cardView(card: DayCard, world: DispatchWorld, flags: ReadonlyMap<string
   }
 }
 
-function stationLane(station: StationRow, cards: readonly DayCard[], world: DispatchWorld, flags: ReadonlyMap<string, MaterialFlag>, named: Named) {
+function stationLane(station: StationRow, cards: readonly DayCard[], world: DispatchWorld, flags: MaterialFlags, named: Named) {
   const own = sortCards(cards.filter((card) => card.stationId === station.id))
   const views = own.map((card) => cardView(card, world, flags, named))
   const operators = named.namesWorkers ? stationOperators(world, station.id).map((row) => operatorView(row, own[0]?.operation.id ?? null, station.lineId, named)) : []

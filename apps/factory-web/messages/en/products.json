@@ -513,7 +513,10 @@
     "MINUTES_NOT_POSITIVE": "Operation {step}: its minutes must be above 0.",
     "NO_SCAN_POINT": "No operation is scanned: the floor needs at least one.",
     "OPERATION_ARCHIVED": "Operation {step}: archived in the library (the routing keeps it).",
-    "LAST_STEP_NOT_SCANNED": "The last operation is not scanned: the batch is given at the last scanned one."
+    "LAST_STEP_NOT_SCANNED": "The last operation is not scanned: the batch is given at the last scanned one.",
+    "PARALLEL_GROUP_SPLIT": "Operation {step}: its side by side group is split by other operations. Move the group's operations together.",
+    "FINAL_SIDE_BY_SIDE": "Operation {step} is the final operation (where the batch is given): it runs alone, not side by side.",
+    "PARALLEL_GROUP_ALONE": "Operation {step} is alone in its side by side group: it runs like any operation until another joins it."
   },
   "complianceCheck": {
     "REVISION": {
@@ -998,7 +1001,8 @@
       "wastage": "Wastage",
       "gross": "With wastage",
       "depends": "Varies by",
-      "actions": "Actions"
+      "actions": "Actions",
+      "operation": "Operation"
     },
     "bySize": "size",
     "byColour": "colourway",
@@ -1092,7 +1096,12 @@
         "material": "Choose a material.",
         "qty": "Type a quantity above 0.",
         "wastage": "Wastage is 0 to 60 %."
-      }
+      },
+      "operation": "Operation that uses it",
+      "operationHint": "The floor asks for its components at this operation only, and dispatch shows its material on this operation. Leave it on \"Any operation\" when several operations use it.",
+      "operationNoRouting": "This revision has no operations yet: add them in Operations (routing) first.",
+      "operationLoading": "Reading the operations of this revision…",
+      "noOperation": "Any operation (not tied to one)"
     },
     "import": {
       "open": "Import BOM",
@@ -1112,7 +1121,9 @@
       "xlsxHint": "The import’s columns: edit it and import it back.",
       "csvHint": "The same columns as a CSV file.",
       "pdfHint": "An internal paper to print (no prices)."
-    }
+    },
+    "operationAt": "Op {step}",
+    "noOperation": "Any operation"
   },
   "routing": {
     "loading": "Reading the routing…",
@@ -1155,7 +1166,8 @@
       "minutes": "Standard minutes",
       "scanned": "Scanned",
       "actions": "Actions",
-      "subcontracted": "Subcontracted"
+      "subcontracted": "Subcontracted",
+      "parallel": "Side by side"
     },
     "final": "final",
     "archivedOp": "archived in the library",
@@ -1184,7 +1196,17 @@
     "addHeld": "Tick at least one operation.",
     "instructionsTitle": "Instructions · {step}",
     "instructions": "Instructions",
-    "instructionsHint": "How it is done for this style: the traveller and the floor screen show it."
+    "instructionsHint": "How it is done for this style: the traveller and the floor screen show it.",
+    "parallel": {
+      "none": "In sequence",
+      "group": "Group {group}",
+      "groupOf": "Group {group} ({steps})",
+      "newGroup": "New group {group}",
+      "with": "Side by side with {steps}",
+      "of": "Side by side: operation {step}",
+      "hint": "Operations in one group run side by side and count as one step: the floor never says one of them was skipped, and dispatch shows them side by side. A group's operations follow each other; the final operation runs alone."
+    },
+    "removeUsed": "BOM line {lines} says this operation uses it: in Materials (BOM), tie it to another operation or to none first."
   },
   "cost": {
     "loading": "Working out the cost…",

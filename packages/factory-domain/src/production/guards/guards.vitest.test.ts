@@ -248,6 +248,90 @@ describe('MES-114 components and lots at the operation', () => {
   })
 })
 
+describe('B-W2b-88 a parallel group counts as one step (MES-025)', () => {
+  // 10 cut, 20 sleeves and 30 body side by side (group 1), 40 join, 50 pack: figures by hand.
+  const grouped = (seq: number, kind: ScanOperation['workCentreKind'], parallelGroup: number | null = null): ScanOperation => ({ ...op(seq, kind), parallelGroup })
+  const PAR = [grouped(10, 'CUTTING'), grouped(20, 'SEWING', 1), grouped(30, 'SEWING', 1), grouped(40, 'ASSEMBLY'), grouped(50, 'PACKING')]
+  const at = (seq: number) => PAR.find((entry) => entry.seq === seq)!
+  const parFacts = (over: Partial<GuardFacts>): GuardFacts => facts({ operations: PAR, ...over })
+
+  it('never finds a sibling skipped: the step before 30 is 10, not 20', () => {
+    const reached = passedTo(PAR, at(30), 10, standing(scan('op-10', 10)), BUNDLE)
+    expect(reached).toMatchObject({ previous: { id: 'op-10' }, from: { id: 'op-10' }, passed: 10, skipped: [] })
+    expect(guardFindings(parFacts({ operation: at(30), standing: standing(scan('op-10', 10)), counts: { good: 10, scrap: 0, rework: 0 } })).findings).toEqual([])
+    expect(guardFindings(parFacts({ operation: at(20), standing: standing(scan('op-10', 10), scan('op-30', 10)), counts: { good: 10, scrap: 0, rework: 0 } })).findings).toEqual([])
+  })
+
+  it('after the group: what reached it is the lowest good of the group; a sibling not reported is skipped, in routing order', () => {
+    const both = passedTo(PAR, at(40), 10, standing(scan('op-10', 10), scan('op-20', 9, 1), scan('op-30', 10)), BUNDLE)
+    expect(both).toMatchObject({ previous: { id: 'op-30' }, from: { id: 'op-20' }, passed: 9, skipped: [] })
+    const one = passedTo(PAR, at(40), 10, standing(scan('op-10', 10), scan('op-30', 8, 2)), BUNDLE)
+    expect(one).toMatchObject({ from: { id: 'op-30' }, passed: 8 })
+    expect(one.skipped.map((entry) => entry.id)).toEqual(['op-20'])
+    const none = passedTo(PAR, at(50), 10, standing(scan('op-10', 10)), BUNDLE)
+    expect(none).toMatchObject({ from: { id: 'op-10' }, passed: 10 })
+    expect(none.skipped.map((entry) => entry.id)).toEqual(['op-20', 'op-30', 'op-40'])
+    const result = guardFindings(parFacts({ operation: at(40), standing: standing(scan('op-10', 10), scan('op-20', 9, 1), scan('op-30', 10)), counts: { good: 10, scrap: 0, rework: 0 } }))
+    expect(result.cap).toBe(9)
+    expect(result.findings.map((finding) => finding.refusal.code)).toEqual(['MORE_THAN_PASSED'])
+    expect(result.findings[0]!.refusal.message).toBe('Op 20 Operation 20 passed 9 garments of bundle BN-1; 10 reported here.')
+  })
+
+  it('a late report inside the group is checked against the step after the group (the most it took), never a sibling', () => {
+    const late = guardFindings(parFacts({ operation: at(20), standing: standing(scan('op-10', 10), scan('op-30', 10), scan('op-40', 9)), counts: { good: 8, scrap: 2, rework: 0 } }))
+    expect(late.findings.map((finding) => finding.refusal.code)).toEqual(['LESS_THAN_TAKEN'])
+    expect(late.findings[0]!.refusal.message).toBe('Op 40 Operation 40 took 9 garments of bundle BN-1 already; 8 good here is fewer.')
+    // 30 reported 10 and 20 says 8: siblings are not "the next one".
+    expect(guardFindings(parFacts({ operation: at(20), standing: standing(scan('op-10', 10), scan('op-30', 10)), counts: { good: 8, scrap: 2, rework: 0 } })).findings).toEqual([])
+  })
+
+  it("W1's strict order and the card read the group the same way", () => {
+    const w1 = (operation: ScanOperation, scans: ScanFact[], good: number): ReportFacts => ({
+      workOrder: { number: 'WO-1', status: 'IN_PROGRESS' },
+      bundleId: BUNDLE,
+      bundle: { code: 'BN-1', quantity: 10, status: 'ACTIVE', replacedCodes: [] },
+      scanned: 'BN-1',
+      operations: PAR,
+      operationId: operation.id,
+      station: null,
+      kindReason: null,
+      standing: standing(...scans),
+      counts: { good, scrap: 0, rework: 0 },
+      viewer: { scanSubject: 'WORKER', workerId: 'w-2', stationId: null },
+      stationCodes: new Map(),
+      timeZone: 'Europe/Rome',
+    })
+    expect(reportDecision(w1(at(30), [scan('op-10', 10)], 10))).toMatchObject({ ok: true, cap: 10, previous: { id: 'op-10' } })
+    expect(reportDecision(w1(at(40), [scan('op-10', 10), scan('op-30', 10)], 9))).toMatchObject({ ok: false, refusal: { code: 'PREVIOUS_NOT_REPORTED', message: 'Op 20 Operation 20 has not passed bundle BN-1 yet.' } })
+    expect(reportDecision(w1(at(40), [scan('op-10', 10), scan('op-20', 7, 3), scan('op-30', 10)], 8))).toMatchObject({ ok: false, refusal: { code: 'MORE_THAN_PASSED' } })
+    expect(reportDecision(w1(at(40), [scan('op-10', 10), scan('op-20', 7, 3), scan('op-30', 10)], 7))).toMatchObject({ ok: true, cap: 7, previous: { id: 'op-20' } })
+  })
+})
+
+describe('B-W2b-88 a scan asks only its own components (BomLine.routingSeq)', () => {
+  const own = { here: true, untied: false, elsewhere: [] }
+  const atJoin = { here: false, untied: false, elsewhere: [{ seq: 40, name: 'Join' }] }
+  const protector: ComponentMaterial = { itemId: 'pro', code: 'PRO-300', name: 'Shoulder protector', tracking: 'LOT', ppe: true, use: atJoin }
+  const back: ComponentMaterial = { itemId: 'bak', code: 'PRO-400', name: 'Back protector', tracking: 'LOT', ppe: true, use: { here: false, untied: true, elsewhere: [] } }
+  const lot = (code: string, itemId: string) => ({ id: `lot-${code}`, code, itemId, qualityStatus: 'RELEASED' })
+
+  it('asks a component at the operation its line names; one whose line names no step still at the sewn operation', () => {
+    // Seen from the sewn operation (20): the shoulder protector is tied to 40, the back protector to nothing.
+    expect(componentsAsked({ operations: OPS, operation: OPS[1]!, garmentTracking: 'SERIAL', materials: [protector, back] }).map((material) => material.code)).toEqual(['PRO-400'])
+    // Seen from 40 (its own line): asked there, though 40 is not the sewn operation.
+    expect(componentsAsked({ operations: OPS, operation: OPS[3]!, garmentTracking: 'SERIAL', materials: [{ ...protector, use: own }, back] }).map((material) => material.code)).toEqual(['PRO-300'])
+    expect(componentsAsked({ operations: OPS, operation: OPS[3]!, garmentTracking: 'BATCH', materials: [{ ...protector, use: own }] })).toEqual([])
+  })
+
+  it('refuses a lot of a component tied to another operation, in words that say where it goes', () => {
+    expect(componentDecision({ asked: [], materials: [protector, back], scanned: [{ code: 'L-A', garments: 10, lot: lot('L-A', 'pro') }], garments: 10, operation: { seq: 20, name: 'Sew' } })).toMatchObject({
+      ok: false,
+      refusal: { code: 'WRONG_COMPONENT', message: 'Lot L-A is PRO-300 Shoulder protector, used at Op 40 Join, not at Op 20 Sew.', fix: 'Scan it at Op 40 Join.' },
+    })
+    expect(componentDecision({ asked: [], materials: [{ ...protector, use: own }], scanned: [{ code: 'L-A', garments: 10, lot: lot('L-A', 'pro') }], garments: 10, operation: { seq: 40, name: 'Join' } })).toMatchObject({ ok: true })
+  })
+})
+
 describe('the catalogues', () => {
   it("adds its refusals to the scans' list, keeps W1's codes for the held checks, reads the site's rules", () => {
     for (const code of [...GUARD_REFUSALS, ...OVERRIDABLE_REFUSALS]) expect(SCAN_REFUSALS).toContain(code)
