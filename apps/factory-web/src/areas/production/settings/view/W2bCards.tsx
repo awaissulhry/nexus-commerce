@@ -65,7 +65,7 @@ function ChecksForm({ model, actions, rules }: { model: FloorRulesModel; actions
   const held = checksHeld(draft, busy)
   const editable = model.can.manage && rules.canManage
   const set = (patch: Partial<ChecksDraft>) => setDraft((current) => ({ ...current, ...patch }))
-  const modeOptions = (rule: 'sequence' | 'quantity') => FLOOR_RULE_MODES.map((mode) => ({ value: mode, label: t(`fr.checks.${rule}.${mode}.label`) }))
+  const modeOptions = (rule: 'sequence' | 'quantity' | 'qualification') => FLOOR_RULE_MODES.map((mode) => ({ value: mode, label: t(`fr.checks.${rule}.${mode}.label`) }))
   const fixed = rules.fixed
   const idle = rules.idleSignOut
 
@@ -84,6 +84,9 @@ function ChecksForm({ model, actions, rules }: { model: FloorRulesModel; actions
             </Field>
             <Field label={t('fr.checks.quantity.title')} hint={t(`fr.checks.quantity.${draft.quantityGuard}.body`)}>
               <SegmentedControl size="sm" ariaLabel={t('fr.checks.quantity.title')} value={draft.quantityGuard} disabled={busy} options={modeOptions('quantity')} onChange={(value) => set({ quantityGuard: value as FloorRuleMode })} />
+            </Field>
+            <Field label={t('fr.checks.qualification.title')} hint={t(`fr.checks.qualification.${draft.qualificationRule}.body`)}>
+              <SegmentedControl size="sm" ariaLabel={t('fr.checks.qualification.title')} value={draft.qualificationRule} disabled={busy} options={modeOptions('qualification')} onChange={(value) => set({ qualificationRule: value as FloorRuleMode })} />
             </Field>
             <Field label={t('fr.checks.scrap.title')} hint={draft.limitOn ? t('fr.checks.scrap.onHint', { count: draft.limit === '' ? 0 : draft.limit }) : t('fr.checks.scrap.offHint')}>
               <span className="fw-fr-row">
@@ -104,6 +107,7 @@ function ChecksForm({ model, actions, rules }: { model: FloorRulesModel; actions
           <ul className="fw-fr-list">
             <li>{t('fr.checks.read.sequence', { mode: t(`fr.checks.sequence.${rules.checks.skippedOperationRule}.label`) })}</li>
             <li>{t('fr.checks.read.quantity', { mode: t(`fr.checks.quantity.${rules.checks.quantityGuard}.label`) })}</li>
+            <li>{t('fr.checks.read.qualification', { mode: t(`fr.checks.qualification.${rules.checks.qualificationRule}.label`) })}</li>
             <li>{rules.checks.scrapApprovalLimit === null ? t('fr.checks.read.noLimit') : t('fr.checks.read.limit', { count: rules.checks.scrapApprovalLimit })}</li>
           </ul>
         )}

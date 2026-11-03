@@ -1,5 +1,6 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { callTimes, isOpenCall, secondsOpen, typeOrder, type CallKind, type CallStatus } from '@nexus/factory-domain/production/calls/rules'
 import type { CommandTx } from '../../../core/command'
 import type { CallContext } from './access'
@@ -27,6 +28,8 @@ export const CALL_COLUMNS = {
   workOrderId: true,
   bundleId: true,
   note: true,
+  reasonCode: true,
+  requestedQuantity: true,
   status: true,
   sentAt: true,
   seenAt: true,
@@ -265,6 +268,8 @@ export async function callViews(db: Reader, rows: readonly CallRow[], context: C
       bundle: row.bundle ? { id: row.bundle.id, code: row.bundle.code } : null,
       responderTeam: team ? { id: team.id, code: team.code, name: team.name } : null,
       note: row.note,
+      reasonCode: row.reasonCode,
+      requestedQuantity: row.requestedQuantity === null ? null : decimalText(row.requestedQuantity.toString()),
       sentAt: toUtcIso(row.sentAt),
       seenAt: iso(row.seenAt),
       onTheWayAt: iso(row.onTheWayAt),

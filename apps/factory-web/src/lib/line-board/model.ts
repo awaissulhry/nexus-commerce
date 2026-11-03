@@ -1,4 +1,6 @@
+import { MATERIAL_REASON_TILES } from '@nexus/factory-domain/production/calls/rules'
 import { isApiError, issuePath } from '../api/errors'
+import { formatNumber } from '../i18n/format'
 import type { Locale } from '../i18n/locales'
 import type { BoardHour, BoardOperation, BoardReason, LineBoard } from './schema'
 
@@ -83,6 +85,14 @@ export function hourBars(hours: readonly BoardHour[]): HourBar[] {
 /** A reason code's words in the screen's language; the code when it has none. */
 export function reasonWords(reason: Pick<BoardReason, 'code' | 'labelIt' | 'labelEn' | 'labelI18n'>, locale: Locale): string {
   return reason.labelI18n[locale] ?? (locale === 'it' ? reason.labelIt : reason.labelEn) ?? reason.code
+}
+
+/** What a material call asks in the screen's language ("Ran out · 4"), or null: the tablet, Help calls and the line view (B-W2b-81; MES-137). */
+export function callAskWords(call: { readonly reasonCode: string | null; readonly requestedQuantity: string | null }, locale: Locale): string | null {
+  const tile = MATERIAL_REASON_TILES.find((entry) => entry.code === call.reasonCode)
+  const reason = tile ? reasonWords({ ...tile, labelI18n: {} }, locale) : call.reasonCode
+  const quantity = call.requestedQuantity === null ? null : formatNumber(Number(call.requestedQuantity), locale, { maximumFractionDigits: 4 })
+  return [reason, quantity].filter((part) => part !== null).join(' · ') || null
 }
 
 /** The operations with bundles waiting, most first; the rest of the line's map says nothing on a wall. */

@@ -1,6 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, ForbiddenError, NotFoundError, UnauthenticatedError, type Issue } from '@nexus/factory-domain/core/errors'
-import { isUuid } from '@nexus/factory-domain/core/ids'
+import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import {
@@ -8,10 +8,12 @@ import {
   decisionRefusal,
   decisionWords,
   isFloorReport,
+  isScrapRefusalReason,
   overLimitOf,
   postingHeldWords,
   refusalReasonText,
   SCRAP_DECISION_ACTION,
+  scrapApprovalKey,
   SCRAP_REFUSAL_TILES,
   type DecidedOn,
   type OverLimitRefusal,
@@ -22,7 +24,7 @@ import {
 import { PRODUCTION_SCRAP_OVER_LIMIT, PRODUCTION_SCRAP_VIEW } from '@nexus/factory-domain/production/scrap/permissions'
 import { limitSince, scrapNeedsApproval, type LimitChange } from '@nexus/factory-domain/production/settings/floor-rules'
 import type { WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
-import { command, type CommandCaller, type CommandTx } from '../../../core/command'
+import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
 import { systemView } from '../scans/access'
 import { lockBundleScans, scanWorkOrderLock, workerUsers } from '../scans/store'
@@ -33,18 +35,23 @@ import { floorChecksFor, FLOOR_RULES_ACTION, scrapLimitHistory } from '../settin
  * for you", production.scrap tile "Waiting for approval (over the limit)", its DetailModal and "Approve 3"). The rule is
  * factory-domain production/scrap/approval (pure); this is its API:
  *
- *   which scans wait   a standing floor REPORT whose scrap is above the limit in force when it was taken (the site's
- *                      ProductionSettings.scrapApprovalLimit and its history in the audit rows of the floor rules'
- *                      change), of a work order not CANCELLED or CLOSED, with no decision yet. The scan counted at once
+ *   the ledger         ScrapApproval (B-W2b-81; labour.prisma, its guard in …_followups_floor_w2b_guards): one row per scan,
+ *                      written WAITING by the REPORT's own command when its scrap is above the limit in force, keeping that
+ *                      limit (`askApprovalInCommand`, the scans' hook). A row stays WAITING for ever when its scan is voided
+ *                      (no VOIDED state, on purpose): every reader asks `standing`, as `approvalStateOf` does.
+ *   older scans        taken before the table have no row. They are not copied: FALLBACK, the audit rows are read for them
+ *                      as they always were (`auditedDecisions`, and the limit in force from the site's history: B-W2b-53's
+ *                      rule). Deciding such a scan writes its whole decided row, so the fallback shrinks by itself.
+ *   which scans wait   a standing floor REPORT with a WAITING row (or an older one above the limit in force when it was
+ *                      taken and with no decision), of a work order not CANCELLED or CLOSED. The scan counted at once
  *                      (F3); what waits is its scrap's posting: a replacement (replacements.ts), a scrap of stock naming it
  *                      (stock.ts) and the cost ledger (costing/actual/post.ts reads `scrapApprovalStatesOf`; an approval posts it).
  *   the decision       ONE command per scan (the work order's scan lock, then the bundle's scan lock: a decision, an undo
  *                      and a correction of the bundle take turns), the facts read again under the locks: APPROVED or
  *                      REFUSED with a reason tile (OTHER with a note), never by who took the scan (four eyes: its worker,
  *                      the account that wrote it, the actors of its report's audit rows, the office users those workers
- *                      are). Recorded as the audit row `production.decideScrapOverLimit` on the scan (and one on its work
- *                      order): the decision's ledger, since the schema has no table for it (named gap); event
- *                      production.scrap_over_limit_decided.
+ *                      are). Written on the ScrapApproval row; audit rows on the scan and its work order (who and why, as
+ *                      every command); event production.scrap_over_limit_decided.
  *   the team leader    floor.lead at the device's own site: the waiting list (no person's name: the station, the line,
  *                      the bundle and the counts; the limit is a count, no money), approve with the PIN (requireFloorStepUp,
  *                      after every other check), refuse with a reason tile.
@@ -52,8 +59,8 @@ import { floorChecksFor, FLOOR_RULES_ACTION, scrapLimitHistory } from '../settin
  *                      many (each its own command, each answered); the scrap list (views.ts) carries each scan's approval
  *                      and the tile.
  *
- * The audit log is read in the office's scope or, for a floor session, in the tenant's system scope (the floor role
- * reads no audit row), always narrowed to the device's own site.
+ * The audit log (who was involved, the older scans' decisions and limits) is read in the office's scope or, for a floor
+ * session, in the tenant's system scope (the floor role reads no audit row), always narrowed to the device's own site.
  */
 
 type Reader = Prisma.TransactionClient
@@ -92,10 +99,28 @@ interface DecisionRow {
   readonly note: string | null
 }
 
+const APPROVAL_ROW = { id: true, scanId: true, limitPieces: true, status: true, decidedOn: true, decidedAt: true, reasonCode: true, note: true } as const satisfies Prisma.ScrapApprovalSelect
+type ApprovalRow = Prisma.ScrapApprovalGetPayload<{ select: typeof APPROVAL_ROW }>
+
+/** The ledger's rows of these scans (one per scan: the key). Office, floor or system scope. */
+async function approvalRows(db: Pick<CommandTx, 'scrapApproval'>, scanIds: readonly string[]): Promise<Map<string, ApprovalRow>> {
+  if (scanIds.length === 0) return new Map()
+  return new Map((await db.scrapApproval.findMany({ where: { scanId: { in: [...new Set(scanIds)] } }, select: APPROVAL_ROW })).map((row) => [row.scanId, row]))
+}
+
+/** The decision a ledger row keeps (null: it waits). */
+function decisionOfRow(row: ApprovalRow): DecisionRow | null {
+  if (row.status === 'WAITING') return null
+  return { decision: row.status, at: row.decidedAt!, decidedOn: row.decidedOn!, reason: isScrapRefusalReason(row.reasonCode) ? row.reasonCode : null, note: row.note }
+}
+
 const objectOf = (value: Prisma.JsonValue | null): Record<string, unknown> => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {})
 
-/** The decisions recorded on these scans (the first one each: a decision is taken once). Office or system scope. */
-export async function readDecisions(db: Pick<CommandTx, 'auditLog'>, scanIds: readonly string[]): Promise<Map<string, DecisionRow>> {
+/**
+ * The decisions the audit rows keep of scans taken before the ledger (the first one each: a decision is taken once): the
+ * fallback, for scans with no ScrapApproval row. Office or system scope.
+ */
+async function auditedDecisions(db: Pick<CommandTx, 'auditLog'>, scanIds: readonly string[]): Promise<Map<string, DecisionRow>> {
   const decisions = new Map<string, DecisionRow>()
   if (scanIds.length === 0) return decisions
   const rows = await db.auditLog.findMany({ where: { recordType: 'OperationScan', recordId: { in: [...new Set(scanIds)] }, action: SCRAP_DECISION_ACTION }, select: { recordId: true, at: true, after: true }, orderBy: [{ at: 'asc' }, { id: 'asc' }] })
@@ -122,21 +147,43 @@ async function limitsOf(db: Pick<CommandTx, 'productionSettings' | 'auditLog'>, 
   return { current: (siteId: string) => current.get(siteId) ?? null, history: (siteId: string): LimitChange[] => history.get(siteId) ?? [] }
 }
 
+type LedgerReader = Pick<CommandTx, 'productionSettings' | 'auditLog' | 'scrapApproval'>
+
+/** What the ledger says of a scan: its row and decision, or, for a scan with no row, the audit rows' fallback. */
+interface Ledger {
+  readonly row: ApprovalRow | null
+  readonly limit: number | null
+  readonly over: boolean
+  readonly decision: DecisionRow | null
+}
+
+async function ledgerOf(db: LedgerReader, scans: readonly Pick<ApprovalScanRow, 'id' | 'siteId' | 'kind' | 'scrapQuantity' | 'serverTime' | 'deviceId' | 'subcontractReceiptLineId'>[]): Promise<Map<string, Ledger>> {
+  const rows = await approvalRows(db, scans.map((scan) => scan.id))
+  const older = scans.filter((scan) => !rows.has(scan.id))
+  const limits = older.length === 0 ? null : await limitsOf(db, older.map((scan) => scan.siteId))
+  const audited = await auditedDecisions(db, older.map((scan) => scan.id))
+  const ledger = new Map<string, Ledger>()
+  for (const scan of scans) {
+    const row = rows.get(scan.id) ?? null
+    ledger.set(scan.id, row ? { row, limit: row.limitPieces, over: true, decision: decisionOfRow(row) } : { row: null, ...overLimitOf(scan, limits!.history(scan.siteId), limits!.current(scan.siteId)), decision: audited.get(scan.id) ?? null })
+  }
+  return ledger
+}
+
 /**
- * Each scan's scrap approval (null: none needed). Office or the tenant's system scope (the audit rows). The scans need
- * not stand: a voided scan's earlier decision is still told; a voided scan with none needs nothing.
+ * Each scan's scrap approval (null: none needed). Office or the tenant's system scope (the older scans' audit rows). The
+ * scans need not stand: a voided scan's earlier decision is still told; a voided scan with none needs nothing, whatever
+ * its row says (a row stays WAITING when its scan is voided).
  */
-export async function approvalsOf(db: Pick<CommandTx, 'productionSettings' | 'auditLog' | 'operationScan'>, scans: readonly Pick<ApprovalScanRow, 'id' | 'siteId' | 'kind' | 'scrapQuantity' | 'serverTime' | 'deviceId' | 'subcontractReceiptLineId'>[]): Promise<Map<string, ApprovalView | null>> {
+export async function approvalsOf(db: LedgerReader & Pick<CommandTx, 'operationScan'>, scans: readonly Pick<ApprovalScanRow, 'id' | 'siteId' | 'kind' | 'scrapQuantity' | 'serverTime' | 'deviceId' | 'subcontractReceiptLineId'>[]): Promise<Map<string, ApprovalView | null>> {
   const answer = new Map<string, ApprovalView | null>()
   const reports = scans.filter((scan) => isFloorReport(scan) && scan.scrapQuantity > 1)
   for (const scan of scans) answer.set(scan.id, null)
   if (reports.length === 0) return answer
-  const limits = await limitsOf(db, reports.map((scan) => scan.siteId))
   const voided = new Set((await db.operationScan.findMany({ where: { correctsId: { in: reports.map((scan) => scan.id) } }, select: { correctsId: true } })).map((row) => row.correctsId!))
-  const decisions = await readDecisions(db, reports.map((scan) => scan.id))
+  const ledger = await ledgerOf(db, reports)
   for (const scan of reports) {
-    const { limit, over } = overLimitOf(scan, limits.history(scan.siteId), limits.current(scan.siteId))
-    const decision = decisions.get(scan.id) ?? null
+    const { limit, over, decision } = ledger.get(scan.id)!
     const state = approvalStateOf({ over, standing: !voided.has(scan.id), decision: decision?.decision ?? null })
     answer.set(
       scan.id,
@@ -150,21 +197,20 @@ export async function approvalsOf(db: Pick<CommandTx, 'productionSettings' | 'au
 
 /**
  * The scans waiting now, newest candidates first (at most `take`), of work orders not CANCELLED or CLOSED, within `where`
- * (the caller's scope, a site, a work order). Only sites that ever had a limit, and only scans taken since. Office or system.
+ * (the caller's scope, a site, a work order): those with a WAITING row, and the older ones with no row of sites that ever
+ * had a limit, taken since. Office or system.
  */
 export async function waitingScans(db: Reader, where: Prisma.OperationScanWhereInput, take = 1000): Promise<{ scan: ApprovalScanRow; approval: ApprovalView }[]> {
   const settings = await db.productionSettings.findMany({ where: { scrapApprovalLimit: { not: null } }, select: { id: true, scrapApprovalLimit: true } })
   const changed = await db.auditLog.findMany({ where: { recordType: 'ProductionSettings', action: FLOOR_RULES_ACTION }, select: { recordId: true }, distinct: ['recordId'] })
   const siteIds = [...new Set([...settings.map((row) => row.id), ...changed.map((row) => row.recordId)])]
-  if (siteIds.length === 0) return []
   const limits = await limitsOf(db, siteIds)
-  const since: Prisma.OperationScanWhereInput[] = []
+  const since: Prisma.OperationScanWhereInput[] = [{ scrapApprovals: { some: { status: 'WAITING' } } }]
   for (const siteId of siteIds) {
     const from = limitSince(limits.history(siteId), limits.current(siteId))
-    if (from === 'ALWAYS') since.push({ siteId })
-    else if (from) since.push({ siteId, serverTime: { gte: from } })
+    if (from === 'ALWAYS') since.push({ siteId, scrapApprovals: { none: {} } })
+    else if (from) since.push({ siteId, serverTime: { gte: from }, scrapApprovals: { none: {} } })
   }
-  if (since.length === 0) return []
   const scans = await db.operationScan.findMany({
     where: {
       AND: [
@@ -189,14 +235,14 @@ export async function waitingScans(db: Reader, where: Prisma.OperationScanWhereI
  * For the modules whose posting waits (the cost ledger, B-W2a-21's costing/actual/post.ts; replacements and the scrap of
  * stock here): each scan's approval state, WAITING and REFUSED meaning "do not post its scrap". Office or system scope.
  */
-export async function scrapApprovalStatesOf(db: Pick<CommandTx, 'productionSettings' | 'auditLog' | 'operationScan'>, scanIds: readonly string[]): Promise<Map<string, ScrapApprovalState | null>> {
+export async function scrapApprovalStatesOf(db: LedgerReader & Pick<CommandTx, 'operationScan'>, scanIds: readonly string[]): Promise<Map<string, ScrapApprovalState | null>> {
   const scans = scanIds.length === 0 ? [] : await db.operationScan.findMany({ where: { id: { in: [...new Set(scanIds)] } }, select: APPROVAL_SCAN })
   const approvals = await approvalsOf(db, scans)
   return new Map(scanIds.map((id) => [id, approvals.get(id)?.state ?? null]))
 }
 
 /** Why a scan's scrap may not post now (WAITING or REFUSED), in words; null when it may. Office scope (inside a command too). */
-export async function scrapPostingHeld(db: Pick<CommandTx, 'productionSettings' | 'auditLog' | 'operationScan'>, scanId: string): Promise<{ readonly state: 'WAITING' | 'REFUSED'; readonly words: string } | null> {
+export async function scrapPostingHeld(db: LedgerReader & Pick<CommandTx, 'operationScan'>, scanId: string): Promise<{ readonly state: 'WAITING' | 'REFUSED'; readonly words: string } | null> {
   const scan = await db.operationScan.findUnique({ where: { id: scanId }, select: APPROVAL_SCAN })
   if (!scan) return null
   const approval = (await approvalsOf(db, [scan])).get(scan.id) ?? null
@@ -205,13 +251,24 @@ export async function scrapPostingHeld(db: Pick<CommandTx, 'productionSettings' 
 }
 
 /**
- * For the scan's answer on the tablet (the scans hook, wired at merge): does scrap of this many pieces at the device's
- * site wait for the team leader now, and the words to show. Floor or office scope (reads only the site's limit).
+ * For the scan's answer on the tablet (the scans hook): does scrap of this many pieces at the device's site wait for the
+ * team leader now, and the words to show. Floor or office scope (reads only the site's limit).
  */
 export async function scrapWaitsAt(db: Pick<CommandTx, 'productionSettings'>, siteId: string, scrapQuantity: number): Promise<{ readonly waits: boolean; readonly limit: number | null; readonly words: string | null }> {
   const { scrapApprovalLimit: limit } = await floorChecksFor(db, siteId)
   const waits = scrapNeedsApproval(scrapQuantity, limit)
   return { waits, limit, words: waits ? postingHeldWords('WAITING', scrapQuantity, limit) : null }
+}
+
+/**
+ * For the REPORT's own command (the scans' hook, floor scope): its scrap above the limit in force asks for a decision: the
+ * WAITING row, keeping that limit (a later change of the site's limit leaves it). The words for the tablet, or null.
+ */
+export async function askApprovalInCommand(tools: Pick<CommandTools, 'tx' | 'now'>, scan: { readonly id: string; readonly siteId: string; readonly scrapQuantity: number; readonly createdById: string | null }): Promise<{ readonly limit: number; readonly words: string } | null> {
+  const waits = await scrapWaitsAt(tools.tx, scan.siteId, scan.scrapQuantity)
+  if (!waits.waits || waits.limit === null || !waits.words) return null
+  await tools.tx.scrapApproval.create({ data: { id: newId(), siteId: scan.siteId, scanId: scan.id, limitPieces: waits.limit, key: scrapApprovalKey(scan.id), createdAt: tools.now, updatedAt: tools.now, createdById: scan.createdById }, select: { id: true } })
+  return { limit: waits.limit, words: waits.words }
 }
 
 // ---- the rows of the waiting lists -----------------------------------------------------------------------------------------
@@ -301,11 +358,21 @@ interface Decider {
 async function factsOf(db: Reader, scan: ApprovalScanRow) {
   const workOrder = (await db.workOrder.findUnique({ where: { id: scan.workOrderId }, select: { id: true, number: true, status: true, companyId: true, siteId: true } }))!
   const bundle = await db.bundle.findUnique({ where: { id: scan.bundleId }, select: { code: true } })
-  const decided = (await readDecisions(db, [scan.id])).get(scan.id) ?? null
+  const { row, limit, over, decision } = (await ledgerOf(db, [scan])).get(scan.id)!
   const standing = (await db.operationScan.count({ where: { correctsId: scan.id } })) === 0
-  const limits = await limitsOf(db, [scan.siteId])
-  const { limit, over } = overLimitOf(scan, limits.history(scan.siteId), limits.current(scan.siteId))
-  return { workOrder, bundleCode: bundle?.code ?? '', decided, standing, limit, over }
+  return { workOrder, bundleCode: bundle?.code ?? '', row, decided: decision, standing, limit, over }
+}
+
+/** The decision on the ledger: its WAITING row decided, or (a scan taken before the ledger) its whole decided row. */
+async function writeDecision(tools: Pick<CommandTools, 'tx' | 'now'>, scan: ApprovalScanRow, row: ApprovalRow | null, limit: number, decision: { readonly status: ScrapDecision; readonly on: DecidedOn; readonly by: string; readonly reason: ScrapRefusalReason | null; readonly note: string | null }): Promise<void> {
+  const decided = { status: decision.status, decidedOn: decision.on, decidedAt: tools.now, decidedById: decision.by, reasonCode: decision.reason, note: decision.note, updatedAt: tools.now }
+  if (!row) {
+    await tools.tx.scrapApproval.create({ data: { ...decided, id: newId(), siteId: scan.siteId, scanId: scan.id, limitPieces: limit, key: scrapApprovalKey(scan.id), createdAt: tools.now, createdById: decision.by }, select: { id: true } })
+    return
+  }
+  // The locks and the facts read under them make this the one decision; the row's own state stays the last word.
+  const { count } = await tools.tx.scrapApproval.updateMany({ where: { id: row.id, status: 'WAITING' }, data: { ...decided, version: { increment: 1 } } })
+  if (count !== 1) refused({ code: 'DECIDED_ALREADY', message: 'The scrap of this scan was decided already.' })
 }
 
 const judge = (input: DecideInput, scan: ApprovalScanRow, facts: Awaited<ReturnType<typeof factsOf>>, involved: Set<string>, actorId: string) =>
@@ -341,6 +408,7 @@ async function decide(caller: CommandCaller, scan: ApprovalScanRow, input: Decid
     const facts = decider.on === 'OFFICE' ? await factsOf(tools.tx, scan) : await decider.read(caller, (db) => factsOf(db, scan))
     const refusal = judge(input, scan, facts, involved, decider.actorId)
     if (refusal) refused(refusal)
+    await writeDecision(tools, scan, facts.row, facts.limit!, { status: input.decision, on: decider.on, by: decider.actorId, reason, note })
     const after = { decision: input.decision, scrapQuantity: scan.scrapQuantity, limit: facts.limit, reason, note, decidedOn: decider.on }
     const words = input.decision === 'REFUSED' ? refusalReasonText(reason!, note) : (note ?? undefined)
     tools.audit({ action: SCRAP_DECISION_ACTION, recordType: 'OperationScan', recordId: scan.id, companyId: facts.workOrder.companyId, siteId: scan.siteId, after, ...(words ? { reason: words } : {}) })

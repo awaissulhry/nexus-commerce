@@ -15,6 +15,7 @@ import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { formatTime } from '../../../../lib/i18n/format'
 import { useDsLabels } from '../../../../lib/i18n/ds-labels'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { callAskWords } from '../../../../lib/line-board/model'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { LiveState } from '../../_shared/hooks'
 import type { Call, CallCounts, CallRecordAnswer, CallsByHour, CallTypes, StationMachine } from '../api'
@@ -410,6 +411,7 @@ function CallsList({
           <span className="fw-cl-hint">—</span>
         )
       ) : null
+    const AskCell = ({ data }: ICellRendererParams<Call>) => (data ? <span className="fw-cl-ellipsis">{callAskWords(data, locale) ?? '—'}</span> : null)
     const OpenedCell = ({ data }: ICellRendererParams<Call>) =>
       data ? (
         <span className="fw-cl-cell">
@@ -452,6 +454,7 @@ function CallsList({
       { colId: 'line', headerName: t('col.line'), minWidth: 80, flex: 0.5, cellRenderer: LineCell, valueGetter: (params) => params.data?.line?.code ?? '' },
       { colId: 'station', headerName: t('col.station'), minWidth: 110, flex: 0.8, cellRenderer: StationCell, valueGetter: (params) => params.data?.station.code ?? '' },
       { colId: 'work', headerName: t('col.work'), minWidth: 120, flex: 0.8, cellRenderer: WorkCell, valueGetter: (params) => params.data?.workOrder?.number ?? '' },
+      { colId: 'asks', headerName: t('col.asks'), minWidth: 120, flex: 0.8, cellRenderer: AskCell, valueGetter: (params) => (params.data ? (callAskWords(params.data, locale) ?? '') : '') },
       { colId: 'opened', headerName: t('col.opened'), minWidth: 120, flex: 0.8, cellRenderer: OpenedCell, valueGetter: (params) => params.data?.sentAt ?? '' },
       { colId: 'team', headerName: t('col.team'), minWidth: 120, flex: 0.8, cellRenderer: TeamCell, valueGetter: (params) => params.data?.responderTeam?.name ?? '' },
       { colId: 'status', headerName: t('col.status'), minWidth: 130, flex: 0.8, cellRenderer: StatusCell, valueGetter: (params) => params.data?.status ?? '' },

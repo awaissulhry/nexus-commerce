@@ -223,6 +223,21 @@
         "offHint": "Gli scarti vengono registrati subito, qualunque sia la quantità.",
         "noValue": "Un limite per valore (costo) non è ancora gestito: il limite è in pezzi."
       },
+      "qualification": {
+        "title": "Competenza mancante",
+        "FREE": {
+          "label": "Spento",
+          "body": "In questo sito le competenze non si controllano. Una classe di macchine soggetta ad autorizzazione la richiede comunque."
+        },
+        "WARN": {
+          "label": "Avvisa",
+          "body": "Una competenza mancante viene mostrata e il caposquadra è avvisato; il lavoro prosegue. Una classe di macchine soggetta ad autorizzazione la richiede sempre."
+        },
+        "STRICT": {
+          "label": "Rigido",
+          "body": "Una competenza mancante ferma l'avvio finché il caposquadra non lo lascia passare con il suo PIN e un motivo. Una classe di macchine soggetta ad autorizzazione la richiede sempre."
+        }
+      },
       "reason": "Perché (facoltativo)",
       "reasonHint": "Resta nel registro delle modifiche.",
       "limitRange": "Usa un numero intero di pezzi da 1 a 500, o spegni il limite.",
@@ -232,7 +247,8 @@
         "quantity": "Controllo delle quantità: {mode}",
         "noLimit": "Gli scarti non attendono mai l'approvazione.",
         "limit_one": "Gli scarti oltre {count} pezzo in una scansione attendono il caposquadra.",
-        "limit_other": "Gli scarti oltre {count} pezzi in una scansione attendono il caposquadra."
+        "limit_other": "Gli scarti oltre {count} pezzi in una scansione attendono il caposquadra.",
+        "qualification": "Competenza mancante: {mode}"
       },
       "same": {
         "title": "Uguali in ogni sito, per ora",

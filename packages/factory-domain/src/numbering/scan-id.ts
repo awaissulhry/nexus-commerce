@@ -38,6 +38,9 @@ export type ScanType = keyof typeof SCAN_TYPES
 
 const TYPE_OF_CODE: ReadonlyMap<string, ScanType> = new Map(Object.entries(SCAN_TYPES).map(([type, code]) => [code, type as ScanType]))
 
+/** A label that stands for another: a coupon is a stub of its bundle's ticket (MES-067), so a screen that takes a bundle takes it too. */
+const STANDS_FOR: Partial<Readonly<Record<ScanType, ScanType>>> = { COUPON: 'BUNDLE' }
+
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 const VALUE_OF: ReadonlyMap<string, number> = new Map([...ALPHABET].map((symbol, value) => [symbol, value]))
 /** The symbols people mistake for others, read as Crockford intends. */
@@ -109,7 +112,7 @@ export type ScanIdResult =
 export interface ParseScanIdOptions {
   /** The tenant of the session: a code with another tag is refused. */
   readonly tenantTag?: string
-  /** The types the screen expects (a hide scan screen takes only hides). */
+  /** The types the screen expects (a hide scan screen takes only hides; BUNDLE reads a coupon too, its `type` stays COUPON). */
   readonly types?: readonly ScanType[]
 }
 
@@ -137,6 +140,7 @@ export function parseScanId(input: unknown, options: ParseScanIdOptions = {}): S
   const ref = symbolValues(reference).reduce((total, value) => total * 32 + value, 0)
   if (ref < 1) return refuse('format', 'This code points at nothing.')
   if (options.tenantTag !== undefined && tag !== options.tenantTag) return refuse('tenant', 'This label belongs to another factory.')
-  if (options.types !== undefined && !options.types.includes(type)) return refuse('type', `This is a ${type.toLowerCase().replace('_', ' ')} label, not one this screen takes.`)
+  const standsFor = STANDS_FOR[type]
+  if (options.types !== undefined && !options.types.includes(type) && !(standsFor && options.types.includes(standsFor))) return refuse('type', `This is a ${type.toLowerCase().replace('_', ' ')} label, not one this screen takes.`)
   return { ok: true, type, tenantTag: tag, ref, text: `${code}-${tag}-${reference}-${rest.slice(-1)}` }
 }

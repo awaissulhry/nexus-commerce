@@ -20,6 +20,8 @@ export const LIMITS = Object.freeze({ scrap: MAX_SCRAP_APPROVAL_LIMIT, stuckMin:
 export interface ChecksDraft {
   skippedOperationRule: FloorRuleMode
   quantityGuard: FloorRuleMode
+  /** B-W2b-81 (MES-024): what a missing skill does at the site. */
+  qualificationRule: FloorRuleMode
   /** Scrap above the limit waits for the team leader (MES-128). */
   limitOn: boolean
   limit: number | ''
@@ -29,6 +31,7 @@ export interface ChecksDraft {
 export const checksDraftOf = (rules: Pick<FloorRules, 'checks'>): ChecksDraft => ({
   skippedOperationRule: rules.checks.skippedOperationRule,
   quantityGuard: rules.checks.quantityGuard,
+  qualificationRule: rules.checks.qualificationRule,
   limitOn: rules.checks.scrapApprovalLimit !== null,
   limit: rules.checks.scrapApprovalLimit ?? 10,
   reason: '',
@@ -39,6 +42,7 @@ export function checksChange(rules: Pick<FloorRules, 'checks' | 'version'>, draf
   const body: FloorRulesBody = {}
   if (draft.skippedOperationRule !== rules.checks.skippedOperationRule) body.skippedOperationRule = draft.skippedOperationRule
   if (draft.quantityGuard !== rules.checks.quantityGuard) body.quantityGuard = draft.quantityGuard
+  if (draft.qualificationRule !== rules.checks.qualificationRule) body.qualificationRule = draft.qualificationRule
   const limit = draft.limitOn ? (draft.limit === '' ? null : draft.limit) : null
   if (limit !== rules.checks.scrapApprovalLimit || (draft.limitOn && draft.limit === '')) body.scrapApprovalLimit = limit
   const count = Object.keys(body).length

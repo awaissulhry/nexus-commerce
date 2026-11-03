@@ -114,7 +114,7 @@ const keysOf = (value: unknown): string[] =>
   Array.isArray(value) ? value.flatMap(keysOf) : value && typeof value === 'object' ? Object.entries(value).flatMap(([key, item]) => [key, ...keysOf(item)]) : []
 const callRow = async (id: string) => (await admin('SELECT status::text AS status, "workerId", "employeeId", "lineId", "seenAt", "seenById", "onTheWayAt", "onTheWayById", "solvedAt", "solvedById", "cancelledById", "resolutionCode", "outcomeRecordType", note, version FROM "HelpCall" WHERE id = $1', [id]))[0]!
 const eventsOf = async (type: string, subject: string) => admin('SELECT payload FROM "OutboxEvent" WHERE type = $1 AND subject = $2 ORDER BY "occurredAt", id', [type, subject])
-const waitingOf = async (callId: string) => admin('SELECT b.status::text AS status, b.source::text AS source, b."workerId", b."stationId", b."startedAt", b."endedAt", c.code FROM "OffStandardEntry" b JOIN "OffStandardCode" c ON c.id = b."codeId" WHERE b."helpCallId" = $1 ORDER BY b."startedAt"', [callId])
+const waitingOf = async (callId: string) => admin('SELECT b.status::text AS status, b.source::text AS source, b."workerId", b."stationId", b."startedAt", b."endedAt", b."workOrderId", c.code FROM "OffStandardEntry" b JOIN "OffStandardCode" c ON c.id = b."codeId" WHERE b."helpCallId" = $1 ORDER BY b."startedAt"', [callId])
 const auditOf = async (recordId: string) => admin('SELECT action, before, after, reason FROM "AuditLog" WHERE "recordId" = $1 ORDER BY "at", id', [recordId])
 let cid = 0
 const clientId = () => `call-${run}-${++cid}`
@@ -231,7 +231,7 @@ describe('one tap from the station (MES-142, MES-143, MES-137)', () => {
     expect(keysOf(raised!.payload).filter((key) => PERSON_KEYS.test(key))).toEqual([])
     expect((await auditOf(materialCallId))[0]).toMatchObject({ action: 'production.sendCall', after: { stationId: A.sew1, workerId: A.operator } })
     // MES-148: the station's waiting books to the type's off-standard code (WAIT_HELP) while the call is open.
-    expect(await waitingOf(materialCallId)).toMatchObject([{ status: 'OPEN', source: 'HELP_CALL', workerId: A.operator, stationId: A.sew1, code: 'WAIT_HELP', endedAt: null }])
+    expect(await waitingOf(materialCallId)).toMatchObject([{ status: 'OPEN', source: 'HELP_CALL', workerId: A.operator, stationId: A.sew1, code: 'WAIT_HELP', endedAt: null, workOrderId: A.wo1 }])
     expect(sent.call).toMatchObject({ waitingBooked: true, waiting: { code: 'WAIT_HELP', status: 'OPEN', endedAt: null } })
     expect((await eventsOf('production.off_standard_started', (await admin('SELECT id FROM "OffStandardEntry" WHERE "helpCallId" = $1', [materialCallId]))[0]!.id))).toHaveLength(1)
   })
@@ -411,5 +411,58 @@ describe('a site that records stations, and the floor’s queue', () => {
     expect(await waitingOf(id)).toMatchObject([{ status: 'APPROVED', workerId: A.operator, stationId: A.sew2 }])
     const refused = { clientEventId: clientId(), kind: 'andon.call.answer' as const, payload: { callId: id, step: 'SOLVED' } }
     expect(await applyQueued(floorCaller('operatorAtSew2'), refused, { key: `${A.sew2Tablet}.${refused.clientEventId}` })).toMatchObject({ status: 'refused', refusal: { code: 'CANCELLED' } })
+  })
+})
+
+describe('what a material call asks (B-W2b-81; MES-137)', () => {
+  const details = (session: string, id: string, body: Json, status = 200) => ok(session, 'POST', `/production/calls/station/${id}/details`, body, status)
+
+  it('told when it is sent: the row, the audit, the tablet, the line view and Help calls all read it; a queued call too', async () => {
+    const sent = await ok('operator', 'POST', '/production/calls/station', { typeId: andon.typeIds.material, clientEventId: clientId(), reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4' }, 201)
+    expect(sent.call).toMatchObject({ reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4' })
+    const id = sent.call.id as string
+    expect((await auditOf(id))[0]).toMatchObject({ action: 'production.sendCall', after: { reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4' } })
+    expect((await ok('operator', 'GET', '/production/calls/station')).open.find((row: Json) => row.id === id)).toMatchObject({ reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4' })
+    expect((await ok('lead', 'GET', '/production/calls/board')).calls.find((row: Json) => row.id === id)).toMatchObject({ reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4' })
+    expect((await ok('manager', 'GET', '/production/calls?view=open')).calls.find((row: Json) => row.id === id)).toMatchObject({ reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4' })
+    expect((await ok('manager', 'GET', `/production/calls/${id}`)).call).toMatchObject({ reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4' })
+    await ok('operator', 'POST', `/production/calls/station/${id}/solve`, {})
+  })
+
+  it('told after the one tap, once; REFUSED: another value, Other with no words, on another kind of call, on a closed call, with nothing to say', async () => {
+    const sent = await ok('operator', 'POST', '/production/calls/station', { typeId: andon.typeIds.material, clientEventId: clientId() }, 201)
+    const id = sent.call.id as string
+    expect(sent.call).toMatchObject({ reasonCode: null, requestedQuantity: null })
+    expect(refusalOf(await no('operator', 'POST', `/production/calls/station/${id}/details`, { reasonCode: 'OTHER' }, 409))).toBe('refusal/REQUEST_WORDS')
+    expect((await details('operator', id, { reasonCode: 'MATERIAL_DAMAGED', requestedQuantity: '2.5' })).call).toMatchObject({ reasonCode: 'MATERIAL_DAMAGED', requestedQuantity: '2.5' })
+    expect((await details('operator', id, { reasonCode: 'MATERIAL_DAMAGED', requestedQuantity: '2.5' })).call.requestedQuantity).toBe('2.5')
+    expect(refusalOf(await no('operator', 'POST', `/production/calls/station/${id}/details`, { reasonCode: 'MATERIAL_WRONG' }, 409))).toBe('refusal/REQUEST_SET')
+    expect(refusalOf(await no('operator', 'POST', `/production/calls/station/${id}/details`, { requestedQuantity: '3' }, 409))).toBe('refusal/REQUEST_SET')
+    expect((await details('operator', id, { note: 'The lining tore on the rack.' })).call).toMatchObject({ note: 'The lining tore on the rack.', reasonCode: 'MATERIAL_DAMAGED' })
+    await no('operator', 'POST', `/production/calls/station/${id}/details`, {}, 400)
+    await no('operator', 'POST', `/production/calls/station/${id}/details`, { requestedQuantity: '0' }, 400)
+    await no('operator', 'POST', `/production/calls/station/${id}/details`, { reasonCode: 'NOT_A_TILE' }, 400)
+    await ok('operator', 'POST', `/production/calls/station/${id}/solve`, {})
+    expect(refusalOf(await no('operator', 'POST', `/production/calls/station/${id}/details`, { note: 'Too late.' }, 409))).toBe('refusal/SOLVED')
+    const other = await ok('operator', 'POST', '/production/calls/station', { typeId: andon.typeIds.maintenance, clientEventId: clientId() }, 201)
+    expect(refusalOf(await no('operator', 'POST', `/production/calls/station/${other.call.id}/details`, { reasonCode: 'MATERIAL_SHORT' }, 409))).toBe('refusal/NOT_MATERIAL')
+    expect(refusalOf(await no('operator', 'POST', '/production/calls/station', { typeId: andon.typeIds.teamLeader, clientEventId: clientId(), requestedQuantity: '1' }, 409))).toBe('refusal/NOT_MATERIAL')
+    await ok('operator', 'POST', `/production/calls/station/${other.call.id}/solve`, {})
+  })
+
+  it('a call naming a draft work order goes out all the same; its waiting names no work order', async () => {
+    const [draft] = await admin<{ id: string }>(`SELECT id FROM "WorkOrder" WHERE "tenantId" = $1 AND "siteId" = $2 AND status = 'DRAFT' LIMIT 1`, [A.tenant, A.siteA1])
+    const sent = await ok('operator', 'POST', '/production/calls/station', { typeId: andon.typeIds.material, clientEventId: clientId(), workOrderId: draft!.id }, 201)
+    expect(await waitingOf(sent.call.id)).toMatchObject([{ status: 'OPEN', workOrderId: null }])
+    await ok('operator', 'POST', `/production/calls/station/${sent.call.id}/solve`, {})
+  })
+
+  it('a queued call carries them too', async () => {
+    const event = { clientEventId: clientId(), kind: 'andon.call.send' as const, payload: { typeId: andon.typeIds.material, reasonCode: 'MATERIAL_RECUT', requestedQuantity: '1' } }
+    const queued = await applyQueued(floorCaller('operator'), event, { key: `${A.sewTablet}.${event.clientEventId}` })
+    expect(queued).toMatchObject({ status: 'accepted' })
+    const id = (queued as { result: { id: string } }).result.id
+    expect((await ok('operator', 'GET', '/production/calls/station')).open.find((row: Json) => row.id === id)).toMatchObject({ reasonCode: 'MATERIAL_RECUT', requestedQuantity: '1' })
+    await ok('operator', 'POST', `/production/calls/station/${id}/solve`, {})
   })
 })

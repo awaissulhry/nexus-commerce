@@ -223,6 +223,21 @@
         "offHint": "Scrap posts at once, whatever the quantity.",
         "noValue": "A limit by value (cost) is not kept yet: the limit is in pieces."
       },
+      "qualification": {
+        "title": "Missing skill",
+        "FREE": {
+          "label": "Off",
+          "body": "Skills are not checked at this site. A class of machine kept under authorisation still needs one."
+        },
+        "WARN": {
+          "label": "Warn",
+          "body": "A missing skill is shown and the team leader is told; the work goes on. A class of machine kept under authorisation always needs one."
+        },
+        "STRICT": {
+          "label": "Strict",
+          "body": "A missing skill stops the start until the team leader lets it through with their PIN and a reason. A class of machine kept under authorisation always needs one."
+        }
+      },
       "reason": "Why (optional)",
       "reasonHint": "Kept in the audit log with the change.",
       "limitRange": "Use a whole number of pieces from 1 to 500, or switch the limit off.",
@@ -232,7 +247,8 @@
         "quantity": "Quantity guard: {mode}",
         "noLimit": "Scrap never waits for approval.",
         "limit_one": "Scrap above {count} piece in one scan waits for the team leader.",
-        "limit_other": "Scrap above {count} pieces in one scan waits for the team leader."
+        "limit_other": "Scrap above {count} pieces in one scan waits for the team leader.",
+        "qualification": "Missing skill: {mode}"
       },
       "same": {
         "title": "The same at every site, for now",

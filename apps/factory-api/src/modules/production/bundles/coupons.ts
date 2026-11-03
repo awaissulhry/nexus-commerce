@@ -18,19 +18,19 @@ import {
 } from '@nexus/factory-domain/production/bundles/coupons'
 import { PRODUCTION_BUNDLES } from '@nexus/factory-domain/production/bundles/permissions'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
+import { allocateScanId, allocateScanIds } from '../../../platform/numbering/scan-ids'
 import type { PrintJobView } from '../../../platform/print/contract'
 import { queueModuleLabel } from '../../../platform/print/jobs'
 import { floorRecordSubjectFor } from '../settings/subject'
 import { assertFloorReady, bundleWorkOrder, mayBundle, postedBy, refused, ticketBase, ticketPrinter, workerOf, type TicketPrinter } from './bundles'
-import { withTicketCodes, type TicketCodes } from './codes'
 import { deviceStationOf, lockBundle, readBundle, readBundles, readCellLabels, readHeader, readOperations, readScans, type BundleHeader, type Reader } from './store'
 import { standingOf } from './track'
 
 /**
  * Coupons per operation (B-W2b-41; MES-067; design production.settings "Bundle codes", floor.operation): at a site whose
  * bundle code mode is COUPON_PER_OPERATION, each scanned operation of a bundle gets its own coupon (BundleCoupon) with
- * its own code from the tenant's BUNDLE counter (codes.ts; no COUPON number kind exists: the codes are `BN-…` too, so
- * every scanner route reads them). Rules: factory-domain production/bundles/coupons.ts; the …_floor_work_w2b_guards
+ * its own code from the tenant's COUPON counter (`CP-…`, B-W2b-81; coupons printed before it keep their `BN-…` codes and
+ * stay valid: a code is found by its row). Rules: factory-domain production/bundles/coupons.ts; the …_floor_work_w2b_guards
  * BundleCoupon trigger stays the last word (only ACTIVE → VOID with when and why; a replacement names a VOID coupon of
  * the same bundle and operation; one ACTIVE coupon per bundle and operation).
  *
@@ -197,7 +197,7 @@ export interface IssueCouponsInput {
   readonly language?: LabelLanguage | undefined
 }
 
-async function issueInCommand(tools: CommandTools, workOrderId: string, body: IssueCouponsInput, codes: TicketCodes) {
+async function issueInCommand(tools: CommandTools, workOrderId: string, body: IssueCouponsInput) {
   const context = tools.context as ReturnType<typeof workerOf>
   const { tx } = tools
   const workOrder = (await readHeader(tx, workOrderId))!
@@ -221,7 +221,7 @@ async function issueInCommand(tools: CommandTools, workOrderId: string, body: Is
   if (total === 0) refused(nothingToCoupon(bundles.length))
   if (total > MAX_COUPONS_PER_ISSUE) throw new ValidationError(`${total} coupons at once is too many (at most ${MAX_COUPONS_PER_ISSUE}): name fewer bundles.`, [{ path: 'body/bundleIds', message: 'Name fewer bundles.' }])
   const createdById = await createdByOf(tools, workOrder.siteId)
-  const taken = await codes.take(tx, total)
+  const taken = [...(await allocateScanIds(tools, 'COUPON', total)).codes]
   const made: CouponRow[] = []
   const scope = { companyId: workOrder.companyId, siteId: workOrder.siteId }
   for (const entry of plan) {
@@ -254,7 +254,7 @@ export async function issueCoupons(caller: CommandCaller, workOrderId: string, b
   const workOrder = await bundleWorkOrder(caller, workOrderId, PRODUCTION_BUNDLES)
   if (context.audience === 'floor') await assertFloorReady(caller, context, workOrder.siteId)
   const target = await ticketPrinter(caller, workOrder, body.printerId)
-  const outcome = await withTicketCodes(caller, (codes) => command(caller, { name: 'production.issueCoupons', idempotencyKey, input: { workOrderId, ...body } }, (tools) => issueInCommand(tools, workOrder.id, body, codes)))
+  const outcome = await command(caller, { name: 'production.issueCoupons', idempotencyKey, input: { workOrderId, ...body } }, (tools) => issueInCommand(tools, workOrder.id, body))
   const { tickets, ...issued } = outcome.result
   return { ...issued, printed: await printCoupons(caller, target, tickets), replayed: outcome.replayed }
 }
@@ -269,7 +269,7 @@ async function namedCoupon(caller: CommandCaller, couponId: string): Promise<{ c
   return { coupon, workOrder }
 }
 
-async function changeInCommand(tools: CommandTools, couponId: string, reason: string, reprint: { readonly codes: TicketCodes; readonly language: LabelLanguage } | null) {
+async function changeInCommand(tools: CommandTools, couponId: string, reason: string, reprint: { readonly language: LabelLanguage } | null) {
   const context = tools.context as ReturnType<typeof workerOf>
   const { tx } = tools
   const named = (await readCoupon(tx, couponId))!
@@ -283,10 +283,10 @@ async function changeInCommand(tools: CommandTools, couponId: string, reason: st
   const scope = { companyId: workOrder.companyId, siteId: workOrder.siteId }
   let replacement: CouponRow | null = null
   if (reprint) {
-    const [code] = await reprint.codes.take(tx, 1)
+    const code = await allocateScanId(tools, 'COUPON')
     const id = newId()
     await tx.bundleCoupon.create({
-      data: { id, siteId: coupon.siteId, workOrderId: coupon.workOrderId, bundleId: coupon.bundleId, workOrderOperationId: coupon.workOrderOperationId, code: code!, replacesId: coupon.id, deviceId: context.audience === 'floor' ? context.deviceId : null, createdAt: tools.now, updatedAt: tools.now, createdById: await createdByOf(tools, coupon.siteId) },
+      data: { id, siteId: coupon.siteId, workOrderId: coupon.workOrderId, bundleId: coupon.bundleId, workOrderOperationId: coupon.workOrderOperationId, code, replacesId: coupon.id, deviceId: context.audience === 'floor' ? context.deviceId : null, createdAt: tools.now, updatedAt: tools.now, createdById: await createdByOf(tools, coupon.siteId) },
       select: { id: true },
     })
     replacement = (await readCoupon(tx, id))!
@@ -314,9 +314,7 @@ export async function reprintCoupon(caller: CommandCaller, couponId: string, bod
   if (context.audience === 'floor') await assertFloorReady(caller, context, workOrder.siteId)
   const target = await ticketPrinter(caller, workOrder, body.printerId)
   const reason = body.reason.trim()
-  const outcome = await withTicketCodes(caller, (codes) =>
-    command(caller, { name: 'production.reprintCoupon', idempotencyKey, input: { couponId, ...body, reason } }, (tools) => changeInCommand(tools, couponId, reason, { codes, language: body.language ?? 'it' })),
-  )
+  const outcome = await command(caller, { name: 'production.reprintCoupon', idempotencyKey, input: { couponId, ...body, reason } }, (tools) => changeInCommand(tools, couponId, reason, { language: body.language ?? 'it' }))
   const { tickets, ...changed } = outcome.result
   const [printed] = await printCoupons(caller, target, tickets)
   return { coupon: changed.coupon, replacement: changed.replacement!, printed: printed!, replayed: outcome.replayed }
