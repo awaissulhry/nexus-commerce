@@ -67,6 +67,9 @@ export const MESSAGE_TEMPLATES = {
   // B-W2a-35 (modules/plant): a machine problem reported (to who triages it), an unsafe one, a job given to a technician.
   'notifications.plant.reported': { en: 'A machine problem was reported on {record}: {title}', it: 'Segnalato un problema sulla macchina {record}: {title}' },
   'notifications.plant.unsafe': { en: '{record} was marked unsafe ({title}): it stays do-not-use until a technician signs it safe', it: '{record} è stata segnalata non sicura ({title}): resta fuori uso finché un tecnico non la dichiara sicura' },
+  // B-W2b-96: a machine request routed to the person (their team or themselves), escalated to them (nobody acknowledged it).
+  'notifications.plant.routed': { en: 'A machine problem on {record} was sent to you: {title}', it: 'Un problema sulla macchina {record} è stato inviato a te: {title}' },
+  'notifications.plant.escalated': { en: 'Nobody has acknowledged the machine problem on {record} yet: {title}', it: 'Nessuno ha ancora preso in carico il problema sulla macchina {record}: {title}' },
   'notifications.assigned.job': { en: '{actor} assigned you maintenance job {record}: "{title}"', it: '{actor} ti ha assegnato l’intervento {record}: "{title}"' },
   // B-W2a-33: an exception rule raised an alert for a record (ALERT; {title} the rule's name), an alert was given to the person.
   'notifications.alert.raised': { en: 'Alert on {record}: {title}', it: 'Avviso su {record}: {title}' },

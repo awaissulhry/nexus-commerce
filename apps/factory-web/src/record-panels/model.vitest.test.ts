@@ -171,6 +171,16 @@ describe('files: audience badges, versions, retention (COL-045, COL-050)', () =>
     expect(uploadProblem({ name: 'IT01234567890_00001.xml.p7m', type: '', size: 10 }, 'FISCAL_ARCHIVE')).toBeNull()
     expect(acceptFor('PHOTO').split(',')).toEqual(expect.arrayContaining(['image/jpeg', '.jpg', '.heic']))
   })
+
+  it('knows a voice note (AUDIO, B-W2b-96): offered on a machine request or job only, read by its extension', () => {
+    const base = { can: { share: false }, party: null }
+    expect(uploadChoices({ ...base, record: { type: 'MaintenanceRequest', siteId: 's', companyId: 'c' } }).kinds).toContain('AUDIO')
+    expect(uploadChoices({ ...base, record: { type: 'MaintenanceJob', siteId: 's', companyId: 'c' } }).kinds).toContain('AUDIO')
+    expect(uploadChoices({ ...base, record: { type: 'Quote', siteId: null, companyId: 'c' } }).kinds).not.toContain('AUDIO')
+    expect(contentTypeOf('note.webm')).toBe('audio/webm')
+    expect(uploadProblem({ name: 'note.m4a', type: '', size: 10 }, 'AUDIO')).toBeNull()
+    expect(uploadProblem({ name: 'note.webm', type: 'audio/webm', size: 11 * 1_048_576 }, 'AUDIO')?.key).toBe('files.problem.size')
+  })
 })
 
 describe('the history (COL-002)', () => {

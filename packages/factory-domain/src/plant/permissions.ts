@@ -27,7 +27,7 @@ export const PLANT_DEFINITIONS = definePermissions('plant', {
   report: {
     risk: 'write',
     description:
-      "Report a machine problem from the station or the office: the machine (its tag scanned), the symptom, what is wrong, whether the machine is down; marking it unsafe stops it at once until a technician signs it safe (a floor device: at its own site).",
+      "Report a machine problem from the station or the office: the machine (its tag scanned), the symptom, what is wrong, whether the machine is down; marking it unsafe stops it at once until a technician signs it safe (a floor device: at its own site); follow it until the machine is fixed, add photos and voice notes, and confirm it works again (B-W2b-96).",
   },
   'requests.triage': {
     risk: 'write',
@@ -40,12 +40,18 @@ export const PLANT_DEFINITIONS = definePermissions('plant', {
   'jobs.work': {
     risk: 'write',
     description:
-      "Work a maintenance job as its technician: start it, wait for parts, hand the machine back with what was done and its state after (running only once a locked machine is signed safe), and take the work back (a floor device: at its own site, the jobs given to you or to nobody).",
+      "Work a maintenance job as its technician: start it, wait for parts, hand the machine back with what was done and its state after (running only once a locked machine is signed safe), and take the work back (a floor device: at its own site, the jobs given to you or to nobody); acknowledge a machine request and say you are on the way, with the job's photos and voice notes and its failure code (B-W2b-96).",
   },
   signSafe: {
     risk: 'write',
     description:
       'Sign a machine that was marked unsafe safe again after checking it, with what was checked: only a technician (D.Lgs. 81/2008 art. 71; Owner answer H1); a signing act (the office\'s fresh code, the floor\'s PIN).',
+  },
+  // B-W2b-96 (QHS-179, QHS-183; design plant.settings): a site's request routing and its unsafe-lock settings.
+  'settings.manage': {
+    risk: 'write',
+    description:
+      "Keep a site's plant settings: where machine requests go (a team or a technician per class of machine) and whom they escalate to when nobody acknowledges them, and the unsafe-lock settings (Owner answer H1 holds: anyone at the station locks, only a technician signs safe; switching the hazard report off asks for a fresh code).",
   },
 })
 
@@ -56,8 +62,9 @@ export const PLANT_REQUESTS_TRIAGE = 'plant.requests.triage' satisfies Permissio
 export const PLANT_JOBS_MANAGE = 'plant.jobs.manage' satisfies Permission
 export const PLANT_JOBS_WORK = 'plant.jobs.work' satisfies Permission
 export const PLANT_SIGN_SAFE = 'plant.signSafe' satisfies Permission
+export const PLANT_SETTINGS_MANAGE = 'plant.settings.manage' satisfies Permission
 
-export const PLANT_PERMISSIONS: readonly Permission[] = Object.freeze([PLANT_VIEW, PLANT_MACHINES_MANAGE, PLANT_REPORT, PLANT_REQUESTS_TRIAGE, PLANT_JOBS_MANAGE, PLANT_JOBS_WORK, PLANT_SIGN_SAFE])
+export const PLANT_PERMISSIONS: readonly Permission[] = Object.freeze([PLANT_VIEW, PLANT_MACHINES_MANAGE, PLANT_REPORT, PLANT_REQUESTS_TRIAGE, PLANT_JOBS_MANAGE, PLANT_JOBS_WORK, PLANT_SIGN_SAFE, PLANT_SETTINGS_MANAGE])
 
 /**
  * What a floor role may hold of them (FLOOR_SHARED_PERMISSIONS): reporting a problem at its own site (every floor role:

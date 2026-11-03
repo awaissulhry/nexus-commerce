@@ -33,6 +33,8 @@ import { events as views } from '../views/events'
 import { events as search } from '../search/events'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { events as plant } from '../plant/events'
+// B-W2b-96: the requests and jobs in depth (escalation, progress, lock, the lead's confirmation, plant settings).
+import { depthEvents as plantDepth } from '../plant/events'
 // B-W2a-33: the stored alerts and the date timers.
 import { events as alerts } from '../alerts/events'
 import { events as timers } from '../timers/events'
@@ -55,6 +57,10 @@ import { events as andon } from '../andon/events'
 import { events as dispatch } from '../dispatch/events'
 // B-W2b-45: labour records and corrections (line days closed and reopened, disputes).
 import { events as labour } from '../labour/events'
+// B-W2b-92: inspection plans (a plan changed, a version approved).
+import { events as qualityPlans } from '../quality-plans/events'
+// B-W2b-97: the final inspection by plan (what the bench recorded).
+import { events as qualityFinal } from '../quality-final/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -162,7 +168,7 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  * accounting: the accounting exports and the period locks (B-W2a-39).
  * ops: restore drills and the two-factor rule of a role (B-W2a-36).
  */
-export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...reasons, ...notifications, ...tasks, ...views, ...search, ...plant, ...alerts, ...timers, ...accounting, ...ops,
+export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...reasons, ...notifications, ...tasks, ...views, ...search, ...plant, ...plantDepth, ...alerts, ...timers, ...accounting, ...ops,
   // B-W2a-41
   ...emailDelivery,
   // B-W2a-55
@@ -177,7 +183,11 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-45
   ...labour,
   // B-W2b-49
-  ...dispatch] as const satisfies readonly EventDefinition[]
+  ...dispatch,
+  // B-W2b-92
+  ...qualityPlans,
+  // B-W2b-97
+  ...qualityFinal] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

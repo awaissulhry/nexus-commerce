@@ -10,6 +10,9 @@ import { DISCREPANCY_KINDS, DISCREPANCY_STATUSES } from './receipts/discrepancie
 import { KIT_CHANGES } from './kits/rules'
 // B-W2b-23: a location's state.
 import { LOCATION_STATUSES } from './locations/rules'
+// B-W2b-94: hides as stock.
+import { GRADE_RULE_CHANGES, GRADING_CHANGES } from './hides/changes'
+import { AREA_OUTCOMES } from './hides/measure'
 
 /**
  * The inventory module's events (plan A1 §3.4; SCM-189). apps/factory-api's modules/inventory/ledger `postMoves` emits
@@ -48,6 +51,13 @@ import { LOCATION_STATUSES } from './locations/rules'
  * Locations (B-W2b-23, modules/inventory/locations): `inventory.location_changed` once per location made (on its page or
  * from a sheet), renamed or given another kind, moved inside another, or archived. The search index follows it; it
  * reaches the locations screens (inventory.locations.view).
+ *
+ * Hides as stock (B-W2b-94, modules/inventory/hides): `inventory.grade_rule_changed` once per change of an article's grade
+ * rule (made, its share or panels changed, retired, made active again: the usable share of its hides of the grade changed;
+ * product.materials.view); `inventory.hide_graded` once per office correction of a hide's grade, shade group, thickness or
+ * defects (a grade or shade group as a record, its text with it); `inventory.hide_measured` once per re-measure of a whole
+ * hide against the tannery's area, with the outcome and the adjustment move when the stock was corrected (its move also
+ * emits `inventory.moved`). The hides, grade mix and cutting screens read again (inventory.stock.view); never a person.
  */
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 
@@ -391,5 +401,50 @@ export const events = [
       supplierDdtDate: z.iso.date().nullable(),
     }),
     live: { permission: 'inventory.stock.view', fields: ['receiptId', 'number'] },
+  }),
+  // B-W2b-94: hides as stock (modules/inventory/hides).
+  defineEvent({
+    type: 'inventory.grade_rule_changed',
+    context: 'inventory',
+    description: "An article's grade rule was made, changed, retired or made active again: the usable share of its hides of that grade changed.",
+    payload: z.strictObject({
+      ruleId: z.uuid(),
+      itemId: z.uuid(),
+      gradeId: z.uuid(),
+      gradeCode: z.string(),
+      change: z.enum(GRADE_RULE_CHANGES),
+    }),
+    live: { permission: 'product.materials.view', fields: ['ruleId', 'itemId', 'gradeId', 'change'] },
+  }),
+  defineEvent({
+    type: 'inventory.hide_graded',
+    context: 'inventory',
+    description: "The office corrected a hide's grade, shade group, thickness or defects (a grade or shade group as a record, its text with it).",
+    payload: z.strictObject({
+      hideId: z.uuid(),
+      lotId: z.uuid(),
+      itemId: z.uuid(),
+      changed: z.array(z.enum(GRADING_CHANGES)).min(1),
+      gradeId: z.uuid().nullable(),
+      gradeCode: z.string().nullable(),
+      shadeGroupId: z.uuid().nullable(),
+      shadeLabel: z.string().nullable(),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['hideId', 'lotId', 'itemId', 'changed'] },
+  }),
+  defineEvent({
+    type: 'inventory.hide_measured',
+    context: 'inventory',
+    description: "A whole hide was measured again against the tannery's area; its stock was corrected by an adjustment move when the office asked for it.",
+    payload: z.strictObject({
+      hideId: z.uuid(),
+      lotId: z.uuid(),
+      itemId: z.uuid(),
+      measureId: z.uuid(),
+      outcome: z.enum(AREA_OUTCOMES),
+      /** The adjustment move that corrected the hide's stock; null: the stock was left as it was. */
+      moveId: z.uuid().nullable(),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['hideId', 'lotId', 'itemId', 'outcome'] },
   }),
 ] as const

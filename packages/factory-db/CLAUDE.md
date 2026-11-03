@@ -126,7 +126,14 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    floor session, training records append-only (corrected once, one per attendance: partial uniques), the instruction register,
    PPE items and PPE issues append-only (voided once by a VOID row: a partial unique); its own trigger `Employee_role_sheet_check`
    (Employee's guard untouched); it redefines wave 14's `factory_generated_document_check` (DVR_FROZEN of its
-   RiskAssessmentVersion, PPE_RECEIPT of its PpeIssue)): triggers, partial unique indexes and deferred
+   RiskAssessmentVersion, PPE_RECEIPT of its PpeIssue)),
+   `…_protected_safety_w2b_guards` (W2b wave 16/16, protected safety data: health plans (one per role: a key), visits, fitness
+   judgements (outcome and task limits only, voided once, one live per visit: a partial unique), the view log ProtectedView
+   append-only, incidents (numbered from the floor's INCIDENT series; a nameless report holds no reporter, creator or tablet;
+   closing held while an action or a filing waits), the people involved (the floor inserts, never reads), actions, INAIL filings
+   (48 hours from the certificate; one per person and type: a key), chemicals and data sheets (one current per language: a
+   partial unique); its own triggers `StoredFile_protected_office_only` and `SearchEntry_not_protected`; it redefines wave 10's
+   numbering floor functions `factory_number_series_floor_guard` and `factory_number_allocation_floor_guard` (INCIDENT)): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written

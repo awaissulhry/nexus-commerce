@@ -12,6 +12,8 @@ import { allocateNumber } from '../../../platform/numbering/allocate'
 import { allocateScanIds } from '../../../platform/numbering/scan-ids'
 import { processLabResults, type LabResultRow } from '../../quality/lab/results-store'
 import { postMoves, type MoveDraft } from '../ledger/post-moves'
+// B-W2b-94: a grade text that is an active grade's code names that grade as the hide's record too.
+import { gradeIdsByCode } from '../hides/facts'
 import { readOpeningFacts } from './facts'
 
 /**
@@ -147,6 +149,8 @@ export async function postOpeningLine(tools: CommandTools, line: string, values:
   const hideIds: string[] = []
   if (plan.hides.length > 0 && lot) {
     const { codes: tags } = await allocateScanIds(tools, 'HIDE', plan.hides.length)
+    // B-W2b-94: a grade text that is an active grade's code names that grade as the hide's record too.
+    const gradeIds = await gradeIdsByCode(tx)
     for (const [index, hide] of plan.hides.entries()) {
       const id = newId()
       await tx.hide.create({
@@ -161,6 +165,7 @@ export async function postOpeningLine(tools: CommandTools, line: string, values:
           areaUom: plan.unit,
           baseArea: hide.baseArea,
           grade: hide.grade,
+          gradeId: gradeIds.get(hide.grade ?? '') ?? null,
           shade: lot.shade,
           thicknessMm: hide.thicknessMm,
           defects: hide.defects,

@@ -25,7 +25,18 @@ import {
   saveRuleContract,
   updateInspectionContract,
   workOrderFinalContract,
+  // B-W2b-97
+  countContract,
+  identityContract,
+  measurementsContract,
+  resultPhotoCompleteContract,
+  resultPhotoContract,
+  resultsContract,
+  sheetContract,
+  workOrderPlansContract,
 } from './contract'
+import { announceResultPhoto, changeIdentity, completeResultPhoto, recordMeasurements, recordResults, setCount } from './bench-plan'
+import { sheetOf, workOrderPlans } from './sheet'
 import { assignInspections, listInspectors } from './assign'
 import { benchWorkOrders } from './bench'
 import { setInspectionsDue } from './due'
@@ -97,4 +108,25 @@ export default defineRoutes('quality.final', manifest, async (app) => {
   )
 
   app.get('/quality/evidence', { schema: evidenceContract }, async (request) => evidenceTrail(request, request.query))
+
+  // B-W2b-97: the final inspection by plan (./plan.ts reads, ./sheet.ts the bench sheet, ./bench-plan.ts the writes).
+  app.get('/quality/final/work-orders/:workOrderId/plans', { schema: workOrderPlansContract }, async (request) => workOrderPlans(request, request.params.workOrderId, request.query))
+
+  app.get('/quality/inspections/:inspectionId/sheet', { schema: sheetContract }, async (request) => sheetOf(request, request.params.inspectionId, request.query))
+
+  app.put('/quality/inspections/:inspectionId/results', { schema: resultsContract }, async (request) => recordResults(request, request.params.inspectionId, request.body, idempotencyKeyFrom(request)))
+
+  app.put('/quality/inspections/:inspectionId/measurements', { schema: measurementsContract }, async (request) => recordMeasurements(request, request.params.inspectionId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/quality/inspections/:inspectionId/count', { schema: countContract }, async (request) => setCount(request, request.params.inspectionId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/quality/inspections/:inspectionId/identity', { schema: identityContract }, async (request) => changeIdentity(request, request.params.inspectionId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/quality/inspections/:inspectionId/results/:resultId/photos', { schema: resultPhotoContract }, async (request, reply) =>
+    reply.code(201).send(await announceResultPhoto(request, request.params.inspectionId, request.params.resultId, request.body, idempotencyKeyFrom(request))),
+  )
+
+  app.post('/quality/inspections/:inspectionId/results/:resultId/photos/:fileId/complete', { schema: resultPhotoCompleteContract }, async (request) =>
+    completeResultPhoto(request, request.params.inspectionId, request.params.resultId, request.params.fileId, idempotencyKeyFrom(request)),
+  )
 })

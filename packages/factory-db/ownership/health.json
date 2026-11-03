@@ -1,0 +1,152 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/health.prisma (rules: src/ownership.ts; roles: src/roles.ts). Protected safety data (GDPR art. 9; D.Lgs. 81/2008 arts. 18 c.1 r, 25, 41, 223): the narrowest grants of the schema. The office (and the worker and scheduler, in the tenant's system context) keeps the health surveillance plans, the visits, the fitness judgements and the view log, the incidents with their people, actions and INAIL filings, and the chemical register with its data sheets, through apps/factory-api's modules/safety (B-W2b-125, -135, -143), always through command(); the API keeps the protected tables (HealthVisit, FitnessJudgement, ProtectedView, IncidentPerson, InailFiling) to HR and the safety roles and writes a ProtectedView row in the command that shows one of their records (QHS-256, QHS-270). The floor (factory_floor_runtime) reads NONE of the health or incident tables: it INSERTS an incident and the people involved at its own site (no select, no update: a tablet never reads a report, not even its own; the reporter, severity, seen, close and cancel columns are not even granted to it) and reads the chemical register and the data sheets of its site (the cabinet QR). Portal and link sessions get nothing here. No export source or search indexer reads the protected tables, and their files are the office's only (…_protected_safety_w2b_guards). Nothing is deleted but a person involved in an open incident (the office corrects a mistake): plans and chemicals are archived, visits done or cancelled, judgements voided, incidents closed or cancelled, actions done or cancelled, filings filed or not needed, data sheets superseded; ProtectedView is append-only (`@append-only`, scripts/factory/check-append-only.mjs: no update or delete grant, and its triggers refuse UPDATE, DELETE and TRUNCATE for every login). No money column. personal: the person each row is about and the purpose of each personal column (PLT-207, PLT-209): SAFETY, the legal duty of D.Lgs. 81/2008, never PERFORMANCE, never EMPLOYMENT: a judgement, an injury or a visit never feeds a figure, a ranking, an HR decision or a filter on performance. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "HealthPlan": {
+      "about": "A role's health surveillance plan as the doctor set it (needed, how often, the end-of-employment visit). No person in it. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "HealthVisit": {
+      "about": "A visit a person is due, booked, done or cancelled: protected (who needs surveillance, for which role, an absence's length). Office only; the API keeps it to HR and the safety roles.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "type": ["SAFETY"],
+          "dueOn": ["SAFETY"],
+          "planId": ["SAFETY"],
+          "roleSheetId": ["SAFETY"],
+          "absenceDays": ["SAFETY"],
+          "status": ["SAFETY"],
+          "bookedOn": ["SAFETY"],
+          "bookedPlace": ["SAFETY"],
+          "doneOn": ["SAFETY"],
+          "cancelReason": ["SAFETY"]
+        }
+      }
+    },
+    "FitnessJudgement": {
+      "about": "The doctor's fitness judgement, the outcome and task limits only: protected. Office only (insert, and update only to void); the API keeps it to HR and the safety roles, records every open, and gives other readers (a machine authorisation) fit yes or no, never the limits.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "visitId": ["SAFETY"],
+          "outcome": ["SAFETY"],
+          "taskLimits": ["SAFETY"],
+          "unfitUntil": ["SAFETY"],
+          "judgedOn": ["SAFETY"],
+          "expiresOn": ["SAFETY"],
+          "doctorAppointmentId": ["SAFETY"],
+          "voidReason": ["SAFETY"]
+        }
+      }
+    },
+    "ProtectedView": {
+      "about": "Who saw which protected record, what of it and when, append-only. The office writes it in the command that shows the data and reads it (HR, the data protection officer, the person for their own records).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "recordType": ["SAFETY"],
+          "recordId": ["SAFETY"],
+          "what": ["SAFETY"],
+          "viewedAt": ["SAFETY"]
+        }
+      }
+    },
+    "Incident": {
+      "about": "An incident, near miss or hazard with its number, what, when and where. The office keeps it; the site's floor only inserts a report (no select: it never reads a report), without the reporter of the office, the severity, the seen, close and cancel columns or the creator.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": {
+          "privileges": ["insert"],
+          "scopedBy": ["site"],
+          "hiddenColumns": ["severity", "reportedById", "seenAt", "seenById", "closedAt", "closedById", "cancelledAt", "cancelledById", "cancelReason", "createdById"]
+        }
+      }
+    },
+    "IncidentPerson": {
+      "about": "A person involved in an incident and, for the injured, the injury in fixed words: protected. The office keeps it (corrects or removes a mistake while the incident is open); the site's floor only inserts one with its report (no select).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["insert"], "scopedBy": ["site"], "hiddenColumns": ["createdById"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "involvement": ["SAFETY"],
+          "outsideName": ["SAFETY"],
+          "bodyParts": ["SAFETY"],
+          "bodySide": ["SAFETY"],
+          "nature": ["SAFETY"],
+          "firstAidGiven": ["SAFETY"],
+          "sentToHospital": ["SAFETY"]
+        }
+      }
+    },
+    "IncidentAction": {
+      "about": "An incident's action and what it was made into (a maintenance job, a measure, a training session). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "InailFiling": {
+      "about": "An INAIL filing for an injured person: the absence in days, the certificate's reference and time, the 48-hour deadline, the filing: protected. Office only; the API keeps it to HR and the safety roles.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      },
+      "personal": {
+        "subject": "incidentPersonId",
+        "via": "IncidentPerson",
+        "columns": {
+          "expectedAbsenceDays": ["SAFETY"],
+          "actualAbsenceDays": ["SAFETY"],
+          "certificateReference": ["SAFETY"],
+          "certificateReceivedAt": ["SAFETY"]
+        }
+      }
+    },
+    "Chemical": {
+      "about": "A chemical in use at a site with its hazards, place, maximum, roles and PPE. The office keeps it; the site's floor reads it (the cabinet QR).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "SafetyDataSheet": {
+      "about": "A chemical's safety data sheet, current or superseded. The office keeps it; the site's floor reads it (offline at the cabinet).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

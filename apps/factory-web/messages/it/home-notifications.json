@@ -227,7 +227,9 @@
       },
       "plant": {
         "reported": "Segnalato un problema sulla macchina {record}: {title}",
-        "unsafe": "{record} è stata segnalata non sicura ({title}): resta fuori uso finché un tecnico non la dichiara sicura"
+        "unsafe": "{record} è stata segnalata non sicura ({title}): resta fuori uso finché un tecnico non la dichiara sicura",
+        "routed": "Un problema sulla macchina {record} è stato inviato a te: {title}",
+        "escalated": "Nessuno ha ancora preso in carico il problema sulla macchina {record}: {title}"
       },
       "alert": {
         "raised": "Avviso su {record}: {title}"
