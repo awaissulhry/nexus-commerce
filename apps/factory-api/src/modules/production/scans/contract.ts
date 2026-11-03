@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
+import { CORRECTION_REFUSAL_REASONS } from '@nexus/factory-domain/production/scans/correction-refusals'
 import { DEFECT_KINDS, REASON_CODE } from '@nexus/factory-domain/production/scans/reasons'
 import { CLIENT_SCAN_ID, MAX_BATCH_ITEMS, SCAN_REFUSALS } from '@nexus/factory-domain/production/scans/rules'
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
@@ -14,7 +15,8 @@ import { scrapWaitsField } from './hooks/scrap-limit'
 /**
  * Operation scans (B-W1-42; MES-069, MES-090, MES-095, MES-096, MES-167, MES-308; A2 SCR-090, SCR-072, SCR-073,
  * SCR-023). Counts are garments (whole numbers). No field carries money; no floor answer names a worker: the floor sees
- * `own` (its own scan) or a station, the office one record's worker by name. A refusal by a scan rule is a 409 whose
+ * `own` (its own scan) or a station, the office one record's worker by name, and a team leader the one request they are
+ * deciding (B-W2b-83: never in the list). A refusal by a scan rule is a 409 whose
  * issues are `refusal/<CODE>` (factory-domain production/scans/rules SCAN_REFUSALS) with its words and `fix` with the
  * one fix; in a batch it is the item's `refusal` (code, words, fix, final).
  */
@@ -293,7 +295,9 @@ export const correctionContract = defineContract({
         askedBy: person.nullable(),
         askedByHidden: z.boolean(),
         askedAt: stationRef.nullable(),
+        /** B-W2b-83: a team leader's tablet decides as the worker, behind the same gate; `decidedByHidden`: the gate keeps back who. */
         decidedById: id().nullable(),
+        decidedByHidden: z.boolean(),
         scan: output({ id: id(), kind, worker: person.nullable(), workerHidden: z.boolean(), station: stationRef.nullable(), defects: z.array(defectLine) }).nullable(),
       }),
     }),
@@ -310,6 +314,62 @@ export const refuseContract = defineContract({
   params: requestParams,
   body: input({ note: z.string().trim().min(3).max(300) }),
   response: { 201: output({ request }) },
+})
+
+// B-W2b-83: what waits for the team leader on the tablet (floor.lead, the device's site); deciding signs with the PIN. Names
+// nobody and carries no figure about a person: the counts of one report, recorded and asked.
+const floorPlace = output({ id: id(), code: z.string() })
+const floorCounts = { good: z.number().int(), scrap: z.number().int(), rework: z.number().int() }
+const floorCorrectionRow = output({
+  id: id(),
+  version: z.number().int(),
+  at: instant(),
+  workOrder: output({ id: id(), number: z.string() }),
+  bundle: floorPlace,
+  operation: output({ seq: z.number().int(), name: z.string() }),
+  station: floorPlace.nullable(),
+  line: floorPlace.nullable(),
+  recorded: output({ ...floorCounts, at: instant() }),
+  asked: output(floorCounts),
+  /** This person took the scan or asked (or is the office account of who did): another person decides it. */
+  own: z.boolean(),
+})
+const correctionRefusalTile = output({ code: z.enum(CORRECTION_REFUSAL_REASONS), labelIt: z.string(), labelEn: z.string(), needsDetail: z.boolean() })
+const reasonWords = output({ kind: z.enum(DEFECT_KINDS), code: z.string(), quantity: z.number().int(), labelIt: z.string(), labelEn: z.string(), labelI18n: z.record(z.string(), z.string()) })
+
+export const floorCorrectionsContract = defineContract({
+  response: { 200: output({ rows: z.array(floorCorrectionRow), refusalTiles: z.array(correctionRefusalTile) }) },
+})
+
+export const floorCorrectionContract = defineContract({
+  params: requestParams,
+  response: {
+    200: output({
+      request: floorCorrectionRow.extend({
+        status: z.enum(CORRECTION_STATUSES),
+        /** The asker's words. */
+        reason: z.string(),
+        /** Who took the scan, where it names someone; a station-only site names nobody. */
+        person: z.string().nullable(),
+        reasons: z.array(reasonWords),
+        recordedReasons: z.array(reasonWords),
+      }),
+    }),
+  },
+})
+
+const floorDecided = output({ id: id(), status: z.enum(CORRECTION_STATUSES), correctionScanId: id().nullable() })
+
+export const floorApproveContract = defineContract({
+  params: requestParams,
+  body: input({ version: z.number().int().min(1), note: z.string().trim().max(300).optional() }),
+  response: { 201: floorDecided },
+})
+
+export const floorRefuseContract = defineContract({
+  params: requestParams,
+  body: input({ version: z.number().int().min(1), reason: z.enum(CORRECTION_REFUSAL_REASONS), note: z.string().trim().max(300).optional() }),
+  response: { 201: floorDecided },
 })
 
 const flow = { arrived: z.number().int(), waiting: z.number().int(), good: z.number().int(), scrap: z.number().int(), rework: z.number().int() }

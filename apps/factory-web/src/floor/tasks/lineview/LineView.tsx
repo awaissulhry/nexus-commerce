@@ -14,6 +14,7 @@ import type { TaskOutcome, TaskProblem } from '../shared/task-api'
 import { fetchCard } from '../scans/api'
 import {
   approveBlock,
+  approveCorrection,
   approveScrap,
   decideConflict,
   overrideOnBehalf,
@@ -22,11 +23,14 @@ import {
   readBoard,
   readCalls,
   readConflicts,
+  readCorrection,
+  readCorrections,
   readFloorLine,
   readHandover,
   readOperators,
   readScrap,
   reassign,
+  refuseCorrection,
   refuseScrap,
   rejectBlock,
   reportOnBehalf,
@@ -62,6 +66,8 @@ import {
   reassignHeld,
   reassignNeedsReason,
   rejectHeld,
+  rejectSigns,
+  rejectTiles,
   SCAN_ON_BEHALF,
   selectedCall,
   toggleTopic,
@@ -91,6 +97,7 @@ interface LineData {
   /** A part could not be read now: the screen says so instead of an empty list. */
   readonly waitingUnknown: boolean
   readonly tiles: readonly RefusalTile[]
+  readonly correctionTiles: readonly RefusalTile[]
   readonly decisions: ConflictDecisions
 }
 
@@ -108,6 +115,8 @@ const LIVE = new Set([
   'production.off_standard_ended',
   'production.off_standard_decided',
   'production.off_standard_recorded',
+  'production.scan_correction_requested',
+  'production.scan_correction_decided',
   'floor.action_refused',
   'floor.refused_action_closed',
   'floor.conflict_sent_to_office',
@@ -152,8 +161,8 @@ export function FloorLineView() {
   )
 
   const read = useCallback(async (): Promise<LineData | null> => {
-    const [board, calls, line, scrap, blocks, conflicts] = await Promise.all([readBoard(api), readCalls(api), readFloorLine(api), readScrap(api), readBlocks(api), readConflicts(api)])
-    const failed = [board, calls, line, scrap, blocks, conflicts].flatMap((answer) => (answer.ok ? [] : [answer.problem]))
+    const [board, calls, line, scrap, blocks, conflicts, corrections] = await Promise.all([readBoard(api), readCalls(api), readFloorLine(api), readScrap(api), readBlocks(api), readConflicts(api), readCorrections(api)])
+    const failed = [board, calls, line, scrap, blocks, conflicts, corrections].flatMap((answer) => (answer.ok ? [] : [answer.problem]))
     if (failed.some((problem) => ended(problem))) return null
     if (!board.ok) {
       const kept = KEPT.get('line')
@@ -172,9 +181,10 @@ export function FloorLineView() {
       board: board.value,
       calls: value(calls),
       line: value(line),
-      waiting: waitingItems(value(scrap)?.rows ?? [], value(blocks)?.blocks ?? [], value(conflicts)?.conflicts ?? [], lineId),
-      waitingUnknown: !scrap.ok || !blocks.ok || !conflicts.ok,
+      waiting: waitingItems(value(scrap)?.rows ?? [], value(blocks)?.blocks ?? [], value(conflicts)?.conflicts ?? [], lineId, value(corrections)?.rows ?? []),
+      waitingUnknown: !scrap.ok || !blocks.ok || !conflicts.ok || !corrections.ok,
       tiles: value(scrap)?.refusalTiles ?? [],
+      correctionTiles: value(corrections)?.refusalTiles ?? [],
       decisions: value(conflicts)?.decisions ?? [],
     }
     KEPT.keep('line', next)
@@ -251,7 +261,23 @@ export function FloorLineView() {
 
   // ---- Waiting for you ---------------------------------------------------------------------------------------------------
 
-  const openItem = (item: WaitingItem) => setStep({ kind: 'decide', item, stage: 'look' })
+  // A correction opens its one record: who took the scan and why it is asked, read for this decision only.
+  const readRecord = async (item: Extract<WaitingItem, { kind: 'correction' }>) => {
+    const answer = await readCorrection(api, item.id)
+    const now = current.current
+    if (now.kind !== 'decide' || waitingKey(now.item) !== waitingKey(item)) return
+    if (!answer.ok) {
+      if (ended(answer.problem)) return
+      return setStep({ ...now, recordUnread: true })
+    }
+    if (answer.value.status !== 'PENDING') return setStep({ ...now, problem: { kind: 'refused', code: 'DECIDED_ALREADY', message: '', fix: null } })
+    setStep({ ...now, record: answer.value, recordUnread: false })
+  }
+
+  const openItem = (item: WaitingItem, done = false) => {
+    setStep({ kind: 'decide', item, stage: 'look', ...(done ? { done } : {}) })
+    if (item.kind === 'correction') void readRecord(item)
+  }
 
   const afterDecision = async (item: WaitingItem) => {
     pending.current = null
@@ -259,14 +285,16 @@ export function FloorLineView() {
     ownChange.current = true
     const fresh = await read()
     const next = fresh ? nextItem(fresh.waiting, item) : null
-    setStep(next ? { kind: 'decide', item: next, stage: 'look', done: true } : { kind: 'now', done: 'decided' })
+    if (next) openItem(next, true)
+    else setStep({ kind: 'now', done: 'decided' })
   }
 
   const act = async (item: WaitingItem, what: DecideAct, pinJustProved = false): Promise<void> => {
     const shown = current.current
     if (shown.kind !== 'decide') return
-    const signs = what.type === 'approve' || (what.type === 'reject' && item.kind === 'block') || (what.type === 'keep' && (data?.value.decisions.find((entry) => entry.decision === 'KEEP_RECORDED')?.signs ?? true))
-    if (signs && !pinJustProved && !steppedUp(stepUntil) && !steppedUp(me?.session.stepUpUntil)) return setStep({ ...shown, stage: 'pin', act: what, pinProblem: null, problem: null })
+    const signs = what.type === 'approve' || (what.type === 'reject' && rejectSigns(item)) || (what.type === 'keep' && (data?.value.decisions.find((entry) => entry.decision === 'KEEP_RECORDED')?.signs ?? true))
+    // A correction asks the API first: its refusals come before the PIN, so nobody types one for a decision that cannot go.
+    if (signs && item.kind !== 'correction' && !pinJustProved && !steppedUp(stepUntil) && !steppedUp(me?.session.stepUpUntil)) return setStep({ ...shown, stage: 'pin', act: what, pinProblem: null, problem: null })
     setStep({ ...shown, busy: true, problem: null })
     const key = keyFor(`${what.type}:${waitingKey(item)}`)
     const done =
@@ -278,7 +306,11 @@ export function FloorLineView() {
           ? what.type === 'approve'
             ? await approveBlock(api, item.row, key)
             : await rejectBlock(api, item.row, what.type === 'reject' ? (what.words ?? '') : '', key)
-          : await decideConflict(api, item.row, what.type === 'keep' ? 'KEEP_RECORDED' : 'SEND_TO_OFFICE', what.type === 'keep' || what.type === 'send' ? what.reason : '', key)
+          : item.kind === 'correction'
+            ? what.type === 'approve'
+              ? await approveCorrection(api, item.row, key)
+              : await refuseCorrection(api, item.row, what.type === 'reject' ? what.tile : '', what.type === 'reject' ? what.words : null, key)
+            : await decideConflict(api, item.row, what.type === 'keep' ? 'KEEP_RECORDED' : 'SEND_TO_OFFICE', what.type === 'keep' || what.type === 'send' ? what.reason : '', key)
     if (done.ok) return afterDecision(item)
     if (ended(done.problem)) return
     if (done.problem.kind === 'stepUp') return setStep({ ...shown, busy: false, stage: 'pin', act: what, pinProblem: null })
@@ -538,7 +570,7 @@ export function FloorLineView() {
         return
       case 'reject': {
         if (shown.kind !== 'decide') return
-        const tile = data?.value.tiles.find((entry) => entry.code === shown.tile) ?? null
+        const tile = rejectTiles(shown.item, { scrap: data?.value.tiles ?? [], correction: data?.value.correctionTiles ?? [] }).find((entry) => entry.code === shown.tile) ?? null
         if (rejectHeld({ item: shown.item, tile, words: shown.words ?? '' })) return
         return void act(shown.item, { type: 'reject', tile: shown.tile ?? '', words: shown.words?.trim() || null })
       }
@@ -634,6 +666,7 @@ export function FloorLineView() {
         waitingPending: waitingRows.pending,
         waitingUnknown: data?.value.waitingUnknown ?? false,
         tiles: data?.value.tiles ?? [],
+        correctionTiles: data?.value.correctionTiles ?? [],
         decisions: data?.value.decisions ?? [],
         asOf: data?.asOf ?? null,
         ticks: saved?.ticks ?? null,

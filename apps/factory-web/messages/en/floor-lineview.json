@@ -48,12 +48,12 @@
     "title": "Waiting for you",
     "none": "Nothing waits for you.",
     "unknown": "Part of this list could not be read now. It comes back by itself.",
-    "corrections": "Corrections of a report are decided in the Office: Home › Approvals.",
     "scrap_one": "{bundle}: {count} piece of scrap over the limit",
     "scrap_other": "{bundle}: {count} pieces of scrap over the limit",
     "block_one": "{code}: {count} minute",
     "block_other": "{code}: {count} minutes",
     "conflict": "{bundle}: reported on two tablets",
+    "correction": "{bundle}: correction of a report",
     "state": {
       "own": "Yours: another person decides",
       "withOffice": "With the office"
@@ -91,7 +91,11 @@
     "from": "From",
     "to": "To",
     "minutes": "Minutes",
-    "tablet": "Tablet"
+    "tablet": "Tablet",
+    "person": "Person",
+    "reported": "Reported at",
+    "reasonsBefore": "Reasons recorded",
+    "why": "Why it is asked"
   },
   "scrap": {
     "kind": "Scrap over the limit",
@@ -116,6 +120,12 @@
       "OTHER_STATION": "It was done at another station"
     }
   },
+  "correction": {
+    "kind": "Correction of a report",
+    "waits": "Waits for you",
+    "reading": "Reading this request…",
+    "unread": "This request could not be read now. Go back and open it again."
+  },
   "reject": {
     "title": "Why?",
     "words": "Say why"
@@ -125,7 +135,9 @@
     "meaning": {
       "scrap": "You approve this scrap: it goes on to be posted. Your signature is kept with the record.",
       "block": "You decide this time. Your signature is kept with the record.",
-      "conflict": "The report recorded first stands and the other is set aside. Your signature is kept with the record."
+      "conflict": "The report recorded first stands and the other is set aside. Your signature is kept with the record.",
+      "correction": "You approve this correction: a new record takes over the count and the original stays. Your signature is kept with the record.",
+      "correctionRefused": "You refuse this correction: the report stays as it is. Your signature is kept with the record."
     }
   },
   "done": {
@@ -248,7 +260,8 @@
       "bundle": "Scan the bundle first.",
       "reason": "Pick a reason first.",
       "note": "Write why first."
-    }
+    },
+    "record": "Read the request first: it is not on this screen yet."
   },
   "refusal": {
     "other": "This cannot be done.",
@@ -303,6 +316,52 @@
     "OTHER_KIND": {
       "message": "This station does not do this kind of work.",
       "fix": "Go back and pick a station of the operation's kind of work."
+    }
+  },
+  "correctionRefusal": {
+    "SELF_APPROVAL": {
+      "message": "You took this report or asked this correction.",
+      "fix": "Another team leader or the office decides it."
+    },
+    "TARGET_VOIDED": {
+      "message": "The report was undone or corrected since this was asked.",
+      "fix": "Refuse it: the person asks again on the report that stands now."
+    },
+    "LESS_THAN_TAKEN": {
+      "message": "The next operation took more pieces than this leaves.",
+      "fix": "Refuse it, or have the next operation corrected first."
+    },
+    "MORE_THAN_PASSED": {
+      "message": "This counts more pieces than the operation before passed.",
+      "fix": "Refuse it, or have the operation before corrected first."
+    },
+    "MORE_THAN_BUNDLE": {
+      "message": "This counts more pieces than the bundle carries.",
+      "fix": "Refuse it: the person counts again."
+    },
+    "PREVIOUS_NOT_REPORTED": {
+      "message": "The operation before this one is not reported yet.",
+      "fix": "Have it reported first; this request keeps waiting."
+    },
+    "NO_COUNT": {
+      "message": "This counts no piece.",
+      "fix": "Refuse it: the person counts again."
+    },
+    "SAME_COUNTS": {
+      "message": "The counts and reasons are the same as the report’s.",
+      "fix": "Refuse it: there is nothing to change."
+    },
+    "UNKNOWN_SCAN": {
+      "message": "The report it names is not on record.",
+      "fix": "Refuse it."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "This work order is not in progress any more.",
+      "fix": "Ask the office."
+    },
+    "ON_HOLD": {
+      "message": "This bundle or its work order is on hold.",
+      "fix": "It can be decided once quality lifts the hold."
     }
   }
 }

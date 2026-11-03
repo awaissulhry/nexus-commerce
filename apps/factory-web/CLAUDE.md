@@ -258,7 +258,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   signed in: one tap queues `andon.call.send`, the open call with who is coming, `andon.call.answer` closes it) and
   `floor/tasks/lineview/` (SCR-168, `/floor/lineview`, catalogue `floor-lineview`; a LINE tablet of a team leader lands on it,
   `store.landing`: line totals, calls, Waiting for you, stations, handover note, scan on behalf; per station only a call, a
-  machine down, material and "nobody signed in", Owner answer F2).
+  machine down, material and "nobody signed in", Owner answer F2). B-W2b-83: corrections of a report join Waiting for you (old →
+  new counts, no name); the row opens its one record (who took the scan where the scan names one, why it is asked), read for that
+  decision; a correction asks the API before the PIN pad, so its refusals come first; approve and refuse both sign.
   B-W2a-76: `floor/tasks/returns-in/` (SCR-180, `/floor/returnsin`: scan the RMA → parcel condition + photos → lines by serial/batch
   scan or tap → ONE receipt, photos onto it → grade per garment (suggestion = factory-domain suggestedOutcome; the office
   decides) → the inspection place scanned) and `floor/tasks/kits/` (SCR-181, `/floor/kits`: Send a kit = ticks by scan,
