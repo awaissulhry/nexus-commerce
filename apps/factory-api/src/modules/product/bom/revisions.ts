@@ -13,6 +13,7 @@ import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller } from '../../../core/command'
 import { readOperations, readSteps } from '../routing/read'
 import { openTypeChangeReviewsInCommand } from '../../compliance/type-changes/detect'
+import { copyPiecesInCommand, lineMapBySeq } from '../pieces/copy'
 import {
   assertMayWrite,
   bomStyleOf,
@@ -46,7 +47,7 @@ import {
  * change to its parts, for every login.
  */
 
-/** product.bom.copyRevision: a RELEASED (or OBSOLETE) revision's BOM, routing, planned yield and label into the next DRAFT. */
+/** product.bom.copyRevision: a RELEASED (or OBSOLETE) revision's BOM, routing, pattern pieces (B-W2b-95), planned yield and label into the next DRAFT. */
 export async function copyRevision(caller: CommandCaller, styleId: string, sourceId: string, body: CopyRevisionBody, idempotencyKey?: string): Promise<BomView> {
   const context = contextOf(caller)
   const { style } = await readRevisionFor(caller, styleId, sourceId)
@@ -108,7 +109,8 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
       })
     }
 
-    const lines = copyLines(await readLines(tx, sourceId), newId)
+    const sourceLines = await readLines(tx, sourceId)
+    const lines = copyLines(sourceLines, newId)
     if (lines.length > 0) {
       await tx.bomLine.createMany({
         data: lines.map((line) => ({
@@ -143,7 +145,9 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
       if (cells.length > 0) await tx.bomLineColour.createMany({ data: cells })
     }
 
-    const copied = { revision, status: 'DRAFT', copiedFrom: { id: sourceId, revision: source.revision }, lines: lines.length, routingSteps: routing.length, changeNote: body.changeNote ?? null }
+    // B-W2b-95: the pattern pieces travel with the BOM, AFTER it (a piece names its line); the range is the style's now.
+    const pieces = await copyPiecesInCommand(tools, { revisionId: sourceId }, { styleId, revisionId: id }, lineMapBySeq(sourceLines, lines), (await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { sizes: true } })).sizes)
+    const copied = { revision, status: 'DRAFT', copiedFrom: { id: sourceId, revision: source.revision }, lines: lines.length, routingSteps: routing.length, pieces, changeNote: body.changeNote ?? null }
     tools.audit({ recordType: 'StyleRevision', recordId: id, companyId: locked.companyId, after: { styleId, ...copied } })
     tools.audit({ recordType: 'Style', recordId: styleId, companyId: locked.companyId, after: { revision: { id, revision, status: 'DRAFT', copiedFrom: source.revision } } })
     tools.emit({ type: 'style.revision_created', subject: styleId, companyId: locked.companyId, payload: { styleId, code: locked.code, revisionId: id, revision } })
