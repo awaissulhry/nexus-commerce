@@ -1789,6 +1789,8 @@
     "quality_plans_view": "Vedere i piani di controllo, le versioni e le liste di controllo",
     "quality_plans_manage": "Tenere i piani di controllo e scriverne le bozze",
     "quality_plans_approve": "Approvare con firma elettronica la bozza di un'altra persona",
+    "quality_triggers_view": "Vedere le regole che aprono le ispezioni da sole e la loro anteprima",
+    "quality_triggers_manage": "Gestire le regole che aprono le ispezioni da sole (quando, per cosa, piano, ogni quanto)",
     "views_save": "Salvare e condividere le proprie viste di un elenco",
     "views_manage": "Condividere viste con tutti e impostare la vista predefinita di un ruolo",
     "views_export": "Esportare un elenco in CSV o Excel",
