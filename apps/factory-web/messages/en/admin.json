@@ -1940,6 +1940,7 @@
     "people_payroll_manage": "Keep the payroll codes and layouts, make payroll exports and send them by secure link",
     "safety_view": "See the safety calendar (every legal deadline, health visits as counts) and the safety organisation with its letters and RLS notices",
     "safety_organisation_manage": "Appoint people and outside contacts to safety roles, record the appointee's signature, end a term, record the RLS notice filed with INAIL",
-    "safety_calendar_manage": "Add, change, mark done and cancel the deadlines typed on the safety calendar, with their evidence"
+    "safety_calendar_manage": "Add, change, mark done and cancel the deadlines typed on the safety calendar, with their evidence",
+    "safety_chemicals_manage": "Keep the chemical register (D.Lgs. 81/2008 art. 223): add, change and archive chemicals, upload and replace their safety data sheets"
   }
 }

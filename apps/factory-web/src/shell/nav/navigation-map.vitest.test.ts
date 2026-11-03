@@ -172,6 +172,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/plant/machines': 'plant.view', // GET /plant/machines
       '/plant/settings': 'plant.view', // GET /plant/symptoms (B-W2a-73)
       '/plant/calendar': 'safety.view', // GET /safety/calendar (B-W2b-120)
+      '/plant/chemicals': 'safety.view', // GET /safety/chemicals (B-W2b-143)
       // B-W2b-55: People › Employees.
       '/people/employees': 'people.view', // GET /people/employees
       // B-W2b-60: People › Shifts.

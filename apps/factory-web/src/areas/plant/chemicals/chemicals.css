@@ -1,0 +1,272 @@
+/*
+ * Plant › Health & safety › Chemicals & waste (SCR-213, B-W2b-143) LAYOUT: the band, the tiles, the register, the SDS
+ * library, the dialogs' forms, the chemical's window, the cabinet QR, the SDS and cabinet tabs, and the floor's cabinet
+ * reader (its own sds.css). The page fills the shell's main area (no max-width: Owner rule 2026-10-29); the controls are the design
+ * system's; semantic tokens only. The GHS pictograms, the signal word and the QR mark: src/lib/chemicals/marks.css.
+ */
+.fw-ch,
+.fw-ch-section,
+.fw-ch-form,
+.fw-ch-loading,
+.fw-ch-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ch {
+  gap: var(--nds-space-20);
+}
+
+.fw-ch-section,
+.fw-ch-loading {
+  gap: var(--nds-space-8);
+}
+
+.fw-ch-anchor {
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-ch-band,
+.fw-ch-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-ch-status,
+.fw-ch-actions,
+.fw-ch-tools,
+.fw-ch-row,
+.fw-ch-meta,
+.fw-ch-head-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ch-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-ch-h:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-ch-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-ch-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ch-warn {
+  margin: 0;
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ch-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-ch-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fw-ch-slow {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  opacity: 0;
+  animation: fw-ch-slow 0s linear 1s forwards;
+}
+
+@keyframes fw-ch-slow {
+  to {
+    opacity: 1;
+  }
+}
+
+.fw-ch-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.fw-ch-codes {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+/* Forms */
+.fw-ch-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-ch-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-ch-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-ch-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-4) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  font-size: var(--nds-font-size-sm);
+  cursor: pointer;
+}
+
+/* The chemical's window: facts beside the PDF on a wide window, one under the other otherwise. */
+.fw-ch-window {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .fw-ch-window {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-ch-facts {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
+  gap: var(--nds-space-6) var(--nds-space-12);
+  margin: 0;
+}
+
+.fw-ch-facts dt {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ch-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-ch-pdf {
+  min-height: 420px;
+  min-width: 0;
+}
+
+.fw-ch-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+/* Print cabinet QR */
+.fw-ch-qr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .fw-ch-qr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The tabs: the SDS (PDF) and the cabinet sheet (print). */
+.fw-ch-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ch-tab-pdf {
+  min-height: 70vh;
+}
+
+.fw-ch-sheet-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+.fw-ch-sheet-qr {
+  width: 140px;
+  height: 140px;
+  padding: var(--nds-space-6);
+  background: var(--nds-tooltip-light-bg);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+}
+
+.fw-ch-sheet-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-ch-sheet-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  break-inside: avoid;
+  min-width: 0;
+}
+
+@media print {
+  .fw-ch-noprint {
+    display: none;
+  }
+  .fw-ch-sheet-item {
+    break-inside: avoid;
+  }
+}

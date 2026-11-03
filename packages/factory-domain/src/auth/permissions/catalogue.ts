@@ -168,6 +168,8 @@ import { SAFETY_DEFINITIONS, SAFETY_PERMISSIONS } from '../../safety/organisatio
 import { SAFETY_CALENDAR_DEFINITIONS, SAFETY_CALENDAR_PERMISSIONS } from '../../safety/calendar/permissions'
 // B-W2b-118: quality rules (quality.rules.view; quality.alerts.manage).
 import { QUALITY_RULES_DEFINITIONS, QUALITY_RULES_PERMISSIONS } from '../../quality/rules/permissions'
+// B-W2b-143: the chemical register and the safety data sheets (safety.chemicals.manage).
+import { SAFETY_CHEMICALS_DEFINITIONS, SAFETY_CHEMICALS_PERMISSIONS } from '../../safety/chemicals/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -613,6 +615,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SAFETY_CALENDAR_DEFINITIONS,
   // B-W2b-118: quality rules.
   QUALITY_RULES_DEFINITIONS,
+  // B-W2b-143: the chemical register and the safety data sheets.
+  SAFETY_CHEMICALS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -781,6 +785,8 @@ for (const name of [...QUALITY_AMENDMENTS_PERMISSIONS, ...QUALITY_DOCUMENTS_PERM
 for (const name of [...SAFETY_PERMISSIONS, ...SAFETY_CALENDAR_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-118: quality rules.
 for (const name of QUALITY_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-143: the chemical register and the safety data sheets.
+for (const name of SAFETY_CHEMICALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

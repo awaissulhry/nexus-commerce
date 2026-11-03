@@ -501,6 +501,14 @@ const QUALITY_RULES_ADDS: Readonly<Record<string, readonly Permission[]>> = Obje
   production_manager: ['quality.rules.view'],
   floor_supervisor: ['quality.rules.view'],
 })
+/**
+ * B-W2b-143 (the chemical register and the safety data sheets; QHS-277, QHS-278; design plant.chemicals): the safety officer
+ * keeps the register and replaces the data sheets; every role with safety.view reads them (no person, no money), and a
+ * tablet of the site reads its own site's with floor.work (the cabinet QR). Office only; owner from every().
+ */
+const CHEMICALS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.chemicals.manage'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -569,7 +577,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-120
   ...(audience === 'office' ? (SAFETY_ADDS[key] ?? []) : []),
   // B-W2b-118
-  ...(audience === 'office' ? (QUALITY_RULES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (QUALITY_RULES_ADDS[key] ?? []) : []),
+  // B-W2b-143
+  ...(audience === 'office' ? (CHEMICALS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
