@@ -1,11 +1,13 @@
 import { createElement, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
+import type { ApiFile } from '../../../../record-panels/api'
 import { RecordProblem, RecordSkeleton } from '../../_shared/parts'
-import type { Complaint } from '../api'
-import { canFor, complaintOf, forRole, inShell, ME, NOW, PREFIX, ROWS, SAFETY_ID, STYLES, TODAY, type RoleCase } from '../demo/fixtures'
+import type { AnswerCheck, Complaint } from '../api'
+import { canFor, complaintOf, forRole, inShell, ME, NOW, PREFIX, QUALITY, ROWS, SAFETY_ID, STYLES, TODAY, withLetter, type RoleCase } from '../demo/fixtures'
+import { answerDraftOf, investigationDraftOf, sendDraftOf, templateWords, withTemplate, type InvestigationDraft } from '../model'
 import { ComplaintsMessages, useWords } from '../view/parts'
 import { triageModel } from '../fixtures'
-import type { ComplaintRecordModel, FactsDraft, RecordDialog, RecordTab } from './view-model'
+import { IDLE_ANSWER, type AnswerModel, type ComplaintRecordModel, type FactsDraft, type RecordDialog, type RecordTab } from './view-model'
 import { ComplaintRecordView } from './view/ComplaintRecordView'
 
 /**
@@ -106,6 +108,23 @@ function RecordDesign({ model }: { model: DesignModel }) {
         onTriage: () => setRecord((current) => (typeof current === 'string' ? current : { ...current, triage: triageModel(NEW.id, { queue: [NEW.id] }) })),
         onTriageClose: () => setRecord((current) => (typeof current === 'string' ? current : { ...current, triage: null })),
         onTriageDraft: (patch) => setRecord((current) => (typeof current === 'string' || !current.triage ? current : { ...current, triage: { ...current.triage, draft: { ...current.triage.draft, ...patch } } })),
+        // B-W2b-113: the investigation and the letter answer to the reviewer's hands (nothing is saved or sent here).
+        onInvestigationEdit: (on: boolean) => setRecord((current) => (typeof current === 'string' ? current : { ...current, investigation: on ? { draft: investigationDraftOf(current.complaint), busy: false, problem: null } : null })),
+        onInvestigationDraft: (patch: Partial<InvestigationDraft>) => setRecord((current) => (typeof current === 'string' || !current.investigation ? current : { ...current, investigation: { ...current.investigation, draft: { ...current.investigation.draft, ...patch } } })),
+        onAnswerTemplate: (template) => setRecord((current) => (typeof current === 'string' ? current : withAnswer(current, (answer) => { const result = withTemplate(answer.draft ?? answerDraftOf(current.complaint), { template }, current.complaint); return { ...answer, draft: result.draft, keptWords: result.keptWords } }))),
+        onAnswerLanguage: (language) => setRecord((current) => (typeof current === 'string' ? current : withAnswer(current, (answer) => { const result = withTemplate(answer.draft ?? answerDraftOf(current.complaint), { language }, current.complaint); return { ...answer, draft: result.draft, keptWords: result.keptWords } }))),
+        onAnswerText: (text) => setRecord((current) => (typeof current === 'string' ? current : withAnswer(current, (answer) => ({ ...answer, draft: { ...(answer.draft ?? answerDraftOf(current.complaint)), text } })))),
+        onAnswerFile: (fileId, on) =>
+          setRecord((current) => {
+            if (typeof current === 'string') return current
+            return withAnswer(current, (answer) => {
+              const draft = answer.draft ?? answerDraftOf(current.complaint)
+              return { ...answer, draft: { ...draft, fileIds: on ? [...new Set([...draft.fileIds, fileId])] : draft.fileIds.filter((id) => id !== fileId) } }
+            })
+          }),
+        onAnswerDiscard: () => setRecord((current) => (typeof current === 'string' ? current : withAnswer(current, (answer) => ({ ...answer, draft: null, keptWords: false })))),
+        onSend: () => setRecord((current) => (typeof current === 'string' ? current : { ...withAnswer(current, (answer) => ({ ...answer, check: CHECK })), dialog: { kind: 'send', draft: sendDraftOf(CHECK) } })),
+        onSendDraft: (patch) => setRecord((current) => (typeof current === 'string' || current.dialog?.kind !== 'send' || !current.dialog.draft ? current : { ...current, dialog: { kind: 'send', draft: { ...current.dialog.draft, ...patch } } })),
       },
     }),
     model.role,
@@ -113,6 +132,131 @@ function RecordDesign({ model }: { model: DesignModel }) {
 }
 
 const tab = (value: RecordTab) => ({ tab: value })
+
+const withAnswer = (record: ComplaintRecordModel, change: (answer: AnswerModel) => AnswerModel): ComplaintRecordModel => ({ ...record, answer: change(record.answer ?? IDLE_ANSWER) })
+
+// ---- B-W2b-113: the investigation and the answer letter (design cmp-inv, cmp-ans, cmp-letter) ---------------------------------
+
+/** A one-page made-up PDF (Helvetica, ASCII), so the preview draws in the review. */
+function demoPdf(lines: readonly string[]): Uint8Array {
+  const escape = (text: string) => text.replace(/[\\()]/g, (char) => `\\${char}`)
+  const content = ['BT', '/F1 11 Tf', '56 780 Td', '16 TL', ...lines.map((line, index) => `${index === 0 ? '' : 'T* '}(${escape(line)}) Tj`), 'ET'].join('\n')
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+  ]
+  let out = '%PDF-1.4\n'
+  const offsets: number[] = []
+  objects.forEach((object, index) => {
+    offsets.push(out.length)
+    out += `${index + 1} 0 obj\n${object}\nendobj\n`
+  })
+  const xref = out.length
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}`
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return new TextEncoder().encode(out)
+}
+
+const DEMO_LETTER = demoPdf(['Demo Factory Srl - made-up letterhead', '', 'Risposta al reclamo CMP-DEMO-0010', 'ANTEPRIMA - lettera non inviata', '', 'Gentile Dario Demo,', 'ripareremo il capo a nostre spese (made-up).', '', 'Cordiali saluti'])
+
+const fileOf = (n: number, name: string, shared: boolean, complaint: Complaint): ApiFile => ({
+  id: `0190f0e2-6511-7000-8000-00000000000${n}`,
+  companyId: complaint.companyId,
+  recordType: 'Complaint',
+  recordId: complaint.id,
+  kind: 'DOCUMENT',
+  originalName: name,
+  contentType: 'application/pdf',
+  sizeBytes: 182_000,
+  status: 'AVAILABLE',
+  visibility: shared ? ['OFFICE', 'PARTNER'] : ['OFFICE'],
+  partyId: shared ? complaint.party.id : null,
+  retainUntil: null,
+  legalHold: false,
+  quarantineReason: null,
+  availableAt: NOW,
+  createdAt: NOW,
+  version: 1,
+})
+
+const INVESTIGATED = complaintOf(INVESTIGATING, {
+  findings: 'The returned pants were checked: the knee seam opened where the stitch density is below the specification (made-up).',
+  rootCause: 'Thread tension drifted on one machine of line 2 (made-up).',
+  return: { id: '0190f0e2-6508-7000-8000-000000000007', number: 'RMA-DEMO-0007', status: 'INSPECTED' },
+  ncrs: [{ id: '0190f0e2-6507-7000-8000-000000000033', number: 'NCR-DEMO-0033', stage: 'CONTAINED' }],
+})
+const INSPECTION_REPORT = fileOf(1, 'inspection-report-RMA-DEMO-0007.pdf', true, INVESTIGATED)
+const PHOTO_OFFICE = fileOf(2, 'seam-close-up.pdf', false, INVESTIGATED)
+const LETTER_TEXT = templateWords('REPAIR', 'it', INVESTIGATED)
+const WRITTEN = withLetter(INVESTIGATED, { template: 'REPAIR', language: 'it', text: LETTER_TEXT, files: [{ id: INSPECTION_REPORT.id, originalName: INSPECTION_REPORT.originalName, kind: 'DOCUMENT', status: 'AVAILABLE', shared: true }] })
+const SENT: Complaint = (() => {
+  const answered = complaintOf(ANSWERED, { findings: 'Mark from the cutting table, outside the garment\'s use (made-up).' })
+  const text = templateWords('NOT_ACCEPTED', 'en', answered)
+  return withLetter(answered, {
+    template: 'NOT_ACCEPTED',
+    language: 'en',
+    text,
+    sent: { documentId: '0190f0e2-6512-7000-8000-000000000002', version: 2, language: 'en', fileId: '0190f0e2-6513-7000-8000-000000000002', at: NOW, byId: QUALITY.id, via: 'EMAIL' },
+    versions: [
+      { id: '0190f0e2-6512-7000-8000-000000000002', version: 2, language: 'en', fileId: '0190f0e2-6513-7000-8000-000000000002', createdAt: NOW, createdById: QUALITY.id },
+      { id: '0190f0e2-6512-7000-8000-000000000001', version: 1, language: 'it', fileId: '0190f0e2-6513-7000-8000-000000000001', createdAt: '2026-10-20T10:40:00.000Z', createdById: QUALITY.id },
+    ],
+    suggestedLanguage: 'en',
+  })
+})()
+const CHECK: AnswerCheck = {
+  ready: true,
+  problems: [],
+  recipients: [
+    { contactId: '0190f0e2-6509-7000-8000-000000000001', name: 'Dario Demo', email: 'dario.demo@example.com', language: 'it', suggested: true },
+    { contactId: '0190f0e2-6509-7000-8000-000000000002', name: 'Ufficio qualità Demo', email: 'qualita@example.com', language: 'it', suggested: false },
+  ],
+  language: 'it',
+  subject: 'Risposta al reclamo CMP-DEMO-0010',
+  message: 'Gentile Dario Demo,\n\nin allegato la nostra risposta al Vostro reclamo CMP-DEMO-0010.\n\nCordiali saluti',
+}
+const CHECK_PROBLEMS: AnswerCheck = {
+  ...CHECK,
+  ready: false,
+  recipients: [],
+  problems: [
+    { path: 'contactIds', message: 'x' },
+    { path: 'letter/company/rea', message: 'x' },
+  ],
+}
+
+const answerTab = (complaint: Complaint, role: RoleCase, answer: Partial<AnswerModel> = {}, over: Partial<ComplaintRecordModel> = {}) =>
+  recordModel(complaint, role, { tab: 'answer', answer: { ...IDLE_ANSWER, files: [INSPECTION_REPORT, PHOTO_OFFICE], ...answer }, ...over })
+const ready = { preview: { status: 'ready' as const, data: DEMO_LETTER, language: 'it' as const } }
+const changedDraft = { ...answerDraftOf(WRITTEN), template: 'REPLACEMENT' as const, text: `${LETTER_TEXT}\n\nP.S. made-up words of our own.` }
+
+const ANSWER_CASES = [
+  { id: 'investigation', label: 'W2b — Investigation: findings, root cause, the return, the NCR and the CAPA', model: { role: 'owner' as RoleCase, record: recordModel(INVESTIGATED, 'owner', tab('investigation')) } },
+  { id: 'investigation-editing', label: 'W2b — Investigation in edit mode (EditModeBar, ⌘S)', model: { role: 'owner' as RoleCase, record: recordModel(INVESTIGATED, 'owner', { tab: 'investigation', investigation: { draft: { findings: `${INVESTIGATED.findings} More found on a second pair (made-up).`, rootCause: INVESTIGATED.rootCause ?? '' }, busy: false, problem: null } }) } },
+  { id: 'investigation-empty', label: 'W2b — Investigation: nothing written yet', model: { role: 'owner' as RoleCase, record: recordModel(complaintOf(INVESTIGATING), 'owner', tab('investigation')) } },
+  { id: 'investigation-held', label: 'W2b — Investigation of a new complaint: held, triage first', model: { role: 'owner' as RoleCase, record: recordModel(complaintOf(NEW), 'owner', tab('investigation')) } },
+  { id: 'investigation-capa-elsewhere', label: 'W2b — Investigation: escalated to a CAPA the reader may not see', model: { role: 'readOnly' as RoleCase, record: recordModel(complaintOf(INVESTIGATING, { capaRecord: null, capaElsewhere: true }), 'readOnly', tab('investigation')) } },
+  { id: 'answer', label: 'W2b — Answer: the letter from the Repair template, its preview, an attachment shared', model: { role: 'owner' as RoleCase, record: answerTab(WRITTEN, 'owner', ready) } },
+  { id: 'answer-draft', label: 'W2b — Answer: another template picked while the person\'s own words stay', model: { role: 'owner' as RoleCase, record: answerTab(WRITTEN, 'owner', { ...ready, draft: changedDraft, keptWords: true }) }, note: 'Send is held until the letter is saved; the preview shows the letter as saved.' },
+  { id: 'answer-empty', label: 'W2b — Answer: nothing written yet (Send held: no words)', model: { role: 'owner' as RoleCase, record: answerTab(complaintOf(INVESTIGATING), 'owner') } },
+  { id: 'answer-send', label: 'W2b — Send…: the review before anything goes', model: { role: 'owner' as RoleCase, record: answerTab(WRITTEN, 'owner', { ...ready, check: CHECK }, { dialog: { kind: 'send', draft: sendDraftOf(CHECK) } }) } },
+  { id: 'answer-send-reading', label: 'W2b — Send…: the customer\'s contacts being read', model: { role: 'owner' as RoleCase, record: answerTab(WRITTEN, 'owner', ready, { dialog: { kind: 'send', draft: null } }) } },
+  { id: 'answer-send-problems', label: 'W2b — Send…: no contact with an e-mail, the letterhead incomplete (held)', model: { role: 'owner' as RoleCase, record: answerTab(WRITTEN, 'owner', { ...ready, check: CHECK_PROBLEMS }, { dialog: { kind: 'send', draft: sendDraftOf(CHECK_PROBLEMS) } }) } },
+  { id: 'answer-send-refused', label: 'W2b — Send… refused: a file not shared with the customer (in words)', model: { role: 'owner' as RoleCase, record: answerTab(WRITTEN, 'owner', { ...ready, check: CHECK }, { dialog: { kind: 'send', draft: sendDraftOf(CHECK) }, dialogProblem: 'answer.send.problem.notShared' }) } },
+  { id: 'answer-sent', label: 'W2b — Answered by letter: when, who, how; frozen; the versions kept', model: { role: 'owner' as RoleCase, record: answerTab(SENT, 'owner', { preview: { status: 'ready', data: DEMO_LETTER, language: 'en' } }) }, note: 'Back to investigating (⋯) opens the letter again; the versions stay.' },
+  { id: 'answer-answered-phone', label: 'W2b — Answered by phone (no letter): the letter frozen', model: { role: 'owner' as RoleCase, record: answerTab(complaintOf(ANSWERED), 'owner') } },
+  { id: 'answer-read-only', label: 'W2b — Answer for a read-only role: every step held with its permission', model: { role: 'readOnly' as RoleCase, record: answerTab(WRITTEN, 'readOnly', ready) } },
+  { id: 'answer-loading-preview', label: 'W2b — Answer: the preview being made', model: { role: 'owner' as RoleCase, record: answerTab(WRITTEN, 'owner', { preview: { status: 'loading' } }) } },
+  { id: 'answer-preview-error', label: 'W2b — Answer: the preview refused (the letterhead is incomplete)', model: { role: 'owner' as RoleCase, record: answerTab(WRITTEN, 'owner', { preview: { status: 'error', problem: 'answer.preview.letterhead' } }) } },
+  { id: 'answer-files-reading', label: 'W2b — Answer: the complaint\'s files being read', model: { role: 'owner' as RoleCase, record: answerTab(WRITTEN, 'owner', { ...ready, files: null }) } },
+  { id: 'answer-held-new', label: 'W2b — Answer of a new complaint: held, triage first', model: { role: 'owner' as RoleCase, record: answerTab(complaintOf(NEW), 'owner') } },
+  { id: 'answer-offline', label: 'W2b — Answer offline: Save and Send held', model: { role: 'owner' as RoleCase, record: answerTab(WRITTEN, 'owner', { ...ready, draft: changedDraft }, { live: 'offline', offline: true }) } },
+  { id: 'answer-receipt', label: 'W2b — The receipt after a send', model: { role: 'owner' as RoleCase, record: answerTab(SENT, 'owner', { preview: { status: 'ready', data: DEMO_LETTER, language: 'en' } }, { notice: { tone: 'success', words: { key: 'done.answerSent', params: { number: SENT.number, version: 2 } } } }) } },
+  { id: 'linked-capa', label: 'W2b — Linked records: the CAPA it is escalated to', model: { role: 'owner' as RoleCase, record: recordModel(INVESTIGATED, 'owner', tab('linked')) } },
+]
 
 // ---- B-W2b-17: Link… / Unlink (design cmp-links) -------------------------------------------------------------------------
 const NCR_31 = SAFETY.ncrs[0]!
@@ -161,7 +305,7 @@ const W2B_CASES = [
 
 export const designScreen = defineDesignScreen<DesignModel>({
   screen: 'SCR-113-complaint',
-  title: 'Complaint (W2a: record, linked records, activity)',
+  title: 'Complaint (record, investigation, answer, linked records, activity)',
   view: RecordDesign,
   cases: [
     { id: 'new', label: 'New: Triage first (the owner)', model: { role: 'owner', record: recordModel(complaintOf(NEW), 'owner') } },
@@ -204,6 +348,7 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'changed', label: 'Changed by someone else while open: Reload', model: { role: 'owner', record: recordModel(complaintOf(INVESTIGATING), 'owner', { changedAt: NOW }) } },
     { id: 'offline', label: 'Offline: the last copy, writes held', model: { role: 'owner', record: recordModel(complaintOf(INVESTIGATING), 'owner', { live: 'offline', offline: true }) } },
     ...W2B_CASES,
+    ...ANSWER_CASES,
     { id: 'loading', label: 'Loading', model: { role: 'owner', record: 'loading' } },
     { id: 'not-found', label: 'Not found', model: { role: 'owner', record: 'notFound' } },
     { id: 'no-permission', label: 'No permission', model: { role: 'none', record: 'forbidden' } },

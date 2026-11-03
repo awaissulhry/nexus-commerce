@@ -1,10 +1,11 @@
 import type { LiveState } from '../../_shared/model'
-import type { Complaint, ComplaintLinkType, ComplaintSeverity, OfficeChannel, SiteOption, StatusMove, StyleOption } from '../api'
-import type { ComplaintsCan } from '../model'
+import type { ApiFile } from '../../../../record-panels/api'
+import type { AnswerCheck, AnswerTemplate, Complaint, ComplaintLinkType, ComplaintSeverity, LetterLanguage, OfficeChannel, SiteOption, StatusMove, StyleOption } from '../api'
+import type { AnswerDraft, ComplaintsCan, InvestigationDraft, SendDraft } from '../model'
 import type { Notice, PhotoView, TriageActions, TriageModel } from '../view-model'
 
-/** The record's tabs (design rec:Complaint): Complaint · Linked records · Activity (Investigation and Answer are W2b). */
-export const RECORD_TABS = ['complaint', 'linked', 'activity'] as const
+/** The record's tabs (design rec:Complaint): Complaint · Investigation · Answer (B-W2b-113) · Linked records · Activity. */
+export const RECORD_TABS = ['complaint', 'investigation', 'answer', 'linked', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 /** The facts the Complaint tab edits (EditModeBar), as typed. */
@@ -29,6 +30,31 @@ export type RecordDialog =
   // B-W2b-17 (design cmp-links): Link… (what, and which record; a garment by its serial) and Unlink of one linked record.
   | { readonly kind: 'link'; readonly type: ComplaintLinkType | ''; readonly recordId: string; readonly serial: string }
   | { readonly kind: 'unlink'; readonly type: ComplaintLinkType; readonly recordId: string; readonly label: string }
+  // B-W2b-113 (design cmp-ans "Send = review then send"): the review of the letter's mail before it goes.
+  | { readonly kind: 'send'; readonly draft: SendDraft | null }
+
+/** B-W2b-113: the letter's preview (the saved letter as the customer would get it, with the "preview" banner). */
+export type PreviewState = { readonly status: 'idle' } | { readonly status: 'loading' } | { readonly status: 'ready'; readonly data: Uint8Array; readonly language: LetterLanguage } | { readonly status: 'error'; readonly problem: string }
+
+/** B-W2b-113: the Answer tab's state (design cmp-ans). */
+export interface AnswerModel {
+  /** The letter as typed (null: as saved). */
+  readonly draft: AnswerDraft | null
+  readonly busy: boolean
+  readonly problem: string | null
+  /** A template picked while the person's own words stay (they choose whether to take the template's). */
+  readonly keptWords: boolean
+  /** The complaint's files that may go with it (null while read, or without files.read). */
+  readonly files: readonly ApiFile[] | null
+  /** The file being shared with the customer now. */
+  readonly sharing: string | null
+  readonly preview: PreviewState
+  /** The send review's check (null while read). */
+  readonly check: AnswerCheck | null
+  readonly checkProblem: string | null
+}
+
+export const IDLE_ANSWER: AnswerModel = { draft: null, busy: false, problem: null, keptWords: false, files: null, sharing: null, preview: { status: 'idle' }, check: null, checkProblem: null }
 
 /** B-W2b-17: what Link… offers for the type picked (read when the type is picked; null while not read or not readable). */
 export interface LinkOptions {
@@ -68,6 +94,10 @@ export interface ComplaintRecordModel {
   readonly linkOptions?: LinkOptions | null
   /** B-W2b-17: the NCRs raised FROM this complaint (they stay linked: their Unlink is held); null while not read. */
   readonly raisedFrom?: readonly string[] | null
+  /** B-W2b-113: the investigation in edit mode (null: shown as text). */
+  readonly investigation?: { readonly draft: InvestigationDraft; readonly busy: boolean; readonly problem: string | null } | null
+  /** B-W2b-113: the Answer tab. */
+  readonly answer?: AnswerModel
 }
 
 export interface ComplaintRecordActions extends TriageActions {
@@ -82,4 +112,20 @@ export interface ComplaintRecordActions extends TriageActions {
   onCopy?: (text: string) => void
   onDismissNotice?: () => void
   onDock?: () => void
+  // B-W2b-113: the investigation and the answer letter.
+  onInvestigationEdit?: (on: boolean) => void
+  onInvestigationDraft?: (patch: Partial<InvestigationDraft>) => void
+  onInvestigationSave?: () => void
+  onAnswerTemplate?: (template: AnswerTemplate | '') => void
+  onAnswerLanguage?: (language: LetterLanguage) => void
+  onAnswerUseTemplate?: () => void
+  onAnswerText?: (text: string) => void
+  onAnswerFile?: (fileId: string, on: boolean) => void
+  onAnswerShare?: (fileId: string) => void
+  onAnswerSave?: () => void
+  onAnswerDiscard?: () => void
+  onPreview?: () => void
+  onOpenFile?: (fileId: string) => void
+  onSend?: () => void
+  onSendDraft?: (patch: Partial<SendDraft>) => void
 }

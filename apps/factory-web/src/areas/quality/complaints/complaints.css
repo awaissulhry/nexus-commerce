@@ -203,3 +203,74 @@
   flex-direction: column;
   gap: var(--nds-space-4);
 }
+
+/*
+ * B-W2b-113: the Investigation tab (the words beside what it is linked to) and the Answer tab (the letter beside its
+ * preview): two columns from 1100 px, one below; the letter's head (template, language) side by side when it fits; the
+ * attachments as rows; Save and Discard at the letter's foot. Layout only.
+ */
+.fw-cmp-two,
+.fw-cmp-answer {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+.fw-cmp-answer {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+@media (max-width: 1100px) {
+  .fw-cmp-two,
+  .fw-cmp-answer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-cmp-answer-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--nds-space-12);
+  align-items: start;
+}
+
+@media (max-width: 560px) {
+  .fw-cmp-answer-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-cmp-answer-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-cmp-answer-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-cmp-answer-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-cmp-answer-save .grow {
+  flex: 1 1 auto;
+}
+
+.fw-cmp-problems {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}

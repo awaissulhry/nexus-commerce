@@ -35,6 +35,12 @@ export const NCR_PERMISSIONS = {
   filesUpload: 'files.upload',
   filesRead: 'files.read',
   threadsRead: 'threads.read',
+  // B-W2b-113: the cost grain (the Cost tab and column), the CAPA (Escalate to CAPA, B-W2b-108's routes), the customers a
+  // concession is asked of.
+  cost: 'money.cost',
+  capaView: 'quality.capa.view',
+  capaManage: 'quality.capa.manage',
+  partiesView: 'parties.view',
 } as const
 
 export type NcrAbility = keyof typeof NCR_PERMISSIONS
@@ -302,7 +308,8 @@ export const cardHeld = (card: Pick<NcrSummary, 'stage'>, moving: boolean): Say 
 
 // ---- the record -----------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['problem', 'containment', 'disposition', 'linked', 'activity'] as const
+/** B-W2b-113: Cost (design rec NCR › cost) after Disposition; absent without the cost grain. */
+export const RECORD_TABS = ['problem', 'containment', 'disposition', 'cost', 'linked', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 /** The band's actions: null = allowed, words = why not (our words for the API's `actions`). */

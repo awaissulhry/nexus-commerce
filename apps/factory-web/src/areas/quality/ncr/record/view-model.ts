@@ -4,6 +4,12 @@ import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import type { StepUpState } from '../../_shared/hooks'
 import type { LiveState } from '../../_shared/model'
 import type {
+  CauseChoice,
+  ConcessionAnswer,
+  ContactChoice,
+  CostKind,
+  CostSheet,
+  CustomerChoice,
   CarryOutBody,
   ClaimChoice,
   ContainmentKind,
@@ -29,6 +35,7 @@ import type {
 import { instantOf, localOf, type NcrCan, type RecordTab, type Say } from '../model'
 import type { NcrNotice } from '../parts'
 import type { CloseDialogModel } from '../view/CloseNcrDialog'
+import type { EscalateActions, EscalateModel } from '../view/EscalateDialog'
 
 /**
  * The NCR record's view model (SCR-145; `?tab=problem|containment|disposition|linked|activity`) and its pure rules: the
@@ -56,6 +63,8 @@ export type CellState = { state: 'saving' } | { state: 'saved' } | { state: 'fai
 
 /** The Problem tab's fields as typed (times in the site's zone, `datetime-local`). */
 export interface ProblemDraft {
+  /** B-W2b-113: the cause code ('' = none). */
+  readonly causeCodeId: string
   readonly title: string
   readonly description: string
   readonly quantityAffected: string
@@ -72,6 +81,7 @@ export interface ProblemDraft {
 
 export function draftOf(ncr: NcrRecord['ncr'], timeZone = TIME_ZONE): ProblemDraft {
   return {
+    causeCodeId: ncr.cause?.id ?? '',
     title: ncr.title,
     description: ncr.description ?? '',
     quantityAffected: plainQuantity(ncr.quantityAffected),
@@ -101,6 +111,7 @@ export const isQuantity = (value: string, positive = true): boolean => QUANTITY.
 export function changesOf(ncr: NcrRecord['ncr'], draft: ProblemDraft, timeZone = TIME_ZONE): NcrContent {
   const saved = draftOf(ncr, timeZone)
   const body: NcrContent = {}
+  if (draft.causeCodeId !== saved.causeCodeId) body.causeCodeId = draft.causeCodeId || null
   if (draft.title.trim() !== saved.title) body.title = draft.title.trim()
   if (draft.description.trim() !== saved.description.trim()) body.description = draft.description.trim() || null
   if (quantityValue(draft.quantityAffected) !== saved.quantityAffected) body.quantityAffected = quantityValue(draft.quantityAffected)
@@ -369,12 +380,14 @@ export type RecordDialog =
   | ({ kind: 'cancelAction'; actionId: string; reason: string } & DialogBase)
   | ({ kind: 'decide'; draft: DecideDraft } & DialogBase)
   | ({ kind: 'carryOut'; decisionId: string; draft: CarryDraft } & DialogBase)
-  | ({ kind: 'rework'; decisionId: string; operationId: string; description: string } & DialogBase)
+  | ({ kind: 'rework'; decisionId: string; operationId: string; description: string; /** B-W2b-113: garments still in work scrapped through the rework. */ scrapAll?: boolean } & DialogBase)
   | ({ kind: 'removeDecision'; decisionId: string } & DialogBase)
   | ({ kind: 'link'; query: string; hits: readonly SearchHit[] | null; searching: boolean; picked: SearchHit | null; note: string } & DialogBase)
   | ({ kind: 'closeHold'; holdId: string; note: string } & DialogBase)
   | ({ kind: 'cancelNcr'; reason: string } & DialogBase)
   | ({ kind: 'register'; description: string } & DialogBase)
+  | ({ kind: 'askConcession'; draft: ConcessionDraft } & DialogBase)
+  | ({ kind: 'answerConcession'; concessionId: string; draft: ConcessionAnswerDraft; fileName: string | null } & DialogBase)
 
 export type RecordDialogKind = RecordDialog['kind']
 
@@ -389,6 +402,10 @@ export interface RecordChoices {
   readonly operations: Choices<OperationChoice>
   readonly repairs: Choices<RepairChoice>
   readonly claims: Choices<ClaimChoice>
+  /** B-W2b-113: the cause list, the customers a concession is asked of and the contacts of the one picked. */
+  readonly causes: Choices<CauseChoice>
+  readonly customers: Choices<CustomerChoice>
+  readonly contacts: Choices<ContactChoice>
 }
 
 export const NO_CHOICES: RecordChoices = {
@@ -401,6 +418,9 @@ export const NO_CHOICES: RecordChoices = {
   operations: choicesReading(),
   repairs: choicesReading(),
   claims: choicesReading(),
+  causes: choicesReading(),
+  customers: choicesReading(),
+  contacts: choicesReading(),
 }
 
 export interface NcrRecordModel {
@@ -436,6 +456,12 @@ export interface NcrRecordModel {
   readonly keysOpen?: boolean
   /** The menu's "Copy number" just copied. */
   readonly copied?: boolean
+  /** B-W2b-113: the Cost tab (read when it opens, the cost grain only). */
+  readonly cost?: CostModel
+  /** B-W2b-113: Escalate to CAPA (the list's dialog, shared). */
+  readonly escalate?: EscalateModel | null
+  /** B-W2b-113: a report version being kept. */
+  readonly keepingReport?: boolean
 }
 
 export interface NcrRecordActions {
@@ -464,6 +490,15 @@ export interface NcrRecordActions {
   close?: { onNote?: (note: string) => void; onSubmit?: () => void; onCancel?: () => void }
   onStepUp?: (code: string) => void
   onStepUpCancel?: () => void
+  // B-W2b-113
+  cost?: CostActions
+  escalate?: EscalateActions
+  onEscalate?: () => void
+  onKeepReport?: () => void
+  onOpenFile?: (fileId: string) => void
+  onFindCustomers?: (query: string) => void
+  onPickCustomer?: (partyId: string) => void
+  onConcessionFile?: (file: File | null) => void
 }
 
 /** The tab's own address. */
@@ -473,3 +508,121 @@ export const tabHref = (prefix: string, ncrId: string, tab: RecordTab): string =
 export const holdStatusKey = (status: string): string => (['ACTIVE', 'RELEASED', 'CLOSED'].includes(status) ? `hold.status.${status}` : 'hold.status.other')
 
 export type { Say }
+
+// ---- B-W2b-113: the cost (QHS-086) -------------------------------------------------------------------------------------
+
+export type CostLoaded = { status: 'idle' } | { status: 'loading' } | { status: 'ready'; sheet: CostSheet } | { status: 'forbidden' } | { status: 'error'; problem: string }
+
+/** A typed line as written: its kind, words and amount in the currency's units ("12,50"). */
+export interface CostDraft {
+  readonly kind: CostKind
+  readonly description: string
+  readonly amount: string
+}
+export const NEW_COST: CostDraft = { kind: 'MATERIAL', description: '', amount: '' }
+
+export interface CostModel {
+  readonly loaded: CostLoaded
+  /** The new line being written (null: none). */
+  readonly adding: CostDraft | null
+  readonly busy: boolean
+  readonly computing: boolean
+  readonly cells: Readonly<Record<string, CellState>>
+}
+export const NO_COST: CostModel = { loaded: { status: 'idle' }, adding: null, busy: false, computing: false, cells: {} }
+
+export interface CostActions {
+  onRetry?: () => void
+  onAdd?: (draft: CostDraft | null) => void
+  onSaveNew?: () => void
+  onCell?: (lineId: string, change: { kind?: CostKind; description?: string | null; amount?: number }, cell: 'kind' | 'description' | 'amount') => void
+  onRemove?: (lineId: string) => void
+  onCompute?: () => void
+}
+
+const AMOUNT = /^\d{1,9}([.,]\d{1,2})?$/
+/** "12,50" → 1250 (minor units of a currency with two decimals); null when it is not an amount. */
+export function minorOf(text: string): number | null {
+  const value = text.trim().replace(/\s/g, '')
+  if (!AMOUNT.test(value)) return null
+  const [units, cents = ''] = value.replace(',', '.').split('.')
+  return Number(units) * 100 + Number(cents.padEnd(2, '0'))
+}
+/** 1250 → "12.50" (what the field shows to edit). */
+export const majorText = (minor: number): string => `${Math.floor(minor / 100)}.${String(minor % 100).padStart(2, '0')}`
+
+/** Why the new line cannot be saved yet (an `ncr-record` key), or null. */
+export function costDraftHeld(draft: CostDraft): string | null {
+  if (minorOf(draft.amount) === null) return 'cost.heldAmount'
+  if (draft.kind === 'OTHER' && !draft.description.trim()) return 'cost.heldOther'
+  if (draft.description.trim().length > 200) return 'cost.heldLong'
+  return null
+}
+
+/** Why the cost cannot change (an `ncr-record` say), or null: the right, then the NCR's stage. */
+export function costEditHeld(record: NcrRecord, can: Pick<NcrCan, 'manage'>): Say | null {
+  if (record.ncr.stage === 'CLOSED' || record.ncr.stage === 'CANCELLED') return { key: record.ncr.stage === 'CLOSED' ? 'cost.heldClosed' : 'cost.heldCancelled' }
+  return can.manage ? null : { key: 'held.noManage' }
+}
+
+// ---- B-W2b-113: concessions asked of the customer (QHS-085) ------------------------------------------------------------
+
+export interface ConcessionDraft {
+  readonly partyId: string
+  readonly partyQuery: string
+  readonly contactId: string
+  readonly ask: string
+  readonly proposal: string
+}
+export const NEW_CONCESSION: ConcessionDraft = { partyId: '', partyQuery: '', contactId: '', ask: '', proposal: '' }
+
+export interface ConcessionAnswerDraft {
+  readonly status: ConcessionAnswer
+  readonly answer: string
+  readonly answeredBy: string
+  /** When they answered, in the site's zone (`datetime-local`). */
+  readonly answeredAt: string
+}
+
+/** Why asking a concession is held (our words from the NCR's facts), or null. */
+export function askConcessionHeld(record: NcrRecord, can: Pick<NcrCan, 'manage' | 'partiesView'>): Say | null {
+  if (record.ncr.stage === 'CLOSED' || record.ncr.stage === 'CANCELLED') return { key: record.ncr.stage === 'CLOSED' ? 'concession.heldClosed' : 'concession.heldCancelled' }
+  if (record.ncr.severity === 'CRITICAL') return { key: 'concession.heldCritical' }
+  if (!can.manage) return { key: 'held.noManage' }
+  if (!can.partiesView) return { key: 'concession.heldNoParties' }
+  return null
+}
+
+/** Why the ask cannot be sent yet (an `ncr-record` key), or null. */
+export function askDraftHeld(draft: ConcessionDraft): string | null {
+  if (!draft.partyId) return 'concession.heldParty'
+  if (!draft.ask.trim()) return 'concession.heldAsk'
+  if (!draft.proposal.trim()) return 'concession.heldProposal'
+  if (draft.ask.trim().length > 1000 || draft.proposal.trim().length > 1000) return 'concession.heldLong'
+  return null
+}
+
+/** Why the answer cannot be recorded yet (an `ncr-record` key), or null. */
+export function answerDraftHeld(draft: ConcessionAnswerDraft, timeZone = TIME_ZONE): string | null {
+  if (!draft.answeredBy.trim()) return 'concession.heldAnsweredBy'
+  if (draft.status === 'REFUSED' && !draft.answer.trim()) return 'concession.heldWhy'
+  if (!instantOf(draft.answeredAt, timeZone)) return 'concession.heldWhen'
+  return null
+}
+
+/** Why recording an answer is held (our words), or null: an answer is recorded once, by who follows NCRs up. */
+export function answerConcessionHeld(status: string, can: Pick<NcrCan, 'manage'>): Say | null {
+  if (status !== 'ASKED') return { key: 'concession.heldAnswered' }
+  return can.manage ? null : { key: 'held.noManage' }
+}
+
+// ---- B-W2b-113: escalate and the report ------------------------------------------------------------------------------------
+
+/** Why Escalate to CAPA is held on the record (our words), or null. */
+export function escalateRecordHeld(record: NcrRecord, can: Pick<NcrCan, 'manage' | 'capaView'>): Say | null {
+  if (record.capaRecord) return { key: 'escalate.heldAlready', params: { number: record.capaRecord.number } }
+  if (record.capaElsewhere) return { key: 'escalate.heldElsewhere' }
+  if (record.ncr.stage === 'CANCELLED') return { key: 'escalate.heldCancelled' }
+  if (!can.manage || !can.capaView) return { key: 'escalate.heldNoRight' }
+  return null
+}
