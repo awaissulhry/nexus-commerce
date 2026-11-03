@@ -418,13 +418,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_EARNINGS_ADDS[key] ?? []) : []),
   // B-W2b-54
   ...(audience === 'office' ? (PEOPLE_PAYROLL_ADDS[key] ?? []) : []),
-<<<<<<< HEAD
   // B-W2b-94
   ...(audience === 'office' ? (HIDES_ADDS[key] ?? []) : []),
-=======
   // B-W2b-92
   ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
->>>>>>> origin/main
   // B-W2b-49
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? []),
   // B-W2b-93
