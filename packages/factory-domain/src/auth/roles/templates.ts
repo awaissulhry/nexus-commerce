@@ -526,6 +526,33 @@ const RISK_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze
   company_doctor: ['safety.risk.sign'],
 })
 /**
+ * B-W2b-125 (incidents, near misses and hazards; QHS-265, QHS-268, QHS-270; design plant.incidents): the production manager,
+ * the maintenance lead and the floor supervisor (the preposti) see the incidents anonymised and report from the office; the
+ * safety officer keeps them (severity, seen, actions, close) and, with HR, sees the people involved and keeps the INAIL
+ * filings (protected: each view recorded). The occupational doctor holds none (fitness judgements only). A tablet reports
+ * with floor.work: no floor template changes. Office only; owner from every(); read-only gets the view only (the people
+ * permission is a write risk on purpose).
+ */
+const INCIDENTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['safety.incidents.view', 'safety.incidents.report'],
+  maintenance: ['safety.incidents.view', 'safety.incidents.report'],
+  floor_supervisor: ['safety.incidents.view', 'safety.incidents.report'],
+  safety_officer: ['safety.incidents.view', 'safety.incidents.report', 'safety.incidents.manage', 'safety.incidents.people'],
+  hr: ['safety.incidents.view', 'safety.incidents.report', 'safety.incidents.people'],
+})
+/**
+ * B-W2b-138 (quality reports, QHS-147 "Quality KPIs, with reports per role"; design quality.reports SCR-147): quality, the
+ * production manager and the floor supervisor read the quality reports of their sites; the buyer reads them for incoming
+ * quality per supplier. Each figure also needs the view permission of its records, which each role already holds or not
+ * (reports per role). Office only; owner and read-only from every().
+ */
+const QUALITY_REPORTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.reports.view'],
+  production_manager: ['quality.reports.view'],
+  floor_supervisor: ['quality.reports.view'],
+  buyer: ['quality.reports.view'],
+})
+/**
  * B-W2b-128 (role risk sheets, QHS-236; design plant.risk "Role sheets"; Owner answer H2): the safety officer types the 6 to
  * 10 role sheets (risks, PPE kit, courses, whether the role needs health surveillance) and applies them. Which sheet a person
  * is in stays the HR record's (people.employees.manage). Office only; owner from every(); read_only gets none (no read added).
@@ -606,6 +633,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...((audience === 'office' ? REWORK_REPAIR_ADDS : REWORK_REPAIR_FLOOR_ADDS)[key] ?? []),
   // B-W2b-122
   ...(audience === 'office' ? (RISK_ADDS[key] ?? []) : []),
+  // B-W2b-125
+  ...(audience === 'office' ? (INCIDENTS_ADDS[key] ?? []) : []),
+  // B-W2b-138
+  ...(audience === 'office' ? (QUALITY_REPORTS_ADDS[key] ?? []) : []),
   // B-W2b-128
   ...(audience === 'office' ? (ROLESHEETS_ADDS[key] ?? []) : [])]
 /**
