@@ -263,6 +263,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Hand back dialog (board drop, the record's primary, `h`; `jobs/view/CloseForm.tsx` is the ONE close form, also the tab),
   the record's Unsafe lock panel with Sign safe (`requests/view/SignSafeDialog.tsx`, the ONE sign-safe dialog), the Photos
   tab (plant files routes, before / after), Line lead confirms. The containers sit inside `PlantMessages` (they speak too).
+  B-W2b-142 `preventive/` Preventive & statutory checks (SCR-266 `/plant/preventive?view=&month=&day=&due=&ended=&missing=&outcome=&plan=
+  &result=&new=1&record=1|<plan>&corrects=&move=&date=`, catalogue `plant-preventive`, CSS prefix `fw-pv-`; on B-W2b-124's API): tiles, the
+  calendar (the shared CalendarView with its optional `move` prop: a due check drags onto a day → Move a check) | List, Plans (`plant.preventive`,
+  Move N), the check register (`plant.preventive.register`, its export source, Print N / Export N), New plan, Record a check result (the job and
+  the lock in ONE call, then the report files), the Plan and result windows, Move a check; new tabs `register/` (SCR-266-register-print) and
+  `report/` (SCR-266-report: the PDF, Keep in the register, the DocumentSeal). `RECORD_PAGES.MachineCheckPlan|MachineCheckResult`.
 - The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
   write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
   and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):
