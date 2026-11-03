@@ -1,4 +1,4 @@
-import { FabricRollState, HideMarkKind, HideState, ItemKind, ItemSourcing, ItemTracking, LotQualityStatus, StockMoveReason, StockValuationMethod, Uom } from '../src/generated/prisma/enums'
+import { CrViEvidence, CrViStatus, FabricRollState, HideMarkKind, HideState, ItemKind, ItemSourcing, ItemTracking, LotQualityStatus, StockMoveReason, StockValuationMethod, Tannage, Uom } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedHolds } from './holds'
 import { seed as seedInspectionPlans } from './inspection-plans'
@@ -20,7 +20,8 @@ import { seed as seedQuality } from './quality'
  *               mark withdrawn.
  *   measures    SEED-HIDE-0001 and -0002 in SEED-IIN-0001 by the floor inspector, short of the tannery's area; SEED-HIDE-0002
  *               measured again in the office.
- *   remnants    an article of its own, SEED-LEA-110, so no stock of the jacket's leather moves: lot SEED-LOT-LEA-09 with hide
+ *   remnants    an article of its own, SEED-LEA-110 (a leather the product rules take: animal, tannage, grade, thickness, Cr VI
+ *               tested), so no stock of the jacket's leather moves: lot SEED-LOT-LEA-09 (its Cr VI PASS on the lot's report) with hide
  *               SEED-HIDE-0009, whose offcut of 14 ft² came back from WO-0001 (a REMNANT move, to the cutting rack, valued at the
  *               lot's cost as every move that changes the site's stock is: the month close counts an unvalued move): SEED-RM-0001
  *               (5 ft²) and SEED-RM-0002 (3 ft²).
@@ -207,8 +208,17 @@ export async function seed(context: SeedContext): Promise<LeatherSeed> {
             baseUom: Uom.FT2,
             purchaseUom: Uom.FT2,
             consumptionUom: Uom.FT2,
+            // Leather names its animal, tannage, grade and thickness range, and its lots need Cr VI evidence (the product rules,
+            // product/materials/rules.ts; REACH Annex XVII entry 47), as the jacket's leather does.
             animalSpecies: 'goat',
+            tannage: Tannage.CHROME,
+            grade: 'B',
+            finish: 'aniline',
+            thicknessMinMm: '0.80',
+            thicknessMaxMm: '1.00',
             animalOrigin: true,
+            requiresCrViTest: true,
+            crViLimitMgKg: '3.000',
             ...stamp(T.written),
           },
         ],
@@ -220,7 +230,14 @@ export async function seed(context: SeedContext): Promise<LeatherSeed> {
           siteId: siteA,
           itemId: offcut.itemId,
           code: 'SEED-LOT-LEA-09',
+          requiresCrViTest: true,
+          crViLimitMgKg: '3.000',
+          crViStatus: CrViStatus.PASS,
+          crViMgKg: '0.800',
+          crViEvidence: CrViEvidence.LOT_REPORT,
+          crViTestedAt: new Date('2026-11-17T00:00:00.000Z'),
           qualityStatus: LotQualityStatus.RELEASED,
+          qualityNote: 'Cr VI 0.8 mg/kg on the lab report of this lot, below the 3 mg/kg limit.',
           qualityDecidedAt: T.written,
           qualityDecidedById: actorId,
           ...stamp(T.written),
