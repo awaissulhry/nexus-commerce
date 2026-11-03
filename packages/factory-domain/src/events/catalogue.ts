@@ -55,6 +55,8 @@ import { events as andon } from '../andon/events'
 import { events as dispatch } from '../dispatch/events'
 // B-W2b-45: labour records and corrections (line days closed and reopened, disputes).
 import { events as labour } from '../labour/events'
+// B-W2b-92: inspection plans (a plan changed, a version approved).
+import { events as qualityPlans } from '../quality-plans/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -177,7 +179,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-45
   ...labour,
   // B-W2b-49
-  ...dispatch] as const satisfies readonly EventDefinition[]
+  ...dispatch,
+  // B-W2b-92
+  ...qualityPlans] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

@@ -343,6 +343,18 @@ const PEOPLE_EARNINGS_ADDS: Readonly<Record<string, readonly Permission[]>> = Ob
 const PEOPLE_PAYROLL_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   admin: ['people.payroll.view', 'people.payroll.records', 'people.payroll.manage'],
 })
+/**
+ * B-W2b-92 (inspection plans, QHS-008, QHS-009, QHS-016; design quality.plans): quality keeps the plans and approves another
+ * person's draft (never one it wrote); the production manager reads them and may be the second person who approves (a small
+ * factory has one quality person); the floor supervisor reads them and prints a checklist for a bench without a tablet.
+ * Office only (a bench reads the version its record runs on through GET /quality/plan-versions/:id). Owner and read-only
+ * from every().
+ */
+const QUALITY_PLANS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.plans.view', 'quality.plans.manage', 'quality.plans.approve'],
+  production_manager: ['quality.plans.view', 'quality.plans.approve'],
+  floor_supervisor: ['quality.plans.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -384,6 +396,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_EARNINGS_ADDS[key] ?? []) : []),
   // B-W2b-54
   ...(audience === 'office' ? (PEOPLE_PAYROLL_ADDS[key] ?? []) : []),
+  // B-W2b-92
+  ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
   // B-W2b-49
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? [])]
 /**
