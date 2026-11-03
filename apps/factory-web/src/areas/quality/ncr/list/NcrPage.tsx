@@ -6,6 +6,8 @@ import { isApiError, issuePath } from '../../../../lib/api/errors'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
+import { recordAddress } from '../../../../lib/records/record-links'
+import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { downloadText, useLive } from '../../_shared/hooks'
@@ -23,6 +25,7 @@ import {
   NCR_FROM_TYPES,
   newIdempotencyKey,
   raiseNcr,
+  reportHref,
   saveNcrSettings,
   uploadPhoto,
   type NcrCard,
@@ -37,7 +40,8 @@ import {
 import { useCloseFlow } from '../close'
 import { assignRefusals, checkSay, containmentDraftOf, containmentHoursOf, csvText, factsOfSummary, nameOf, ncrAddressOf, ncrAddressText, ncrCan, ncrQueryOf, quantityText, readProblem, refusalOf, type NcrAddress } from '../model'
 import { NCR_NAMESPACE, NcrMessages, sayWith, type NcrNotice } from '../parts'
-import { draftOf, EMPTY_DRAFT, type ListDialog, type NcrListModel } from './view-model'
+import { useEscalate } from '../escalate'
+import { costCsv, draftOf, EMPTY_DRAFT, type ListDialog, type NcrListModel } from './view-model'
 import { NcrListView } from './view/NcrListView'
 
 /**
@@ -329,12 +333,23 @@ function Container() {
     }
   }, [dialog, api, readContainmentTime])
 
+  // ---- B-W2b-113: Escalate to CAPA (the shared dialog: a row's verb, the selection, key e) ------------------------------------
+  const escalate = useEscalate(api, (capa, count) => {
+    setNotice({
+      say: { key: 'escalate.done', params: { count, capa: capa.number } },
+      tone: 'success',
+      link: { href: `${prefix}${recordAddress({ type: 'Capa', id: capa.id, label: capa.number }, OFFICE_PAGES)}`, label: { key: 'escalate.openCapa', params: { capa: capa.number } } },
+    })
+    void load()
+  })
+
   // ---- export -----------------------------------------------------------------------------------------------------------------
   const exportRows = useCallback(
     (ids: readonly string[]) => {
       const picked = (rows.items ?? []).filter((row) => ids.includes(row.id))
       const intl = INTL_LOCALE[lang]
-      const header = ['number', 'title', 'stage', 'severity', 'source', 'defect', 'style', 'size', 'lot', 'serial', 'supplier', 'affected', 'suspect', 'decided', 'unit', 'owner', 'due', 'found', 'site'].map((column) => t(`csv.${column}`))
+      // B-W2b-113: the CAPA's number; the cost only for a reader with the cost grain (the API sends it only then).
+      const header = ['number', 'title', 'stage', 'severity', 'source', 'defect', 'style', 'size', 'lot', 'serial', 'supplier', 'affected', 'suspect', 'decided', 'unit', 'owner', 'due', 'found', 'site', 'capa', ...(can.cost ? ['cost'] : [])].map((column) => t(`csv.${column}`))
       const lines = picked.map((row: NcrSummary) => [
         row.number,
         row.title,
@@ -355,10 +370,12 @@ function Container() {
         row.containmentDueAt ? formatDateTime(row.containmentDueAt, { locale: lang }) : '',
         formatDateTime(row.foundOn, { locale: lang }),
         sites?.find((site) => site.id === row.siteId)?.code ?? '',
+        row.capa?.number ?? '',
+        ...(can.cost ? [costCsv(row.cost)] : []),
       ])
       downloadText(`nonconformances-${new Date().toISOString().slice(0, 10)}.csv`, csvText(header, lines))
     },
-    [rows.items, t, lang, people, sites],
+    [rows.items, t, lang, people, sites, can.cost],
   )
 
   const model: NcrListModel = {
@@ -379,6 +396,7 @@ function Container() {
     dialog,
     close: close.dialog,
     stepUp: close.stepUp,
+    escalate: escalate.model,
   }
 
   return (
@@ -424,6 +442,9 @@ function Container() {
         close: close.actions,
         onStepUpSubmit: (code) => void close.submitStepUp(code),
         onStepUpCancel: close.cancelStepUp,
+        onEscalate: escalate.open,
+        escalate: escalate.actions,
+        onPrintNcr: (id) => window.open(reportHref(id), '_blank', 'noopener'),
       }}
     />
   )

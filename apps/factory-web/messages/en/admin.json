@@ -1178,6 +1178,18 @@
       "technician": {
         "name": "Maintenance technician",
         "description": "Works maintenance jobs on an enrolled floor device and signs a machine marked unsafe safe again with the PIN; sees no money."
+      },
+      "hr": {
+        "name": "HR",
+        "description": "The HR register and People: employees, teams, shifts, attendance and the month close, skills, earnings and the payroll file; the safety calendar and organisation; sees workers' pay, no prices or costs."
+      },
+      "safety_officer": {
+        "name": "Safety officer",
+        "description": "The safety officer (RSPP or ASPP): the safety organisation and the RLS notice, the safety calendar and its deadlines, the machines and their checks (read); sees no money."
+      },
+      "company_doctor": {
+        "name": "Occupational doctor",
+        "description": "The occupational doctor: the safety calendar and organisation; fitness judgements come with the health pages, never a diagnosis; sees no money."
       }
     },
     "bulk": {
@@ -1587,7 +1599,8 @@
     "security": "Security & health",
     "receivables": "Receivables and reminders",
     "payables": "Supplier invoices",
-    "people": "People"
+    "people": "People",
+    "safety": "Safety at work"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1846,6 +1859,7 @@
     "plant_jobs_work": "Work a maintenance job as its technician",
     "plant_signSafe": "Sign an unsafe machine safe again (technicians only)",
     "plant_settings_manage": "Keep a site's request routing and unsafe-lock settings",
+    "plant_checks_manage": "Keep the statutory machine checks: check types, plans and the check register",
     "quality_complaints_view": "See customer complaints",
     "quality_complaints_log": "Log a customer complaint",
     "quality_complaints_manage": "Triage, follow up and close customer complaints",
@@ -1856,6 +1870,10 @@
     "quality_incoming_record": "Inspect a lot hide by hide and sign the decision (never releases the lot)",
     "quality_capa_view": "See corrective actions (CAPA and 8D), their actions and the 8D report; record your own action done",
     "quality_capa_manage": "Open and follow up CAPAs and 8Ds (also from NCRs and complaints), keep the 8D report, close or cancel them",
+    "quality_amendments_request": "Ask for a correction of a signed inspection or check (a note, a value, a measurement, a defect's zone or cause) with the reason; it counts only with the second signature",
+    "quality_amendments_sign": "Sign or refuse a correction another person asked for (never your own); signing asks for a fresh code",
+    "quality_documents_make": "Keep a signed final inspection's report and a shipment's certificate of conformity as a PDF (no price, cost or pay)",
+    "quality_documents_share": "Put a kept report or certificate on a shipment's documents link and mail that link",
     "quality_rules_view": "See the quality rules: who may sign what, the alert and escalation rules, how results are counted",
     "quality_alerts_manage": "Keep the quality alert and escalation rules and send a test of a rule to yourself",
     "numbering_override": "Type a number for a migrated document (never a fiscal series; clashes refused, reason kept)",
@@ -1919,6 +1937,9 @@
     "people_earnings_review": "Review a person's statement as their lead: pieces and minutes, never money",
     "people_payroll_view": "See a month's payroll export as counts, never one person's figures",
     "people_payroll_records": "Open the values per employee code and the files of a payroll export",
-    "people_payroll_manage": "Keep the payroll codes and layouts, make payroll exports and send them by secure link"
+    "people_payroll_manage": "Keep the payroll codes and layouts, make payroll exports and send them by secure link",
+    "safety_view": "See the safety calendar (every legal deadline, health visits as counts) and the safety organisation with its letters and RLS notices",
+    "safety_organisation_manage": "Appoint people and outside contacts to safety roles, record the appointee's signature, end a term, record the RLS notice filed with INAIL",
+    "safety_calendar_manage": "Add, change, mark done and cancel the deadlines typed on the safety calendar, with their evidence"
   }
 }

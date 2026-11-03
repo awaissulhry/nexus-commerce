@@ -5,6 +5,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
+import type { HoldChangedField } from '@nexus/factory-domain/quality/holds/changes'
 import { QUALITY_HOLDS_PLACE, QUALITY_HOLDS_RELEASE, QUALITY_HOLDS_VIEW } from '@nexus/factory-domain/quality/holds/permissions'
 import {
   GARMENT_SUBJECTS,
@@ -75,12 +76,12 @@ const tenantOf = (tools: Pick<CommandTools, 'context'>): string => {
 }
 
 const sortedIds = (ids: readonly string[]): string[] => [...new Set(ids)].sort()
-const refuse = (problems: readonly Issue[], words: string): never => {
+export const refuse = (problems: readonly Issue[], words: string): never => {
   throw new ValidationError(problems.length === 1 ? problems[0]!.message : words, problems.map((problem) => ({ ...problem, path: problem.path.startsWith('body/') ? problem.path : `body/${problem.path}` })))
 }
 
 /** A hold the caller may see with the permission (another site's or company's: not found). */
-async function visibleHold(caller: CommandCaller, holdId: string, permission: typeof QUALITY_HOLDS_VIEW | typeof QUALITY_HOLDS_PLACE | typeof QUALITY_HOLDS_RELEASE): Promise<HoldRow> {
+export async function visibleHold(caller: CommandCaller, holdId: string, permission: typeof QUALITY_HOLDS_VIEW | typeof QUALITY_HOLDS_PLACE | typeof QUALITY_HOLDS_RELEASE): Promise<HoldRow> {
   const context = officeOf(caller)
   const row = await caller.withClient((client) => readHold(client, holdId))
   if (!row || !can(actorOf(context), QUALITY_HOLDS_VIEW, { companyId: row.companyId, siteId: row.siteId })) throw new NotFoundError('Hold not found.')
@@ -88,7 +89,7 @@ async function visibleHold(caller: CommandCaller, holdId: string, permission: ty
   return row
 }
 
-async function detailOf(db: Reader, row: HoldRow, now: Date) {
+export async function detailOf(db: Reader, row: HoldRow, now: Date) {
   const facts = await viewFactsOf(db, [row], now)
   return holdView(row, facts)
 }
@@ -203,6 +204,8 @@ export interface PlaceHoldInput {
    * floor's own command, quality/final/bench-hold.ts). Absent: the hold takes its number from the company's HOLD series here.
    */
   readonly numbered?: { readonly id: string; readonly number: string } | undefined
+  /** B-W2b-114 (QHS-075): the hold by genealogy it is part of (the group's row exists first, of the same company). */
+  readonly groupId?: string | null | undefined
 }
 
 export interface PlacedHold {
@@ -218,6 +221,8 @@ const SOURCE_SITES: Partial<Record<HoldSourceType, (tx: Reader, id: string) => P
   Certificate: async (tx, id) => ((await tx.certificate.findUnique({ where: { id }, select: { id: true } })) ? { siteId: null } : null),
   QualityReleaseReversal: async (tx, id) => ((await tx.qualityReleaseReversal.findUnique({ where: { id }, select: { id: true } })) ? { siteId: null } : null),
   Complaint: async (tx, id) => ((await tx.complaint.findUnique({ where: { id }, select: { id: true } })) ? { siteId: null } : null),
+  // B-W2b-114: the incoming inspection that rejected or set aside the hides (B-W2b-98's hold prefill), of the hold's site.
+  IncomingInspection: (tx, id) => tx.incomingInspection.findUnique({ where: { id }, select: { siteId: true } }),
 }
 
 /**
@@ -300,6 +305,7 @@ export async function placeHoldInCommand(tools: CommandTools, input: PlaceHoldIn
       quarantine: quarantineLocationId ? 'ASKED' : 'NOT_NEEDED',
       quarantineLocationId,
       note: input.note?.trim() || null,
+      ...(input.groupId ? { groupId: input.groupId } : {}),
       createdAt: now,
       updatedAt: now,
       createdById: placedById,
@@ -312,7 +318,7 @@ export async function placeHoldInCommand(tools: CommandTools, input: PlaceHoldIn
     recordId: hold.id,
     companyId,
     siteId,
-    after: { number, subjectType: hold.subjectType, subjectIds: hold.subjectIds, reasonCode: hold.reasonCode, reasonNote, sourceType: hold.sourceType, sourceId: hold.sourceId, ownerId: hold.ownerId, expectedReleaseOn: input.expectedReleaseOn ?? null, quarantine: hold.quarantine, quarantineLocationId, workOrdersHeld: workOrdersHeld.map((entry) => entry.id) },
+    after: { number, subjectType: hold.subjectType, subjectIds: hold.subjectIds, reasonCode: hold.reasonCode, reasonNote, sourceType: hold.sourceType, sourceId: hold.sourceId, ownerId: hold.ownerId, expectedReleaseOn: input.expectedReleaseOn ?? null, quarantine: hold.quarantine, quarantineLocationId, workOrdersHeld: workOrdersHeld.map((entry) => entry.id), ...(hold.groupId ? { groupId: hold.groupId } : {}) },
     ...(reasonNote ? { reason: reasonNote } : {}),
   })
   tools.emit({
@@ -349,12 +355,18 @@ export async function placeHold(caller: CommandCaller, body: PlaceHoldInput, ide
  * command()'s record guard by hand on a hold: its row locked, ACTIVE (a released or closed hold never changes: the
  * guard would refuse the version bump itself), at the version the caller read.
  */
-async function lockActiveHold(tools: CommandTools, holdId: string, expectedVersion: number): Promise<HoldRow> {
+export async function lockActiveHold(tools: CommandTools, holdId: string, expectedVersion: number): Promise<HoldRow> {
   const [locked] = await tools.tx.$queryRaw<{ version: number; status: string }[]>`SELECT "version", "status"::text AS "status" FROM "QualityHold" WHERE "id" = ${holdId}::uuid FOR UPDATE`
   if (!locked) throw new NotFoundError('Hold not found.')
   if (locked.status !== 'ACTIVE') throw new InvalidStateError(`This hold is ${locked.status.toLowerCase()}: a released or closed hold never changes.`)
   if (locked.version !== expectedVersion) throw new StaleVersionError('QualityHold', holdId, locked.version, expectedVersion)
   return (await readHold(tools.tx, holdId))!
+}
+
+/** `quality.hold_changed` with the fields that changed (none: no event). B-W2b-114's board and quarantine moves use it too. */
+export function emitHoldChanged(tools: Pick<CommandTools, 'emit'>, hold: Pick<HoldRow, 'id' | 'companyId' | 'siteId'>, fields: readonly HoldChangedField[]): void {
+  if (fields.length === 0) return
+  tools.emit({ type: 'quality.hold_changed', subject: hold.id, companyId: hold.companyId, siteId: hold.siteId, payload: { holdId: hold.id, fields: [...new Set(fields)] } })
 }
 
 // ---- change ---------------------------------------------------------------------------------------------------------
@@ -393,7 +405,7 @@ export async function editHold(caller: CommandCaller, holdId: string, body: Edit
     const after = await tx.qualityHold.update({ where: { id: current.id }, data, select: HOLD_COLUMNS })
     const pick = (hold: HoldRow) => Object.fromEntries(fields.map((field) => [field, field === 'expectedReleaseOn' ? (hold.expectedReleaseOn?.toISOString().slice(0, 10) ?? null) : hold[field]]))
     tools.audit({ recordType: 'QualityHold', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: pick(current), after: pick(after) })
-    if (fields.length > 0) tools.emit({ type: 'quality.hold_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { holdId: current.id, fields } })
+    emitHoldChanged(tools, current, fields)
     return { hold: await detailOf(tx, after, now) }
   })
   return result

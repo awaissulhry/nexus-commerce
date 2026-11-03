@@ -6,33 +6,43 @@ import type { GradingChange } from '@nexus/factory-domain/inventory/hides/change
 import { gradingRefusal } from '@nexus/factory-domain/inventory/hides/grading'
 import { QUALITY_INCOMING_RECORD } from '@nexus/factory-domain/quality/incoming/permissions'
 import { cancelReasonProblem, decisionProblems, decisionShape, isOverride, nextStepOf, type DecisionDraft, type DecisionFacts } from '@nexus/factory-domain/quality/incoming/rules'
+import { isRollLot, receiptDecision, rollDecisionProblems, type ReceiptLineFact } from '@nexus/factory-domain/quality/incoming/units'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
+import { asTenantSystem } from '../../production/bundles/codes'
 import { assertFloorReady } from '../../production/serials/facts'
+import { releaseReceiptInCommand, type ReceiptRow } from '../../purchasing/subcontracting/inspection'
 import { postedBy, signerOf, type Inspector } from '../final/access'
-import { sampleFactsOf, type SampleFacts } from './facts'
-import { incomingView } from './views'
-import { assertOpen, assertOwn, incomingFor, lockIncoming, readIncoming, takeOver, type IncomingRow, type LotRow, type Reader } from './store'
+import { readComponents, readRolls, sampleFactsOf, type ComponentRow, type RollRow, type SampleFacts } from './facts'
+import { viewOf } from './views'
+import { assertOpen, assertOwn, incomingFor, lockIncoming, takeOver, type IncomingRow, type LotRow, type Reader, type Subject } from './store'
 
 /**
  * The decision of an incoming inspection (B-W2b-98; QHS-034 "Partial acceptance and split"; design floor.incoming
  * "Decision: three QuantityPads: accepted, rejected, to sort (they must add up). Summary; the inspector's PinPad with the
  * meaning in words"), and its cancellation.
  *
- *   decide   { version, accepted, rejected, toSort, overrideReason?, note? }: a signing act (the office's fresh code, the
- *            floor's PIN), asked after every other check. ONE command at the inspection's version: the rules again
- *            (factory-domain quality/incoming decisionProblems: adding up to the lot, never fewer than the sample's
- *            decisions, units outside the sample accepted only on a whole sample, every hide decided, the whole lot never
- *            accepted over a critical defect, a failed critical check or a missing mandatory check, the reason exactly
- *            when the whole lot goes against the computed result); every hide of the sample then takes the grade and
- *            shade group it was given here, as records (the text with them), and its marks become HideMark rows naming
- *            the inspection (MES-054: they stay with the hide, for the cutting table and a claim); the decision with its
- *            SHA-256, which the database checks and completes with the computed result.
+ *   decide   { version, accepted, rejected, toSort, overrideReason?, note?, rejectedLines? }: a signing act (the office's
+ *            fresh code, the floor's PIN), asked after every other check. ONE command at the inspection's version: the
+ *            rules again (factory-domain quality/incoming decisionProblems: adding up to the lot, never fewer than the
+ *            sample's decisions, units outside the sample accepted only on a whole sample, every hide decided, the whole
+ *            lot never accepted over a critical defect, a failed critical check or a missing mandatory check, the reason
+ *            exactly when the whole lot goes against the computed result); every hide of the sample then takes the grade
+ *            and shade group it was given here, as records (the text with them), and its marks become HideMark rows
+ *            naming the inspection (MES-054: they stay with the hide, for the cutting table and a claim); the decision
+ *            with its SHA-256, which the database checks and completes with the computed result.
  *   cancel   { version, reason }: an OPEN inspection abandoned, with why.
  *
  * The lot does not move: a person with the quality role releases or rejects it by typing its code, never its receiver
  * (Owner answer W3; modules/quality/lab). The record then says so in words, with what to do with the rejected hides (hold
  * them, return them to the tannery: purchasing's claim, sent by a person).
+ *
+ * B-W2b-111: every roll and component decided first (the database's rule, said in words before the PIN); a lot counted in
+ * a length is bound by its rolls (factory-domain units rollDecisionProblems); goods back from a workshop are decided bundle
+ * by bundle (`rejectedLines`; the quantities follow, nothing to sort) and the decision releases them in the same command
+ * (purchasing/subcontracting inspection.ts: the bundles kept reported at their operation, the rejected ones' pieces moved to
+ * defective, the fee posted); a cancellation lets them go on as received. On a tablet that command runs as the tenant's
+ * system caller (the floor has no grant on the subcontract tables), naming the signed-in worker as before.
  */
 
 const invalid = (problems: readonly Issue[], words: string) =>
@@ -46,12 +56,21 @@ const codesOf = async (db: Reader, facts: SampleFacts): Promise<Map<string, stri
   return new Map((ids.length ? await db.hide.findMany({ where: { id: { in: ids } }, select: { id: true, code: true } }) : []).map((hide) => [hide.id, hide.code]))
 }
 
-async function decisionFactsOf(db: Reader, row: IncomingRow): Promise<{ facts: SampleFacts; decision: DecisionFacts }> {
-  const byHide = row.uom === 'HIDE'
+interface Facts {
+  readonly facts: SampleFacts
+  readonly decision: DecisionFacts
+  readonly rolls: readonly RollRow[]
+  readonly components: readonly ComponentRow[]
+}
+
+async function decisionFactsOf(db: Reader, row: IncomingRow, subject: Subject): Promise<Facts> {
+  const byHide = row.uom === 'HIDE' && subject.lot !== null
   const facts = await sampleFactsOf(db, row, byHide)
   const codes = await codesOf(db, facts)
   return {
     facts,
+    rolls: await readRolls(db, row.id),
+    components: await readComponents(db, row.id),
     decision: {
       lotSize: row.lotSize.toString(),
       whole: byHide || row.uom === 'PCS' || row.uom === 'PAIR',
@@ -65,8 +84,30 @@ async function decisionFactsOf(db: Reader, row: IncomingRow): Promise<{ facts: S
   }
 }
 
+const linesOf = (receipt: ReceiptRow): ReceiptLineFact[] =>
+  receipt.lines.filter((line) => line.good + line.defective > 0).map((line) => ({ id: line.id, seq: line.seq, bundleCode: line.bundleCode, operationCode: line.operationCode, good: line.good, defective: line.defective, scrapped: line.scrapped }))
+
+/** Every problem of the decision: B-W2b-98's rules, then the rolls', components' and a workshop's (B-W2b-111). */
+function problemsOf(body: DecideBody, row: IncomingRow, subject: Subject, facts: Facts): { problems: Issue[]; rejected: ReadonlySet<string> } {
+  const problems = decisionProblems(body, facts.decision)
+  const rollsOpen = facts.rolls.filter((roll) => roll.decision === null).map((roll) => roll.rollRef)
+  if (rollsOpen.length > 0) problems.push({ path: 'rolls', message: `Decide every roll first: ${rollsOpen.join(', ')} ${rollsOpen.length === 1 ? 'has' : 'have'} no decision.` })
+  const componentsOpen = facts.components.filter((component) => component.decision === null).map((component) => String(component.seq))
+  if (componentsOpen.length > 0) problems.push({ path: 'components', message: `Decide every component check first: line ${componentsOpen.join(', ')} ${componentsOpen.length === 1 ? 'has' : 'have'} no decision.` })
+  if (subject.lot && isRollLot(row.uom)) problems.push(...rollDecisionProblems(body, { lotSize: row.lotSize.toString(), uom: row.uom, sampleSize: row.sampleSize, rolls: facts.rolls.map((roll) => ({ lengthM: roll.lengthM.toFixed(2), decision: (roll.decision as 'ACCEPTED' | 'REJECTED' | 'TO_SORT' | null) ?? null })) }))
+  let rejected: ReadonlySet<string> = new Set()
+  if (subject.receipt) {
+    const split = receiptDecision(body, linesOf(subject.receipt))
+    problems.push(...split.problems)
+    rejected = split.rejected
+  } else if (body.rejectedLines !== undefined) problems.push({ path: 'rejectedLines', message: 'Only goods back from a workshop are decided by their receipt lines.' })
+  return { problems, rejected }
+}
+
 export interface DecideBody extends DecisionDraft {
   readonly version: number
+  /** B-W2b-111: goods back from a workshop: the receipt lines (bundles) rejected. */
+  readonly rejectedLines?: readonly string[] | undefined
 }
 
 /** The hides of the sample take what the inspection gave them; their marks are written to them (HideMark). */
@@ -138,36 +179,48 @@ async function writeToHides(tools: CommandTools, context: Inspector, row: Incomi
   return marked
 }
 
+/** The caller a workshop receipt's commands run as: a tablet acts as the tenant's system caller (no grant on the subcontract tables). */
+const actingAs = (caller: CommandCaller, context: Inspector, subject: Subject): CommandCaller => (context.audience === 'floor' && subject.receipt ? asTenantSystem(caller, context) : caller)
+
 /** POST /quality/incoming/:inspectionId/decide */
 export async function decideIncoming(caller: CommandCaller, inspectionId: string, body: DecideBody, options: { readonly sign: () => void | Promise<void>; readonly idempotencyKey?: string | undefined }) {
-  const { row: seen, lot, context } = await incomingFor(caller, inspectionId, QUALITY_INCOMING_RECORD)
+  const { row: seen, lot, receipt, context } = await incomingFor(caller, inspectionId, QUALITY_INCOMING_RECORD)
+  const subject: Subject = { lot, receipt }
   assertOwn(context, seen)
   assertOpen(seen)
   if (context.audience === 'floor') await assertFloorReady(caller, seen.siteId)
   // Answered in the command too; said first so a stale screen is not asked for a PIN.
   if (seen.version !== body.version) throw new StaleVersionError('IncomingInspection', seen.id, seen.version, body.version)
-  const first = await caller.withClient((db) => decisionFactsOf(db, seen))
-  const problems = decisionProblems(body, first.decision)
-  if (problems.length > 0) throw invalid(problems, 'The decision cannot be signed.')
+  const first = await caller.withClient((db) => decisionFactsOf(db, seen, subject))
+  const asked = problemsOf(body, seen, subject, first)
+  if (asked.problems.length > 0) throw invalid(asked.problems, 'The decision cannot be signed.')
   await options.sign()
-  const { result } = await command(caller, { name: 'quality.incoming.decide', idempotencyKey: options.idempotencyKey, input: { inspectionId, ...body } }, async (tools) => {
+  const signer = signerOf(context)
+  const { result } = await command(actingAs(caller, context, subject), { name: 'quality.incoming.decide', idempotencyKey: options.idempotencyKey, input: { inspectionId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const row = await lockIncoming(tx, seen.id, body.version)
-    const { facts, decision } = await decisionFactsOf(tx, row)
-    const again = decisionProblems(body, decision)
-    if (again.length > 0) throw new ConflictError(`The inspection changed while you signed: ${again.map((problem) => problem.message).join(' ')}`)
-    const shape = decisionShape(body, decision.lotSize)
-    const overrideReason = isOverride(shape, facts.computed) ? body.overrideReason!.trim() : null
+    const facts = await decisionFactsOf(tx, row, subject)
+    const again = problemsOf(body, row, subject, facts)
+    if (again.problems.length > 0) throw new ConflictError(`The inspection changed while you signed: ${again.problems.map((problem) => problem.message).join(' ')}`)
+    const shape = decisionShape(body, facts.decision.lotSize)
+    const overrideReason = isOverride(shape, facts.facts.computed) ? body.overrideReason!.trim() : null
     const quantities = { accepted: new Dec(body.accepted.trim()).toFixed(4), rejected: new Dec(body.rejected.trim()).toFixed(4), toSort: new Dec(body.toSort.trim()).toFixed(4) }
-    const marked = await writeToHides(tools, context, row, lot, facts)
-    const signer = signerOf(context)
+    const marked = lot ? await writeToHides(tools, context, row, lot, facts.facts) : 0
     const signature = signatureOf({
       incomingInspectionId: row.id,
       number: row.number,
-      lotId: lot.id,
+      lotId: row.lotId,
+      subcontractReceiptId: row.subcontractReceiptId,
       planVersionId: row.planVersionId,
-      sample: { size: row.sampleSize, found: facts.found, hides: facts.results.map((entry) => ({ hideId: entry.hideId, decision: entry.decision, grade: entry.grade, shade: entry.shadeGroup, measuredArea: entry.measuredArea.toFixed(4), areaUom: entry.areaUom })) },
-      computed: facts.computed.result,
+      sample: {
+        size: row.sampleSize,
+        found: facts.facts.found,
+        hides: facts.facts.results.map((entry) => ({ hideId: entry.hideId, decision: entry.decision, grade: entry.grade, shade: entry.shadeGroup, measuredArea: entry.measuredArea.toFixed(4), areaUom: entry.areaUom })),
+        rolls: facts.rolls.map((roll) => ({ rollRef: roll.rollRef, points: [roll.onePoint, roll.twoPoint, roll.threePoint, roll.fourPoint], widthCm: roll.widthCm.toFixed(2), lengthM: roll.lengthM.toFixed(2), pointsPer100SqYd: roll.pointsPer100SqYd.toFixed(2), decision: roll.decision })),
+        components: facts.components.map((component) => ({ seq: component.seq, kind: component.kind, marking: component.marking, protectorType: component.protectorType, certificateId: component.certificateId, checked: component.checkedQuantity, defective: component.defectiveQuantity, decision: component.decision })),
+      },
+      ...(receipt ? { rejectedLines: [...again.rejected].sort() } : {}),
+      computed: facts.facts.computed.result,
       ...quantities,
       overrideReason,
       signer,
@@ -177,9 +230,9 @@ export async function decideIncoming(caller: CommandCaller, inspectionId: string
       where: { id: row.id },
       data: {
         status: 'DECIDED',
-        foundCritical: facts.found.critical,
-        foundMajor: facts.found.major,
-        foundMinor: facts.found.minor,
+        foundCritical: facts.facts.found.critical,
+        foundMajor: facts.facts.found.major,
+        foundMinor: facts.facts.found.minor,
         acceptedQuantity: quantities.accepted,
         rejectedQuantity: quantities.rejected,
         toSortQuantity: quantities.toSort,
@@ -193,15 +246,30 @@ export async function decideIncoming(caller: CommandCaller, inspectionId: string
       },
       select: { computedResult: true },
     })
-    if (decided.computedResult !== facts.computed.result) throw new ConflictError('The computed result differs from the rules: reload the inspection.')
+    if (decided.computedResult !== facts.facts.computed.result) throw new ConflictError('The computed result differs from the rules: reload the inspection.')
     const next = nextStepOf(quantities, row.lotSize.toString())
+    // B-W2b-111 hook (purchasing/subcontracting inspection.ts): goods back from a workshop released bundle by bundle.
+    const released = receipt && row.subcontractReceiptId ? await releaseReceiptInCommand(tools, { id: row.id, number: row.number, subcontractReceiptId: row.subcontractReceiptId }, again.rejected) : null
     tools.audit({
       recordType: 'IncomingInspection',
       recordId: row.id,
       companyId: row.companyId,
       siteId: row.siteId,
       before: { status: 'OPEN' },
-      after: { status: 'DECIDED', computedResult: facts.computed.result, reasons: facts.computed.reasons, found: facts.found, ...quantities, overrideReason, next, marksWritten: marked, signatureSha256: signature, signedBy: postedBy(context) },
+      after: {
+        status: 'DECIDED',
+        computedResult: facts.facts.computed.result,
+        reasons: facts.facts.computed.reasons,
+        found: facts.facts.found,
+        ...quantities,
+        overrideReason,
+        next,
+        marksWritten: marked,
+        ...(released ? { rejectedLines: [...again.rejected], reported: released.reports.filter((report) => report.scanId !== null).map((report) => report.receiptLineId) } : {}),
+        signatureSha256: signature,
+        signedBy: postedBy(context),
+        ...(context.audience === 'floor' && receipt ? { floor: { deviceId: context.deviceId, workerId: context.actorId } } : {}),
+      },
       ...(overrideReason ? { reason: overrideReason } : {}),
     })
     tools.emit({
@@ -209,27 +277,30 @@ export async function decideIncoming(caller: CommandCaller, inspectionId: string
       subject: row.id,
       companyId: row.companyId,
       siteId: row.siteId,
-      payload: { incomingInspectionId: row.id, number: row.number, lotId: lot.id, computedResult: facts.computed.result, ...quantities, uom: row.uom, overridden: overrideReason !== null, next, postedBy: postedBy(context) },
+      payload: { incomingInspectionId: row.id, number: row.number, lotId: row.lotId, subcontractReceiptId: row.subcontractReceiptId, computedResult: facts.facts.computed.result, ...quantities, uom: row.uom, overridden: overrideReason !== null, next, postedBy: postedBy(context) },
     })
     return { id: row.id }
   })
-  return caller.withClient(async (db) => incomingView(db, (await readIncoming(db, result.id))!, lot, context))
+  return viewOf(caller, result.id, subject, context)
 }
 
 /** POST /quality/incoming/:inspectionId/cancel */
 export async function cancelIncoming(caller: CommandCaller, inspectionId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey: string | undefined) {
-  const { row: seen, lot, context } = await incomingFor(caller, inspectionId, QUALITY_INCOMING_RECORD)
+  const { row: seen, lot, receipt, context } = await incomingFor(caller, inspectionId, QUALITY_INCOMING_RECORD)
+  const subject: Subject = { lot, receipt }
   assertOwn(context, seen)
   assertOpen(seen)
   const problem = cancelReasonProblem(body.reason)
   if (problem) throw invalid([problem], 'Say why the inspection is cancelled.')
   const reason = body.reason.trim()
-  const { result } = await command(caller, { name: 'quality.incoming.cancel', idempotencyKey, input: { inspectionId, ...body } }, async (tools) => {
+  const { result } = await command(actingAs(caller, context, subject), { name: 'quality.incoming.cancel', idempotencyKey, input: { inspectionId, ...body } }, async (tools) => {
     const row = await lockIncoming(tools.tx, seen.id, body.version)
     await tools.tx.incomingInspection.update({ where: { id: row.id }, data: { status: 'CANCELLED', cancelledAt: tools.now, cancelReason: reason, ...takeOver(context, row), version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
+    // B-W2b-111 hook: goods back from a workshop go on as received.
+    if (receipt && row.subcontractReceiptId) await releaseReceiptInCommand(tools, { id: row.id, number: row.number, subcontractReceiptId: row.subcontractReceiptId }, null)
     tools.audit({ recordType: 'IncomingInspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { status: 'OPEN' }, after: { status: 'CANCELLED' }, reason })
-    tools.emit({ type: 'incoming_inspection.cancelled', subject: row.id, companyId: row.companyId, siteId: row.siteId, payload: { incomingInspectionId: row.id, number: row.number, lotId: lot.id, postedBy: postedBy(context) } })
+    tools.emit({ type: 'incoming_inspection.cancelled', subject: row.id, companyId: row.companyId, siteId: row.siteId, payload: { incomingInspectionId: row.id, number: row.number, lotId: row.lotId, subcontractReceiptId: row.subcontractReceiptId, postedBy: postedBy(context) } })
     return { id: row.id }
   })
-  return caller.withClient(async (db) => incomingView(db, (await readIncoming(db, result.id))!, lot, context))
+  return viewOf(caller, result.id, subject, context)
 }

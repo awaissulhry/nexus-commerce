@@ -101,3 +101,36 @@
     margin: 0;
   }
 }
+
+/* B-W2b-113 Escalate to CAPA (pop:ncr-capa): one line per NCR — its number, the rule that suggests it, why it cannot go. */
+.fw-ncr-escalate-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-ncr-escalate-rows > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding-block-end: var(--nds-space-8);
+  border-block-end: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.fw-ncr-escalate-rows > li.is-held .fw-q-code {
+  color: var(--nds-text-muted);
+}
+
+.fw-ncr-escalate-why {
+  overflow-wrap: anywhere;
+}
+
+/* The Cost column's amount (cost grain): right aligned, digits of one width. */
+.fw-ncr-cost {
+  display: block;
+  text-align: end;
+}

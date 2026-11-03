@@ -1,7 +1,8 @@
 import type { Issue } from '../../core/errors'
 import type { Permission } from '../../core/permissions'
 import { Dec, ZERO, type Decimal } from '../../tax/decimal'
-import { isGarmentZone, useAsIsProblem, type DefectClass, type DispositionFollowUp, type DispositionMove, type DispositionOutcome, type QualityStage } from '../defects/rules'
+import { isGarmentZone, type DefectClass, type DispositionFollowUp, type DispositionMove, type DispositionOutcome, type QualityStage } from '../defects/rules'
+import { acceptedDecisionProblem } from '../defects/severity'
 
 /**
  * Nonconformances (B-W2a-47; QHS-080 raised from anywhere, QHS-081 content, QHS-082 containment actions, QHS-083
@@ -334,14 +335,18 @@ export type DecisionState = (typeof DECISION_STATES)[number]
 export const decisionState = (decision: { readonly approvalRequired: boolean; readonly approved: boolean; readonly done: boolean }): DecisionState =>
   decision.done ? 'DONE' : decision.approvalRequired && !decision.approved ? 'WAITING_APPROVAL' : 'TO_CARRY_OUT'
 
-/** A new or changed decision: above 0, never more than is left to decide, never "use as is" on a major or critical NCR. */
+/**
+ * A new or changed decision: above 0, never more than is left to decide, never "use as is" on a major or critical NCR,
+ * and (B-W2b-113, B-W2b-90's safety rule) never a regrade to second quality on a critical one: a critical defect is never
+ * accepted (factory-domain quality/defects/severity acceptedDecisionProblem).
+ */
 export function decisionProblems(input: { readonly quantity: string; readonly left: Decimal; readonly uom: string; readonly outcome: DispositionOutcome; readonly severity: DefectClass; readonly note?: string | null | undefined }): Issue[] {
   const problems: Issue[] = []
   const quantity = quantityProblem(input.quantity, 'quantity', true)
   if (quantity) problems.push(quantity)
   else if (new Dec(input.quantity).gt(input.left)) problems.push({ path: 'quantity', message: input.left.lte(0) ? 'The whole quantity is decided already: change or remove a decision first.' : `Only ${text(input.left)} ${input.uom} ${input.left.eq(1) ? 'is' : 'are'} left to decide.` })
-  const asIs = useAsIsProblem(input.outcome, input.severity)
-  if (asIs) problems.push({ path: 'dispositionCodeId', message: asIs })
+  const accepted = acceptedDecisionProblem(input.outcome, input.severity)
+  if (accepted) problems.push({ path: 'dispositionCodeId', message: accepted })
   if ((input.note ?? '').length > NCR_LIMITS.note) problems.push({ path: 'note', message: `At most ${NCR_LIMITS.note} characters.` })
   return problems
 }

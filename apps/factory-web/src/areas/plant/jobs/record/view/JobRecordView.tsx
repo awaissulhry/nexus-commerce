@@ -1,19 +1,26 @@
 'use client'
 
-import { type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Ban, CalendarCheck, CheckCheck, ExternalLink, MoreHorizontal, Pause, Pencil, Play, RotateCcw, Undo2, X } from 'lucide-react'
+import { AlertTriangle, Ban, CalendarCheck, CheckCheck, CircleCheck, ExternalLink, MoreHorizontal, Pause, Pencil, Play, RotateCcw, Undo2, X } from 'lucide-react'
 import { Banner, Card, Field, KeyValue, Menu, type TabItem } from '@nexus/ui/components'
-import { Button, RadioCard, Select, Spinner, Tag, Input } from '@nexus/ui/primitives'
+import { Lightbox } from '@nexus/ui/patterns'
+import { Button, Select, Spinner, Tag, Input } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { RecordPanelsView, type RecordPanelsViewModel } from '../../../../../record-panels/view/RecordPanelsView'
-import { JOB_TYPES, MACHINE_AFTER, PRIORITIES, type JobMove, type JobRecord } from '../../../_shared/api'
+import { JOB_TYPES, PRIORITIES, type JobMove } from '../../../_shared/api'
 import { AssigneeField } from '../../../_shared/AssigneeField'
 import { ageWords, assigneeWords, dueWords, labelOf, moveHeld, nextMove, personWords } from '../../../_shared/model'
-import { JobPill, LiveLine, MachinePill, NoticeBanner, PlantMessages, PriorityTag, RecordFrame, say, SymptomText, useWords, type Translate } from '../../../_shared/parts'
+import { JobPill, LiveLine, MachinePill, NoticeBanner, PlantMessages, PriorityTag, RecordFrame, say, StepUpDialog, SymptomText, useWords, type Translate } from '../../../_shared/parts'
+import type { DeepJobRecord } from '../../../requests/depth/api'
+import { closeHeld, failureLabel, lightboxPhotos } from '../../../requests/depth/model'
+import { SignSafeDialog } from '../../../requests/view/SignSafeDialog'
 import { JOB_TABS, type JobRecordActions, type JobRecordModel } from '../../view-model'
+import { CloseForm } from '../../view/CloseForm'
+import { HandBackDialog } from '../../view/HandBackDialog'
+import { LeadConfirmPanel, LockPanel, PhotosTab } from './DepthParts'
 
 export type { JobRecordActions, JobRecordModel } from '../../view-model'
 
@@ -30,12 +37,13 @@ const MOVE_ICON: Readonly<Record<JobMove, ReactNode>> = {
 /**
  * SCR-149 — a maintenance job (design plant.jobs "Record: Maintenance job", a record page): the band (‹ Maintenance jobs,
  * "<number> · type", its state, priority, the machine's live status, overdue; ONE primary next step — Start, Hand back,
- * Close — and the other moves the state allows, each held with its reason; the job sheet in a new tab) and the W2a tabs:
+ * Close — and the other moves the state allows, each held with its reason; the job sheet in a new tab) and the tabs:
  * Problem (what is wrong and on which machine: the symptom, the words, the requests merged in, the machine's card with the
- * "third failure in 30 days" hint; a machine locked as unsafe says where it is signed safe; the side panel's state,
- * priority, technician and due time with an explicit Apply), Hand-back (the one-screen close: what was done, the time from
- * start, the machine after — running only once signed safe; Retired from the office) and Activity (the record panels).
- * A floor technician is named only here (Owner answer W1).
+ * "third failure in 30 days" hint; B-W2b-140 the Unsafe lock panel — locked since, by whom, why, Sign safe here — and the
+ * side panel's state, priority, technician and due time with an explicit Apply), Photos (B-W2b-140: before / after and
+ * voice notes, the requests' too, upload from a phone with markup, the Lightbox), Hand-back (the one-screen close with its
+ * tiles; once handed back: the failure code, the API's minutes, Reopen / Close, and B-W2b-140's Line lead confirms) and
+ * Activity (the record panels). Keys: s start the work, h hand back. A floor technician is named only here (Owner W1).
  */
 export function JobRecordView({ model, actions, panels, panelsPreview }: { model: JobRecordModel; actions?: JobRecordActions; panels?: ReactNode; panelsPreview?: RecordPanelsViewModel }) {
   return (
@@ -53,8 +61,34 @@ function JobRecordBody({ model, actions, panels, panelsPreview }: { model: JobRe
   const value = model.loaded.status === 'ready' ? model.loaded.value : null
   const job = value?.job ?? null
   const base = job ? `${listHref}/${encodeURIComponent(job.id)}` : listHref
-  const tabs: TabItem[] = JOB_TABS.map((tab) => ({ id: tab, href: tab === 'problem' ? base : `${base}?tab=${tab}`, label: t(`jobTab.${tab}`), count: tab === 'problem' && value ? value.requests.length || null : null }))
+  const media = value ? value.files.length + value.requestFiles.length : 0
+  const tabs: TabItem[] = JOB_TABS.map((tab) => ({ id: tab, href: tab === 'problem' ? base : `${base}?tab=${tab}`, label: t(`jobTab.${tab}`), count: tab === 'problem' && value ? value.requests.length || null : tab === 'photos' ? media || null : null }))
   const can = { manageJobs: model.can.manageJobs && (value?.canManage ?? false), work: model.can.work && (value?.canWork ?? false) }
+
+  // s: start the work; h: hand back (design kb "Record: s start work, h hand back") — never while typing or in a dialog.
+  const startHeld = job ? moveHeld('start', job, can) : 'held.busy'
+  const handHeld = job ? moveHeld('handBack', job, can) : 'held.busy'
+  const latest = useRef({ actions, startHeld, handHeld, busy: model.busy })
+  latest.current = { actions, startHeld, handHeld, busy: model.busy }
+  const quiet = model.dialog !== null || model.stepUp.open || model.lightbox !== null || model.capture?.state === 'camera'
+  useEffect(() => {
+    if (quiet || !job) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target && (target.closest('input, textarea, select, audio, [contenteditable="true"], [role="dialog"], [role="menu"]') || target.isContentEditable)) return
+      const now = latest.current
+      if (event.key === 's' && !now.startHeld && !now.busy) {
+        event.preventDefault()
+        now.actions?.onMove?.('start')
+      } else if (event.key === 'h' && !now.handHeld && !now.busy) {
+        event.preventDefault()
+        now.actions?.onOpenHandBack?.()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [quiet, job])
 
   let title: ReactNode = null
   let bandActions: ReactNode = null
@@ -63,14 +97,14 @@ function JobRecordBody({ model, actions, panels, panelsPreview }: { model: JobRe
     const next = nextMove(job.status)
     const primaryHeld = next ? moveHeld(next, job, can) : null
     const primary = next ? (
-      next === 'handBack' && model.tab !== 'handback' ? (
-        <Button size="sm" variant="primary" asChild>
-          <Link href={`${base}?tab=handback`}>
+      next === 'handBack' ? (
+        model.tab === 'handback' ? null : (
+          <Button size="sm" variant="primary" heldReason={primaryHeld ? t(primaryHeld) : model.busy ? t('held.busy') : null} onClick={() => actions?.onOpenHandBack?.()} aria-keyshortcuts="h">
             {MOVE_ICON.handBack} {t('move.handBack')}
-          </Link>
-        </Button>
-      ) : next === 'handBack' ? null : (
-        <Button size="sm" variant="primary" heldReason={primaryHeld ? t(primaryHeld) : model.busy ? t('held.busy') : null} onClick={() => actions?.onMove?.(next)}>
+          </Button>
+        )
+      ) : (
+        <Button size="sm" variant="primary" heldReason={primaryHeld ? t(primaryHeld) : model.busy ? t('held.busy') : null} onClick={() => actions?.onMove?.(next)} aria-keyshortcuts={next === 'start' ? 's' : undefined}>
           {model.busy ? <Spinner size={12} /> : MOVE_ICON[next]} {t(`move.${next}`)}
         </Button>
       )
@@ -84,6 +118,11 @@ function JobRecordBody({ model, actions, panels, panelsPreview }: { model: JobRe
         <MachinePill status={job.machine.status} locked={job.machine.locked} />
         {job.overdue && <Tag tone="danger">{t('jobs.overdue')}</Tag>}
         <Tag tone="neutral">{t(`jobSource.${job.source}`)}</Tag>
+        {job.leadConfirmed && (
+          <Tag tone="success">
+            <CircleCheck size={11} aria-hidden /> {t('lead.tag')}
+          </Tag>
+        )}
       </>
     )
     bandActions = (
@@ -117,6 +156,7 @@ function JobRecordBody({ model, actions, panels, panelsPreview }: { model: JobRe
   }
 
   const activity = panels ?? (panelsPreview ? <RecordPanelsView model={panelsPreview} /> : null)
+  const photos = lightboxPhotos(model.media)
 
   return (
     <RecordFrame
@@ -134,42 +174,33 @@ function JobRecordBody({ model, actions, panels, panelsPreview }: { model: JobRe
     >
       <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
       {value && model.tab === 'problem' && <ProblemTab model={model} value={value} actions={actions} can={can} t={t} place={place} />}
+      {value && model.tab === 'photos' && <PhotosTab model={model} value={value} actions={actions} can={can} />}
       {value && model.tab === 'handback' && <HandBackTab model={model} value={value} actions={actions} can={can} t={t} place={place} />}
       {value && model.tab === 'activity' && (activity ?? <p className="fw-pl-hint">{t('record.activityLater')}</p>)}
-      {value && model.dialog && <RecordDialog model={model} actions={actions} />}
+      {value && model.dialog && <RecordDialog model={model} value={value} actions={actions} can={can} />}
+      <StepUpDialog state={model.stepUp} onSubmit={actions?.onSubmitStepUp} onCancel={actions?.onCancelStepUp} />
+      {value && model.lightbox !== null && photos.length > 0 && (
+        <Lightbox
+          open
+          onClose={() => actions?.onPhoto?.(null)}
+          items={photos.map((photo, at) => ({ url: photo.src!, alt: t('media.photoAlt', { n: at + 1, what: t(photo.category === 'BEFORE_WORK' ? 'media.before' : photo.category === 'AFTER_WORK' ? 'media.after' : 'media.photo') }) }))}
+          index={Math.min(model.lightbox, photos.length - 1)}
+          onIndex={(at) => actions?.onPhoto?.(at)}
+          title={t('detail.photoTitle', { n: Math.min(model.lightbox, photos.length - 1) + 1, count: photos.length })}
+          external={photos[model.lightbox] ? { label: t('detail.photoFull'), href: photos[model.lightbox]!.src! } : undefined}
+        />
+      )}
     </RecordFrame>
   )
 }
 
-interface TabProps {
+export interface TabProps {
   model: JobRecordModel
-  value: JobRecord
+  value: DeepJobRecord
   actions?: JobRecordActions
   can: { manageJobs: boolean; work: boolean }
   t: Translate
   place: { locale: ReturnType<typeof useLocale>; timeZone: string }
-}
-
-function LockedBanner({ model, value, t }: Pick<TabProps, 'model' | 'value' | 't'>) {
-  const job = value.job
-  if (!job.machine.locked) return null
-  const lock = value.requests.find((request) => request.locking)
-  return (
-    <Banner
-      tone="danger"
-      icon={<AlertTriangle size={18} aria-hidden />}
-      title={t('record.lockedTitle', { machine: job.machine.assetNumber })}
-      action={
-        lock ? (
-          <Button size="sm" asChild>
-            <Link href={`${model.prefix}/plant/requests?open=${encodeURIComponent(lock.id)}`}>{t('record.lockedOpen')}</Link>
-          </Button>
-        ) : undefined
-      }
-    >
-      {t('record.lockedBody')}
-    </Banner>
-  )
 }
 
 function ProblemTab({ model, value, actions, can, t, place }: TabProps) {
@@ -183,7 +214,7 @@ function ProblemTab({ model, value, actions, can, t, place }: TabProps) {
   const applyHeld = edit && edit.problem.trim().length === 0 ? t('held.problemNeeded') : model.editBusy ? t('held.busy') : null
   return (
     <div className="fw-pl-stack">
-      <LockedBanner model={model} value={value} t={t} />
+      <LockPanel model={model} value={value} actions={actions} />
       <div className="fw-pl-split">
         <div className="fw-pl-stack">
           <Card padded>
@@ -202,8 +233,9 @@ function ProblemTab({ model, value, actions, can, t, place }: TabProps) {
                         <SymptomText symptom={request.symptom} description={request.description} />
                         <span className="fw-pl-sub">
                           {formatDateTime(request.reportedAt, place)} · {personWords(t, request.reportedBy)}
-                          {request.photos > 0 ? ` · ${t('list.photos', { count: request.photos })}` : ''}
+                          {request.photos + request.voiceNotes > 0 ? ` · ${t('media.count', { photos: request.photos, voices: request.voiceNotes })}` : ''}
                           {request.unsafe ? ` · ${request.locking ? t('unsafe.tag') : t('unsafe.signed')}` : ''}
+                          {` · ${t(`progress.step.${request.progress.step}`)}`}
                         </span>
                       </span>
                       <Button size="sm" variant="quiet" asChild>
@@ -354,9 +386,11 @@ function ProblemTab({ model, value, actions, can, t, place }: TabProps) {
 function HandBackTab({ model, value, actions, can, t, place }: TabProps) {
   const job = value.job
   const draft = model.handBack
+  const locale = place.locale
   if (job.handedBack) {
-    const closeHeld = moveHeld('close', job, can)
+    const closeMoveHeld = moveHeld('close', job, can)
     const reopenHeld = moveHeld('reopen', job, can)
+    const minutes = job.handedBack.minutesSpent
     return (
       <div className="fw-pl-stack">
         <Card padded>
@@ -370,7 +404,8 @@ function HandBackTab({ model, value, actions, can, t, place }: TabProps) {
                 { label: t('handBack.by'), value: personWords(t, job.handedBack.by) },
                 { label: t('handBack.at'), value: formatDateTime(job.handedBack.at, place) },
                 { label: t('handBack.machineAfter'), value: t(`machineAfter.${job.handedBack.machineAfter}`) },
-                { label: t('handBack.time'), value: job.startedAt ? ageWords(t, Math.max(0, Math.round((new Date(job.handedBack.at).getTime() - new Date(job.startedAt).getTime()) / 60_000))) : '—', hint: t('handBack.timeHint') },
+                { label: t('close.failure'), value: job.handedBack.failureCode ? failureLabel(job.handedBack.failureCode, locale) : t('close.noFailure') },
+                { label: t('handBack.time'), value: minutes !== null ? ageWords(t, minutes) : job.startedAt ? ageWords(t, Math.max(0, Math.round((new Date(job.handedBack.at).getTime() - new Date(job.startedAt).getTime()) / 60_000))) : '—', hint: t('handBack.timeHint') },
               ]}
             />
             <p className="fw-pl-h3">{t('handBack.workDone')}</p>
@@ -380,25 +415,23 @@ function HandBackTab({ model, value, actions, can, t, place }: TabProps) {
                 <Button size="sm" heldReason={reopenHeld ? t(reopenHeld) : model.busy ? t('held.busy') : null} onClick={() => actions?.onMove?.('reopen')}>
                   {MOVE_ICON.reopen} {t('move.reopen')}
                 </Button>
-                <Button size="sm" variant="primary" heldReason={closeHeld ? t(closeHeld) : model.busy ? t('held.busy') : null} onClick={() => actions?.onMove?.('close')}>
+                <Button size="sm" variant="primary" heldReason={closeMoveHeld ? t(closeMoveHeld) : model.busy ? t('held.busy') : null} onClick={() => actions?.onMove?.('close')}>
                   {MOVE_ICON.close} {t('move.close')}
                 </Button>
               </span>
             )}
             {job.status === 'HANDED_BACK' && job.handedBack.machineAfter === 'RETIRED' && <p className="fw-pl-hint">{t('handBack.retiresOnClose')}</p>}
-            <p className="fw-pl-hint">{t('handBack.confirmLater')}</p>
           </div>
         </Card>
+        <LeadConfirmPanel model={model} value={value} actions={actions} />
       </div>
     )
   }
   const started = job.status === 'IN_PROGRESS'
-  const runningHeld = job.machine.locked ? t('held.lockedRunning') : null
-  const held = moveHeld('handBack', job, can, draft.machineAfter ?? undefined)
-  const submitHeld = held ? t(held) : draft.workDone.trim().length === 0 ? t('held.workDoneNeeded') : !draft.machineAfter ? t('held.machineAfterNeeded') : model.busy ? t('held.busy') : null
+  const heldKey = closeHeld(draft, job, value.close, can, model.busy)
   return (
     <div className="fw-pl-stack">
-      <LockedBanner model={model} value={value} t={t} />
+      <LockPanel model={model} value={value} actions={actions} />
       {!started && (
         <Banner tone="info" title={t(job.open ? 'handBack.notStarted' : 'handBack.notOpen')}>
           {job.open && job.status !== 'IN_PROGRESS' ? t('handBack.notStartedBody') : null}
@@ -409,40 +442,18 @@ function HandBackTab({ model, value, actions, can, t, place }: TabProps) {
           className="fw-pl-dialog"
           onSubmit={(event) => {
             event.preventDefault()
-            if (!submitHeld) actions?.onHandBack?.()
+            if (!heldKey) actions?.onHandBack?.()
           }}
         >
           <h3 className="fw-pl-h3">{t('handBack.title')}</h3>
-          <Field label={t('handBack.workDone')} required hint={t('handBack.workDoneHint')}>
-            <Textarea value={draft.workDone} rows={4} maxLength={2000} disabled={!started} onChange={(event) => actions?.onHandBackDraft?.({ workDone: event.target.value })} />
-          </Field>
-          <p className="fw-pl-hint">{t('handBack.failureCodeLater')}</p>
-          <p className="fw-pl-hint">{job.startedAt ? t('handBack.timeSoFar', { time: ageWords(t, Math.max(0, Math.round((new Date(model.now).getTime() - new Date(job.startedAt).getTime()) / 60_000))) }) : t('handBack.timeHint')}</p>
-          <div className="fw-pl-choices" role="radiogroup" aria-label={t('handBack.machineAfter')}>
-            {MACHINE_AFTER.map((after) => {
-              const reason = after === 'RUNNING' ? runningHeld : null
-              return (
-                <RadioCard
-                  key={after}
-                  name="machine-after"
-                  value={after}
-                  checked={draft.machineAfter === after}
-                  selected={draft.machineAfter === after}
-                  disabled={!started || reason !== null}
-                  onChange={() => actions?.onHandBackDraft?.({ machineAfter: after })}
-                  title={t(`machineAfter.${after}`)}
-                  description={reason ?? t(`machineAfterHint.${after}`)}
-                />
-              )
-            })}
-          </div>
+          <CloseForm job={job} close={value.close} draft={draft} disabled={!started || model.busy} onDraft={actions?.onHandBackDraft} />
           <span className="fw-pl-row">
             {job.status !== 'IN_PROGRESS' && job.open && (
-              <Button size="sm" heldReason={moveHeld('start', job, can) ? t(moveHeld('start', job, can)!) : model.busy ? t('held.busy') : null} onClick={() => actions?.onMove?.('start')}>
+              <Button size="sm" heldReason={moveHeld('start', job, can) ? t(moveHeld('start', job, can)!) : model.busy ? t('held.busy') : null} onClick={() => actions?.onMove?.('start')} aria-keyshortcuts="s">
                 {MOVE_ICON.start} {t('move.start')}
               </Button>
             )}
-            <Button size="sm" variant="primary" type="submit" heldReason={submitHeld}>
+            <Button size="sm" variant="primary" type="submit" heldReason={heldKey ? t(heldKey) : null}>
               {model.busy ? <Spinner size={12} /> : MOVE_ICON.handBack} {t('move.handBack')}
             </Button>
           </span>
@@ -452,9 +463,29 @@ function HandBackTab({ model, value, actions, can, t, place }: TabProps) {
   )
 }
 
-function RecordDialog({ model, actions }: { model: JobRecordModel; actions?: JobRecordActions }) {
+function RecordDialog({ model, value, actions, can }: { model: JobRecordModel; value: DeepJobRecord; actions?: JobRecordActions; can: { manageJobs: boolean; work: boolean } }) {
   const t = useWords()
   const dialog = model.dialog!
+  if (dialog.kind === 'handBack') {
+    const heldKey = closeHeld(model.handBack, value.job, value.close, can, dialog.busy)
+    return (
+      <HandBackDialog
+        number={value.job.number}
+        loaded={{ status: 'ready', value }}
+        draft={model.handBack}
+        held={heldKey ? t(heldKey) : null}
+        busy={dialog.busy}
+        problem={dialog.problem}
+        onDraft={actions?.onHandBackDraft}
+        onSubmit={actions?.onHandBack}
+        onClose={actions?.onDialogClose}
+      />
+    )
+  }
+  if (dialog.kind === 'signSafe') {
+    const held = !model.can.signSafe || !(value.lock?.canSignSafe ?? false) ? t('held.noSignSafe') : dialog.draft.note.trim().length === 0 ? t('held.checkedNeeded') : dialog.busy ? t('held.busy') : null
+    return <SignSafeDialog machine={value.job.machine.assetNumber} draft={dialog.draft} held={held} busy={dialog.busy} problem={dialog.problem} onDraft={actions?.onSignSafeDraft} onSubmit={actions?.onDialogSubmit} onClose={actions?.onDialogClose} />
+  }
   const held = dialog.reason.trim().length === 0 ? t('held.reasonNeeded') : dialog.busy ? t('held.busy') : null
   return (
     <Modal

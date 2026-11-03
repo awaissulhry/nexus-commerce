@@ -2,17 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Camera, CheckCheck, Download, MoreHorizontal, Play, Printer, TriangleAlert } from 'lucide-react'
-import { Banner, EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
+import { Camera, CheckCheck, Download, Mic, MoreHorizontal, Play, Printer, TriangleAlert } from 'lucide-react'
+import { EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Select, Tag } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
 import { formatDate, formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
-import type { MaintenanceRequest } from '../../_shared/api'
-import { ageTone, ageWords, labelOf, personWords, REQUEST_VIEWS, type RequestsAddress } from '../../_shared/model'
-import { KeysModal, LiveLine, MachinePill, NoPlantAccess, NoticeBanner, PlantMessages, RequestPill, StepUpDialog, SymptomText, UnsafeTag, useWords } from '../../_shared/parts'
+import { ageWords, labelOf, personWords, REQUEST_VIEWS, type RequestsAddress } from '../../_shared/model'
+import { KeysModal, LiveLine, MachinePill, NoPlantAccess, NoticeBanner, PlantMessages, RequestPill, say, StepUpDialog, SymptomText, UnsafeTag, useWords } from '../../_shared/parts'
+import type { DeepRequest } from '../depth/api'
+import { escalatedWords, escalationTone, routedWords } from '../depth/model'
+import { DuplicatesPanel, UnsafeBanners } from './DepthSections'
 import type { RequestsListActions, RequestsListModel } from '../view-model'
 import { RequestDetail } from './RequestDetail'
 import { RequestDialogs } from './RequestDialogs'
@@ -57,19 +59,20 @@ function Requests({ model, actions }: { model: RequestsListModel; actions?: Requ
   // The cells call the page's latest actions (the grid keeps its columns between renders).
   const act = useRef(actions)
   act.current = actions
-  const columns = useMemo<ColDef<MaintenanceRequest>[]>(() => {
-    const machineHref = (row: MaintenanceRequest) => `${model.prefix}/plant/machines/${encodeURIComponent(row.machine.id)}`
-    const AgeCell = ({ data }: ICellRendererParams<MaintenanceRequest>) => {
+  const columns = useMemo<ColDef<DeepRequest>[]>(() => {
+    const machineHref = (row: DeepRequest) => `${model.prefix}/plant/machines/${encodeURIComponent(row.machine.id)}`
+    const AgeCell = ({ data }: ICellRendererParams<DeepRequest>) => {
       if (!data) return null
-      const tone = ageTone(data)
+      const tone = escalationTone(data)
+      const escalated = escalatedWords(data.routing)
       return (
-        <span className="fw-pl-cell" title={formatDateTime(data.reportedAt, place)}>
+        <span className="fw-pl-cell" title={[formatDateTime(data.reportedAt, place), say(t, escalated)].filter(Boolean).join(' · ')}>
           <span className={`fw-pl-num strong${tone === 'danger' ? ' fw-pl-danger' : tone === 'warning' ? ' fw-pl-warning' : ''}`}>{ageWords(t, data.ageMinutes)}</span>
           <span className="fw-pl-sub">{data.ageMinutes < 24 * 60 ? formatTime(data.reportedAt, place) : formatDate(data.reportedAt, place)}</span>
         </span>
       )
     }
-    const MachineCell = ({ data }: ICellRendererParams<MaintenanceRequest>) =>
+    const MachineCell = ({ data }: ICellRendererParams<DeepRequest>) =>
       data ? (
         <span className="fw-pl-cell">
           <Link className="fw-pl-link fw-pl-code" href={machineHref(data)}>
@@ -80,28 +83,33 @@ function Requests({ model, actions }: { model: RequestsListModel; actions?: Requ
           </span>
         </span>
       ) : null
-    const SymptomCell = ({ data }: ICellRendererParams<MaintenanceRequest>) =>
+    const SymptomCell = ({ data }: ICellRendererParams<DeepRequest>) =>
       data ? (
         <span className="fw-pl-cell" title={data.description ?? undefined}>
           <SymptomText symptom={data.symptom} description={data.description} />
           {data.symptom && data.description && <span className="fw-pl-sub">{data.description}</span>}
         </span>
       ) : null
-    const UnsafeCell = ({ data }: ICellRendererParams<MaintenanceRequest>) => (data?.unsafe ? <UnsafeTag signed={!data.locking} /> : <span className="fw-pl-sub">{t('unsafe.no')}</span>)
-    const StationCell = ({ data }: ICellRendererParams<MaintenanceRequest>) =>
+    const UnsafeCell = ({ data }: ICellRendererParams<DeepRequest>) => (data?.unsafe ? <UnsafeTag signed={!data.locking} /> : <span className="fw-pl-sub">{t('unsafe.no')}</span>)
+    const StationCell = ({ data }: ICellRendererParams<DeepRequest>) =>
       data ? (
         <span className="fw-pl-cell" title={data.station ? `${data.station.code} · ${data.station.name}` : undefined}>
           <span className="fw-pl-ellipsis">{data.station ? data.station.code : t('list.noStation')}</span>
           {data.station && <span className="fw-pl-sub">{data.station.name}</span>}
         </span>
       ) : null
-    const ReporterCell = ({ data }: ICellRendererParams<MaintenanceRequest>) => (data ? <span className="fw-pl-ellipsis" title={personWords(t, data.reportedBy)}>{personWords(t, data.reportedBy)}</span> : null)
-    const EvidenceCell = ({ data }: ICellRendererParams<MaintenanceRequest>) =>
-      data && (data.photos > 0 || data.duplicates > 0) ? (
+    const ReporterCell = ({ data }: ICellRendererParams<DeepRequest>) => (data ? <span className="fw-pl-ellipsis" title={personWords(t, data.reportedBy)}>{personWords(t, data.reportedBy)}</span> : null)
+    const EvidenceCell = ({ data }: ICellRendererParams<DeepRequest>) =>
+      data && (data.photos > 0 || data.voiceNotes > 0 || data.duplicates > 0) ? (
         <span className="fw-pl-row">
           {data.photos > 0 && (
             <span className="fw-pl-symptom" title={t('list.photos', { count: data.photos })}>
               <Camera size={14} aria-hidden /> <span className="fw-pl-num">{data.photos}</span>
+            </span>
+          )}
+          {data.voiceNotes > 0 && (
+            <span className="fw-pl-symptom" title={t('media.voiceCount', { count: data.voiceNotes })}>
+              <Mic size={14} aria-hidden /> <span className="fw-pl-num">{data.voiceNotes}</span>
             </span>
           )}
           {data.duplicates > 0 && <Tag tone="warning">{t('list.duplicates', { count: data.duplicates })}</Tag>}
@@ -109,7 +117,18 @@ function Requests({ model, actions }: { model: RequestsListModel; actions?: Requ
       ) : (
         <span className="fw-pl-sub">—</span>
       )
-    const StateCell = ({ data }: ICellRendererParams<MaintenanceRequest>) => {
+    const RoutedCell = ({ data }: ICellRendererParams<DeepRequest>) => {
+      if (!data) return null
+      const routed = say(t, routedWords(data.routing)) ?? ''
+      const escalated = escalatedWords(data.routing)
+      return (
+        <span className="fw-pl-cell" title={routed}>
+          <span className="fw-pl-ellipsis">{routed}</span>
+          {escalated && <span className={`fw-pl-sub ${data.routing.escalationLevel >= 2 ? 'fw-pl-danger' : 'fw-pl-warning'}`}>{say(t, escalated)}</span>}
+        </span>
+      )
+    }
+    const StateCell = ({ data }: ICellRendererParams<DeepRequest>) => {
       if (!data) return null
       return (
         <span className="fw-pl-cell">
@@ -126,8 +145,8 @@ function Requests({ model, actions }: { model: RequestsListModel; actions?: Requ
         </span>
       )
     }
-    const SiteCell = ({ data }: ICellRendererParams<MaintenanceRequest>) => <span className="fw-pl-code">{data ? (model.sites.find((site) => site.id === data.siteId)?.code ?? '—') : ''}</span>
-    const MoreCell = ({ data }: ICellRendererParams<MaintenanceRequest>) =>
+    const SiteCell = ({ data }: ICellRendererParams<DeepRequest>) => <span className="fw-pl-code">{data ? (model.sites.find((site) => site.id === data.siteId)?.code ?? '—') : ''}</span>
+    const MoreCell = ({ data }: ICellRendererParams<DeepRequest>) =>
       data ? (
         <Menu
           label={<MoreHorizontal size={16} aria-hidden />}
@@ -140,7 +159,7 @@ function Requests({ model, actions }: { model: RequestsListModel; actions?: Requ
           ]}
         />
       ) : null
-    const list: ColDef<MaintenanceRequest>[] = [
+    const list: ColDef<DeepRequest>[] = [
       { colId: 'age', headerName: t('col.age'), minWidth: 96, flex: 0.5, cellRenderer: AgeCell },
       { colId: 'machine', headerName: t('col.machine'), minWidth: 156, flex: 0.8, cellRenderer: MachineCell },
       { colId: 'symptom', headerName: t('col.symptom'), minWidth: 190, flex: 1.5, cellRenderer: SymptomCell },
@@ -148,6 +167,7 @@ function Requests({ model, actions }: { model: RequestsListModel; actions?: Requ
       { colId: 'station', headerName: t('col.station'), minWidth: 130, flex: 0.8, cellRenderer: StationCell },
       { colId: 'reporter', headerName: t('col.reporter'), minWidth: 140, flex: 0.9, cellRenderer: ReporterCell },
       { colId: 'evidence', headerName: t('col.evidence'), minWidth: 124, flex: 0.5, cellRenderer: EvidenceCell },
+      { colId: 'routed', headerName: t('routing.column'), minWidth: 150, flex: 0.8, cellRenderer: RoutedCell },
       { colId: 'state', headerName: t('col.state'), minWidth: 160, flex: 0.8, cellRenderer: StateCell },
       { colId: 'more', headerName: t('col.actions'), minWidth: 84, maxWidth: 84, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
@@ -243,6 +263,7 @@ function Requests({ model, actions }: { model: RequestsListModel; actions?: Requ
 
   return (
     <div className="fw-pl">
+      <UnsafeBanners model={model} actions={actions} />
       <div className="fw-pl-head">
         <LiveLine asOf={model.asOf} live={model.live} />
         <span className="fw-pl-actions">
@@ -262,21 +283,6 @@ function Requests({ model, actions }: { model: RequestsListModel; actions?: Requ
 
       <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
 
-      {model.tiles && model.tiles.UNSAFE > 0 && model.address.tile !== 'UNSAFE' && (
-        <Banner
-          tone="danger"
-          icon={<AlertTriangle size={18} aria-hidden />}
-          title={t('requests.lockedBanner', { count: model.tiles.UNSAFE })}
-          action={
-            <Button size="sm" onClick={() => actions?.onTile?.('UNSAFE')}>
-              {t('requests.lockedShow')}
-            </Button>
-          }
-        >
-          {t('requests.lockedBannerBody')}
-        </Banner>
-      )}
-
       <MetricStrip
         metrics={TILES.map((entry) => ({
           label: t(`requestTile.${entry.tile}`),
@@ -287,7 +293,7 @@ function Requests({ model, actions }: { model: RequestsListModel; actions?: Requ
         }))}
       />
 
-      <ListFrame<MaintenanceRequest>
+      <ListFrame<DeepRequest>
         label={t('requests.tableLabel')}
         rows={state ? [] : model.rows.items}
         rowId={(row) => row.id}
@@ -323,11 +329,12 @@ function Requests({ model, actions }: { model: RequestsListModel; actions?: Requ
       <p className="fw-pl-hint">
         <Printer size={12} aria-hidden /> {model.rows.truncated ? t('requests.truncated') : t('requests.foot')}
       </p>
+      <DuplicatesPanel model={model} actions={actions} />
 
       {model.detail && <RequestDetail model={model} actions={actions} />}
       <RequestDialogs model={model} actions={actions} />
       <StepUpDialog state={model.stepUp} onSubmit={actions?.onSubmitStepUp} onCancel={actions?.onCancelStepUp} />
-      {help && <KeysModal own={[...ownKeys, { keys: ['J', 'K'], does: t('keys.walk') }, { keys: ['A'], does: t('keys.acknowledge') }, { keys: ['M'], does: t('keys.makeJob') }, { keys: ['D'], does: t('keys.merge') }, { keys: ['C'], does: t('keys.close') }, { keys: ['S'], does: t('keys.signSafe') }]} onClose={() => setHelp(false)} />}
+      {help && <KeysModal own={[...ownKeys, { keys: ['J', 'K'], does: t('keys.walk') }, { keys: ['A'], does: t('keys.acknowledge') }, { keys: ['M'], does: t('keys.makeJob') }, { keys: ['D'], does: t('keys.merge') }, { keys: ['L'], does: t('keys.lock') }, { keys: ['C'], does: t('keys.close') }, { keys: ['S'], does: t('keys.signSafe') }]} onClose={() => setHelp(false)} />}
       <PageKeys enabled={!model.detail && !model.dialog && !help} onReport={() => model.can.report && actions?.onReport?.()} onTriage={() => firstOpen && actions?.onOpen?.(firstOpen.id)} />
     </div>
   )

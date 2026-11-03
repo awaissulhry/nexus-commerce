@@ -202,6 +202,10 @@ describe('the permissions (registry and role templates)', () => {
       floor_supervisor: ['files.read'],
       // B-W2a-35: the plant's technicians (photos and documents of machines, requests and jobs).
       maintenance: ['files.read', 'files.upload'],
+      // B-W2b-120: HR and the safety officer upload letters, receipts and evidence; the occupational doctor reads.
+      hr: ['files.read', 'files.upload'],
+      safety_officer: ['files.read', 'files.upload'],
+      company_doctor: ['files.read'],
       read_only: ['files.read'],
     })
   })

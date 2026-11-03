@@ -10,6 +10,18 @@ import { downloadLink } from '../../../../record-panels/api'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { useLive, useRecordTab } from '../../_shared/hooks'
 import {
+  addCostLine,
+  answerConcession,
+  askConcession,
+  computeCost,
+  editCostLine,
+  getCost,
+  keepReport,
+  listCauses,
+  listContacts,
+  listCustomers,
+  removeCostLine,
+  uploadConcessionFile,
   addAction,
   addDecision,
   approveDecision,
@@ -41,12 +53,14 @@ import {
   unlinkRecord,
   uploadPhoto,
   workOrderOperations,
+  type CostSheet,
   type NcrLinkType,
   type NcrPhoto,
   type NcrRecord as NcrRecordValue,
   type Person,
 } from '../api'
 import { useCloseFlow } from '../close'
+import { useEscalate } from '../escalate'
 import { instantOf, ncrCan, readProblem, RECORD_TABS, refusalOf, type Say } from '../model'
 import type { NcrNotice } from '../parts'
 import {
@@ -60,7 +74,10 @@ import {
   stockLinesOf,
   carryBodyOf,
   carryKindOf,
+  minorOf,
+  NO_COST,
   TIME_ZONE,
+  type CostModel,
   type CellState,
   type Choices,
   type Loaded,
@@ -105,6 +122,10 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
   const [busy, setBusy] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  // B-W2b-113: the Cost tab (read when it opens), a report version being kept, the concession answer's file.
+  const [cost, setCost] = useState<CostModel>(NO_COST)
+  const [keepingReport, setKeepingReport] = useState(false)
+  const concessionFile = useRef<File | null>(null)
   const record = loaded.status === 'ready' ? loaded.record : null
   const current = useRef<NcrRecordValue | null>(null)
   current.current = record
@@ -171,12 +192,37 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
     if (can.view) readPhotos()
   }, [readPhotos, can.view])
 
+  // ---- B-W2b-113: the cost (the cost grain only) ------------------------------------------------------------------------
+  const tabRef = useRef(tab)
+  tabRef.current = tab
+  const seesCost = can.cost && (record?.may.cost ?? false)
+  const loadCost = useCallback(async () => {
+    setCost((now) => (now.loaded.status === 'ready' ? now : { ...now, loaded: { status: 'loading' } }))
+    try {
+      const sheet = await getCost(api, ncrId)
+      setCost((now) => ({ ...now, loaded: { status: 'ready', sheet } }))
+    } catch (error) {
+      setCost((now) => ({ ...now, loaded: isApiError(error) && error.kind === 'forbidden' ? { status: 'forbidden' } : { status: 'error', problem: readProblem(error) } }))
+    }
+  }, [api, ncrId])
+  useEffect(() => {
+    if (tab === 'cost' && seesCost) void loadCost()
+  }, [tab, seesCost, loadCost])
+
+  const escalate = useEscalate(api, (capa, count) => {
+    void load()
+    setNotice({ say: { key: 'escalate.done', params: { number: capa.number, count } }, tone: 'success' })
+  })
+
   const live = useLive(
     (change) => {
       if (!change.type.startsWith('ncr.') && !change.type.startsWith('quality.hold')) return
       if (change.fields.ncrId !== ncrId) return
       if (dialogRef.current) setStale(formatTime(new Date(), { locale }))
-      else void load()
+      else {
+        void load()
+        if (tabRef.current === 'cost') void loadCost()
+      }
     },
     () => void load(),
   )
@@ -199,9 +245,11 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
       else if (choice === 'operations' && ncr?.workOrder) put(choice, workOrderOperations(api, ncr.workOrder.id))
       else if (choice === 'repairs') put(choice, can.repairsView ? findRepairs(api, '') : Promise.resolve([]))
       else if (choice === 'claims' && ncr?.supplier) put(choice, findClaims(api, { partyId: ncr.supplier.id, lotId: ncr.lot?.id ?? null }))
+      else if (choice === 'causes') put(choice, can.defectsView ? listCauses(api) : Promise.resolve([]))
+      else if (choice === 'customers') put(choice, can.partiesView ? listCustomers(api, '') : Promise.resolve([]))
       else if (choice === 'sites' && !current.current) asked.current.delete(choice)
     },
-    [api, can.defectsView, can.stockView, can.repairsView],
+    [api, can.defectsView, can.stockView, can.repairsView, can.partiesView],
   )
 
   // Opening a dialog reads what it picks from.
@@ -376,10 +424,10 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
           const decision = now.decisions.find((entry) => entry.id === open.decisionId)
           if (!decision) break
           carryKey.current ??= newIdempotencyKey()
-          const answer = await reworkFromDecision(api, ncr.id, decision.id, { version: decision.version, reworkAtOperationId: open.operationId, ...(open.description.trim() ? { description: open.description.trim() } : {}) }, carryKey.current)
+          const answer = await reworkFromDecision(api, ncr.id, decision.id, { version: decision.version, reworkAtOperationId: open.operationId, ...(open.description.trim() ? { description: open.description.trim() } : {}), ...(open.scrapAll ? { scrapAll: true } : {}) }, carryKey.current)
           take(answer.record)
           carryKey.current = null
-          receipt = { key: 'rework.done', params: { seq: decision.seq } }
+          receipt = { key: open.scrapAll ? 'rework.doneScrap' : 'rework.done', params: { seq: decision.seq } }
           break
         }
         case 'removeDecision': {
@@ -406,6 +454,21 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
           take(await openRegisterEntry(api, ncr.id, { version: ncr.version, description: open.description.trim() || null }))
           receipt = { key: 'register.done' }
           break
+        // B-W2b-113: a concession asked of the customer; their written answer recorded (its file uploaded first).
+        case 'askConcession':
+          take(await askConcession(api, ncr.id, { partyId: open.draft.partyId, contactId: open.draft.contactId || null, ask: open.draft.ask.trim(), proposal: open.draft.proposal.trim() }))
+          receipt = { key: 'concession.asked' }
+          break
+        case 'answerConcession': {
+          const concession = now.concessions.find((entry) => entry.id === open.concessionId)
+          const answeredAt = instantOf(open.draft.answeredAt, TIME_ZONE)
+          if (!concession || !answeredAt) break
+          const fileId = concessionFile.current ? await uploadConcessionFile(api, { companyId: ncr.companyId, concessionId: concession.id }, concessionFile.current, concessionFile.current.name) : null
+          take(await answerConcession(api, ncr.id, concession.id, { version: concession.version, status: open.draft.status, answer: open.draft.answer.trim() || null, answeredBy: open.draft.answeredBy.trim(), answeredAt, ...(fileId ? { answerFileId: fileId } : {}) }))
+          concessionFile.current = null
+          receipt = { key: open.draft.status === 'ACCEPTED' ? 'concession.accepted' : 'concession.refused', params: { seq: concession.seq } }
+          break
+        }
       }
       doneFile.current = null
       setDialog(null)
@@ -575,6 +638,113 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
     onStepUpCancel: closeFlow.cancelStepUp,
   }
 
+  // ---- B-W2b-113: cost writes, the report, files, customers ------------------------------------------------------------
+  const costWrite = useCallback(
+    async (work: () => Promise<CostSheet>, key: string, receipt: Say | null) => {
+      setCost((now) => ({ ...now, busy: true }))
+      try {
+        const sheet = await work()
+        setCost((now) => ({ ...now, busy: false, computing: false, loaded: { status: 'ready', sheet } }))
+        if (receipt) setNotice({ say: receipt, tone: 'success' })
+        return true
+      } catch (error) {
+        setCost((now) => ({ ...now, busy: false, computing: false }))
+        const refusal = refusalOf(error)
+        if (refusal.stale) void loadCost()
+        setNotice({ say: refusal.stale ? refusal.say : { key }, tone: 'danger', detail: refusal.stale ? [] : refusal.detail })
+        return false
+      }
+    },
+    [loadCost],
+  )
+  const openFile = useCallback(
+    async (fileId: string) => {
+      try {
+        const answer = await downloadLink(api, fileId)
+        const url = answer.download.url
+        window.open(url.startsWith('/') && !url.startsWith('//') ? `/api${url}` : url, '_blank', 'noopener')
+      } catch (error) {
+        setNotice(refused(error, 'file.notOpened'))
+      }
+    },
+    [api, refused],
+  )
+  const customerTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const findCustomers = useCallback(
+    (query: string) => {
+      if (!can.partiesView) {
+        setChoices((now) => ({ ...now, customers: choicesOf([]) }))
+        return
+      }
+      if (customerTimer.current) clearTimeout(customerTimer.current)
+      customerTimer.current = setTimeout(() => {
+        setChoices((now) => ({ ...now, customers: { items: null, problem: null } }))
+        listCustomers(api, query)
+          .then((items) => setChoices((now) => ({ ...now, customers: choicesOf(items) })))
+          .catch((error: unknown) => setChoices((now) => ({ ...now, customers: { items: null, problem: readProblem(error) } })))
+      }, query ? 250 : 0)
+    },
+    [api, can.partiesView],
+  )
+
+  actions.cost = {
+    onRetry: () => void loadCost(),
+    onAdd: (draft) => setCost((now) => ({ ...now, adding: draft })),
+    onSaveNew: () => {
+      const adding = cost.adding
+      const amount = adding ? minorOf(adding.amount) : null
+      if (!adding || amount === null || cost.busy) return
+      void costWrite(() => addCostLine(api, ncrId, { kind: adding.kind, description: adding.description.trim() || null, amount }), 'cost.notAdded', { key: 'cost.added' }).then((ok) => {
+        if (ok) setCost((now) => ({ ...now, adding: null }))
+      })
+    },
+    onCell: (lineId, change, name) => {
+      const sheet = cost.loaded.status === 'ready' ? cost.loaded.sheet : null
+      const line = sheet?.lines.find((entry) => entry.id === lineId)
+      if (!line) return
+      const key = `${lineId}:${name}`
+      setCost((now) => ({ ...now, cells: { ...now.cells, [key]: { state: 'saving' } } }))
+      void costWrite(() => editCostLine(api, ncrId, lineId, { version: line.version, ...change }), 'cost.notSaved', null).then((ok) => setCost((now) => ({ ...now, cells: { ...now.cells, [key]: { state: ok ? 'saved' : 'failed' } } })))
+    },
+    onRemove: (lineId) => {
+      const sheet = cost.loaded.status === 'ready' ? cost.loaded.sheet : null
+      const line = sheet?.lines.find((entry) => entry.id === lineId)
+      if (!line) return
+      void costWrite(() => removeCostLine(api, ncrId, lineId, line.version), 'cost.notRemoved', { key: 'cost.removed', params: { seq: line.seq } })
+    },
+    onCompute: () => {
+      setCost((now) => ({ ...now, computing: true }))
+      void costWrite(() => computeCost(api, ncrId).then((answer) => answer.sheet), 'cost.notComputed', { key: 'cost.computedDone' })
+    },
+  }
+  actions.escalate = escalate.actions
+  actions.onEscalate = () => {
+    if (record) escalate.open([{ id: record.ncr.id, number: record.ncr.number }])
+  }
+  actions.onKeepReport = () => {
+    if (!record || keepingReport) return
+    setKeepingReport(true)
+    keepReport(api, record.ncr.id, null)
+      .then((answer) => {
+        void load()
+        setNotice({ say: { key: answer.made ? 'report.kept' : 'report.same', params: { version: answer.report.version } }, tone: 'success' })
+      })
+      .catch((error: unknown) => setNotice(refused(error, 'report.notKept')))
+      .finally(() => setKeepingReport(false))
+  }
+  actions.onOpenFile = (fileId) => void openFile(fileId)
+  actions.onFindCustomers = findCustomers
+  actions.onPickCustomer = (partyId) => {
+    setChoices((now) => ({ ...now, contacts: { items: null, problem: null } }))
+    listContacts(api, partyId)
+      .then((items) => setChoices((now) => ({ ...now, contacts: choicesOf(items) })))
+      .catch((error: unknown) => setChoices((now) => ({ ...now, contacts: { items: null, problem: readProblem(error) } })))
+  }
+  actions.onConcessionFile = (file) => {
+    concessionFile.current = file
+    setDialog((now) => (now?.kind === 'answerConcession' ? { ...now, fileName: file?.name ?? null } : now))
+  }
+
   const model: NcrRecordModel = {
     prefix,
     me: session.user.id,
@@ -601,6 +771,9 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
     stepUp: closeFlow.stepUp,
     keysOpen,
     copied,
+    cost,
+    escalate: escalate.model,
+    keepingReport,
   }
 
   const panels = record && tab === 'activity' ? <RecordPanels record={{ type: 'Nonconformance', id: record.ncr.id, companyId: record.ncr.companyId, siteId: record.ncr.siteId }} title={`${record.ncr.number} · ${record.ncr.title}`} /> : null
