@@ -52,7 +52,7 @@ import {
  * ledger lacks, one entry per source event by its key (factory-domain costing/ledger entryKeys), so a repeat, a retried
  * job or a catch-up never posts twice:
  *
- *   stock moves of the work order (StockMove.workOrderId), once valued: ISSUE / RETURN → MATERIAL, SCRAP → SCRAP (a
+ *   stock moves of the work order (StockMove.workOrderId), once valued: ISSUE / RETURN / REMNANT → MATERIAL, SCRAP → SCRAP (a
  *     charge), PRODUCTION_RECEIPT → COMPLETION; a move's reversal → the reversal of its entry
  *   scans: each standing REPORT or CORRECTION with good garments → LABOUR (good × the operation's standard minutes × the
  *     cost per minute in force that day for its kind of work centre, never per person); one an UNDO or CORRECTION
@@ -93,7 +93,8 @@ export interface Plan {
   readonly waiting: WaitingView[]
 }
 
-const POSTED_REASONS = ['ISSUE', 'RETURN', 'SCRAP', 'PRODUCTION_RECEIPT'] as const
+// B-W2b-100: a REMNANT takes its material off the work order, as a RETURN does (factory_work_order_cost_entry_check).
+const POSTED_REASONS = ['ISSUE', 'RETURN', 'REMNANT', 'SCRAP', 'PRODUCTION_RECEIPT'] as const
 type PostedReason = (typeof POSTED_REASONS)[number]
 
 const MOVE_COLUMNS = { id: true, reason: true, itemId: true, lotId: true, baseQuantity: true, occurredAt: true, reversalOfId: true, note: true, workOrderId: true } as const satisfies Prisma.StockMoveSelect

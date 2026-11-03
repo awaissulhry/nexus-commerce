@@ -229,6 +229,20 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
     // B-W2b-96: the step (ACKNOWLEDGE, ON_THE_WAY, WORKS_AGAIN) and the request it is about; never who.
     case 'plant.request.progress':
       return { code: text(p.step, 20), target: text(p.requestId, 40) }
+    // B-W2b-99: which check and what it found, the pieces looked at; never who, never the note.
+    case 'quality.inprocess.record': {
+      const pieces = whole((p.decision as { pieces?: unknown } | null | undefined)?.pieces)
+      return { code: text(p.kind, 20), target: text((p.decision as { outcome?: unknown } | null | undefined)?.outcome, 20), ...(pieces !== undefined ? { quantity: pieces } : {}), ...(workOrderId ? { workOrderId } : {}) }
+    }
+    // B-W2b-106: what was recorded and on which inspection (a count's units added or set, how many rows); never who, never a
+    // value, a note or a mark.
+    case 'quality.final.record':
+    case 'quality.incoming.record':
+    case 'quality.inprocess.results': {
+      const rows = Array.isArray(p.results) ? p.results.length : Array.isArray(p.measurements) ? p.measurements.length : Array.isArray(p.defects) ? p.defects.length : undefined
+      const counted = whole(p.add) ?? whole(p.inspected) ?? rows
+      return { code: kind === 'quality.inprocess.results' ? 'RESULTS' : text(p.what, 20), target: text(p.inspectionId, 40) ?? text(p.checkId, 40), ...(counted !== undefined ? { quantity: counted } : {}) }
+    }
   }
 }
 

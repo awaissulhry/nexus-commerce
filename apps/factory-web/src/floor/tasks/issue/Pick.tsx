@@ -45,7 +45,7 @@ interface ReturnState {
   readonly busy: boolean
   readonly problem: { readonly problem: TaskProblem; readonly code: string | null } | null
   readonly key: string
-  readonly done: { readonly row: ReturnRow; readonly quantity: number; readonly place: string; readonly as: 'whole' | 'remnant' | 'part'; readonly tag: ReturnTag | null; readonly job: TagJob | null; readonly tagKey: string } | null
+  readonly done: { readonly row: ReturnRow; readonly quantity: number; readonly place: string; readonly as: 'whole' | 'remnant' | 'part'; readonly tag: ReturnTag | null; readonly job: TagJob | null; readonly tagKey: string; readonly remnantCode?: string | null } | null
 }
 
 export function FloorPick() {
@@ -294,7 +294,7 @@ export function FloorPick() {
     feedback('success')
     const as = answer.value.hideState === 'REMNANT' ? 'remnant' : comesBackAs(row, value)
     const tag: ReturnTag | null = row.kind === 'hide' && as === 'remnant' ? { kind: 'looking' } : null
-    setRet({ ...ret, busy: false, problem: null, done: { row, quantity: value, place: place.code, as, tag, job: null, tagKey: newIdempotencyKey() } })
+    setRet({ ...ret, busy: false, problem: null, done: { row, quantity: value, place: place.code, as, tag, job: null, tagKey: newIdempotencyKey(), remnantCode: answer.value.remnant?.code ?? null } })
     void refresh(list.workOrder.id)
     if (tag) {
       const resolved = await resolveTag(row, as)

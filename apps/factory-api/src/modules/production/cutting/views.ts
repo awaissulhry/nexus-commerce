@@ -185,9 +185,9 @@ export async function cuttingView(caller: CommandCaller, workOrderId: string) {
   })
 }
 
-/** The hides the work order's ledger names (ISSUE and RETURN moves). */
+/** The hides the work order's ledger names (ISSUE and RETURN moves; B-W2b-100: and REMNANT, RETURN's twin). */
 async function heldHides(db: Reader, workOrder: CutHeader): Promise<string[]> {
-  const rows = await db.stockMove.groupBy({ by: ['hideId'], where: { siteId: workOrder.siteId, workOrderId: workOrder.id, hideId: { not: null }, reason: { in: ['ISSUE', 'RETURN'] } } })
+  const rows = await db.stockMove.groupBy({ by: ['hideId'], where: { siteId: workOrder.siteId, workOrderId: workOrder.id, hideId: { not: null }, reason: { in: ['ISSUE', 'RETURN', 'REMNANT'] } } })
   return rows.flatMap((row) => (row.hideId ? [row.hideId] : []))
 }
 

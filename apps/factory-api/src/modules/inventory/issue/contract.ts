@@ -4,6 +4,7 @@ import { businessDate, defineContract, id, input, instant, output, quantity } fr
 import { notMoney } from '@nexus/factory-domain/money/marked'
 import { ITEM_TRACKINGS } from '@nexus/factory-domain/inventory/ledger/moves'
 import { HIDE_STATES } from '@nexus/factory-domain/inventory/issue/rules'
+import { SHADE_RULES } from '@nexus/factory-domain/inventory/reservations/shade'
 import { UNUSABLE_REASONS } from '@nexus/factory-domain/planning/usable'
 import { READINESS_WORDS } from '@nexus/factory-domain/planning/readiness/readiness'
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
@@ -75,6 +76,13 @@ const candidate = output({
   locationId: id(),
   locationCode: z.string(),
   onHand: decimal,
+  // B-W2b-100 (SCM-214, SCM-206): the hide's shade (group label or W1 text), its shade lot, out of shade, its remnant tag, and
+  // whether it is of the shade lot the work order holds already (null: it holds no hide of the line yet, or not a hide).
+  shadeLabel: z.string().nullable(),
+  shadeLot: z.string().nullable(),
+  outOfShade: z.boolean(),
+  remnant: output({ id: id(), code: z.string() }).nullable(),
+  sameShade: z.boolean().nullable(),
 })
 
 /** The quality hold (B-W2a-26) behind a held entry: its reason in both languages and since when (B-W2a-58). */
@@ -132,6 +140,10 @@ export const pickLine = output({
   atWorkOrder: z.array(
     output({ lotId: id().nullable(), lotCode: z.string().nullable(), hideId: id().nullable(), hideCode: z.string().nullable(), quantity: decimal, cut: decimal, returnable: decimal }),
   ),
+  /** B-W2b-100 (SCM-214): a leather line's hides at the work order, beside `issued` against `planned` ("4 hides · 96.2 of 110 ft²"); null for other lines. */
+  hides: output({ count: z.number().int() }).nullable(),
+  /** B-W2b-100 (SCM-206): the shade lots of the hides the work order holds of the line (two or more: mixed). */
+  shadeLots: z.array(output({ key: z.string(), lotCode: z.string(), shadeLabel: z.string().nullable() })),
 })
 
 export const pickListContract = defineContract({
@@ -152,6 +164,8 @@ export const pickListContract = defineContract({
         issuable: z.boolean(),
         style: output({ id: id(), code: z.string(), name: z.string() }),
       }),
+      /** B-W2b-100 (SCM-206): the site's shade rule (ORDER: a hide of another shade lot is refused at the issue). */
+      shadeRule: z.enum(SHADE_RULES),
       lines: z.array(pickLine),
       /** The caller's own last stock action when it is an issue to this work order it may still undo. */
       undo: output({
@@ -182,6 +196,8 @@ export const issueContract = defineContract({
     fromLocationId: id().optional(),
     /** An over-issue (the office, inventory.issue.over): why. */
     overIssueReason: why().optional(),
+    /** B-W2b-100 (SCM-206): a hide of another shade lot issued anyway (the office, inventory.shade.override): why. */
+    shadeOverrideReason: z.string().max(500).optional(),
     /** When it happened, by the device's clock. Default now. */
     occurredAt: instant().optional(),
     periodLockOverride: periodLockOverride.optional(),
@@ -222,13 +238,21 @@ export const returnContract = defineContract({
   }),
   response: {
     201: output({
-      return: output({ id: id(), workOrderId: id(), number: z.string(), hideState: z.enum(HIDE_STATES).nullable(), move: moveView }),
+      return: output({
+        id: id(),
+        workOrderId: id(),
+        number: z.string(),
+        hideState: z.enum(HIDE_STATES).nullable(),
+        move: moveView,
+        /** B-W2b-100 (SCM-254): a part of a hide came back (a REMNANT move) with its own tag; null otherwise. */
+        remnant: output({ id: id(), code: z.string(), baseArea: decimal }).nullable(),
+      }),
     }),
   },
 })
 
 const reversal = output({
-  reversal: output({ reversedId: id(), of: z.enum(['ISSUE', 'RETURN']), workOrderId: id(), number: z.string(), baseQuantity: decimal, moves: z.array(moveView) }),
+  reversal: output({ reversedId: id(), of: z.enum(['ISSUE', 'RETURN', 'REMNANT']), workOrderId: id(), number: z.string(), baseQuantity: decimal, moves: z.array(moveView) }),
 })
 
 export const undoContract = defineContract({

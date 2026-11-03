@@ -103,7 +103,7 @@ async function figuresOf(client: FactoryClient, lotIds: readonly string[]): Prom
       return counts
     }),
     client.lotDocument.groupBy({ by: ['lotId'], where: { lotId: { in: ids }, status: 'ACTIVE' }, _count: { _all: true } }),
-    client.stockMove.findMany({ where: { lotId: { in: ids }, reason: { in: ['ISSUE', 'RETURN'] } }, select: { id: true, lotId: true, reason: true, workOrderId: true, baseQuantity: true, reversalOfId: true, hideId: true } }),
+    client.stockMove.findMany({ where: { lotId: { in: ids }, reason: { in: ['ISSUE', 'RETURN', 'REMNANT'] } }, select: { id: true, lotId: true, reason: true, workOrderId: true, baseQuantity: true, reversalOfId: true, hideId: true } }),
   ])
   const documentsOf = new Map(documents.map((row) => [row.lotId, row._count._all]))
   const result = new Map<string, LotFigures>()
@@ -184,7 +184,7 @@ export async function stockLotRecord(caller: CommandCaller, lotId: string) {
       figuresOf(client, [lot.id]),
       locatedBy(client, 'lotId', { lotId: lot.id }),
       client.hide.groupBy({ by: ['state'], where: { lotId: lot.id }, _count: { _all: true } }),
-      client.stockMove.findMany({ where: { lotId: lot.id, reason: { in: ['ISSUE', 'RETURN'] } }, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }], select: { id: true, reason: true, workOrderId: true, baseQuantity: true, reversalOfId: true, hideId: true } }),
+      client.stockMove.findMany({ where: { lotId: lot.id, reason: { in: ['ISSUE', 'RETURN', 'REMNANT'] } }, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }], select: { id: true, reason: true, workOrderId: true, baseQuantity: true, reversalOfId: true, hideId: true } }),
       client.stockMove.count({ where: { lotId: lot.id } }),
     ])
     const here = located.get(lot.id)

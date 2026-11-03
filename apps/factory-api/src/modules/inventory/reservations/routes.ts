@@ -1,6 +1,7 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { availabilityContract, listReservationsContract, releaseContract, reservationRecordContract, reserveContract } from './contract'
+import { availabilityContract, findHidesContract, listReservationsContract, releaseContract, reservationRecordContract, reserveContract } from './contract'
+import { findHidesForJob } from './find'
 import { manifest } from './manifest'
 import { availability, listReservations, reservationRecord } from './read'
 import { release, reserve } from './reserve'
@@ -13,6 +14,8 @@ import { release, reserve } from './reserve'
 export default defineRoutes('inventory.reservations', manifest, async (app) => {
   app.get('/inventory/reservations', { schema: listReservationsContract }, async (request) => listReservations(request, { ...request.query, statuses: request.query.status }))
   app.get('/inventory/reservations/availability', { schema: availabilityContract }, async (request) => availability(request, request.query))
+  // B-W2b-100: find hides for a job (SCM-257, SCM-206).
+  app.get('/inventory/reservations/find-hides', { schema: findHidesContract }, async (request) => findHidesForJob(request, request.query))
   app.get('/inventory/reservations/:reservationId', { schema: reservationRecordContract }, async (request) => reservationRecord(request, request.params.reservationId))
   app.post('/inventory/reservations', { schema: reserveContract }, async (request, reply) => reply.code(201).send(await reserve(request, request.body, idempotencyKeyFrom(request))))
   app.post('/inventory/reservations/release', { schema: releaseContract }, async (request) => release(request, request.body, idempotencyKeyFrom(request)))

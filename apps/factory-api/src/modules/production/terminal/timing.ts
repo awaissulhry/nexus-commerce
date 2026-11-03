@@ -40,6 +40,7 @@ import type { VerifiedOverride } from '../guards/override'
 import { endRunningBlock } from '../offstandard/writes'
 import { floorOf, mayScan, refuse as refuseScan, systemView } from '../scans/access'
 import { refuseIfHeld } from '../scans/scans'
+import { firstPieceRefusalAt } from './first-piece'
 import { deviceStationOf, lockBundleScans, readBundleScans, readHeader, readOperations, readStations, scanWorkOrderLock, siteTimeZone, type OperationRow, type ScanHeader } from '../scans/store'
 import { floorRecordSubjectFor, hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import { startOnFirstWork } from '../work-orders/moves'
@@ -392,6 +393,11 @@ async function timeInCommand(tools: CommandTools, work: Work): Promise<TimingAns
     const picked = openOperationFor(action, open, locked.bundle.code)
     if (!picked.ok) refuseTiming(picked.refusal)
     operation = (picked as { operation: OperationRow }).operation
+  }
+  // B-W2b-99 hook (./first-piece.ts; QHS-039): a run waiting for its first piece starts no other bundle (pause, hand back pass).
+  if (working) {
+    const firstPiece = await firstPieceRefusalAt(tx, { workOrderId: workOrder.id, bundleId: locked.bundle.id, workOrderOperationId: operation.id })
+    if (firstPiece) refuseScan(firstPiece)
   }
   const place: WorkPlace = { bundleCode: locked.bundle.code, operation }
   const rows = await readOperationRows(tx, locked.bundle.id, operation.id)

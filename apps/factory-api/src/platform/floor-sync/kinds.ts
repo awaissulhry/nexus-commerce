@@ -49,6 +49,12 @@ import { writeHandover } from '../../modules/production/dispatch/handover'
 // B-W2b-96: a machine request's progress from the floor's queue.
 import { queuedProgressBody } from '../../modules/plant/requests/contract-depth'
 import { stepRequest } from '../../modules/plant/requests/depth'
+// B-W2b-99: a roving result or an end-of-line pass or defect recorded in one step from the floor's queue.
+import { InProcessRefusedError } from '../../modules/quality/inprocess/access'
+import { openCheck } from '../../modules/quality/inprocess/checks'
+import { openContract } from '../../modules/quality/inprocess/contract'
+// B-W2b-106: an open inspection recorded offline, through the queue module's one-client-id write.
+import { recordFromQueue } from '../../modules/quality/queue/record'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -85,6 +91,12 @@ import { stepRequest } from '../../modules/plant/requests/depth'
  *   plant.request.progress                modules/plant/requests stepRequest (B-W2b-96: a technician acknowledges a machine
  *                                         request or is on the way, the station confirms the machine works again; each
  *                                         step set once, applied as the request stands when it arrives)
+ *   quality.inprocess.record              modules/quality/inprocess openCheck with its `decision` (B-W2b-99: a roving result or
+ *                                         an end-of-line pass or defect, one step; a first piece is signed online, never queued)
+ *   quality.final.record / quality.incoming.record / quality.inprocess.results
+ *                                         modules/quality/queue recordFromQueue (B-W2b-106: a write of an open inspection, the
+ *                                         same command and key as its online try; applied on the record as it stands; a
+ *                                         signature, an opening or a cancellation is never queued)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -121,6 +133,7 @@ export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof ClockRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix, final: error.refusal.final })
   if (error instanceof TimingRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix, final: error.refusal.final })
   if (error instanceof DispatchRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
+  if (error instanceof InProcessRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
     return first ? moduleRefusal({ code: first.code, message: first.message, fix: first.fix }) : moduleRefusal({ code: 'NUMBER_REFUSED', message: error.message })
@@ -282,6 +295,15 @@ async function applyPlantProgress(caller: CommandCaller, event: QueuedEvent, key
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'MaintenanceRequest', id: result.request.id } }
 }
 
+/** B-W2b-99: a queued roving or end-of-line check, recorded in one step through its own command (the key: `<device>.<client event id>`). */
+async function applyInProcess(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const body = parsed(openContract.body, event.payload)
+  if (!body.ok) return refusedBy(body.refusal)
+  if (!body.value.decision || (body.value.kind !== 'ROVING' && body.value.kind !== 'END_OF_LINE')) return refusedBy(badEventRefusal('only a roving or end-of-line check recorded in one step is kept offline (a first piece is signed online).'))
+  const result = await openCheck(caller, body.value, key)
+  return { status: 'accepted', result: { type: 'InProcessCheck', id: result.check.id } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -324,6 +346,12 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
         return await applyHandover(caller, event, context.key)
       case 'plant.request.progress':
         return await applyPlantProgress(caller, event, context.key)
+      case 'quality.inprocess.record':
+        return await applyInProcess(caller, event, context.key)
+      case 'quality.final.record':
+      case 'quality.incoming.record':
+      case 'quality.inprocess.results':
+        return await recordFromQueue(caller, { clientEventId: event.clientEventId, kind: event.kind, payload: event.payload }, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

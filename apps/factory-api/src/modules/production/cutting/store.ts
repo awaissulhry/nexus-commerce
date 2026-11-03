@@ -217,11 +217,14 @@ export const unitsOf = (item: ItemRow) => ({
   consumptionFactor: item.consumptionFactor.toString(),
 })
 
-/** Per hide: issued to the work order (ISSUE out, less its reversals) and returned from it (RETURN in, less its reversals). */
+/**
+ * Per hide: issued to the work order (ISSUE out, less its reversals) and returned from it (RETURN in, less its reversals).
+ * B-W2b-100: a REMNANT (a part of the hide back with its own tag) counts as returned, as a RETURN does.
+ */
 export async function readHideLedger(db: Reader, siteId: string, workOrderId: string, hideIds: readonly string[]): Promise<Map<string, { issued: Decimal; returned: Decimal; at: Decimal }>> {
   const result = new Map<string, { issued: Decimal; returned: Decimal; at: Decimal }>()
   if (hideIds.length === 0) return result
-  const where = { siteId, workOrderId, hideId: { in: [...hideIds] }, reason: { in: ['ISSUE', 'RETURN'] as ('ISSUE' | 'RETURN')[] } }
+  const where = { siteId, workOrderId, hideId: { in: [...hideIds] }, reason: { in: ['ISSUE', 'RETURN', 'REMNANT'] as ('ISSUE' | 'RETURN' | 'REMNANT')[] } }
   const out = await db.stockMove.groupBy({ by: ['hideId', 'reason'], where: { ...where, fromLocationId: { not: null }, toLocationId: null }, _sum: { baseQuantity: true } })
   const back = await db.stockMove.groupBy({ by: ['hideId', 'reason'], where: { ...where, fromLocationId: null, toLocationId: { not: null } }, _sum: { baseQuantity: true } })
   for (const hideId of hideIds) result.set(hideId, { issued: ZERO, returned: ZERO, at: ZERO })
@@ -237,7 +240,7 @@ export async function readHideLedger(db: Reader, siteId: string, workOrderId: st
     const facts = entry(row.hideId)
     if (!facts) continue
     // From the work order into a location: a return, or the reversal of an issue.
-    if (row.reason === 'RETURN') facts.returned = facts.returned.plus(dec(row._sum.baseQuantity))
+    if (row.reason === 'RETURN' || row.reason === 'REMNANT') facts.returned = facts.returned.plus(dec(row._sum.baseQuantity))
     else facts.issued = facts.issued.minus(dec(row._sum.baseQuantity))
   }
   for (const facts of result.values()) facts.at = facts.issued.minus(facts.returned)
@@ -258,7 +261,7 @@ export async function readCutTotals(db: Reader, siteId: string, workOrderId: str
 
 /** What the work orders of the site hold of a hide, and what was cut of it for each (base unit). */
 export async function readHideAtWorkOrders(db: Reader, siteId: string, hideId: string): Promise<Map<string, { at: Decimal; cut: Decimal }>> {
-  const where = { siteId, hideId, workOrderId: { not: null }, reason: { in: ['ISSUE', 'RETURN'] as ('ISSUE' | 'RETURN')[] } }
+  const where = { siteId, hideId, workOrderId: { not: null }, reason: { in: ['ISSUE', 'RETURN', 'REMNANT'] as ('ISSUE' | 'RETURN' | 'REMNANT')[] } }
   const out = await db.stockMove.groupBy({ by: ['workOrderId'], where: { ...where, fromLocationId: { not: null }, toLocationId: null }, _sum: { baseQuantity: true } })
   const back = await db.stockMove.groupBy({ by: ['workOrderId'], where: { ...where, fromLocationId: null, toLocationId: { not: null } }, _sum: { baseQuantity: true } })
   const made = await db.cutLog.groupBy({ by: ['workOrderId'], where: { siteId, hideId, reversalOfId: null }, _sum: { baseAreaUsed: true } })

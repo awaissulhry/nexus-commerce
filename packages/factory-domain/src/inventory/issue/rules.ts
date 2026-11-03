@@ -56,6 +56,11 @@ export const REFUSALS = [
   'REVERSED_ALREADY',
   // B-W2a-11: the stock is held by another work order's or order line's reservation (inventory/reservations/rules).
   'RESERVED_FOR_OTHER',
+  // B-W2b-100: one shade lot per order (inventory/reservations/shade) and remnant stock (inventory/remnants/rules).
+  'SHADE_LOT',
+  'OUT_OF_SHADE',
+  'REMNANT_TOO_SMALL',
+  'REMNANT_GONE_ON',
 ] as const
 export type RefusalCode = (typeof REFUSALS)[number]
 
@@ -162,7 +167,10 @@ export interface ReturnFacts {
   readonly baseQuantity: DecimalInput
 }
 
-export type ReturnDecision = { readonly ok: true; readonly hideState: HideState | null } | { readonly ok: false; readonly refusal: Refusal }
+export type ReturnDecision =
+  /** `reason` (B-W2b-100): RETURN for a hide that comes back whole and for anything else; REMNANT for a part of a hide. */
+  | { readonly ok: true; readonly hideState: HideState | null; readonly reason: 'RETURN' | 'REMNANT' }
+  | { readonly ok: false; readonly refusal: Refusal }
 
 /** Whether this much may come back from the work order, and the hide's state after it (rules in the header). */
 export function returnDecision(facts: ReturnFacts): ReturnDecision {
@@ -180,7 +188,17 @@ export function returnDecision(facts: ReturnFacts): ReturnDecision {
       ? refuse('MORE_THAN_AT_WORK_ORDER', `Work order ${facts.workOrder.number} holds ${text(at)} ${facts.baseUom} of ${what} and ${text(cut)} of it was cut; at most ${text(Dec.max(ZERO, free))} comes back.`)
       : refuse('MORE_THAN_AT_WORK_ORDER', `Work order ${facts.workOrder.number} holds ${text(at)} ${facts.baseUom} of ${what}; the return is ${text(back)}.`)
   }
-  return { ok: true, hideState: facts.hide ? hideStateAfterReturn(facts.hide.state, back.equals(at) && cut.isZero()) : null }
+  const whole = back.equals(at) && cut.isZero()
+  return { ok: true, hideState: facts.hide ? hideStateAfterReturn(facts.hide.state, whole) : null, reason: returnReasonOf(facts.hide !== null, whole) }
+}
+
+/**
+ * B-W2b-100 (SCM-254): the move a return posts. A hide that comes back whole (nothing cut, all of what the work order holds)
+ * is a RETURN — a tagged remnant coming back uncut keeps its tag; a part of a hide is a REMNANT: an offcut with a tag of its
+ * own. Anything else (a lot, a material) is a RETURN.
+ */
+export function returnReasonOf(hide: boolean, whole: boolean): 'RETURN' | 'REMNANT' {
+  return hide && !whole ? 'REMNANT' : 'RETURN'
 }
 
 /** A hide that comes back whole (nothing cut, all of it) keeps its state; one that left part of itself is a REMNANT. */
@@ -190,6 +208,9 @@ export function hideStateAfterReturn(state: HideState, whole: boolean): HideStat
 }
 
 // ---- undo and reversal ------------------------------------------------------------------------------------------------------
+
+/** The moves of a work order's pick list: an issue, a return, and (B-W2b-100) a remnant that came back with its tag. */
+export const PICKED_REASONS: readonly string[] = Object.freeze(['ISSUE', 'RETURN', 'REMNANT'])
 
 /** A move as the undo and the reversal read it. */
 export interface PickedMove {
@@ -212,7 +233,8 @@ export function reversalRefusal(
   moves: readonly PickedMove[],
   facts: { readonly reversed: boolean; readonly workOrderNumber: string; readonly hide?: { readonly code: string; readonly atWorkOrder: DecimalInput; readonly cut: DecimalInput; readonly baseUom: string } | null },
 ): Refusal | null {
-  if (moves.length === 0 || moves.some((move) => move.reversalOfId !== null || (move.reason !== 'ISSUE' && move.reason !== 'RETURN') || move.workOrderId === null)) {
+  // B-W2b-100: a REMNANT (a part of a hide that came back with its own tag) is RETURN's twin here.
+  if (moves.length === 0 || moves.some((move) => move.reversalOfId !== null || !PICKED_REASONS.includes(move.reason) || move.workOrderId === null)) {
     return { code: 'NOT_IN_WORK_ORDER', message: 'Only an issue to a work order or a return from it is reversed here (never a reversal).' }
   }
   if (facts.reversed) return { code: 'REVERSED_ALREADY', message: 'This was reversed already; a move has at most one reversal.' }

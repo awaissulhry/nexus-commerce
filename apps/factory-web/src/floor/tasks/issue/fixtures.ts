@@ -14,6 +14,8 @@ import type { PickReturnModel, ReturnTag } from './view/ReturnStep'
 
 const TAG = tenantTag('0190f0e2-4c1d-7a3b-9e55-2f1c8d7a6b10')
 const hide = (ref: number) => formatScanId({ type: 'HIDE', tenantTag: TAG, ref })
+// B-W2b-100: a remnant's own tag (RM-…).
+const remnant = (ref: number) => formatScanId({ type: 'REMNANT', tenantTag: TAG, ref })
 const LOT = 'LOT-DEMO-0031'
 const AS_OF = '2026-10-29T07:52:00.000Z'
 
@@ -139,6 +141,50 @@ const ret = (extra: Partial<PickReturnModel> = {}): PickReturnModel => ({ workOr
 const returning = (extra: Partial<PickReturnModel> = {}, model: Partial<PickViewModel> = {}): PickViewModel => base({ list: withReturns, stage: 'return', ret: ret(extra), ...model })
 const remnantDone = (tag: ReturnTag | null) => ({ row: RETURN_ROWS[0]!, quantity: 18.6, place: 'A1-STORE-01', as: 'remnant' as const, tag })
 
+// ---- B-W2b-100: choose hides at the pick (SCM-214), one shade lot per order (SCM-206), remnant tags (SCM-254) ----
+const shadeTwo = [{ key: 'lot-7|g:2', lotCode: 'LOT-DEMO-0007', shadeLabel: '2' }]
+const leatherChoose: PickLine = {
+  ...leather,
+  hides: { count: 3 },
+  shadeLots: shadeTwo,
+  usable: {
+    onHand: '312.6000',
+    candidates: [
+      { lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-1', hideCode: hide(4211), hideState: 'FULL', grade: 'A', locationCode: 'A1-STORE-01', onHand: '52.4000', shadeLabel: '2', outOfShade: false, remnant: null, sameShade: true },
+      { lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-2', hideCode: hide(4212), hideState: 'FULL', grade: 'B', locationCode: 'A1-STORE-01', onHand: '49.8000', shadeLabel: '2', outOfShade: false, remnant: null, sameShade: true },
+      { lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-5', hideCode: hide(4190), hideState: 'REMNANT', grade: 'A', locationCode: 'A1-RACK-R2', onHand: '14.2000', shadeLabel: '2', outOfShade: false, remnant: { id: 'rm-1', code: remnant(118) }, sameShade: true },
+      { lotId: 'lot-8', lotCode: 'LOT-DEMO-0008', hideId: 'h-9', hideCode: hide(4302), hideState: 'FULL', grade: 'A', locationCode: 'A1-STORE-02', onHand: '55.0000', shadeLabel: '1', outOfShade: false, remnant: null, sameShade: false },
+      { lotId: 'lot-8', lotCode: 'LOT-DEMO-0008', hideId: 'h-10', hideCode: hide(4303), hideState: 'FULL', grade: 'C', locationCode: 'A1-STORE-02', onHand: '51.0000', shadeLabel: '1', outOfShade: false, remnant: null, sameShade: false },
+      { lotId: 'lot-8', lotCode: 'LOT-DEMO-0008', hideId: 'h-11', hideCode: hide(4304), hideState: 'FULL', grade: 'A', locationCode: 'A1-STORE-02', onHand: '48.0000', shadeLabel: 'Fuori tono', outOfShade: true, remnant: null, sameShade: false },
+    ],
+    more: 0,
+  },
+  atWorkOrder: [
+    { lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-0', hideCode: hide(4208), quantity: '51.1000', cut: '0.0000', returnable: '51.1000' },
+    { lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-3', hideCode: hide(4209), quantity: '53.0000', cut: '0.0000', returnable: '53.0000' },
+    { lotId: 'lot-7', lotCode: 'LOT-DEMO-0007', hideId: 'h-4', hideCode: hide(4210), quantity: '52.1000', cut: '0.0000', returnable: '52.1000' },
+  ],
+}
+const chooseList: PickList = { ...list, lines: [leatherChoose, lining, protector, thread], shadeRule: 'ORDER' }
+// Both lots held: the API marks every hide of either as the order's own (the out-of-shade one stays out).
+const mixedList: PickList = {
+  ...chooseList,
+  lines: [
+    {
+      ...leatherChoose,
+      shadeLots: [...shadeTwo, { key: 'lot-8|g:1', lotCode: 'LOT-DEMO-0008', shadeLabel: '1' }],
+      usable: { ...leatherChoose.usable, candidates: leatherChoose.usable.candidates.map((row) => (row.lotId === 'lot-8' && !row.outOfShade ? { ...row, sameShade: true } : row)) },
+    },
+    lining,
+    protector,
+    thread,
+  ],
+}
+const firstHideList: PickList = {
+  ...chooseList,
+  lines: [{ ...leatherChoose, issued: '0.0000', toIssue: '410.0000', hides: { count: 0 }, shadeLots: [], atWorkOrder: [], usable: { ...leatherChoose.usable, candidates: leatherChoose.usable.candidates.map((row) => ({ ...row, sameShade: null })) } }, lining, protector, thread],
+}
+
 export const designScreen = defineDesignScreen<PickViewModel>({
   screen: 'SCR-093',
   title: 'Pick & issue',
@@ -227,5 +273,34 @@ export const designScreen = defineDesignScreen<PickViewModel>({
     { id: 'return-done-no-printer', label: 'No label printer', model: returning({ done: remnantDone({ kind: 'printer', printer: { kind: 'none' }, picked: null }) }), note: 'Said plainly: write the new area on the tag.' },
     { id: 'return-done-old-tag', label: 'An older tag code', model: returning({ done: remnantDone({ kind: 'notOurs' }) }) },
     { id: 'return-done-lot', label: 'A lot back to stock', model: returning({ done: { row: RETURN_ROWS[2]!, quantity: 12, place: 'A2-ROLL-03', as: 'part', tag: null } }), note: 'A lot keeps its label.' },
+    // ---- B-W2b-100: Choose hides (W2b, SCM-214), one shade lot per order (SCM-206), remnant tags (SCM-254) ----
+    {
+      id: 'choose-hides',
+      label: 'Choose hides: running area against the need',
+      model: base({ list: chooseList }),
+      note: 'W2b: the leather line says "3 hides · 156.2 of 410 ft²" and the shade lot the work order is cut from; the hides to take next follow, the same shade lot first (a remnant by its RM tag among them), each with the running area if it is taken. Another shade lot says it is refused; out-of-shade hides are not offered.',
+    },
+    { id: 'choose-hides-first', label: 'Choose hides: nothing issued yet', model: base({ list: firstHideList }), note: 'No shade lot yet: the first hide scanned sets it; the oldest first.' },
+    { id: 'choose-hides-mixed', label: 'Mixed shade lots (issued before the rule)', model: base({ list: mixedList }), note: 'The line names both lots plainly; the office sorts it out.' },
+    {
+      id: 'refused-shade-lot',
+      label: 'Refused: another shade lot',
+      model: base({ list: chooseList, problem: { problem: { kind: 'refused', code: 'SHADE_LOT', message: `Work order WO-DEMO-0042 is cut from lot LOT-DEMO-0007, shade 2; hide ${hide(4302)} is lot LOT-DEMO-0008, shade 1.`, fix: null }, code: hide(4302) } }),
+      note: 'One shade lot per order (Q18 default): the scan is refused in the screen\'s words; the office may let it through with a reason.',
+    },
+    { id: 'refused-out-of-shade', label: 'Refused: out of shade', model: base({ list: chooseList, problem: { problem: { kind: 'refused', code: 'OUT_OF_SHADE', message: 'Out of shade.', fix: null }, code: hide(4304) } }) },
+    {
+      id: 'issued-remnant',
+      label: 'A remnant issued by its RM tag',
+      model: base({ list: chooseList, last: { kind: 'issued', code: remnant(118), quantity: 14.2, uom: 'FT2', workOrder: 'WO-DEMO-0042' } }),
+      note: 'The remnant\'s own tag issues it like its hide\'s: whole, zero taps.',
+    },
+    {
+      id: 'return-done-remnant-tag',
+      label: 'Back as a remnant: its own RM tag',
+      model: returning({ done: { ...remnantDone({ kind: 'printer', printer: { kind: 'site', id: 'p-1', name: 'Etichette magazzino (demo)' }, picked: 'p-1' }), remnantCode: remnant(119) } }),
+      note: 'W2b: the part that came back is stock with its own tag (RM-…), shown here; the hide\'s tag prints with the new area.',
+    },
+    { id: 'return-refused-too-small', label: 'Refused: smaller than a remnant', model: returning({ picked: { rowKey: RETURN_ROWS[0]!.key, value: 0.5 }, placeId: 'loc-1', problem: { problem: { kind: 'refused', code: 'REMNANT_TOO_SMALL', message: 'Too small.', fix: null }, code: hide(4208) } }), note: 'Under the minimum remnant (0.10 m², 1.08 ft²: a default until it is a setting) the piece is waste.' },
   ],
 })

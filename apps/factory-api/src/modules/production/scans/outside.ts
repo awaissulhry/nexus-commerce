@@ -7,6 +7,7 @@ import { PURCHASING_SUBCONTRACT_RECEIVE } from '@nexus/factory-domain/purchasing
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { holdOnScan } from '../../quality/holds/checks'
+import { firstPieceRefusalAt } from '../terminal/first-piece'
 import { bundleFlowOf } from '../bundles/flow'
 import { lockBundleForScan } from '../bundles/store'
 import { officeOf } from './access'
@@ -76,8 +77,9 @@ async function defectLinesOf(tools: CommandTools, line: OutsideLine): Promise<De
 const merged = (a: readonly DefectLine[], b: readonly DefectLine[]): DefectLine[] => {
   const sum = new Map<string, DefectLine>()
   for (const line of [...a, ...b]) {
-    const key = `${line.kind}|${line.reason}`
-    sum.set(key, { kind: line.kind, reason: line.reason, quantity: (sum.get(key)?.quantity ?? 0) + line.quantity })
+    // B-W2b-99: a line charged to an operation stays its own line, the charge kept.
+    const key = `${line.kind}|${line.reason}|${line.causedAtOperationId ?? ''}`
+    sum.set(key, { kind: line.kind, reason: line.reason, quantity: (sum.get(key)?.quantity ?? 0) + line.quantity, ...(line.causedAtOperationId ? { causedAtOperationId: line.causedAtOperationId } : {}) })
   }
   return [...sum.values()].sort((x, y) => (x.kind === y.kind ? x.reason.localeCompare(y.reason) : x.kind === 'SCRAP' ? -1 : 1))
 }
@@ -107,6 +109,8 @@ export async function reportOutsideInCommand(tools: CommandTools, order: Outside
     if (!bundle) throw new NotFoundError('Bundle not found.')
     await lockBundleScans(tx, tenantId, bundle.bundle.siteId, bundle.bundle.id)
     const hold = await holdOnScan(tx, context, { bundleId: bundle.bundle.id, workOrderId: order.workOrderId })
+    // B-W2b-99 hook (terminal/first-piece.ts; QHS-039): a run waiting for its first piece takes no outside report either.
+    const firstPiece = await firstPieceRefusalAt(tx, { workOrderId: order.workOrderId, bundleId: bundle.bundle.id, workOrderOperationId: operation.id })
     const workOrder = (await readHeader(tx, order.workOrderId))!
     const scans = await readBundleScans(tx, bundle.bundle.id)
     const own = standingScans(scans)
@@ -119,7 +123,7 @@ export async function reportOutsideInCommand(tools: CommandTools, order: Outside
       operation,
       standing: standing ? { ...standing, fromReceipt: (rootReport(scans, standing.id)?.subcontractReceiptLineId ?? null) !== null } : null,
       // A work order ON_HOLD is said by the plan in its own words; a quality hold here.
-      held: hold && hold.holdId ? hold.message : null,
+      held: hold && hold.holdId ? hold.message : (firstPiece?.message ?? null),
       byPerson: person !== null,
     })
     if (plan.action === 'NONE') {
