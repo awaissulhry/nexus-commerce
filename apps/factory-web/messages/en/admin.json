@@ -1766,6 +1766,8 @@
     "calendars_manage": "Change company, site and line calendars",
     "calendars_suppliers_manage": "Change supplier and subcontractor calendars",
     "production_rework": "Send garments back for rework and finish it",
+    "production_repair": "See the repair queue and scan bundles in and out at a repair station",
+    "production_downgrade": "Send scrapped garments to second quality and withdraw a downgrade",
     "production_scrap_view": "See scrap and rework",
     "production_scrap": "Post scrap and ask for replacements",
     "production_scrap_approve": "Approve lower order quantities",

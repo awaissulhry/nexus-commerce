@@ -72,6 +72,8 @@ import { events as inventoryRolls } from '../inventory-rolls/events'
 import { events as qualityCapa } from '../quality-capa/events'
 // B-W2b-124: statutory periodic checks (a check type, a plan, a result recorded, a check due).
 import { events as plantStatutory } from '../plant-statutory/events'
+// B-W2b-126: the repair station and second quality.
+import { events as productionRepair } from '../production-repair/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -210,7 +212,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-108
   ...qualityCapa,
   // B-W2b-124
-  ...plantStatutory] as const satisfies readonly EventDefinition[]
+  ...plantStatutory,
+  // B-W2b-126
+  ...productionRepair] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

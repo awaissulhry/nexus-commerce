@@ -243,6 +243,12 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       const counted = whole(p.add) ?? whole(p.inspected) ?? rows
       return { code: kind === 'quality.inprocess.results' ? 'RESULTS' : text(p.what, 20), target: text(p.inspectionId, 40) ?? text(p.checkId, 40), ...(counted !== undefined ? { quantity: counted } : {}) }
     }
+    // B-W2b-126: the step (IN or OUT) and the bundle scanned, the garments that came out good and scrapped; never who.
+    case 'production.repair.scan': {
+      const good = whole(p.good)
+      const scrap = whole(p.scrap)
+      return { code: text(p.code) ?? text(p.step, 8), target: text(p.reworkId, 40), ...(good !== undefined ? { good } : {}), ...(scrap !== undefined ? { scrap } : {}) }
+    }
   }
 }
 

@@ -717,7 +717,8 @@
       "handover": "Nota di consegna",
       "onBehalf_one": "Inserimento per conto di altri: {code} · {count} buono",
       "onBehalf_other": "Inserimento per conto di altri: {code} · {count} buoni",
-      "progress": "Avanzamento di una segnalazione guasto"
+      "progress": "Avanzamento di una segnalazione guasto",
+      "repair": "Scansione di riparazione di {code}"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

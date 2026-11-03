@@ -59,6 +59,8 @@ export const FLOOR_SYNC_KINDS = [
   'quality.final.record',
   'quality.incoming.record',
   'quality.inprocess.results',
+  // B-W2b-126: a bundle scanned in or out at a repair station (MES-132; design floor.mywork "Works offline"), with the tablet's time.
+  'production.repair.scan',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -112,6 +114,8 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'quality.final.record': { kind: 'quality.final.record', permission: 'quality.inspections.record', numbers: null, what: 'Record a final inspection (results, measurements, count, serials, defects)' },
   'quality.incoming.record': { kind: 'quality.incoming.record', permission: 'quality.incoming.record', numbers: null, what: 'Record an incoming inspection (a hide, plan checks)' },
   'quality.inprocess.results': { kind: 'quality.inprocess.results', permission: 'quality.inprocess.record', numbers: null, what: "Record an in-process check's plan checks" },
+  // B-W2b-126: the repair station's own right; the module checks again the rework, its bundle and the station.
+  'production.repair.scan': { kind: 'production.repair.scan', permission: 'production.repair', numbers: null, what: 'Scan a bundle in or out at a repair station' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const
