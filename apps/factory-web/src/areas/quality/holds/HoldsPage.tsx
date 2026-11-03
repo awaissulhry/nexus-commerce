@@ -19,6 +19,7 @@ import {
   LIVE_EVENTS,
   nextLimit,
   kindKey,
+  modeFromAddress,
   PAGE,
   prefillFromAddress,
   queryOf,
@@ -37,6 +38,8 @@ import {
   type ReleaseDraft,
   type View,
 } from './model'
+import { genealogyFromAddress } from './depth/model'
+import { useHoldsDepth } from './depth/use-depth'
 import { officeToday, PlaceHold } from './place/PlaceHold'
 import { HoldsMessages } from './view/parts'
 import { HoldsView } from './view/HoldsView'
@@ -76,6 +79,9 @@ function HoldsContainer() {
   const scope = scopeFromAddress(params)
   const openId = params?.get('open') ?? null
   const tab: RecordTab = tabFromAddress(params)
+  // B-W2b-114: List · Board in the address (`?mode=board`, the list frame's term).
+  const mode = modeFromAddress(params)
+  const canTransfer = session.permissions.includes('inventory.transfer')
   const [rows, setRows] = useState<Read<readonly Hold[]>>(reading())
   const [truncated, setTruncated] = useState(false)
   const [limit, setLimit] = useState(PAGE)
@@ -118,11 +124,11 @@ function HoldsContainer() {
 
   /** The address keeps the view, the record the list is narrowed to, the open hold and its tab (Back closes it). */
   const go = useCallback(
-    (next: { view?: View; open?: string | null; tab?: RecordTab | null; scope?: { subjectType: Hold['subjectType'] | null; subjectId: string | null } }) => {
+    (next: { view?: View; open?: string | null; tab?: RecordTab | null; scope?: { subjectType: Hold['subjectType'] | null; subjectId: string | null }; mode?: typeof mode }) => {
       const nextScope = next.scope ?? scope
-      router.replace(`${pathname}${holdsAddress({ view: next.view ?? view, subjectType: nextScope.subjectType, subjectId: nextScope.subjectId, open: next.open === undefined ? openId : next.open, tab: next.tab === undefined ? tab : next.tab })}`, { scroll: false })
+      router.replace(`${pathname}${holdsAddress({ view: next.view ?? view, subjectType: nextScope.subjectType, subjectId: nextScope.subjectId, open: next.open === undefined ? openId : next.open, tab: next.tab === undefined ? tab : next.tab, mode: next.mode ?? mode })}`, { scroll: false })
     },
-    [openId, pathname, router, scope, tab, view],
+    [mode, openId, pathname, router, scope, tab, view],
   )
 
   const queryKey = JSON.stringify({ ...queryOf(view, scope), q: q || null })
@@ -214,7 +220,10 @@ function HoldsContainer() {
       if (liveMatches(change, LIVE_EVENTS)) {
         setUpdates((count) => count + 1)
         void loadCounts()
-        if (openId && change.fields.holdId === openId) void loadDetail()
+        if (openId && change.fields.holdId === openId) {
+          void loadDetail()
+          if (tab === 'affected') void depth.loadAffected()
+        }
       }
     },
     () => {
@@ -424,6 +433,29 @@ function HoldsContainer() {
     setDialog(next)
   }
 
+  // B-W2b-114: the board's moves, the hold by genealogy, the Affected tab, the quarantine move.
+  const depth = useHoldsDepth({
+    api,
+    can,
+    canTransfer,
+    open: { id: openId, tab },
+    current,
+    replace,
+    reload: () => {
+      void load()
+      void loadCounts()
+      void loadDetail()
+    },
+    notify: setNotice,
+    openHold: (id, next) => go({ open: id, tab: next }),
+  })
+  const fromAddress = useRef(genealogyFromAddress(params))
+  useEffect(() => {
+    const asked = fromAddress.current
+    if (asked && can.holdsView) depth.openGenealogy(asked.start, asked.holdId)
+    // Once, from the address another list opened (`?genealogy=1&type=&id=&hold=`).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const openHold = detail.value?.hold ?? null
   const panels =
     openHold && can.threadsRead ? (
@@ -466,6 +498,7 @@ function HoldsContainer() {
           settings,
           settingsDraft,
           companyName: session.company?.name ?? '',
+          depth: { mode, canTransfer, genealogy: depth.genealogy, affected: depth.affected, quarantine: depth.quarantine, moving: depth.moving },
         }}
         stepUp={stepUp}
         panels={panels}
@@ -510,6 +543,19 @@ function HoldsContainer() {
           onSettingsDraft: setSettingsDraft,
           onSaveSettings: () => void saveSettings(),
           onRetrySettings: () => void loadSettings(),
+          onMode: (next) => go({ mode: next }),
+          onNextStep: depth.nextStep,
+          onGenealogy: depth.openGenealogy,
+          onQuarantine: depth.openQuarantine,
+          onRetryAffected: () => void depth.loadAffected(),
+          genealogy: {
+            ...depth.genealogyActions,
+            onClose: () => {
+              depth.genealogyActions.onClose?.()
+              if (params?.get('genealogy') === '1') go({})
+            },
+          },
+          quarantine: depth.quarantineActions,
         }}
       />
       <PlaceHold

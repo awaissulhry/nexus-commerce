@@ -162,7 +162,8 @@
     "tab": {
       "activity": "Attività",
       "decision": "Decisione",
-      "hold": "Blocco"
+      "hold": "Blocco",
+      "affected": "Coinvolti"
     },
     "tabsLabel": "Parti del blocco",
     "tag": "Stampa cartellino",
@@ -180,7 +181,10 @@
     "workOrders": "Ordini di lavoro che blocca",
     "workOrdersHint": "Un ordine di lavoro torna dov’era quando nessun blocco attivo lo nomina più.",
     "number": "Numero",
-    "numberNone": "Messo prima che i blocchi fossero numerati."
+    "numberNone": "Messo prima che i blocchi fossero numerati.",
+    "group": "Blocco per genealogia",
+    "groupFrom": "Da {kind} {code}",
+    "groupHint": "Vedi cosa tocca in Coinvolti."
   },
   "expected": {
     "none": "Non indicato",
@@ -224,7 +228,8 @@
     "place": "Metti un blocco",
     "release": "Sblocca il blocco mostrato (nella sua finestra)",
     "title": "Scorciatoie da tastiera",
-    "walk": "Blocco precedente / successivo nella sua finestra"
+    "walk": "Blocco precedente / successivo nella sua finestra",
+    "genealogy": "Traccia e blocca per genealogia"
   },
   "kind": {
     "Bundle": "Fascio",
@@ -275,7 +280,10 @@
     "state": "Stato",
     "title": "Spostamento in quarantena",
     "to": "Verso",
-    "trigger": "Spostamento in quarantena: {state}"
+    "trigger": "Spostamento in quarantena: {state}",
+    "office": "Finché non arriva la scansione da tablet, l'ufficio conferma lo spostamento con il codice del posto.",
+    "confirm": "Conferma lo spostamento…",
+    "otherPlace": "Chiedi un altro posto…"
   },
   "noAccess": {
     "body": "I blocchi richiedono quality.holds.view: li leggono magazzino, capi reparto, responsabili di produzione e qualità. Lo assegna un amministratore in Sistema › Ruoli e permessi.",
@@ -442,7 +450,10 @@
     "release": "Sblocca…",
     "tag": "Stampa cartellino di blocco",
     "trace": "Traccia in Lotti e tracciabilità",
-    "copyNumber": "Copia il numero"
+    "copyNumber": "Copia il numero",
+    "quarantine": "Chiedi spostamento in quarantena…",
+    "quarantineHint": "La merce bloccata va in un posto di quarantena della sede.",
+    "genealogyHint": "Blocca tutto ciò che è stato fatto con {code}"
   },
   "source": {
     "Certificate": "Certificato sospeso o scaduto",
@@ -452,7 +463,8 @@
     "Nonconformance": "Non conformità",
     "QualityReleaseReversal": "Rilascio revocato",
     "manual": "Messo a mano",
-    "other": "Un altro record"
+    "other": "Un altro record",
+    "IncomingInspection": "Controllo in accettazione"
   },
   "status": {
     "ACTIVE": "Bloccato",
@@ -575,5 +587,289 @@
     "cancelled": "Non è stato salvato nulla: il codice non è stato dato.",
     "conflict": "Qualcuno ha cambiato la regola nel frattempo: è stata riletta.",
     "refused": "La regola non è stata salvata:"
+  },
+  "genealogy": {
+    "open": "Blocca per genealogia",
+    "title": "Blocca per genealogia",
+    "titleExtend": "Estendi il blocco per genealogia",
+    "subtitle": "Tutto ciò che è stato fatto con {kind} {code}",
+    "subtitleStart": "Parti da un lotto o da una pelle sospetti",
+    "goNone": "Blocca",
+    "refusedPicks": "Alcuni elementi spuntati non si possono bloccare ora",
+    "refusedRight": "Non puoi bloccare in una di queste sedi",
+    "refused": "Il blocco per genealogia non è stato registrato",
+    "readAgain": "Rileggi la tracciabilità",
+    "extendNew": "Questo blocco non ha ancora un gruppo: bloccando qui se ne crea uno che lo comprende.",
+    "start": "Lotto o pelle sospetti",
+    "startHint": "Scansiona o digita il codice: un codice lotto o l'etichetta di una pelle.",
+    "findNone": "Nessun lotto o pelle con codice {code} in una sede che raggiungi.",
+    "startPlaceholder": "Codice lotto o etichetta pelle",
+    "typeFirst": "Digita o scansiona prima un codice.",
+    "find": "Cerca",
+    "tree": "Cosa è stato fatto con esso",
+    "empty": "Indica il lotto o la pelle sospetti per vedere tutto ciò che ne è stato fatto.",
+    "failed": "Non è stato possibile leggere la tracciabilità",
+    "reading": "Lettura della tracciabilità…",
+    "hold": "Blocca {what}",
+    "holdNothing": "Nulla di spuntato si può bloccare",
+    "and": "{first} e {last}",
+    "treeLabel": "Tutto ciò che è stato fatto con {code}",
+    "nothingMade": "Non è stato ancora fatto nulla con esso.",
+    "reasonNoteHint": "Cosa è sospetto, in poche parole.",
+    "quarantineGap": "Chiesto solo dove la sede ha un solo posto di quarantena; non a {sites}: chiedilo da ogni blocco.",
+    "quarantineHint": "Lotti e pelli bloccati vanno nel posto di quarantena della sede; l'ufficio conferma lo spostamento con il codice del posto.",
+    "after": "Un blocco per tipo di elemento e sede, tutti in un gruppo: ognuno blocca e si rilascia come qualsiasi blocco. Ciò che è uscito è del registro DPI: un richiamo, non un blocco.",
+    "register": "Apri il registro DPI (richiami)",
+    "extendKind": "L'estensione parte da un lotto o da una pelle: questo blocco non ne contiene e non ha un gruppo.",
+    "part": {
+      "Lot_one": "{count} lotto",
+      "Lot_other": "{count} lotti",
+      "Hide_one": "{count} pelle",
+      "Hide_other": "{count} pelli",
+      "WorkOrder_one": "{count} ordine di produzione",
+      "WorkOrder_other": "{count} ordini di produzione",
+      "Bundle_one": "{count} mazzetto",
+      "Bundle_other": "{count} mazzetti",
+      "Shipment_one": "{count} spedizione",
+      "Shipment_other": "{count} spedizioni",
+      "garments_one": "{count} capo",
+      "garments_other": "{count} capi"
+    },
+    "problem": {
+      "start": "Indica prima il lotto o la pelle sospetti.",
+      "nothing": "Spunta almeno un elemento che si può bloccare.",
+      "reason": "Scegli il motivo.",
+      "reasonNote": "Questo motivo richiede una nota.",
+      "reasonNoteLong": "La nota del motivo è troppo lunga.",
+      "noteLong": "La nota è troppo lunga.",
+      "date": "Il rilascio previsto è oggi o più avanti."
+    },
+    "held": {
+      "HELD": "Già bloccato",
+      "LEFT": "Già spedito: un richiamo, non un blocco",
+      "NOT_HOLDABLE": "Non si può bloccare nel suo stato",
+      "HIDDEN": "In una sede che non raggiungi",
+      "site": "Non blocchi nella sede {site}"
+    },
+    "extendGroup_one": "Fa parte del blocco per genealogia di {code} ({count} blocco): ciò che blocchi si aggiunge.",
+    "extendGroup_other": "Fa parte del blocco per genealogia di {code} ({count} blocchi): ciò che blocchi si aggiunge.",
+    "shipped_one": "{count} capo già spedito a {customers}",
+    "shipped_other": "{count} capi già spediti a {customers}",
+    "customers_one": "{count} cliente",
+    "customers_other": "{count} clienti",
+    "covered_one": "{count} mazzetto o capo è coperto dal blocco del suo ordine.",
+    "covered_other": "{count} mazzetti o capi sono coperti dal blocco del loro ordine.",
+    "alreadyHeld_one": "{count} elemento spuntato è già bloccato e resta com'è.",
+    "alreadyHeld_other": "{count} elementi spuntati sono già bloccati e restano come sono.",
+    "placed_one": "Bloccato per genealogia da {code}: {count} blocco registrato.",
+    "placed_other": "Bloccato per genealogia da {code}: {count} blocchi registrati.",
+    "placedNoMove_one": "Bloccato per genealogia da {code}: {count} blocco registrato; lo spostamento in quarantena non è stato chiesto in una sede senza un unico posto di quarantena.",
+    "placedNoMove_other": "Bloccato per genealogia da {code}: {count} blocchi registrati; lo spostamento in quarantena non è stato chiesto in una sede senza un unico posto di quarantena."
+  },
+  "affected": {
+    "states": "Cosa tocca, per stato",
+    "material": "Materiale in giacenza",
+    "hides_one": "{count} pelle in giacenza",
+    "hides_other": "{count} pelli in giacenza",
+    "inWork": "In lavorazione",
+    "inStock": "Finiti, in magazzino",
+    "packed": "Imballati",
+    "shipped": "Spediti",
+    "reading": "Lettura di ciò che il blocco tocca…",
+    "failed": "Non è stato possibile leggere ciò che il blocco tocca",
+    "title": "Cosa tocca",
+    "intro": "Tutto ciò che è stato fatto con gli elementi bloccati, con ciò che è uscito e chi lo ha ricevuto.",
+    "tracedSome": "Sono tracciati i primi {traced} di {of} elementi bloccati.",
+    "notTraceable": "I colli non sono ancora tracciati: apri la loro spedizione.",
+    "group": "Blocco per genealogia di {code}",
+    "groupHint_one": "{count} blocco in questo gruppo; ognuno si rilascia da solo.",
+    "groupHint_other": "{count} blocchi in questo gruppo; ognuno si rilascia da solo.",
+    "groupHolds": "Blocchi del gruppo",
+    "thisHold": "(questo blocco)",
+    "extendFrom": "Estendi il blocco da {kind} {code}",
+    "extend": "Estendi il blocco",
+    "treeLabel": "Cosa tocca il blocco",
+    "empty": "Con gli elementi bloccati non è stato ancora fatto nulla.",
+    "extendHeld": {
+      "NOT_ACTIVE": "Un blocco rilasciato o chiuso non si estende.",
+      "NO_RIGHT": "Per estendere un blocco serve quality.holds.place nella sua sede.",
+      "KIND": "L'estensione parte da un lotto o da una pelle: questo blocco non ne contiene e non ha un gruppo."
+    }
+  },
+  "node": {
+    "kind": {
+      "SUPPLIER": "Fornitore",
+      "RECEIPT": "Ricevimento",
+      "LOT": "Lotto",
+      "HIDE": "Pelle",
+      "SUBCONTRACT": "Ordine al terzista",
+      "WORK_ORDER": "Ordine di produzione",
+      "CELL": "Taglia",
+      "BUNDLE": "Mazzetto",
+      "SERIAL": "Capo",
+      "SHIPMENT": "Spedizione",
+      "CUSTOMER": "Cliente"
+    },
+    "count": {
+      "SUPPLIER_one": "{count} fornitore",
+      "SUPPLIER_other": "{count} fornitori",
+      "RECEIPT_one": "{count} ricevimento",
+      "RECEIPT_other": "{count} ricevimenti",
+      "LOT_one": "{count} lotto",
+      "LOT_other": "{count} lotti",
+      "HIDE_one": "{count} pelle",
+      "HIDE_other": "{count} pelli",
+      "SUBCONTRACT_one": "{count} ordine al terzista",
+      "SUBCONTRACT_other": "{count} ordini al terzista",
+      "WORK_ORDER_one": "{count} ordine di produzione",
+      "WORK_ORDER_other": "{count} ordini di produzione",
+      "CELL_one": "{count} taglia",
+      "CELL_other": "{count} taglie",
+      "BUNDLE_one": "{count} mazzetto",
+      "BUNDLE_other": "{count} mazzetti",
+      "SERIAL_one": "{count} capo",
+      "SERIAL_other": "{count} capi",
+      "SHIPMENT_one": "{count} spedizione",
+      "SHIPMENT_other": "{count} spedizioni",
+      "CUSTOMER_one": "{count} cliente",
+      "CUSTOMER_other": "{count} clienti"
+    },
+    "state": {
+      "LOT": {
+        "QUARANTINE": "in quarantena",
+        "RELEASED": "rilasciato",
+        "REJECTED": "respinto",
+        "BLOCKED": "bloccato"
+      },
+      "HIDE": {
+        "FULL": "intera",
+        "PARTLY_CUT": "tagliata in parte",
+        "REMNANT": "ritaglio",
+        "CONSUMED": "consumata",
+        "SCRAPPED": "scartata",
+        "RETURNED": "resa al fornitore"
+      },
+      "BUNDLE": {
+        "ACTIVE": "attivo",
+        "VOID": "annullato"
+      },
+      "SERIAL": {
+        "MADE": "prodotto",
+        "RELEASED": "rilasciato",
+        "SHIPPED": "spedito",
+        "VOID": "annullato"
+      },
+      "SHIPMENT": {
+        "DRAFT": "in preparazione",
+        "PACKED": "imballata",
+        "SHIPPED": "spedita",
+        "DELIVERED": "consegnata",
+        "RETURNED": "tornata dal corriere",
+        "CANCELLED": "annullata"
+      }
+    },
+    "onHand": "{quantity} in giacenza",
+    "batch": "lotto di produzione {batch}",
+    "size": "{colourway} · taglia {size}",
+    "cellGarments_one": "{count} capo, {shipped} spediti",
+    "cellGarments_other": "{count} capi, {shipped} spediti",
+    "ddt": "DDT {number}",
+    "partyHidden": "nome non mostrato (parties.view)",
+    "received": "ricevuto",
+    "left": "uscito dalla sede",
+    "onHold": "Bloccato: {reason}",
+    "hidden": "non mostrato",
+    "restrictedParties_one": "{count} cliente o fornitore è contato senza nome (serve parties.view).",
+    "restrictedParties_other": "{count} clienti o fornitori sono contati senza nome (serve parties.view).",
+    "restrictedSites_one": "{count} elemento in una sede che non raggiungi è contato, non mostrato.",
+    "restrictedSites_other": "{count} elementi in sedi che non raggiungi sono contati, non mostrati.",
+    "affectedOnly_one": "Mostra solo i clienti coinvolti ({count})",
+    "affectedOnly_other": "Mostra solo i clienti coinvolti ({count})",
+    "noAffected": "Nessun cliente ne ha ricevuto."
+  },
+  "gap": {
+    "title": {
+      "BROKEN": "La catena è interrotta",
+      "COARSE": "Noto solo in modo approssimativo (\"può contenerlo\")",
+      "IN_WORK": "Ancora in lavorazione"
+    },
+    "OPENING_STOCK": "{at} è entrato come giacenza iniziale: nessun fornitore o ricevimento registrato.",
+    "NO_SUPPLIER": "{at} non indica alcun fornitore.",
+    "NO_ISSUE": "{at}: nulla è stato prelevato o tagliato.",
+    "BUNDLE_WITHOUT_CUTS": "Il mazzetto {at} non indica alcun taglio: può contenerlo una pelle dell'ordine.",
+    "SERIAL_WITHOUT_BUNDLE": "{count} capi di {at} non hanno un mazzetto registrato: può contenerli ogni mazzetto della taglia.",
+    "LINE_WITHOUT_SERIALS": "{count} capi spediti di {at} non hanno una matricola registrata.",
+    "BATCH_TRACKED": "{at} è tracciato per lotto di produzione: i capi si conoscono per taglia, non uno per uno.",
+    "ISSUED_BY_QUANTITY": "{at} è stato prelevato a quantità: può contenerlo ogni capo dell'ordine.",
+    "SUBCONTRACT_RETURN": "Quanto è tornato dal terzista per {at} non è collegato capo per capo.",
+    "SERIALS_COLLAPSED": "{count} capi sono contati sui mazzetti e sulle taglie, non elencati uno per uno.",
+    "ISSUED_NOT_CUT": "{at} è stato prelevato e non ancora tagliato.",
+    "CUT_NOT_BUNDLED": "Tagli di {at} non sono ancora in un mazzetto."
+  },
+  "board": {
+    "lane": {
+      "NEW": "Nuovo",
+      "INVESTIGATING": "In indagine",
+      "WAITING_DECISION": "In attesa di decisione",
+      "READY_TO_RELEASE": "Pronto da rilasciare",
+      "RELEASED": "Rilasciato"
+    },
+    "empty": "Niente qui",
+    "oldest_one": "Il più vecchio da {count} giorno",
+    "oldest_other": "Il più vecchio da {count} giorni",
+    "releasedHint": "Rilasciando qui si apre il rilascio",
+    "held": {
+      "notActive": "Un blocco rilasciato o chiuso non si sposta.",
+      "same": "Il blocco è già a questo passo."
+    },
+    "conflict": "{number} è stato cambiato nel frattempo: la bacheca viene riletta.",
+    "refused": "{number} non è stato spostato.",
+    "readOnly": "Leggi questa bacheca: spostare un blocco richiede quality.holds.place (un ispettore qualità, un responsabile di produzione o un capo reparto)."
+  },
+  "qmove": {
+    "of": "Blocco {number} · {kind} {code} {more}",
+    "askTitle": "Chiedi lo spostamento in quarantena",
+    "askGo": "Chiedi lo spostamento",
+    "askHint": "Il posto di quarantena della sede del blocco in cui va la merce.",
+    "askAfter": "Lo spostamento attende la conferma: l'ufficio digita o scansiona il codice del posto quando la merce è lì (la scansione da tablet arriva più avanti).",
+    "confirmTitle": "Conferma lo spostamento in quarantena",
+    "confirmGo": "Conferma lo spostamento",
+    "askedTo": "Chiesto verso {code} · {name}.",
+    "code": "Codice del posto di quarantena",
+    "codeHint": "Scansiona l'etichetta del posto o digitane il codice: la merce ora è lì.",
+    "confirmAfter": "Confermando la merce bloccata viene spostata ora nel posto nel registro di magazzino; la merce presso un terzista resta dov'è.",
+    "lying": "Dove si trova la merce bloccata",
+    "place": "Posto",
+    "onHand": "In giacenza",
+    "what": "Alla conferma",
+    "stays": "resta (presso il terzista)",
+    "moves": "va in quarantena",
+    "there": "già lì",
+    "notAsked": "nessuno spostamento chiesto",
+    "nothingLying": "Nessuna giacenza in sede.",
+    "section": "Spostamento in quarantena",
+    "sectionMoved": "La merce è in quarantena (lo spostamento è stato confermato).",
+    "sectionAsked": "Chiesto verso {code}: non ancora confermato.",
+    "sectionNone": "Nessuno spostamento chiesto: il blocco da solo impedisce l'uso.",
+    "held": {
+      "notStock": "Solo lotti e pelli vanno in quarantena.",
+      "moved": "La merce è già in quarantena.",
+      "noTransfer": "Confermare sposta merce: serve inventory.transfer nella sede.",
+      "notAsked": "Nessuno spostamento chiesto: chiedilo prima."
+    },
+    "problem": {
+      "code": "Digita o scansiona il codice del posto.",
+      "notPlace": "Questo codice non è un posto di quarantena della sede.",
+      "reading": "Lettura del blocco…",
+      "noPlaces": "La sede non ha un posto di quarantena: aggiungilo prima in magazzino.",
+      "place": "Scegli un posto di quarantena."
+    },
+    "asked": "{number}: è chiesto lo spostamento verso {code}.",
+    "confirmed_one": "{number}: la merce è in {code} ({count} trasferimento registrato).",
+    "confirmed_other": "{number}: la merce è in {code} ({count} trasferimenti registrati).",
+    "confirmedStays": "{number}: spostato in {code} ({count} trasferimenti); la merce presso {stays} resta dal terzista.",
+    "refusedRight": "Non puoi farlo nella sede del blocco",
+    "refusedCode": "Il codice non è un posto di quarantena della sede",
+    "refused": "Lo spostamento non è stato salvato"
   }
 }

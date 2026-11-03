@@ -252,6 +252,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `plant.request.progress` under the try's id, its key `<device>.<id>`), the technician's queue, the line lead's confirm, the
   one-screen close (factory-domain plant/jobs/close tiles), files opened through `GET /plant/floor/files/:id/download`;
   `INCIDENT_PAGE` in depth.ts is the hook B-W2b-137 sets.
+  B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
+  schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
+  a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up
+  fixtures, depth.css): SCR-148 the locked machines first (`GET /plant/requests/locks`, one banner each), Possible
+  duplicates + Merge requests (`POST /plant/requests/merge`, the ONE merge path: D and "Merge into this" open it), Lock as
+  unsafe (L), what the reporter sees (On my way, It works again), photos and voice notes (`view/MediaList.tsx`); SCR-149 the
+  Hand back dialog (board drop, the record's primary, `h`; `jobs/view/CloseForm.tsx` is the ONE close form, also the tab),
+  the record's Unsafe lock panel with Sign safe (`requests/view/SignSafeDialog.tsx`, the ONE sign-safe dialog), the Photos
+  tab (plant files routes, before / after), Line lead confirms. The containers sit inside `PlantMessages` (they speak too).
 - The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
   write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
   and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):

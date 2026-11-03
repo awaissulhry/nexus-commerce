@@ -58,7 +58,8 @@ const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales
 const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   planner: ['plant.view'],
   // B-W2b-96: plant.settings.manage (a site's request routing and unsafe-lock settings) for the production manager.
-  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.settings.manage'],
+  // B-W2b-124: plant.checks.manage (the statutory periodic checks: types, plans, the register) for the production manager.
+  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.settings.manage', 'plant.checks.manage'],
   floor_supervisor: ['plant.view', 'plant.report', 'plant.requests.triage'],
   operator: ['plant.report'],
   cutting_operator: ['plant.report'],
@@ -467,6 +468,17 @@ const CAPA_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze
   buyer: ['quality.capa.view'],
   sales: ['quality.capa.view'],
 })
+/**
+ * B-W2b-123 (locked results with amendments, QHS-145; the inspection report and the certificate of conformity, QHS-055,
+ * QHS-059; design ins-amend "second signature (another inspector or the quality manager)"): the quality inspector asks for
+ * corrections and countersigns another person's (never their own), keeps the report and the certificate and puts them on a
+ * shipment's documents link; to find the shipment that carries the goods it released and certify it, it reads shipments
+ * (shipping.view; no money: the carrier's cost is the cost grain it does not hold). The warehouse mails that link as before
+ * (shipping.manage). Office only; owner from every().
+ */
+const AMENDMENTS_DOCUMENTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.amendments.request', 'quality.amendments.sign', 'quality.documents.make', 'quality.documents.share', 'shipping.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -529,7 +541,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-107
   ...((audience === 'office' ? ROLLS_ADDS : ROLLS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-108
-  ...(audience === 'office' ? (CAPA_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (CAPA_ADDS[key] ?? []) : []),
+  // B-W2b-123
+  ...(audience === 'office' ? (AMENDMENTS_DOCUMENTS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -999,7 +1013,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     requireMfa: false,
     permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'sites.view', 'workers.view', 'parties.view', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.jobs.work', 'plant.signSafe',
       // B-W2b-96: the site's request routing and unsafe-lock settings.
-      'plant.settings.manage'],
+      'plant.settings.manage',
+      // B-W2b-124: the statutory periodic checks (check types, plans, the check register with its reports).
+      'plant.checks.manage'],
     grains: [],
   }),
   template('read_only', {

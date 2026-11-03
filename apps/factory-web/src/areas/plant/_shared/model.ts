@@ -1,8 +1,8 @@
-import { JOB_MOVE_RULES, WAITING_MINUTES } from '@nexus/factory-domain/plant/rules'
+import { JOB_MOVE_RULES } from '@nexus/factory-domain/plant/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Locale } from '../../../lib/i18n/locales'
 import type { Translate } from '../../../lib/i18n/messages'
-import type { JobMove, JobStatus, MachineAfter, MachineStatus, MaintenanceJob, MaintenanceRequest, Person, Priority, RequestStatus } from './api'
+import type { JobMove, JobStatus, MachineAfter, MachineStatus, MaintenanceJob, Person, Priority, RequestStatus } from './api'
 
 /**
  * The rules every Plant maintenance page shares (B-W2a-53; SCR-148 Machine requests, SCR-149 Maintenance jobs, SCR-150
@@ -47,10 +47,6 @@ export const MACHINE_TONE: Readonly<Record<MachineStatus, Tone>> = { RUNNING: 's
 export const REQUEST_TONE: Readonly<Record<RequestStatus, Tone>> = { NEW: 'warning', ACKNOWLEDGED: 'info', JOB_MADE: 'success', MERGED: 'neutral', CLOSED: 'neutral' }
 export const JOB_TONE: Readonly<Record<JobStatus, Tone>> = { NEW: 'warning', PLANNED: 'info', IN_PROGRESS: 'info', WAITING_PARTS: 'warning', HANDED_BACK: 'success', CLOSED: 'neutral', CANCELLED: 'neutral' }
 export const PRIORITY_TONE: Readonly<Record<Priority, Tone>> = { P1: 'danger', P2: 'warning', P3: 'neutral' }
-
-/** The age tone of a waiting request: over 30 minutes it waits too long (design "tone by escalation level"). */
-export const ageTone = (request: Pick<MaintenanceRequest, 'ageMinutes' | 'status' | 'locking'>): Tone =>
-  request.locking ? 'danger' : request.status === 'NEW' || request.status === 'ACKNOWLEDGED' ? (request.ageMinutes >= WAITING_MINUTES ? 'warning' : 'neutral') : 'neutral'
 
 /** Minutes as the screens say them: "14 min", "3 h 05", "2 d" (the words come from the catalogue). */
 export function ageWords(t: Translate, minutes: number): string {

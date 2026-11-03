@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Download, Hand, MoreHorizontal, Printer, Settings2, ShieldCheck, UserRound, X } from 'lucide-react'
+import { Download, GitBranch, Hand, MoreHorizontal, Printer, ScanLine, Settings2, ShieldCheck, UserRound, X } from 'lucide-react'
 import { Banner, DetailPopover, EmptyState, Field, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Kbd, Select, Skeleton } from '@nexus/ui/primitives'
@@ -46,6 +46,10 @@ import {
   type ReleaseDraft,
   type View,
 } from '../model'
+import type { ListMode } from '../../../../list-frame/w2b/model'
+import { askHeld, BOARD_RELEASED, boardHeld, boardLanes, boardMoveHeld, confirmHeld, extendStartOf, isNextStep, laneOfHold, type GenealogyStart, type QuarantineDialog } from '../depth/model'
+import { GenealogyDialog, type GenealogyActions } from '../depth/view/GenealogyDialog'
+import { QuarantineDialogs, type QuarantineActions } from '../depth/view/QuarantineDialogs'
 import { HoldDetailModal } from './HoldDetailModal'
 import { HoldSettingsDialog } from './HoldSettingsDialog'
 import { HoldPill, HoldsMessages, HoldsStepUp, SaveMark } from './parts'
@@ -81,6 +85,16 @@ export interface HoldsListActions {
   onSettingsDraft?: (draft: HoldSettingsDraft) => void
   onSaveSettings?: () => void
   onRetrySettings?: () => void
+  /** B-W2b-114: List · Board, the board's move of a hold to another next step (true when saved). */
+  onMode?: (mode: ListMode) => void
+  onNextStep?: (hold: Hold, step: Hold['nextStep']) => Promise<boolean>
+  /** B-W2b-114: the hold by genealogy (a suspect record, or none: its code is typed; extending a hold). */
+  onGenealogy?: (start: GenealogyStart | null, holdId: string | null) => void
+  /** B-W2b-114: the quarantine move of one hold (ask a place; confirm with the place code). */
+  onQuarantine?: (dialog: QuarantineDialog) => void
+  onRetryAffected?: () => void
+  genealogy?: GenealogyActions
+  quarantine?: QuarantineActions
 }
 
 const NOBODY = '__nobody__'
@@ -112,14 +126,17 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
   const open = (next: HoldsDialog | null) => actions?.onDialog?.(next)
   const placeHeld = can.holdsPlace ? null : t('held.noPlace')
 
-  // c: Place hold (the frame's own keys are / j k x ↵ ?; the same skip of fields, menus and dialogs).
+  // c: Place hold; t: Trace and hold by genealogy (B-W2b-114) (the frame's own keys are / j k x ↵ ?; the same skip of
+  // fields, menus and dialogs).
+  const depthOpen = Boolean(model.depth?.genealogy || model.depth?.quarantine)
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.key !== 'c' || event.metaKey || event.ctrlKey || event.altKey || dialog || model.open || placeHeld) return
+      if ((event.key !== 'c' && event.key !== 't') || event.metaKey || event.ctrlKey || event.altKey || dialog || model.open || placeHeld || depthOpen) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]') || target.isContentEditable)) return
       event.preventDefault()
-      actions?.onPlace?.()
+      if (event.key === 'c') actions?.onPlace?.()
+      else actions?.onGenealogy?.(null, null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -307,7 +324,17 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
                 <dd>{data.quarantine === 'MOVED' && data.quarantineMovedAt ? t('move.movedAt', { at: formatDateTime(data.quarantineMovedAt, { locale }) }) : t('move.notConfirmed')}</dd>
               </div>
             </dl>
-            <p className="fw-q-hint">{t('move.later')}</p>
+            <p className="fw-q-hint">{t('move.office')}</p>
+            {data.quarantine === 'ASKED' && (
+              <span className="fw-q-actions">
+                <Button size="sm" variant="primary" heldReason={(() => { const held = confirmHeld(data, latest.current.model.depth?.canTransfer ?? false); return held ? t(held) : null })()} onClick={() => latest.current.actions?.onQuarantine?.({ kind: 'confirm', holdId: data.id })}>
+                  <ScanLine size={13} aria-hidden /> {t('move.confirm')}
+                </Button>
+                <Button size="sm" heldReason={(() => { const held = askHeld(data, latest.current.model.can); return held ? t(held) : null })()} onClick={() => latest.current.actions?.onQuarantine?.({ kind: 'ask', holdId: data.id })}>
+                  {t('move.otherPlace')}
+                </Button>
+              </span>
+            )}
           </div>
         </DetailPopover>
       )
@@ -336,7 +363,15 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
         evidence
           ? { id: 'evidence', label: t('row.evidence'), href: evidence, target: '_blank' }
           : { id: 'evidence', label: t('row.evidence'), disabled: data.subjectType !== 'WorkOrder', description: t(data.subjectType === 'WorkOrder' ? 'held.evidenceOpen' : 'held.evidenceKind'), onSelect: () => latest.current.actions?.onOpen?.(data.id) },
-        { id: 'genealogy', label: t('row.genealogy'), disabled: true, description: t('held.later') },
+        // B-W2b-114: Ask quarantine move (stock only) and Extend by genealogy (from the group's suspect record or its lot / hide).
+        (() => {
+          const held = askHeld(data, now.can)
+          return { id: 'quarantine', label: t('row.quarantine'), disabled: held !== null, description: held ? t(held) : t('row.quarantineHint'), onSelect: () => latest.current.actions?.onQuarantine?.({ kind: 'ask', holdId: data.id }) }
+        })(),
+        (() => {
+          const extend = extendStartOf(data, now.can)
+          return { id: 'genealogy', label: t('row.genealogy'), disabled: extend.start === null, description: extend.held ? t(extend.held) : t('row.genealogyHint', { code: extend.start?.code ?? '—' }), onSelect: () => extend.start && latest.current.actions?.onGenealogy?.(extend.start, data.id) }
+        })(),
         { id: 'copy', label: t('row.copy'), onSelect: () => void navigator.clipboard?.writeText(data.subjects.map((subject) => subject.label ?? '').filter(Boolean).join(' ')) },
         { id: 'copyNumber', label: t('row.copyNumber'), disabled: !data.number, description: data.number ? undefined : t('number.none'), onSelect: () => void (data.number && navigator.clipboard?.writeText(data.number)) },
       ]
@@ -381,7 +416,6 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
   const viewItems: MenuItemDef[] = [
     { id: 'heading', heading: true, label: t('list.rowsHeading') },
     ...VIEWS.map((view) => ({ id: view, label: t(`view.${view}`), checked: model.view === view, onSelect: () => actions?.onView?.(view) })),
-    { id: 'board', label: t('view.board'), disabled: true, description: t('held.later') },
   ]
   const tools = (
     <>
@@ -452,8 +486,37 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
 
   const ownKeys: ListKey[] = [
     { keys: ['c'], does: t('keys.place') },
+    { keys: ['t'], does: t('keys.genealogy') },
     { keys: ['r'], does: t('keys.release') },
   ]
+  // B-W2b-114 (QHS-077, design sec:qh-board): the board of the list's rows by next step; a drop on Released opens the release.
+  const board = {
+    lanes: boardLanes(all, can, t),
+    heldReason: boardHeld(can, t),
+    laneOf: (hold: Hold) => laneOfHold(hold),
+    card: (hold: Hold) => ({
+      label: hold.number ?? '—',
+      title: `${t(kindKey(hold.subjectType))} ${subjectCodes(hold, 2).codes.join(' · ')}${hold.subjects.length > 2 ? ` ${t('subject.more', { count: hold.subjects.length - 2 })}` : ''}`,
+      fields: [
+        { label: t('col.quantity'), value: quantityWords(hold.quantity, t) ?? '—' },
+        { label: t('col.age'), value: t('age.days', { count: hold.ageDays }) },
+        { label: t('col.owner'), value: (() => { const words = ownerWords(hold, model.me); return t(words.key, words.params) })() },
+      ],
+      marks: [{ label: reasonText(hold, model.reasons, locale), tone: hold.overdue ? ('danger' as const) : ('neutral' as const) }, ...(hold.status === 'CLOSED' ? [{ label: t('status.CLOSED') }] : [])],
+      held: hold.status === 'ACTIVE' ? (model.depth?.moving?.[hold.id] === 'moving' ? q('common.working') : null) : t('board.held.notActive'),
+    }),
+    onMove: async (hold: Hold, lane: string) => {
+      if (lane === BOARD_RELEASED) {
+        open({ kind: 'release', ids: [hold.id] })
+        return false
+      }
+      return isNextStep(lane) ? ((await actions?.onNextStep?.(hold, lane)) ?? false) : false
+    },
+    moveHeld: (hold: Hold, lane: string) => {
+      const held = boardMoveHeld(hold, lane, can)
+      return held ? t(held.key, held.params) : null
+    },
+  }
   const moreItems: MenuItemDef[] = [
     { id: 'tags', label: t('list.printTags'), disabled: rows.length === 0, description: rows.length === 0 ? t('held.noRows') : t('list.printTagsHint', { count: Math.min(rows.length, MAX) }), onSelect: () => window.open(tagAddress(model.prefix, rows.map((row) => row.id)) ?? '', '_blank') },
     { id: 'export', label: t('list.exportView'), disabled: rows.length === 0, description: rows.length === 0 ? t('held.noRows') : undefined, onSelect: () => actions?.onExport?.(rows.map((row) => row.id)) },
@@ -476,6 +539,9 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
         actions={
           <>
             <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('list.more') }} items={moreItems} />
+            <Button size="sm" onClick={() => actions?.onGenealogy?.(null, null)} heldReason={placeHeld} aria-keyshortcuts="t">
+              <GitBranch size={14} aria-hidden /> {t('genealogy.open')}
+            </Button>
             <Button size="sm" variant="primary" onClick={() => actions?.onPlace?.()} heldReason={placeHeld} aria-keyshortcuts="c">
               <Hand size={14} aria-hidden /> {t('list.place')}
             </Button>
@@ -513,6 +579,7 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
         onOpen={(row) => actions?.onOpen?.(row.id)}
         state={state}
         focusRow={model.focusRow}
+        modes={{ mode: model.depth?.mode ?? 'table', onMode: (mode) => actions?.onMode?.(mode), board }}
       />
 
       {openHold && (
@@ -555,6 +622,8 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
       />
       <KeysModal open={dialog?.kind === 'shortcuts'} keys={listKeys(ownKeys, true).map((entry) => ({ keys: entry.keys, does: lists(entry.does) === entry.does ? entry.does : lists(entry.does) }))} onClose={() => open(null)} />
       {stepUp && <HoldsStepUp state={stepUp} onSubmit={(code) => actions?.onStepUpSubmit?.(code)} onCancel={() => actions?.onStepUpCancel?.()} />}
+      {model.depth?.genealogy && <GenealogyDialog model={model.depth.genealogy} prefix={model.prefix} reasonWords={model.reasons} actions={actions?.genealogy} />}
+      {model.depth?.quarantine && <QuarantineDialogs model={model.depth.quarantine} actions={actions?.quarantine} />}
     </div>
   )
 }
