@@ -148,6 +148,7 @@ export async function siteWip(caller: CommandCaller, query: { readonly siteId?: 
           code: row.code,
           name: row.name,
           scanRequired: row.scanRequired,
+          unplanned: row.unplanned,
           final: row.final,
           arrived: row.arrived,
           waiting: row.waiting,

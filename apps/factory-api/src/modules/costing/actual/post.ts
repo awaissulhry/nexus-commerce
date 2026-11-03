@@ -57,6 +57,8 @@ import {
  *   scans: each standing REPORT or CORRECTION with good garments → LABOUR (good × the operation's standard minutes × the
  *     cost per minute in force that day for its kind of work centre, never per person); one an UNDO or CORRECTION
  *     voided → the reversal of its LABOUR; its scrap → a SCRAP record per material (amount 0: the leather and its value)
+ *     B-W2b-82: an unplanned operation's scans post the same way: it is a work order operation like any other, at the
+ *     standard minutes copied from the library; the estimate leaves it out (reads.ts), so it shows as variance
  *   reworks DONE with scrap → a SCRAP record per material, with the scan that opened the rework; a rework opened by hand
  *     (an inspection, a nonconformance: no scan) names its rework order instead (B-W2b-22), and one not bundled apart
  *     takes the leather of its cell's bundles

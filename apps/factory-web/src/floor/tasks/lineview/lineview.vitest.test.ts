@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { LineBoard } from '../../../lib/line-board/schema'
-import type { BehalfOptions, BlockRow, Conflict, ScrapRow } from './api'
+import type { BehalfOptions, BlockRow, Conflict, CorrectionRow, ScrapRow } from './api'
 import {
   behalfHeld,
   behalfPayload,
+  correctionChanges,
   countsHeld,
   decisionHeld,
   EMPTY_BEHALF,
@@ -20,10 +21,13 @@ import {
   overrideHeld,
   queuedAnswers,
   rejectHeld,
+  rejectSigns,
+  rejectTiles,
   selectedCall,
   stationStates,
   toggleTopic,
   waitingItems,
+  waitingVersion,
   withDefects,
   type BehalfDraft,
 } from './model'
@@ -32,6 +36,7 @@ import { designScreen } from './fixtures'
 const scrap = (at: string, extra: Partial<ScrapRow> = {}) => ({ scanId: `scan-${at}`, at, own: false, scrapQuantity: 5, ...extra }) as ScrapRow
 const block = (startedAt: string, lineId: string | null, extra: Partial<BlockRow> = {}) => ({ id: `block-${startedAt}`, startedAt, version: 1, own: false, line: lineId ? { id: lineId, code: 'L', name: 'L' } : null, ...extra }) as BlockRow
 const conflict = (serverTime: string, state: Conflict['state'] = 'OPEN') => ({ id: `conflict-${serverTime}`, state, version: 1, refused: { serverTime } }) as Conflict
+const correction = (at: string, lineId: string | null, extra: Partial<CorrectionRow> = {}) => ({ id: `request-${at}`, at, version: 1, own: false, line: lineId ? { id: lineId, code: 'L' } : null, recorded: { good: 19, scrap: 1, rework: 0, at }, asked: { good: 20, scrap: 0, rework: 0 }, ...extra }) as CorrectionRow
 
 const station = (id: string, extra: Partial<LineBoard['stations'][number]> = {}) => ({ id, code: id, name: id, call: 'CLEAR', material: false, machineDown: false, state: 'CLEAR', look: { icon: 'check', tone: 'success', shape: 'SQUARE' }, ...extra }) as LineBoard['stations'][number]
 
@@ -50,6 +55,38 @@ describe('Line view (SCR-168)', () => {
     const items = waitingItems([scrap('2026-11-02T10:00:00.000Z')], [block('2026-11-02T09:00:00.000Z', 'L1'), block('2026-11-02T08:00:00.000Z', 'L2'), block('2026-11-02T08:30:00.000Z', null)], [conflict('2026-11-02T07:00:00.000Z', 'WITH_OFFICE'), conflict('2026-11-02T09:30:00.000Z')], 'L1')
     expect(items.map((item) => item.kind)).toEqual(['block', 'block', 'conflict', 'scrap', 'conflict'])
     expect(items.at(-1)).toMatchObject({ kind: 'conflict', row: { state: 'WITH_OFFICE' } })
+  })
+
+  it('lists corrections with the rest, this line’s and the ones with no line, oldest first', () => {
+    const items = waitingItems([scrap('2026-11-02T10:00:00.000Z')], [], [], 'L1', [correction('2026-11-02T09:00:00.000Z', 'L1'), correction('2026-11-02T08:00:00.000Z', 'L2'), correction('2026-11-02T11:00:00.000Z', null)])
+    expect(items.map((item) => [item.kind, item.at])).toEqual([['correction', '2026-11-02T09:00:00.000Z'], ['scrap', '2026-11-02T10:00:00.000Z'], ['correction', '2026-11-02T11:00:00.000Z']])
+    expect(waitingItems([], [], [], null, [correction('2026-11-02T08:00:00.000Z', 'L2')])).toHaveLength(1)
+  })
+
+  it('holds a correction of one’s own (four eyes) and opens the next that may be decided past it', () => {
+    const items = waitingItems([], [], [], null, [correction('2026-11-02T08:00:00.000Z', null, { own: true }), correction('2026-11-02T09:00:00.000Z', null)])
+    expect(decisionHeld(items[0]!)).toBe('own')
+    expect(decisionHeld(items[1]!)).toBeNull()
+    expect(nextItem(items, items[1]!)).toBeNull()
+    expect(waitingVersion(items[0]!)).toBe('1')
+  })
+
+  it('says only what a correction changes, old → new', () => {
+    expect(correctionChanges(correction('2026-11-02T08:00:00.000Z', null))).toEqual([{ key: 'good', from: 19, to: 20 }, { key: 'scrap', from: 1, to: 0 }])
+    expect(correctionChanges(correction('2026-11-02T08:00:00.000Z', null, { asked: { good: 19, scrap: 1, rework: 0 } }))).toEqual([])
+  })
+
+  it('offers a correction its own tiles, and its rejection signs with the PIN like a time block’s', () => {
+    const [item] = waitingItems([], [], [], null, [correction('2026-11-02T08:00:00.000Z', null)])
+    const tiles = { scrap: [{ code: 'WRONG_COUNT', labelIt: '', labelEn: '', needsDetail: false }], correction: [{ code: 'OTHER', labelIt: '', labelEn: '', needsDetail: true }] }
+    expect(rejectTiles(item!, tiles)).toBe(tiles.correction)
+    expect(rejectTiles({ kind: 'scrap' }, tiles)).toBe(tiles.scrap)
+    expect(rejectTiles({ kind: 'block' }, tiles)).toEqual([])
+    expect(rejectHeld({ item: item!, tile: null, words: '' })).toBe('tile')
+    expect(rejectHeld({ item: item!, tile: { needsDetail: true }, words: ' ' })).toBe('words')
+    expect(rejectHeld({ item: item!, tile: { needsDetail: true }, words: 'It cleans off.' })).toBeNull()
+    expect(rejectSigns(item!)).toBe(true)
+    expect(rejectSigns({ kind: 'scrap' })).toBe(false)
   })
 
   it('holds one’s own work and what is with the office, and opens the next that may be decided', () => {
@@ -137,7 +174,7 @@ describe('Line view (SCR-168)', () => {
 
   it('has every state of the design, with no money and no figure per person', () => {
     const ids = designScreen.cases.map((entry) => entry.id)
-    for (const id of ['now', 'quiet', 'updates', 'offline', 'parts-unknown', 'no-line', 'problem', 'no-permission', 'scrap', 'pin', 'conflict', 'reassign', 'handover', 'behalf-station', 'behalf-override', 'behalf-done']) expect(ids).toContain(id)
+    for (const id of ['now', 'quiet', 'updates', 'offline', 'parts-unknown', 'no-line', 'problem', 'no-permission', 'scrap', 'pin', 'conflict', 'correction', 'correction-own', 'correction-reject', 'correction-pin', 'reassign', 'handover', 'behalf-station', 'behalf-override', 'behalf-done']) expect(ids).toContain(id)
     expect(JSON.stringify(designScreen.cases)).not.toMatch(/price|cost|margin|wage|€/i)
   })
 })

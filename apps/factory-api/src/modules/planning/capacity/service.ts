@@ -67,7 +67,8 @@ async function readWorkOrders(db: Reader, site: SiteRow): Promise<{ loading: Ope
       heldFromStatus: true,
       style: { select: { id: true, code: true, name: true } },
       sizes: { select: { quantity: true } },
-      operations: { select: { id: true, seq: true, code: true, name: true, standardMinutes: true, workCentreId: true }, orderBy: { seq: 'asc' } },
+      // B-W2b-82: an unplanned operation has no target quantity, so no load: the plan stays the routing's.
+      operations: { where: { routingSeq: { not: null } }, select: { id: true, seq: true, code: true, name: true, standardMinutes: true, workCentreId: true }, orderBy: { seq: 'asc' } },
     },
     orderBy: [{ dueDate: 'asc' }, { number: 'asc' }],
   })

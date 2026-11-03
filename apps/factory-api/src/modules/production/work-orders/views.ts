@@ -188,7 +188,8 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
   const cut = frozen ? await cutCountsOf(db, workOrder.id, workOrder.styleId) : null
   const scanned = frozen ? await scanProgressOf(db, workOrder) : null
   const pieces = cells.reduce((sum, cell) => sum + cell.quantity, 0)
-  const perGarment = plan.operations.reduce<Decimal>((sum, op) => sum.plus(op.standardMinutes), ZERO)
+  // B-W2b-82: the spec's minutes are the routing's; an unplanned operation is none of them.
+  const perGarment = plan.operations.filter((op) => op.routingSeq !== null).reduce<Decimal>((sum, op) => sum.plus(op.standardMinutes), ZERO)
   const dueDate = dayOrNull(workOrder.dueDate)
   const genealogy = await genealogyOf(db, workOrder)
   return {

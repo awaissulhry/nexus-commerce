@@ -1,5 +1,8 @@
 {
-  "noAccess": { "title": "Non hai accesso ai costi", "body": "Costi standard ed effettivi richiede il permesso {permission}. Chiedi a chi gestisce i ruoli." },
+  "noAccess": {
+    "title": "Non hai accesso ai costi",
+    "body": "Costi standard ed effettivi richiede il permesso {permission}. Chiedi a chi gestisce i ruoli."
+  },
   "band": {
     "label": "Ambito e azioni",
     "readAt": "Letto alle {time}",
@@ -12,8 +15,16 @@
     "ledger": "Vai al registro costi",
     "print": "Stampa il report scostamenti (nuova scheda)"
   },
-  "scope": { "site": "Stabilimento", "allSites": "Tutti gli stabilimenti", "period": "Periodo" },
-  "live": { "connecting": "Connessione…", "live": "In tempo reale", "offline": "Offline — rileggo al ritorno" },
+  "scope": {
+    "site": "Stabilimento",
+    "allSites": "Tutti gli stabilimenti",
+    "period": "Periodo"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In tempo reale",
+    "offline": "Offline — rileggo al ritorno"
+  },
   "method": {
     "unknown": "Metodo di costo: non è stato possibile leggerlo.",
     "reading": "Lettura del metodo di costo…",
@@ -21,7 +32,11 @@
     "chosen": "Metodo di costo: {method} (scelto; si blocca con il primo costo registrato).",
     "locked": "Metodo di costo: {method}, bloccato: le registrazioni di costo si basano su di esso.",
     "body": "Il commercialista sceglie il metodo per società (costo standard, costo medio ponderato o FIFO; art. 2426 c.c.). Questa pagina mostra ciò che i dati contengono e non ne sceglie nessuno.",
-    "name": { "STANDARD": "costo standard", "MOVING_AVERAGE": "costo medio ponderato", "FIFO": "FIFO" }
+    "name": {
+      "STANDARD": "costo standard",
+      "MOVING_AVERAGE": "costo medio ponderato",
+      "FIFO": "FIFO"
+    }
   },
   "tiles": {
     "title": "Costi a colpo d'occhio",
@@ -53,11 +68,25 @@
     "slow": "Ancora in caricamento…",
     "failed": "Impossibile caricare gli ordini di lavoro: standard ed effettivo",
     "clearFilters": "Azzera i filtri",
-    "noMatch": { "title": "Nessuna riga corrisponde a questi filtri", "body": "Cambia la ricerca o la vista delle righe." },
-    "empty": { "title": "Nessun ordine di lavoro in questo periodo", "body": "Un ordine di lavoro compare qui dal rilascio, con il suo standard e quanto costa finora." }
+    "noMatch": {
+      "title": "Nessuna riga corrisponde a questi filtri",
+      "body": "Cambia la ricerca o la vista delle righe."
+    },
+    "empty": {
+      "title": "Nessun ordine di lavoro in questo periodo",
+      "body": "Un ordine di lavoro compare qui dal rilascio, con il suo standard e quanto costa finora."
+    }
   },
-  "rows": { "label": "Righe", "all": "Tutti gli ordini con costi", "over": "Oltre lo standard", "closed": "Chiusi in {month}" },
-  "bulk": { "export_one": "Esporta {count} (CSV)", "export_other": "Esporta {count} (CSV)" },
+  "rows": {
+    "label": "Righe",
+    "all": "Tutti gli ordini con costi",
+    "over": "Oltre lo standard",
+    "closed": "Chiusi in {month}"
+  },
+  "bulk": {
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)"
+  },
   "col": {
     "workOrder": "Ordine di lavoro",
     "pieces": "Pezzi",
@@ -70,14 +99,21 @@
     "reason": "Causa principale",
     "state": "Stato"
   },
-  "row": { "estimatePart": "Solo la parte nota", "provisional": "Provvisorio (metodo non deciso)", "over": "Oltre lo standard" },
+  "row": {
+    "estimatePart": "Solo la parte nota",
+    "provisional": "Provvisorio (metodo non deciso)",
+    "over": "Oltre lo standard"
+  },
   "basis": {
     "STANDARD": "Standard congelato",
     "ESTIMATE": "Stima al rilascio",
     "estimatePart": "Stima al rilascio (parziale)",
     "none": "Ancora niente con cui confrontare"
   },
-  "state": { "open": "Aperto", "final": "Definitivo" },
+  "state": {
+    "open": "Aperto",
+    "final": "Definitivo"
+  },
   "reason": {
     "MATERIAL_PRICE": "Prezzo materiale",
     "MATERIAL_USAGE": "Consumo materiale",
@@ -88,7 +124,12 @@
     "ADJUSTMENT": "Rettifica",
     "none": "—"
   },
-  "part": { "MATERIAL": "Materiale", "LABOUR": "Manodopera", "SUBCONTRACT": "Lavorazione esterna", "OVERHEAD": "Costi generali" },
+  "part": {
+    "MATERIAL": "Materiale",
+    "LABOUR": "Manodopera",
+    "SUBCONTRACT": "Lavorazione esterna",
+    "OVERHEAD": "Costi generali"
+  },
   "centre": {
     "CUTTING": "Taglio",
     "SEWING": "Cucitura",
@@ -138,7 +179,10 @@
   "bridge": {
     "title": "Dalla base all'effettivo",
     "none": "Ancora nessun ponte: non c'è niente con cui confrontare.",
-    "basis": { "STANDARD": "Standard", "ESTIMATE": "Stima al rilascio" },
+    "basis": {
+      "STANDARD": "Standard",
+      "ESTIMATE": "Stima al rilascio"
+    },
     "actual": "Effettivo finora",
     "open": "La manodopera resta bassa finché ogni capo non è dichiarato; il ponte è definitivo quando l'ordine di lavoro è completato."
   },
@@ -174,9 +218,13 @@
     "perMinute": "Costo al minuto",
     "amount": "Importo",
     "minutes": "{minutes} min",
-    "privacy": "Solo per ordine di lavoro e fase: mai per persona. I minuti di un lavoratore restano nella sua scheda."
+    "privacy": "Solo per ordine di lavoro e fase: mai per persona. I minuti di un lavoratore restano nella sua scheda.",
+    "unplanned": "Fuori ciclo: non nel piano"
   },
-  "scrap": { "title": "Scarti", "hint": "Lo scarto a una fase è registrato a 0: la sua pelle è già stata addebitata al prelievo." },
+  "scrap": {
+    "title": "Scarti",
+    "hint": "Lo scarto a una fase è registrato a 0: la sua pelle è già stata addebitata al prelievo."
+  },
   "waiting": {
     "title_one": "{count} evento attende il costo",
     "title_other": "{count} eventi attendono il costo",
@@ -200,14 +248,33 @@
     "count_one": "{count} standard",
     "count_other": "{count} standard",
     "failed": "Impossibile caricare il costo standard per articolo",
-    "empty": { "title": "Nessuno standard congelato per questo periodo", "body": "Nessuno standard congelato è in vigore il {day}. Gli standard si preparano dalle schede costo dei modelli.", "action": "Vai alle schede costo dei modelli" },
+    "empty": {
+      "title": "Nessuno standard congelato per questo periodo",
+      "body": "Nessuno standard congelato è in vigore il {day}. Gli standard si preparano dalle schede costo dei modelli.",
+      "action": "Vai alle schede costo dei modelli"
+    },
     "period": "{from} – {to}",
     "from": "Dal {from}",
     "minutes": "{minutes} min",
-    "col": { "item": "Articolo", "period": "Periodo", "material": "Materiale", "labour": "Manodopera", "subcontract": "Lavorazione esterna", "overhead": "Costi generali", "total": "Totale unitario" }
+    "col": {
+      "item": "Articolo",
+      "period": "Periodo",
+      "material": "Materiale",
+      "labour": "Manodopera",
+      "subcontract": "Lavorazione esterna",
+      "overhead": "Costi generali",
+      "total": "Totale unitario"
+    }
   },
-  "itemKind": { "FINISHED": "Capo finito", "MATERIAL": "Materiale" },
-  "source": { "ROLLUP": "Dalla scheda costo", "PURCHASE": "Dal prezzo d'acquisto", "MANUAL": "Inserito dall'amministrazione" },
+  "itemKind": {
+    "FINISHED": "Capo finito",
+    "MATERIAL": "Materiale"
+  },
+  "source": {
+    "ROLLUP": "Dalla scheda costo",
+    "PURCHASE": "Dal prezzo d'acquisto",
+    "MANUAL": "Inserito dall'amministrazione"
+  },
   "ledger": {
     "title": "Registro costi",
     "hint": "Ogni evento di valorizzazione dal {from} al {to}.",
@@ -215,7 +282,10 @@
     "count_one": "{count} registrazione",
     "count_other": "{count} registrazioni",
     "failed": "Impossibile caricare il registro costi",
-    "empty": { "title": "Nessuna registrazione di costo in questo periodo", "body": "Niente è stato registrato a costo in {month}." },
+    "empty": {
+      "title": "Nessuna registrazione di costo in questo periodo",
+      "body": "Niente è stato registrato a costo in {month}."
+    },
     "kindLabel": "Tipo",
     "allKinds": "Ogni tipo",
     "provisional": "Provvisorio",
@@ -254,7 +324,9 @@
     "reasonShort": "Scrivi il motivo (almeno 3 caratteri).",
     "reasonLong": "Il motivo supera i 500 caratteri."
   },
-  "notice": { "reversed": "La registrazione di {number} è stornata." },
+  "notice": {
+    "reversed": "La registrazione di {number} è stornata."
+  },
   "problem": {
     "signed_out": "Sei uscito. Accedi di nuovo.",
     "forbidden": "Il tuo ruolo non può farlo qui.",
@@ -281,7 +353,11 @@
     "reason": "Causa principale",
     "state": "Stato"
   },
-  "keys": { "title": "Tasti", "search": "Cerca un ordine di lavoro", "open": "Apri il costo dell'ordine di lavoro" },
+  "keys": {
+    "title": "Tasti",
+    "search": "Cerca un ordine di lavoro",
+    "open": "Apri il costo dell'ordine di lavoro"
+  },
   "print": {
     "title": "Report scostamenti · {company}",
     "search": "Ricerca \"{q}\"",
@@ -296,13 +372,27 @@
   },
   "labourTab": {
     "title": "Manodopera e costo",
-    "noView": { "title": "Il costo richiede il permesso sui costi", "body": "Manodopera e costo richiede il permesso {permission}. Il resto dell'ordine di lavoro resta com'è." },
-    "noCost": { "title": "Il costo richiede la visibilità sui costi", "body": "Il tuo ruolo non ha la visibilità sui costi (money.cost): l'intera sezione costi è visibile solo ai ruoli che la hanno. Le paghe non compaiono mai qui." },
-    "draft": { "title": "Niente a costo prima del rilascio", "body": "Un ordine di lavoro raccoglie il suo costo dal rilascio: materiale prelevato, manodopera maturata, scarti." },
+    "noView": {
+      "title": "Il costo richiede il permesso sui costi",
+      "body": "Manodopera e costo richiede il permesso {permission}. Il resto dell'ordine di lavoro resta com'è."
+    },
+    "noCost": {
+      "title": "Il costo richiede la visibilità sui costi",
+      "body": "Il tuo ruolo non ha la visibilità sui costi (money.cost): l'intera sezione costi è visibile solo ai ruoli che la hanno. Le paghe non compaiono mai qui."
+    },
+    "draft": {
+      "title": "Niente a costo prima del rilascio",
+      "body": "Un ordine di lavoro raccoglie il suo costo dal rilascio: materiale prelevato, manodopera maturata, scarti."
+    },
     "loading": "Lettura del costo…",
     "failed": "Impossibile caricare il costo",
     "inFinance": "Vedilo in Amministrazione › Costi standard ed effettivi",
     "wagesNever": "Manodopera ai minuti standard maturati × il costo al minuto; paghe e persone non compaiono mai qui."
   },
-  "common": { "retry": "Riprova", "dismiss": "Chiudi", "cancel": "Annulla", "loading": "Caricamento…" }
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "cancel": "Annulla",
+    "loading": "Caricamento…"
+  }
 }

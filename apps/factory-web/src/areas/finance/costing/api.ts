@@ -127,6 +127,8 @@ export const workOrderCostSchema = workOrderCostRowSchema.extend({
   labour: z.array(
     z.object({
       operation: z.object({ id: z.string(), seq: z.number(), code: z.string(), name: z.string(), workCentreKind: z.string() }),
+      // B-W2b-82: added to the released work order: nothing of it was planned (absent: an older API).
+      unplanned: z.boolean().optional(),
       plannedMinutes: z.string(),
       earnedMinutes: z.string(),
       perMinute: cost(z.string().nullable()),

@@ -24,14 +24,17 @@ import { FloorState } from '../../../frame/view/FloorState'
 import { DANGER_AFTER_MS, WARN_AFTER_MS } from '../../help/model'
 import type { TaskProblem } from '../../shared/task-api'
 import { ListFooter, PinSign, ProblemState, TaskLine, Ticks, UndoStrip, type PinProblem, type TickState } from '../../shared/view/TaskParts'
-import type { BehalfOptions, Conflict, ConflictDecisions, FloorLine, Handover, LineCall, Operator, Operators, RefusalTile, ReassignRow } from '../api'
+import type { BehalfOptions, Conflict, ConflictDecisions, CorrectionRecord, FloorLine, Handover, LineCall, Operator, Operators, RefusalTile, ReassignRow } from '../api'
 import {
   behalfHeld,
+  CORRECTION_NOTE_MAX,
+  correctionChanges,
   countsHeld,
   decisionHeld,
   decisionOf,
   expectedOf,
   handoverHeld,
+  isCorrectionRefusal,
   isKnownRefusal,
   lineNumbers,
   NOTE_MAX,
@@ -41,6 +44,7 @@ import {
   REASON_MAX,
   reassignHeld,
   rejectHeld,
+  rejectTiles,
   stationStates,
   TOPICS,
   waitingKey,
@@ -61,9 +65,10 @@ import type { HandoverTopic } from '@nexus/factory-domain/production/dispatch/ha
  *
  *   My line now      output against the target, WIP bundles, open calls, machines down, DHU
  *   Calls            rows by station with the elapsed time; the action bar answers the row picked (one tap: On my way)
- *   Waiting for you  scrap over the limit, off-standard blocks, sync conflicts, oldest first; a row opens its decision (Approve
- *                    signs with the PIN, Reject takes a reason); the next item opens after a decision. Corrections are
- *                    decided in the Office (the floor may not write them yet: the step's notes name the gap)
+ *   Waiting for you  scrap over the limit, off-standard blocks, sync conflicts, corrections of a report (B-W2b-83, old → new
+ *                    counts), oldest first; a row opens its decision (Approve signs with the PIN, Reject takes a reason); the
+ *                    next item opens after a decision. A correction alone names the person, in its one record, where the
+ *                    scan names someone: the decision needs it (design); never in the list, never with a figure about them
  *   Stations         each station's state; work assigned to someone not clocked in shows Reassign, with no name
  *   Handover note    topic tiles and a short text, the last shift's note above; saved on the tablet first
  *   Scan on behalf   station → person where the site names workers → bundle → counts → reason; "entered by the team leader"
@@ -90,6 +95,10 @@ export type LineStep =
       readonly words?: string
       /** What the PIN signs: sent again after it. */
       readonly act?: DecideAct | null
+      /** A correction's one record, read when it opens. */
+      readonly record?: CorrectionRecord | null
+      /** That record could not be read now. */
+      readonly recordUnread?: boolean
       readonly busy?: boolean
       readonly problem?: TaskProblem | null
       readonly pinProblem?: PinProblem
@@ -133,6 +142,7 @@ export interface LineViewModel {
   readonly waitingPending: number
   readonly waitingUnknown: boolean
   readonly tiles: readonly RefusalTile[]
+  readonly correctionTiles: readonly RefusalTile[]
   readonly decisions: ConflictDecisions
   readonly asOf: string | null
   /** A saved note's or entry's two ticks. */
@@ -195,11 +205,17 @@ const refusalWords =
   (code: string): { message: string; fix: string | null } | null =>
     isKnownRefusal(code) ? { message: t(`refusal.${code}.message`), fix: t(`refusal.${code}.fix`) } : null
 
+/** A correction's refusals: the same code on an entry on behalf means another thing. */
+const correctionWords =
+  (t: Translate) =>
+  (code: string): { message: string; fix: string | null } | null =>
+    isCorrectionRefusal(code) ? { message: t(`correctionRefusal.${code}.message`), fix: t(`correctionRefusal.${code}.fix`) } : refusalWords(t)(code)
+
 /** A refusal or failure as one line inside a step (the step stays). */
-function ProblemLine({ problem, t }: { problem: TaskProblem | null | undefined; t: Translate }) {
+function ProblemLine({ problem, t, words: wordsOf = refusalWords(t) }: { problem: TaskProblem | null | undefined; t: Translate; words?: (code: string) => { message: string; fix: string | null } | null }) {
   const tasks = useT('floor-tasks')
   if (!problem) return null
-  const known = problem.kind === 'refused' ? refusalWords(t)(problem.code) : null
+  const known = problem.kind === 'refused' ? wordsOf(problem.code) : null
   const words = problem.kind === 'refused' ? [known?.message ?? (problem.message || t('refusal.other')), known ? known.fix : problem.fix].filter(Boolean).join(' ') : tasks(`problem.${problem.kind === 'stepUp' ? 'forbidden' : problem.kind}.title`)
   return (
     <TaskLine tone="danger" icon={<CircleAlert />} alert>
@@ -244,7 +260,8 @@ function Screen({ model, onAction, onFrame, camera }: LineViewProps) {
     }
     case 'decide': {
       const held = decisionHeld(step.item)
-      const heldWords = offline ?? (held ? t(`held.${held}`) : null)
+      const unread = step.item.kind === 'correction' && !step.record
+      const heldWords = offline ?? (held ? t(`held.${held}`) : unread ? t('held.record') : null)
       body = <Decide model={model} step={step} send={send} t={t} locale={locale} time={time} />
       if (step.stage === 'look') {
         actions =
@@ -252,7 +269,7 @@ function Screen({ model, onAction, onFrame, camera }: LineViewProps) {
             ? [back, { label: t('action.toOffice'), icon: <Send />, variant: 'secondary', heldReason: heldWords, onPress: () => send({ type: 'stage', stage: 'send' }) }, { label: t('action.keepRecorded'), icon: <ShieldCheck />, heldReason: heldWords, onPress: () => send({ type: 'stage', stage: 'keep' }) }]
             : [back, { label: t('action.reject'), icon: <X />, variant: 'secondary', heldReason: heldWords, onPress: () => send({ type: 'stage', stage: 'reject' }) }, { label: t('action.approve'), icon: <Check />, heldReason: heldWords, onPress: () => send({ type: 'approve' }) }]
       } else if (step.stage === 'reject') {
-        const tile = model.tiles.find((entry) => entry.code === step.tile) ?? null
+        const tile = rejectTiles(step.item, { scrap: model.tiles, correction: model.correctionTiles }).find((entry) => entry.code === step.tile) ?? null
         const why = rejectHeld({ item: step.item, tile, words: step.words ?? '' })
         actions = [back, { label: t('action.sendReject'), icon: <X />, variant: 'danger', heldReason: offline ?? (why ? t(`held.reject.${why}`) : null), onPress: () => send({ type: 'reject' }) }]
       } else if (step.stage === 'keep' || step.stage === 'send') {
@@ -390,7 +407,6 @@ function Now({ model, step, send, t, locale, time }: PartProps & { step: Extract
               <ListFooter count={t('waiting.count', { count: model.waiting.length })} keys={[{ key: 'Tab', does: t('keys.move') }, { key: 'Enter', does: t('keys.open') }, { key: 'Esc', does: t('keys.back') }]} />
             </>
           )}
-          <TaskLine tone="info" icon={<ClipboardList />}>{t('waiting.corrections')}</TaskLine>
         </section>
       ) : null}
       <section className="fw-floor-section" aria-labelledby="fw-lv-stations">
@@ -456,11 +472,12 @@ function callIcon(call: Pick<LineCall, 'type'>): ReactNode {
   return call.type.kind === 'MATERIAL' ? <Package /> : call.type.kind === 'MACHINE' || call.type.kind === 'MAINTENANCE' ? <Wrench /> : call.type.kind === 'QUALITY' ? <ShieldCheck /> : <Bell />
 }
 
-const waitingIcon = (item: WaitingItem): ReactNode => (item.kind === 'scrap' ? <Trash2 /> : item.kind === 'block' ? <Timer /> : <Layers />)
+const waitingIcon = (item: WaitingItem): ReactNode => (item.kind === 'scrap' ? <Trash2 /> : item.kind === 'block' ? <Timer /> : item.kind === 'correction' ? <PenLine /> : <Layers />)
 
 function waitingTitle(item: WaitingItem, t: Translate, locale: Locale): string {
   if (item.kind === 'scrap') return t('waiting.scrap', { count: item.row.scrapQuantity, bundle: item.row.bundle.code })
   if (item.kind === 'block') return t('waiting.block', { code: locale === 'it' ? item.row.code.labelIt : item.row.code.labelEn, count: item.row.minutes })
+  if (item.kind === 'correction') return t('waiting.correction', { bundle: item.row.bundle.code })
   return t('waiting.conflict', { bundle: item.row.bundle.code })
 }
 
@@ -468,6 +485,7 @@ function waitingMeta(item: WaitingItem, t: Translate): string {
   const op = (row: { operation: { seq: number; name: string } }) => t('fact.op', { seq: row.operation.seq, name: row.operation.name })
   if (item.kind === 'scrap') return [op(item.row), item.row.station?.code].filter(Boolean).join(' · ')
   if (item.kind === 'block') return item.row.station?.code ?? t('fact.noStation')
+  if (item.kind === 'correction') return [op(item.row), item.row.station?.code, ...correctionChanges(item.row).map((change) => `${t(`fact.${change.key}`)} ${change.from} → ${change.to}`)].filter(Boolean).join(' · ')
   return op(item.row)
 }
 
@@ -478,14 +496,15 @@ function Decide({ model, step, send, t, locale, time }: PartProps & { step: Extr
   const tasks = useT('floor-tasks')
   const words = useReasonWords()
   const { item } = step
-  const summary = <Summary item={item} t={t} locale={locale} time={time} />
+  const summary = <Summary item={item} record={step.record ?? null} t={t} locale={locale} time={time} />
+  const problemWords = item.kind === 'correction' ? correctionWords(t) : refusalWords(t)
   if (step.stage === 'pin') {
     const problem = step.pinProblem
     return (
       <PinSignBlock
         title={t('pin.title')}
         summary={<p className="fw-floor-subtitle">{waitingTitle(item, t, locale)}</p>}
-        meaning={t(`pin.meaning.${item.kind}`)}
+        meaning={t(item.kind === 'correction' && step.act?.type === 'reject' ? 'pin.meaning.correctionRefused' : `pin.meaning.${item.kind}`)}
         signer={{ name: model.signer }}
         onSign={(pin) => send({ type: 'pin', pin })}
         onCancel={() => send({ type: 'back' })}
@@ -499,19 +518,20 @@ function Decide({ model, step, send, t, locale, time }: PartProps & { step: Extr
     )
   }
   if (step.stage === 'reject') {
-    const tile = model.tiles.find((entry) => entry.code === step.tile) ?? null
-    const reasons: ReasonTile[] = model.tiles.map((entry) => ({ id: entry.code, label: locale === 'it' ? entry.labelIt : entry.labelEn, icon: <MessageSquare /> }))
+    const tiles = rejectTiles(item, { scrap: model.tiles, correction: model.correctionTiles })
+    const tile = tiles.find((entry) => entry.code === step.tile) ?? null
+    const reasons: ReasonTile[] = tiles.map((entry) => ({ id: entry.code, label: locale === 'it' ? entry.labelIt : entry.labelEn, icon: <MessageSquare /> }))
     const asked = item.kind === 'block' || tile?.needsDetail
     return (
       <div className="fw-floor-stack">
         <p className="fw-floor-subtitle">{waitingTitle(item, t, locale)}</p>
-        {item.kind === 'scrap' ? <ReasonGrid label={t('reject.title')} reasons={reasons} value={step.tile ?? null} onChange={(code) => send({ type: 'tile', code })} words={words} locale={INTL_LOCALE[locale]} /> : null}
+        {reasons.length > 0 ? <ReasonGrid label={t('reject.title')} reasons={reasons} value={step.tile ?? null} onChange={(code) => send({ type: 'tile', code })} words={words} locale={INTL_LOCALE[locale]} /> : null}
         {asked ? (
           <Field label={t('reject.words')} required htmlFor="fw-lv-words">
-            <Textarea id="fw-lv-words" value={step.words ?? ''} rows={3} limit={REASON_MAX} maxLength={REASON_MAX} onChange={(event) => send({ type: 'words', text: event.target.value })} />
+            <Textarea id="fw-lv-words" value={step.words ?? ''} rows={3} limit={item.kind === 'correction' ? CORRECTION_NOTE_MAX : REASON_MAX} maxLength={item.kind === 'correction' ? CORRECTION_NOTE_MAX : REASON_MAX} onChange={(event) => send({ type: 'words', text: event.target.value })} />
           </Field>
         ) : null}
-        <ProblemLine problem={step.problem} t={t} />
+        <ProblemLine problem={step.problem} t={t} words={problemWords} />
       </div>
     )
   }
@@ -533,13 +553,59 @@ function Decide({ model, step, send, t, locale, time }: PartProps & { step: Extr
       {summary}
       {held ? <TaskLine tone="info" icon={<CircleAlert />}>{t(`held.${held}`)}</TaskLine> : null}
       {!model.online ? <TaskLine tone="warning" icon={<WifiOff />}>{t('held.offline')}</TaskLine> : null}
-      <ProblemLine problem={step.problem} t={t} />
+      {item.kind === 'correction' && !step.record && !step.problem ? <TaskLine tone={step.recordUnread ? 'warning' : 'info'} icon={step.recordUnread ? <CloudOff /> : <History />}>{t(step.recordUnread ? 'correction.unread' : 'correction.reading')}</TaskLine> : null}
+      <ProblemLine problem={step.problem} t={t} words={problemWords} />
     </div>
   )
 }
 
-function Summary({ item, t, locale, time }: { item: WaitingItem; t: Translate; locale: Locale; time: (value: string) => string }) {
+function Summary({ item, record, t, locale, time }: { item: WaitingItem; record: CorrectionRecord | null; t: Translate; locale: Locale; time: (value: string) => string }) {
   const ds = useDsWords()
+  if (item.kind === 'correction') {
+    const { row } = item
+    const changes = correctionChanges(row)
+    const count = (key: 'good' | 'scrap' | 'rework') => {
+      const change = changes.find((entry) => entry.key === key)
+      return { id: key, label: t(`fact.${key}`), value: change ? `${change.from} → ${change.to}` : String(row.asked[key]), ...(change ? { tone: 'warning' as const } : {}) }
+    }
+    const lines = (reasons: CorrectionRecord['reasons']) => reasons.map((reason) => `${reasonWords(reason, locale)} · ${reason.quantity}`).join(', ') || null
+    return (
+      <FloorCard
+        icon={<PenLine />}
+        kind={t('correction.kind')}
+        code={row.bundle.code}
+        status={{ label: t('correction.waits'), tone: 'warning' }}
+        facts={[
+          { id: 'operation', label: t('fact.operation'), value: t('fact.op', { seq: row.operation.seq, name: row.operation.name }) },
+          { id: 'station', label: t('fact.station'), value: row.station?.code ?? t('fact.noStation') },
+          { id: 'workOrder', label: t('fact.workOrder'), value: row.workOrder.number },
+          { id: 'person', label: t('fact.person'), value: record?.person },
+          { id: 'reported', label: t('fact.reported'), value: time(row.recorded.at) },
+          count('good'),
+          count('scrap'),
+          count('rework'),
+        ]}
+        labels={ds.floorCard}
+      >
+        {record ? (
+          <dl className="fw-lv-words">
+            {[
+              { id: 'why', label: t('fact.why'), value: record.reason },
+              { id: 'reasonsBefore', label: t('fact.reasonsBefore'), value: lines(record.recordedReasons) },
+              { id: 'reasons', label: t('fact.reasons'), value: lines(record.reasons) },
+            ].map((entry) =>
+              entry.value ? (
+                <div key={entry.id}>
+                  <dt>{entry.label}</dt>
+                  <dd>{entry.value}</dd>
+                </div>
+              ) : null,
+            )}
+          </dl>
+        ) : null}
+      </FloorCard>
+    )
+  }
   if (item.kind === 'scrap') {
     const { row } = item
     return (

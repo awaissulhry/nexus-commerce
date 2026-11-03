@@ -153,12 +153,14 @@ export function minutesOf(workOrder: Pick<WorkOrder, 'pieces' | 'spec'>, wip: Pi
     .sort((a, b) => a.seq - b.seq)
     .map((operation) => {
       const standard = Number(operation.standardMinutes)
+      // B-W2b-82: an unplanned operation earns what its scans report; nothing of it was planned.
+      const unplanned = operation.routingSeq === null
       return {
         seq: operation.seq,
         code: operation.code,
         name: operation.name,
-        planned: tenths(standard * workOrder.pieces),
-        earned: operation.scanRequired ? tenths(standard * (good.get(operation.seq) ?? 0)) : null,
+        planned: unplanned ? 0 : tenths(standard * workOrder.pieces),
+        earned: operation.scanRequired || unplanned ? tenths(standard * (good.get(operation.seq) ?? 0)) : null,
       }
     })
   return {

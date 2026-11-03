@@ -1,7 +1,9 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { BUNDLE_SCANS, bundlesOf, NO_PRINTERS, wipOf } from '../../_shared/fixtures'
+import { BUNDLE_SCANS, bundlesOf, NO_PRINTERS, wipOf, wipWithUnplanned } from '../../_shared/fixtures'
 import { recordCase, RecordDesign, type RecordCase } from '../record/fixtures'
 import { dailyFor, FINISHED, HOLD, heldWorkOrder, NOTHING_TO_FINISH } from '../daily/demo/fixtures'
+import type { ExtraRecord } from '../extra/api'
+import type { ExtraDialogModel, ExtraModel } from '../extra/use-extra'
 
 /**
  * SCR-072 — the work order's Bundles and Operations tabs (design wo-bundles, wo-flow, wo-corrections; MES-065, MES-068,
@@ -15,6 +17,26 @@ import { dailyFor, FINISHED, HOLD, heldWorkOrder, NOTHING_TO_FINISH } from '../d
 const B = (n: number) => `0190f0e2-7171-7000-8000-${String(n).padStart(12, '0')}`
 const bundles = (role: Parameters<typeof recordCase>[0], over: Parameters<typeof recordCase>[2] = {}): RecordCase => recordCase(role, 'IN_PROGRESS', { tab: 'bundles', ...over })
 const ops = (role: Parameters<typeof recordCase>[0], over: Parameters<typeof recordCase>[2] = {}): RecordCase => recordCase(role, 'IN_PROGRESS', { tab: 'operations', ...over })
+
+// ---- B-W2b-82: unplanned operations ----------------------------------------------------------------------------------------
+
+const ADDED: ExtraRecord[] = [
+  { id: B(90), workOrderOperationId: B(90), seq: 60, at: '2026-10-29T09:12:00.000Z', operation: { id: B(91), code: 'REINF', name: 'Rinforzo colletto', workCentreKind: 'SEWING', standardMinutes: '1.500' }, reasonCode: 'QUALITY_FIX', reason: 'To fix a defect', addedOn: 'FLOOR' },
+  { id: B(92), workOrderOperationId: B(92), seq: 70, at: '2026-10-29T10:40:00.000Z', operation: { id: B(93), code: 'PRESS', name: 'Stiratura extra', workCentreKind: 'FINISHING', standardMinutes: '0.800' }, reasonCode: 'OTHER', reason: 'Other (say why): Pieghe dalla pressa', addedOn: 'OFFICE' },
+]
+const extraList = (over: Partial<ExtraModel> = {}): ExtraModel => ({ canAdd: true, added: { value: ADDED, problem: null }, dialog: null, ...over })
+const CHOICES: NonNullable<ExtraDialogModel['choices']> = {
+  operations: [
+    { id: B(94), code: 'BARTACK', name: 'Travette aggiuntive', workCentreKind: 'SEWING', standardMinutes: '0.600', pays: 'PIECE_RATE' },
+    { id: B(95), code: 'STEAM', name: 'Vaporizzatura', workCentreKind: 'FINISHING', standardMinutes: '0.400', pays: 'OFF_STANDARD' },
+  ],
+  reasons: [
+    { code: 'QUALITY_FIX', label: { it: 'Per correggere un difetto', en: 'To fix a defect' }, needsNote: false },
+    { code: 'CUSTOMER_CHANGE', label: { it: 'Richiesta del cliente', en: 'The customer asked' }, needsNote: false },
+    { code: 'OTHER', label: { it: 'Altro (scrivi perché)', en: 'Other (say why)' }, needsNote: true },
+  ],
+}
+const extraDialog = (over: Partial<ExtraDialogModel> = {}): ExtraModel => extraList({ dialog: { choices: CHOICES, draft: { operationId: null, reasonCode: null, note: '' }, busy: false, problem: null, ...over } })
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-072',
@@ -43,6 +65,20 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'operations-ready', label: 'Every garment finished: complete the work order', model: ops('manager', { wip: { value: wipOf(true), problem: null } }) },
     { id: 'operations-draft', label: 'A draft: the operations the release would freeze', model: recordCase('manager', 'DRAFT', { tab: 'operations' }) },
     { id: 'operations-error', label: 'The WIP failed: in words, with Try again', model: ops('manager', { wip: { value: null, problem: 'error.offline' } }) },
+    // ---- B-W2b-82: unplanned operations ----
+    { id: 'unplanned', label: 'Unplanned operations: on the WIP with their tag, and why each was added', model: ops('manager', { wip: { value: wipWithUnplanned(), problem: null }, extra: extraList() }), note: 'Nothing waits for an unplanned operation: only what was reported there arrived there. Add: production.extraops.add, on a released or in-progress work order.' },
+    { id: 'unplanned-none', label: 'Unplanned operations: none yet', model: ops('manager', { extra: extraList({ added: { value: [], problem: null } }) }) },
+    { id: 'unplanned-loading', label: 'Unplanned operations: loading', model: ops('manager', { extra: extraList({ added: { value: null, problem: null } }) }) },
+    { id: 'unplanned-error', label: 'Unplanned operations: the list failed, with Try again', model: ops('manager', { extra: extraList({ added: { value: null, problem: 'unavailable' } }) }) },
+    { id: 'unplanned-read-only', label: 'Team leader in the office: reads them (no Add: production.extraops.add)', model: ops('teamLeader', { wip: { value: wipWithUnplanned(), problem: null }, extra: extraList({ canAdd: false }) }) },
+    { id: 'unplanned-dialog', label: 'Add an unplanned operation: Add held until both are chosen', model: ops('manager', { extra: extraDialog() }) },
+    { id: 'unplanned-dialog-ready', label: 'Add: ready', model: ops('manager', { extra: extraDialog({ draft: { operationId: B(94), reasonCode: 'QUALITY_FIX', note: '' } }) }) },
+    { id: 'unplanned-dialog-words', label: 'Add: Other asks a few words', model: ops('manager', { extra: extraDialog({ draft: { operationId: B(94), reasonCode: 'OTHER', note: '' } }) }) },
+    { id: 'unplanned-dialog-no-rate', label: 'Add: no piece rate, said before Add', model: ops('manager', { extra: extraDialog({ draft: { operationId: B(95), reasonCode: 'QUALITY_FIX', note: '' } }) }), note: 'A word, never a figure. Piece pay off at the site: nothing to say.' },
+    { id: 'unplanned-dialog-loading', label: 'Add: reading the operations', model: ops('manager', { extra: extraDialog({ choices: null }) }) },
+    { id: 'unplanned-dialog-empty', label: 'Add: nothing left to add', model: ops('manager', { extra: extraDialog({ choices: { ...CHOICES, operations: [] } }) }) },
+    { id: 'unplanned-dialog-refused', label: 'Add refused: inside the pop-up, in words', model: ops('manager', { extra: extraDialog({ draft: { operationId: B(94), reasonCode: 'QUALITY_FIX', note: '' }, problem: { key: 'extra.refused', params: { words: 'BARTACK was added to this work order already: scan the bundles at it.' } } }) }) },
+    { id: 'unplanned-dialog-failed', label: 'Add failed: Try again, what was chosen stays', model: ops('manager', { extra: extraDialog({ draft: { operationId: B(94), reasonCode: 'QUALITY_FIX', note: '' }, problem: { key: 'extra.failed' } }) }) },
     // ---- B-W2a-46: report finished to stock, split a bundle, bundles on hold, the operation flow ----
     { id: 'w2a-finished', label: 'W2a · Bundles: finished to stock — released, in stock, can go now; Report N finished', model: bundles('manager') },
     { id: 'w2a-finish-dialog', label: 'W2a · Report finished to stock: per size what can go now, the finished-goods place', model: bundles('manager', { daily: dailyFor('manager', 'IN_PROGRESS', { dialog: { kind: 'finish' } }) }) },

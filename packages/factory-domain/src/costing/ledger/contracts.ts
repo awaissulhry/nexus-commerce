@@ -222,7 +222,9 @@ export const workOrderCostView = workOrderCostRowView.extend({
   labour: z.array(
     output({
       operation: output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string(), workCentreKind: z.enum(WORK_CENTRE_KINDS) }),
-      /** Standard minutes × the work order's garments. */
+      /** B-W2b-82: added to the released work order: nothing of it was planned, its whole cost is variance. */
+      unplanned: z.boolean(),
+      /** Standard minutes × the work order's garments; 0 on an unplanned operation. */
       plannedMinutes: z.string(),
       /** Standard minutes of the good garments its scans reported (W2a: earned; timed minutes are W2b). */
       earnedMinutes: z.string(),

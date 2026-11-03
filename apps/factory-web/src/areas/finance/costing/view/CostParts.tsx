@@ -215,7 +215,7 @@ export function CostLabour({ detail, can }: { detail: WorkOrderCost; can: Pick<C
             cells: [
               <span key="o" className="fw-fco-cell">
                 <span>{`${row.operation.seq} · ${row.operation.name}`}</span>
-                <span className="fw-fco-cell-sub">{`${row.operation.code} · ${t(`centre.${row.operation.workCentreKind}`)}`}</span>
+                <span className="fw-fco-cell-sub">{[row.operation.code, t(`centre.${row.operation.workCentreKind}`), ...(row.unplanned ? [t('labour.unplanned')] : [])].join(' · ')}</span>
               </span>,
               t('labour.minutes', { minutes: decimalText(row.plannedMinutes, locale, 1) }),
               t('labour.minutes', { minutes: decimalText(row.earnedMinutes, locale, 1) }),

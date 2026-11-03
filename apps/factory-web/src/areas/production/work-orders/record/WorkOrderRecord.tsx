@@ -41,6 +41,7 @@ import { useStepUp, isStepUpCancelled } from '../../../quality/_shared/hooks'
 import { useLabourCost } from '../labour/use-labour'
 import { SHIFT_NAMESPACE } from '../every-shift/model'
 import { useSplit } from '../every-shift/use-split'
+import { useExtra } from '../extra/use-extra'
 import { getAvailability, getFinished, getHold, getReadiness, getScrap, getYield, holdReasons, listHolds, placeHold, releaseHold, reportFinished, reserveHides, splitBundle } from '../daily/api'
 import { beforeRelease, DAILY_NAMESPACE, dailyCan, dailyProblem, dailyReadProblem, FINISHABLE, LOADING, NO_DAILY, READINESS_STATUSES, type DailyDialog, type DailyModel } from '../daily/model'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
@@ -295,6 +296,12 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   // B-W2b-59: Split work order: done, the new draft opens.
   const split = useSplit(api, workOrder.status === 'ready' ? workOrder.value : null, (child) => router.push(`${prefix}/production/work-orders/${child.id}`))
 
+  // B-W2b-82: an unplanned operation: done, the work order's figures are read again.
+  const extra = useExtra(api, workOrder.status === 'ready' ? workOrder.value : null, can.extraOps, (words) => {
+    setNotice({ tone: 'success', words })
+    void load()
+  })
+
   const model: WorkOrderRecordModel = {
     prefix,
     can,
@@ -321,6 +328,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     cutOpen,
     daily: { ...daily, can: dcan, stepUp },
     labour: labour.model,
+    extra: extra.model,
     split: split.model,
   }
 
@@ -335,6 +343,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         onRetryLabour: labour.retry,
         onOpenSplit: split.open,
         split: split.actions,
+        extra: extra.actions,
         onRetryPart: () => value && void loadParts(value),
         onReload: () => void load(),
         onDock: toggleDock,

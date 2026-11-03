@@ -120,15 +120,24 @@ export function styleRefOf(styles: Awaited<ReturnType<typeof stylesById>>, step:
   return { id: step.styleId, code: style?.code ?? '', name: style?.name ?? '' }
 }
 
-/** Work order operations → the routing step each one is, with the standard frozen on the work order. */
-async function stepsOfOperations(db: Reader, ids: readonly string[]): Promise<Map<string, RoutingStep>> {
-  const out = new Map<string, RoutingStep>()
+/**
+ * Work order operations → the routing step each one is, with the standard frozen on the work order, and every operation's
+ * standard. B-W2b-82: an unplanned operation is no routing step, so it stays out of the per-step list, the cycle times and
+ * the standard review (one-off work says nothing about a routing's standard); its standard still earns minutes on the line
+ * and person figures: the work was paid and costed, the daily report's line efficiency counts it, and leaving it out would
+ * make a line look slower for doing it.
+ */
+async function stepsOfOperations(db: Reader, ids: readonly string[]): Promise<{ readonly steps: Map<string, RoutingStep>; readonly standard: Map<string, string> }> {
+  const steps = new Map<string, RoutingStep>()
+  const standard = new Map<string, string>()
   for (const part of chunks([...new Set(ids)])) {
     const rows = await db.workOrderOperation.findMany({ where: { id: { in: part } }, select: { id: true, code: true, name: true, standardMinutes: true, routingOperation: { select: { id: true, styleId: true, revisionId: true, seq: true, operationId: true } } } })
-    // B-W2b-74: an unplanned operation is no routing step: it stays out of the efficiency reports until B-W2b-82 says.
-    for (const row of rows) if (row.routingOperation) out.set(row.id, { ...row.routingOperation, code: row.code, name: row.name, standardMinutes: row.standardMinutes.toFixed(3) })
+    for (const row of rows) {
+      standard.set(row.id, row.standardMinutes.toFixed(3))
+      if (row.routingOperation) steps.set(row.id, { ...row.routingOperation, code: row.code, name: row.name, standardMinutes: row.standardMinutes.toFixed(3) })
+    }
   }
-  return out
+  return { steps, standard }
 }
 
 // ---- the reports ------------------------------------------------------------------------------------------------------------
@@ -137,7 +146,8 @@ async function stepsOfOperations(db: Reader, ids: readonly string[]): Promise<Ma
 export interface WorkRecord {
   readonly record: LabourRecord
   readonly lineId: string | null
-  readonly step: RoutingStep
+  /** Null: an unplanned operation (B-W2b-82). */
+  readonly step: RoutingStep | null
   /** Who made the report: the worker (and the team it names), or the station. */
   readonly subjects: readonly string[]
   /** More than one person on the bundle at the operation: a team, or work handed on. Not one person's. */
@@ -178,8 +188,7 @@ export async function readWork(db: Reader, place: Place, sources: LineSources, r
   if (reports.length === 0) return { records: [], employees: new Map() }
   const rows: WorkRow[] = []
   for (const part of chunks([...new Set(reports.map((row) => row.bundleId))])) rows.push(...((await db.operationScan.findMany({ where: { bundleId: { in: part } }, select: ROW })) as WorkRow[]))
-  const steps = await stepsOfOperations(db, rows.map((row) => row.workOrderOperationId))
-  const standard = new Map([...steps.entries()].map(([id, step]) => [id, step.standardMinutes]))
+  const { steps, standard } = await stepsOfOperations(db, rows.map((row) => row.workOrderOperationId))
   const wanted = new Set(reports.map((row) => row.id))
   const standing = labourRecordsOf(rows.filter((row) => COUNT_KINDS.includes(row.kind)).map(toLabourScan), standard, place.timezone).filter((record) => wanted.has(record.scanId) && record.state !== 'UNDONE')
   const members = new Map<string, string[]>()
@@ -193,8 +202,7 @@ export async function readWork(db: Reader, place: Place, sources: LineSources, r
   }
   const records: WorkRecord[] = []
   for (const record of standing) {
-    const step = steps.get(record.workOrderOperationId)
-    if (!step) continue
+    const step = steps.get(record.workOrderOperationId) ?? null
     const timed = timedReportOf(perPair.get(`${record.bundleId}|${record.workOrderOperationId}`) ?? [], members, record.scanId)
     const named = members.get(record.scanId) ?? []
     const own = record.workerId ? [`worker:${record.workerId}`] : record.stationId ? [`station:${record.stationId}`] : []
@@ -316,7 +324,9 @@ export interface Samples {
 /** The timed bundles of a range per routing step: never by person. A bundle a trainee worked on at the operation is left out. */
 export async function readSamples(db: Reader, place: Place, sources: LineSources, range: DayRange, filter: WorkFilter & { readonly lineId?: string | undefined; readonly styleId?: string | undefined } = {}): Promise<Samples> {
   const work = await readWork(db, place, sources, range, filter)
-  const chosen = work.records.filter((entry) => (filter.lineId ? entry.lineId === filter.lineId : true) && (filter.styleId ? entry.step.styleId === filter.styleId : true))
+  // B-W2b-82: the per-step samples are the routing's (stepsOfOperations).
+  const onSteps = work.records.flatMap((entry) => (entry.step ? [{ ...entry, step: entry.step }] : []))
+  const chosen = onSteps.filter((entry) => (filter.lineId ? entry.lineId === filter.lineId : true) && (filter.styleId ? entry.step.styleId === filter.styleId : true))
   const timed = chosen.filter((entry) => entry.timed !== null)
   const trainees = await traineesOf(db, timed.flatMap((entry) => employeesIn([...entry.subjects, ...(entry.timed?.subjects ?? [])], work.employees)))
   const steps = new Map<string, StepSamples>()
