@@ -17,6 +17,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
 import { floorChecksFor, scrapLimitHistory } from './floor-rules'
+import { qualificationRuleFor } from '../../people/skills/rule'
 
 /**
  * Floor rules per site (B-W2b-53; MES-294; design production.settings "Floor rules per site") and the floor's full reason
@@ -97,12 +98,14 @@ describe('the lists of factory-domain', () => {
   })
 })
 
+const qualificationRuleOf = () => h.database.withScope({ audience: 'floor', tenantId: T, actorId: operator, siteId: siteA1 }, (client) => qualificationRuleFor(client, siteA1))
+
 describe('floor rules per site (MES-294)', () => {
   it('one site: its checks in words, the rules that are the same everywhere, idle sign-out as the tablets keep it', async () => {
     const view = await ok('viewer', 'GET', `/production/settings/${siteA1}/floor-rules`)
     expect(view).toMatchObject({
       site: { id: siteA1 },
-      checks: { quantityGuard: 'STRICT', skippedOperationRule: 'WARN', scrapApprovalLimit: null, bundleCodeMode: 'ONE_CODE', stuckBundleHours: 4 },
+      checks: { quantityGuard: 'STRICT', skippedOperationRule: 'WARN', scrapApprovalLimit: null, bundleCodeMode: 'ONE_CODE', stuckBundleHours: 4, qualificationRule: 'WARN' },
       isDefault: false,
       fixed: { undoWindowSeconds: 120, clockOffSeconds: 300, clockFlagSeconds: 86_400, offlineMaxHours: null, offlineMaxActions: null },
       idleSignOut: { idleMinutes: 10, shiftEnds: ['06:00', '14:00', '22:00'], isDefault: false },
@@ -110,6 +113,7 @@ describe('floor rules per site (MES-294)', () => {
       canManage: false,
     })
     expect(view.words[2]).toBe('Scrap needs no approval, whatever the count.')
+    expect(view.words[3]).toMatch(/^A missing skill warns/)
     expect(view.fixed.words).toHaveLength(3)
     expect((await ok('manager', 'GET', `/production/settings/${siteA1}/floor-rules`)).canManage).toBe(true)
   })
@@ -126,12 +130,12 @@ describe('floor rules per site (MES-294)', () => {
     expect(await audits(siteA1)).toEqual([
       {
         action: 'production.changeFloorRules',
-        before: { quantityGuard: 'STRICT', skippedOperationRule: 'WARN', scrapApprovalLimit: null },
-        after: { quantityGuard: 'STRICT', skippedOperationRule: 'STRICT', scrapApprovalLimit: 5 },
+        before: { quantityGuard: 'STRICT', skippedOperationRule: 'WARN', scrapApprovalLimit: null, qualificationRule: 'WARN' },
+        after: { quantityGuard: 'STRICT', skippedOperationRule: 'STRICT', scrapApprovalLimit: 5, qualificationRule: 'WARN' },
         reason: 'Leather is dear: the lead sees big scrap.',
       },
     ])
-    expect((await events(siteA1)).map((row) => row.payload)).toEqual([{ siteId: siteA1, fields: ['skippedOperationRule', 'scrapApprovalLimit'], quantityGuard: 'STRICT', skippedOperationRule: 'STRICT', scrapApprovalLimit: 5 }])
+    expect((await events(siteA1)).map((row) => row.payload)).toEqual([{ siteId: siteA1, fields: ['skippedOperationRule', 'scrapApprovalLimit'], quantityGuard: 'STRICT', skippedOperationRule: 'STRICT', scrapApprovalLimit: 5, qualificationRule: 'WARN' }])
   })
 
   it('the same values again change nothing (no audit, no event); a stale version is refused; none takes the limit away', async () => {
@@ -156,6 +160,22 @@ describe('floor rules per site (MES-294)', () => {
     // Company B's own site is theirs.
     const b1 = await ok('companyB', 'POST', `/production/settings/${siteB1}/floor-rules`, { quantityGuard: 'FREE' })
     expect(b1).toMatchObject({ changed: true, checks: { quantityGuard: 'FREE' } })
+  })
+
+  it('the qualification rule is one more rule (B-W2b-81; MES-024): changed alone, audited, told; the one reader follows it; the tablet reads it', async () => {
+    const before = await ok('manager', 'GET', `/production/settings/${siteA1}/floor-rules`)
+    expect(await qualificationRuleOf()).toMatchObject({ mode: 'WARN', isDefault: false })
+    const changed = await ok('manager', 'POST', `/production/settings/${siteA1}/floor-rules`, { qualificationRule: 'STRICT', reason: 'The matrix is complete.', version: before.version })
+    expect(changed).toMatchObject({ changed: true, changedFields: ['qualificationRule'], checks: { qualificationRule: 'STRICT' } })
+    expect(changed.changeWords[0]).toMatch(/^From now on: A missing skill holds the work/)
+    expect(await qualificationRuleOf()).toMatchObject({ mode: 'STRICT', isDefault: false, words: expect.stringMatching(/^A missing skill holds the work/) })
+    expect((await ok('floorA1', 'GET', '/production/floor-rules')).checks.qualificationRule).toBe('STRICT')
+    const [audit] = await admin(`SELECT before, after, reason FROM "AuditLog" WHERE action = 'production.changeFloorRules' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [siteA1])
+    expect(audit).toMatchObject({ before: { qualificationRule: 'WARN' }, after: { qualificationRule: 'STRICT' }, reason: 'The matrix is complete.' })
+    const [event] = await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'production.floor_rules_changed' ORDER BY "occurredAt" DESC, id DESC LIMIT 1`)
+    expect(event!.payload).toMatchObject({ siteId: siteA1, fields: ['qualificationRule'], qualificationRule: 'STRICT' })
+    await no('manager', 'POST', `/production/settings/${siteA1}/floor-rules`, { qualificationRule: 'HOLD' }, 400)
+    await ok('manager', 'POST', `/production/settings/${siteA1}/floor-rules`, { qualificationRule: 'WARN', version: changed.version })
   })
 
   it("the tablet reads its own site's checks and the undo window, never the legal basis", async () => {

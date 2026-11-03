@@ -87,6 +87,7 @@ export function rowOf(block: BlockRow, facts: RowFacts): BlockRowView {
     minutes: minutesOf(block.startedAt, block.endedAt, facts.now),
     named: block.workerId !== null,
     helpCallId: block.helpCallId,
+    workOrderId: block.workOrderId,
     unusual: block.status === 'PENDING' ? unusualOf({ status: block.status, source: block.source, startedAt: block.startedAt, endedAt: block.endedAt, edited }, facts.now) : [],
     decidedAt: block.approvedAt ? toUtcIso(block.approvedAt) : block.rejectedAt ? toUtcIso(block.rejectedAt) : null,
   }

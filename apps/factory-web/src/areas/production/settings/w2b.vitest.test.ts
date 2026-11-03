@@ -50,6 +50,8 @@ describe('Floor rules per site (fr-rules)', () => {
     expect(checksChange(FLOOR, { ...draft, limitOn: true, limit: 5 }).body).toEqual({ scrapApprovalLimit: 5, version: 3 })
     expect(checksChange({ ...FLOOR, checks: { ...FLOOR.checks, scrapApprovalLimit: 5 } }, { ...draft, limitOn: false }).body).toEqual({ scrapApprovalLimit: null, version: 3 })
     expect(checksChange({ ...FLOOR, version: null }, { ...draft, quantityGuard: 'WARN' }).body).toEqual({ quantityGuard: 'WARN' })
+    // B-W2b-81: the qualification rule is one more field of the same Apply.
+    expect(checksChange(FLOOR, { ...draft, qualificationRule: 'STRICT' })).toEqual({ body: { qualificationRule: 'STRICT', version: 3 }, count: 1 })
   })
 
   it('a limit switched on needs 1 to 500 whole pieces', () => {

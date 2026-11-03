@@ -372,6 +372,8 @@ model WorkOrderOperation {
   subcontractOperations SubcontractOperation[]
   // W2b inspection-plans.prisma (wave 10/16): the in-process checks at it.
   inProcessChecks InProcessCheck[]
+  // W2b (wave 11/16; B-W2b-79, MES-127): the scan lines that charge a defect to it.
+  chargedDefects  OperationScanDefect[]
   // W2a rework.prisma, schedule.prisma: the rework found at it and done at it, its slots on the planning board.
   reworkFound   ReworkOrder[]  @relation("ReworkFoundAt")
   reworkDone    ReworkOrder[]  @relation("ReworkDoneAt")
@@ -380,6 +382,8 @@ model WorkOrderOperation {
   @@unique([tenantId, workOrderId, seq])
   // The target of the scans' reference: an operation of the scan's site and work order.
   @@unique([tenantId, siteId, workOrderId, id])
+  // W2b (wave 11/16): the target of a scan line's charge; its work order is the trigger's (a line has none of its own).
+  @@unique([tenantId, siteId, id])
 }
 
 /// One planned material line of a work order (SCR-093 pick list): a BOM line of its revision for one cell, in the BOM
@@ -876,6 +880,9 @@ model OperationScanDefect {
   reasonCode          String
   /// Garments, from 1 up to the scan's (or request's) count of this kind.
   quantity            Int
+  /// W2b (B-W2b-79; MES-127; design floor.reasons "Which operation caused it?"): the operation of the same work order the
+  /// defect is charged to. Per operation, never per worker; null: not said.
+  causedAtOperationId String?    @db.Uuid
   serverTime          DateTime   @default(now()) @db.Timestamptz(3)
   createdById         String?    @db.Uuid
 
@@ -883,11 +890,14 @@ model OperationScanDefect {
   scan              OperationScan?         @relation(fields: [tenantId, siteId, scanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   correctionRequest ScanCorrectionRequest? @relation(fields: [tenantId, siteId, correctionRequestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   reason            ScrapReason            @relation(fields: [tenantId, kind, reasonCode], references: [tenantId, kind, code], onDelete: Restrict, onUpdate: Restrict)
+  causedAtOperation WorkOrderOperation?    @relation(fields: [tenantId, siteId, causedAtOperationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, scanId])
   @@index([tenantId, correctionRequestId])
   // Scrap and rework by reason (W2a reports).
   @@index([tenantId, kind, reasonCode])
+  // Defects charged to an operation (B-W2b-99).
+  @@index([tenantId, causedAtOperationId])
 }
 
 /// PENDING → APPROVED (a CORRECTION scan) | REFUSED (final).

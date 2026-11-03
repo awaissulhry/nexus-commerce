@@ -98,6 +98,11 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    hides, rolls and components, in-process checks, results, measurements, amendments append-only; no W1 inspection or release
    function is redefined: it adds its own triggers `Inspection_plan_guard` and `OperationScan_awaits_first_piece`, and
    redefines numbering's two floor document functions (INCOMING_INSPECTION)),
+   `…_quality_problems_w2b_guards` (W2b wave 11/16, B-W2b-79: CAPA and 8D with sources and actions, cause codes, a defect
+   charged to its operation, NCR cost lines and concessions, hold groups, the bench settings and the four-eyes list, alert
+   rules, the complaint's investigation and letter, a document of a record with no site; it redefines wave 6's
+   `factory_nonconformance_guard`, the final release's `factory_quality_release_check` and wave 1's
+   `factory_generated_document_check`, which waves 14 and 15 extend with their record tables),
    `…_leather_stock_w2b_guards` (W2b wave 12/16: leather grades and article rules, shade groups, hide marks, hide measures
    append-only, remnants, fabric rolls, protector lots, consumables by pack, ROLL and REMNANT as scan-id kinds, the move reason
    REMNANT as RETURN's twin; it redefines numbering's `factory_number_series_document_kind` and `factory_number_block_guard`,

@@ -43,6 +43,7 @@ export const BLOCK = {
   codeId: true,
   source: true,
   helpCallId: true,
+  workOrderId: true,
   workDate: true,
   startedAt: true,
   endedAt: true,

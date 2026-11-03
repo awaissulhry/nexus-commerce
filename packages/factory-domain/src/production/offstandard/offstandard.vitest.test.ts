@@ -14,6 +14,7 @@ import {
   isNormal,
   minutesOf,
   OFF_STANDARD_LIMITS,
+  offStandardByWorkOrder,
   overlaps,
   reopenRefusal,
   statusWhenEnded,
@@ -115,6 +116,30 @@ describe('blocks of time with no bundle (MES-156) and the lead’s approval (MES
     expect(editOf({ startedAt: 'a', endedAt: 'b', codeId: 'c' }, { startedAt: 'a2', endedAt: 'b', codeId: 'c' })).toEqual({ before: { startedAt: 'a' }, after: { startedAt: 'a2' } })
     expect(editOf({ status: 'APPROVED' }, { status: 'APPROVED' })).toBeNull()
     expect(editOf({}, { lineId: 'l' })).toEqual({ before: { lineId: null }, after: { lineId: 'l' } })
+  })
+})
+
+describe('a work order’s off-standard time (B-W2b-81)', () => {
+  it('adds up per state and per code, most minutes first; a rejected block is no off-standard time', () => {
+    expect(
+      offStandardByWorkOrder([
+        { codeId: 'help', status: 'APPROVED', minutes: 20 },
+        { codeId: 'material', status: 'PENDING', minutes: 30 },
+        { codeId: 'material', status: 'OPEN', minutes: 15 },
+        { codeId: 'help', status: 'REJECTED', minutes: 500 },
+      ]),
+    ).toEqual({
+      minutes: 65,
+      approved: 20,
+      waiting: 30,
+      running: 15,
+      blocks: 3,
+      codes: [
+        { codeId: 'material', minutes: 45, blocks: 2 },
+        { codeId: 'help', minutes: 20, blocks: 1 },
+      ],
+    })
+    expect(offStandardByWorkOrder([])).toEqual({ minutes: 0, approved: 0, waiting: 0, running: 0, blocks: 0, codes: [] })
   })
 })
 

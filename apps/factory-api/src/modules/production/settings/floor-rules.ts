@@ -32,9 +32,9 @@ import { mayOn, siteOf } from './settings'
  *                                                    the tablets' settings keep it (FloorSettings, changed there)
  *   POST /production/settings/:siteId/floor-rules    ONE command on the site's row (made the first time with the other
  *                                                    defaults): the quantity guard, the sequence (skippedOperationRule),
- *                                                    the scrap approval limit; audited before → after (with the reason when
- *                                                    given); event production.floor_rules_changed; the same values again
- *                                                    change nothing
+ *                                                    the scrap approval limit, the qualification rule (B-W2b-81); audited
+ *                                                    before → after (with the reason when given); event
+ *                                                    production.floor_rules_changed; the same values again change nothing
  *
  * The scrap limit's history is its audit rows (the change's before → after): scrap waits only above the limit in force
  * when the scan was taken (`scrapLimitHistory`, factory-domain limitAt). The bundle code mode and the stuck-bundle hours
@@ -43,7 +43,7 @@ import { mayOn, siteOf } from './settings'
 
 export const FLOOR_RULES_ACTION = 'production.changeFloorRules'
 
-const CHECKS_SELECT = { quantityGuard: true, skippedOperationRule: true, scrapApprovalLimit: true, bundleCodeMode: true, stuckBundleHours: true } as const satisfies Prisma.ProductionSettingsSelect
+const CHECKS_SELECT = { quantityGuard: true, skippedOperationRule: true, scrapApprovalLimit: true, bundleCodeMode: true, stuckBundleHours: true, qualificationRule: true } as const satisfies Prisma.ProductionSettingsSelect
 const ROW_SELECT = { ...CHECKS_SELECT, id: true, version: true, updatedAt: true } as const satisfies Prisma.ProductionSettingsSelect
 type Row = Prisma.ProductionSettingsGetPayload<{ select: typeof ROW_SELECT }>
 
@@ -52,15 +52,22 @@ const readRow = (db: Pick<CommandTx, 'productionSettings'>, siteId: string): Pro
 /**
  * The site's floor checks (its row's, or the schema's defaults for a site without one), for the modules that act on them:
  * the checks before a scan counts (B-W2b-46: quantityGuard, skippedOperationRule), the bundles (B-W2b-41: bundleCodeMode,
- * stuckBundleHours) and scrap above the limit (scrapApprovalLimit). Office or floor scope, inside a command or on a
- * request's client: the floor role may read these columns of its own site's row (never the legal basis).
+ * stuckBundleHours), scrap above the limit (scrapApprovalLimit) and the skills check (B-W2b-81: qualificationRule, through
+ * people/skills/rule.ts). Office or floor scope, inside a command or on a request's client: the floor role may read these
+ * columns of its own site's row (never the legal basis).
  */
 export async function floorChecksFor(db: Pick<CommandTx, 'productionSettings'>, siteId: string): Promise<FloorChecks> {
-  return floorChecksOf(await db.productionSettings.findUnique({ where: { id: siteId }, select: CHECKS_SELECT }))
+  return (await siteFloorChecks(db, siteId)).checks
+}
+
+/** The site's checks and whether it runs on the defaults (no floor rules of its own yet). */
+export async function siteFloorChecks(db: Pick<CommandTx, 'productionSettings'>, siteId: string): Promise<{ readonly checks: FloorChecks; readonly isDefault: boolean }> {
+  const row = await db.productionSettings.findUnique({ where: { id: siteId }, select: CHECKS_SELECT })
+  return { checks: floorChecksOf(row), isDefault: row === null }
 }
 
 /** What the audit rows keep of the checks. */
-const audited = (checks: FloorChecks) => ({ quantityGuard: checks.quantityGuard, skippedOperationRule: checks.skippedOperationRule, scrapApprovalLimit: checks.scrapApprovalLimit })
+const audited = (checks: FloorChecks) => ({ quantityGuard: checks.quantityGuard, skippedOperationRule: checks.skippedOperationRule, scrapApprovalLimit: checks.scrapApprovalLimit, qualificationRule: checks.qualificationRule })
 
 const limitIn = (value: Prisma.JsonValue | null): number | null | undefined => {
   if (value === null || typeof value !== 'object' || Array.isArray(value) || !('scrapApprovalLimit' in value)) return undefined
@@ -120,6 +127,7 @@ export interface ChangeFloorRulesInput {
   readonly quantityGuard?: FloorRuleMode | undefined
   readonly skippedOperationRule?: FloorRuleMode | undefined
   readonly scrapApprovalLimit?: number | null | undefined
+  readonly qualificationRule?: FloorRuleMode | undefined
   readonly reason?: string | null | undefined
   readonly version?: number | undefined
 }
@@ -154,7 +162,7 @@ export async function changeFloorRules(caller: CommandCaller, siteId: string, bo
       const beforeRow = existing ? await readRow(tools.tx, site.id) : null
       const before = floorChecksOf(beforeRow)
       const after = changedChecks(before, body)
-      const data = { quantityGuard: after.quantityGuard, skippedOperationRule: after.skippedOperationRule, scrapApprovalLimit: after.scrapApprovalLimit }
+      const data = { quantityGuard: after.quantityGuard, skippedOperationRule: after.skippedOperationRule, scrapApprovalLimit: after.scrapApprovalLimit, qualificationRule: after.qualificationRule }
       if (beforeRow) {
         await tools.tx.productionSettings.update({ where: { id: site.id }, data, select: { id: true } })
       } else {
@@ -168,7 +176,7 @@ export async function changeFloorRules(caller: CommandCaller, siteId: string, bo
         subject: site.id,
         companyId: site.companyId,
         siteId: site.id,
-        payload: { siteId: site.id, fields, quantityGuard: after.quantityGuard, skippedOperationRule: after.skippedOperationRule, scrapApprovalLimit: after.scrapApprovalLimit },
+        payload: { siteId: site.id, fields, quantityGuard: after.quantityGuard, skippedOperationRule: after.skippedOperationRule, scrapApprovalLimit: after.scrapApprovalLimit, qualificationRule: after.qualificationRule },
       })
       const view = await viewOf(tools.tx, site, await readRow(tools.tx, site.id), true)
       return { ...view, changed: true, changedFields: fields, changeWords: floorRulesChangeWords(before, after) }
@@ -187,7 +195,7 @@ export async function floorChecksRead(caller: CommandCaller) {
   if (context.audience !== 'floor') throw new ForbiddenError()
   const checks = await caller.withClient((client) => floorChecksFor(client, context.siteId))
   return {
-    checks: { quantityGuard: checks.quantityGuard, skippedOperationRule: checks.skippedOperationRule, scrapApprovalLimit: checks.scrapApprovalLimit, bundleCodeMode: checks.bundleCodeMode },
+    checks: { quantityGuard: checks.quantityGuard, skippedOperationRule: checks.skippedOperationRule, scrapApprovalLimit: checks.scrapApprovalLimit, bundleCodeMode: checks.bundleCodeMode, qualificationRule: checks.qualificationRule },
     undoWindowSeconds: FIXED_FLOOR_RULES.undoWindowSeconds,
   }
 }

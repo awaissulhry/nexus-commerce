@@ -260,6 +260,21 @@ describe('the qualification check at the start (B-W2b-39; MES-024, MES-246)', ()
     expect(warned.qualification).toMatchObject({ mode: 'WARN' })
     await ok('leadCut', 'POST', '/production/terminal/hand-back', { clientScanId: cid('cut-back'), bundleId: bundles[3] }, 201)
   })
+
+  it('the rule is the site\'s (B-W2b-81): STRICT holds that same missing skill for a team leader, in words; nothing is written; FREE checks nothing', async () => {
+    const setRule = (mode: string) => admin(`UPDATE "ProductionSettings" SET "qualificationRule" = $1::"FloorRuleMode" WHERE id = $2`, [mode, siteA1])
+    const before = (await rowsOf(bundles[3]!)).length
+    await setRule('STRICT')
+    const held = await no('leadCut', 'POST', '/production/terminal/start', { clientScanId: cid('cut-strict'), bundleId: bundles[3] }, 409)
+    expect(refusalOf(held)).toBe('refusal/NOT_QUALIFIED')
+    expect(held.message).toMatch(/A team leader may override it with their PIN and a reason\.$/)
+    expect(await rowsOf(bundles[3]!)).toHaveLength(before)
+    await setRule('FREE')
+    const free = await ok('leadCut', 'POST', '/production/terminal/start', { clientScanId: cid('cut-free'), bundleId: bundles[3] }, 201)
+    expect(free.qualification ?? null).toBeNull()
+    await ok('leadCut', 'POST', '/production/terminal/hand-back', { clientScanId: cid('cut-free-back'), bundleId: bundles[3] }, 201)
+    await setRule('WARN')
+  })
 })
 
 describe('open work paused at clock-out, and the next sign-in offers to continue (MES-117)', () => {

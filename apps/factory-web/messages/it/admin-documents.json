@@ -264,6 +264,7 @@
       "COUNT": "Inventario",
       "NCR": "Non conformità",
       "MAINTENANCE_JOB": "Intervento di manutenzione",
+      "CAPA": "Azione correttiva",
       "ACCOUNTING_EXPORT": "Esportazione contabile",
       "HOLD": "Blocco qualità",
       "INCOMING_INSPECTION": "Controllo in accettazione",

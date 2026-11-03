@@ -138,6 +138,36 @@ export function minutesOf(startedAt: Date, endedAt: Date | null, now: Date = new
   return Math.max(0, Math.floor((end.getTime() - startedAt.getTime()) / 60_000))
 }
 
+/** One block of a work order, as its totals read it (never who). */
+export interface WorkOrderBlock {
+  readonly codeId: string
+  readonly status: BlockStatus
+  readonly minutes: number
+}
+
+/**
+ * A work order's off-standard time (B-W2b-81, the Labour tab): the minutes of its blocks, approved, waiting for a decision
+ * and running; per code, most minutes first. A rejected block is no off-standard time. Per work order and code: no figure
+ * here is about one person.
+ */
+export function offStandardByWorkOrder(blocks: readonly WorkOrderBlock[]) {
+  const counted = blocks.filter((block) => block.status !== 'REJECTED')
+  const sum = (status: BlockStatus) => counted.filter((block) => block.status === status).reduce((total, block) => total + block.minutes, 0)
+  const perCode = new Map<string, { codeId: string; minutes: number; blocks: number }>()
+  for (const block of counted) {
+    const entry = perCode.get(block.codeId) ?? { codeId: block.codeId, minutes: 0, blocks: 0 }
+    perCode.set(block.codeId, { ...entry, minutes: entry.minutes + block.minutes, blocks: entry.blocks + 1 })
+  }
+  return {
+    minutes: counted.reduce((total, block) => total + block.minutes, 0),
+    approved: sum('APPROVED'),
+    waiting: sum('PENDING'),
+    running: sum('OPEN'),
+    blocks: counted.length,
+    codes: [...perCode.values()].sort((a, b) => b.minutes - a.minutes || a.codeId.localeCompare(b.codeId)),
+  }
+}
+
 export interface BlockFacts {
   readonly status: BlockStatus
   readonly source: BlockSource
