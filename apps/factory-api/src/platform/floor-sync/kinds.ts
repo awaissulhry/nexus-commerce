@@ -59,6 +59,10 @@ import { recordFromQueue } from '../../modules/quality/queue/record'
 import { RepairRefusedError } from '../../modules/production/repair/access'
 import { queuedScanBody } from '../../modules/production/repair/contract'
 import { scanRepair } from '../../modules/production/repair/station'
+// B-W2b-125: an incident reported with the worker's name, kept offline.
+import { IncidentRefusedError } from '../../modules/safety/incidents/access'
+import { floorReportBody } from '../../modules/safety/incidents/contract'
+import { reportFromFloor } from '../../modules/safety/incidents/report'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -103,6 +107,9 @@ import { scanRepair } from '../../modules/production/repair/station'
  *                                         signature, an opening or a cancellation is never queued)
  *   production.repair.scan                modules/production/repair scanRepair (B-W2b-126: a bundle scanned in or out at a
  *                                         repair station, the tablet's time when believable; each step set once)
+ *   safety.incident.report                modules/safety/incidents reportFromFloor (B-W2b-125: a report with the worker's name,
+ *                                         the tablet's time of the tap as when it happened; one without a name is refused
+ *                                         here: the queue's ledger names the tablet, so the tablet sends that one online)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -142,6 +149,8 @@ export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof InProcessRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   // B-W2b-126
   if (error instanceof RepairRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, ...(error.refusal.fix ? { fix: error.refusal.fix } : {}) })
+  // B-W2b-125
+  if (error instanceof IncidentRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
     return first ? moduleRefusal({ code: first.code, message: first.message, fix: first.fix }) : moduleRefusal({ code: 'NUMBER_REFUSED', message: error.message })
@@ -322,6 +331,14 @@ async function applyRepairScan(caller: CommandCaller, event: QueuedEvent, key: s
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'ReworkOrder', id: result.repair.reworkId } }
 }
 
+/** B-W2b-125: a queued incident report, through the incidents' own command (its key: `<device>.<client event id>`). */
+async function applyIncidentReport(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const body = parsed(floorReportBody, { ...event.payload, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const result = await reportFromFloor(caller, body.value, key, { queued: true })
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'Incident', id: result.incident.id } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -372,6 +389,8 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
         return await recordFromQueue(caller, { clientEventId: event.clientEventId, kind: event.kind, payload: event.payload }, context.key)
       case 'production.repair.scan':
         return await applyRepairScan(caller, event, context.key)
+      case 'safety.incident.report':
+        return await applyIncidentReport(caller, event, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

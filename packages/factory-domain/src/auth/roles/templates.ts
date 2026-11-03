@@ -525,6 +525,21 @@ const RISK_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze
   safety_officer: ['safety.risk.manage', 'safety.risk.sign'],
   company_doctor: ['safety.risk.sign'],
 })
+/**
+ * B-W2b-125 (incidents, near misses and hazards; QHS-265, QHS-268, QHS-270; design plant.incidents): the production manager,
+ * the maintenance lead and the floor supervisor (the preposti) see the incidents anonymised and report from the office; the
+ * safety officer keeps them (severity, seen, actions, close) and, with HR, sees the people involved and keeps the INAIL
+ * filings (protected: each view recorded). The occupational doctor holds none (fitness judgements only). A tablet reports
+ * with floor.work: no floor template changes. Office only; owner from every(); read-only gets the view only (the people
+ * permission is a write risk on purpose).
+ */
+const INCIDENTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['safety.incidents.view', 'safety.incidents.report'],
+  maintenance: ['safety.incidents.view', 'safety.incidents.report'],
+  floor_supervisor: ['safety.incidents.view', 'safety.incidents.report'],
+  safety_officer: ['safety.incidents.view', 'safety.incidents.report', 'safety.incidents.manage', 'safety.incidents.people'],
+  hr: ['safety.incidents.view', 'safety.incidents.report', 'safety.incidents.people'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -597,7 +612,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-126
   ...((audience === 'office' ? REWORK_REPAIR_ADDS : REWORK_REPAIR_FLOOR_ADDS)[key] ?? []),
   // B-W2b-122
-  ...(audience === 'office' ? (RISK_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (RISK_ADDS[key] ?? []) : []),
+  // B-W2b-125
+  ...(audience === 'office' ? (INCIDENTS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

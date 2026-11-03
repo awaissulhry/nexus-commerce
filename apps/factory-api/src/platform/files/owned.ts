@@ -52,6 +52,10 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   PayrollExport: { route: 'POST /people/payroll/exports (made by the API, never uploaded)' },
   // B-W2b-62, B-W2b-68: an approved worker statement's PDF (modules/people/earnings, modules/people/myday): every kind; only ever made by the API.
   WorkerStatement: { route: 'POST /people/statements/:statementId/pdf, or POST /people/myday/statements/:statementId/print (made by the API, never uploaded)' },
+  // B-W2b-125: an incident's photos (office, or the tablet that reported it) and INAIL's receipt of a filing (modules/safety/incidents):
+  // every kind; office only (a photo may show an injury or a face, the receipt names the injured person; GDPR art. 9).
+  Incident: { route: 'POST /safety/incidents/:incidentId/photos (or POST /safety/floor/incidents/:incidentId/photos), then POST …/photos/:fileId/complete' },
+  InailFiling: { route: 'POST /safety/incidents/:incidentId/filings/:filingId/receipt, then POST …/receipt/:fileId/complete' },
 })
 
 /**
@@ -66,6 +70,10 @@ export const MODULE_READ_FILES: Readonly<Record<string, string>> = Object.freeze
   // B-W2b-62, B-W2b-68: one person's pay: the office with people.earnings.records and the pay grain, each opening recorded; the
   // worker's own through My day; files.read never reaches it.
   WorkerStatement: 'POST /people/statements/:statementId/pdf, or GET /people/myday/statements/:statementId/pdf',
+  // B-W2b-125: an incident's photos (safety.incidents.view) and INAIL's receipt (safety.incidents.people, each opening a view in the
+  // protected view log); files.read never reaches them.
+  Incident: 'GET /safety/incidents/:incidentId/photos/:fileId/download',
+  InailFiling: 'POST /safety/incidents/:incidentId/filings/:filingId/receipt/:fileId/open',
 })
 
 export const readsThroughModule = (recordType: string): boolean => Object.hasOwn(MODULE_READ_FILES, recordType)

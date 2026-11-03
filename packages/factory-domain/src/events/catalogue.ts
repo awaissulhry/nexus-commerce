@@ -83,6 +83,8 @@ import { events as qualityRules } from '../quality-rules/events'
 import { events as productionRepair } from '../production-repair/events'
 // B-W2b-122: the risk assessment (versions, signatures, the improvement plan).
 import { events as safetyRisk } from '../safety-risk/events'
+// B-W2b-125: incidents, near misses and hazards, the INAIL filings (the safety module's own block).
+import { incidentEvents as safetyIncidents } from '../safety/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -232,7 +234,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-126
   ...productionRepair,
   // B-W2b-122
-  ...safetyRisk] as const satisfies readonly EventDefinition[]
+  ...safetyRisk,
+  // B-W2b-125
+  ...safetyIncidents] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
