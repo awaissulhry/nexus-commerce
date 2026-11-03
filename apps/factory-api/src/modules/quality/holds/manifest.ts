@@ -20,4 +20,12 @@ export const manifest = defineManifest({
   'POST /quality/holds': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },
   'PATCH /quality/holds/:holdId': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },
   'POST /quality/holds/:holdId/release': { audiences: ['office'], permission: 'quality.holds.release', scope: 'record' },
+  // B-W2b-114: hold by genealogy (QHS-075), what a hold touches, the hold board (QHS-077), the quarantine move (QHS-078; the
+  // confirm moves stock: inventory.transfer at the hold's site, the hold seen with quality.holds.view, checked in the handler).
+  'GET /quality/holds/genealogy': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },
+  'POST /quality/holds/genealogy': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },
+  'GET /quality/holds/:holdId/affected': { audiences: ['office'], permission: 'quality.holds.view', scope: 'record' },
+  'POST /quality/holds/:holdId/next-step': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },
+  'POST /quality/holds/:holdId/quarantine/ask': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },
+  'POST /quality/holds/:holdId/quarantine/confirm': { audiences: ['office'], permission: 'inventory.transfer', scope: 'record' },
 })
