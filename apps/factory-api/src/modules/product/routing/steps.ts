@@ -2,6 +2,7 @@ import { DomainError, NotFoundError, ValidationError, type Issue } from '@nexus/
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import type { AddStepsBody, CopyStepsBody, ReorderStepsBody, RoutingView, UpdateStepBody } from '@nexus/factory-domain/product/routing/contracts'
 import { operationUseRefusal } from '@nexus/factory-domain/product/routing/operations'
+import { groupsAfter } from '@nexus/factory-domain/product/routing/parallel'
 import { PRODUCT_ROUTING_MANAGE } from '@nexus/factory-domain/product/routing/permissions'
 import { planSubcontract, sameSubcontract, type Subcontract } from '@nexus/factory-domain/product/routing/subcontract'
 import {
@@ -23,6 +24,7 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { findRevision } from '../bom/store'
 import {
   assertMayWrite,
+  assertNoLinesUse,
   assertNoWorkOrders,
   auditedStep,
   auditedSubcontract,
@@ -50,8 +52,9 @@ import {
 
 /**
  * A draft revision's routing (features PRD-110, PRD-111): operations from the library added at the end, a step's
- * minutes, scan point and instructions changed, a step removed, the steps reordered, and the steps of a released routing
- * copied in. Every write sends the revision's version: it locks the style row, checks the revision is a draft (409
+ * minutes, scan point, instructions and parallel group (B-W2b-88) changed, a step removed, the steps reordered, and the
+ * steps of a released routing copied in. A step a BOM line uses (BomLine.routingSeq) is not removed: the lines are named in
+ * a 409; a reorder takes the lines along (the key's ON UPDATE CASCADE). Every write sends the revision's version: it locks the style row, checks the revision is a draft (409
  * otherwise, before the database's own refusal), compares and sets the revision's version, locks the library operations
  * it copies, then writes the steps; it records an audit row per step and one on the revision, and `style.routing_changed`.
  */
@@ -125,7 +128,8 @@ export async function addSteps(caller: CommandCaller, styleId: string, revisionI
 }
 
 /**
- * product.routing.updateStep: a step's minutes for this style, its scan point, its instructions, and (W2a, PRD-120) its
+ * product.routing.updateStep: a step's minutes for this style, its scan point, its instructions, its parallel group
+ * (B-W2b-88: side by side with the steps of the same number; the release check holds them together), and (W2a, PRD-120) its
  * subcontract details: the workshop (SUBCONTRACTOR role, of the style's company or every company), its fee per piece
  * (the cost grain: the grain filter refuses a fee from a caller without it) and the transit days; null takes the step
  * back in-house.
@@ -162,6 +166,7 @@ export async function updateStep(caller: CommandCaller, styleId: string, revisio
           standardMinutes: plan.step.standardMinutes,
           scanRequired: plan.step.scanRequired,
           instructions: plan.step.instructions,
+          parallelGroup: plan.step.parallelGroup,
           ...(subcontracted ? subcontractColumns(next) : {}),
           version: { increment: 1 },
           updatedAt: now,
@@ -195,6 +200,7 @@ export async function removeStep(caller: CommandCaller, styleId: string, revisio
     const draft = await lockDraft(tools, styleId, revisionId, version)
     const current = stepOf(await readSteps(tx, revisionId), stepId)
     await assertNoWorkOrders(tx, revisionId)
+    await assertNoLinesUse(tx, revisionId, [current])
     await deleteSteps(tools, [stepId])
     tools.audit({ recordType: 'RoutingOperation', recordId: stepId, companyId: draft.style.companyId, before: { revisionId, ...auditedStep(current) }, after: { removed: true } })
     recordChange(tools, draft, [stepId], { removed: stepId, seq: current.seq, operationId: current.operationId })
@@ -279,13 +285,15 @@ export async function copyRoutingSteps(caller: CommandCaller, styleId: string, r
     if (first + (sourceSteps.length - 1) * SEQ_STEP > MAX_SEQ) throw tooMany(kept.length + sourceSteps.length)
     if (body.replace && current.length > 0) {
       await assertNoWorkOrders(tx, revisionId)
+      await assertNoLinesUse(tx, revisionId, current)
       await deleteSteps(
         tools,
         current.map((step) => step.id),
       )
       for (const step of current) tools.audit({ recordType: 'RoutingOperation', recordId: step.id, companyId: draft.style.companyId, before: { revisionId, ...auditedStep(step) }, after: { removed: true } })
     }
-    const copied = copySteps(sourceSteps, first, newId)
+    // B-W2b-88: a copied parallel group is numbered after the kept steps' groups, so it never joins one of them.
+    const copied = copySteps(sourceSteps, first, newId, groupsAfter(kept, sourceSteps))
     // copySteps keeps the source's order: the n-th copy is the n-th source step.
     const copiedSubcontracts = new Map(
       copied.flatMap((step, index): [string, Subcontract][] => {

@@ -1,4 +1,5 @@
 import type { BusinessDate } from '../../core/time'
+import { sideBySide } from '../../product/routing/parallel'
 import type { FloorRuleMode } from '../settings/floor-rules'
 
 /**
@@ -320,7 +321,8 @@ export interface SequenceFacts {
 /**
  * What the site's rule (ProductionSettings.skippedOperationRule: STRICT, WARN or FREE, edited with the floor rules,
  * B-W2b-53) says about starting this work now. The scan's own guard (B-W2b-46) decides at the tablet; this is the same
- * rule on the list, before anyone walks to the machine. The routing has no parallel operations yet (schema need).
+ * rule on the list, before anyone walks to the machine. B-W2b-88: `previous` is the step before (product/routing/parallel
+ * stepBefore), never a sibling of a parallel group: siblings start side by side.
  */
 export function sequenceOf(mode: FloorRuleMode, facts: SequenceFacts): { readonly rule: FloorRuleMode; readonly state: SequenceState; readonly words: string | null } {
   if (!facts.previous || !facts.waiting) return { rule: mode, state: 'CLEAR', words: null }
@@ -335,15 +337,20 @@ export interface LaneEntry {
   readonly workOrderNumber: string
   readonly seq: number
   readonly name: string
+  /** B-W2b-88: its parallel group; operations side by side may stand in either order. */
+  readonly parallelGroup?: number | null | undefined
 }
 
-/** The first pair of a lane out of order: a later operation of a work order before an earlier one of the same work order. */
+/**
+ * The first pair of a lane out of order: a later operation of a work order before an earlier one of the same work order
+ * (B-W2b-88: two operations of one parallel group are in no order).
+ */
 export function laneOrderIssue(lane: readonly LaneEntry[]): { readonly earlier: LaneEntry; readonly later: LaneEntry; readonly words: string } | null {
   for (let i = 0; i < lane.length; i += 1) {
     for (let j = i + 1; j < lane.length; j += 1) {
       const first = lane[i]!
       const second = lane[j]!
-      if (first.workOrderId === second.workOrderId && first.seq > second.seq) {
+      if (first.workOrderId === second.workOrderId && first.seq > second.seq && !sideBySide(first, second)) {
         return { earlier: second, later: first, words: `Op ${first.seq} ${first.name} of ${first.workOrderNumber} stands before Op ${second.seq} ${second.name}.` }
       }
     }

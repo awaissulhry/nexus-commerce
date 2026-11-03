@@ -154,7 +154,8 @@
       "ON_THE_WAY": "Materiale in arrivo",
       "expected": "Materiale {date}",
       "MISSING": "Materiale mancante"
-    }
+    },
+    "parallel": "In parallelo con Op {seqs}"
   },
   "held": {
     "draft": "Una bozza non si assegna: prima rilascia l'ordine di produzione.",

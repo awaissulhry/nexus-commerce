@@ -134,6 +134,13 @@
       "MISSING": "Materiale di quest'ordine: manca qualcosa",
       "NOT_KNOWN": "Materiale di quest'ordine: non noto",
       "expected": "Materiale di quest'ordine: in arrivo, previsto il {date}"
+    },
+    "cardOp": {
+      "IN_STOCK": "Materiale di questa operazione: disponibile",
+      "ON_THE_WAY": "Materiale di questa operazione: in arrivo",
+      "MISSING": "Materiale di questa operazione: manca qualcosa",
+      "NOT_KNOWN": "Materiale di questa operazione: non noto",
+      "expected": "Materiale di questa operazione: in arrivo, previsto il {date}"
     }
   },
   "foryou": {

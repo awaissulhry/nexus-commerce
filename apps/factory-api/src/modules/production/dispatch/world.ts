@@ -1,7 +1,8 @@
 import { businessDayRange, businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { dispatchState, type DispatchState } from '@nexus/factory-domain/planning/schedule/dispatch'
 import { liveGarments } from '@nexus/factory-domain/production/bundles/split'
-import { materialFlagOf, type MaterialFlag } from '@nexus/factory-domain/production/dispatch/material'
+import { siblingsOf, stepBefore } from '@nexus/factory-domain/product/routing/parallel'
+import { materialKey, operationMaterialFlag, type MaterialFlag } from '@nexus/factory-domain/production/dispatch/material'
 import { placementsOf, REST_CARD, sequenceOf, type SequenceState } from '@nexus/factory-domain/production/dispatch/rules'
 import { SCAN_KINDS, standingKey, standingScans, type ScanFact } from '@nexus/factory-domain/production/scans/rules'
 import type { Wip } from '@nexus/factory-domain/production/scans/wip'
@@ -28,6 +29,8 @@ import { activeStationsOf, assignmentsOf, dayOf, type AssignmentRow, type Reader
  *               REST): its pieces and standard minutes still to do, where the work stands, the site's sequence rule on it
  *   pieces      the garments the plan puts on the operation less those done there (good + scrapped), from the floor's
  *               scans; bundles named on a row take their live garments, the rest is the rest
+ *   side by side B-W2b-88 (MES-025): operations of one parallel group are cards of their own that name each other
+ *               (`parallel`); a sibling is never the operation "before" (the sequence rule and the words skip it)
  *
  * No person is read here but the rows' ids; no money.
  */
@@ -44,7 +47,7 @@ export const WORK_ORDER_SELECT = {
   style: { select: { code: true, name: true } },
   sizes: { select: { quantity: true } },
   // B-W2b-82: an unplanned operation has no target quantity, so no card: the day's plan stays the routing's.
-  operations: { where: { routingSeq: { not: null } }, select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true }, orderBy: { seq: 'asc' } },
+  operations: { where: { routingSeq: { not: null } }, select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, parallelGroup: true }, orderBy: { seq: 'asc' } },
 } as const satisfies Prisma.WorkOrderSelect
 export type WorkOrderRow = Prisma.WorkOrderGetPayload<{ select: typeof WORK_ORDER_SELECT }>
 export type OperationOfOrder = WorkOrderRow['operations'][number]
@@ -98,6 +101,8 @@ export interface DayCard {
   readonly workOrder: WorkOrderRow
   readonly operation: OperationOfOrder
   readonly previous: OperationOfOrder | null
+  /** B-W2b-88: the operations it runs side by side with (its parallel group), in routing order; null: in sequence. */
+  readonly parallel: { readonly group: number; readonly with: readonly OperationOfOrder[] } | null
   readonly slot: Pick<SlotRow, 'id' | 'startAt' | 'endAt'> | null
   readonly stationId: string | null
   readonly lineId: string | null
@@ -184,7 +189,10 @@ function cardsOfOperation(input: {
   if (left === 0) return []
   const open = flows.bundlesOf(workOrder.id).filter((bundle) => !flows.reported(bundle.id, operation.id))
   const placements = placementsOf(rows, open.map((bundle) => bundle.id))
-  const previous = [...workOrder.operations].reverse().find((candidate) => candidate.seq < operation.seq) ?? null
+  // B-W2b-88: the step before (of a group before it, the last); a sibling is never before it.
+  const previous = stepBefore(workOrder.operations, operation).at(-1) ?? null
+  const siblings = siblingsOf(workOrder.operations, operation)
+  const parallel = operation.parallelGroup !== null && siblings.length > 0 ? { group: operation.parallelGroup, with: siblings } : null
   const standard = new Dec(operation.standardMinutes.toString())
   const slotOf = (entry: PlannedOperation | undefined) => (entry ? { id: entry.slot.id, startAt: entry.slot.startAt, endAt: entry.slot.endAt } : null)
   const cardOf = (fields: { key: string; pieces: number; bundleIds: readonly string[]; whole: boolean; stationId: string | null; lineId: string | null; workCentreId: string | null; rows: readonly AssignmentRow[]; order: number | null; slot: DayCard['slot'] }): DayCard => {
@@ -196,6 +204,7 @@ function cardsOfOperation(input: {
       workOrder,
       operation,
       previous,
+      parallel,
       minutes: standard.times(fields.pieces).toFixed(1),
       state: state.state,
       words: state.words,
@@ -283,13 +292,54 @@ export const planView = (version: PlanRow) => ({
   publishedAt: toUtcIso(version.publishedAt!),
 })
 
+/** The material flags of a read: per operation of a work order (B-W2b-88); null: not read, or the operation uses no material. */
+export interface MaterialFlags {
+  of(workOrderId: string, operationId: string): MaterialFlag | null
+}
+
+/** No flag read (a list that leaves the netting out). */
+export const NO_MATERIAL_FLAGS: MaterialFlags = Object.freeze({ of: () => null })
+
 /**
- * The material flag of these work orders from the plan computed now (planning/readiness; one netting of the site, however
- * many work orders). Read with the office's client or, for the floor, the system view: the floor reads no planning table.
+ * What each operation of these work orders uses (B-W2b-88): its planned materials (WorkOrderMaterial) whose BOM line names
+ * the operation's routing step, and those whose line names no step; `tied` when any line names a step.
  */
-export async function materialFlags(db: Reader, site: SiteRow, workOrderIds: readonly string[]): Promise<Map<string, MaterialFlag>> {
+async function operationUses(db: Reader, workOrderIds: readonly string[]): Promise<Map<string, { tied: boolean; keysOf: Map<string, Set<string>> }>> {
+  const planned = await db.workOrderMaterial.findMany({ where: { workOrderId: { in: [...workOrderIds] } }, select: { workOrderId: true, bomLineId: true, itemId: true, itemColourId: true } })
+  const lineIds = [...new Set(planned.map((row) => row.bomLineId))]
+  const lines = lineIds.length > 0 ? await db.bomLine.findMany({ where: { id: { in: lineIds } }, select: { id: true, routingSeq: true } }) : []
+  const stepOfLine = new Map(lines.map((line) => [line.id, line.routingSeq]))
+  const operations = await db.workOrderOperation.findMany({ where: { workOrderId: { in: [...workOrderIds] } }, select: { id: true, workOrderId: true, routingSeq: true } })
+  const out = new Map<string, { tied: boolean; keysOf: Map<string, Set<string>> }>()
+  for (const workOrderId of workOrderIds) {
+    const rows = planned.filter((row) => row.workOrderId === workOrderId).map((row) => ({ key: materialKey(row.itemId, row.itemColourId), step: stepOfLine.get(row.bomLineId) ?? null }))
+    const untied = rows.filter((row) => row.step === null).map((row) => row.key)
+    const keysOf = new Map<string, Set<string>>()
+    for (const operation of operations.filter((row) => row.workOrderId === workOrderId)) {
+      keysOf.set(operation.id, new Set([...untied, ...rows.filter((row) => row.step !== null && row.step === operation.routingSeq).map((row) => row.key)]))
+    }
+    out.set(workOrderId, { tied: rows.some((row) => row.step !== null), keysOf })
+  }
+  return out
+}
+
+/**
+ * The material flags of these work orders from the plan computed now (planning/readiness; one netting of the site, however
+ * many work orders), per operation where the BOM says which step uses a line (B-W2b-88; factory-domain production/dispatch
+ * material operationMaterialFlag). Read with the office's client or, for the floor, the system view: the floor reads no
+ * planning table.
+ */
+export async function materialFlags(db: Reader, site: SiteRow, workOrderIds: readonly string[]): Promise<MaterialFlags> {
   const ids = [...new Set(workOrderIds)]
-  if (ids.length === 0) return new Map()
-  const answers = await readinessFor(db, site, ids)
-  return new Map(answers.map((answer) => [answer.workOrderId, materialFlagOf(answer.word, answer.date)]))
+  if (ids.length === 0) return NO_MATERIAL_FLAGS
+  const answers = new Map((await readinessFor(db, site, ids)).map((answer) => [answer.workOrderId, answer]))
+  const uses = await operationUses(db, ids)
+  return {
+    of: (workOrderId, operationId) => {
+      const answer = answers.get(workOrderId)
+      if (!answer) return null
+      const use = uses.get(workOrderId)
+      return operationMaterialFlag(answer, { tied: use?.tied ?? false, keys: use?.keysOf.get(operationId) ?? new Set() })
+    },
+  }
 }

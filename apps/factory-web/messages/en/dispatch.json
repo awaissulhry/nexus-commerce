@@ -154,7 +154,8 @@
       "ON_THE_WAY": "Material on the way",
       "expected": "Material {date}",
       "MISSING": "Material missing"
-    }
+    },
+    "parallel": "Side by side with Op {seqs}"
   },
   "held": {
     "draft": "A draft is not dispatched: release the work order first.",

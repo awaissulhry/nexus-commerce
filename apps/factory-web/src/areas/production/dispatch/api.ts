@@ -46,6 +46,8 @@ const cardSchema = z.object({
   }),
   operation: z.object({ id: z.string(), seq: z.number(), name: z.string(), workCentreId: z.string() }),
   previous: z.object({ seq: z.number(), name: z.string() }).nullable(),
+  /** B-W2b-88 (MES-025): the operations it runs side by side with; null (or an answer from before): in sequence. */
+  parallel: z.object({ group: z.number(), with: z.array(z.object({ seq: z.number(), name: z.string() })) }).nullable().optional(),
   stationId: z.string().nullable(),
   lineId: z.string().nullable(),
   bundles: z.array(z.object({ id: z.string(), code: z.string(), garments: z.number() })),

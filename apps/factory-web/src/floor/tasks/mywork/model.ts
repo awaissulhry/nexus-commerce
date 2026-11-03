@@ -1,5 +1,5 @@
 import type { DispatchState } from '@nexus/factory-domain/planning/schedule/dispatch'
-import type { MaterialState } from '@nexus/factory-domain/production/dispatch/material'
+import type { MaterialScope, MaterialState } from '@nexus/factory-domain/production/dispatch/material'
 import type { FloorRuleMode } from '@nexus/factory-domain/production/settings/floor-rules'
 import { floorListChanges } from '@nexus/ui/floor/FloorListUpdates/floorListUpdatesModel'
 import type { FloorMode } from '../../model'
@@ -23,8 +23,9 @@ import type { FloorMode } from '../../model'
  * B-W2b-71 (the W2b part):
  *   my list   `GET /production/dispatch/mine`: what the day names the signed-in person for, across stations, their running
  *             work first. With open work on it, it is the list; else the station's queue (design "Station or person view")
- *   material  each entry's flag (MES-026): in stock, on the way or missing, by icon, tone and word. It is the WORK ORDER's:
- *             nothing says which operation uses which component, so the screen says so
+ *   material  each entry's flag (MES-026): in stock, on the way or missing, by icon, tone and word. B-W2b-88: it is the
+ *             OPERATION's own where the BOM says which operation uses a line (scope OPERATION), else the work order's;
+ *             the card says which. An operation that uses no material shows no flag
  *   messages  `GET /production/dispatch/mine/messages`: "For your work" counts the ones not opened on this tablet and hides
  *             at zero; which ones were opened stays on the tablet, per tablet, never per person (art. 4)
  *   help      Call for help: Material, the site's first active MATERIAL type: one tap through the floor queue, so it works
@@ -59,7 +60,7 @@ export interface DispatchEntry {
   readonly done: number
   /** What the site's sequence rule makes of it (B-W2b-49; a saved list from before it has none). */
   readonly sequence?: { readonly rule: FloorRuleMode; readonly state: string; readonly words: string | null } | null
-  /** The work order's material flag (MES-026); null: nothing known. */
+  /** The material flag (MES-026): the operation's or the work order's (`scope`); null: nothing known or nothing used. */
   readonly material?: MaterialFlag | null
   /** My list only: where the work is, how many bundles by name, and whether I am on it now. */
   readonly station?: { readonly id: string; readonly code: string; readonly name: string } | null
@@ -71,6 +72,8 @@ export interface MaterialFlag {
   readonly state: MaterialState
   /** When it is expected (on the way); null when no date is known. */
   readonly date: string | null
+  /** B-W2b-88: whose material it is about; left out (an older answer): the work order's. */
+  readonly scope?: MaterialScope | undefined
 }
 
 export interface DispatchList {

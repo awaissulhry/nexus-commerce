@@ -34,11 +34,11 @@ export interface RoutingDiff {
   readonly minutes: { readonly from: string; readonly to: string }
 }
 
-const PLAIN_FIELDS = ['seq', 'code', 'name', 'workCentreKind', 'scanRequired', 'instructions'] as const satisfies readonly (keyof StepFields)[]
+const PLAIN_FIELDS = ['seq', 'code', 'name', 'workCentreKind', 'scanRequired', 'instructions', 'parallelGroup'] as const satisfies readonly (keyof StepFields)[]
 
 function stepFields(from: StepData, to: StepData): FieldChange[] {
   const fields: FieldChange[] = []
-  for (const field of PLAIN_FIELDS) if (from[field] !== to[field]) fields.push({ field, from: from[field], to: to[field] })
+  for (const field of PLAIN_FIELDS) if ((from[field] ?? null) !== (to[field] ?? null)) fields.push({ field, from: from[field] ?? null, to: to[field] ?? null })
   if (!sameMinutes(from.standardMinutes, to.standardMinutes)) fields.push({ field: 'standardMinutes', from: decimalText(from.standardMinutes), to: decimalText(to.standardMinutes) })
   if (JSON.stringify(from.nameI18n ?? {}) !== JSON.stringify(to.nameI18n ?? {})) fields.push({ field: 'nameI18n', from: JSON.stringify(from.nameI18n ?? {}), to: JSON.stringify(to.nameI18n ?? {}) })
   return fields

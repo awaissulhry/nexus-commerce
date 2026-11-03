@@ -10,7 +10,7 @@ import { dimensionOf, UOMS } from '@nexus/factory-domain/product/units/units'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { BomLine, BomLineInput, BomView, MaterialView, StyleView } from '../../api'
 import { SheetImportDialog } from '../../import/view/SheetImportDialog'
-import { decimalInput, decimalText, draftOf, editableRevision, editText, issueWords, nextRevisionNumber, revisionInView } from '../../model'
+import { decimalInput, decimalText, draftOf, editableRevision, editText, isRoutingIssue, issueWords, nextRevisionNumber, revisionInView, stepLabel } from '../../model'
 import type { BomViewMode, StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
 import { moveSeq, sizeCells } from '../bom-model'
 
@@ -22,6 +22,8 @@ const VIEWS: BomViewMode[] = ['lines', 'sizes', 'colours']
  * the range, decimals typed either way, a missing size said in words, never 0), By colourway (colour-dependent lines ×
  * the active colourways, the material's own colours only) — `v` cycles them; and leather: what each size cuts and
  * needs in hide, with the planned hide yield of the revision. A released revision is frozen: everything is drawn as text.
+ * B-W2b-88: each line may name the operation of the routing that uses it (column "Operation", a field of the line): the
+ * floor then asks its components at that operation only, and dispatch flags its material per operation.
  */
 export function BomTab({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
   const t = useT('products')
@@ -75,8 +77,8 @@ export function BomTab({ style, model, actions }: { style: StyleView; model: Sty
     return <Banner tone="danger" title={t('bom.failed')} action={<Button size="sm" onClick={() => actions?.onReload?.()}>{t('common.retry')}</Button>}>{t(model.bom.problem)}</Banner>
   const bom = model.bom.value
   const routing = model.routing.status === 'ready' ? model.routing.value : null
-  const bomIssues = bom.issues.filter((issue) => !['NO_STEPS', 'MINUTES_NOT_POSITIVE', 'NO_SCAN_POINT'].includes(issue.code))
-  const bomWarnings = bom.warnings.filter((issue) => !['OPERATION_ARCHIVED', 'LAST_STEP_NOT_SCANNED'].includes(issue.code))
+  const bomIssues = bom.issues.filter((issue) => !isRoutingIssue(issue.code))
+  const bomWarnings = bom.warnings.filter((issue) => !isRoutingIssue(issue.code))
 
   const showMe = (issue: BomView['issues'][number]) => {
     const view: BomViewMode = issue.size ? 'sizes' : issue.colourwayId ? 'colours' : 'lines'
@@ -221,9 +223,9 @@ function LinesView({ bom, editable, heldWhy, actions, prefix }: { bom: BomView; 
         label={t('bom.title', { count: bom.lines.length })}
         density="roomy"
         stackOnPhone
-        columns={[t('bom.col.seq'), t('bom.col.material'), t('bom.col.placement'), t('bom.col.qty', { size: base ?? '—' }), t('bom.col.wastage'), t('bom.col.gross'), t('bom.col.depends'), t('bom.col.actions')]}
-        widths={['6%', '25%', '13%', '10%', '7%', '10%', '13%', undefined]}
-        align={[undefined, undefined, undefined, 'right', 'right', 'right', undefined, 'right']}
+        columns={[t('bom.col.seq'), t('bom.col.material'), t('bom.col.placement'), t('bom.col.qty', { size: base ?? '—' }), t('bom.col.wastage'), t('bom.col.gross'), t('bom.col.depends'), t('bom.col.operation'), t('bom.col.actions')]}
+        widths={['5%', '19%', '10%', '9%', '7%', '9%', '11%', '11%', undefined]}
+        align={[undefined, undefined, undefined, 'right', 'right', 'right', undefined, undefined, 'right']}
         rows={bom.lines.map((line, index) => {
           const atBase = line.bySize.find((entry) => entry.size === base) ?? line.bySize[0]
           return {
@@ -244,6 +246,16 @@ function LinesView({ bom, editable, heldWhy, actions, prefix }: { bom: BomView; 
               `${decimalText(line.wastagePct, locale)} %`,
               atBase?.gross ? `${decimalText(atBase.gross, locale)} ${t(`uom.${line.uom}`)}` : t('bom.missing'),
               <span key="d">{dependence(line, t)}</span>,
+              line.routingStep ? (
+                <span key="o" className="fw-st-cellstack">
+                  <span>{t('bom.operationAt', { step: stepLabel(line.routingStep) })}</span>
+                  <span className="nds-summary-sub">{line.routingStep.name}</span>
+                </span>
+              ) : (
+                <span key="o" className="fw-st-hint">
+                  {t('bom.noOperation')}
+                </span>
+              ),
               <span key="a" className="fw-st-inline fw-st-nowrap" data-line={line.id} tabIndex={-1}>
                 <Button size="sm" variant="quiet" heldReason={heldWhy} onClick={() => actions?.onDialog?.({ kind: 'bomLine', lineId: line.id })} aria-label={t('bom.editOne', { line: line.seq })}>
                   {t('bom.edit')}
@@ -538,6 +550,12 @@ function LineDialog({ bom, model, actions, lineId }: { bom: BomView; model: Styl
   const current = lineId ? bom.lines.find((line) => line.id === lineId) ?? null : null
   const [itemId, setItemId] = useState<string | null>(current?.item.id ?? model.lineDraft?.material.id ?? null)
   const material: MaterialView | null = (itemId ? model.materials[itemId] : null) ?? (model.lineDraft && model.lineDraft.material.id === itemId ? model.lineDraft.material : null)
+  // An existing line's material is read when the dialog opens (only leather and colour-dependent lines are read beforehand).
+  const loadMaterial = useRef(actions?.onLoadMaterial)
+  loadMaterial.current = actions?.onLoadMaterial
+  useEffect(() => {
+    if (itemId && !(itemId in model.materials) && model.lineDraft?.material.id !== itemId) loadMaterial.current?.(itemId)
+  }, [itemId, model.materials, model.lineDraft])
   const [query, setQuery] = useState('')
   const typedQuery = useRef(false)
   const search = useRef(actions?.onMaterialQuery)
@@ -555,6 +573,8 @@ function LineDialog({ bom, model, actions, lineId }: { bom: BomView; model: Styl
   const [colourDependent, setColourDependent] = useState(current?.colourDependent ?? false)
   const [itemColourId, setItemColourId] = useState<string | null>(current?.itemColour?.id ?? null)
   const [colourwayId, setColourwayId] = useState<string | null>(current?.colourway?.id ?? null)
+  const [routingSeq, setRoutingSeq] = useState<number | null>(current?.routingStep?.seq ?? null)
+  const steps = model.routing.status === 'ready' ? model.routing.value.steps : null
   const [note, setNote] = useState(current?.note ?? '')
   useEffect(() => {
     if (material && !uom) setUom(material.consumptionUom)
@@ -583,6 +603,7 @@ function LineDialog({ bom, model, actions, lineId }: { bom: BomView; model: Styl
       itemColourId: colourDependent ? null : itemColourId,
       colourwayId,
       note: note.trim() || null,
+      routingSeq,
     }
     const done = current ? actions?.onEditLine?.(current.id, input) : actions?.onAddLine?.({ ...input, itemId: material.id })
     void done?.then((ok) => ok && actions?.onDialog?.(null))
@@ -737,6 +758,17 @@ function LineDialog({ bom, model, actions, lineId }: { bom: BomView; model: Styl
                 </Select>
               </Field>
             </div>
+            <Field label={t('bom.line.operation')} hint={steps === null ? t('bom.line.operationLoading') : steps.length === 0 ? t('bom.line.operationNoRouting') : t('bom.line.operationHint')}>
+              <Select value={routingSeq === null ? '' : String(routingSeq)} onChange={(event) => setRoutingSeq(event.target.value === '' ? null : Number(event.target.value))}>
+                <option value="">{t('bom.line.noOperation')}</option>
+                {(steps ?? []).map((step) => (
+                  <option key={step.id} value={String(step.seq)}>
+                    {stepLabel(step)} {step.name}
+                  </option>
+                ))}
+                {current?.routingStep && !(steps ?? []).some((step) => step.seq === current.routingStep!.seq) && <option value={String(current.routingStep.seq)}>{stepLabel(current.routingStep)}</option>}
+              </Select>
+            </Field>
             <Field label={t('bom.line.note')}>
               <Textarea value={note} rows={2} maxLength={1000} onChange={(event) => setNote(event.target.value)} />
             </Field>

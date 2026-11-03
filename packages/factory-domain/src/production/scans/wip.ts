@@ -1,5 +1,5 @@
 import { bundleFlow, type Flow as BundleFlow, type FlowRework } from '../bundles/split'
-import { finalOperationOf, previousScanned, sewnOperationOf, standingKey, standingScans, totalOf, type ScanFact, type ScanOperation } from './rules'
+import { finalOperationOf, previousStep, sewnOperationOf, standingKey, standingScans, totalOf, type ScanFact, type ScanOperation } from './rules'
 
 /**
  * Work in progress from the floor's scans (B-W1-42; MES-167 WIP by operation, MES-079 the operation bulletin; design
@@ -171,9 +171,10 @@ export function wipOf(input: {
       const reported = flow.standing.get(standingKey(bundle.id, operation.id))
       return reported ? totalOf(reported) : 0
     }
-    const previous = previousScanned(operations, operation.id)
-    if (!previous) return flow.quantity
-    return flow.standing.get(standingKey(bundle.id, previous.id))?.goodQuantity ?? 0
+    // B-W2b-88: after a parallel group, what every one of its operations passed (the lowest good; 0 while one has not).
+    const previous = previousStep(operations, operation.id)
+    if (previous.length === 0) return flow.quantity
+    return Math.min(...previous.map((candidate) => flow.standing.get(standingKey(bundle.id, candidate.id))?.goodQuantity ?? 0))
   }
 
   const rows: WipOperation[] = operations.map((operation) => {

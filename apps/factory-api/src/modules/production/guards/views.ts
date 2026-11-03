@@ -11,6 +11,7 @@ import {
   OVERRIDABLE_REFUSALS,
   OVERRIDE_REASONS,
   passedTo,
+  usableHere,
   type GuardKind,
 } from '@nexus/factory-domain/production/guards/rules'
 import { PRODUCTION_SCAN, PRODUCTION_SCAN_CORRECT } from '@nexus/factory-domain/production/scans/permissions'
@@ -80,7 +81,7 @@ export async function checkBundle(caller: CommandCaller, query: { readonly code:
     const counts = padded ? { good: query.good ?? 0, scrap: query.scrap ?? 0, rework: query.rework ?? 0 } : { good: reached.passed, scrap: 0, rework: 0 }
     const result = guardFindings({ operations, operation, bundleId: bundle.id, bundle: { code: bundle.code, quantity: flow.quantity }, workOrder, standing: flow.standing, counts, settings, lines })
     const beyondBundle = counts.good + counts.scrap + counts.rework > flow.quantity
-    const facts = await componentFacts(db, { styleId: workOrder.styleId, workOrderId: workOrder.id, workOrderSizeId: bundle.workOrderSizeId })
+    const facts = await componentFacts(db, { styleId: workOrder.styleId, workOrderId: workOrder.id, workOrderSizeId: bundle.workOrderSizeId, operationId: operation.id })
     const asked = componentsAsked({ operations, operation, garmentTracking: facts.garmentTracking, materials: facts.materials })
     return {
       ...base,
@@ -92,7 +93,8 @@ export async function checkBundle(caller: CommandCaller, query: { readonly code:
       findings: result.findings.map((finding) => ({ kind: finding.kind, mode: finding.mode, code: finding.refusal.code, message: finding.refusal.message, fix: finding.refusal.fix, overridable: !beyondBundle && finding.mode === 'STRICT' && overridable(finding.refusal.code) })),
       components: {
         asked: asked.map((material) => ({ itemId: material.itemId, code: material.code, name: material.name })),
-        traceable: facts.materials.filter((material) => material.tracking === 'LOT').map((material) => ({ itemId: material.itemId, code: material.code, name: material.name, asked: asked.some((entry) => entry.itemId === material.itemId) })),
+        // B-W2b-88: only what this operation may record (a line of it names this operation, or no step).
+        traceable: facts.materials.filter((material) => material.tracking === 'LOT' && usableHere(material)).map((material) => ({ itemId: material.itemId, code: material.code, name: material.name, asked: asked.some((entry) => entry.itemId === material.itemId) })),
       },
     }
   })
@@ -114,7 +116,7 @@ export async function checkLot(caller: CommandCaller, query: { readonly code: st
     if (!bundle || !workOrder || !mayScan(context, PRODUCTION_SCAN, workOrder)) throw new NotFoundError('Not a bundle ticket of this site: scan the bundle’s ticket.')
     const operation = (await readOperations(db, workOrder.id)).find((candidate) => candidate.id === query.workOrderOperationId)
     if (!operation) throw new NotFoundError('Not an operation of this bundle’s work order.')
-    const facts = await componentFacts(db, { styleId: workOrder.styleId, workOrderId: workOrder.id, workOrderSizeId: bundle.workOrderSizeId })
+    const facts = await componentFacts(db, { styleId: workOrder.styleId, workOrderId: workOrder.id, workOrderSizeId: bundle.workOrderSizeId, operationId: operation.id })
     const scanned = await scannedLots(db, workOrder.siteId, [{ code: query.code, garments: 1 }])
     const decision = componentDecision({ asked: [], materials: facts.materials, scanned, garments: 1, operation })
     if (!decision.ok) return { lot: null, refusal: { code: decision.refusal.code, message: decision.refusal.message, fix: decision.refusal.fix } }

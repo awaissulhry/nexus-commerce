@@ -145,7 +145,7 @@ describe('routing steps (PRD-110)', () => {
     const plan = planNewStep(SEW, { standardMinutes: '90.1234', instructions: 'Twin seam at the yoke.' }, 20)
     expect(plan).toEqual({
       ok: true,
-      step: { seq: 20, operationId: 'op-sew', code: 'SEW-1', name: 'SEW-1 (made up)', nameI18n: { it: 'SEW-1 it', en: 'SEW-1 en' }, workCentreKind: 'SEWING', standardMinutes: '90.123', scanRequired: true, instructions: 'Twin seam at the yoke.' },
+      step: { seq: 20, operationId: 'op-sew', code: 'SEW-1', name: 'SEW-1 (made up)', nameI18n: { it: 'SEW-1 it', en: 'SEW-1 en' }, workCentreKind: 'SEWING', standardMinutes: '90.123', scanRequired: true, instructions: 'Twin seam at the yoke.', parallelGroup: null },
     })
   })
 

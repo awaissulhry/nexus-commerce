@@ -295,6 +295,8 @@ export interface BomLineInput {
   colours?: Array<{ colourwayId: string; itemColourId: string | null }>
   colourwayId?: string | null
   note?: string | null
+  /** B-W2b-88: the routing step that uses the line (its place); null: not tied to one step. */
+  routingSeq?: number | null
 }
 
 export function addBomLine(api: ApiClient, styleId: string, revision: { id: string; version: number }, input: BomLineInput & { itemId: string }): Promise<BomView> {
@@ -362,6 +364,8 @@ export interface StepPatch {
   standardMinutes?: string
   scanRequired?: boolean
   instructions?: string | null
+  /** B-W2b-88: its parallel group (side by side with the steps of the number); null: back in the sequence. */
+  parallelGroup?: number | null
   /** null: the step goes back in-house. */
   subcontract?: SubcontractPatch | null
 }
