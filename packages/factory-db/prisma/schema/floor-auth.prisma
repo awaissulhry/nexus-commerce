@@ -261,6 +261,12 @@ model Worker {
   maintenanceSignedSafe   MaintenanceRequest[] @relation("MaintenanceRequestSignedSafeBy")
   maintenanceJobs         MaintenanceJob[]     @relation("MaintenanceJobAssignee")
   maintenanceHandedBack   MaintenanceJob[]     @relation("MaintenanceJobHandedBackBy")
+  // W2b plant.prisma (wave 14/16): the requests they acknowledged, were on the way to, confirmed working; the jobs they
+  // confirmed as the line lead.
+  maintenanceAcknowledged MaintenanceRequest[] @relation("MaintenanceRequestAcknowledgedBy")
+  maintenanceOnTheWay     MaintenanceRequest[] @relation("MaintenanceRequestOnTheWayBy")
+  maintenanceConfirmed    MaintenanceRequest[] @relation("MaintenanceRequestConfirmedWorksBy")
+  maintenanceLeadConfirmed MaintenanceJob[]    @relation("MaintenanceJobLeadConfirmedBy")
   // W2b inspection-plans.prisma (wave 10/16): what they inspected and recorded at the bench, and the in-process checks
   // that name them as the operator (behind the legal gate).
   incomingInspected       IncomingInspection[]    @relation("IncomingInspectionInspector")

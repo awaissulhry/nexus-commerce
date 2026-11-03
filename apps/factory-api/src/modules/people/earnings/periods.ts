@@ -6,6 +6,7 @@ import { PEOPLE_EARNINGS_MANAGE, PEOPLE_EARNINGS_VIEW } from '@nexus/factory-dom
 import { checksOpen, lockPhrase, moveRefusal, notOver, paysOn, periodChecks, statementsOpen, statementStale, wrongPhrase, type EarningsRefusal, type PeriodCheck, type PeriodFacts, type PayWindow } from '@nexus/factory-domain/people/earnings/rules'
 import { TOO_FEW_WORDS, groupShown } from '@nexus/factory-domain/people/privacy/groups'
 import { monthPeriod } from '@nexus/factory-domain/people/overtime/timesheets'
+import { paysByPiece } from '@nexus/factory-domain/people/schemes/rules'
 import { eachDay } from '@nexus/factory-domain/calendars/dates'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
@@ -106,13 +107,17 @@ export async function factsOfPeriod(db: Client, facts: PayFacts, period: PeriodR
     db.worker.count({ where: { siteId: { in: siteIds }, employeeId: null, operationScans: { some: { serverTime: range, kind: { in: ['REPORT', 'CORRECTION', 'PARTIAL'] } } } } }),
     db.labourDispute.count({ where: { siteId: { in: siteIds }, workDate: days, status: 'OPEN' } }),
   ])
-  let sitesWithoutClock = 0
-  for (const id of siteIds) if (!(await facts.clockReadable(id))) sitesWithoutClock += 1
+  const withoutClock: string[] = []
+  for (const id of siteIds) if (!(await facts.clockReadable(id))) withoutClock.push(id)
+  const sitesWithoutClock = withoutClock.length
   const first = dayOf(period.periodStart)
   const last = dayOf(period.periodEnd)
+  // B-W2b-84: a bonus scheme pays on the minutes present; where nobody can read them (a paying site with no clock) it waits.
   const schemes = await facts.schemesOf(period.companyId)
-  const bonusSchemes = siteIds.length === 0 ? 0 : schemes.filter((scheme) => scheme.kind === 'STANDARD_MINUTE_BONUS' && scheme.validFrom <= last && (scheme.validTo === null || scheme.validTo >= first)).length
-  return { heldOpen, daysOpen, overtimePending, blocksWaiting, bonusSchemes, scansWithoutRate, workersWithoutEmployee, disputesOpen, sitesWithoutClock }
+  const bonus = withoutClock.length === 0 ? [] : schemes.filter((scheme) => !paysByPiece(scheme) && scheme.validFrom <= last && (scheme.validTo === null || scheme.validTo >= first))
+  const lineSites = new Map((bonus.some((scheme) => scheme.lineId) ? await db.line.findMany({ where: { id: { in: bonus.flatMap((scheme) => (scheme.lineId ? [scheme.lineId] : [])) } }, select: { id: true, siteId: true } }) : []).map((row) => [row.id, row.siteId]))
+  const bonusWithoutClock = bonus.filter((scheme) => (scheme.lineId ? withoutClock.includes(lineSites.get(scheme.lineId) ?? '') : true)).length
+  return { heldOpen, daysOpen, overtimePending, blocksWaiting, bonusWithoutClock, scansWithoutRate, workersWithoutEmployee, disputesOpen, sitesWithoutClock }
 }
 
 async function checksOf(db: Client, period: PeriodRecord, now: Date): Promise<PeriodCheck[]> {

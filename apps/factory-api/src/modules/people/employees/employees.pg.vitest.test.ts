@@ -116,8 +116,8 @@ describe('the HR register (SCR-084)', () => {
     const byCode = new Map(list.employees.map((row: Json) => [row.employeeCode, row]))
     expect(byCode.get('SEED-A1-2')).toMatchObject({ isLead: true, team: { code: 'L1-A' }, lead: { name: 'Seed Employee Two' }, officeAccount: true, floor: { signIns: 1, badge: 'ACTIVE', notice: 'MISSING' } })
     expect(byCode.get('SEED-A1-1')).toMatchObject({ isLead: false, team: { code: 'L1-A' }, homeLine: { code: 'L1' }, floor: { signIns: 1, notice: 'ACKNOWLEDGED' }, lifecycle: 'ACTIVE' })
-    expect(byCode.get('SEED-A-4')).toMatchObject({ lifecycle: 'LEAVING', leaving: { lastWorkingDay: '2026-11-30', openSteps: 5 }, floor: { signIns: 0, notice: null } })
-    expect(list.employees.find((row: Json) => row.kind === 'AGENCY')).toMatchObject({ agency: { id: T.agency }, endDate: '2026-12-31', employeeCode: null })
+    expect(byCode.get('SEED-A-4')).toMatchObject({ lifecycle: 'LEAVING', leaving: { lastWorkingDay: people.dates.e4LastWorkingDay, openSteps: 5 }, floor: { signIns: 0, notice: null } })
+    expect(list.employees.find((row: Json) => row.kind === 'AGENCY')).toMatchObject({ agency: { id: T.agency }, endDate: people.dates.e3EndDate, employeeCode: null })
     // No pay, attendance, efficiency or health column exists on this list (design: "No pay, health or efficiency column").
     expect(keysOf(list).filter((key) => /wage|pay|earn|efficien|attendance|health|minutesWorked|pieces/i.test(key))).toEqual([])
   })
@@ -148,7 +148,7 @@ describe('the HR register (SCR-084)', () => {
     expect(e1.notKept).toEqual(['ADDRESS', 'TAX_CODE', 'IBAN', 'DATE_OF_BIRTH', 'PHOTO', 'HEALTH_DATA', 'BIOMETRICS'])
     expect(e1).toMatchObject({ canManage: true, canLeave: true, leaving: null, officeAccount: null })
     const e4 = await ok('viewer', 'GET', `/people/employees/${people.employeeIds.e4}`)
-    expect(e4).toMatchObject({ canManage: false, canLeave: false, leaving: { status: 'OPEN', lastWorkingDay: '2026-11-30' }, loans: [expect.objectContaining({ toLine: expect.objectContaining({ code: 'L1' }), state: 'PLANNED' })] })
+    expect(e4).toMatchObject({ canManage: false, canLeave: false, leaving: { status: 'OPEN', lastWorkingDay: people.dates.e4LastWorkingDay }, loans: [expect.objectContaining({ toLine: expect.objectContaining({ code: 'L1' }), state: 'PLANNED' })] })
     expect(e4.leaving.steps.map((step: Json) => [step.kind, step.status, step.place])).toEqual([
       ['ACCESS_ENDED', 'OPEN', 'OFFICE_ACCOUNT'],
       ['WORK_HANDED_OVER', 'OPEN', 'OPEN_WORK'],

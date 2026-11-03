@@ -87,6 +87,7 @@ const SESSIONS: Record<string, SessionContext> = {
   finance: office([grant(['costing.view', COST])]),
   owner: office([grant(['costing.view', COST, PAY])]),
   companyB: office([grant(HR, [companyB])]),
+  payroll: office([grant(['people.payroll.view', 'people.payroll.records', PAY])]),
   plain: office([grant(['home.view'])]),
 }
 
@@ -737,6 +738,40 @@ describe('the pay period (MES-260), the statement (MES-261) and waiting (MES-148
   })
 })
 
+describe('a late team share of a locked month (B-W2b-84: found in B-W2b-43)', () => {
+  it('stays when the period it is paid in starts its review: the run takes back only its own month', async () => {
+    const lockedId = (await admin<{ id: string }>(`SELECT id FROM "PayPeriod" WHERE "tenantId" = $1 AND "companyId" = $2 AND "periodStart" = $3::date`, [T, companyA, `${MONTH}-01`]))[0]!.id
+    const bundleId = await bundle()
+    const teamScan = await scan({ bundleId, at: local('13:00', D3), good: 2, workerId: worker.b, earn: false })
+    for (const [workerId, employeeId] of [[worker.b, employee.b], [worker.c, employee.c]] as const) await admin('INSERT INTO "OperationScanMember" (id, "tenantId", "siteId", "scanId", "workerId", "employeeId") VALUES ($1, $2, $3, $4, $5, $6)', [newId(), T, siteA1, teamScan, workerId, employeeId])
+    await earn(bundleId)
+    const shares = await admin<{ id: string; payPeriodId: string; correctsPeriodId: string; amount: number }>(`SELECT id, "payPeriodId", "correctsPeriodId", amount FROM "EarningsEntry" WHERE "operationScanId" = $1 AND kind = 'TEAM_SPLIT' AND "reversalOfId" IS NULL ORDER BY amount`, [teamScan])
+    // The month is locked: the handler books the shares at once, in the first period not locked, naming the month.
+    expect(shares.map((row) => [row.correctsPeriodId, row.amount])).toEqual([[lockedId, 100], [lockedId, 200]])
+    const later = shares[0]!.payPeriodId
+    expect(later).not.toBe(lockedId)
+    let row = (await admin<{ version: number; status: string }>('SELECT version, status::text FROM "PayPeriod" WHERE id = $1', [later]))[0]!
+    if (row.status === 'REVIEW') row = { ...row, version: (await ok('hr', 'POST', `/people/pay-periods/${later}/review/back`, { version: row.version, reason: 'A late team scan of a locked month (made up)' })).period.version }
+    const run = await ok('hr', 'POST', `/people/pay-periods/${later}/run`, { version: row.version })
+    await ok('hr', 'POST', `/people/pay-periods/${later}/review`, { version: run.period.version })
+    expect(await admin('SELECT id FROM "EarningsEntry" WHERE "reversalOfId" = ANY($1::uuid[])', [shares.map((share) => share.id)])).toEqual([])
+    const statement = (await admin<{ id: string }>(`SELECT id FROM "WorkerStatement" WHERE "payPeriodId" = $1 AND "employeeId" = $2 AND status <> 'SUPERSEDED' ORDER BY revision DESC`, [later, employee.b]))[0]!
+    const opened = await ok('hr', 'POST', `/people/statements/${statement.id}/open`, {})
+    expect(opened.corrections.map((line: Json) => [line.kind, line.month, line.amount])).toEqual(expect.arrayContaining([['TEAM_SPLIT', MONTH, 100]]))
+  })
+
+  it('a block of the locked month paid there is not paid again in the later period, so the statement still matches the ledger', async () => {
+    const lockedId = (await admin<{ id: string }>(`SELECT id FROM "PayPeriod" WHERE "tenantId" = $1 AND "companyId" = $2 AND "periodStart" = $3::date`, [T, companyA, `${MONTH}-01`]))[0]!.id
+    const later = (await admin<{ id: string }>(`SELECT "payPeriodId" AS id FROM "EarningsEntry" WHERE "employeeId" = $1 AND kind = 'TEAM_SPLIT' AND "correctsPeriodId" = $2 LIMIT 1`, [employee.b, lockedId]))[0]!.id
+    // B's waiting and cleaning of the locked month were paid there (at the average, and at the guarantee).
+    expect(await admin(`SELECT id FROM "EarningsEntry" WHERE "payPeriodId" = $1 AND "employeeId" = $2 AND kind = 'OFF_STANDARD'`, [later, employee.b])).toEqual([])
+    const statement = (await admin<{ id: string }>(`SELECT id FROM "WorkerStatement" WHERE "payPeriodId" = $1 AND "employeeId" = $2 AND status <> 'SUPERSEDED' ORDER BY revision DESC`, [later, employee.b]))[0]!
+    const opened = await ok('hr', 'POST', `/people/statements/${statement.id}/open`, {})
+    expect(opened.corrections.map((line: Json) => line.kind)).toEqual(['TEAM_SPLIT'])
+    expect(opened).toMatchObject({ stale: false, earningsAmount: 100 })
+  })
+})
+
 describe('corrections and the ledger (MES-256)', () => {
   it('the ledger grid is for those with the right, names nobody and refuses a filter by person', async () => {
     const page = await ok('hr', 'GET', `/people/earnings/ledger?kind=SCAN&limit=20&lineId=${lineL1}`)
@@ -908,6 +943,139 @@ describe('the earnings report (MES-304) and labour cost per piece (MES-266)', ()
     expect(Number(full.paidPerPiece)).toBeGreaterThan(1.4)
     expect(Number(full.paidPerPiece)).toBeLessThanOrEqual(1.5)
     await no('managerNoPay', 'GET', url, undefined, 403)
+  })
+})
+
+describe('B-W2b-84: the scrap fault and a standard-minute bonus reach the ledger, the statement and the payroll file', () => {
+  // Two months of their own after every other month here, inside the switch's window: the fault under the company's
+  // scheme (a team incentive by now, paid by the piece), then a bonus scheme of line L1 from its first day.
+  const FAULT = monthAfter(AFTER)
+  const BONUS = monthAfter(FAULT)
+  const FD = `${FAULT}-05`
+  const BD = `${BONUS}-05`
+  let faultScan = ''
+  let faultPeriod: Json = {}
+  const reason = (kind: 'SCRAP' | 'REWORK') => admin<{ code: string }>('SELECT code FROM "ScrapReason" WHERE "tenantId" = $1 AND kind = $2::"DefectKind" ORDER BY code', [T, kind])
+  const setFault = (kind: 'SCRAP' | 'REWORK', code: string, fault: 'OWN' | 'OTHERS' | 'UNKNOWN') => admin('UPDATE "ScrapReason" SET fault = $3::"ScrapFault" WHERE "tenantId" = $1 AND kind = $2::"DefectKind" AND code = $4', [T, kind, fault, code])
+  const line = (scanId: string, kind: 'SCRAP' | 'REWORK', code: string, quantity: number) =>
+    admin('INSERT INTO "OperationScanDefect" (id, "tenantId", "siteId", "scanId", kind, "reasonCode", quantity) VALUES ($1, $2, $3, $4, $5::"DefectKind", $6, $7)', [newId(), T, siteA1, scanId, kind, code, quantity])
+  const periodOf = async (month: string) => {
+    const made = await call('hr', 'POST', '/people/pay-periods', { companyId: companyA, month })
+    expect([200, 201], made.body).toContain(made.statusCode)
+    return made.json() as Json
+  }
+  const statementOfC = async (periodId: string) => {
+    const row = (await admin<{ id: string }>(`SELECT id FROM "WorkerStatement" WHERE "payPeriodId" = $1 AND "employeeId" = $2 AND status <> 'SUPERSEDED' ORDER BY revision DESC`, [periodId, employee.c]))[0]!
+    return ok('hr', 'POST', `/people/statements/${row.id}/open`, {})
+  }
+
+  it("scrap and rework pay by their reason's fault: own by the scheme's rule, others' as paid time, an unset reason as own", async () => {
+    const [scrapA, scrapB] = (await reason('SCRAP')).map((row) => row.code)
+    const [reworkA, reworkB] = (await reason('REWORK')).map((row) => row.code)
+    await setFault('SCRAP', scrapA!, 'OTHERS')
+    await setFault('SCRAP', scrapB!, 'OWN')
+    await setFault('REWORK', reworkA!, 'OWN')
+    await setFault('REWORK', reworkB!, 'UNKNOWN')
+    await clock(employee.c, 'IN', local('06:00', FD), worker.c)
+    await clock(employee.c, 'OUT', local('14:00', FD), worker.c)
+    await attendance(employee.c, FD, 480)
+    const bundleId = await bundle()
+    faultScan = await scan({ bundleId, at: local('10:00', FD), good: 4, scrap: 3, rework: 2, workerId: worker.c, earn: false })
+    await line(faultScan, 'SCRAP', scrapA!, 2)
+    await line(faultScan, 'SCRAP', scrapB!, 1)
+    await line(faultScan, 'REWORK', reworkA!, 1)
+    await line(faultScan, 'REWORK', reworkB!, 1)
+    await earn(bundleId)
+    // Own rework (1 own + 1 not set) at the scheme's 50 %; own scrap unpaid; the 2 scrapped by others are the period's.
+    const rows = (await entriesOf(employee.c)).filter((row) => row.operationScanId === faultScan || row.sourceId === faultScan)
+    expect(rows.map((row) => [row.idempotencyKey, row.pieces, row.amount])).toEqual([[`scan:${faultScan}`, 4, 600], [`rework:${faultScan}`, 2, 150]])
+    faultPeriod = await periodOf(FAULT)
+    const run = await ok('hr', 'POST', `/people/pay-periods/${faultPeriod.period.id}/run`, { version: faultPeriod.period.version })
+    faultPeriod = run
+    const opened = await statementOfC(run.period.id)
+    // 2 garments × the operation's standard minutes, rounded up, paid as time off standard.
+    const minutes = Math.ceil(2 * Number((await admin<{ m: string }>('SELECT "standardMinutes"::text AS m FROM "WorkOrderOperation" WHERE id = $1', [sew]))[0]!.m))
+    expect(opened.time).toEqual([expect.objectContaining({ code: 'SCRAP_OTHERS', minutes: `${minutes}.000` })])
+    expect(opened.time[0].amount).toBeGreaterThan(0)
+    expect(opened.defects).toEqual({ scrap: 3, rework: 2, othersScrap: 2, othersRework: 0 })
+    expect(opened.bonus).toBeNull()
+    expect(opened.words.join(' ')).toContain('caused by others as paid time')
+  })
+
+  it("the reason's fault is read at every run: set to own, the paid time goes and own scrap follows the scheme", async () => {
+    const [scrapA] = (await reason('SCRAP')).map((row) => row.code)
+    await setFault('SCRAP', scrapA!, 'OWN')
+    const again = await ok('hr', 'POST', `/people/pay-periods/${faultPeriod.period.id}/run`, { version: faultPeriod.period.version })
+    expect((await statementOfC(again.period.id)).time).toEqual([])
+    await setFault('SCRAP', scrapA!, 'OTHERS')
+    const back = await ok('hr', 'POST', `/people/pay-periods/${faultPeriod.period.id}/run`, { version: again.period.version })
+    await ok('hr', 'POST', `/people/pay-periods/${faultPeriod.period.id}/review`, { version: back.period.version })
+    const booked = (await entriesOf(employee.c)).filter((row) => row.idempotencyKey === `others:${faultScan}:SCRAP`)
+    expect(booked).toEqual([expect.objectContaining({ kind: 'OFF_STANDARD', sourceType: 'OperationScan', sourceId: faultScan, payPeriodId: faultPeriod.period.id })])
+    // It counts towards the guarantee as paid time: the make-up is 480 minutes at 9.00 less the pieces, the rework and it.
+    const makeUp = (await entriesOf(employee.c)).find((row) => row.kind === 'MAKE_UP' && row.payPeriodId === faultPeriod.period.id)!
+    expect(makeUp.amount).toBe(7200 - 600 - 150 - booked[0]!.amount)
+  })
+
+  it('a standard-minute bonus scheme: the pieces pay nothing by the piece, the review books the guaranteed pay and the bonus', async () => {
+    const bonusScheme = newId()
+    await admin(
+      `INSERT INTO "IncentiveScheme" (id, "tenantId", "companyId", "siteId", "lineId", name, kind, "efficiencyThresholdPct", "guaranteedBasis", "guaranteedHourlyRate", "reworkOwnFault", "scrapOwnFault", "validFrom", "updatedAt") VALUES ($1, $2, $3, $4, $5, 'Made-up bonus of L1', 'STANDARD_MINUTE_BONUS', 75, 'CCNL_MINIMUM', 9, 'FULL_RATE', 'FULL_RATE', $6::date, now())`,
+      [bonusScheme, T, companyA, siteA1, lineL1, `${BONUS}-01`],
+    )
+    await admin(`UPDATE "IncentiveScheme" SET status = 'ACTIVE', "activatedAt" = now(), "activatedById" = $2 WHERE id = $1`, [bonusScheme, actors.hr])
+    await clock(employee.c, 'IN', local('06:00', BD), worker.c)
+    await clock(employee.c, 'OUT', local('14:00', BD), worker.c)
+    await attendance(employee.c, BD, 480)
+    const [scrapA] = (await reason('SCRAP')).map((row) => row.code)
+    const bundleId = await bundle()
+    const scanId = await scan({ bundleId, at: local('10:00', BD), good: 5, scrap: 1, workerId: worker.c, earn: false })
+    await line(scanId, 'SCRAP', scrapA!, 1)
+    await earn(bundleId)
+    // 20 minutes of cleaning: inside the minutes present the guaranteed pay covers.
+    await block({ employeeId: employee.c, workerId: worker.c, code: 'CLEANING', date: BD, from: '11:00', to: '11:20' })
+    const rows = (await entriesOf(employee.c)).filter((row) => row.operationScanId === scanId)
+    expect(rows.map((row) => [row.kind, row.pieces, String(row.rate), row.amount])).toEqual([['SCAN', 5, '1.500000', 0]])
+    expect(rows[0]!.reason).toContain('measure the bonus')
+    const period = await periodOf(BONUS)
+    const run = await ok('hr', 'POST', `/people/pay-periods/${period.period.id}/run`, { version: period.period.version })
+    // The review no longer waits on a bonus scheme: only a site with no clock would hold it.
+    expect(run.checks.map((check: Json) => check.code)).not.toContain('BONUS_NO_CLOCK')
+    expect(run.actions.startReview).toMatchObject({ allowed: true })
+    await ok('hr', 'POST', `/people/pay-periods/${period.period.id}/review`, { version: run.period.version })
+    const sm = Number((await admin<{ m: string }>('SELECT "standardMinutes"::text AS m FROM "WorkOrderOperation" WHERE id = $1', [sew]))[0]!.m)
+    const standard = 5 * sm
+    const above = standard - 360
+    const booked = (await entriesOf(employee.c)).filter((row) => row.payPeriodId === period.period.id)
+    expect(booked.map((row) => row.kind).sort()).toEqual(['BONUS', 'MAKE_UP', 'SCAN'])
+    expect(booked.find((row) => row.kind === 'MAKE_UP')).toMatchObject({ amount: 7200, idempotencyKey: `makeup:${period.period.id}:${employee.c}` })
+    const bonus = booked.find((row) => row.kind === 'BONUS')!
+    expect(bonus).toMatchObject({ idempotencyKey: `bonus:${period.period.id}:${employee.c}`, rate: null, operationScanId: null })
+    expect(Number(bonus.minutes)).toBeCloseTo(above, 3)
+    // The bonus minutes at what the pieces are worth: 5 × 1.50 = 7.50 over the standard minutes earned.
+    expect(bonus.amount).toBe(Math.round((750 * above) / standard))
+    const opened = await statementOfC(period.period.id)
+    expect(opened.lines).toEqual([expect.objectContaining({ pieces: 5, amount: 0, rate: '1.5', minutes: (5 * sm).toFixed(3) })])
+    expect(opened.time).toEqual([])
+    expect(opened.bonus).toMatchObject({ minutesPresent: 480, thresholdMinutes: '360.000', efficiencyPct: ((standard * 100) / 480).toFixed(2), amount: bonus.amount })
+    expect(opened.makeUp).toMatchObject({ guaranteed: 7200, earned: 0, amount: 7200 })
+    expect(opened).toMatchObject({ earningsAmount: bonus.amount, makeUpAmount: 7200, stale: false })
+    // The statement's PDF says it (the office's route; My day prints the same document).
+    const pdf = await call('hr', 'POST', `/people/statements/${opened.id}/pdf`, {})
+    expect(pdf.statusCode, pdf.body).toBe(200)
+    expect(pdf.headers['content-type']).toContain('application/pdf')
+  })
+
+  it('the bonus reaches the payroll file as its own code, an amount alone; the pieces no scheme paid are not on it', async () => {
+    const preview = await ok('payroll', 'POST', '/people/payroll/preview', { companyId: companyA, month: BONUS })
+    const bonus = (await entriesOf(employee.c)).find((row) => row.kind === 'BONUS')!
+    const cells = (preview.people as Json[]).flatMap((person) => person.cells as Json[]).filter((cell) => cell.kind === 'EARNING')
+    expect(cells.map((cell) => cell.code).sort()).toEqual(['BONUS', 'MAKE_UP'])
+    expect(cells.find((cell) => cell.code === 'BONUS')).toMatchObject({ meaning: 'Standard-minute bonus', unit: null, quantity: null, amount: bonus.amount })
+    expect(JSON.stringify(preview)).not.toContain('Carla')
+    // The code mapping lists it, not mapped yet.
+    const codes = await ok('payroll', 'GET', `/people/payroll/codes?companyId=${companyA}`)
+    expect(codes.codes.find((row: Json) => row.kind === 'EARNING' && row.ourCode === 'BONUS')).toMatchObject({ providerCode: null, inUse: true })
   })
 })
 

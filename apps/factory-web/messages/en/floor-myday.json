@@ -171,6 +171,7 @@
     "share": "share {share}%",
     "earnings": "Earnings of the month",
     "makeUp": "Make-up to guaranteed pay",
+    "bonus": "Standard-minute bonus ({efficiency}% efficiency)",
     "total": "Total",
     "noLines": "No piece work this month.",
     "approved": "Approved, revision {revision}.",

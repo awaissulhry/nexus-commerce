@@ -22,7 +22,9 @@ export type MyPace = z.infer<typeof pace>
 
 const statementLine = z.object({ operationCode: z.string(), operationName: z.string(), pieces: z.number(), minutes: z.string(), sharePct: z.string().nullable(), rate: z.string(), amount: z.number() })
 const timeLine = z.object({ code: z.string(), minutes: z.string(), rate: z.string(), amount: z.number() })
-const statement = z.object({ id: z.string(), status: z.string(), revision: z.number(), currency: z.string(), lines: z.array(statementLine), time: z.array(timeLine), earningsAmount: z.number().nullable(), makeUpAmount: z.number().nullable() })
+/** B-W2b-84: a standard-minute bonus scheme's bonus of the month (its figures are the worker's own). */
+const bonus = z.object({ minutesPresent: z.number(), standardMinutes: z.string(), thresholdMinutes: z.string(), efficiencyPct: z.string(), bonusMinutes: z.string(), amount: z.number() })
+const statement = z.object({ id: z.string(), status: z.string(), revision: z.number(), currency: z.string(), lines: z.array(statementLine), time: z.array(timeLine), bonus: bonus.nullable().default(null), earningsAmount: z.number().nullable(), makeUpAmount: z.number().nullable() })
 export type MyStatement = z.infer<typeof statement>
 
 const pay = z.object({

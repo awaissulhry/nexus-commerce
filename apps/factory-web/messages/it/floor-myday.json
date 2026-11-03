@@ -171,6 +171,7 @@
     "share": "quota {share}%",
     "earnings": "Guadagni del mese",
     "makeUp": "Integrazione alla paga garantita",
+    "bonus": "Premio a minuti standard (rendimento {efficiency}%)",
     "total": "Totale",
     "noLines": "Nessun lavoro a cottimo in questo mese.",
     "approved": "Approvato, revisione {revision}.",

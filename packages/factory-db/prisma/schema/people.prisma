@@ -86,6 +86,12 @@ model Employee {
   skills              EmployeeSkill[]        @relation("EmployeeSkillHolder")
   trainedSkills       EmployeeSkill[]        @relation("EmployeeSkillTrainer")
   machineAuthorisations MachineAuthorisation[]
+  // W2b plantcare.prisma, plant.prisma (wave 14/16): the routing rules that send machine requests to them or escalate to
+  // them, the requests routed to them.
+  routingRulesAsTechnician   RequestRoutingRule[] @relation("RequestRoutingRuleTechnician")
+  routingRulesEscalateTo     RequestRoutingRule[] @relation("RequestRoutingRuleEscalateTo")
+  routingRulesEscalateAgain  RequestRoutingRule[] @relation("RequestRoutingRuleEscalateAgainTo")
+  maintenanceRequestsRouted  MaintenanceRequest[] @relation("MaintenanceRequestRoutedEmployee")
   // W2b time.prisma (wave 5/7): the person's roster, overtime answers, clock events, attendance days and their anomalies,
   // absences, overtime worked, timesheets and corrections of closed days.
   rosterEntries         RosterEntry[]
@@ -173,6 +179,10 @@ model Team {
   loans   LineLoan[]
   // W2b andon.prisma (wave 7/7): the help-call types it answers.
   helpCallTypes HelpCallType[]
+  // W2b plantcare.prisma, plant.prisma (wave 14/16): the routing rules that send machine requests to it, the requests routed
+  // to it.
+  requestRoutingRules  RequestRoutingRule[] @relation("RequestRoutingRuleTeam")
+  maintenanceRequests  MaintenanceRequest[] @relation("MaintenanceRequestRoutedTeam")
 
   @@unique([tenantId, siteId, code])
   // The target of the members' and loans' tenant- and site-safe references.

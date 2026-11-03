@@ -79,11 +79,11 @@ export function guaranteedPayOf(scheme: Pick<SchemePay, 'guaranteedHourlyRate' |
 
 /** One kind of earnings entry and its amount (minor units; a reversal negative). */
 export interface EarnedEntry {
-  readonly kind: 'SCAN' | 'TEAM_SPLIT' | 'MAKE_UP' | 'OFF_STANDARD' | 'ADJUSTMENT'
+  readonly kind: 'SCAN' | 'TEAM_SPLIT' | 'MAKE_UP' | 'OFF_STANDARD' | 'ADJUSTMENT' | 'BONUS'
   readonly amount: MinorUnits
 }
 
-/** What a period earned towards its guaranteed pay: SCAN, TEAM_SPLIT and OFF_STANDARD (no make-up, no adjustment). */
+/** What a period earned towards its guaranteed pay: SCAN, TEAM_SPLIT and OFF_STANDARD (no make-up, no adjustment, no bonus). */
 export function earnedForMakeUp(entries: readonly EarnedEntry[]): MinorUnits {
   let total = 0
   for (const entry of entries) {
@@ -145,6 +145,18 @@ export type DefectPay =
   | { readonly pays: 'NOTHING'; readonly rule: OwnFaultPay; readonly amount: 0 }
   | { readonly pays: 'PIECES'; readonly rule: OwnFaultPay; readonly pieces: number; readonly rate: string; readonly amount: MinorUnits }
   | { readonly pays: 'TIME'; readonly rule: PaidTimeRate; readonly time: PaidTime; readonly amount: MinorUnits }
+
+/**
+ * The minutes rework or scrap caused by others took, to pay as time (B-W2b-84): the garments × the operation's standard
+ * minutes, rounded up to the whole minute (the worker's favour: never a minute of work unpaid). 0 with no standard minutes.
+ */
+export function defectMinutesOf(pieces: number, standardMinutes: string | null): number {
+  if (!Number.isInteger(pieces) || pieces < 0) throw new SchemePayError(`pieces: a whole number from 0, not ${String(pieces)}`)
+  if (standardMinutes === null || pieces === 0) return 0
+  const minutes = new Dec(standardMinutes)
+  if (minutes.isNegative()) throw new SchemePayError('standard minutes are 0 or more')
+  return Math.min(MINUTES_MAX, Number.parseInt(minutes.times(pieces).ceil().toFixed(0), 10))
+}
 
 export const DEFECT_KINDS = ['REWORK', 'SCRAP'] as const
 export type DefectKind = (typeof DEFECT_KINDS)[number]

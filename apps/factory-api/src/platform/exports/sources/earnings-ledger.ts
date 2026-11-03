@@ -48,7 +48,7 @@ export const earningsLedger = defineExportSource<Query, Row>({
     reason: { value: (row) => row.reason ?? '' },
   },
   words: {
-    it: { SCAN: 'Scansione', TEAM_SPLIT: 'Quota di squadra', MAKE_UP: 'Integrazione', OFF_STANDARD: 'Tempo fuori cottimo', ADJUSTMENT: 'Correzione', REVERSAL: 'Storno' },
-    en: { SCAN: 'Scan', TEAM_SPLIT: 'Team share', MAKE_UP: 'Make-up', OFF_STANDARD: 'Off-standard time', ADJUSTMENT: 'Correction', REVERSAL: 'Reversal' },
+    it: { SCAN: 'Scansione', TEAM_SPLIT: 'Quota di squadra', MAKE_UP: 'Integrazione', OFF_STANDARD: 'Tempo fuori cottimo', ADJUSTMENT: 'Correzione', BONUS: 'Premio', REVERSAL: 'Storno' },
+    en: { SCAN: 'Scan', TEAM_SPLIT: 'Team share', MAKE_UP: 'Make-up', OFF_STANDARD: 'Off-standard time', ADJUSTMENT: 'Correction', BONUS: 'Bonus', REVERSAL: 'Reversal' },
   },
 })

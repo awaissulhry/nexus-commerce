@@ -5,7 +5,7 @@ import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time
 import type { ClockFact, ClockFlag, ClockKind, ClockSource } from '@nexus/factory-domain/people/clock/rules'
 import { CLOCK_RULES } from '@nexus/factory-domain/people/clock/rules'
 import { baseKey, type LedgerRow } from '@nexus/factory-domain/people/earnings/ledger'
-import { clockAt, clockRuleApplies, windowsOf, type ClockAt, type PayWindow, type RateCandidate } from '@nexus/factory-domain/people/earnings/rules'
+import { clockAt, clockRuleApplies, windowsOf, type ClockAt, type DefectFact, type PayWindow, type RateCandidate, type ScrapFault } from '@nexus/factory-domain/people/earnings/rules'
 import { monthPeriod } from '@nexus/factory-domain/people/overtime/timesheets'
 import type { PeriodStatus, SchemeRow } from '@nexus/factory-domain/people/schemes/rules'
 import { schemeFor } from '@nexus/factory-domain/people/schemes/rules'
@@ -153,6 +153,18 @@ export async function workOfScans(db: Client, scans: readonly ScanRecord[]): Pro
       return [scan.id, { operationId: operation.routingOperation?.operationId ?? operation.operationId!, code: operation.code, name: operation.name, standardMinutes: operation.standardMinutes.toString(), styleId: workOrderBy.get(scan.workOrderId)!.styleId, size: bundle.workOrderSize.size, lineId, bundleCode: bundle.code }]
     }),
   )
+}
+
+/**
+ * Each scan's scrap and rework lines with their reason's fault as it stands now (B-W2b-84; ScrapReason.fault): the office may
+ * set a reason's fault after the scan, and the next run follows it.
+ */
+export async function defectsOfScans(db: Client, scanIds: readonly string[]): Promise<Map<string, DefectFact[]>> {
+  const out = new Map<string, DefectFact[]>()
+  if (scanIds.length === 0) return out
+  const rows = await db.operationScanDefect.findMany({ where: { scanId: { in: [...new Set(scanIds)] } }, select: { scanId: true, kind: true, quantity: true, reason: { select: { fault: true } } }, orderBy: [{ serverTime: 'asc' }, { id: 'asc' }] })
+  for (const row of rows) if (row.scanId) out.set(row.scanId, [...(out.get(row.scanId) ?? []), { kind: row.kind as DefectFact['kind'], quantity: row.quantity, fault: row.reason.fault as ScrapFault }])
+  return out
 }
 
 /** The members of a team scan: its own, else those of the report it corrects. */

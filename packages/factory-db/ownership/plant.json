@@ -1,8 +1,8 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/plant.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the machine register (classes, symptoms, machines), triages requests and plans maintenance jobs through apps/factory-api's modules/plant (B-W2a-35), always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) reads the classes and symptoms, tenant-wide (the station's symptom tiles: words and icons, nothing personal or secret), and its site's machines (never what they cost: purchaseCost is hidden), requests and jobs. A station reports a problem (floor.machine: a request) and marks the machine down, or unsafe at once (Owner answer H1: anyone at the station; the machine DO_NOT_USE in the same command); a technician (the API's permission) starts and hands back the jobs of the site and signs a locked machine safe with the PIN. The …_quality_plant_w2a_guards triggers keep the floor to those changes (a machine's status, a request's sign-safe, a job's work and hand-back) and hold the lock: an unsafe request not signed safe keeps its machine DO_NOT_USE. The floor never makes or numbers a job, never retires a machine. Portal and link sessions read nothing here. Nothing is deleted: classes and symptoms are set inactive, machines retired, requests closed, jobs cancelled. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/plant.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the machine register (classes, symptoms, machines), triages requests and plans maintenance jobs through apps/factory-api's modules/plant (B-W2a-35), always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) reads the classes and symptoms, tenant-wide (the station's symptom tiles: words and icons, nothing personal or secret), and its site's machines (never what they cost: purchaseCost is hidden), requests and jobs. A station reports a problem (floor.machine: a request) and marks the machine down, or unsafe at once (Owner answer H1: anyone at the station; the machine DO_NOT_USE in the same command); a technician (the API's permission) starts and hands back the jobs of the site and signs a locked machine safe with the PIN. W2b (wave 14/16): a technician on the floor also acknowledges a request and says they are on the way, the reporter confirms the machine works again, the line lead confirms a handed-back job, and the hand-back carries the failure code and the minutes; a floor report may carry where it was routed. The …_quality_plant_w2a_guards triggers (W2b: …_plant_care_w2b_guards, which redefine the request and job functions) keep the floor to those changes (a machine's status, a request's sign-safe, a job's work and hand-back) and hold the lock: an unsafe request not signed safe keeps its machine DO_NOT_USE. The floor never makes or numbers a job, never retires a machine. Portal and link sessions read nothing here. Nothing is deleted: classes and symptoms are set inactive, machines retired, requests closed, jobs cancelled. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "MachineClass": {
-      "about": "The office keeps the machine classes; every floor device reads them (the class word and icon of a machine).",
+      "about": "The office keeps the machine classes (W2b: and whether operating them needs an authorisation); every floor device reads them (the class word and icon of a machine; the authorisation rule its checks read).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
@@ -29,7 +29,7 @@
       }
     },
     "MaintenanceRequest": {
-      "about": "The office reports, triages, merges and closes requests and makes jobs from them. The site's floor reads them, reports a problem from the station (a request, unsafe at once when it is), and a technician signs an unsafe one safe with the PIN.",
+      "about": "The office reports, triages, merges, routes, escalates and closes requests and makes jobs from them. The site's floor reads them, reports a problem from the station (a request, unsafe at once when it is, with where it was routed), a technician acknowledges one, is on the way and signs an unsafe one safe with the PIN, and the reporter confirms the machine works.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
@@ -38,7 +38,7 @@
       }
     },
     "MaintenanceJob": {
-      "about": "The office makes jobs (number from the company's MAINTENANCE_JOB series), assigns, plans, closes and cancels them. The site's floor reads them (a technician's My jobs) and a technician starts, pauses for parts and hands back its work.",
+      "about": "The office makes jobs (number from the company's MAINTENANCE_JOB series), assigns, plans, closes and cancels them. The site's floor reads them (a technician's My jobs), a technician starts, pauses for parts and hands back its work (with the failure code and minutes), and the line lead confirms the machine works.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {

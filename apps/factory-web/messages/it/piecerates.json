@@ -34,8 +34,8 @@
   "check": {
     "BLOCKS_WAITING_one": "{count} blocco fuori cottimo è in corso o in attesa.",
     "BLOCKS_WAITING_other": "{count} blocchi fuori cottimo sono in corso o in attesa.",
-    "BONUS_SCHEME_one": "{count} schema a premio si applica: il registro non può ancora contabilizzare un premio.",
-    "BONUS_SCHEME_other": "{count} schemi a premio si applicano: il registro non può ancora contabilizzare un premio.",
+    "BONUS_NO_CLOCK_one": "{count} schema a premio si applica in un sito senza presenze attive: la paga garantita e il premio si contano sui minuti presenti.",
+    "BONUS_NO_CLOCK_other": "{count} schemi a premio si applicano in un sito senza presenze attive: la paga garantita e il premio si contano sui minuti presenti.",
     "DAYS_OPEN_one": "{count} giorno di presenza non è approvato.",
     "DAYS_OPEN_other": "{count} giorni di presenza non sono approvati.",
     "DISPUTES_OPEN_one": "{count} contestazione è aperta: una risposta dopo il blocco si paga come correzione.",
@@ -245,6 +245,7 @@
     "TEAM_INCENTIVE": "Incentivo di squadra",
     "ledger": {
       "ADJUSTMENT": "Correzione",
+      "BONUS": "Premio",
       "MAKE_UP": "Integrazione",
       "OFF_STANDARD": "Tempo fuori cottimo",
       "REVERSAL": "Storno",
@@ -673,8 +674,14 @@
   },
   "statement": {
     "approve": "Approva il prospetto",
+    "bonus": "Premio a minuti standard",
+    "bonusLine": "Rendimento {efficiency}%: {standard} minuti standard su {present} minuti presenti, soglia {threshold}: il premio paga {above} minuti.",
+    "bonusPieces": "Con lo schema a premio i pezzi non sono pagati a cottimo: misurano il premio. La paga garantita copre i minuti presenti.",
     "code": "Codice",
     "corrections": "Correzioni",
+    "defects": "Scarti e rilavorazioni sulle proprie scansioni",
+    "defectsOthers": "{scrap} scarti, {rework} rilavorazioni: {othersScrap} scarti e {othersRework} rilavorazioni per causa altrui, pagati come tempo",
+    "defectsValue": "{scrap} scarti, {rework} rilavorazioni",
     "disputes": "Contestazioni dal reparto",
     "earnings": "Guadagni",
     "employee": "Scheda dipendente",
