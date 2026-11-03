@@ -1878,6 +1878,7 @@
     "quality_documents_share": "Mettere un rapporto o un certificato conservato sul link dei documenti di una spedizione e inviare quel link",
     "quality_rules_view": "Vedere le regole qualità: chi può firmare cosa, le regole di avviso ed escalation, come si contano i risultati",
     "quality_alerts_manage": "Tenere le regole di avviso ed escalation della qualità e mandarsi una prova di una regola",
+    "quality_reports_view": "Vedere i report qualità di un sito: resa al primo passaggio, DHU, AQL finale, non conformità aperte, azioni correttive in tempo, blocchi vecchi, andamento e confronto per linea, operazione, fornitore e modello (solo dai record che si possono vedere; mai per persona)",
     "numbering_override": "Digitare il numero di un documento migrato (mai una serie fiscale; doppioni rifiutati, motivo conservato)",
     "people_view": "Vedere dipendenti, squadre, prestiti ad altre linee e passi di uscita (mai paghe, presenze o salute)",
     "people_team_view": "Vedere le squadre che guidi o di cui fai parte (La mia squadra)",

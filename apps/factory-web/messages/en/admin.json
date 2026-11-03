@@ -1878,6 +1878,7 @@
     "quality_documents_share": "Put a kept report or certificate on a shipment's documents link and mail that link",
     "quality_rules_view": "See the quality rules: who may sign what, the alert and escalation rules, how results are counted",
     "quality_alerts_manage": "Keep the quality alert and escalation rules and send a test of a rule to yourself",
+    "quality_reports_view": "See a site's quality reports: first-pass yield, DHU, final AQL, open NCRs, corrective actions on time, old holds, the trend and a comparison by line, operation, supplier and style (only from records you may see; never per person)",
     "numbering_override": "Type a number for a migrated document (never a fiscal series; clashes refused, reason kept)",
     "people_view": "See the employees, teams, loans to other lines and leaver steps (never pay, attendance or health)",
     "people_team_view": "See the teams you lead or belong to (My team)",

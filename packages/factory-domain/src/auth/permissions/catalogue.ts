@@ -174,6 +174,8 @@ import { PRODUCTION_REPAIR_DEFINITIONS, PRODUCTION_REPAIR_FLOOR_PERMISSIONS, PRO
 import { SAFETY_RISK_DEFINITIONS, SAFETY_RISK_PERMISSIONS } from '../../safety/risk/permissions'
 // B-W2b-125: incidents, near misses and hazards (safety.incidents.view | report | manage | people).
 import { SAFETY_INCIDENTS_DEFINITIONS, SAFETY_INCIDENTS_PERMISSIONS } from '../../safety/incidents/permissions'
+// B-W2b-138: quality reports (quality.reports.view).
+import { QUALITY_REPORTS_DEFINITIONS, QUALITY_REPORTS_PERMISSIONS } from '../../quality/reports/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -625,6 +627,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SAFETY_RISK_DEFINITIONS,
   // B-W2b-125: incidents, near misses and hazards.
   SAFETY_INCIDENTS_DEFINITIONS,
+  // B-W2b-138: quality reports.
+  QUALITY_REPORTS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -801,6 +805,8 @@ for (const name of PRODUCTION_REPAIR_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 for (const name of SAFETY_RISK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-125: incidents.
 for (const name of SAFETY_INCIDENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-138: quality reports.
+for (const name of QUALITY_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

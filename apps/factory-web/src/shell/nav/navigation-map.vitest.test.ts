@@ -153,6 +153,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/quality/settings': 'quality.rules.view', // GET /quality/rules (B-W2b-118)
       '/quality/ncr': 'quality.ncr.view', // GET /quality/ncr (B-W2a-68)
       '/quality/complaints': 'quality.complaints.view', // GET /quality/complaints (B-W2a-65)
+      '/quality/reports': 'quality.reports.view', // GET /quality/reports/kpis (B-W2b-138)
       '/compliance/certificates': 'compliance.certificates.view', // GET /compliance/certificates
       '/compliance/labels': 'compliance.certificates.view', // GET /compliance/labels
       '/compliance/tests': 'quality.lots.view', // GET /quality/lots

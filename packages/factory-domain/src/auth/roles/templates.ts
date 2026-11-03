@@ -540,6 +540,18 @@ const INCIDENTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.f
   safety_officer: ['safety.incidents.view', 'safety.incidents.report', 'safety.incidents.manage', 'safety.incidents.people'],
   hr: ['safety.incidents.view', 'safety.incidents.report', 'safety.incidents.people'],
 })
+/**
+ * B-W2b-138 (quality reports, QHS-147 "Quality KPIs, with reports per role"; design quality.reports SCR-147): quality, the
+ * production manager and the floor supervisor read the quality reports of their sites; the buyer reads them for incoming
+ * quality per supplier. Each figure also needs the view permission of its records, which each role already holds or not
+ * (reports per role). Office only; owner and read-only from every().
+ */
+const QUALITY_REPORTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.reports.view'],
+  production_manager: ['quality.reports.view'],
+  floor_supervisor: ['quality.reports.view'],
+  buyer: ['quality.reports.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -614,7 +626,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-122
   ...(audience === 'office' ? (RISK_ADDS[key] ?? []) : []),
   // B-W2b-125
-  ...(audience === 'office' ? (INCIDENTS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (INCIDENTS_ADDS[key] ?? []) : []),
+  // B-W2b-138
+  ...(audience === 'office' ? (QUALITY_REPORTS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

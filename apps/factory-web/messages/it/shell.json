@@ -124,7 +124,9 @@
       "rules": "Regole qualità",
       "problems": "Problemi",
       "ncr": "Non conformità",
-      "complaints": "Reclami"
+      "complaints": "Reclami",
+      "reportsGroup": "Report",
+      "reports": "Report qualità"
     },
     "compliance": {
       "area": "Conformità",
