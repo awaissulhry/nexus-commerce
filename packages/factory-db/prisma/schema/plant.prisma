@@ -50,6 +50,9 @@ model MachineClass {
   // W2b skills.prisma (wave 4/7): the skills about it, and who may operate it.
   skills         Skill[]
   authorisations MachineAuthorisation[]
+  // W2b safety.prisma (wave 15/16): the courses it asks of who operates it, the instruction given on it.
+  trainingRequirements TrainingRequirement[]
+  instructionRecords   InstructionRecord[]
 
   @@unique([tenantId, code])
   // The target of the symptoms' and machines' tenant-safe references.
@@ -151,6 +154,8 @@ model Machine {
   checkPlans   MachineCheckPlan[]
   checkResults MachineCheckResult[]
   statusEvents MachineStatusEvent[]
+  // W2b safety.prisma (wave 15/16): the instruction given on it.
+  instructionRecords InstructionRecord[]
   jobs         MaintenanceJob[]
 
   @@unique([tenantId, assetNumber])
