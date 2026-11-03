@@ -298,7 +298,9 @@
     "CARTON": "Carton",
     "LOCATION": "Location",
     "WORK_ORDER": "Work order",
-    "COUPON": "Bundle coupon"
+    "COUPON": "Bundle coupon",
+    "ROLL": "Fabric roll",
+    "REMNANT": "Remnant"
   },
   "links": {
     "language": "Language",

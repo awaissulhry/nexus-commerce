@@ -211,6 +211,8 @@ export const REASON_TONE: Readonly<Record<MoveReason, Tone>> = {
   CUSTOMER_RETURN: 'success',
   SUPPLIER_RETURN: 'warning',
   SHIPMENT: 'info',
+  // W2b-2 (wave 12/16): an offcut back from a work order, RETURN's twin.
+  REMNANT: 'info',
 }
 export const LOCATION_KIND_ORDER: readonly LocationKind[] = ['WAREHOUSE', 'ZONE', 'BIN', 'RECEIVING', 'QUARANTINE', 'PRODUCTION', 'SHIPPING']
 

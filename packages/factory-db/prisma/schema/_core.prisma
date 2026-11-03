@@ -327,6 +327,9 @@ model Site {
   // W2b inspection-plans.prisma (wave 10/16): its incoming inspections and in-process checks.
   incomingInspections IncomingInspection[]
   inProcessChecks     InProcessCheck[]
+  // W2b leather.prisma (wave 12/16): its remnants and fabric rolls.
+  remnants            Remnant[]
+  fabricRolls         FabricRoll[]
   // W2b time.prisma (wave 5/7): its roster, planned overtime, clock events, attendance days, overtime worked and
   // working-time limits.
   rosterEntries      RosterEntry[]

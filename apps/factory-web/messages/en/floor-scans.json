@@ -170,6 +170,10 @@
     "BUNDLE_RUNNING": {
       "message": "A bundle is running here.",
       "fix": "Pause or finish the bundle first."
+    },
+    "UNPLANNED_GOOD_ONLY": {
+      "message": "An unplanned operation counts good pieces only.",
+      "fix": "Count the good ones here; report scrap or rework at the next operation of the routing."
     }
   },
   "unknownCode": {
@@ -518,6 +522,32 @@
     "pieces_one": "{code}: {count} piece so far saved",
     "pieces_other": "{code}: {count} pieces so far saved",
     "handBack": "{code} handed back: the time is kept",
-    "note": "{code}: note posted to the work order"
+    "note": "{code}: note posted to the work order",
+    "extra": "Op {seq} {name} added to {code}."
+  },
+  "unplanned": {
+    "flag": "Unplanned operation",
+    "goodOnly": "Count the good pieces here. Scrap or rework goes on the next operation of the routing.",
+    "open": "Do Op {seq} {name} (unplanned)",
+    "back": "Back to Op {seq} {name}"
+  },
+  "extra": {
+    "title": "Add an unplanned operation",
+    "open": "Add an unplanned operation",
+    "loading": "Reading the operations…",
+    "empty": "Every operation of the library is on this work order already.",
+    "operation": "Which operation?",
+    "minutes": "{minutes} min per piece",
+    "why": "Why is it needed?",
+    "words": "Say why in a few words",
+    "add": "Add the operation",
+    "adding": "Adding…",
+    "offline": "Adding an operation needs the network: the list is the office's.",
+    "noRate": "It has no piece rate: book the time as off-standard.",
+    "held": {
+      "operation": "Pick the operation first.",
+      "reason": "Say why it is needed.",
+      "words": "Say why in a few words."
+    }
   }
 }

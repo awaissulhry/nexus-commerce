@@ -250,6 +250,14 @@ export function releaseCheck(kind: 'blocked' | 'material' | 'ready' | 'noRevisio
 // ---- WIP ---------------------------------------------------------------------------------------------------------------------
 
 const flow = (arrived: number, waiting: number, good: number, scrap = 0, rework = 0) => ({ arrived, waiting, good, scrap, rework })
+/** B-W2b-82: the figures with an unplanned operation: only what was reported there arrived there, nothing waits for it. */
+export function wipWithUnplanned(): WorkOrderWip {
+  const wip = wipOf()
+  const cells = wip.operations[0]!.cells.map((cell) => ({ ...cell, arrived: 0, waiting: 0, good: 0, scrap: 0, rework: 0, missing: 0 }))
+  const row = { ...wip.operations[0]!, operationId: uid('4141', 90), seq: 60, code: 'REINF', name: 'Rinforzo colletto', scanRequired: false, unplanned: true, final: false, sewn: false, workCentreKind: 'SEWING', arrived: 8, waiting: 0, good: 8, scrap: 0, rework: 0, missing: 0, bundles: { done: 2, waiting: 0, notReached: 4 }, partBundles: { done: 0, waiting: 0, notReached: 0 }, cells, lines: [] }
+  return { ...wip, operations: [...wip.operations, row] }
+}
+
 export function wipOf(ready = false): WorkOrderWip {
   const wo = workOrder('IN_PROGRESS')
   const figures: Record<number, ReturnType<typeof flow> & { bundles: { done: number; waiting: number; notReached: number } }> = ready

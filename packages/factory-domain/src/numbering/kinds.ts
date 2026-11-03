@@ -51,17 +51,20 @@ export const NUMBER_KINDS = [
   'PAYROLL_EXPORT',
   // W2b-2 wave 8 (factory-db numbering.prisma): a bundle's coupon for one operation (CP-…), a scan-id kind.
   'COUPON',
+  // W2b-2 wave 12 (factory-db numbering.prisma): a fabric roll's tag (RL-…) and a remnant's tag (RM-…), scan-id kinds.
+  'ROLL',
+  'REMNANT',
 ] as const
 export type NumberKind = (typeof NUMBER_KINDS)[number]
 
 /**
- * The scan-id kinds: what a floor tablet numbers, offline too, as scannable ids (`BN-…`, `HD-…`, `SN-…`, `CP-…`; numbering/scan-id).
+ * The scan-id kinds: what a floor tablet numbers, offline too, as scannable ids (`BN-…`, `HD-…`, `SN-…`, `CP-…`, `RL-…`, `RM-…`; numbering/scan-id).
  * They are NOT document series: no company, sezionale, pattern or period, and a gap is fine (a ticket printed and
  * thrown away). The rule is that a reference is handed out once per tenant: the scan id carries only the tenant's tag,
  * so ONE tenant-wide counter per kind, kept as the tenant's ledger of number blocks (numbering/blocks; factory-db
  * NumberBlock). allocateNumber refuses them; apps/factory-api's allocateScanIds hands them out.
  */
-export const SCAN_ID_KINDS = ['BUNDLE', 'HIDE', 'GARMENT_SERIAL', 'COUPON'] as const satisfies readonly NumberKind[]
+export const SCAN_ID_KINDS = ['BUNDLE', 'HIDE', 'GARMENT_SERIAL', 'COUPON', 'ROLL', 'REMNANT'] as const satisfies readonly NumberKind[]
 export type ScanIdKind = (typeof SCAN_ID_KINDS)[number]
 
 /** The document kinds: a company's series with a pattern and a period (allocateNumber; factory-db NumberSeries). */

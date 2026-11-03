@@ -96,6 +96,11 @@ model Item {
   leadTimeDays        Int?
   minOrderQty         Decimal?     @db.Decimal(18, 4)
   orderMultiple       Decimal?     @db.Decimal(18, 4)
+  /// W2b (wave 12/16, SCM-263): a consumable counted by the pack (thread by the cone, needles by the box): how many base
+  /// units one pack holds, above 0, and what the pack is, both or neither. Its minimum and maximum per site are ItemPlanning's
+  /// method MIN_MAX.
+  packSize            Decimal?     @db.Decimal(18, 4)
+  packUom             Uom?
   /// The standard purchase price per base unit, typed by the office (GAP-006): quotes and the cost sheet use it until
   /// supplier price lists come (W2a). Never shown to the floor, a portal or a link.
   /// @grain cost
@@ -148,6 +153,9 @@ model Item {
   bomLines        BomLine[]
   // compliance.prisma: the certificates that cover it (a protector's EN 1621 certificate).
   coverage        CertificateCoverage[]
+  // W2b leather.prisma (wave 12/16): what each grade means for it, and its shade groups.
+  gradeRules      ItemGradeRule[]
+  shadeGroups     ShadeGroup[]
   // supply.prisma: the purchase order lines that buy it and the planning runs' requirements of it.
   purchaseOrderLines   PurchaseOrderLine[]
   materialRequirements MaterialRequirement[]
@@ -290,6 +298,8 @@ model ItemColour {
   workOrderMaterials   WorkOrderMaterial[]
   // W2a sourcing.prisma, claims.prisma, subcontract.prisma: its approved sources, claim lines and kit lines.
   supplierItems        SupplierItem[]
+  // W2b leather.prisma (wave 12/16): the shade groups of this colour.
+  shadeGroups          ShadeGroup[]
   supplierClaimLines   SupplierClaimLine[]
   subcontractKitLines  SubcontractKitLine[]
 

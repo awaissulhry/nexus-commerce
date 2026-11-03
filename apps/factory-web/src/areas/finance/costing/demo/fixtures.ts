@@ -138,6 +138,7 @@ export const DETAIL_221: WorkOrderCost = {
     { operation: { id: uid('aaaa', 10), seq: 10, code: 'CUT', name: 'Taglio', workCentreKind: 'CUTTING' }, plannedMinutes: '800.0000', earnedMinutes: '800.0000', perMinute: '0.250000', amount: 20000 },
     { operation: { id: uid('aaaa', 20), seq: 20, code: 'SEW', name: 'Cucitura', workCentreKind: 'SEWING' }, plannedMinutes: '2400.0000', earnedMinutes: '2280.0000', perMinute: '0.250000', amount: 57000 },
     { operation: { id: uid('aaaa', 30), seq: 30, code: 'FIN', name: 'Rifinitura', workCentreKind: 'FINISHING' }, plannedMinutes: '800.0000', earnedMinutes: '600.0000', perMinute: '0.250000', amount: 15000 },
+    { operation: { id: uid('aaaa', 60), seq: 60, code: 'REINF', name: 'Rinforzo colletto', workCentreKind: 'SEWING' }, unplanned: true, plannedMinutes: '0', earnedMinutes: '600.0000', perMinute: '0.250000', amount: 15000 },
   ],
   scrap: [],
   waitingItems: [{ code: 'NOT_VALUED', sourceType: 'StockMove', sourceId: uid('4444', 9), words: 'A move has no value yet.' }],

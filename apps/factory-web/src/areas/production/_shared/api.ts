@@ -439,6 +439,8 @@ export const workOrderWipSchema = z.object({
       code: z.string(),
       name: z.string(),
       scanRequired: z.boolean(),
+      // B-W2b-82: added to the released work order, no routing step (absent: an older API).
+      unplanned: z.boolean().optional(),
       final: z.boolean(),
       sewn: z.boolean(),
       workCentreKind: z.string(),
@@ -506,6 +508,7 @@ export const siteWipSchema = z.object({
           code: z.string(),
           name: z.string(),
           scanRequired: z.boolean(),
+          unplanned: z.boolean().optional(),
           final: z.boolean(),
           ...flow,
           bundles: bundleCounts,

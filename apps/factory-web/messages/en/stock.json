@@ -73,7 +73,8 @@
     "PRODUCTION_RECEIPT": "Finished goods from a work order",
     "CUSTOMER_RETURN": "Customer return",
     "SUPPLIER_RETURN": "Return to supplier",
-    "SHIPMENT": "Shipment"
+    "SHIPMENT": "Shipment",
+    "REMNANT": "Offcut from work order"
   },
   "quality": {
     "QUARANTINE": "Quarantine",

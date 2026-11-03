@@ -5,6 +5,7 @@ import { putToStore, sha256Hex } from '../../../record-panels/store'
 import { onlineFirst, type KeepsActions } from '../../queue/online-first'
 import { floorRead, floorWrite, seg, type TaskOutcome } from '../shared/task-api'
 import type { OperationCheck, OperationSteps } from './checks'
+import { EXTRA_REASON_CODES, type ExtraChoices, type ExtraPay } from './extra'
 import type { OffStandardBlock, OffStandardFloor, OffStandardTile } from './indirect'
 import type { BundleCard, CorrectionTarget } from './model'
 import { TIMING_KINDS, type OpenItem, type Timing } from './timing'
@@ -51,6 +52,7 @@ export const cardSchema = z.object({
   operations: z.array(
     operationRef.extend({
       scanRequired: z.boolean(),
+      unplanned: z.boolean().optional(),
       workCentreKind: z.string(),
       final: z.boolean(),
       sewn: z.boolean(),
@@ -360,4 +362,22 @@ export async function uploadNoteFile(api: ApiClient, workOrderId: string, file: 
   }
   const done = await floorWrite(api, 'POST', `${base}/${seg(first.value.file.id)}/complete`, { schema: z.object({ file: z.object({ id: z.string() }) }) })
   return done.ok ? { ok: true, value: { fileId: done.value.file.id } } : done
+}
+
+// ---- an unplanned operation (B-W2b-82; MES-086): online only, the choice is the office's list -----------------------------------
+
+const extraPays = z.enum(['PIECE_RATE', 'OFF_STANDARD', 'NO_PIECE_PAY'])
+const extraChoices = z.object({
+  operations: z.array(z.object({ id: z.string(), code: z.string(), name: z.string(), workCentreKind: z.string(), standardMinutes: z.string(), pays: extraPays })),
+  reasons: z.array(z.object({ code: z.enum(EXTRA_REASON_CODES), label: z.object({ it: z.string(), en: z.string() }), needsNote: z.boolean() })),
+})
+
+export function fetchExtraChoices(api: ApiClient, workOrderId: string): Promise<TaskOutcome<ExtraChoices>> {
+  return floorRead(api, `/production/extra-operations/work-orders/${seg(workOrderId)}/choices`, { schema: extraChoices })
+}
+
+const extraAdded = z.object({ workOrderOperationId: z.string().nullable(), seq: z.number().nullable(), operation: z.object({ code: z.string(), name: z.string() }), pays: extraPays })
+
+export function addExtra(api: ApiClient, workOrderId: string, body: Readonly<Record<string, unknown>>, key: string): Promise<TaskOutcome<{ readonly workOrderOperationId: string | null; readonly seq: number | null; readonly operation: { readonly code: string; readonly name: string }; readonly pays: ExtraPay }>> {
+  return floorWrite(api, 'POST', `/production/extra-operations/work-orders/${seg(workOrderId)}`, { body, schema: extraAdded, idempotencyKey: key })
 }

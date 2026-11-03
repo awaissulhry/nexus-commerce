@@ -334,8 +334,10 @@ export interface FlowStep {
 /** Operations as a row with the pile waiting before each (design wo-flow "W2a OperationFlow"). Totals only, no person. */
 export function flowSteps(wip: WorkOrderWip | null): FlowStep[] {
   if (!wip) return []
-  const most = Math.max(0, ...wip.operations.map((op) => op.waiting))
-  return wip.operations.map((op) => ({ seq: op.seq, code: op.code, name: op.name, waiting: op.waiting, good: op.good, scrap: op.scrap, rework: op.rework, final: op.final, bottleneck: most > 0 && op.waiting === most }))
+  // B-W2b-82: the flow is the routing's: nothing waits for an unplanned operation.
+  const operations = wip.operations.filter((op) => !op.unplanned)
+  const most = Math.max(0, ...operations.map((op) => op.waiting))
+  return operations.map((op) => ({ seq: op.seq, code: op.code, name: op.name, waiting: op.waiting, good: op.good, scrap: op.scrap, rework: op.rework, final: op.final, bottleneck: most > 0 && op.waiting === most }))
 }
 
 // ---- documents to print -------------------------------------------------------------------------------------------------------------

@@ -48,11 +48,11 @@ export interface OperationRow extends ScanOperation {
   readonly workCentreId: string
 }
 
-/** The work order's frozen operations in routing order, each with its work centre's kind. */
+/** The work order's frozen operations in routing order, each with its work centre's kind (B-W2b-82: `unplanned`, no routing step). */
 export async function readOperations(db: Reader, workOrderId: string): Promise<OperationRow[]> {
-  const rows = await db.workOrderOperation.findMany({ where: { workOrderId }, select: { id: true, seq: true, code: true, name: true, scanRequired: true, workCentreId: true }, orderBy: { seq: 'asc' } })
+  const rows = await db.workOrderOperation.findMany({ where: { workOrderId }, select: { id: true, seq: true, routingSeq: true, code: true, name: true, scanRequired: true, workCentreId: true }, orderBy: { seq: 'asc' } })
   const centres = new Map((await db.workCentre.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.workCentreId))] } }, select: { id: true, kind: true } })).map((row) => [row.id, row.kind as WorkCentreKind]))
-  return rows.map((row) => ({ ...row, workCentreKind: centres.get(row.workCentreId) ?? 'SEWING' }))
+  return rows.map(({ routingSeq, ...row }) => ({ ...row, unplanned: routingSeq === null, workCentreKind: centres.get(row.workCentreId) ?? 'SEWING' }))
 }
 
 export const SCAN_COLUMNS = {

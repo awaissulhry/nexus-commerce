@@ -295,7 +295,7 @@ function FloorRow({ row, prefix, showSite }: { row: SiteWipRow; prefix: string; 
               <span className="fw-pr-op-figures">{t('floor.opFigures', { waiting: op.waiting, good: op.good })}</span>
               {op.scrap > 0 && <span className="fw-pr-op-figures">{t('floor.opScrap', { count: op.scrap })}</span>}
               {pile?.operationId === op.operationId && <Tag tone="warning">{t('floor.mostWaiting')}</Tag>}
-              {!op.scanRequired && <span className="fw-pr-op-figures">{t('ops.notScanned')}</span>}
+              {!op.scanRequired && <span className="fw-pr-op-figures">{t(op.unplanned ? 'ops.unplanned' : 'ops.notScanned')}</span>}
             </>
           )
           const cls = pile?.operationId === op.operationId ? 'fw-pr-op is-pile' : 'fw-pr-op'

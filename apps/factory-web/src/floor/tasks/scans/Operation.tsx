@@ -15,7 +15,9 @@ import type { TaskProblem } from '../shared/task-api'
 import { listBeforeRead, readListReasons } from '../reasons/api'
 import type { PickerReason } from '../reasons/model'
 import {
+  addExtra,
   checkLot,
+  fetchExtraChoices,
   offStandardEndOrKeep,
   offStandardStartOrKeep,
   fetchCard,
@@ -37,6 +39,7 @@ import {
   type TimingAnswer,
   type TimingRoute,
 } from './api'
+import { extraBody, extraHeld, NEW_EXTRA } from './extra'
 import { addLot, componentLines, dropLot, garmentsOn, heldFindings, lineOf, overrideCounts, quantityRule, sameLot, stepLot, tickStep, toldFindings, workHold, type GuardLine, type StepOutcome } from './checks'
 import { startedBlock, type OffStandardBlock, type OffStandardTile } from './indirect'
 import {
@@ -115,6 +118,7 @@ export function FloorOperation() {
   const { frame, onFrame } = store.frame('tile.operation', { showHome: true })
   const { me, api, online, queue, queueSnapshot, sessionEnded, device } = store
   const allowed = Boolean(me?.permissions.includes('production.scan'))
+  const mayAdd = Boolean(me?.permissions.includes('production.extraops.add'))
   // What the tablet kept about a bundle speaks of "you": it never reaches the next person on the tablet.
   if (me && me.worker.id !== WORK_PERSON) {
     WORK.clear()
@@ -390,7 +394,7 @@ export function FloorOperation() {
     if (code) void look(code)
   }, [look, store])
 
-  useWedgeScans(onScan, step.kind !== 'scan' && step.kind !== 'stack' && step.kind !== 'note' && step.kind !== 'noPermission' && leave === null && override === null)
+  useWedgeScans(onScan, step.kind !== 'scan' && step.kind !== 'stack' && step.kind !== 'note' && step.kind !== 'extra' && step.kind !== 'noPermission' && leave === null && override === null)
 
   // What runs for this person and the lists the screen needs: read once on opening (Continue, the running block, the crew).
   useEffect(() => {
@@ -788,8 +792,48 @@ export function FloorOperation() {
     }
   }
 
+  // ---- an unplanned operation (B-W2b-82; MES-086) ----------------------------------------------------------------------------
+  const cardOfStep = step.kind === 'counts' || step.kind === 'already' ? step.card : step.kind === 'refused' ? step.card : null
+
+  const openExtra = async () => {
+    if (!cardOfStep || !online) return
+    setDone(null)
+    const card = cardOfStep
+    setStep({ kind: 'extra', card, back: step, choices: null, draft: NEW_EXTRA })
+    const answer = await fetchExtraChoices(api, card.workOrder.id)
+    if (answer.ok) return setStep((now) => (now.kind === 'extra' ? { ...now, choices: answer.value, problem: null } : now))
+    if (answer.problem.kind === 'signedOut') return void sessionEnded()
+    setStep((now) => (now.kind === 'extra' ? { ...now, problem: answer.problem } : now))
+  }
+
+  const sendExtra = async () => {
+    if (step.kind !== 'extra' || step.busy || !online || extraHeld(step.draft, step.choices)) return
+    if (acting.current) return
+    acting.current = true
+    const card = step.card
+    setStep({ ...step, busy: true, problem: null })
+    try {
+      const added = await addExtra(api, card.workOrder.id, extraBody(step.draft), newIdempotencyKey())
+      if (!added.ok) {
+        if (added.problem.kind === 'signedOut') return void sessionEnded()
+        feedback('error')
+        return setStep((now) => (now.kind === 'extra' ? { ...now, busy: false, problem: added.problem } : now))
+      }
+      feedback('success')
+      setDone({ kind: 'extra', bundleCode: card.workOrder.number, extra: { seq: added.value.seq, name: added.value.operation.name, pays: added.value.pays }, queued: null })
+      // The card again, with its new operation: the team leader stays where they were.
+      const fresh = await fetchCard(api, card.bundle.code)
+      if (!fresh.ok) return setStep({ kind: 'scan' })
+      CARDS.keep(codeKey(fresh.value.bundle.code), fresh.value)
+      openCard(fresh.value, null, card.bundle.code, ++lookRun.current)
+    } finally {
+      acting.current = false
+    }
+  }
+
   const back = () => {
     setLeave(null)
+    if (step.kind === 'extra') return setStep(step.back)
     if (step.kind === 'pause' || step.kind === 'pieces') return setStep(step.from)
     // A stack is several scans: it asks once before it goes.
     if (step.kind === 'stack' && step.rows.length > 0) return setLeavingStack(true)
@@ -804,6 +848,23 @@ export function FloorOperation() {
       case 'pick':
         if (step.kind !== 'pick') return
         return void openOperation(step.card, step.options.find((operation) => operation.id === action.operationId) ?? step.options[0]!, step.asOf, ++lookRun.current)
+      case 'operationOpen': {
+        const operation = cardOfStep?.operations.find((entry) => entry.id === action.operationId)
+        if (!cardOfStep || !operation) return
+        return void openOperation(cardOfStep, operation, step.kind === 'counts' ? step.asOf : null, ++lookRun.current)
+      }
+      case 'extraOpen':
+        return void openExtra()
+      case 'extraBack':
+        return back()
+      case 'extraOperation':
+        return step.kind === 'extra' ? setStep({ ...step, draft: { ...step.draft, operationId: action.id } }) : undefined
+      case 'extraReason':
+        return step.kind === 'extra' ? setStep({ ...step, draft: { ...step.draft, reason: action.code } }) : undefined
+      case 'extraWords':
+        return step.kind === 'extra' ? setStep({ ...step, draft: { ...step.draft, words: action.words } }) : undefined
+      case 'extraSend':
+        return void sendExtra()
       case 'reason':
       case 'unreason':
       case 'good':
@@ -1085,7 +1146,7 @@ export function FloorOperation() {
         bundles: last.bundles,
       }
     : null
-  const doneLine: DoneLine | null = done ? { kind: done.kind, bundleCode: done.bundleCode, count: done.count, ticks: done.queued ? (queuedView(queueSnapshot, done.queued)?.ticks ?? 'recorded') : 'recorded' } : null
+  const doneLine: DoneLine | null = done ? { kind: done.kind, bundleCode: done.bundleCode, count: done.count, extra: done.extra, ticks: done.queued ? (queuedView(queueSnapshot, done.queued)?.ticks ?? 'recorded') : 'recorded' } : null
   const shown: OperationStep = step.kind === 'asked' && askedId ? { ...step, ticks: queuedView(queueSnapshot, askedId)?.ticks ?? 'recorded' } : step
   const pending = step.kind === 'counts' ? step : null
 
@@ -1105,6 +1166,7 @@ export function FloorOperation() {
         stackLeave: leavingStack && step.kind === 'stack' ? stackTotals(step.rows) : null,
         done: doneLine,
         pauseReasons,
+        mayAdd,
         leave: leave && pending ? { bundleCode: pending.card.bundle.code, operationSeq: pending.operation.seq, scrap: scrapOf(pending.counts), rework: reworkOf(pending.counts) } : leave && step.kind === 'correct' ? { bundleCode: step.target.bundleCode, operationSeq: step.target.operation.seq, scrap: scrapOf(step.counts), rework: reworkOf(step.counts) } : null,
       }}
       onFrame={onFrame}

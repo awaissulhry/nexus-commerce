@@ -138,6 +138,8 @@ describe('the sides of a move', () => {
     expect(paths(facts({ receiptLineId: LOT }))).toEqual(['receiptLineId'])
     expect(paths(facts({ reason: 'ISSUE', toLocationId: null, fromLocationId: STORE }))).toEqual(['workOrderId'])
     expect(paths(facts({ reason: 'RETURN', workOrderId: LOT }))).toEqual([])
+    // W2b-2 (wave 12/16): an offcut comes back as a RETURN does, and is of a hide.
+    expect(paths(facts({ reason: 'REMNANT' }))).toEqual(['workOrderId', 'hideId'])
   })
 
   it('names the lot and hide exactly as the item is tracked; the base unit gives the base quantity', () => {
