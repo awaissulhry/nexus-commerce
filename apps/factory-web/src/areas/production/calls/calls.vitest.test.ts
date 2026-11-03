@@ -67,6 +67,8 @@ const base: Call = {
   bundle: null,
   responderTeam: { id: 'tm', code: 'MNT', name: 'Manutenzione' },
   note: null,
+  reasonCode: null,
+  requestedQuantity: null,
   sentAt: '2026-10-30T09:28:00.000Z',
   seenAt: null,
   onTheWayAt: null,

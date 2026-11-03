@@ -11,7 +11,7 @@ import { AsOfMemory } from '../shared/as-of'
 import { queuedView } from '../shared/queued'
 import type { TaskProblem } from '../shared/task-api'
 import { addDetails, readHelpStation, type HelpCall, type HelpStation } from './api'
-import { CALL_ANSWER, CALL_SEND, callWords, closePayload, detailsHeld, newlyOnTheWay, queuedCalls, sendPayload, tilePress } from './model'
+import { askOf, CALL_ANSWER, CALL_SEND, callWords, closePayload, detailsHeld, detailsOf, newlyOnTheWay, queuedCalls, reasonPicked, sendPayload, tilePress } from './model'
 import { HelpView, type HelpAction, type HelpStep } from './view/HelpView'
 
 /**
@@ -19,8 +19,8 @@ import { HelpView, type HelpAction, type HelpStep } from './view/HelpView'
  * (`andon.call.send`: it works offline and the office records it once; a second tap shows the call, never a second one),
  * the two ticks follow it, and the open call is read again when the office recorded it, on every live hint from the
  * responder (`help_call.*`: "On my way" plays the success sound) and on a beat while the screen is in view (a missed hint).
- * "It's solved" and "Cancel call" queue too (`andon.call.answer`); words on a call need the network. What the tablet read
- * stays for this visit with its time (offline: "as of").
+ * "It's solved" and "Cancel call" queue too (`andon.call.answer`); details on a call need the network: words, and on a
+ * material call why and how much (B-W2b-81; MES-137). What the tablet read stays for this visit with its time (offline: "as of").
  */
 
 const KEPT = new AsOfMemory<HelpStation>(1)
@@ -151,12 +151,12 @@ export function FloorHelp() {
 
   const sendDetails = async () => {
     const shown = current.current
-    if (shown.kind !== 'details' || shown.busy || detailsHeld(shown.words, online)) return
+    if (shown.kind !== 'details' || shown.busy) return
     const call = callOf(shown.callId)
-    if (!call) return
+    if (!call || detailsHeld(shown.words, online, shown.ask, Boolean(call.note))) return
     detailsKey.current ??= newIdempotencyKey()
     setStep({ ...shown, busy: true, problem: null })
-    const answer = await addDetails(api, call, shown.words.trim(), detailsKey.current)
+    const answer = await addDetails(api, call, detailsOf(shown.words, shown.ask), detailsKey.current)
     if (!answer.ok) {
       if (answer.problem.kind === 'signedOut') return void sessionEnded()
       feedback('error')
@@ -165,7 +165,7 @@ export function FloorHelp() {
     detailsKey.current = null
     feedback('success')
     await read()
-    setStep({ kind: 'call', callId: call.id, done: 'details' })
+    setStep({ kind: 'call', callId: call.id, done: shown.ask ? 'ask' : 'details' })
   }
 
   const back = () => {
@@ -174,8 +174,12 @@ export function FloorHelp() {
       case 'tiles':
       case 'loading':
         return router.push('/floor')
-      case 'details':
+      case 'details': {
+        const ask = shown.ask
+        if (ask?.stage === 'words') return setStep({ ...shown, ask: { ...ask, stage: ask.askQuantity ? 'quantity' : 'reason' } })
+        if (ask?.stage === 'quantity' && ask.reason !== null) return setStep({ ...shown, ask: { ...ask, stage: 'reason' } })
         return setStep({ kind: 'call', callId: shown.callId })
+      }
       default:
         setStep({ kind: 'tiles' })
         return void read()
@@ -204,8 +208,18 @@ export function FloorHelp() {
       case 'details':
         if (shown.kind === 'call') {
           detailsKey.current = null
-          setStep({ kind: 'details', callId: shown.callId, words: '' })
+          const call = callOf(shown.callId)
+          setStep({ kind: 'details', callId: shown.callId, words: '', ask: call ? askOf(call) : null })
         }
+        return
+      case 'reason':
+        if (shown.kind === 'details' && shown.ask) setStep({ ...shown, ask: reasonPicked(shown.ask, action.code) })
+        return
+      case 'quantity':
+        if (shown.kind === 'details' && shown.ask) setStep({ ...shown, ask: { ...shown.ask, quantity: action.value } })
+        return
+      case 'addWords':
+        if (shown.kind === 'details' && shown.ask) setStep({ ...shown, ask: { ...shown.ask, stage: 'words' } })
         return
       case 'words':
         if (shown.kind === 'details') setStep({ ...shown, words: action.text })

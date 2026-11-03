@@ -120,9 +120,10 @@ async function reportQc(scrap: number, serverTime = new Date()): Promise<string>
 
 /** The operator undoes a report on the same tablet (the scan stays; the undo voids it). */
 async function undo(scanId: string): Promise<void> {
+  const [scan] = await admin<{ stationId: string | null }>('SELECT "stationId" FROM "OperationScan" WHERE id = $1', [scanId])
   await h.database.withScope({ audience: 'floor', tenantId: T, actorId: operator, siteId: siteA1 }, (client) =>
     client.operationScan.create({
-      data: { id: newId(), siteId: siteA1, workOrderId: seed.workOrderId, workOrderOperationId: seed.operationIds.qc, bundleId: seed.bundleIds[1], kind: 'UNDO', correctsId: scanId, reason: 'Scanned in a hurry.', workerId: operator, stationId: qcStation, deviceId: device, clientScanId: `w2b53-${run}-${++serial}`, createdById: operator },
+      data: { id: newId(), siteId: siteA1, workOrderId: seed.workOrderId, workOrderOperationId: seed.operationIds.qc, bundleId: seed.bundleIds[1], kind: 'UNDO', correctsId: scanId, reason: 'Scanned in a hurry.', workerId: operator, stationId: scan!.stationId, deviceId: device, clientScanId: `w2b53-${run}-${++serial}`, createdById: operator },
       select: { id: true },
     }),
   )
@@ -132,6 +133,7 @@ const scrapRows = async (query = '') => ok('manager', 'GET', `/production/scrap?
 const rowOf = (page: Json, scanId: string) => page.rows.find((row: Json) => row.source.type === 'SCAN' && row.source.id === scanId)
 const decisions = (scanId: string) => admin('SELECT "recordType", "actorId", audience::text AS audience, after, reason FROM "AuditLog" WHERE action = \'production.decideScrapOverLimit\' AND ("recordId" = $1::uuid OR (after->>\'scanId\') = $2) ORDER BY at, id', [scanId, scanId])
 const decidedEvents = (scanId: string) => admin('SELECT payload FROM "OutboxEvent" WHERE type = \'production.scrap_over_limit_decided\' AND payload->>\'scanId\' = $1 ORDER BY "occurredAt", id', [scanId])
+const ledger = (scanId: string) => admin('SELECT status::text AS status, "limitPieces", "decidedOn"::text AS "decidedOn", "decidedById", "reasonCode", note, key, version FROM "ScrapApproval" WHERE "scanId" = $1', [scanId])
 const askRecut = (session: string, scanId: string) => call(session, 'POST', '/production/replacements', { kind: 'RECUT', quantity: 1, reason: 'Cut two more from the next hide.', sourceScanId: scanId })
 
 beforeAll(async () => {
@@ -244,6 +246,8 @@ describe("the team leader's decision on the tablet and the office's (four eyes)"
     expect(recut.statusCode).toBe(409)
     expect(refusalOf(recut.json().error)).toBe('refusal/SCRAP_REFUSED')
     expect(rowOf(await scrapRows(), waiting).approval).toMatchObject({ state: 'REFUSED', decidedOn: 'FLOOR', reason: 'REWORK_INSTEAD' })
+    // B-W2b-81: a scan with no row (taken before the ledger) gets its whole decided row when it is decided.
+    expect(await ledger(waiting)).toEqual([{ status: 'REFUSED', limitPieces: 1, decidedOn: 'FLOOR', decidedById: lead, reasonCode: 'REWORK_INSTEAD', note: null, key: `scrap:${waiting}`, version: 1 }])
   })
 
   it('the counts put right (an undo, a new report) wait again; the office approves and the replacement is asked', async () => {
@@ -253,6 +257,7 @@ describe("the team leader's decision on the tablet and the office's (four eyes)"
     const approved = await ok('manager', 'POST', `/production/scrap/over-limit/${again}/approve`, { note: 'Seen the hide: real flaw.' })
     expect(approved).toMatchObject({ approval: { state: 'APPROVED', decidedOn: 'OFFICE', note: 'Seen the hide: real flaw.' } })
     expect(approved.words).toMatch(/^2 pieces of bundle .+ approved as scrap: it posts now/)
+    expect(await ledger(again)).toMatchObject([{ status: 'APPROVED', decidedOn: 'OFFICE', note: 'Seen the hide: real flaw.' }])
     const recut = await askRecut('manager', again)
     expect(recut.statusCode, recut.body).toBe(201)
     const plan = await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, async (client) => planCosts(client, (await readWorkOrders(client, { id: seed.workOrderId }))[0]!, { scanIds: [again] }))
@@ -279,6 +284,7 @@ describe("the team leader's decision on the tablet and the office's (four eyes)"
 describe('the team leader approves on a real tablet with the PIN (a signing act)', () => {
   let tablet: Browser
   let pending: string
+  let routed: string
 
   beforeAll(async () => {
     const supervisor = await addUser(h, TENANT, { email: `supervisor-${run}@example.test`, role: 'floor_supervisor' })
@@ -317,6 +323,7 @@ describe('the team leader approves on a real tablet with the PIN (a signing act)
       ['OperationScan', lead, 'FLOOR'],
       ['WorkOrder', lead, 'FLOOR'],
     ])
+    expect(await ledger(pending)).toMatchObject([{ status: 'APPROVED', decidedOn: 'FLOOR', decidedById: lead }])
   })
 
   it("a real report above the limit counts and its answer tells the tablet the scrap waits (the scans' hook)", async () => {
@@ -330,5 +337,53 @@ describe('the team leader approves on a real tablet with the PIN (a signing act)
     })
     expect(answer.statusCode, answer.body).toBe(201)
     expect(answer.json().scan).toMatchObject({ kind: 'REPORT', scrapQuantity: 2, scrapWaits: { limit: 1, words: "2 pieces scrapped in one scan is above this site's limit of 1: it waits for the team leader's approval before it posts." } })
+    routed = answer.json().scan.id
+    // B-W2b-81: the report's own command wrote the ledger's row, keeping the limit in force.
+    expect(await ledger(routed)).toEqual([{ status: 'WAITING', limitPieces: 1, decidedOn: null, decidedById: null, reasonCode: null, note: null, key: `scrap:${routed}`, version: 1 }])
+  })
+
+  it('the ledger answers, not the history: a later change of the limit leaves a waiting row; approving it decides the row', async () => {
+    const rules = await ok('manager', 'GET', `/production/settings/${siteA1}/floor-rules`)
+    await ok('manager', 'POST', `/production/settings/${siteA1}/floor-rules`, { scrapApprovalLimit: 5, version: rules.version })
+    expect(rowOf(await scrapRows(), routed).approval).toMatchObject({ state: 'WAITING', limit: 1 })
+    expect((await ok('lead', 'GET', '/production/scrap/floor/waiting')).rows.map((row: Json) => row.scanId)).toContain(routed)
+    const decided = await ok('manager', 'POST', `/production/scrap/over-limit/${routed}/approve`, {})
+    expect(decided.approval).toMatchObject({ state: 'APPROVED', limit: 1, decidedOn: 'OFFICE' })
+    expect(await ledger(routed)).toMatchObject([{ status: 'APPROVED', limitPieces: 1, decidedOn: 'OFFICE', version: 2 }])
+    expect(refusalOf(await no('manager', 'POST', `/production/scrap/over-limit/${routed}/approve`, {}, 409))).toBe('refusal/DECIDED_ALREADY')
+    const after = await ok('manager', 'GET', `/production/settings/${siteA1}/floor-rules`)
+    await ok('manager', 'POST', `/production/settings/${siteA1}/floor-rules`, { scrapApprovalLimit: 1, version: after.version })
+  })
+
+  it('a voided scan\'s WAITING row stays WAITING and waits for nothing (the readers ask whether the scan stands)', async () => {
+    await undo(routed)
+    const clientScanId = `w2b81-${run}-voided`
+    const answer = await app.inject({
+      method: 'POST',
+      url: '/production/scans',
+      headers: { 'x-test-session': 'operator', 'idempotency-key': clientScanId },
+      payload: { clientScanId, bundleId: seed.bundleIds[1], workOrderOperationId: seed.operationIds.qc, good: 0, scrap: [{ reason: 'STAIN', quantity: 2 }], kindReason: 'The inspection bench is busy.' },
+    })
+    expect(answer.statusCode, answer.body).toBe(201)
+    const scan = answer.json().scan.id as string
+    await undo(scan)
+    expect(await ledger(scan)).toMatchObject([{ status: 'WAITING', decidedOn: null }])
+    expect((await ok('lead', 'GET', '/production/scrap/floor/waiting')).rows.map((row: Json) => row.scanId)).not.toContain(scan)
+    const states = await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, (client) => scrapApprovalStatesOf(client, [scan]))
+    expect(states.get(scan)).toBeNull()
+    expect(refusalOf(await no('manager', 'POST', `/production/scrap/over-limit/${scan}/approve`, {}, 409))).toBe('refusal/SCAN_VOIDED')
+  })
+
+  it('the fallback (named): a decision kept only in the audit rows, of a scan taken before the ledger, is still read', async () => {
+    const older = await reportQc(2)
+    const before = await ok('manager', 'POST', `/production/scrap/over-limit/${older}/approve`, { note: 'Decided before the ledger.' })
+    expect(before.approval.state).toBe('APPROVED')
+    // As before B-W2b-81: the audit rows and no row in the ledger.
+    await admin('ALTER TABLE "ScrapApproval" DISABLE TRIGGER "ScrapApproval_guard"')
+    await admin('DELETE FROM "ScrapApproval" WHERE "scanId" = $1', [older])
+    await admin('ALTER TABLE "ScrapApproval" ENABLE TRIGGER "ScrapApproval_guard"')
+    expect(rowOf(await scrapRows(), older).approval).toMatchObject({ state: 'APPROVED', decidedOn: 'OFFICE', note: 'Decided before the ledger.' })
+    expect(refusalOf(await no('manager', 'POST', `/production/scrap/over-limit/${older}/approve`, {}, 409))).toBe('refusal/DECIDED_ALREADY')
+    expect((await askRecut('manager', older)).statusCode).toBe(201)
   })
 })

@@ -21,6 +21,7 @@ export const manifest = defineManifest({
   'POST /production/offstandard/blocks/:blockId/reopen': { audiences: ['office'], permission: 'production.offstandard.approve', scope: 'record' },
   'POST /production/offstandard/blocks/:blockId/correct': { audiences: ['office'], permission: 'production.offstandard.approve', scope: 'record' },
   'POST /production/offstandard/blocks/:blockId/end': { audiences: ['office'], permission: 'production.offstandard.approve', scope: 'record' },
+  'GET /production/offstandard/work-orders/:workOrderId/minutes': { audiences: ['office'], permission: 'production.offstandard.view', scope: 'record' },
   'GET /production/offstandard/floor': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
   'POST /production/offstandard/floor/start': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },
   'POST /production/offstandard/floor/end': { audiences: ['floor'], permission: 'floor.work', scope: 'site' },

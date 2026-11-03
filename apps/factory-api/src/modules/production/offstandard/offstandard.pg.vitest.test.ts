@@ -263,6 +263,25 @@ describe('time with no bundle on the floor (MES-156, MES-158)', () => {
     await insertScan('HAND_BACK')
   })
 
+  it('a block started with one bundle paused belongs to that work order (B-W2b-81); with none, to no work order', async () => {
+    const bundle2 = labour.production.bundleIds[1]
+    const insertScan = (kind: string, reason: string | null = null) =>
+      admin(
+        `INSERT INTO "OperationScan" (id, "tenantId", "siteId", "workOrderId", "workOrderOperationId", "bundleId", kind, "pauseReasonCode", "workerId", "deviceId", "clientScanId", "serverTime", "createdById")
+         VALUES ($1, $2, $3, $4, $5, $6, $7::"ScanKind", $8, $9, $10, $11, now(), $9)`,
+        [newId(), T, siteA1, labour.production.workOrderId, labour.production.operationIds.pack, bundle2, kind, reason, operator, tablets.sew, `paused-${run}-${kind}`],
+      )
+    const free = await ok('sew', 'POST', '/production/offstandard/floor/start', { codeId: codes.CLEANING, clientEventId: evt('no-paused') }, 201)
+    expect(await block(free.block.id)).toMatchObject({ workOrderId: null })
+    await ok('sew', 'POST', '/production/offstandard/floor/end', { clientEventId: evt('no-paused-end') })
+    await insertScan('START')
+    await insertScan('PAUSE', 'NO_MATERIAL')
+    const paused = await ok('sew', 'POST', '/production/offstandard/floor/start', { codeId: codes.CLEANING, clientEventId: evt('paused') }, 201)
+    expect(await block(paused.block.id)).toMatchObject({ workOrderId: labour.production.workOrderId })
+    await ok('sew', 'POST', '/production/offstandard/floor/end', { clientEventId: evt('paused-end') })
+    await insertScan('HAND_BACK')
+  })
+
   it('names the station and nobody at a site that records the station only', async () => {
     const waitWork = await ok('companyB', 'POST', '/production/offstandard/codes', { companyId: companyB, code: 'WAIT_WORK', kind: 'OFF_STANDARD', payRule: 'AVERAGE', needsApproval: true, labelIt: 'Attesa lavoro', labelEn: 'Waiting for work' }, 201)
     const state = await ok('b1', 'GET', '/production/offstandard/floor')
@@ -390,6 +409,28 @@ describe("the lead's approval in the office (MES-157)", () => {
     expect(future.issues.map((issue: Json) => issue.path)).toContain('body/startedAt')
     expect((await no('companyB', 'POST', '/production/offstandard/blocks', { siteId: siteB1, codeId: await codeId(companyB, 'WAIT_WORK'), workerId: operator, stationId: b1Station, ...span }, 400)).issues[0].path).toBe('body/workerId')
     await no('companyB', 'POST', '/production/offstandard/blocks', { siteId: siteA1, codeId: codes.TRAINING, workerId: operator, ...span }, 404)
+  })
+
+  it('a block typed afterwards names its work order; the Labour tab reads the work order\'s minutes per state and code, never per person (B-W2b-81)', async () => {
+    const workOrderId = labour.production.workOrderId
+    const before = await ok('manager', 'GET', `/production/offstandard/work-orders/${workOrderId}/minutes`)
+    const span = { startedAt: minutesAgo(260), endedAt: minutesAgo(250) }
+    const typed = (await ok('manager', 'POST', '/production/offstandard/blocks', { siteId: siteA1, codeId: codes.TRAINING, workerId: operator, stationId: sew1, workOrderId, ...span }, 201)).block
+    expect(typed).toMatchObject({ workOrderId, status: 'PENDING' })
+    const after = await ok('manager', 'GET', `/production/offstandard/work-orders/${workOrderId}/minutes`)
+    expect(after).toMatchObject({ workOrderId, minutes: before.minutes + 10, waiting: before.waiting + 10, blocks: before.blocks + 1 })
+    expect(after.codes.find((row: Json) => row.code.code === 'TRAINING')).toMatchObject({ minutes: expect.any(Number), blocks: expect.any(Number) })
+    expect(JSON.stringify(after)).not.toMatch(/workerId|employeeId|Seed Worker/)
+    // A rejected block is no off-standard time.
+    await ok('manager', 'POST', `/production/offstandard/blocks/${typed.id}/reject`, { version: typed.version, reason: 'Not this work order.' })
+    expect((await ok('manager', 'GET', `/production/offstandard/work-orders/${workOrderId}/minutes`)).minutes).toBe(before.minutes)
+    // REFUSED: a draft work order, in words before the database's refusal; another site's; the walls.
+    const [draft] = await admin<{ id: string }>(`SELECT id FROM "WorkOrder" WHERE "tenantId" = $1 AND "siteId" = $2 AND status = 'DRAFT' LIMIT 1`, [T, siteA1])
+    const held = { startedAt: minutesAgo(300), endedAt: minutesAgo(290) }
+    expect((await no('manager', 'POST', '/production/offstandard/blocks', { siteId: siteA1, codeId: codes.TRAINING, workerId: operator, stationId: sew1, workOrderId: draft!.id, ...held }, 400)).issues[0].path).toBe('body/workOrderId')
+    await no('companyB', 'GET', `/production/offstandard/work-orders/${workOrderId}/minutes`, undefined, 404)
+    await no('sew', 'GET', `/production/offstandard/work-orders/${workOrderId}/minutes`, undefined, 403)
+    expect((await ok('manager', 'GET', `/production/offstandard/work-orders/${newId()}/minutes`, undefined, 404)).error).toBeDefined()
   })
 
   it('approves the normal blocks at once; the unusual and the decided ones are skipped and say why', async () => {

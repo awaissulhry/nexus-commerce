@@ -522,8 +522,8 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   recordGuardsInCommand(tools, guard, { scan: row, workOrder, bundleId: locked.bundle.id, operation: decision.operation })
   // B-W2b-47 hook: the entry on behalf, kept and told.
   onBehalfRecordedInCommand(tools, onBehalf, { scanId: id, workOrder, bundleId: locked.bundle.id, operationId: decision.operation.id })
-  // B-W2b-53 hook: the scrap above the site's limit waits for the team leader before it posts; the tablet is told.
-  return { ...scanView(row, operations, locked.bundle.code, work.lines), scrapWaits: await scrapWaitsInCommand(tools, workOrder.siteId, row.scrapQuantity) }
+  // B-W2b-53 hook: the scrap above the site's limit waits for the team leader before it posts; the tablet is told. B-W2b-81: its ScrapApproval row is written here.
+  return { ...scanView(row, operations, locked.bundle.code, work.lines), scrapWaits: await scrapWaitsInCommand(tools, { id, siteId: workOrder.siteId, scrapQuantity: row.scrapQuantity, createdById: subject.workerId ? context.actorId : null }) }
 }
 
 export function scanEvent(workOrder: Pick<ScanHeader, 'id' | 'number' | 'companyId' | 'siteId'>, scan: ScanRow, operationSeq: number, postedBy: 'FLOOR' | 'OFFICE' | 'SYSTEM') {

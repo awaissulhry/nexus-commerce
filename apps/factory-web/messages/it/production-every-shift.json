@@ -95,7 +95,6 @@
     "planned": "Previsti",
     "earned": "Maturati",
     "notScanned": "Non scansionata: nulla la dichiara",
-    "offStandard": "I minuti fuori standard si tengono per linea e giorno, non per ordine di lavoro: si vedono sulla giornata della linea in Manodopera e rettifiche.",
     "toLabour": "Apri Manodopera e rettifiche",
     "neverPerson": "Mai per persona: i minuti di un lavoratore stanno solo nella sua scheda."
   },
@@ -131,5 +130,22 @@
     "print": "Stampa",
     "storedNowhere": "Creato su richiesta e non conservato.",
     "loading": "Creo il PDF…"
+  },
+  "offStandard": {
+    "title": "Minuti fuori standard",
+    "hint": "Tempo perso da questo ordine di lavoro in attese e lavoro indiretto, mai per persona.",
+    "held": "I minuti fuori standard richiedono il permesso di leggere il tempo fuori standard (production.offstandard.view).",
+    "failed": "Non è stato possibile leggere i minuti fuori standard",
+    "retry": "Riprova",
+    "loading": "Lettura dei minuti fuori standard…",
+    "scope": "Contano solo i blocchi che nominano questo ordine di lavoro; il resto resta sul giorno della linea.",
+    "none": "Ancora nessun tempo fuori standard nomina questo ordine di lavoro.",
+    "total": "Totale",
+    "approved": "Approvati",
+    "waiting": "In attesa di decisione",
+    "running": "In corso",
+    "perCode": "Minuti fuori standard per codice",
+    "blocks_one": "{count} blocco",
+    "blocks_other": "{count} blocchi"
   }
 }

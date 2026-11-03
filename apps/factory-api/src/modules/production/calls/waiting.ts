@@ -3,6 +3,7 @@ import type { CommandTools } from '../../../core/command'
 import { scanSubjectFor } from '../settings/subject'
 import { closedDays, dayKey, latestEndOf, lockBlock, lockRunningBlock, readCode, runningStretchOf, type Subject } from '../offstandard/store'
 import { dayColumn } from '../offstandard/views'
+import { blockableWorkOrder, pausedWorkOrderOf } from '../offstandard/work-order'
 import { endBlock, insertBlock } from '../offstandard/writes'
 
 /**
@@ -27,6 +28,8 @@ export interface WaitingStart {
   /** The caller where the site names workers (null otherwise). */
   readonly named: { readonly workerId: string; readonly employeeId: string | null } | null
   readonly callId: string
+  /** The work order the call names (B-W2b-81: the block belongs to it; else to the bundle the subject paused). */
+  readonly workOrderId: string | null
   readonly at: Date
   readonly deviceId: string
 }
@@ -53,6 +56,8 @@ export async function startWaitingInCommand(tools: CommandTools, input: WaitingS
     const workDate = dayColumn(businessDate(startedAt, input.site.timezone))
     if ((await closedDays(tx, [{ lineId: input.station.lineId, workDate }])).has(dayKey(input.station.lineId, workDate))) return null
   }
+  // A call may name a work order no time can be booked to (a draft, a cancelled one): it goes out all the same.
+  const named = input.workOrderId && (await blockableWorkOrder(tx, input.site.id, input.workOrderId)) ? input.workOrderId : null
   const block = await insertBlock(tools, {
     companyId: input.site.companyId,
     siteId: input.site.id,
@@ -64,6 +69,7 @@ export async function startWaitingInCommand(tools: CommandTools, input: WaitingS
     code,
     source: 'HELP_CALL',
     helpCallId: input.callId,
+    workOrderId: named ?? (await pausedWorkOrderOf(tx, input.site.id, subject, tools.now)),
     startedAt,
     deviceId: input.deviceId,
     createdById: subject.workerId,

@@ -1,13 +1,14 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { onFloor, signedInFrame } from '../../frame/fixtures'
 import type { CallType, HelpCall, HelpStation } from './api'
+import type { AskDraft } from './model'
 import { HelpView, type HelpStep, type HelpViewModel } from './view/HelpView'
 
 /**
  * SCR-172's cases (B-W2b-70; design floor.help): Who do you need? (tiles, one open, one on the tablet, offline, no station,
  * no types), Your call (nobody yet, seen, on the way by a floor person, by the office, the machine and safety follow-ups, words
- * on it), Cancel this call? (someone on the way, nobody yet), Add details, the saved call's ticks, closed, refused. Made-up
- * stations, types and people of a made-up "Demo" plant: no money.
+ * on it), Cancel this call? (someone on the way, nobody yet), Add details (B-W2b-81: a material call asks why and how much),
+ * the saved call's ticks, closed, refused. Made-up stations, types and people of a made-up "Demo" plant: no money.
  */
 
 const AT = '2026-10-31T08:41:00.000Z'
@@ -36,12 +37,17 @@ const call = (callType: CallType, extra: Partial<HelpCall> = {}): HelpCall => ({
   line: LINE,
   responderTeam: TEAM,
   note: null,
+  reasonCode: null,
+  requestedQuantity: null,
   sentAt: AT,
   timeline: [{ step: 'SENT', at: AT, by: null }],
   coming: null,
   ...extra,
 })
 
+const ASKED = call(MATERIAL, { reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4' })
+const ask = (extra: Partial<AskDraft>): AskDraft => ({ stage: 'reason', reason: null, quantity: null, askQuantity: true, ...extra })
+const asking = (draft: Partial<AskDraft>, extra: Partial<Extract<HelpStep, { kind: 'details' }>> = {}, more: Partial<HelpViewModel> = {}) => model({ kind: 'details', callId: 'call-material', words: '', ask: ask(draft), ...extra }, station([call(MATERIAL)]), more)
 const SEEN = call(MATERIAL, { status: 'SEEN', timeline: [{ step: 'SENT', at: AT, by: null }, { step: 'SEEN', at: '2026-10-31T08:43:00.000Z', by: { kind: 'WORKER', name: 'Paolo Demo' } }], coming: { step: 'SEEN', by: { kind: 'WORKER', name: 'Paolo Demo' }, team: TEAM } })
 const COMING = call(MATERIAL, { status: 'ON_THE_WAY', timeline: [...SEEN.timeline, { step: 'ON_THE_WAY', at: '2026-10-31T08:45:00.000Z', by: { kind: 'WORKER', name: 'Paolo Demo' } }], coming: { step: 'ON_THE_WAY', by: { kind: 'WORKER', name: 'Paolo Demo' }, team: TEAM } })
 const OFFICE = call(MATERIAL, { status: 'ON_THE_WAY', timeline: [{ step: 'SENT', at: AT, by: null }, { step: 'ON_THE_WAY', at: '2026-10-31T08:45:00.000Z', by: { kind: 'USER', name: null } }], coming: { step: 'ON_THE_WAY', by: { kind: 'USER', name: null }, team: TEAM } })
@@ -76,12 +82,20 @@ export const designScreen = defineDesignScreen<HelpViewModel>({
     { id: 'call-safety', label: 'Safety: Report an incident held with its wave', model: openCall(call(SAFETY)) },
     { id: 'call-words', label: 'With words added', model: openCall(call(MATERIAL, { note: 'Mancano le fodere per il fascio 12.' }), { done: 'details' }) },
     { id: 'call-offline', label: 'Your call offline: as of', model: model({ kind: 'call', callId: SEEN.id }, station([SEEN]), { online: false, asOf: AT }) },
+    { id: 'call-asked', label: 'Material: the call says why and how much', model: openCall(ASKED, { done: 'ask' }), note: 'MES-137. The quantity has no unit on purpose: the tile and the words say of what.' },
     { id: 'cancel-coming', label: 'Cancel this call? Someone is on the way', model: openCall(COMING, { cancelling: true }) },
     { id: 'cancel-nobody', label: 'Cancel this call? Nobody yet', model: openCall(call(MATERIAL), { cancelling: true }) },
     { id: 'details', label: 'Add details', model: model({ kind: 'details', callId: SEEN.id, words: 'Mancano le fodere.' }, station([SEEN])) },
     { id: 'details-empty', label: 'Add details: held until there are words', model: model({ kind: 'details', callId: SEEN.id, words: '' }, station([SEEN])) },
     { id: 'details-offline', label: 'Add details offline: held with the reason', model: model({ kind: 'details', callId: SEEN.id, words: 'Mancano le fodere.' }, station([SEEN]), { online: false }) },
     { id: 'details-failed', label: 'Add details refused', model: model({ kind: 'details', callId: SEEN.id, words: 'Mancano le fodere.', problem: { kind: 'refused', code: 'SOLVED', message: 'This call is solved.', fix: null } }, station([SEEN])) },
+    { id: 'ask-reason', label: 'Add details on a material call: why? One tap moves on', model: asking({}) },
+    { id: 'ask-quantity', label: 'How much? Add to the call, or add words first', model: asking({ stage: 'quantity', reason: 'MATERIAL_SHORT', quantity: 4 }) },
+    { id: 'ask-quantity-empty', label: 'How much left empty: the reason alone may go', model: asking({ stage: 'quantity', reason: 'MATERIAL_DAMAGED' }) },
+    { id: 'ask-other-held', label: 'Other: held until there are words, says why', model: asking({ stage: 'quantity', reason: 'OTHER', quantity: 2 }) },
+    { id: 'ask-words', label: 'Words after the reason and the quantity', model: asking({ stage: 'words', reason: 'OTHER', quantity: 2 }, { words: 'Fodera nera per il fascio 12.' }) },
+    { id: 'ask-offline', label: 'Offline: the details wait for the network, held with the reason', model: asking({ stage: 'quantity', reason: 'MATERIAL_SHORT', quantity: 4 }, {}, { online: false }) },
+    { id: 'ask-refused', label: 'Refused: someone at this station told it first', model: asking({ stage: 'quantity', reason: 'MATERIAL_WRONG', quantity: 3 }, { problem: { kind: 'refused', code: 'REQUEST_SET', message: 'This call already says why and how much: it is told once.', fix: null } }) },
     { id: 'saved', label: 'Sent: being sent', model: model({ kind: 'queued', clientEventId: 'queued-1', typeId: MATERIAL.id, ticks: 'sending', refusal: null }) },
     { id: 'saved-offline', label: 'Sent offline: one tick, says to call out loud', model: model({ kind: 'queued', clientEventId: 'queued-1', typeId: MATERIAL.id, ticks: 'saved', refusal: null }, station(), { online: false }) },
     { id: 'refused', label: 'Refused by the office', model: model({ kind: 'queued', clientEventId: 'queued-1', typeId: MATERIAL.id, ticks: 'refused', refusal: { code: 'TYPE_INACTIVE', message: 'This call type is switched off.' } }) },
