@@ -1,0 +1,328 @@
+{
+  "noAccess": {
+    "title": "Non puoi aprire Regole qualità",
+    "body": "Serve il permesso quality.rules.view. Lo assegna un amministratore in Sistema › Ruoli e permessi (lo hanno i ruoli ispettore qualità, responsabile di produzione e capo reparto)."
+  },
+  "head": {
+    "intro": "Chi può firmare cosa, chi viene avvisato di cosa e quanto presto, come si contano i risultati. Una regola più larga chiede un codice nuovo; una più stretta mai.",
+    "reload": "Rileggi le regole",
+    "more": "Altre azioni"
+  },
+  "scope": {
+    "label": "Di chi sono le regole",
+    "company": "Questa azienda ({company})",
+    "all": "Tutte le aziende",
+    "companyHint": "Questa azienda segue le regole di tutte le aziende dove non ne tiene di proprie; quello che tiene qui si aggiunge a esse.",
+    "allHint": "Queste regole valgono per ogni azienda che non ne tiene di proprie. Cambiarle richiede un ruolo su tutte le aziende."
+  },
+  "common": {
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "loading": "Lettura…"
+  },
+  "live": {
+    "changedTitle": "Qualcuno ha cambiato queste regole nel frattempo",
+    "changedBody": "Rileggile prima di salvare: le modifiche non salvate vanno perse.",
+    "reload": "Rileggi"
+  },
+  "stepUp": {
+    "title": "Conferma con il tuo codice",
+    "confirm": "Applica la regola più larga",
+    "loosen": "Una regola più larga su chi può firmare cosa vale dopo che la confermi con un codice nuovo della tua app di autenticazione."
+  },
+  "card": {
+    "failed": "Non è stato possibile leggere queste regole",
+    "changedAt": "Cambiate alle {time}",
+    "neverChanged": "Mai cambiate qui: valgono i valori predefiniti e quello che si eredita.",
+    "apply": "Salva",
+    "locked": "Sempre attiva",
+    "fixed": "Fissa"
+  },
+  "source": {
+    "COMPANY": "impostata per questa azienda",
+    "TENANT": "come per tutte le aziende",
+    "DEFAULT": "il valore predefinito"
+  },
+  "held": {
+    "noRight": "Per cambiare queste regole serve quality.settings.manage per questa azienda.",
+    "noRightAll": "Per cambiare le regole di tutte le aziende serve quality.settings.manage su tutte le aziende.",
+    "offline": "Nessuna connessione: le modifiche aspettano che la pagina torni in linea.",
+    "busy": "Attendi: l’ultima modifica è ancora in salvataggio.",
+    "reading": "Attendi: la pagina sta ancora leggendo.",
+    "noAlertRight": "Per tenere le regole di avviso serve quality.alerts.manage.",
+    "pickRows": "Spunta prima le regole.",
+    "allOn": "Tutte le regole spuntate sono già attive.",
+    "allOff": "Tutte le regole spuntate sono già spente.",
+    "starterAll": "Le regole suggerite valgono per tutte le aziende: serve quality.alerts.manage su tutte le aziende."
+  },
+  "duties": {
+    "title": "Separazione dei compiti e doppio controllo",
+    "description": "Chi può firmare cosa.",
+    "release": {
+      "question": "Chi rilascia i capi finiti?",
+      "alone": "L’ispettore che ha firmato può rilasciare da solo",
+      "aloneHint": "Se non ha prodotto nessuno dei capi. Una seconda persona solo quando la chiede una condizione qui sotto.",
+      "always": "Ogni rilascio richiede una seconda persona",
+      "alwaysHint": "Dopo la firma dell’ispettore, rilascia sempre un’altra persona.",
+      "default": "Nulla impostato: l’ispettore che non ha prodotto nessuno dei capi rilascia da solo (predefinito)."
+    },
+    "follow": "Come per tutte le aziende",
+    "followNow": "Ora: {rule}",
+    "rule": {
+      "WHEN_REQUIRED": "L’ispettore rilascia da solo",
+      "ALWAYS": "Ogni rilascio richiede una seconda persona"
+    },
+    "conditions": {
+      "question": "Serve una seconda persona anche per",
+      "oneRecord": "Un risultato forzato e un rilascio condizionato sono lo stesso record (un esito positivo su un negativo calcolato): una spunta vale per entrambi."
+    },
+    "condition": {
+      "OVERRIDE": "Risultati forzati e rilasci condizionati",
+      "CUSTOMER": "I capi dei clienti elencati qui"
+    },
+    "conditionFromAll": "Lo chiedono le regole di tutte le aziende: cambialo in Tutte le aziende.",
+    "coveredByAlways": "Ogni rilascio richiede già una seconda persona.",
+    "customers": {
+      "label": "Clienti elencati qui",
+      "none": "Nessun cliente elencato.",
+      "remove": "Togli {name} dall’elenco",
+      "fromAll": "Elencato per tutte le aziende",
+      "noPicker": "Per aggiungere un cliente serve parties.view.",
+      "add": "Aggiungi un cliente",
+      "pick_one": "Scegli un cliente ({count})",
+      "pick_other": "Scegli un cliente ({count})"
+    },
+    "hold": {
+      "question": "Chi rilascia un blocco?",
+      "someoneElse": "Una persona diversa da chi l’ha messo",
+      "someoneElseHint": "Chi ha messo un blocco non lo rilascia mai.",
+      "placer": "Chi l’ha messo può anche rilasciarlo",
+      "placerHint": "Per una fabbrica con una sola persona della qualità per turno.",
+      "followPlacer": "Ora: chi l’ha messo può rilasciarlo",
+      "followSomeoneElse": "Ora: lo rilascia un’altra persona",
+      "placerShort": "Chi l’ha messo può rilasciarlo",
+      "someoneElseShort": "Lo rilascia un’altra persona"
+    },
+    "loosens_one": "Questa modifica allarga {count} regola: chiede il motivo e un codice nuovo",
+    "loosens_other": "Questa modifica allarga {count} regole: chiede il motivo e un codice nuovo",
+    "applyLoosen": "Salva la regola più larga…"
+  },
+  "loosen": {
+    "title": "Conferma una regola più larga",
+    "apply": "Applica",
+    "reason": "Perché",
+    "reasonHint": "Resta con la modifica nel registro delle attività.",
+    "codeHint": "Applica chiede un codice nuovo della tua app di autenticazione.",
+    "reasonHeld": "Prima scrivi il perché, in almeno 3 caratteri.",
+    "reasonLong": "Al massimo 1000 caratteri.",
+    "code": {
+      "RELEASE_ALONE": "D'ora in poi un ispettore che non ha prodotto nessuno dei capi rilascia da solo.",
+      "OVERRIDE_ALONE": "D’ora in poi una sola persona può rilasciare i risultati forzati e i rilasci condizionati.",
+      "CUSTOMER_ALONE": "D’ora in poi i capi dei clienti elencati non richiedono più una seconda persona.",
+      "CUSTOMERS_REMOVED": "D'ora in poi i capi di {count} clienti tolti dall'elenco non richiedono più una seconda persona.",
+      "PLACER_RELEASES": "D'ora in poi chi ha messo un blocco può anche rilasciarlo."
+    }
+  },
+  "results": {
+    "title": "Regole dei risultati",
+    "description": "Come si calcolano e si contano i risultati.",
+    "stop": {
+      "question": "Quando un campione rifiuta già il lotto",
+      "finish": "Completa tutto il campione",
+      "finishHint": "Si ispeziona ogni unità del campione, anche dopo che una classe ha rifiutato il lotto.",
+      "stop": "Fermati al numero di rifiuto",
+      "stopHint": "Quando una classe raggiunge il suo numero di rifiuto, l’ispezione si può firmare respinta.",
+      "followStop": "Ora: fermati al numero di rifiuto",
+      "followFinish": "Ora: completa tutto il campione",
+      "planWins": "Una versione del piano di ispezione che dice altro prevale."
+    },
+    "undo": {
+      "label": "Tempo per annullare una scansione al banco",
+      "hint": "Da {min} a {max} secondi; 0: una scansione al banco non si annulla mai.",
+      "unit": "s",
+      "follow": "Come per tutte le aziende",
+      "default": "Il valore predefinito (10 secondi)"
+    },
+    "undoRange": "Il tempo per annullare è un numero intero di secondi da 0 a 300."
+  },
+  "signers": {
+    "title": "Chi firma, sempre",
+    "description": "Le regole che non sono impostazioni, con il loro perché."
+  },
+  "monitoring": {
+    "title": "Chi nominano i registri di reparto (il controllo di chi ha prodotto)",
+    "none": "Nessuno stabilimento da mostrare.",
+    "WORKER": "Le scansioni registrano la persona: il controllo legge le scansioni",
+    "STATION": "Solo la postazione: il controllo è una dichiarazione firmata",
+    "where": "Si imposta per stabilimento in",
+    "link": "Produzione › Regole di reparto"
+  },
+  "separations": {
+    "title": "Separazioni che ogni ruolo rispetta",
+    "who": {
+      "INSPECTOR": "Ispettore.",
+      "OPERATOR": "Operatore.",
+      "MAINTENANCE": "Manutenzione.",
+      "PEOPLE": "Ufficio del personale."
+    },
+    "broken": "Un ruolo personalizzato non la rispetta: {roles}. Cambia il ruolo in Sistema › Ruoli e permessi.",
+    "how": "I ruoli di sistema rispettano ogni separazione (un test li tiene a questo); i controlli di ogni record rifiutano chi ha prodotto la merce, scritto il piano o messo il blocco."
+  },
+  "alerts": {
+    "title": "Avvisi ed escalation",
+    "description": "Chi riceve cosa e quanto presto.",
+    "table": "Regole di avviso ed escalation",
+    "count_one": "{count} regola",
+    "count_other": "{count} regole",
+    "add": "Aggiungi regola",
+    "failed": "Non è stato possibile leggere le regole di avviso",
+    "capaNote": "Azioni correttive: l’escalation è un’attività tra le attività delle persone.",
+    "everyCompany": "Tutte le aziende",
+    "shadowed": "Non per questa azienda: tiene regole proprie per questo evento.",
+    "neverFired": "Mai scattata",
+    "fired7d_one": "{count} volta in 7 giorni",
+    "fired7d_other": "{count} volte in 7 giorni",
+    "on": "Attiva",
+    "off": "Spenta",
+    "switchOffOf": "Spegni la regola {rule}",
+    "switchOnOf": "Attiva la regola {rule}",
+    "howTold": "Una regola suona la campanella delle persone che nomina e che possono vedere il record; l’e-mail le raggiunge solo nel riepilogo giornaliero, se lo tengono attivo. Nulla arriva a un cliente o a un fornitore.",
+    "empty": {
+      "title": "Ancora nessuna regola di avviso",
+      "body_one": "Parti dalla regola suggerita, o aggiungine una tua.",
+      "body_other": "Parti dalle {count} regole suggerite, o aggiungine una tua."
+    }
+  },
+  "event": {
+    "HOLD_PLACED": "Blocco messo",
+    "CRITICAL_NCR": "NC critica",
+    "SAFETY_COMPLAINT": "Reclamo di sicurezza",
+    "INSPECTION_WAITING": "Ispezione in attesa",
+    "CERTIFICATE_EXPIRING": "Certificato in scadenza",
+    "RELEASE_WAITING_SECOND_PERSON": "Rilascio in attesa della seconda persona",
+    "CAPA_ACTION_OVERDUE": "Azione correttiva scaduta"
+  },
+  "row": {
+    "view": "Apri",
+    "edit": "Modifica",
+    "test": "Prova: manda a me",
+    "testHint": "Suona una volta la tua campanella con le parole di questa regola.",
+    "remove": "Rimuovi",
+    "menu": "Azioni della regola {rule}"
+  },
+  "col": {
+    "event": "Quando",
+    "sentence": "La regola",
+    "where": "Per",
+    "fired": "Ultima volta",
+    "enabled": "Attiva",
+    "actions": "Azioni"
+  },
+  "bulk": {
+    "on": "Attiva {count}",
+    "off": "Spegni {count}",
+    "remove": "Rimuovi {count}"
+  },
+  "starter": {
+    "title_one": "Manca {count} regola suggerita",
+    "title_other": "Mancano {count} regole suggerite",
+    "add_one": "Aggiungi la regola suggerita",
+    "add_other": "Aggiungi le {count} regole suggerite"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "save": "Salva la scheda che hai cambiato",
+    "add": "Aggiungi regola",
+    "dialog": "Salva, in una finestra",
+    "close": "Chiudi una finestra"
+  },
+  "ruleDialog": {
+    "titleNew": "Aggiungi una regola di avviso",
+    "titleEdit": "Regola di avviso",
+    "save": "Salva regola",
+    "add": "Aggiungi regola",
+    "event": "Quando",
+    "where": "Per",
+    "fixed": "Fisso una volta aggiunta la regola.",
+    "who": "Avvisa",
+    "owner": "{owner}",
+    "role": "Chi ha un ruolo",
+    "both": "Il responsabile e chi ha un ruolo",
+    "nobodyNamed": "Un certificato non nomina nessuno: la regola avvisa un ruolo.",
+    "roleLabel": "Ruolo",
+    "pickRole": "Scegli un ruolo",
+    "days": "Giorni prima dell’ultimo giorno di validità",
+    "daysHint": "Fino a 6 numeri da 1 a 730, per esempio 180, 90, 30. Una volta ciascuno, solo l’ultimo raggiunto.",
+    "wait": "In attesa da più di",
+    "waitEvent": "Dopo",
+    "waitCapa": "Scaduta da più di",
+    "waitHint": "Avvisa una volta, quando il record ha atteso tanto.",
+    "waitEventHint": "0: subito. Di più: una volta, se è ancora così dopo questo tempo.",
+    "waitNumber": "Quanto",
+    "waitUnit": "Unità",
+    "bell": "La campanella",
+    "bellAlways": "La campanella è sempre attiva.",
+    "email": "Anche e-mail",
+    "enabled": "Regola attiva",
+    "emailHow": "L’e-mail raggiunge una persona nel suo riepilogo giornaliero della campanella, se lo tiene attivo.",
+    "capaHow": "Un’azione correttiva va in escalation come attività a queste persone (l’azione correttiva tiene i suoi promemoria).",
+    "sentence": "La regola dice",
+    "problem": {
+      "roleId": "Scegli il ruolo da avvisare.",
+      "audience": "Un certificato non nomina nessuno: avvisa un ruolo.",
+      "wait": "Un numero intero, al massimo 30 giorni.",
+      "days": "Da 1 a 6 numeri diversi di giorni, da 1 a 730.",
+      "channels": "La campanella è sempre attiva.",
+      "event": "Scegli che cosa guarda la regola.",
+      "companyId": "Scegli un’azienda di cui tieni le regole."
+    }
+  },
+  "unit": {
+    "minutes": "minuti",
+    "hours": "ore",
+    "days": "giorni"
+  },
+  "remove": {
+    "title_one": "Rimuovere {count} regola?",
+    "title_other": "Rimuovere {count} regole?",
+    "confirm_one": "Rimuovi {count} regola",
+    "confirm_other": "Rimuovi {count} regole",
+    "body_one": "Non avvisa più nessuno. Il registro delle attività tiene com’era.",
+    "body_other": "Non avvisano più nessuno. Il registro delle attività tiene com’erano."
+  },
+  "problem": {
+    "failed": "Qualcosa non ha funzionato: riprova.",
+    "stale": "Qualcuno l’ha cambiata nel frattempo: è stata riletta; rifai la modifica.",
+    "conflict": "Questo è in conflitto con quanto salvato: rileggi la pagina.",
+    "reason": "Scrivi il perché, in almeno 3 caratteri.",
+    "changedMeanwhile": "Le regole in vigore sono cambiate nel frattempo: rileggile, poi allargale con il motivo e un codice nuovo.",
+    "customers": "Si elencano solo clienti, una volta ciascuno.",
+    "invalid": "La modifica è stata rifiutata così com’è.",
+    "forbidden": "Non puoi cambiare questo.",
+    "stepUp": "La regola più larga richiede un codice nuovo.",
+    "gone": "Questa regola non c’è più.",
+    "signedOut": "Sei uscito: accedi di nuovo.",
+    "offline": "Nessuna risposta dal server: non sappiamo se è stato salvato. Riprova.",
+    "read": "Il server non ha risposto come previsto.",
+    "readForbidden": "Non puoi leggerlo (quality.rules.view).",
+    "ruleGone": "La regola indicata dall’indirizzo non c’è più."
+  },
+  "done": {
+    "duties": "Chi può firmare cosa è salvato.",
+    "dutiesLoosened": "La regola più larga è salvata, con il tuo motivo.",
+    "results": "Le regole dei risultati sono salvate.",
+    "ruleSaved": "La regola è salvata.",
+    "ruleAdded": "La regola è aggiunta.",
+    "switchedOn_one": "{count} regola attivata.",
+    "switchedOn_other": "{count} regole attivate.",
+    "switchedOff_one": "{count} regola spenta.",
+    "switchedOff_other": "{count} regole spente.",
+    "removed_one": "{count} regola rimossa.",
+    "removed_other": "{count} regole rimosse.",
+    "tested": "Una prova sta arrivando alla tua campanella.",
+    "starter_one": "{count} regola suggerita aggiunta.",
+    "starter_other": "{count} regole suggerite aggiunte."
+  }
+}

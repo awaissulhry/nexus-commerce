@@ -198,12 +198,17 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/quality/holds',
   '/quality/holds/[id]/tag',
   '/quality/defects',
+  // B-W2b-118: Quality › Settings › Quality rules (SCR-260).
+  '/quality/settings',
   // B-W2a-68: Quality › Problems › Nonconformances (SCR-144 list and board, SCR-145 the NCR record).
   '/quality/ncr',
   '/quality/ncr/[id]',
   // B-W2a-65: Quality › Complaints (SCR-113 W2a part).
   '/quality/complaints',
   '/quality/complaints/[id]',
+  // B-W2b-138: Quality › Reports › Quality reports (SCR-147) and its report for paper or PDF (a new tab).
+  '/quality/reports',
+  '/quality/reports/print',
   '/compliance/certificates',
   '/compliance/certificates/[id]',
   '/compliance/labels',

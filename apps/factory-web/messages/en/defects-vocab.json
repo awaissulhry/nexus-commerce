@@ -1,0 +1,192 @@
+{
+  "head": {
+    "severity": "What each class of defect means and allows: the critical class is locked by the safety rule.",
+    "causes": "Why a defect happened, by the process that answers for it: an inspector or an NCR names one, the reports count them.",
+    "grades": "The grades of a hide and how much of it can be cut, and the hide defects incoming and cutting mark on a hide."
+  },
+  "common": {
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "loading": "Reading…"
+  },
+  "read": {
+    "failed": "This list could not be read"
+  },
+  "severity": {
+    "locked": "Locked",
+    "aql": "Its acceptance number comes from the plan's AQL.",
+    "acceptance_one": "Acceptance number {count} in every plan.",
+    "acceptance_other": "Acceptance number {count} in every plan.",
+    "defects_one": "{count} active defect of the library has this class.",
+    "defects_other": "{count} active defects of the library have this class.",
+    "rule": "A critical defect of the library is always recorded critical, never milder, and is never accepted: no use as is, no regrade, no concession.",
+    "fixed": "The texts are the factory's fixed words for now: no place keeps a company's own yet."
+  },
+  "words": {
+    "missing": "No words yet",
+    "missingTitle": "Words missing in another floor language",
+    "missingIn_one": "{language}: {count} code",
+    "missingIn_other": "{language}: {count} codes"
+  },
+  "col": {
+    "code": "Code",
+    "it": "Italian",
+    "en": "English",
+    "language": "Words ({language})",
+    "process": "Process",
+    "used": "Used",
+    "status": "Status",
+    "actions": "Actions",
+    "grade": "Grade",
+    "usableShare": "Usable share",
+    "words": "Words",
+    "severity": "Class",
+    "stages": "Stages"
+  },
+  "status": {
+    "active": "Active",
+    "retired": "Retired",
+    "retireOf": "Retire {code}",
+    "restoreOf": "Restore {code}"
+  },
+  "used": {
+    "none": "Not used",
+    "records_one": "{count} record",
+    "records_other": "{count} records"
+  },
+  "held": {
+    "noManage": "Changing the vocabulary needs quality.defects.manage over every company.",
+    "busy": "Wait: the last change is still being saved.",
+    "pickRows": "Tick the codes first.",
+    "allActive": "Every ticked code is active already.",
+    "allRetired": "Every ticked code is retired already.",
+    "used_one": "Used on {count} record: retire it instead (it stays on it).",
+    "used_other": "Used on {count} records: retire it instead (it stays on them)."
+  },
+  "bulk": {
+    "retire": "Retire {count}",
+    "restore": "Restore {count}",
+    "export": "Export {count}"
+  },
+  "causes": {
+    "title": "Cause codes",
+    "table": "Cause codes",
+    "add": "Add cause",
+    "count_one": "{count} cause",
+    "count_other": "{count} causes",
+    "fixed": "Code and process fixed",
+    "footnote": "A code and its process never change (records and reports keep them): retire one and add another. A used code is retired, never deleted.",
+    "newTitle": "Add a cause code",
+    "codeHint": "2 to 40 capital letters, digits and hyphens, starting with a letter (SEW-ERROR). Fixed once added.",
+    "processHint": "Which process answers for it. Fixed once added.",
+    "pickProcess": "Pick a process",
+    "otherLanguages": "The words in the other floor languages are typed in the list, beside Italian and English ({language}).",
+    "deleteTitle": "Delete {code}?",
+    "deleteBody": "Nothing names this code: it goes for good. A used code is retired instead.",
+    "empty": {
+      "title": "No cause code yet",
+      "body_one": "Start from the starter code, or add your own.",
+      "body_other": "Start from the {count} starter codes (one per process), or add your own."
+    }
+  },
+  "starter": {
+    "addCauses_one": "Add the starter code",
+    "addCauses_other": "Add the {count} starter codes",
+    "causesTitle_one": "{count} starter code is missing",
+    "causesTitle_other": "{count} starter codes are missing",
+    "addGrades": "Add the starter grades",
+    "gradesTitle_one": "{count} starter grade is missing",
+    "gradesTitle_other": "{count} starter grades are missing"
+  },
+  "keys": {
+    "addCause": "Add cause",
+    "addGrade": "Add grade"
+  },
+  "row": {
+    "retire": "Retire",
+    "restore": "Restore",
+    "delete": "Delete",
+    "copyCode": "Copy the code",
+    "menu": "Actions of {code}"
+  },
+  "grades": {
+    "title": "Leather grades",
+    "table": "Leather grades",
+    "add": "Add grade",
+    "count_one": "{count} grade",
+    "count_other": "{count} grades",
+    "fixed": "Code fixed",
+    "shareOf": "Usable share of grade {code} (percent)",
+    "neverDeleted": "A grade is retired, never deleted: hides keep it.",
+    "footnote": "The usable share is the default of an article with no rule of its own. A grade is retired, never deleted: hides, rules and marks keep it.",
+    "newTitle": "Add a leather grade",
+    "codeHint": "1 to 10 capital letters, digits and hyphens (A, B, 1-ST). Fixed once added.",
+    "shareHint": "The percent of a hide of this grade that can be cut, from 0 to 100 (72,5).",
+    "empty": {
+      "title": "No leather grade yet",
+      "body": "Start from the grades A to D, or add your own."
+    }
+  },
+  "class": {
+    "CRITICAL": "Critical",
+    "MAJOR": "Major",
+    "MINOR": "Minor"
+  },
+  "stages": {
+    "every": "Every stage"
+  },
+  "stage": {
+    "AUDIT": "Audit",
+    "CUSTOMER": "Customer",
+    "CUTTING": "Cutting",
+    "FINAL": "Final",
+    "INCOMING": "Incoming",
+    "IN_LINE": "In-line",
+    "PACKING": "Packing",
+    "STOCK": "Stock"
+  },
+  "hide": {
+    "title": "Hide defects",
+    "table": "Hide defects",
+    "intro": "The defects of the library category {category} that apply at incoming or cutting: the marks a hide carries. Change them in the Defects tab.",
+    "noCategory": "The defect library has no LEATHER category yet: its starter set adds it.",
+    "open": "Open in the library",
+    "count_one": "{count} hide defect",
+    "count_other": "{count} hide defects",
+    "empty": {
+      "title": "No hide defect",
+      "body": "Add defects under the LEATHER category of the library for incoming or cutting."
+    }
+  },
+  "process": {
+    "MATERIAL": "Material",
+    "SUPPLIER": "Supplier",
+    "CUTTING": "Cutting",
+    "SEWING": "Sewing",
+    "FINISHING": "Finishing",
+    "HANDLING": "Handling",
+    "DESIGN": "Design",
+    "MEASUREMENT": "Measurement"
+  },
+  "problem": {
+    "labelIt": "Give the Italian words.",
+    "labelEn": "Give the English words.",
+    "labelI18n": "Those words are not valid for that language.",
+    "tooLong": "At most 80 characters.",
+    "sortOrder": "The position is a whole number from 0.",
+    "usableShare": "A percent from 0 to 100, at most two decimals (72,5).",
+    "failed": "Something went wrong: try again.",
+    "stale": "Someone changed this code meanwhile: it was read again; make your change again.",
+    "codeTaken": "This code is taken: pick another.",
+    "inUse": "This code is used: retire it instead (it stays on its records).",
+    "full": "The list is full: retire or delete some codes first.",
+    "conflict": "This clashes with what is stored: read the page again.",
+    "code": "A code is capital letters, digits and hyphens, starting with a letter.",
+    "process": "Pick the process that answers for it.",
+    "language": "Those words are not valid for that language.",
+    "invalid": "The change was refused as it is.",
+    "forbidden": "You may not change the vocabulary (quality.defects.manage over every company).",
+    "gone": "This code is no longer there.",
+    "offline": "No answer from the server: we do not know whether it was saved. Try again."
+  }
+}

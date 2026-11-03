@@ -6,6 +6,8 @@ import { failed, ready } from '../../library/model'
 import { CERTIFICATES, LEATHER, LIBRARY_COLOURS, LOTS, PROTECTOR, STOCK, SUPPLIER_ROWS, TEXTILE, withoutCost } from '../demo'
 import type { MaterialRecordViewModel } from './record-model'
 import { MaterialRecordView } from './view/MaterialRecordView'
+import { GRADE_ROWS, GRADES_VIEW, gradesModel, REFUSED_MARKS, SAVING_MARKS, WAITING_MARKS } from './grades/demo'
+import { NO_GRADES } from './grades/grades-model'
 
 /**
  * SCR-048 the material record — made-up data only: a chrome-tanned leather bought by the hide (52.5 ft²), stocked in
@@ -13,7 +15,10 @@ import { MaterialRecordView } from './view/MaterialRecordView'
  * composition; a protector covered by a made-up EN 1621 certificate. Role cases: the Owner, a product developer (no
  * money), quality and sales (read). B-W2a-69: Suppliers & prices › Supplier prices (`supplier-prices-*`): Purchasing's
  * approved sources of the leather, read only — normal, no cost grain, only the default supplier, none, couldn't load,
- * loading, and a role without purchasing.view.
+ * loading, and a role without purchasing.view. B-W2b-131: Properties & grades › Grades and usable area (`grades-*`): the
+ * leather's grades with the article's own rules and the grades' defaults, saving, waiting offline, refused, read only (no
+ * edit right, a material of every company, archived), not tracked by the hide, none, loading, couldn't load, the selection
+ * and the earlier rules.
  */
 
 const base: MaterialRecordViewModel = {
@@ -33,6 +38,7 @@ const base: MaterialRecordViewModel = {
   dialog: null,
   refused: null,
   supplierPrices: pricesModel(LEATHER.id, { defaultSupplier: LEATHER.defaultSupplier }),
+  grades: gradesModel(),
 }
 const as = (role: 'developer' | 'quality' | 'sales', model: MaterialRecordViewModel): MaterialRecordViewModel => {
   const sources = sourcesCan(ROLE_PERMISSIONS[role])
@@ -46,8 +52,10 @@ const as = (role: 'developer' | 'quality' | 'sales', model: MaterialRecordViewMo
   }
 }
 const prices = (over: Parameters<typeof pricesModel>[1]): MaterialRecordViewModel => ({ ...base, tab: 'suppliers', supplierPrices: pricesModel(LEATHER.id, { defaultSupplier: LEATHER.defaultSupplier, ...over }) })
-const protector: MaterialRecordViewModel = { ...base, material: { status: 'ready', value: PROTECTOR }, certificates: ready(CERTIFICATES), lots: ready({ lots: [], capped: false }), stock: ready({ rows: [], totals: [], truncated: false }) }
-const textile: MaterialRecordViewModel = { ...base, material: { status: 'ready', value: TEXTILE }, lots: ready({ lots: [], capped: true }), stock: ready({ rows: [], totals: [], truncated: false }) }
+const protector: MaterialRecordViewModel = { ...base, material: { status: 'ready', value: PROTECTOR }, certificates: ready(CERTIFICATES), lots: ready({ lots: [], capped: false }), stock: ready({ rows: [], totals: [], truncated: false }), grades: NO_GRADES }
+const textile: MaterialRecordViewModel = { ...base, material: { status: 'ready', value: TEXTILE }, lots: ready({ lots: [], capped: true }), stock: ready({ rows: [], totals: [], truncated: false }), grades: NO_GRADES }
+/** B-W2b-131: the Properties & grades tab of the leather with its grades section as given. */
+const grades = (over: Parameters<typeof gradesModel>[0] = {}, view = GRADES_VIEW, model: MaterialRecordViewModel = base): MaterialRecordViewModel => ({ ...model, tab: 'properties', grades: gradesModel(over, view) })
 
 export const designScreen = defineDesignScreen<MaterialRecordViewModel>({
   screen: 'SCR-048',
@@ -64,6 +72,30 @@ export const designScreen = defineDesignScreen<MaterialRecordViewModel>({
     { id: 'colours-none', label: 'Colours: none', model: { ...protector, tab: 'colours' } },
     { id: 'properties-leather', label: 'Properties: leather', model: { ...base, tab: 'properties' } },
     { id: 'properties-textile', label: 'Properties: composition', model: { ...textile, tab: 'properties' }, note: 'Fibres add up to 100 % before Save (held with the gap).' },
+    {
+      id: 'grades',
+      label: 'B-W2b-131 — Grades and usable area (Owner): A by this article (88 %), B on the grade default, C with its panels, a retired grade D',
+      model: grades(),
+      note: 'Each cell saves by itself (Enter or leaving it; Esc puts the stored value back). Typing into B creates the article’s own rule.',
+    },
+    { id: 'grades-saving', label: 'B-W2b-131 — Grades: two cells on their way (B’s share, C’s panels)', model: grades({ marks: SAVING_MARKS, busy: true }) },
+    { id: 'grades-offline', label: 'B-W2b-131 — Grades offline: two cell edits wait on this page', model: grades({ marks: WAITING_MARKS, offline: true }), note: 'Nothing else is kept; they go when the browser is back online.' },
+    { id: 'grades-refused', label: 'B-W2b-131 — Grades: a share of 120 refused, a rule changed meanwhile (read again)', model: grades({ marks: REFUSED_MARKS }), note: 'The "!" says why in our words; the stored value shows again.' },
+    { id: 'grades-selected', label: 'B-W2b-131 — Grades: A and C selected — Back to the grade default for 2', model: grades({ selected: [GRADE_ROWS[0]!.grade.id, GRADE_ROWS[2]!.grade.id] }) },
+    { id: 'grades-selected-held', label: 'B-W2b-131 — Grades: only B selected — held (no rule of this article to retire)', model: grades({ selected: [GRADE_ROWS[1]!.grade.id] }) },
+    { id: 'grades-default-done', label: 'B-W2b-131 — Grades: back to the grade default (notice)', model: grades({ notice: { key: 'material.grades.notice.default', tone: 'success', params: { count: 1 } } }) },
+    { id: 'grades-history', label: 'B-W2b-131 — Grades: the earlier rules of C, each with Use again (held while C has a rule)', model: grades({ historyOpen: true }) },
+    { id: 'grades-read-only', label: 'B-W2b-131 — Grades read only (quality: no product.materials.manage): banner, cells as text', model: as('quality', grades({}, { ...GRADES_VIEW, canManage: false })) },
+    {
+      id: 'grades-every-company',
+      label: 'B-W2b-131 — Grades of a material of every company, for an Owner over one company: read only, said why',
+      model: grades({}, { ...GRADES_VIEW, material: { ...GRADES_VIEW.material, companyId: null }, canManage: false }),
+    },
+    { id: 'grades-archived', label: 'B-W2b-131 — Grades of an archived leather: read only', model: grades({ archived: true }, GRADES_VIEW, { ...base, material: { status: 'ready', value: { ...LEATHER, status: 'ARCHIVED' } } }) },
+    { id: 'grades-not-leather', label: 'B-W2b-131 — Grades: a leather counted by the lot, not by the hide (grades do not apply)', model: grades({}, { ...GRADES_VIEW, material: { ...GRADES_VIEW.material, tracksHides: false }, grades: [], canManage: false }) },
+    { id: 'grades-empty', label: 'B-W2b-131 — Grades: no grade set up yet', model: grades({}, { ...GRADES_VIEW, grades: [] }) },
+    { id: 'grades-loading', label: 'B-W2b-131 — Grades: loading (the rest of the tab is usable)', model: grades({ part: { status: 'loading' } }) },
+    { id: 'grades-error', label: "B-W2b-131 — Grades: couldn't load + Try again (the rest of the record stays usable)", model: grades({ part: { status: 'error', problem: 'problem.read.unavailable' } }) },
     { id: 'suppliers', label: 'Suppliers & prices (Owner)', model: { ...base, tab: 'suppliers' }, note: 'The standard cost per ft², per hide and per dm²; set with a reason for the audit row.' },
     { id: 'suppliers-developer', label: 'Suppliers & prices: no cost grain', model: { ...as('developer', base), tab: 'suppliers' }, note: 'The production manager reads no purchasing either: Supplier prices says what is missing.' },
     { id: 'supplier-prices', label: 'Supplier prices (Owner)', model: prices({}), note: 'Purchasing\u2019s approved sources of the leather: primary first; Open the supplier goes to its Items & prices.' },

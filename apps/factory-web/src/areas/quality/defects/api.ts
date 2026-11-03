@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CAUSE_PROCESSES } from '@nexus/factory-domain/quality/defects/causes'
 import { DEFECT_CLASSES, DISPOSITION_FOLLOW_UPS, DISPOSITION_MOVES, DISPOSITION_OUTCOMES, QUALITY_STAGES } from '@nexus/factory-domain/quality/defects/rules'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { completeUpload, presignedSchema, requestUpload } from '../../../record-panels/api'
@@ -203,3 +204,144 @@ export const editDisposition = (api: ApiClient, id: string, version: number, edi
 
 export const addStandardDispositions = (api: ApiClient, idempotencyKey: string) =>
   api.post('/quality/dispositions/standard', { body: {}, schema: z.object({ added: z.array(z.string()) }), idempotencyKey })
+
+// ---- B-W2b-118: the severity classes, the cause codes, the leather grades (B-W2b-90's routes) ---------------------------------
+
+const itEn = z.object({ it: z.string(), en: z.string() })
+
+export const severitySchema = z.object({
+  classes: z.array(z.object({ class: klass, rank: z.number().int(), words: itEn, meaning: itEn, acceptanceNumber: z.number().int().nullable(), locked: z.boolean(), law: z.string().nullable(), defects: z.number().int() })),
+  safetyRule: z.object({ it: z.string(), en: z.string(), law: z.string() }),
+  editable: z.boolean(),
+})
+export type Severity = z.infer<typeof severitySchema>
+
+/** GET /quality/severity (quality.defects.view): the classes, the safety rule; the texts are fixed (`editable` false). */
+export const readSeverity = (api: ApiClient, signal?: AbortSignal) => api.get('/quality/severity', { schema: severitySchema, signal })
+
+const process = z.enum(CAUSE_PROCESSES)
+
+export const causeSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  labelIt: z.string(),
+  labelEn: z.string(),
+  labelI18n: z.record(z.string(), z.string()),
+  process,
+  processWords: itEn,
+  sortOrder: z.number().int(),
+  active: z.boolean(),
+  usedCount: z.number().int(),
+  missingLanguages: z.array(z.string()),
+  version: z.number().int(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+export type Cause = z.infer<typeof causeSchema>
+
+export const causesSchema = z.object({
+  causes: z.array(causeSchema),
+  processes: z.array(z.object({ process, it: z.string(), en: z.string() })),
+  languages: z.array(z.string()),
+  starterMissing: z.array(z.string()),
+  canManage: z.boolean(),
+})
+export type Causes = z.infer<typeof causesSchema>
+
+export const readCauses = (api: ApiClient, signal?: AbortSignal) => api.get('/quality/causes', { schema: causesSchema, signal })
+
+export interface NewCauseBody {
+  code: string
+  process: (typeof CAUSE_PROCESSES)[number]
+  labelIt: string
+  labelEn: string
+}
+
+export const createCause = (api: ApiClient, body: NewCauseBody, idempotencyKey: string) => api.post('/quality/causes', { body, schema: z.object({ cause: causeSchema }), idempotencyKey })
+
+export interface VocabularyEdit {
+  labelIt?: string
+  labelEn?: string
+  labelI18n?: Record<string, string | null>
+  sortOrder?: number
+  active?: boolean
+  /** A grade's usable share ("72.50"). */
+  usableShare?: string
+}
+
+export const editCause = (api: ApiClient, id: string, version: number, edit: VocabularyEdit, idempotencyKey: string) =>
+  api.request('PATCH', `/quality/causes/${seg(id)}`, { body: { version, ...edit }, schema: z.object({ cause: causeSchema, retireWords: z.string().nullable() }), idempotencyKey })
+
+export const deleteCause = (api: ApiClient, id: string, version: number, idempotencyKey: string) =>
+  api.request('DELETE', `/quality/causes/${seg(id)}`, { query: { version }, schema: z.object({ deleted: z.string(), code: z.string() }), idempotencyKey })
+
+export const addStarterCauses = (api: ApiClient, idempotencyKey: string) => api.post('/quality/causes/starter', { body: {}, schema: z.object({ added: z.array(z.string()) }), idempotencyKey })
+
+export const gradeSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  labelIt: z.string(),
+  labelEn: z.string(),
+  labelI18n: z.record(z.string(), z.string()),
+  usableShare: z.string(),
+  sortOrder: z.number().int(),
+  active: z.boolean(),
+  usedCount: z.number().int(),
+  missingLanguages: z.array(z.string()),
+  version: z.number().int(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+export type Grade = z.infer<typeof gradeSchema>
+
+export const hideDefectSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  labelIt: z.string(),
+  labelEn: z.string(),
+  labelI18n: z.record(z.string(), z.string()),
+  icon: z.string().nullable(),
+  colour: z.string().nullable(),
+  pictureFileId: z.string().nullable(),
+  severity: klass,
+  stages: z.array(stage),
+  active: z.boolean(),
+  missingLanguages: z.array(z.string()),
+  version: z.number().int(),
+})
+export type HideDefect = z.infer<typeof hideDefectSchema>
+
+export const gradesSchema = z.object({
+  grades: z.array(gradeSchema),
+  hideCategory: z.object({ id: z.string(), code: z.string(), labelIt: z.string(), labelEn: z.string(), icon: z.string().nullable(), colour: z.string().nullable(), active: z.boolean() }).nullable(),
+  hideDefects: z.array(hideDefectSchema),
+  hideStages: z.array(stage),
+  languages: z.array(z.string()),
+  starterMissing: z.array(z.string()),
+  canManage: z.boolean(),
+})
+export type Grades = z.infer<typeof gradesSchema>
+
+export const readGrades = (api: ApiClient, signal?: AbortSignal) => api.get('/quality/grades', { schema: gradesSchema, signal })
+
+export interface NewGradeBody {
+  code: string
+  labelIt: string
+  labelEn: string
+  usableShare: string
+}
+
+export const createGrade = (api: ApiClient, body: NewGradeBody, idempotencyKey: string) => api.post('/quality/grades', { body, schema: z.object({ grade: gradeSchema }), idempotencyKey })
+
+export const editGrade = (api: ApiClient, id: string, version: number, edit: VocabularyEdit, idempotencyKey: string) =>
+  api.request('PATCH', `/quality/grades/${seg(id)}`, { body: { version, ...edit }, schema: z.object({ grade: gradeSchema, retireWords: z.string().nullable() }), idempotencyKey })
+
+export const addStarterGrades = (api: ApiClient, idempotencyKey: string) => api.post('/quality/grades/starter', { body: {}, schema: z.object({ added: z.array(z.string()) }), idempotencyKey })
+
+export const coverageSchema = z.object({
+  languages: z.array(z.object({ language: z.string(), sites: z.number().int(), missing: z.object({ DEFECTS: z.array(z.string()), CAUSES: z.array(z.string()), GRADES: z.array(z.string()) }), complete: z.boolean() })),
+})
+export type Coverage = z.infer<typeof coverageSchema>
+
+/** GET /quality/vocabulary/coverage: per other floor language, the active codes with no words in it. */
+export const readCoverage = (api: ApiClient, signal?: AbortSignal) => api.get('/quality/vocabulary/coverage', { schema: coverageSchema, signal })

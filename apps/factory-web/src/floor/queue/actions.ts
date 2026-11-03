@@ -62,6 +62,8 @@ export const WHAT_KEY = {
   'production.offStandard.end': 'noBundleEnd',
   // B-W2b-102: a machine request's progress (Seen, On my way, It works) kept on the tablet.
   'plant.request.progress': 'progress',
+  // B-W2b-126: a bundle scanned in or out at a repair station.
+  'production.repair.scan': 'repair',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

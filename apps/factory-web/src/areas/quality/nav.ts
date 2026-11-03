@@ -1,4 +1,4 @@
-import { ClipboardCheck, FileWarning, Hand, ListTree, MessageSquareWarning } from 'lucide-react'
+import { BarChart3, ClipboardCheck, FileWarning, Hand, ListTree, MessageSquareWarning, Scale } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -39,11 +39,21 @@ export const officeArea: OfficeAreaNav = {
           { id: 'quality-complaints', label: 'shell:nav.quality.complaints', href: '/quality/complaints', icon: MessageSquareWarning, permission: 'quality.complaints.view' },
         ],
       },
+      // B-W2b-138 SCR-147: Quality › Reports › Quality reports (GET /quality/reports/kpis, quality.reports.view); before Settings (the tree's order).
+      {
+        id: 'quality-reports',
+        label: 'shell:nav.quality.reportsGroup',
+        items: [{ id: 'quality-reports', label: 'shell:nav.quality.reports', href: '/quality/reports', icon: BarChart3, permission: 'quality.reports.view' }],
+      },
       {
         // B-W2a-67 SCR-079: Settings › Defects & dispositions (the defect library and the disposition codes).
         id: 'quality-settings',
         label: 'shell:nav.quality.settings',
-        items: [{ id: 'quality-defects', label: 'shell:nav.quality.defects', href: '/quality/defects', icon: ListTree, permission: 'quality.defects.view' }],
+        items: [
+          { id: 'quality-defects', label: 'shell:nav.quality.defects', href: '/quality/defects', icon: ListTree, permission: 'quality.defects.view' },
+          // B-W2b-118 SCR-260: Settings › Quality rules (who may sign what, alerts and escalation, result rules; quality.rules.view).
+          { id: 'quality-rules', label: 'shell:nav.quality.rules', href: '/quality/settings', icon: Scale, permission: 'quality.rules.view' },
+        ],
       },
     ],
   },

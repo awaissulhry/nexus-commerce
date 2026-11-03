@@ -111,7 +111,9 @@
     "standard_one": "{count} codice standard aggiunto.",
     "standard_other": "{count} codici standard aggiunti.",
     "starter_one": "{count} codice del set iniziale aggiunto.",
-    "starter_other": "{count} codici del set iniziale aggiunti."
+    "starter_other": "{count} codici del set iniziale aggiunti.",
+    "addedCause": "Causa {code} aggiunta.",
+    "addedGrade": "Scelta {code} aggiunta."
   },
   "drawer": {
     "categorySub_one": "Una categoria di {count} difetto",
@@ -331,7 +333,10 @@
     "stale": "Qualcuno ha modificato questo codice nel frattempo: è stato riletto; rifai la modifica.",
     "stockMoveReason": "Questo esito non consente quel movimento.",
     "tooLong": "Al massimo 80 caratteri.",
-    "zone": "Scegli una zona della mappa del capo."
+    "zone": "Scegli una zona della mappa del capo.",
+    "full": "L’elenco è pieno: prima ritira o cancella qualche codice.",
+    "process": "Scegli il processo che ne risponde.",
+    "usableShare": "Una percentuale da 0 a 100, al massimo due decimali (72,5)."
   },
   "readOnly": {
     "title": "Puoi leggere la libreria, non modificarla"

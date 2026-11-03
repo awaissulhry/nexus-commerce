@@ -345,12 +345,18 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'quality.complaints', title: 'Complaints', titleIt: 'Reclami', wave: 'W2a', href: '/quality/complaints' },
         ],
       },
+      // W2b: B-W2b-138 Quality reports (SCR-147). The tree's Reports group, after Problems and before Settings.
+      { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'quality.reports', title: 'Quality reports', titleIt: 'Report qualità', wave: 'W2b', href: '/quality/reports' }] },
       // W2a: B-W2a-67 Defects & dispositions (SCR-079). After Problems (the tree's order).
       {
         label: 'Settings',
         labelIt: 'Impostazioni',
         hideLabel: false,
-        pages: [{ id: 'quality.defects', title: 'Defects & dispositions', titleIt: 'Difetti e destinazioni', wave: 'W2a', href: '/quality/defects' }],
+        pages: [
+          { id: 'quality.defects', title: 'Defects & dispositions', titleIt: 'Difetti e destinazioni', wave: 'W2a', href: '/quality/defects' },
+          // W2b: B-W2b-118 Quality rules (SCR-260).
+          { id: 'quality.settings', title: 'Quality rules', titleIt: 'Regole qualità', wave: 'W2b', href: '/quality/settings' },
+        ],
       },
     ],
   },

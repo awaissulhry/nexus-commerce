@@ -37,4 +37,16 @@ export const manifest = defineManifest({
   'POST /quality/ncr/:ncrId/decisions/:decisionId/approve': { audiences: ['office'], permission: 'quality.ncr.approve', scope: 'record' },
   'POST /quality/ncr/:ncrId/decisions/:decisionId/carry-out': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
   'POST /quality/ncr/:ncrId/decisions/:decisionId/rework': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
+  // B-W2b-113: the cost (the cost grain at the NCR's site is checked in the handler; every amount is marked money.cost),
+  // the concessions asked of the customer (the office records their answer until W2b-3's link page), the report (ncr-pdf).
+  'GET /quality/ncr/:ncrId/cost': { audiences: ['office'], permission: 'quality.ncr.view', scope: 'record' },
+  'POST /quality/ncr/:ncrId/cost/lines': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
+  'PATCH /quality/ncr/:ncrId/cost/lines/:lineId': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
+  'DELETE /quality/ncr/:ncrId/cost/lines/:lineId': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
+  'POST /quality/ncr/:ncrId/cost/compute': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
+  'POST /quality/ncr/:ncrId/concessions': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
+  'PATCH /quality/ncr/:ncrId/concessions/:concessionId': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
+  'POST /quality/ncr/:ncrId/concessions/:concessionId/answer': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
+  'GET /quality/ncr/:ncrId/report': { audiences: ['office'], permission: 'quality.ncr.view', scope: 'record' },
+  'POST /quality/ncr/:ncrId/report': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
 })

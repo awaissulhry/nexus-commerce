@@ -14,7 +14,37 @@ import it_ from '../../../../../messages/it/ncr-record.json'
 import enNcr from '../../../../../messages/en/ncr.json'
 import { RECORD, RECORD_OPEN, STOCK } from '../demo/fixtures'
 import { designScreen } from './fixtures'
-import { carryBodyOf, carryGap, carryHeld, carryKindOf, changesOf, draftHeld, draftOf, EMPTY_CARRY, holdBodyOf, holdSubjects, linkGroupsOf, linesTotal, plainQuantity, stockLinesOf, TIME_ZONE } from './view-model'
+import { CAPA_STATUSES } from '@nexus/factory-domain/quality/capa/rules'
+import { CONCESSION_STATUSES } from '@nexus/factory-domain/quality/ncr/concession'
+import { COST_KINDS } from '@nexus/factory-domain/quality/ncr/cost'
+import {
+  answerConcessionHeld,
+  answerDraftHeld,
+  askConcessionHeld,
+  askDraftHeld,
+  carryBodyOf,
+  carryGap,
+  carryHeld,
+  carryKindOf,
+  changesOf,
+  costDraftHeld,
+  costEditHeld,
+  draftHeld,
+  draftOf,
+  EMPTY_CARRY,
+  escalateRecordHeld,
+  holdBodyOf,
+  holdSubjects,
+  linkGroupsOf,
+  linesTotal,
+  majorText,
+  minorOf,
+  NEW_CONCESSION,
+  plainQuantity,
+  stockLinesOf,
+  TIME_ZONE,
+} from './view-model'
+import { ncrCan } from '../model'
 
 // The DS Modal opens in a portal after mount (nothing on a server render): drawn in place here, so every dialog's words
 // and its code are rendered and checked too.
@@ -50,8 +80,9 @@ describe('SCR-145 the NCR record: every design case draws in both languages with
 
   it('the garments-in-work scrap says why it is held (never a fake success)', () => {
     const item = designScreen.cases.find((entry) => entry.id === 'carry-held-garments')!
-    expect(render(item.model, 'en')).toContain('Garments still in work are scrapped at the scan')
-    expect(render(item.model, 'it')).toContain('I capi ancora in lavorazione si scartano alla lettura')
+    // B-W2b-113: the words point to the plan's rework scrap path.
+    expect(render(item.model, 'en')).toContain('Garments still in work have no stock to move')
+    expect(render(item.model, 'it')).toContain('I capi ancora in lavorazione non hanno merce da movimentare')
   })
 
   it('the dialogs draw: the carry-out lines, the claim, the close checklist, the hold fields', () => {
@@ -80,7 +111,7 @@ describe('SCR-145 the NCR record: every design case draws in both languages with
     const sources = [...readdirSync(dir).map((name) => join(dir, name)), join(__dirname, 'NcrRecord.tsx'), join(__dirname, 'view-model.ts')].map((file) => readFileSync(file, 'utf8')).join('\n')
     const own = [...sources.matchAll(/\br\('([a-zA-Z.]+)'/g)].map((match) => match[1]!)
     const shared = [...sources.matchAll(/\bt\('([a-zA-Z.]+)'/g)].map((match) => match[1]!)
-    const keyed = [...sources.matchAll(/(?:key: |return )'((?:carry|hold|problem|done|decide|rework|addAction|link|reason|photos|cell|disposition|linked|remove|register|cancelNcr|cancelAction|closeHold)\.[a-zA-Z.]+)'/g)].map((match) => match[1]!)
+    const keyed = [...sources.matchAll(/(?:key: |return |\? )'((?:carry|hold|problem|done|decide|rework|addAction|link|reason|photos|cell|disposition|linked|remove|register|cancelNcr|cancelAction|closeHold|cost|concession|escalate|report|file)\.[a-zA-Z.]+)'/g)].map((match) => match[1]!)
     expect(own.length).toBeGreaterThan(100)
     for (const key of own) expect(has(flat, key), `ncr-record: ${key}`).toBe(true)
     for (const key of shared) expect(has(flatNcr, key), `ncr: ${key}`).toBe(true)
@@ -96,7 +127,13 @@ describe('SCR-145 the NCR record: every design case draws in both languages with
       for (const state of DECISION_STATES) has(`decisionState.${state}`)
       for (const outcome of DISPOSITION_OUTCOMES) has(`outcome.${outcome}`)
       for (const move of DISPOSITION_MOVES) has(`move.${move}`)
-      for (const tab of ['problem', 'containment', 'disposition', 'linked', 'activity']) has(`tab.${tab}`)
+      for (const tab of ['problem', 'containment', 'disposition', 'cost', 'linked', 'activity']) has(`tab.${tab}`)
+      // B-W2b-113
+      for (const kind of COST_KINDS) has(`cost.kind.${kind}`)
+      for (const type of ['NcrDispositionLine', 'ReworkOrder', 'StockMove', 'other']) has(`cost.record.${type}`)
+      for (const status of CONCESSION_STATUSES) has(`concession.status.${status}`)
+      for (const status of CAPA_STATUSES) has(`capaStatus.${status}`)
+      for (const language of ['it', 'en']) has(`report.language.${language}`)
       for (const kind of ['stock', 'repair', 'claim', 'stockAndClaim', 'rework', 'none']) has(`carryKind.${kind}`)
     }
   })
@@ -163,5 +200,56 @@ describe('the record rules', () => {
     expect(groups.source.map((link) => link.recordType)).toEqual(['Inspection'])
     expect(groups.follow.map((link) => link.recordType)).toEqual(['ReworkOrder'])
     expect(groups.other.map((link) => link.recordType)).toEqual(['WorkOrder'])
+  })
+})
+
+describe('B-W2b-113: cost, concessions, escalate, cause', () => {
+  const owner = ncrCan(['quality.ncr.view', 'quality.ncr.manage', 'money.cost', 'quality.capa.view', 'parties.view'])
+  const viewer = ncrCan(['quality.ncr.view'])
+
+  it('amounts are typed in the currency\'s units and kept in cents', () => {
+    expect(minorOf('12,5')).toBe(1250)
+    expect(minorOf('12.50')).toBe(1250)
+    expect(minorOf('0')).toBe(0)
+    expect(minorOf('-3')).toBeNull()
+    expect(minorOf('1.234')).toBeNull()
+    expect(majorText(1250)).toBe('12.50')
+    expect(majorText(5)).toBe('0.05')
+    expect(costDraftHeld({ kind: 'OTHER', description: '', amount: '10' })).toBe('cost.heldOther')
+    expect(costDraftHeld({ kind: 'FREIGHT', description: '', amount: 'x' })).toBe('cost.heldAmount')
+    expect(costDraftHeld({ kind: 'FREIGHT', description: '', amount: '10' })).toBeNull()
+  })
+
+  it('the cost and a concession are held by the stage, the severity and the right', () => {
+    expect(costEditHeld(RECORD, owner)).toBeNull()
+    expect(costEditHeld({ ...RECORD, ncr: { ...RECORD.ncr, stage: 'CLOSED' } }, owner)?.key).toBe('cost.heldClosed')
+    expect(costEditHeld(RECORD, viewer)?.key).toBe('held.noManage')
+    expect(askConcessionHeld({ ...RECORD, ncr: { ...RECORD.ncr, severity: 'CRITICAL' } }, owner)?.key).toBe('concession.heldCritical')
+    expect(askConcessionHeld(RECORD, owner)).toBeNull()
+    expect(askDraftHeld(NEW_CONCESSION)).toBe('concession.heldParty')
+    expect(askDraftHeld({ ...NEW_CONCESSION, partyId: 'p', ask: 'x', proposal: 'y' })).toBeNull()
+    expect(answerDraftHeld({ status: 'REFUSED', answer: '', answeredBy: 'Demo Buyer', answeredAt: '2026-10-29T10:15' })).toBe('concession.heldWhy')
+    expect(answerDraftHeld({ status: 'ACCEPTED', answer: '', answeredBy: 'Demo Buyer', answeredAt: '2026-10-29T10:15' })).toBeNull()
+    expect(answerConcessionHeld('ACCEPTED', owner)?.key).toBe('concession.heldAnswered')
+  })
+
+  it('escalate is held once escalated, for a cancelled NCR and without the rights; the cause is part of the draft', () => {
+    expect(escalateRecordHeld(RECORD, owner)).toBeNull()
+    expect(escalateRecordHeld({ ...RECORD, capaRecord: { id: 'c', number: 'CAPA-1', title: 't', type: 'CAPA', status: 'PLAN' } }, owner)?.key).toBe('escalate.heldAlready')
+    expect(escalateRecordHeld({ ...RECORD, capaElsewhere: true }, owner)?.key).toBe('escalate.heldElsewhere')
+    expect(escalateRecordHeld(RECORD, viewer)?.key).toBe('escalate.heldNoRight')
+    const draft = { ...draftOf(RECORD.ncr, TIME_ZONE), causeCodeId: 'cause-1' }
+    expect(changesOf(RECORD.ncr, draft, TIME_ZONE)).toEqual({ causeCodeId: 'cause-1' })
+  })
+
+  it('the new cases draw what they promise', () => {
+    const html = (id: string, locale: 'en' | 'it' = 'en') => render(designScreen.cases.find((entry) => entry.id === id)!.model, locale)
+    expect(html('cost')).toContain('Cost of this NCR')
+    expect(html('cost')).toMatch(/540[.,]50/)
+    expect(html('cost-no-grain')).toContain('You need the cost grain to see costs')
+    expect(html('concessions')).toContain('Concession asked of the customer')
+    expect(html('concession-critical')).toContain('never sold under a concession')
+    expect(html('escalated')).toContain('CAPA-DEMO-0004')
+    expect(html('rework-scrap', 'it')).toContain('Scarta tutto')
   })
 })

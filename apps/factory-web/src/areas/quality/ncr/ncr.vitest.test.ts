@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -15,11 +16,13 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { LIST_PAGES, recordAddress } from '../../../lib/records/record-links'
 import { permissionCheck } from '../../../lib/session/session'
 import { OFFICE_PAGES, officeNavFor } from '../../../shell/nav/office-nav'
-import { assignNcrs, editNcr, getNcrSettings, moveNcr, ncrPrefill, raiseNcr, saveNcrSettings } from './api'
+import { CAPA_TYPES, ESCALATION_REASONS } from '@nexus/factory-domain/quality/capa/rules'
+import { addToCapa, assignNcrs, editNcr, escalatePreview, getNcrSettings, moveNcr, ncrPrefill, openCapaFrom, raiseNcr, reportHref, saveNcrSettings, type EscalatePreview } from './api'
 import { CONTAINMENT_SETTINGS, LANES, PREFILL_BUNDLE, PREFILL_DEFECTS, RECORD, RECORD_OPEN, RECORD_READY, ROWS } from './demo/fixtures'
 import { designScreen as listScreen } from './list/fixtures'
 import { newHeldKey } from './list/view/NewNcrDialog'
-import { draftOf, EMPTY_DRAFT } from './list/view-model'
+import { bulkEscalateHeld, costCsv, costText, draftOf, EMPTY_DRAFT, escalatableOf, rowEscalateHeld } from './list/view-model'
+import { dayAfter, ESCALATE_CODES, escalateHeld, escalateModelOf, escalateRefusal, goingOf, recordProblem, withPreview } from './view/EscalateDialog'
 import {
   assignRefusalKey,
   assignRefusals,
@@ -58,6 +61,125 @@ import { officeArea } from '../nav'
  */
 
 const params = (text: string) => new URLSearchParams(text)
+
+// ---- B-W2b-113: the CAPA and Cost columns, Escalate to CAPA -------------------------------------------------------------
+
+const ESC_PREVIEW: EscalatePreview = {
+  records: [
+    { recordType: 'Nonconformance', recordId: 'n1', number: 'NCR-T-1', title: 'Open seam', companyId: 'c1', state: 'OPEN', reasons: ['CRITICAL'], escalatedTo: null, problem: null },
+    { recordType: 'Nonconformance', recordId: 'n2', number: 'NCR-T-2', title: 'Loose zip', companyId: 'c1', state: 'CLOSED', reasons: [], escalatedTo: { capaId: 'k9', number: 'CAPA-T-9', status: 'ACT' }, problem: { path: 'held/ESCALATED_ELSEWHERE', message: 'NCR-T-2 is escalated to CAPA-T-9 (act).' } },
+  ],
+  companyId: 'c1',
+  sameCompany: true,
+  ready: false,
+  capas: [{ id: 'k1', number: 'CAPA-T-1', title: 'Seams', type: 'CAPA', status: 'ACT', customer: null, version: 4 }],
+  mayOpen: true,
+  mayView: true,
+  asOf: '2026-11-03T09:00:00.000Z',
+}
+
+describe('ncr: B-W2b-113 the CAPA and Cost columns and Escalate to CAPA', () => {
+  const full = { manage: true, capaView: true }
+  it('a row goes to a CAPA unless the person may not, it is cancelled or it names a CAPA already', () => {
+    const row = { number: 'NCR-1', stage: 'OPEN' as const, capa: null }
+    expect(rowEscalateHeld(row, full)).toBeNull()
+    expect(rowEscalateHeld(row, { manage: true, capaView: false })).toEqual({ key: 'list.heldEscalateRight' })
+    expect(rowEscalateHeld({ ...row, stage: 'CANCELLED' }, full)).toEqual({ key: 'escalate.code.NCR_CANCELLED', params: { number: 'NCR-1' } })
+    expect(rowEscalateHeld({ ...row, stage: 'CLOSED' }, full)).toBeNull()
+    expect(rowEscalateHeld({ ...row, capa: { id: 'k', number: 'CAPA-1', status: 'ACT' } }, full)).toEqual({ key: 'list.heldEscalated', params: { number: 'NCR-1', capa: 'CAPA-1' } })
+    const many = Array.from({ length: 51 }, (_, index) => ({ ...row, number: `NCR-${index}` }))
+    expect(bulkEscalateHeld(many, full, false)).toEqual({ key: 'list.heldEscalateMax' })
+    expect(bulkEscalateHeld([{ ...row, stage: 'CANCELLED' }], full, false)).toEqual({ key: 'list.heldEscalateNone' })
+    expect(bulkEscalateHeld([row], full, true)).toEqual({ key: 'list.heldEscalateOffline' })
+    expect(bulkEscalateHeld([row], full, false)).toBeNull()
+    expect(escalatableOf([row, { ...row, stage: 'CANCELLED' }], full)).toHaveLength(1)
+  })
+
+  it('the cost in the reader\'s number format (minor units), — for none; the CSV a plain decimal', () => {
+    expect(costText(24_700, 'EUR', 'it')).toMatch(/247,00\s?€/)
+    expect(costText(24_700, 'EUR', 'en')).toMatch(/€247\.00/)
+    expect(costText(null, 'EUR', 'en')).toBe('—')
+    expect(costText(undefined, 'EUR', 'en')).toBe('—')
+    expect(costCsv(12_050)).toBe('120.50')
+    expect(costCsv(null)).toBe('')
+  })
+
+  it('the dialog: held rows said in our words, the rest goes; held with the reason until the CAPA is picked or written', () => {
+    const opened = escalateModelOf([{ id: 'n1', number: 'NCR-T-1' }, { id: 'n2', number: 'NCR-T-2' }], new Date(2026, 10, 3))
+    expect(opened.dueOn).toBe('2026-12-03')
+    expect(dayAfter(new Date(2026, 0, 31), 1)).toBe('2026-02-01')
+    expect(escalateHeld(opened)).toEqual({ key: 'escalate.held.reading' })
+    const ready = withPreview(opened, ESC_PREVIEW)
+    expect(ready.title).toBe('Open seam')
+    expect(goingOf(ESC_PREVIEW).map((record) => record.number)).toEqual(['NCR-T-1'])
+    expect(recordProblem(ESC_PREVIEW.records[1]!)).toEqual({ key: 'escalate.code.ESCALATED_ELSEWHERE', params: { number: 'NCR-T-2', capa: 'CAPA-T-9' } })
+    expect(recordProblem(ESC_PREVIEW.records[0]!)).toBeNull()
+    expect(escalateHeld(ready)).toEqual({ key: 'escalate.held.pick' })
+    expect(escalateHeld({ ...ready, capaId: 'k1' })).toBeNull()
+    expect(escalateHeld({ ...ready, mode: 'new', title: ' ' })).toEqual({ key: 'escalate.held.title' })
+    expect(escalateHeld({ ...ready, mode: 'new', dueOn: '' })).toEqual({ key: 'escalate.held.due' })
+    expect(escalateHeld({ ...ready, mode: 'new' })).toBeNull()
+    expect(escalateHeld({ ...ready, preview: { status: 'ready', preview: { ...ESC_PREVIEW, sameCompany: false } } })).toEqual({ key: 'escalate.held.companies' })
+    expect(escalateHeld({ ...ready, preview: { status: 'ready', preview: { ...ESC_PREVIEW, mayOpen: false } } })).toEqual({ key: 'escalate.held.noManage' })
+    expect(escalateHeld({ ...ready, preview: { status: 'ready', preview: { ...ESC_PREVIEW, records: [ESC_PREVIEW.records[1]!] } } })).toEqual({ key: 'escalate.held.none' })
+    expect(withPreview(opened, { ...ESC_PREVIEW, capas: [] }).mode).toBe('new')
+    expect(escalateHeld({ ...ready, busy: true })).toEqual({ key: 'common.working' })
+  })
+
+  it('a refused escalation: a held code in our words, the API sentence only as a detail line', () => {
+    const held = escalateRefusal(new ApiError('conflict', 409, 'invalid_state', 'NCR-T-1 is escalated to CAPA-T-9 already.', null, [{ path: 'held/ESCALATED_ELSEWHERE', message: 'NCR-T-1 is escalated to CAPA-T-9 already.' }]))
+    expect(held.say).toEqual({ key: 'escalate.refusedHeld' })
+    expect(held.detail).toContain('NCR-T-1 is escalated to CAPA-T-9 already.')
+    expect(escalateRefusal(new Error('network')).say).toEqual({ key: 'problem.unavailable' })
+  })
+
+  it('the calls: the preview of the NCRs picked, a new CAPA from them, linking them to an open one; the report in a new tab', async () => {
+    const calls: { url: string; method: string; body: unknown; headers: Headers }[] = []
+    const capa = { record: { capa: { id: 'k1', number: 'CAPA-T-1' } } }
+    const answers: Record<string, unknown> = { 'GET /api/quality/capa/escalate': ESC_PREVIEW, 'POST /api/quality/capa': capa, 'POST /api/quality/capa/k1/sources': { ...capa, added: 1 } }
+    const fetcher = (async (url: string, init: RequestInit) => {
+      const method = init.method ?? 'GET'
+      calls.push({ url, method, body: init.body ? JSON.parse(String(init.body)) : null, headers: new Headers(init.headers) })
+      return new Response(JSON.stringify(answers[`${method} ${url.split('?')[0]}`]), { status: method === 'GET' ? 200 : 201, headers: { 'content-type': 'application/json' } })
+    }) as unknown as typeof fetch
+    const api = createApiClient({ baseUrl: '/api', fetch: fetcher, csrfToken: () => 'csrf-demo', company: 'DEMO' })
+    expect((await escalatePreview(api, ['n1', 'n2'])).records).toHaveLength(2)
+    const query = new URL(calls[0]!.url, 'http://x').searchParams
+    expect([query.get('recordType'), query.get('ids')]).toEqual(['Nonconformance', 'n1,n2'])
+    expect(await openCapaFrom(api, { type: 'CAPA', title: 'Seams', dueOn: '2026-12-03', sources: [{ recordType: 'Nonconformance', recordId: 'n1' }] })).toMatchObject({ id: 'k1', number: 'CAPA-T-1' })
+    expect(calls[1]!.body).toEqual({ type: 'CAPA', title: 'Seams', dueOn: '2026-12-03', sources: [{ recordType: 'Nonconformance', recordId: 'n1' }] })
+    expect(await addToCapa(api, 'k1', { version: 4, sources: [{ recordType: 'Nonconformance', recordId: 'n1' }] })).toMatchObject({ number: 'CAPA-T-1' })
+    expect(calls[2]!.body).toEqual({ version: 4, sources: [{ recordType: 'Nonconformance', recordId: 'n1' }] })
+    for (const call of calls.slice(1)) expect(call.headers.get('idempotency-key'), call.url).toBeTruthy()
+    expect(reportHref('n1')).toBe('/api/quality/ncr/n1/report')
+  })
+
+  it('every reason, held code and kind has words in both languages', () => {
+    for (const locale of LOCALES) {
+      const tr = createTranslator(locale, messagesFor(locale, ['ncr']).ncr!)
+      const has = (key: string) => expect(tr(key), `${locale}: ${key}`).not.toBe(key)
+      for (const reason of ESCALATION_REASONS) has(`escalate.reason.${reason}`)
+      for (const code of [...ESCALATE_CODES, 'OTHER']) has(`escalate.code.${code}`)
+      for (const type of CAPA_TYPES) has(`escalate.typeName.${type}`)
+      for (const key of ['col.capa', 'col.cost', 'csv.capa', 'csv.cost', 'keys.escalate', 'list.escalate', 'list.printNcr', 'escalate.refused', 'escalate.refusedHeld', 'escalate.refusedStale']) has(key)
+      expect(tr('list.escalateMany', { count: 2 })).not.toMatch(/\{|list\./)
+      expect(tr('escalate.done', { count: 1, capa: 'CAPA-1' })).toContain('CAPA-1')
+    }
+  })
+
+  it('every word the dialog and the list ask for exists in both languages (the dialog draws in a portal, outside the render check)', () => {
+    const keys = new Set<string>()
+    for (const file of ['./view/EscalateDialog.tsx', './list/view/NcrListView.tsx', './list/view-model.ts']) {
+      const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+      for (const found of source.matchAll(/(?:\bt\(|key: )'((?:escalate|list|col|csv|keys)\.[A-Za-z_.]+)'/g)) keys.add(found[1]!)
+    }
+    expect(keys.size).toBeGreaterThan(40)
+    for (const locale of LOCALES) {
+      const tr = createTranslator(locale, messagesFor(locale, ['ncr']).ncr!)
+      for (const key of keys) expect(tr(key, { count: 2, total: 3, number: 'NCR-1', capa: 'CAPA-1', name: 'Demo' }), `${locale}: ${key}`).not.toMatch(/^(?:escalate|list|col|csv|keys)\./)
+    }
+  })
+})
 
 describe('ncr: who may do what, and where it lives', () => {
   it('reads the five NCR rights and the rights of what a decision makes', () => {
@@ -349,10 +471,10 @@ describe('ncr: the calls as the API takes them', () => {
 })
 
 const LEFT_KEY =
-  /\b(?:common|stage|severity|source|foundAt|recordType|uom|quantity|decided|due|age|check|checkName|board|held|problem|keys|close|list|view|tile|col|csv|new|zone|containmentTime|assign|discrepancyKind)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+  /\b(?:common|stage|severity|source|foundAt|recordType|uom|quantity|decided|due|age|check|checkName|board|held|problem|keys|close|list|view|tile|col|csv|new|zone|containmentTime|assign|discrepancyKind|escalate)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
 /** Permission names are said on purpose ("needs quality.ncr.manage"); file names are not keys. */
-const SAID = /\b(?:quality\.ncr\.[a-z]+|quality\.defects\.view|tasks\.manage|files\.upload|production\.rework|purchasing\.claims\.manage|inventory\.[a-z]+|zip-pull\.jpg|shoulder-seam\.jpg)\b/g
+const SAID = /\b(?:quality\.ncr\.[a-z]+|quality\.capa\.[a-z]+|money\.cost|quality\.defects\.view|tasks\.manage|files\.upload|production\.rework|purchasing\.claims\.manage|inventory\.[a-z]+|zip-pull\.jpg|shoulder-seam\.jpg)\b/g
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>
