@@ -25,8 +25,10 @@ import { devicePlaceOf } from '../../production/calls/store'
 import { assertFloorReady } from '../../production/serials/facts'
 import { customersOf, aqlPlanFor } from '../aql/chain'
 import { chipsOf, contentOfCheck, readChecks } from '../plans/store'
+// B-W2b-101's work-order lock (`factory.inprocess-check|tenant|<work order>`): a person here and a rule there never open two checks of one run at once.
+import { lockWorkOrderChecks } from '../triggers/open'
 import { assertOn, checkerOf, postedBy, refuse, signerOf, systemOf, type Checker } from './access'
-import { firstPieceRows, kindOf, lockRun, lockWorkOrderChecks, outcomeOf, readCheck, readLine, readOperationsOf, readResults, readWorkOrder, statusOf, type CheckRow, type LineRow, type Reader, type WorkOrderRow } from './store'
+import { firstPieceRows, kindOf, lockRun, outcomeOf, readCheck, readLine, readOperationsOf, readResults, readWorkOrder, statusOf, type CheckRow, type LineRow, type Reader, type WorkOrderRow } from './store'
 import { checkViewOf } from './views'
 
 /**

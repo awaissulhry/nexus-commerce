@@ -93,15 +93,6 @@ export async function firstPieceRows(db: Pick<Reader, 'inProcessCheck'>, workOrd
 }
 
 /**
- * The work order's in-process checks: a person (this module) and a rule (B-W2b-101, modules/quality/triggers
- * `lockWorkOrderChecks`) never open two checks of one run at once. EXACTLY B-W2b-101's key (`factory.inprocess-check|tenant|
- * <work order>`, the tenant from the session's setting); once B-W2b-101 is on main, import its helper and drop this copy.
- * Taken FIRST, before the issue lock below.
- */
-export const lockWorkOrderChecks = (tx: Reader, workOrderId: string) =>
-  tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.inprocess-check', current_setting('factory.tenant_id', true), ${workOrderId}::text), 0))`
-
-/**
  * A first piece opened, decided or cancelled changes what the run's scans may do: it takes the work order's issue lock
  * EXCLUSIVE (every scan takes it shared: production/scans scanWorkOrderLock), so a scan in flight ends first and every
  * later scan reads the run's checks as this command leaves them.

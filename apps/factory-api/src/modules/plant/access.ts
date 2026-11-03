@@ -1,6 +1,7 @@
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { PLANT_MACHINES_MANAGE } from '@nexus/factory-domain/plant/permissions'
+import type { DepthRefusal } from '@nexus/factory-domain/plant/requests/refusals'
 import type { PlantRefusal } from '@nexus/factory-domain/plant/rules'
 import type { CommandCaller } from '../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../core/context'
@@ -65,10 +66,13 @@ export function assertManageLists(context: OfficeContext): void {
   if (!mayManageLists(context)) throw new ForbiddenError("The machine classes and the symptoms are the whole group's: they are kept with plant.machines.manage over every company.")
 }
 
+/** A plant rule's refusal: W2a's (PLANT_REFUSALS) or the requests and jobs in depth's (B-W2b-96, DEPTH_REFUSALS). */
+export type AnyPlantRefusal = PlantRefusal | DepthRefusal
+
 export class PlantRefusedError extends ConflictError {
   override name = 'PlantRefusedError'
   override readonly issues: readonly Issue[]
-  constructor(readonly refusal: PlantRefusal) {
+  constructor(readonly refusal: AnyPlantRefusal) {
     super(refusal.message)
     this.issues = [
       { path: `refusal/${refusal.code}`, message: refusal.message },
@@ -77,7 +81,7 @@ export class PlantRefusedError extends ConflictError {
   }
 }
 
-export const refused = (refusal: PlantRefusal): never => {
+export const refused = (refusal: AnyPlantRefusal): never => {
   throw new PlantRefusedError(refusal)
 }
 

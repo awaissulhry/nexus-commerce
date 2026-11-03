@@ -90,6 +90,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // W2b wave 10/16: incoming inspections are numbered from it (a floor document kind: the bench numbers the inspection
       // it opens).
       { id: `ffffffff${id(`series:${company}:INCOMING_INSPECTION:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'INCOMING_INSPECTION', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'IIN-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b wave 16/16: incidents, near misses and hazards are numbered from it (a floor document kind: a tablet numbers the
+      // report it sends).
+      { id: `ffffffff${id(`series:${company}:INCIDENT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'INCIDENT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'INC-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       // W2b wave 11/16: CAPAs and 8Ds are numbered from it (apps/factory-api modules/quality/capa, B-W2b-108): without one, a
       // CAPA cannot be opened. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:CAPA:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CAPA', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CAPA-{YYYY}-{N:4}', fiscal: false, createdById: actorId },

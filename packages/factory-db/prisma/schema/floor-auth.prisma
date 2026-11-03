@@ -105,6 +105,8 @@ model Device {
   // W2b safety.prisma (wave 15/16): the training attendances signed and the PPE receipts signed on it.
   trainingAttendances TrainingAttendance[]
   ppeIssues           PpeIssue[]
+  // W2b health.prisma (wave 16/16): the incidents reported on it with a name.
+  incidents           Incident[]
   // floor-sync.prisma: its queue's recorded events and refused actions.
   syncEvents      FloorSyncEvent[]
   refusedActions  FloorRefusedAction[]
@@ -247,6 +249,8 @@ model Worker {
   instructionRecordsSigned         InstructionRecord[]       @relation("InstructionRecordSigner")
   ppeIssuesGiven                   PpeIssue[]                @relation("PpeIssueGiver")
   ppeIssuesSigned                  PpeIssue[]                @relation("PpeIssueSigner")
+  // W2b health.prisma (wave 16/16): the incidents they reported with their name.
+  incidentsReported                Incident[]                @relation("IncidentReporter")
   // W2b (wave 7/7) floor-auth.prisma, labour.prisma, andon.prisma (a site that names workers): the phone that is theirs,
   // the team operations they were a member of, the steps they ticked, their off-standard time, the edits of their labour
   // records and their disputes, their dispatch, their crews, the help calls they sent.

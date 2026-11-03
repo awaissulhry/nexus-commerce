@@ -80,6 +80,10 @@ import { loadReports } from './modules/insights/reports/registry'
 import { scanFindingsCron, stuckBundlesCron } from './modules/production/bundles/jobs'
 // B-W2b-40: a clock-out pauses the person's running work (MES-117).
 import { pauseAtClockOutHandler } from './modules/production/terminal/clock-out'
+// B-W2b-101: inspections opened by rule at goods receipt, a finished operation and a bundle scan (QHS-010, QHS-011).
+import { inspectionTriggerHandlers } from './modules/quality/triggers/handler'
+// B-W2b-96: machine requests nobody acknowledged escalate by their routing rule.
+import { escalationCron } from './modules/plant/requests/escalation'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -129,6 +133,8 @@ const W2B_37_HANDLERS: readonly EventHandler[] = attendanceHandlers()
 const W2B_42_HANDLERS: readonly EventHandler[] = overtimeHandlers()
 // B-W2b-43: production.scan_recorded → the earnings ledger; attendance.day_changed → held scans looked at again.
 const W2B_43_HANDLERS: readonly EventHandler[] = earningsHandlers()
+// B-W2b-101: a receipt posted, a workshop's goods back, a scan → the company's inspection rules open what they pick.
+const W2B_101_HANDLERS: readonly EventHandler[] = inspectionTriggerHandlers()
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 
@@ -195,7 +201,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
@@ -230,6 +236,8 @@ if (mode === 'worker') {
   crons.push(costCatchUpCron({ database, log }))
   // B-W2b-41: every 15 minutes the stuck bundles (MES-168); hourly the scan-pattern checks about bundles (MES-075).
   crons.push(stuckBundlesCron({ database, log }), scanFindingsCron({ database, log }))
+  // B-W2b-96: every minute, the routed machine requests nobody acknowledged in time escalate (QHS-179).
+  crons.push(escalationCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

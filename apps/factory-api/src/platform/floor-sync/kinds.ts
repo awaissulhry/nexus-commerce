@@ -46,6 +46,9 @@ import { reportOnBehalf } from '../../modules/production/onbehalf/report'
 import { DispatchRefusedError } from '../../modules/production/dispatch/access'
 import { writeHandoverBody } from '../../modules/production/dispatch/contract'
 import { writeHandover } from '../../modules/production/dispatch/handover'
+// B-W2b-96: a machine request's progress from the floor's queue.
+import { queuedProgressBody } from '../../modules/plant/requests/contract-depth'
+import { stepRequest } from '../../modules/plant/requests/depth'
 // B-W2b-99: a roving result or an end-of-line pass or defect recorded in one step from the floor's queue.
 import { InProcessRefusedError } from '../../modules/quality/inprocess/access'
 import { openCheck } from '../../modules/quality/inprocess/checks'
@@ -83,6 +86,9 @@ import { openContract } from '../../modules/quality/inprocess/contract'
  *                                         order's thread, with the files confirmed before it was sent)
  *   andon.handover.write                  modules/production/dispatch writeHandover (B-W2b-49: a line's note of a shift; the
  *                                         tablet's time picks the shift)
+ *   plant.request.progress                modules/plant/requests stepRequest (B-W2b-96: a technician acknowledges a machine
+ *                                         request or is on the way, the station confirms the machine works again; each
+ *                                         step set once, applied as the request stands when it arrives)
  *   quality.inprocess.record              modules/quality/inprocess openCheck with its `decision` (B-W2b-99: a roving result or
  *                                         an end-of-line pass or defect, one step; a first piece is signed online, never queued)
  *
@@ -274,6 +280,15 @@ async function applyFloorNote(caller: CommandCaller, event: QueuedEvent): Promis
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'Message', id: result.messageId } }
 }
 
+/** B-W2b-96: a queued progress step of a machine request, through the plant's own command (its key: `<device>.<client event id>`). */
+async function applyPlantProgress(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const body = parsed(queuedProgressBody, event.payload)
+  if (!body.ok) return refusedBy(body.refusal)
+  const { requestId, step, version } = body.value
+  const result = await stepRequest(caller, requestId, step, version === undefined ? {} : { version }, key)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'MaintenanceRequest', id: result.request.id } }
+}
+
 /** B-W2b-99: a queued roving or end-of-line check, recorded in one step through its own command (the key: `<device>.<client event id>`). */
 async function applyInProcess(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
   const body = parsed(openContract.body, event.payload)
@@ -323,6 +338,8 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
         return await applyFloorNote(caller, event)
       case 'andon.handover.write':
         return await applyHandover(caller, event, context.key)
+      case 'plant.request.progress':
+        return await applyPlantProgress(caller, event, context.key)
       case 'quality.inprocess.record':
         return await applyInProcess(caller, event, context.key)
     }

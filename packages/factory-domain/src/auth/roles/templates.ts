@@ -57,7 +57,8 @@ const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales
  */
 const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   planner: ['plant.view'],
-  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage'],
+  // B-W2b-96: plant.settings.manage (a site's request routing and unsafe-lock settings) for the production manager.
+  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.settings.manage'],
   floor_supervisor: ['plant.view', 'plant.report', 'plant.requests.triage'],
   operator: ['plant.report'],
   cutting_operator: ['plant.report'],
@@ -344,6 +345,16 @@ const PEOPLE_PAYROLL_ADDS: Readonly<Record<string, readonly Permission[]>> = Obj
   admin: ['people.payroll.view', 'people.payroll.records', 'people.payroll.manage'],
 })
 /**
+ * B-W2b-94 (hides as stock; SCM-249, SCM-250; design warehouse.hides record "Measurements & grade"): the warehouse, which keeps
+ * the hides, and the quality inspector, who grades them, correct a hide's grade, shade group, thickness and defects and measure
+ * a whole hide again against the tannery's area (correcting its stock is inventory.adjust: the warehouse's). Office only; Owner
+ * from every(). One line per template.
+ */
+const HIDES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  warehouse: ['inventory.hides.manage'],
+  quality_inspector: ['inventory.hides.manage'],
+})
+/**
  * B-W2b-92 (inspection plans, QHS-008, QHS-009, QHS-016; design quality.plans): quality keeps the plans and approves another
  * person's draft (never one it wrote); the production manager reads them and may be the second person who approves (a small
  * factory has one quality person); the floor supervisor reads them and prints a checklist for a bench without a tablet.
@@ -365,6 +376,16 @@ const AQL_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
   quality_inspector: ['quality.aql.view', 'quality.aql.manage'],
   production_manager: ['quality.aql.view'],
   sales: ['quality.aql.view'],
+})
+/**
+ * B-W2b-101 (inspection triggers, QHS-010, QHS-011; design quality.plans "When inspections are created"): quality keeps the
+ * rules that open inspections by themselves; the production manager and the floor supervisor read them (a first-piece rule
+ * holds a run until its check is approved). Office only: the worker's handler applies them. Owner and read-only from every().
+ */
+const QUALITY_TRIGGERS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.triggers.view', 'quality.triggers.manage'],
+  production_manager: ['quality.triggers.view'],
+  floor_supervisor: ['quality.triggers.view'],
 })
 /**
  * B-W2b-99 (in-process checks, QHS-039 … QHS-042, MES-127; design floor.inline modes inspection and supervisor): the
@@ -421,12 +442,16 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_EARNINGS_ADDS[key] ?? []) : []),
   // B-W2b-54
   ...(audience === 'office' ? (PEOPLE_PAYROLL_ADDS[key] ?? []) : []),
+  // B-W2b-94
+  ...(audience === 'office' ? (HIDES_ADDS[key] ?? []) : []),
   // B-W2b-92
   ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
   // B-W2b-49
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? []),
   // B-W2b-93
   ...(audience === 'office' ? (AQL_ADDS[key] ?? []) : []),
+  // B-W2b-101
+  ...(audience === 'office' ? (QUALITY_TRIGGERS_ADDS[key] ?? []) : []),
   // B-W2b-99
   ...((audience === 'office' ? INPROCESS_ADDS : INPROCESS_FLOOR_ADDS)[key] ?? [])]
 /**
@@ -896,7 +921,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Maintenance',
     description: 'Keeps the machines running: the machine register and its classes and symptoms, the requests from the stations and the maintenance jobs; signs a machine marked unsafe safe again; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'sites.view', 'workers.view', 'parties.view', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.jobs.work', 'plant.signSafe'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'sites.view', 'workers.view', 'parties.view', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.jobs.work', 'plant.signSafe',
+      // B-W2b-96: the site's request routing and unsafe-lock settings.
+      'plant.settings.manage'],
     grains: [],
   }),
   template('read_only', {

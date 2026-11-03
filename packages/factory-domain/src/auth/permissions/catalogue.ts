@@ -17,6 +17,8 @@ import { INVENTORY_COUNTS_DEFINITIONS, INVENTORY_COUNTS_PERMISSIONS } from '../.
 // B-W2a-31: receiving every day (discrepancies and the report to the supplier).
 import { INVENTORY_DISCREPANCIES_DEFINITIONS, INVENTORY_DISCREPANCIES_PERMISSIONS } from '../../inventory/receipts/permissions'
 import { INVENTORY_RESERVATION_PERMISSIONS } from '../../inventory/reservations/permissions'
+// B-W2b-94: hides as stock (inventory.hides.manage: a hide's grade, shade group, thickness and defects; its re-measure).
+import { INVENTORY_HIDES_DEFINITIONS, INVENTORY_HIDES_PERMISSIONS } from '../../inventory/hides/permissions'
 import { INVOICES_DEFINITIONS, INVOICES_PERMISSIONS } from '../../invoicing/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
@@ -144,6 +146,8 @@ import { PRODUCTION_DISPATCH_DEFINITIONS, PRODUCTION_DISPATCH_FLOOR_PERMISSIONS,
 import { QUALITY_AQL_DEFINITIONS, QUALITY_AQL_PERMISSIONS } from '../../quality/aql/permissions'
 // B-W2b-92: inspection plans (quality.plans.view | manage | approve).
 import { QUALITY_PLANS_DEFINITIONS, QUALITY_PLANS_PERMISSIONS } from '../../quality/plans/permissions'
+// B-W2b-101: inspection triggers (quality.triggers.view | manage).
+import { QUALITY_TRIGGERS_DEFINITIONS, QUALITY_TRIGGERS_PERMISSIONS } from '../../quality/triggers/permissions'
 // B-W2b-99: in-process checks (quality.inprocess.view | record).
 import { QUALITY_INPROCESS_DEFINITIONS, QUALITY_INPROCESS_FLOOR_PERMISSIONS, QUALITY_INPROCESS_PERMISSIONS } from '../../quality/inprocess/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
@@ -436,6 +440,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_COUNTS_DEFINITIONS,
   // B-W2a-31: receiving every day.
   INVENTORY_DISCREPANCIES_DEFINITIONS,
+  // B-W2b-94: hides as stock.
+  INVENTORY_HIDES_DEFINITIONS,
   SHIPPING_DEFINITIONS,
   SHIPPING_LABELS_DEFINITIONS,
   PARTIES_DEFINITIONS,
@@ -567,6 +573,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_AQL_DEFINITIONS,
   // B-W2b-92: inspection plans.
   QUALITY_PLANS_DEFINITIONS,
+  // B-W2b-101: inspection triggers.
+  QUALITY_TRIGGERS_DEFINITIONS,
   // B-W2b-99: in-process checks.
   QUALITY_INPROCESS_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -638,6 +646,8 @@ for (const name of QUALITY_NCR_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(
 for (const name of VIEWS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-31: receiving every day.
 for (const name of INVENTORY_DISCREPANCIES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-94: hides as stock.
+for (const name of INVENTORY_HIDES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-32: global search.
 for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-35: the plant.
@@ -711,6 +721,8 @@ for (const name of PRODUCTION_DISPATCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isD
 for (const name of QUALITY_AQL_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-92: inspection plans.
 for (const name of QUALITY_PLANS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-101: inspection triggers.
+for (const name of QUALITY_TRIGGERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-99: in-process checks.
 for (const name of QUALITY_INPROCESS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

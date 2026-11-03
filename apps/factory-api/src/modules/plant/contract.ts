@@ -17,6 +17,8 @@ import {
   REQUEST_TILES,
   SAFE_AFTER,
 } from '@nexus/factory-domain/plant/rules'
+import { HAND_BACK_ACTION_CODES } from '@nexus/factory-domain/plant/jobs/close'
+import { PROGRESS_STEPS, TRAIL_KINDS } from '@nexus/factory-domain/plant/requests/progress'
 
 /**
  * The plant's routes (B-W2a-35; QHS-162, QHS-178, QHS-184; design plant.machines SCR-150, plant.requests SCR-148,
@@ -114,7 +116,30 @@ export const requestOut = output({
   signedSafe: output({ at: instant(), by: person, note: z.string().nullable() }).nullable(),
   locking: z.boolean(),
   duplicates: z.number().int(),
+  /** Its available photos (kind PHOTO). */
   photos: z.number().int(),
+  /** B-W2b-96: its available voice notes (kind AUDIO, QHS-189). */
+  voiceNotes: z.number().int(),
+  /** B-W2b-96 (QHS-180): what the reporter sees: acknowledged, on the way, fixed (its job handed back; a merged request: the one it joined), works again. */
+  progress: output({
+    step: z.enum(PROGRESS_STEPS),
+    acknowledgedAt: instant().nullable(),
+    onTheWayAt: instant().nullable(),
+    onTheWayBy: person.nullable(),
+    fixedAt: instant().nullable(),
+    worksAt: instant().nullable(),
+    /** Who confirmed it works: a person, or the station. */
+    worksBy: person.nullable(),
+    closedWithoutJob: z.boolean(),
+    canConfirm: z.boolean(),
+  }),
+  /** B-W2b-96 (QHS-179): where it was sent and how far it escalated (a technician by name inside one record, or an office user's). */
+  routing: output({
+    routedTo: output({ kind: z.enum(['TEAM', 'TECHNICIAN']), id: id().nullable(), name: z.string().nullable() }).nullable(),
+    ruleId: id().nullable(),
+    escalationLevel: z.number().int(),
+    escalatedAt: instant().nullable(),
+  }),
   version: z.number().int(),
 })
 
@@ -135,7 +160,10 @@ export const jobOut = output({
   overdue: z.boolean(),
   status: z.enum(JOB_STATUSES),
   startedAt: instant().nullable(),
-  handedBack: output({ at: instant(), by: person, workDone: z.string(), machineAfter: z.enum(MACHINE_AFTER) }).nullable(),
+  /** The hand-back; B-W2b-96 (QHS-190): with its failure code and the minutes from the start (the API's count). */
+  handedBack: output({ at: instant(), by: person, workDone: z.string(), machineAfter: z.enum(MACHINE_AFTER), failureCode: z.string().nullable(), minutesSpent: z.number().int().nullable() }).nullable(),
+  /** B-W2b-96 (QHS-180): the line lead confirmed the machine works. */
+  leadConfirmed: output({ at: instant(), by: person }).nullable(),
   closedAt: instant().nullable(),
   closedBy: person.nullable(),
   cancelledAt: instant().nullable(),
@@ -160,6 +188,19 @@ export const machineCardOut = output({
 })
 
 const stationWordsOut = output({ blocked: z.boolean(), message: z.string().nullable(), fix: z.string().nullable() })
+
+/** B-W2b-96 (QHS-189): a photo or voice note of a request or job (the floor looks at it through GET /plant/floor/files/:fileId/download). */
+export const mediaOut = output({
+  id: id(),
+  kind: z.enum(['PHOTO', 'AUDIO']),
+  /** A job's photo before or after the work. */
+  category: z.enum(['BEFORE_WORK', 'AFTER_WORK']).nullable(),
+  originalName: z.string(),
+  contentType: z.string(),
+  sizeBytes: z.number().int(),
+  availableAt: instant().nullable(),
+})
+
 
 // ---- classes and symptoms (tenant-wide) ------------------------------------------------------------------------------
 
@@ -361,6 +402,14 @@ export const requestRecordContract = defineContract({
       /** The other open requests of the machine (possible duplicates). */
       duplicates: z.array(requestOut),
       photos: z.array(output({ id: id(), originalName: z.string(), contentType: z.string() })),
+      /** B-W2b-96 (QHS-189): its photos and voice notes. */
+      files: z.array(mediaOut),
+      /** B-W2b-96 (QHS-179, QHS-180): the routing and progress trail, in time order. */
+      trail: z.array(output({ kind: z.enum(TRAIL_KINDS), at: instant(), level: z.number().int().nullable() })),
+      /** B-W2b-96: may say a technician is on the way, confirm the machine works, lock the machine as unsafe. */
+      canGo: z.boolean(),
+      canConfirm: z.boolean(),
+      canLock: z.boolean(),
       canTriage: z.boolean(),
       canSignSafe: z.boolean(),
     }),
@@ -461,7 +510,24 @@ export const jobCountsContract = defineContract({
 
 export const jobRecordContract = defineContract({
   params: input({ jobId: id() }),
-  response: { 200: output({ job: jobOut, card: machineCardOut, requests: z.array(requestOut), canManage: z.boolean(), canWork: z.boolean() }) },
+  response: {
+    200: output({
+      job: jobOut,
+      card: machineCardOut,
+      requests: z.array(requestOut),
+      canManage: z.boolean(),
+      canWork: z.boolean(),
+      /** B-W2b-96 (QHS-183): the machine's lock (its first unsafe request not signed safe) and its release; null: not locked. */
+      lock: output({ request: requestOut, since: instant(), reason: z.string().nullable(), canSignSafe: z.boolean() }).nullable(),
+      /** B-W2b-96 (QHS-189): the job's photos (before / after) and voice notes, and its requests'. */
+      files: z.array(mediaOut),
+      requestFiles: z.array(mediaOut.extend({ requestId: id() })),
+      /** B-W2b-96 (QHS-190): the close screen's facts: the minutes so far, whether "running" is held by the lock. */
+      close: output({ minutesSoFar: z.number().int().nullable(), runningHeld: z.boolean(), canHandBack: z.boolean() }),
+      /** B-W2b-96 (QHS-180): this person confirms as the line lead now. */
+      canConfirm: z.boolean(),
+    }),
+  },
 })
 
 export const createJobContract = defineContract({
@@ -514,7 +580,16 @@ export const waitJobContract = defineContract({ params: jobParams, body: version
 export const reopenJobContract = defineContract({ params: jobParams, body: versionOnly, response: { 200: moveAnswer } })
 export const handBackContract = defineContract({
   params: jobParams,
-  body: input({ version: version(), workDone: text(), machineAfter: z.enum(MACHINE_AFTER) }),
+  body: input({
+    version: version(),
+    /** What was done in words; B-W2b-96: optional with an action tile (but OTHER). */
+    workDone: text().optional(),
+    machineAfter: z.enum(MACHINE_AFTER),
+    /** B-W2b-96 (QHS-190): the action tile (adjusted, replaced a part, cleaned, other). */
+    action: z.enum(HAND_BACK_ACTION_CODES).optional(),
+    /** B-W2b-96 (QHS-190): the failure code tile (upper-case letters, digits, underscores; optional until QHS-188's list). */
+    failureCode: z.string().trim().min(1).max(40).nullable().optional(),
+  }),
   response: { 200: moveAnswer },
 })
 export const closeJobContract = defineContract({ params: jobParams, body: versionOnly, response: { 200: moveAnswer } })
