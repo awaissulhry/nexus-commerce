@@ -2,8 +2,9 @@ import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { onFloor, signedInFrame } from '../../frame/fixtures'
 import type { CutWorkOrderRow, RemnantPlace } from './api'
-import { areaUsed, sizeStates, type CutCell } from './model'
-import { CutView, type CutViewModel, type HideCardModel } from './view/CutView'
+import { areaUsed, cardCheck, remnantMinimum, sizeStates, type CheckWarning, type CutCell, type HideChecks } from './model'
+import type { AnywayModel } from './view/AnywayDialog'
+import { CutView, type CutViewModel, type HideCardModel, type HideCheckModel } from './view/CutView'
 
 /**
  * SCR-094's cases (design floor.hidecut): the cutting table's work order, the hide's check, the sets drafted per size,
@@ -80,6 +81,119 @@ const remnant = (value: number | null, extra: Partial<NonNullable<CutViewModel['
 
 const scan = (extra: Partial<CutViewModel> = {}): CutViewModel => ({ frame, stage: 'scan', workOrder: chip, ...extra })
 
+// ---- B-W2b-110: the hide check in depth, "Cut anyway", the thickness at the table, the photo (made-up lots, people) -------
+
+const LOT = { lotCode: 'LOT-DEMO-0007', shadeLabel: '2' }
+const OTHER_LOT = { lotCode: 'LOT-DEMO-0011', shadeLabel: '3' }
+
+const CLEAN: HideChecks = {
+  warnings: [],
+  standing: [],
+  passed: [],
+  shade: { rule: 'ORDER', cutFrom: [LOT], hide: { ...LOT, outOfShade: false }, same: true },
+  thickness: { verdict: 'OK', valueMm: '1.20', source: 'HIDE', minMm: '1.10', maxMm: '1.30' },
+  grade: { hide: 'A', byText: false, pieces: [{ name: 'Davanti', minGrade: 'B', verdict: 'OK' }, { name: 'Manica', minGrade: null, verdict: 'OK' }] },
+  reserved: { forIt: true, hides: [HIDE], lots: ['LOT-DEMO-0007'] },
+  photo: { required: false },
+}
+
+const SHADE: CheckWarning = { kind: 'SHADE', code: 'SHADE_LOT', shade: { rule: 'ORDER', cutFrom: [LOT], hide: { ...OTHER_LOT, outOfShade: false }, cell: null } }
+const WRONG: CheckWarning = { kind: 'WRONG_HIDE', code: 'NOT_RESERVED', wrongHide: { reservedHides: [{ code: HIDE_2, lotCode: 'LOT-DEMO-0007', grade: 'A' }], reservedLots: ['LOT-DEMO-0007'], differs: ['LOT', 'GRADE'], hide: { lotCode: 'LOT-DEMO-0011', grade: 'B' } } }
+const THIN: CheckWarning = { kind: 'THICKNESS', code: 'THIN', thickness: { valueMm: '0.95', source: 'HIDE', minMm: '1.10', maxMm: '1.30' } }
+const BELOW: CheckWarning = { kind: 'GRADE', code: 'BELOW', grade: { hideGrade: 'C', pieces: [{ name: 'Davanti', minGrade: 'B' }] } }
+
+const shadeChecks: HideChecks = { ...CLEAN, warnings: [SHADE], standing: ['SHADE'], shade: { ...CLEAN.shade, hide: { ...OTHER_LOT, outOfShade: false }, same: false }, reserved: { forIt: false, hides: [], lots: [] } }
+const wrongChecks: HideChecks = { ...CLEAN, warnings: [WRONG], standing: ['WRONG_HIDE'], reserved: { forIt: false, hides: [HIDE_2], lots: ['LOT-DEMO-0007'] } }
+const thinChecks: HideChecks = { ...CLEAN, warnings: [THIN], standing: ['THICKNESS'], thickness: { verdict: 'THIN', valueMm: '0.95', source: 'HIDE', minMm: '1.10', maxMm: '1.30' } }
+const belowChecks: HideChecks = { ...CLEAN, warnings: [BELOW], standing: ['GRADE'], grade: { hide: 'C', byText: false, pieces: [{ name: 'Davanti', minGrade: 'B', verdict: 'BELOW' }, { name: 'Manica', minGrade: null, verdict: 'OK' }] } }
+const severalChecks: HideChecks = { ...belowChecks, warnings: [SHADE, BELOW], standing: ['SHADE', 'GRADE'], shade: shadeChecks.shade, reserved: { forIt: false, hides: [], lots: [] } }
+const passedChecks: HideChecks = { ...shadeChecks, standing: [], passed: ['SHADE'] }
+
+const checkModel = (checks: HideChecks, measuredMm: string | null = null): HideCheckModel => {
+  const card = cardCheck(checks, measuredMm)
+  return { workOrderNumber: 'WO-DEMO-0042', warnings: card.warnings, standing: card.standing, passed: checks.passed, shade: checks.shade, thickness: card.thickness, grade: checks.grade, reserved: checks.reserved, measuredMm, measurable: true }
+}
+
+const inDepth = (checks: HideChecks, extra: Partial<HideCardModel> = {}, measuredMm: string | null = null): HideCardModel => ({
+  ...hide,
+  lotCode: checks.shade.hide.lotCode,
+  grade: checks.grade.hide,
+  thicknessMm: checks.thickness.valueMm,
+  checks: checkModel(checks, measuredMm),
+  photo: { taken: false, required: checks.photo.required, held: null },
+  ...extra,
+})
+
+/** A card that stops: the size buttons pick the first set, the main action is Cut anyway (held with its reason, or not). */
+const stopped = (checks: HideChecks, held: NonNullable<CutViewModel['stopped']>['held'] = null, extra: Partial<CutViewModel> = {}): CutViewModel => check({ hide: inDepth(checks), stopped: { held, waiting: held === 'waiting' ? 2 : 0 }, ...extra })
+
+const PEOPLE = [
+  { id: 'w-1', name: 'Marta Demo' },
+  { id: 'w-2', name: 'Luca Demo' },
+  { id: 'w-3', name: 'Sara Demo' },
+]
+
+const anyway = (extra: Partial<AnywayModel> = {}, warnings: readonly CheckWarning[] = [SHADE]): AnywayModel => ({
+  hideCode: HIDE,
+  workOrderNumber: 'WO-DEMO-0042',
+  size: '52',
+  warnings,
+  measuredMm: null,
+  reasonCode: null,
+  words: '',
+  lead: null,
+  people: PEOPLE,
+  picking: false,
+  busy: false,
+  problem: null,
+  ...extra,
+})
+const signing = (extra: Partial<AnywayModel> = {}, warnings?: readonly CheckWarning[]): CutViewModel => stopped(shadeChecks, null, { anyway: anyway({ reasonCode: 'CHECKED_BY_EYE', lead: { kind: 'name', workerId: 'w-1', name: 'Marta Demo' }, ...extra }, warnings) })
+
+const W2B_CASES = [
+  { id: 'check-in-depth', label: 'W2b hide check passed (shade lot, reserved, thickness, grade)', model: check({ hide: inDepth(CLEAN) }), note: 'B-W2b-110: every check passes, so the size buttons are there at once (no tap). Same shade lot, reserved for this work order, thickness against the leather\'s range, the pieces\' minimum grade. Photo of the hide and Measure here on the card.' },
+  { id: 'stop-shade', label: 'Stops: another shade lot (Cut anyway)', model: stopped(shadeChecks), note: 'MES-053: W2b blocks it. The warning stops on the card, never as a tap on a size; the size buttons pick the first set the lead\'s signature records.' },
+  { id: 'stop-wrong-hide', label: 'Stops: not the reserved hide', model: stopped(wrongChecks), note: 'MES-063: the work order has a hide reserved by name; this one differs by lot and grade.' },
+  { id: 'stop-thin-measure-first', label: 'Stops: too thin as recorded (measure first)', model: stopped(thinChecks, 'measure'), note: 'MES-064: a thickness read off the hide\'s record: Cut anyway waits for a measure at the table (the office refuses it otherwise).' },
+  { id: 'stop-grade', label: 'Stops: grade too low for a piece', model: stopped(belowChecks), note: 'MES-055: the hide is grade C; Davanti asks B or better.' },
+  { id: 'stop-several', label: 'Stops: two warnings at once', model: stopped(severalChecks) },
+  { id: 'stop-offline', label: 'Stops, offline: Cut anyway needs the network', model: stopped(shadeChecks, 'offline', { frame: offlineFrame, asOf: '2026-10-29T08:35:00.000Z' }), note: 'The card as the tablet read it this visit; the lead\'s PIN is checked by the office, so Cut anyway is held with the reason. The queue never carries a signature.' },
+  { id: 'stop-waiting', label: 'Stops: cuts of this work order wait to be sent', model: stopped(shadeChecks, 'waiting'), note: 'Order: what this tablet saved for the work order goes first.' },
+  { id: 'anyway-reason', label: 'Cut anyway? — what differs, a reason tile', model: stopped(shadeChecks, null, { anyway: anyway() }), note: 'Design hidecut.override: what differs, a reason tile, the lead\'s PIN. Esc cancels.' },
+  { id: 'anyway-other-words', label: 'Cut anyway? — Other asks a few words', model: stopped(shadeChecks, null, { anyway: anyway({ reasonCode: 'OTHER', words: 'Pi' }) }) },
+  { id: 'anyway-lead', label: 'Cut anyway? — the lead scans a badge or is picked by name', model: stopped(shadeChecks, null, { anyway: anyway({ reasonCode: 'CHECKED_BY_EYE' }) }) },
+  { id: 'anyway-pick-name', label: 'Cut anyway? — pick the lead by name', model: stopped(shadeChecks, null, { anyway: anyway({ reasonCode: 'NO_OTHER_HIDE', picking: true }) }), note: 'The site\'s people, never the cutter: they cannot sign their own cut.' },
+  { id: 'anyway-pin', label: 'Cut anyway? — the lead\'s PIN', model: signing(), note: 'The sixth digit signs. The PIN goes in that one request and is never drawn or kept.' },
+  { id: 'anyway-pin-several', label: 'Cut anyway? — two warnings, thickness measured', model: stopped(severalChecks, null, { anyway: anyway({ reasonCode: 'HIDDEN_PARTS', lead: { kind: 'badge', code: 'BADGE' }, measuredMm: '0.98' }, [SHADE, BELOW]) }) },
+  { id: 'anyway-wrong-pin', label: 'Cut anyway? — badge or PIN wrong', model: signing({ problem: 'wrong' }) },
+  { id: 'anyway-cutter', label: 'Cut anyway? — the cutter cannot sign', model: signing({ problem: 'self' }) },
+  { id: 'anyway-not-lead', label: 'Cut anyway? — not a lead', model: signing({ problem: 'notLead' }) },
+  { id: 'anyway-locked', label: 'Cut anyway? — too many tries', model: signing({ problem: 'locked' }) },
+  { id: 'anyway-no-answer', label: 'Cut anyway? — no answer (sign again)', model: signing({ problem: 'unavailable' }), note: 'The same cut, the same client id: signed again, it is recorded once.' },
+  { id: 'anyway-busy', label: 'Cut anyway? — signing', model: signing({ busy: true }) },
+  {
+    id: 'anyway-signed',
+    label: 'Signed: the first set recorded, cut the rest',
+    model: check({ hide: inDepth(passedChecks), notice: { tone: 'success', text: 'Cut anyway signed (shade): the first set is recorded. Cut the rest as usual.' } }),
+    note: 'The pass is per hide and work order: the next sets of this hide queue as usual. The signed set is on the scan step\'s strip, recorded, with Undo (online): the pass goes with it.',
+  },
+  { id: 'anyway-changed', label: 'The check changed since the card', model: stopped(severalChecks, null, { notice: { tone: 'warning', text: 'The hide\'s check changed since the card (grade): read it again, then a lead signs.' } }) },
+  { id: 'measure-pad', label: 'Thickness at the table', model: { ...check({ hide: inDepth(thinChecks) }), stage: 'measure', measure: { value: 0.98, problem: null } }, note: 'MES-064: mm on the pad; it goes with every cut of this hide while it is on the table.' },
+  { id: 'measure-empty', label: 'Thickness at the table — nothing typed', model: { ...check({ hide: inDepth(thinChecks) }), stage: 'measure', measure: { value: null, problem: 'empty' } } },
+  { id: 'measured-in-range', label: 'Measured here inside the range: the warning goes', model: check({ hide: inDepth(thinChecks, {}, '1.15') }), note: 'The record said 0.95 mm; 1.15 mm measured at the table is inside 1.10–1.30: no warning, the sizes open. The cut carries the measure.' },
+  { id: 'measured-still-thin', label: 'Measured here, still too thin', model: stopped(thinChecks, null, { hide: inDepth(thinChecks, {}, '0.98') }), note: 'Measured: Cut anyway may open; the entry records what the lead saw.' },
+  { id: 'photo-step', label: 'Photo of the hide', model: { ...check({ hide: inDepth(CLEAN) }), stage: 'photo', photoStep: { sending: false, failed: false, held: null } }, note: 'MES-060: camera step with an outline guide, faces kept out; the camera starts only when asked.' },
+  { id: 'photo-sending', label: 'Photo of the hide — sending', model: { ...check({ hide: inDepth(CLEAN) }), stage: 'photo', photoStep: { sending: true, failed: false, held: null } } },
+  { id: 'photo-failed', label: 'Photo of the hide — did not reach the office', model: { ...check({ hide: inDepth(CLEAN) }), stage: 'photo', photoStep: { sending: false, failed: true, held: null } } },
+  { id: 'photo-offline', label: 'Photo of the hide — needs the network', model: { ...check({ frame: offlineFrame, hide: inDepth(CLEAN, { photo: { taken: false, required: false, held: 'offline' } }) }), stage: 'photo', photoStep: { sending: false, failed: false, held: 'offline' } } },
+  { id: 'photo-taken', label: 'Photo taken: it goes with the next cut', model: check({ hide: inDepth(CLEAN, { photo: { taken: true, required: false, held: null } }) }) },
+  { id: 'photo-required', label: 'A site that asks the photo first', model: check({ hide: inDepth({ ...CLEAN, photo: { required: true } }), photoFirst: true }), note: 'No site setting yet (B-W2b-103): optional everywhere today. When a site asks it, + 1 set waits for the photo.' },
+  { id: 'remnant-tag-scanned', label: 'A remnant scanned by its RM tag', model: check({ hide: inDepth(CLEAN, { state: 'REMNANT', remnantTag: 'RM-5P-00003P-K', left: '14.2000' }) }), note: 'B-W2b-100: the RM tag is looked up to its hide (online).' },
+  { id: 'remnant-no-right', label: 'An RM tag the role cannot look up', model: scan({ notice: { tone: 'danger', text: 'This is a remnant\'s tag, and your role cannot look it up: scan the hide\'s own tag on it.' } }) },
+  { id: 'remnant-too-small', label: 'Remnant smaller than the minimum kept', model: remnant(0.6, { problem: 'tooSmall', minimum: remnantMinimum('FT2') }), note: 'B-W2b-100: a piece under 10 dm² is waste; the office refuses it, so the save waits.' },
+  { id: 'refused-cut-warning', label: 'The office refused a queued cut: warnings now', model: scan({ last: { text: `${HIDE_2} · 52 × 2 · not done`, ticks: 'refused', refused: 'This hide has warnings no lead signed for. Take another hide, or scan it again online: a lead signs Cut anyway with their PIN and a reason.', undo: null } }), note: 'A card read clean (or offline) whose warning appeared before the queue sent it: refused, final, in words.' },
+] satisfies { id: string; label: string; model: CutViewModel; note?: string }[]
+
 export const designScreen = defineDesignScreen<CutViewModel>({
   screen: 'SCR-094',
   title: 'Hide check & cut log',
@@ -114,5 +228,6 @@ export const designScreen = defineDesignScreen<CutViewModel>({
     { id: 'error', label: 'The office does not answer', model: { frame, stage: 'scan', workOrder: chip, refusal: { kind: 'problem', problem: { kind: 'unavailable' }, code: HIDE } } },
     { id: 'not-found', label: 'Not a hide of this site', model: { frame, stage: 'scan', workOrder: chip, refusal: { kind: 'problem', problem: { kind: 'notFound' }, code: 'HD-XX-1' } } },
     { id: 'no-permission', label: 'No permission to cut', model: { frame, stage: 'workOrder', noPermission: true }, note: 'Fail closed: without production.cut nothing is asked.' },
+    ...W2B_CASES,
   ],
 })

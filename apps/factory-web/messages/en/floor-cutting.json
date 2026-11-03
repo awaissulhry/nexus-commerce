@@ -38,7 +38,8 @@
       "start": "Use the camera",
       "stop": "Stop the camera",
       "error": "The camera did not start. Use the scanner or type the code."
-    }
+    },
+    "remnantNoRight": "This is a remnant's tag, and your role cannot look it up: scan the hide's own tag on it."
   },
   "hide": {
     "type": "Hide",
@@ -69,7 +70,8 @@
     "lastCut": {
       "station": "Cut on {station} at {time} for {number}: {left} left.",
       "noStation": "Cut at {time} for {number}: {left} left."
-    }
+    },
+    "remnantTag": "Scanned by the remnant's tag {tag}: a piece of this hide."
   },
   "sets": {
     "title": "Log the pieces",
@@ -119,7 +121,8 @@
     "held": {
       "empty": "Type the remnant's area.",
       "place": "Pick where it goes."
-    }
+    },
+    "tooSmall": "Smaller than the smallest remnant kept ({min}): it is waste. Choose No remnant · done."
   },
   "pad": {
     "less": "Less",
@@ -140,7 +143,8 @@
     "undoHeld": {
       "offline": "Undo needs the network.",
       "notRecorded": "Undo once the office has recorded it."
-    }
+    },
+    "anyway": "cut anyway: {reason}"
   },
   "confirm": {
     "title": "Leave this hide?",
@@ -201,6 +205,172 @@
     "REJECTED": {
       "message": "This hide's lot was rejected.",
       "fix": "Do not cut. Put it back and tell your team leader."
+    },
+    "CUT_WARNING": {
+      "message": "This hide has warnings no lead signed for.",
+      "fix": "Take another hide, or scan it again online: a lead signs Cut anyway with their PIN and a reason."
+    },
+    "LEAD_PIN_WRONG": {
+      "message": "The lead's badge or PIN is wrong, or the lead is locked for a few minutes.",
+      "fix": "The lead tries again, or another lead signs."
+    },
+    "LEAD_IS_CUTTER": {
+      "message": "The cutter cannot sign Cut anyway for their own cut.",
+      "fix": "Another lead signs."
+    },
+    "NOT_A_LEAD": {
+      "message": "This person may not let a hide be cut anyway.",
+      "fix": "A lead with that right signs."
+    },
+    "LEAD_NOTE_MISSING": {
+      "message": "Other needs a few words of why.",
+      "fix": "Say why, then sign again."
+    },
+    "REMNANT_TOO_SMALL": {
+      "message": "This piece is smaller than the smallest remnant kept: it is waste.",
+      "fix": "Close the hide with No remnant · done."
+    }
+  },
+  "check": {
+    "stops_one": "{count} warning: this hide stops here. Take another hide, or a lead signs Cut anyway.",
+    "stops_other": "{count} warnings: this hide stops here. Take another hide, or a lead signs Cut anyway.",
+    "clear": "Hide check passed for this work order.",
+    "passed": "A lead let this hide be cut anyway for this work order: {kinds}.",
+    "reserved": "Reserved for {number}.",
+    "shade": {
+      "same": "Same shade lot: {number} is cut from {cutFrom} · this hide: {hide}.",
+      "first": "The first hide of {number}: its shade lot ({hide}) sets the shade."
+    },
+    "warning": {
+      "SHADE_LOT": "Different shade lot: {number} is cut from {cutFrom}; this hide is {hide}. One shade lot per order.",
+      "OUT_OF_SHADE": "Out of shade: this hide is {hide}, and {number} asks one shade lot.",
+      "GARMENT_SHADE": "Size {cell}: the garment's other parts are cut from {cutFrom}; this hide is {hide}.",
+      "NOT_RESERVED_one": "Not the reserved hide: {number} has {count} hide reserved for it ({hides}). This hide: {differs}.",
+      "NOT_RESERVED_other": "Not a reserved hide: {number} has {count} hides reserved for it ({hides}). This hide: {differs}.",
+      "RESERVED_LOT": "Not the reserved lot: {number} has its leather reserved from {lots}; this hide is lot {lot}.",
+      "THIN": "Too thin: {value} mm {where}; the leather asks {range}.",
+      "THICK": "Too thick: {value} mm {where}; the leather asks {range}.",
+      "BELOW": "Grade {grade} is too low for some pieces: {pieces}.",
+      "UNGRADED": "This hide has no grade, and some pieces ask one: {pieces}.",
+      "other": "Check: {kind}."
+    },
+    "differ": {
+      "COLOUR": "another colour",
+      "LOT": "lot {lot}, reserved {lots}",
+      "GRADE": "grade {grade}, reserved {grades}",
+      "none": "not one of them"
+    },
+    "where": {
+      "HIDE": "as recorded on the hide",
+      "TABLE": "measured here"
+    },
+    "range": {
+      "both": "{min}–{max} mm",
+      "min": "at least {min} mm",
+      "max": "at most {max} mm"
+    },
+    "piece": {
+      "asks": "{name} asks {grade} or better"
+    },
+    "kind": {
+      "SHADE": "shade",
+      "WRONG_HIDE": "wrong hide",
+      "THICKNESS": "thickness",
+      "GRADE": "grade"
+    },
+    "thickness": {
+      "recorded": "{value} mm as recorded",
+      "measured": "{value} mm measured here",
+      "unknown": "Not recorded",
+      "withRange": "{value} · the leather asks {range}"
+    },
+    "grade": {
+      "label": "Pieces and grade",
+      "byText": "(grade read from the hide's text)",
+      "piece": {
+        "OK": "{name}: {grade} or better ✓",
+        "BELOW": "{name}: {grade} or better ✗",
+        "UNKNOWN": "{name}: {grade} or better ?"
+      }
+    }
+  },
+  "anyway": {
+    "title": "Cut anyway?",
+    "lead": "A lead looks at the hide and signs with their badge or name, their PIN and a reason. The first set is recorded with the signature; then you cut as usual.",
+    "firstSet": "First set",
+    "open": "Cut anyway",
+    "another": "Or take another hide: Scan another hide, then its tag.",
+    "held": {
+      "offline": "Cut anyway needs the network: the office checks the lead's PIN.",
+      "waiting_one": "{count} cut of this work order waits to be sent first.",
+      "waiting_other": "{count} cuts of this work order wait to be sent first.",
+      "measure": "Measure the thickness at the table first (Measure here).",
+      "pickSize": "Pick the size of the first set.",
+      "allCut": "Size {size} is all cut: pick another size.",
+      "photo": "Take the photo of the hide first."
+    },
+    "dialog": {
+      "title": "Cut anyway?",
+      "what": "What differs",
+      "signs": "The lead signs for 1 set of size {size} from {hide} for {number}.",
+      "reason": "Why may it be cut?",
+      "because": "Because: {reason}",
+      "change": "Change",
+      "words": "Say why",
+      "badge": "The lead scans their badge",
+      "badgeHint": "No badge at hand? Pick the lead by name.",
+      "badgeRead": "Badge read",
+      "byName": "Pick the lead by name",
+      "pickName": "Who signs?",
+      "useBadge": "Use a badge instead",
+      "signsBadge": "The lead whose badge was read signs with their PIN.",
+      "signsName": "{name} signs with their PIN.",
+      "otherLead": "Another lead",
+      "pin": "The lead's PIN",
+      "cancel": "Cancel",
+      "measured": "Thickness measured here: {value} mm. It goes with the cut."
+    },
+    "problem": {
+      "wrong": "Badge or PIN wrong, or the lead is locked for a few minutes. Try again, or another lead signs.",
+      "self": "The cutter cannot sign for their own cut: another lead signs.",
+      "notLead": "This person may not let a hide be cut anyway: a lead with that right signs.",
+      "note": "Other: say why in a few words.",
+      "locked": "Too many tries on this tablet: wait a few minutes.",
+      "unavailable": "No answer from the office. The lead signs again: the cut is recorded once.",
+      "measure": "Measure the thickness at the table first, then a lead signs again."
+    },
+    "done": "Cut anyway signed ({kinds}): the first set is recorded. Cut the rest as usual.",
+    "changed": "The hide's check changed since the card ({kinds}): read it again, then a lead signs."
+  },
+  "measure": {
+    "open": "Measure here",
+    "again": "Measure again",
+    "title": "Thickness of {code} at the table",
+    "value": "Thickness",
+    "spec": "The leather asks {range}.",
+    "recorded": "Recorded on the hide: {value} mm.",
+    "save": "Use this thickness",
+    "range": "Up to 99.99 mm",
+    "goes": "It goes with every cut of this hide while it is on the table.",
+    "clear": "Clear the measure ({value} mm)",
+    "held": {
+      "empty": "Type the thickness in mm.",
+      "invalid": "A thickness in mm, like 1.25."
+    }
+  },
+  "photo": {
+    "open": "Photo of the hide",
+    "retake": "Take the photo again",
+    "title": "Photo of {code}",
+    "label": "Photo of the hide on the table",
+    "hint": "Lay the hide flat on the table, inside the frame. Keep faces out of the picture.",
+    "taken": "Photo of the hide taken: it goes with the next cut of this hide.",
+    "required": "This site asks a photo of the hide before cutting.",
+    "heldFirst": "Take the photo of the hide first.",
+    "sending": "Sending the photo…",
+    "failed": "The photo did not reach the office. Try again, or cut without it.",
+    "held": {
+      "offline": "The photo needs the network. Cut without it, or wait for the network."
     }
   }
 }
