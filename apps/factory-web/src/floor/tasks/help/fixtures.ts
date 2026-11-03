@@ -79,7 +79,7 @@ export const designScreen = defineDesignScreen<HelpViewModel>({
     { id: 'call-coming', label: 'On the way: "Paolo · team · on the way"', model: openCall(COMING), note: 'A floor responder is named inside this one call.' },
     { id: 'call-office', label: 'On the way from the office: no name on the floor', model: openCall(OFFICE) },
     { id: 'call-machine', label: 'Machine: says what is wrong next', model: openCall(call(MACHINE)) },
-    { id: 'call-safety', label: 'Safety: Report an incident held with its wave', model: openCall(call(SAFETY)) },
+    { id: 'call-safety', label: 'Safety: followed by Report an incident (SCR-230, B-W2b-137)', model: openCall(call(SAFETY)) },
     { id: 'call-words', label: 'With words added', model: openCall(call(MATERIAL, { note: 'Mancano le fodere per il fascio 12.' }), { done: 'details' }) },
     { id: 'call-offline', label: 'Your call offline: as of', model: model({ kind: 'call', callId: SEEN.id }, station([SEEN]), { online: false, asOf: AT }) },
     { id: 'call-asked', label: 'Material: the call says why and how much', model: openCall(ASKED, { done: 'ask' }), note: 'MES-137. The quantity has no unit on purpose: the tile and the words say of what.' },
