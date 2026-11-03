@@ -759,6 +759,17 @@ describe('a late team share of a locked month (B-W2b-84: found in B-W2b-43)', ()
     const opened = await ok('hr', 'POST', `/people/statements/${statement.id}/open`, {})
     expect(opened.corrections.map((line: Json) => [line.kind, line.month, line.amount])).toEqual(expect.arrayContaining([['TEAM_SPLIT', MONTH, 100]]))
   })
+
+  it('a block of the locked month paid there is not paid again in the later period, so the statement still matches the ledger', async () => {
+    const lockedId = (await admin<{ id: string }>(`SELECT id FROM "PayPeriod" WHERE "tenantId" = $1 AND "companyId" = $2 AND "periodStart" = $3::date`, [T, companyA, `${MONTH}-01`]))[0]!.id
+    const later = (await admin<{ id: string }>(`SELECT "payPeriodId" AS id FROM "EarningsEntry" WHERE "employeeId" = $1 AND kind = 'TEAM_SPLIT' AND "correctsPeriodId" = $2 LIMIT 1`, [employee.b, lockedId]))[0]!.id
+    // B's waiting and cleaning of the locked month were paid there (at the average, and at the guarantee).
+    expect(await admin(`SELECT id FROM "EarningsEntry" WHERE "payPeriodId" = $1 AND "employeeId" = $2 AND kind = 'OFF_STANDARD'`, [later, employee.b])).toEqual([])
+    const statement = (await admin<{ id: string }>(`SELECT id FROM "WorkerStatement" WHERE "payPeriodId" = $1 AND "employeeId" = $2 AND status <> 'SUPERSEDED' ORDER BY revision DESC`, [later, employee.b]))[0]!
+    const opened = await ok('hr', 'POST', `/people/statements/${statement.id}/open`, {})
+    expect(opened.corrections.map((line: Json) => line.kind)).toEqual(['TEAM_SPLIT'])
+    expect(opened).toMatchObject({ stale: false, earningsAmount: 100 })
+  })
 })
 
 describe('corrections and the ledger (MES-256)', () => {

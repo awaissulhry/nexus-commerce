@@ -291,6 +291,15 @@ export async function syncPersonInCommand(tools: CommandTools, facts: PayFacts, 
   const others = await othersFaultOf(tx, facts, period, scans)
   const othersMinutes = others.lines.reduce((sum, item) => sum + item.minutes, 0)
   const average = averagePerMinuteOf({ earned: Math.max(0, pieceEarned), minutes: Math.max(0, presentTotal - blockMinutes - othersMinutes), currency })
+  // A block of an earlier month already paid in its own period is that period's figure: "late" is a block decided after the
+  // lock, never paid yet (B-W2b-84: the run re-priced paid blocks at the guaranteed rate, and a block priced the same was shown
+  // on the statement but not booked, so the statement stopped matching the ledger and the period could not lock).
+  const lateIds = blocks.filter((row) => dayOf(row.workDate) < first).map((row) => row.id)
+  const paidElsewhere = new Set(
+    lateIds.length === 0
+      ? []
+      : (await tx.earningsEntry.findMany({ where: { sourceType: 'OffStandardEntry', sourceId: { in: lateIds }, reversalOfId: null, reversedBy: { none: {} }, payPeriodId: { not: period.id } }, select: { sourceId: true } })).map((row) => row.sourceId),
+  )
   const time: EntryDraft[] = []
   for (const block of blocks) {
     const day = dayOf(block.workDate)
@@ -299,6 +308,7 @@ export async function syncPersonInCommand(tools: CommandTools, facts: PayFacts, 
     const paidMinutesOf = minutesOf(block.startedAt, block.endedAt)
     if (!code || !block.workerId || !paysOn(site.windows, day) || paidMinutesOf === 0) continue
     const late = day < first
+    if (late && paidElsewhere.has(block.id)) continue
     if (late) {
       // An earlier month: only once it is locked, and into the first period open after it.
       const place = await placeOf(tools, person.companyId, day)
