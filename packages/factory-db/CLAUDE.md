@@ -112,7 +112,14 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    partial uniques), lays with the ply check at both ends, lay rolls of one shade, ply runs, the reconciliation append-only, the
    consumption, secondary processes, trolleys to sewing, pattern pieces frozen with their revision (it reuses the product part rule),
    second quality; its own trigger `CutLog_cutting_rules` (photo, thickness, overrides) and no cut log function touched; it redefines
-   wave 5's `factory_rework_order_guard` (the repair station's scans) and `factory_replacement_request_guard` (the recut ticket)): triggers, partial unique indexes and deferred
+   wave 5's `factory_rework_order_guard` (the repair station's scans) and `factory_replacement_request_guard` (the recut ticket)),
+   `…_plant_care_w2b_guards` (W2b wave 14/16: check types, plans (one active per machine and type: a partial unique) and results
+   append-only (corrected once: a partial unique), the machine status history append-only, written by its own trigger
+   `Machine_status_history` on every status change, clicking dies, the site's plant rules held at Owner answer H1, routing rules;
+   its own trigger `StoredFile_floor_guard` (the floor adds and confirms only the photos and voice notes of a request or job); it
+   redefines wave 6's `factory_maintenance_request_guard` (progress, routing, escalation) and `factory_maintenance_job_guard`
+   (failure code, minutes, the lead's confirmation, the check result) and wave 11's `factory_generated_document_check` (CHECK_REPORT
+   of its MachineCheckResult)): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written

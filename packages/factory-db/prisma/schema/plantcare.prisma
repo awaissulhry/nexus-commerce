@@ -1,0 +1,361 @@
+// Plant care (W2b schema wave 14/16, B-W2b-86; features QHS-167, QHS-173, QHS-179, QHS-180, QHS-183, QHS-189, QHS-190,
+// QHS-205, QHS-219; Owner answer H1; D.Lgs. 81/2008 art. 71 c.4, c.8 to c.11 and Annex VII; design plant.preventive,
+// plant.machines "Clicking dies" and the record's "Status & downtime", plant.settings "Request routing and escalation",
+// "Unsafe lock" and "Statutory check types", plant.requests, plant.jobs, floor.machine). W2a built the machine register,
+// requests and jobs only (plant.prisma, B-W2a-35: no plans, no status history); this file adds what plant care needs around
+// them: statutory and periodic checks with their plans and the register of results, the history of every machine's
+// status, the clicking dies, the site's lock rules and where a request goes. apps/factory-api's modules/plant writes them
+// (B-W2b-96 requests and jobs, B-W2b-124 statutory checks, B-W2b-136 machines and dies), always through command().
+//
+// Checks (QHS-205, QHS-219): a check type is the tenant's (pressure vessels, lifting equipment, earthing, press guards and
+// two-hand controls), with its legal basis, its default interval, whether an outside body does it and how long its
+// results are kept (at least three years: art. 71 c.9). A plan puts one type on one machine with its interval and next due
+// date; a result is the check done, append-only: its outcome, who did it, the next due date and until when it is kept.
+// The report itself is a file of the result (StoredFile recordType "MachineCheckResult", category CHECK_REPORT), and its PDF
+// a generated document (GeneratedDocumentKind CHECK_REPORT); "reports missing" is a result with no such file. A wrong
+// result is corrected by a new one that names it, never changed.
+//
+// Status history (QHS-167): every change of Machine.status writes one MachineStatusEvent, by the database itself (the
+// …_plant_care_w2b_guards trigger on Machine, for every login), so no path that moves a machine can forget it. The event
+// names the machine, never a person (Statuto dei Lavoratori art. 4): who changed it is in the audit log of the command.
+//
+// The unsafe lock (Owner answer H1): anyone at the station locks a machine at once, only a technician signs it safe. The
+// site's PlantSettings say who may lock and who may sign safe with the design's choices, and the database keeps both at
+// H1 until the Owner decides otherwise (the guard refuses the other values).
+//
+// Statuto dei Lavoratori art. 4: nothing here is a figure about one person. A routing rule names a team or a technician
+// to send requests to, and the people a request escalates to; a job's minutes are the job's, never summed per person.
+//
+// Who sees what (ownership/plantcare.json): the office reads and writes. The floor of a site reads its dies (never their
+// cost), its lock rules and its routing rules (a report from the station is routed in its own command), and writes a
+// machine's status event through the machine's trigger. Check types, plans and results are the office's. Portal and link
+// sessions read nothing here.
+
+/// How long between two checks of a plan.
+enum CheckIntervalUnit {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+/// A kind of statutory or periodic check (QHS-205, QHS-219; design plant.settings "Statutory check types"): its words, the
+/// law it rests on, the interval a new plan starts from, whether an outside body does it, how long its results are kept
+/// (at least three years, D.Lgs. 81/2008 art. 71 c.9) and, when given, the class of machine it is for. Retired (inactive),
+/// never deleted while a plan or result names it.
+model MachineCheckType {
+  id                  String            @id @db.Uuid
+  tenantId            String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Upper-case letters, digits and underscores (factory-domain checks it); unique in the tenant; never changes.
+  code                String
+  labelIt             String
+  labelEn             String
+  labelI18n           Json              @default("{}")
+  /// The law or standard it rests on, in words ("D.Lgs. 81/2008 art. 71 c.11, Annex VII"; "DPR 462/2001").
+  legalBasis          String
+  /// The class of machine it is for; null: any machine.
+  classId             String?           @db.Uuid
+  /// The interval a new plan starts from: a number of days, weeks, months or years, at most ten years.
+  defaultInterval     Int
+  defaultIntervalUnit CheckIntervalUnit
+  /// Done by an outside body (INAIL, the ASL or ARPA, an accredited inspector), not in house.
+  outsideBody         Boolean           @default(false)
+  /// Its results are kept at least this many years (3 to 30; the law's minimum is three).
+  retentionYears      Int               @default(3)
+  sortOrder           Int               @default(0)
+  active              Boolean           @default(true)
+  version             Int               @default(1)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?           @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  machineClass MachineClass?        @relation(fields: [tenantId, classId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  plans        MachineCheckPlan[]
+  results      MachineCheckResult[]
+
+  @@unique([tenantId, code])
+  // The target of the plans' and results' tenant-safe references.
+  @@unique([tenantId, id])
+}
+
+/// ACTIVE → ENDED (final: the machine retired, the check no longer due).
+enum CheckPlanStatus {
+  ACTIVE
+  ENDED
+}
+
+/// One check type on one machine (design plant.preventive "Plans", "New plan"): its interval, the outside body that does
+/// it, who looks after it, when it was first due and when it is due next, and how many days before that the reminder goes.
+/// One ACTIVE plan per machine and type (the partial unique index). Ended, never deleted: its results stay.
+model MachineCheckPlan {
+  id                 String            @id @db.Uuid
+  tenantId           String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The machine's company and site.
+  companyId          String            @db.Uuid
+  siteId             String            @db.Uuid
+  machineId          String            @db.Uuid
+  checkTypeId        String            @db.Uuid
+  /// A number of days, weeks, months or years, at most ten years.
+  interval           Int
+  intervalUnit       CheckIntervalUnit
+  /// The outside body that does it (an organisation of the tenant); null: in house or not chosen yet.
+  outsideBodyPartyId String?           @db.Uuid
+  /// The office user who looks after it; null: nobody named.
+  ownerId            String?           @db.Uuid
+  /// When it was first due; never changes.
+  firstDueOn         DateTime          @db.Date
+  /// When it is due next (moved by each result, or by hand with a reason in the audit log).
+  nextDueOn          DateTime          @db.Date
+  /// The reminder goes this many days before it is due (0 to 365).
+  reminderDays       Int               @default(30)
+  /// When the last reminder of this due date went.
+  lastRemindedAt     DateTime?         @db.Timestamptz(3)
+  status             CheckPlanStatus   @default(ACTIVE)
+  /// ENDED: when and why.
+  endedAt            DateTime?         @db.Timestamptz(3)
+  endedReason        String?
+  note               String?
+  version            Int               @default(1)
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?           @db.Uuid
+
+  site        Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  machine     Machine              @relation(fields: [tenantId, siteId, machineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  checkType   MachineCheckType     @relation(fields: [tenantId, checkTypeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  outsideBody Party?               @relation("MachineCheckPlanOutsideBody", fields: [tenantId, outsideBodyPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  results     MachineCheckResult[]
+
+  // The target of the results' reference: a plan of the same site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, machineId])
+  @@index([tenantId, nextDueOn])
+}
+
+/// What a check found (design plant.preventive "Check register": Passed / Passed with remarks / Failed).
+enum CheckOutcome {
+  PASSED
+  /// Passed, with remarks to act on.
+  PASSED_WITH_REMARKS
+  /// Failed: the screen offers "Make a job" and "Lock as unsafe" in the same step.
+  FAILED
+}
+
+/// A check done on a machine (QHS-205, QHS-219; the control register, D.Lgs. 81/2008 art. 71 c.9): the machine and check
+/// type (and the plan, when it came from one), the day, the outcome and remarks, who did it (the outside body or the
+/// inspector, as on the report), the next due date it gives and until when it is kept. The report is a file of the row
+/// (StoredFile recordType "MachineCheckResult", category CHECK_REPORT). A correction is a new row naming the one it
+/// corrects, with why; each result is corrected at most once.
+/// @append-only
+model MachineCheckResult {
+  id                 String       @id @db.Uuid
+  tenantId           String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The machine's company and site.
+  companyId          String       @db.Uuid
+  siteId             String       @db.Uuid
+  machineId          String       @db.Uuid
+  checkTypeId        String       @db.Uuid
+  /// The plan it was due under (of the same machine and type); null: a check out of plan (after a repair or a change).
+  planId             String?      @db.Uuid
+  performedOn        DateTime     @db.Date
+  outcome            CheckOutcome
+  /// What was found: required unless PASSED.
+  remarks            String?
+  /// Who did it, as on the report: the outside body or the inspector.
+  performedBy        String
+  /// The outside body as an organisation of the tenant, when it is one.
+  outsideBodyPartyId String?      @db.Uuid
+  /// The next due date the check gives (after the day it was done); null: the plan's interval decides.
+  nextDueOn          DateTime?    @db.Date
+  /// Kept at least until then: three years from the check at least, and the type's retention years.
+  keptUntil          DateTime     @db.Date
+  /// The result it corrects (of the same machine and type), and why: exactly together.
+  correctsId         String?      @db.Uuid
+  correctionReason   String?
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  createdById        String?      @db.Uuid
+
+  site        Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  machine     Machine              @relation(fields: [tenantId, siteId, machineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  checkType   MachineCheckType     @relation(fields: [tenantId, checkTypeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  plan        MachineCheckPlan?    @relation(fields: [tenantId, siteId, planId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  outsideBody Party?               @relation("MachineCheckResultOutsideBody", fields: [tenantId, outsideBodyPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  corrects    MachineCheckResult?  @relation("MachineCheckResultCorrection", fields: [tenantId, siteId, correctsId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  correctedBy MachineCheckResult[] @relation("MachineCheckResultCorrection")
+  // plant.prisma: the maintenance jobs made from it (a failed check makes the job).
+  jobs        MaintenanceJob[]
+
+  // The target of the corrections' and jobs' references: a result of the same site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, machineId, performedOn])
+  @@index([tenantId, planId])
+}
+
+/// One change of a machine's status (QHS-167; design plant.machines record "Status & downtime"): from what, to what, when
+/// (the machine's statusSince) and why (its statusReason). Written by the database whenever Machine.status changes, for
+/// every login; never changed or deleted. Names the machine only, never a person.
+/// @append-only
+model MachineStatusEvent {
+  id         String         @id @db.Uuid
+  tenantId   String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The machine's company and site.
+  companyId  String         @db.Uuid
+  siteId     String         @db.Uuid
+  machineId  String         @db.Uuid
+  /// The status before; null: the history's first row of a machine written another way (an import).
+  fromStatus MachineStatus?
+  toStatus   MachineStatus
+  /// When it changed: the machine's statusSince (a report queued on a tablet keeps the time it was made).
+  at         DateTime       @db.Timestamptz(3)
+  /// Why: the machine's statusReason, when it has one.
+  reason     String?
+  /// When it was written.
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+
+  site    Site    @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  machine Machine @relation(fields: [tenantId, siteId, machineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, machineId, at])
+}
+
+/// The state of a clicking die (design "condition"); RETIRED is final.
+enum DieCondition {
+  GOOD
+  /// Usable, wearing out: plan a new one.
+  WORN
+  /// Not to be used until it is repaired.
+  DAMAGED
+  /// Out of use for good, kept for its history.
+  RETIRED
+}
+
+/// A cutting die for a clicking press (QHS-173; design plant.machines "Clicking dies"): its number, the style, size and
+/// piece it cuts (the pattern piece, when the style's pattern names it), the rack it lies on, its material, supplier and
+/// cost, and its condition. Retired, never deleted.
+model ClickingDie {
+  id             String       @id @db.Uuid
+  tenantId       String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company and site whose cutting room keeps it.
+  companyId      String       @db.Uuid
+  siteId         String       @db.Uuid
+  /// The die number stamped on it, unique in the tenant; never changes.
+  code           String
+  styleId        String       @db.Uuid
+  /// A size code of the style's range; null: one die for every size.
+  size           String?
+  /// The piece it cuts, as the pattern names it ("Front left", "Sleeve").
+  piece          String
+  /// The style's pattern piece it cuts (W2b cutting.prisma), when the pattern names it.
+  patternPieceId String?      @db.Uuid
+  /// Where it lies ("Rack R3, shelf 2").
+  rackLocation   String?
+  /// What it is made of ("steel rule", "forged steel").
+  material       String?
+  supplierId     String?      @db.Uuid
+  /// What it cost, in the company's currency (minor units; office only).
+  /// @grain cost
+  purchaseCost   Int?
+  condition      DieCondition @default(GOOD)
+  note           String?
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?      @db.Uuid
+
+  site         Site          @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  style        Style         @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and styleId.
+  patternPiece PatternPiece? @relation(fields: [tenantId, styleId, patternPieceId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier     Party?        @relation("ClickingDieSupplier", fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, siteId])
+  @@index([tenantId, styleId])
+}
+
+/// Who may lock a machine as unsafe (design plant.settings "Unsafe lock").
+enum PlantLockBy {
+  /// Anyone at the station, at once (Owner answer H1; the only value the database takes until the Owner decides).
+  ANYONE_AT_STATION
+  LEADS_AND_TECHNICIANS
+}
+
+/// Who may sign a locked machine safe again (design plant.settings "Unsafe lock").
+enum PlantSignSafeBy {
+  /// Technicians only (Owner answer H1; the only value the database takes until the Owner decides).
+  TECHNICIANS
+  TECHNICIANS_AND_SAFETY_OFFICER
+}
+
+/// The plant rules of one site (design plant.settings "Unsafe lock"): who may lock a machine, who may sign it safe, and
+/// whether a lock opens a hazard report in Incidents. A site without a row has the defaults (H1, a hazard report).
+model PlantSettings {
+  /// The site's own id (`siteId`): a site has at most one row, and it is read by the site's id.
+  id                 String          @id @db.Uuid
+  tenantId           String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId          String          @db.Uuid
+  siteId             String          @db.Uuid
+  lockBy             PlantLockBy     @default(ANYONE_AT_STATION)
+  signSafeBy         PlantSignSafeBy @default(TECHNICIANS)
+  /// A lock opens a hazard report in Plant › Incidents (QHS-183).
+  hazardReportOnLock Boolean         @default(true)
+  version            Int             @default(1)
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?         @db.Uuid
+
+  site Site @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId])
+}
+
+/// Where a machine request of a site goes (QHS-179; design plant.settings "Request routing and escalation"): for a class of
+/// machine (or every class), a team of the site or one technician of the company, a push or not, and who it escalates to
+/// when nobody acknowledges it in time, and then who next. Rules are read in order (seq, then id): the first that fits
+/// wins. A rule a request names is set inactive, never deleted.
+model RequestRoutingRule {
+  id                        String   @id @db.Uuid
+  tenantId                  String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId                 String   @db.Uuid
+  siteId                    String   @db.Uuid
+  /// Its place in the site's list (from 0).
+  seq                       Int
+  /// The class of machine it is for; null: every class (the fallback, usually last).
+  machineClassId            String?  @db.Uuid
+  /// Where requests go: a team of the site (its members on shift) or one technician (an employee of the company);
+  /// exactly one.
+  teamId                    String?  @db.Uuid
+  technicianId              String?  @db.Uuid
+  /// Send a push notification (PLT push).
+  push                      Boolean  @default(true)
+  /// Not acknowledged after these minutes (1 to 1440): escalate to this person (an employee of the company); both or
+  /// neither.
+  escalateAfterMinutes      Int?
+  escalateToId              String?  @db.Uuid
+  /// Still not acknowledged after these minutes (more than the first, at most 1440): escalate again, to this person; both
+  /// or neither, and only after a first escalation.
+  escalateAgainAfterMinutes Int?
+  escalateAgainToId         String?  @db.Uuid
+  active                    Boolean  @default(true)
+  version                   Int      @default(1)
+  createdAt                 DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById               String?  @db.Uuid
+
+  site           Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId or siteId.
+  machineClass   MachineClass?        @relation(fields: [tenantId, machineClassId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  team           Team?                @relation("RequestRoutingRuleTeam", fields: [tenantId, siteId, teamId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  technician     Employee?            @relation("RequestRoutingRuleTechnician", fields: [tenantId, companyId, technicianId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  escalateTo     Employee?            @relation("RequestRoutingRuleEscalateTo", fields: [tenantId, companyId, escalateToId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  escalateAgainTo Employee?           @relation("RequestRoutingRuleEscalateAgainTo", fields: [tenantId, companyId, escalateAgainToId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // plant.prisma: the requests it routed.
+  requests       MaintenanceRequest[]
+
+  // The target of the requests' reference: a rule of the same site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, siteId, seq])
+}
