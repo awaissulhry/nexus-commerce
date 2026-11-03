@@ -66,6 +66,8 @@ const SESSIONS: Record<string, SessionContext> = {
   warehouse: office(A.tenant, [grant([...RECEIVE, 'inventory.issue', 'inventory.issue.over', 'inventory.transfer'])]),
   viewer: office(A.tenant, [grant(['inventory.stock.view'])]),
   planner: office(A.tenant, [grant(['planning.view'])]),
+  /** B-W2b-100: the warehouse's rights and the shade rule's override (SEED-WO-0001 is cut from another lot). */
+  shadeManager: office(A.tenant, [grant([...RECEIVE, 'inventory.issue', 'inventory.issue.over', 'inventory.transfer', 'inventory.shade.override'])]),
   buyer: office(A.tenant, [grant(['purchasing.view', 'purchasing.manage', 'purchasing.send'])]),
   companyB: office(A.tenant, [grant([...RECEIVE, 'money.cost'], [A.companyB])]),
   otherTenant: office(B.tenant, [grant([...RECEIVE, 'money.cost'])]),
@@ -406,7 +408,8 @@ describe('reversing a receipt', () => {
     const lotId = receipt.lines[0].lots[0].id
     // The quality step's release (B-W1-34), as its command would leave the lot: Cr VI PASS, RELEASED.
     await admin(`UPDATE "Lot" SET "crViStatus" = 'PASS', "crViMgKg" = 1.2, "crViEvidence" = 'LOT_REPORT', "crViTestedAt" = current_date, "qualityStatus" = 'RELEASED', "qualityDecidedAt" = now() WHERE id = $1`, [lotId])
-    const issued = await ok('warehouse', 'POST', `/inventory/picking/work-orders/${A.workOrder}/issue`, { hideId: hides[0]!.id, overIssueReason: 'Test: cut a sample' }, 201, freshKey())
+    // B-W2b-100: SEED-WO-0001 is cut from another lot (one shade lot per order): issued with the override's reason.
+    const issued = await ok('shadeManager', 'POST', `/inventory/picking/work-orders/${A.workOrder}/issue`, { hideId: hides[0]!.id, overIssueReason: 'Test: cut a sample', shadeOverrideReason: 'Test: a sample from the new lot' }, 201, freshKey())
 
     const view = (await ok('manager', 'GET', `/inventory/receipts/${receipt.id}`)).receipt
     const words = `hide ${hides[0]!.code} is issued to work order SEED-WO-0001: return it to A1-RCV or reverse the issue first, then reverse the receipt.`
@@ -422,7 +425,7 @@ describe('reversing a receipt', () => {
     expect(await admin(`SELECT "qualityStatus"::text AS status FROM "Lot" WHERE id = $1`, [lotId])).toEqual([{ status: 'RELEASED' }])
 
     // Undone, the issue sums to nothing: the receipt reverses, and its released lot ends REJECTED (RELEASED → BLOCKED → REJECTED).
-    await ok('warehouse', 'POST', `/inventory/picking/issues/${issued.issue.id}/undo`, undefined, 201, freshKey())
+    await ok('shadeManager', 'POST', `/inventory/picking/issues/${issued.issue.id}/undo`, undefined, 201, freshKey())
     const answer = await ok('manager', 'POST', `/inventory/receipts/${receipt.id}/reverse`, { version: view.version, reason: 'Wrong supplier' }, 201, freshKey())
     expect(answer.receipt.status).toBe('REVERSED')
     expect(answer.receipt.lines[0].lots[0].qualityStatus).toBe('REJECTED')

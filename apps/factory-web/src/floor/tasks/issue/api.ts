@@ -37,6 +37,11 @@ const candidate = z.object({
   grade: z.string().nullable(),
   locationCode: z.string(),
   onHand: decimal,
+  // B-W2b-100: the shade lot and remnant tag of a hide (absent from an older API: defaults).
+  shadeLabel: z.string().nullable().default(null),
+  outOfShade: z.boolean().default(false),
+  remnant: z.object({ id: z.string(), code: z.string() }).nullable().default(null),
+  sameShade: z.boolean().nullable().default(null),
 })
 
 const pickListAnswer = z.object({
@@ -66,8 +71,12 @@ const pickListAnswer = z.object({
       usable: z.object({ onHand: decimal, candidates: z.array(candidate), more: z.number() }),
       held: z.array(z.object({ reason: z.string(), lotCode: z.string(), onHand: decimal, hides: z.number() })),
       atWorkOrder: z.array(z.object({ lotId: z.string().nullable(), lotCode: z.string().nullable(), hideId: z.string().nullable(), hideCode: z.string().nullable(), quantity: decimal, cut: decimal, returnable: decimal })),
+      // B-W2b-100: a leather line's hides and the shade lots the work order is cut from.
+      hides: z.object({ count: z.number() }).nullable().default(null),
+      shadeLots: z.array(z.object({ key: z.string(), lotCode: z.string(), shadeLabel: z.string().nullable() })).default([]),
     }),
   ),
+  shadeRule: z.string().default('ORDER'),
   undo: z
     .object({
       issueId: z.string(),
@@ -117,13 +126,14 @@ export async function fetchPickWorkOrders(api: ApiClient, number?: string): Prom
 export async function fetchPickList(api: ApiClient, workOrderId: string): Promise<TaskOutcome<PickList>> {
   const answer = await floorRead(api, `/inventory/picking/work-orders/${seg(workOrderId)}`, { schema: pickListAnswer })
   if (!answer.ok) return answer
-  const { workOrder, lines, undo } = answer.value
+  const { workOrder, lines, undo, shadeRule } = answer.value
   return {
     ok: true,
     value: {
       workOrder: { id: workOrder.id, number: workOrder.number, batchNumber: workOrder.batchNumber, status: workOrder.status, dueDate: workOrder.dueDate, issuable: workOrder.issuable, style: { code: workOrder.style.code, name: workOrder.style.name } },
       lines: lines.map((line) => ({ ...line, key: `${line.itemId}:${line.itemColourId ?? '-'}` })),
       undo,
+      shadeRule,
     },
   }
 }
@@ -142,7 +152,8 @@ export function issueStock(api: ApiClient, workOrderId: string, stock: { code: s
 
 // ---- Return unused (B-W2a-75; design floor.pick sec "return"; SCM-216) -----------------------------------------------------
 
-const returnAnswer = z.object({ return: z.object({ id: z.string(), hideState: z.string().nullable(), move: z.object({ id: z.string() }).passthrough() }) })
+// B-W2b-100: a part of a hide comes back with its own remnant tag (RM-…).
+const returnAnswer = z.object({ return: z.object({ id: z.string(), hideState: z.string().nullable(), move: z.object({ id: z.string() }).passthrough(), remnant: z.object({ id: z.string(), code: z.string(), baseArea: decimal }).nullable().default(null) }) })
 export type Returned = z.infer<typeof returnAnswer>['return']
 
 /** Back to stock (B-W1-39's route): the stock by id, the measured quantity in the base unit, where it goes. */

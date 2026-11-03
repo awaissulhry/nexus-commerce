@@ -19,6 +19,8 @@ import { INVENTORY_DISCREPANCIES_DEFINITIONS, INVENTORY_DISCREPANCIES_PERMISSION
 import { INVENTORY_RESERVATION_PERMISSIONS } from '../../inventory/reservations/permissions'
 // B-W2b-94: hides as stock (inventory.hides.manage: a hide's grade, shade group, thickness and defects; its re-measure).
 import { INVENTORY_HIDES_DEFINITIONS, INVENTORY_HIDES_PERMISSIONS } from '../../inventory/hides/permissions'
+// B-W2b-100: one shade lot per order (inventory.shade.override: a hide of another shade lot let through with the reason).
+import { INVENTORY_SHADE_DEFINITIONS, INVENTORY_SHADE_PERMISSIONS } from '../../inventory/reservations/permissions'
 import { INVOICES_DEFINITIONS, INVOICES_PERMISSIONS } from '../../invoicing/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
@@ -438,6 +440,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_DISCREPANCIES_DEFINITIONS,
   // B-W2b-94: hides as stock.
   INVENTORY_HIDES_DEFINITIONS,
+  // B-W2b-100: one shade lot per order.
+  INVENTORY_SHADE_DEFINITIONS,
   SHIPPING_DEFINITIONS,
   SHIPPING_LABELS_DEFINITIONS,
   PARTIES_DEFINITIONS,
@@ -638,6 +642,8 @@ for (const name of VIEWS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name))
 for (const name of INVENTORY_DISCREPANCIES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-94: hides as stock.
 for (const name of INVENTORY_HIDES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-100: one shade lot per order.
+for (const name of INVENTORY_SHADE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-32: global search.
 for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-35: the plant.

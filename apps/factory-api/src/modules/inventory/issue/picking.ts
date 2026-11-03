@@ -16,6 +16,9 @@ import { mayAt, stockContextOf, type StockContext } from '../ledger/access'
 import { LEDGER_SELECT, type LedgerRow } from '../ledger/post-moves'
 import { reasonWords } from '../../../platform/reasons/service'
 import { activeHoldsOf, type ActiveHold } from '../../quality/holds/checks'
+// B-W2b-100: choose hides at the pick (SCM-214): each hide's shade lot and remnant tag; the site's shade rule (SCM-206).
+import { liveTagsOf } from '../remnants/lifecycle'
+import { shadeFactsOf, shadeRuleFor } from '../reservations/shade'
 import { heldByQualityHolds } from '../../quality/holds/stock'
 import {
   pickHideOf,
@@ -138,13 +141,20 @@ export async function pickListView(db: Reader, context: StockContext, workOrder:
   const cuts = await readCuts(db, workOrder.siteId, workOrder.id, atWorkOrder.flatMap((row) => (row.hideId ? [row.hideId] : [])))
   // B-W2a-58 (the lead's follow-up of #973): stock under an ACTIVE quality hold is never offered; it is held, with the hold.
   const quality = await qualityHeldOf(db, stock, lots, hides)
+  const shades = await shadeFactsOf(db as Prisma.TransactionClient, hideIds)
+  const tags = await liveTagsOf(db as Prisma.TransactionClient, hideIds)
+  const pickHide = (hide: HideRow) => {
+    const shade = shades.get(hide.id)
+    const tag = tags.get(hide.id)
+    return { ...pickHideOf(hide), lotId: hide.lotId, shadeGroupId: hide.shadeGroupId, shadeLabel: shade?.shadeLabel ?? hide.shade, outOfShade: shade?.outOfShade ?? false, remnant: tag ? { id: tag.id, code: tag.code } : null }
+  }
   const lines = pickList({
     materials,
     items: new Map([...items.values()].map((item) => [item.id, pickItemOf(item)])),
     colours,
     stock: pickStockOf(quality.free, locations),
     lots: new Map([...lots.values()].map((lot) => [lot.id, pickLotOf(lot)])),
-    hides: new Map([...hides.values()].map((hide) => [hide.id, pickHideOf(hide)])),
+    hides: new Map([...hides.values()].map((hide) => [hide.id, pickHide(hide)])),
     atWorkOrder,
     cuts,
   }).map((line) => withHolds(line, quality.held))
@@ -163,6 +173,7 @@ export async function pickListView(db: Reader, context: StockContext, workOrder:
       issuable: ISSUABLE_STATUSES.includes(workOrder.status),
       style: { id: style.id, code: style.code, name: style.name },
     },
+    shadeRule: await shadeRuleFor(db, workOrder.siteId),
     lines,
     undo: last && last.moves[0]!.workOrderId === workOrder.id ? undoView(last.moves) : null,
   }

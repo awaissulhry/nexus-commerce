@@ -38,6 +38,8 @@ export interface PickReturnDone {
   readonly as: 'whole' | 'remnant' | 'part'
   /** A hide's new tag; null: a lot or a material keeps its label. */
   readonly tag: ReturnTag | null
+  /** B-W2b-100 (SCM-254): the remnant's own tag (RM-…) the API gave the part that came back. */
+  readonly remnantCode?: string | null
 }
 
 export interface PickReturnModel {
@@ -134,6 +136,11 @@ export function returnStep({ ret, online, locale, t, shared, floor, send, words,
           </TaskLine>
           <Ticks state="recorded" />
         </div>
+        {ret.done.remnantCode ? (
+          <TaskLine tone="info" icon={<Tag />}>
+            {t('return.done.remnantTag', { code: ret.done.remnantCode })}
+          </TaskLine>
+        ) : null}
         {tag ? (
           <section className="fw-floor-section" aria-labelledby="fw-pick-tag">
             <h2 id="fw-pick-tag" className="fw-floor-section-title">

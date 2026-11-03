@@ -354,6 +354,16 @@ const HIDES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freez
   warehouse: ['inventory.hides.manage'],
   quality_inspector: ['inventory.hides.manage'],
 })
+
+/**
+ * B-W2b-100 (one shade lot per order; SCM-206): the production manager and the quality inspector let a hide of another shade
+ * lot into an order that asks one (with the reason). The warehouse picks and reserves, and is refused in words. Office only;
+ * Owner from every(). One line per template.
+ */
+const SHADE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['inventory.shade.override'],
+  quality_inspector: ['inventory.shade.override'],
+})
 /**
  * B-W2b-92 (inspection plans, QHS-008, QHS-009, QHS-016; design quality.plans): quality keeps the plans and approves another
  * person's draft (never one it wrote); the production manager reads them and may be the second person who approves (a small
@@ -420,6 +430,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_PAYROLL_ADDS[key] ?? []) : []),
   // B-W2b-94
   ...(audience === 'office' ? (HIDES_ADDS[key] ?? []) : []),
+  // B-W2b-100
+  ...(audience === 'office' ? (SHADE_ADDS[key] ?? []) : []),
   // B-W2b-92
   ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
   // B-W2b-49

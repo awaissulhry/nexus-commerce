@@ -25,6 +25,7 @@ import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contra
 // B-W2b-22: the one valuation of a finished garment (its company's frozen standard in force on the day).
 import { standardCostFor } from '../finished/post'
 import { postedBy, stockContextOf, type StockContext } from './access'
+import { remnantsFollowTransfers } from '../remnants/lifecycle'
 
 /**
  * postMoves(): the ONE writer of the stock ledger (plan A1 §2.1, §2.6; SCM-189, SCM-192, SCM-194), called INSIDE the
@@ -313,6 +314,8 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
 
   await tx.stockMove.createMany({ data: rows })
   const valued = context.audience === 'floor' ? new Set<string>() : await valueMovesInCommand(tools, rows, moves, facts)
+  // B-W2b-100: a hide's tagged remnant in stock goes where a TRANSFER takes the hide (it says where it lies).
+  await remnantsFollowTransfers(tools, rows)
 
   const by = postedBy(context)
   for (const row of rows) {

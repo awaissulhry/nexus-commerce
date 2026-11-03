@@ -211,8 +211,10 @@ const cutAnswer = output({
     startsWorkOrder: z.boolean(),
     moves: z.array(moveView),
   }).nullable(),
-  /** The remnant's RETURN move (Hide done with a remnant). */
+  /** The remnant's move (Hide done with a remnant): a REMNANT since B-W2b-100. */
   remnant: moveView.nullable(),
+  /** B-W2b-100 (SCM-254): the remnant's own tag (RM-…). */
+  remnantTag: output({ id: id(), code: z.string() }).nullable().optional(),
   hide: hideAfter,
   cells: z.array(cellAfter),
   /** The device sent this event before (its client event id): the entry recorded then; nothing was written now. */

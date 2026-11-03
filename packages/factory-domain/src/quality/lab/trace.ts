@@ -38,7 +38,8 @@ export function workOrderUses(moves: readonly TraceMove[]): WorkOrderUse[] {
   const uses = new Map<string, { issued: Decimal; returned: Decimal; hides: Set<string> }>()
   for (const move of moves) {
     if (move.workOrderId === null || move.reversalOfId !== null || reversed.has(move.id)) continue
-    if (move.reason !== 'ISSUE' && move.reason !== 'RETURN') continue
+    // B-W2b-100: a REMNANT (a part of a hide back with its tag) is a return.
+    if (move.reason !== 'ISSUE' && move.reason !== 'RETURN' && move.reason !== 'REMNANT') continue
     const use = uses.get(move.workOrderId) ?? { issued: ZERO, returned: ZERO, hides: new Set<string>() }
     if (move.reason === 'ISSUE') {
       use.issued = use.issued.plus(new Dec(move.baseQuantity))
