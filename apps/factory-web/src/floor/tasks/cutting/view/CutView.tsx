@@ -1,8 +1,9 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ArrowLeft, Ban, CircleAlert, CircleCheck, ClipboardList, CloudOff, House, Layers, MapPin, RotateCcw, ScanLine, Scissors, Undo2 } from 'lucide-react'
+import { ArrowLeft, Ban, Camera, CircleAlert, CircleCheck, ClipboardList, CloudOff, House, Layers, MapPin, RotateCcw, Ruler, ScanLine, Scissors, ShieldAlert, ShieldCheck, Undo2 } from 'lucide-react'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, QuantityPad, ScanInput, SizeButtons, type CameraScanner, type FloorActions } from '@nexus/ui/floor'
+import type { CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
 import { Modal } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatNumber, formatTime } from '../../../../lib/i18n/format'
 import type { Translate } from '../../../../lib/i18n/messages'
@@ -12,7 +13,10 @@ import { FloorState } from '../../../frame/view/FloorState'
 import type { TaskProblem } from '../../shared/task-api'
 import { HeldLine, ListFooter, ProblemState, TaskCard, TaskLine, UndoStrip, type TickState } from '../../shared/view/TaskParts'
 import type { CutWorkOrderRow, RemnantPlace } from '../api'
-import { areaPlain, convertArea, isAreaUom, otherUnitOf, type AreaUom, type RemnantProblem, type ShadeMatch, type SizeState } from '../model'
+import { areaPlain, convertArea, isAreaUom, otherUnitOf, type AnywayHeld, type AreaUom, type CheckWarning, type CutWarningKind, type HideChecks, type RemnantProblem, type ShadeMatch, type SizeState, type ThicknessView } from '../model'
+import { AnywayDialog, type AnywayAction, type AnywayModel } from './AnywayDialog'
+import { kindsWords, lotWords, mmWords, rangeWords, thicknessWords, warningWords } from './check-words'
+import { HidePhoto } from './HidePhoto'
 import '../cutting.css'
 
 /**
@@ -31,9 +35,45 @@ import '../cutting.css'
  * A refusal is a full-screen state with the reason and what to do (the lot on hold: "Do not cut. Put it back on …").
  * The cut is saved on this tablet first and sent by the queue (two ticks). No money anywhere (the hide's cost is never
  * shown on the floor). One view model, no fetching.
+ *
+ * B-W2b-110 (on B-W2b-103's API) adds to the check:
+ *   the hide check in depth  shade lot against the work order's, the reserved hides, thickness against the leather's range,
+ *              the pieces' minimum grade, each in words on the card; a warning no lead passed STOPS on the card (never a
+ *              tap on a size): the size buttons pick the first set, the main action is "Cut anyway"
+ *   Cut anyway   the pop-up: what differs, a reason tile, the lead's badge or name and PIN; online only (held with the
+ *              reason offline or while this work order's cuts wait to be sent); the signature records the first set
+ *   measure      the thickness at the table on a pad (mm): it goes with every cut of the hide this visit
+ *   photo        the photo of the hide on the table (DS PhotoCapture, outline guide, faces out); optional per site
  */
 
-export type CutStage = 'workOrder' | 'scan' | 'check' | 'done' | 'remnant'
+export type CutStage = 'workOrder' | 'scan' | 'check' | 'done' | 'remnant' | 'measure' | 'photo'
+
+/** B-W2b-110: the hide check of the work order at the table, as the card shows it (the table measure counted in). */
+export interface HideCheckModel {
+  readonly workOrderNumber: string
+  /** Every warning (standing ones stop the card; passed ones are said as information). */
+  readonly warnings: readonly CheckWarning[]
+  readonly standing: readonly CutWarningKind[]
+  readonly passed: readonly CutWarningKind[]
+  readonly shade: HideChecks['shade']
+  readonly thickness: ThicknessView
+  readonly grade: HideChecks['grade']
+  readonly reserved: HideChecks['reserved']
+  /** The thickness measured at this table for this hide this visit (mm). */
+  readonly measuredMm: string | null
+  /** The leather has a thickness range: "Measure here" is offered. */
+  readonly measurable: boolean
+}
+
+/** B-W2b-110: the photo of the hide on the card. */
+export interface HidePhotoModel {
+  /** A photo was taken and confirmed this visit: it goes with the next cut of the hide. */
+  readonly taken: boolean
+  /** The site asks one before cutting (no setting yet: false everywhere). */
+  readonly required: boolean
+  /** The photo needs the network (it is sent at once, never queued). */
+  readonly held: 'offline' | null
+}
 
 export interface WorkOrderChip {
   readonly id: string
@@ -64,6 +104,11 @@ export interface HideCardModel {
   readonly match: ShadeMatch
   /** The hide's last cut: when, for which work order, at which table (never who). */
   readonly lastCut: { readonly at: string; readonly workOrderNumber: string; readonly station: string | null } | null
+  /** B-W2b-110: the hide check (null: an office without it; the W1 dye batch information shows instead). */
+  readonly checks?: HideCheckModel | null
+  readonly photo?: HidePhotoModel | null
+  /** B-W2b-110: scanned by a remnant's RM tag (B-W2b-100): the tag, said on the card. */
+  readonly remnantTag?: string | null
 }
 
 export type CutRefusalModel =
@@ -93,6 +138,8 @@ export interface RemnantModel {
   readonly placeId: string | null
   /** Why the places are not listed (no permission to see the site's locations, no network). */
   readonly placesHeld?: 'noPermission' | 'unavailable' | null
+  /** B-W2b-110: the smallest remnant kept, in `uom` (B-W2b-100: a smaller piece is waste). */
+  readonly minimum?: string | null
 }
 
 export interface LastCut {
@@ -132,8 +179,18 @@ export interface CutViewModel {
   /** Read from this tablet's memory (offline): when it was read. */
   asOf?: string | null
   /** A line in the job (an undo done, an undo refused). */
-  notice?: { readonly tone: 'success' | 'warning' | 'danger'; readonly text: string } | null
+  notice?: { readonly tone: 'success' | 'warning' | 'danger' | 'info'; readonly text: string } | null
   timeZone?: string
+  /** B-W2b-110: the card stops on warnings no lead passed: "Cut anyway" (held with the reason) instead of "+ 1 set". */
+  stopped?: { readonly held: AnywayHeld; readonly waiting: number } | null
+  /** B-W2b-110: "+ 1 set" waits for the photo the site asks for. */
+  photoFirst?: boolean
+  /** B-W2b-110: the thickness at the table (stage `measure`). */
+  measure?: { readonly value: number | null; readonly problem: 'empty' | 'invalid' | null } | null
+  /** B-W2b-110: the photo step (stage `photo`): sending, or the last try failed. */
+  photoStep?: { readonly sending: boolean; readonly failed: boolean; readonly held: 'offline' | null } | null
+  /** B-W2b-110: the "Cut anyway?" pop-up. */
+  anyway?: AnywayModel | null
 }
 
 export type CutAction =
@@ -155,6 +212,15 @@ export type CutAction =
   | { type: 'retry' }
   | { type: 'undoCut' }
   | { type: 'home' }
+  // B-W2b-110
+  | { type: 'openAnyway' }
+  | { type: 'openMeasure' }
+  | { type: 'measureValue'; value: number | null }
+  | { type: 'measureSave' }
+  | { type: 'measureClear' }
+  | { type: 'openPhoto' }
+  | { type: 'photoTaken'; photo: CapturedPhoto }
+  | AnywayAction
 
 export interface CutViewProps {
   model: CutViewModel
@@ -166,8 +232,8 @@ export interface CutViewProps {
 const UNIT_WORD: Readonly<Record<string, string>> = { M2: 'm²', DM2: 'dm²', FT2: 'ft²' }
 export const unitWord = (uom: string): string => UNIT_WORD[uom] ?? uom
 
-/** The cut refusal codes this screen has its own words for (else the API's sentence). */
-export const CUT_WORDS = ['WORK_ORDER_NOT_OPEN', 'NOT_AT_WORK_ORDER', 'NOTHING_LEFT', 'FLOOR_NOT_READY', 'CR_VI_PENDING', 'CR_VI_FAILED', 'QUALITY_HOLD', 'BLOCKED', 'REJECTED'] as const
+/** The cut refusal codes this screen has its own words for (else the API's sentence). B-W2b-110: the table's warnings and the lead's signature (B-W2b-103), a remnant under the minimum (B-W2b-100). */
+export const CUT_WORDS = ['WORK_ORDER_NOT_OPEN', 'NOT_AT_WORK_ORDER', 'NOTHING_LEFT', 'FLOOR_NOT_READY', 'CR_VI_PENDING', 'CR_VI_FAILED', 'QUALITY_HOLD', 'BLOCKED', 'REJECTED', 'CUT_WARNING', 'LEAD_PIN_WRONG', 'LEAD_IS_CUTTER', 'NOT_A_LEAD', 'LEAD_NOTE_MISSING', 'REMNANT_TOO_SMALL'] as const
 
 export function CutView({ model, onAction, onFrame, camera }: CutViewProps) {
   const t = useT('floor-cutting')
@@ -303,11 +369,53 @@ export function CutView({ model, onAction, onFrame, camera }: CutViewProps) {
           {model.loading ? <Looking code={model.loading} t={t} /> : <p className="fw-floor-lead">{t('scan.empty')}</p>}
         </div>
       )
+    } else if (model.stage === 'check' && model.hide && model.stopped) {
+      // B-W2b-110: warnings no lead passed stop on the card. The size buttons pick the first set; the lead's signature records it.
+      const sizes = model.sizes ?? []
+      const picked = sizes.find((size) => size.id === model.picked) ?? null
+      const stopped = model.stopped
+      const held = anywayHeldWords(t, stopped.held, stopped.waiting, picked?.label ?? '')
+      actions = [
+        { label: t('action.scanAnother'), icon: <ScanLine />, onPress: () => send({ type: 'back' }), variant: 'secondary' },
+        { label: t('anyway.open'), icon: <ShieldAlert />, onPress: () => send({ type: 'openAnyway' }), variant: 'warning', heldReason: held },
+      ]
+      body = (
+        <div className="fw-floor-stack">
+          {chip}
+          {notices}
+          <div className="fw-task-split">
+            <HideCard hide={model.hide} t={t} both={both} area={area} place={place} send={send} />
+            <section className="fw-floor-stack fw-cut-stop" aria-labelledby="fw-cut-stop-title">
+              <h2 id="fw-cut-stop-title" className="fw-floor-section-title">
+                <span className="fw-floor-inline-icon" aria-hidden="true">
+                  <ShieldAlert />
+                </span>
+                {t('anyway.title')}
+              </h2>
+              <p className="fw-floor-lead">{t('anyway.lead')}</p>
+              {sizes.length === 0 ? (
+                <FloorState tone="info" icon={<Layers />} title={t('sets.none.title')} text={t('sets.none.body')} />
+              ) : (
+                <SizeButtons
+                  label={t('anyway.firstSet')}
+                  sizes={sizes.map((size) => ({ id: size.id, label: size.label, remaining: size.remaining, heldReason: size.allCut ? t('sets.allCut', { size: size.label }) : null }))}
+                  value={model.picked ?? null}
+                  onChange={(id) => send({ type: 'pickSize', id })}
+                  remainingLabel={(count) => t('sets.remaining', { count })}
+                  doneLabel={t('sets.done')}
+                />
+              )}
+              {held ? <HeldLine text={held} /> : null}
+              <p className="fw-floor-muted">{t('anyway.another')}</p>
+            </section>
+          </div>
+        </div>
+      )
     } else if (model.stage === 'check' && model.hide) {
       const sizes = model.sizes ?? []
       const picked = sizes.find((size) => size.id === model.picked) ?? null
       const draft = model.draft ?? []
-      const setsHeld = !picked ? t('sets.pickSize') : picked.allCut ? t('sets.allCut', { size: picked.label }) : null
+      const setsHeld = model.photoFirst ? t('photo.heldFirst') : !picked ? t('sets.pickSize') : picked.allCut ? t('sets.allCut', { size: picked.label }) : null
       actions = [
         { label: t('action.hideDone'), icon: <CircleCheck />, onPress: () => send({ type: 'hideDone' }), variant: 'secondary' },
         // The label carries its own "+" (design: "+ 1 set"): no second plus as an icon.
@@ -318,7 +426,7 @@ export function CutView({ model, onAction, onFrame, camera }: CutViewProps) {
           {chip}
           {notices}
           <div className="fw-task-split">
-            <HideCard hide={model.hide} t={t} both={both} area={area} place={place} />
+            <HideCard hide={model.hide} t={t} both={both} area={area} place={place} send={send} />
             <section className="fw-floor-stack" aria-labelledby="fw-cut-sets-title">
               <h2 id="fw-cut-sets-title" className="fw-floor-section-title">
                 <span className="fw-floor-inline-icon" aria-hidden="true">
@@ -387,7 +495,17 @@ export function CutView({ model, onAction, onFrame, camera }: CutViewProps) {
       const remnant = model.remnant
       const other = otherUnitOf(remnant.uom)
       const otherValue = remnant.value !== null ? convertArea(String(remnant.value), remnant.uom, other) : null
-      const held = remnant.problem === 'empty' ? t('remnant.held.empty') : remnant.problem === 'tooLarge' ? t('remnant.tooLarge', { left: area(remnant.left, remnant.uom) }) : !remnant.placeId ? t('remnant.held.place') : null
+      const tooSmall = remnant.minimum ? t('remnant.tooSmall', { min: area(remnant.minimum, remnant.uom) }) : null
+      const held =
+        remnant.problem === 'empty'
+          ? t('remnant.held.empty')
+          : remnant.problem === 'tooLarge'
+            ? t('remnant.tooLarge', { left: area(remnant.left, remnant.uom) })
+            : remnant.problem === 'tooSmall'
+              ? tooSmall
+              : !remnant.placeId
+                ? t('remnant.held.place')
+                : null
       actions = [
         { label: shared('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'back' }) },
         { label: t('remnant.save'), icon: <CircleCheck />, onPress: () => send({ type: 'saveRemnant' }), heldReason: held },
@@ -421,8 +539,8 @@ export function CutView({ model, onAction, onFrame, camera }: CutViewProps) {
                 backLabel={t('pad.back')}
                 emptyLabel={t('remnant.held.empty')}
                 rangeLabel={(_min, max) => t('remnant.range', { max: max === undefined ? '—' : formatNumber(max, locale, { maximumFractionDigits: 2 }) })}
-                message={remnant.problem === 'tooLarge' ? t('remnant.tooLarge', { left: area(remnant.left, remnant.uom) }) : otherValue ? t('remnant.other', { other: area(otherValue, other) }) : undefined}
-                messageTone={remnant.problem === 'tooLarge' ? 'danger' : 'info'}
+                message={remnant.problem === 'tooLarge' ? t('remnant.tooLarge', { left: area(remnant.left, remnant.uom) }) : remnant.problem === 'tooSmall' && tooSmall ? tooSmall : otherValue ? t('remnant.other', { other: area(otherValue, other) }) : undefined}
+                messageTone={remnant.problem === 'tooLarge' || remnant.problem === 'tooSmall' ? 'danger' : 'info'}
                 autoFocus
               />
               <p className="fw-cut-used">{t('remnant.used', { used: both(remnant.used, remnant.uom), left: both(remnant.left, remnant.uom) })}</p>
@@ -470,6 +588,87 @@ export function CutView({ model, onAction, onFrame, camera }: CutViewProps) {
           </div>
         </div>
       )
+    } else if (model.stage === 'measure' && model.hide && model.measure) {
+      // B-W2b-110 (MES-064): the thickness measured at the table, in mm; it goes with every cut of this hide this visit.
+      const measure = model.measure
+      const checks = model.hide.checks ?? null
+      const range = checks ? rangeWords(t, checks.thickness, locale) : null
+      const held = measure.problem === 'empty' ? t('measure.held.empty') : measure.problem === 'invalid' ? t('measure.held.invalid') : null
+      actions = [
+        { label: shared('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'back' }) },
+        { label: t('measure.save'), icon: <CircleCheck />, onPress: () => send({ type: 'measureSave' }), heldReason: held },
+      ]
+      body = (
+        <div className="fw-floor-stack">
+          {chip}
+          {notices}
+          <section className="fw-floor-stack fw-cut-measure" aria-labelledby="fw-cut-measure-title">
+            <h2 id="fw-cut-measure-title" className="fw-floor-section-title">
+              <span className="fw-floor-inline-icon" aria-hidden="true">
+                <Ruler />
+              </span>
+              {t('measure.title', { code: model.hide.code })}
+            </h2>
+            {range ? <p className="fw-floor-lead">{t('measure.spec', { range })}</p> : null}
+            {checks && checks.thickness.source === 'HIDE' && checks.thickness.valueMm ? <p className="fw-floor-muted">{t('measure.recorded', { value: mmWords(checks.thickness.valueMm, locale) })}</p> : null}
+            <QuantityPad
+              label={t('measure.value')}
+              value={measure.value}
+              onChange={(value) => send({ type: 'measureValue', value })}
+              unit="mm"
+              min={0.01}
+              max={99.99}
+              decimals={2}
+              decimalSeparator={locale === 'it' ? ',' : '.'}
+              separatorLabel={t('remnant.separator')}
+              decrementLabel={t('pad.less')}
+              incrementLabel={t('pad.more')}
+              clearLabel={t('pad.clear')}
+              backLabel={t('pad.back')}
+              emptyLabel={t('measure.held.empty')}
+              rangeLabel={() => t('measure.range')}
+              message={held ?? undefined}
+              messageTone={measure.problem === 'invalid' ? 'danger' : 'info'}
+              autoFocus
+            />
+            <p className="fw-floor-muted">{t('measure.goes')}</p>
+            {checks?.measuredMm ? (
+              <FloorButton size="md" variant="quiet" icon={<RotateCcw />} onClick={() => send({ type: 'measureClear' })}>
+                {t('measure.clear', { value: mmWords(checks.measuredMm, locale) })}
+              </FloorButton>
+            ) : null}
+          </section>
+        </div>
+      )
+    } else if (model.stage === 'photo' && model.hide && model.photoStep) {
+      // B-W2b-110 (MES-060): the photo of the hide on the table, before cutting; online (sent at once, never queued).
+      const step = model.photoStep
+      body = (
+        <div className="fw-floor-stack">
+          {chip}
+          {notices}
+          <section className="fw-floor-stack fw-cut-photo" aria-labelledby="fw-cut-photo-title">
+            <h2 id="fw-cut-photo-title" className="fw-floor-section-title">
+              <span className="fw-floor-inline-icon" aria-hidden="true">
+                <Camera />
+              </span>
+              {t('photo.title', { code: model.hide.code })}
+            </h2>
+            <p className="fw-floor-lead">{t('photo.hint')}</p>
+            {step.failed ? (
+              <TaskLine tone="danger" icon={<CircleAlert />} alert>
+                {t('photo.failed')}
+              </TaskLine>
+            ) : null}
+            {step.sending ? (
+              <p className="fw-floor-muted" aria-busy="true">
+                {t('photo.sending')}
+              </p>
+            ) : null}
+            <HidePhoto label={t('photo.label')} heldReason={step.held ? t('photo.held.offline') : null} onCapture={(photo) => send({ type: 'photoTaken', photo })} onCancel={() => send({ type: 'back' })} />
+          </section>
+        </div>
+      )
     } else {
       body = <p className="fw-floor-lead">{t('scan.empty')}</p>
     }
@@ -478,6 +677,7 @@ export function CutView({ model, onAction, onFrame, camera }: CutViewProps) {
   return (
     <FloorFrameView frame={model.frame} onFrame={onFrame} actions={actions ? <FloorActionBar label={t('title')} actions={actions} /> : undefined}>
       {body}
+      <AnywayDialog model={model.anyway ?? null} send={send} />
       <Modal open={Boolean(model.confirm)} onClose={() => send({ type: 'confirmCancel' })} title={t('confirm.title')} size="sm" className="fw-floor-dialog">
         <div className="fw-floor-dialog-body">
           <p className="fw-floor-dialog-line">{t('confirm.body', { count: model.confirm?.sets ?? 0 })}</p>
@@ -498,6 +698,20 @@ export function CutView({ model, onAction, onFrame, camera }: CutViewProps) {
 /** The screen's words for a cut refusal it knows (message, fix), else null (the API's sentence is shown). */
 export function wordsOf(t: Translate, code: string): { message: string; fix: string | null } | null {
   return (CUT_WORDS as readonly string[]).includes(code) ? { message: t(`refusal.${code}.message`), fix: t(`refusal.${code}.fix`) } : null
+}
+
+/** B-W2b-110: why "Cut anyway" cannot open now, in words (null: it may). */
+function anywayHeldWords(t: Translate, held: AnywayHeld, waiting: number, size: string): string | null {
+  switch (held) {
+    case null:
+      return null
+    case 'waiting':
+      return t('anyway.held.waiting', { count: waiting })
+    case 'allCut':
+      return t('anyway.held.allCut', { size })
+    default:
+      return t(`anyway.held.${held}`)
+  }
 }
 
 function Looking({ code, t }: { code: string; t: Translate }) {
@@ -526,8 +740,27 @@ function WorkOrderLine({ chip, t, onChange }: { chip: WorkOrderChip; t: Translat
   )
 }
 
-function HideCard({ hide, t, both, area, place }: { hide: HideCardModel; t: Translate; both: (value: string, uom: string) => string; area: (value: string, uom: string) => string; place: { locale: 'it' | 'en'; timeZone?: string } }) {
+function HideCard({
+  hide,
+  t,
+  both,
+  area,
+  place,
+  send,
+}: {
+  hide: HideCardModel
+  t: Translate
+  both: (value: string, uom: string) => string
+  area: (value: string, uom: string) => string
+  place: { locale: 'it' | 'en'; timeZone?: string }
+  send: (action: CutAction) => void
+}) {
   const shade = hide.match
+  const checks = hide.checks ?? null
+  const photo = hide.photo ?? null
+  const context = { number: checks?.workOrderNumber ?? '', locale: place.locale }
+  const standing = checks ? checks.warnings.filter((warning) => checks.standing.includes(warning.kind)) : []
+  const graded = checks ? checks.grade.pieces.filter((piece) => piece.minGrade !== null) : []
   return (
     <TaskCard
       icon={<Scissors />}
@@ -538,12 +771,19 @@ function HideCard({ hide, t, both, area, place }: { hide: HideCardModel; t: Tran
       big={hide.grade ? { value: hide.grade, label: t('hide.grade') } : null}
       flags={
         <>
+          {hide.remnantTag ? (
+            <TaskLine tone="info" icon={<Scissors />}>
+              {t('hide.remnantTag', { tag: hide.remnantTag })}
+            </TaskLine>
+          ) : null}
           {hide.issuedByCut ? (
             <TaskLine tone="info" icon={<ClipboardList />}>
               {t('hide.issuedByCut')}
             </TaskLine>
           ) : null}
-          {shade.kind === 'same' ? (
+          {checks ? (
+            <CheckLines checks={checks} standing={standing} t={t} context={context} />
+          ) : shade.kind === 'same' ? (
             <TaskLine tone="success" icon={<CircleCheck />}>
               {t('hide.shade.same', { batch: shade.batch })}
             </TaskLine>
@@ -569,12 +809,81 @@ function HideCard({ hide, t, both, area, place }: { hide: HideCardModel; t: Tran
         { label: t('hide.item'), value: hide.colour ? `${hide.item} · ${hide.colour}` : hide.item },
         { label: t('hide.area'), value: both(hide.area, hide.areaUom) },
         { label: t('hide.left'), value: both(hide.left, hide.baseUom) },
-        { label: t('hide.thickness'), value: hide.thicknessMm ? `${areaPlain(hide.thicknessMm)} mm` : '—' },
+        { label: t('hide.thickness'), value: checks && checks.thickness.verdict !== 'NO_SPEC' ? thicknessWords(t, checks.thickness, place.locale) : hide.thicknessMm ? `${areaPlain(hide.thicknessMm)} mm` : '—' },
         { label: t('hide.shadeLabel'), value: [hide.shade, hide.dyeBatch ? t('hide.batch', { batch: hide.dyeBatch }) : null].filter(Boolean).join(' · ') || '—' },
         { label: t('hide.lot'), value: hide.lotCode },
+        ...(graded.length > 0 ? [{ label: t('check.grade.label'), value: graded.map((piece) => t(`check.grade.piece.${piece.verdict}`, { name: piece.name, grade: piece.minGrade ?? '—' })).join(' · ') + (checks?.grade.byText ? ` ${t('check.grade.byText')}` : '') }] : []),
         { label: t('hide.defects'), value: hide.defects ?? t('hide.noDefects') },
       ]}
-    />
+    >
+      {photo || checks?.measurable ? (
+        <div className="fw-cut-card-tools">
+          {photo ? (
+            <FloorButton size="md" variant={photo.required && !photo.taken ? 'primary' : 'secondary'} icon={<Camera />} heldReason={photo.held ? t('photo.held.offline') : null} onClick={() => send({ type: 'openPhoto' })}>
+              {photo.taken ? t('photo.retake') : t('photo.open')}
+            </FloorButton>
+          ) : null}
+          {checks?.measurable ? (
+            <FloorButton size="md" variant="secondary" icon={<Ruler />} onClick={() => send({ type: 'openMeasure' })}>
+              {checks.measuredMm ? t('measure.again') : t('measure.open')}
+            </FloorButton>
+          ) : null}
+        </div>
+      ) : null}
+      {photo?.taken ? (
+        <TaskLine tone="success" icon={<Camera />}>
+          {t('photo.taken')}
+        </TaskLine>
+      ) : photo?.required ? (
+        <TaskLine tone="warning" icon={<Camera />}>
+          {t('photo.required')}
+        </TaskLine>
+      ) : null}
+    </TaskCard>
+  )
+}
+
+/** B-W2b-110: the hide check on the card: what stops it (amber, in words), what a lead passed, and what is fine. */
+function CheckLines({ checks, standing, t, context }: { checks: HideCheckModel; standing: readonly CheckWarning[]; t: Translate; context: { number: string; locale: 'it' | 'en' } }) {
+  const shadeStands = standing.some((warning) => warning.kind === 'SHADE')
+  const shadeWarned = checks.warnings.some((warning) => warning.kind === 'SHADE')
+  return (
+    <>
+      {standing.length > 0 ? (
+        <TaskLine tone="warning" icon={<ShieldAlert />} alert>
+          {t('check.stops', { count: standing.length })}
+        </TaskLine>
+      ) : null}
+      {standing.map((warning) => (
+        <TaskLine key={`${warning.kind}-${warning.code}`} tone="warning" icon={<CircleAlert />}>
+          {warningWords(t, warning, context)}
+        </TaskLine>
+      ))}
+      {checks.passed.length > 0 ? (
+        <TaskLine tone="info" icon={<ShieldCheck />}>
+          {t('check.passed', { kinds: kindsWords(t, checks.passed) })}
+        </TaskLine>
+      ) : null}
+      {!shadeStands && !shadeWarned && checks.shade.same === true ? (
+        <TaskLine tone="success" icon={<CircleCheck />}>
+          {t('check.shade.same', { number: context.number, cutFrom: checks.shade.cutFrom.map((lot) => lotWords(lot, context.locale)).join('; '), hide: lotWords(checks.shade.hide, context.locale) })}
+        </TaskLine>
+      ) : !shadeStands && !shadeWarned && checks.shade.same === null ? (
+        <TaskLine tone="info" icon={<Layers />}>
+          {t('check.shade.first', { number: context.number, hide: lotWords(checks.shade.hide, context.locale) })}
+        </TaskLine>
+      ) : null}
+      {checks.reserved.forIt ? (
+        <TaskLine tone="success" icon={<CircleCheck />}>
+          {t('check.reserved', { number: context.number })}
+        </TaskLine>
+      ) : null}
+      {standing.length === 0 && checks.passed.length === 0 ? (
+        <TaskLine tone="success" icon={<ShieldCheck />}>
+          {t('check.clear')}
+        </TaskLine>
+      ) : null}
+    </>
   )
 }
 

@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { AlertCircle, Check } from 'lucide-react'
 import { Pill, Spinner } from '@nexus/ui/primitives'
 import { StepUpModal } from '../../../../lib/i18n/ds-parts'
@@ -20,7 +21,13 @@ import '../holds.css'
 
 /** `holds` with the shared `quality` words, the list frame's (`lists`) and the record panels' (`records`). */
 export function HoldsMessages({ children }: { children?: ReactNode }) {
-  return <WithMessages namespaces={['holds', 'quality', 'lists', 'records']}>{children}</WithMessages>
+  return <WithMessages namespaces={['holds', 'quality', 'lists', 'records', 'stock']}>{children}</WithMessages>
+}
+
+/** B-W2b-114: a unit in the reader's words (the `stock` catalogue's units; an unknown unit stays as data). */
+export function useUomWord(): (uom: string) => string {
+  const stock = useT('stock')
+  return (uom) => ((UOMS as readonly string[]).includes(uom) ? stock(`uom.${uom}`) : uom)
 }
 
 export function HoldPill({ hold }: { hold: Pick<Hold, 'status' | 'overdue'> }) {

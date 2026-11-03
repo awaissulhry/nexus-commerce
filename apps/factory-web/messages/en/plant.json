@@ -176,12 +176,13 @@
     "walk": "Next / previous request (in its detail)",
     "acknowledge": "Acknowledge",
     "makeJob": "Make a job",
-    "merge": "Merge into the other open request",
+    "merge": "Merge requests (the group of this machine)",
     "close": "Close without a job",
     "signSafe": "Sign the machine safe",
     "newJob": "New job",
     "board": "List ⇄ board",
-    "newMachine": "New machine"
+    "newMachine": "New machine",
+    "lock": "Lock the machine as unsafe"
   },
   "requestView": {
     "open": "Open requests",
@@ -211,9 +212,6 @@
     "startTriageCount_other": "Start triage ({count} new)",
     "more": "More for the requests",
     "print": "Print open requests (for the shift)",
-    "lockedBanner_one": "{count} machine is locked as unsafe",
-    "lockedBanner_other": "{count} machines are locked as unsafe",
-    "lockedBannerBody": "Nobody may use them until a technician checks them and signs them safe (D.Lgs. 81/2008 art. 71).",
     "lockedShow": "Show them",
     "tableLabel": "Machine requests",
     "failed": "The requests couldn't be read",
@@ -246,21 +244,15 @@
     "unsafe": "Unsafe",
     "unsafeLocked": "Yes: locked until signed safe",
     "unsafeSigned": "Yes: signed safe",
-    "photos_one": "{count} photo",
-    "photos_other": "{count} photos",
-    "noPhotos": "No photos.",
-    "photoOpen": "Open photo {n}",
     "photoAlt": "Photo {n} of the problem on {machine}",
     "photoTitle": "Photo {n} of {count}",
     "photoFull": "Photo full size (new tab)",
-    "photoUnread": "{name}: couldn't be shown",
     "duplicates_one": "Possible duplicates ({count})",
     "duplicates_other": "Possible duplicates ({count})",
     "noDuplicates": "No other open request on this machine.",
     "openOther": "Open",
     "mergeInto": "Merge into this",
     "trail": "What happened",
-    "routingLater": "Routing to the technician on shift and escalation come with the plant settings.",
     "repeatFailure_one": "{count} request in 30 days: a repeat failure",
     "repeatFailure_other": "{count} requests in 30 days: a repeat failure",
     "statusSince": "Status since",
@@ -325,12 +317,6 @@
     },
     "law": "Only a technician signs a machine safe again (D.Lgs. 81/2008 art. 71; Owner answer H1)."
   },
-  "merge": {
-    "title": "Merge requests",
-    "submit": "Merge",
-    "body": "Merge this request on {machine} into the one reported {when} by {who}?",
-    "hint": "Both reporters stay on the request that is kept; this one leaves the queue."
-  },
   "report": {
     "title": "Report a problem",
     "submit": "Send report",
@@ -393,7 +379,8 @@
   "jobTab": {
     "problem": "Problem",
     "handback": "Hand-back",
-    "activity": "Activity"
+    "activity": "Activity",
+    "photos": "Photos"
   },
   "move": {
     "plan": "Plan",
@@ -515,9 +502,6 @@
   "handBack": {
     "title": "Hand back",
     "workDone": "What was done",
-    "workDoneHint": "The next person reads it on the machine's history.",
-    "failureCodeLater": "Failure codes (problem, cause, remedy) come later.",
-    "timeSoFar": "Time so far: {time} (from the start of the work).",
     "timeHint": "The time is counted from the start of the work.",
     "machineAfter": "The machine after",
     "notStarted": "The work has not started",
@@ -527,8 +511,7 @@
     "by": "By",
     "at": "When",
     "time": "Time",
-    "retiresOnClose": "Closing the job retires the machine.",
-    "confirmLater": "The line lead's confirmation that it works comes later."
+    "retiresOnClose": "Closing the job retires the machine."
   },
   "cancelJob": {
     "title": "Cancel job",
@@ -751,7 +734,6 @@
     "notOpen": "This request is not open anymore.",
     "ackDone": "Already acknowledged.",
     "closeLocked": "Locked as unsafe: it is closed only after a technician signs it safe.",
-    "mergeLocked": "Locked as unsafe: it is merged only after a technician signs it safe.",
     "nothingToTriage": "No open request to triage.",
     "noneNew": "None of the selected requests is new.",
     "problemNeeded": "Say what is wrong.",
@@ -768,7 +750,6 @@
     "noChange": "Pick a technician different from now.",
     "jobDone": "The job is closed or cancelled.",
     "lockedRunning": "Still locked as unsafe: “Running” once a technician signs it safe.",
-    "workDoneNeeded": "Say what was done.",
     "machineAfterNeeded": "Say how the machine is after.",
     "siteNeeded": "Pick the site.",
     "assetNumberNeeded": "Type its asset number (letters, digits, . / - _).",
@@ -803,7 +784,6 @@
     "jobMade": "Job {number} made",
     "joined": "Added to job {number}",
     "closed": "{machine}: request closed",
-    "merged": "{machine}: requests merged",
     "signedSafe": "{machine} signed safe: {status}",
     "reported": "{machine}: problem reported",
     "reportedUnsafe": "{machine}: reported and locked as unsafe",
@@ -827,7 +807,19 @@
       "reopen": "{number} taken back to work",
       "close": "{number} closed",
       "cancel": "{number} cancelled"
-    }
+    },
+    "mergedMany_one": "{machine}: {count} request merged into the one kept",
+    "mergedMany_other": "{machine}: {count} requests merged into the one kept",
+    "mergedIntoJob_one": "{count} request joined the job {number}",
+    "mergedIntoJob_other": "{count} requests joined the job {number}",
+    "locked": "{machine} locked as unsafe: a technician signs it safe",
+    "lockedJoined": "{machine} locked as unsafe; this request joined the lock",
+    "onTheWay": "{machine}: the station sees a technician on the way",
+    "works": "{machine}: confirmed it works again",
+    "leadConfirmed": "{number}: the line lead confirmed it works",
+    "leadRefused": "{number}: not confirmed",
+    "photoAdded": "{number}: photo added",
+    "voiceAdded": "{number}: voice note added"
   },
   "stepUp": {
     "title": "Confirm with your authenticator",
@@ -854,7 +846,10 @@
     "photos": "Photos",
     "duplicates": "Other open",
     "state": "State",
-    "job": "Job"
+    "job": "Job",
+    "voiceNotes": "Voice notes",
+    "routedTo": "Routed to",
+    "escalation": "Escalation level"
   },
   "csvJob": {
     "number": "Number",
@@ -886,5 +881,209 @@
     "openJobs": "Open jobs",
     "openRequests": "Open requests",
     "cost": "Purchase cost (EUR)"
+  },
+  "locks": {
+    "failed": "Couldn't read the machines locked as unsafe",
+    "loading": "Reading the machines locked as unsafe…",
+    "label_one": "{count} machine locked as unsafe",
+    "label_other": "{count} machines locked as unsafe",
+    "title": "{class} {machine} locked: {what}",
+    "body": "Reported {when} by {who} · {age} ago",
+    "youSign": "it stays locked until a technician signs it safe (you may)",
+    "technicianSigns": "it stays locked until a technician signs it safe",
+    "open": "Open",
+    "openFor": "Open the request that locks {machine}",
+    "more_one": "{count} more machine locked as unsafe.",
+    "more_other": "{count} more machines locked as unsafe."
+  },
+  "dupes": {
+    "title": "Possible duplicates",
+    "failed": "Couldn't read the possible duplicates.",
+    "loading": "Reading the possible duplicates…",
+    "words_one": "{count} request on {class} {machine} in {age}",
+    "words_other": "{count} requests on {class} {machine} in {age}",
+    "kept": "Kept",
+    "suggestJob": "Suggested: join the open job {number}; every reporter stays informed.",
+    "suggestRequest": "Suggested: keep the request marked Kept; every reporter stays informed.",
+    "merge": "Merge into one"
+  },
+  "mergeMany": {
+    "open": "Merge requests",
+    "title": "Merge requests · {machine}",
+    "body_one": "{count} open request on {class} {machine} in {age}.",
+    "body_other": "{count} open requests on {class} {machine} in {age}.",
+    "target": "Merge into",
+    "intoJob": "The open job {number}",
+    "intoJobHint": "each request joins the job",
+    "intoRequest": "The request of {when}",
+    "suggested": "Suggested",
+    "which": "Requests that go into it",
+    "isTarget": "this is the one kept",
+    "lockedSource": "it locks the machine: it joins a job, never another request",
+    "reporters": "Every reporter keeps their request, follows the one kept and confirms on their own when it works.",
+    "hint": "All or none: a request changed meanwhile stops the merge.",
+    "submit_one": "Merge {count}",
+    "submit_other": "Merge {count}",
+    "held": {
+      "none": "Pick at least one request to merge.",
+      "lockedSource": "A request that locks the machine is never merged into another request: keep that one, or merge into the open job.",
+      "noGroup": "No other open request on this machine to merge."
+    }
+  },
+  "lockAsUnsafe": {
+    "button": "Lock as unsafe",
+    "title": "Lock {machine} as unsafe?",
+    "reachTitle": "What happens",
+    "reach": {
+      "station": "{machine} becomes do-not-use at once, on its station and on the tablet.",
+      "lists": "The planning board and every list show it locked.",
+      "dispatch": "No work is sent to it until it is signed safe.",
+      "request": "This request joins the lock: its reporter follows it.",
+      "hazard": "A hazard report is asked for Incidents (the Incidents page comes later)."
+    },
+    "reversal": "Only a technician signs it safe again.",
+    "lawPlain": "Work equipment must be safe: a machine that is not safe is not used until it is checked and put right.",
+    "note": "What you saw (optional)",
+    "noteHint": "Added to the lock's words; never a person's name.",
+    "keys": "Enter locks · Esc cancels",
+    "submit": "Lock machine",
+    "held": {
+      "locked": "The machine is already locked as unsafe.",
+      "notAllowed": "This site lets only line leads and technicians lock a machine."
+    }
+  },
+  "routing": {
+    "column": "Routed to",
+    "none": "Not routed (no rule)",
+    "team": "{name}",
+    "aTeam": "A maintenance team",
+    "technician": "{name}",
+    "aTechnician": "A technician",
+    "escalated": "Escalated (level {level})"
+  },
+  "progress": {
+    "title": "What the reporter sees",
+    "body": "The station follows these steps on its tablet.",
+    "step": {
+      "REPORTED": "Reported",
+      "ACKNOWLEDGED": "Seen by maintenance",
+      "ON_THE_WAY": "A technician on the way",
+      "FIXED": "Fixed: handed back",
+      "WORKS": "Works again: confirmed"
+    },
+    "lockedNote": "Locked as unsafe: nobody confirms it works before a technician signs it safe.",
+    "mergedNote": "Merged into another request of the machine: it follows that one's progress.",
+    "onTheWay": "On my way",
+    "works": "It works again",
+    "held": {
+      "onTheWay": "A technician is on the way already.",
+      "cannotGo": "Not open for a technician now.",
+      "confirmed": "Confirmed already: it works again.",
+      "locked": "Locked as unsafe: a technician signs it safe first.",
+      "closedWithoutJob": "Closed without a job: nothing to confirm.",
+      "notFixed": "Not fixed yet: the job is not handed back.",
+      "cannotConfirm": "Not to be confirmed now."
+    }
+  },
+  "trail2": {
+    "routed": "Sent to {to}",
+    "escalated": "Not acknowledged in time: escalated (level {level})",
+    "onTheWay": "On the way: {who}",
+    "fixed": "Fixed: handed back",
+    "fixedJob": "Fixed: job {number} handed back",
+    "works": "Works again: confirmed by {who}"
+  },
+  "media": {
+    "requestTitle": "Photos {photos} · voice notes {voices}",
+    "jobTitle": "Photos and voice notes of the job",
+    "fromRequests_one": "From its request ({count})",
+    "fromRequests_other": "From its requests ({count})",
+    "photo": "Photo",
+    "before": "Before the work",
+    "after": "After the work",
+    "voice": "Voice note",
+    "voiceN": "Voice note {n}",
+    "voices": "Voice notes",
+    "voiceCount_one": "{count} voice note",
+    "voiceCount_other": "{count} voice notes",
+    "count": "photos {photos} · voice notes {voices}",
+    "none": "No photos or voice notes.",
+    "noneJob": "No photos yet.",
+    "noneRequests": "No photos or voice notes on its requests.",
+    "noRead_one": "{count} file: opening it needs the files right (files.read).",
+    "noRead_other": "{count} files: opening them needs the files right (files.read).",
+    "openPhoto": "Open photo {n}: {what}",
+    "photoAlt": "Photo {n}: {what}",
+    "listenTo": "Listen to voice note {n}",
+    "unread": "{name}: couldn't be shown",
+    "addBefore": "Photo before",
+    "addAfter": "Photo after",
+    "addVoice": "Add a voice note",
+    "takeBefore": "A photo before the work",
+    "takeAfter": "A photo after the work",
+    "sendingPhoto": "Sending the photo…",
+    "sendingVoice": "Sending the voice note…",
+    "phoneHint": "From a phone: the camera, arrows and circles drawn in; a voice note from the phone's recorder. Faces never.",
+    "audioType": "That file is not a voice note we take (webm, ogg, m4a, mp3, aac or wav).",
+    "audioSize": "That voice note is too long: at most 10 MB.",
+    "held": {
+      "closed": "The job is closed: no more photos."
+    }
+  },
+  "close": {
+    "action": "What was done?",
+    "otherHint": "Say it in words",
+    "failure": "What failed?",
+    "failureHint": "The failure code tiles stand until the code list (problem, cause, remedy) comes.",
+    "noFailure": "None given",
+    "wordsHint": "Optional with a tile: the next person reads it on the machine's history.",
+    "wordsOther": "Needed for Other: what was done.",
+    "notStarted": "Not started: no time counted.",
+    "minutes": "{time} since the start of the work (the office counts it).",
+    "dialogTitle": "Hand back {number} · {machine}",
+    "dialogHint": "What was done → what failed → Hand back",
+    "lockedNote": "{machine} is locked as unsafe: Running waits until a technician signs it safe.",
+    "held": {
+      "action": "Pick what was done.",
+      "words": "Say in words what was done (Other).",
+      "failure": "Pick what failed."
+    }
+  },
+  "lead": {
+    "title": "Line lead confirms",
+    "body": "The person who asked confirms the machine works: on the tablet the line lead, here a person who triages the requests.",
+    "confirm": "Confirm it works",
+    "by": "Confirmed by",
+    "at": "When",
+    "tag": "Confirmed it works",
+    "reporters": "Who reported it, and what they see",
+    "firstPiece": "Stitch settings were touched: a first-piece check after the repair comes with a later version (Quality › Inspections).",
+    "held": {
+      "done": "Confirmed already.",
+      "noRight": "Confirmed by a person who triages the requests (plant.requests.triage).",
+      "notHandedBack": "Confirmed once the job is handed back.",
+      "cannot": "Not to be confirmed now."
+    }
+  },
+  "lockPanel": {
+    "title": "{machine} locked since {since} by {who}",
+    "reason": "Reason: {reason}",
+    "body": "Signed safe by a technician; the status returns to Running or Under maintenance."
+  },
+  "depthRefusal": {
+    "ALREADY_ACKNOWLEDGED": "A technician has seen this request already.",
+    "ON_THE_WAY_ALREADY": "A technician is on the way already.",
+    "NOT_ON_THE_WAY_NOW": "This request is not open for a technician now.",
+    "NOT_FIXED_YET": "Not fixed yet: the job is not handed back.",
+    "WORKS_CONFIRMED": "Confirmed already: it works again.",
+    "CLOSED_WITHOUT_JOB": "Closed without a job: nothing to confirm.",
+    "H1_HELD": "The site keeps the Owner's rule: anyone at the station locks, only a technician signs it safe.",
+    "LOCK_NOT_ALLOWED": "This site lets only line leads and technicians lock a machine.",
+    "LOCKED_ALREADY": "The machine is locked as unsafe already: read it again.",
+    "MERGE_NOTHING": "Pick the requests to merge.",
+    "NOT_HANDED_BACK": "The job is not handed back yet.",
+    "LEAD_CONFIRMED": "The line lead confirmed it works already.",
+    "FILES_CLOSED": "Closed: no more photos or voice notes.",
+    "ORDER_INCOMPLETE": "The order names every rule: read them again."
   }
 }

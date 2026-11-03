@@ -14,6 +14,8 @@ import { officeOf } from './access'
 import { readDefects, writeDefects } from './defects-store'
 import { scanEvent } from './scans'
 import { lockBundleScans, readBundleScans, readHeader, readOperations, readScan, scanWorkOrderLock } from './store'
+// B-W2b-111 (QHS-036): a line whose receipt waits for its incoming inspection, or that the inspection rejected, is not reported here.
+import { receiptLineHold } from '../../purchasing/subcontracting/held'
 
 /**
  * The outside operation reported at receive back (B-W2b-10; the follow-up of B-W2a-25 and B-W2a-76: "receiving bundles
@@ -208,6 +210,8 @@ export async function reportReceiptLine(caller: CommandCaller, lineId: string, i
     await tools.tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.receipt-line-report', ${context.tenantId}::uuid, ${lineId}::uuid), 0))`
     const already = await tools.tx.operationScan.findFirst({ where: { workOrderId: found.order.workOrderId, clientScanId: receiptLineClientId(lineId), deviceId: null }, select: { id: true } })
     if (already) throw new ConflictError('This receipt line is reported at its operation already.')
+    const hold = await receiptLineHold(tools.tx, { id: lineId, receiptId: found.line.receiptId })
+    if (hold) throw new ConflictError(hold)
     const [report] = await reportOutsideInCommand(tools, { workOrderId: found.order.workOrderId, number: found.order.number }, [
       {
         lineId,

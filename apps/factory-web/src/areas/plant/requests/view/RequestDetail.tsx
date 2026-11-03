@@ -2,25 +2,29 @@
 
 import { useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Check, ExternalLink, GitMerge, ShieldCheck, Wrench, X } from 'lucide-react'
+import { AlertTriangle, Check, CircleCheck, ExternalLink, Footprints, GitMerge, Lock, ShieldCheck, Wrench, X } from 'lucide-react'
 import { Banner, Card, KeyValue, type TimelineStep } from '@nexus/ui/components'
 import { Lightbox } from '@nexus/ui/patterns'
 import { Button, Kbd, Tag } from '@nexus/ui/primitives'
 import { DetailModal, Timeline } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
-import type { MaintenanceRequest, RequestRecord } from '../../_shared/api'
 import { ageWords, labelOf, personWords } from '../../_shared/model'
 import { JobPill, MachinePill, RequestPill, say, SymptomText, UnsafeTag, useWords, type Translate } from '../../_shared/parts'
+import type { DeepRequest, DeepRequestRecord } from '../depth/api'
+import { escalatedWords, goHeld, groupOfRecord, lightboxPhotos, lockHeld, progressRows, routedWords, trailSteps, worksHeld } from '../depth/model'
 import type { RequestsListActions, RequestsListModel } from '../view-model'
+import { MediaList } from './MediaList'
 
 /**
  * The request's detail (design plant.requests/pop:request, a DetailModal opened by Enter or `?open=<request>`): the
- * symptom, the words and the photos (full size in the Lightbox; "Open full size" in a new tab), the machine's card (its
- * status, the open job, the last five jobs, the "third failure in 30 days" hint), who reported it and when, the other open
- * requests of the machine (merge into one), and the trail of what happened. Decisions by keys: A acknowledge, M make a job,
- * D merge into the first duplicate, C close without a job, S sign the machine safe (a technician, a fresh code); J / K the
- * previous and next request of the queue (the DS DetailModal's own Prev / Next). Each held with its reason in words. A
+ * symptom, the words, the photos (full size in the Lightbox; "Open full size" in a new tab) and the voice notes, where it
+ * was sent and how far it escalated, what the person who reported it sees (reported → seen → a technician on the way →
+ * fixed → works again: design inline "Floor › Machine problem & jobs (the requester sees progress)") with On my way and
+ * It works again, the machine's card (its status, the open job, the last five jobs, the "third failure in 30 days" hint),
+ * the other open requests of the machine (Merge requests), and the routing and progress trail in time order. Decisions by
+ * keys: A acknowledge, M make a job, D merge requests, L lock as unsafe, C close without a job, S sign the machine safe
+ * (a technician, a fresh code); J / K the previous and next request (the DS DetailModal's). Each held with its reason. A
  * worker is named only here, and only where the site records workers (the API decides; Owner answer W1).
  */
 export function RequestDetail({ model, actions }: { model: RequestsListModel; actions?: RequestsListActions }) {
@@ -40,17 +44,19 @@ export function RequestDetail({ model, actions }: { model: RequestsListModel; ac
   const jobHeld = !model.can.triage || (record && !triage && open) ? t('held.noTriage') : !open ? t('held.notOpen') : busyHeld
   const closeHeld = !model.can.triage || (record && !triage && open) ? t('held.noTriage') : !open ? t('held.notOpen') : request?.locking ? t('held.closeLocked') : busyHeld
   const signHeld = !(record?.canSignSafe ?? false) ? t('held.noSignSafe') : busyHeld
-  const firstDuplicate = record?.duplicates[0] ?? null
+  const lockKey = record ? lockHeld(record, model.can, detail.busy) : 'held.busy'
+  const group = record ? groupOfRecord(record) : null
+  const mergeKeyHeld = !model.can.triage ? 'held.noTriage' : !group ? 'mergeMany.held.noGroup' : detail.busy ? 'held.busy' : null
 
-  const latest = useRef({ actions, ackHeld, jobHeld, closeHeld, signHeld, request, firstDuplicate })
-  latest.current = { actions, ackHeld, jobHeld, closeHeld, signHeld, request, firstDuplicate }
+  const latest = useRef({ actions, ackHeld, jobHeld, closeHeld, signHeld, lockKey, mergeKeyHeld, request, group })
+  latest.current = { actions, ackHeld, jobHeld, closeHeld, signHeld, lockKey, mergeKeyHeld, request, group }
   const quiet = model.dialog !== null || model.stepUp.open || detail.lightbox !== null
   useEffect(() => {
     if (quiet) return
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
-      if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="menu"]') || target.isContentEditable)) return
+      if (target && (target.closest('input, textarea, select, audio, [contenteditable="true"], [role="menu"]') || target.isContentEditable)) return
       const now = latest.current
       const key = event.key.toLowerCase()
       const act = (run: () => void) => {
@@ -60,7 +66,8 @@ export function RequestDetail({ model, actions }: { model: RequestsListModel; ac
       if (key === 'a' && !now.ackHeld) act(() => now.actions?.onAcknowledge?.())
       else if (key === 'm' && !now.jobHeld) act(() => now.actions?.onMakeJob?.())
       else if (key === 'c' && !now.closeHeld) act(() => now.actions?.onClose?.())
-      else if (key === 'd' && !now.jobHeld && now.firstDuplicate && !now.request?.locking) act(() => now.actions?.onMerge?.(now.firstDuplicate!))
+      else if (key === 'd' && !now.mergeKeyHeld && now.group) act(() => now.actions?.onMergeGroup?.(now.group!))
+      else if (key === 'l' && !now.lockKey) act(() => now.actions?.onLock?.())
       else if (key === 's' && now.request?.locking && !now.signHeld) act(() => now.actions?.onSignSafe?.())
     }
     window.addEventListener('keydown', onKey)
@@ -69,6 +76,7 @@ export function RequestDetail({ model, actions }: { model: RequestsListModel; ac
 
   const title = request ? t('detail.title', { machine: request.machine.assetNumber }) : t('detail.titleUnknown')
   const subtitle = request ? [labelOf(request.machine.class, locale), request.station ? `${request.station.code} · ${request.station.name}` : null].filter(Boolean).join(' · ') : undefined
+  const photos = lightboxPhotos(detail.media)
 
   return (
     <>
@@ -100,6 +108,11 @@ export function RequestDetail({ model, actions }: { model: RequestsListModel; ac
                     <ShieldCheck size={14} aria-hidden /> {t('detail.signSafe')} <Kbd>S</Kbd>
                   </Button>
                 )}
+                {!request.locking && (
+                  <Button size="sm" variant="danger-outline" heldReason={lockKey ? t(lockKey) : null} onClick={() => actions?.onLock?.()} aria-keyshortcuts="l">
+                    <Lock size={14} aria-hidden /> {t('lockAsUnsafe.button')} <Kbd>L</Kbd>
+                  </Button>
+                )}
                 <Button size="sm" heldReason={ackHeld} onClick={() => actions?.onAcknowledge?.()} aria-keyshortcuts="a">
                   <Check size={14} aria-hidden /> {t('detail.acknowledge')} <Kbd>A</Kbd>
                 </Button>
@@ -114,30 +127,46 @@ export function RequestDetail({ model, actions }: { model: RequestsListModel; ac
           </>
         }
       >
-        {record && request && <DetailBody record={record} request={request} model={model} actions={actions} t={t} place={place} />}
+        {record && request && <DetailBody record={record} request={request} model={model} actions={actions} t={t} place={place} mergeHeld={mergeKeyHeld} />}
       </DetailModal>
-      {record && detail.lightbox !== null && detail.photos.some((photo) => photo.src) && (
+      {record && detail.lightbox !== null && photos.length > 0 && (
         <Lightbox
           open
           onClose={() => actions?.onPhoto?.(null)}
-          items={detail.photos.filter((photo) => photo.src).map((photo, at) => ({ url: photo.src!, alt: t('detail.photoAlt', { n: at + 1, machine: record.request.machine.assetNumber }) }))}
-          index={detail.lightbox}
+          items={photos.map((photo, at) => ({ url: photo.src!, alt: t('detail.photoAlt', { n: at + 1, machine: record.request.machine.assetNumber }) }))}
+          index={Math.min(detail.lightbox, photos.length - 1)}
           onIndex={(at) => actions?.onPhoto?.(at)}
-          title={t('detail.photoTitle', { n: detail.lightbox + 1, count: detail.photos.filter((photo) => photo.src).length })}
-          external={detail.photos.filter((photo) => photo.src)[detail.lightbox] ? { label: t('detail.photoFull'), href: detail.photos.filter((photo) => photo.src)[detail.lightbox]!.src! } : undefined}
+          title={t('detail.photoTitle', { n: Math.min(detail.lightbox, photos.length - 1) + 1, count: photos.length })}
+          external={photos[detail.lightbox] ? { label: t('detail.photoFull'), href: photos[detail.lightbox]!.src! } : undefined}
         />
       )}
     </>
   )
 }
 
-function DetailBody({ record, request, model, actions, t, place }: { record: RequestRecord; request: MaintenanceRequest; model: RequestsListModel; actions?: RequestsListActions; t: Translate; place: { locale: ReturnType<typeof useLocale>; timeZone: string } }) {
+interface BodyProps {
+  record: DeepRequestRecord
+  request: DeepRequest
+  model: RequestsListModel
+  actions?: RequestsListActions
+  t: Translate
+  place: { locale: ReturnType<typeof useLocale>; timeZone: string }
+  mergeHeld: string | null
+}
+
+function DetailBody({ record, request, model, actions, t, place, mergeHeld }: BodyProps) {
   const locale = place.locale
   const detail = model.detail!
   const card = record.card
   const machineHref = `${model.prefix}/plant/machines/${encodeURIComponent(request.machine.id)}`
   const jobHref = (id: string) => `${model.prefix}/plant/jobs/${encodeURIComponent(id)}`
-  const steps = trailOf(t, request, place)
+  const steps = trailSteps(t, request, record.trail).map(
+    (step): TimelineStep => ({ key: step.key, label: say(t, step.words), tone: step.tone, detail: [step.at ? formatDateTime(step.at, place) : null, step.note].filter(Boolean).join(' · ') || undefined }),
+  )
+  const group = groupOfRecord(record)
+  const routed = say(t, routedWords(request.routing)) ?? ''
+  const escalated = escalatedWords(request.routing)
+  const photos = detail.media.filter((entry) => entry.kind === 'PHOTO' && entry.src)
 
   return (
     <div className="fw-pl-stack">
@@ -164,33 +193,19 @@ function DetailBody({ record, request, model, actions, t, place }: { record: Req
                 { label: t('detail.reportedAt'), value: formatDateTime(request.reportedAt, place), hint: t('detail.waiting', { age: ageWords(t, request.ageMinutes) }) },
                 { label: t('detail.station'), value: request.station ? `${request.station.code} · ${request.station.name}` : t('list.noStation') },
                 { label: t('detail.unsafe'), value: request.unsafe ? (request.locking ? t('detail.unsafeLocked') : t('detail.unsafeSigned')) : t('unsafe.no') },
+                { label: t('routing.column'), value: routed, hint: escalated ? [say(t, escalated), request.routing.escalatedAt ? formatDateTime(request.routing.escalatedAt, place) : null].filter(Boolean).join(' · ') : undefined },
               ]}
             />
           </section>
 
-          <section className="fw-pl-section" aria-labelledby="pl-req-photos">
-            <h3 className="fw-pl-h3" id="pl-req-photos">
-              {t('detail.photos', { count: request.photos })}
+          <section className="fw-pl-section" aria-labelledby="pl-req-media">
+            <h3 className="fw-pl-h3" id="pl-req-media">
+              {t('media.requestTitle', { photos: request.photos, voices: request.voiceNotes })}
             </h3>
-            {detail.photos.length === 0 ? (
-              <p className="fw-pl-hint">{t('detail.noPhotos')}</p>
-            ) : (
-              <div className="fw-pl-photos">
-                {detail.photos.map((photo, at) =>
-                  photo.src ? (
-                    <button key={photo.id} type="button" className="fw-pl-photo" aria-label={t('detail.photoOpen', { n: at + 1 })} onClick={() => actions?.onPhoto?.(detail.photos.filter((entry) => entry.src).findIndex((entry) => entry.id === photo.id))}>
-                      {/* A presigned address of the files API; the DS MediaPreview draws it full size in the Lightbox. */}
-                      <img src={photo.src} alt={t('detail.photoAlt', { n: at + 1, machine: request.machine.assetNumber })} />
-                    </button>
-                  ) : (
-                    <span key={photo.id} className="fw-pl-hint">
-                      {t('detail.photoUnread', { name: photo.name })}
-                    </span>
-                  ),
-                )}
-              </div>
-            )}
+            <MediaList media={detail.media} canRead={model.can.readFiles} t={t} place={place} onPhoto={(id) => actions?.onPhoto?.(photos.findIndex((entry) => entry.id === id))} />
           </section>
+
+          <ProgressSection record={record} request={request} model={model} actions={actions} t={t} place={place} />
 
           <section className="fw-pl-section" aria-labelledby="pl-req-dupes">
             <h3 className="fw-pl-h3" id="pl-req-dupes">
@@ -199,31 +214,34 @@ function DetailBody({ record, request, model, actions, t, place }: { record: Req
             {record.duplicates.length === 0 ? (
               <p className="fw-pl-hint">{t('detail.noDuplicates')}</p>
             ) : (
-              <ul className="fw-pl-plain">
-                {record.duplicates.map((other) => (
-                  <li key={other.id} className="fw-pl-dupe">
-                    <span className="fw-pl-cell">
-                      <SymptomText symptom={other.symptom} description={other.description} />
-                      <span className="fw-pl-sub">
-                        {formatDateTime(other.reportedAt, place)} · {personWords(t, other.reportedBy)} · {t(`requestStatus.${other.status}`)}
+              <>
+                <ul className="fw-pl-plain">
+                  {record.duplicates.map((other) => (
+                    <li key={other.id} className="fw-pl-dupe">
+                      <span className="fw-pl-cell">
+                        <SymptomText symptom={other.symptom} description={other.description} />
+                        <span className="fw-pl-sub">
+                          {formatDateTime(other.reportedAt, place)} · {personWords(t, other.reportedBy)} · {t(`requestStatus.${other.status}`)}
+                          {other.locking ? ` · ${t('unsafe.tag')}` : ''}
+                        </span>
                       </span>
-                    </span>
-                    <span className="fw-pl-row">
-                      <Button size="sm" variant="quiet" onClick={() => actions?.onOpen?.(other.id)}>
-                        {t('detail.openOther')}
-                      </Button>
-                      <Button
-                        size="sm"
-                        heldReason={!record.canTriage ? t('held.noTriage') : request.locking ? t('held.mergeLocked') : detail.busy ? t('held.busy') : null}
-                        onClick={() => actions?.onMerge?.(other)}
-                        aria-keyshortcuts={other.id === record.duplicates[0]?.id ? 'd' : undefined}
-                      >
-                        <GitMerge size={13} aria-hidden /> {t('detail.mergeInto')}
-                      </Button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
+                      <span className="fw-pl-row">
+                        <Button size="sm" variant="quiet" onClick={() => actions?.onOpen?.(other.id)}>
+                          {t('detail.openOther')}
+                        </Button>
+                        <Button size="sm" heldReason={mergeHeld ? t(mergeHeld) : null} onClick={() => group && actions?.onMergeGroup?.(group, `REQUEST:${other.id}`)}>
+                          <GitMerge size={13} aria-hidden /> {t('detail.mergeInto')}
+                        </Button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <span>
+                  <Button size="sm" heldReason={mergeHeld ? t(mergeHeld) : null} onClick={() => group && actions?.onMergeGroup?.(group)} aria-keyshortcuts="d">
+                    <GitMerge size={13} aria-hidden /> {t('mergeMany.open')} <Kbd>D</Kbd>
+                  </Button>
+                </span>
+              </>
             )}
           </section>
 
@@ -232,7 +250,6 @@ function DetailBody({ record, request, model, actions, t, place }: { record: Req
               {t('detail.trail')}
             </h3>
             <Timeline label={t('detail.trail')} steps={steps} />
-            <p className="fw-pl-hint">{t('detail.routingLater')}</p>
           </section>
         </div>
 
@@ -301,16 +318,39 @@ function DetailBody({ record, request, model, actions, t, place }: { record: Req
   )
 }
 
-/** What happened to the request, in order (reported, acknowledged, made into a job, merged or closed, signed safe). */
-export function trailOf(t: Translate, request: MaintenanceRequest, place: { locale: ReturnType<typeof useLocale>; timeZone: string }): TimelineStep[] {
-  const when = (at: string) => formatDateTime(at, place)
-  const steps: TimelineStep[] = [{ key: 'reported', label: t('trail.reported', { who: personWords(t, request.reportedBy) }), tone: 'info', detail: when(request.reportedAt) }]
-  if (request.acknowledgedAt) steps.push({ key: 'ack', label: t('trail.acknowledged', { who: personWords(t, request.acknowledgedBy) }), tone: 'info', detail: when(request.acknowledgedAt) })
-  if (request.job) steps.push({ key: 'job', label: t('trail.job', { number: request.job.number }), tone: 'success', detail: t(`jobStatus.${request.job.status}`) })
-  if (request.status === 'MERGED') steps.push({ key: 'merged', label: t('trail.merged'), tone: 'neutral', detail: request.closedAt ? when(request.closedAt) : undefined })
-  if (request.status === 'CLOSED' && request.closedAt)
-    steps.push({ key: 'closed', label: t('trail.closed', { reason: request.closeReason ? t(`closeReason.${request.closeReason}`) : '—', who: personWords(t, request.closedBy) }), tone: 'neutral', detail: [when(request.closedAt), request.closeNote].filter(Boolean).join(' · ') })
-  if (request.signedSafe) steps.push({ key: 'safe', label: t('trail.signedSafe', { who: personWords(t, request.signedSafe.by) }), tone: 'success', detail: [when(request.signedSafe.at), request.signedSafe.note].filter(Boolean).join(' · ') })
-  else if (request.locking) steps.push({ key: 'locked', label: t('trail.waitsSignSafe'), tone: 'info', detail: t('trail.waitsSignSafeDetail') })
-  return steps
+/**
+ * What the person who reported it sees (QHS-180; design inline "the requester sees progress"): the five steps, a step
+ * never said before a later one left out; On my way (a technician: plant.jobs.work) and It works again (the reporter's,
+ * here for the office: plant.report), each held with its reason.
+ */
+function ProgressSection({ record, request, model, actions, t, place }: Omit<BodyProps, 'mergeHeld'>) {
+  const busy = model.detail?.busy ?? false
+  const go = goHeld(record, model.can, busy)
+  const works = worksHeld(record, model.can, busy)
+  const rows = progressRows(request)
+  const steps: TimelineStep[] = rows.map((row) => ({
+    key: row.key,
+    label: t(`progress.step.${row.key}`),
+    tone: row.done ? (row.key === 'WORKS' || row.key === 'FIXED' ? 'success' : 'info') : 'neutral',
+    ...(row.done ? { detail: row.at ? formatDateTime(row.at, place) : undefined } : { at: null }),
+  }))
+  return (
+    <section className="fw-pl-section" aria-labelledby="pl-req-progress">
+      <h3 className="fw-pl-h3" id="pl-req-progress">
+        {t('progress.title')}
+      </h3>
+      <p className="fw-pl-hint">{t('progress.body')}</p>
+      <Timeline label={t('progress.title')} steps={steps} />
+      {request.locking && <p className="fw-pl-hint">{t('progress.lockedNote')}</p>}
+      {request.status === 'MERGED' && <p className="fw-pl-hint">{t('progress.mergedNote')}</p>}
+      <span className="fw-pl-row">
+        <Button size="sm" heldReason={go ? t(go) : null} onClick={() => actions?.onOnTheWay?.()}>
+          <Footprints size={13} aria-hidden /> {t('progress.onTheWay')}
+        </Button>
+        <Button size="sm" variant="primary" heldReason={works ? t(works) : null} onClick={() => actions?.onWorks?.()}>
+          <CircleCheck size={13} aria-hidden /> {t('progress.works')}
+        </Button>
+      </span>
+    </section>
+  )
 }

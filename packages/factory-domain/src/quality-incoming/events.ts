@@ -9,17 +9,24 @@ import { NEXT_STEPS } from '../quality/incoming/rules'
  *
  *   incoming_inspection.opened     an inspection of a lot was opened on its approved plan, with its sample
  *   incoming_inspection.recorded   a hide of the sample recorded, changed or taken out, or the plan checks answered
+ *                                  (B-W2b-111: a roll by the 4-point system, a component check, the defect counter)
  *   incoming_inspection.decided    the decision was signed: accepted, rejected and to sort, adding up to the lot
  *   incoming_inspection.cancelled  an open inspection was abandoned, with the reason
  *
  * Reach the office's inspections (quality.incoming.view) and the site's inspection tablets (the same permission, which
  * the floor shares). Ids, numbers, counts and states only: never a person, never money.
+ *
+ * B-W2b-111: an inspection is of a lot (lotId) or of goods back from a workshop (subcontractReceiptId), exactly one of
+ * the two; the other is null. A workshop's goods released or held by the decision also reach the subcontract order's
+ * record through `subcontract_order.updated` (purchasing's event).
  */
 
-const live = { permission: 'quality.incoming.view', floor: 'quality.incoming.view', fields: ['incomingInspectionId', 'number', 'lotId'] } as const
+const live = { permission: 'quality.incoming.view', floor: 'quality.incoming.view', fields: ['incomingInspectionId', 'number', 'lotId', 'subcontractReceiptId'] } as const
+/** B-W2b-111: a lot or a workshop's receipt, exactly one of the two. */
+const subject = () => ({ lotId: z.uuid().nullable(), subcontractReceiptId: z.uuid().nullable() })
 const quantity = () => z.string().regex(/^\d{1,14}(\.\d{1,4})?$/)
 
-export const RECORDED_WHAT = ['HIDE', 'HIDE_REMOVED', 'RESULTS'] as const
+export const RECORDED_WHAT = ['HIDE', 'HIDE_REMOVED', 'RESULTS', 'ROLL', 'ROLL_REMOVED', 'COMPONENT', 'COMPONENT_REMOVED', 'COUNTERS'] as const
 export type RecordedWhat = (typeof RECORDED_WHAT)[number]
 
 export const events = [
@@ -30,8 +37,8 @@ export const events = [
     payload: z.strictObject({
       incomingInspectionId: z.uuid(),
       number: z.string(),
-      lotId: z.uuid(),
-      itemId: z.uuid(),
+      ...subject(),
+      itemId: z.uuid().nullable(),
       planVersionId: z.uuid(),
       lotSize: quantity(),
       uom: z.string(),
@@ -47,13 +54,13 @@ export const events = [
     payload: z.strictObject({
       incomingInspectionId: z.uuid(),
       number: z.string(),
-      lotId: z.uuid(),
+      ...subject(),
       what: z.enum(RECORDED_WHAT),
       hideId: z.uuid().nullable(),
       done: z.number().int().min(0),
       sampleSize: z.number().int().min(1),
     }),
-    live: { ...live, fields: ['incomingInspectionId', 'number', 'lotId', 'what', 'hideId', 'done'] },
+    live: { ...live, fields: ['incomingInspectionId', 'number', 'lotId', 'subcontractReceiptId', 'what', 'hideId', 'done'] },
   }),
   defineEvent({
     type: 'incoming_inspection.decided',
@@ -62,7 +69,7 @@ export const events = [
     payload: z.strictObject({
       incomingInspectionId: z.uuid(),
       number: z.string(),
-      lotId: z.uuid(),
+      ...subject(),
       computedResult: z.enum(['PASS', 'FAIL']),
       accepted: quantity(),
       rejected: quantity(),
@@ -72,7 +79,7 @@ export const events = [
       next: z.enum(NEXT_STEPS),
       postedBy: z.enum(['FLOOR', 'OFFICE']),
     }),
-    live: { ...live, fields: ['incomingInspectionId', 'number', 'lotId', 'computedResult', 'next'] },
+    live: { ...live, fields: ['incomingInspectionId', 'number', 'lotId', 'subcontractReceiptId', 'computedResult', 'next'] },
   }),
   defineEvent({
     type: 'incoming_inspection.cancelled',
@@ -81,7 +88,7 @@ export const events = [
     payload: z.strictObject({
       incomingInspectionId: z.uuid(),
       number: z.string(),
-      lotId: z.uuid(),
+      ...subject(),
       postedBy: z.enum(['FLOOR', 'OFFICE']),
     }),
     live,

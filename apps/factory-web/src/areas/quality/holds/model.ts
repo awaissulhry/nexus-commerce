@@ -1,6 +1,8 @@
 import { HOLD_LIMITS, HOLD_SOURCE_TYPES, HOLD_SUBJECT_TYPES, STOCK_SUBJECTS, type HoldSourceType, type HoldSubjectType, type ReleaseCheckKey } from '@nexus/factory-domain/quality/holds/rules'
 import type { LiveState, Notice, QualityCan, Read } from '../_shared/model'
 import type { Hold, HoldCheck, HoldCounts, HoldDetail, HoldPreview, HoldSettings, HoldSettingsAnswer, HoldsQuery, PlaceBody, Person } from './api'
+import type { ListMode } from '../../../list-frame/w2b/model'
+import type { HoldsDepthModel } from './depth/model'
 
 /**
  * The rules of Quality › Holds (SCR-078) without React and without the API: the saved views and their address (the
@@ -25,7 +27,8 @@ export const PAGE = 50
 export const MAX = 200
 export const nextLimit = (limit: number): number => Math.min(MAX, limit + PAGE)
 
-export const RECORD_TABS = ['hold', 'decision', 'activity'] as const
+// B-W2b-114: Affected (what the hold touches) after Hold.
+export const RECORD_TABS = ['hold', 'affected', 'decision', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 type Params = { get(name: string): string | null } | null | undefined
@@ -79,9 +82,11 @@ export function queryOf(view: View, scope: { subjectType: HoldSubjectType | null
 }
 
 /** The page's address: the view, the record the list is narrowed to, the hold open in its DetailModal and its tab. */
-export function holdsAddress(state: { view: View; subjectType?: HoldSubjectType | null; subjectId?: string | null; open?: string | null; tab?: RecordTab | null }): string {
+export function holdsAddress(state: { view: View; subjectType?: HoldSubjectType | null; subjectId?: string | null; open?: string | null; tab?: RecordTab | null; mode?: ListMode | null }): string {
   const query = new URLSearchParams()
   if (state.view !== 'open') query.set('view', state.view)
+  // B-W2b-114: the board (the list frame's own `mode` term, so a saved view keeps it).
+  if (state.mode && state.mode !== 'table') query.set('mode', state.mode)
   if (state.subjectType) query.set('subjectType', state.subjectType)
   if (state.subjectId) query.set('subjectId', state.subjectId)
   if (state.open) query.set('open', state.open)
@@ -89,6 +94,9 @@ export function holdsAddress(state: { view: View; subjectType?: HoldSubjectType 
   const qs = query.toString()
   return qs ? `?${qs}` : ''
 }
+
+/** B-W2b-114: List · Board (design qh-grid "View switch in the toolbar: List · Board"). */
+export const modeFromAddress = (params: Params): ListMode => (params?.get('mode') === 'board' ? 'board' : params?.get('mode') === 'cards' ? 'cards' : 'table')
 
 export const tabFromAddress = (params: Params): RecordTab => {
   const asked = params?.get('tab') ?? ''
@@ -163,7 +171,8 @@ export const SUBJECT_RECORD: Readonly<Record<HoldSubjectType, string>> = Object.
 })
 
 /** The source's record type for its link (a reversal is reviewed on its release; a lab result on its lot is not known here). */
-export const SOURCE_RECORD: Readonly<Record<HoldSourceType, string>> = Object.freeze({
+// B-W2b-114: an incoming inspection has no page yet (B-W2b-127 adds it): its source is said, not linked.
+export const SOURCE_RECORD: Readonly<Partial<Record<HoldSourceType, string>>> = Object.freeze({
   Inspection: 'Inspection',
   Nonconformance: 'Nonconformance',
   LabResult: 'LabResult',
@@ -592,4 +601,6 @@ export interface HoldsListModel {
   /** Design cases: the focused row, the quarantine popover open on a row. */
   readonly focusRow?: number
   readonly moveOpen?: string | null
+  /** B-W2b-114: the board, the hold by genealogy, the Affected tab, the quarantine move. */
+  readonly depth?: HoldsDepthModel
 }
