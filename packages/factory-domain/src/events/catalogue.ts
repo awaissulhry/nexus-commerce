@@ -77,6 +77,8 @@ import { events as qualityAmendments } from '../quality-amendments/events'
 import { events as qualityDocuments } from '../quality-documents/events'
 // B-W2b-120: safety at work (the safety organisation, the RLS notice, the safety calendar's deadlines).
 import { events as safety } from '../safety/events'
+// B-W2b-125: incidents, near misses and hazards, the INAIL filings (the safety module's own block).
+import { incidentEvents as safetyIncidents } from '../safety/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -220,7 +222,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...qualityAmendments,
   ...qualityDocuments,
   // B-W2b-120
-  ...safety] as const satisfies readonly EventDefinition[]
+  ...safety,
+  // B-W2b-125
+  ...safetyIncidents] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

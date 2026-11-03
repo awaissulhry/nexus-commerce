@@ -90,6 +90,8 @@ import { escalationCron } from './modules/plant/requests/escalation'
 import { capaRemindersCron } from './modules/quality/capa/reminders'
 // B-W2b-124: the reminders of statutory machine checks whose window opened.
 import { checkRemindersCron } from './modules/plant/statutory/reminders'
+// B-W2b-125: a machine locked as unsafe opens a hazard report in Plant › Incidents when the site asks for one.
+import { incidentHandlers } from './modules/safety/incidents/handlers'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -141,6 +143,8 @@ const W2B_42_HANDLERS: readonly EventHandler[] = overtimeHandlers()
 const W2B_43_HANDLERS: readonly EventHandler[] = earningsHandlers()
 // B-W2b-101: a receipt posted, a workshop's goods back, a scan → the company's inspection rules open what they pick.
 const W2B_101_HANDLERS: readonly EventHandler[] = inspectionTriggerHandlers()
+// B-W2b-125: maintenance_request.locked (hazardReport) → a hazard report in Plant › Incidents.
+const W2B_125_HANDLERS: readonly EventHandler[] = incidentHandlers()
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
@@ -209,7 +213,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_125_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]

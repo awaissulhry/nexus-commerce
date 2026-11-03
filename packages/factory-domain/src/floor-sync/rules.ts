@@ -243,6 +243,9 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       const counted = whole(p.add) ?? whole(p.inspected) ?? rows
       return { code: kind === 'quality.inprocess.results' ? 'RESULTS' : text(p.what, 20), target: text(p.inspectionId, 40) ?? text(p.checkId, 40), ...(counted !== undefined ? { quantity: counted } : {}) }
     }
+    // B-W2b-125: the kind only (INJURY, NEAR_MISS, HAZARD); never the words, the place or a person.
+    case 'safety.incident.report':
+      return { code: text(p.kind, 20) }
   }
 }
 
