@@ -23,6 +23,9 @@ import { actorOf } from '../../../core/context'
 import { officeContextOf, siteFor } from '../ledger/access'
 import { itemUnitsOf, readHides, readItems, readLots, type HideRow, type ItemRow, type LotRow } from '../issue/store'
 import { viewsOf, type ReservationView } from './read'
+// B-W2b-100: one shade lot per order (SCM-206).
+import { asksOneShadePerOrder, shadeRefusal, type ShadeFacts } from '@nexus/factory-domain/inventory/reservations/shade'
+import { heldShades, shadeFactsOf, shadeOverrideOf, shadeRuleFor } from './shade'
 import { demandWords, lockReservations, readKeyFacts, reserveKeyOf, RESERVATION_COLUMNS, type ReserveKey } from './store'
 
 /**
@@ -61,6 +64,8 @@ export interface ReserveInput {
   readonly salesOrderLineId?: string | undefined
   readonly needDate?: string | undefined
   readonly note?: string | null | undefined
+  /** B-W2b-100: hides of another shade lot reserved anyway, with this reason (inventory.shade.override). */
+  readonly shadeOverrideReason?: string | undefined
   readonly lines: readonly ReserveLineInput[]
 }
 
@@ -253,6 +258,26 @@ export async function reserve(caller: CommandCaller, body: ReserveInput, idempot
           refusals.push({ path: `body/lines/${refusal.index}/refusal/${refusal.code}`, message: refusal.message })
         }
       }
+      // B-W2b-100 (SCM-206): one shade lot per order — the demand's hides (issued, reserved) and these lines', in their order.
+      const override = shadeOverrideOf(tools.context, { companyId: site.companyId, siteId: site.id }, body.shadeOverrideReason, 'body/shadeOverrideReason')
+      const overridden = new Set<number>()
+      const rule = await shadeRuleFor(tools.tx, site.id)
+      const hideLines = resolved.filter((line) => line.hide !== null).sort((a, b) => a.index - b.index)
+      if (asksOneShadePerOrder(rule) && hideLines.length > 0) {
+        const facts = await shadeFactsOf(tools.tx, hideLines.map((line) => line.hide!.id))
+        const held = new Map<string, ShadeFacts[]>()
+        for (const line of hideLines) {
+          const id = reserveKeyOf({ siteId: site.id, itemId: line.item.id, itemColourId: line.itemColourId })
+          if (!held.has(id)) held.set(id, await heldShades(tools.tx, { siteId: site.id, workOrderId: demand.workOrderId, salesOrderLineId: demand.salesOrderLineId, itemId: line.item.id, itemColourId: line.itemColourId }))
+          const fact = facts.get(line.hide!.id)!
+          const refusal = shadeRefusal(rule, demand.words, held.get(id)!, fact)
+          if (refusal && !override) refusals.push({ path: `body/lines/${line.index}/refusal/${refusal.code}`, message: refusal.message })
+          else {
+            if (refusal) overridden.add(line.index)
+            held.get(id)!.push(fact)
+          }
+        }
+      }
       if (refusals.length > 0) {
         refusals.sort((a, b) => (a.path < b.path ? -1 : 1))
         throw new ReservationRefusedError(refusals.length === 1 ? refusals[0]!.message : `${refusals.length} lines cannot be reserved: ${refusals[0]!.message}`, refusals)
@@ -301,7 +326,9 @@ export async function reserve(caller: CommandCaller, body: ReserveInput, idempot
             workOrderId: row.workOrderId,
             salesOrderLineId: row.salesOrderLineId,
             needDate: body.needDate ?? (needDate ? needDate.toISOString().slice(0, 10) : null),
+            ...(overridden.has(line.index) ? { shadeOverride: true } : {}),
           },
+          ...(overridden.has(line.index) && override ? { reason: `Shade rule overridden: ${override}` } : {}),
         })
       }
       tools.emit({

@@ -1668,6 +1668,7 @@
     "inventory_receive": "Receive goods against a purchase order",
     "inventory_reserve": "Reserve stock and release it",
     "inventory_hides_manage": "Correct a hide's grade and shade, re-measure it",
+    "inventory_shade_override": "Let a hide of another shade lot into an order, with the reason",
     "shipping_view": "See the shipments",
     "shipping_manage": "Plan and change shipments",
     "shipping_pack": "Pack a shipment",

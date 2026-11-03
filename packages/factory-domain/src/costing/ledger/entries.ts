@@ -108,7 +108,8 @@ const BLANK = {
 /** A stock move of the work order as the ledger reads it, with its value (StockValuation). */
 export interface ValuedMoveFacts {
   readonly id: string
-  readonly reason: 'ISSUE' | 'RETURN' | 'SCRAP' | 'PRODUCTION_RECEIPT'
+  // B-W2b-100: REMNANT is RETURN's twin (an offcut of a hide back to stock with its tag).
+  readonly reason: 'ISSUE' | 'RETURN' | 'REMNANT' | 'SCRAP' | 'PRODUCTION_RECEIPT'
   readonly itemId: string
   readonly baseQuantity: string
   readonly occurredAt: Date
@@ -130,8 +131,8 @@ export interface StandardRef {
  */
 export function moveEntry(id: string, move: ValuedMoveFacts, standard: StandardRef | null): EntryDraft {
   const base = decimalOf(move.baseQuantity)
-  const kind: CostEntryKind = move.reason === 'ISSUE' || move.reason === 'RETURN' ? 'MATERIAL' : move.reason === 'SCRAP' ? 'SCRAP' : 'COMPLETION'
-  const into = move.reason === 'RETURN' || move.reason === 'PRODUCTION_RECEIPT'
+  const kind: CostEntryKind = move.reason === 'ISSUE' || move.reason === 'RETURN' || move.reason === 'REMNANT' ? 'MATERIAL' : move.reason === 'SCRAP' ? 'SCRAP' : 'COMPLETION'
+  const into = move.reason === 'RETURN' || move.reason === 'REMNANT' || move.reason === 'PRODUCTION_RECEIPT'
   return {
     ...BLANK,
     id,

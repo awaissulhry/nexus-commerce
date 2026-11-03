@@ -9,6 +9,8 @@ import { defineManifest } from '../../../core/manifest'
 export const manifest = defineManifest({
   'GET /inventory/reservations': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
   'GET /inventory/reservations/availability': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
+  // B-W2b-100: find hides for a job (SCM-257) — before /:reservationId.
+  'GET /inventory/reservations/find-hides': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
   'GET /inventory/reservations/:reservationId': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
   'POST /inventory/reservations': { audiences: ['office'], permission: 'inventory.reserve', scope: 'record' },
   'POST /inventory/reservations/release': { audiences: ['office'], permission: 'inventory.reserve', scope: 'record' },

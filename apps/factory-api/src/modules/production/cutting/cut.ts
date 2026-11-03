@@ -35,6 +35,9 @@ import { LEDGER_SELECT, postMoves, type PostedMove } from '../../inventory/ledge
 import { workerGateFor } from '../../people/privacy/worker-gate'
 import { stationBlock } from '../../plant/checks'
 import { holdOnCut } from '../../quality/holds/checks'
+// B-W2b-100 (SCM-254): Hide done's remnant is a REMNANT move with its own tag; the hide's tagged pieces follow the cut.
+import { remnantSizeRefusal } from '@nexus/factory-domain/inventory/remnants/rules'
+import { assertRemnantMoveReversible, remnantsOnClose, remnantsOnMoveReversed, remnantsOnReopen, RemnantRefusedError, tagRemnantInCommand } from '../../inventory/remnants/lifecycle'
 import { floorRecordSubjectFor } from '../settings/subject'
 import {
   deviceStationOf,
@@ -73,8 +76,9 @@ import {
  *
  *   cut        the floor: a scanned hide (issued to the work order first, in the same command, when it is still in
  *              stock: issueInCommand), the garment sets and parts per cell, the area from the BOM (or typed for single
- *              parts), and with Hide done the rest of the hide: the remnant's RETURN (postMoves, after the entry) or the
- *              hide used up. Offline-safe: a device's client event id is recorded once (the unique key); a resend
+ *              parts), and with Hide done the rest of the hide: the remnant's REMNANT move (B-W2b-100: RETURN's twin, with
+ *              its own RM tag; refused below the minimum remnant) or the hide used up. A tagged remnant cut and closed is
+ *              USED (inventory/remnants/lifecycle.ts). Offline-safe: a device's client event id is recorded once (the unique key); a resend
  *              under another Idempotency-Key answers the entry already recorded.
  *   undo       the floor: the cutter's own last entry on this device (and the remnant it returned, back to the work
  *              order), by a mirror entry.
@@ -207,8 +211,10 @@ export interface CutResult {
   readonly cut: ReturnType<typeof entryView> | null
   /** The hide was issued to the work order by this cut (it was still in stock). */
   readonly issue: IssueResult['issue'] | null
-  /** The remnant's RETURN move (Hide done with a remnant). */
+  /** The remnant's REMNANT move (Hide done with a remnant). */
   readonly remnant: PostedMove | null
+  /** B-W2b-100: the remnant's new tag (RM-…), when Hide done set one aside. */
+  readonly remnantTag?: { readonly id: string; readonly code: string } | null
   readonly hide: { readonly id: string; readonly code: string; readonly state: HideState; readonly left: string; readonly closed: boolean }
   readonly cells: Awaited<ReturnType<typeof cellsAfter>>
   /** True when the device sent this event before (its client event id): the entry recorded then, nothing written now. */
@@ -265,7 +271,8 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
   let ledger = (await readHideLedger(tx, workOrder.siteId, workOrder.id, [hide.id])).get(hide.id)!
   let issue: IssueResult['issue'] | null = null
   if (ledger.at.lte(0)) {
-    issue = (await issueInCommand(tools, workOrder.id, { hideId: hide.id, ...(body.occurredAt ? { occurredAt: body.occurredAt } : {}) }, `${key}:issue`, 'body')).issue
+    // B-W2b-100: the table checks the shade itself (B-W2b-103: a warning a lead may pass), so the issue skips it here.
+    issue = (await issueInCommand(tools, workOrder.id, { hideId: hide.id, ...(body.occurredAt ? { occurredAt: body.occurredAt } : {}) }, `${key}:issue`, 'body', { shade: false })).issue
     ledger = (await readHideLedger(tx, workOrder.siteId, workOrder.id, [hide.id])).get(hide.id)!
   }
   const cut = (await readCutTotals(tx, workOrder.siteId, workOrder.id, [hide.id])).get(hide.id) ?? ZERO
@@ -297,6 +304,11 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
     elsewhere: (await readElsewhere(tx, workOrder.siteId, hide.id, workOrder.id)).toFixed(4),
   })
   if (!decision.ok) return refused(decision.refusal)
+  // B-W2b-100: a piece under the minimum remnant is waste, not stock (refused in words, before anything is written).
+  if (remnantIn && new Dec(decision.remnant).gt(0)) {
+    const small = remnantSizeRefusal({ hideCode: hide.code, baseArea: decision.remnant, baseUom: item.baseUom })
+    if (small) throw new RemnantRefusedError(small.code, small.message)
+  }
 
   let entry: EntryRow | null = null
   if (decision.entry) {
@@ -351,7 +363,7 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
       [
         {
           siteId: workOrder.siteId,
-          reason: 'RETURN',
+          reason: 'REMNANT',
           itemId: hide.itemId,
           itemColourId: lot.itemColourId,
           lotId: hide.lotId,
@@ -370,6 +382,13 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
       { key, issuePath: () => 'body/done/remnant' },
     )
     remnant = posted[0] ?? null
+  }
+  // B-W2b-100: Hide done uses the hide's issued pieces; the remnant set aside gets its own tag.
+  let remnantTag: { id: string; code: string } | null = null
+  if (decision.closes) await remnantsOnClose(tools, hide.id, workOrder.id)
+  if (remnant) {
+    const row = await tagRemnantInCommand(tools, { move: remnant, hide: { id: hide.id, lotId: hide.lotId, itemId: hide.itemId }, baseUom: item.baseUom, source: 'CUT' })
+    remnantTag = { id: row.id, code: row.code }
   }
   if (decision.hideState !== hide.state) {
     // A used-up hide names its closing entry: this one, or (Hide done used nothing more) the last cut that took what was
@@ -427,6 +446,7 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
     cut: entry ? entryView(entry, await readPieces(tx, [entry.id])) : null,
     issue,
     remnant,
+    remnantTag,
     hide: { id: hide.id, code: hide.code, state: decision.hideState, left: decision.left, closed: decision.closes },
     cells: await cellsAfter(tx, workOrder, leather),
     replayed: false,
@@ -439,7 +459,7 @@ const cellTotals = (pieces: readonly { readonly cellId: string; readonly pieces:
   return [...totals.entries()].map(([workOrderSizeId, count]) => ({ workOrderSizeId, pieces: count }))
 }
 
-/** The idempotency key of the remnant's RETURN move of an entry: the undo finds it by it. */
+/** The idempotency key of the remnant's move of an entry (REMNANT; a RETURN before B-W2b-100): the undo finds it by it. */
 export const remnantKey = (cutLogId: string) => `production.cut.remnant:${cutLogId}`
 
 /** The entry a device recorded under this client event id, as the answer to a resent event. */
@@ -565,10 +585,16 @@ async function reverseInCommand(tools: CommandTools, original: EntryRow, options
   if (options.undo) {
     const move = await tx.stockMove.findFirst({ where: { idempotencyKey: remnantKey(original.id) }, select: LEDGER_SELECT })
     if (move && (await tx.stockMove.count({ where: { reversalOfId: move.id } })) === 0) {
+      // B-W2b-100: its tag must still lie where it went (refused in words when it was issued or scrapped since).
+      await assertRemnantMoveReversible(tx, [move.id])
       await postMoves(tools, [{ ...reversalOf({ ...move, quantity: move.quantity.toString(), baseQuantity: move.baseQuantity.toString() }, options.reason), uom: move.uom }], { key: `${options.key}:remnant`, issuePath: () => 'body' })
       remnantReturnReversed = true
+      await remnantsOnMoveReversed(tools, move)
     }
   }
+  // B-W2b-100: the closing entry of a used-up hide reversed gives the pieces that close used back (a remnant's move reversed
+  // did it above: remnantsOnMoveReversed).
+  if (reopens) await remnantsOnReopen(tools, hide.id, original.workOrderId)
   // After the mirror (the Hide trigger opens a used-up hide only once its closing entry is reversed).
   const hideState: HideState = stateAfterReversal({ state: hide.state, reopens, remnantReturnReversed })
   if (hideState !== hide.state) {

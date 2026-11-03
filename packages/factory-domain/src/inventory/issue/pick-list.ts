@@ -2,6 +2,8 @@ import { NOT_COUNTED_WORDS, usabilityOf, type LotQuality, type UnusableReason } 
 import { Dec, ZERO, type Decimal, type DecimalInput } from '../../tax/decimal'
 import { quantityText, type ItemTracking } from '../ledger/moves'
 import { stillToIssue, type HideState } from './rules'
+// B-W2b-100: choose hides at the pick (SCM-214): the order's shade lot first (SCM-206), the hides beside their area.
+import { shadeLotKey } from '../reservations/shade'
 
 /**
  * A work order's pick list (B-W1-39; A2 SCR-093 "need", SCR-070 "Materials & leather"; SCM-215), pure: per material
@@ -13,6 +15,10 @@ import { stillToIssue, type HideState } from './rules'
  *
  * Issued is shared over the BOM line × cell rows in their order (BOM line, then cell), each up to its plan; what is
  * issued beyond the plan is the line's `over`. W1 has no bins or reservations: no route order (W2b SCM-212).
+ *
+ * B-W2b-100 (SCM-214, SCM-206): a leather line (tracked by HIDE) says how many hides the work order holds beside the area
+ * issued against the need ("4 hides · 96.2 of 110 ft²"), and its shade lots (lot and shade group); its candidates name
+ * their shade lot and remnant tag, and those of the order's own shade lot come first (then oldest first).
  */
 
 /** At most this many usable lots or hides per line are listed (the rest are counted in `more`). */
@@ -71,6 +77,13 @@ export interface PickHide {
   readonly code: string
   readonly state: HideState
   readonly grade: string | null
+  /** B-W2b-100: its lot, its shade (the group's label or the W1 text; null: not sorted), the group's record, out of shade. */
+  readonly lotId?: string | undefined
+  readonly shadeGroupId?: string | null | undefined
+  readonly shadeLabel?: string | null | undefined
+  readonly outOfShade?: boolean | undefined
+  /** B-W2b-100: its live remnant tag (IN_STOCK or ISSUED), when it is a tagged remnant. */
+  readonly remnant?: { readonly id: string; readonly code: string } | null | undefined
 }
 
 /** What the work order holds of one stock key: issued minus returned (the ledger), in the base unit. */
@@ -119,6 +132,20 @@ export interface PickCandidate {
   readonly locationId: string
   readonly locationCode: string
   readonly onHand: string
+  /** B-W2b-100: the hide's shade (group label or W1 text), its shade lot's key, out of shade, its remnant tag. */
+  readonly shadeLabel: string | null
+  readonly shadeLot: string | null
+  readonly outOfShade: boolean
+  readonly remnant: { readonly id: string; readonly code: string } | null
+  /** Of the shade lot the work order holds already (null: it holds no hide of this line yet, or not a hide). */
+  readonly sameShade: boolean | null
+}
+
+/** B-W2b-100: a shade lot the work order holds of a leather line. */
+export interface PickShadeLot {
+  readonly key: string
+  readonly lotCode: string
+  readonly shadeLabel: string | null
 }
 
 export interface PickHeld {
@@ -163,6 +190,10 @@ export interface PickLine {
   readonly usable: { readonly onHand: string; readonly candidates: PickCandidate[]; readonly more: number }
   readonly held: PickHeld[]
   readonly atWorkOrder: PickHolding[]
+  /** B-W2b-100 (SCM-214): a leather line's hides at the work order (issued less returned, above 0); null for other lines. */
+  readonly hides: { readonly count: number } | null
+  /** B-W2b-100 (SCM-206): the shade lots of the hides the work order holds of this line (more than one: mixed). */
+  readonly shadeLots: PickShadeLot[]
 }
 
 const keyOf = (itemId: string, itemColourId: string | null): string => `${itemId}|${itemColourId ?? '-'}`
@@ -236,16 +267,36 @@ export function pickList(input: PickInput): PickLine[] {
         over: text(Dec.max(ZERO, issued.minus(planned))),
         covered: toIssue.lte(0),
         rows,
-        ...stockOf(input, first.itemId, first.itemColourId),
+        ...stockOf(input, first.itemId, first.itemColourId, shadeLotsHeld(input, first.itemId, first.itemColourId)),
         atWorkOrder: holdingsOf(input, first.itemId, first.itemColourId),
+        hides: item?.tracking === 'HIDE' ? { count: hidesHeld(input, first.itemId, first.itemColourId).length } : null,
+        shadeLots: shadeLotsHeld(input, first.itemId, first.itemColourId),
       } satisfies PickLine,
     }
   })
   return lines.sort((a, b) => a.order - b.order || compare(a.line.itemCode, b.line.itemCode) || compare(a.line.colourCode ?? '', b.line.colourCode ?? '')).map((entry) => entry.line)
 }
 
+/** The hides the work order holds of one material and colour (issued less returned above 0). */
+function hidesHeld(input: PickInput, itemId: string, itemColourId: string | null): AtWorkOrder[] {
+  return input.atWorkOrder.filter((row) => row.itemId === itemId && row.itemColourId === itemColourId && row.hideId !== null && dec(row.quantity).gt(0))
+}
+
+/** The shade lots of the hides the work order holds of one material and colour, each once, by lot code. */
+function shadeLotsHeld(input: PickInput, itemId: string, itemColourId: string | null): PickShadeLot[] {
+  const lots = new Map<string, PickShadeLot>()
+  for (const row of hidesHeld(input, itemId, itemColourId)) {
+    const hide = input.hides.get(row.hideId!)
+    if (!hide || !row.lotId) continue
+    const key = shadeLotKey({ lotId: row.lotId, shadeGroupId: hide.shadeGroupId ?? null, shadeLabel: hide.shadeLabel ?? null })
+    if (!lots.has(key)) lots.set(key, { key, lotCode: input.lots.get(row.lotId)?.code ?? '', shadeLabel: hide.shadeLabel ?? null })
+  }
+  return [...lots.values()].sort((a, b) => compare(a.lotCode, b.lotCode) || compare(a.shadeLabel ?? '', b.shadeLabel ?? ''))
+}
+
 /** The site's stock of one material and colour: usable candidates (oldest first) and held lots with their reason. */
-function stockOf(input: PickInput, itemId: string, itemColourId: string | null): Pick<PickLine, 'usable' | 'held'> {
+function stockOf(input: PickInput, itemId: string, itemColourId: string | null, ownLots: readonly PickShadeLot[] = []): Pick<PickLine, 'usable' | 'held'> {
+  const own = new Set(ownLots.map((lot) => lot.key))
   const candidates: PickCandidate[] = []
   const heldBy = new Map<string, { reason: UnusableReason; lotCode: string; onHand: Decimal; hides: Set<string> }>()
   let usableOnHand = ZERO
@@ -263,6 +314,7 @@ function stockOf(input: PickInput, itemId: string, itemColourId: string | null):
     }
     if (hide && (hide.state === 'CONSUMED' || hide.state === 'SCRAPPED' || hide.state === 'RETURNED')) continue
     usableOnHand = usableOnHand.plus(dec(row.onHand))
+    const shadeLot = hide && row.lotId ? shadeLotKey({ lotId: row.lotId, shadeGroupId: hide.shadeGroupId ?? null, shadeLabel: hide.shadeLabel ?? null }) : null
     candidates.push({
       lotId: row.lotId,
       lotCode: lot?.code ?? null,
@@ -275,9 +327,15 @@ function stockOf(input: PickInput, itemId: string, itemColourId: string | null):
       locationId: row.locationId,
       locationCode: row.locationCode,
       onHand: text(row.onHand),
+      shadeLabel: hide?.shadeLabel ?? null,
+      shadeLot,
+      outOfShade: hide?.outOfShade ?? false,
+      remnant: hide?.remnant ?? null,
+      sameShade: shadeLot !== null && own.size > 0 ? own.has(shadeLot) : null,
     })
   }
-  candidates.sort(oldestFirst)
+  // B-W2b-100: the order's own shade lot first (then oldest first).
+  candidates.sort((a, b) => Number(b.sameShade === true) - Number(a.sameShade === true) || oldestFirst(a, b))
   return {
     usable: { onHand: text(usableOnHand), candidates: candidates.slice(0, MAX_CANDIDATES), more: Math.max(0, candidates.length - MAX_CANDIDATES) },
     held: [...heldBy.entries()]

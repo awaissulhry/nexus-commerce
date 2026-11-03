@@ -91,6 +91,8 @@ const SESSIONS: Record<string, SessionContext> = {
   warehouse: office(A.tenant, [grant(PICK)]),
   /** Issues only. */
   issuer: office(A.tenant, [grant(['inventory.issue'])]),
+  /** B-W2b-100: the warehouse's rights and the shade rule's override (a production manager). */
+  shadeManager: office(A.tenant, [grant([...PICK, 'inventory.shade.override'])]),
   companyB: office(A.tenant, [grant(PICK, [A.companyB])]),
   otherTenant: office(B.tenant, [grant(PICK)]),
   floor: floor(A.siteA1, A.deviceA1, A.operatorA1, A.companyA),
@@ -510,7 +512,9 @@ describe('return (SCM-216): the unused part comes back with its measured quantit
     expect(over.message).toContain('at most 33.2000 comes back')
     const response = await call('floor', 'POST', `${url}${A.seededWorkOrder}/return`, { hideId: A.seededHide, quantity: '30', toLocationId: A.cut, note: 'Offcut of the back panel' }, freshKey())
     expect(response.statusCode, response.body).toBe(201)
-    expect(response.json().return).toMatchObject({ hideState: 'REMNANT', move: expect.objectContaining({ reason: 'RETURN', toLocationId: A.cut, fromLocationId: null, baseQuantity: '30.0000', workOrderId: A.seededWorkOrder }) })
+    // B-W2b-100 (SCM-254): a part of a hide comes back as a REMNANT move with its own tag (RM-…).
+    expect(response.json().return).toMatchObject({ hideState: 'REMNANT', move: expect.objectContaining({ reason: 'REMNANT', toLocationId: A.cut, fromLocationId: null, baseQuantity: '30.0000', workOrderId: A.seededWorkOrder }), remnant: expect.objectContaining({ baseArea: '30.0000' }) })
+    expect(response.json().return.remnant.code).toMatch(/^RM-/)
     expect(await admin(`SELECT state FROM "Hide" WHERE id = $1`, [A.seededHide])).toEqual([{ state: 'REMNANT' }])
     expect(await onHand(A.cut, { hideId: A.seededHide })).toBe('30.0000')
     const holding = (lineOf(await pickList(A.seededWorkOrder), A.leather, A.leatherBLK).atWorkOrder as Json[]).find((row) => row.hideId === A.seededHide)
@@ -520,7 +524,9 @@ describe('return (SCM-216): the unused part comes back with its measured quantit
   it('issues the remnant again, with what it measured: an over-issue once the work order is covered', async () => {
     const refusal = await refused('floor', 'POST', `${url}${WO.main.id}/issue`, { hideId: A.seededHide }, 409)
     expect(refusalOf(refusal)).toBe('refusal/OVER_ISSUE')
-    const response = await issueTo(WO.main.id, { hideId: A.seededHide, overIssueReason: 'Small parts from a remnant' }, 'warehouse')
+    // B-W2b-100 (SCM-206): the remnant is of another lot than WO.main's hide: one shade lot per order refuses it, unless overridden.
+    expect(refusalOf(await refused('warehouse', 'POST', `${url}${WO.main.id}/issue`, { hideId: A.seededHide, overIssueReason: 'Small parts from a remnant' }, 409))).toBe('refusal/SHADE_LOT')
+    const response = await issueTo(WO.main.id, { hideId: A.seededHide, overIssueReason: 'Small parts from a remnant', shadeOverrideReason: 'Small inner parts: the shade does not show' }, 'shadeManager')
     expect(response.statusCode, response.body).toBe(201)
     expect(response.json().issue).toMatchObject({ baseQuantity: '30.0000', overIssue: true, startsWorkOrder: false })
     expect(await onHand(A.cut, { hideId: A.seededHide })).toBe('0.0000')

@@ -8,7 +8,7 @@ import { CATALOGUE } from '../../../lib/i18n/messages'
 import { readScan } from '../../scan/scan-model'
 import { designScreen } from './fixtures'
 import { comesBackAs, remnantLabel, returnBody, returnBounds, returnOfScan, returnRows, tagPrinterOf } from './returns'
-import { coveredCount, decimalsOf, HELD_REASONS, ISSUE_REFUSAL_WORDS, padBounds, quantityText, SCREEN_REFUSALS, stockOfScan, undoStock, UNIT_KEYS, withLine, type PickLine, type PickList } from './model'
+import { coveredCount, decimalsOf, HELD_REASONS, hideChoices, hideProgress, ISSUE_REFUSAL_WORDS, otherShadeHides, padBounds, quantityText, SCREEN_REFUSALS, shadeOfLine, stockOfScan, undoStock, UNIT_KEYS, withLine, type PickLine, type PickList } from './model'
 
 /**
  * Pick & issue's rules (SCR-093): what a scan is on the pick list (a hide is issued at once, a lot or material asks its
@@ -206,5 +206,81 @@ describe('Return unused (B-W2a-75; design floor.pick sec "return"; SCM-216)', ()
     expect(tagPrinterOf([], null)).toEqual({ kind: 'none' })
     const [hideRow] = returnRows(withHeld)
     expect(remnantLabel(hideRow!, '18,6 ft²', 'it')).toEqual({ kind: 'HIDE', language: 'it', scanId: HIDE, title: 'LEATHER · leather', fields: { article: 'LEATHER', colour: null, area: '18,6 ft²', lot: 'LOT-7' } })
+  })
+})
+
+// ---- B-W2b-100: choose hides at the pick (SCM-214), one shade lot per order (SCM-206), a remnant's own tag (SCM-254) ----
+
+describe('choose hides: the running area against the need', () => {
+  const RM = formatScanId({ type: 'REMNANT', tenantTag: TAG, ref: 118 })
+  const candidate = (id: string, onHand: string, extra: Partial<PickLine['usable']['candidates'][number]> = {}) => ({ lotId: 'l7', lotCode: 'LOT-7', hideId: id, hideCode: `HD-${id}`, hideState: 'FULL', grade: 'A', locationCode: 'A1', onHand, shadeLabel: '2', outOfShade: false, remnant: null, sameShade: true, ...extra })
+  const hides = line({
+    key: 'hides',
+    itemId: 'leather',
+    tracking: 'HIDE',
+    baseUom: 'FT2',
+    planned: '110.0000',
+    issued: '96.2000',
+    toIssue: '13.8000',
+    hides: { count: 4 },
+    shadeLots: [{ key: 'l7|g:2', lotCode: 'LOT-7', shadeLabel: '2' }],
+    usable: {
+      onHand: '200.0000',
+      candidates: [
+        candidate('a', '10.0000', { remnant: { id: 'rm', code: RM }, hideState: 'REMNANT' }),
+        candidate('b', '50.0000'),
+        candidate('c', '45.0000'),
+        candidate('x', '55.0000', { lotId: 'l8', lotCode: 'LOT-8', shadeLabel: '1', sameShade: false }),
+        candidate('o', '40.0000', { outOfShade: true, sameShade: false }),
+      ],
+      more: 0,
+    },
+  })
+
+  it('says a leather line\'s hides beside its area against the need ("4 hides · 96.2 of 110 ft²"); nothing for other lines', () => {
+    expect(hideProgress(hides)).toEqual({ count: 4, issued: 96.2, planned: 110, covers: false })
+    expect(hideProgress(lining)).toBeNull()
+    // An older answer without `hides`: counted from what the work order holds.
+    expect(hideProgress(leather)?.count).toBe(1)
+  })
+
+  it('suggests hides in the API\'s order until the need is reached, each with the running area, a remnant by its own tag', () => {
+    const choices = hideChoices(hides)
+    expect(choices.map((choice) => choice.code)).toEqual([RM, 'HD-b'])
+    expect(choices[0]).toMatchObject({ remnantCode: RM, hideCode: 'HD-a', runningCount: 5, runningArea: 106.2, covers: false, sameShade: true })
+    expect(choices[1]).toMatchObject({ runningCount: 6, runningArea: 156.2, covers: true })
+  })
+
+  it('leaves out, under one shade lot per order, the hides the scan would refuse; counts them; offers them with the rule off', () => {
+    const short = { ...hides, issued: '0.0000', toIssue: '110.0000', hides: { count: 0 } }
+    expect(hideChoices(short).map((choice) => choice.hideCode)).toEqual(['HD-a', 'HD-b', 'HD-c'])
+    expect(otherShadeHides(short)).toBe(2)
+    expect(hideChoices(short, false).map((choice) => choice.hideCode)).toEqual(['HD-a', 'HD-b', 'HD-c', 'HD-x'])
+    // Nothing held yet: the first hide suggested sets the shade lot; another lot is not suggested beside it.
+    const fresh = { ...short, shadeLots: [], usable: { ...short.usable, candidates: short.usable.candidates.map((row) => ({ ...row, sameShade: null })) }, planned: '400.0000' }
+    expect(hideChoices(fresh).map((choice) => choice.hideCode)).toEqual(['HD-a', 'HD-b', 'HD-c'])
+    expect(otherShadeHides(fresh)).toBe(2)
+    expect(otherShadeHides(short, false)).toBe(0)
+    expect(hideChoices({ ...short, planned: '400.0000' }, false).map((choice) => choice.hideCode)).toEqual(['HD-a', 'HD-b', 'HD-c', 'HD-x', 'HD-o'])
+    expect(hideChoices({ ...hides, covered: true })).toEqual([])
+  })
+
+  it('names the shade lot the work order is cut from, and says when it is mixed', () => {
+    expect(shadeOfLine(hides)).toEqual({ lots: [{ key: 'l7|g:2', lotCode: 'LOT-7', shadeLabel: '2' }], mixed: false })
+    expect(shadeOfLine({ ...hides, shadeLots: [...hides.shadeLots!, { key: 'l8|g:1', lotCode: 'LOT-8', shadeLabel: '1' }] })?.mixed).toBe(true)
+    expect(shadeOfLine(lining)).toBeNull()
+  })
+
+  it('issues a remnant by its own tag like its hide\'s (a scanned RM label, or the code typed)', () => {
+    const withRemnant: PickList = { ...list, lines: [hides] }
+    expect(stockOfScan(withRemnant, readScan(RM, TAG))).toEqual({ kind: 'hide', code: RM, line: hides })
+    expect(stockOfScan(withRemnant, { kind: 'free', code: RM })).toMatchObject({ kind: 'hide', line: hides })
+  })
+
+  it('has words for the shade and remnant refusals in every language', () => {
+    for (const code of ['SHADE_LOT', 'OUT_OF_SHADE', 'REMNANT_TOO_SMALL', 'REMNANT_GONE_ON'] as const) {
+      expect(ISSUE_REFUSAL_WORDS).toContain(code)
+      expect(REFUSALS).toContain(code)
+    }
   })
 })
