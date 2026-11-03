@@ -1665,6 +1665,8 @@
     "inventory_reverse": "Stornare un movimento sbagliato",
     "inventory_issue": "Prelevare e consegnare merce a un ordine di lavoro",
     "inventory_issue_over": "Consegnare più di quanto serve a un ordine di lavoro",
+    "inventory_rolls_manage": "Correggere un rotolo di tessuto: altezza, tonalità, ritiro",
+    "inventory_protectors_record": "Registrare il lotto di protezioni di un lotto di produzione o di un capo",
     "inventory_receive": "Ricevere merce su un ordine d'acquisto",
     "inventory_reserve": "Riservare e liberare merce",
     "inventory_hides_manage": "Correggere scelta e tonalità di una pelle, rimisurarla",
