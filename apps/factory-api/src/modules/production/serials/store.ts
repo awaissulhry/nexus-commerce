@@ -144,7 +144,11 @@ export async function buyerLanguages(db: Reader, partyIds: readonly string[]): P
 /** The bundles a scanned ticket code names (its current code, or a replaced one): its work order and cell. */
 export async function readBundleByCode(db: Reader, code: string) {
   const select = { id: true, code: true, workOrderId: true, workOrderSizeId: true, status: true } as const
-  return (await db.bundle.findFirst({ where: { code }, select })) ?? db.bundle.findFirst({ where: { replacedCodes: { has: code } }, select })
+  const bundle = (await db.bundle.findFirst({ where: { code }, select })) ?? (await db.bundle.findFirst({ where: { replacedCodes: { has: code } }, select }))
+  if (bundle) return bundle
+  // B-W2b-81 (MES-067): a coupon names its bundle, whatever its letters (a CP- code, or an older BN- one).
+  const coupon = await db.bundleCoupon.findFirst({ where: { code }, select: { bundleId: true } })
+  return coupon ? db.bundle.findUnique({ where: { id: coupon.bundleId }, select }) : null
 }
 
 /** Bundle codes by id (a serial's bundle). */

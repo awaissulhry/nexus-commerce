@@ -59,6 +59,8 @@ function call(n: number, over: Partial<Call> & Pick<Call, 'type' | 'station' | '
     bundle: null,
     responderTeam: TEAM_L1,
     note: null,
+    reasonCode: null,
+    requestedQuantity: null,
     seenAt: null,
     onTheWayAt: null,
     solvedAt: null,
@@ -76,10 +78,10 @@ function call(n: number, over: Partial<Call> & Pick<Call, 'type' | 'station' | '
 const WO = { id: uid('3737', 1), number: 'WO-2026-0142' }
 const OPEN: Call[] = [
   call(1, { type: TYPE.machine, station: SEW4, line: L2, sentAt: ago(12), responderTeam: TEAM_MNT, workOrder: WO, bundle: { id: uid('3838', 1), code: 'BN-004211' } }),
-  call(2, { type: TYPE.material, station: SEW1, sentAt: ago(9), status: 'SEEN', seenAt: ago(7), seenBy: OFFICE_USER, times: times(120, null, null), responderTeam: TEAM_WH, workOrder: WO, waitingBooked: true }),
+  call(2, { type: TYPE.material, station: SEW1, sentAt: ago(9), status: 'SEEN', seenAt: ago(7), seenBy: OFFICE_USER, times: times(120, null, null), responderTeam: TEAM_WH, workOrder: WO, waitingBooked: true, reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4' }),
   call(3, { type: TYPE.quality, station: QC1, sentAt: ago(6), status: 'ON_THE_WAY', seenAt: ago(5), onTheWayAt: ago(5), seenBy: FLOOR, times: times(60, 60, null), responderTeam: TEAM_QA }),
   call(4, { type: TYPE.leader, station: SEW7, line: L2, sentAt: ago(3), responderTeam: null }),
-  call(5, { type: TYPE.material, station: PRESS, sentAt: ago(1), responderTeam: TEAM_WH, note: 'Fodera nera finita' }),
+  call(5, { type: TYPE.material, station: PRESS, sentAt: ago(1), responderTeam: TEAM_WH, note: 'Fodera nera finita', reasonCode: 'OTHER', requestedQuantity: '2.5' }),
 ]
 const CLOSED: Call[] = [
   call(6, { type: TYPE.machine, station: SEW1, sentAt: ago(95), status: 'SOLVED', open: false, openSeconds: null, seenAt: ago(93), onTheWayAt: ago(92), solvedAt: ago(70), seenBy: OFFICE_USER, times: times(120, 180, 1500), responderTeam: TEAM_MNT, resolutionCode: 'FIXED', outcome: { recordType: 'MaintenanceJob', recordId: uid('3939', 1) }, waitingBooked: true }),

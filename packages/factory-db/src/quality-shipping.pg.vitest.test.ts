@@ -329,6 +329,7 @@ describe('the walls', () => {
       'LotDocument',
       'Parcel',
       'PpeRegisterEntry',
+      'QualityAlertRule',
       'QualityRelease',
       'QualityReleaseReversal',
       'QualitySettings',

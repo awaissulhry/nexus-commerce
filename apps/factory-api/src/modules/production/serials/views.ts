@@ -165,7 +165,7 @@ export async function scanForLabels(caller: CommandCaller, code: string) {
   return caller.withClient(async (db) => {
     const visible = (header: LabelHeader | null): header is LabelHeader => header !== null && mayLabel(context, PRODUCTION_SERIALS, header)
     const headerOf = (id: string) => db.workOrder.findUnique({ where: { id }, select: LABEL_HEADER })
-    if (parsed.ok && parsed.type === 'BUNDLE') {
+    if (parsed.ok && (parsed.type === 'BUNDLE' || parsed.type === 'COUPON')) {
       const bundle = await readBundleByCode(db, parsed.text)
       const header = bundle ? await headerOf(bundle.workOrderId) : null
       if (!bundle || !visible(header)) throw new NotFoundError('No bundle of this factory has this code.')

@@ -1,0 +1,121 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/cutting.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) plans cut orders, their lines, tickets and lays, reconciles them, keeps pattern pieces on a draft revision and records second quality, through apps/factory-api's modules/production/{cutorders,cutting,repair} and modules/product/pieces (B-W2b-95, -103, -112, -116, -117, -121, -126, -129), always through command(); the API keeps staff to the companies and sites their grants reach (a company is a column, not a policy key: the keys are tenant, site and party). The floor (factory_floor_runtime) of the cut order's site reads cut orders, lines, tickets and lays, moves a ticket, a lay and its cut order on (the triggers let a floor session do only that), spreads rolls (and undoes the last one), prints ply stickers, confirms the fabric used, loads trolleys and confirms them at the line, moves secondary processes and records a downgrade; it reads pattern pieces tenant-wide (the cutting table's minimum grade, no site). It never sees a reconciliation (the office closes a cut order). Portal and link sessions read nothing here. Nobody deletes a row here but a cut order line while it is PLANNED and a lay's roll or a trolley's bundle while they are loading: a cut order, ticket, lay, run, process or trolley is cancelled or voided, a downgrade withdrawn, and a reconciliation is append-only (`@append-only`, scripts/factory/check-append-only.mjs: no update or delete grant, and its triggers refuse UPDATE, DELETE and TRUNCATE for every login). No table here has a cost, price, margin or wages column, so no @grain and no wall. No personal entry: no row names a worker but the lead of a cut log override (production.prisma), shown only inside that record. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "CutOrder": {
+      "about": "A cut order over work orders of one material and colour. The office plans, releases, reconciles or cancels it. The site's floor reads it and moves it from RELEASED to IN_PROGRESS and on to CUT (nothing else).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "CutOrderLine": {
+      "about": "A work order cell on a cut order, with its garments (and ratio and plies for fabric). The office writes, changes and removes lines while the cut order is PLANNED. The site's floor reads them: the ticket's size chips.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "CutTicket": {
+      "about": "A cut or recut ticket. The office prints and voids them. The site's floor reads them and scans them at the start and at the end of cutting (nothing else).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "Lay": {
+      "about": "A lay of a fabric cut order. The office plans and cancels it. The site's floor spreads it, counts its plies at both ends and cuts it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "LayRoll": {
+      "about": "A roll spread in a lay: plies, splices, end loss, roll end returned. The office and the site's floor add, correct and remove (Undo last roll) rows while the lay is spread.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"] }
+      }
+    },
+    "PlyRun": {
+      "about": "A ply and part numbering run of a counted lay. The office and the site's floor make one, mark it printed or void it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "CutReconciliation": {
+      "about": "What a cut order line cut against what it ordered, written once the cut order is cut. The office adds rows and reads them. Nobody changes or removes a row; the floor has no access.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "CutConsumption": {
+      "about": "The material a cut used: estimate, cut-log figure, confirmed. The office and the site's floor write it and correct the confirmed figure until the cut order is reconciled.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "SecondaryProcess": {
+      "about": "A secondary process of a bundle (fusing, perforation, print, embroidery), in house or outside. The office and the site's floor add it and move it on.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "CutIssue": {
+      "about": "A trolley of bundles from cutting to a sewing line. The office and the site's floor load it, send it and confirm it at the line.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "CutIssueLine": {
+      "about": "A bundle on a trolley. The office and the site's floor scan it on and off while loading, and confirm it at the line.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"] }
+      }
+    },
+    "PatternPiece": {
+      "about": "A pattern piece of a style revision. The office writes, changes and removes pieces while the revision is DRAFT (frozen once released). The floor reads them, tenant-wide: the minimum grade at the cutting table.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "GarmentDowngrade": {
+      "about": "Garments of a cell sent to second quality instead of scrap. The office and the site's floor (the repair station) record it; only the office withdraws a wrong row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

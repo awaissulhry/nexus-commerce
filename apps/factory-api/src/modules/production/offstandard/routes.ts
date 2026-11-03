@@ -25,9 +25,11 @@ import {
   recordBlockContract,
   rejectContract,
   reopenContract,
+  workOrderMinutesContract,
 } from './contract'
 import { floorApprove, floorEnd, floorLeadList, floorReject, floorStart, floorState } from './floor'
 import { manifest } from './manifest'
+import { workOrderMinutes } from './work-order'
 
 /**
  * Off-standard and indirect time (B-W2b-29; MES-155 codes with pay rules, MES-156 time with no bundle, MES-157 the lead's
@@ -64,6 +66,8 @@ export default defineRoutes('production.offstandard', manifest, async (app) => {
   app.post('/production/offstandard/blocks/:blockId/correct', { schema: correctContract }, async (request) => correctBlock(request, request.params.blockId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/production/offstandard/blocks/:blockId/end', { schema: endBlockContract }, async (request) => endBlockByLead(request, request.params.blockId, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/production/offstandard/work-orders/:workOrderId/minutes', { schema: workOrderMinutesContract }, async (request) => workOrderMinutes(request, request.params.workOrderId))
 
   app.get('/production/offstandard/floor', { schema: floorStateContract }, async (request) => floorState(request))
 

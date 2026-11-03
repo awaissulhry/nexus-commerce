@@ -22,6 +22,7 @@
   },
   "fact": {
     "station": "Station",
+    "asked": "What you asked",
     "sent": "Sent at",
     "who": "Who",
     "nobody": "Nobody yet"
@@ -55,6 +56,22 @@
     "done": "Your words are on the call.",
     "failed": "The words were not added. Try again."
   },
+  "ask": {
+    "done": "The call says why and how much.",
+    "reason": {
+      "title": "Why do you need material?"
+    },
+    "quantity": {
+      "title": "How much do you need?",
+      "label": "How much",
+      "less": "Less",
+      "more": "More",
+      "clear": "Clear",
+      "back": "Delete",
+      "empty": "Type how much",
+      "range": "From 0.01 to 100,000"
+    }
+  },
   "closed": {
     "SOLVED": "{type}: solved",
     "CANCELLED": "{type}: call cancelled"
@@ -73,17 +90,19 @@
     "cancel": "Cancel call",
     "solved": "It's solved",
     "details": "Add details",
+    "addWords": "Add words",
     "machine": "Say what is wrong with the machine",
     "incident": "Report an incident"
   },
   "held": {
     "noStation": "This tablet belongs to no station: a call needs one. Ask the office.",
     "photo": "Photos on a call are not ready yet: say it in words.",
-    "detailsOffline": "Words on a call need the network.",
+    "detailsOffline": "Details on a call need the network.",
     "incident": "Reporting an incident comes with a later version: tell your team leader.",
     "details": {
-      "offline": "Words on a call need the network.",
-      "empty": "Write a few words first."
+      "offline": "Details on a call need the network.",
+      "empty": "Add something first.",
+      "needsWords": "Say in a few words what you need."
     }
   },
   "refusal": {
@@ -110,6 +129,14 @@
     "CANCELLED": {
       "message": "This call was cancelled.",
       "fix": "Call again if you still need help."
+    },
+    "REQUEST_SET": {
+      "message": "This call already says why and how much.",
+      "fix": "Add words to the call, or cancel it and send a new one."
+    },
+    "REQUEST_WORDS": {
+      "message": "Say in a few words what you need.",
+      "fix": "Add the words, then send it again."
     }
   }
 }

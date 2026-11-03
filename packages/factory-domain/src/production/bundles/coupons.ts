@@ -17,9 +17,9 @@ import type { BundleTicket } from './ticket'
  *                          scans in both modes (decided: the floor screens find the bundle by it; a "coupon required"
  *                          rule would be a floor rule per site, B-W2b-53).
  *
- * Codes: a coupon's code is a BUNDLE scannable id from the tenant's BUNDLE counter (`BN-…`): no COUPON number kind
- * exists in the schema (a schema need, named), and one counter keeps a coupon's code and every ticket's code apart for
- * good. So every scanner route that reads a bundle ticket reads a coupon too.
+ * Codes: a coupon's code is a COUPON scannable id from the tenant's COUPON counter (`CP-…`, B-W2b-81). Coupons printed
+ * before it carry `BN-…` codes from the BUNDLE counter and stay valid: a code is found by its row, never by its letters.
+ * A screen that takes a bundle's ticket takes a coupon (numbering/scan-id: a COUPON label stands for a BUNDLE one).
  *
  * Which operations get one: the work order's scanned operations (`scanRequired`) that have no ACTIVE coupon of the
  * bundle and no standing report yet (a coupon for work already reported proves nothing). Only an ACTIVE bundle of an

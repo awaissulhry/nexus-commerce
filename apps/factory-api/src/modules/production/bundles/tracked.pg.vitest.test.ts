@@ -8,7 +8,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import { businessDate, businessDayStart } from '@nexus/factory-domain/core/time'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
-import { parseScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
+import { formatScanId, parseScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedNumbering } from '../../../../../../packages/factory-db/seed/numbering'
@@ -66,7 +66,7 @@ const TAG = tenantTag(A.tenant)
 
 const grant = (permissions: Permission[], companies: Grant['companies'] = 'all', sites: Grant['sites'] = 'all'): Grant => ({ permissions, companies, sites, parties: 'all' })
 const office = (tenantId: string, grants: Grant[]): SessionContext => ({ audience: 'office', tenantId, actorId: newId(), grants })
-const FLOOR: Permission[] = ['floor.work', 'production.cut', 'production.bundles', 'production.scan', 'inventory.issue', 'print.view', 'print.labels']
+const FLOOR: Permission[] = ['floor.work', 'production.cut', 'production.bundles', 'production.scan', 'production.serials', 'inventory.issue', 'print.view', 'print.labels']
 const TRACK: Permission[] = ['production.bundles.view', 'production.bundles', 'workorders.view', 'print.view', 'print.labels']
 const SESSIONS: Record<string, SessionContext> = {
   settings: office(A.tenant, [grant(['production.settings.view', 'production.settings.manage'])]),
@@ -270,6 +270,10 @@ describe('one bundle code or a coupon per operation (MES-067)', () => {
     expect(refs.at(-1)! - refs[0]!).toBe(7)
     expect(issued.printed.every((row: Json) => row.job?.status === 'QUEUED' && row.label.kind === 'BUNDLE')).toBe(true)
     expect(issued.printed[0].coupon).toMatchObject({ bundleCode: expect.stringMatching(/^BN-/), operation: { seq: expect.any(Number) } })
+    // B-W2b-81: a coupon's own counter and letters; its label is a bundle's, and the printer took it.
+    expect(coupons.every((coupon) => coupon.code.startsWith('CP-'))).toBe(true)
+    expect(issued.printed[0].label).toMatchObject({ kind: 'BUNDLE', scanId: expect.stringMatching(/^CP-/) })
+    expect(issued.printed[0].job).not.toBeNull()
     const again = await ok('floor', 'POST', `/production/bundles/work-orders/${WO.coupon.id}/coupons`, { printerId: A.printer }, 200, key)
     expect(again.replayed).toBe(true)
     expect(again.coupons.map((coupon: Json) => coupon.id)).toEqual(coupons.map((coupon) => coupon.id))
@@ -312,6 +316,22 @@ describe('one bundle code or a coupon per operation (MES-067)', () => {
     const voided = await report({ code: pack.code, good: 6 })
     expect(voided.statusCode, voided.body).toBe(409)
     expect(pathOf(voided.json().error)).toBe('refusal/VOIDED')
+    // B-W2b-81: the replacement takes the COUPON counter too.
+    expect(reprinted.replacement.code).toMatch(/^CP-/)
+  })
+
+  it('a coupon printed before the COUPON counter keeps its BN- code: every scan route still reads it (B-W2b-81)', async () => {
+    const bundle = BUNDLES.coupon[0]!
+    const pack = coupons.find((coupon) => coupon.bundleId === bundle.id && coupon.operation.seq === 40)!
+    const old = formatScanId({ type: 'BUNDLE', tenantTag: TAG, ref: 900_001 })
+    await admin(`INSERT INTO "BundleCoupon" (id, "tenantId", "siteId", "workOrderId", "bundleId", "workOrderOperationId", code, "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, now())`, [newId(), A.tenant, A.siteA1, WO.coupon.id, bundle.id, pack.operation.id, old])
+    expect(await ok('floor', 'GET', `/production/bundles/scan?code=${old}`)).toMatchObject({ bundle: { id: bundle.id }, refusal: null, coupon: { code: old, status: 'ACTIVE', operation: { seq: 40 } } })
+    expect((await ok('floor', 'GET', `/production/scans/card?code=${old}`)).bundle.id).toBe(bundle.id)
+    // The labels screen has its own lookup: a coupon names its bundle there too, old or new.
+    for (const code of [old, coupons.find((coupon) => coupon.bundleId === bundle.id && coupon.operation.seq === 20)!.code]) {
+      expect(await ok('floor', 'GET', `/production/serials/scan?code=${code}`)).toMatchObject({ kind: 'BUNDLE', bundle: { id: bundle.id } })
+    }
+    expect((await ok('manager', 'GET', `/production/bundles?workOrderId=${WO.coupon.id}&q=${old}`)).bundles.map((row: Json) => row.id)).toEqual([bundle.id])
   })
 
   it('a voided bundle takes its ACTIVE coupons with it', async () => {
@@ -360,8 +380,9 @@ describe('where every bundle is, and the stuck ones (MES-074, MES-168)', () => {
       [30, 'HERE', null],
       [40, 'NOT_REACHED', null],
     ])
-    expect(record.ticket.coupons).toHaveLength(5)
-    expect(record.ticket.coupons.filter((coupon: Json) => coupon.status === 'ACTIVE').map((coupon: Json) => coupon.operation.seq).sort()).toEqual([10, 20, 30])
+    expect(record.ticket.coupons).toHaveLength(6)
+    // Op 40's ACTIVE one is the old BN- coupon of the test above.
+    expect(record.ticket.coupons.filter((coupon: Json) => coupon.status === 'ACTIVE').map((coupon: Json) => coupon.operation.seq).sort()).toEqual([10, 20, 30, 40])
     expect(record.genealogy).toMatchObject({ shades: ['A'], parent: null, children: [] })
     expect(record.genealogy.hides).toHaveLength(1)
     expect(keysOf(record).filter((name) => PERSON.test(name))).toEqual([])

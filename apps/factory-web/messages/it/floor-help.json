@@ -22,6 +22,7 @@
   },
   "fact": {
     "station": "Postazione",
+    "asked": "Cosa hai chiesto",
     "sent": "Inviata alle",
     "who": "Chi",
     "nobody": "Ancora nessuno"
@@ -55,6 +56,22 @@
     "done": "Le tue parole sono sulla chiamata.",
     "failed": "Le parole non sono state aggiunte. Riprova."
   },
+  "ask": {
+    "done": "La chiamata dice perché e quanto.",
+    "reason": {
+      "title": "Perché ti serve materiale?"
+    },
+    "quantity": {
+      "title": "Quanto te ne serve?",
+      "label": "Quanto",
+      "less": "Meno",
+      "more": "Più",
+      "clear": "Cancella",
+      "back": "Elimina",
+      "empty": "Scrivi quanto",
+      "range": "Da 0,01 a 100.000"
+    }
+  },
   "closed": {
     "SOLVED": "{type}: risolta",
     "CANCELLED": "{type}: chiamata annullata"
@@ -73,17 +90,19 @@
     "cancel": "Annulla",
     "solved": "Risolto",
     "details": "Aggiungi dettagli",
+    "addWords": "Scrivi",
     "machine": "Di' che cosa ha la macchina",
     "incident": "Segnala un infortunio"
   },
   "held": {
     "noStation": "Questo tablet non appartiene a una postazione: la chiamata ne ha bisogno. Chiedi all'ufficio.",
     "photo": "Le foto sulle chiamate non sono ancora pronte: scrivilo a parole.",
-    "detailsOffline": "Le parole su una chiamata richiedono la rete.",
+    "detailsOffline": "I dettagli su una chiamata richiedono la rete.",
     "incident": "La segnalazione di infortuni arriva con una versione successiva: avvisa il tuo capo squadra.",
     "details": {
-      "offline": "Le parole su una chiamata richiedono la rete.",
-      "empty": "Scrivi prima qualche parola."
+      "offline": "I dettagli su una chiamata richiedono la rete.",
+      "empty": "Aggiungi prima qualcosa.",
+      "needsWords": "Di' in poche parole che cosa ti serve."
     }
   },
   "refusal": {
@@ -110,6 +129,14 @@
     "CANCELLED": {
       "message": "Questa chiamata è stata annullata.",
       "fix": "Chiama di nuovo se ti serve ancora aiuto."
+    },
+    "REQUEST_SET": {
+      "message": "Questa chiamata dice già perché e quanto.",
+      "fix": "Aggiungi parole alla chiamata, oppure annullala e inviane una nuova."
+    },
+    "REQUEST_WORDS": {
+      "message": "Di' in poche parole che cosa ti serve.",
+      "fix": "Aggiungi le parole, poi invia di nuovo."
     }
   }
 }

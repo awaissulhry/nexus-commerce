@@ -1,14 +1,16 @@
-import { CALL_LIMITS } from '@nexus/factory-domain/production/calls/rules'
+import { CALL_LIMITS, MATERIAL_REASON_TILES, MAX_REQUESTED_QUANTITY, type MaterialReason } from '@nexus/factory-domain/production/calls/rules'
 import type { FloorTone } from '@nexus/ui/floor'
 import type { Locale } from '../../../lib/i18n/locales'
 import { reasonWords } from '../../../lib/line-board/model'
 import type { QueueItem } from '../../queue/model'
-import type { CallType, HelpCall, HelpStation } from './api'
+import type { PickerReason } from '../reasons/model'
+import type { CallDetails, CallType, HelpCall, HelpStation } from './api'
 
 /**
  * Call for help's rules (SCR-172; design floor.help, MES-142, -143, -145). Pure, so the tests hold them: a tile's words
  * and tone, one tap never makes a second call (the station's open call, or the call waiting in this tablet's queue), the
  * four steps of "Who is coming", and who the card names (a floor responder by name; an office responder as "the office").
+ * B-W2b-81 (MES-137): after the one tap, "Add details" on a material call asks why and how much, one job a screen.
  */
 
 export const CALL_SEND = 'andon.call.send'
@@ -96,12 +98,50 @@ export function followUpOf(type: Pick<CallType, 'kind' | 'code'>): 'machine' | '
   return type.kind === 'MACHINE' || type.kind === 'MAINTENANCE' ? 'machine' : null
 }
 
-/** Why "Add details" cannot send now, or null. */
-export function detailsHeld(words: string, online: boolean): 'offline' | 'empty' | null {
+// ---- what a material call asks (MES-137) ----------------------------------------------------------------------------------
+
+/** "Add details" on a material call: why, then how much, then (only when asked for) words. */
+export type AskStage = 'reason' | 'quantity' | 'words'
+
+export interface AskDraft {
+  readonly stage: AskStage
+  readonly reason: MaterialReason | null
+  readonly quantity: number | null
+  /** Each is told once: what the call already says is not asked again. */
+  readonly askQuantity: boolean
+}
+
+export const QUANTITY_BOUNDS = { min: 0.01, max: MAX_REQUESTED_QUANTITY, decimals: 2 } as const
+
+/** Where "Add details" opens: a material call that has not said why or how much asks that first; any other call asks for words. */
+export function askOf(call: Pick<HelpCall, 'type' | 'reasonCode' | 'requestedQuantity'>): AskDraft | null {
+  if (call.type.kind !== 'MATERIAL') return null
+  const askQuantity = call.requestedQuantity === null
+  if (call.reasonCode === null) return { stage: 'reason', reason: null, quantity: null, askQuantity }
+  return askQuantity ? { stage: 'quantity', reason: null, quantity: null, askQuantity } : null
+}
+
+/** A tile picked moves on: how much, unless the call says that already. */
+export const reasonPicked = (ask: AskDraft, reason: MaterialReason): AskDraft => ({ ...ask, reason, stage: ask.askQuantity ? 'quantity' : 'words' })
+
+/** The material tiles, as the one picker draws them. */
+export const askReasons = (): PickerReason[] => MATERIAL_REASON_TILES.map((tile, index) => ({ id: tile.code, list: 'HELP_CALL', code: tile.code, labelIt: tile.labelIt, labelEn: tile.labelEn, labelI18n: {}, icon: tile.icon, colour: tile.colour, photo: null, needsDetail: false, sortOrder: index }))
+
+const needsWords = (ask: AskDraft | null | undefined): boolean => MATERIAL_REASON_TILES.find((tile) => tile.code === ask?.reason)?.needsDetail ?? false
+
+/** What "Add to the call" sends: only what was told. */
+export function detailsOf(words: string, ask: AskDraft | null | undefined): CallDetails {
+  const note = words.trim()
+  return { ...(note ? { note } : {}), ...(ask?.reason ? { reasonCode: ask.reason } : {}), ...(ask?.quantity ? { requestedQuantity: String(ask.quantity) } : {}) }
+}
+
+/** Why "Add to the call" cannot send now, or null. `told`: the call has words already (the tile that asks for them). */
+export function detailsHeld(words: string, online: boolean, ask?: AskDraft | null, told = false): 'offline' | 'empty' | 'needsWords' | null {
   if (!online) return 'offline'
-  return words.trim() === '' ? 'empty' : null
+  if (needsWords(ask) && words.trim() === '' && !told) return 'needsWords'
+  return Object.keys(detailsOf(words, ask)).length === 0 ? 'empty' : null
 }
 
 /** The refusals this screen has its own words for; any other shows the API's. */
-export const KNOWN_REFUSALS = ['NO_STATION', 'OTHER_STATION', 'TYPE_INACTIVE', 'NOT_THIS_STATION', 'SOLVED', 'CANCELLED'] as const
+export const KNOWN_REFUSALS = ['NO_STATION', 'OTHER_STATION', 'TYPE_INACTIVE', 'NOT_THIS_STATION', 'SOLVED', 'CANCELLED', 'REQUEST_SET', 'REQUEST_WORDS'] as const
 export const isKnownRefusal = (code: string): boolean => (KNOWN_REFUSALS as readonly string[]).includes(code)

@@ -11,6 +11,7 @@ import { decideInCommand, involvedOf, lockedAt } from './blocks'
 import type { FloorEndBody, FloorStartBody } from './contract'
 import { deviceStationOf, latestEndOf, linesById, lockRunningBlock, readBlock, readBlockByClient, readBlocks, readCode, readCodes, runningBlockOf, runningStretchOf, sitesById, stationsById, workerOf, type BlockRow, type Reader, type Subject } from './store'
 import { floorBlockOf, rowFactsOf, rowOf, tileOf, type FloorBlockView } from './views'
+import { pausedWorkOrderOf } from './work-order'
 import { endBlock, insertBlock } from './writes'
 
 /**
@@ -135,6 +136,7 @@ export async function floorStart(caller: CommandCaller, body: FloorStartBody, ke
           employeeId: worker?.employeeId ?? null,
           code,
           source: 'FLOOR',
+          workOrderId: await pausedWorkOrderOf(tools.tx, site.id, subject, tools.now),
           startedAt,
           note: body.note ?? null,
           deviceId: context.deviceId,

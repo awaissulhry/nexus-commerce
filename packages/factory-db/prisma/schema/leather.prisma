@@ -57,6 +57,8 @@ model LeatherGrade {
   hides     Hide[]
   remnants  Remnant[]
   hideMarks HideMark[]
+  // W2b-2 cutting.prisma (wave 13/16): the pattern pieces it is the lowest grade of.
+  patternPieces PatternPiece[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references.
@@ -353,6 +355,8 @@ model FabricRoll {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   shadeGroup ShadeGroup? @relation(fields: [tenantId, shadeGroupId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   location   Location?   @relation(fields: [tenantId, siteId, locationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-2 cutting.prisma (wave 13/16): the lays it was spread in.
+  layRolls   LayRoll[]
 
   @@unique([tenantId, code])
   // The target of a lay's reference (B-W2b-85): a roll of the lay's own site.

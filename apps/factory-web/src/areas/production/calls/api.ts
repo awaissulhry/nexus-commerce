@@ -32,6 +32,9 @@ export const callSchema = z.object({
   bundle: z.object({ id: z.string(), code: z.string() }).nullable(),
   responderTeam: place.nullable(),
   note: z.string().nullable(),
+  /** B-W2b-81 (MES-137): what a material call asks. */
+  reasonCode: z.string().nullable(),
+  requestedQuantity: z.string().nullable(),
   sentAt: z.string(),
   seenAt: z.string().nullable(),
   onTheWayAt: z.string().nullable(),

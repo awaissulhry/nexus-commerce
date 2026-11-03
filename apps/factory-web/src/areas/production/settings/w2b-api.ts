@@ -28,7 +28,7 @@ const mode = z.enum(FLOOR_RULE_MODES)
 
 export const floorRulesSchema = z.object({
   site: z.object({ id: z.string(), code: z.string(), name: z.string() }),
-  checks: z.object({ quantityGuard: mode, skippedOperationRule: mode, scrapApprovalLimit: z.number().nullable(), bundleCodeMode: z.enum(BUNDLE_CODE_MODES), stuckBundleHours: z.number() }),
+  checks: z.object({ quantityGuard: mode, skippedOperationRule: mode, scrapApprovalLimit: z.number().nullable(), bundleCodeMode: z.enum(BUNDLE_CODE_MODES), stuckBundleHours: z.number(), qualificationRule: mode }),
   isDefault: z.boolean(),
   fixed: z.object({ undoWindowSeconds: z.number(), clockOffSeconds: z.number(), clockFlagSeconds: z.number(), offlineMaxHours: z.number().nullable(), offlineMaxActions: z.number().nullable(), onlineOnly: z.array(z.string()) }),
   idleSignOut: z.object({ idleMinutes: z.number(), shiftEnds: z.array(z.string()), badgeOnlySignIn: z.boolean(), isDefault: z.boolean() }),
@@ -44,6 +44,7 @@ export interface FloorRulesBody {
   quantityGuard?: FloorRuleMode
   skippedOperationRule?: FloorRuleMode
   scrapApprovalLimit?: number | null
+  qualificationRule?: FloorRuleMode
   reason?: string
   version?: number
 }

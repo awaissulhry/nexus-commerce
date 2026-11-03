@@ -3,20 +3,26 @@
 import type { ReactNode } from 'react'
 import { ArrowLeft, Camera, Check, CircleAlert, ClipboardPen, Flag, HardHat, House, MessageSquarePlus, Package, ShieldAlert, ShieldCheck, TriangleAlert, Users, WifiOff, Wrench, X } from 'lucide-react'
 import { Field } from '@nexus/ui/components'
-import { FloorActionBar, FloorButton, FloorTile, FloorTileGrid, type FloorActions, type FloorTone } from '@nexus/ui/floor'
+import { FloorActionBar, FloorButton, FloorTile, FloorTileGrid, QuantityPad, qtyHeldReason, type FloorActions, type FloorTone } from '@nexus/ui/floor'
 import { FloorCard } from '@nexus/ui/floor/FloorCard/index'
 import { FloorElapsed } from '@nexus/ui/floor/FloorElapsed/index'
+import { ReasonGrid, type ReasonTile } from '@nexus/ui/floor/ReasonGrid/index'
+import type { MaterialReason } from '@nexus/factory-domain/production/calls/rules'
+import { useReasonWords } from '../../../../lib/ds-words/reason-grid'
 import { Modal, Textarea, Timeline, useDsWords } from '../../../../lib/i18n/ds-parts'
 import { formatTime } from '../../../../lib/i18n/format'
-import type { Locale } from '../../../../lib/i18n/locales'
+import { INTL_LOCALE, type Locale } from '../../../../lib/i18n/locales'
 import type { Translate } from '../../../../lib/i18n/messages'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { callAskWords } from '../../../../lib/line-board/model'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../../frame/view/FloorFrameView'
 import { FloorState } from '../../../frame/view/FloorState'
+import { tilesOf } from '../../reasons/model'
+import { glyphOf } from '../../reasons/view/ReasonPicker'
 import type { TaskProblem } from '../../shared/task-api'
 import { ProblemState, TaskLine, Ticks, type TickState } from '../../shared/view/TaskParts'
 import type { CallType, HelpCall, HelpStation } from '../api'
-import { callTone, callWords, comingOf, DANGER_AFTER_MS, detailsHeld, followUpOf, isKnownRefusal, NOTE_MAX, progressOf, WARN_AFTER_MS, type QueuedCall, type Who } from '../model'
+import { askReasons, callTone, callWords, comingOf, DANGER_AFTER_MS, detailsHeld, followUpOf, isKnownRefusal, NOTE_MAX, progressOf, QUANTITY_BOUNDS, WARN_AFTER_MS, type AskDraft, type QueuedCall, type Who } from '../model'
 import '../help.css'
 
 /**
@@ -28,7 +34,8 @@ import '../help.css'
  *                     waits on this tablet, so call out loud or use the line lamp
  *   Your call         type, sent time, the elapsed time big, who acknowledged ("Paolo · Line 1 team · on the way")
  *   Who is coming     Sent → Seen → On the way → Solved, with times
- *   Add details       words added to the open call (call first, explain after); the photo held with its reason
+ *   Add details       words added to the open call (call first, explain after); the photo held with its reason. A material
+ *                     call asks why (a reason tile), then how much, each its own screen (B-W2b-81; MES-137)
  *   Cancel this call? a confirm that names who is on the way; Enter keeps the call
  *
  * Never money. The view fetches nothing: the container (Help.tsx) reads and maps.
@@ -37,9 +44,9 @@ import '../help.css'
 export type HelpStep =
   | { readonly kind: 'loading' }
   | { readonly kind: 'tiles' }
-  | { readonly kind: 'call'; readonly callId: string; readonly cancelling?: boolean; readonly done?: 'details' | null }
+  | { readonly kind: 'call'; readonly callId: string; readonly cancelling?: boolean; readonly done?: 'details' | 'ask' | null }
   | { readonly kind: 'queued'; readonly clientEventId: string; readonly typeId: string; readonly ticks: TickState; readonly refusal: Refusal | null }
-  | { readonly kind: 'details'; readonly callId: string; readonly words: string; readonly busy?: boolean; readonly problem?: TaskProblem | null }
+  | { readonly kind: 'details'; readonly callId: string; readonly words: string; readonly ask?: AskDraft | null; readonly busy?: boolean; readonly problem?: TaskProblem | null }
   | { readonly kind: 'closed'; readonly clientEventId: string; readonly what: 'SOLVED' | 'CANCELLED'; readonly type: string; readonly ticks: TickState; readonly refusal: Refusal | null }
   | { readonly kind: 'problem'; readonly problem: TaskProblem }
 
@@ -70,6 +77,9 @@ export type HelpAction =
   | { type: 'cancel' }
   | { type: 'details' }
   | { type: 'words'; text: string }
+  | { type: 'reason'; code: MaterialReason }
+  | { type: 'quantity'; value: number | null }
+  | { type: 'addWords' }
   | { type: 'sendDetails' }
   | { type: 'machine' }
 
@@ -195,8 +205,22 @@ export function HelpView({ model, onAction, onFrame }: HelpViewProps) {
     }
 
     case 'details': {
-      const heldKey = detailsHeld(step.words, online)
+      const call = station?.open.find((entry) => entry.id === step.callId) ?? null
+      const heldKey = detailsHeld(step.words, online, step.ask, Boolean(call?.note))
       const refusal = step.problem?.kind === 'refused' ? refusalOf(t, step.problem) : null
+      const failed = refusal ? <TaskLine tone="danger" icon={<CircleAlert />} alert>{refusal.message}</TaskLine> : step.problem ? <TaskLine tone="danger" icon={<CircleAlert />} alert>{t('details.failed')}</TaskLine> : null
+      const sendAction = { label: t('details.send'), icon: <MessageSquarePlus />, heldReason: heldKey ? t(`held.details.${heldKey}`) : null, onPress: () => send({ type: 'sendDetails' }) }
+      if (step.ask?.stage === 'reason') {
+        body = <AskReason ask={step.ask} send={send} t={t} locale={locale} failed={failed} />
+        actions = [backAction]
+        break
+      }
+      if (step.ask?.stage === 'quantity') {
+        const held = qtyHeldReason(step.ask.quantity, QUANTITY_BOUNDS, quantityWords(t))
+        body = <AskQuantity ask={step.ask} send={send} t={t} locale={locale} failed={failed} />
+        actions = [backAction, { label: t('action.addWords'), icon: <MessageSquarePlus />, variant: 'secondary', onPress: () => send({ type: 'addWords' }) }, { ...sendAction, heldReason: step.ask.quantity === null ? sendAction.heldReason : (held ?? sendAction.heldReason) }]
+        break
+      }
       body = (
         <div className="fw-floor-stack">
           <section className="fw-floor-section" aria-labelledby="fw-hp-details">
@@ -212,10 +236,10 @@ export function HelpView({ model, onAction, onFrame }: HelpViewProps) {
             {t('details.photo')}
           </FloorButton>
           {!online ? <TaskLine tone="warning" icon={<WifiOff />}>{t('held.detailsOffline')}</TaskLine> : null}
-          {refusal ? <TaskLine tone="danger" icon={<CircleAlert />} alert>{refusal.message}</TaskLine> : step.problem ? <TaskLine tone="danger" icon={<CircleAlert />} alert>{t('details.failed')}</TaskLine> : null}
+          {failed}
         </div>
       )
-      actions = [backAction, { label: t('details.send'), icon: <MessageSquarePlus />, heldReason: heldKey ? t(`held.details.${heldKey}`) : null, onPress: () => send({ type: 'sendDetails' }) }]
+      actions = [backAction, sendAction]
       break
     }
 
@@ -249,12 +273,61 @@ export function HelpView({ model, onAction, onFrame }: HelpViewProps) {
   )
 }
 
+const quantityWords = (t: Translate) => ({ emptyLabel: t('ask.quantity.empty'), rangeLabel: () => t('ask.quantity.range') })
+
+/** A material call: why? One tap on a tile moves on. */
+function AskReason({ ask, send, t, locale, failed }: { ask: AskDraft; send: (action: HelpAction) => void; t: Translate; locale: Locale; failed: ReactNode }) {
+  const words = useReasonWords()
+  const tiles: ReasonTile[] = tilesOf(askReasons(), locale).map((tile) => ({ id: tile.id, label: tile.label, icon: glyphOf(tile.icon), tone: tile.tone }))
+  return (
+    <div className="fw-floor-stack">
+      <section className="fw-floor-section" aria-labelledby="fw-hp-ask">
+        <h2 id="fw-hp-ask" className="fw-floor-subtitle">
+          {t('ask.reason.title')}
+        </h2>
+        <ReasonGrid label={t('ask.reason.title')} hideLabel reasons={tiles} value={ask.reason} onChange={(code) => send({ type: 'reason', code: code as MaterialReason })} words={words} locale={INTL_LOCALE[locale]} />
+      </section>
+      {failed}
+    </div>
+  )
+}
+
+/** A material call: how much? No unit: the tile and the call's words say of what. */
+function AskQuantity({ ask, send, t, locale, failed }: { ask: AskDraft; send: (action: HelpAction) => void; t: Translate; locale: Locale; failed: ReactNode }) {
+  return (
+    <div className="fw-floor-stack">
+      <section className="fw-floor-section" aria-labelledby="fw-hp-ask">
+        <h2 id="fw-hp-ask" className="fw-floor-subtitle">
+          {t('ask.quantity.title')}
+        </h2>
+        {ask.reason ? <p className="fw-floor-muted">{callAskWords({ reasonCode: ask.reason, requestedQuantity: null }, locale)}</p> : null}
+        <QuantityPad
+          label={t('ask.quantity.label')}
+          hideLabel
+          value={ask.quantity}
+          onChange={(value) => send({ type: 'quantity', value })}
+          {...QUANTITY_BOUNDS}
+          decrementLabel={t('ask.quantity.less')}
+          incrementLabel={t('ask.quantity.more')}
+          clearLabel={t('ask.quantity.clear')}
+          backLabel={t('ask.quantity.back')}
+          emptyLabel={t('ask.quantity.empty')}
+          rangeLabel={() => t('ask.quantity.range')}
+          decimalSeparator={locale === 'it' ? ',' : '.'}
+        />
+      </section>
+      {failed}
+    </div>
+  )
+}
+
 /** Your call and Who is coming; the follow-up of its type; Cancel this call? */
 function CallCard({ call, step, asOf, online, send, t, locale, time }: { call: HelpCall; step: Extract<HelpStep, { kind: 'call' }>; asOf: string | null; online: boolean; send: (action: HelpAction) => void; t: Translate; locale: Locale; time: (value: string) => string }) {
   const ds = useDsWords()
   const coming = comingOf(call)
   const name = coming ? whoWords(coming.who, t) : null
   const follow = followUpOf(call.type)
+  const asked = callAskWords(call, locale)
   return (
     <div className="fw-floor-stack">
       <FloorCard
@@ -264,6 +337,7 @@ function CallCard({ call, step, asOf, online, send, t, locale, time }: { call: H
         status={{ label: t(`status.${call.status}`), tone: STATUS_TONE[call.status] }}
         facts={[
           { id: 'station', label: t('fact.station'), value: `${call.station.code} · ${call.station.name}` },
+          ...(asked ? [{ id: 'asked', label: t('fact.asked'), value: asked }] : []),
           { id: 'sent', label: t('fact.sent'), value: time(call.sentAt) },
           { id: 'who', label: t('fact.who'), value: coming ? [name, coming.team, t(`status.${coming.step}`)].filter(Boolean).join(' · ') : t('fact.nobody') },
         ]}
@@ -275,7 +349,7 @@ function CallCard({ call, step, asOf, online, send, t, locale, time }: { call: H
           <FloorElapsed since={call.sentAt} label={t('card.elapsed')} warnAfterMs={WARN_AFTER_MS} dangerAfterMs={DANGER_AFTER_MS} size="lg" labels={ds.floorElapsed} />
         </div>
       </FloorCard>
-      {step.done === 'details' ? <TaskLine tone="success" icon={<Check />}>{t('details.done')}</TaskLine> : null}
+      {step.done ? <TaskLine tone="success" icon={<Check />}>{t(step.done === 'ask' ? 'ask.done' : 'details.done')}</TaskLine> : null}
       {call.note ? <p className="fw-hp-note">{call.note}</p> : null}
       <section className="fw-floor-section" aria-labelledby="fw-hp-progress">
         <h2 id="fw-hp-progress" className="fw-floor-subtitle">

@@ -90,9 +90,17 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // W2b wave 10/16: incoming inspections are numbered from it (a floor document kind: the bench numbers the inspection
       // it opens).
       { id: `ffffffff${id(`series:${company}:INCOMING_INSPECTION:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'INCOMING_INSPECTION', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'IIN-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b wave 11/16: CAPAs and 8Ds are numbered from it (apps/factory-api modules/quality/capa, B-W2b-108): without one, a
+      // CAPA cannot be opened. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:CAPA:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CAPA', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CAPA-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       // W2b wave 6: payroll exports are numbered from it (apps/factory-api modules/people/payroll, B-W2b-54): without one,
       // an export cannot be made. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:PAYROLL_EXPORT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'PAYROLL_EXPORT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'PAY-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2b-2 wave 13/16: cut orders and cut tickets are numbered from these (apps/factory-api modules/production/cutorders,
+      // B-W2b-112): without them, a cut order cannot be made or a ticket printed. A ticket number is printed on the label, so
+      // each company's ticket series prints its own prefix. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:CUT_ORDER:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CUT_ORDER', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CO-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      { id: `ffffffff${id(`series:${company}:CUT_TICKET:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CUT_TICKET', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: `CT${company}-{YYYY}-{N:5}`, fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

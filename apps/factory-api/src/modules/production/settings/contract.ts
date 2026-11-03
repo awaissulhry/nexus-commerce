@@ -148,7 +148,7 @@ export const floorRulesContract = defineContract({
       /** Garments per bundle when the cutter names no size (MES-065). */
       standardBundleSize: z.number().int(),
       /** B-W2b-53 (MES-294): the site's floor checks a tablet shows or acts on; the scrap limit is a count (no money). */
-      checks: output({ quantityGuard: mode, skippedOperationRule: mode, scrapApprovalLimit: z.number().int().nullable(), bundleCodeMode: z.enum(BUNDLE_CODE_MODES) }),
+      checks: output({ quantityGuard: mode, skippedOperationRule: mode, scrapApprovalLimit: z.number().int().nullable(), bundleCodeMode: z.enum(BUNDLE_CODE_MODES), qualificationRule: mode }),
       /** One's own last report is undone until the next scan on the tablet or this many seconds after it (the same at every site). */
       undoWindowSeconds: z.number().int(),
     }),
@@ -167,6 +167,8 @@ const checksView = output({
   /** Shown here, changed by the bundles step (MES-067). */
   bundleCodeMode: z.enum(BUNDLE_CODE_MODES),
   stuckBundleHours: z.number().int(),
+  /** B-W2b-81 (MES-024): a missing skill: FREE not checked, WARN told, STRICT held for a team leader's PIN and a reason. */
+  qualificationRule: mode,
 })
 
 const floorRulesView = {
@@ -174,7 +176,7 @@ const floorRulesView = {
   checks: checksView,
   /** true: the site has no floor rules yet and runs on the defaults. */
   isDefault: z.boolean(),
-  /** The quantity guard, the sequence and the scrap limit in words, in that order. */
+  /** The quantity guard, the sequence, the scrap limit and the qualification rule in words, in that order. */
   words: z.array(z.string()),
   /** The same at every site for now (per-site columns are a schema follow-up). */
   fixed: output({
@@ -209,6 +211,8 @@ export const changeFloorRulesContract = defineContract({
     skippedOperationRule: mode.optional(),
     /** Pieces in one scan (1 to a bundle's 500); null: scrap needs no approval. */
     scrapApprovalLimit: z.number().int().min(1).max(MAX_SCRAP_APPROVAL_LIMIT).nullable().optional(),
+    /** B-W2b-81 (MES-024): what a missing skill does at this site. */
+    qualificationRule: mode.optional(),
     /** Kept in the audit row. */
     reason,
     /** The version read; left out while the site has no floor rules. */

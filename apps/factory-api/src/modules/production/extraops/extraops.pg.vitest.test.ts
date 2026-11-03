@@ -6,6 +6,7 @@ import { localInstant, plusDays } from '@nexus/factory-domain/calendars/dates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
+import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedAccounting, type AccountingSeed } from '../../../../../../packages/factory-db/seed/accounting'
 import { seed as seedAndon } from '../../../../../../packages/factory-db/seed/andon'
@@ -201,6 +202,17 @@ describe('the scan at it', () => {
     expect(row).toMatchObject({ unplanned: true, scanRequired: false, final: false, sewn: false, state: 'OPEN', expected: 20 })
     expect(card.operations.filter((entry: Json) => !entry.unplanned).map((entry: Json) => entry.unplanned)).toEqual([false, false, false, false])
     expect(card.next).toBe(ops.sew)
+  })
+
+  it('a coupon reads as its bundle here too (B-W2b-81): the card and the check; a coupon of a routing operation is refused at it, in words', async () => {
+    const row = await bundle()
+    const code = formatScanId({ type: 'COUPON', tenantTag: tenantTag(T), ref: 800_000 + serial })
+    await admin(`INSERT INTO "BundleCoupon" (id, "tenantId", "siteId", "workOrderId", "bundleId", "workOrderOperationId", code, "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, now())`, [newId(), T, siteA1, wo, row.id, ops.sew, code])
+    const card = await ok('op', 'GET', `/production/scans/card?code=${code}`)
+    expect(card.operations.find((entry: Json) => entry.id === step)).toMatchObject({ unplanned: true, state: 'OPEN' })
+    expect(await ok('op', 'GET', `/production/guards/check?code=${code}&workOrderOperationId=${step}`)).toMatchObject({ expected: 20 })
+    const refused = await no('op', 'POST', '/production/scans', { clientScanId: cid('scan'), code, workOrderOperationId: step, good: 5 }, 409)
+    expect(refusalOf(refused)).toBe('refusal/NOT_AN_OPERATION')
   })
 
   it('takes a bundle no routing operation reported, at a site that holds skipped operations; nothing is flagged', async () => {

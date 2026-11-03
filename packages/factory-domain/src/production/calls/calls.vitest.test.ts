@@ -3,6 +3,7 @@ import { FACTORY_PERMISSIONS, FLOOR_SHARED_PERMISSIONS } from '../../auth/permis
 import { ROLE_TEMPLATES } from '../../auth/roles/templates'
 import { EVENT_CATALOGUE } from '../../events/catalogue'
 import { events } from '../../andon/events'
+import { REASON_COLOURS, REASON_ICONS } from '../../reasons/rules'
 import { PRODUCTION_CALLS_FLOOR_PERMISSIONS, PRODUCTION_CALLS_MANAGE, PRODUCTION_CALLS_PERMISSIONS } from './permissions'
 import {
   CALL_REFUSALS,
@@ -10,9 +11,13 @@ import {
   callTimes,
   hourIn,
   isOpenCall,
+  isRequestedQuantity,
   isWaiting,
+  MATERIAL_REASON_TILES,
+  MATERIAL_REASONS,
   median,
   nextTypeOrder,
+  requestRefusal,
   secondsOpen,
   sentAtOf,
   stationCallState,
@@ -25,6 +30,37 @@ import {
 
 const at = (iso: string) => new Date(iso)
 const sent: CallState = { status: 'SENT', sentAt: at('2026-11-17T08:10:00Z'), seenAt: null, onTheWayAt: null }
+
+describe('what a material call asks (B-W2b-81; MES-137)', () => {
+  const none = { reasonCode: null, requestedQuantity: null }
+  const told = { reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4' }
+
+  it('a tile per reason, Other asks for words; every icon and swatch one the design system has', () => {
+    expect(MATERIAL_REASON_TILES.map((tile) => tile.code)).toEqual([...MATERIAL_REASONS])
+    expect(MATERIAL_REASON_TILES.filter((tile) => tile.needsDetail).map((tile) => tile.code)).toEqual(['OTHER'])
+    for (const tile of MATERIAL_REASON_TILES) {
+      expect(REASON_ICONS).toContain(tile.icon)
+      expect(REASON_COLOURS).toContain(tile.colour)
+    }
+  })
+
+  it('a quantity is a decimal text above 0, up to the most one call could ask', () => {
+    for (const value of ['0.01', '2.5', '100000']) expect(isRequestedQuantity(value)).toBe(true)
+    for (const value of ['0', '-1', '100000.01']) expect(isRequestedQuantity(value)).toBe(false)
+  })
+
+  it('only a material call asks; each is told once (the same value again is a resend); Other needs words', () => {
+    expect(requestRefusal({ kind: 'MAINTENANCE', current: none, hasWords: false })).toBeNull()
+    expect(requestRefusal({ kind: 'MAINTENANCE', current: none, reasonCode: 'MATERIAL_SHORT', hasWords: false })).toBe(CALL_REFUSALS.NOT_MATERIAL)
+    expect(requestRefusal({ kind: 'QUALITY', current: none, requestedQuantity: '1', hasWords: false })).toBe(CALL_REFUSALS.NOT_MATERIAL)
+    expect(requestRefusal({ kind: 'MATERIAL', current: none, reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4', hasWords: false })).toBeNull()
+    expect(requestRefusal({ kind: 'MATERIAL', current: told, reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4.00', hasWords: false })).toBeNull()
+    expect(requestRefusal({ kind: 'MATERIAL', current: told, reasonCode: 'MATERIAL_WRONG', hasWords: false })).toBe(CALL_REFUSALS.REQUEST_SET)
+    expect(requestRefusal({ kind: 'MATERIAL', current: told, requestedQuantity: '5', hasWords: false })).toBe(CALL_REFUSALS.REQUEST_SET)
+    expect(requestRefusal({ kind: 'MATERIAL', current: none, reasonCode: 'OTHER', hasWords: false })).toBe(CALL_REFUSALS.REQUEST_WORDS)
+    expect(requestRefusal({ kind: 'MATERIAL', current: none, reasonCode: 'OTHER', hasWords: true })).toBeNull()
+  })
+})
 
 describe('a help call moves forward only (MES-145)', () => {
   it('refuses a step on a final call, a second "seen" and a second "on my way"', () => {

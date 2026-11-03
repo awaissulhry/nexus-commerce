@@ -1,4 +1,5 @@
 import type { Issue } from '../../core/errors'
+import { decimalOf } from '../../product/units/units'
 import { REASON_CODE } from '../scans/reasons'
 
 /**
@@ -75,6 +76,67 @@ export const CALL_LIMITS = Object.freeze({
 /** How a call was solved: a code (BROUGHT, FIXED, ADJUSTED…), upper-case letters, digits and underscores. */
 export const RESOLUTION_CODE = /^[A-Z][A-Z0-9_]{1,39}$/
 
+// ---- what a material call asks (B-W2b-81; MES-137 "request extra material from the floor, with a reason") --------------------
+
+/**
+ * Why material is called for: a tile list kept here (as the scrap refusal's), since a reason list of its own would be an
+ * enum value. HelpCall.reasonCode keeps the code. The quantity has no unit on purpose (HelpCall.requestedQuantity): the
+ * call's work order, its words and the tile say of what; a call asks for pieces of one thing, a metre of lining or a hide.
+ */
+export const MATERIAL_REASONS = ['MATERIAL_SHORT', 'MATERIAL_DAMAGED', 'MATERIAL_WRONG', 'MATERIAL_RECUT', 'OTHER'] as const
+export type MaterialReason = (typeof MATERIAL_REASONS)[number]
+
+export interface MaterialReasonTile {
+  readonly code: MaterialReason
+  readonly labelIt: string
+  readonly labelEn: string
+  /** The design system's tag icon and swatch (factory-domain reasons/rules REASON_ICONS, REASON_COLOURS). */
+  readonly icon: string
+  readonly colour: string
+  /** OTHER asks for words on the call. */
+  readonly needsDetail: boolean
+}
+
+export const MATERIAL_REASON_TILES: readonly MaterialReasonTile[] = Object.freeze([
+  Object.freeze({ code: 'MATERIAL_SHORT', labelIt: 'Materiale finito', labelEn: 'Ran out', icon: 'box', colour: '#b87503', needsDetail: false }),
+  Object.freeze({ code: 'MATERIAL_DAMAGED', labelIt: 'Materiale danneggiato', labelEn: 'Damaged', icon: 'alert', colour: '#e5484d', needsDetail: false }),
+  Object.freeze({ code: 'MATERIAL_WRONG', labelIt: 'Materiale sbagliato', labelEn: 'Wrong material', icon: 'flag', colour: '#ea580c', needsDetail: false }),
+  Object.freeze({ code: 'MATERIAL_RECUT', labelIt: 'Serve un nuovo taglio', labelEn: 'Needs a recut', icon: 'shirt', colour: '#1f6fde', needsDetail: false }),
+  Object.freeze({ code: 'OTHER', labelIt: 'Altro', labelEn: 'Other', icon: 'bookmark', colour: '#5b6573', needsDetail: true }),
+] as const satisfies readonly MaterialReasonTile[])
+
+export const isMaterialReason = (value: unknown): value is MaterialReason => (MATERIAL_REASONS as readonly unknown[]).includes(value)
+
+/** More than one call could ever ask for: a typo, not a request. */
+export const MAX_REQUESTED_QUANTITY = 100_000
+
+/** A quantity a call may ask: a decimal text above 0, up to the most one call could ever ask. */
+export function isRequestedQuantity(value: string): boolean {
+  if (!/^\d+(\.\d+)?$/.test(value)) return false
+  const amount = decimalOf(value)
+  return amount.gt(0) && amount.lte(MAX_REQUESTED_QUANTITY)
+}
+
+/** What a call asks, as the row keeps it and as a change names it. */
+export interface CallRequest {
+  readonly reasonCode: string | null
+  readonly requestedQuantity: string | null
+}
+
+/**
+ * Why this request may not go on this call, or null. Told when it is sent or added while it is open, and set once: the same
+ * value again changes nothing (a resend), another one is refused. Only a material call asks (the database says so for the
+ * quantity too); its OTHER tile needs words, on the call or with the request.
+ */
+export function requestRefusal(facts: { readonly kind: CallKind; readonly current: CallRequest; readonly reasonCode?: string | undefined; readonly requestedQuantity?: string | undefined; readonly hasWords: boolean }): CallRefusal | null {
+  if (facts.reasonCode === undefined && facts.requestedQuantity === undefined) return null
+  if (facts.kind !== 'MATERIAL') return CALL_REFUSALS.NOT_MATERIAL
+  if (facts.reasonCode !== undefined && facts.current.reasonCode !== null && facts.reasonCode !== facts.current.reasonCode) return CALL_REFUSALS.REQUEST_SET
+  if (facts.requestedQuantity !== undefined && facts.current.requestedQuantity !== null && !decimalOf(facts.requestedQuantity).eq(decimalOf(facts.current.requestedQuantity))) return CALL_REFUSALS.REQUEST_SET
+  if (MATERIAL_REASON_TILES.find((tile) => tile.code === facts.reasonCode)?.needsDetail && !facts.hasWords) return CALL_REFUSALS.REQUEST_WORDS
+  return null
+}
+
 export interface CallRefusal {
   readonly code: string
   readonly message: string
@@ -98,6 +160,9 @@ export const CALL_REFUSALS = Object.freeze({
   CODE_NOT_LISTED: refusal('CODE_NOT_LISTED', 'This is not an active code of the help-call reason list.', 'Add it to the help-call reasons first (Floor rules & codes › Reason codes).'),
   TEAM_NOT_ACTIVE: refusal('TEAM_NOT_ACTIVE', 'This team is archived or works at another site.', "Pick an active team of the site, or none (the site's team leaders answer)."),
   WAITING_CODE: refusal('WAITING_CODE', "The waiting time books to an active off-standard code of the site's company.", 'Pick one of the off-standard codes (Floor rules & codes › Off-standard codes), or none.'),
+  NOT_MATERIAL: refusal('NOT_MATERIAL', 'Only a material call asks for a reason and a quantity.', 'Add words to this call, or send a material call.'),
+  REQUEST_SET: refusal('REQUEST_SET', 'This call already says why and how much: it is told once.', 'Add words to the call, or cancel it and send a new one.'),
+  REQUEST_WORDS: refusal('REQUEST_WORDS', 'Say in a few words what is needed.', 'Add the words, then send it again.'),
 } satisfies Record<string, CallRefusal>)
 
 // ---- the steps ----------------------------------------------------------------------------------------------------------
