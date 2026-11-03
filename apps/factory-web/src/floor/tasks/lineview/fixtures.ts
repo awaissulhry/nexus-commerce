@@ -17,8 +17,9 @@ const AT = '2026-10-29T09:12:00.000Z'
 const LINE_PLACE = { id: 'line-1', code: 'L1', name: 'Linea giacche' }
 const station = (n: number) => ({ id: `0190f0e2-0000-7000-9173-${String(100 + n).padStart(12, '0')}`, code: `CUC-${String(n).padStart(2, '0')}`, name: `Cucitura ${n}` })
 
-const call = (n: number, status: LineCall['status'], code: string, labelIt: string, labelEn: string, kind: LineCall['type']['kind'], sentAt: string): LineCall => ({ id: `call-${n}`, version: 1, status, type: { id: `type-${code}`, code, kind, labelIt, labelEn, labelI18n: {}, icon: null, colour: null }, station: station(n), sentAt })
-const CALLS = [call(3, 'SENT', 'MATERIAL', 'Materiale', 'Material', 'MATERIAL', '2026-10-29T09:30:00.000Z'), call(7, 'ON_THE_WAY', 'MAINTENANCE', 'Manutenzione', 'Maintenance', 'MAINTENANCE', '2026-10-29T09:20:00.000Z')]
+const call = (n: number, status: LineCall['status'], code: string, labelIt: string, labelEn: string, kind: LineCall['type']['kind'], sentAt: string, ask: Pick<LineCall, 'reasonCode' | 'requestedQuantity'> = { reasonCode: null, requestedQuantity: null }): LineCall => ({ id: `call-${n}`, version: 1, status, type: { id: `type-${code}`, code, kind, labelIt, labelEn, labelI18n: {}, icon: null, colour: null }, station: station(n), sentAt, ...ask })
+// B-W2b-81 (MES-137): the material call says why and how much.
+const CALLS = [call(3, 'SENT', 'MATERIAL', 'Materiale', 'Material', 'MATERIAL', '2026-10-29T09:30:00.000Z', { reasonCode: 'MATERIAL_SHORT', requestedQuantity: '4' }), call(7, 'ON_THE_WAY', 'MAINTENANCE', 'Manutenzione', 'Maintenance', 'MAINTENANCE', '2026-10-29T09:20:00.000Z')]
 
 const reasons = [{ code: 'STAIN', quantity: 3, labelIt: 'Macchia', labelEn: 'Stain', labelI18n: {}, icon: null, colour: null }, { code: 'HOLE', quantity: 2, labelIt: 'Foro', labelEn: 'Hole', labelI18n: {}, icon: null, colour: null }]
 const SCRAP: ScrapRow = { scanId: 'scan-1', at: AT, workOrder: { id: 'wo-1', number: 'WO-0041' }, bundle: { id: 'bn-1', code: 'B-000123' }, operation: { seq: 30, name: 'Cucitura maniche' }, station: { id: 'st-3', code: 'CUC-03' }, line: { id: 'line-1', code: 'L1' }, goodQuantity: 15, scrapQuantity: 5, reworkQuantity: 0, reasons, approval: { limit: 3 }, own: false }

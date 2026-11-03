@@ -16,7 +16,7 @@ import { formatDate, formatTime } from '../../../../lib/i18n/format'
 import { INTL_LOCALE, type Locale } from '../../../../lib/i18n/locales'
 import type { Translate } from '../../../../lib/i18n/messages'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
-import { reasonWords } from '../../../../lib/line-board/model'
+import { callAskWords, reasonWords } from '../../../../lib/line-board/model'
 import type { LineBoard } from '../../../../lib/line-board/schema'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../../frame/view/FloorFrameView'
@@ -375,7 +375,7 @@ function Now({ model, step, send, t, locale, time }: PartProps & { step: Extract
                     key={call.id}
                     icon={callIcon(call)}
                     title={`${call.station.code} · ${reasonWords(call.type, locale)}`}
-                    meta={saved ? t('calls.saved') : t(`status.${call.status}`)}
+                    meta={saved ? t('calls.saved') : [t(`status.${call.status}`), callAskWords(call, locale)].filter(Boolean).join(' · ')}
                     tone={call.status === 'SENT' ? 'warning' : 'info'}
                     selected={call.id === model.picked}
                     status={<FloorElapsed since={call.sentAt} warnAfterMs={WARN_AFTER_MS} dangerAfterMs={DANGER_AFTER_MS} size="md" labels={ds.floorElapsed} />}

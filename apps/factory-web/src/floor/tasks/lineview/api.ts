@@ -30,6 +30,9 @@ const lineCall = z.object({
   type: z.object({ id: z.string(), code: z.string(), kind: z.enum(CALL_KINDS), labelIt: z.string(), labelEn: z.string(), labelI18n: words, icon: z.string().nullable(), colour: z.string().nullable() }),
   station: place,
   sentAt: z.string(),
+  /** B-W2b-81 (MES-137): what a material call asks (a reason tile and a quantity, decimal text). */
+  reasonCode: z.string().nullable(),
+  requestedQuantity: z.string().nullable(),
 })
 export type LineCall = z.infer<typeof lineCall>
 
