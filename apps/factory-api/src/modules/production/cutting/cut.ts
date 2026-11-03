@@ -39,6 +39,22 @@ import { holdOnCut } from '../../quality/holds/checks'
 import { remnantSizeRefusal } from '@nexus/factory-domain/inventory/remnants/rules'
 import { assertRemnantMoveReversible, remnantsOnClose, remnantsOnMoveReversed, remnantsOnReopen, RemnantRefusedError, tagRemnantInCommand } from '../../inventory/remnants/lifecycle'
 import { floorRecordSubjectFor } from '../settings/subject'
+// B-W2b-103 (MES-053, MES-055, MES-060, MES-063, MES-064): the table's leather checks, "Cut anyway" and the hide's photo.
+import type { FastifyRequest } from 'fastify'
+import {
+  cutOverrideReasonText,
+  cutOverrideRefusal,
+  kindsOf,
+  leadPinWrong,
+  measuredThicknessProblem,
+  warningsRefusal,
+  type CutOverrideReasonCode,
+  type CutWarning,
+  type CutWarningKind,
+} from '@nexus/factory-domain/production/cutting/checks'
+import { PRODUCTION_CUT_OVERRIDE } from '@nexus/factory-domain/production/cutting/permissions'
+import { proveLead, type LeadInput } from '../guards/override'
+import { evaluateChecks, readCheckFacts, readShadedPieces } from './checks'
 import {
   deviceStationOf,
   lastLiveEntryOf,
@@ -107,6 +123,23 @@ export class CutRefusedError extends ConflictError {
 const refused = (refusal: CutRefusal): never => {
   throw new CutRefusedError(refusal)
 }
+
+/**
+ * B-W2b-103: a cut stopped by the table's warnings (factory-domain production/cutting/checks): a 409 `refusal/CUT_WARNING` with
+ * one issue per warning (`warnings/<KIND>/<CODE>`, its words). A CutRefusedError, so the floor's queue answers it in words
+ * (its refusal carries the fix: a lead signs "Cut anyway" online), never an override from the queue.
+ */
+export class CutWarningsError extends CutRefusedError {
+  override name = 'CutWarningsError'
+  override readonly issues: readonly Issue[]
+  constructor(
+    refusal: CutRefusal & { readonly fix: string; readonly final: boolean },
+    readonly warnings: readonly CutWarning[],
+  ) {
+    super(refusal)
+    this.issues = [{ path: `refusal/${refusal.code}`, message: refusal.message }, ...warnings.map((warning) => ({ path: `warnings/${warning.kind}/${warning.code}`, message: warning.message }))]
+  }
+}
 const text = (value: { toString(): string }) => quantityText(value.toString())
 const at = (value: Date | null) => (value ? toUtcIso(value) : null)
 
@@ -161,6 +194,11 @@ export function entryView(entry: EntryRow, pieces: readonly CutPiece[]) {
     deviceTime: at(entry.deviceTime),
     serverTime: toUtcIso(entry.serverTime),
     pieces: pieces.filter((piece) => piece.cutLogId === entry.id).map((piece) => ({ workOrderSizeId: piece.cellId, part: piece.part, pieces: piece.pieces })),
+    // B-W2b-103: the table's checks written with it (who signed "Cut anyway" is the office cut log's, behind its gate).
+    photoFileId: entry.photoFileId,
+    measuredThicknessMm: entry.measuredThicknessMm ? entry.measuredThicknessMm.toFixed(2) : null,
+    overrides: [...entry.overrides] as CutWarningKind[],
+    overrideReason: entry.overrideReason,
   }
 }
 
@@ -205,6 +243,18 @@ export interface CutInput {
   /** When it happened, by the device's clock. */
   readonly occurredAt?: string | undefined
   readonly note?: string | null | undefined
+  /** B-W2b-103 (MES-060): the photo of the hide on the table, uploaded first (POST /production/cutting/hides/:hideId/photos). */
+  readonly photoFileId?: string | null | undefined
+  /** B-W2b-103 (MES-064): the thickness measured at the table, in mm ("1.25"). */
+  readonly measuredThicknessMm?: string | null | undefined
+}
+
+/** B-W2b-103: a lead's verified "Cut anyway" (no PIN): who, the reason tile and its words, the warnings they signed for. */
+export interface CutOverride {
+  readonly leadWorkerId: string
+  readonly reasonCode: CutOverrideReasonCode
+  readonly reason: string
+  readonly signed: readonly CutWarningKind[]
 }
 
 export interface CutResult {
@@ -241,8 +291,16 @@ function baseAreaOf(item: ItemRow, area: AreaInput, path: string): string {
 
 const material = (hide: HideRow, lot: LotRow): Material => ({ itemId: hide.itemId, itemColourId: lot.itemColourId })
 
+/** B-W2b-103: the photo a cut names, a photo of this hide shared with the site's floor, stored (or waiting for its virus scan). */
+async function assertHidePhoto(tx: CommandTools['tx'], hide: HideRow, photoFileId: string): Promise<void> {
+  const file = await tx.storedFile.findFirst({ where: { id: photoFileId, recordType: 'Hide', recordId: hide.id, kind: 'PHOTO', floorSiteId: hide.siteId }, select: { status: true, scanStatus: true } })
+  if (!file || !(file.status === 'AVAILABLE' || (file.status === 'QUARANTINED' && file.scanStatus === 'PENDING'))) {
+    throw new ValidationError(`This is not a photo of hide ${hide.code} taken at this table: take the photo again.`, [{ path: 'body/photoFileId', message: 'Not a stored photo of this hide.' }])
+  }
+}
+
 /** The cut INSIDE a command: the locks, the issue when needed, the rules, the entry, the remnant, the hide's state. */
-async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutInput, key: string): Promise<CutResult> {
+async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutInput, key: string, override: CutOverride | null = null): Promise<CutResult> {
   const context = floorIn(tools)
   const { tx } = tools
   await lockWorkOrderIssues(tx, context.tenantId, workOrderId)
@@ -266,6 +324,8 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
   const subject = await floorRecordSubjectFor(tx, { siteId: workOrder.siteId, workerId: context.actorId, stationId })
   const createdById = subject.workerId ? context.actorId : null
   const occurredAt = body.occurredAt ? parseInstant(body.occurredAt)! : undefined
+  // B-W2b-103: what the table's checks read, BEFORE the scan issues the hide (the issue consumes the hide's own reservation).
+  const checkFacts = await readCheckFacts(tx, { workOrder, hide, lot, item })
 
   // A hide the work order does not hold yet is issued to it by the scan (whole, from wherever it lies: SCM-215, SCM-194).
   let ledger = (await readHideLedger(tx, workOrder.siteId, workOrder.id, [hide.id])).get(hide.id)!
@@ -310,6 +370,29 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
     if (small) throw new RemnantRefusedError(small.code, small.message)
   }
 
+  // B-W2b-103: the table's checks of the pieces this entry cuts (Hide done that cuts nothing more is not checked: nothing is
+  // cut). A warning no lead passed for this hide and work order stops the cut; "Cut anyway" passes what the lead signed for.
+  const measuredMm = body.measuredThicknessMm?.trim() || null
+  let overrides: CutWarningKind[] = []
+  let lead: CutOverride | null = null
+  if (decision.entry && decision.entry.pieces.length > 0) {
+    const sets = [...new Set(body.lines.filter((line) => (line.sets ?? 0) > 0).map((line) => line.workOrderSizeId))]
+    const singleParts = body.lines.flatMap((line) => (line.parts ?? []).filter((entry) => entry.pieces > 0 && entry.part.trim() !== '').map((entry) => ({ cellId: line.workOrderSizeId, part: entry.part.trim() })))
+    const shaded = checkFacts.rule === 'GARMENT' && singleParts.length > 0 ? await readShadedPieces(tx, workOrder.id) : []
+    const checks = evaluateChecks(checkFacts, { sets, singleParts, measuredMm, shaded })
+    if (checks.standingWarnings.length > 0) {
+      if (!override) throw new CutWarningsError(warningsRefusal(checks.standingWarnings, null), checks.standingWarnings)
+      const unsigned = checks.standingWarnings.filter((warning) => !override.signed.includes(warning.kind))
+      if (unsigned.length > 0) throw new CutWarningsError(warningsRefusal(unsigned, override.signed), unsigned)
+      if (checks.standing.includes('THICKNESS') && measuredMm === null) {
+        throw new ValidationError('Measure the hide\'s thickness at the table first: "Cut anyway" on the thickness records the measure the lead saw.', [{ path: 'body/cut/measuredThicknessMm', message: 'Required to cut anyway on the thickness.' }])
+      }
+      overrides = kindsOf(checks.standingWarnings)
+      lead = override
+    }
+  }
+  if (decision.entry && body.photoFileId) await assertHidePhoto(tx, hide, body.photoFileId)
+
   let entry: EntryRow | null = null
   if (decision.entry) {
     const id = newId()
@@ -336,6 +419,12 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
         deviceTime: occurredAt ?? null,
         serverTime: tools.now,
         createdById,
+        // B-W2b-103: written with the entry (append-only), as the CutLog_cutting_rules trigger checks them.
+        photoFileId: body.photoFileId ?? null,
+        measuredThicknessMm: measuredMm,
+        overrides,
+        overrideLeadWorkerId: lead?.leadWorkerId ?? null,
+        overrideReason: lead?.reason ?? null,
       },
       select: { id: true },
     })
@@ -351,7 +440,24 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
       recordId: id,
       companyId: workOrder.companyId,
       siteId: workOrder.siteId,
-      after: { workOrderId: workOrder.id, hideId: hide.id, lotId: hide.lotId, uom: item.baseUom, areaUsed: area, remnantArea: remnant, pattern: decision.entry.pattern, pieces: decision.entry.pieces, workerId: subject.workerId, stationId: subject.stationId, clientEventId: body.clientEventId },
+      after: {
+        workOrderId: workOrder.id,
+        hideId: hide.id,
+        lotId: hide.lotId,
+        uom: item.baseUom,
+        areaUsed: area,
+        remnantArea: remnant,
+        pattern: decision.entry.pattern,
+        pieces: decision.entry.pieces,
+        workerId: subject.workerId,
+        stationId: subject.stationId,
+        clientEventId: body.clientEventId,
+        // B-W2b-103: the photo, the thickness measured, and "Cut anyway" (the lead, the tile, the warnings).
+        photoFileId: body.photoFileId ?? null,
+        measuredThicknessMm: measuredMm,
+        ...(lead ? { overrides, overrideLeadWorkerId: lead.leadWorkerId, overrideReasonCode: lead.reasonCode } : {}),
+      },
+      ...(lead ? { reason: lead.reason } : {}),
     })
   }
 
@@ -435,6 +541,9 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
       },
     })
   }
+  if (entry && lead && overrides.length > 0) {
+    tools.emit({ ...event, type: 'production.cut_overridden', payload: { workOrderId: workOrder.id, number: workOrder.number, cutLogId: entry.id, hideId: hide.id, lotId: hide.lotId, overrides, reasonCode: lead.reasonCode } })
+  }
   if (decision.closes) {
     tools.emit({
       ...event,
@@ -502,10 +611,15 @@ async function assertFloorReady(caller: CommandCaller, context: FloorContext, si
   if (refusal) refused(refusal)
 }
 
-/** The floor's cut (and Hide done): one command, offline-safe by the device's client event id. */
-export async function logCut(caller: CommandCaller, workOrderId: string, body: CutInput, idempotencyKey?: string): Promise<CutResult> {
+/**
+ * The floor's cut (and Hide done): one command, offline-safe by the device's client event id. B-W2b-103: `override` is a lead's
+ * verified "Cut anyway" (cutAnyway below; never from the queue): it reaches the command's input without the PIN.
+ */
+export async function logCut(caller: CommandCaller, workOrderId: string, body: CutInput, idempotencyKey?: string, override: CutOverride | null = null): Promise<CutResult> {
   const context = floorOf(caller)
   const workOrder = await cuttingWorkOrder(caller, workOrderId, PRODUCTION_CUT)
+  const problem = measuredThicknessProblem(body.measuredThicknessMm)
+  if (problem) throw new ValidationError(problem, [{ path: 'body/measuredThicknessMm', message: problem }])
   const before = await recordedBefore(caller, context, workOrderId, body)
   if (before) return before
   await assertFloorReady(caller, context, workOrder.siteId)
@@ -513,8 +627,8 @@ export async function logCut(caller: CommandCaller, workOrderId: string, body: C
   try {
     const { result } = await command(
       caller,
-      { name: 'production.cut', idempotencyKey, input: { workOrderId, ...body }, ...(occurredAt ? { deviceTime: occurredAt } : {}) },
-      (tools) => cutInCommand(tools, workOrderId, body, `production.cut:${idempotencyKey ?? `g-${newId()}`}`),
+      { name: 'production.cut', idempotencyKey, input: { workOrderId, ...body, ...(override ? { override } : {}) }, ...(occurredAt ? { deviceTime: occurredAt } : {}) },
+      (tools) => cutInCommand(tools, workOrderId, body, `production.cut:${idempotencyKey ?? `g-${newId()}`}`, override),
     )
     return result
   } catch (error) {
@@ -523,6 +637,40 @@ export async function logCut(caller: CommandCaller, workOrderId: string, body: C
     if (raced) return raced
     throw error
   }
+}
+
+export interface CutAnywayInput {
+  readonly cut: CutInput
+  /** The lead: their badge, scanned, or their worker id, picked by name (exactly one); and their own PIN (never stored). */
+  readonly lead: LeadInput
+  readonly reasonCode: CutOverrideReasonCode
+  readonly note?: string | undefined
+  /** The warnings the card showed and the lead signed for (factory-domain production/cutting/checks CUT_WARNING_KINDS). */
+  readonly warnings: readonly CutWarningKind[]
+}
+
+/**
+ * B-W2b-103 (design floor.hidecut pop-up "Cut anyway?": what differs, a reason tile, the lead's PIN): the cut, sent again with
+ * the lead who lets it through. The lead is proved first (modules/production/guards proveLead: badge or name, their own PIN,
+ * the same refusal for a wrong badge or PIN, a wrong PIN counted on them) with their own floor roles' production.cut.override,
+ * never the cutter; then the cut runs as any cut, carrying the verified override, which passes the warnings the lead signed
+ * for. A warning that stands and was not signed for refuses it again (CUT_WARNING). The answer says what was overridden, or
+ * null when nothing stood any more.
+ */
+export async function cutAnyway(request: FastifyRequest, workOrderId: string, body: CutAnywayInput, idempotencyKey?: string) {
+  const context = floorOf(request)
+  if ((body.lead.badgeCode === undefined) === (body.lead.workerId === undefined)) {
+    throw new ValidationError('The lead scans their badge or picks their name, then enters their PIN.', [{ path: 'body/lead', message: 'Send a badge code or a worker id, not both.' }])
+  }
+  await cuttingWorkOrder(request, workOrderId, PRODUCTION_CUT)
+  const proved = await proveLead(request, context, body.lead, PRODUCTION_CUT_OVERRIDE)
+  if (!proved) refused(leadPinWrong())
+  const note = body.note?.trim() || null
+  const refusal = cutOverrideRefusal({ leadId: proved!.workerId, cutterId: context.actorId, mayOverride: proved!.may, reasonCode: body.reasonCode, note })
+  if (refusal) refused(refusal)
+  const result = await logCut(request, workOrderId, body.cut, idempotencyKey, { leadWorkerId: proved!.workerId, reasonCode: body.reasonCode, reason: cutOverrideReasonText(body.reasonCode, note), signed: [...new Set(body.warnings)] })
+  const overrides = result.cut?.overrides ?? []
+  return { ...result, override: overrides.length > 0 ? { overrides, reasonCode: body.reasonCode } : null }
 }
 
 // ---- undo and correction ------------------------------------------------------------------------------------------------------

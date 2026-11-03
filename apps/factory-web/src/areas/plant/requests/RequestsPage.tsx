@@ -12,12 +12,9 @@ import {
   acknowledgeRequest,
   closeRequest,
   getMachine,
-  getRequest,
   listMachines,
-  listRequests,
   listSymptoms,
   makeJobOfRequest,
-  mergeRequest,
   photoAddress,
   plantPlaces,
   plantTechnicians,
@@ -25,29 +22,39 @@ import {
   requestTiles,
   signSafe,
   uploadRequestPhoto,
-  type MaintenanceRequest,
-  type RequestRecord,
   type RequestTiles,
 } from '../_shared/api'
 import { downloadText, isStepUpCancelled, useCoalesced, useLive, useStepUp } from '../_shared/hooks'
-import { csvText, instantOf, isRequestEvent, labelOf, personWords, plantCan, problemOf, readProblem, requestsAddressOf, requestsAddressText, requestsQuery, TIME_ZONE, type RequestsAddress } from '../_shared/model'
-import { useWords, type Notice } from '../_shared/parts'
-import type { RequestDetailModel, RequestDialog, RequestRows, RequestsListModel, SiteChoice } from './view-model'
+import { csvText, instantOf, isRequestEvent, labelOf, personWords, plantCan, readProblem, requestsAddressOf, requestsAddressText, requestsQuery, TIME_ZONE, type RequestsAddress } from '../_shared/model'
+import { PlantMessages, useWords, type Notice } from '../_shared/parts'
+import { confirmWorks, getDeepRequest, listDeepRequests, lockAsUnsafe, mergeRequests, readDuplicates, readLocks, sayOnTheWay, type DeepRequest, type DeepRequestRecord, type MachineLock } from './depth/api'
+import { depthProblemOf, groupOfDuplicates, mediaViews, mergeBody, mergeDraftOf, routedWords, type MergeGroup } from './depth/model'
+import type { RequestDetailModel, RequestDialog, RequestRows, RequestsListModel, SectionRead, SiteChoice } from './view-model'
 import { RequestsView } from './view/RequestsView'
 
 /**
  * `/w/<company>/plant/requests` (SCR-148): the queue of the address (`?view=` a saved row, `?tile=` a tile pressed,
  * `?site=`), the tiles, live changes ("N new · Show"; an unsafe report reads everything at once), the request open in its
- * detail (`?open=`), and the decisions: acknowledge, make a job (or add it to the machine's open job), merge, close without
- * a job, sign safe (a fresh code), Report a problem (`?report=1`, `&machine=` from a machine's record). After a decision
- * that takes the request out of the queue, the next request opens by itself.
+ * detail (`?open=`), and the decisions: acknowledge, make a job (or add it to the machine's open job), close without a
+ * job, sign safe (a fresh code), Report a problem (`?report=1`, `&machine=` from a machine's record). After a decision
+ * that takes the request out of the queue, the next request opens by itself. B-W2b-140: the machines locked now (always
+ * first: GET /plant/requests/locks), the possible duplicates (GET /plant/requests/duplicates) and Merge requests, Lock as
+ * unsafe, the requester's progress (on the way, it works again), photos and voice notes, routing and escalation.
  */
 export function RequestsPage() {
-  return <RequestsContainer />
+  // The container speaks too (a notice's words, the CSV's header): the plant catalogue around it, not only its view.
+  return (
+    <PlantMessages>
+      <RequestsContainer />
+    </PlantMessages>
+  )
 }
 
 const QUEUE = 200
 const PAGE = 50
+
+/** What a step's answer says of its request (acknowledge answers W2a's request, on the way and it works the deep one). */
+type StepRequest = { id: string; machine: { assetNumber: string } }
 
 function RequestsContainer() {
   const api = useOfficeApi()
@@ -71,6 +78,38 @@ function RequestsContainer() {
       .catch(() => setSites([]))
   }, [api, can.view])
 
+  // ---- the machines locked now (first on the page) and the possible duplicates -------------------------------------------
+  const [locks, setLocks] = useState<SectionRead<MachineLock>>({ items: null, problem: null })
+  const [duplicates, setDuplicates] = useState<SectionRead<MergeGroup>>({ items: null, problem: null })
+  const locksRead = useRef(0)
+  const dupesRead = useRef(0)
+  const loadLocks = useCallback(async () => {
+    if (!can.view) return
+    const id = ++locksRead.current
+    try {
+      const items = await readLocks(api, siteId)
+      if (id === locksRead.current) setLocks({ items, problem: null })
+    } catch (error) {
+      if (id === locksRead.current) setLocks({ items: null, problem: readProblem(error) })
+    }
+  }, [api, can.view, siteId])
+  const loadDuplicates = useCallback(async () => {
+    if (!can.view) return
+    const id = ++dupesRead.current
+    try {
+      const groups = await readDuplicates(api, siteId)
+      if (id === dupesRead.current) setDuplicates({ items: groups.map(groupOfDuplicates), problem: null })
+    } catch (error) {
+      if (id === dupesRead.current) setDuplicates({ items: null, problem: readProblem(error) })
+    }
+  }, [api, can.view, siteId])
+  useEffect(() => {
+    setLocks({ items: null, problem: null })
+    setDuplicates({ items: null, problem: null })
+    void loadLocks()
+    void loadDuplicates()
+  }, [loadLocks, loadDuplicates])
+
   // ---- the queue and the tiles -------------------------------------------------------------------------------------------
   const [rows, setRows] = useState<RequestRows>({ items: null, truncated: false, more: false, problem: null })
   const [cursor, setCursor] = useState<string | null>(null)
@@ -86,7 +125,7 @@ function RequestsContainer() {
     if (!can.view) return
     const id = ++readId.current
     try {
-      const page = await listRequests(api, { ...query, limit: queued ? QUEUE : PAGE })
+      const page = await listDeepRequests(api, { ...query, limit: queued ? QUEUE : PAGE })
       const counted = await requestTiles(api, siteId).catch(() => null)
       if (id !== readId.current) return
       setRows({ items: page.requests, truncated: page.truncated, more: page.nextCursor !== null, problem: null })
@@ -106,14 +145,21 @@ function RequestsContainer() {
     void load()
   }, [load])
 
+  /** The queue, the locks and the duplicates again (after a decision). */
+  const loadAll = useCallback(() => {
+    void load()
+    void loadLocks()
+    void loadDuplicates()
+  }, [load, loadLocks, loadDuplicates])
+
   const more = useCallback(async () => {
     if (!cursor) return
     try {
-      const page = await listRequests(api, { ...query, cursor, limit: PAGE })
+      const page = await listDeepRequests(api, { ...query, cursor, limit: PAGE })
       setRows((current) => ({ ...current, items: [...(current.items ?? []), ...page.requests.filter((row) => !current.items?.some((seen) => seen.id === row.id))], more: page.nextCursor !== null }))
       setCursor(page.nextCursor)
     } catch (error) {
-      setNotice({ tone: 'danger', words: problemOf(error) })
+      setNotice({ tone: 'danger', words: depthProblemOf(error) })
     }
   }, [api, cursor, query])
 
@@ -123,22 +169,27 @@ function RequestsContainer() {
   const loadDetail = useCallback(
     async (id: string) => {
       const read = ++detailRead.current
-      setDetail((current) => (current && current.id === id ? current : { id, loaded: { status: 'loading' }, photos: [], lightbox: null, busy: false, problem: null }))
+      setDetail((current) => (current && current.id === id ? current : { id, loaded: { status: 'loading' }, media: [], lightbox: null, busy: false, problem: null }))
       try {
-        const record = await getRequest(api, id)
+        const record = await getDeepRequest(api, id)
         if (read !== detailRead.current) return
-        setDetail((current) => ({ id, loaded: { status: 'ready', value: record }, photos: record.photos.map((photo) => ({ id: photo.id, name: photo.originalName, src: current?.id === id ? (current.photos.find((seen) => seen.id === photo.id)?.src ?? null) : null })), lightbox: null, busy: false, problem: current?.id === id ? current.problem : null }))
+        setDetail((current) => ({ id, loaded: { status: 'ready', value: record }, media: mediaViews(record.files, current?.id === id ? current.media : []), lightbox: null, busy: false, problem: current?.id === id ? current.problem : null }))
+        // The addresses one after another (parallel reads made the shared database busy: 503).
         if (can.readFiles) {
-          for (const photo of record.photos) {
-            photoAddress(api, photo.id)
-              .then((src) => setDetail((current) => (current && current.id === id ? { ...current, photos: current.photos.map((entry) => (entry.id === photo.id ? { ...entry, src } : entry)) } : current)))
-              .catch(() => undefined)
+          for (const file of record.files) {
+            if (read !== detailRead.current) return
+            try {
+              const src = await photoAddress(api, file.id)
+              setDetail((current) => (current && current.id === id ? { ...current, media: current.media.map((entry) => (entry.id === file.id ? { ...entry, src } : entry)) } : current))
+            } catch {
+              // Said on screen: "couldn't be shown".
+            }
           }
         }
       } catch (error) {
         if (read !== detailRead.current) return
         const status = isApiError(error) && error.kind === 'not_found' ? 'notFound' : isApiError(error) && error.kind === 'forbidden' ? 'forbidden' : 'error'
-        setDetail({ id, loaded: status === 'error' ? { status, problem: readProblem(error) } : { status }, photos: [], lightbox: null, busy: false, problem: null })
+        setDetail({ id, loaded: status === 'error' ? { status, problem: readProblem(error) } : { status }, media: [], lightbox: null, busy: false, problem: null })
       }
     },
     [api, can.readFiles],
@@ -152,7 +203,7 @@ function RequestsContainer() {
     void loadDetail(address.open)
   }, [address.open, can.view, loadDetail])
 
-  const record: RequestRecord | null = detail?.loaded.status === 'ready' ? detail.loaded.value : null
+  const record: DeepRequestRecord | null = detail?.loaded.status === 'ready' ? detail.loaded.value : null
 
   // ---- live ----------------------------------------------------------------------------------------------------------------
   const refreshTiles = useCoalesced(() => {
@@ -161,19 +212,26 @@ function RequestsContainer() {
       .catch(() => undefined)
   }, 1000)
   const refreshNow = useCoalesced(() => void load(), 500)
+  const refreshLocks = useCoalesced(() => void loadLocks(), 300)
+  const refreshDuplicates = useCoalesced(() => void loadDuplicates(), 1500)
   const live = useLive(
     (change) => {
       if (!isRequestEvent(change.type)) return
       refreshTiles()
+      refreshDuplicates()
+      // A lock raises its banner at once; a sign-safe takes it down (design: "unsafe → Banner at once").
+      if (change.type === 'maintenance_request.locked' || change.type === 'maintenance_request.signed_safe' || change.type === 'machine.status_changed' || (change.type === 'maintenance_request.reported' && change.fields.unsafe === true)) refreshLocks()
       if (change.type === 'maintenance_request.reported') {
         // An unsafe report raises the banner and the row at once; any other waits behind "N new · Show".
         if (change.fields.unsafe === true) refreshNow()
         else setUpdates((count) => count + 1)
       }
+      // An escalation changes the Age tone (design live "request.escalated → Age tone"): the rows quietly again.
+      if (change.type === 'maintenance_request.escalated') refreshNow()
       const open = address.open
       if (open && (change.fields.requestId === open || (record && change.fields.machineId === record.request.machine.id))) void loadDetail(open)
     },
-    () => void load(),
+    () => loadAll(),
     can.view,
   )
 
@@ -193,39 +251,43 @@ function RequestsContainer() {
     [rows.items],
   )
 
-  /** A decision went through: the queue and the tiles again; the next request opens when this one left the queue. */
+  /** A decision went through: the queue, the locks and the duplicates again; the next request opens when this one left the queue. */
   const decided = useCallback(
-    (request: MaintenanceRequest, words: Notice['words'], leaves: boolean) => {
+    (request: { id: string }, words: Notice['words'], leaves: boolean) => {
       setDialog(null)
       setNotice({ tone: 'success', words })
-      void load()
+      loadAll()
       if (leaves) {
         const next = nextAfter(request.id)
         go({ open: next })
       } else void loadDetail(request.id)
     },
-    [go, load, loadDetail, nextAfter],
+    [go, loadAll, loadDetail, nextAfter],
   )
 
   const dialogOpen = useRef(false)
   dialogOpen.current = dialog !== null
-  /** A refused decision: in the dialog when one is open, else in the detail. */
+  /** A refused decision: in the dialog when one is open, else in the detail (or the page's notice). */
   const failed = useCallback((error: unknown) => {
-    const words = problemOf(error)
+    const words = depthProblemOf(error)
     setDialog((current) => (current ? { ...current, busy: false, problem: words } : current))
     setDetail((current) => (current ? { ...current, busy: false, problem: dialogOpen.current ? current.problem : words } : current))
   }, [])
 
-  const acknowledge = useCallback(async () => {
-    if (!record) return
-    setDetail((current) => (current ? { ...current, busy: true, problem: null } : current))
-    try {
-      const answer = await acknowledgeRequest(api, record.request.id, record.request.version)
-      decided(answer.request, { key: 'done.acknowledged', params: { machine: answer.request.machine.assetNumber } }, false)
-    } catch (error) {
-      failed(error)
-    }
-  }, [api, record, decided, failed])
+  /** One step of the open request without a dialog (acknowledge, on the way, it works). */
+  const step = useCallback(
+    async (run: (request: DeepRequest) => Promise<{ request: StepRequest }>, words: (request: StepRequest) => Notice['words']) => {
+      if (!record) return
+      setDetail((current) => (current ? { ...current, busy: true, problem: null } : current))
+      try {
+        const answer = await run(record.request)
+        decided(answer.request, words(answer.request), false)
+      } catch (error) {
+        failed(error)
+      }
+    },
+    [record, decided, failed],
+  )
 
   const openMakeJob = useCallback(() => {
     if (!record) return
@@ -258,7 +320,14 @@ function RequestsContainer() {
     setDialog({ kind: 'signSafe', draft: { note: '', machineAfter: null }, busy: false, problem: null })
   }, [record])
 
-  const openMerge = useCallback((into: MaintenanceRequest) => setDialog({ kind: 'merge', into, busy: false, problem: null }), [])
+  const lockKey = useRef<string | null>(null)
+  const openLock = useCallback(() => {
+    if (!record) return
+    lockKey.current = newIdempotencyKey()
+    setDialog({ kind: 'lock', note: '', busy: false, problem: null })
+  }, [record])
+
+  const openMerge = useCallback((group: MergeGroup, target?: string | null) => setDialog({ kind: 'mergeMany', group, draft: mergeDraftOf(group, target ?? null), busy: false, problem: null }), [])
 
   // ---- Report a problem ------------------------------------------------------------------------------------------------------
   const reportKey = useRef<string | null>(null)
@@ -330,8 +399,21 @@ function RequestsContainer() {
         }
         setDialog(null)
         setNotice({ tone: photoFailed ? 'warning' : 'success', words: { key: answer.request.unsafe ? 'done.reportedUnsafe' : 'done.reported', params: { machine: answer.request.machine.assetNumber } }, detail: photoFailed ? { key: 'done.photoFailed' } : null })
-        void load()
+        loadAll()
         go({ report: false, machineId: null, open: answer.request.id })
+        return
+      }
+      if (dialog.kind === 'mergeMany') {
+        const body = mergeBody(dialog.group, dialog.draft)
+        const answer = await mergeRequests(api, body)
+        const target: Notice['words'] = answer.job ? { key: 'done.mergedIntoJob', params: { count: answer.requests.length, number: answer.job.number } } : { key: 'done.mergedMany', params: { count: answer.requests.length, machine: dialog.group.machine.assetNumber } }
+        const open = record?.request.id ?? null
+        if (open) decided({ id: open }, target, body.requests.some((entry) => entry.id === open))
+        else {
+          setDialog(null)
+          setNotice({ tone: 'success', words: target })
+          loadAll()
+        }
         return
       }
       if (!record) return
@@ -358,9 +440,14 @@ function RequestsContainer() {
         const draft = dialog.draft
         const answer = await closeRequest(api, request.id, { version: request.version, reason: draft.reason!, ...(draft.note.trim() ? { note: draft.note.trim() } : {}), ...(dialog.machineDown && draft.keepDown ? { keepDown: true } : {}) })
         decided(answer.request, { key: 'done.closed', params: { machine: answer.request.machine.assetNumber } }, true)
-      } else if (dialog.kind === 'merge') {
-        const answer = await mergeRequest(api, request.id, { version: request.version, intoId: dialog.into.id })
-        decided(answer.request, { key: 'done.merged', params: { machine: answer.request.machine.assetNumber } }, true)
+      } else if (dialog.kind === 'lock') {
+        lockKey.current = lockKey.current ?? newIdempotencyKey()
+        const answer = await lockAsUnsafe(api, request.id, { version: request.version, ...(dialog.note.trim() ? { note: dialog.note.trim() } : {}) }, lockKey.current)
+        lockKey.current = null
+        setDialog(null)
+        setNotice({ tone: 'warning', words: { key: answer.joined ? 'done.lockedJoined' : 'done.locked', params: { machine: answer.machine.assetNumber } } })
+        loadAll()
+        go({ open: answer.lock.id })
       } else if (dialog.kind === 'signSafe') {
         signKey.current = signKey.current ?? newIdempotencyKey()
         const key = signKey.current
@@ -377,7 +464,7 @@ function RequestsContainer() {
       if (dialog.kind === 'signSafe') signKey.current = null
       failed(error)
     }
-  }, [dialog, api, record, decided, failed, guard, go, load, t])
+  }, [dialog, api, record, decided, failed, guard, go, loadAll, t])
 
   // ---- bulk, export ----------------------------------------------------------------------------------------------------------
   const [busy, setBusy] = useState(false)
@@ -408,28 +495,34 @@ function RequestsContainer() {
     (ids: readonly string[]) => {
       const picked = (rows.items ?? []).filter((row) => ids.includes(row.id))
       const place = { locale, timeZone: TIME_ZONE }
-      const header = ['reportedAt', 'site', 'machine', 'class', 'symptom', 'words', 'unsafe', 'station', 'reportedBy', 'photos', 'duplicates', 'state', 'job'].map((column) => t(`csv.${column}`))
-      const lines = picked.map((row) => [
-        formatDateTime(row.reportedAt, place),
-        sites.find((site) => site.id === row.siteId)?.code ?? '',
-        row.machine.assetNumber,
-        labelOf(row.machine.class, locale),
-        row.symptom ? labelOf(row.symptom, locale) : '',
-        row.description ?? '',
-        row.unsafe ? t('common.yes') : t('common.no'),
-        row.station?.code ?? '',
-        personWords(t, row.reportedBy),
-        row.photos,
-        row.duplicates,
-        t(`requestStatus.${row.status}`),
-        row.job?.number ?? '',
-      ])
+      const header = ['reportedAt', 'site', 'machine', 'class', 'symptom', 'words', 'unsafe', 'station', 'reportedBy', 'photos', 'voiceNotes', 'duplicates', 'routedTo', 'escalation', 'state', 'job'].map((column) => t(`csv.${column}`))
+      const lines = picked.map((row) => {
+        const routed = routedWords(row.routing)
+        return [
+          formatDateTime(row.reportedAt, place),
+          sites.find((site) => site.id === row.siteId)?.code ?? '',
+          row.machine.assetNumber,
+          labelOf(row.machine.class, locale),
+          row.symptom ? labelOf(row.symptom, locale) : '',
+          row.description ?? '',
+          row.unsafe ? t('common.yes') : t('common.no'),
+          row.station?.code ?? '',
+          personWords(t, row.reportedBy),
+          row.photos,
+          row.voiceNotes,
+          row.duplicates,
+          t(routed.key, routed.params),
+          row.routing.escalationLevel,
+          t(`requestStatus.${row.status}`),
+          row.job?.number ?? '',
+        ]
+      })
       downloadText(`machine-requests-${new Date().toISOString().slice(0, 10)}.csv`, csvText(header, lines))
     },
     [rows.items, sites, locale, t],
   )
 
-  const model: RequestsListModel = { prefix, can, address: { view, tile, siteId }, sites, rows, tiles, asOf, live, updates, timeZone: TIME_ZONE, detail, dialog, stepUp, notice, busy }
+  const model: RequestsListModel = { prefix, can, address: { view, tile, siteId }, sites, rows, locks, duplicates, tiles, asOf, live, updates, timeZone: TIME_ZONE, detail, dialog, stepUp, notice, busy }
 
   return (
     <RequestsView
@@ -446,12 +539,19 @@ function RequestsContainer() {
           go({ open: id })
         },
         onRetryDetail: () => address.open && void loadDetail(address.open),
-        onPhoto: (index) => setDetail((current) => (current ? { ...current, lightbox: index } : current)),
-        onAcknowledge: () => void acknowledge(),
+        onPhoto: (index) => setDetail((current) => (current ? { ...current, lightbox: index !== null && index < 0 ? null : index } : current)),
+        onAcknowledge: () => void step((request) => acknowledgeRequest(api, request.id, request.version), (request) => ({ key: 'done.acknowledged', params: { machine: request.machine.assetNumber } })),
         onMakeJob: openMakeJob,
         onClose: openClose,
         onSignSafe: openSignSafe,
-        onMerge: openMerge,
+        onRetryLocks: () => void loadLocks(),
+        onRetryDuplicates: () => void loadDuplicates(),
+        onMergeGroup: openMerge,
+        onMergeDraft: (draft) => setDialog((current) => (current?.kind === 'mergeMany' ? { ...current, draft, problem: null } : current)),
+        onLock: openLock,
+        onLockNote: (note) => setDialog((current) => (current?.kind === 'lock' ? { ...current, note } : current)),
+        onOnTheWay: () => void step((request) => sayOnTheWay(api, request.id, request.version), (request) => ({ key: 'done.onTheWay', params: { machine: request.machine.assetNumber } })),
+        onWorks: () => void step((request) => confirmWorks(api, request.id, request.version), (request) => ({ key: 'done.works', params: { machine: request.machine.assetNumber } })),
         onDialogClose: () => {
           if (dialog?.kind === 'report') go({ report: false, machineId: null })
           setDialog(null)

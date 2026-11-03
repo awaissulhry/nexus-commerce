@@ -166,16 +166,6 @@ export type JobBrief = z.infer<typeof jobBrief>
 const cardSchema = z.object({ machine: machineSchema, openJob: jobRef.nullable(), lastJobs: z.array(jobBrief), requestsIn30Days: z.number(), repeatFailure: z.boolean() })
 export type MachineCard = z.infer<typeof cardSchema>
 
-const requestRecordSchema = z.object({
-  request: requestSchema,
-  card: cardSchema,
-  duplicates: z.array(requestSchema),
-  photos: z.array(z.object({ id: z.string(), originalName: z.string(), contentType: z.string() })),
-  canTriage: z.boolean(),
-  canSignSafe: z.boolean(),
-})
-export type RequestRecord = z.infer<typeof requestRecordSchema>
-
 const jobRecordSchema = z.object({ job: jobSchema, card: cardSchema, requests: z.array(requestSchema), canManage: z.boolean(), canWork: z.boolean() })
 export type JobRecord = z.infer<typeof jobRecordSchema>
 
@@ -315,8 +305,6 @@ export const listRequests = (api: ApiClient, query: RequestsQuery, signal?: Abor
 
 export const requestTiles = (api: ApiClient, siteId: string | null, signal?: AbortSignal) => api.get('/plant/requests/counts', { query: clean({ siteId }), schema: requestTilesSchema, signal }).then((answer) => answer.tiles)
 
-export const getRequest = (api: ApiClient, id: string, signal?: AbortSignal) => api.get(`/plant/requests/${seg(id)}`, { schema: requestRecordSchema, signal })
-
 export interface ReportBody {
   machineId?: string
   assetNumber?: string
@@ -347,8 +335,6 @@ export interface MakeJobBody {
 }
 
 export const makeJobOfRequest = (api: ApiClient, id: string, body: MakeJobBody) => api.post(`/plant/requests/${seg(id)}/job`, { body, schema: triageAnswer, idempotencyKey: newIdempotencyKey() })
-
-export const mergeRequest = (api: ApiClient, id: string, body: { version: number; intoId: string }) => api.post(`/plant/requests/${seg(id)}/merge`, { body, schema: triageAnswer, idempotencyKey: newIdempotencyKey() })
 
 export const closeRequest = (api: ApiClient, id: string, body: { version: number; reason: CloseReason; note?: string; keepDown?: boolean }) =>
   api.post(`/plant/requests/${seg(id)}/close`, { body, schema: triageAnswer, idempotencyKey: newIdempotencyKey() })

@@ -15,8 +15,10 @@ import { assertFloorReady } from '../../production/serials/facts'
 import { aqlPlanFor } from '../aql/chain'
 import { chipsOf } from '../plans/store'
 import { postedBy, signerOf } from '../final/access'
-import { incomingView } from './views'
-import { lotFor, readIncoming, type LotRow, type Reader } from './store'
+import { viewOf } from './views'
+import { lotFor, type LotRow, type Reader } from './store'
+// B-W2b-111: goods back from a workshop open in receipt.ts.
+import { openReceipt } from './receipt'
 // The lot's lock: THE SAME KEY as the inspection triggers' handler (B-W2b-101), so a person and a rule never open two of one lot.
 import { lockIncomingSubject } from '../triggers/open'
 
@@ -61,7 +63,7 @@ async function sizeOf(db: Reader, lot: LotRow): Promise<Size | null> {
   return { lotSize, uom, countable: ['COUNT', 'ITEM'].includes(dimensionOf(uom)), hides: 0 }
 }
 
-interface Chosen {
+export interface Chosen {
   readonly plan: { readonly id: string; readonly code: string; readonly name: string }
   readonly version: { readonly id: string; readonly number: number; readonly samplingMethod: string; readonly fixedSampleSize: number | null }
   readonly because: readonly Chip[]
@@ -92,7 +94,7 @@ async function choosePlan(db: Reader, lot: LotRow, planId: string | null | undef
   return best[0]!
 }
 
-interface Sampling {
+export interface Sampling {
   readonly aqlProfileId: string | null
   readonly codeLetter: string | null
   readonly sampleSize: number
@@ -107,19 +109,29 @@ interface Sampling {
   readonly words: string | null
 }
 
+/** What is sampled, as the sample needs it: words for the refusals ("Lot LA-000123"), the company, and (a workshop's goods) the style and customers. */
+export interface SampledOf {
+  readonly label: string
+  readonly companyId: string
+  readonly styleId: string | null
+  readonly customerIds: readonly string[]
+}
+
+export const lotSampled = (lot: LotRow): SampledOf => ({ label: `Lot ${lot.code}`, companyId: lot.companyId, styleId: null, customerIds: [] })
+
 /** The sample of the lot on the plan version: a fixed number, ISO 2859-1's from the profile that applies, or the whole lot. */
-async function samplingOf(db: Reader, lot: LotRow, chosen: Chosen, size: Size, profileId: string | null | undefined): Promise<Sampling | { readonly refusal: string }> {
+export async function samplingOf(db: Reader, of: SampledOf, chosen: Chosen, size: Pick<Size, 'lotSize' | 'uom' | 'countable'>, profileId: string | null | undefined): Promise<Sampling | { readonly refusal: string }> {
   const whole = size.lotSize.isInteger() ? Number(size.lotSize.toFixed(0)) : null
   if (chosen.version.samplingMethod === 'FIXED') {
-    if (!whole || whole < 1) return { refusal: `Lot ${lot.code} is ${size.lotSize.toFixed()} ${size.uom}: a fixed sample needs the lot counted in whole units.` }
+    if (!whole || whole < 1) return { refusal: `${of.label} is ${size.lotSize.toFixed()} ${size.uom}: a fixed sample needs the lot counted in whole units.` }
     if (profileId) return { refusal: `Plan ${chosen.plan.code} v${chosen.version.number} samples a fixed number of units: no AQL profile applies.` }
     return { aqlProfileId: null, codeLetter: null, sampleSize: Math.min(chosen.version.fixedSampleSize ?? 1, whole), inspectionLevel: null, aqlMajor: null, aqlMinor: null, acceptMajor: null, acceptMinor: null, note: null, named: false, profileCode: null, words: null }
   }
-  if (!size.countable || !whole || whole < 1) return { refusal: `Lot ${lot.code} is counted in ${size.uom}: an AQL sample needs units (hides, pieces); inspect it on a plan with a fixed sample.` }
-  const answer = await aqlPlanFor(db, { companyId: lot.companyId, planVersionId: chosen.version.id, styleId: null, customerIds: [], lotSize: whole, profileId: profileId ?? null, at: 'body/profileId' })
+  if (!size.countable || !whole || whole < 1) return { refusal: `${of.label} is counted in ${size.uom}: an AQL sample needs units (hides, pieces); inspect it on a plan with a fixed sample.` }
+  const answer = await aqlPlanFor(db, { companyId: of.companyId, planVersionId: chosen.version.id, styleId: of.styleId, customerIds: [...of.customerIds], lotSize: whole, profileId: profileId ?? null, at: 'body/profileId' })
   if (!answer.plan || !answer.profile) {
     if (profileId) return { refusal: 'The plan version samples a fixed number of units: no AQL profile applies.' }
-    return { aqlProfileId: null, codeLetter: null, sampleSize: whole, inspectionLevel: null, aqlMajor: null, aqlMinor: null, acceptMajor: null, acceptMinor: null, note: 'No AQL profile applies to this lot (no company default): the whole lot is inspected.', named: false, profileCode: null, words: null }
+    return { aqlProfileId: null, codeLetter: null, sampleSize: whole, inspectionLevel: null, aqlMajor: null, aqlMinor: null, acceptMajor: null, acceptMinor: null, note: `No AQL profile applies to this ${of.styleId ? 'receipt (no style, customer or company default)' : 'lot (no company default)'}: the whole lot is inspected.`, named: false, profileCode: null, words: null }
   }
   const plan = answer.plan
   const aql = (defectClass: 'MAJOR' | 'MINOR') => aqlStored(plan.classes.find((entry) => entry.defectClass === defectClass)!.aql)
@@ -141,18 +153,21 @@ async function samplingOf(db: Reader, lot: LotRow, chosen: Chosen, size: Size, p
 /** GET /quality/incoming/lots/:lotId — the scan of a lot. */
 export async function scanLot(caller: CommandCaller, lotId: string) {
   const { lot, context } = await lotFor(caller, lotId, QUALITY_INCOMING_VIEW)
+  const head = { id: lot.id, code: lot.code, qualityStatus: lot.qualityStatus, dyeBatch: lot.dyeBatch, supplierLotRef: lot.supplierLotRef, item: { id: lot.item.id, code: lot.item.code, name: lot.item.name }, colour: lot.itemColour }
+  const found = await caller.withClient(async (db) => ({
+    open: await db.incomingInspection.findFirst({ where: { lotId: lot.id, status: 'OPEN' }, select: { id: true }, orderBy: { id: 'asc' } }),
+    decided: await db.incomingInspection.count({ where: { lotId: lot.id, status: 'DECIDED' } }),
+  }))
+  if (found.open) return { lot: head, decided: found.decided, open: await viewOf(caller, found.open.id, { lot, receipt: null }, context), opening: null }
+  const decided = found.decided
   return caller.withClient(async (db) => {
-    const open = await db.incomingInspection.findFirst({ where: { lotId: lot.id, status: 'OPEN' }, select: { id: true }, orderBy: { id: 'asc' } })
-    const decided = await db.incomingInspection.count({ where: { lotId: lot.id, status: 'DECIDED' } })
-    const head = { id: lot.id, code: lot.code, qualityStatus: lot.qualityStatus, dyeBatch: lot.dyeBatch, supplierLotRef: lot.supplierLotRef, item: { id: lot.item.id, code: lot.item.code, name: lot.item.name }, colour: lot.itemColour }
-    if (open) return { lot: head, decided, open: await incomingView(db, (await readIncoming(db, open.id))!, lot, context), opening: null }
     const size = await sizeOf(db, lot)
     const chosen = await choosePlan(db, lot, null)
     let opening: { plan: { planId: string; code: string; name: string; versionId: string; number: number } | null; lotSize: string | null; uom: string | null; sampleSize: number | null; words: { it: string; en: string } | null; refusal: string | null }
     if (!size) opening = { plan: null, lotSize: null, uom: null, sampleSize: null, words: null, refusal: `Lot ${lot.code} has nothing received to inspect.` }
     else if ('refusal' in chosen) opening = { plan: null, lotSize: size.lotSize.toFixed(4), uom: size.uom, sampleSize: null, words: null, refusal: chosen.refusal }
     else {
-      const sampling = await samplingOf(db, lot, chosen, size, null).catch((error: unknown) => ({ refusal: error instanceof Error ? error.message : String(error) }))
+      const sampling = await samplingOf(db, lotSampled(lot), chosen, size, null).catch((error: unknown) => ({ refusal: error instanceof Error ? error.message : String(error) }))
       const plan = { planId: chosen.plan.id, code: chosen.plan.code, name: chosen.plan.name, versionId: chosen.version.id, number: chosen.version.number }
       opening =
         'refusal' in sampling
@@ -164,17 +179,19 @@ export async function scanLot(caller: CommandCaller, lotId: string) {
 }
 
 export interface OpenBody {
-  readonly lotId: string
+  readonly lotId?: string | null | undefined
+  /** B-W2b-111: goods back from a workshop (exactly one of lotId and subcontractReceiptId). */
+  readonly subcontractReceiptId?: string | null | undefined
   readonly planId?: string | null | undefined
   readonly profileId?: string | null | undefined
   readonly reason?: string | null | undefined
   readonly note?: string | null | undefined
 }
 
-const invalid = (problems: readonly Issue[], words: string) => new ValidationError(problems.length === 1 ? problems[0]!.message : words, problems.map((problem) => ({ ...problem, path: problem.path.startsWith('body/') ? problem.path : `body/${problem.path}` })))
+export const invalid = (problems: readonly Issue[], words: string) => new ValidationError(problems.length === 1 ? problems[0]!.message : words, problems.map((problem) => ({ ...problem, path: problem.path.startsWith('body/') ? problem.path : `body/${problem.path}` })))
 
 /** The inspection's number from the company's series, in words when the company has none (409). */
-async function numberOf(tools: CommandTools, companyId: string, id: string): Promise<string> {
+export async function numberOf(tools: CommandTools, companyId: string, id: string): Promise<string> {
   try {
     const issued = await allocateNumber(tools, { companyId, kind: 'INCOMING_INSPECTION' }, { type: 'IncomingInspection', id })
     await assertNumberUniqueInTenant(tools, issued)
@@ -187,6 +204,14 @@ async function numberOf(tools: CommandTools, companyId: string, id: string): Pro
 
 /** POST /quality/incoming */
 export async function openIncoming(caller: CommandCaller, body: OpenBody, idempotencyKey: string | undefined) {
+  if (Boolean(body.lotId) === Boolean(body.subcontractReceiptId)) throw invalid([{ path: 'lotId', message: "Name what is inspected: a lot, or a workshop's receipt (goods back), not both." }], 'Name what is inspected.')
+  // B-W2b-111 (receipt.ts): goods back from a workshop.
+  if (body.subcontractReceiptId) return openReceipt(caller, { ...body, subcontractReceiptId: body.subcontractReceiptId }, idempotencyKey)
+  return openLot(caller, { ...body, lotId: body.lotId! }, idempotencyKey)
+}
+
+/** POST /quality/incoming for a lot (B-W2b-98). */
+async function openLot(caller: CommandCaller, body: OpenBody & { readonly lotId: string }, idempotencyKey: string | undefined) {
   const { lot, context } = await lotFor(caller, body.lotId, QUALITY_INCOMING_RECORD)
   if (context.audience === 'floor') await assertFloorReady(caller, lot.siteId)
   const note = body.note?.trim() || null
@@ -207,7 +232,7 @@ export async function openIncoming(caller: CommandCaller, body: OpenBody, idempo
       if (chosen.path) throw invalid([{ path: chosen.path, message: chosen.refusal }], chosen.refusal)
       throw new InvalidStateError(chosen.refusal)
     }
-    const sampling = await samplingOf(tx, lot, chosen, size, body.profileId)
+    const sampling = await samplingOf(tx, lotSampled(lot), chosen, size, body.profileId)
     if ('refusal' in sampling) throw new InvalidStateError(sampling.refusal)
     const problems: Issue[] = []
     if (sampling.named) {
@@ -275,9 +300,9 @@ export async function openIncoming(caller: CommandCaller, body: OpenBody, idempo
       subject: id,
       companyId: lot.companyId,
       siteId: lot.siteId,
-      payload: { incomingInspectionId: id, number, lotId: lot.id, itemId: lot.itemId, planVersionId: chosen.version.id, lotSize: size.lotSize.toFixed(4), uom: size.uom, sampleSize: sampling.sampleSize, postedBy: postedBy(context) },
+      payload: { incomingInspectionId: id, number, lotId: lot.id, subcontractReceiptId: null, itemId: lot.itemId, planVersionId: chosen.version.id, lotSize: size.lotSize.toFixed(4), uom: size.uom, sampleSize: sampling.sampleSize, postedBy: postedBy(context) },
     })
     return { id }
   })
-  return caller.withClient(async (db) => incomingView(db, (await readIncoming(db, result.id))!, lot, context))
+  return viewOf(caller, result.id, { lot, receipt: null }, context)
 }

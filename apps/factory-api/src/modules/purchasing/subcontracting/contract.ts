@@ -408,6 +408,8 @@ export const receiveContract = defineContract({
       ledger: output({ posted: z.number().int(), waiting: z.array(z.string()) }),
       /** B-W2b-10: each line at its outside operation: the scan that reported the bundle (naming the receipt line), or why not. */
       outside: z.array(outsideReport),
+      /** B-W2b-111: the incoming inspection a rule asked for, opened with the receipt (the bundles wait for it); null: none. */
+      inspection: output({ id: id(), number: z.string(), words: output({ it: z.string(), en: z.string() }) }).nullable(),
     }),
   },
 })

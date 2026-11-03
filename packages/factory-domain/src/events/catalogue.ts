@@ -70,6 +70,8 @@ import { events as qualityInprocess } from '../quality-inprocess/events'
 import { events as inventoryRolls } from '../inventory-rolls/events'
 // B-W2b-108: corrective actions, CAPA and 8D (opened, changed, stages, sources, actions, reminders, escalation, the 8D report).
 import { events as qualityCapa } from '../quality-capa/events'
+// B-W2b-124: statutory periodic checks (a check type, a plan, a result recorded, a check due).
+import { events as plantStatutory } from '../plant-statutory/events'
 // B-W2b-123: amendments of signed results; the inspection report and the certificate of conformity.
 import { events as qualityAmendments } from '../quality-amendments/events'
 import { events as qualityDocuments } from '../quality-documents/events'
@@ -210,6 +212,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...inventoryRolls,
   // B-W2b-108
   ...qualityCapa,
+  // B-W2b-124
+  ...plantStatutory,
   // B-W2b-123
   ...qualityAmendments,
   ...qualityDocuments] as const satisfies readonly EventDefinition[]

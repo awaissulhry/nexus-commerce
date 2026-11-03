@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ChevronUp, FileSearch, GitBranch, Printer, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { ChevronDown, ChevronUp, FileSearch, GitBranch, Printer, ScanLine, ShieldCheck, TriangleAlert, Warehouse } from 'lucide-react'
 import { Banner, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Kbd, Select, Tag } from '@nexus/ui/primitives'
 import { DetailModal, Textarea } from '../../../../lib/i18n/ds-parts'
@@ -38,8 +38,11 @@ import {
   type HoldsListModel,
   type RecordTab,
 } from '../model'
+import { quantity } from '../../../_shared/stock/model'
+import { askHeld, confirmHeld } from '../depth/model'
+import { AffectedTab } from '../depth/view/AffectedTab'
 import type { HoldsListActions } from './HoldsView'
-import { HoldPill, SaveMark } from './parts'
+import { HoldPill, SaveMark, useUomWord } from './parts'
 
 const NOBODY = '__nobody__'
 
@@ -69,8 +72,9 @@ export function checkLines(detail: Pick<HoldDetail, 'release' | 'hold'>, t: (key
  * the work orders it holds; owner, expected release and note saved as they change. Decision — what must be true to
  * release it (the GateExplainer: each check in our words with the API's sentence under it), the four-eyes and maker
  * lines, Release… (held with the first open check) and Decide in NCR for reject, rework or scrap. Activity — the hold's
- * thread, files and history (the record panels). "Affected" (the trace of what it touches) comes with W2b. J / K walk the
- * list; r opens the release.
+ * thread, files and history (the record panels). B-W2b-114: Affected — what the hold touches (the trace of its records
+ * forward, counts by state, its hold by genealogy, Extend hold); the quarantine move asked or confirmed from the Hold tab.
+ * J / K walk the list; r opens the release.
  */
 export function HoldDetailModal({
   open,
@@ -129,6 +133,7 @@ export function HoldDetailModal({
 
   const tabs = [
     { id: 'hold', label: t('detail.tab.hold') },
+    { id: 'affected', label: t('detail.tab.affected') },
     { id: 'decision', label: t('detail.tab.decision'), count: value ? value.release.checks.filter((check) => !check.ok).length || null : null },
     { id: 'activity', label: t('detail.tab.activity') },
   ]
@@ -178,6 +183,9 @@ export function HoldDetailModal({
       {value && hold && (
         <div className="fw-q-stack">
           {tab === 'hold' && <HoldTab value={value} model={model} actions={actions} />}
+          {tab === 'affected' && (
+            <AffectedTab affected={model.depth?.affected ?? null} prefix={model.prefix} reasons={model.reasons} onExtend={(start) => actions?.onGenealogy?.(start, hold.id)} onRetry={actions?.onRetryAffected} onOpenHold={(holdId) => actions?.onOpen?.(holdId)} />
+          )}
           {tab === 'decision' && <DecisionTab value={value} model={model} actions={actions} releaseText={releaseText} />}
           {tab === 'activity' && (panels ?? <p className="fw-q-hint">{model.can.threadsRead ? t('detail.activityLater') : t('held.noThreads')}</p>)}
         </div>
@@ -282,6 +290,8 @@ function HoldTab({ value, model, actions }: { value: HoldDetail; model: HoldsLis
                 : [hold.quarantineLocation ? `${hold.quarantineLocation.code} · ${hold.quarantineLocation.name}` : t('move.noPlace'), hold.quarantine === 'MOVED' && hold.quarantineMovedAt ? t('move.movedAt', { at: formatDateTime(hold.quarantineMovedAt, { locale }) }) : t('move.notConfirmed')].join(' · '),
           },
           { label: t('detail.site'), value: hold.site ? `${hold.site.code} · ${hold.site.name}` : '—' },
+          // B-W2b-114: the hold by genealogy it is part of (the suspect record it started from).
+          ...(hold.group ? [{ label: t('detail.group'), value: t('detail.groupFrom', { kind: t(hold.group.sourceType === 'Hide' ? 'kind.Hide' : 'kind.Lot'), code: hold.group.sourceCode ?? '—' }), hint: t('detail.groupHint') }] : []),
           ...(hold.status === 'RELEASED' && released ? [{ label: t('detail.released'), value: t(released), hint: [hold.releasedAt ? formatDateTime(hold.releasedAt, { locale }) : null, hold.releaseNote].filter(Boolean).join(' · ') || undefined }] : []),
           ...(hold.status === 'CLOSED' ? [{ label: t('detail.closed'), value: hold.closedAt ? formatDateTime(hold.closedAt, { locale }) : '—', hint: hold.closeNote ?? undefined }] : []),
         ]}
@@ -308,6 +318,7 @@ function HoldTab({ value, model, actions }: { value: HoldDetail; model: HoldsLis
           </span>
         )}
       </div>
+      <QuarantineSection value={value} model={model} actions={actions} />
       {value.workOrders.length > 0 && (
         <div className="fw-q-section">
           <div className="fw-q-section-title">
@@ -346,6 +357,48 @@ function HoldTab({ value, model, actions }: { value: HoldDetail; model: HoldsLis
         </Button>
       </div>
     </>
+  )
+}
+
+/** B-W2b-114 (QHS-078): the quarantine move of a stock hold — where the stock lies now, Ask… and Confirm… (held with why). */
+function QuarantineSection({ value, model, actions }: { value: HoldDetail; model: HoldsListModel; actions?: HoldsListActions }) {
+  const t = useT('holds')
+  const locale = useLocale()
+  const uomWord = useUomWord()
+  const hold = value.hold
+  if (!value.stock) return null
+  const ask = askHeld(hold, model.can)
+  const confirm = confirmHeld(hold, model.depth?.canTransfer ?? false)
+  return (
+    <div className="fw-q-section">
+      <div className="fw-q-section-title">
+        <strong>{t('qmove.section')}</strong>
+        <p className="fw-q-hint">{hold.quarantine === 'MOVED' ? t('qmove.sectionMoved') : hold.quarantine === 'ASKED' ? t('qmove.sectionAsked', { code: hold.quarantineLocation?.code ?? '—' }) : t('qmove.sectionNone')}</p>
+      </div>
+      {value.stock.lying.length > 0 ? (
+        <SummaryTable
+          label={t('qmove.lying')}
+          stackOnPhone
+          columns={[t('qmove.place'), t('qmove.onHand'), t('qmove.what')]}
+          rows={value.stock.lying.map((entry) => ({
+            id: `${entry.locationId}|${entry.uom}`,
+            cells: [`${entry.code} · ${entry.name}`, `${quantity(entry.onHand, locale)} ${uomWord(entry.uom)}`, entry.kind === 'SUBCONTRACTOR' ? t('qmove.stays') : entry.moves ? t('qmove.moves') : hold.quarantine === 'NOT_NEEDED' ? t('qmove.notAsked') : t('qmove.there')],
+          }))}
+        />
+      ) : (
+        <p className="fw-q-hint">{t('qmove.nothingLying')}</p>
+      )}
+      <div className="fw-q-actions">
+        {hold.quarantine === 'ASKED' && (
+          <Button size="sm" variant="primary" heldReason={confirm ? t(confirm) : null} onClick={() => actions?.onQuarantine?.({ kind: 'confirm', holdId: hold.id })}>
+            <ScanLine size={14} aria-hidden /> {t('move.confirm')}
+          </Button>
+        )}
+        <Button size="sm" heldReason={ask ? t(ask) : null} onClick={() => actions?.onQuarantine?.({ kind: 'ask', holdId: hold.id })}>
+          <Warehouse size={14} aria-hidden /> {hold.quarantine === 'ASKED' ? t('move.otherPlace') : t('row.quarantine')}
+        </Button>
+      </div>
+    </div>
   )
 }
 

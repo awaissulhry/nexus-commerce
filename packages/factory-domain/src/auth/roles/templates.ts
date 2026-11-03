@@ -58,7 +58,8 @@ const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales
 const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   planner: ['plant.view'],
   // B-W2b-96: plant.settings.manage (a site's request routing and unsafe-lock settings) for the production manager.
-  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.settings.manage'],
+  // B-W2b-124: plant.checks.manage (the statutory periodic checks: types, plans, the register) for the production manager.
+  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.settings.manage', 'plant.checks.manage'],
   floor_supervisor: ['plant.view', 'plant.report', 'plant.requests.triage'],
   operator: ['plant.report'],
   cutting_operator: ['plant.report'],
@@ -365,6 +366,14 @@ const SHADE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freez
   quality_inspector: ['inventory.shade.override'],
 })
 /**
+ * B-W2b-103 (leather cutting rules; MES-053, MES-063, MES-064; design floor.hidecut pop-up "Cut anyway?"): the team leader lets a
+ * hide be cut anyway when the table's checks warn, signed on the cutter's tablet with their own PIN and a reason. Floor only;
+ * Owner from every().
+ */
+const CUT_OVERRIDE_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.cut.override'],
+})
+/**
  * B-W2b-92 (inspection plans, QHS-008, QHS-009, QHS-016; design quality.plans): quality keeps the plans and approves another
  * person's draft (never one it wrote); the production manager reads them and may be the second person who approves (a small
  * factory has one quality person); the floor supervisor reads them and prints a checklist for a bench without a tablet.
@@ -515,6 +524,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (HIDES_ADDS[key] ?? []) : []),
   // B-W2b-100
   ...(audience === 'office' ? (SHADE_ADDS[key] ?? []) : []),
+  // B-W2b-103
+  ...(audience === 'floor' ? (CUT_OVERRIDE_FLOOR_ADDS[key] ?? []) : []),
   // B-W2b-92
   ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
   // B-W2b-49
@@ -1002,7 +1013,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     requireMfa: false,
     permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'sites.view', 'workers.view', 'parties.view', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.jobs.work', 'plant.signSafe',
       // B-W2b-96: the site's request routing and unsafe-lock settings.
-      'plant.settings.manage'],
+      'plant.settings.manage',
+      // B-W2b-124: the statutory periodic checks (check types, plans, the check register with its reports).
+      'plant.checks.manage'],
     grains: [],
   }),
   template('read_only', {

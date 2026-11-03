@@ -1,9 +1,28 @@
-import { idempotencyKeyFrom } from '../../../core/command'
+import type { FastifyRequest } from 'fastify'
+import { ValidationError } from '@nexus/factory-domain/core/errors'
+import { idempotencyKeyFrom, IDEMPOTENCY_KEY_HEADER } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { correctContract, cutContract, cutLogContract, cutsListContract, cuttingViewContract, cuttingWorkOrdersContract, remnantContract, scanHideContract, undoContract } from './contract'
-import { correctCut, logCut, undoCut } from './cut'
+import { deviceCookieOf } from '../../../platform/auth/floor/cookies'
+import { parseSiteToken } from '../../../platform/auth/floor/tokens'
+import { AUTH_RATE_LIMITS } from '../../../platform/auth/sessions/office-auth'
+import {
+  announceHidePhotoContract,
+  completeHidePhotoContract,
+  correctContract,
+  cutAnywayContract,
+  cutContract,
+  cutLogContract,
+  cutsListContract,
+  cuttingViewContract,
+  cuttingWorkOrdersContract,
+  remnantContract,
+  scanHideContract,
+  undoContract,
+} from './contract'
+import { correctCut, cutAnyway, logCut, undoCut } from './cut'
 import { manifest } from './manifest'
 import { cutsList } from './office'
+import { announceHidePhoto, completeHidePhoto } from './photos'
 import { cutLog, cuttingView, cuttingWorkOrders, scanHide } from './views'
 
 /**
@@ -12,8 +31,16 @@ import { cutLog, cuttingView, cuttingWorkOrders, scanHide } from './views'
  * command), Hide done with its remnant back to stock, the undo of one's own last cut, and for the office the cut log of
  * a work order and the correction of an entry. Every write is one command (./cut.ts); a resent floor event (the same
  * client event id) answers 200 with the entry recorded before.
+ *
+ * B-W2b-103 (leather cutting rules): a cut is checked before the knife (./checks.ts: shade, the hide reserved, thickness, the
+ * pieces' minimum grade); a warning no lead passed stops it (409 refusal/CUT_WARNING). "Cut anyway" sends the cut again with a
+ * lead's badge or name, PIN and reason tile: it takes a secret, so it has the floor sign-in's rate limit per enrolled device,
+ * and its Idempotency-Key (a floor write takes one) is the cut's clientEventId. The photo of the hide is uploaded first (./photos.ts).
  */
 export default defineRoutes('production.cutting', manifest, async (app) => {
+  const limit = app.officeAuth?.rateLimits.floorSignIn ?? AUTH_RATE_LIMITS.floorSignIn
+  const perDevice = { rateLimit: { max: limit.max, timeWindow: limit.timeWindowMs, keyGenerator: (request: FastifyRequest) => `cut-anyway:${parseSiteToken(deviceCookieOf(request))?.id ?? request.ip}` } }
+
   app.get('/production/cutting/work-orders', { schema: cuttingWorkOrdersContract }, async (request) => cuttingWorkOrders(request, request.query))
 
   app.get('/production/cutting/work-orders/:workOrderId', { schema: cuttingViewContract }, async (request) => cuttingView(request, request.params.workOrderId))
@@ -48,4 +75,22 @@ export default defineRoutes('production.cutting', manifest, async (app) => {
 
   // B-W2a-60: the cutting office's list of cuts (office.ts).
   app.get('/production/cutting/cuts', { schema: cutsListContract }, async (request) => cutsList(request, request.query))
+
+  // B-W2b-103: "Cut anyway" with a lead's PIN, and the photo of the hide on the table.
+  app.post('/production/cutting/work-orders/:workOrderId/cuts/anyway', { schema: cutAnywayContract, config: perDevice }, async (request, reply) => {
+    const header = idempotencyKeyFrom(request)
+    if (header !== undefined && header !== request.body.cut.clientEventId) {
+      throw new ValidationError('The Idempotency-Key is the cut’s clientEventId: send the same value.', [{ path: `headers/${IDEMPOTENCY_KEY_HEADER}`, message: 'Must equal body.cut.clientEventId.' }])
+    }
+    const result = await cutAnyway(request, request.params.workOrderId, request.body, header)
+    return reply.code(result.replayed ? 200 : 201).send(result)
+  })
+
+  app.post('/production/cutting/hides/:hideId/photos', { schema: announceHidePhotoContract }, async (request, reply) =>
+    reply.code(201).send(await announceHidePhoto(request, request.params.hideId, request.body, idempotencyKeyFrom(request))),
+  )
+
+  app.post('/production/cutting/hides/:hideId/photos/:fileId/complete', { schema: completeHidePhotoContract }, async (request) =>
+    completeHidePhoto(request, request.params.hideId, request.params.fileId, idempotencyKeyFrom(request)),
+  )
 })
