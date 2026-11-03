@@ -1,9 +1,12 @@
 import type { StepUpState } from '../../_shared/hooks'
 import type { LiveState } from '../../_shared/model'
 import type { DefectChoice, FoundAt, NcrCard, NcrCounts, NcrLane, NcrPrefill, NcrSettingsAnswer, NcrSource, NcrSummary, Person, Severity, SiteChoice, Uom } from '../api'
-import type { ContainmentTimeDraft, NcrAddress, NcrCan } from '../model'
+import { formatNumber } from '../../../../lib/i18n/format'
+import type { Locale } from '../../../../lib/i18n/locales'
+import type { ContainmentTimeDraft, NcrAddress, NcrCan, Say } from '../model'
 import type { NcrNotice } from '../parts'
 import type { CloseDialogActions, CloseDialogModel } from '../view/CloseNcrDialog'
+import type { EscalateActions, EscalateModel } from '../view/EscalateDialog'
 
 /** What New NCR holds while it is typed (design pop:ncr-new). Photos are kept by the container; here their names. */
 export interface NewNcrDraft {
@@ -117,6 +120,13 @@ export interface NcrListModel {
   readonly selected?: readonly string[]
   readonly keysOpen?: boolean
   readonly focusRow?: number
+  /** B-W2b-113: Escalate to CAPA (pop:ncr-capa), the shared dialog's model; null: closed. */
+  readonly escalate?: EscalateModel | null
+  /**
+   * B-W2b-113: the currency of the Cost column (the company's; the list's rows carry minor units without one — EUR until the
+   * summary names it).
+   */
+  readonly currency?: string
 }
 
 export interface NcrListActions {
@@ -149,4 +159,45 @@ export interface NcrListActions {
   close?: CloseDialogActions
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
+  /** B-W2b-113: open Escalate to CAPA for these NCRs (a row's verb, the selection, key e). */
+  onEscalate?: (ncrs: readonly { readonly id: string; readonly number: string }[]) => void
+  /** B-W2b-113: the shared dialog's actions. */
+  escalate?: EscalateActions
+  /** B-W2b-113: the NCR report (ncr-pdf) in a new tab. */
+  onPrintNcr?: (id: string) => void
 }
+
+// ---- B-W2b-113: the CAPA and Cost columns, Escalate to CAPA from the list -------------------------------------------------
+
+/** At most this many NCRs go to one CAPA at once (B-W2b-108's preview reads 50). */
+export const ESCALATE_MAX = 50
+
+/** Why a row cannot be escalated (an `ncr` Say), or null: the person's rights, a cancelled NCR, a CAPA it names already. */
+export function rowEscalateHeld(row: Pick<NcrSummary, 'number' | 'stage' | 'capa'>, can: Pick<NcrCan, 'manage' | 'capaView'>): Say | null {
+  if (!can.manage || !can.capaView) return { key: 'list.heldEscalateRight' }
+  if (row.stage === 'CANCELLED') return { key: 'escalate.code.NCR_CANCELLED', params: { number: row.number } }
+  if (row.capa) return { key: 'list.heldEscalated', params: { number: row.number, capa: row.capa.number } }
+  return null
+}
+
+/** The picked rows that may go to a CAPA. */
+export const escalatableOf = <Row extends Pick<NcrSummary, 'number' | 'stage' | 'capa'>>(rows: readonly Row[], can: Pick<NcrCan, 'manage' | 'capaView'>): Row[] => rows.filter((row) => rowEscalateHeld(row, can) === null)
+
+/** Why "Escalate N to one CAPA" is held for the rows picked (an `ncr` Say), or null. */
+export function bulkEscalateHeld(picked: readonly Pick<NcrSummary, 'number' | 'stage' | 'capa'>[], can: Pick<NcrCan, 'manage' | 'capaView'>, offline: boolean): Say | null {
+  if (!can.manage || !can.capaView) return { key: 'list.heldEscalateRight' }
+  const going = escalatableOf(picked, can)
+  if (going.length === 0) return { key: 'list.heldEscalateNone' }
+  if (going.length > ESCALATE_MAX) return { key: 'list.heldEscalateMax' }
+  if (offline) return { key: 'list.heldEscalateOffline' }
+  return null
+}
+
+/** A cost in minor units in the reader's number format and the currency; "—" when there is none. */
+export function costText(minor: number | null | undefined, currency: string, locale: Locale): string {
+  if (minor === null || minor === undefined) return '—'
+  return formatNumber(minor / 100, locale, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+/** The cost in the CSV: a plain decimal (the reader's spreadsheet formats it), empty when none. */
+export const costCsv = (minor: number | null | undefined): string => (minor === null || minor === undefined ? '' : (minor / 100).toFixed(2))

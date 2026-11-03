@@ -146,7 +146,7 @@
     "due": "Answer due",
     "ncr": "NCR",
     "capa": "CAPA",
-    "capaHint": "Corrective actions come with a later step (W2b).",
+    "capaHint": "The corrective action (CAPA) it is escalated to.",
     "register": "In PPE register",
     "value": "Order value",
     "valueHint": "The order's net value, before VAT.",
@@ -365,6 +365,8 @@
   },
   "tab": {
     "complaint": "Complaint",
+    "investigation": "Investigation",
+    "answer": "Answer",
     "linked": "Linked records",
     "activity": "Activity"
   },
@@ -377,14 +379,16 @@
     "close": "Close",
     "register": "Add to PPE register",
     "createNcr": "Create NCR",
-    "makeRepair": "Make a repair"
+    "makeRepair": "Make a repair",
+    "investigate": "Write the investigation",
+    "writeAnswer": "Write the answer",
+    "sendAnswer": "Send the answer…"
   },
   "linked": {
     "ncr": "Nonconformances",
     "ncrNone": "No NCR raised from it.",
     "ncrNoRight": "Your role does not see NCRs.",
     "capa": "Corrective actions",
-    "capaLater": "Corrective actions come with a later step (W2b).",
     "register": "PPE register entry",
     "return": "Return",
     "shipment": "Shipment",
@@ -417,10 +421,12 @@
     "reopenTitle": "Back to investigating {number}",
     "answeredTitle": "Mark {number} answered",
     "investigateBody": "Quality looks into it (the returned garment, the batch, the evidence trail).",
-    "answeredBody": "The customer was answered (by phone, e-mail or letter: the answer letter comes with a later step).",
+    "answeredBody": "The customer was answered another way (by phone or in person).",
     "note": "Note (optional)",
     "noteHint": "Kept in the record's history.",
-    "answeredNoteHint": "How and what was answered, kept in the record's history."
+    "answeredNoteHint": "How and what was answered, kept in the record's history.",
+    "reopenLetter": "The letter sent (version {version}) stays kept; the letter can be changed and sent again.",
+    "answeredLetter": "To answer with a letter, write it on the Answer tab and send it from there: it marks the complaint answered."
   },
   "closeDialog": {
     "title": "Close {number}",
@@ -479,8 +485,13 @@
       "register": "Adding to the PPE register needs quality.complaints.manage and compliance.register.manage",
       "createNcr": "Raising an NCR needs quality.ncr.raise",
       "makeRepair": "Making a repair needs sales.repairs.manage",
-      "log": "Your role cannot log complaints (quality.complaints.log)"
-    }
+      "log": "Your role cannot log complaints (quality.complaints.log)",
+      "investigate": "Quality writes the investigation (quality.complaints.manage)",
+      "writeAnswer": "Quality writes the answer letter (quality.complaints.manage)",
+      "sendAnswer": "Quality sends the answer letter (quality.complaints.manage)"
+    },
+    "ANSWER_SENT": "The letter went out and the complaint is answered: back to investigating to change it",
+    "NO_ANSWER": "Write the letter first (its words, in Italian or English)"
   },
   "refusal": {
     "conflict": "Someone changed this complaint in the meantime. It has been read again: check and try once more.",
@@ -497,7 +508,17 @@
       "returnId": "That return is not of this customer and company.",
       "reason": "Say why it closes.",
       "siteId": "Choose an active site of the company.",
-      "serial": "The serial was refused: check it."
+      "serial": "The serial was refused: check it.",
+      "findings": "The findings were refused: at most 4000 characters, from triage on.",
+      "rootCause": "The root cause was refused: at most 2000 characters, from triage on.",
+      "template": "The template was refused: choose one of the list.",
+      "language": "The language was refused: Italian or English.",
+      "text": "The letter's words were refused: at most 8000 characters.",
+      "fileIds": "A file was refused: only available files of this complaint go with the letter.",
+      "contactIds": "A recipient was refused: choose active contacts of the customer with an e-mail.",
+      "cc": "A copy address was refused: check the e-mail addresses.",
+      "subject": "The subject was refused: at most 200 characters.",
+      "attachments": "A file was refused: share it with the customer first."
     }
   },
   "notice": {
@@ -522,7 +543,11 @@
     "savedWarnings_other": "Check {count} notes on the facts.",
     "exported_one": "{count} complaint exported.",
     "exported_other": "{count} complaints exported.",
-    "copied": "Copied: {text}"
+    "copied": "Copied: {text}",
+    "answerSaved": "The letter of {number} is saved.",
+    "answerSent": "{number} answered: letter version {version} sent to the customer.",
+    "investigationSaved": "The investigation of {number} is saved.",
+    "fileShared": "{name} is shared with the customer."
   },
   "csv": {
     "file": "complaints-{day}.csv",
@@ -545,7 +570,8 @@
     "ncr": "NCR",
     "register": "PPE register",
     "orderValue": "Order value",
-    "currency": "Currency"
+    "currency": "Currency",
+    "capa": "CAPA"
   },
   "links": {
     "intro": "Link the complaint's order, shipment, return or garment, or an NCR; unlink what does not belong.",
@@ -638,5 +664,139 @@
   },
   "mail": {
     "intoThread": "Mail from the customer's contacts with {number} in its subject lands on this thread by itself."
+  },
+  "capa": {
+    "named": "{number} · {title}",
+    "elsewhere": "Escalated to a corrective action your role does not see.",
+    "none": "Not escalated to a corrective action: an NCR raised from it is escalated from the NCR.",
+    "noRight": "Your role does not see corrective actions.",
+    "status": {
+      "PLAN": "Plan",
+      "ACT": "Act",
+      "CHECK": "Check",
+      "D1": "D1 team",
+      "D2": "D2 problem",
+      "D3": "D3 containment",
+      "D4": "D4 root cause",
+      "D5": "D5 corrective actions",
+      "D6": "D6 actions in place",
+      "D7": "D7 prevention",
+      "D8": "D8 closure",
+      "CLOSED": "Closed",
+      "CANCELLED": "Cancelled"
+    }
+  },
+  "investigation": {
+    "title": "Investigation",
+    "sub": "What the investigation found and why it happened.",
+    "findings": "Findings",
+    "findingsHint": "What was found on the garment, the batch, the evidence trail.",
+    "rootCause": "Root cause",
+    "rootCauseHint": "Why it happened, in a few words.",
+    "save": "Save the investigation",
+    "noFindings": "No findings written yet.",
+    "noRootCause": "No root cause written yet.",
+    "officeOnly": "For the office only: never printed and never sent to the customer (the answer letter says what the customer reads).",
+    "linksTitle": "What it is linked to",
+    "linksSub": "The returned garment, the nonconformances and the corrective action.",
+    "return": "Return of the garment",
+    "returnHint": "The returned garment is inspected on the return.",
+    "noReturn": "No return named.",
+    "held": {
+      "findingsLong": "The findings are too long (at most 4000 characters)",
+      "rootCauseLong": "The root cause is too long (at most 2000 characters)"
+    }
+  },
+  "answer": {
+    "sent": "Answered by letter on {time} by {who} ({via}, version {version}).",
+    "sentBody": "The letter is frozen while the complaint stays answered: back to investigating to change it. Every version stays.",
+    "openSent": "Answer letter (PDF)",
+    "answeredOtherWay": "Answered without a letter (by phone or in person): the letter changes once the complaint goes back to investigating.",
+    "title": "Answer to the customer",
+    "sub": "A letter from a template, in the customer's language. Nothing is sent until you review it and press Send.",
+    "template": "Template",
+    "templateHint": "Its words fill the letter; you change them before sending.",
+    "noTemplate": "No template",
+    "languageLabel": "Language",
+    "languageCustomer": "The customer's language.",
+    "languageOther": "Not the customer's language.",
+    "language": {
+      "it": "Italian",
+      "en": "English"
+    },
+    "keptWords": "Your own words stay in the letter.",
+    "useTemplate": "Use the template's words",
+    "text": "The letter",
+    "textHint": "What the customer reads, as it will be printed.",
+    "files": "Files with the letter ({count})",
+    "filesHint": "Files of this complaint (add them on the Activity tab). Only a file shared with the customer goes with the mail.",
+    "filesNoRight": "Your role does not see files (files.read).",
+    "filesReading": "Reading the complaint's files…",
+    "filesNone": "This complaint has no file yet: add one on the Activity tab.",
+    "shared": "Shared with the customer",
+    "notShared": "Office only",
+    "share": "Share with the customer",
+    "shareOf": "Share {name} with the customer",
+    "shareNoRight": "Sharing a file needs files.manage",
+    "savedHint": "The letter as saved.",
+    "discard": "Discard",
+    "save": "Save the letter",
+    "held": {
+      "textLong": "The letter is too long (at most 8000 characters)",
+      "files": "At most 10 files go with a letter",
+      "saveFirst": "Save the letter first: Send sends the letter as saved"
+    },
+    "via": {
+      "EMAIL": "by e-mail",
+      "PORTAL": "on the portal"
+    },
+    "preview": {
+      "title": "As the customer gets it",
+      "sub": "The letter as saved, with the preview banner: nothing is kept or sent.",
+      "again": "Show again",
+      "newTab": "Open in a new tab",
+      "none": "Write and save the letter to see it here.",
+      "pdfTitle": "Answer letter of {number}",
+      "loading": "Making the preview…",
+      "idle": "The preview shows once the letter is read.",
+      "letterhead": "The letter cannot be made: the company's letterhead is incomplete (legal name, address, VAT number, codice fiscale, REA). Complete it in Admin › Companies & sites."
+    },
+    "versions": {
+      "title": "Versions kept ({count})",
+      "sub": "Each letter sent is kept as a version.",
+      "none": "No letter sent yet.",
+      "version": "Version {version}",
+      "open": "Open ({language})",
+      "sentOne": "the one sent"
+    },
+    "send": {
+      "open": "Send…",
+      "title": "Send the answer of {number}",
+      "confirm": "Send to the customer",
+      "reading": "Reading the customer's contacts…",
+      "body": "The letter of {number} goes as a PDF in {language}, with the files shared with the customer. Check who gets it.",
+      "heldProblems": "It cannot go yet:",
+      "heldNoRecipient": "Choose who gets the letter",
+      "heldTooMany": "At most 10 people get one letter",
+      "heldCc": "A copy address is not an e-mail address",
+      "heldSubject": "The subject is too long (at most 200 characters)",
+      "to": "To",
+      "toHint": "The customer's contacts with an e-mail.",
+      "suggested": "suggested",
+      "cc": "Copy to",
+      "ccHint": "E-mail addresses, separated by commas (optional).",
+      "subject": "Subject",
+      "message": "Message",
+      "messageHint": "The mail's own words; the letter goes as the PDF.",
+      "attached": "Files with it: {count}.",
+      "never": "Nothing is sent until you press Send to the customer. It leaves through the company's e-mail.",
+      "problem": {
+        "contactIds": "The customer has no active contact with an e-mail: add one to the customer first.",
+        "letterhead": "The company's letterhead is incomplete (legal name, address, VAT number, codice fiscale, REA): complete it in Admin › Companies & sites.",
+        "notShared": "A file with the letter is not shared with the customer: share it, or untick it.",
+        "filesRead": "A letter goes with files only for a sender who may read files (files.read).",
+        "other": "The letter cannot go as it stands: check the letter and the customer."
+      }
+    }
   }
 }

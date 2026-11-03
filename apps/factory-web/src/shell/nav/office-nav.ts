@@ -198,6 +198,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/quality/holds',
   '/quality/holds/[id]/tag',
   '/quality/defects',
+  // B-W2b-118: Quality › Settings › Quality rules (SCR-260).
+  '/quality/settings',
   // B-W2a-68: Quality › Problems › Nonconformances (SCR-144 list and board, SCR-145 the NCR record).
   '/quality/ncr',
   '/quality/ncr/[id]',

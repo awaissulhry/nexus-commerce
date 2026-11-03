@@ -1,0 +1,82 @@
+/*
+ * Hides › Leather dashboard (B-W2b-131, SCR-134) — LAYOUT only: the panels fill the page's width (no page max-width:
+ * more columns on wide screens, one on a phone), the panel's head row and figures. Controls are the design system's;
+ * semantic tokens only.
+ */
+.fw-hd-dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--nds-space-12);
+  margin-top: var(--nds-space-10);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-hd-dash-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .fw-hd-dash-panel {
+    grid-column: span 2;
+  }
+  .fw-hd-dash-panel.wide {
+    grid-column: span 3;
+  }
+}
+
+@media (min-width: 1700px) {
+  .fw-hd-dash-panel.wide {
+    grid-column: span 2;
+  }
+}
+
+.fw-hd-dash-panel {
+  min-width: 0;
+}
+
+.fw-hd-dash-stack,
+.fw-hd-dash-figures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-hd-dash-head,
+.fw-hd-dash-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-hd-dash-tools {
+  justify-content: flex-start;
+}
+
+.fw-hd-dash-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-hd-dash-big {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.fw-hd-dash-hint,
+.fw-hd-dash-held {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-hd-dash-figures > button {
+  align-self: flex-start;
+}

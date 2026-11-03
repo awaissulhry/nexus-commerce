@@ -2,8 +2,23 @@ import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { requireStepUp } from '../../../platform/auth/office/account'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
+import { processFiles } from '../../../platform/files/service'
+import { inlineDisposition } from '../../inventory/receipts/report'
+import { answerConcession, askConcession, editConcession } from './concessions'
+import { addCostLine, computeCost, editCostLine, ncrCost, removeCostLine } from './cost'
+import { makeNcrReport, previewNcrReport } from './report'
 import { addAction, cancelAction, doneAction, editAction } from './containment'
 import {
+  addCostLineContract,
+  answerConcessionContract,
+  askConcessionContract,
+  computeCostContract,
+  costContract,
+  editConcessionContract,
+  editCostLineContract,
+  makeReportContract,
+  previewReportContract,
+  removeCostLineContract,
   addActionContract,
   addDecisionContract,
   assignContract,
@@ -82,4 +97,19 @@ export default defineRoutes('quality.ncr', manifest, async (app) => {
   app.post('/quality/ncr/:ncrId/decisions/:decisionId/approve', { schema: approveDecisionContract }, async (request) => approveDecision(request, request.params.ncrId, request.params.decisionId, request.body, idempotencyKeyFrom(request)))
   app.post('/quality/ncr/:ncrId/decisions/:decisionId/carry-out', { schema: carryOutContract }, async (request) => carryOut(request, request.params.ncrId, request.params.decisionId, request.body, idempotencyKeyFrom(request)))
   app.post('/quality/ncr/:ncrId/decisions/:decisionId/rework', { schema: reworkContract }, async (request) => reworkFromDecision(request, request.params.ncrId, request.params.decisionId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-113: the cost (QHS-086, the cost grain), the concessions asked of the customer (QHS-085), the report (ncr-pdf).
+  app.get('/quality/ncr/:ncrId/cost', { schema: costContract }, async (request) => ncrCost(request, request.params.ncrId))
+  app.post('/quality/ncr/:ncrId/cost/lines', { schema: addCostLineContract }, async (request, reply) => reply.code(201).send(await addCostLine(request, request.params.ncrId, request.body, idempotencyKeyFrom(request))))
+  app.patch('/quality/ncr/:ncrId/cost/lines/:lineId', { schema: editCostLineContract }, async (request) => editCostLine(request, request.params.ncrId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/quality/ncr/:ncrId/cost/lines/:lineId', { schema: removeCostLineContract }, async (request) => removeCostLine(request, request.params.ncrId, request.params.lineId, request.query, idempotencyKeyFrom(request)))
+  app.post('/quality/ncr/:ncrId/cost/compute', { schema: computeCostContract }, async (request) => computeCost(request, request.params.ncrId, idempotencyKeyFrom(request)))
+  app.post('/quality/ncr/:ncrId/concessions', { schema: askConcessionContract }, async (request, reply) => reply.code(201).send(await askConcession(request, request.params.ncrId, request.body, idempotencyKeyFrom(request))))
+  app.patch('/quality/ncr/:ncrId/concessions/:concessionId', { schema: editConcessionContract }, async (request) => editConcession(request, request.params.ncrId, request.params.concessionId, request.body, idempotencyKeyFrom(request)))
+  app.post('/quality/ncr/:ncrId/concessions/:concessionId/answer', { schema: answerConcessionContract }, async (request) => answerConcession(request, request.params.ncrId, request.params.concessionId, request.body, idempotencyKeyFrom(request)))
+  app.get('/quality/ncr/:ncrId/report', { schema: previewReportContract }, async (request, reply) => {
+    const { pdf, fileName } = await previewNcrReport(request, request.params.ncrId, request.query)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
+  app.post('/quality/ncr/:ncrId/report', { schema: makeReportContract }, async (request, reply) => reply.code(201).send(await makeNcrReport(processFiles(), request, request.params.ncrId, request.body, idempotencyKeyFrom(request))))
 })

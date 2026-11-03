@@ -206,7 +206,9 @@
     "tab": {
       "overview": "Overview",
       "cuts": "Cuts",
-      "moves": "Moves"
+      "moves": "Moves",
+      "grade": "Measurements & grade",
+      "defects": "Defects & photos"
     },
     "movesLabel": "Moves of hide {code}",
     "facts": {
@@ -222,8 +224,7 @@
       "area": "Area measured at receipt",
       "left": "Area left",
       "place": "Where",
-      "received": "Came with",
-      "readOnly": "Measured at receipt and never changed here: a different area is an adjustment move; grade, shade and defects cannot be corrected from the office yet."
+      "received": "Came with"
     },
     "area": {
       "title": "What happened to its area",
@@ -238,8 +239,7 @@
     },
     "defects": {
       "title": "Defects",
-      "none": "No defect recorded at receipt.",
-      "photos": "Photos of the hide come later: the office cannot add them yet."
+      "none": "No defect recorded at receipt."
     },
     "side": {
       "title": "Its lot and the next step",
@@ -306,6 +306,233 @@
         "noScrap": "Your role may not scrap stock (inventory.scrap).",
         "gone": "A selected hide has nothing in stock (used up, scrapped or at a work order): take it out of the selection.",
         "reservedAlready": "Reserved already: release that reservation first."
+      }
+    },
+    "grading": {
+      "title": "Grade and shade",
+      "hint": "Correct the grade, the shade group and the thickness: Apply saves them together.",
+      "viewOnly": "You can view, not change: your role does not correct hides.",
+      "grade": "Grade",
+      "shade": "Shade group",
+      "thickness": "Thickness (mm)",
+      "thicknessHint": "Above 0, at most two decimals: 1,20.",
+      "noGrade": "No grade",
+      "unsorted": "Not sorted",
+      "gradeOption": "{grade} — {share} % usable",
+      "gradeOptionRetired": "{grade} — {share} % usable (retired)",
+      "outOfShadeOption": "{shade} (out of shade)",
+      "byTextHint": "Graded {grade} by its text at receipt, not yet as a grade record.",
+      "recordByText": "Record grade {grade} as the hide’s grade",
+      "shadeTextHint": "Shade written at receipt: {shade} (no shade group).",
+      "shadeText": "{shade} (written at receipt)",
+      "ungraded": "Ungraded",
+      "byText": "From its text at receipt",
+      "outOfShade": "Out of shade: it goes in no order that asks one shade.",
+      "reason": "Why it changes",
+      "reasonHint": "The hide was cut already: say why its grade, shade, thickness or defects change.",
+      "areaLine": "Measured at receipt: {area} ({other})",
+      "areaFixed": "Measured at receipt and never changed: a correction is an adjustment move.",
+      "correctArea": "Correct the area…",
+      "readOnly": {
+        "CONSUMED": "Hide {code} is used up: its grade and shade stay as they were cut.",
+        "SCRAPPED": "Hide {code} was scrapped: it is read only.",
+        "RETURNED": "Hide {code} went back to the supplier: it is read only.",
+        "other": "Hide {code} cannot be changed now."
+      },
+      "readOnlyBody": "Nothing on this tab can be changed any more.",
+      "changedMeanwhile": "Someone changed this hide meanwhile: it was read again. Check your change, then apply it again or discard it.",
+      "saved": "Saved.",
+      "held": {
+        "saving": "Saving…",
+        "readOnly": "This hide is read only.",
+        "noRight": "Your role does not correct hides (inventory.hides.manage).",
+        "nothing": "Nothing changed yet.",
+        "thickness": "The thickness is above 0 mm, with at most two decimals (1,20).",
+        "defectsLong": "The defects are at most 2000 characters.",
+        "reasonLong": "The reason is at most 500 characters.",
+        "reason": "Say why it changes: the hide was cut already."
+      },
+      "refused": {
+        "reason": "Say why it changes: the hide was cut already.",
+        "grade": "This grade cannot be given to this hide: it is retired or not one of the article’s grades.",
+        "shade": "This shade group does not fit the hide: another article, colour or lot, or retired.",
+        "thickness": "The thickness was not accepted: above 0 mm, at most two decimals.",
+        "defects": "The defects were not accepted: at most 2000 characters.",
+        "readOnly": "This hide cannot be changed any more: it is used up, scrapped or returned.",
+        "stale": "Someone changed this hide meanwhile: it was read again. Check and apply again.",
+        "forbidden": "Your role may not correct this hide."
+      },
+      "factsHint": "Measured at receipt and never changed here: a different area is an adjustment move.",
+      "factsLink": "Grade, shade and thickness are on Measurements & grade.",
+      "usable": {
+        "title": "Usable area",
+        "hint": "How much of the hide can be cut: the share of the article’s rule for its grade, else the grade’s own share.",
+        "share": "Usable share",
+        "byRule": "Grade {grade}: this article’s rule",
+        "byGrade": "Grade {grade}: the grade’s default",
+        "ofMeasured": "Of the area measured",
+        "ofLeft": "Of what is left",
+        "panels": "Panels it may be cut for",
+        "everyPanel": "Every panel",
+        "unknown": "Ungraded: its usable area is unknown. Give it a grade to see it.",
+        "estimates": "At each grade it may be given (of what is left)",
+        "noGrades": "The article has no grades yet: add them on the material’s Grades and usable area.",
+        "atGrade": "Grade {grade} · {share} %",
+        "now": "Its grade now",
+        "ruleShort": "The article’s rule",
+        "gradeShort": "The grade’s default"
+      },
+      "changes": {
+        "title": "Changes",
+        "empty": "No grade, shade, thickness or defects changed since receipt.",
+        "line": "{field} {from} → {to}",
+        "field": {
+          "grade": "Grade",
+          "shade": "Shade",
+          "thicknessMm": "Thickness",
+          "defects": "Defects"
+        },
+        "defects": "Defects rewritten",
+        "none": "none",
+        "noField": "Changed",
+        "why": "Why: {reason}",
+        "by": {
+          "office": "In the office",
+          "floor": "On the floor",
+          "system": "By the system",
+          "other": "Elsewhere"
+        }
+      }
+    },
+    "measure": {
+      "title": "Measures against the tannery",
+      "label": "Measures of this hide",
+      "count_one": "{count} measure",
+      "count_other": "{count} measures",
+      "none": "Not measured again",
+      "noneBody": "Its area is the one measured at receipt.",
+      "again": "Measure again…",
+      "latest": "The one that counts",
+      "atInspection": "At the incoming inspection",
+      "fromTannery": "Tannery’s area",
+      "fromReceipt": "Area at receipt",
+      "toleranceLine": "Tolerance {percent} %, agreed on the purchase order line.",
+      "toleranceDefault": "Tolerance {percent} %: the default (the order line has none).",
+      "col": {
+        "when": "When",
+        "declared": "Against",
+        "measured": "Measured",
+        "difference": "Difference",
+        "outcome": "Outcome",
+        "by": "Measured by",
+        "note": "Note"
+      },
+      "outcome": {
+        "WITHIN": "Within tolerance",
+        "SHORT": "Short",
+        "OVER": "Over"
+      },
+      "by": {
+        "office": "The office",
+        "floor": "A floor worker",
+        "floorHidden": "A floor worker (the site shows no names)"
+      },
+      "held": {
+        "cut": "The hide was cut already: only a whole hide is measured against the tannery’s area.",
+        "CONSUMED": "The hide is used up: there is nothing left to measure.",
+        "SCRAPPED": "The hide was scrapped: it is not measured any more.",
+        "RETURNED": "The hide went back to the supplier: it is not measured any more.",
+        "notWhole": "Only a whole hide is measured against the tannery’s area.",
+        "noRight": "Your role does not measure hides (inventory.hides.manage).",
+        "noAdjust": "Correcting the stock is an adjustment: your role needs inventory.adjust.",
+        "reading": "Reading the measures…",
+        "saving": "Saving…",
+        "measured": "Type the area measured.",
+        "measuredBad": "The area measured is above 0, with at most four decimals.",
+        "declaredBad": "The tannery’s area is above 0, with at most four decimals.",
+        "noteLong": "A note is at most 500 characters."
+      },
+      "refused": {
+        "adjust": "The stock correction was refused: it needs inventory.adjust and an active adjustment reason.",
+        "measured": "The area measured was not accepted: above 0, at most four decimals.",
+        "declared": "The tannery’s area was not accepted: above 0, at most four decimals.",
+        "when": "A hide is measured now or before, never later.",
+        "notWhole": "This hide cannot be measured now: only a whole hide is.",
+        "notOnePlace": "The hide is not in one place of the site’s stock (it may be at a work order): bring it back first.",
+        "forbidden": "Your role may not measure this hide."
+      },
+      "dialog": {
+        "title": "Measure hide {code} again",
+        "correctTitle": "Correct the area of hide {code}",
+        "hint": "Only a whole hide is measured against the tannery’s area. The area received never changes: a measure that differs can correct the stock with an adjustment move.",
+        "measured": "Area measured ({unit})",
+        "declared": "Tannery’s area ({unit})",
+        "declaredHint": "Optional: left empty, the measure is set against the area received ({area}).",
+        "note": "Note",
+        "correct": "Also correct the stock to the area measured (an adjustment move)",
+        "correctNote": "Note for the adjustment",
+        "correctHint": "Optional: the move says the measure in words by itself.",
+        "save": "Save the measure",
+        "saveCorrect": "Save and correct the stock",
+        "doneLine": "Measured {measured} against {declared}: {percent} %.",
+        "movedOut": "The stock was corrected: {quantity} out.",
+        "movedIn": "The stock was corrected: {quantity} in.",
+        "stockSaidIt": "The stock already said this area: no move was needed.",
+        "stockUntouched": "The stock was not changed."
+      }
+    },
+    "defectsTab": {
+      "title": "Defects",
+      "hint": "Holes, scars, veins and brand marks, and where they are.",
+      "field": "Defects and where",
+      "placeholder": "Two tick holes near the back; a vein on the neck",
+      "overviewLink": "Defects and photos of this hide",
+      "map": {
+        "title": "Defect map",
+        "later": "Comes in a later wave",
+        "body": "Marks and quality zones drawn on the hide’s photo (SCM-251). It waits for the marks the incoming inspection records on each hide."
+      }
+    },
+    "photos": {
+      "title": "Photos · {count}",
+      "hint": "Taken at the cutting table, at the incoming inspection, or added in the office.",
+      "place": {
+        "CUTTING_TABLE": "Cutting table",
+        "INSPECTION": "Incoming inspection",
+        "floor": "Taken on a tablet",
+        "office": "Added in the office"
+      },
+      "alt": "Photo {n} of {count} of hide {code}: {place}",
+      "lightboxTitle": "Hide {code} · photo {n} of {count}",
+      "open": "Open photo {n}: {place}",
+      "unread": "{name} could not be read.",
+      "loading": "Reading the photos…",
+      "failed": "The photos couldn’t be read",
+      "none": "No photos yet",
+      "noneBody": "Photos taken at the cutting table appear here; the office can add one.",
+      "noRead": "Photos need files.read",
+      "noReadBody": "Your role does not read files: ask an administrator if you need the photos.",
+      "add": "Add a photo",
+      "addHint": "JPEG, PNG, WebP or HEIC, up to 15 MB. Kept on the hide, for the office.",
+      "held": {
+        "noUpload": "Adding a photo needs files.upload."
+      },
+      "listLabel": "Photos of this hide",
+      "uploadsLabel": "Photos being added",
+      "notAdded": "Not added",
+      "sending": "Adding {name}…",
+      "dismiss": "Dismiss {name}",
+      "receiptNote": "Photos taken at receipt stay on the goods receipt: they are not kept on the hide yet.",
+      "problem": {
+        "notImage": "Not an image: a photo is a JPEG, PNG, WebP or HEIC file.",
+        "empty": "The file is empty.",
+        "tooBig": "Larger than 15 MB.",
+        "quarantined": "The store’s check did not match the file: it was set aside.",
+        "forbidden": "Your role may not add files to this hide.",
+        "offline": "No connection: the photo was not added.",
+        "refused": "The photo was refused as it is.",
+        "failed": "The photo was not added. Try again.",
+        "store": "The file store did not take the photo. Try again."
       }
     }
   },

@@ -491,6 +491,31 @@ const SAFETY_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.free
   floor_supervisor: ['safety.view'],
 })
 /**
+ * B-W2b-118 (quality rules; QHS-154, QHS-300; design quality.settings SCR-260): quality reads the rules page and keeps the
+ * alert and escalation rules (the quality manager of the design is the quality inspector's role); the production manager
+ * and the floor supervisor read it (the rules quote back where a button waits). Changing who may sign what and the result
+ * rules stays quality.settings.manage (the owner's, B-W1-34). Office only; owner and read-only from every().
+ */
+const QUALITY_RULES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.rules.view', 'quality.alerts.manage'],
+  production_manager: ['quality.rules.view'],
+  floor_supervisor: ['quality.rules.view'],
+})
+/**
+ * B-W2b-126 (the repair station and second quality, MES-132, MES-133; design floor.mywork "repair queue", production.scrap
+ * "Downgrade to second quality"): the production manager and the quality inspector send scrapped garments to second quality
+ * in the office (a stock decision: it puts them into a place); on the floor the operators and team leaders see the repair
+ * queue and scan bundles in and out at a repair station of their site. Owner from every().
+ */
+const REWORK_REPAIR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.downgrade'],
+  quality_inspector: ['production.downgrade'],
+})
+const REWORK_REPAIR_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  operator: ['production.repair'],
+  team_leader: ['production.repair'],
+})
+/**
  * B-W2b-122 (the risk assessment, the DVR; QHS-230, QHS-234; design plant.risk): the safety officer keeps the assessments,
  * freezes the consultant's versions, records signed papers and keeps the improvement plan (no money: a measure's cost is the
  * cost grain it does not hold), and signs for the role it holds (an in-house RSPP); the occupational doctor signs a version
@@ -567,6 +592,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (AMENDMENTS_DOCUMENTS_ADDS[key] ?? []) : []),
   // B-W2b-120
   ...(audience === 'office' ? (SAFETY_ADDS[key] ?? []) : []),
+  // B-W2b-118
+  ...(audience === 'office' ? (QUALITY_RULES_ADDS[key] ?? []) : []),
+  // B-W2b-126
+  ...((audience === 'office' ? REWORK_REPAIR_ADDS : REWORK_REPAIR_FLOOR_ADDS)[key] ?? []),
   // B-W2b-122
   ...(audience === 'office' ? (RISK_ADDS[key] ?? []) : [])]
 /**

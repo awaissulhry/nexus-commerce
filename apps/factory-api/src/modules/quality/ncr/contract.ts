@@ -1,5 +1,10 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output, quantity } from '@nexus/factory-domain/core/contracts'
+import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
+import { money, notMoney } from '@nexus/factory-domain/money/marked'
+import { CAPA_STATUSES, CAPA_TYPES } from '@nexus/factory-domain/quality/capa/rules'
+import { CONCESSION_ANSWERS, CONCESSION_LIMITS, CONCESSION_STATUSES } from '@nexus/factory-domain/quality/ncr/concession'
+import { COST_KINDS, COST_LIMITS, COST_SOURCES } from '@nexus/factory-domain/quality/ncr/cost'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { DEFECT_CLASSES, DISPOSITION_FOLLOW_UPS, DISPOSITION_MOVES, DISPOSITION_OUTCOMES, QUALITY_STAGES } from '@nexus/factory-domain/quality/defects/rules'
 import { HOLD_LIMITS, HOLD_SUBJECT_TYPES } from '@nexus/factory-domain/quality/holds/rules'
@@ -24,8 +29,10 @@ import {
  * Nonconformances (B-W2a-47; QHS-080 … QHS-091; design quality.ncr SCR-144: ncr-metrics, ncr-grid, ncr-board; SCR-145:
  * the NCR record — Problem & evidence, Containment, Disposition, Linked records — and the pop-ups ncr-new, ncr-close).
  * Office routes; every write takes an Idempotency-Key and the NCR's version (the containment action's or decision's for
- * theirs). Refusals in words: `body/<field>` (400), `stage/<CHECK>` (409, the board's move and the close). No cost, no
- * price; no worker's name.
+ * theirs). Refusals in words: `body/<field>` (400), `stage/<CHECK>` (409, the board's move and the close). No price; no
+ * worker's name. B-W2b-113: the NCR's cost (QHS-086) only by the cost grain (money.cost: dropped for a reader without
+ * it, refused from a writer without it), its concessions asked of the customer (QHS-085), its report (ncr-pdf), its cause
+ * and the CAPA it is escalated to (the CAPA module's reads).
  */
 
 const stage = z.enum(NCR_STAGES)
@@ -80,10 +87,18 @@ export const summaryView = output({
   version: z.number().int(),
   createdAt: instant(),
   updatedAt: instant(),
+  /** B-W2b-113 (ncr-grid "CAPA (link)"): the CAPA it is escalated to, when the reader may see it (quality.capa.view). */
+  capa: output({ id: id(), number: z.string(), status: z.enum(CAPA_STATUSES) }).nullable(),
+  /** B-W2b-113 (ncr-grid "Cost (cost grain, W2b)"): the sum of its cost lines in minor units (null: none), cost grain only. */
+  cost: money.cost(z.number().int().nullable()),
+  /** B-W2b-113: the company's currency (ISO 4217) the cost is in. */
+  currency: z.string(),
 })
 
 export const ncrView = summaryView.extend({
   description: z.string().nullable(),
+  /** B-W2b-113 (ncr-what "cause (W2b)"): the cause code (quality.causes), read-only once decided. */
+  cause: output({ id: id(), code: z.string(), labelIt: z.string(), labelEn: z.string() }).nullable(),
   foundBy: output({ kind: z.enum(['USER', 'WORKER', 'NONE']), userId: id().nullable(), workerId: id().nullable() }),
   closedById: id().nullable(),
   closeNote: z.string().nullable(),
@@ -145,6 +160,28 @@ const decisionView = output({
 })
 
 const linkView = output({ id: id(), recordType: z.string(), recordId: id(), label: z.string().nullable(), note: z.string().nullable(), createdAt: instant(), createdById: id().nullable() })
+
+/** B-W2b-113 (QHS-085): a concession asked of the customer and, once recorded, their answer with its file. */
+const concessionView = output({
+  id: id(),
+  seq: z.number().int(),
+  party: output({ id: id(), code: z.string(), name: z.string() }),
+  contact: output({ id: id(), name: z.string(), email: z.string().nullable() }).nullable(),
+  ask: z.string(),
+  proposal: z.string(),
+  status: z.enum(CONCESSION_STATUSES),
+  askedAt: instant(),
+  askedById: id().nullable(),
+  answer: z.string().nullable(),
+  answeredAt: instant().nullable(),
+  /** The name of who answered for the customer (as they signed). */
+  answeredBy: z.string().nullable(),
+  /** Their written answer: a file of the concession (recordType NcrConcession). */
+  answerFile: output({ id: id(), originalName: z.string(), status: z.string() }).nullable(),
+  /** The office person who recorded the answer (null: by the customer's link, W2b-3). */
+  recordedById: id().nullable(),
+  version: z.number().int(),
+})
 const holdRow = output({ id: id(), status: z.string(), subjectType: z.string(), subjectIds: z.array(id()), reasonCode: z.string(), reasonNote: z.string().nullable(), placedAt: instant(), decidedHere: z.boolean() })
 
 export const recordView = output({
@@ -154,13 +191,30 @@ export const recordView = output({
   links: z.array(linkView),
   holds: z.array(holdRow),
   register: output({ id: id(), reference: z.string(), status: z.string() }).nullable(),
+  /** B-W2b-113: the CAPA it is escalated to, with its title (the CAPA module's reads; null: none, or one the reader may not see). */
+  capaRecord: output({ id: id(), number: z.string(), title: z.string(), type: z.enum(CAPA_TYPES), status: z.enum(CAPA_STATUSES) }).nullable(),
+  /** Escalated to a CAPA the reader may not see. */
+  capaElsewhere: z.boolean(),
+  /** B-W2b-113 (QHS-085): the concessions asked of the customer, oldest first. */
+  concessions: z.array(concessionView),
+  /** B-W2b-113 (ncr-pdf): the versions of its report kept, newest first. */
+  reports: z.array(output({ id: id(), version: z.number().int(), language: z.string(), fileId: id(), createdAt: instant(), createdById: id().nullable() })),
   /** The next stage on the board and what it needs (the Stepper's "what is missing"). */
   next: output({ stage: stage.nullable(), checks: z.array(check), ready: z.boolean() }),
   /** The closing checklist (ncr-close). */
   closing: output({ checks: z.array(check), ready: z.boolean() }),
   /** The band's actions: null = allowed, words = why not. */
-  actions: output({ edit: z.string().nullable(), contain: z.string().nullable(), decide: z.string().nullable(), close: z.string().nullable(), cancel: z.string().nullable() }),
-  may: output({ manage: z.boolean(), approve: z.boolean(), close: z.boolean(), raise: z.boolean() }),
+  actions: output({
+    edit: z.string().nullable(),
+    contain: z.string().nullable(),
+    decide: z.string().nullable(),
+    close: z.string().nullable(),
+    cancel: z.string().nullable(),
+    /** B-W2b-113: asking a concession (a critical NCR: never; closed or cancelled: no more). */
+    concession: z.string().nullable(),
+  }),
+  /** B-W2b-113: `cost` = the reader sees the NCR's cost (the cost grain at its site); `escalate` = quality.ncr.manage + quality.capa.view. */
+  may: output({ manage: z.boolean(), approve: z.boolean(), close: z.boolean(), raise: z.boolean(), cost: notMoney(z.boolean()), escalate: z.boolean() }),
 })
 
 const one = output({ record: recordView })
@@ -267,6 +321,8 @@ export const getContract = defineContract({ params: ncrParams, response: { 200: 
 
 const content = {
   title: text(NCR_LIMITS.title * 2),
+  /** B-W2b-113: the cause code (an active one of quality.causes); null clears it. Read-only once decided. */
+  causeCodeId: id().nullable(),
   description: text(NCR_LIMITS.description * 2).nullable(),
   source,
   foundAt,
@@ -418,6 +474,12 @@ export const reworkContract = defineContract({
     description: text(1000).optional(),
     split: z.boolean().optional(),
     printerId: id().nullable().optional(),
+    /**
+     * B-W2b-113 (plan default for garments still in work): scrap them all through the rework scrap path — the rework order
+     * opened and recorded done with every garment scrapped in the same request (production's own move; the cost ledger
+     * posts their scrap).
+     */
+    scrapAll: z.boolean().optional(),
   }),
   response: { 200: output({ record: recordView, reworkId: id(), ticket: z.unknown().nullable() }) },
 })
@@ -454,4 +516,103 @@ export const saveSettingsContract = defineContract({
     version: z.number().int().min(0),
   }),
   response: { 200: output({ settings: ncrSettings, mayChange: z.boolean() }) },
+})
+
+// ---- B-W2b-113: the cost (QHS-086), the concessions (QHS-085), the report (ncr-pdf) ----------------------------------
+
+const costLine = output({
+  id: id(),
+  seq: z.number().int(),
+  kind: z.enum(COST_KINDS),
+  source: z.enum(COST_SOURCES),
+  description: z.string().nullable(),
+  /** Minor units of the company's currency, from 0. */
+  amount: money.cost(z.number().int()),
+  /** The record a computed line comes from (a stock move, a rework order), in words; null on a typed line. */
+  record: output({ type: z.string(), id: id(), label: z.string().nullable() }).nullable(),
+  version: z.number().int(),
+  createdAt: instant(),
+  createdById: id().nullable(),
+  updatedAt: instant(),
+})
+
+/** The Cost tab (ncr-cost): the lines, the total, whether the computed lines are up to date, what waits to be valued. */
+export const costView = output({
+  ncrId: id(),
+  number: z.string(),
+  currency: z.string(),
+  lines: z.array(costLine),
+  total: money.cost(z.number().int()),
+  computed: output({
+    /** A computation now would change nothing. */
+    upToDate: z.boolean(),
+    add: z.number().int(),
+    change: z.number().int(),
+    remove: z.number().int(),
+    /** Records of the NCR not valued yet (a move or a rework the ledger has not costed): why, in words. */
+    waiting: z.array(output({ recordType: z.string(), recordId: id(), label: z.string().nullable(), words: z.string() })),
+  }),
+  /** Why the cost cannot change now (null: it can): closed or cancelled, or no quality.ncr.manage. */
+  held: z.string().nullable(),
+  version: z.number().int(),
+})
+
+const costAnswer = output({ sheet: costView })
+const lineParams = input({ ncrId: id(), lineId: id() })
+
+export const costContract = defineContract({ params: ncrParams, response: { 200: costAnswer } })
+export const addCostLineContract = defineContract({
+  params: ncrParams,
+  body: input({ kind: z.enum(COST_KINDS), description: text(COST_LIMITS.description * 2).nullable().optional(), amount: money.cost(z.number().int()) }),
+  response: { 201: costAnswer },
+})
+export const editCostLineContract = defineContract({
+  params: lineParams,
+  body: input({ version: version(), kind: z.enum(COST_KINDS).optional(), description: text(COST_LIMITS.description * 2).nullable().optional(), amount: money.cost(z.number().int()) }),
+  response: { 200: costAnswer },
+})
+export const removeCostLineContract = defineContract({ params: lineParams, querystring: input({ version: z.coerce.number().int().min(1) }), response: { 200: costAnswer } })
+export const computeCostContract = defineContract({
+  params: ncrParams,
+  body: input({}),
+  response: { 200: output({ sheet: costView, added: z.number().int(), changed: z.number().int(), removed: z.number().int() }) },
+})
+
+const concessionParams = input({ ncrId: id(), concessionId: id() })
+export const askConcessionContract = defineContract({
+  params: ncrParams,
+  body: input({ partyId: id(), contactId: id().nullable().optional(), ask: text(CONCESSION_LIMITS.ask * 2), proposal: text(CONCESSION_LIMITS.proposal * 2) }),
+  response: { 201: one },
+})
+export const editConcessionContract = defineContract({
+  params: concessionParams,
+  body: input({ version: version(), contactId: id().nullable().optional(), ask: text(CONCESSION_LIMITS.ask * 2).optional(), proposal: text(CONCESSION_LIMITS.proposal * 2).optional() }),
+  response: { 200: one },
+})
+/** The customer's written answer, recorded by the office (the link page is W2b-3): upload the file first (POST /files, recordType NcrConcession). */
+export const answerConcessionContract = defineContract({
+  params: concessionParams,
+  body: input({
+    version: version(),
+    status: z.enum(CONCESSION_ANSWERS),
+    answer: text(CONCESSION_LIMITS.answer * 2).nullable().optional(),
+    answeredBy: text(CONCESSION_LIMITS.answeredBy * 2),
+    answeredAt: instant(),
+    answerFileId: id().nullable().optional(),
+  }),
+  response: { 200: one },
+})
+
+/** The report as it would be kept, with the "preview" banner: made in memory, stored nowhere (default language: the supplier's, else Italian). */
+export const previewReportContract = defineContract({ params: ncrParams, querystring: input({ language: z.enum(DOCUMENT_LANGUAGES).optional() }), response: {} })
+export const makeReportContract = defineContract({
+  params: ncrParams,
+  body: input({ language: z.enum(DOCUMENT_LANGUAGES).optional() }),
+  response: {
+    201: output({
+      report: output({ id: id(), version: z.number().int(), language: z.string(), number: z.string().nullable(), fileId: id(), createdAt: instant(), createdById: id().nullable() }),
+      /** False: the newest version already showed exactly this. */
+      made: z.boolean(),
+    }),
+  },
 })

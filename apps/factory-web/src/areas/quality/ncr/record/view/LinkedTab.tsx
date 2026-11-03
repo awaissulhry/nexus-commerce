@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { Link2, Lock, Unlink } from 'lucide-react'
+import { FileText, Link2, Lock, Unlink } from 'lucide-react'
 import { Card, SummaryTable } from '@nexus/ui/components'
 import { Button, Tag } from '@nexus/ui/primitives'
 import type { NcrLink, NcrRecord } from '../../api'
@@ -15,6 +15,7 @@ import type { RecordWords } from './words'
  * complaint · CAPA · supplier · lots · shipments · PPE register entry"): every record this NCR touches, in groups, each a
  * real link (its own page once built, else the record panel). Link… finds a record by number (global search, the kinds an
  * NCR links); Unlink is kept in Activity; the source stays linked. The holds this NCR decides close with it, or now.
+ * B-W2b-113: the CAPA it is escalated to (the CAPA module's reads) and the versions of its report kept (ncr-pdf).
  */
 export function LinkedTab({ model, record, words, actions }: { model: NcrRecordModel; record: NcrRecord; words: RecordWords; actions?: NcrRecordActions }) {
   const { t, r, say, person, when } = words
@@ -134,6 +135,23 @@ export function LinkedTab({ model, record, words, actions }: { model: NcrRecordM
           <p className="fw-q-hint">{r('linked.holdsHint')}</p>
         </section>
       </Card>
+      <Card padded>
+        <section className="fw-q-stack" aria-labelledby="ncr-links-capa">
+          <h2 id="ncr-links-capa" className="fw-ncr-h3">
+            {r('linked.capa')}
+          </h2>
+          {record.capaRecord ? (
+            <p>
+              <Link className="fw-q-link" href={recordHref(model.prefix, { type: 'Capa', id: record.capaRecord.id, label: record.capaRecord.number })}>
+                {`${record.capaRecord.number} · ${record.capaRecord.title}`}
+              </Link>{' '}
+              <Tag tone="info">{r(`capaStatus.${record.capaRecord.status}`)}</Tag>
+            </p>
+          ) : (
+            <p className="fw-q-hint">{record.capaElsewhere ? r('side.capaElsewhere') : r('linked.capaNone')}</p>
+          )}
+        </section>
+      </Card>
       {group('follow', r('linked.follow'), r('linked.followNone'))}
       {group('other', r('linked.other'), r('linked.otherNone'))}
       <Card padded>
@@ -151,6 +169,36 @@ export function LinkedTab({ model, record, words, actions }: { model: NcrRecordM
           ) : (
             <p className="fw-q-hint">{ncr.style?.ppe ? r('linked.registerPpe') : r('side.registerNotPpe')}</p>
           )}
+        </section>
+      </Card>
+      <Card padded>
+        <section className="fw-q-stack" aria-labelledby="ncr-links-reports">
+          <h2 id="ncr-links-reports" className="fw-ncr-h3">
+            {r('report.versions')}
+          </h2>
+          {record.reports.length === 0 ? (
+            <p className="fw-q-hint">{r('report.none')}</p>
+          ) : (
+            <SummaryTable
+              label={r('report.versions')}
+              density="roomy"
+              stackOnPhone
+              columns={[r('report.col.version'), r('report.col.language'), r('report.col.kept'), t('col.actions')]}
+              widths={['20%', '20%', '36%', undefined]}
+              rows={record.reports.map((report) => ({
+                id: report.id,
+                cells: [
+                  r('report.version', { version: report.version }),
+                  r(`report.language.${report.language === 'en' ? 'en' : 'it'}`),
+                  `${when(report.createdAt)} · ${person(report.createdById)}`,
+                  <Button key="open" size="xs" variant="quiet" onClick={() => actions?.onOpenFile?.(report.fileId)}>
+                    <FileText size={13} aria-hidden /> {r('report.open')}
+                  </Button>,
+                ],
+              }))}
+            />
+          )}
+          <p className="fw-q-hint">{r('report.hint')}</p>
         </section>
       </Card>
     </div>

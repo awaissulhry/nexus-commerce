@@ -109,6 +109,7 @@ const ORDER: Prisma.NonconformanceOrderByWithRelationInput[] = [{ createdAt: 'de
 export async function listNcrs(caller: CommandCaller, query: ListQuery) {
   const now = serverClock.now()
   const where = whereOf(caller, query, now)
+  const context = officeOf(caller)
   return caller.withClient(async (client) => {
     let rows = await client.nonconformance.findMany({ where, select: NCR_COLUMNS, orderBy: ORDER, take: query.waiting ? 1000 : NCR_LIMITS.list + 1 })
     if (query.waiting) {
@@ -116,7 +117,7 @@ export async function listNcrs(caller: CommandCaller, query: ListQuery) {
       rows = rows.filter((row) => waiting.has(row.id))
     }
     const shown = rows.slice(0, NCR_LIMITS.list)
-    const facts = await summaryFactsOf(client, shown)
+    const facts = await summaryFactsOf(client, shown, context)
     return { items: shown.map((row) => ncrSummary(row, facts, now)), truncated: rows.length > NCR_LIMITS.list }
   })
 }
@@ -144,6 +145,7 @@ export async function ncrCounts(caller: CommandCaller, query: { readonly siteId?
 export async function ncrBoard(caller: CommandCaller, query: Omit<ListQuery, 'stage' | 'open'>) {
   const now = serverClock.now()
   const closedSince = new Date(now.getTime() - NCR_LIMITS.closedLaneDays * 86_400_000)
+  const context = officeOf(caller)
   return caller.withClient(async (client) => {
     const lanes = []
     for (const stage of BOARD_LANES) {
@@ -155,7 +157,7 @@ export async function ncrBoard(caller: CommandCaller, query: Omit<ListQuery, 'st
       }
       const count = query.waiting ? rows.length : await client.nonconformance.count({ where })
       const shown = rows.slice(0, NCR_LIMITS.list)
-      const facts = await summaryFactsOf(client, shown)
+      const facts = await summaryFactsOf(client, shown, context)
       const holds = shown.length === 0 ? [] : await client.qualityHold.groupBy({ by: ['ncrId'], where: { ncrId: { in: shown.map((row) => row.id) }, status: 'ACTIVE' }, _count: { _all: true } })
       const activeHolds = new Map(holds.map((row) => [row.ncrId, row._count._all]))
       const cards = shown.map((row) => {

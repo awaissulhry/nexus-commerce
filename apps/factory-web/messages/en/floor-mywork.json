@@ -121,7 +121,9 @@
     "rows": "Move between the tasks",
     "open": "Open the task with the focus",
     "messages": "Move between the messages",
-    "openMessage": "Open the message with the focus"
+    "openMessage": "Open the message with the focus",
+    "repair": "Move between the repairs",
+    "openRepair": "Open the repair with the focus"
   },
   "material": {
     "IN_STOCK": "Material in stock",
@@ -148,7 +150,12 @@
     "messages": "Messages",
     "messagesCount_one": "{count} message to read",
     "messagesCount_other": "{count} messages to read",
-    "failed": "The messages could not be read. They show here when the office answers."
+    "failed": "The messages could not be read. They show here when the office answers.",
+    "repair": "Repair",
+    "repairHere_one": "{count} bundle to repair at this station",
+    "repairHere_other": "{count} bundles to repair at this station",
+    "repairSite_one": "{count} bundle to repair at the site",
+    "repairSite_other": "{count} bundles to repair at the site"
   },
   "messages": {
     "title": "Messages on your work orders",
@@ -183,5 +190,87 @@
       "OTHER_STATION": "The material call did not go: only a team leader calls for another station.",
       "TYPE_INACTIVE": "The material call did not go: the office switched it off. Ask your team leader."
     }
+  },
+  "repair": {
+    "title": "Repair",
+    "noStation": "No station: the whole site",
+    "none": {
+      "title": "Nothing to repair",
+      "body": "No bundle is waiting for repair at this site. Bundles sent back from a check show here."
+    },
+    "here": "Here",
+    "since": "sent back {time}",
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "count_one": "{count} bundle to repair",
+    "count_other": "{count} bundles to repair",
+    "state": {
+      "WAITING": "Waiting",
+      "IN_REPAIR": "In repair",
+      "held": "On hold"
+    },
+    "kind": "Repair",
+    "fact": {
+      "reason": "Why",
+      "found": "Found at",
+      "foundOutside": "A check outside the routing",
+      "since": "Sent back",
+      "station": "Scanned in at"
+    },
+    "held": {
+      "onHold": "The work order is on hold: the repair waits until the hold is lifted.",
+      "notOpen": "The work order is no longer open: nothing is repaired on it."
+    },
+    "scanIn": "Scan bundle {code} to start the repair.",
+    "scanOut": "Scan bundle {code} when the repair is done.",
+    "noBundleIn": "These garments travel without a bundle ticket: start the repair with the button.",
+    "noBundleOut": "These garments travel without a bundle ticket: say the repair is done with the button.",
+    "startWithout": "Start the repair",
+    "doneWithout": "Repair done",
+    "out": {
+      "title": "How did {code} come out?",
+      "allGood_one": "All good · {count}",
+      "allGood_other": "All good · {count}",
+      "good": "Good",
+      "of_one": "of {count}",
+      "of_other": "of {count}",
+      "confirm": "Done: good {good}, scrapped {scrap}",
+      "confirmEmpty": "Type the good ones",
+      "scrapSaid_one": "{count} garment will be scrapped: the office replaces it or sends it to second quality.",
+      "scrapSaid_other": "{count} garments will be scrapped: the office replaces them or sends them to second quality."
+    },
+    "refusal": {
+      "WRONG_STATE": "{code} is no longer in repair: pick another bundle of the list.",
+      "ALREADY_IN": "{code} was scanned in already: scan it again when the repair is done.",
+      "NOT_IN": "{code} was not scanned in: scan it in first.",
+      "NO_STATION": "This tablet belongs to no station: scan the repair in at the repair station's tablet.",
+      "NOT_THIS_BUNDLE": "That is not the bundle of this repair: scan its own ticket.",
+      "WORK_ORDER_ON_HOLD": "The work order of {code} is on hold: the repair waits until the hold is lifted.",
+      "WORK_ORDER_NOT_OPEN": "The work order of {code} is no longer open: nothing is repaired on it.",
+      "COUNTS_DO_NOT_ADD_UP": "Good and scrapped must add up to the garments of {code}.",
+      "NOT_IN_QUEUE": "{code} is not in the repair list. Scan a bundle of the list."
+    },
+    "refused": "The office did not take the scan of {code}.",
+    "saidIn": "{code} scanned in: the repair has started.",
+    "saidOut": "{code} scanned out: good {good}, scrapped {scrap}.",
+    "offline": "The repair list was not read on this tablet yet. It shows here when the network is back.",
+    "error": {
+      "title": "Could not load the repair list",
+      "body": "The office did not answer. Try again in a moment."
+    },
+    "gone": {
+      "title": "This repair is no longer open",
+      "body": "It was finished or cancelled meanwhile. Go back to the list."
+    },
+    "busy": "Sending the scan…",
+    "inAt": "in at {station} {time}"
+  },
+  "pad": {
+    "less": "Less",
+    "more": "More",
+    "clear": "Clear",
+    "back": "Delete",
+    "empty": "Type a number",
+    "range": "From {min} to {max}"
   }
 }
