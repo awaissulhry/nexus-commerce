@@ -378,6 +378,16 @@ const AQL_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
   sales: ['quality.aql.view'],
 })
 /**
+ * B-W2b-101 (inspection triggers, QHS-010, QHS-011; design quality.plans "When inspections are created"): quality keeps the
+ * rules that open inspections by themselves; the production manager and the floor supervisor read them (a first-piece rule
+ * holds a run until its check is approved). Office only: the worker's handler applies them. Owner and read-only from every().
+ */
+const QUALITY_TRIGGERS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.triggers.view', 'quality.triggers.manage'],
+  production_manager: ['quality.triggers.view'],
+  floor_supervisor: ['quality.triggers.view'],
+})
+/**
  * B-W2b-98 (incoming inspection hide by hide, QHS-025, QHS-028, QHS-034, MES-054; design floor.incoming, quality.inspections
  * "Incoming"): quality inspects a lot and signs the decision, in the office or on the inspection tablet at the dock (the
  * floor inspector, with the PIN); the warehouse that received the lot, the buyer who claims its shortfall or returns its
@@ -442,6 +452,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? []),
   // B-W2b-93
   ...(audience === 'office' ? (AQL_ADDS[key] ?? []) : []),
+  // B-W2b-101
+  ...(audience === 'office' ? (QUALITY_TRIGGERS_ADDS[key] ?? []) : []),
   // B-W2b-98
   ...((audience === 'office' ? INCOMING_ADDS : INCOMING_FLOOR_ADDS)[key] ?? [])]
 /**

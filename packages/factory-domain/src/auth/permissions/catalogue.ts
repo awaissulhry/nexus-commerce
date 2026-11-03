@@ -146,6 +146,8 @@ import { PRODUCTION_DISPATCH_DEFINITIONS, PRODUCTION_DISPATCH_FLOOR_PERMISSIONS,
 import { QUALITY_AQL_DEFINITIONS, QUALITY_AQL_PERMISSIONS } from '../../quality/aql/permissions'
 // B-W2b-92: inspection plans (quality.plans.view | manage | approve).
 import { QUALITY_PLANS_DEFINITIONS, QUALITY_PLANS_PERMISSIONS } from '../../quality/plans/permissions'
+// B-W2b-101: inspection triggers (quality.triggers.view | manage).
+import { QUALITY_TRIGGERS_DEFINITIONS, QUALITY_TRIGGERS_PERMISSIONS } from '../../quality/triggers/permissions'
 // B-W2b-98: the incoming inspection of a lot, hide by hide (quality.incoming.view | record).
 import { QUALITY_INCOMING_DEFINITIONS, QUALITY_INCOMING_FLOOR_PERMISSIONS, QUALITY_INCOMING_PERMISSIONS } from '../../quality/incoming/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
@@ -571,6 +573,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_AQL_DEFINITIONS,
   // B-W2b-92: inspection plans.
   QUALITY_PLANS_DEFINITIONS,
+  // B-W2b-101: inspection triggers.
+  QUALITY_TRIGGERS_DEFINITIONS,
   // B-W2b-98: the incoming inspection, hide by hide.
   QUALITY_INCOMING_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -717,6 +721,8 @@ for (const name of PRODUCTION_DISPATCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isD
 for (const name of QUALITY_AQL_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-92: inspection plans.
 for (const name of QUALITY_PLANS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-101: inspection triggers.
+for (const name of QUALITY_TRIGGERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-98: the incoming inspection.
 for (const name of QUALITY_INCOMING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
