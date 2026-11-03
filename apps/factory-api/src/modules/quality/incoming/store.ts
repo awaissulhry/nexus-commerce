@@ -5,6 +5,9 @@ import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { QUALITY_INCOMING_VIEW } from '@nexus/factory-domain/quality/incoming/permissions'
 import { StaleVersionError, type CommandCaller, type CommandTx } from '../../../core/command'
 import { inspectorOf, mayOn, signerOf, type Inspector } from '../final/access'
+// B-W2b-111: goods back from a workshop (a tablet reads the receipt as the tenant's system caller: the floor has no grant on it).
+import { asTenantSystem } from '../../production/bundles/codes'
+import { readReceipt, type ReceiptRow } from '../../purchasing/subcontracting/inspection'
 
 /**
  * What the incoming inspection's reads and commands share (B-W2b-98): the columns, one lot and one inspection as the
@@ -40,6 +43,8 @@ export const INCOMING_COLUMNS = {
   number: true,
   lotId: true,
   itemId: true,
+  subcontractReceiptId: true,
+  workOrderId: true,
   planVersionId: true,
   aqlProfileId: true,
   codeLetter: true,
@@ -109,14 +114,34 @@ export async function lotFor(caller: CommandCaller, lotId: string, permission: P
   return { lot, context }
 }
 
-/** The inspection and its lot as the caller may reach them with the permission. */
-export async function incomingFor(caller: CommandCaller, inspectionId: string, permission: Permission): Promise<{ row: IncomingRow; lot: LotRow; context: Inspector }> {
+/** The workshop's receipt as the caller reads it: the office in its scope, a tablet as the tenant's system caller (its site checked first). */
+export async function receiptAs(caller: CommandCaller, context: Inspector, receiptId: string): Promise<ReceiptRow | null> {
+  const reader = context.audience === 'floor' ? asTenantSystem(caller, context) : caller
+  return reader.withClient((client) => readReceipt(client, receiptId))
+}
+
+/** What an inspection is of: a lot (with its item), or goods back from a workshop (B-W2b-111), exactly one. */
+export interface Subject {
+  readonly lot: LotRow | null
+  readonly receipt: ReceiptRow | null
+}
+
+/** The inspection and its lot, or its workshop receipt, as the caller may reach them with the permission. */
+export async function incomingFor(caller: CommandCaller, inspectionId: string, permission: Permission): Promise<{ row: IncomingRow; context: Inspector } & Subject> {
   const context = inspectorOf(caller)
   const row = await caller.withClient((client) => readIncoming(client, inspectionId))
-  if (!row || !row.lotId || !(mayOn(context, QUALITY_INCOMING_VIEW, row) || mayOn(context, permission, row))) throw new NotFoundError('Incoming inspection not found.')
-  if (!mayOn(context, permission, row)) throw new ForbiddenError(`This needs ${permission} over the lot's company and site.`)
-  const lot = (await caller.withClient((client) => readLot(client, row.lotId!)))!
-  return { row, lot, context }
+  if (!row || !(row.lotId || row.subcontractReceiptId) || !(mayOn(context, QUALITY_INCOMING_VIEW, row) || mayOn(context, permission, row))) throw new NotFoundError('Incoming inspection not found.')
+  if (!mayOn(context, permission, row)) throw new ForbiddenError(`This needs ${permission} over the inspection's company and site.`)
+  if (row.lotId) return { row, lot: (await caller.withClient((client) => readLot(client, row.lotId!)))!, receipt: null, context }
+  const receipt = await receiptAs(caller, context, row.subcontractReceiptId!)
+  if (!receipt) throw new NotFoundError('Incoming inspection not found.')
+  return { row, lot: null, receipt, context }
+}
+
+/** The lot of an inspection that must have one (hides, rolls): 409 in words for goods back from a workshop. */
+export function lotOf(row: Pick<IncomingRow, 'number'>, subject: Subject, what: string): LotRow {
+  if (!subject.lot) throw new InvalidStateError(`Incoming inspection ${row.number} is of goods back from a workshop: it has no ${what}.`)
+  return subject.lot
 }
 
 /** A decided or cancelled inspection never changes (409 before the trigger). */

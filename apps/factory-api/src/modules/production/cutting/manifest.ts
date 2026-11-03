@@ -19,4 +19,9 @@ export const manifest = defineManifest({
   'POST /production/cutting/cuts/:cutLogId/correct': { audiences: ['office'], permission: 'production.cut.correct', scope: 'record' },
   // B-W2a-60: the cutting office (SCR-238), one cut per work order with its tiles (production.cutting.view).
   'GET /production/cutting/cuts': { audiences: ['office'], permission: 'production.cutting.view', scope: 'record' },
+  // B-W2b-103: "Cut anyway" on the cutter's tablet (the lead's own production.cut.override is checked with their PIN), and the
+  // photo of the hide on the table before the cut (a file of the hide, shared with its site's floor).
+  'POST /production/cutting/work-orders/:workOrderId/cuts/anyway': { audiences: ['floor'], permission: 'production.cut', scope: 'record' },
+  'POST /production/cutting/hides/:hideId/photos': { audiences: ['floor'], permission: 'production.cut', scope: 'record' },
+  'POST /production/cutting/hides/:hideId/photos/:fileId/complete': { audiences: ['floor'], permission: 'production.cut', scope: 'record' },
 })

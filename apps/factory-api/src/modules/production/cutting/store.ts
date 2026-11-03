@@ -29,6 +29,8 @@ export const CUT_HEADER = {
   status: true,
   kind: true,
   styleId: true,
+  // B-W2b-103: the revision whose pattern pieces the grade check reads.
+  styleRevisionId: true,
   dueDate: true,
   priority: true,
   version: true,
@@ -97,6 +99,13 @@ export const ENTRY_COLUMNS = {
   deviceTime: true,
   serverTime: true,
   createdById: true,
+  // B-W2b-103 (B-W2b-85's columns): the table's checks written with the entry.
+  photoFileId: true,
+  measuredThicknessMm: true,
+  overrides: true,
+  overrideLeadWorkerId: true,
+  overrideLeadUserId: true,
+  overrideReason: true,
 } as const satisfies Prisma.CutLogSelect
 export type EntryRow = Prisma.CutLogGetPayload<{ select: typeof ENTRY_COLUMNS }>
 
@@ -165,6 +174,9 @@ export const HIDE_COLUMNS = {
   baseArea: true,
   grade: true,
   shade: true,
+  // B-W2b-103: the grade and shade group as records (B-W2b-80), read by the table's checks.
+  gradeId: true,
+  shadeGroupId: true,
   thicknessMm: true,
   defects: true,
   state: true,
@@ -202,7 +214,20 @@ export async function readLot(db: Reader, lotId: string): Promise<LotRow | null>
 }
 
 /** The item's units and code (never its standard cost: the floor may not read it). */
-export const ITEM_COLUMNS = { id: true, code: true, name: true, baseUom: true, tracking: true, purchaseUom: true, purchaseFactor: true, consumptionUom: true, consumptionFactor: true } as const satisfies Prisma.ItemSelect
+export const ITEM_COLUMNS = {
+  id: true,
+  code: true,
+  name: true,
+  baseUom: true,
+  tracking: true,
+  purchaseUom: true,
+  purchaseFactor: true,
+  consumptionUom: true,
+  consumptionFactor: true,
+  // B-W2b-103 (MES-064): the leather's thickness range, the spec the table checks a hide against.
+  thicknessMinMm: true,
+  thicknessMaxMm: true,
+} as const satisfies Prisma.ItemSelect
 export type ItemRow = Prisma.ItemGetPayload<{ select: typeof ITEM_COLUMNS }>
 
 export async function readItem(db: Reader, itemId: string): Promise<ItemRow | null> {

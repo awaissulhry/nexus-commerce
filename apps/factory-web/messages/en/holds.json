@@ -162,7 +162,8 @@
     "tab": {
       "activity": "Activity",
       "decision": "Decision",
-      "hold": "Hold"
+      "hold": "Hold",
+      "affected": "Affected"
     },
     "tabsLabel": "Parts of the hold",
     "tag": "Print hold tag",
@@ -180,7 +181,10 @@
     "workOrders": "Work orders it holds",
     "workOrdersHint": "A work order goes back to where it was when no active hold names it any more.",
     "number": "Number",
-    "numberNone": "Placed before holds were numbered."
+    "numberNone": "Placed before holds were numbered.",
+    "group": "Hold by genealogy",
+    "groupFrom": "From {kind} {code}",
+    "groupHint": "See what it touches in Affected."
   },
   "expected": {
     "none": "Not set",
@@ -224,7 +228,8 @@
     "place": "Place hold",
     "release": "Release the hold on show (in its window)",
     "title": "Keyboard shortcuts",
-    "walk": "Previous / next hold in its window"
+    "walk": "Previous / next hold in its window",
+    "genealogy": "Trace and hold by genealogy"
   },
   "kind": {
     "Bundle": "Bundle",
@@ -275,7 +280,10 @@
     "state": "State",
     "title": "Quarantine move",
     "to": "To",
-    "trigger": "Quarantine move: {state}"
+    "trigger": "Quarantine move: {state}",
+    "office": "Until the tablet scan arrives, the office confirms the move with the place code.",
+    "confirm": "Confirm the move…",
+    "otherPlace": "Ask another place…"
   },
   "noAccess": {
     "body": "Holds need quality.holds.view: warehouse, supervisors, production managers and quality read them. An administrator gives it in Admin › Roles & permissions.",
@@ -442,7 +450,10 @@
     "release": "Release…",
     "tag": "Print hold tag",
     "trace": "Trace in Lots & traceability",
-    "copyNumber": "Copy number"
+    "copyNumber": "Copy number",
+    "quarantine": "Ask quarantine move…",
+    "quarantineHint": "The held stock goes to a quarantine place of the site.",
+    "genealogyHint": "Hold everything made from {code}"
   },
   "source": {
     "Certificate": "Certificate suspended or expired",
@@ -452,7 +463,8 @@
     "Nonconformance": "Nonconformance",
     "QualityReleaseReversal": "Release reversed",
     "manual": "Placed by hand",
-    "other": "Another record"
+    "other": "Another record",
+    "IncomingInspection": "Incoming inspection"
   },
   "status": {
     "ACTIVE": "On hold",
@@ -575,5 +587,289 @@
     "cancelled": "Nothing was saved: the code was not given.",
     "conflict": "Someone changed the rule meanwhile: it was read again.",
     "refused": "The rule was not saved:"
+  },
+  "genealogy": {
+    "open": "Hold by genealogy",
+    "title": "Hold by genealogy",
+    "titleExtend": "Extend the hold by genealogy",
+    "subtitle": "Everything made from {kind} {code}",
+    "subtitleStart": "Start from one suspect lot or hide",
+    "goNone": "Hold",
+    "refusedPicks": "Some ticked records cannot be held now",
+    "refusedRight": "You cannot hold at one of these sites",
+    "refused": "The hold by genealogy was not placed",
+    "readAgain": "Read the trace again",
+    "extendNew": "This hold has no group yet: holding here makes one with it.",
+    "start": "Suspect lot or hide",
+    "startHint": "Scan or type its code: a lot code or a hide tag.",
+    "findNone": "No lot or hide with code {code} at a site you reach.",
+    "startPlaceholder": "Lot code or hide tag",
+    "typeFirst": "Type or scan a code first.",
+    "find": "Find",
+    "tree": "What was made from it",
+    "empty": "Name the suspect lot or hide to see everything made from it.",
+    "failed": "The trace could not be read",
+    "reading": "Reading the trace…",
+    "hold": "Hold {what}",
+    "holdNothing": "Nothing ticked can be held",
+    "and": "{first} and {last}",
+    "treeLabel": "Everything made from {code}",
+    "nothingMade": "Nothing was made from it yet.",
+    "reasonNoteHint": "What is suspect, in a few words.",
+    "quarantineGap": "Asked only where a site has one quarantine place; not at {sites}: ask it from each hold.",
+    "quarantineHint": "Held lots and hides go to the site's quarantine place; the office confirms the move with the place code.",
+    "after": "One hold per kind of record and site, all in one group: each blocks and is released as any hold. What has left is the PPE register's: a recall, not a hold.",
+    "register": "Open the PPE register (recalls)",
+    "extendKind": "Extending starts from a lot or a hide: this hold holds neither and has no group.",
+    "part": {
+      "Lot_one": "{count} lot",
+      "Lot_other": "{count} lots",
+      "Hide_one": "{count} hide",
+      "Hide_other": "{count} hides",
+      "WorkOrder_one": "{count} work order",
+      "WorkOrder_other": "{count} work orders",
+      "Bundle_one": "{count} bundle",
+      "Bundle_other": "{count} bundles",
+      "Shipment_one": "{count} shipment",
+      "Shipment_other": "{count} shipments",
+      "garments_one": "{count} garment",
+      "garments_other": "{count} garments"
+    },
+    "problem": {
+      "start": "Name the suspect lot or hide first.",
+      "nothing": "Tick at least one record that can be held.",
+      "reason": "Pick the reason.",
+      "reasonNote": "This reason needs a note.",
+      "reasonNoteLong": "The reason note is too long.",
+      "noteLong": "The note is too long.",
+      "date": "The expected release is today or later."
+    },
+    "held": {
+      "HELD": "On hold already",
+      "LEFT": "Already shipped: a recall, not a hold",
+      "NOT_HOLDABLE": "Cannot be held in its state",
+      "HIDDEN": "At a site you do not reach",
+      "site": "You do not hold at site {site}"
+    },
+    "extendGroup_one": "Part of the hold by genealogy of {code} ({count} hold): what you hold joins it.",
+    "extendGroup_other": "Part of the hold by genealogy of {code} ({count} holds): what you hold joins it.",
+    "shipped_one": "{count} garment already shipped to {customers}",
+    "shipped_other": "{count} garments already shipped to {customers}",
+    "customers_one": "{count} customer",
+    "customers_other": "{count} customers",
+    "covered_one": "{count} bundle or garment is covered by its work order's hold.",
+    "covered_other": "{count} bundles or garments are covered by their work order's hold.",
+    "alreadyHeld_one": "{count} ticked record is on hold already and stays as it is.",
+    "alreadyHeld_other": "{count} ticked records are on hold already and stay as they are.",
+    "placed_one": "Held by genealogy from {code}: {count} hold placed.",
+    "placed_other": "Held by genealogy from {code}: {count} holds placed.",
+    "placedNoMove_one": "Held by genealogy from {code}: {count} hold placed; the quarantine move was not asked at a site without exactly one quarantine place.",
+    "placedNoMove_other": "Held by genealogy from {code}: {count} holds placed; the quarantine move was not asked at a site without exactly one quarantine place."
+  },
+  "affected": {
+    "states": "What it touches by state",
+    "material": "Material on hand",
+    "hides_one": "{count} hide in stock",
+    "hides_other": "{count} hides in stock",
+    "inWork": "In work",
+    "inStock": "Finished, in stock",
+    "packed": "Packed",
+    "shipped": "Shipped",
+    "reading": "Reading what the hold touches…",
+    "failed": "What the hold touches could not be read",
+    "title": "What it touches",
+    "intro": "Everything made from the held records, with what has left and who received it.",
+    "tracedSome": "The first {traced} of {of} held records are traced.",
+    "notTraceable": "Parcels are not traced yet: open their shipment.",
+    "group": "Hold by genealogy of {code}",
+    "groupHint_one": "{count} hold in this group; each is released on its own.",
+    "groupHint_other": "{count} holds in this group; each is released on its own.",
+    "groupHolds": "Holds of the group",
+    "thisHold": "(this hold)",
+    "extendFrom": "Extend hold from {kind} {code}",
+    "extend": "Extend hold",
+    "treeLabel": "What the hold touches",
+    "empty": "Nothing was made from the held records yet.",
+    "extendHeld": {
+      "NOT_ACTIVE": "A released or closed hold is not extended.",
+      "NO_RIGHT": "Extending a hold needs quality.holds.place at its site.",
+      "KIND": "Extending starts from a lot or a hide: this hold holds neither and has no group."
+    }
+  },
+  "node": {
+    "kind": {
+      "SUPPLIER": "Supplier",
+      "RECEIPT": "Receipt",
+      "LOT": "Lot",
+      "HIDE": "Hide",
+      "SUBCONTRACT": "Workshop order",
+      "WORK_ORDER": "Work order",
+      "CELL": "Size",
+      "BUNDLE": "Bundle",
+      "SERIAL": "Garment",
+      "SHIPMENT": "Shipment",
+      "CUSTOMER": "Customer"
+    },
+    "count": {
+      "SUPPLIER_one": "{count} supplier",
+      "SUPPLIER_other": "{count} suppliers",
+      "RECEIPT_one": "{count} receipt",
+      "RECEIPT_other": "{count} receipts",
+      "LOT_one": "{count} lot",
+      "LOT_other": "{count} lots",
+      "HIDE_one": "{count} hide",
+      "HIDE_other": "{count} hides",
+      "SUBCONTRACT_one": "{count} workshop order",
+      "SUBCONTRACT_other": "{count} workshop orders",
+      "WORK_ORDER_one": "{count} work order",
+      "WORK_ORDER_other": "{count} work orders",
+      "CELL_one": "{count} size",
+      "CELL_other": "{count} sizes",
+      "BUNDLE_one": "{count} bundle",
+      "BUNDLE_other": "{count} bundles",
+      "SERIAL_one": "{count} garment",
+      "SERIAL_other": "{count} garments",
+      "SHIPMENT_one": "{count} shipment",
+      "SHIPMENT_other": "{count} shipments",
+      "CUSTOMER_one": "{count} customer",
+      "CUSTOMER_other": "{count} customers"
+    },
+    "state": {
+      "LOT": {
+        "QUARANTINE": "in quarantine",
+        "RELEASED": "released",
+        "REJECTED": "rejected",
+        "BLOCKED": "blocked"
+      },
+      "HIDE": {
+        "FULL": "whole",
+        "PARTLY_CUT": "partly cut",
+        "REMNANT": "remnant",
+        "CONSUMED": "used up",
+        "SCRAPPED": "scrapped",
+        "RETURNED": "returned to the supplier"
+      },
+      "BUNDLE": {
+        "ACTIVE": "active",
+        "VOID": "void"
+      },
+      "SERIAL": {
+        "MADE": "made",
+        "RELEASED": "released",
+        "SHIPPED": "shipped",
+        "VOID": "void"
+      },
+      "SHIPMENT": {
+        "DRAFT": "being packed",
+        "PACKED": "packed",
+        "SHIPPED": "shipped",
+        "DELIVERED": "delivered",
+        "RETURNED": "back from the carrier",
+        "CANCELLED": "cancelled"
+      }
+    },
+    "onHand": "{quantity} on hand",
+    "batch": "batch {batch}",
+    "size": "{colourway} · size {size}",
+    "cellGarments_one": "{count} garment, {shipped} shipped",
+    "cellGarments_other": "{count} garments, {shipped} shipped",
+    "ddt": "DDT {number}",
+    "partyHidden": "name not shown (parties.view)",
+    "received": "received",
+    "left": "left the site",
+    "onHold": "On hold: {reason}",
+    "hidden": "not shown",
+    "restrictedParties_one": "{count} customer or supplier is counted without the name (it needs parties.view).",
+    "restrictedParties_other": "{count} customers or suppliers are counted without the name (it needs parties.view).",
+    "restrictedSites_one": "{count} record at a site you do not reach is counted, not shown.",
+    "restrictedSites_other": "{count} records at sites you do not reach are counted, not shown.",
+    "affectedOnly_one": "Show only affected customers ({count})",
+    "affectedOnly_other": "Show only affected customers ({count})",
+    "noAffected": "No customer received any of it."
+  },
+  "gap": {
+    "title": {
+      "BROKEN": "The chain is broken",
+      "COARSE": "Known only roughly (\"may hold it\")",
+      "IN_WORK": "Still in work"
+    },
+    "OPENING_STOCK": "{at} came in as opening stock: no supplier or receipt is on record.",
+    "NO_SUPPLIER": "{at} names no supplier.",
+    "NO_ISSUE": "{at}: nothing was issued or cut for it.",
+    "BUNDLE_WITHOUT_CUTS": "Bundle {at} names no cut: the work order's hides may hold it.",
+    "SERIAL_WITHOUT_BUNDLE": "{count} garments of {at} have no bundle on record: every bundle of their size may hold them.",
+    "LINE_WITHOUT_SERIALS": "{count} shipped garments of {at} carry no serial on record.",
+    "BATCH_TRACKED": "{at} is traced by batch: its garments are known per size, not one by one.",
+    "ISSUED_BY_QUANTITY": "{at} was issued by quantity: every garment of the work order may hold it.",
+    "SUBCONTRACT_RETURN": "What came back from the workshop for {at} is not linked garment by garment.",
+    "SERIALS_COLLAPSED": "{count} garments are counted on their bundles and sizes, not listed one by one.",
+    "ISSUED_NOT_CUT": "{at} was issued and not cut yet.",
+    "CUT_NOT_BUNDLED": "Cuts of {at} are in no bundle yet."
+  },
+  "board": {
+    "lane": {
+      "NEW": "New",
+      "INVESTIGATING": "Investigating",
+      "WAITING_DECISION": "Waiting decision",
+      "READY_TO_RELEASE": "Ready to release",
+      "RELEASED": "Released"
+    },
+    "empty": "Nothing here",
+    "oldest_one": "Oldest {count} day",
+    "oldest_other": "Oldest {count} days",
+    "releasedHint": "A drop here opens the release",
+    "held": {
+      "notActive": "A released or closed hold does not move.",
+      "same": "The hold is at this step already."
+    },
+    "conflict": "{number} was changed meanwhile: the board is read again.",
+    "refused": "{number} was not moved.",
+    "readOnly": "You read this board: moving a hold needs quality.holds.place (a quality inspector, a production manager or a floor supervisor)."
+  },
+  "qmove": {
+    "of": "Hold {number} · {kind} {code} {more}",
+    "askTitle": "Ask the move to quarantine",
+    "askGo": "Ask the move",
+    "askHint": "The quarantine place of the hold's site the stock goes to.",
+    "askAfter": "The move waits to be confirmed: the office types or scans the place's code once the goods lie there (the tablet's scan comes later).",
+    "confirmTitle": "Confirm the move to quarantine",
+    "confirmGo": "Confirm the move",
+    "askedTo": "Asked to {code} · {name}.",
+    "code": "Code of the quarantine place",
+    "codeHint": "Scan the place's label or type its code: the goods lie there now.",
+    "confirmAfter": "Confirming moves the held stock into the place in the stock ledger now; stock at an outside workshop stays where it is.",
+    "lying": "Where the held stock lies",
+    "place": "Place",
+    "onHand": "On hand",
+    "what": "On confirming",
+    "stays": "stays (outside workshop)",
+    "moves": "moves to quarantine",
+    "there": "already there",
+    "notAsked": "no move asked",
+    "nothingLying": "No stock of it is on hand at the site.",
+    "section": "Quarantine move",
+    "sectionMoved": "The goods lie in quarantine (the move was confirmed).",
+    "sectionAsked": "Asked to {code}: not confirmed yet.",
+    "sectionNone": "No move asked: the hold alone blocks the use.",
+    "held": {
+      "notStock": "Only lots and hides move to quarantine.",
+      "moved": "The goods lie in quarantine already.",
+      "noTransfer": "Confirming moves stock: it needs inventory.transfer at the site.",
+      "notAsked": "No move was asked: ask it first."
+    },
+    "problem": {
+      "code": "Type or scan the place's code.",
+      "notPlace": "This code is not a quarantine place of the site.",
+      "reading": "Reading the hold…",
+      "noPlaces": "The site has no quarantine place: add one in the warehouse first.",
+      "place": "Pick a quarantine place."
+    },
+    "asked": "{number}: the move to {code} is asked.",
+    "confirmed_one": "{number}: the goods lie in {code} ({count} transfer posted).",
+    "confirmed_other": "{number}: the goods lie in {code} ({count} transfers posted).",
+    "confirmedStays": "{number}: moved to {code} ({count} transfers); stock at {stays} stays at the outside workshop.",
+    "refusedRight": "You cannot do this at the hold's site",
+    "refusedCode": "The code is not a quarantine place of the site",
+    "refused": "The move was not saved"
   }
 }

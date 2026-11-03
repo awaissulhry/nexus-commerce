@@ -15,6 +15,12 @@ export const PRODUCTION_CUTTING_DEFINITIONS = definePermissions('production', {
       "Cut hides for a work order at the cutting table: scan a hide (issued to the work order by the scan when it is still in stock), log the garment sets or parts cut from it, close it with its remnant back to stock or the rest as waste, and undo one's own last cut (a floor device: at its own site).",
   },
   'cut.correct': { risk: 'write', description: 'Correct a wrong cut log entry with the reason: a mirror entry that takes its pieces and area back.' },
+  // B-W2b-103 (MES-053, MES-055, MES-063, MES-064; design floor.hidecut pop-up "Cut anyway?"): the lead's own right, proved by their PIN.
+  'cut.override': {
+    risk: 'write',
+    description:
+      'Let a hide be cut anyway at the cutting table when its checks warn (another shade lot, not the hide reserved, thickness outside the spec, a grade below a piece): signed on the cutter\'s tablet with one\'s own PIN and a reason, never on one\'s own cut.',
+  },
   // W2a (B-W2a-13; MES-057; design production.cutting "Yield"): the cutting room's yield across work orders.
   'cutting.view': {
     risk: 'read',
@@ -26,8 +32,12 @@ export const PRODUCTION_CUTTING_DEFINITIONS = definePermissions('production', {
 export const PRODUCTION_CUT = 'production.cut' satisfies Permission
 export const PRODUCTION_CUT_CORRECT = 'production.cut.correct' satisfies Permission
 export const PRODUCTION_CUTTING_VIEW = 'production.cutting.view' satisfies Permission
+export const PRODUCTION_CUT_OVERRIDE = 'production.cut.override' satisfies Permission
 
-export const PRODUCTION_CUTTING_PERMISSIONS: readonly Permission[] = Object.freeze([PRODUCTION_CUT, PRODUCTION_CUT_CORRECT, PRODUCTION_CUTTING_VIEW])
+export const PRODUCTION_CUTTING_PERMISSIONS: readonly Permission[] = Object.freeze([PRODUCTION_CUT, PRODUCTION_CUT_CORRECT, PRODUCTION_CUTTING_VIEW, PRODUCTION_CUT_OVERRIDE])
 
-/** What a floor role may hold of them (FLOOR_SHARED_PERMISSIONS): cutting at its own site. Never a correction: the office's. */
-export const PRODUCTION_CUTTING_FLOOR_PERMISSIONS: readonly Permission[] = Object.freeze([PRODUCTION_CUT])
+/**
+ * What a floor role may hold of them (FLOOR_SHARED_PERMISSIONS): cutting at its own site, and (B-W2b-103) a lead's "Cut
+ * anyway" signed with their PIN. Never a correction: the office's.
+ */
+export const PRODUCTION_CUTTING_FLOOR_PERMISSIONS: readonly Permission[] = Object.freeze([PRODUCTION_CUT, PRODUCTION_CUT_OVERRIDE])
