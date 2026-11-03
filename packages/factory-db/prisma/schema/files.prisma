@@ -92,6 +92,10 @@ model StoredFile {
   // W2b leather.prisma (wave 12/16): the hide marks made on it (a photo), the shade group whose master swatch it shows.
   hideMarkPhotos   HideMark[]   @relation("HideMarkPhoto")
   shadeGroupSwatches ShadeGroup[] @relation("ShadeGroupSwatch")
+  // W2b-2 cutting.prisma, production.prisma (wave 13/16): the cut orders whose marker plot it is, the cut log entries whose hide
+  // photo it is.
+  cutOrderMarkers  CutOrder[]   @relation("CutOrderMarkerFile")
+  cutLogPhotos     CutLog[]     @relation("CutLogPhoto")
   // print.prisma: the print jobs that printed this file.
   printJobs    PrintJob[]
   // money.prisma: the invoices whose XML or PDF copy it is, and the SDI sends that sent it.

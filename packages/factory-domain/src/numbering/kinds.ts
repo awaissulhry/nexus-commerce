@@ -23,6 +23,9 @@ export const NUMBER_KINDS = [
   'RETURN',
   'LOT',
   'BATCH',
+  // W2b-2 wave 13/16 (factory-db numbering.prisma): cut orders (CO-…) and cut tickets (CT-…), office document kinds.
+  'CUT_ORDER',
+  'CUT_TICKET',
   'PPE_REGISTER',
   'BUNDLE',
   'HIDE',
@@ -183,6 +186,8 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   RETURN: 'RMA',
   LOT: 'LOT',
   BATCH: 'BT',
+  CUT_ORDER: 'CO',
+  CUT_TICKET: 'CT',
   PPE_REGISTER: 'REG',
   INSPECTION: 'INS',
   RELEASE: 'REL',

@@ -66,6 +66,11 @@ model ReworkOrder {
   /// Set exactly when CANCELLED, with the reason.
   cancelledAt         DateTime?    @db.Timestamptz(3)
   cancelReason        String?
+  /// W2b-2 (B-W2b-85, wave 13/16; MES-132): the repair station's scans, so repair minutes are kept apart (per rework, never per
+  /// person): scanned in at a station of the site (both together, from IN_PROGRESS on), scanned out after it; each set once.
+  repairInAt          DateTime?    @db.Timestamptz(3)
+  repairStationId     String?      @db.Uuid
+  repairOutAt         DateTime?    @db.Timestamptz(3)
   note                String?
   version             Int          @default(1)
   createdAt           DateTime     @default(now()) @db.Timestamptz(3)
@@ -73,6 +78,10 @@ model ReworkOrder {
   createdById         String?      @db.Uuid
 
   site          Site                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-2 (wave 13/16): the repair station that scanned it in (Restrict: as below, for tenantId and siteId).
+  repairStation Station?            @relation(fields: [tenantId, siteId, repairStationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-2 cutting.prisma: its garments sent to second quality instead of scrap.
+  garmentDowngrades GarmentDowngrade[]
   workOrder     WorkOrder           @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   workOrderSize WorkOrderSize       @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
@@ -131,6 +140,9 @@ model ReplacementRequest {
   decisionNote    String?
   /// RECUT, DONE: the cut log entry that cut the replacement (of the work order, not a reversal).
   cutLogId        String?           @db.Uuid
+  /// W2b-2 (B-W2b-85, wave 13/16; MES-044): a RECUT's recut ticket (cutting.prisma CutTicket, kind RECUT, of its work order,
+  /// cell and part, not VOID), given while OPEN; never on a REDUCE.
+  recutTicketId   String?           @db.Uuid
   /// Set exactly when DONE.
   doneAt          DateTime?         @db.Timestamptz(3)
   /// Set exactly when CANCELLED, with the reason.
@@ -150,6 +162,8 @@ model ReplacementRequest {
   sourceScan    OperationScan? @relation(fields: [tenantId, siteId, sourceScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   reworkOrder   ReworkOrder?   @relation(fields: [tenantId, siteId, workOrderId, reworkOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   cutLog        CutLog?        @relation(fields: [tenantId, siteId, workOrderId, cutLogId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b-2 (wave 13/16): the recut ticket (Restrict: as above).
+  recutTicket   CutTicket?     @relation(fields: [tenantId, siteId, recutTicketId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
   // A work order's replacements; the recuts to cut and the reductions to approve, per site.
   @@index([tenantId, workOrderId])

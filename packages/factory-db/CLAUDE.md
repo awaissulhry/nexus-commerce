@@ -102,7 +102,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    append-only, remnants, fabric rolls, protector lots, consumables by pack, ROLL and REMNANT as scan-id kinds, the move reason
    REMNANT as RETURN's twin; it redefines numbering's `factory_number_series_document_kind` and `factory_number_block_guard`,
    wave 1's `factory_stock_move_check` and `factory_hide_guard`, production's `factory_cut_log_check` and wave 2's
-   `factory_work_order_cost_entry_check`, and recreates the trigger `StockMove_bound_to_work_order` with REMNANT in its WHEN): triggers, partial unique indexes and deferred
+   `factory_work_order_cost_entry_check`, and recreates the trigger `StockMove_bound_to_work_order` with REMNANT in its WHEN),
+   `…_cutting_room_w2b_guards` (W2b wave 13/16: cut orders and lines, cut and recut tickets (one per lay, one per leather cut order:
+   partial uniques), lays with the ply check at both ends, lay rolls of one shade, ply runs, the reconciliation append-only, the
+   consumption, secondary processes, trolleys to sewing, pattern pieces frozen with their revision (it reuses the product part rule),
+   second quality; its own trigger `CutLog_cutting_rules` (photo, thickness, overrides) and no cut log function touched; it redefines
+   wave 5's `factory_rework_order_guard` (the repair station's scans) and `factory_replacement_request_guard` (the recut ticket)): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written

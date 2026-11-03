@@ -246,6 +246,8 @@
       "RETURN": "Return",
       "LOT": "Lot",
       "BATCH": "Batch",
+      "CUT_ORDER": "Cut order",
+      "CUT_TICKET": "Cut ticket",
       "PPE_REGISTER": "PPE register entry",
       "BUNDLE": "Bundle ticket",
       "HIDE": "Hide tag",

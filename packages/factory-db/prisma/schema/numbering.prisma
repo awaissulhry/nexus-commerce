@@ -78,6 +78,11 @@ enum NumberKind {
   RETURN
   LOT
   BATCH
+  /// W2b-2 wave 13/16: a cut order's number (CO-…; cutting.prisma CutOrder.number). An office document kind.
+  CUT_ORDER
+  /// W2b-2 wave 13/16: a cut ticket's number (CT-…; cutting.prisma CutTicket.number). An office document kind: tickets are
+  /// printed in the office (or at release); the floor scans them.
+  CUT_TICKET
   /// The PPE register's entries (REG-…; quality.prisma PpeRegisterEntry.reference).
   PPE_REGISTER
   /// Scan-id kinds (@nexus/factory-domain/numbering/kinds SCAN_ID_KINDS): ONE tenant-wide counter each, kept as the

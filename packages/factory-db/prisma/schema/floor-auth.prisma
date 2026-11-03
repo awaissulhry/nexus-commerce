@@ -270,6 +270,8 @@ model Worker {
   inspectionMeasurements  InspectionMeasurement[] @relation("InspectionMeasurementRecorder")
   // W2b leather.prisma (wave 12/16): the hides they measured.
   hideMeasures            HideMeasure[]
+  // W2b-2 production.prisma (wave 13/16): the cut log entries where the lead allowed "Cut anyway".
+  cutLogOverrides         CutLog[]                @relation("CutLogOverrideLead")
   // The quality releases a floor inspector signed (B-W1-45).
   qualityReleases QualityRelease[]
 
