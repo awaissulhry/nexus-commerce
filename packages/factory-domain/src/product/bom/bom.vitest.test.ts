@@ -3,7 +3,7 @@ import { copyLines } from './copy'
 import { diffBoms } from './diff'
 import { decimalOf, roundTo } from '../units/units'
 import { colourIn, exactRequirements, lineBySize, lineNeed, netQuantity, requirements, withWastage } from './requirements'
-import { bomIssues, editRefusal, hideYieldProblem, inRangeOrder, nextSeq, obsoleteRefusal, planLine, releaseRefusal, sizeDependentQty, type BomLineData, type BomMaterial, type BomStyle } from './rules'
+import { bomIssues, editRefusal, hideYieldProblem, inRangeOrder, nextSeq, obsoleteRefusal, planLine, releaseRefusal, routingSeqProblem, sizeDependentQty, type BomLineData, type BomMaterial, type BomStyle } from './rules'
 
 /**
  * The BOM's rules and math (B-W1-13; features PRD-043, PRD-076, PRD-079, PRD-082, PRD-100). The wastage cases are the
@@ -189,6 +189,26 @@ describe('a BOM line (PRD-076, PRD-079, PRD-043, PRD-100)', () => {
     // The unit is never changed behind the office's back: 1.8 m of lining is not 1.8 protectors.
     expect(refused(liningLine, { itemId: protector.id }, protector)).toEqual([{ path: 'uom', message: 'PRO-1 does not convert m to its base unit pz: use PCS, PAIR.' }])
     expect(planned(protectorLine, { qty: '3' }, { ...protector, status: 'ARCHIVED' }).qty).toBe('3')
+  })
+})
+
+describe('B-W2b-88 the operation that uses a line (BomLine.routingSeq)', () => {
+  it('names a step of the revision, keeps it on a change that leaves it out, clears it with null', () => {
+    expect(planned(null, { itemId: protector.id, qty: '2' }, protector).routingSeq).toBeNull()
+    const tied = planned(null, { itemId: protector.id, qty: '2', routingSeq: 40 }, protector)
+    expect(tied.routingSeq).toBe(40)
+    expect(planned(tied, { qty: '3' }, protector).routingSeq).toBe(40)
+    expect(planned(tied, { routingSeq: null }, protector).routingSeq).toBeNull()
+    expect(routingSeqProblem(null, [])).toBeNull()
+    expect(routingSeqProblem(20, [{ seq: 10 }, { seq: 20 }])).toBeNull()
+    expect(routingSeqProblem(30, [{ seq: 10 }, { seq: 20 }])).toBe("Step 30 is not in this revision's routing: choose one of its steps (10, 20).")
+    expect(routingSeqProblem(10, [])).toBe('This revision has no routing yet: add its operations first, then say which one uses the line.')
+  })
+
+  it('travels with a new revision and shows in a compare', () => {
+    const tied = { ...protectorLine, routingSeq: 40 }
+    expect(copyLines([tied], () => 'n-1')[0]!.routingSeq).toBe(40)
+    expect(diffBoms({ plannedHideYieldPct: null, labelTemplateId: null, lines: [protectorLine] }, { plannedHideYieldPct: null, labelTemplateId: null, lines: [tied] }).changed[0]!.fields).toEqual([{ field: 'routingSeq', from: null, to: 40 }])
   })
 })
 

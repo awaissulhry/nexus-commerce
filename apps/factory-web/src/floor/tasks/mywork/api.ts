@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { DISPATCH_STATES } from '@nexus/factory-domain/planning/schedule/dispatch'
-import { MATERIAL_STATES } from '@nexus/factory-domain/production/dispatch/material'
+import { MATERIAL_SCOPES, MATERIAL_STATES } from '@nexus/factory-domain/production/dispatch/material'
 import { FLOOR_RULE_MODES } from '@nexus/factory-domain/production/settings/floor-rules'
 import type { ApiClient } from '../../../lib/api/client'
 import { AsOfMemory, type Remembered } from '../shared/as-of'
@@ -43,7 +43,8 @@ const entry = z.object({
   waiting: z.number(),
   done: z.number(),
   sequence: z.object({ rule: z.enum(FLOOR_RULE_MODES), state: z.string(), words: z.string().nullable() }).nullable().optional(),
-  material: z.object({ state: z.enum(MATERIAL_STATES), date: z.string().nullable() }).nullable().optional(),
+  // B-W2b-88: `scope` OPERATION when the BOM ties lines to steps (a list kept from before has none: the work order's).
+  material: z.object({ state: z.enum(MATERIAL_STATES), date: z.string().nullable(), scope: z.enum(MATERIAL_SCOPES).optional() }).nullable().optional(),
 })
 
 const myEntry = entry.extend({ station: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable(), bundles: z.number(), current: z.boolean() })

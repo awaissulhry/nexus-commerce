@@ -1,5 +1,5 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { CAN, demoBom, demoSheetImport, demoStyle, LINE_MATERIALS, MATERIAL, MATERIAL_RESULTS, newStyle, recordModel, REV, REVISIONS } from '../demo/fixtures'
+import { CAN, demoBom, demoRouting, demoSheetImport, demoStyle, LINE_MATERIALS, MATERIAL, MATERIAL_RESULTS, newStyle, recordModel, REV, REVISIONS } from '../demo/fixtures'
 import type { StyleRecordViewModel } from '../record/record-model'
 import { StyleRecordView } from '../record/view/StyleRecordView'
 
@@ -36,6 +36,9 @@ export const designScreen = defineDesignScreen<StyleRecordViewModel>({
     { id: 'import-held-frozen', label: 'W2a: Import held on a released revision', model: bom({ ...released, style: { status: 'ready', value: demoStyle({ revisions: [REVISIONS[1]!, REVISIONS[2]!] }) } }), note: 'Import BOM: "Start revision 3 first" (rows go into a draft); Export ▾ still offers XLSX, CSV and PDF.' },
     { id: 'import-held-right', label: 'W2a: Import held (no import right)', model: bom({ can: { ...CAN.product, imports: false } }, 'product'), note: 'Import BOM: "Your role cannot load sheets".' },
     { id: 'exporting', label: 'W2a: Export being made', model: bom({ exporting: 'xlsx' }), note: 'Export ▾ says "Making the file…" until the download starts.' },
+    { id: 'operations', label: 'W2b: lines tied to the operation that uses them', model: bom({ bom: { status: 'ready', value: demoBom({ tied: true }) } }), note: 'Column "Operation": the protectors at Op 70 · ASS-PROT, the zip at Op 50 · CUC-ZIP, the rest "Any operation".' },
+    { id: 'line-operation', label: 'W2b: Edit a line — the operation that uses it', model: bom({ bom: { status: 'ready', value: demoBom({ tied: true }) }, routing: { status: 'ready', value: demoRouting() }, dialog: { kind: 'bomLine', lineId: demoBom().lines[3]!.id } }), note: 'Select "Operation that uses it": Any operation, or one of the revision\'s nine operations; the hint says what it changes on the floor.' },
+    { id: 'line-operation-none', label: 'W2b: Edit a line — no routing yet', model: bom({ routing: { status: 'ready', value: demoRouting({ empty: true }) }, dialog: { kind: 'bomLine', lineId: demoBom().lines[3]!.id } }), note: 'Only "Any operation"; the hint says to add the operations first.' },
     { id: 'loading', label: 'Loading', model: bom({ bom: { status: 'loading' } }) },
     { id: 'error', label: 'Could not load', model: bom({ bom: { status: 'error', problem: 'problem.read.unavailable' } }), note: 'The rest of the record stays usable.' },
   ],

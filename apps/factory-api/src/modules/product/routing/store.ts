@@ -1,5 +1,5 @@
 import type { FactoryClient } from '@nexus/factory-db'
-import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { ConflictError, DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -116,6 +116,7 @@ export function routingViewOf(loaded: LoadedRouting): RoutingView {
       scanRequired: step.scanRequired,
       final: final?.id === step.id,
       instructions: step.instructions,
+      parallelGroup: step.parallelGroup ?? null,
       subcontract: subcontract
         ? {
             supplier: loaded.workshops.get(subcontract.supplierId) ?? { id: subcontract.supplierId, code: '', name: '' },
@@ -197,6 +198,22 @@ export async function workshopProblems(tx: CommandTx, supplierId: string, styleC
 }
 
 /**
+ * B-W2b-88: the BOM lines of the draft that name these steps (BomLine.routingSeq): a step a line uses is not removed (the
+ * key refuses it, onDelete Restrict), so the command says which lines first, in a 409 with each line's path.
+ */
+export async function assertNoLinesUse(tx: CommandTx, revisionId: string, steps: readonly Pick<StepRecord, 'seq' | 'code'>[]): Promise<void> {
+  if (steps.length === 0) return
+  const lines = await tx.bomLine.findMany({ where: { revisionId, routingSeq: { in: steps.map((step) => step.seq) } }, select: { id: true, seq: true, routingSeq: true }, orderBy: { seq: 'asc' } })
+  if (lines.length === 0) return
+  const named = [...new Set(lines.map((line) => line.routingSeq!))].map((seq) => `${seq} (${steps.find((step) => step.seq === seq)?.code ?? ''})`)
+  throw new DomainError(
+    'conflict',
+    `${lines.length} BOM line(s) say step ${named.join(', ')} uses them (lines ${lines.map((line) => line.seq).join(', ')}): tie them to another step or to none in the BOM first.`,
+    lines.map((line) => ({ path: `bom/lines/${line.id}/routingSeq`, message: `BOM line ${line.seq} is used at step ${line.routingSeq}.` })),
+  )
+}
+
+/**
  * A draft revision's steps are named by work order operations only by mistake (a work order is released with a RELEASED
  * revision); while one does, its steps keep their places: a clear 409 before the reference's refusal.
  */
@@ -223,6 +240,7 @@ export function auditedStep(step: StepFields): Record<string, unknown> {
     standardMinutes: step.standardMinutes,
     scanRequired: step.scanRequired,
     instructions: step.instructions,
+    parallelGroup: step.parallelGroup ?? null,
   }
 }
 
@@ -260,6 +278,7 @@ export async function insertSteps(
       standardMinutes: step.standardMinutes,
       scanRequired: step.scanRequired,
       instructions: step.instructions,
+      parallelGroup: step.parallelGroup ?? null,
       ...subcontractColumns(subcontracts.get(step.id) ?? null),
       createdAt: now,
       updatedAt: now,

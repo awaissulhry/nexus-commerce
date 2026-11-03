@@ -13,7 +13,7 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import type { BomView, StyleView } from '../../api'
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
-import { draftOf, editableRevision, nextRevisionNumber, releaseHeld, releasedOf, revisionInView, startRevisionHeld, STATUS_TONE, stepRevision, tabsFor, type StyleTab } from '../../model'
+import { draftOf, editableRevision, isRoutingBlocker, nextRevisionNumber, releaseHeld, releasedOf, revisionInView, startRevisionHeld, STATUS_TONE, stepRevision, tabsFor, type StyleTab } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
 import { StyleDialogs } from './Dialogs'
 import { OverviewTab } from './OverviewTab'
@@ -330,8 +330,7 @@ function ReadyRecord({ style, model, actions, panels }: { style: StyleView; mode
 /** The problem dot of a tab: the release check's findings that belong to it. */
 function countFor(tab: 'bom' | 'routing', bom: BomView | null): number {
   if (!bom) return 0
-  const routing = (code: string) => ['NO_STEPS', 'MINUTES_NOT_POSITIVE', 'NO_SCAN_POINT'].includes(code)
-  return bom.issues.filter((issue) => (tab === 'routing' ? routing(issue.code) : !routing(issue.code) && issue.code !== 'NO_SIZE_RANGE' && issue.code !== 'NO_ACTIVE_COLOURWAY')).length
+  return bom.issues.filter((issue) => (tab === 'routing' ? isRoutingBlocker(issue.code) : !isRoutingBlocker(issue.code) && issue.code !== 'NO_SIZE_RANGE' && issue.code !== 'NO_ACTIVE_COLOURWAY')).length
 }
 
 const KEYS: Array<{ keys: string[]; does: string }> = [

@@ -1,4 +1,5 @@
 import type { WorkCentreKind } from '../../product/routing/operations'
+import { stepAfter, stepBefore } from '../../product/routing/parallel'
 import { NO_DPIA_NOTE, NO_WORKER_NOTICE_NOTE, type FloorReadiness } from '../../privacy/readiness'
 import { scannedBundleRefusal } from '../bundles/rules'
 import { CUTTABLE_STATUSES } from '../cutting/rules'
@@ -35,6 +36,10 @@ import type { DefectKind, ScanReason } from './reasons'
  *               voids it).
  *   own         "own" is the site's floor subject (B-W1-37): at a WORKER site the signed-in worker's scans, at a STATION
  *               site the device's station's (no worker is recorded there).
+ *   parallel    B-W2b-88 (MES-025): operations with the same parallel group (copied from the routing, product/routing/parallel)
+ *               run side by side and count as ONE step: a sibling is never "the one before" or "the one after" another; the
+ *               step before a group member is the one before the group, and what reached the step after a group is the
+ *               lowest good of its operations (a garment passes each of them).
  *   unplanned   B-W2b-82 (MES-086): an operation added to a released work order (production/extraops) is a real step with no
  *               routing step: `scanRequired` false and `unplanned` true. It stands outside the routing's order: nothing has to
  *               reach it, nothing waits for it, it never is the final or the sewn operation, and the operation after it
@@ -164,6 +169,8 @@ export interface ScanOperation {
   readonly workCentreKind: WorkCentreKind
   /** B-W2b-82: added to the released work order, no routing step (see the file's head). Left out: a routing step. */
   readonly unplanned?: boolean | undefined
+  /** B-W2b-88: its routing step's parallel group (side by side with the others of the number). Left out or null: in sequence. */
+  readonly parallelGroup?: number | null | undefined
 }
 
 const bySeq = <Op extends Pick<ScanOperation, 'seq'>>(operations: readonly Op[]): Op[] => [...operations].sort((a, b) => a.seq - b.seq)
@@ -176,18 +183,31 @@ export function scannedOperations<Op extends ScanOperation>(operations: readonly
   return bySeq(operations).filter((operation) => operation.scanRequired)
 }
 
-/** The scanned operation before this one (the one whose good it takes), or null for the first. */
-export function previousScanned<Op extends ScanOperation>(operations: readonly Op[], operationId: string): Op | null {
+/**
+ * The scanned step before this operation (B-W2b-88): one operation, or every scanned operation of a parallel group before
+ * it (a garment passes each); never its own siblings. Empty at the first step and at an unplanned operation.
+ */
+export function previousStep<Op extends ScanOperation>(operations: readonly Op[], operationId: string): Op[] {
   const self = operations.find((operation) => operation.id === operationId)
-  if (!self || self.unplanned) return null
-  return scannedOperations(operations).filter((operation) => operation.seq < self.seq).at(-1) ?? null
+  if (!self || self.unplanned) return []
+  return stepBefore(scannedOperations(operations), self)
 }
 
-/** The scanned operation after this one (the one that takes its good), or null for the last. */
-export function nextScanned<Op extends ScanOperation>(operations: readonly Op[], operationId: string): Op | null {
+/** The scanned step after this operation (B-W2b-88): one operation, or every scanned operation of the parallel group after it. */
+export function nextStep<Op extends ScanOperation>(operations: readonly Op[], operationId: string): Op[] {
   const self = operations.find((operation) => operation.id === operationId)
-  if (!self || self.unplanned) return null
-  return scannedOperations(operations).find((operation) => operation.seq > self.seq) ?? null
+  if (!self || self.unplanned) return []
+  return stepAfter(scannedOperations(operations), self)
+}
+
+/** The scanned operation before this one (the one whose good it takes; of a group before it, the last), or null for the first. */
+export function previousScanned<Op extends ScanOperation>(operations: readonly Op[], operationId: string): Op | null {
+  return previousStep(operations, operationId).at(-1) ?? null
+}
+
+/** The scanned operation after this one (the one that takes its good; of a group after it, the first), or null for the last. */
+export function nextScanned<Op extends ScanOperation>(operations: readonly Op[], operationId: string): Op | null {
+  return nextStep(operations, operationId)[0] ?? null
 }
 
 /** The final operation: the last scanned one (B-W1-14 finalStepOf). Its good garments are finished. */
@@ -386,7 +406,8 @@ export interface BundleFacts {
 
 /**
  * How many garments of the bundle may be reported at the operation: what the previous scanned operation passed (its
- * standing report's good), or the bundle's garments at the first one; or PREVIOUS_NOT_REPORTED.
+ * standing report's good), or the bundle's garments at the first one; or PREVIOUS_NOT_REPORTED. B-W2b-88: a parallel
+ * group before it passes the lowest good of its operations, and each of them must have passed the bundle.
  */
 export function capAt(
   operations: readonly ScanOperation[],
@@ -395,16 +416,19 @@ export function capAt(
   standing: ReadonlyMap<string, ScanFact>,
   bundleId: string,
 ): { readonly ok: true; readonly cap: number; readonly previous: ScanOperation | null } | { readonly ok: false; readonly refusal: ScanRefusal } {
-  const previous = previousScanned(operations, operation.id)
-  if (!previous) return { ok: true, cap: bundle.quantity, previous: null }
-  const passed = standing.get(standingKey(bundleId, previous.id))
-  if (!passed) {
+  const step = previousStep(operations, operation.id)
+  if (step.length === 0) return { ok: true, cap: bundle.quantity, previous: null }
+  const missing = step.find((candidate) => !standing.has(standingKey(bundleId, candidate.id)))
+  if (missing) {
     return {
       ok: false,
-      refusal: refusal('PREVIOUS_NOT_REPORTED', `${operationLabel(previous)} has not passed bundle ${bundle.code} yet.`, `Report it at Op ${previous.seq} first; if it waits in another tablet's queue, this one is sent again by itself.`, false),
+      refusal: refusal('PREVIOUS_NOT_REPORTED', `${operationLabel(missing)} has not passed bundle ${bundle.code} yet.`, `Report it at Op ${missing.seq} first; if it waits in another tablet's queue, this one is sent again by itself.`, false),
     }
   }
-  return { ok: true, cap: passed.goodQuantity, previous }
+  // The lowest good of the step (the one operation, or the group's) is what reached this operation.
+  let previous = step[0]!
+  for (const candidate of step) if (standing.get(standingKey(bundleId, candidate.id))!.goodQuantity <= standing.get(standingKey(bundleId, previous.id))!.goodQuantity) previous = candidate
+  return { ok: true, cap: standing.get(standingKey(bundleId, previous.id))!.goodQuantity, previous }
 }
 
 function overCap(bundle: Pick<BundleFacts, 'code' | 'quantity'>, previous: ScanOperation | null, cap: number, total: number): ScanRefusal | null {
@@ -413,12 +437,17 @@ function overCap(bundle: Pick<BundleFacts, 'code' | 'quantity'>, previous: ScanO
   return refusal('MORE_THAN_PASSED', `${operationLabel(previous)} passed ${garments(cap)} of bundle ${bundle.code}; ${total} reported here.`, `Count again: at most ${cap}, or ask a correction of Op ${previous.seq} first.`)
 }
 
-/** What the next scanned operation already took of the bundle (its standing report's garments), with that operation. */
+/**
+ * What the next scanned operation already took of the bundle (its standing report's garments), with that operation;
+ * B-W2b-88: of a parallel group after it, the most any of them took.
+ */
 function takenNext(operations: readonly ScanOperation[], operation: ScanOperation, standing: ReadonlyMap<string, ScanFact>, bundleId: string): { readonly next: ScanOperation; readonly taken: number } | null {
-  const next = nextScanned(operations, operation.id)
-  if (!next) return null
-  const scan = standing.get(standingKey(bundleId, next.id))
-  return scan ? { next, taken: totalOf(scan) } : null
+  let most: { next: ScanOperation; taken: number } | null = null
+  for (const next of nextStep(operations, operation.id)) {
+    const scan = standing.get(standingKey(bundleId, next.id))
+    if (scan && (most === null || totalOf(scan) > most.taken)) most = { next, taken: totalOf(scan) }
+  }
+  return most
 }
 
 const noCount = (): ScanRefusal => refusal('NO_COUNT', 'Nothing to report: good, scrap and rework add up to 0.', 'Count at least one garment.')

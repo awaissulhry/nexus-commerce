@@ -48,8 +48,8 @@ const keyOf = (line: BomLineData): string => `${line.itemId}\u0000${line.placeme
 
 function lineFields(from: BomLineData, to: BomLineData): FieldChange[] {
   const fields: FieldChange[] = []
-  const plain = (field: 'seq' | 'uom' | 'sizeDependent' | 'colourDependent' | 'itemColourId' | 'supplierId' | 'note') => {
-    if (from[field] !== to[field]) fields.push({ field, from: from[field], to: to[field] })
+  const plain = (field: 'seq' | 'uom' | 'sizeDependent' | 'colourDependent' | 'itemColourId' | 'supplierId' | 'note' | 'routingSeq') => {
+    if ((from[field] ?? null) !== (to[field] ?? null)) fields.push({ field, from: from[field] ?? null, to: to[field] ?? null })
   }
   const decimal = (field: 'qty' | 'wastagePct') => {
     if (!sameDecimal(from[field], to[field])) fields.push({ field, from: shown(from[field]), to: shown(to[field]) })
@@ -64,6 +64,7 @@ function lineFields(from: BomLineData, to: BomLineData): FieldChange[] {
   plain('itemColourId')
   plain('supplierId')
   plain('note')
+  plain('routingSeq')
   return fields
 }
 

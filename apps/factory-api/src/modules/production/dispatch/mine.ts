@@ -2,7 +2,7 @@ import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/error
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { sumMinutes } from '@nexus/factory-domain/production/dispatch/load'
-import { MATERIAL_LOOK, worstMaterial, type MaterialFlag } from '@nexus/factory-domain/production/dispatch/material'
+import { MATERIAL_LOOK, worstMaterial } from '@nexus/factory-domain/production/dispatch/material'
 import { PRODUCTION_DISPATCH_HANDOVER, PRODUCTION_DISPATCH_MANAGE, PRODUCTION_DISPATCH_VIEW } from '@nexus/factory-domain/production/dispatch/permissions'
 import { assignmentKindOf, DISPATCH_REFUSALS } from '@nexus/factory-domain/production/dispatch/rules'
 import { shiftLabelAt } from '@nexus/factory-domain/production/dispatch/handover'
@@ -15,7 +15,7 @@ import { floorOf, may } from './access'
 import { materialView, sortCards } from './board'
 import { attendanceOfDay, lineLoads, lineMinutesOf } from './facts'
 import { lineRowOf, siteRowOf, type Reader } from './store'
-import { cardAt, dispatchWorld, materialFlags, planView, type DayCard, type DispatchWorld } from './world'
+import { cardAt, dispatchWorld, materialFlags, planView, type DayCard, type DispatchWorld, type MaterialFlags } from './world'
 
 /**
  * The floor's side of dispatch (B-W2b-49):
@@ -35,7 +35,7 @@ import { cardAt, dispatchWorld, materialFlags, planView, type DayCard, type Disp
  */
 
 /** A card as a list entry (the W2a dispatch list's shape; a card with no slot names its row). */
-export function entryOfCard(card: DayCard, world: Pick<DispatchWorld, 'start' | 'end'>, flags: ReadonlyMap<string, MaterialFlag>) {
+export function entryOfCard(card: DayCard, world: Pick<DispatchWorld, 'start' | 'end'>, flags: MaterialFlags) {
   return {
     slotId: card.slot?.id ?? card.rows[0]?.id ?? card.operation.id,
     workOrder: { id: card.workOrder.id, number: card.workOrder.number, status: card.workOrder.status, priority: card.workOrder.priority, rush: card.workOrder.rush, dueDate: card.workOrder.dueDate ? card.workOrder.dueDate.toISOString().slice(0, 10) : null, style: card.workOrder.style, holdReason: card.workOrder.holdReason },
@@ -51,7 +51,7 @@ export function entryOfCard(card: DayCard, world: Pick<DispatchWorld, 'start' | 
     waiting: card.waiting,
     done: 0,
     sequence: card.sequence,
-    material: materialView(flags.get(card.workOrder.id)),
+    material: materialView(flags.of(card.workOrder.id, card.operation.id)),
   }
 }
 
@@ -146,7 +146,8 @@ export async function floorLine(caller: CommandCaller, query: { readonly lineId?
               return [{ assignmentId: row.id, version: row.version, kind: assignmentKindOf(row), workOrder: card ? { number: card.workOrder.number } : null, operation: card ? { seq: card.operation.seq, name: card.operation.name } : null, words: standing.words! }]
             })
           : []
-        const material = worstMaterial(cards.flatMap((card) => (flags.get(card.workOrder.id) ? [flags.get(card.workOrder.id)!.state] : [])))
+        // B-W2b-88: each card's own operation's flag (an operation that uses no material says nothing).
+        const material = worstMaterial(cards.flatMap((card) => flags.of(card.workOrder.id, card.operation.id)?.state ?? []))
         return { id: station.id, code: station.code, name: station.name, signedIn: signedIn.has(station.id), work: { cards: cards.length, pieces: cards.reduce((sum, card) => sum + card.pieces, 0), minutes: sumMinutes(queued.map((card) => card.minutes)) }, material: material ? { state: material, ...MATERIAL_LOOK[material] } : null, reassign }
       }),
       mayManage,

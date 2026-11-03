@@ -84,10 +84,12 @@ const SESSIONS: Record<string, SessionContext> = {
   qc: floor(A.qc, A.operatorA1),
   /** The team leader signed in on the inspection tablet. */
   leadQc: floor(A.qc, A.leadA1),
+  /** B-W2b-88: the office's product engineer (a routing step's parallel group, a BOM line's operation, the release). */
+  engineer: office([grant(['product.styles.view', 'product.bom.view', 'product.bom.manage', 'product.bom.release', 'product.routing.view', 'product.routing.manage'])]),
 }
 
 type Json = Record<string, any>
-type Method = 'GET' | 'POST'
+type Method = 'GET' | 'POST' | 'PATCH'
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await db.admin.query(sql, values)).rows as T[]
 const run = randomBytes(4).toString('hex')
 let sent = 0
@@ -216,7 +218,8 @@ beforeAll(async () => {
       await tx.certificateCoverage.create({ data: { id: newId(), certificateId, styleId: A.style, sizes: ['50', '52'] }, select: { id: true } })
     }),
   )
-  await addStock(5)
+  // Five hides for the work orders below; a sixth for B-W2b-88's.
+  await addStock(6)
   // A made-up second line with a sewing station of its own.
   await admin(`INSERT INTO "Line" (id, "tenantId", "companyId", "siteId", code, name) VALUES ($1, $2, $3, $4, 'L2', 'Made-up line 2')`, [A.line2, A.tenant, A.companyA, A.siteA1])
   await admin(`INSERT INTO "Station" (id, "tenantId", "companyId", "siteId", "lineId", "workCentreId", code, name) VALUES ($1, $2, $3, $4, $5, $6, 'SEW-03', 'Made-up sewing station 3')`, [A.sew3Station, A.tenant, A.companyA, A.siteA1, A.line2, A.sewCentre])
@@ -546,5 +549,87 @@ describe('who reads the checks: the office within its grants, never another comp
     expect((await call('viewer', 'GET', '/production/guards/flags')).statusCode).toBe(403)
     expect((await call('supervisor', 'GET', `/production/guards/flags/${newId()}`)).statusCode).toBe(404)
     expect((await call('companyB', 'GET', `/production/guards/lots/${lotIds.protectorA}/garments`)).statusCode).toBe(404)
+  })
+})
+
+// ---- B-W2b-88 ------------------------------------------------------------------------------------------------------------------------
+
+describe('B-W2b-88 parallel operations and components per operation, through a released revision and a work order', () => {
+  let workOrder: Json
+  let bundle: Json
+  beforeAll(async () => {
+    // Revision 2 of SEED-JKT-02 (made up): sewing (20) and the inspection (30) side by side, the shoulder protector used at 30.
+    const style = (await ok('engineer', 'GET', `/product/styles/${A.style}`)).style
+    const released = style.revisions.find((revision: Json) => revision.status === 'RELEASED')
+    const draft = (await ok('engineer', 'POST', `/product/styles/${A.style}/revisions/${released.id}/copy`, { changeNote: 'Sewing and inspection side by side (made up).' }, 201)).bom
+    const url = `/product/styles/${A.style}/revisions/${draft.revision.id}`
+    let routing = (await ok('engineer', 'GET', `${url}/routing`)).routing
+    for (const seq of [20, 30]) {
+      const step = routing.steps.find((entry: Json) => entry.seq === seq)
+      routing = (await ok('engineer', 'PATCH', `${url}/routing/steps/${step.id}`, { version: routing.revision.version, parallelGroup: 1 })).routing
+    }
+    expect(routing.steps.map((step: Json) => [step.seq, step.parallelGroup])).toEqual([[10, null], [20, 1], [30, 1], [40, null]])
+    expect(routing).toMatchObject({ issues: [], warnings: [] })
+    let bom = (await ok('engineer', 'GET', `${url}/bom`)).bom
+    // The copy kept the seed's ties (leather at 10, lining and protector at 20): the protector moves to 30.
+    expect(bom.lines.map((line: Json) => [line.seq, line.routingStep?.seq ?? null])).toEqual([[10, 10], [20, 20], [30, 20]])
+    const protectorLine = bom.lines.find((line: Json) => line.item.id === A.protector)
+    bom = (await ok('engineer', 'PATCH', `${url}/bom/lines/${protectorLine.id}`, { version: bom.revision.version, routingSeq: 30 })).bom
+    expect(bom.lines.find((line: Json) => line.item.id === A.protector).routingStep).toMatchObject({ seq: 30, code: routing.steps[2].code })
+    await ok('engineer', 'POST', `${url}/release`, { version: bom.revision.version })
+    // The first sales order line still has 10 of its 60 pieces open.
+    const [open] = await admin(`SELECT l.id FROM "SalesOrderLine" l JOIN "SalesOrder" o ON o.id = l."orderId" WHERE o.number = $1`, [`T-${run}-SO`])
+    workOrder = await releasedWorkOrder(open!.id, 5)
+    bundle = (await cutAndBundle(workOrder, 'H6', 5))[0]!
+    await reported('cutter', scanBody(bundle!, 5))
+    await admin(`UPDATE "Style" SET "garmentTracking" = 'SERIAL' WHERE id = $1`, [A.style])
+  })
+  afterAll(async () => {
+    await admin(`UPDATE "Style" SET "garmentTracking" = 'BATCH' WHERE id = $1`, [A.style])
+  })
+
+  it("copies the routing's parallel group onto the work order's operations at its release (the database fills it)", async () => {
+    expect(await admin(`SELECT seq, "parallelGroup" FROM "WorkOrderOperation" WHERE "workOrderId" = $1 ORDER BY seq`, [workOrder.id])).toEqual([
+      { seq: 10, parallelGroup: null },
+      { seq: 20, parallelGroup: 1 },
+      { seq: 30, parallelGroup: 1 },
+      { seq: 40, parallelGroup: null },
+    ])
+  })
+
+  it('the inspection, side by side with sewing, finds sewing not skipped and asks the protector its own line names', async () => {
+    const check = await ok('qc', 'GET', `/production/guards/check?code=${bundle.code}`)
+    expect(check).toMatchObject({ operation: { id: opOf(workOrder, 30), seq: 30 }, expected: 5, skipped: [], findings: [] })
+    expect(check.components.asked).toEqual([{ itemId: A.protector, code: 'SEED-PRO-300', name: 'Seed shoulder protector level 2' }])
+    const missing = await refused('qc', scanBody(bundle, 5))
+    expect(refusalOf(missing)).toBe('refusal/COMPONENTS_MISSING')
+    const scan = await reported('qc', scanBody(bundle, 5, { components: [{ code: lots.protectorA, garments: 5 }] }))
+    expect(scan.operation.seq).toBe(30)
+    expect(await flagRows(scan.id, 'production.scanGuardFlagged')).toEqual([])
+    expect((await flagRows(scan.id, 'production.scanComponentsTraced'))[0]!.after).toMatchObject({ operationSeq: 30, garments: 5, components: [{ lotCode: lots.protectorA, garments: 5 }] })
+  })
+
+  it('sewing (the sewn operation) no longer asks the protector, refuses its lot in words, and is not after its sibling', async () => {
+    const check = await ok('sew1', 'GET', `/production/guards/check?code=${bundle.code}`)
+    expect(check).toMatchObject({ operation: { id: opOf(workOrder, 20), seq: 20 }, expected: 5, skipped: [], findings: [], components: { asked: [] } })
+    expect(check.components.traceable.map((row: Json) => row.itemId)).not.toContain(A.protector)
+    const wrong = await refused('sew1', scanBody(bundle, 5, { components: [{ code: lots.protectorB, garments: 5 }] }))
+    expect(refusalOf(wrong)).toBe('refusal/WRONG_COMPONENT')
+    expect(wrong.message).toBe(`Lot ${lots.protectorB} is SEED-PRO-300 Seed shoulder protector level 2, used at Op 30 ${(workOrder.spec.operations as Json[]).find((op) => op.seq === 30)!.name}, not at Op 20 ${(workOrder.spec.operations as Json[]).find((op) => op.seq === 20)!.name}.`)
+    // 4 good after the inspection took 5: a sibling is not "the one after" (no LESS_THAN_TAKEN); no skip either.
+    const scan = await reported('sew1', scanBody(bundle, 4, { scrap: [{ reason: 'STAIN', quantity: 1 }] }))
+    expect(await flagRows(scan.id, 'production.scanGuardFlagged')).toEqual([])
+  })
+
+  it('pack, after the group, takes the lowest good of the two (4) and says nothing was skipped', async () => {
+    const check = await ok('qc', 'GET', `/production/guards/check?code=${bundle.code}&workOrderOperationId=${opOf(workOrder, 40)}`)
+    expect(check).toMatchObject({ operation: { seq: 40 }, expected: 4, skipped: [], findings: [] })
+    const card = await ok('qc', 'GET', `/production/scans/card?code=${bundle.code}`)
+    expect(card.operations.map((op: Json) => [op.seq, op.state, op.expected])).toEqual([
+      [10, 'DONE', 5],
+      [20, 'DONE', 5],
+      [30, 'DONE', 5],
+      [40, 'OPEN', 4],
+    ])
   })
 })

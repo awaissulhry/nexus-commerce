@@ -7,6 +7,7 @@ import { localisedNames } from '../materials/contracts'
 import { REVISION_STATUSES } from '../styles/revisions'
 import { STYLE_STATUSES } from '../styles/rules'
 import { MAX_INSTRUCTIONS, MINUTES_INPUT_SCALE, MINUTES_PRECISION, MINUTES_SCALE, OPERATION_CODE, OPERATION_CODE_RULE, OPERATION_STATUSES, WORK_CENTRE_KINDS } from './operations'
+import { MAX_PARALLEL_GROUP } from './parallel'
 import { MAX_ROUTING_STEPS, ROUTING_ISSUE_CODES } from './rules'
 import { MAX_TRANSIT_DAYS } from './subcontract'
 
@@ -144,6 +145,8 @@ const stepInput = {
   scanRequired: z.boolean(),
   /** For this style; left out on a new step: the library's; null clears it. */
   instructions: text(MAX_INSTRUCTIONS).nullable(),
+  /** B-W2b-88 (MES-025): steps with the same number run side by side and count as one step; null: in sequence. */
+  parallelGroup: z.number().int().min(1).max(MAX_PARALLEL_GROUP).nullable(),
 }
 
 /** Operations from the library, added at the end of the draft's routing in the order sent. */
@@ -174,6 +177,8 @@ export const updateStepBody = input({
   standardMinutes: stepInput.standardMinutes.optional(),
   scanRequired: stepInput.scanRequired.optional(),
   instructions: stepInput.instructions.optional(),
+  /** B-W2b-88: the step's parallel group; null takes it back into the sequence. */
+  parallelGroup: stepInput.parallelGroup.optional(),
   /** W2a: the step's subcontract details; null takes the step back in-house. */
   subcontract: subcontractBody.nullable().optional(),
 })
@@ -228,6 +233,8 @@ export const stepView = output({
   /** The final operation: the last scanned step, where the batch or serial is given (B-W1-44). */
   final: z.boolean(),
   instructions: z.string().nullable(),
+  /** B-W2b-88 (MES-025): its parallel group (side by side with the other steps of the number); null: in sequence. */
+  parallelGroup: z.number().int().nullable(),
   /** W2a (PRD-120): the workshop that does it, its fee per piece (the cost grain) and the transit days; null: in-house. */
   subcontract: output({
     supplier: output({ id: id(), code: z.string(), name: z.string() }),

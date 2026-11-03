@@ -136,6 +136,14 @@ const BOARD: DispatchBoard = {
   mayManage: true,
 }
 
+/** B-W2b-88: WO-0144's sides and sleeves run side by side (one parallel group) at SEW-02 and SEW-03. */
+const SIDES = { ...C144, parallel: { group: 1, with: [{ seq: 30, name: 'Cucitura maniche' }] } }
+const SLEEVES = card(8, 'WO-0144', 'Gilet Pista', { seq: 30, name: 'Cucitura maniche' }, 40, '240.0', { parallel: { group: 1, with: [{ seq: 20, name: 'Cucitura fianchi' }] }, material: { state: 'IN_STOCK', date: null }, workOrder: C144.workOrder })
+const SIDE_BY_SIDE: DispatchBoard = {
+  ...BOARD,
+  lines: BOARD.lines.map((line) => (line.id !== L1 ? line : { ...line, stations: [line.stations[0]!, station(2, 'SEW-02', 'Cucitura 2', L1, [C143, SIDES], { operators: [MARCO, NINA] }), station(3, 'SEW-03', 'Cucitura 3', L1, [SLEEVES])] })),
+}
+
 const GATE_OPEN: DispatchBoard = {
   ...BOARD,
   attendance: { open: true },
@@ -227,6 +235,7 @@ export const designScreen = defineDesignScreen<DispatchCase>({
     { id: 'attendance', label: 'Clock-in on: who is not in, Reassign', model: ready(GATE_OPEN), note: 'Only with the ATTENDANCE gate open and only to who runs the board: a word, never why. Absent is a line count, hidden under the minimum group.' },
     { id: 'moving', label: 'A keyboard move under way', model: ready(BOARD, { moving: { cardId: NOT1.id, laneId: uid('3333', 3) } }), note: 'Space picks up, ← → choose a station, the column shows its queue after the move.' },
     { id: 'held-drop', label: 'A held drop: a station that does not do the work', model: ready(BOARD, { moving: { cardId: NOT1.id, laneId: uid('3333', 4) } }) },
+    { id: 'side-by-side', label: 'W2b: two operations side by side', model: ready(SIDE_BY_SIDE), note: 'WO-0144 Op 20 on SEW-02 and Op 30 on SEW-03 are one parallel group: each card says "Side by side with Op …"; neither waits for the other.' },
     { id: 'many', label: 'Three lines, a dozen stations: the columns wrap', model: ready(MANY) },
     { id: 'line', label: 'One line chosen (?line=)', model: ready(BOARD, { address: { ...ADDRESS, line: L1 } }) },
     { id: 'no-names', label: 'A site whose records name the station', model: ready(NO_NAMES) },
@@ -258,4 +267,4 @@ export const designScreen = defineDesignScreen<DispatchCase>({
   ],
 })
 
-export { BOARD as DISPATCH_BOARD, NOT1, C142, C143, DRAFT, PICKER }
+export { BOARD as DISPATCH_BOARD, NOT1, C142, C143, DRAFT, PICKER, SIDE_BY_SIDE }

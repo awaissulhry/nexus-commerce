@@ -79,8 +79,36 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
       select: { id: true },
     })
 
-    const lines = copyLines(await readLines(tx, sourceId), newId)
     const stamp = { createdAt: now, updatedAt: now, createdById }
+    // The routing (B-W1-14) travels with the revision: its steps are copied as they are, a subcontracted step (W2a,
+    // PRD-120) with its workshop, fee per piece and transit days (office columns: the floor never reads the fee), and
+    // (B-W2b-88) its parallel group. BEFORE the BOM: a line names its step by place (BomLine.routingSeq's key).
+    const routing = await tx.routingOperation.findMany({
+      where: { revisionId: sourceId },
+      select: {
+        seq: true,
+        operationId: true,
+        code: true,
+        name: true,
+        nameI18n: true,
+        workCentreKind: true,
+        standardMinutes: true,
+        scanRequired: true,
+        instructions: true,
+        parallelGroup: true,
+        supplierId: true,
+        pricePerPiece: true,
+        transitDays: true,
+      },
+      orderBy: { seq: 'asc' },
+    })
+    if (routing.length > 0) {
+      await tx.routingOperation.createMany({
+        data: routing.map((step) => ({ ...step, id: newId(), styleId, revisionId: id, nameI18n: step.nameI18n ?? undefined, ...stamp })),
+      })
+    }
+
+    const lines = copyLines(await readLines(tx, sourceId), newId)
     if (lines.length > 0) {
       await tx.bomLine.createMany({
         data: lines.map((line) => ({
@@ -100,6 +128,8 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
           colourwayId: line.colourwayId,
           supplierId: line.supplierId,
           note: line.note,
+          // B-W2b-88: the step that uses it, by place: the copied routing keeps every place.
+          routingSeq: line.routingSeq ?? null,
           ...stamp,
         })),
       })
@@ -111,31 +141,6 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
           : [],
       )
       if (cells.length > 0) await tx.bomLineColour.createMany({ data: cells })
-    }
-    // The routing (B-W1-14) travels with the revision: its steps are copied as they are, a subcontracted step (W2a,
-    // PRD-120) with its workshop, fee per piece and transit days (office columns: the floor never reads the fee).
-    const routing = await tx.routingOperation.findMany({
-      where: { revisionId: sourceId },
-      select: {
-        seq: true,
-        operationId: true,
-        code: true,
-        name: true,
-        nameI18n: true,
-        workCentreKind: true,
-        standardMinutes: true,
-        scanRequired: true,
-        instructions: true,
-        supplierId: true,
-        pricePerPiece: true,
-        transitDays: true,
-      },
-      orderBy: { seq: 'asc' },
-    })
-    if (routing.length > 0) {
-      await tx.routingOperation.createMany({
-        data: routing.map((step) => ({ ...step, id: newId(), styleId, revisionId: id, nameI18n: step.nameI18n ?? undefined, ...stamp })),
-      })
     }
 
     const copied = { revision, status: 'DRAFT', copiedFrom: { id: sourceId, revision: source.revision }, lines: lines.length, routingSteps: routing.length, changeNote: body.changeNote ?? null }

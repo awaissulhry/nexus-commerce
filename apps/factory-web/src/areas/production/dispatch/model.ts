@@ -205,6 +205,8 @@ function marksOf(card: DispatchCard, words: Words): PlanningMark[] {
     else if (card.sequence.state === 'WARN') marks.push({ label: t('mark.sequenceWarn', params), tone: 'warning' })
     else marks.push({ label: t('mark.waiting', params), tone: 'neutral' })
   }
+  // B-W2b-88: operations of one parallel group run side by side; the card says which.
+  if (card.parallel && card.parallel.with.length > 0) marks.push({ label: t('mark.parallel', { seqs: card.parallel.with.map((operation) => operation.seq).join(', ') }), tone: 'info' })
   if (card.material?.state === 'IN_STOCK') marks.push({ label: t('mark.material.IN_STOCK'), tone: 'success' })
   if (card.material?.state === 'ON_THE_WAY') marks.push({ label: card.material.date ? t('mark.material.expected', { date: dayWords(card.material.date, words) }) : t('mark.material.ON_THE_WAY'), tone: 'warning' })
   if (card.material?.state === 'MISSING') marks.push({ label: t('mark.material.MISSING'), tone: 'danger' })

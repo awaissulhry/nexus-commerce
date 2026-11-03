@@ -4,7 +4,7 @@ import { DISPATCH_STATES } from '@nexus/factory-domain/planning/schedule/dispatc
 import { READINESS_WORDS } from '@nexus/factory-domain/planning/readiness/readiness'
 import { HANDOVER_LIMITS, HANDOVER_TOPICS } from '@nexus/factory-domain/production/dispatch/handover'
 import { LOAD_SOURCES, LOAD_STATES, PRESENCE_STATES } from '@nexus/factory-domain/production/dispatch/load'
-import { MATERIAL_STATES } from '@nexus/factory-domain/production/dispatch/material'
+import { MATERIAL_SCOPES, MATERIAL_STATES } from '@nexus/factory-domain/production/dispatch/material'
 import { PAPER_LANGUAGES } from '@nexus/factory-domain/production/dispatch/paper'
 import { ASSIGNMENT_KINDS, DISPATCH_LIMITS, SEQUENCE_STATES } from '@nexus/factory-domain/production/dispatch/rules'
 import { QUALIFICATION_MODES } from '@nexus/factory-domain/people/skills/qualification'
@@ -28,7 +28,8 @@ const named = output({ id: id(), code: z.string(), name: z.string() })
 
 const sequenceView = output({ rule: z.enum(FLOOR_RULE_MODES), state: z.enum(SEQUENCE_STATES), words: z.string().nullable() })
 
-const materialView = output({ state: z.enum(MATERIAL_STATES), word: z.enum(READINESS_WORDS), label: z.string(), date: businessDate().nullable(), words: z.string(), icon: z.string(), tone: z.string() })
+/** B-W2b-88: `scope` OPERATION where the BOM ties lines to steps (the operation's own material), else WORK_ORDER. */
+const materialView = output({ state: z.enum(MATERIAL_STATES), word: z.enum(READINESS_WORDS), label: z.string(), date: businessDate().nullable(), words: z.string(), scope: z.enum(MATERIAL_SCOPES), icon: z.string(), tone: z.string() })
 
 const entryView = output({
   slotId: id(),
@@ -61,7 +62,10 @@ const entryView = output({
   done: z.number().int(),
   /** B-W2b-49 (MES-025): the site's sequence rule on this work. */
   sequence: sequenceView,
-  /** B-W2b-49 (MES-026): its work order's material flag; null: not read. */
+  /**
+   * B-W2b-49 (MES-026): its material flag; B-W2b-88: the operation's own where the BOM ties lines to steps (scope); null: not
+   * read, or the operation uses no material.
+   */
   material: materialView.nullable(),
 })
 
@@ -136,6 +140,8 @@ const cardView = output({
   workOrder: output({ id: id(), number: z.string(), status: z.string(), priority: z.number().int(), rush: z.boolean(), dueDate: businessDate().nullable(), style: output({ code: z.string(), name: z.string() }), holdReason: z.string().nullable() }),
   operation: output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string(), workCentreId: id() }),
   previous: output({ seq: z.number().int(), code: z.string(), name: z.string() }).nullable(),
+  /** B-W2b-88 (MES-025): the operations it runs side by side with (its parallel group); null: in sequence. */
+  parallel: output({ group: z.number().int(), with: z.array(output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string() })) }).nullable(),
   stationId: id().nullable(),
   lineId: id().nullable(),
   bundles: z.array(output({ id: id(), code: z.string(), garments: z.number().int() })),

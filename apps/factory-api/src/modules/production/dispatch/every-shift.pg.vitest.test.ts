@@ -165,6 +165,10 @@ describe('the board (MES-023, MES-031; design production.dispatch)', () => {
     expect(card.pieces).toBeGreaterThan(0)
     expect(Number(card.minutes)).toBeCloseTo(card.pieces * Number(card.standardMinutes), 1)
     expect(['IN_STOCK', 'ON_THE_WAY', 'MISSING', 'NOT_KNOWN']).toContain(card.material.state)
+    // B-W2b-88: the seed's BOM ties the lining and the protector to sewing, so the flag is sewing's own material.
+    expect(card.material.scope).toBe('OPERATION')
+    expect(card.material.words).toMatch(/this operation uses/)
+    expect(card.parallel).toBeNull()
     const load = loadOf(answer)
     expect(load).toMatchObject({ source: 'PLANNED', sourceWords: 'Planned people: clock-in is not switched on at this site.', absent: null })
     expect(load.queuedMinutes).toBe(Math.round(Number(card.minutes)))

@@ -43,7 +43,10 @@ import {
   inScaleOrder,
   issueTab,
   issueWords,
+  isRoutingBlocker,
   matrixCells,
+  parallelChoices,
+  sideBySideWith,
   moveCell,
   rangeEffect,
   rangeWords,
@@ -388,5 +391,29 @@ describe('money by grain on the Cost tab (A1 §2.6)', () => {
     const stripped = withoutCost(demoCost()).cells[0]!
     expect('total' in stripped || 'knownTotal' in stripped).toBe(false)
     expect(stripped.material.lines.every((line) => !('amount' in line) && !('unitCost' in line))).toBe(true)
+  })
+})
+
+describe('B-W2b-88 side by side steps and the operation of a BOM line', () => {
+  it('offers in sequence, the groups in use with their steps, and a new group', () => {
+    const steps = demoRouting({ parallel: 'together' }).steps
+    expect(parallelChoices(steps)).toEqual({ groups: [{ group: 1, steps: ['40', '50'] }], next: 2 })
+    expect(parallelChoices(demoRouting().steps)).toEqual({ groups: [], next: 1 })
+    expect(sideBySideWith(steps[3]!, steps)).toEqual(['50 · CUC-ZIP'])
+    expect(sideBySideWith(steps[0]!, steps)).toEqual([])
+  })
+
+  it('sends the new routing findings to the routing tab and counts the blockers there', () => {
+    expect(issueTab({ code: 'PARALLEL_GROUP_SPLIT' })).toBe('routing')
+    expect(issueTab({ code: 'PARALLEL_GROUP_ALONE' })).toBe('routing')
+    expect(isRoutingBlocker('FINAL_SIDE_BY_SIDE')).toBe(true)
+    expect(isRoutingBlocker('PARALLEL_GROUP_ALONE')).toBe(false)
+    const routing = demoRouting({ parallel: 'split' })
+    expect(issueWords({ ...routing.issues[0]!, lineId: null, size: null, colourwayId: null }, null, routing)).toEqual({ key: 'issue.PARALLEL_GROUP_SPLIT', params: { line: '—', size: '—', colourway: '—', step: '40 · CUC-MAN' } })
+  })
+
+  it('a tied line names its operation; the rest say any operation', () => {
+    const lines = demoBom({ tied: true }).lines
+    expect(lines.map((line) => line.routingStep?.seq ?? null)).toEqual([null, null, null, 70, 70, 50, null, null])
   })
 })
