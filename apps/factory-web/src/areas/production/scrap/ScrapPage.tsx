@@ -12,6 +12,10 @@ import { romeDayStart } from '../cutting/model'
 import { approveReduction, askReplacement, getScrap, openReductions, refuseReduction, type ScrapRow, type ScrapTiles } from './api'
 import { addressOf, addressText, csvOf, leftToReplace, periodFrom, phrase, readProblem, replaceBody, replaceHeld, SCRAP_NAMESPACE, scrapCanOf, writeProblem, type ScrapAddress } from './model'
 import type { ReplaceDraftModel } from './view/ScrapDialogs'
+// B-W2b-126: second quality (MES-133) and a rework's repair (MES-132).
+import { getDowngradeOptions, getDowngrades, getRepair, postDowngrade, withdrawDowngrade } from './api'
+import { downgradeBody, downgradeHeld, emptyDowngradeDraft, withDowngrades, type SecondTotals } from './model'
+import type { DowngradeModel, RepairModel } from './view/SecondDialogs'
 import { ScrapView, type ScrapModel } from './view/ScrapView'
 
 const TIME_ZONE = 'Europe/Rome'
@@ -56,6 +60,9 @@ function Container() {
   const [problem, setProblem] = useState<ScrapModel['problem']>(null)
   const [notice, setNotice] = useState<ScrapModel['notice']>(null)
   const [replace, setReplace] = useState<ReplaceDraftModel | null>(null)
+  const [second, setSecond] = useState<SecondTotals | null>(null)
+  const [downgrade, setDowngrade] = useState<DowngradeModel | null>(null)
+  const [repair, setRepair] = useState<RepairModel | null>(null)
   const writeKey = useRef<string | null>(null)
   const readId = useRef(0)
   const todayStart = romeDayStart(new Date()).getTime()
@@ -66,10 +73,13 @@ function Container() {
     if (!can.view) return
     const id = ++readId.current
     try {
-      const [page, open] = await Promise.all([getScrap(api, { from: periodFrom(address.period, Date.now()) }), openReductions(api).catch(() => [] as Replacement[])])
+      const from = periodFrom(address.period, Date.now())
+      // B-W2b-126: the downgrades are their own read; a failed one leaves the scrap rows (its tile says "—").
+      const [page, open, downgrades] = await Promise.all([getScrap(api, { from }), openReductions(api).catch(() => [] as Replacement[]), getDowngrades(api, { from }).catch(() => null)])
       if (id !== readId.current) return
-      setRows({ items: page.rows, problem: null })
+      setRows({ items: withDowngrades(page.rows, downgrades?.downgrades ?? null), problem: null })
       setTiles(page.tiles)
+      setSecond(downgrades?.garments ?? null)
       setReductions(open)
       setAsOf(new Date().toISOString())
       setUpdates(0)
@@ -102,6 +112,37 @@ function Container() {
     if (!address.replace && replace) setReplace(null)
   }, [address.replace, rows.items])
 
+  // B-W2b-126: Downgrade to second quality follows the address (`?downgrade=`): what the row can still send, read when it opens.
+  useEffect(() => {
+    if (!address.downgrade) {
+      if (downgrade) setDowngrade(null)
+      return
+    }
+    if (downgrade?.rowId === address.downgrade) return
+    const row = (rows.items ?? []).find((entry) => entry.id === address.downgrade)
+    if (!row) return
+    writeKey.current = newIdempotencyKey()
+    setProblem(null)
+    setDowngrade({ rowId: row.id, options: null, readProblem: null, draft: emptyDowngradeDraft(null) })
+    getDowngradeOptions(api, row.source.type === 'SCAN' ? { sourceScanId: row.source.id } : { reworkOrderId: row.source.id })
+      .then((options) => setDowngrade((current) => (current?.rowId === row.id ? { ...current, options, draft: emptyDowngradeDraft(options) } : current)))
+      .catch((error: unknown) => setDowngrade((current) => (current?.rowId === row.id ? { ...current, readProblem: readProblem(error) } : current)))
+  }, [address.downgrade, rows.items])
+
+  // B-W2b-126: a rework row's detail reads its repair at the repair station.
+  useEffect(() => {
+    const row = address.open ? (rows.items ?? []).find((entry) => entry.id === address.open) : undefined
+    if (!row || row.source.type !== 'REWORK' || row.kind === 'SECOND') {
+      if (repair) setRepair(null)
+      return
+    }
+    if (repair?.reworkId === row.source.id && repair.value) return
+    setRepair({ reworkId: row.source.id, value: null, problem: null })
+    getRepair(api, row.source.id)
+      .then((value) => setRepair((current) => (current?.reworkId === row.source.id ? { ...current, value } : current)))
+      .catch((error: unknown) => setRepair((current) => (current?.reworkId === row.source.id ? { ...current, problem: readProblem(error) } : current)))
+  }, [address.open, rows.items])
+
   const recount = useCoalesced(() => {
     getScrap(api, { from: periodFrom(address.period, Date.now()) })
       .then((page) => setTiles(page.tiles))
@@ -110,7 +151,7 @@ function Container() {
   const live = useLive(
     (change) => {
       const scanScrap = change.type === 'production.scan_recorded' && Number(change.fields.scrap ?? change.fields.scrapQuantity ?? 1) > 0
-      if (!scanScrap && !/^production\.(rework_|replacement_|scrap_)/.test(change.type)) return
+      if (!scanScrap && !/^production\.(rework_|replacement_|scrap_|garments_downgraded|downgrade_withdrawn|repair_scanned)/.test(change.type)) return
       setUpdates((count) => count + 1)
       recount()
     },
@@ -170,6 +211,38 @@ function Container() {
     }
   }, [api, rows.items, replace, can, busy, go, load])
 
+  // B-W2b-126: the garments go to second quality instead of scrap.
+  const downgradeGo = useCallback(async () => {
+    const row = (rows.items ?? []).find((entry: ScrapRow) => entry.id === downgrade?.rowId) ?? null
+    if (!row || !downgrade?.options || downgradeHeld(downgrade.options, downgrade.draft, can, busy)) return
+    const key = writeKey.current ?? newIdempotencyKey()
+    writeKey.current = key
+    setBusy(true)
+    setProblem(null)
+    try {
+      await postDowngrade(api, downgradeBody(row, downgrade.draft, downgrade.options), key)
+      writeKey.current = null
+      setDowngrade(null)
+      setNotice({ tone: 'success', words: phrase('second.notice.done', { count: Number(downgrade.draft.quantity), number: row.workOrder.number }) })
+      go({ downgrade: null })
+      void load()
+    } catch (error) {
+      writeKey.current = newIdempotencyKey()
+      setProblem(writeProblem(error))
+    } finally {
+      setBusy(false)
+    }
+  }, [api, rows.items, downgrade, can, busy, go, load])
+
+  const withdraw = useCallback(
+    (row: ScrapRow, reason: string) => {
+      const target = row.downgrade
+      if (!target) return
+      void decide(() => withdrawDowngrade(api, target.id, { version: target.version, reason }), { tone: 'success', words: phrase('second.notice.withdrawn', { count: target.quantity, number: row.workOrder.number }) })
+    },
+    [api, decide],
+  )
+
   const exportRows = useCallback(
     (ids: string[]) => {
       const picked = (rows.items ?? []).filter((row) => ids.includes(row.id))
@@ -196,9 +269,12 @@ function Container() {
     shown,
     chartOpen,
     busy,
-    problem: address.replace || address.open ? problem : null,
+    problem: address.replace || address.open || address.downgrade ? problem : null,
     notice,
     replace: address.replace ? replace : null,
+    second,
+    downgrade: address.downgrade ? downgrade : null,
+    repair,
   }
 
   return (
@@ -218,6 +294,10 @@ function Container() {
         onReplace: (rowId) => go({ replace: rowId, open: rowId ? null : address.open }),
         onReplaceDraft: (draft) => setReplace((current) => (current ? { ...current, draft } : current)),
         onAsk: () => void ask(),
+        onDowngrade: (rowId) => go({ downgrade: rowId, open: rowId ? null : address.open }),
+        onDowngradeDraft: (draft) => setDowngrade((current) => (current ? { ...current, draft } : current)),
+        onDowngradeGo: () => void downgradeGo(),
+        onWithdraw: withdraw,
         onExport: exportRows,
         onDismissNotice: () => setNotice(null),
       }}

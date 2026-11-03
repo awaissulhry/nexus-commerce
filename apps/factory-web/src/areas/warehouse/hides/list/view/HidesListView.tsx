@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Bookmark, Download, MoreHorizontal, Printer, Search, Trash2, X } from 'lucide-react'
-import { EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
+import { ArrowRightLeft, Bookmark, Download, MoreHorizontal, PackageSearch, Printer, Search, Trash2, X } from 'lucide-react'
+import { EmptyState, Menu, MetricStrip, Thumbnail } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Select } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
@@ -15,13 +15,22 @@ import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import type { HideRow, StateCount } from '../../../../_shared/stock/api'
 import { convertArea, movesHref, otherAreaUnit, quantity, sumPerUnit, unitTotals } from '../../../../_shared/stock/model'
 import { HideStatePill, NoAccess, QualityPill } from '../../../../_shared/stock/parts'
-import { KeysModal, LotsMessages, useWords, type Words } from '../../../lots/shared/parts'
+import { KeysModal, useWords, type Words } from '../../../lots/shared/parts'
 import { holdOfHide, holdReasonWords, reserveSelectionHeld, scrapSelectionHeld } from '../../../lots/shared/daily'
 import { demandLabel, demandRecord } from '../../../stock/daily/model'
 import { ReserveDialog } from '../../../stock/daily/ReserveDialog'
 import { WriteOffDialog } from '../../../stock/daily/WriteOffDialog'
 import { HIDE_TILES, HIDE_VIEWS, tagHeldKey, type HideFilters, type HidesListActions, type HidesListModel, type HideView } from '../../model'
 import { PrintTagsDialog } from '../../print/PrintTagsDialog'
+import { LeatherDashboard } from '../../dashboard/view/LeatherDashboard'
+import { areaWords } from '../../dashboard/dashboard-model'
+import { FindHidesDialog } from '../../find/view/FindHidesDialog'
+import { moveSelectionHeld } from '../../move/move-model'
+import { MoveHidesDialog } from '../../move/view/MoveHidesDialog'
+import { latestPhoto } from '../../photos/model'
+import { PhotoLightbox } from '../../photos/view/PhotoLightbox'
+import { RemnantsList } from '../../remnants/view/RemnantsList'
+import { HidesMessages, useHideWords } from '../../words'
 
 export type { HidesListActions, HidesListModel } from '../../model'
 
@@ -42,17 +51,21 @@ export function stateWords(count: StateCount | null, t: Words, locale: ReturnTyp
  * B-W2a-64: the Reserved tile and view, "Reserved for" (the work order or order line, a done one said "release it"), a
  * held hide says why (its own or its lot's quality hold, in the reason's words: never shown as free), and on the
  * selection "Reserve to a work order…" and "Scrap…" (the shared every-day dialogs), each held with its reason.
+ * B-W2b-131: "Find hides for a job" (the band's primary) and ⋯ "Leather dashboard on / off"; the leather dashboard (SCR-134)
+ * under the tiles; the Remnants tile as pieces beside area (the tagged offcuts) and the Remnants view as those pieces; a
+ * Photo column (Thumbnail of the newest photo, files.read) that opens the Lightbox; "Move…" on the selection.
  */
 export function HidesListView({ model, actions }: { model: HidesListModel; actions?: HidesListActions }) {
   return (
-    <LotsMessages>
+    <HidesMessages>
       <HidesList model={model} actions={actions} />
-    </LotsMessages>
+    </HidesMessages>
   )
 }
 
 function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesListActions }) {
   const t = useWords()
+  const h = useHideWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const [query, setQuery] = useState(model.q)
@@ -150,6 +163,13 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
           <span className="fw-st-sub">{data.onHand === '0.0000' && data.left !== '0.0000' ? t('hd.atCutting') : ''}</span>
         </span>
       ) : null
+    const PhotoCell = ({ data }: ICellRendererParams<HideRow>) => {
+      if (!data || !model.photos) return null
+      const photos = model.photos.byHide[data.id] ?? []
+      const latest = latestPhoto(photos)
+      if (!latest) return <span className="fw-st-sub">{model.photos.loading ? '…' : '—'}</span>
+      return <Thumbnail src={latest.src} photoCount={photos.length} alt={h('photo.alt', { code: data.code })} title={h('photo.open', { code: data.code, count: photos.length })} onClick={() => actions?.onPhoto?.(data.id, data.code)} />
+    }
     const StateCell = ({ data }: ICellRendererParams<HideRow>) => (data ? <HideStatePill state={data.state} /> : null)
     const PlaceCell = ({ data }: ICellRendererParams<HideRow>) =>
       data ? data.location ? (
@@ -181,6 +201,7 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
       ) : null
     return [
       { colId: 'tag', headerName: t('hd.col.tag'), minWidth: 150, flex: 1, cellRenderer: TagCell },
+      ...(model.photos ? [{ colId: 'photo', headerName: h('photo.col'), minWidth: 76, maxWidth: 90, sortable: false, cellRenderer: PhotoCell } satisfies ColDef<HideRow>] : []),
       { colId: 'article', headerName: t('hd.col.article'), minWidth: 185, flex: 1.4, cellRenderer: ArticleCell },
       { colId: 'lot', headerName: t('hd.col.lot'), minWidth: 200, flex: 1, cellRenderer: LotCell },
       { colId: 'batch', headerName: t('hd.col.batch'), minWidth: 105, flex: 0.7, cellRenderer: BatchCell },
@@ -195,7 +216,7 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
       { colId: 'received', headerName: t('hd.col.received'), field: 'receivedAt', minWidth: 110, flex: 0.6, valueFormatter: (params) => (params.value ? formatDate(params.value as string, place) : '—') },
       { colId: 'more', headerName: t('rec.actions'), minWidth: 84, maxWidth: 84, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.can.printLabels, model.timeZone, model.holds, model.holdReasons, model.daily, actions])
+  }, [t, h, locale, model.prefix, model.can.printLabels, model.timeZone, model.holds, model.holdReasons, model.daily, model.photos, actions])
 
   if (!model.can.stockView) {
     return (
@@ -250,6 +271,7 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
   const printHeld = !model.can.printLabels ? t('hd.print.noRight') : picked.some((row) => tagHeldKey(row)) ? t('hd.print.someHeld') : null
   const reserveHeld = reserveSelectionHeld(picked, model.daily)
   const scrapHeld = scrapSelectionHeld(picked, model.daily)
+  const moveHeld = moveSelectionHeld(picked, !!model.canTransfer)
 
   const search = (
     <Input
@@ -284,11 +306,16 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
           ))}
         </Select>
       )}
-      {activeFilters.map(([name, value]) => (
-        <FilterChip key={name} pressed aria-label={t('hd.filter.remove', { filter: t(`hd.filter.${name}`) })} onClick={() => actions?.onClearFilter?.(name)}>
-          {t(`hd.filter.${name}`)}: {name === 'lotId' || name === 'locationId' ? t('hd.filter.one') : value} <X size={11} aria-hidden />
-        </FilterChip>
-      ))}
+      {activeFilters
+        .filter(([name]) => name !== 'itemColourId')
+        .map(([name, value]) => {
+          const label = name === 'itemId' ? h(model.filters.itemColourId ? 'filter.articleColour' : 'filter.article') : t(`hd.filter.${name}`)
+          return (
+            <FilterChip key={name} pressed aria-label={t('hd.filter.remove', { filter: label })} onClick={() => actions?.onClearFilter?.(name)}>
+              {label}: {name === 'lotId' || name === 'locationId' || name === 'itemId' ? t('hd.filter.one') : value} <X size={11} aria-hidden />
+            </FilterChip>
+          )
+        })}
     </>
   )
   const printing = model.print ? (model.rows.items ?? []).filter((row) => model.print!.hideIds.includes(row.id)) : []
@@ -303,19 +330,54 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
           {' · '}
           {t(`stock:live.${model.live}`)}
         </span>
+        <span className="fw-st-actions">
+          <Button size="sm" variant="primary" onClick={() => actions?.onFind?.()}>
+            <PackageSearch size={14} aria-hidden /> {h('find.open')}
+          </Button>
+          {model.dashboard && (
+            <Menu
+              label={<MoreHorizontal size={16} aria-hidden />}
+              align="right"
+              triggerProps={{ 'aria-label': h('band.more') }}
+              items={[{ id: 'dashboard', label: h(model.dashboard.open ? 'band.dashboardOff' : 'band.dashboardOn'), onSelect: () => actions?.dashboard?.onToggle?.(!model.dashboard!.open) }]}
+            />
+          )}
+        </span>
       </div>
 
       <MetricStrip
-        metrics={HIDE_TILES.map((tile) => ({
-          label: t(`hd.tile.${tile.id}`),
-          // Two numbers (design hd-metrics): the hides big, their area per unit under them (never adding units).
-          value: tile.count(model.counts) ? t('stock:hides', { count: tile.count(model.counts)!.hides }) : '—',
-          hint: tile.count(model.counts) ? t(`hd.tileHint.${tile.id}`, { area: unitTotals(tile.count(model.counts)!.area, (uom) => t(`stock:uom.${uom}`), locale) }) : t('hd.tileHint.unknown'),
-          onClick: () => actions?.onView?.(model.view === tile.view ? 'inStock' : tile.view),
-          active: tileView === tile.view,
-        }))}
+        metrics={HIDE_TILES.map((tile) => {
+          // B-W2b-131 (design hd-metrics "Remnants (pieces · m², W2b)"): the tagged offcuts in stock, pieces beside area.
+          if (tile.id === 'remnant' && model.remnantTotals !== undefined) {
+            const totals = model.remnantTotals?.filter((total) => total.pieces > 0) ?? null
+            const pieces = totals?.reduce((sum, total) => sum + total.pieces, 0) ?? null
+            return {
+              label: t(`hd.tile.${tile.id}`),
+              value: pieces === null ? '—' : h('dash.pieces', { count: pieces }),
+              hint: totals === null ? t('hd.tileHint.unknown') : totals.length === 0 ? h('tile.noRemnants') : totals.map((total) => areaWords(total.area, total.uom, (uom) => t(`stock:uom.${uom}`), locale)).join(' · '),
+              onClick: () => actions?.onView?.(model.view === tile.view ? 'inStock' : tile.view),
+              active: tileView === tile.view,
+            }
+          }
+          return {
+            label: t(`hd.tile.${tile.id}`),
+            // Two numbers (design hd-metrics): the hides big, their area per unit under them (never adding units).
+            value: tile.count(model.counts) ? t('stock:hides', { count: tile.count(model.counts)!.hides }) : '—',
+            hint: tile.count(model.counts) ? t(`hd.tileHint.${tile.id}`, { area: unitTotals(tile.count(model.counts)!.area, (uom) => t(`stock:uom.${uom}`), locale) }) : t('hd.tileHint.unknown'),
+            onClick: () => actions?.onView?.(model.view === tile.view ? 'inStock' : tile.view),
+            active: tileView === tile.view,
+          }
+        })}
       />
 
+      {model.dashboard && <LeatherDashboard model={model.dashboard} actions={actions?.dashboard} />}
+
+      {model.view === 'remnants' && model.remnants ? (
+        <>
+          <div className="fw-st-head">{tools}</div>
+          <RemnantsList model={model.remnants} actions={actions?.remnants} />
+        </>
+      ) : (
       <ListFrame<HideRow>
         label={t('hd.list.tableLabel')}
         rows={state ? [] : model.rows.items}
@@ -337,6 +399,9 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
               <Button size="sm" variant="primary" aria-label={t('hd.bulk.print', { count: picked.length })} heldReason={printHeld} onClick={() => actions?.print?.onOpen?.(picked.map((row) => row.id))}>
                 <Printer size={13} aria-hidden /> <SelectionLabel>{t('hd.bulk.print', { count: picked.length })}</SelectionLabel>
               </Button>
+              <Button size="sm" aria-label={h('move.bulk', { count: picked.length })} heldReason={moveHeld ? h(moveHeld) : null} onClick={() => actions?.onMove?.(picked.map((row) => row.id))}>
+                <ArrowRightLeft size={13} aria-hidden /> <SelectionLabel>{h('move.bulk', { count: picked.length })}</SelectionLabel>
+              </Button>
               <Button size="sm" aria-label={t('hd.daily.reserve', { count: picked.length })} heldReason={reserveHeld ? t(reserveHeld) : null} onClick={() => actions?.onReserve?.(picked.map((row) => row.id))}>
                 <Bookmark size={13} aria-hidden /> <SelectionLabel>{t('hd.daily.reserve', { count: picked.length })}</SelectionLabel>
               </Button>
@@ -356,11 +421,15 @@ function HidesList({ model, actions }: { model: HidesListModel; actions?: HidesL
         onOpen={(row) => actions?.onOpen?.(row.id)}
         state={state}
       />
+      )}
 
       {model.print && <PrintTagsDialog dialog={model.print} hides={printing} actions={actions?.print} />}
       {model.reserve && <ReserveDialog model={model.reserve} actions={actions?.reserve} />}
       {model.writeOff && <WriteOffDialog model={model.writeOff} actions={actions?.writeOff} />}
       {help && <KeysModal own={ownKeys} onClose={() => setHelp(false)} />}
+      {model.find && <FindHidesDialog model={model.find} actions={actions?.find} />}
+      {model.move && <MoveHidesDialog model={model.move} actions={actions?.move} />}
+      {model.lightbox && <PhotoLightbox model={model.lightbox} timeZone={model.timeZone} actions={actions?.lightbox} />}
     </div>
   )
 }

@@ -12,6 +12,7 @@ import {
   measuresContract,
   recordMeasureContract,
 } from './contract'
+import { dashboardContract, photosContract, readHidePhotos, readLeatherDashboard } from './dashboard'
 import { readGradeMix } from './grade-mix'
 import { createGradeRule, editGradeRule, readGradeRules } from './grade-rules'
 import { correctGrading, readGrading } from './grading'
@@ -48,4 +49,9 @@ export default defineRoutes('inventory.hides', manifest, async (app) => {
   app.get('/inventory/lots/:lotId/area-check', { schema: areaCheckContract }, async (request) => readAreaCheck(request, request.params.lotId))
 
   app.get('/inventory/leather/grade-mix', { schema: gradeMixContract }, async (request) => readGradeMix(request, request.query))
+
+  // B-W2b-131: the leather dashboard's own reads (what lies at subcontractors, what is on hold) and the hides' photos.
+  app.get('/inventory/leather/dashboard', { schema: dashboardContract }, async (request) => readLeatherDashboard(request, request.query))
+
+  app.get('/inventory/leather/photos', { schema: photosContract }, async (request) => readHidePhotos(request, request.query))
 })

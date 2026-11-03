@@ -6,7 +6,7 @@ import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { QUALITY_GARMENTS_RELEASE, QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/permissions'
 import { inspectionLabel } from '@nexus/factory-domain/quality/final/rules'
 import {
-  FOUR_EYES_WORDS,
+  fourEyesWords,
   openChecks,
   releasable,
   releaseSummary,
@@ -346,7 +346,7 @@ export async function workOrderFinal(caller: CommandCaller, workOrderId: string)
       cells: cellViews,
       maker: makerCheck(viewer, makers, header.number),
       documents: docs.map((check) => ({ code: check.code, message: check.message })),
-      rule: { rule: rule.rule, source: rule.source, words: FOUR_EYES_WORDS[rule.rule], customerListed: cells.some((cell) => rule.partyIds.includes(cell.partyId)) },
+      rule: { rule: rule.rule, source: rule.source, words: fourEyesWords(rule.rule, rule.conditions), customerListed: cells.some((cell) => rule.partyIds.includes(cell.partyId)) },
       holds,
     }
   })

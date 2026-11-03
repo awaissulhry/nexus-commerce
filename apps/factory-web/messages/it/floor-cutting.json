@@ -38,7 +38,8 @@
       "start": "Usa la fotocamera",
       "stop": "Ferma la fotocamera",
       "error": "La fotocamera non è partita. Usa lo scanner o scrivi il codice."
-    }
+    },
+    "remnantNoRight": "Questa è l'etichetta di un avanzo, e il tuo ruolo non può cercarla: scansiona l'etichetta della pelle che ci sta sopra."
   },
   "hide": {
     "type": "Pelle",
@@ -69,7 +70,8 @@
     "lastCut": {
       "station": "Tagliata su {station} alle {time} per {number}: restano {left}.",
       "noStation": "Tagliata alle {time} per {number}: restano {left}."
-    }
+    },
+    "remnantTag": "Letta dall'etichetta dell'avanzo {tag}: un pezzo di questa pelle."
   },
   "sets": {
     "title": "Registra i pezzi",
@@ -119,7 +121,8 @@
     "held": {
       "empty": "Scrivi la superficie dell'avanzo.",
       "place": "Scegli dove va."
-    }
+    },
+    "tooSmall": "Più piccolo dell'avanzo minimo tenuto ({min}): è scarto. Scegli Nessun avanzo · finita."
   },
   "pad": {
     "less": "Meno",
@@ -140,7 +143,8 @@
     "undoHeld": {
       "offline": "Per annullare serve la rete.",
       "notRecorded": "Annulla quando l'ufficio l'ha registrato."
-    }
+    },
+    "anyway": "tagliata comunque: {reason}"
   },
   "confirm": {
     "title": "Lasci questa pelle?",
@@ -201,6 +205,172 @@
     "REJECTED": {
       "message": "Il lotto di questa pelle è stato respinto.",
       "fix": "Non tagliare. Rimettila a posto e avvisa il capo squadra."
+    },
+    "CUT_WARNING": {
+      "message": "Questa pelle ha avvisi che nessun capo ha firmato.",
+      "fix": "Prendi un'altra pelle, o scansionala di nuovo con la rete: un capo firma Taglia comunque con il suo PIN e un motivo."
+    },
+    "LEAD_PIN_WRONG": {
+      "message": "Il badge o il PIN del capo è errato, oppure il capo è bloccato per qualche minuto.",
+      "fix": "Il capo riprova, o firma un altro capo."
+    },
+    "LEAD_IS_CUTTER": {
+      "message": "Chi taglia non può firmare Taglia comunque per il proprio taglio.",
+      "fix": "Firma un altro capo."
+    },
+    "NOT_A_LEAD": {
+      "message": "Questa persona non può far tagliare comunque una pelle.",
+      "fix": "Firma un capo con quel diritto."
+    },
+    "LEAD_NOTE_MISSING": {
+      "message": "Altro chiede qualche parola sul perché.",
+      "fix": "Scrivi perché, poi firma di nuovo."
+    },
+    "REMNANT_TOO_SMALL": {
+      "message": "Questo pezzo è più piccolo dell'avanzo minimo tenuto: è scarto.",
+      "fix": "Chiudi la pelle con Nessun avanzo · finita."
+    }
+  },
+  "check": {
+    "stops_one": "{count} avviso: questa pelle si ferma qui. Prendi un'altra pelle, o un capo firma Taglia comunque.",
+    "stops_other": "{count} avvisi: questa pelle si ferma qui. Prendi un'altra pelle, o un capo firma Taglia comunque.",
+    "clear": "Controllo della pelle superato per questo ordine.",
+    "passed": "Un capo ha lasciato tagliare comunque questa pelle per questo ordine: {kinds}.",
+    "reserved": "Riservata per {number}.",
+    "shade": {
+      "same": "Stesso lotto di tonalità: {number} è tagliato da {cutFrom} · questa pelle: {hide}.",
+      "first": "La prima pelle di {number}: il suo lotto di tonalità ({hide}) fissa la tonalità."
+    },
+    "warning": {
+      "SHADE_LOT": "Lotto di tonalità diverso: {number} è tagliato da {cutFrom}; questa pelle è {hide}. Un lotto di tonalità per ordine.",
+      "OUT_OF_SHADE": "Fuori tonalità: questa pelle è {hide}, e {number} chiede un solo lotto di tonalità.",
+      "GARMENT_SHADE": "Taglia {cell}: le altre parti del capo sono tagliate da {cutFrom}; questa pelle è {hide}.",
+      "NOT_RESERVED_one": "Non è la pelle riservata: {number} ha {count} pelle riservata ({hides}). Questa pelle: {differs}.",
+      "NOT_RESERVED_other": "Non è una pelle riservata: {number} ha {count} pelli riservate ({hides}). Questa pelle: {differs}.",
+      "RESERVED_LOT": "Non è il lotto riservato: {number} ha la pelle riservata da {lots}; questa pelle è del lotto {lot}.",
+      "THIN": "Troppo sottile: {value} mm {where}; la pelle chiede {range}.",
+      "THICK": "Troppo spessa: {value} mm {where}; la pelle chiede {range}.",
+      "BELOW": "La scelta {grade} è troppo bassa per alcuni pezzi: {pieces}.",
+      "UNGRADED": "Questa pelle non ha una scelta, e alcuni pezzi ne chiedono una: {pieces}.",
+      "other": "Controllo: {kind}."
+    },
+    "differ": {
+      "COLOUR": "un altro colore",
+      "LOT": "lotto {lot}, riservato {lots}",
+      "GRADE": "scelta {grade}, riservata {grades}",
+      "none": "non è una di quelle"
+    },
+    "where": {
+      "HIDE": "come registrato sulla pelle",
+      "TABLE": "misurato qui"
+    },
+    "range": {
+      "both": "{min}–{max} mm",
+      "min": "almeno {min} mm",
+      "max": "al massimo {max} mm"
+    },
+    "piece": {
+      "asks": "{name} chiede {grade} o meglio"
+    },
+    "kind": {
+      "SHADE": "tonalità",
+      "WRONG_HIDE": "pelle sbagliata",
+      "THICKNESS": "spessore",
+      "GRADE": "scelta"
+    },
+    "thickness": {
+      "recorded": "{value} mm come registrato",
+      "measured": "{value} mm misurato qui",
+      "unknown": "Non registrato",
+      "withRange": "{value} · la pelle chiede {range}"
+    },
+    "grade": {
+      "label": "Pezzi e scelta",
+      "byText": "(scelta letta dal testo della pelle)",
+      "piece": {
+        "OK": "{name}: {grade} o meglio ✓",
+        "BELOW": "{name}: {grade} o meglio ✗",
+        "UNKNOWN": "{name}: {grade} o meglio ?"
+      }
+    }
+  },
+  "anyway": {
+    "title": "Tagliare comunque?",
+    "lead": "Un capo guarda la pelle e firma con il suo badge o nome, il suo PIN e un motivo. Il primo set si registra con la firma; poi tagli come sempre.",
+    "firstSet": "Primo set",
+    "open": "Taglia comunque",
+    "another": "Oppure prendi un'altra pelle: Scansiona un'altra pelle, poi la sua etichetta.",
+    "held": {
+      "offline": "Taglia comunque ha bisogno della rete: l'ufficio controlla il PIN del capo.",
+      "waiting_one": "{count} taglio di questo ordine aspetta di essere inviato prima.",
+      "waiting_other": "{count} tagli di questo ordine aspettano di essere inviati prima.",
+      "measure": "Prima misura lo spessore al tavolo (Misura qui).",
+      "pickSize": "Scegli la taglia del primo set.",
+      "allCut": "La taglia {size} è tutta tagliata: scegline un'altra.",
+      "photo": "Prima fai la foto della pelle."
+    },
+    "dialog": {
+      "title": "Tagliare comunque?",
+      "what": "Cosa non va",
+      "signs": "Il capo firma per 1 set della taglia {size} da {hide} per {number}.",
+      "reason": "Perché si può tagliare?",
+      "because": "Motivo: {reason}",
+      "change": "Cambia",
+      "words": "Scrivi perché",
+      "badge": "Il capo passa il suo badge",
+      "badgeHint": "Niente badge? Scegli il capo per nome.",
+      "badgeRead": "Badge letto",
+      "byName": "Scegli il capo per nome",
+      "pickName": "Chi firma?",
+      "useBadge": "Usa un badge",
+      "signsBadge": "Firma con il suo PIN il capo del badge letto.",
+      "signsName": "{name} firma con il suo PIN.",
+      "otherLead": "Un altro capo",
+      "pin": "Il PIN del capo",
+      "cancel": "Annulla",
+      "measured": "Spessore misurato qui: {value} mm. Va con il taglio."
+    },
+    "problem": {
+      "wrong": "Badge o PIN errato, oppure il capo è bloccato per qualche minuto. Riprova, o firma un altro capo.",
+      "self": "Chi taglia non può firmare il proprio taglio: firma un altro capo.",
+      "notLead": "Questa persona non può far tagliare comunque una pelle: firma un capo con quel diritto.",
+      "note": "Altro: scrivi perché in poche parole.",
+      "locked": "Troppi tentativi su questo tablet: aspetta qualche minuto.",
+      "unavailable": "Nessuna risposta dall'ufficio. Il capo firma di nuovo: il taglio si registra una volta sola.",
+      "measure": "Prima misura lo spessore al tavolo, poi il capo firma di nuovo."
+    },
+    "done": "Taglia comunque firmato ({kinds}): il primo set è registrato. Taglia il resto come sempre.",
+    "changed": "Il controllo della pelle è cambiato dalla scheda ({kinds}): rileggila, poi firma un capo."
+  },
+  "measure": {
+    "open": "Misura qui",
+    "again": "Misura di nuovo",
+    "title": "Spessore di {code} al tavolo",
+    "value": "Spessore",
+    "spec": "La pelle chiede {range}.",
+    "recorded": "Registrato sulla pelle: {value} mm.",
+    "save": "Usa questo spessore",
+    "range": "Fino a 99,99 mm",
+    "goes": "Va con ogni taglio di questa pelle finché è sul tavolo.",
+    "clear": "Togli la misura ({value} mm)",
+    "held": {
+      "empty": "Scrivi lo spessore in mm.",
+      "invalid": "Uno spessore in mm, come 1,25."
+    }
+  },
+  "photo": {
+    "open": "Foto della pelle",
+    "retake": "Rifai la foto",
+    "title": "Foto di {code}",
+    "label": "Foto della pelle sul tavolo",
+    "hint": "Stendi la pelle sul tavolo, dentro la cornice. Niente volti nella foto.",
+    "taken": "Foto della pelle fatta: va con il prossimo taglio di questa pelle.",
+    "required": "Questo stabilimento chiede una foto della pelle prima del taglio.",
+    "heldFirst": "Prima fai la foto della pelle.",
+    "sending": "Invio della foto…",
+    "failed": "La foto non è arrivata all'ufficio. Riprova, o taglia senza.",
+    "held": {
+      "offline": "La foto ha bisogno della rete. Taglia senza, o aspetta la rete."
     }
   }
 }

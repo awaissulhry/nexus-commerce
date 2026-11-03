@@ -1,0 +1,38 @@
+{
+  "kind": {
+    "overdue": "Overdue",
+    "dueSoon": "Due within 30 days",
+    "planned": "Planned or day to confirm",
+    "done": "Done",
+    "cancelled": "Cancelled",
+    "none": "Nothing due"
+  },
+  "day": {
+    "count_one": "1 deadline",
+    "count_other": "{count} deadlines",
+    "andMore_one": "and 1 more",
+    "andMore_other": "and {count} more"
+  },
+  "grid": {
+    "list": "Days with deadlines",
+    "listEmpty": "Nothing falls due in {period}."
+  },
+  "month": {
+    "summary": "This month: {overdue} overdue · {dueSoon} due within 30 days · {planned} planned or to confirm · {done} done"
+  },
+  "agenda": {
+    "label": "Deadlines of the chosen day",
+    "title": "Due on {day}",
+    "empty": "Nothing falls due on {day}.",
+    "pick": "Choose a day to see what falls due on it.",
+    "loading": "Reading the deadlines…",
+    "reading": "Reading again…",
+    "openItem": "Open: {title}"
+  },
+  "state": {
+    "TO_CONFIRM": "Day to confirm",
+    "CANCELLED": "Cancelled",
+    "firstDay": "first day {date}",
+    "dueOn": "Due {date}"
+  }
+}

@@ -9,7 +9,7 @@ import { QUALITY_NCR_APPROVE, QUALITY_NCR_MANAGE } from '@nexus/factory-domain/q
 import { approveProblem, carryOutProblem, decisionProblems, FOLLOW_UP_TYPES, MOVE_PERMISSIONS, NCR_LIMITS, problemEditable, stageWords, valueOf, type NcrStage } from '@nexus/factory-domain/quality/ncr/rules'
 import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
-import { openRework } from '../../production/rework/rework'
+import { moveRework, openRework } from '../../production/rework/rework'
 import { readReworkReasons } from '../../production/rework/store'
 import { createClaimInCommand, resolveClaim } from '../../purchasing/claims/claims'
 import { lotCostOf } from '../../purchasing/claims/store'
@@ -323,12 +323,19 @@ export interface ReworkBody {
   readonly description?: string | undefined
   readonly split?: boolean | undefined
   readonly printerId?: string | null | undefined
+  /** B-W2b-113: scrap every garment through the rework (garments still in work: the plan's rework scrap path). */
+  readonly scrapAll?: boolean | undefined
 }
 
 /**
  * POST /quality/ncr/:ncrId/decisions/:decisionId/rework: the decision's rework order for the NCR's work order (B-W2a-13's
  * rework loop, its own command: production.rework; the garments go back to the operation named and are inspected again),
  * then the decision carried out with it. A repeat with the same Idempotency-Key answers both again.
+ *
+ * B-W2b-113 (plan default for the open design choice: "a garment in work scrapped from an NCR posts through the existing
+ * rework scrap path"): `scrapAll` records the rework order done with every garment scrapped (production's own move, its own
+ * command: production.reworkDone), so the cost ledger posts their scrap by the rework order (B-W2b-22) — garments in work
+ * have no stock to move, so a SCRAP decision cannot carry them out (the database asks a SCRAP code for its stock move).
  */
 export async function reworkFromDecision(caller: CommandCaller, ncrId: string, decisionId: string, body: ReworkBody, idempotencyKey?: string) {
   const { context, row } = await visibleNcr(caller, ncrId, QUALITY_NCR_MANAGE)
@@ -371,6 +378,10 @@ export async function reworkFromDecision(caller: CommandCaller, ncrId: string, d
     },
     idempotencyKey ? `${idempotencyKey}:rework` : undefined,
   )
+  // B-W2b-113: garments still in work scrapped through the rework: done at once with every garment scrapped.
+  if (body.scrapAll) {
+    await moveRework(caller, opened.rework.id, 'done', { version: opened.rework.version, good: 0, scrap: Number(decision.quantity.toFixed(0)), note: `${row.number}: scrapped from the NCR` }, idempotencyKey ? `${idempotencyKey}:scrap` : undefined)
+  }
   // A repeat of the same key answers the same rework (its receipt) and the same carrying out.
   const carried = await carryOut(caller, ncrId, decisionId, { version: body.version, followUp: { type: 'ReworkOrder', id: opened.rework.id } }, idempotencyKey ? `${idempotencyKey}:carry` : undefined)
   return { record: carried.record, reworkId: opened.rework.id, ticket: opened.ticket ?? null }

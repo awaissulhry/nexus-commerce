@@ -38,6 +38,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Nonconformance: '/quality/ncr/[id]',
   // Quality › Complaints (SCR-113 W2a part, B-W2a-65): a complaint's record (a new one is triaged from the list's DetailModal).
   Complaint: '/quality/complaints/[id]',
+  // B-W2b-118: a quality alert rule (a test of it rings the bell) opens on Quality rules in its dialog.
+  QualityAlertRule: '/quality/settings?rule=[id]',
   // Warehouse › Lots & traceability (SCR-201): a lot's stock, trace and moves; its tests, documents and release stay in
   // Compliance › Tests & substances (SCR-054), which the lot record links.
   Lot: '/warehouse/lots/[id]',
@@ -124,6 +126,11 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   AttendanceDay: '/people/attendance?open=[id]',
   OvertimeEntry: '/people/attendance?entry=[id]',
   TimesheetApproval: '/people/attendance/timesheets/[id]',
+  // B-W2b-120 Plant › Safety calendar (SCR-267): a deadline typed there opens in its window, an appointment in its dialog,
+  // an RLS notice to INAIL in Record RLS notice.
+  SafetyDeadline: '/plant/calendar?open=DEADLINE:[id]',
+  SafetyAppointment: '/plant/calendar?appoint=[id]',
+  RlsNotice: '/plant/calendar?filing=[id]',
 })
 
 /**
@@ -240,6 +247,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/people/pay-periods': '/people/piecerates',
   // B-W2b-61: Attendance (SCR-157) reads `?month=`, `?tile=`, `?team=`, `?line=`, `?status=`.
   '/people/attendance': '/people/attendance',
+  // B-W2b-120: the safety calendar (SCR-267) reads `?view=`, `?tile=`, `?from=`, `?to=`.
+  '/safety/calendar': '/plant/calendar',
 })
 
 export interface RecordRef {

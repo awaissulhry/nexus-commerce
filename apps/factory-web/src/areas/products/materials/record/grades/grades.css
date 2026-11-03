@@ -1,0 +1,65 @@
+/* Material › Grades and usable area (B-W2b-131, SCR-048): layout only; every control is the DS's, semantic tokens only. */
+.fw-mg-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  max-width: 100%;
+}
+.fw-mg-wide {
+  width: 100%;
+}
+.fw-mg-input {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.fw-mg-cell:not(.fw-mg-wide) .fw-mg-input {
+  max-width: 96px;
+}
+.fw-mg-code {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-mg-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fw-mg-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fw-mg-sub {
+  margin: 0;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+.fw-mg-refused {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--nds-radius-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}
+.fw-mg-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-mg-history-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}

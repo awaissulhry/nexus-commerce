@@ -38,6 +38,9 @@ import {
   type ScrapView as SavedView,
 } from '../model'
 import { ReplaceDialog, ScrapItemDialog, say, type ReplaceDraftModel } from './ScrapDialogs'
+// B-W2b-126: second quality (MES-133) and a rework's repair (MES-132).
+import { downgradeOpenHeld, type DowngradeDraft, type SecondTotals } from '../model'
+import { DowngradeDialog, type DowngradeModel, type RepairModel } from './SecondDialogs'
 import '../scrap.css'
 
 export interface ScrapModel {
@@ -65,6 +68,10 @@ export interface ScrapModel {
   readonly problem: Phrase | null
   readonly notice: { readonly tone: 'success' | 'danger' | 'info'; readonly words: Phrase } | null
   readonly replace: ReplaceDraftModel | null
+  /** B-W2b-126: the downgrades' totals (the tile), the downgrade dialog, the open rework's repair. */
+  readonly second?: SecondTotals | null
+  readonly downgrade?: DowngradeModel | null
+  readonly repair?: RepairModel | null
   /** Design cases. */
   readonly selected?: readonly string[]
   readonly focusRow?: number
@@ -85,17 +92,24 @@ export interface ScrapActions {
   onAsk?: () => void
   onExport?: (ids: string[]) => void
   onDismissNotice?: () => void
+  /** B-W2b-126: open (or close, null) Downgrade to second quality for a row; its draft; send it; withdraw a downgrade. */
+  onDowngrade?: (rowId: string | null) => void
+  onDowngradeDraft?: (draft: DowngradeDraft) => void
+  onDowngradeGo?: () => void
+  onWithdraw?: (row: ScrapRow, reason: string) => void
 }
 
 /**
  * SCR-140 — Scrap & rework (Production › Floor control; design production.scrap, workspace-list): the head (as of,
  * live, Pareto by reason, Approve N as the selection-aware primary, ⋯ Export / keys), the tiles (scrap today in pieces,
- * rework open, lower quantities waiting for approval, recuts to cut — each a saved filter; downgraded to second quality
- * is W2b), By reason (the pareto of scrap and rework by reason, operation or style: bars and the cumulative line; a bar
+ * rework open, lower quantities waiting for approval, recuts to cut, downgraded to second quality — each a saved filter),
+ * By reason (the pareto of scrap and rework by reason, operation or style: bars and the cumulative line; a bar
  * filters the list), and the shared list frame of every scrap and rework row with its reason and what replaces it:
  * date, work order, bundle, operation, size, part, pieces, kind, reason, lot / hide and area, replacement, approval,
  * station, value (cost grain only). A row opens its detail (`?open=`; A approve, R refuse, J / K next); Replace scrapped
- * quantity asks a recut or a lower order quantity. Never a person: work orders, bundles, operations and stations.
+ * quantity asks a recut or a lower order quantity. B-W2b-126: Second quality… sends scrapped garments to second quality
+ * with a reason instead of scrap (a SECOND row; ESPR); a rework row's detail says its repair at the repair station. Never a
+ * person: work orders, bundles, operations and stations.
  */
 export function ScrapView({ model, actions }: { model: ScrapModel; actions?: ScrapActions }) {
   return (
@@ -174,10 +188,16 @@ function Page({ model, actions }: { model: ScrapModel; actions?: ScrapActions })
       <section aria-label={t('tiles.label')}>
         <MetricStrip
           metrics={TILES.map((tile) => {
-            const value = tileValue(tile.id, model.tiles)
+            const value = tileValue(tile.id, model.tiles, model.second ?? null)
             const view = tile.view
-            if (view === null) return { label: t(`tile.${tile.id}`), value, hint: t('tile.downgradedLater') }
-            return { label: t(`tile.${tile.id}`), value, onClick: () => actions?.onAddress?.({ view: model.address.view === view ? 'all' : view, group: null }), active: model.address.view === view, ...(tile.id === 'toApprove' && model.tiles && model.tiles.reductionsToApprove > 0 ? { accent: 'var(--nds-warning)' } : {}) }
+            return {
+              label: t(`tile.${tile.id}`),
+              value,
+              onClick: () => actions?.onAddress?.({ view: model.address.view === view ? 'all' : view, group: null }),
+              active: model.address.view === view,
+              ...(tile.id === 'downgraded' ? { hint: model.second ? t('tile.downgradedHint', { today: model.second.today }) : t('tile.downgradedUnread') } : {}),
+              ...(tile.id === 'toApprove' && model.tiles && model.tiles.reductionsToApprove > 0 ? { accent: 'var(--nds-warning)' } : {}),
+            }
           })}
         />
       </section>
@@ -188,6 +208,7 @@ function Page({ model, actions }: { model: ScrapModel; actions?: ScrapActions })
 
       {open && <ScrapItemDialog model={model} row={open} ids={(filtered ?? []).map((row) => row.id)} actions={actions} />}
       {model.replace && <ReplaceDialog model={model} actions={actions} />}
+      {model.downgrade && <DowngradeDialog model={model} actions={actions} />}
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('common.shortcuts')} size="sm">
           <ul className="fw-sc-list">
@@ -327,6 +348,7 @@ function ScrapList({
             <Pill tone={KIND_TONE[data.kind]}>{t(`kind.${data.kind}`)}</Pill>
           </span>
           {data.kind === 'REWORK' && data.status && <span className="fw-sc-sub">{t(`rework.${data.status}`)}</span>}
+          {data.kind === 'SECOND' && data.downgrade?.withdrawn && <span className="fw-sc-sub">{t('second.withdrawn')}</span>}
         </span>
       ) : null
     const ReasonCell = ({ data }: ICellRendererParams<ScrapRow>) => (data ? <span className="fw-sc-ellipsis" title={data.reasonCode}>{reasonWord(data, locale)}</span> : null)
@@ -358,6 +380,8 @@ function ScrapList({
           items={[
             { id: 'open', label: t('common.open'), onSelect: () => actions?.onAddress?.({ open: data.id }) },
             ...(data.kind === 'SCRAP' ? [{ id: 'replace', label: t('replace.open'), onSelect: () => actions?.onReplace?.(data.id) }] : []),
+            // B-W2b-126: held rows say why in the detail; the menu offers it only where it can go.
+            ...(data.kind === 'SCRAP' && !downgradeOpenHeld(data, model.rows.items ?? [], model.can) ? [{ id: 'second', label: t('second.open'), onSelect: () => actions?.onDowngrade?.(data.id) }] : []),
             ...(model.can.workOrders ? [{ id: 'workOrder', label: t('list.workOrder'), href: `${model.prefix}/production/work-orders/${data.workOrder.id}` }] : []),
           ]}
         />
@@ -368,7 +392,7 @@ function ScrapList({
       { colId: 'bundle', headerName: t('col.bundle'), minWidth: 125, flex: 0.9, cellRenderer: BundleCell, valueGetter: (params) => params.data?.bundle?.code ?? '' },
       { colId: 'operation', headerName: t('col.operation'), minWidth: 115, flex: 0.9, valueGetter: (params) => (params.data?.operation ? `${params.data.operation.seq} · ${params.data.operation.name}` : '—') },
       { colId: 'pieces', headerName: t('col.pieces'), minWidth: 72, flex: 0.35, type: 'rightAligned', valueGetter: (params) => params.data?.pieces ?? 0 },
-      { colId: 'kind', headerName: t('col.kind'), minWidth: 100, flex: 0.6, cellRenderer: KindCell },
+      { colId: 'kind', headerName: t('col.kind'), minWidth: 128, flex: 0.7, cellRenderer: KindCell },
       { colId: 'reason', headerName: t('col.reason'), minWidth: 115, flex: 0.9, cellRenderer: ReasonCell },
       { colId: 'lot', headerName: t('col.lot'), minWidth: 140, flex: 1.2, valueGetter: (params) => (params.data ? materialsText(params.data, locale) : '') },
       { colId: 'replacement', headerName: t('col.replacement'), minWidth: 135, flex: 1.1, cellRenderer: ReplacementCell },
@@ -377,7 +401,7 @@ function ScrapList({
       ...(model.can.cost ? [{ colId: 'value', headerName: t('col.value'), minWidth: 100, flex: 0.7, type: 'rightAligned', valueGetter: (params) => (params.data ? moneyText(params.data.value, params.data.currency, locale) : '') } satisfies ColDef<ScrapRow>] : []),
       { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.can.workOrders, model.can.cost, model.timeZone, actions])
+  }, [t, locale, model.prefix, model.can.workOrders, model.can.cost, model.can.downgrade, model.rows.items, model.timeZone, actions])
 
   const items = model.rows.items
   const narrowed = model.address.q.trim() !== '' || model.address.view !== 'all' || model.address.kind !== null || model.address.group !== null
@@ -440,6 +464,7 @@ function ScrapList({
               <option value="">{t('list.kindAll')}</option>
               <option value="SCRAP">{t('kind.SCRAP')}</option>
               <option value="REWORK">{t('kind.REWORK')}</option>
+              <option value="SECOND">{t('kind.SECOND')}</option>
             </Select>
             <Select size="sm" aria-label={t('list.periodLabel')} value={model.address.period} onChange={(event) => actions?.onAddress?.({ period: event.target.value as Period })}>
               {PERIODS.map((period) => (

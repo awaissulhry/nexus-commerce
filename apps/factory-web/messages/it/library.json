@@ -633,6 +633,83 @@
       },
       "hide": "Pelle {code} · lotto {lot}",
       "noColour": "Colore unico"
+    },
+    "grades": {
+      "title": "Scelte e area utilizzabile",
+      "intro": "La quota di una pelle di ciascuna scelta che {code} può davvero usare, e i pezzi per cui ogni scelta può essere tagliata.",
+      "rule": "Quota utilizzabile = quanta parte dell’area di una pelle di questa scelta serve a questo articolo. Alimenta la stima dell’area utilizzabile di ogni pelle e la pianificazione della pelle. Una scelta senza una regola di questo articolo usa il valore predefinito della scelta; scrivendo qui una quota o dei pezzi l’articolo prende una regola sua.",
+      "loading": "Lettura delle scelte…",
+      "failed": "Impossibile caricare le scelte",
+      "notTracked": "Questa pelle non è seguita pelle per pelle: scelte e quote utilizzabili non si applicano.",
+      "table": "Scelte e area utilizzabile",
+      "count_one": "{count} scelta · {rules} di questo articolo",
+      "count_other": "{count} scelte · {rules} di questo articolo",
+      "offline": "Non in linea: le modifiche delle celle aspettano in questa pagina e partono quando torna la connessione ({count} in attesa).",
+      "retiredGrade": "Ritirata",
+      "cell": {
+        "share": "Quota utilizzabile della scelta {grade} in percentuale",
+        "panels": "Pezzi per cui la scelta {grade} può essere tagliata"
+      },
+      "panels": {
+        "every": "Tutti i pezzi"
+      },
+      "source": {
+        "rule": "Questo articolo",
+        "grade": "Predefinito della scelta"
+      },
+      "col": {
+        "grade": "Scelta",
+        "share": "Quota utilizzabile %",
+        "panels": "Pezzi ammessi",
+        "hides": "Pelli in magazzino",
+        "more": "Azioni"
+      },
+      "row": {
+        "default": "Torna al predefinito della scelta",
+        "defaultHint": "Torna a valere il {share} % della scelta; questa regola resta nello storico.",
+        "useAgain": "Usa di nuovo la regola precedente ({share} %, {date})",
+        "menu": "Azioni per la scelta {grade}"
+      },
+      "bulk": {
+        "default_one": "Torna al predefinito per {count}",
+        "default_other": "Torna al predefinito per {count}"
+      },
+      "empty": {
+        "title": "Nessuna scelta",
+        "body": "Non è ancora impostata nessuna scelta della pelle: la Qualità imposta prima le scelte (A, B, C…)."
+      },
+      "history": {
+        "summary_one": "{count} regola precedente",
+        "summary_other": "{count} regole precedenti",
+        "row": "Scelta {grade}: {share} % · {panels} · fino al {date}",
+        "useAgain": "Usa di nuovo"
+      },
+      "readOnly": {
+        "archived": "Sola lettura: il materiale è archiviato. Riattivalo per cambiarne le scelte.",
+        "everyCompany": "Sola lettura: questo materiale è condiviso da tutte le aziende, quindi solo un ruolo su tutte le aziende ne cambia le scelte.",
+        "noManage": "Sola lettura: il tuo ruolo può vedere le scelte, non cambiarle."
+      },
+      "held": {
+        "noRule": "Torna al predefinito solo una scelta con una regola di questo articolo.",
+        "gradeRetired": "La scelta è ritirata: la sua regola non può essere usata di nuovo.",
+        "activeExists": "Questa scelta ha già una regola di questo articolo: cambia quella, oppure riportala prima al predefinito."
+      },
+      "problem": {
+        "share": "La quota utilizzabile è una percentuale da 0 a 100, al massimo due decimali (72,5).",
+        "panelsMany": "Al massimo 20 pezzi.",
+        "panelLong": "Il nome di un pezzo è di al massimo 60 caratteri.",
+        "retiredGrade": "Questa scelta è ritirata: nessun articolo prende una nuova regola per essa.",
+        "moved": "La regola è stata cambiata nel frattempo: le scelte sono state rilette, controllale e scrivi di nuovo.",
+        "ruleExists": "Nel frattempo questo articolo ha ricevuto una regola per la scelta: le scelte sono state rilette.",
+        "otherActive": "È in uso un’altra regola di questa scelta: le scelte sono state rilette.",
+        "retiredRule": "Questa regola è storico: usala prima di nuovo, oppure scrivi nella riga della scelta.",
+        "gone": "Questa scelta o regola non c’è più: le scelte sono state rilette."
+      },
+      "notice": {
+        "default_one": "Tornata al predefinito {count} scelta.",
+        "default_other": "Tornate al predefinito {count} scelte.",
+        "usedAgain": "La regola precedente della scelta {grade} è di nuovo in uso."
+      }
     }
   },
   "operations": {

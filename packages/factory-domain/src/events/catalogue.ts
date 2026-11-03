@@ -72,6 +72,19 @@ import { events as inventoryRolls } from '../inventory-rolls/events'
 import { events as qualityCapa } from '../quality-capa/events'
 // B-W2b-124: statutory periodic checks (a check type, a plan, a result recorded, a check due).
 import { events as plantStatutory } from '../plant-statutory/events'
+// B-W2b-123: amendments of signed results; the inspection report and the certificate of conformity.
+import { events as qualityAmendments } from '../quality-amendments/events'
+import { events as qualityDocuments } from '../quality-documents/events'
+// B-W2b-120: safety at work (the safety organisation, the RLS notice, the safety calendar's deadlines).
+import { events as safety } from '../safety/events'
+// B-W2b-118: quality rules (who may sign what and the result rules changed, alert rules changed, an alert rule fired).
+import { events as qualityRules } from '../quality-rules/events'
+// B-W2b-126: the repair station and second quality.
+import { events as productionRepair } from '../production-repair/events'
+// B-W2b-122: the risk assessment (versions, signatures, the improvement plan).
+import { events as safetyRisk } from '../safety-risk/events'
+// B-W2b-125: incidents, near misses and hazards, the INAIL filings (the safety module's own block).
+import { incidentEvents as safetyIncidents } from '../safety/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -210,7 +223,20 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-108
   ...qualityCapa,
   // B-W2b-124
-  ...plantStatutory] as const satisfies readonly EventDefinition[]
+  ...plantStatutory,
+  // B-W2b-123
+  ...qualityAmendments,
+  ...qualityDocuments,
+  // B-W2b-120
+  ...safety,
+  // B-W2b-118
+  ...qualityRules,
+  // B-W2b-126
+  ...productionRepair,
+  // B-W2b-122
+  ...safetyRisk,
+  // B-W2b-125
+  ...safetyIncidents] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

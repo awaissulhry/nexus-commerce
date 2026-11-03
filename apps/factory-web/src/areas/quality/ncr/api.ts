@@ -2,6 +2,9 @@ import { z } from 'zod'
 import { DEFECT_CLASSES, DISPOSITION_FOLLOW_UPS, DISPOSITION_MOVES, DISPOSITION_OUTCOMES, QUALITY_STAGES } from '@nexus/factory-domain/quality/defects/rules'
 import { HOLD_SUBJECT_TYPES } from '@nexus/factory-domain/quality/holds/rules'
 import { BOARD_LANES, CONTAINMENT_KINDS, CONTAINMENT_STATUSES, DECISION_STATES, NCR_FROM_TYPES, NCR_LINK_TYPES, NCR_SOURCES, NCR_STAGES, NCR_TITLE_KEYS, STAGE_CHECKS } from '@nexus/factory-domain/quality/ncr/rules'
+import { CAPA_PRIORITIES, CAPA_STATUSES, CAPA_TYPES, ESCALATION_REASONS } from '@nexus/factory-domain/quality/capa/rules'
+import { CONCESSION_ANSWERS, CONCESSION_STATUSES } from '@nexus/factory-domain/quality/ncr/concession'
+import { COST_KINDS, COST_SOURCES } from '@nexus/factory-domain/quality/ncr/cost'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { completeUpload, listFiles, requestUpload } from '../../../record-panels/api'
@@ -13,7 +16,9 @@ import { putToStore, sha256Hex } from '../../../record-panels/store'
  * shapes mirror the API's contract.ts. Every write is one command with an Idempotency-Key per attempt and the version the
  * screen read (the NCR's; a containment action's or a decision's for theirs). The API's English is never drawn as our
  * words: the screens say their own from codes and facts (a refusal's sentence is kept only as a detail line, like a lot
- * code). No cost, no price, no worker's name in a list.
+ * code). No price, no worker's name in a list. B-W2b-113: the NCR's cost by the cost grain (the API leaves every amount out
+ * for a reader without it: optional here), its concessions, its report, its cause and its CAPA (the CAPA module's routes
+ * for Escalate to CAPA, B-W2b-108).
  */
 
 export type NcrStage = (typeof NCR_STAGES)[number]
@@ -33,6 +38,14 @@ export type DispositionMove = (typeof DISPOSITION_MOVES)[number]
 export type DispositionFollowUp = (typeof DISPOSITION_FOLLOW_UPS)[number]
 export type HoldSubjectType = (typeof HOLD_SUBJECT_TYPES)[number]
 export type NcrTitleKey = (typeof NCR_TITLE_KEYS)[number]
+export type CostKind = (typeof COST_KINDS)[number]
+export type CostSource = (typeof COST_SOURCES)[number]
+export type ConcessionStatus = (typeof CONCESSION_STATUSES)[number]
+export type ConcessionAnswer = (typeof CONCESSION_ANSWERS)[number]
+export type CapaStatus = (typeof CAPA_STATUSES)[number]
+export type CapaType = (typeof CAPA_TYPES)[number]
+export type EscalationReason = (typeof ESCALATION_REASONS)[number]
+export { CAPA_PRIORITIES, CAPA_TYPES, CONCESSION_ANSWERS, COST_KINDS, ESCALATION_REASONS }
 
 export { BOARD_LANES, CONTAINMENT_KINDS, DEFECT_CLASSES, HOLD_SUBJECT_TYPES, NCR_FROM_TYPES, NCR_LINK_TYPES, NCR_SOURCES, NCR_STAGES, NCR_TITLE_KEYS, QUALITY_STAGES, UOMS }
 
@@ -85,11 +98,19 @@ export const summarySchema = z.object({
   version: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** B-W2b-113: the CAPA it is escalated to (when the reader may see it). */
+  capa: z.object({ id: z.string(), number: z.string(), status: z.enum(CAPA_STATUSES) }).nullable().optional(),
+  /** B-W2b-113: the sum of its cost lines (minor units; null: none) — only for a reader with the cost grain. */
+  cost: z.number().nullable().optional(),
+  /** B-W2b-113: its company's currency (the Cost column's). */
+  currency: z.string().optional(),
 })
 export type NcrSummary = z.infer<typeof summarySchema>
 
 const ncrSchema = summarySchema.extend({
   description: z.string().nullable(),
+  /** B-W2b-113: the cause code (read-only once decided). */
+  cause: z.object({ id: z.string(), code: z.string(), labelIt: z.string(), labelEn: z.string() }).nullable().optional(),
   foundBy: z.object({ kind: z.enum(['USER', 'WORKER', 'NONE']), userId: z.string().nullable(), workerId: z.string().nullable() }),
   closedById: z.string().nullable(),
   closeNote: z.string().nullable(),
@@ -159,6 +180,29 @@ export type NcrLink = z.infer<typeof linkSchema>
 const holdSchema = z.object({ id: z.string(), status: z.string(), subjectType: z.string(), subjectIds: z.array(z.string()), reasonCode: z.string(), reasonNote: z.string().nullable(), placedAt: z.string(), decidedHere: z.boolean() })
 export type NcrHold = z.infer<typeof holdSchema>
 
+/** B-W2b-113 (QHS-085): a concession asked of the customer and, once recorded, their answer. */
+const concessionSchema = z.object({
+  id: z.string(),
+  seq: z.number(),
+  party: z.object({ id: z.string(), code: z.string(), name: z.string() }),
+  contact: z.object({ id: z.string(), name: z.string(), email: z.string().nullable() }).nullable(),
+  ask: z.string(),
+  proposal: z.string(),
+  status: z.enum(CONCESSION_STATUSES),
+  askedAt: z.string(),
+  askedById: z.string().nullable(),
+  answer: z.string().nullable(),
+  answeredAt: z.string().nullable(),
+  answeredBy: z.string().nullable(),
+  answerFile: z.object({ id: z.string(), originalName: z.string(), status: z.string() }).nullable(),
+  recordedById: z.string().nullable(),
+  version: z.number(),
+})
+export type Concession = z.infer<typeof concessionSchema>
+const capaRecordSchema = z.object({ id: z.string(), number: z.string(), title: z.string(), type: z.enum(CAPA_TYPES), status: z.enum(CAPA_STATUSES) })
+const reportVersionSchema = z.object({ id: z.string(), version: z.number(), language: z.string(), fileId: z.string(), createdAt: z.string(), createdById: z.string().nullable() })
+export type ReportVersion = z.infer<typeof reportVersionSchema>
+
 export const recordSchema = z.object({
   ncr: ncrSchema,
   containment: z.array(actionSchema),
@@ -166,10 +210,15 @@ export const recordSchema = z.object({
   links: z.array(linkSchema),
   holds: z.array(holdSchema),
   register: z.object({ id: z.string(), reference: z.string(), status: z.string() }).nullable(),
+  /** B-W2b-113: the CAPA it is escalated to (null: none, or one the reader may not see: `capaElsewhere`). */
+  capaRecord: capaRecordSchema.nullable().default(null),
+  capaElsewhere: z.boolean().default(false),
+  concessions: z.array(concessionSchema).default([]),
+  reports: z.array(reportVersionSchema).default([]),
   next: z.object({ stage: z.enum(NCR_STAGES).nullable(), checks: z.array(check), ready: z.boolean() }),
   closing: z.object({ checks: z.array(check), ready: z.boolean() }),
-  actions: z.object({ edit: z.string().nullable(), contain: z.string().nullable(), decide: z.string().nullable(), close: z.string().nullable(), cancel: z.string().nullable() }),
-  may: z.object({ manage: z.boolean(), approve: z.boolean(), close: z.boolean(), raise: z.boolean() }),
+  actions: z.object({ edit: z.string().nullable(), contain: z.string().nullable(), decide: z.string().nullable(), close: z.string().nullable(), cancel: z.string().nullable(), concession: z.string().nullable().optional() }),
+  may: z.object({ manage: z.boolean(), approve: z.boolean(), close: z.boolean(), raise: z.boolean(), cost: z.boolean().default(false), escalate: z.boolean().default(false) }),
 })
 export type NcrRecord = z.infer<typeof recordSchema>
 const one = z.object({ record: recordSchema })
@@ -277,6 +326,8 @@ export const getNcr = (api: ApiClient, ncrId: string, signal?: AbortSignal) => a
 /** The NCR's content (QHS-081): what a new one says (`from` prefills what is left out) and what an edit changes. */
 export interface NcrContent {
   title?: string
+  /** B-W2b-113: the cause code; null clears it. */
+  causeCodeId?: string | null
   description?: string | null
   source?: NcrSource
   foundAt?: FoundAt
@@ -418,7 +469,7 @@ export const carryOut = (api: ApiClient, ncrId: string, decisionId: string, body
   api.post(`${decisionPath(ncrId, decisionId)}/carry-out`, { body, schema: z.object({ record: recordSchema, stockMoveIds: z.array(z.string()), followUp: z.object({ type: z.string(), id: z.string() }).nullable() }), idempotencyKey })
 
 /** QHS-091 "Create rework order": the rework of this NCR's garments at an operation of its work order, then carried out. */
-export const reworkFromDecision = (api: ApiClient, ncrId: string, decisionId: string, body: { version: number; reworkAtOperationId: string; description?: string }, idempotencyKey: string) =>
+export const reworkFromDecision = (api: ApiClient, ncrId: string, decisionId: string, body: { version: number; reworkAtOperationId: string; description?: string; scrapAll?: boolean }, idempotencyKey: string) =>
   api.post(`${decisionPath(ncrId, decisionId)}/rework`, { body, schema: z.object({ record: recordSchema, reworkId: z.string() }), idempotencyKey })
 
 // ---- what the record's dialogs pick from (other modules' reads) -------------------------------------------------------
@@ -504,6 +555,145 @@ export type SearchHit = z.infer<typeof searchResultSchema>
 /** Records by number for "Link…" (global search; only the kinds an NCR links). */
 export const searchLinkable = (api: ApiClient, q: string, signal?: AbortSignal) =>
   api.get('/search', { query: { q, limit: 20 }, schema: z.object({ results: z.array(searchResultSchema) }), signal }).then((answer) => answer.results.filter((hit) => (NCR_LINK_TYPES as readonly string[]).includes(hit.recordType)))
+
+// ---- B-W2b-113: the cost (QHS-086, the cost grain) ----------------------------------------------------------------------
+
+const costLineSchema = z.object({
+  id: z.string(),
+  seq: z.number(),
+  kind: z.enum(COST_KINDS),
+  source: z.enum(COST_SOURCES),
+  description: z.string().nullable(),
+  /** Minor units (the cost grain: present only for a reader with it). */
+  amount: z.number().optional(),
+  record: z.object({ type: z.string(), id: z.string(), label: z.string().nullable() }).nullable(),
+  version: z.number(),
+  createdAt: z.string(),
+  createdById: z.string().nullable(),
+  updatedAt: z.string(),
+})
+export type CostLine = z.infer<typeof costLineSchema>
+const costSheetSchema = z.object({
+  ncrId: z.string(),
+  number: z.string(),
+  currency: z.string(),
+  lines: z.array(costLineSchema),
+  total: z.number().optional(),
+  computed: z.object({
+    upToDate: z.boolean(),
+    add: z.number(),
+    change: z.number(),
+    remove: z.number(),
+    waiting: z.array(z.object({ recordType: z.string(), recordId: z.string(), label: z.string().nullable(), words: z.string() })),
+  }),
+  held: z.string().nullable(),
+  version: z.number(),
+})
+export type CostSheet = z.infer<typeof costSheetSchema>
+const sheetAnswer = z.object({ sheet: costSheetSchema })
+const costPath = (ncrId: string) => `/quality/ncr/${seg(ncrId)}/cost`
+
+export const getCost = (api: ApiClient, ncrId: string, signal?: AbortSignal) => api.get(costPath(ncrId), { schema: sheetAnswer, signal }).then((answer) => answer.sheet)
+export const addCostLine = (api: ApiClient, ncrId: string, body: { kind: CostKind; description?: string | null; amount: number }) =>
+  api.post(`${costPath(ncrId)}/lines`, { body, schema: sheetAnswer, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.sheet)
+export const editCostLine = (api: ApiClient, ncrId: string, lineId: string, body: { version: number; kind?: CostKind; description?: string | null; amount?: number }) =>
+  api.request('PATCH', `${costPath(ncrId)}/lines/${seg(lineId)}`, { body, schema: sheetAnswer, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.sheet)
+export const removeCostLine = (api: ApiClient, ncrId: string, lineId: string, version: number) =>
+  api.request('DELETE', `${costPath(ncrId)}/lines/${seg(lineId)}`, { query: { version }, schema: sheetAnswer, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.sheet)
+export const computeCost = (api: ApiClient, ncrId: string) =>
+  api.post(`${costPath(ncrId)}/compute`, { body: {}, schema: z.object({ sheet: costSheetSchema, added: z.number(), changed: z.number(), removed: z.number() }), idempotencyKey: newIdempotencyKey() })
+
+// ---- B-W2b-113: concessions asked of the customer (QHS-085) --------------------------------------------------------------
+
+const concessionPath = (ncrId: string, concessionId: string) => `/quality/ncr/${seg(ncrId)}/concessions/${seg(concessionId)}`
+export const askConcession = (api: ApiClient, ncrId: string, body: { partyId: string; contactId?: string | null; ask: string; proposal: string }) =>
+  api.post(`/quality/ncr/${seg(ncrId)}/concessions`, { body, schema: one, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.record)
+export const editConcession = (api: ApiClient, ncrId: string, concessionId: string, body: { version: number; contactId?: string | null; ask?: string; proposal?: string }) =>
+  api.request('PATCH', concessionPath(ncrId, concessionId), { body, schema: one, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.record)
+export const answerConcession = (api: ApiClient, ncrId: string, concessionId: string, body: { version: number; status: ConcessionAnswer; answer?: string | null; answeredBy: string; answeredAt: string; answerFileId?: string | null }) =>
+  api.post(`${concessionPath(ncrId, concessionId)}/answer`, { body, schema: one, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.record)
+
+const customerSchema = z.object({ id: z.string(), code: z.string(), legalName: z.string(), tradeName: z.string().nullable().optional() })
+export type CustomerChoice = { id: string; code: string; name: string }
+/** The company's customers and brands (parties.view): whom a concession is asked of. */
+export const listCustomers = (api: ApiClient, q: string, signal?: AbortSignal): Promise<CustomerChoice[]> =>
+  api
+    .get('/parties', { query: clean({ role: 'CUSTOMER,BRAND', q: q.trim() || undefined, limit: 100 }), schema: z.object({ parties: z.array(customerSchema) }), signal })
+    .then((answer) => answer.parties.map((party) => ({ id: party.id, code: party.code, name: party.tradeName ?? party.legalName })))
+const contactSchema = z.object({ id: z.string(), name: z.string(), email: z.string().nullable(), status: z.string().optional() })
+export type ContactChoice = z.infer<typeof contactSchema>
+/** A customer's active contacts (the person asked; the party's own read). */
+export const listContacts = (api: ApiClient, partyId: string, signal?: AbortSignal) =>
+  api.get(`/parties/${seg(partyId)}`, { schema: z.object({ party: z.object({ contacts: z.array(contactSchema) }) }), signal }).then((answer) => answer.party.contacts.filter((contact) => !contact.status || contact.status === 'ACTIVE'))
+
+/** The customer's written answer: a file of the concession (record type NcrConcession) — announce → the bytes → complete. */
+export async function uploadConcessionFile(api: ApiClient, target: { companyId: string; concessionId: string }, file: Blob, name: string): Promise<string> {
+  const bytes = await file.arrayBuffer()
+  const { file: stored, upload } = await requestUpload(api, {
+    companyId: target.companyId,
+    record: { type: 'NcrConcession', id: target.concessionId },
+    kind: 'DOCUMENT',
+    name,
+    contentType: file.type || 'application/pdf',
+    sizeBytes: bytes.byteLength,
+    sha256: await sha256Hex(bytes),
+    visibility: ['OFFICE'],
+    floorSiteId: null,
+    partyId: null,
+  })
+  await putToStore(upload, bytes)
+  await completeUpload(api, stored.id)
+  return stored.id
+}
+
+// ---- B-W2b-113: the report (ncr-pdf) and the cause list -----------------------------------------------------------------
+
+/** The report's preview (the PDF's bytes, "preview" banner); a new tab opens `reportHref`. */
+export const reportPreview = (api: ApiClient, ncrId: string, language: 'it' | 'en' | null, signal?: AbortSignal) => api.bytes(`/quality/ncr/${seg(ncrId)}/report`, { query: language ? { language } : {}, signal })
+export const reportHref = (ncrId: string, language?: 'it' | 'en' | null): string => `/api/quality/ncr/${seg(ncrId)}/report${language ? `?language=${language}` : ''}`
+export const keepReport = (api: ApiClient, ncrId: string, language: 'it' | 'en' | null) =>
+  api.post(`/quality/ncr/${seg(ncrId)}/report`, { body: language ? { language } : {}, schema: z.object({ report: reportVersionSchema.extend({ number: z.string().nullable() }), made: z.boolean() }), idempotencyKey: newIdempotencyKey() })
+
+const causeSchema = z.object({ id: z.string(), code: z.string(), labelIt: z.string(), labelEn: z.string(), active: z.boolean().optional(), process: z.string().optional() })
+export type CauseChoice = z.infer<typeof causeSchema>
+/** The cause list (quality.defects.view; B-W2b-90): active causes only. */
+export const listCauses = (api: ApiClient, signal?: AbortSignal) => api.get('/quality/causes', { query: { active: 'true' }, schema: z.object({ causes: z.array(causeSchema) }), signal }).then((answer) => answer.causes.filter((cause) => cause.active !== false))
+
+// ---- B-W2b-113: Escalate to CAPA (pop:ncr-capa, on B-W2b-108's routes) ---------------------------------------------------
+
+const escalateSchema = z.object({
+  records: z.array(
+    z.object({
+      recordType: z.string(),
+      recordId: z.string(),
+      number: z.string(),
+      title: z.string().nullable(),
+      companyId: z.string(),
+      state: z.string(),
+      reasons: z.array(z.enum(ESCALATION_REASONS)),
+      escalatedTo: z.object({ capaId: z.string(), number: z.string(), status: z.enum(CAPA_STATUSES) }).nullable(),
+      problem: z.object({ path: z.string(), message: z.string() }).nullable(),
+    }),
+  ),
+  companyId: z.string().nullable(),
+  sameCompany: z.boolean(),
+  ready: z.boolean(),
+  capas: z.array(z.object({ id: z.string(), number: z.string(), title: z.string(), type: z.enum(CAPA_TYPES), status: z.enum(CAPA_STATUSES), customer: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable(), version: z.number() })),
+  mayOpen: z.boolean(),
+  mayView: z.boolean(),
+  asOf: z.string(),
+})
+export type EscalatePreview = z.infer<typeof escalateSchema>
+/** What escalating these NCRs would do: the rule that suggests it, where each one is already, the open CAPAs to link to. */
+export const escalatePreview = (api: ApiClient, ncrIds: readonly string[], signal?: AbortSignal) =>
+  api.get('/quality/capa/escalate', { query: { recordType: 'Nonconformance', ids: ncrIds.join(',') }, schema: escalateSchema, signal })
+const capaAnswer = z.object({ record: z.object({ capa: z.object({ id: z.string(), number: z.string() }).passthrough() }).passthrough() })
+/** Start a new CAPA from the NCRs (one command: the CAPA numbered, the NCRs name it). */
+export const openCapaFrom = (api: ApiClient, body: { type: CapaType; title: string; dueOn: string; priority?: (typeof CAPA_PRIORITIES)[number]; sources: { recordType: 'Nonconformance'; recordId: string }[] }) =>
+  api.post('/quality/capa', { body, schema: capaAnswer, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.record.capa)
+/** Link the NCRs to an open CAPA. */
+export const addToCapa = (api: ApiClient, capaId: string, body: { version?: number; sources: { recordType: 'Nonconformance'; recordId: string }[] }) =>
+  api.post(`/quality/capa/${seg(capaId)}/sources`, { body, schema: z.object({ record: capaAnswer.shape.record, added: z.number() }), idempotencyKey: newIdempotencyKey() }).then((answer) => answer.record.capa)
 
 // ---- photos ---------------------------------------------------------------------------------------------------------------
 

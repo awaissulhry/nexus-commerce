@@ -347,12 +347,18 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'quality.complaints', title: 'Complaints', titleIt: 'Reclami', wave: 'W2a', href: '/quality/complaints' },
         ],
       },
+      // W2b: B-W2b-138 Quality reports (SCR-147). The tree's Reports group, after Problems and before Settings.
+      { label: 'Reports', labelIt: 'Report', hideLabel: false, pages: [{ id: 'quality.reports', title: 'Quality reports', titleIt: 'Report qualità', wave: 'W2b', href: '/quality/reports' }] },
       // W2a: B-W2a-67 Defects & dispositions (SCR-079). After Problems (the tree's order).
       {
         label: 'Settings',
         labelIt: 'Impostazioni',
         hideLabel: false,
-        pages: [{ id: 'quality.defects', title: 'Defects & dispositions', titleIt: 'Difetti e destinazioni', wave: 'W2a', href: '/quality/defects' }],
+        pages: [
+          { id: 'quality.defects', title: 'Defects & dispositions', titleIt: 'Difetti e destinazioni', wave: 'W2a', href: '/quality/defects' },
+          // W2b: B-W2b-118 Quality rules (SCR-260).
+          { id: 'quality.settings', title: 'Quality rules', titleIt: 'Regole qualità', wave: 'W2b', href: '/quality/settings' },
+        ],
       },
     ],
   },
@@ -478,6 +484,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'plant.jobs', title: 'Maintenance jobs', titleIt: 'Interventi', wave: 'W2a', href: '/plant/jobs' },
           { id: 'plant.machines', title: 'Machines & tools', titleIt: 'Macchine e attrezzature', wave: 'W2a', href: '/plant/machines' },
         ],
+      },
+      // B-W2b-120: Health & safety ships its Safety calendar (SCR-267); the other Health & safety pages join with their steps.
+      {
+        label: 'Health & safety',
+        labelIt: 'Salute e sicurezza',
+        hideLabel: false,
+        pages: [{ id: 'plant.calendar', title: 'Safety calendar', titleIt: 'Scadenzario sicurezza', wave: 'W2b', href: '/plant/calendar' }],
       },
       // B-W2a-73: Plant settings (a W2b page) ships with its W2a section only, Symptoms on the floor (SCR-241).
       {

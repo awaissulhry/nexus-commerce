@@ -39,14 +39,16 @@
     "toApprove": "Lower quantities to approve",
     "recuts": "Replacements to cut",
     "downgraded": "Downgraded to second quality",
-    "downgradedLater": "Comes later (W2b)"
+    "downgradedHint": "in the period · {today} today",
+    "downgradedUnread": "Not read: try again"
   },
   "view": {
     "all": "Every row",
     "today": "Scrap today",
     "rework": "Rework open",
     "approve": "Waiting for approval",
-    "recuts": "Recuts to cut"
+    "recuts": "Recuts to cut",
+    "second": "Second quality"
   },
   "period": {
     "7": "Last 7 days",
@@ -56,7 +58,8 @@
   },
   "kind": {
     "SCRAP": "Scrap",
-    "REWORK": "Rework"
+    "REWORK": "Rework",
+    "SECOND": "Second quality"
   },
   "rework": {
     "OPEN": "Open",
@@ -178,7 +181,9 @@
       "SCRAP_one": "Scrap {count} piece · {number}",
       "SCRAP_other": "Scrap {count} pieces · {number}",
       "REWORK_one": "Rework {count} piece · {number}",
-      "REWORK_other": "Rework {count} pieces · {number}"
+      "REWORK_other": "Rework {count} pieces · {number}",
+      "SECOND_one": "Second quality {count} garment · {number}",
+      "SECOND_other": "Second quality {count} garments · {number}"
     },
     "reason": "Reason",
     "operation": "Operation",
@@ -259,5 +264,104 @@
     "notAPart": "That part is not a part of this garment.",
     "selfDecision": "You asked for it: another person decides it.",
     "wrongState": "It was decided meanwhile. The rows were read again."
+  },
+  "second": {
+    "open": "Second quality…",
+    "title": "Downgrade to second quality",
+    "go": "Downgrade",
+    "espr": "The garments go into stock as second quality instead of being scrapped: unsold apparel is not destroyed (EU ESPR).",
+    "readFailed": "What this row can still send could not be read.",
+    "body": "{left} of the {scrapped} scrapped garments can go to second quality ({downgraded} went already) · {cell}.",
+    "quantity": "Garments",
+    "quantityHint": "From 1 to {max}.",
+    "reason": "Why second quality",
+    "reasonCode": {
+      "LEATHER_FLAW": "Leather flaw",
+      "SHADE": "Shade difference",
+      "STAIN": "Stain that does not come out",
+      "STITCHING": "Visible stitching fault",
+      "ALIGNMENT": "Alignment",
+      "MEASUREMENT": "Measurements out of tolerance",
+      "OTHER": "Other (say why)"
+    },
+    "note": "Note",
+    "noteRequired": "Why (required for Other)",
+    "target": "Kept as",
+    "targetSku": "The same SKU ({sku})",
+    "targetSkuHint": "In a second-quality place outside finished goods, so it never ships as first quality.",
+    "targetItem": "A second-quality item",
+    "targetItemHint": "A finished item kept for second quality, with no SKU of its own.",
+    "item": "Second-quality item",
+    "pick": "Pick…",
+    "place": "Place",
+    "placeHint": "Where the garments go.",
+    "placeHintSku": "A place outside finished goods (finished-goods places cannot be picked for the SKU).",
+    "finishedGoods": "finished goods",
+    "ppe": "The fault does not touch the protection",
+    "ppeHint": "This is protective clothing: second quality only when seams, armour and abrasion zones are not affected. A safety fault is scrapped.",
+    "section": "Second quality",
+    "keptAs": "Kept as",
+    "keptSku": "SKU {sku}",
+    "keptItem": "Item {item}",
+    "noMove": "No stock move (an older row)",
+    "withdrawnAt": "Withdrawn",
+    "withdrawn": "Withdrawn",
+    "withdraw": "Withdraw…",
+    "withdrawReason": "Why it is withdrawn",
+    "withdrawHint": "The garments come out of the place again; the row stays, marked withdrawn.",
+    "withdrawGo": "Withdraw",
+    "held": {
+      "notScrap": "Only scrapped garments go to second quality.",
+      "part": "A cut piece ({part}) is not a garment: replace it with a recut instead.",
+      "covered": "Every garment of this row went to second quality already.",
+      "quantity": "Garments from 1 to {max}.",
+      "reason": "Pick why the garments go to second quality.",
+      "item": "Pick the second-quality item.",
+      "noItems": "No finished item is kept for second quality yet: add one in Product › Materials, or keep the SKU.",
+      "place": "Pick the place the garments go to.",
+      "general": "This row cannot go to second quality now.",
+      "isSecond": "These garments went to second quality: nothing to replace here."
+    },
+    "refusal": {
+      "NOT_SCRAP": "That row scrapped no garment: only scrapped garments go to second quality.",
+      "NOT_A_GARMENT": "A cut piece is not a garment: only whole garments go to second quality. Replace the piece with a recut instead.",
+      "NOT_A_REASON": "Pick a reason of the list.",
+      "REASON_WORDS": "Say in words why the garments go to second quality.",
+      "SCRAP_WAITS_APPROVAL": "This scrap is above the limit and waits for the team leader’s approval: nothing goes to second quality before.",
+      "SCRAP_REFUSED": "The team leader refused this scrap count: there is nothing scrapped to send to second quality.",
+      "PPE_CONFIRM": "This is protective clothing: confirm the fault does not touch its protection, or scrap it.",
+      "NO_SKU": "This cell has no SKU yet: keep the garments as a second-quality item.",
+      "SKU_IN_FINISHED_GOODS": "Kept as the SKU, the garments go into a place outside finished goods, so they never ship as first quality.",
+      "NOT_A_SECOND_QUALITY_ITEM": "That item is not kept for second quality: pick a finished item with no SKU of its own, counted in pieces.",
+      "ALREADY_WITHDRAWN": "This downgrade is withdrawn already.",
+      "GARMENTS_MOVED": "The garments are no longer all in their place: move them back first, or correct the stock there."
+    },
+    "notice": {
+      "done_one": "{count} garment of {number} went to second quality.",
+      "done_other": "{count} garments of {number} went to second quality.",
+      "withdrawn_one": "The downgrade of {count} garment of {number} was withdrawn.",
+      "withdrawn_other": "The downgrade of {count} garments of {number} was withdrawn."
+    }
+  },
+  "repair": {
+    "section": "Repair station",
+    "failed": "The repair could not be read.",
+    "state": "Where it stands",
+    "stateOf": {
+      "WAITING": "Waiting for the repair station",
+      "IN_REPAIR": "In repair",
+      "OUT": "Repaired and scanned out",
+      "NONE": "Not through the repair station"
+    },
+    "station": "Station",
+    "in": "Scanned in",
+    "out": "Scanned out",
+    "minutes": "Repair minutes",
+    "minutesValue_one": "{count} min",
+    "minutesValue_other": "{count} min",
+    "minutesHint": "Per rework: kept apart from piece pay, never per person.",
+    "result": "Came out",
+    "resultValue": "{good} good, {scrap} scrapped",
+    "hidden": "A person scanned it: who is shown only where the site's legal basis for performance data is in force."
   }
 }

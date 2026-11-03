@@ -1,7 +1,8 @@
 import type { Tone } from '@nexus/ui/primitives'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Replacement } from '../cutting/api'
-import type { ReplacementAsk, ScrapKind, ScrapRow, ScrapTiles } from './api'
+import { DOWNGRADE_REASON_WORDS, isDowngradeReason } from '@nexus/factory-domain/production/repair/rules'
+import type { Downgrade, DowngradeAsk, DowngradeOptions, ReplacementAsk, ScrapKind, ScrapRow, ScrapTiles } from './api'
 
 /**
  * Production › Floor control › Scrap & rework (SCR-140; design production.scrap): the rules without a screen. What a
@@ -10,7 +11,8 @@ import type { ReplacementAsk, ScrapKind, ScrapRow, ScrapTiles } from './api'
  * `?open=<row>` the row's detail, `?replace=<row>` Replace scrapped quantity), the filters over the rows read, the
  * pareto (bars per reason, operation or style with the cumulative line), what Approve reaches, why a replacement or a
  * decision is held, and a refused write in words. Values only with the cost grain. Per work order, bundle, operation
- * and station: never a person (Statuto dei Lavoratori art. 4). "Second quality" (downgrade, MES-133) is W2b.
+ * and station: never a person (Statuto dei Lavoratori art. 4). B-W2b-126: "Second quality" (downgrade, MES-133) rows, the
+ * tile and its saved filter, why a downgrade is held, and its body.
  */
 
 export const SCRAP_NAMESPACE = 'scrap'
@@ -36,6 +38,8 @@ export interface ScrapCan {
   readonly workOrders: boolean
   /** production.cutting.view: the recut list of the Cutting page. */
   readonly cutting: boolean
+  /** B-W2b-126: production.downgrade: send scrapped garments to second quality, withdraw a downgrade. */
+  readonly downgrade: boolean
 }
 
 export function scrapCanOf(permissions: readonly string[]): ScrapCan {
@@ -47,12 +51,13 @@ export function scrapCanOf(permissions: readonly string[]): ScrapCan {
     cost: held.has('money.cost'),
     workOrders: held.has('workorders.view'),
     cutting: held.has('production.cutting.view'),
+    downgrade: held.has('production.downgrade'),
   }
 }
 
 // ---- the address ---------------------------------------------------------------------------------------------------------------
 
-export const SCRAP_VIEWS = ['all', 'today', 'rework', 'approve', 'recuts'] as const
+export const SCRAP_VIEWS = ['all', 'today', 'rework', 'approve', 'recuts', /* B-W2b-126 */ 'second'] as const
 export type ScrapView = (typeof SCRAP_VIEWS)[number]
 export const PERIODS = ['7', '30', '90', 'all'] as const
 export type Period = (typeof PERIODS)[number]
@@ -69,6 +74,8 @@ export interface ScrapAddress {
   readonly q: string
   readonly open: string | null
   readonly replace: string | null
+  /** B-W2b-126: Downgrade to second quality for this row (`?downgrade=`). */
+  readonly downgrade: string | null
 }
 
 const pick = <T extends string>(values: readonly T[], value: string | null | undefined, fallback: T): T => ((values as readonly string[]).includes(value ?? '') ? (value as T) : fallback)
@@ -80,12 +87,13 @@ export function addressOf(params: { get(name: string): string | null } | null): 
   return {
     view: pick(SCRAP_VIEWS, params?.get('view'), 'all'),
     period: pick(PERIODS, params?.get('period'), '30'),
-    kind: kind === 'SCRAP' || kind === 'REWORK' ? kind : null,
+    kind: kind === 'SCRAP' || kind === 'REWORK' || kind === 'SECOND' ? kind : null,
     by: pick(DIMENSIONS, params?.get('by'), 'reason'),
     group: group ? group.slice(0, 80) : null,
     q: (params?.get('q') ?? '').trim().slice(0, 60),
     open: rowId(params?.get('open')),
     replace: rowId(params?.get('replace')),
+    downgrade: rowId(params?.get('downgrade')),
   }
 }
 
@@ -99,6 +107,7 @@ export function addressText(address: ScrapAddress): string {
   if (address.q.trim()) query.set('q', address.q.trim())
   if (address.open) query.set('open', address.open)
   if (address.replace) query.set('replace', address.replace)
+  if (address.downgrade) query.set('downgrade', address.downgrade)
   const text = query.toString()
   return text ? `?${text}` : ''
 }
@@ -112,19 +121,27 @@ export function periodFrom(period: Period, now: number): string | null {
 
 export interface TileRule {
   readonly id: 'scrapToday' | 'reworkOpen' | 'toApprove' | 'recuts' | 'downgraded'
-  /** The saved filter it sets; null: W2b (downgrade to second quality, MES-133). */
-  readonly view: ScrapView | null
+  /** The saved filter it sets. */
+  readonly view: ScrapView
 }
 export const TILES: readonly TileRule[] = [
   { id: 'scrapToday', view: 'today' },
   { id: 'reworkOpen', view: 'rework' },
   { id: 'toApprove', view: 'approve' },
   { id: 'recuts', view: 'recuts' },
-  { id: 'downgraded', view: null },
+  // B-W2b-126 (MES-133): the garments sent to second quality in the period, withdrawn ones left out.
+  { id: 'downgraded', view: 'second' },
 ]
 
-export function tileValue(id: TileRule['id'], tiles: ScrapTiles | null): string {
-  if (!tiles || id === 'downgraded') return '—'
+/** B-W2b-126: the downgrades' totals (garments, not withdrawn): today and the period read. */
+export interface SecondTotals {
+  readonly today: number
+  readonly period: number
+}
+
+export function tileValue(id: TileRule['id'], tiles: ScrapTiles | null, second: SecondTotals | null = null): string {
+  if (id === 'downgraded') return second ? String(second.period) : '—'
+  if (!tiles) return '—'
   if (id === 'scrapToday') return String(tiles.scrapToday)
   if (id === 'reworkOpen') return String(tiles.reworkOpen)
   if (id === 'toApprove') return String(tiles.reductionsToApprove)
@@ -153,6 +170,7 @@ export function filterRows(rows: readonly ScrapRow[], address: ScrapAddress, tod
     if (address.view === 'rework' && (row.kind !== 'REWORK' || (row.status !== 'OPEN' && row.status !== 'IN_PROGRESS'))) return false
     if (address.view === 'approve' && !openReplacement(row, 'REDUCE')) return false
     if (address.view === 'recuts' && !openReplacement(row, 'RECUT')) return false
+    if (address.view === 'second' && row.kind !== 'SECOND') return false
     if (address.kind && row.kind !== address.kind) return false
     if (options.withGroup && address.group && groupOf(row, address.by, locale).key !== address.group) return false
     if (q) {
@@ -174,7 +192,8 @@ export interface ParetoBar {
 /** The pareto: pieces per group, largest first, the first `top` and "other" for the rest; the cumulative share. */
 export function pareto(rows: readonly ScrapRow[], by: Dimension, locale: string, top = 8): ParetoBar[] {
   const groups = new Map<string, { label: string; pieces: number }>()
-  for (const row of rows) {
+  // B-W2b-126: a downgrade is scrap that was saved, never a second count of it.
+  for (const row of rows.filter((entry) => entry.kind !== 'SECOND')) {
     const group = groupOf(row, by, locale)
     const entry = groups.get(group.key) ?? { label: group.label, pieces: 0 }
     entry.pieces += row.pieces
@@ -192,7 +211,7 @@ export function pareto(rows: readonly ScrapRow[], by: Dimension, locale: string,
   })
 }
 
-export const KIND_TONE: Readonly<Record<ScrapKind, Tone>> = { SCRAP: 'danger', REWORK: 'warning' }
+export const KIND_TONE: Readonly<Record<ScrapKind, Tone>> = { SCRAP: 'danger', REWORK: 'warning', SECOND: 'info' }
 export const REPLACEMENT_TONE: Readonly<Record<string, Tone>> = { OPEN: 'info', APPROVED: 'success', REFUSED: 'neutral', DONE: 'success', CANCELLED: 'neutral' }
 
 /** Leather the row held, per lot and hide ("SEED-LOT-1 / HD-1 3,33 ft²"). */
@@ -277,6 +296,19 @@ export function replaceBody(row: ScrapRow, draft: ReplaceDraft): ReplacementAsk 
 // ---- refusals ---------------------------------------------------------------------------------------------------------------------
 
 const REFUSALS: Readonly<Record<string, string>> = {
+  // B-W2b-126: second quality (factory-domain production/repair DOWNGRADE_REFUSALS).
+  NOT_SCRAP: 'second.refusal.NOT_SCRAP',
+  NOT_A_GARMENT: 'second.refusal.NOT_A_GARMENT',
+  NOT_A_REASON: 'second.refusal.NOT_A_REASON',
+  REASON_WORDS: 'second.refusal.REASON_WORDS',
+  SCRAP_WAITS_APPROVAL: 'second.refusal.SCRAP_WAITS_APPROVAL',
+  SCRAP_REFUSED: 'second.refusal.SCRAP_REFUSED',
+  PPE_CONFIRM: 'second.refusal.PPE_CONFIRM',
+  NO_SKU: 'second.refusal.NO_SKU',
+  SKU_IN_FINISHED_GOODS: 'second.refusal.SKU_IN_FINISHED_GOODS',
+  NOT_A_SECOND_QUALITY_ITEM: 'second.refusal.NOT_A_SECOND_QUALITY_ITEM',
+  ALREADY_WITHDRAWN: 'second.refusal.ALREADY_WITHDRAWN',
+  GARMENTS_MOVED: 'second.refusal.GARMENTS_MOVED',
   WORK_ORDER_NOT_OPEN: 'problem.notOpen',
   MORE_THAN_SCRAPPED: 'problem.moreThanScrapped',
   MORE_THAN_CELL: 'problem.moreThanCell',
@@ -339,4 +371,110 @@ export function csvOf(rows: readonly ScrapRow[], header: readonly string[], loca
       .join(','),
   )
   return [header.map(cell).join(','), ...lines].join('\n')
+}
+
+// ---- B-W2b-126: second quality instead of scrap (MES-133) ---------------------------------------------------------------------
+
+/** A downgrade as a row of the list (kind SECOND): its garments, its reason in the person's words, the scrap it came from. */
+export function downgradeRow(downgrade: Downgrade): ScrapRow {
+  const words = isDowngradeReason(downgrade.reasonCode) ? DOWNGRADE_REASON_WORDS[downgrade.reasonCode] : null
+  return {
+    id: `second:${downgrade.id}`,
+    kind: 'SECOND',
+    // An older row that names no scrap: its own id (the row opens its downgrade, nothing else reads the source).
+    source: downgrade.source ?? { type: 'REWORK', id: downgrade.id },
+    at: downgrade.createdAt,
+    workOrder: downgrade.workOrder,
+    bundle: downgrade.bundle ? { id: downgrade.bundle.id, code: downgrade.bundle.code } : null,
+    operation: null,
+    cell: downgrade.cell,
+    part: downgrade.bundle?.part ?? null,
+    pieces: downgrade.quantity,
+    reasonCode: downgrade.reasonCode,
+    reasonLabel: words ? { it: words.it, en: words.en } : null,
+    status: null,
+    station: null,
+    materials: [],
+    replacements: [],
+    downgrade,
+  }
+}
+
+/** The list's rows: the scrap and rework rows with the downgrades, newest first. */
+export function withDowngrades(rows: readonly ScrapRow[], downgrades: readonly Downgrade[] | null): ScrapRow[] {
+  if (!downgrades || downgrades.length === 0) return [...rows]
+  return [...rows, ...downgrades.map(downgradeRow)].sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || (a.id < b.id ? 1 : -1))
+}
+
+/** Garments of a scrap row already sent to second quality (the downgrades of its scan or rework, withdrawn ones left out). */
+export function downgradedOf(row: ScrapRow, rows: readonly ScrapRow[]): number {
+  return rows
+    .filter((entry) => entry.kind === 'SECOND' && entry.downgrade && !entry.downgrade.withdrawn && entry.downgrade.source?.type === row.source.type && entry.downgrade.source.id === row.source.id)
+    .reduce((sum, entry) => sum + entry.pieces, 0)
+}
+
+/** Why "Second quality…" is held on a row (else null): not scrap, no right, a cut piece, nothing left. */
+export function downgradeOpenHeld(row: ScrapRow, rows: readonly ScrapRow[], can: ScrapCan): Phrase | null {
+  if (row.kind !== 'SCRAP') return phrase('second.held.notScrap')
+  if (!can.downgrade) return phrase('held.permission', { permission: 'production.downgrade' })
+  if (row.part) return phrase('second.held.part', { part: row.part })
+  if (row.pieces - downgradedOf(row, rows) <= 0) return phrase('second.held.covered')
+  return null
+}
+
+export interface DowngradeDraft {
+  readonly quantity: string
+  readonly reasonCode: string
+  readonly note: string
+  readonly target: 'SKU' | 'ITEM'
+  readonly itemId: string
+  readonly toLocationId: string
+  readonly ppeConfirmed: boolean
+}
+
+export const emptyDowngradeDraft = (options: DowngradeOptions | null): DowngradeDraft => ({
+  quantity: String(Math.max(1, options?.left ?? 1)),
+  reasonCode: '',
+  note: '',
+  target: options && !options.sku ? 'ITEM' : 'SKU',
+  itemId: '',
+  // The site's one place outside finished goods, when there is exactly one; else the person picks.
+  toLocationId: (() => {
+    const outside = (options?.places ?? []).filter((place) => !place.finishedGoods)
+    return outside.length === 1 ? outside[0]!.id : ''
+  })(),
+  ppeConfirmed: false,
+})
+
+/** Why Downgrade is held (else null), checked as the API checks it. */
+export function downgradeHeld(options: DowngradeOptions | null, draft: DowngradeDraft, can: ScrapCan, busy: boolean): Phrase | null {
+  if (!can.downgrade) return phrase('held.permission', { permission: 'production.downgrade' })
+  if (!options) return phrase('held.loading')
+  if (options.held) return phrase(REFUSALS[options.held.code] ?? 'second.held.general')
+  const quantity = Number(draft.quantity)
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > options.left) return phrase('second.held.quantity', { max: options.left })
+  if (!draft.reasonCode) return phrase('second.held.reason')
+  if (draft.reasonCode === 'OTHER' && draft.note.trim().length < 3) return phrase('second.refusal.REASON_WORDS')
+  if (draft.target === 'SKU' && !options.sku) return phrase('second.refusal.NO_SKU')
+  if (draft.target === 'ITEM' && !draft.itemId) return phrase(options.items.length === 0 ? 'second.held.noItems' : 'second.held.item')
+  const place = options.places.find((entry) => entry.id === draft.toLocationId)
+  if (!place) return phrase('second.held.place')
+  if (draft.target === 'SKU' && place.finishedGoods) return phrase('second.refusal.SKU_IN_FINISHED_GOODS')
+  if (options.ppe && !draft.ppeConfirmed) return phrase('second.refusal.PPE_CONFIRM')
+  if (busy) return phrase('held.busy')
+  return null
+}
+
+/** The request Downgrade sends. */
+export function downgradeBody(row: ScrapRow, draft: DowngradeDraft, options: DowngradeOptions): DowngradeAsk {
+  return {
+    ...(row.source.type === 'SCAN' ? { sourceScanId: row.source.id } : { reworkOrderId: row.source.id }),
+    quantity: Number(draft.quantity),
+    reasonCode: draft.reasonCode,
+    ...(draft.note.trim() ? { note: draft.note.trim() } : {}),
+    target: draft.target,
+    ...(draft.target === 'ITEM' ? { itemId: draft.itemId } : {}),
+    toLocationId: draft.toLocationId,
+    ...(options.ppe ? { ppeConfirmed: draft.ppeConfirmed } : {}),
+  }
 }

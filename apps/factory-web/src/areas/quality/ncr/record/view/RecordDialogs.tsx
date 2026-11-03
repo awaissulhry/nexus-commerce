@@ -23,6 +23,7 @@ import {
   type NcrRecordModel,
   type RecordDialog,
 } from '../view-model'
+import { AnswerConcessionDialog, AskConcessionDialog } from './ConcessionPanel'
 import { codeLabel, type RecordWords } from './words'
 
 /**
@@ -59,6 +60,11 @@ export function RecordDialogs({ model, record, words, actions }: { model: NcrRec
       return <ReasonDialog {...props} dialog={dialog} title={words.r('cancelNcr.title', { number: record.ncr.number })} body={words.r('cancelNcr.body')} label={words.r('cancelNcr.reason')} submit={words.r('cancelNcr.submit')} value={dialog.reason} onValue={(reason) => actions?.onDialog?.({ ...dialog, reason })} danger />
     case 'register':
       return <Register {...props} dialog={dialog} />
+    // B-W2b-113: a concession asked of the customer, their answer recorded.
+    case 'askConcession':
+      return <AskConcessionDialog {...props} dialog={dialog} />
+    case 'answerConcession':
+      return <AnswerConcessionDialog {...props} dialog={dialog} />
   }
 }
 
@@ -71,7 +77,7 @@ interface Props<K extends RecordDialog['kind']> {
 }
 
 /** The frame every dialog shares: the stale banner, the dialog's notice, Cancel and the held main button. */
-function Frame({ model, words, actions, dialog, title, submit, held, danger, children, size = 'md' }: { model: NcrRecordModel; words: RecordWords; actions?: NcrRecordActions; dialog: RecordDialog; title: string; submit: string; held: string | null; danger?: boolean; children?: ReactNode; size?: 'sm' | 'md' | 'lg' }) {
+export function Frame({ model, words, actions, dialog, title, submit, held, danger, children, size = 'md' }: { model: NcrRecordModel; words: RecordWords; actions?: NcrRecordActions; dialog: RecordDialog; title: string; submit: string; held: string | null; danger?: boolean; children?: ReactNode; size?: 'sm' | 'md' | 'lg' }) {
   return (
     <Modal
       open
@@ -462,7 +468,9 @@ function Rework({ model, record, words, actions, dialog }: Props<'rework'>) {
       <Field label={r('rework.description')}>
         <Textarea rows={2} maxLength={1000} value={dialog.description} onChange={(event) => actions?.onDialog?.({ ...dialog, description: event.target.value })} />
       </Field>
-      <p className="fw-q-hint">{r('rework.reinspection')}</p>
+      {/* B-W2b-113: garments still in work are scrapped through the rework (the plan's rework scrap path). */}
+      <Checkbox checked={dialog.scrapAll === true} onChange={(event) => actions?.onDialog?.({ ...dialog, scrapAll: event.target.checked })} label={r('rework.scrapAll')} />
+      <p className="fw-q-hint">{dialog.scrapAll ? r('rework.scrapAllHint') : r('rework.reinspection')}</p>
     </Frame>
   )
 }

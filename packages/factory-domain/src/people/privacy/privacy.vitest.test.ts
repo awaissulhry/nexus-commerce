@@ -253,9 +253,10 @@ describe('permissions, templates and events', () => {
 
   it('the administrator and the production manager read the gates; only the owner switches them and opens one person\'s figures', () => {
     const holders = (permission: string) => ROLE_TEMPLATES.filter((template) => template.permissions.includes(permission as never)).map((template) => template.key).sort()
-    expect(holders(PEOPLE_PRIVACY_VIEW)).toEqual(['admin', 'owner', 'production_manager', 'read_only'])
+    // B-W2b-120: the HR template reads them too and opens one person's figures (Owner answer H3).
+    expect(holders(PEOPLE_PRIVACY_VIEW)).toEqual(['admin', 'hr', 'owner', 'production_manager', 'read_only'])
     expect(holders(PEOPLE_PRIVACY_MANAGE)).toEqual(['owner'])
-    expect(holders(PEOPLE_FIGURES_VIEW)).toEqual(['owner'])
+    expect(holders(PEOPLE_FIGURES_VIEW)).toEqual(['hr', 'owner'])
   })
 
   it('the events are in the catalogue, with no person and no basis text', () => {
