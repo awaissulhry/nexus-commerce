@@ -7,6 +7,7 @@ import { seed as seedAndon } from '../seed/andon'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedCalendar } from '../seed/calendar'
+import { seed as seedCapa } from '../seed/capa'
 import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
 import { seed as seedCosting } from '../seed/costing'
@@ -249,6 +250,9 @@ beforeAll(async () => {
   // The inspection plans and records schema of W2b (wave 10/16).
   await seedInspectionPlans({ db: factory, namespace: 'iso-a' })
   await seedInspectionPlans({ db: factory, namespace: 'iso-b' })
+  // The quality problems schema of W2b (wave 11/16).
+  await seedCapa({ db: factory, namespace: 'iso-a' })
+  await seedCapa({ db: factory, namespace: 'iso-b' })
   // The leather and roll stock schema of W2b (wave 12/16).
   await seedLeather({ db: factory, namespace: 'iso-a' })
   await seedLeather({ db: factory, namespace: 'iso-b' })
@@ -298,6 +302,10 @@ it('covers every classified table and every runtime role', () => {
     'BundleCoupon',
     'BundleReprint',
     'CalendarDay',
+    'Capa',
+    'CapaAction',
+    'CapaSource',
+    'CauseCode',
     'Certificate',
     'CertificateCoverage',
     'CertificateRenewal',
@@ -406,7 +414,9 @@ it('covers every classified table and every runtime role', () => {
     'MeasurementTemplate',
     'Message',
     'MessageMention',
+    'NcrConcession',
     'NcrContainmentAction',
+    'NcrCostLine',
     'NcrDispositionLine',
     'NcrLink',
     'Nonconformance',
@@ -473,7 +483,9 @@ it('covers every classified table and every runtime role', () => {
     'PurchaseOrderReminder',
     'PurchaseOrderRevision',
     'PurchasingSettings',
+    'QualityAlertRule',
     'QualityHold',
+    'QualityHoldGroup',
     'QualityRelease',
     'QualityReleaseReversal',
     'QualitySettings',
@@ -637,8 +649,11 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
       }
       return copy
     }
+    // Only the columns the role may see: a hidden column has no grant, so its row takes the column's default (B-W2b-79:
+    // the floor inserts holds without QualityHold.nextStep).
+    const insertColumns = visible.map(q).join(', ')
     const insert = (copy: Record<string, unknown>) =>
-      execute(role, `INSERT INTO ${table} SELECT * FROM jsonb_populate_record(NULL::${table}, $1::jsonb)`, JSON.stringify(copy))
+      execute(role, `INSERT INTO ${table} (${insertColumns}) SELECT ${insertColumns} FROM jsonb_populate_record(NULL::${table}, $1::jsonb)`, JSON.stringify(copy))
 
     if (!access) {
       it('has no privilege at all', async () => {

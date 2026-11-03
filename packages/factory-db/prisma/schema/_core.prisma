@@ -201,6 +201,12 @@ model Company {
   reportSubscriptions  ReportSubscription[]
   // alerts.prisma: the alert rules that look at it.
   alertRules           AlertRule[]
+  // W2b capa.prisma, holds.prisma, quality.prisma, gendocs.prisma (wave 11/16): its corrective actions, genealogy holds,
+  // quality alert rules and the documents generated for its records.
+  capas                Capa[]
+  qualityHoldGroups    QualityHoldGroup[]
+  qualityAlertRules    QualityAlertRule[]
+  generatedDocuments   GeneratedDocument[]
   // W2a sourcing.prisma: the approved sources held for the company only.
   supplierItems        SupplierItem[]
 

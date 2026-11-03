@@ -101,6 +101,9 @@ model Party {
   lots                 Lot[]
   // quality.prisma: the PPE register's entries it reported.
   ppeRegisterEntries   PpeRegisterEntry[]
+  // W2b capa.prisma, ncr.prisma (wave 11/16): the 8Ds written for it and the concessions it was asked.
+  capas                Capa[]
+  ncrConcessions       NcrConcession[]
   // W2a ncr.prisma, plant.prisma: as a supplier, the nonconformances about its goods and the machines it sold.
   nonconformances      Nonconformance[]
   machines             Machine[]
@@ -270,6 +273,8 @@ model PartyContact {
   // returns.prisma, complaints.prisma: the returns they asked for and the complaints they made.
   returnAuthorisations ReturnAuthorisation[]
   complaints          Complaint[]
+  // W2b ncr.prisma (wave 11/16): the concessions they were asked.
+  ncrConcessions      NcrConcession[]
 
   // The target of the measurement profiles' reference: a rider is a contact of the profile's own party.
   @@unique([tenantId, partyId, id])

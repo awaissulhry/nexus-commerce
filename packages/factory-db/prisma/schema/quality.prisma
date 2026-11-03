@@ -194,6 +194,8 @@ model InspectionDefect {
   /// map); null: typed (W1 rows) or not located.
   defectCodeId    String?     @db.Uuid
   zone            String?
+  /// W2b (B-W2b-79; QHS-004): why it happened (holds.prisma CauseCode); null: not known.
+  causeCodeId     String?     @db.Uuid
   description     String?
   /// Garments of the sample with this defect, from 1.
   quantity        Int
@@ -211,6 +213,8 @@ model InspectionDefect {
   workOrderSize WorkOrderSize? @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2a: the library's defect (Restrict, as above: SetNull would also clear tenantId).
   defectCode    DefectCode?    @relation(fields: [tenantId, defectCodeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (B-W2b-79; Restrict, as above).
+  causeCode     CauseCode?     @relation(fields: [tenantId, causeCodeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, inspectionId, defectClass, code])
 }
@@ -531,6 +535,18 @@ model QualitySettings {
   /// W2b (B-W2a-47's default): hours after a problem is found by which an NCR's containment is due when nobody says
   /// otherwise, 1 to 720. null: not set on this row (a company row follows the tenant-wide one; no row: 24).
   defaultContainmentHours Int?
+  /// W2b (B-W2b-79; QHS-023; design quality.settings qs-results): true stops a sample at the reject number, false finishes
+  /// the whole sample. A plan version's own stopAtReject wins. null: not set on this row (a company row follows the
+  /// tenant-wide one; no row: false).
+  stopAtRejectNumber      Boolean?
+  /// W2b (B-W2b-79; qs-results): the undo window after a bench scan, 0 to 300 seconds (0: none). null: not set on this row
+  /// (a company row follows the tenant-wide one; no row: 10).
+  benchUndoSeconds        Int?
+  /// W2b (B-W2b-79; QHS-300; design qs-sod "Four-eyes release for"): when a final release needs a second person, beside
+  /// the rule above: OVERRIDE (an overridden result; a conditional release is that same record, a PASS against a computed
+  /// FAIL) and CUSTOMER (the customers listed above). The release trigger reads it: a company's list adds to the tenant-wide
+  /// one, as the customers do; no row: both. ALWAYS is the rule's, never here.
+  fourEyesConditions      ReleaseSecondPersonReason[] @default([OVERRIDE, CUSTOMER])
   version          Int              @default(1)
   createdAt        DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
@@ -556,6 +572,61 @@ enum CrViEvidenceRule {
   SUPPLIER_REPORT_ACCEPTED
   /// (b) Only a lab report on the lot itself counts.
   LOT_REPORT_REQUIRED
+}
+
+/// What a quality alert rule watches (W2b, B-W2b-79; QHS-154; design quality.settings qs-alerts, quality.capa).
+enum QualityAlertEvent {
+  HOLD_PLACED
+  CRITICAL_NCR
+  SAFETY_COMPLAINT
+  /// An inspection waits longer than the rule's time.
+  INSPECTION_WAITING
+  /// A certificate expires: the rule's days before.
+  CERTIFICATE_EXPIRING
+  /// A release waits for its second person longer than the rule's time.
+  RELEASE_WAITING_SECOND_PERSON
+  /// A corrective action is overdue by the rule's time (it escalates).
+  CAPA_ACTION_OVERDUE
+}
+
+/// Whom a quality alert rule tells.
+enum QualityAlertAudience {
+  /// The person the record names: its owner.
+  OWNER
+  /// The holders of the rule's role.
+  ROLE
+  OWNER_AND_ROLE
+}
+
+/// One quality alert rule (W2b, B-W2b-79; QHS-154; design quality.settings "Alerts and escalation"): when it fires, whom it
+/// tells, how fast and how. A rule of a company, or of every company (companyId null); a person's words and the delivery
+/// are Notification's. The company and the event never change. Removed by the office (the audit log keeps it).
+model QualityAlertRule {
+  id            String               @id @db.Uuid
+  tenantId      String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: every company.
+  companyId     String?              @db.Uuid
+  event         QualityAlertEvent
+  audience      QualityAlertAudience
+  /// The office role told: exactly for ROLE and OWNER_AND_ROLE.
+  roleId        String?              @db.Uuid
+  /// How long the thing may wait before it fires, in minutes, up to 30 days. 0: at once.
+  withinMinutes Int                  @default(0)
+  /// CERTIFICATE_EXPIRING: the days before the expiry it fires, highest first (180, 90, 30); every other event: empty.
+  daysBefore    Int[]                @default([])
+  /// How: the bell, e-mail; at least one.
+  channels      AlertChannel[]       @default([IN_APP])
+  enabled       Boolean              @default(true)
+  version       Int                  @default(1)
+  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?              @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  role    Role?    @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, event])
 }
 
 /// One lab result of a lot (QHS-029; B-W1-34): the test, its method (EN ISO 17075-1 or -2 for chromium VI), the measured

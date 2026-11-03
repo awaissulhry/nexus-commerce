@@ -18,9 +18,14 @@
 // a reference (holds.prisma, this wave). A nonconformity of PPE that may present a risk opens a PPE register entry whose
 // source is the NCR (quality.prisma PpeRegisterEntry.sourceType "Nonconformance").
 //
+// W2b schema wave 11/16 (B-W2b-79): the cause (holds.prisma CauseCode) and the CAPA an NCR is escalated to (capa.prisma; a
+// reference, kept with the CAPA's source row, and set once more on a DECIDED or CLOSED NCR: a repeat is often seen after
+// the first one closed); its cost (NcrCostLine, QHS-086, the cost grain) and a concession asked of its customer
+// (NcrConcession, QHS-085).
+//
 // Who sees what (ownership/ncr.json): the office only. The floor raises a hold at the bench (holds.prisma) and the
-// office raises the NCR; portal and link sessions read nothing here. No column holds a cost (the cost tab is W2b) or a
-// figure per person.
+// office raises the NCR; portal and link sessions read nothing here. No column holds a figure per person; the cost lines
+// are at the cost grain.
 
 /// Where an NCR comes from (the design's Source column).
 enum NcrSource {
@@ -89,6 +94,11 @@ model Nonconformance {
   lotId                String?      @db.Uuid
   supplierId           String?      @db.Uuid
   stage                NcrStage     @default(OPEN)
+  /// W2b (B-W2b-79; QHS-004): why it happened; follows the problem (read-only once DECIDED). Null: not known.
+  causeCodeId          String?      @db.Uuid
+  /// W2b (B-W2b-79; QHS-087): the CAPA it was escalated to, of the same company, which lists it as a source. Free while
+  /// OPEN or CONTAINED; once DECIDED or CLOSED given once and kept; never on a CANCELLED NCR.
+  capaId               String?      @db.Uuid
   /// The office user who follows it up, and when its containment is due.
   ownerId              String?      @db.Uuid
   containmentDueAt     DateTime?    @db.Timestamptz(3)
@@ -119,11 +129,18 @@ model Nonconformance {
   item          Item?                   @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   lot           Lot?                    @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   supplier      Party?                  @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (B-W2b-79): Restrict, as above.
+  causeCode     CauseCode?              @relation(fields: [tenantId, causeCodeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  capa          Capa?                   @relation(fields: [tenantId, companyId, capaId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2b claims.prisma (B-W2b-01): the supplier claims it led to.
   supplierClaims SupplierClaim[]
   containment   NcrContainmentAction[]
   dispositions  NcrDispositionLine[]
   links         NcrLink[]
+  // W2b (B-W2b-79): its cost and the concessions asked.
+  /// @not-money the relation to its cost lines
+  costLines     NcrCostLine[]
+  concessions   NcrConcession[]
   // holds.prisma: the holds it decides.
   holds         QualityHold[]
 
@@ -132,6 +149,7 @@ model Nonconformance {
   @@unique([tenantId, siteId, id])
   @@index([tenantId, stage])
   @@index([tenantId, sourceType, sourceId])
+  @@index([tenantId, capaId])
 }
 
 /// What a containment action does (QHS-082; the design's Containment tab).
@@ -255,4 +273,107 @@ model NcrLink {
   @@index([tenantId, ncrId])
   // Which NCRs a record is linked to (the record's own NCR list).
   @@index([tenantId, recordType, recordId])
+}
+
+/// What a cost line of an NCR is (QHS-086; the design's Cost tab).
+enum NcrCostKind {
+  MATERIAL
+  LABOUR
+  REWORK_TIME
+  SCRAP_VALUE
+  FREIGHT
+  /// Says what in words.
+  OTHER
+}
+
+/// Where a cost line's amount comes from.
+enum NcrCostSource {
+  /// Typed by a person.
+  TYPED
+  /// Computed from the record it names (a stock move, a rework order's scans): read-only on the screen, replaced when
+  /// computed again.
+  COMPUTED
+}
+
+/// One cost line of an NCR (W2b, B-W2b-79; QHS-086): what it is, its amount at the cost grain, and where the amount came
+/// from. Written, changed and removed while the NCR is neither CLOSED nor CANCELLED; the total is the sum of the lines.
+model NcrCostLine {
+  id          String        @id @db.Uuid
+  tenantId    String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The NCR's site.
+  siteId      String        @db.Uuid
+  ncrId       String        @db.Uuid
+  /// 1, 2, 3 … in the NCR.
+  seq         Int
+  kind        NcrCostKind
+  source      NcrCostSource @default(TYPED)
+  /// What it is, in words (required for OTHER).
+  description String?
+  /// From 0, in minor units of the company's currency.
+  /// @grain cost
+  amount      Int
+  /// The record a COMPUTED line was computed from: its type and id, exactly on a COMPUTED line.
+  recordType  String?
+  recordId    String?       @db.Uuid
+  version     Int           @default(1)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?       @db.Uuid
+
+  ncr Nonconformance @relation(fields: [tenantId, siteId, ncrId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, ncrId, seq])
+}
+
+/// ASKED → ACCEPTED | REFUSED (both final).
+enum NcrConcessionStatus {
+  ASKED
+  ACCEPTED
+  REFUSED
+}
+
+/// A concession asked of a customer (W2b, B-W2b-79; QHS-085; design links.approve "Concession"): the deviation we ask them
+/// to accept and what we propose, then their answer: in words, when, by whom, with the file of their written answer. The
+/// office records the answer; the link page (W2b-3) records it with no office user. Asked while the NCR is neither CLOSED
+/// nor CANCELLED, and answered once, whenever the answer comes. Never deleted.
+model NcrConcession {
+  id           String              @id @db.Uuid
+  tenantId     String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The NCR's site.
+  siteId       String              @db.Uuid
+  ncrId        String              @db.Uuid
+  /// 1, 2, 3 … in the NCR.
+  seq          Int
+  /// The customer, and the person asked when known.
+  partyId      String              @db.Uuid
+  contactId    String?             @db.Uuid
+  /// The deviation, in words ("Shade slightly darker, ΔE 1.8").
+  ask          String
+  /// What we propose.
+  proposal     String
+  status       NcrConcessionStatus @default(ASKED)
+  askedAt      DateTime            @db.Timestamptz(3)
+  askedById    String?             @db.Uuid
+  /// Set exactly when answered: their words (required when REFUSED), when, and the name of who answered for them.
+  answer       String?
+  answeredAt   DateTime?           @db.Timestamptz(3)
+  answeredBy   String?
+  /// Their written answer: a file of this row (StoredFile recordType "NcrConcession").
+  answerFileId String?             @db.Uuid
+  /// The office user who recorded the answer; null: the customer, by the link.
+  recordedById String?             @db.Uuid
+  version      Int                 @default(1)
+  createdAt    DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?             @db.Uuid
+
+  ncr        Nonconformance @relation(fields: [tenantId, siteId, ncrId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  party      Party          @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  contact    PartyContact?  @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  answerFile StoredFile?    @relation("NcrConcessionAnswer", fields: [tenantId, answerFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, ncrId, seq])
+  // What a customer was asked.
+  @@index([tenantId, partyId])
 }

@@ -12,6 +12,9 @@
 // every login: the …_followups_stock_w2b_guards triggers); the record is named by type and id (it may be of any later
 // wave's table), checked by the trigger to be of the document's company and site.
 //
+// W2b schema wave 11/16 (B-W2b-79): the quality and safety documents. A record of the whole company (a Capa, a Complaint) has
+// no site, so neither has its document: siteId is null there, and the floor reads none of them.
+//
 // Who sees what (ownership/gendocs.json): the office reads and writes; the floor of the record's site reads the rows (its
 // packing station prints the current packing list; the file itself has its own audiences); portal and link sessions
 // read none (a customer portal reads its documents through their files, W2b-3).
@@ -22,11 +25,13 @@
 model GeneratedDocument {
   id          String                @id @db.Uuid
   tenantId    String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
-  /// The record's company and site.
+  /// The record's company and site (null: a record of the whole company, a Capa or a Complaint).
   companyId   String                @db.Uuid
-  siteId      String                @db.Uuid
-  /// The record it was made for: Shipment (PACKING_LIST), SupplierClaim (CLAIM_LETTER), SubcontractOrder or
-  /// MaintenanceJob (JOB_SHEET), ReturnAuthorisation (RMA_SHEET).
+  siteId      String?               @db.Uuid
+  /// The record it was made for: Shipment (PACKING_LIST, CERTIFICATE_OF_CONFORMITY), SupplierClaim (CLAIM_LETTER),
+  /// SubcontractOrder or MaintenanceJob (JOB_SHEET), ReturnAuthorisation (RMA_SHEET), Inspection or IncomingInspection
+  /// (INSPECTION_REPORT), Nonconformance (NCR_REPORT), Capa (EIGHT_D), Complaint (COMPLAINT_ANSWER), and, once their
+  /// tables exist, MachineCheckResult (CHECK_REPORT), RiskAssessmentVersion (DVR_FROZEN), PpeIssue (PPE_RECEIPT).
   recordType  String
   recordId    String                @db.Uuid
   kind        GeneratedDocumentKind
@@ -47,10 +52,17 @@ model GeneratedDocument {
   /// Who made it (null: the system, a document made by a handler).
   createdById String?               @db.Uuid
 
-  site Site       @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
-  file StoredFile @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (B-W2b-79): the company stands on its own, the site reference checks nothing without a site. Restrict, not Prisma's
+  // SetNull default for an optional relation: that would also clear tenantId and companyId.
+  company Company    @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  site    Site?      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  file    StoredFile @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // complaints.prisma (W2b, B-W2b-79): the complaints answered with this version.
+  complaintAnswers Complaint[]
 
   @@unique([tenantId, recordId, kind, version])
+  // The target of the complaints' tenant-safe reference.
+  @@unique([tenantId, id])
   // A record's documents (the record's Documents tab).
   @@index([tenantId, recordType, recordId])
 }
@@ -66,4 +78,20 @@ enum GeneratedDocumentKind {
   JOB_SHEET
   /// The RMA sheet of a return (SAL-346): its scannable number for the parcel.
   RMA_SHEET
+  /// W2b (B-W2b-79): the report of an inspection, for the customer (QHS-059): no pay or cost figure.
+  INSPECTION_REPORT
+  /// The certificate of conformity of a shipment (QHS-145).
+  CERTIFICATE_OF_CONFORMITY
+  /// The report of an NCR, to send to a supplier or attach to a complaint.
+  NCR_REPORT
+  /// The 8D report of a CAPA, in the language chosen (QHS-094).
+  EIGHT_D
+  /// The answer letter of a complaint, in the customer's language (QHS-116).
+  COMPLAINT_ANSWER
+  /// The report of a statutory machine check (D.Lgs. 81/2008 art. 71).
+  CHECK_REPORT
+  /// A risk assessment version frozen with its signatures (D.Lgs. 81/2008 arts. 28-29).
+  DVR_FROZEN
+  /// The receipt of PPE handed to a person.
+  PPE_RECEIPT
 }

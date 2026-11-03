@@ -112,6 +112,8 @@ enum NumberKind {
   /// W2a wave 6: a nonconformance report's number (NCR-…; ncr.prisma Nonconformance.number). W2b: a floor document kind
   /// too (an NCR raised at the bench).
   NCR
+  /// W2b wave 11/16: a CAPA's or an 8D's number (CAPA-…; capa.prisma Capa.number).
+  CAPA
   /// W2a wave 6: a maintenance job's number (MJ-…; plant.prisma MaintenanceJob.number).
   MAINTENANCE_JOB
   /// W2a wave 7: an accounting export batch's number (EXP-…; accounting.prisma AccountingExport.number).
