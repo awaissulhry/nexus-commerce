@@ -888,9 +888,10 @@ describe('the cutting office (B-W2a-60, SCR-238): one cut per work order, where 
     expect(waiting!.materials).toEqual([expect.objectContaining({ itemId: A.leather, colourCode: 'BLK' })])
     expect(rowOf(await cuts('?view=waiting'), WO.office.id)).toBeDefined()
 
-    // Allocate hides: OF-H2 reserved whole for the work order (POST /inventory/reservations).
-    await ok('reserver', 'POST', '/inventory/reservations', { siteId: A.siteA1, workOrderId: WO.office.id, lines: [{ hideId: hides['OF-H2']!.id }] }, 201, freshKey())
-    // One set cut at the cutting table from OF-H1.
+    // Allocate hides: OF-H1 and OF-H2 reserved whole for the work order (POST /inventory/reservations). B-W2b-103: the hide cut
+    // is one of those reserved (any other would be the wrong hide while they wait, MES-063).
+    await ok('reserver', 'POST', '/inventory/reservations', { siteId: A.siteA1, workOrderId: WO.office.id, lines: [{ hideId: hides['OF-H1']!.id }, { hideId: hides['OF-H2']!.id }] }, 201, freshKey())
+    // One set cut at the cutting table from OF-H1 (its reservation is issued; OF-H2 stays allocated).
     const first = await cut(WO.office.id, { code: hides['OF-H1']!.code, lines: sets(WO.office) })
     expect(first.statusCode, first.body).toBe(201)
     const answer = await cuts(`?q=${WO.office.number}`)

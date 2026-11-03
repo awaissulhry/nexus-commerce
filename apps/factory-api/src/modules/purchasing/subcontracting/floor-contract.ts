@@ -140,6 +140,8 @@ export const floorReceiveBackContract = defineContract({
     201: output({
       order: kitView,
       receipt: output({ id: id(), receivedAt: z.string(), good: z.number().int(), defective: z.number().int(), scrapped: z.number().int(), bundles: z.number().int(), returned: z.number().int() }),
+      /** B-W2b-111 (design floor.kits "goods go to inspection before stock and before the workshop is paid"): the incoming inspection opened with the receipt; null: none. */
+      inspection: output({ id: id(), number: z.string(), words: output({ it: z.string(), en: z.string() }) }).nullable(),
     }),
   },
 })

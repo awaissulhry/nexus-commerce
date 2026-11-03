@@ -57,6 +57,8 @@ import {
   type WorkOrderFacts,
 } from './store'
 import { orderDetailOf, orderSummaries, type OrderDetailView, type OrderSummaryView } from './views'
+// B-W2b-111: an order is not closed while goods back on it wait for their incoming inspection.
+import { openInspectionsOfOrder } from './held'
 
 /**
  * Subcontract orders (B-W2a-25; SCM-138; design purchasing.subcontracting "New subcontract order", record tab
@@ -1060,6 +1062,9 @@ export async function closeOrder(caller: CommandCaller, orderId: string, input: 
       const order = await lockedOrder(tools, orderId)
       const problems = closeProblems({ status: order.status as SubcontractOrderStatus })
       if (problems.length > 0) throw inWords(problems)
+      // B-W2b-111 (held.ts): goods back still waiting for their incoming inspection keep the order open.
+      const waiting = await openInspectionsOfOrder(tools.tx, orderId)
+      if (waiting.length > 0) throw new InvalidStateError(`Goods back on this order wait for incoming inspection ${waiting.join(', ')}: decide or cancel it before the order is closed.`)
       await tools.tx.subcontractOrder.update({ where: { id: orderId }, data: { status: 'CLOSED', closedAt: tools.now }, select: { id: true } })
       tools.audit({ recordType: 'SubcontractOrder', recordId: orderId, companyId: order.companyId, siteId: order.siteId, ...(blankToNull(input.note) ? { reason: blankToNull(input.note)! } : {}), before: { status: 'RECEIVED' }, after: { status: 'CLOSED' } })
       tools.emit({ type: 'subcontract_order.closed', subject: orderId, companyId: order.companyId, siteId: order.siteId, payload: { subcontractOrderId: orderId, number: order.number, status: 'CLOSED' } })

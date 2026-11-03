@@ -13,6 +13,8 @@ import { officeOrder, readLocationRow, readOrder, sizesOf } from './store'
 import { RECEIPT_ACTION, receiptViews, storedReceipts, type OrderDetailView } from './views'
 import type { OutsideReport } from '../../production/scans/outside'
 import { lockForOutsideReports, recordReceiptInCommand, reportReceiptInCommand } from './receive-back'
+// B-W2b-111: goods back go to incoming inspection first when a rule asks (before stock and before the workshop is paid).
+import { heldReports, openForReceiptInCommand, type OpenedForReceipt } from './inspection'
 
 /**
  * Receive back (B-W2a-25; SCM-142; design purchasing.subcontracting "Received back", floor.kits "Receive back"): what
@@ -36,6 +38,11 @@ import { lockForOutsideReports, recordReceiptInCommand, reportReceiptInCommand }
  * W2b (B-W2b-10): each bundle that came back is reported at its outside operation in the same command (production/scans
  * outside.ts): a REPORT naming the receipt line, no worker, station or device, so the next operation takes the bundle;
  * the answer's `outside` says per line which scan it wrote, or why none.
+ *
+ * W2b (B-W2b-111, inspection.ts; QHS-036 "goods go to inspection before stock and before the workshop is paid"): when a
+ * rule of the company asks for an incoming inspection of the receipt, it is opened in this command; the bundles then
+ * wait for its decision (no report at the operation now: `outside` says they wait), their good pieces earn no fee and
+ * count in no supplier invoice's match until it is decided; the answer's `inspection` names it.
  */
 
 const refuse = (problems: readonly Issue[]) => new ValidationError(problems.length === 1 ? problems[0]!.message : 'The receipt is not valid as it stands.', problems)
@@ -52,7 +59,7 @@ export interface ReceiveInput {
   readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
-export type ReceiveAnswer = { order: OrderDetailView; receipt: OrderDetailView['receipts'][number]; ledger: { posted: number; waiting: string[] }; outside: OutsideReport[] }
+export type ReceiveAnswer = { order: OrderDetailView; receipt: OrderDetailView['receipts'][number]; ledger: { posted: number; waiting: string[] }; outside: OutsideReport[]; inspection: OpenedForReceipt | null }
 
 /** purchasing.subcontract.receive: goods back from the workshop. */
 export async function receiveBack(caller: CommandCaller, orderId: string, input: ReceiveInput, idempotencyKey?: string): Promise<ReceiveAnswer> {
@@ -181,8 +188,10 @@ export async function receiveBackAs(caller: CommandCaller, orderId: string, inpu
         note: blankToNull(input.note),
         deviceId: floor?.deviceId ?? null,
       })
-      const outside = await reportReceiptInCommand(tools, order, operations, stored)
       const totals = [...perOperation.values()].reduce((sum, back) => ({ good: sum.good + back.good, defective: sum.defective + back.defective, scrapped: sum.scrapped + back.scrapped }), { good: 0, defective: 0, scrapped: 0 })
+      // B-W2b-111 hook (inspection.ts): the incoming inspection a rule asks for, opened now; then the bundles wait for it.
+      const inspection = totals.good + totals.defective > 0 ? await openForReceiptInCommand(tools, order, receiptId, totals.good + totals.defective) : null
+      const outside = inspection ? await heldReports(tools.tx, order.workOrderId, operations, stored, inspection.words.en) : await reportReceiptInCommand(tools, order, operations, stored)
       tools.audit({
         action: RECEIPT_ACTION,
         recordType: 'SubcontractOrder',
@@ -199,6 +208,7 @@ export async function receiveBackAs(caller: CommandCaller, orderId: string, inpu
           supplierDdt: input.supplierDdt ? { number: input.supplierDdt.number.trim(), date: input.supplierDdt.date ?? null } : null,
           note: blankToNull(input.note),
           ...(floor ? { floor } : {}),
+          ...(inspection ? { incomingInspection: { id: inspection.id, number: inspection.number } } : {}),
         },
       })
 
@@ -230,6 +240,7 @@ export async function receiveBackAs(caller: CommandCaller, orderId: string, inpu
         receipt: receipt!,
         ledger: { posted: cost.posted.filter((entry) => entry.kind === 'SUBCONTRACT').length, waiting: cost.waiting.filter((entry) => entry.sourceType === 'SubcontractOrder').map((entry) => entry.words) },
         outside,
+        inspection,
       }
     },
   )

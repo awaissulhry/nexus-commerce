@@ -6,6 +6,8 @@ import { matchSettingsOf } from '@nexus/factory-domain/payables/settings'
 import type { CommandTools } from '../../core/command'
 import { payablesSettingsFor } from './settings'
 import { actorIdOf, invoiceInCommand, lockOrders, readLines, readMatches, RECORD, type InvoiceRow, type LineRow, type Reader } from './store'
+// B-W2b-111 (QHS-036): goods back from a workshop waiting for their incoming inspection are not matched good yet.
+import { heldGoodByOperation } from '../purchasing/subcontracting/held'
 
 /**
  * The three-way match in the database (B-W2a-62; FIN-137; the rule: factory-domain payables/match). Inside the caller's
@@ -97,14 +99,16 @@ export async function goodsFacts(db: Reader, invoiceId: string, purchaseOrderLin
 export async function subcontractFacts(db: Reader, invoiceId: string, subcontractOrderId: string): Promise<SubcontractLineFacts | null> {
   const order = await db.subcontractOrder.findUnique({
     where: { id: subcontractOrderId },
-    select: { id: true, number: true, status: true, siteId: true, currency: true, workOrderId: true, operations: { select: { pieces: true, piecesBackGood: true, pricePerPiece: true } } },
+    select: { id: true, number: true, status: true, siteId: true, currency: true, workOrderId: true, operations: { select: { id: true, pieces: true, piecesBackGood: true, pricePerPiece: true } } },
   })
   if (!order) return null
+  const held = await heldGoodByOperation(db, [order.id])
+  const goodOf = (operation: { readonly id: string; readonly piecesBackGood: number }) => Math.max(0, operation.piecesBackGood - (held.get(operation.id) ?? 0))
   let orderedValue = new Dec(0)
   let goodValue = new Dec(0)
   for (const operation of order.operations) {
     orderedValue = orderedValue.plus(dec(operation.pricePerPiece).times(operation.pieces))
-    goodValue = goodValue.plus(dec(operation.pricePerPiece).times(operation.piecesBackGood))
+    goodValue = goodValue.plus(dec(operation.pricePerPiece).times(goodOf(operation)))
   }
   return {
     siteId: order.siteId,
@@ -113,7 +117,7 @@ export async function subcontractFacts(db: Reader, invoiceId: string, subcontrac
     facts: {
       kind: 'SUBCONTRACT',
       orderedPieces: order.operations.reduce((total, operation) => total + operation.pieces, 0),
-      piecesBackGood: order.operations.reduce((total, operation) => total + operation.piecesBackGood, 0),
+      piecesBackGood: order.operations.reduce((total, operation) => total + goodOf(operation), 0),
       orderedValue: orderedValue.toFixed(6),
       goodValue: goodValue.toFixed(6),
       billedElsewhere: await billedElsewhere(db, invoiceId, { subcontractOrderId }),
