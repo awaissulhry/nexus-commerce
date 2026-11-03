@@ -68,7 +68,12 @@ export const PERSONAL_PURPOSES = {
   PERFORMANCE: 'performance',
   /** Pay and the payroll: piece rates, earnings, the export to the labour consultant (c.c. arts. 2099-2101). */
   PAY: 'pay',
-  /** Health and safety at work: skills, training, machine authorisations; never health data (D.Lgs. 81/2008). */
+  /**
+   * Health and safety at work: skills, training, machine authorisations, the safety registers (D.Lgs. 81/2008). Of health
+   * data (GDPR art. 9(2)(b)) only what the law hands the employer: the fitness judgement's outcome and task limits (art. 41
+   * c.6), an injury's facts for the INAIL report (art. 18 c.1 r), an absence's length; never a diagnosis or a clinical
+   * record, which stay the occupational doctor's (art. 25). health.prisma (B-W2b-91) holds them, office only.
+   */
   SAFETY: 'safety',
   /** Traceability of what was made and by whom on the floor (MES-278; the worker notice). */
   PRODUCTION: 'production',

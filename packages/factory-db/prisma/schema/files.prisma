@@ -128,6 +128,8 @@ model StoredFile {
   attendanceLulOf AttendanceMonthClose[] @relation("AttendanceMonthCloseLul")
   // W2b safety.prisma (wave 15/16): the risk assessment versions whose frozen PDF it is.
   riskAssessmentVersions RiskAssessmentVersion[] @relation("RiskAssessmentVersionFile")
+  // W2b health.prisma (wave 16/16): the safety data sheets whose PDF it is.
+  safetyDataSheets       SafetyDataSheet[]       @relation("SafetyDataSheetFile")
   // W2a stockcount.prisma: the year-end count whose signed valued list it is.
   stockCountValuedLists StockCount[] @relation("StockCountValuedList")
   // privacy.prisma: the notice language and the DPIA whose PDF it is.

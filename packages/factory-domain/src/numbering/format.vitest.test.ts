@@ -23,8 +23,8 @@ describe('number kinds and periods', () => {
     expect(FISCAL_KINDS.every((kind) => NUMBER_KINDS.includes(kind))).toBe(true)
   })
 
-  it("lets the floor number goods receipts, lots, inspections, releases, holds and NCRs: document kinds, never a fiscal one", () => {
-    expect([...FLOOR_DOCUMENT_KINDS].sort()).toEqual(['GOODS_RECEIPT', 'HOLD', 'INCOMING_INSPECTION', 'INSPECTION', 'LOT', 'NCR', 'RELEASE'])
+  it("lets the floor number goods receipts, lots, inspections, releases, holds, NCRs, incoming inspections and incidents: document kinds, never a fiscal one", () => {
+    expect([...FLOOR_DOCUMENT_KINDS].sort()).toEqual(['GOODS_RECEIPT', 'HOLD', 'INCIDENT', 'INCOMING_INSPECTION', 'INSPECTION', 'LOT', 'NCR', 'RELEASE'])
     for (const kind of FLOOR_DOCUMENT_KINDS) {
       expect(isDocumentKind(kind)).toBe(true)
       expect(isFiscalKind(kind)).toBe(false)

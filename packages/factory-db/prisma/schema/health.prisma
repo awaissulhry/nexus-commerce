@@ -1,0 +1,715 @@
+// Protected safety data (W2b schema wave 16/16, B-W2b-91; features QHS-252, QHS-253, QHS-254, QHS-256, QHS-265, QHS-268,
+// QHS-270, QHS-277, QHS-278; design plant.health, plant.incidents, plant.chemicals, floor.incident). The records of
+// D.Lgs. 81/2008 that touch a person's health, kept in their own file with the narrowest grants: health surveillance plans
+// per role, the visits a person is due, the occupational doctor's fitness judgements (art. 41), every view of these
+// records (ProtectedView), incidents, near misses and hazards with the people involved, their actions and the INAIL
+// filings (art. 18 c.1 r), and the chemical register with its safety data sheets (art. 223; REACH art. 35).
+// apps/factory-api's module `modules/safety` writes them (B-W2b-125 incidents, -135 health surveillance, -143 chemicals),
+// always through command().
+//
+// Special-category data (GDPR art. 9; D.Lgs. 81/2008 arts. 25, 41): the company holds the fitness JUDGEMENT only, never a
+// diagnosis. No clinical column exists: the outcome is one of four words, the task limits are the limits the doctor
+// wrote for the task ("no lifting over 15 kg"), never the medical reason; the clinical file (cartella sanitaria e di
+// rischio) stays the doctor's (art. 25 c.1 c). An injury is told in fixed words (body part, side, nature, first aid, sent
+// to hospital: what the INAIL report asks), never in free text; an absence travels as its length in days, never its
+// reason. Every personal column is tagged in ownership/health.json with its purpose, SAFETY (the legal duty), never
+// PERFORMANCE.
+//
+// Who sees what (ownership/health.json; the API keeps the protected tables to the roles the design names: HR and the
+// safety roles, and records every view in ProtectedView): the office keeps everything. The floor reads NONE of the health
+// or incident tables: it inserts an incident and the people involved (an INSERT grant without SELECT, so a tablet never
+// reads anyone's report, not even one it sent) and reads the chemical register and data sheets of its site (the cabinet
+// QR, offline). Portal and link sessions read nothing here. No export source and no search index reads the protected
+// tables (…_protected_safety_w2b_guards: a search entry of one is refused, a file of one is the office's only).
+
+// =====================================================================================================================
+// Health surveillance (QHS-252, QHS-253, QHS-254, QHS-256; design plant.health; D.Lgs. 81/2008 art. 41)
+// =====================================================================================================================
+
+/// The health surveillance plan of a role (QHS-252; design plant.health "Plans per role"): whether a person in the role
+/// needs visits, and how often, as the occupational doctor set it (default once a year), with whether an end-of-employment
+/// visit is required (art. 41 c.2 e). One per role sheet (the key `plan:<roleSheetId>` is unique). The risks driving it are
+/// the role sheet's SURVEILLANCE items (safety.prisma), never typed twice. No person in it. Archived, never deleted.
+model HealthPlan {
+  id                   String       @id @db.Uuid
+  tenantId             String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId            String       @db.Uuid
+  /// The role sheet's site.
+  siteId               String       @db.Uuid
+  roleSheetId          String       @db.Uuid
+  /// `plan:<roleSheetId>`: one plan per role sheet.
+  key                  String
+  /// The doctor's decision: people in the role need surveillance visits.
+  needed               Boolean
+  /// Needed: a periodic visit every this many months, 1 to 60 (the doctor's; the law's default is yearly). Not needed: null.
+  frequencyMonths      Int?
+  /// Needed: the role asks a visit at the end of the employment (art. 41 c.2 e, where the law requires it).
+  endOfEmploymentVisit Boolean      @default(false)
+  /// The day the doctor set it (today at the latest), and the doctor's appointment (of the company) when recorded.
+  setOn                DateTime     @db.Date
+  doctorAppointmentId  String?      @db.Uuid
+  status               MasterStatus @default(ACTIVE)
+  version              Int          @default(1)
+  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?      @db.Uuid
+
+  site      Site               @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  roleSheet RoleSheet          @relation(fields: [tenantId, siteId, roleSheetId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  doctor    SafetyAppointment? @relation("HealthPlanDoctor", fields: [tenantId, companyId, doctorAppointmentId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  visits    HealthVisit[]
+
+  @@unique([tenantId, key])
+  // The target of the visits' company-safe reference.
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, roleSheetId])
+}
+
+/// A health surveillance visit a person is due (QHS-253; design plant.health "Due list", "Plan visits", "Mark booked"):
+/// its type (art. 41 c.2: before the task, periodic, on the person's request, change of task, return after more than 60
+/// days of absence for health reasons, end of employment), the day it is due, the plan it came from, the role it is for
+/// (the new role of a change of task), and for a return visit only the LENGTH of the absence in days (never its reason).
+/// DUE ↔ BOOKED (the day and the place) → DONE (the day the visit took place; its judgement is a FitnessJudgement) |
+/// CANCELLED (a reason from a fixed list: no free text on a health record). DONE and CANCELLED are final. Never deleted.
+model HealthVisit {
+  id           String                   @id @db.Uuid
+  tenantId     String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The person's company (the employer's duty).
+  companyId    String                   @db.Uuid
+  employeeId   String                   @db.Uuid
+  type         HealthVisitType
+  /// The day it must take place by.
+  dueOn        DateTime                 @db.Date
+  /// The plan of the person's role it was planned from; null: on request, or typed by hand.
+  planId       String?                  @db.Uuid
+  /// The role sheet it is for (CHANGE_OF_TASK: the new role, always).
+  roleSheetId  String?                  @db.Uuid
+  /// RETURN_AFTER_ABSENCE: the length of the absence in days, above 60 (art. 41 c.2 e-ter); nothing else of it travels.
+  absenceDays  Int?
+  status       HealthVisitStatus        @default(DUE)
+  /// The appointment: its day and place, when and by whom it was booked; all together, kept once DONE.
+  bookedOn     DateTime?                @db.Date
+  bookedPlace  String?
+  bookedAt     DateTime?                @db.Timestamptz(3)
+  bookedById   String?                  @db.Uuid
+  /// DONE: the day the visit took place (today at the latest).
+  doneOn       DateTime?                @db.Date
+  cancelledAt  DateTime?                @db.Timestamptz(3)
+  cancelledById String?                 @db.Uuid
+  cancelReason HealthVisitCancelReason?
+  version      Int                      @default(1)
+  createdAt    DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?                  @db.Uuid
+
+  employee   Employee           @relation("HealthVisitPerson", fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  plan       HealthPlan?        @relation(fields: [tenantId, companyId, planId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  roleSheet  RoleSheet?         @relation("HealthVisitRole", fields: [tenantId, roleSheetId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  judgements FitnessJudgement[]
+
+  // The target of the judgements' same-person reference.
+  @@unique([tenantId, employeeId, id])
+  @@index([tenantId, companyId, status, dueOn])
+  @@index([tenantId, employeeId])
+}
+
+/// The type of a surveillance visit (D.Lgs. 81/2008 art. 41 c.2; design plant.health "visit type").
+enum HealthVisitType {
+  /// Before the task (visita preventiva, also before hiring: c.2 a, e-bis).
+  PREVENTIVE
+  /// Periodic, at the plan's frequency (c.2 b).
+  PERIODIC
+  /// On the person's request, when the doctor finds it related to the work's risks (c.2 c).
+  ON_REQUEST
+  /// A change of task (c.2 d).
+  CHANGE_OF_TASK
+  /// The return to work after more than 60 days of continuous absence for health reasons (c.2 e-ter).
+  RETURN_AFTER_ABSENCE
+  /// The end of the employment, where the law requires it (c.2 e).
+  END_OF_EMPLOYMENT
+}
+
+enum HealthVisitStatus {
+  DUE
+  BOOKED
+  DONE
+  CANCELLED
+}
+
+/// Why a visit was cancelled: fixed words, never free text on a health record.
+enum HealthVisitCancelReason {
+  /// The doctor says it is not needed.
+  NOT_NEEDED
+  /// The person left before it.
+  LEFT
+  /// A newer visit covers it.
+  REPLACED
+  /// Planned by mistake.
+  MISTAKE
+}
+
+/// The occupational doctor's fitness judgement for a person's task (QHS-254; design plant.health "Judgements", "Record a
+/// judgement"; art. 41 c.6, 6-bis): ONLY the outcome (fit, fit with limits, temporarily unfit until a day, unfit), the task
+/// limits the doctor wrote for the task (never the medical reason), the day of the judgement, when it expires, the visit
+/// it came from and the doctor. The copy of the written judgement is a file of the row (StoredFile recordType
+/// "FitnessJudgement", the office's only). No diagnosis or clinical field exists. Never changed: a wrong one is voided
+/// (a reason from a fixed list; the task limits may be cleared then) and recorded again; never deleted. The newest one
+/// not voided is the person's judgement.
+model FitnessJudgement {
+  id                  String                      @id @db.Uuid
+  tenantId            String                      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId           String                      @db.Uuid
+  employeeId          String                      @db.Uuid
+  /// The visit it came from (of the same person; one judgement not voided per visit); null: recorded from a paper copy.
+  visitId             String?                     @db.Uuid
+  outcome             FitnessOutcome
+  /// FIT_WITH_LIMITS: the limits for the task, as the doctor wrote them (at most 1000 characters); null otherwise.
+  taskLimits          String?
+  /// TEMPORARILY_UNFIT: unfit until this day (after the judgement's day); null otherwise.
+  unfitUntil          DateTime?                   @db.Date
+  /// The day of the judgement (today at the latest), and when it expires (after it; null: no expiry, or UNFIT).
+  judgedOn            DateTime                    @db.Date
+  expiresOn           DateTime?                   @db.Date
+  /// The doctor's appointment (a DOCTOR appointment of the company), when recorded.
+  doctorAppointmentId String?                     @db.Uuid
+  voidedAt            DateTime?                   @db.Timestamptz(3)
+  voidedById          String?                     @db.Uuid
+  voidReason          FitnessJudgementVoidReason?
+  version             Int                         @default(1)
+  createdAt           DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                    @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?                     @db.Uuid
+
+  employee Employee           @relation("FitnessJudgementPerson", fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and employeeId.
+  visit    HealthVisit?       @relation(fields: [tenantId, employeeId, visitId], references: [tenantId, employeeId, id], onDelete: Restrict, onUpdate: Restrict)
+  doctor   SafetyAppointment? @relation("FitnessJudgementDoctor", fields: [tenantId, companyId, doctorAppointmentId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, employeeId, judgedOn])
+  @@index([tenantId, companyId, outcome])
+}
+
+/// A fitness judgement's outcome (art. 41 c.6): the only fact of it the company holds.
+enum FitnessOutcome {
+  /// Idoneo.
+  FIT
+  /// Idoneo con prescrizioni o limitazioni: the task limits say which.
+  FIT_WITH_LIMITS
+  /// Temporaneamente non idoneo, until a day.
+  TEMPORARILY_UNFIT
+  /// Permanentemente non idoneo for the task.
+  UNFIT
+}
+
+/// Why a judgement was voided: fixed words.
+enum FitnessJudgementVoidReason {
+  /// Recorded on the wrong person (its task limits are cleared).
+  WRONG_PERSON
+  /// A wrong outcome, day or limit: recorded again.
+  WRONG_DETAILS
+  DUPLICATE
+}
+
+/// One view of protected data (QHS-256, QHS-270; design plant.health "Who looked", plant.incidents "Show people"; GDPR
+/// arts. 5(2), 9, 32): who saw which protected record, what of it (a record opened, a list with people shown, the copy
+/// downloaded, a print), whose data it was, and when. Written by the API in the command that shows the data; read by HR
+/// and the data protection officer (Admin › Privacy & notices) and, for their own records, by the person. Never changed or
+/// removed.
+/// @append-only
+model ProtectedView {
+  id         String               @id @db.Uuid
+  tenantId   String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company of the record seen.
+  companyId  String               @db.Uuid
+  recordType ProtectedRecordType
+  /// The record seen; null for a list (INCIDENT_PEOPLE_LIST, HEALTH_VISIT_LIST).
+  recordId   String?              @db.Uuid
+  /// The person whose data it is (null: a list, or someone from outside the company).
+  employeeId String?              @db.Uuid
+  what       ProtectedViewWhat
+  /// The office user who saw it.
+  viewerId   String               @db.Uuid
+  viewedAt   DateTime             @default(now()) @db.Timestamptz(3)
+
+  company  Company   @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  employee Employee? @relation("ProtectedViewSubject", fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, recordType, recordId])
+  @@index([tenantId, employeeId, viewedAt])
+  @@index([tenantId, viewerId, viewedAt])
+}
+
+/// The protected records a view is of.
+enum ProtectedRecordType {
+  HEALTH_VISIT
+  FITNESS_JUDGEMENT
+  INCIDENT_PERSON
+  INAIL_FILING
+  /// The incident list with its person and injury columns shown (the "Show people" toggle).
+  INCIDENT_PEOPLE_LIST
+  /// The due list or the visit list for the doctor, with names.
+  HEALTH_VISIT_LIST
+}
+
+/// What of a protected record was seen.
+enum ProtectedViewWhat {
+  /// A record opened: its protected values shown.
+  OPEN
+  /// A list with people shown.
+  LIST
+  /// A file of the record downloaded (the judgement's copy, a filing's receipt).
+  COPY
+  /// Printed with names.
+  PRINT
+}
+
+// =====================================================================================================================
+// Incidents, near misses and hazards (QHS-265, QHS-268, QHS-270; design plant.incidents, floor.incident)
+// =====================================================================================================================
+
+/// An incident (someone hurt), a near miss or a hazard (QHS-265; design plant.incidents, floor.incident "Report an
+/// incident"): its number (INC-…, a floor document kind of numbering.prisma), what happened in words (the people involved
+/// and their injuries live only in IncidentPerson), when, where (an area, a station, a machine of the site, or a place in
+/// words), the immediate action (a machine locked: its maintenance request), the severity the safety roles set, and who
+/// reported it: a floor worker on a tablet or an office user, or nobody for a near miss or a hazard sent without a name
+/// ("Your name is not stored with this report": no reporter, no creator, no device on the row). Photos are files of the
+/// row (the office's only). OPEN → CLOSED (held while an action is open or an INAIL filing waits; reopened when needed) |
+/// CANCELLED (a duplicate or a mistake, with the reason; final). "Seen by safety" is written once. Never deleted.
+model Incident {
+  id                   String               @id @db.Uuid
+  tenantId             String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId            String               @db.Uuid
+  siteId               String               @db.Uuid
+  /// INC-2026-0012, from the company's INCIDENT series; given when the row is made, never changed.
+  number               String
+  kind                 IncidentKind
+  /// When it happened (at most when it was reported) and when it was reported.
+  occurredAt           DateTime             @db.Timestamptz(3)
+  reportedAt           DateTime             @default(now()) @db.Timestamptz(3)
+  /// What happened, in words (at most 2000 characters): the event, never a person's injury.
+  what                 String
+  /// Where: an area, a station or a machine of the site, or a place in words; at least one.
+  areaId               String?              @db.Uuid
+  stationId            String?              @db.Uuid
+  machineId            String?              @db.Uuid
+  place                String?
+  /// What was done at once ("machine locked"), and the maintenance request that locked a machine.
+  immediateAction      String?
+  maintenanceRequestId String?              @db.Uuid
+  /// Set by the safety roles (null: not assessed yet).
+  severity             IncidentSeverity?
+  reportedVia          IncidentReportedVia
+  /// Sent without a name (a near miss or a hazard only): then no reporter, creator or device is stored.
+  reporterAnonymous    Boolean              @default(false)
+  /// The reporter: the floor worker signed in at the tablet (FLOOR) or the office user (OFFICE).
+  reportedByWorkerId   String?              @db.Uuid
+  reportedById         String?              @db.Uuid
+  /// The tablet it was sent from (FLOOR, with a name).
+  deviceId             String?              @db.Uuid
+  /// "Seen by safety": when and by whom it was first opened by a safety role; written once.
+  seenAt               DateTime?            @db.Timestamptz(3)
+  seenById             String?              @db.Uuid
+  status               IncidentStatus       @default(OPEN)
+  closedAt             DateTime?            @db.Timestamptz(3)
+  closedById           String?              @db.Uuid
+  cancelledAt          DateTime?            @db.Timestamptz(3)
+  cancelledById        String?              @db.Uuid
+  cancelReason         String?
+  version              Int                  @default(1)
+  createdAt            DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?              @db.Uuid
+
+  site               Site                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  area               OrgArea?            @relation(fields: [tenantId, siteId, areaId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  station            Station?            @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  machine            Machine?            @relation(fields: [tenantId, siteId, machineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  maintenanceRequest MaintenanceRequest? @relation(fields: [tenantId, siteId, maintenanceRequestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  reportedByWorker   Worker?             @relation("IncidentReporter", fields: [tenantId, siteId, reportedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device             Device?             @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  people             IncidentPerson[]
+  actions            IncidentAction[]
+  inailFilings       InailFiling[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the people's, actions' and filings' site-safe references.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, siteId, status])
+  @@index([tenantId, companyId, occurredAt])
+}
+
+/// What an incident is (QHS-265; design floor.incident "What happened?").
+enum IncidentKind {
+  /// Someone was hurt.
+  INJURY
+  NEAR_MISS
+  HAZARD
+}
+
+enum IncidentReportedVia {
+  /// From a floor tablet or phone (a floor session).
+  FLOOR
+  /// From the office.
+  OFFICE
+}
+
+/// How serious it was (design plant.incidents "severity (none / first aid / lost days)").
+enum IncidentSeverity {
+  NONE
+  FIRST_AID
+  LOST_DAYS
+}
+
+enum IncidentStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+/// A person involved in an incident (QHS-270; design plant.incidents "People involved", floor.incident "people
+/// involved"): protected data. A person of the company or someone from outside by name (a visitor, a contractor's worker),
+/// exactly one; INJURED or only INVOLVED; for the injured, the injury in fixed words: body parts, side, nature, first aid
+/// given, sent to hospital (what the INAIL report asks; no free text, no diagnosis). Added from the floor (an INSERT grant
+/// only) or the office; corrected or removed by the office while the incident is OPEN. Visible to the safety and HR roles,
+/// every view recorded; others see "One person involved".
+model IncidentPerson {
+  id             String                @id @db.Uuid
+  tenantId       String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The incident's site.
+  siteId         String                @db.Uuid
+  incidentId     String                @db.Uuid
+  involvement    IncidentInvolvement
+  /// A person of the tenant's companies …
+  employeeId     String?               @db.Uuid
+  /// … or someone from outside, by name.
+  outsideName    String?
+  /// INJURED only: the parts hurt (each once), the side, the nature of the injury.
+  bodyParts      IncidentBodyPart[]    @default([])
+  bodySide       IncidentBodySide?
+  nature         IncidentInjuryNature?
+  /// INJURED only.
+  firstAidGiven  Boolean               @default(false)
+  sentToHospital Boolean               @default(false)
+  version        Int                   @default(1)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?               @db.Uuid
+
+  incident     Incident      @relation(fields: [tenantId, siteId, incidentId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  employee     Employee?     @relation("IncidentPersonEmployee", fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  inailFilings InailFiling[]
+
+  // The target of the filings' same-incident reference.
+  @@unique([tenantId, incidentId, id])
+  @@index([tenantId, employeeId])
+}
+
+enum IncidentInvolvement {
+  INJURED
+  /// Involved, not hurt (the person at the machine in a near miss).
+  INVOLVED
+}
+
+/// The body part hurt (the INAIL report's "sede della lesione", in general words).
+enum IncidentBodyPart {
+  HEAD
+  EYE
+  FACE
+  NECK
+  SHOULDER
+  ARM
+  ELBOW
+  WRIST
+  HAND
+  FINGER
+  BACK
+  CHEST
+  ABDOMEN
+  HIP
+  LEG
+  KNEE
+  ANKLE
+  FOOT
+  TOE
+  MULTIPLE
+}
+
+enum IncidentBodySide {
+  LEFT
+  RIGHT
+  BOTH
+}
+
+/// The nature of an injury (the INAIL report's "natura della lesione", in general words).
+enum IncidentInjuryNature {
+  CUT
+  PUNCTURE
+  CRUSH
+  BRUISE
+  BURN
+  CHEMICAL_BURN
+  FRACTURE
+  SPRAIN
+  STRAIN
+  FOREIGN_BODY
+  ELECTRIC_SHOCK
+  AMPUTATION
+  OTHER
+}
+
+/// An action of an incident (design plant.incidents "Actions": COL-037; the CAPA engine is W3): what to do, its owner,
+/// the day it is due, its status and evidence (a note, and files of the row), and what it was made into in one step: a
+/// maintenance job, a measure of the site's improvement plan (whose source is this incident) or a training session. The
+/// link is set once. OPEN → DONE (when, who) | CANCELLED (with the reason); both final. Written while the incident is OPEN.
+/// Never deleted.
+model IncidentAction {
+  id                String                @id @db.Uuid
+  tenantId          String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The incident's site.
+  siteId            String                @db.Uuid
+  incidentId        String                @db.Uuid
+  /// Its place in the incident's list, from 1 (unique per incident).
+  seq               Int
+  title             String
+  /// The office user it is assigned to (a task in their My work).
+  ownerId           String?               @db.Uuid
+  dueOn             DateTime?             @db.Date
+  status            IncidentActionStatus  @default(OPEN)
+  doneAt            DateTime?             @db.Timestamptz(3)
+  doneById          String?               @db.Uuid
+  evidenceNote      String?
+  cancelledAt       DateTime?             @db.Timestamptz(3)
+  cancelReason      String?
+  /// What it was made into, and that record (of the incident's site): exactly the one of its kind; null: a plain action.
+  madeInto          IncidentActionLink?
+  maintenanceJobId  String?               @db.Uuid
+  riskMeasureId     String?               @db.Uuid
+  trainingSessionId String?               @db.Uuid
+  version           Int                   @default(1)
+  createdAt         DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?               @db.Uuid
+
+  incident        Incident         @relation(fields: [tenantId, siteId, incidentId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  maintenanceJob  MaintenanceJob?  @relation(fields: [tenantId, siteId, maintenanceJobId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  riskMeasure     RiskMeasure?     @relation(fields: [tenantId, siteId, riskMeasureId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  trainingSession TrainingSession? @relation(fields: [tenantId, siteId, trainingSessionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, incidentId, seq])
+  @@index([tenantId, siteId, status])
+}
+
+enum IncidentActionStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+/// What an incident's action was made into (design plant.incidents "Make a job", "Add to improvement plan", "Plan
+/// training").
+enum IncidentActionLink {
+  MAINTENANCE_JOB
+  RISK_MEASURE
+  TRAINING_SESSION
+}
+
+/// An INAIL filing for an injured person of the company (QHS-268; design plant.incidents "Authority notice", "Record INAIL
+/// filing"; D.Lgs. 81/2008 art. 18 c.1 r): STATISTICAL (an absence of at least one day beyond the day of the event) or
+/// INSURANCE (more than three days), one of each per person (the key `inail:<person>:<type>` is unique). The absence as
+/// days only, the medical certificate's reference and the time it was received, which starts the 48-hour clock (the
+/// deadline, received + 48 h), then the filing on the INAIL portal (a manual send: no API): when, by whom, INAIL's
+/// protocol number; the receipt is a file of the row (the office's only; never the certificate itself, which carries the
+/// diagnosis). WAITING_CERTIFICATE → DUE (the certificate received) → FILED (final); NOT_NEEDED (decided, with who and
+/// when) and back while not filed. Late is a DUE past its deadline (shown, never refused). Never deleted.
+model InailFiling {
+  id                    String            @id @db.Uuid
+  tenantId              String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The incident's site.
+  siteId                String            @db.Uuid
+  incidentId            String            @db.Uuid
+  incidentPersonId      String            @db.Uuid
+  type                  InailFilingType
+  /// `inail:<incidentPersonId>:<type>`: one filing of each type per person.
+  key                   String
+  /// The absence in days, expected (the certificate's) and actual (when known), 0 to 3650; never its reason.
+  expectedAbsenceDays   Int?
+  actualAbsenceDays     Int?
+  /// The medical certificate's identifier (never the certificate, which carries the diagnosis), and when it was received.
+  certificateReference  String?
+  certificateReceivedAt DateTime?         @db.Timestamptz(3)
+  /// The deadline: 48 hours after the certificate was received; set with it.
+  dueAt                 DateTime?         @db.Timestamptz(3)
+  status                InailFilingStatus @default(WAITING_CERTIFICATE)
+  filedAt               DateTime?         @db.Timestamptz(3)
+  filedById             String?           @db.Uuid
+  /// INAIL's protocol number.
+  protocolNumber        String?
+  notNeededAt           DateTime?         @db.Timestamptz(3)
+  notNeededById         String?           @db.Uuid
+  version               Int               @default(1)
+  createdAt             DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?           @db.Uuid
+
+  incident Incident       @relation(fields: [tenantId, siteId, incidentId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  person   IncidentPerson @relation(fields: [tenantId, incidentId, incidentPersonId], references: [tenantId, incidentId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, incidentId])
+  @@index([tenantId, status, dueAt])
+}
+
+/// What an INAIL filing is (art. 18 c.1 r; DPR 1124/1965 art. 53).
+enum InailFilingType {
+  /// Comunicazione a fini statistici e informativi: an absence of at least one day beyond the day of the event.
+  STATISTICAL
+  /// Denuncia a fini assicurativi: an absence of more than three days.
+  INSURANCE
+}
+
+enum InailFilingStatus {
+  WAITING_CERTIFICATE
+  DUE
+  FILED
+  NOT_NEEDED
+}
+
+// =====================================================================================================================
+// Chemicals and safety data sheets (QHS-277, QHS-278; design plant.chemicals; D.Lgs. 81/2008 art. 223; REACH art. 35)
+// =====================================================================================================================
+
+/// A chemical product in use at a site (QHS-277; design plant.chemicals "Chemical register", "Add chemical"): its name,
+/// supplier (a party, or by name), use, GHS pictograms, signal word, hazard (H, EUH) and precautionary (P) statements as
+/// codes (each once), where it is kept (the place, and the cabinet its QR lists), the most kept there, the role sheets of
+/// the site that use it and the PPE items needed to handle it. Its data sheets are SafetyDataSheet rows. The floor of the
+/// site reads it (the cabinet QR). Archived, never deleted.
+model Chemical {
+  id               String                @id @db.Uuid
+  tenantId         String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String                @db.Uuid
+  siteId           String                @db.Uuid
+  /// The product's trade name.
+  name             String
+  supplierPartyId  String?               @db.Uuid
+  /// The supplier's name when it is not a party.
+  supplierName     String?
+  use              ChemicalUse
+  ghsPictograms    GhsPictogram[]        @default([])
+  signalWord       ChemicalSignalWord?
+  /// "H225", "H319", "EUH066"; "P210", "P305+P351+P338" (CLP Regulation (EC) 1272/2008).
+  hazardStatements String[]              @default([])
+  precautionStatements String[]          @default([])
+  /// Where it is kept ("Glue cabinet, cutting room") and the cabinet's code its QR lists.
+  storagePlace     String
+  cabinetCode      String?
+  /// The most kept there, above 0, with its unit (both or neither).
+  maxQuantity      Decimal?              @db.Decimal(18, 4)
+  maxQuantityUnit  ChemicalQuantityUnit?
+  /// The role sheets of the site that use it, and the PPE items (of the company) needed to handle it; each once.
+  roleSheetIds     String[]              @default([]) @db.Uuid
+  ppeItemIds       String[]              @default([]) @db.Uuid
+  status           MasterStatus          @default(ACTIVE)
+  note             String?
+  version          Int                   @default(1)
+  createdAt        DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?               @db.Uuid
+
+  site       Site              @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  supplier   Party?            @relation("ChemicalSupplier", fields: [tenantId, supplierPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  dataSheets SafetyDataSheet[]
+
+  // The target of the data sheets' site-safe reference.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, siteId, status])
+}
+
+/// What a chemical is used for (design plant.chemicals "use").
+enum ChemicalUse {
+  GLUE
+  SOLVENT
+  PRIMER
+  FINISH
+  EDGE_PAINT
+  DYE
+  CLEANER
+  OIL
+  OTHER
+}
+
+/// The nine GHS hazard pictograms (CLP Annex V).
+enum GhsPictogram {
+  /// Exploding bomb.
+  GHS01
+  /// Flame.
+  GHS02
+  /// Flame over circle.
+  GHS03
+  /// Gas cylinder.
+  GHS04
+  /// Corrosion.
+  GHS05
+  /// Skull and crossbones.
+  GHS06
+  /// Exclamation mark.
+  GHS07
+  /// Health hazard.
+  GHS08
+  /// Environment.
+  GHS09
+}
+
+enum ChemicalSignalWord {
+  DANGER
+  WARNING
+}
+
+enum ChemicalQuantityUnit {
+  ML
+  L
+  G
+  KG
+}
+
+/// A safety data sheet of a chemical (QHS-278; design plant.chemicals "SDS library", "Replace SDS"): the supplier's
+/// version, its revision day, its language, and the PDF (a file of the chemical, StoredFile recordType "Chemical", shared
+/// with the site's floor so the cabinet QR opens it offline). CURRENT (one per chemical and language) → SUPERSEDED when a
+/// newer one replaces it (when, by whom); superseded sheets are kept. Never changed otherwise, never deleted.
+model SafetyDataSheet {
+  id             String                @id @db.Uuid
+  tenantId       String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The chemical's site.
+  siteId         String                @db.Uuid
+  chemicalId     String                @db.Uuid
+  /// The supplier's version ("3.1").
+  versionLabel   String
+  /// The sheet's revision day (today at the latest).
+  revisedOn      DateTime              @db.Date
+  /// ISO 639-1.
+  language       String
+  fileId         String                @db.Uuid
+  status         SafetyDataSheetStatus @default(CURRENT)
+  supersededAt   DateTime?             @db.Timestamptz(3)
+  supersededById String?               @db.Uuid
+  version        Int                   @default(1)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?               @db.Uuid
+
+  chemical Chemical   @relation(fields: [tenantId, siteId, chemicalId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  file     StoredFile @relation("SafetyDataSheetFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, chemicalId])
+}
+
+enum SafetyDataSheetStatus {
+  CURRENT
+  SUPERSEDED
+}
