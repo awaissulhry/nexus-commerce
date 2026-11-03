@@ -1667,6 +1667,7 @@
     "inventory_issue_over": "Consegnare più di quanto serve a un ordine di lavoro",
     "inventory_receive": "Ricevere merce su un ordine d'acquisto",
     "inventory_reserve": "Riservare e liberare merce",
+    "inventory_hides_manage": "Correggere scelta e tonalità di una pelle, rimisurarla",
     "shipping_view": "Vedere le spedizioni",
     "shipping_manage": "Pianificare e cambiare spedizioni",
     "shipping_pack": "Imballare una spedizione",

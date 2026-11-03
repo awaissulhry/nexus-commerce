@@ -345,6 +345,16 @@ const PEOPLE_PAYROLL_ADDS: Readonly<Record<string, readonly Permission[]>> = Obj
   admin: ['people.payroll.view', 'people.payroll.records', 'people.payroll.manage'],
 })
 /**
+ * B-W2b-94 (hides as stock; SCM-249, SCM-250; design warehouse.hides record "Measurements & grade"): the warehouse, which keeps
+ * the hides, and the quality inspector, who grades them, correct a hide's grade, shade group, thickness and defects and measure
+ * a whole hide again against the tannery's area (correcting its stock is inventory.adjust: the warehouse's). Office only; Owner
+ * from every(). One line per template.
+ */
+const HIDES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  warehouse: ['inventory.hides.manage'],
+  quality_inspector: ['inventory.hides.manage'],
+})
+/**
  * B-W2b-92 (inspection plans, QHS-008, QHS-009, QHS-016; design quality.plans): quality keeps the plans and approves another
  * person's draft (never one it wrote); the production manager reads them and may be the second person who approves (a small
  * factory has one quality person); the floor supervisor reads them and prints a checklist for a bench without a tablet.
@@ -408,6 +418,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (PEOPLE_EARNINGS_ADDS[key] ?? []) : []),
   // B-W2b-54
   ...(audience === 'office' ? (PEOPLE_PAYROLL_ADDS[key] ?? []) : []),
+  // B-W2b-94
+  ...(audience === 'office' ? (HIDES_ADDS[key] ?? []) : []),
   // B-W2b-92
   ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
   // B-W2b-49
