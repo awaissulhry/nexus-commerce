@@ -53,6 +53,12 @@ export const FLOOR_SYNC_KINDS = [
   'plant.request.progress',
   // B-W2b-99: a roving result or an end-of-line pass or defect recorded in one step (design floor.inline "Works offline").
   'quality.inprocess.record',
+  // B-W2b-106: an open inspection recorded offline (QHS-062; design floor.final, floor.incoming, floor.inline "Works offline"):
+  // a final inspection's results, measurements, sample count, serial scans, defects or W1 checklist; an incoming inspection's
+  // hides and plan checks; an in-process check's plan checks. Opening, signing and cancelling stay online.
+  'quality.final.record',
+  'quality.incoming.record',
+  'quality.inprocess.results',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -102,6 +108,10 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'plant.request.progress': { kind: 'plant.request.progress', permission: 'plant.report', numbers: null, what: "A machine request's progress: acknowledged, on the way, works again" },
   // B-W2b-99: a first piece is signed with the PIN at once, so it stays online; a roving or end-of-line result queues.
   'quality.inprocess.record': { kind: 'quality.inprocess.record', permission: 'quality.inprocess.record', numbers: null, what: 'Record a roving or end-of-line check' },
+  // B-W2b-106: each under its module's record permission; the module checks again whose the inspection is.
+  'quality.final.record': { kind: 'quality.final.record', permission: 'quality.inspections.record', numbers: null, what: 'Record a final inspection (results, measurements, count, serials, defects)' },
+  'quality.incoming.record': { kind: 'quality.incoming.record', permission: 'quality.incoming.record', numbers: null, what: 'Record an incoming inspection (a hide, plan checks)' },
+  'quality.inprocess.results': { kind: 'quality.inprocess.results', permission: 'quality.inprocess.record', numbers: null, what: "Record an in-process check's plan checks" },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const

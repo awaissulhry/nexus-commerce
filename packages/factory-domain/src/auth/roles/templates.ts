@@ -58,7 +58,8 @@ const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales
 const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   planner: ['plant.view'],
   // B-W2b-96: plant.settings.manage (a site's request routing and unsafe-lock settings) for the production manager.
-  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.settings.manage'],
+  // B-W2b-124: plant.checks.manage (the statutory periodic checks: types, plans, the register) for the production manager.
+  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.settings.manage', 'plant.checks.manage'],
   floor_supervisor: ['plant.view', 'plant.report', 'plant.requests.triage'],
   operator: ['plant.report'],
   cutting_operator: ['plant.report'],
@@ -365,6 +366,14 @@ const SHADE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freez
   quality_inspector: ['inventory.shade.override'],
 })
 /**
+ * B-W2b-103 (leather cutting rules; MES-053, MES-063, MES-064; design floor.hidecut pop-up "Cut anyway?"): the team leader lets a
+ * hide be cut anyway when the table's checks warn, signed on the cutter's tablet with their own PIN and a reason. Floor only;
+ * Owner from every().
+ */
+const CUT_OVERRIDE_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.cut.override'],
+})
+/**
  * B-W2b-92 (inspection plans, QHS-008, QHS-009, QHS-016; design quality.plans): quality keeps the plans and approves another
  * person's draft (never one it wrote); the production manager reads them and may be the second person who approves (a small
  * factory has one quality person); the floor supervisor reads them and prints a checklist for a bench without a tablet.
@@ -445,6 +454,20 @@ const ROLLS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object
   operator: ['inventory.protectors.record'],
   team_leader: ['inventory.protectors.record'],
 })
+/**
+ * B-W2b-108 (corrective actions, CAPA and 8D; QHS-087, QHS-093, QHS-094, QHS-096; design quality.capa): quality opens
+ * CAPAs and 8Ds (also by escalating NCRs and complaints), follows their actions and keeps the 8D report; the production
+ * manager does too (most corrective actions are on the floor's work); the floor supervisor, the buyer (a supplier's
+ * cause) and sales (the customer's 8D) read them, and each records the actions they own done with view alone. Office
+ * only; owner and read-only from every().
+ */
+const CAPA_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.capa.view', 'quality.capa.manage'],
+  production_manager: ['quality.capa.view', 'quality.capa.manage'],
+  floor_supervisor: ['quality.capa.view'],
+  buyer: ['quality.capa.view'],
+  sales: ['quality.capa.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -490,6 +513,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (HIDES_ADDS[key] ?? []) : []),
   // B-W2b-100
   ...(audience === 'office' ? (SHADE_ADDS[key] ?? []) : []),
+  // B-W2b-103
+  ...(audience === 'floor' ? (CUT_OVERRIDE_FLOOR_ADDS[key] ?? []) : []),
   // B-W2b-92
   ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
   // B-W2b-49
@@ -503,7 +528,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-99
   ...((audience === 'office' ? INPROCESS_ADDS : INPROCESS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-107
-  ...((audience === 'office' ? ROLLS_ADDS : ROLLS_FLOOR_ADDS)[key] ?? [])]
+  ...((audience === 'office' ? ROLLS_ADDS : ROLLS_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-108
+  ...(audience === 'office' ? (CAPA_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -973,7 +1000,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     requireMfa: false,
     permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'sites.view', 'workers.view', 'parties.view', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.jobs.work', 'plant.signSafe',
       // B-W2b-96: the site's request routing and unsafe-lock settings.
-      'plant.settings.manage'],
+      'plant.settings.manage',
+      // B-W2b-124: the statutory periodic checks (check types, plans, the check register with its reports).
+      'plant.checks.manage'],
     grains: [],
   }),
   template('read_only', {

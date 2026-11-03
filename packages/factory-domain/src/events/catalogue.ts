@@ -68,6 +68,10 @@ import { events as qualityIncoming } from '../quality-incoming/events'
 import { events as qualityInprocess } from '../quality-inprocess/events'
 // B-W2b-107: rolls, protector lots and consumables (a roll tagged and changed, a protector lot recorded and withdrawn, a pack).
 import { events as inventoryRolls } from '../inventory-rolls/events'
+// B-W2b-108: corrective actions, CAPA and 8D (opened, changed, stages, sources, actions, reminders, escalation, the 8D report).
+import { events as qualityCapa } from '../quality-capa/events'
+// B-W2b-124: statutory periodic checks (a check type, a plan, a result recorded, a check due).
+import { events as plantStatutory } from '../plant-statutory/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -202,7 +206,11 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-99
   ...qualityInprocess,
   // B-W2b-107
-  ...inventoryRolls] as const satisfies readonly EventDefinition[]
+  ...inventoryRolls,
+  // B-W2b-108
+  ...qualityCapa,
+  // B-W2b-124
+  ...plantStatutory] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

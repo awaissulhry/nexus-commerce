@@ -69,6 +69,12 @@ export const CUT_REFUSALS = [
   'IN_BUNDLE',
   // B-W2a-35b (Owner answer H1): every machine at the cutting station is do-not-use (apps/factory-api modules/plant/checks.ts stationBlock).
   'MACHINE_UNSAFE',
+  // B-W2b-103 (./checks.ts): the table's leather warnings stand (a lead's "Cut anyway" passes them), and the lead's signature refused.
+  'CUT_WARNING',
+  'LEAD_PIN_WRONG',
+  'LEAD_IS_CUTTER',
+  'NOT_A_LEAD',
+  'LEAD_NOTE_MISSING',
 ] as const
 export type CutRefusalCode = (typeof CUT_REFUSALS)[number]
 
