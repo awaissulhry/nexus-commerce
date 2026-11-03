@@ -47,7 +47,16 @@
     "signFirst": "Running only once a technician has signed the machine safe.",
     "noSign": "Only a technician signs a machine safe again.",
     "checked": "Say what you checked.",
-    "photo": "Photos from the tablet come later: the office can add one to the request."
+    "mediaOffline": "A photo or voice note needs the network. The report itself still saves on this tablet.",
+    "mediaFull": "This report has as many photos and voice notes as it takes.",
+    "mediaClosed": "This report takes no more photos: it was joined to another or closed.",
+    "worksDone": "It was confirmed already that it works.",
+    "worksClosed": "Closed without a job: there is nothing to confirm.",
+    "worksLocked": "Locked as unsafe: a technician signs it safe first.",
+    "worksNotFixed": "Not fixed yet: confirm once the technician has handed the machine back.",
+    "stepDone": "Done already, or not possible now.",
+    "failure": "Tap what failed.",
+    "incident": "Reporting an incident comes with a later version: tell your team leader now."
   },
   "status": {
     "RUNNING": "Running",
@@ -72,7 +81,13 @@
     "reopen": "Take back to work",
     "signSafe": "Sign safe",
     "retry": "Try again",
-    "reportAs": "Report as:"
+    "reportAs": "Report as:",
+    "follow": "Follow it",
+    "works": "It works",
+    "acknowledge": "Seen",
+    "onTheWay": "On my way",
+    "leadConfirm": "Line lead: it works",
+    "incident": "Report an incident"
   },
   "symptom": {
     "title": "What is wrong?",
@@ -83,7 +98,6 @@
     "unsafe": "It is unsafe: lock it",
     "unsafeOn": "Marked unsafe",
     "unsafeBySymptom": "This symptom locks the machine by itself.",
-    "photo": "Add a photo",
     "unsafeBody": "{machine} will be marked do not use at once: nobody may work on it until a technician signs it safe.",
     "locks": "Locks the machine",
     "saysWords": "Say it in a few words",
@@ -134,7 +148,9 @@
   "keys": {
     "next": "Next job",
     "open": "Open the job",
-    "back": "Back"
+    "back": "Back",
+    "nextReport": "Next report",
+    "openReport": "Open the report"
   },
   "done": {
     "started": "{job} started: {machine} shows as under maintenance.",
@@ -142,11 +158,14 @@
     "reopened": "{job} is back in progress.",
     "signed": "{machine} is signed safe.",
     "handedBack": "{job} handed back: the office closes it.",
-    "tile": {
-      "adjusted": "Adjusted",
-      "replaced": "Replaced a part",
-      "cleaned": "Cleaned and lubricated",
-      "other": "Other"
+    "leadConfirmed": "{job}: the line lead confirmed {machine} works.",
+    "request": {
+      "works": "Thank you: maintenance knows {machine} works again.",
+      "acknowledged": "Seen: the station knows maintenance has it.",
+      "onTheWay": "On your way: the station sees a technician is coming.",
+      "leadConfirmed": "Confirmed as line lead: {machine} works.",
+      "added": "Added to the report.",
+      "kept": "Saved on this tablet: it reaches maintenance when the network is back."
     }
   },
   "job": {
@@ -159,7 +178,8 @@
     "overdue": "overdue",
     "last": "The machine's last jobs",
     "lastNone": "No earlier job on this machine.",
-    "repeat": "{count} problems in the last 30 days: look for the cause."
+    "repeat": "{count} problems in the last 30 days: look for the cause.",
+    "leadConfirmed": "The line lead confirmed it works at {time}."
   },
   "handBack": {
     "title": "Hand back {job} · {machine}",
@@ -195,15 +215,15 @@
     "symptom": "Symptom",
     "problem": "The job",
     "reporters": "Reported as",
-    "photos": "Photos",
-    "photosValue_one": "{count} photo: open the request in the office",
-    "photosValue_other": "{count} photos: open the request in the office",
-    "noPhotos": "None",
     "priority": "Priority",
     "waiting": "Waiting",
     "where": "Where",
     "openJobs": "Open jobs",
-    "openRequests": "Open problems"
+    "openRequests": "Open problems",
+    "words": "Words",
+    "machineNow": "Machine now",
+    "job": "Job",
+    "timeSpent": "Time on the job"
   },
   "age": {
     "minutes_one": "{count} min",
@@ -252,6 +272,147 @@
     "NOT_YOUR_JOB": {
       "message": "This job is given to another technician.",
       "fix": "Work the jobs given to you or to nobody; the office reassigns it."
+    },
+    "ALREADY_ACKNOWLEDGED": {
+      "message": "Maintenance has seen this request already.",
+      "fix": "Say On my way when you go to the machine."
+    },
+    "ON_THE_WAY_ALREADY": {
+      "message": "A technician is on the way to this machine already.",
+      "fix": "Read it again."
+    },
+    "NOT_ON_THE_WAY_NOW": {
+      "message": "This request is joined to another or closed: nobody goes to it now.",
+      "fix": "Open the request it joined, or go back."
+    },
+    "NOT_FIXED_YET": {
+      "message": "The machine is not fixed yet, or a technician has not signed it safe.",
+      "fix": "Confirm once the technician has handed it back."
+    },
+    "WORKS_CONFIRMED": {
+      "message": "It was confirmed already that the machine works again.",
+      "fix": "Read it again."
+    },
+    "CLOSED_WITHOUT_JOB": {
+      "message": "This request was closed without a job: there is nothing to confirm.",
+      "fix": "Report a new problem if the machine still does not work."
+    },
+    "LOCK_NOT_ALLOWED": {
+      "message": "At this site, only team leaders and technicians lock a machine.",
+      "fix": "Tell your team leader now: they lock it."
+    },
+    "NOT_HANDED_BACK": {
+      "message": "The job is not handed back: the line lead confirms once it is.",
+      "fix": "Confirm once the technician has handed the machine back."
+    },
+    "LEAD_CONFIRMED": {
+      "message": "The line lead confirmed this job already.",
+      "fix": "Read it again."
+    },
+    "FILES_CLOSED": {
+      "message": "This report or job takes no more photos or voice notes.",
+      "fix": "Add them to the machine's new report or job."
     }
+  },
+  "media": {
+    "title": "Photos and voice notes",
+    "optional": "A photo or a voice note, if it helps",
+    "addPhoto": "Add a photo",
+    "addVoice": "Add a voice note",
+    "photo": "Photo",
+    "photoBefore": "Photo before the work",
+    "photoAfter": "Photo after the work",
+    "voice": "Voice note",
+    "photoFor": "A photo of {machine}",
+    "voiceFor": "A voice note about {machine}",
+    "taken": "Taken with this report",
+    "sent": "Going to maintenance",
+    "stored": "Photos and voice notes",
+    "remove": "Remove {name}",
+    "none": "No photo or voice note yet.",
+    "look": "Look",
+    "listen": "Listen",
+    "lookAt": "Look at the {what}",
+    "listenTo": "Listen to the {what}",
+    "opening": "Opening…",
+    "openFailed": "It could not be opened. Try again when the network is back.",
+    "close": "Close",
+    "uploading": "Going up…",
+    "failed": "It did not go up. Take it again, or try when the network is back.",
+    "afterReport": "They go to maintenance once the report is recorded: keep this screen open until they are added.",
+    "waitReport": "They go up as soon as maintenance has the report: keep this screen open.",
+    "dropped": "The photos and voice notes taken with it were not sent."
+  },
+  "upload": {
+    "waiting": "waits for the report",
+    "sending": "going up…",
+    "added": "added",
+    "failed": "not added"
+  },
+  "voice": {
+    "hint": "Say what you see or hear, at most {count} seconds. Never a person's name.",
+    "recording": "Recording…",
+    "left": "Time left",
+    "review": "Your voice note",
+    "failed": "The microphone did not start. Allow it in Android, or write a few words instead.",
+    "start": "Start recording",
+    "stop": "Stop",
+    "again": "Record again",
+    "use": "Use it",
+    "cancel": "Cancel"
+  },
+  "reported": {
+    "title": "Reported here",
+    "at": "reported at {time}",
+    "count_one": "{count} report under way",
+    "count_other": "{count} reports under way"
+  },
+  "queue": {
+    "title": "Requests at this site",
+    "empty": "No open request at this site.",
+    "toMe": "sent to you",
+    "escalated": "passed on: not seen in time",
+    "count_one": "{count} open request",
+    "count_other": "{count} open requests"
+  },
+  "progress": {
+    "title": "Progress",
+    "step": {
+      "REPORTED": "Reported",
+      "ACKNOWLEDGED": "Seen by maintenance",
+      "ON_THE_WAY": "A technician is on the way",
+      "FIXED": "Fixed: the technician handed it back",
+      "WORKS": "Works again: confirmed",
+      "CLOSED": "Closed without a job"
+    },
+    "row": {
+      "REPORTED": "Waiting for maintenance",
+      "ACKNOWLEDGED": "Seen by maintenance",
+      "ON_THE_WAY": "Technician on the way",
+      "FIXED": "Fixed: does it work?",
+      "WORKS": "Works again"
+    },
+    "routed": {
+      "TEAM": "Sent to the maintenance team",
+      "TECHNICIAN": "Sent to a technician"
+    },
+    "locked": "{machine} is locked as unsafe: a technician signs it safe before anyone says it works.",
+    "merged": "This report joined another report of {machine}: you see that one's progress.",
+    "closed": "Maintenance closed this report without a job: there is nothing to confirm.",
+    "escalated": "Not seen in time: it was passed on.",
+    "askWorks": "{machine} was handed back. Does it work? Tap It works."
+  },
+  "request": {
+    "type": "Report · {time}",
+    "offline": "The network is down: It works, Seen and On my way are saved on this tablet and sent when it is back."
+  },
+  "close": {
+    "failure": "What failed?",
+    "time": "Time on the job: {age} since Start (the office counts it).",
+    "notStarted": "Not started: no time is counted.",
+    "photoBefore": "Photo before",
+    "photoAfter": "Photo after",
+    "photoBeforeFor": "{machine} before the work",
+    "photoAfterFor": "{machine} after the work"
   }
 }

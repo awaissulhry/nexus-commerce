@@ -11,7 +11,7 @@
   min-width: 0;
 }
 
-/* ── "It is unsafe: lock it" and the photo (held), side by side on a tablet, stacked on a phone ─────────────────────── */
+/* ── Add a photo / Add a voice note, side by side on a tablet, stacked on a phone ───────────────────────────────────── */
 .fw-mc-toggles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16em), 1fr));
@@ -80,4 +80,82 @@
 }
 .fw-mc-last-problem {
   color: var(--nds-text-muted);
+}
+
+/* ── B-W2b-102: photos and voice notes — taken, going up, stored (each a row: icon · what · state · its button) ─────── */
+.fw-mc-media {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-mc-media-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+  padding: var(--nds-space-8) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  font-size: var(--nds-density-font-body);
+}
+.fw-mc-media-row[data-state='failed'] {
+  border-inline-start: 6px solid var(--nds-danger);
+}
+.fw-mc-media-row[data-state='added'] {
+  border-inline-start: 6px solid var(--nds-success);
+}
+.fw-mc-media-name {
+  font-weight: 600;
+}
+.fw-mc-media-state {
+  flex: 1 1 8em;
+  min-width: 0;
+  color: var(--nds-text-muted);
+  overflow-wrap: anywhere;
+}
+.fw-mc-media-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+
+/* ── the recorder and the dialog that shows a photo or plays a voice note ─────────────────────────────────────────── */
+.fw-mc-voice-now {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  font-weight: 600;
+  color: var(--nds-danger-text);
+}
+.fw-mc-audio {
+  width: 100%;
+}
+.fw-mc-peek-photo {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+}
+
+/* ── Report an incident (held until B-W2b-137) ───────────────────────────────────────────────────────────────────── */
+.fw-mc-incident {
+  display: flex;
+}
+
+/* ── the report's timeline at floor size (the DS Timeline reads no density token) ─────────────────────────────────── */
+.fw-mc-progress .nds-timeline-label,
+.fw-mc-progress .nds-timeline-detail,
+.fw-mc-progress .nds-as-of {
+  font-size: var(--nds-density-font-label);
+}
+.fw-mc-progress .nds-timeline-step {
+  padding-bottom: var(--nds-space-12);
 }
