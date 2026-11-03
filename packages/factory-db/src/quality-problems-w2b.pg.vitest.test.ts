@@ -19,7 +19,7 @@ import { loadOwnership, loadSchema } from './tools'
  *   - sources: what they may be, of the company, kept while an NCR names the CAPA; actions: evidence, reminders, escalation;
  *   - cause codes on defects and NCRs; an NCR's CAPA, given once after DECIDED, even on a CLOSED NCR;
  *   - a defect charged to an operation of its own work order;
- *   - NCR cost lines and concessions; hold groups and a hold's group;
+ *   - NCR cost lines and concessions; hold groups and a hold's group; a hold's lane on the board, the office's only;
  *   - the result and four-eyes settings, and the release that reads them; alert rules;
  *   - the complaint's investigation and letter; generated documents of the new kinds, some with no site;
  *   - CAPA is a number kind with a seeded series.
@@ -487,6 +487,55 @@ describe('hold groups (QHS-075)', () => {
     const released = await newHold()
     await run(office(), `UPDATE "QualityHold" SET status = 'RELEASED', "releasedAt" = now(), "releasedById" = $2::uuid, "releaseSignatureSha256" = $3, "notMakerStatement" = true WHERE id = $1::uuid`, released, a.actorId, SHA)
     await expect(set(released, id)).rejects.toThrow(/a released or closed hold never changes/)
+  })
+})
+
+describe("a hold's lane on the hold board (QHS-077)", () => {
+  const newHold = async (): Promise<string> => {
+    const id = randomUUID()
+    await copyRow(office(), 'QualityHold', capa.holdId, { id, number: `T-HLD-${id.slice(0, 8)}`, groupId: null, ncrId: null, placedByWorkerId: null, placedById: a.actorId, nextStep: 'NEW' })
+    return id
+  }
+
+  it('starts NEW, the seeded hold too, and is hidden from the floor and the partner', async () => {
+    expect(await admin(`SELECT "nextStep"::text AS lane FROM "QualityHold" WHERE id = $1`, [capa.holdId])).toEqual([{ lane: 'NEW' }])
+    const holds = classifiedModels(loadSchema(), loadOwnership()).find(({ model }) => model.name === 'QualityHold')
+    expect(holds?.ownership.access['factory_floor_runtime']?.hiddenColumns).toEqual(['nextStep'])
+    expect(holds?.ownership.access['factory_partner_runtime']).toBeUndefined()
+  })
+
+  it('the office moves it while the hold is ACTIVE; a released hold keeps its lane', async () => {
+    const id = await newHold()
+    const set = (lane: string) => run(office(), `UPDATE "QualityHold" SET "nextStep" = $2::"HoldNextStep", version = version + 1 WHERE id = $1::uuid`, id, lane)
+    for (const lane of ['INVESTIGATING', 'WAITING_DECISION', 'READY_TO_RELEASE', 'NEW']) expect(await set(lane)).toBe(1)
+    await expect(set('ACTIVE')).rejects.toThrow(/invalid input value for enum/)
+    await set('READY_TO_RELEASE')
+    await run(office(), `UPDATE "QualityHold" SET status = 'RELEASED', "releasedAt" = now(), "releasedById" = $2::uuid, "releaseSignatureSha256" = $3, "notMakerStatement" = true WHERE id = $1::uuid`, id, a.actorId, SHA)
+    await expect(set('INVESTIGATING')).rejects.toThrow(/a released or closed hold never changes/)
+  })
+
+  it('the floor neither reads nor writes it, and still places, reads and moves its holds', async () => {
+    await expect(sql(floor(), `SELECT "nextStep" FROM "QualityHold"`)).rejects.toThrow(/permission denied/)
+    await expect(run(floor(), `UPDATE "QualityHold" SET "nextStep" = 'INVESTIGATING' WHERE id = $1::uuid`, capa.holdId)).rejects.toThrow(/permission denied/)
+    await expect(as(floor(), (client) => client.qualityHold.findMany())).rejects.toThrow(/permission denied/)
+    expect((await sql(floor(), `SELECT id FROM "QualityHold"`)).length).toBeGreaterThan(0)
+    // A hold placed at the bench names no lane and starts NEW.
+    const id = randomUUID()
+    const columns = '"id", "number", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "placedAt", "placedByWorkerId"'
+    const [seeded] = await admin(`SELECT "subjectIds"::text[] AS subjects, "placedByWorkerId"::text AS worker FROM "QualityHold" WHERE id = $1`, [capa.holdId])
+    expect(
+      await run(
+        { audience: 'floor', tenantId: a.tenantId, actorId: String(seeded?.worker), siteId: A.site },
+        `INSERT INTO "QualityHold" (${columns}) VALUES ($1::uuid, $2, $3::uuid, $4::uuid, 'Hide', $5::uuid[], 'QUALITY_CHECK', now(), $6::uuid)`,
+        id,
+        `T-HLD-${id.slice(0, 8)}`,
+        A.company,
+        A.site,
+        seeded?.subjects,
+        seeded?.worker,
+      ),
+    ).toBe(1)
+    expect(await admin(`SELECT "nextStep"::text AS lane FROM "QualityHold" WHERE id = $1`, [id])).toEqual([{ lane: 'NEW' }])
   })
 })
 

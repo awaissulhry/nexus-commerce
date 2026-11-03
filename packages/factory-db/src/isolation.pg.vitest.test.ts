@@ -637,8 +637,11 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
       }
       return copy
     }
+    // Only the columns the role may see: a hidden column has no grant, so its row takes the column's default (B-W2b-79:
+    // the floor inserts holds without QualityHold.nextStep).
+    const insertColumns = visible.map(q).join(', ')
     const insert = (copy: Record<string, unknown>) =>
-      execute(role, `INSERT INTO ${table} SELECT * FROM jsonb_populate_record(NULL::${table}, $1::jsonb)`, JSON.stringify(copy))
+      execute(role, `INSERT INTO ${table} (${insertColumns}) SELECT ${insertColumns} FROM jsonb_populate_record(NULL::${table}, $1::jsonb)`, JSON.stringify(copy))
 
     if (!access) {
       it('has no privilege at all', async () => {

@@ -44,8 +44,26 @@ async function force(text: string, values: unknown[] = []): Promise<void> {
   }
 }
 /** INSERT a copy of a row of `table` (the first one `where` finds) with `changes` (a jsonb object of columns). */
-const copyRow = (scope: FactoryScope, table: string, where: string, changes: Record<string, unknown>, ...values: unknown[]) =>
-  run(scope, `INSERT INTO "${table}" SELECT * FROM jsonb_populate_record(NULL::"${table}", (SELECT to_jsonb(r) || $1::jsonb FROM "${table}" r WHERE ${where} LIMIT 1))`, JSON.stringify(changes), ...values)
+/** The columns of `table` the scope's role may insert (B-W2b-79: the floor has no grant on QualityHold.nextStep, which takes its default). */
+async function insertable(scope: FactoryScope, table: string): Promise<string> {
+  const role = scope.audience === 'floor' ? 'factory_floor_runtime' : 'factory_runtime'
+  const [row] = await admin(
+    `SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum) AS columns FROM pg_attribute a
+      WHERE a.attrelid = format('%I', $1::text)::regclass AND a.attnum > 0 AND NOT a.attisdropped AND has_column_privilege($2, a.attrelid, a.attnum, 'INSERT')`,
+    [table, role],
+  )
+  return String(row?.columns)
+}
+const copyRow = async (scope: FactoryScope, table: string, where: string, changes: Record<string, unknown>, ...values: unknown[]) => {
+  const columns = await insertable(scope, table)
+  // The row is read through the same columns: the floor may not read a hidden one either.
+  return run(
+    scope,
+    `INSERT INTO "${table}" (${columns}) SELECT ${columns} FROM jsonb_populate_record(NULL::"${table}", (SELECT to_jsonb(r) || $1::jsonb FROM (SELECT ${columns} FROM "${table}" WHERE ${where} LIMIT 1) r))`,
+    JSON.stringify(changes),
+    ...values,
+  )
+}
 
 beforeAll(async () => {
   db = await migratedDatabase('followupsw2bf1')

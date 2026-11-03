@@ -227,6 +227,15 @@ enum QualityHoldStatus {
   CLOSED
 }
 
+/// Where a hold stands on the hold board (W2b, B-W2b-79; QHS-077; design quality.holds "Hold board"): the next step a person
+/// drags it to. Releasing and closing stay the hold's own status, never a lane.
+enum HoldNextStep {
+  NEW
+  INVESTIGATING
+  WAITING_DECISION
+  READY_TO_RELEASE
+}
+
 /// The move of held stock to a quarantine place (QHS-078).
 enum HoldQuarantine {
   /// Nothing to move (a work order, a serial, a shipment), or the stock stays where it is.
@@ -297,6 +306,12 @@ model QualityHold {
   /// W2b (B-W2b-79; QHS-075): the hold by genealogy it is part of, of the same company. Set when it is placed, or once
   /// later while it is ACTIVE; never changed or cleared (the …_quality_problems_w2b_guards trigger).
   groupId                String?           @db.Uuid
+  /// W2b (B-W2b-79; QHS-077): its lane on the hold board, set by the office while the hold is ACTIVE (W2a's guard freezes a
+  /// released or closed hold). Office only: the floor neither reads nor writes it (ownership/holds.json hides it). The
+  /// default is the database's (dbgenerated, as tenantId's), so a hold placed at the bench names no lane: Prisma would
+  /// send a plain @default(NEW) itself, and the floor has no grant on the column. A new hold is NEW. Written as a cast from text:
+  /// Prisma reads a bare 'NEW'::"HoldNextStep" back as @default(NEW) and the replay would never match.
+  nextStep               HoldNextStep      @default(dbgenerated("('NEW'::text)::\"HoldNextStep\""))
   version                Int               @default(1)
   createdAt              DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime          @default(now()) @updatedAt @db.Timestamptz(3)

@@ -20,6 +20,9 @@ CREATE TYPE "ComplaintAnswerChannel" AS ENUM ('EMAIL', 'PORTAL');
 CREATE TYPE "CauseProcess" AS ENUM ('MATERIAL', 'SUPPLIER', 'CUTTING', 'SEWING', 'FINISHING', 'HANDLING', 'DESIGN', 'MEASUREMENT');
 
 -- CreateEnum
+CREATE TYPE "HoldNextStep" AS ENUM ('NEW', 'INVESTIGATING', 'WAITING_DECISION', 'READY_TO_RELEASE');
+
+-- CreateEnum
 CREATE TYPE "NcrCostKind" AS ENUM ('MATERIAL', 'LABOUR', 'REWORK_TIME', 'SCRAP_VALUE', 'FREIGHT', 'OTHER');
 
 -- CreateEnum
@@ -79,7 +82,8 @@ ADD COLUMN     "causeCodeId" UUID;
 ALTER TABLE "OperationScanDefect" ADD COLUMN     "causedAtOperationId" UUID;
 
 -- AlterTable
-ALTER TABLE "QualityHold" ADD COLUMN     "groupId" UUID;
+ALTER TABLE "QualityHold" ADD COLUMN     "groupId" UUID,
+ADD COLUMN     "nextStep" "HoldNextStep" NOT NULL DEFAULT ('NEW'::text)::"HoldNextStep";
 
 -- AlterTable
 ALTER TABLE "QualitySettings" ADD COLUMN     "benchUndoSeconds" INTEGER,
