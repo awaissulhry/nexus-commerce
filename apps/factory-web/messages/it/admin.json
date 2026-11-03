@@ -1878,6 +1878,7 @@
     "quality_documents_share": "Mettere un rapporto o un certificato conservato sul link dei documenti di una spedizione e inviare quel link",
     "quality_rules_view": "Vedere le regole qualità: chi può firmare cosa, le regole di avviso ed escalation, come si contano i risultati",
     "quality_alerts_manage": "Tenere le regole di avviso ed escalation della qualità e mandarsi una prova di una regola",
+    "quality_reports_view": "Vedere i report qualità di un sito: resa al primo passaggio, DHU, AQL finale, non conformità aperte, azioni correttive in tempo, blocchi vecchi, andamento e confronto per linea, operazione, fornitore e modello (solo dai record che si possono vedere; mai per persona)",
     "numbering_override": "Digitare il numero di un documento migrato (mai una serie fiscale; doppioni rifiutati, motivo conservato)",
     "people_view": "Vedere dipendenti, squadre, prestiti ad altre linee e passi di uscita (mai paghe, presenze o salute)",
     "people_team_view": "Vedere le squadre che guidi o di cui fai parte (La mia squadra)",
@@ -1944,6 +1945,11 @@
     "safety_organisation_manage": "Nominare persone e contatti esterni ai ruoli della sicurezza, registrare la firma del nominato, chiudere un incarico, registrare la comunicazione RLS inviata all'INAIL",
     "safety_calendar_manage": "Aggiungere, modificare, segnare come fatte e annullare le scadenze inserite nello scadenzario, con le loro evidenze",
     "safety_risk_manage": "Gestire le valutazioni dei rischi (DVR): congelare le versioni del consulente, registrare le firme su carta, conservare il sigillo; le misure del programma di miglioramento",
-    "safety_risk_sign": "Firmare di persona una versione della valutazione dei rischi per il ruolo della sicurezza che si ricopre (con un codice nuovo)"
+    "safety_risk_sign": "Firmare di persona una versione della valutazione dei rischi per il ruolo della sicurezza che si ricopre (con un codice nuovo)",
+    "safety_incidents_view": "Vedere infortuni, quasi incidenti e pericoli in forma anonima: cosa, quando, dove, gravità, azioni, foto e le scadenze INAIL (mai la persona o la lesione)",
+    "safety_incidents_report": "Segnalare un infortunio, un quasi incidente o un pericolo dall’ufficio, con le persone coinvolte",
+    "safety_incidents_manage": "Gestire le segnalazioni: correggerle, gravità, presa visione della sicurezza, azioni trasformate in intervento, misura o sessione di formazione, chiudere, riaprire, annullare, foto",
+    "safety_incidents_people": "Dati protetti: vedere e correggere le persone coinvolte e le loro lesioni, gestire le comunicazioni INAIL (certificato, invio con numero di protocollo, ricevuta); ogni consultazione è registrata",
+    "safety_rolesheets_manage": "Gestire le schede mansione: rischi, kit DPI, corsi e sorveglianza sanitaria di ogni mansione; applicare una scheda dopo aver letto cosa cambia per le persone della mansione"
   }
 }

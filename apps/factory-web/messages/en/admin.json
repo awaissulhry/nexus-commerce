@@ -1878,6 +1878,7 @@
     "quality_documents_share": "Put a kept report or certificate on a shipment's documents link and mail that link",
     "quality_rules_view": "See the quality rules: who may sign what, the alert and escalation rules, how results are counted",
     "quality_alerts_manage": "Keep the quality alert and escalation rules and send a test of a rule to yourself",
+    "quality_reports_view": "See a site's quality reports: first-pass yield, DHU, final AQL, open NCRs, corrective actions on time, old holds, the trend and a comparison by line, operation, supplier and style (only from records you may see; never per person)",
     "numbering_override": "Type a number for a migrated document (never a fiscal series; clashes refused, reason kept)",
     "people_view": "See the employees, teams, loans to other lines and leaver steps (never pay, attendance or health)",
     "people_team_view": "See the teams you lead or belong to (My team)",
@@ -1944,6 +1945,11 @@
     "safety_organisation_manage": "Appoint people and outside contacts to safety roles, record the appointee's signature, end a term, record the RLS notice filed with INAIL",
     "safety_calendar_manage": "Add, change, mark done and cancel the deadlines typed on the safety calendar, with their evidence",
     "safety_risk_manage": "Keep the risk assessments (DVR): freeze the consultant's versions, record signed papers, keep the seal; the improvement plan's measures",
-    "safety_risk_sign": "Sign a risk assessment version yourself for the safety role you hold (with a fresh code)"
+    "safety_risk_sign": "Sign a risk assessment version yourself for the safety role you hold (with a fresh code)",
+    "safety_incidents_view": "See incidents, near misses and hazards anonymised: what, when, where, severity, actions, photos and the INAIL deadlines (never the person or the injury)",
+    "safety_incidents_report": "Report an incident, a near miss or a hazard from the office, with the people involved",
+    "safety_incidents_manage": "Keep the incidents: correct the report, severity, seen by safety, actions made into a job, a measure or a training session, close, reopen, cancel, photos",
+    "safety_incidents_people": "Protected: see and correct the people involved and their injuries, keep the INAIL filings (certificate, filed with the protocol number, receipt); each view is recorded",
+    "safety_rolesheets_manage": "Keep the role risk sheets (scheda mansione): risks, PPE kit, courses and health surveillance per role; apply a sheet after reading what it changes for the people in the role"
   }
 }

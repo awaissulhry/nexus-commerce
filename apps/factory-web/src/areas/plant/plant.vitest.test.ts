@@ -72,12 +72,14 @@ describe('plant: who may do what', () => {
     expect(plantCan(templateOf('sales')!.permissions).view).toBe(false)
   })
 
-  it('the area: Plant (order 12) with its three Maintenance pages, each asking plant.view; a sales person sees no Plant', () => {
+  it('the area: Plant (order 12) with its four Maintenance pages, each asking plant.view; a sales person sees no Plant', () => {
     expect(officeArea.order).toBe(12)
     expect(officeArea.area.sections?.[0]?.items.map((item) => [item.href, item.permission])).toEqual([
       ['/plant/requests', 'plant.view'],
       ['/plant/jobs', 'plant.view'],
       ['/plant/machines', 'plant.view'],
+      // B-W2b-142: Preventive & statutory checks (SCR-266).
+      ['/plant/preventive', 'plant.view'],
     ])
     expect(officeNavFor(permissionCheck(templateOf('sales')!.permissions)).areas.map((area) => area.id)).not.toContain('plant')
     expect(officeNavFor(permissionCheck(templateOf('maintenance')!.permissions)).areas.map((area) => area.id)).toContain('plant')

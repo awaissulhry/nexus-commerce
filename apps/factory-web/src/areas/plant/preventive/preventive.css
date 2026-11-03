@@ -1,0 +1,179 @@
+/*
+ * Plant › Maintenance › Preventive & statutory checks (SCR-266, B-W2b-142) LAYOUT: the band, the tiles, the calendar, the
+ * plans, the check register, the dialogs' forms, the register print and the report window. The page fills the shell's main
+ * area (no max-width: Owner rule 2026-10-29); the controls are the design system's; semantic tokens only.
+ */
+.fw-pv,
+.fw-pv-section,
+.fw-pv-stack,
+.fw-pv-form,
+.fw-pv-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pv {
+  gap: var(--nds-space-20);
+}
+
+.fw-pv-section,
+.fw-pv-loading {
+  gap: var(--nds-space-8);
+}
+
+.fw-pv-anchor {
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-pv-band,
+.fw-pv-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-pv-status,
+.fw-pv-actions,
+.fw-pv-tools,
+.fw-pv-row,
+.fw-pv-head-title,
+.fw-pv-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pv-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-pv-h:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-pv-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-pv-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pv-warn {
+  margin: 0;
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pv-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-pv-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fw-pv-slow {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  opacity: 0;
+  animation: fw-pv-slow 0s linear 1s forwards;
+}
+
+@keyframes fw-pv-slow {
+  to {
+    opacity: 1;
+  }
+}
+
+.fw-pv-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.fw-pv-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-pv-outcomes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-pv-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-pv-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+/* The print and the report window (new tabs). */
+.fw-pv-print-note {
+  margin: 0 0 var(--nds-space-8);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pv-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-pv-pdf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+@media print {
+  .fw-pv-noprint {
+    display: none !important;
+  }
+
+  .fw-pv-print-group {
+    break-inside: avoid;
+  }
+}
