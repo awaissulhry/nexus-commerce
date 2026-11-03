@@ -717,7 +717,8 @@
       "handover": "Handover note",
       "onBehalf_one": "Entry on behalf: {code} · {count} good",
       "onBehalf_other": "Entry on behalf: {code} · {count} good",
-      "progress": "A machine report's progress"
+      "progress": "A machine report's progress",
+      "repair": "Repair scan of {code}"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

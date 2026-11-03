@@ -1779,6 +1779,8 @@
     "calendars_manage": "Cambiare i calendari di azienda, stabilimento e linea",
     "calendars_suppliers_manage": "Cambiare i calendari di fornitori e terzisti",
     "production_rework": "Mandare capi in rilavorazione e chiuderla",
+    "production_repair": "Vedere le riparazioni e scansionare i fasci in entrata e in uscita alla postazione di riparazione",
+    "production_downgrade": "Passare a seconda scelta i capi scartati e ritirare un passaggio",
     "production_scrap_view": "Vedere scarti e rilavorazioni",
     "production_scrap": "Registrare scarti e chiedere sostituzioni",
     "production_scrap_approve": "Approvare riduzioni d'ordine",

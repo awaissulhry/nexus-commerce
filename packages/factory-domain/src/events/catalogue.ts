@@ -79,6 +79,8 @@ import { events as qualityDocuments } from '../quality-documents/events'
 import { events as safety } from '../safety/events'
 // B-W2b-118: quality rules (who may sign what and the result rules changed, alert rules changed, an alert rule fired).
 import { events as qualityRules } from '../quality-rules/events'
+// B-W2b-126: the repair station and second quality.
+import { events as productionRepair } from '../production-repair/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -224,7 +226,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-120
   ...safety,
   // B-W2b-118
-  ...qualityRules] as const satisfies readonly EventDefinition[]
+  ...qualityRules,
+  // B-W2b-126
+  ...productionRepair] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

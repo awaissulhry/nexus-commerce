@@ -16,6 +16,10 @@ import { TASK_ROUTES, taskForScan } from '../routes'
 import { fetchMyMessages, fetchStationHelp, fetchWorkList, keptMyMessages, keptStationHelp, keptWorkList } from './api'
 import { arranged, changedRows, helpHeld, helpPayload, listChanged, materialTile, PUT_LAST_KEY, putLastIn, readPutLast, readSeen, SEEN_KEY, withPutLast, withSeen, type DispatchList, type MyMessages, type PutLast, type StationHelp } from './model'
 import { MyWorkView, type MyWorkAction, type MyWorkCall, type MyWorkStep } from './view/MyWorkView'
+// B-W2b-126: the repair queue (MES-132).
+import { fetchRepairQueue, keptRepairQueue, scanOrKeep, type RepairScan } from './repair/api'
+import { doneStill, outCounts, repairHeld, rowOfCode, withDone, type RepairDone, type RepairQueue } from './repair/model'
+import type { RepairLineModel } from './repair/view/RepairViews'
 
 /**
  * The live SCR-089 (`/floor/mywork`): the list to work from (the person's, else the station's queue: `fetchWorkList`) read on view, again when
@@ -32,6 +36,8 @@ import { MyWorkView, type MyWorkAction, type MyWorkCall, type MyWorkStep } from 
 
 /** The live changes after which the station's list may differ (each a hint: the screen reads again). */
 const MOVES = new Set(['planning.schedule_published', 'production.scan_recorded', 'quality.hold_placed', 'quality.hold_released', 'workorder.status_changed', 'dispatch.assignment_changed'])
+/** B-W2b-126: the live changes after which the repair queue may differ (a repair scanned elsewhere, rework sent back or moved). */
+const REPAIR_MOVES = new Set(['production.repair_scanned', 'production.rework_opened', 'production.rework_moved'])
 /**
  * While the screen is in view it also reads again on this beat: the live rules of those events ask office permissions
  * (planning.view, workorders.view, quality.holds.view) that no floor role holds, so today they never reach a tablet
@@ -96,6 +102,15 @@ export function FloorMyWork() {
   const [called, setCalled] = useState<{ id: string | null; number: string; seq: number } | null>(null)
   const shownRef = useRef<DispatchList | null>(null)
   shownRef.current = shown
+  // B-W2b-126: the repair queue (production.repair), what this tablet scanned meanwhile, and the last scan's line.
+  const canRepair = Boolean(me?.permissions.includes('production.repair')) && allowed
+  const [repairRead, setRepairRead] = useState<RepairQueue | null>(null)
+  const [repairAsOf, setRepairAsOf] = useState<string | null>(null)
+  const [repairProblem, setRepairProblem] = useState<'offline' | 'error' | null>(null)
+  const [repairDone, setRepairDone] = useState<RepairDone[]>([])
+  const [repairSaid, setRepairSaid] = useState<(Omit<RepairLineModel, 'ticks'> & { clientEventId: string | null; ticks: RepairLineModel['ticks'] }) | null>(null)
+  const [repairBusy, setRepairBusy] = useState(false)
+  const deviceId = store.device?.device.id ?? null
 
   useEffect(() => {
     setPutLast(loadPutLast())
@@ -119,6 +134,24 @@ export function FloorMyWork() {
     setMessagesFailed(!kept)
   }, [allowed, api, sessionEnded])
 
+  /** B-W2b-126: the repair queue; a failed read keeps what this tablet read, with its time. */
+  const readRepair = useCallback(async () => {
+    if (!canRepair) return
+    const answer = await fetchRepairQueue(api)
+    if (answer.ok) {
+      setRepairRead(answer.value)
+      setRepairAsOf(null)
+      setRepairProblem(null)
+      setRepairDone((current) => doneStill(current, answer.value))
+      return
+    }
+    if (answer.problem.kind === 'signedOut') return void sessionEnded()
+    const kept = keptRepairQueue()
+    setRepairRead((current) => current ?? kept?.value ?? null)
+    setRepairAsOf((current) => current ?? kept?.asOf ?? null)
+    setRepairProblem(answer.problem.kind === 'offline' ? 'offline' : 'error')
+  }, [canRepair, api, sessionEnded])
+
   /** Who to call for material: read once on view and when the dialog opens; offline it stays what this tablet read. */
   const readHelp = useCallback(async () => {
     if (!allowed) return
@@ -139,6 +172,7 @@ export function FloorMyWork() {
     async (show: boolean) => {
       if (!allowed) return
       void readMessages()
+      void readRepair()
       const answer = await fetchWorkList(api)
       if (answer.ok) {
         setProblem(null)
@@ -161,7 +195,7 @@ export function FloorMyWork() {
       setProblem(answer.problem.kind === 'offline' ? 'offline' : 'error')
       setStep((current) => (current.kind === 'loading' ? { kind: 'list' } : current))
     },
-    [allowed, api, sessionEnded, readMessages],
+    [allowed, api, sessionEnded, readMessages, readRepair],
   )
 
   useEffect(() => {
@@ -192,6 +226,7 @@ export function FloorMyWork() {
     {
       onChange: (change) => {
         if (MOVES.has(change.type)) void read(false)
+        else if (REPAIR_MOVES.has(change.type)) void readRepair()
       },
       onReconnect: () => void read(false),
     },
@@ -260,6 +295,64 @@ export function FloorMyWork() {
     }
   }
 
+  // ---- the repair queue (B-W2b-126) ---------------------------------------------------------------------------------------
+
+  const repairShown = withDone(repairRead, repairDone, repairRead?.station ?? null)
+  const saidTicks = repairSaid?.clientEventId ? (queuedView(queueSnapshot, repairSaid.clientEventId)?.ticks ?? repairSaid.ticks) : (repairSaid?.ticks ?? null)
+  const saidRefusal = repairSaid?.clientEventId ? (queuedView(queueSnapshot, repairSaid.clientEventId)?.refusal?.code ?? repairSaid.refusal ?? null) : (repairSaid?.refusal ?? null)
+  const repairLine: RepairLineModel | null = repairSaid && saidTicks ? { ...repairSaid, ticks: saidTicks, refusal: saidRefusal } : null
+
+  /** One scan in or out, online first; kept on the tablet when the network fails (the row moves on screen at once). */
+  const scanRepair = async (scan: RepairScan, label: string) => {
+    const row = repairShown?.rows.find((entry) => entry.reworkId === scan.reworkId)
+    if (!row || repairHeld(row) || repairBusy) return feedback('warning')
+    setRepairBusy(true)
+    const said = { code: label, step: scan.step, ...(scan.step === 'OUT' ? { good: scan.good ?? 0, scrap: scan.scrap ?? 0 } : {}) }
+    try {
+      const outcome = await scanOrKeep(api, queue, online, deviceId, scan)
+      if (outcome.kept) {
+        setRepairDone((current) => [...current.filter((entry) => !(entry.reworkId === scan.reworkId && entry.step === scan.step)), { reworkId: scan.reworkId, step: scan.step, at: new Date().toISOString(), clientEventId: outcome.kept.clientEventId }])
+        setRepairSaid({ ...said, clientEventId: outcome.kept.clientEventId, ticks: 'saved' })
+        feedback('success')
+      } else if (outcome.answer.ok) {
+        setRepairDone((current) => [...current, { reworkId: scan.reworkId, step: scan.step, at: outcome.answer.ok ? (outcome.answer.value.repair.repairInAt ?? new Date().toISOString()) : new Date().toISOString(), clientEventId: null }])
+        setRepairSaid({ ...said, clientEventId: null, ticks: 'recorded' })
+        feedback('success')
+        void readRepair()
+      } else {
+        const problem = outcome.answer.problem
+        if (problem.kind === 'signedOut') return void sessionEnded()
+        setRepairSaid({ ...said, clientEventId: null, ticks: 'refused', refusal: problem.kind === 'refused' ? problem.code : null, words: problem.kind === 'refused' ? problem.message : null })
+        feedback('error')
+        void readRepair()
+      }
+      if (scan.step === 'OUT') setStep({ kind: 'repair' })
+      else setStep({ kind: 'repairItem', reworkId: scan.reworkId })
+    } finally {
+      setRepairBusy(false)
+    }
+  }
+
+  /** A label scanned on the repair screens: its row's scan in, or the scan out's question. */
+  const onRepairScan = (code: string) => {
+    const row = rowOfCode(repairShown, code)
+    if (!row) {
+      setRepairSaid({ code, step: 'IN', clientEventId: null, ticks: 'refused', refusal: 'NOT_IN_QUEUE' })
+      return feedback('warning')
+    }
+    if (row.state === 'WAITING') return void scanRepair({ reworkId: row.reworkId, step: 'IN', code }, code)
+    setRepairSaid(null)
+    setStep({ kind: 'repairOut', reworkId: row.reworkId, code, good: null })
+  }
+
+  const repairOutWith = (good: number | null) => {
+    if (step.kind !== 'repairOut') return
+    const row = repairShown?.rows.find((entry) => entry.reworkId === step.reworkId)
+    const counts = row ? outCounts(row, good) : null
+    if (!row || !counts) return feedback('warning')
+    void scanRepair({ reworkId: row.reworkId, step: 'OUT', ...(step.code ? { code: step.code } : {}), good: counts.good, scrap: counts.scrap }, row.bundle?.code ?? row.workOrder.number)
+  }
+
   const reasonDone = () => {
     if (step.kind !== 'reason') return
     const picked = step.picker.reasons.find((reason) => reason.id === step.picker.value)
@@ -283,6 +376,7 @@ export function FloorMyWork() {
 
   const onScan = async (code: string) => {
     if (!me) return
+    if (step.kind === 'repair' || step.kind === 'repairItem' || step.kind === 'repairOut') return onRepairScan(code)
     const read = readScan(code, me.scanTag)
     const mode = modeOf(me.device.station, me.device.mode)
     const task = taskForScan(mode, read, homeTiles(mode, me.permissions, me.notice.blocksScans, me.device.mode))
@@ -293,6 +387,9 @@ export function FloorMyWork() {
 
   const back = () => {
     setCantFind(null)
+    if (step.kind === 'repairOut') return setStep({ kind: 'repairItem', reworkId: step.reworkId })
+    if (step.kind === 'repairItem') return setStep({ kind: 'repair' })
+    if (step.kind === 'repair') setRepairSaid(null)
     setStep(step.kind === 'message' ? { kind: 'messages' } : allowed ? { kind: 'list' } : { kind: 'noPermission' })
   }
 
@@ -341,12 +438,34 @@ export function FloorMyWork() {
         return onReason(action.action)
       case 'reasonDone':
         return reasonDone()
+      // B-W2b-126: the repair queue.
+      case 'repair':
+        setPutLastDone(null)
+        setRepairSaid(null)
+        void readRepair()
+        return setStep({ kind: 'repair' })
+      case 'repairOpen':
+        return setStep({ kind: 'repairItem', reworkId: action.reworkId })
+      case 'repairStart': {
+        const row = repairShown?.rows.find((entry) => entry.reworkId === action.reworkId)
+        if (!row) return
+        if (row.state === 'WAITING') return void scanRepair({ reworkId: row.reworkId, step: 'IN' }, row.workOrder.number)
+        return setStep({ kind: 'repairOut', reworkId: row.reworkId, code: null, good: null })
+      }
+      case 'repairGood':
+        return step.kind === 'repairOut' ? setStep({ ...step, good: action.value }) : undefined
+      case 'repairAllGood':
+        return repairOutWith(null)
+      case 'repairConfirm':
+        return step.kind === 'repairOut' ? repairOutWith(step.good) : undefined
+      case 'repairRetry':
+        return void readRepair()
     }
   }
 
   useFloorKeys({
     enter: step.kind === 'reason' ? reasonDone : null,
-    escape: cantFind !== null ? null : step.kind === 'entry' || step.kind === 'reason' || step.kind === 'messages' || step.kind === 'message' ? back : () => router.push('/floor'),
+    escape: cantFind !== null ? null : step.kind === 'entry' || step.kind === 'reason' || step.kind === 'messages' || step.kind === 'message' || step.kind === 'repair' || step.kind === 'repairItem' || step.kind === 'repairOut' ? back : () => router.push('/floor'),
   })
 
   if (!me) return null
@@ -372,6 +491,11 @@ export function FloorMyWork() {
         messagesFailed,
         helpHeld: held,
         call,
+        repair: canRepair ? repairShown : null,
+        repairAsOf: repairAsOf ?? (!online && repairShown ? repairShown.asOf : null),
+        repairProblem: repairShown ? null : repairProblem,
+        repairLine,
+        repairBusy,
       }}
       onFrame={onFrame}
       onAction={onAction}
