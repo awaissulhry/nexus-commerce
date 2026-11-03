@@ -84,6 +84,8 @@ import { pauseAtClockOutHandler } from './modules/production/terminal/clock-out'
 import { inspectionTriggerHandlers } from './modules/quality/triggers/handler'
 // B-W2b-96: machine requests nobody acknowledged escalate by their routing rule.
 import { escalationCron } from './modules/plant/requests/escalation'
+// B-W2b-124: the reminders of statutory machine checks whose window opened.
+import { checkRemindersCron } from './modules/plant/statutory/reminders'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -238,6 +240,8 @@ if (mode === 'worker') {
   crons.push(stuckBundlesCron({ database, log }), scanFindingsCron({ database, log }))
   // B-W2b-96: every minute, the routed machine requests nobody acknowledged in time escalate (QHS-179).
   crons.push(escalationCron({ database, log }))
+  // B-W2b-124: hourly, the statutory checks whose reminder window opened, once per due date (QHS-205).
+  crons.push(checkRemindersCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
