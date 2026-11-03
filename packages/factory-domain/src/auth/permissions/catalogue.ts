@@ -148,6 +148,8 @@ import { QUALITY_AQL_DEFINITIONS, QUALITY_AQL_PERMISSIONS } from '../../quality/
 import { QUALITY_PLANS_DEFINITIONS, QUALITY_PLANS_PERMISSIONS } from '../../quality/plans/permissions'
 // B-W2b-101: inspection triggers (quality.triggers.view | manage).
 import { QUALITY_TRIGGERS_DEFINITIONS, QUALITY_TRIGGERS_PERMISSIONS } from '../../quality/triggers/permissions'
+// B-W2b-98: the incoming inspection of a lot, hide by hide (quality.incoming.view | record).
+import { QUALITY_INCOMING_DEFINITIONS, QUALITY_INCOMING_FLOOR_PERMISSIONS, QUALITY_INCOMING_PERMISSIONS } from '../../quality/incoming/permissions'
 // B-W2b-99: in-process checks (quality.inprocess.view | record).
 import { QUALITY_INPROCESS_DEFINITIONS, QUALITY_INPROCESS_FLOOR_PERMISSIONS, QUALITY_INPROCESS_PERMISSIONS } from '../../quality/inprocess/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
@@ -575,6 +577,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_PLANS_DEFINITIONS,
   // B-W2b-101: inspection triggers.
   QUALITY_TRIGGERS_DEFINITIONS,
+  // B-W2b-98: the incoming inspection, hide by hide.
+  QUALITY_INCOMING_DEFINITIONS,
   // B-W2b-99: in-process checks.
   QUALITY_INPROCESS_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -611,6 +615,8 @@ export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PR
   // B-W2b-50: the team leader's line view reads its line's hour by hour and board, and gives a short hour's reason.
   ...PRODUCTION_BOARDS_FLOOR_PERMISSIONS,
   ...PRODUCTION_DISPATCH_FLOOR_PERMISSIONS,
+  // B-W2b-98: the inspection tablet at the dock inspects a lot hide by hide and signs the decision with the PIN.
+  ...QUALITY_INCOMING_FLOOR_PERMISSIONS,
   // B-W2b-99: the floor inspector and the team leader record in-process checks at their own site.
   ...QUALITY_INPROCESS_FLOOR_PERMISSIONS])
 
@@ -723,6 +729,8 @@ for (const name of QUALITY_AQL_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(
 for (const name of QUALITY_PLANS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-101: inspection triggers.
 for (const name of QUALITY_TRIGGERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-98: the incoming inspection.
+for (const name of QUALITY_INCOMING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-99: in-process checks.
 for (const name of QUALITY_INPROCESS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

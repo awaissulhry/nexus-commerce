@@ -388,6 +388,22 @@ const QUALITY_TRIGGERS_ADDS: Readonly<Record<string, readonly Permission[]>> = O
   floor_supervisor: ['quality.triggers.view'],
 })
 /**
+ * B-W2b-98 (incoming inspection hide by hide, QHS-025, QHS-028, QHS-034, MES-054; design floor.incoming, quality.inspections
+ * "Incoming"): quality inspects a lot and signs the decision, in the office or on the inspection tablet at the dock (the
+ * floor inspector, with the PIN); the warehouse that received the lot, the buyer who claims its shortfall or returns its
+ * rejected hides and the production manager read it. Releasing the lot stays quality.lots.release (Owner answer W3). Owner
+ * and read-only from every().
+ */
+const INCOMING_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.incoming.view', 'quality.incoming.record'],
+  warehouse: ['quality.incoming.view'],
+  buyer: ['quality.incoming.view'],
+  production_manager: ['quality.incoming.view'],
+})
+const INCOMING_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  floor_inspector: ['quality.incoming.view', 'quality.incoming.record'],
+})
+/**
  * B-W2b-99 (in-process checks, QHS-039 … QHS-042, MES-127; design floor.inline modes inspection and supervisor): the
  * quality inspector, the production manager and the floor supervisor open, record and sign checks in the office; on the
  * floor the floor inspector and the team leader do at their own site. Owner and read-only from every().
@@ -452,6 +468,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (AQL_ADDS[key] ?? []) : []),
   // B-W2b-101
   ...(audience === 'office' ? (QUALITY_TRIGGERS_ADDS[key] ?? []) : []),
+  // B-W2b-98
+  ...((audience === 'office' ? INCOMING_ADDS : INCOMING_FLOOR_ADDS)[key] ?? []),
   // B-W2b-99
   ...((audience === 'office' ? INPROCESS_ADDS : INPROCESS_FLOOR_ADDS)[key] ?? [])]
 /**

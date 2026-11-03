@@ -35,6 +35,8 @@ export function writeProblem(error: unknown): WriteProblem {
   if (error.kind === 'conflict') {
     const moved = error.code === 'version_conflict' || paths.some((path) => path.split(/[./]/).includes('version'))
     if (moved) return { key: 'problem.write.moved', reload: true, paths }
+    // B-W2b-95: a BOM line that pattern pieces are cut from (removed, or turned into a material their grades cannot take).
+    if (paths.some((path) => /^pieces\//.test(path))) return { key: 'problem.write.piecesUse', reload: false, paths }
     // A release refused with its blockers: the check on the page says which.
     if (paths.some((path) => /^(lines|routing|bom|sizes|colourways)\b/.test(path))) return { key: 'problem.write.blocked', reload: true, paths }
     if (/taken/i.test(error.message) || paths.includes('code')) return { key: 'problem.write.codeTaken', reload: false, paths }
