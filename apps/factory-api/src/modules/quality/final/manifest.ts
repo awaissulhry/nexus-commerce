@@ -31,4 +31,13 @@ export const manifest = defineManifest({
   'GET /quality/release-rule': { audiences: ['office'], permission: 'quality.inspections.view', scope: 'record' },
   'PUT /quality/release-rule': { audiences: ['office'], permission: 'quality.settings.manage', scope: 'record' },
   'GET /quality/evidence': { audiences: ['office'], permission: 'quality.inspections.view', scope: 'record' },
+  // B-W2b-97: the final inspection by plan (office and the site's bench; quality.inspections.record over the inspection, by its inspector).
+  'GET /quality/final/work-orders/:workOrderId/plans': { audiences: ['office', 'floor'], permission: 'quality.inspections.view', scope: 'record' },
+  'GET /quality/inspections/:inspectionId/sheet': { audiences: ['office', 'floor'], permission: 'quality.inspections.view', scope: 'record' },
+  'PUT /quality/inspections/:inspectionId/results': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },
+  'PUT /quality/inspections/:inspectionId/measurements': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },
+  'POST /quality/inspections/:inspectionId/count': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },
+  'POST /quality/inspections/:inspectionId/identity': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },
+  'POST /quality/inspections/:inspectionId/results/:resultId/photos': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },
+  'POST /quality/inspections/:inspectionId/results/:resultId/photos/:fileId/complete': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },
 })

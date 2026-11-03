@@ -3,6 +3,12 @@ import { businessDate, defineContract, id, input, instant, output } from '@nexus
 import { money } from '@nexus/factory-domain/money/marked'
 import { CHECKLIST_CODES, DEFECT_CLASSES, INSPECTION_RESULTS, INSPECTION_STATUSES, MAX_DEFECT_LINES, NOTE_MAX, REASON_MAX } from '@nexus/factory-domain/quality/final/rules'
 import { CHECK_STATES, FOUR_EYES_RULES, RELEASE_CHECKS, REVERSAL_REASONS, SECOND_PERSON_REASONS, SERIALS_TO } from '@nexus/factory-domain/quality/release/rules'
+// B-W2b-97: the final inspection by plan.
+import { UOMS } from '@nexus/factory-domain/product/units/units'
+import { IDENTITY_MODES, PLAN_LIMITS, RESULT_OUTCOMES } from '@nexus/factory-domain/quality/final/plan'
+import { CHECK_TYPES } from '@nexus/factory-domain/quality/plans/rules'
+import { fileView, presignedView } from '../../../platform/files/contract'
+import { chainView as chainOut, planView as aqlPlanOut } from '../aql/contract'
 
 /**
  * The final inspection and release (B-W1-45; QHS-013, QHS-050, QHS-051, QHS-058, QHS-073, PLT-097; Owner answers Q1, Q2,
@@ -77,6 +83,11 @@ export const inspectionOut = output({
   note: z.string().nullable(),
   version: z.number().int(),
   createdAt: instant(),
+  /** B-W2b-97: the plan version it runs on (null: W1's fixed checklist), the AQL profile and ISO 2859-1 code letter of its sample, the units inspected (on a plan). */
+  planVersion: output({ id: id(), planId: id(), code: z.string(), name: z.string(), number: z.number().int() }).nullable(),
+  aqlProfileId: id().nullable(),
+  codeLetter: z.string().nullable(),
+  inspected: z.number().int().nullable(),
 })
 
 const makerOut = output({ made: z.boolean(), words: z.string() })
@@ -243,7 +254,28 @@ export const benchWorkOrdersContract = defineContract({
 
 export const openInspectionContract = defineContract({
   /** W2a (B-W2a-67; design qi-new "Inspector (optional)"): the office may assign it at once (never a maker). */
-  body: input({ workOrderId: id(), ...plan, note: note().nullable().optional(), assigneeId: id().nullable().optional(), assigneeWorkerId: id().nullable().optional(), /** B-W2b-17: by when it is due (office only). */ dueAt: instant().nullable().optional() }),
+  body: input({
+    workOrderId: id(),
+    lotSize: plan.lotSize,
+    // W1's typed sampling plan: every field, or none (B-W2b-97: the plan's fixed sample or the AQL profile then gives it).
+    sampleSize: plan.sampleSize.optional(),
+    inspectionLevel: plan.inspectionLevel.optional(),
+    aqlMajor: plan.aqlMajor.optional(),
+    aqlMinor: plan.aqlMinor.optional(),
+    acceptMajor: plan.acceptMajor.optional(),
+    acceptMinor: plan.acceptMinor.optional(),
+    note: note().nullable().optional(),
+    assigneeId: id().nullable().optional(),
+    assigneeWorkerId: id().nullable().optional(),
+    /** B-W2b-17: by when it is due (office only). */
+    dueAt: instant().nullable().optional(),
+    /** B-W2b-97: the FINAL plan it runs on (its approved version is frozen on it), and why when another plan applies. */
+    planId: id().nullable().optional(),
+    planReason: reason().nullable().optional(),
+    /** B-W2b-93's chain: a profile other than the one it gives, and why. */
+    profileId: id().nullable().optional(),
+    profileReason: reason().nullable().optional(),
+  }),
   response: { 200: inspectionAnswer, 201: inspectionAnswer },
 })
 
@@ -298,7 +330,8 @@ export const decideInspectionContract = defineContract({
   body: input({
     version,
     result: z.enum(INSPECTION_RESULTS),
-    checklist: z.array(checklistAnswer).max(CHECKLIST_CODES.length * 2),
+    /** W1's checklist; B-W2b-97: an inspection on a plan sends none (its results are the answers). */
+    checklist: z.array(checklistAnswer).max(CHECKLIST_CODES.length * 2).optional(),
     /** "I did not make these garments" — where the site records the station, not the worker. */
     notMakerStatement: z.boolean().optional(),
     /** QHS-013: the decision against the computed result, and why. */
@@ -547,4 +580,237 @@ export const evidenceContract = defineContract({
 export const dueContract = defineContract({
   body: input({ inspections: z.array(input({ id: id(), version })).min(1).max(50), dueAt: instant().nullable() }),
   response: { 200: output({ inspections: z.array(output({ id: id(), version: z.number().int(), dueAt: instant().nullable(), overdue: z.boolean() })) }) },
+})
+
+// ---- B-W2b-97: the final inspection by plan ------------------------------------------------------------------------------------
+
+const outcome = z.enum(RESULT_OUTCOMES)
+const verdict = z.enum(['open', 'accept', 'reject'])
+const words = z.string()
+const decimalText = z.string().trim().max(14)
+const versionBody = { version }
+
+/** The bench sheet: the checks with their results and photos, the measurement chart, the identity check, the photo set, the counter, the result, what holds the signature. */
+export const sheetOut = output({
+  inspection: output({
+    id: id(),
+    number: z.string().nullable(),
+    workOrderId: id(),
+    status,
+    version: z.number().int(),
+    lotSize: z.number().int(),
+    sampleSize: z.number().int(),
+    inspectionLevel: z.string(),
+    codeLetter: z.string().nullable(),
+    aqlProfileId: id().nullable(),
+    aqlMajor: z.string(),
+    aqlMinor: z.string(),
+    acceptMajor: z.number().int(),
+    acceptMinor: z.number().int(),
+    decidedAt: instant().nullable(),
+  }),
+  plan: output({ planId: id(), code: z.string(), name: z.string(), versionId: id(), number: z.number().int(), samplingMethod: z.enum(['AQL_PROFILE', 'FIXED']) }),
+  language: z.string(),
+  checks: z.array(
+    output({
+      id: id(),
+      code: z.string(),
+      label: z.string(),
+      /** The person's language has no words for it: English stands in. */
+      missingWords: z.boolean(),
+      labelIt: z.string(),
+      labelEn: z.string(),
+      type: z.enum(CHECK_TYPES),
+      typeWords: z.string(),
+      checkClass: z.enum(DEFECT_CLASSES).nullable(),
+      classWords: z.string().nullable(),
+      mandatory: z.boolean(),
+      photoRequired: z.boolean(),
+      takesResult: z.boolean(),
+      /** A measurement: answered on the chart. */
+      onChart: z.boolean(),
+      choices: z.array(z.string()),
+      results: z.array(
+        output({
+          id: id(),
+          sampleIndex: z.number().int(),
+          outcome,
+          value: z.string().nullable(),
+          note: z.string().nullable(),
+          photos: z.array(output({ id: id(), status: z.string() })),
+          recordedBy: z.enum(['FLOOR', 'OFFICE']),
+          recordedAt: instant(),
+        }),
+      ),
+    }),
+  ),
+  /** "11 of 12 checked · 1 failed · critical failed: none". */
+  checksNow: output({ answered: z.number().int(), outOf: z.number().int(), failed: z.array(z.string()), failedCritical: z.array(z.string()), mandatoryMissing: z.array(z.string()), words }),
+  chart: output({
+    points: z.array(
+      output({
+        pointCode: z.string(),
+        checkCode: z.string().nullable(),
+        label: z.string(),
+        size: z.string().nullable(),
+        /** PLAN: the plan's nominal; SIZE_CHART: typed from the size chart; PROFILE: the rider's measurement profile (QHS-053); TYPED: a point measured outside the plan. */
+        source: z.enum(['PLAN', 'SIZE_CHART', 'PROFILE', 'TYPED']),
+        nominal: z.string().nullable(),
+        tolerance: z.string().nullable(),
+        uom: z.string().nullable(),
+        spec: z.string(),
+        values: z.array(output({ id: id(), size: z.string(), sampleIndex: z.number().int(), measured: z.string(), nominal: z.string(), tolerance: z.string(), pass: z.boolean(), words })),
+      }),
+    ),
+    values: z.number().int(),
+    outOfTolerance: z.number().int(),
+    words,
+    madeToMeasure: output({
+      garmentType: z.string(),
+      revision: z.number().int(),
+      size: z.string(),
+      points: z.array(output({ code: z.string(), name: z.string(), nominal: z.string(), uom: z.string() })),
+      pointsWithout: z.array(z.string()),
+    }).nullable(),
+  }),
+  identity: output({
+    mode: z.enum(IDENTITY_MODES),
+    target: z.number().int(),
+    matched: z.number().int(),
+    missing: z.array(z.string()),
+    missingCount: z.number().int(),
+    unknown: z.array(z.string()),
+    noNumber: z.number().int(),
+    done: z.boolean(),
+    ok: z.boolean().nullable(),
+    words,
+    scans: z.number().int(),
+    batchNumber: z.string().nullable(),
+  }),
+  photos: output({
+    slots: z.array(output({ code: z.string(), labelIt: z.string(), labelEn: z.string(), mandatory: z.boolean(), photos: z.number().int(), state: z.enum(['TAKEN', 'MISSING', 'NOT_APPLICABLE', 'OPEN']) })),
+    waiting: z.array(z.string()),
+    mandatoryMissing: z.array(z.string()),
+    words,
+  }),
+  counter: output({
+    sampleSize: z.number().int(),
+    inspected: z.number().int(),
+    remaining: z.number().int(),
+    classes: z.array(output({ defectClass: z.enum(DEFECT_CLASSES), aql: z.string(), accept: z.number().int(), reject: z.number().int(), found: z.number().int(), state: z.enum(['ok', 'limit', 'reject']), spare: z.number().int().nullable(), words })),
+    verdict,
+    stop: output({ stop: z.boolean(), source: z.enum(['PLAN', 'COMPANY', 'TENANT', 'DEFAULT']), words }),
+    words,
+  }),
+  result: output({ resultNow: z.enum(INSPECTION_RESULTS), reasons: z.array(z.string()), byCountsOnly: z.boolean(), overrideWords: words, words }),
+  /** What holds the signature of a PASS and of a FAIL, in words (never silent). */
+  sign: output({ pass: output({ held: z.boolean(), reasons: z.array(z.string()) }), fail: output({ held: z.boolean(), reasons: z.array(z.string()) }) }),
+  may: output({ record: z.boolean() }),
+})
+
+export const sheetContract = defineContract({ params: inspectionParams, querystring: input({ language: z.string().trim().regex(/^[a-z]{2}$/).optional() }), response: { 200: sheetOut } })
+
+export const resultsContract = defineContract({
+  params: inspectionParams,
+  body: input({
+    ...versionBody,
+    results: z
+      .array(
+        input({
+          checkCode: z.string().trim().min(1).max(40),
+          sampleIndex: z.number().int().min(1).max(100_000).optional(),
+          /** null: take the answer back (Not checked). */
+          outcome: outcome.nullable(),
+          value: z.string().trim().max(PLAN_LIMITS.value + 1).nullable().optional(),
+          note: note().nullable().optional(),
+        }),
+      )
+      .min(1)
+      .max(PLAN_LIMITS.rows + 1),
+  }),
+  response: { 200: sheetOut },
+})
+
+export const measurementsContract = defineContract({
+  params: inspectionParams,
+  body: input({
+    ...versionBody,
+    measurements: z
+      .array(
+        input({
+          checkCode: z.string().trim().min(1).max(40).nullable().optional(),
+          pointCode: z.string().trim().min(1).max(PLAN_LIMITS.pointCode + 1).nullable().optional(),
+          size: z.string().trim().min(1).max(PLAN_LIMITS.size).nullable().optional(),
+          sampleIndex: z.number().int().min(1).max(100_000).optional(),
+          /** null: take the value back. */
+          measured: decimalText.nullable(),
+          nominal: decimalText.nullable().optional(),
+          tolerance: decimalText.nullable().optional(),
+          uom: z.enum(UOMS).nullable().optional(),
+        }),
+      )
+      .min(1)
+      .max(PLAN_LIMITS.rows + 1),
+  }),
+  response: { 200: sheetOut },
+})
+
+export const countContract = defineContract({
+  params: inspectionParams,
+  body: input({ ...versionBody, inspected: z.number().int().min(0).max(100_000).optional(), add: z.number().int().min(-100_000).max(100_000).optional() }),
+  response: { 200: sheetOut },
+})
+
+export const identityContract = defineContract({
+  params: inspectionParams,
+  body: input({
+    ...versionBody,
+    /** Numbers read off the garments (serials, or the batch label); null: a garment without a readable number. */
+    add: z.array(z.string().trim().max(61).nullable()).max(PLAN_LIMITS.scans).optional(),
+    /** Numbers to take back; NO_NUMBER takes back one garment ticked without a number. */
+    remove: z.array(z.string().trim().min(1).max(61)).max(PLAN_LIMITS.scans).optional(),
+  }),
+  response: { 200: sheetOut },
+})
+
+const resultParams = input({ inspectionId: id(), resultId: id() })
+export const resultPhotoContract = defineContract({
+  params: resultParams,
+  body: input({ originalName: z.string().min(1).max(500), contentType: z.string().min(1).max(200), sizeBytes: z.number().int().min(1), sha256: z.string() }),
+  response: { 201: output({ file: fileView, upload: presignedView }) },
+})
+export const resultPhotoCompleteContract = defineContract({ params: input({ inspectionId: id(), resultId: id(), fileId: id() }), response: { 200: output({ file: fileView }) } })
+
+const planFit = output({
+  id: id(),
+  code: z.string(),
+  name: z.string(),
+  approved: output({ id: id(), number: z.number().int() }).nullable(),
+  matches: z.boolean(),
+  usable: z.boolean(),
+  suggested: z.boolean(),
+  /** "category Jacket, customer Example Moto"; null when it does not apply. */
+  because: z.string().nullable(),
+})
+export const workOrderPlansContract = defineContract({
+  params: workOrderParams,
+  querystring: input({ lotSize: z.coerce.number().int().min(1).max(100_000).optional(), planId: id().optional(), profileId: id().optional() }),
+  response: {
+    200: output({
+      workOrderId: id(),
+      number: z.string(),
+      plans: z.array(planFit),
+      suggestedId: id().nullable(),
+      words,
+      /** With ?lotSize: the sample of the plan (suggested, or ?planId): its fixed size, or B-W2b-93's AQL plan from the chain (or ?profileId). */
+      sampling: output({
+        method: z.enum(['FIXED', 'AQL_PROFILE']),
+        sampleSize: z.number().int().nullable(),
+        words,
+        chain: chainOut.nullable(),
+        plan: aqlPlanOut.nullable(),
+        named: z.boolean(),
+      }).nullable(),
+    }),
+  },
 })
