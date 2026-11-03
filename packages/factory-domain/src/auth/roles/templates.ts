@@ -468,6 +468,39 @@ const CAPA_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze
   buyer: ['quality.capa.view'],
   sales: ['quality.capa.view'],
 })
+/**
+ * B-W2b-123 (locked results with amendments, QHS-145; the inspection report and the certificate of conformity, QHS-055,
+ * QHS-059; design ins-amend "second signature (another inspector or the quality manager)"): the quality inspector asks for
+ * corrections and countersigns another person's (never their own), keeps the report and the certificate and puts them on a
+ * shipment's documents link; to find the shipment that carries the goods it released and certify it, it reads shipments
+ * (shipping.view; no money: the carrier's cost is the cost grain it does not hold). The warehouse mails that link as before
+ * (shipping.manage). Office only; owner from every().
+ */
+const AMENDMENTS_DOCUMENTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.amendments.request', 'quality.amendments.sign', 'quality.documents.make', 'quality.documents.share', 'shipping.view'],
+})
+/**
+ * B-W2b-120 (the safety organisation and the safety calendar; QHS-224, QHS-226, QHS-227; design plant.calendar): the
+ * production manager, the maintenance lead (statutory machine checks are on the calendar) and the floor supervisor (the
+ * preposti) read the calendar and the organisation; the safety roles keep them in their own templates below (hr,
+ * safety_officer, company_doctor). Office only; owner and read-only from every().
+ */
+const SAFETY_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['safety.view'],
+  maintenance: ['safety.view'],
+  floor_supervisor: ['safety.view'],
+})
+/**
+ * B-W2b-118 (quality rules; QHS-154, QHS-300; design quality.settings SCR-260): quality reads the rules page and keeps the
+ * alert and escalation rules (the quality manager of the design is the quality inspector's role); the production manager
+ * and the floor supervisor read it (the rules quote back where a button waits). Changing who may sign what and the result
+ * rules stays quality.settings.manage (the owner's, B-W1-34). Office only; owner and read-only from every().
+ */
+const QUALITY_RULES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.rules.view', 'quality.alerts.manage'],
+  production_manager: ['quality.rules.view'],
+  floor_supervisor: ['quality.rules.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -530,7 +563,13 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-107
   ...((audience === 'office' ? ROLLS_ADDS : ROLLS_FLOOR_ADDS)[key] ?? []),
   // B-W2b-108
-  ...(audience === 'office' ? (CAPA_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (CAPA_ADDS[key] ?? []) : []),
+  // B-W2b-123
+  ...(audience === 'office' ? (AMENDMENTS_DOCUMENTS_ADDS[key] ?? []) : []),
+  // B-W2b-120
+  ...(audience === 'office' ? (SAFETY_ADDS[key] ?? []) : []),
+  // B-W2b-118
+  ...(audience === 'office' ? (QUALITY_RULES_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -1003,6 +1042,37 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'plant.settings.manage',
       // B-W2b-124: the statutory periodic checks (check types, plans, the check register with its reports).
       'plant.checks.manage'],
+    grains: [],
+  }),
+  // B-W2b-120 (the hr template B-W2b-26 left open; W2b plan B-W2b-120): the HR office, the safety officer (RSPP) and the
+  // occupational doctor. The administrator keeps its People permissions until the Owner moves them (a one-line change).
+  template('hr', {
+    name: 'HR',
+    description: "The HR register and People: employees, teams and loans, leaver steps, shifts, attendance and the month close, skills, piece rates, earnings and the payroll file for the labour consultant; one person's figures where the site's legal basis allows (H3); the safety calendar and organisation (the teams' appointments); sees workers' pay, no prices or costs.",
+    requireMfa: true,
+    permissions: [
+      'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'sites.view', 'workers.view',
+      'people.view', 'people.team.view', 'people.employees.manage', 'people.teams.manage', 'people.loans.manage', 'people.leavers.manage',
+      'people.shifts.view', 'people.shifts.manage', 'people.overtime.manage', 'people.overtime.approve', 'people.overtime.review', 'people.timesheets.hr', 'people.limits.manage',
+      'people.skills.view', 'people.skills.manage', 'people.authorisations.manage',
+      'people.attendance.view', 'people.attendance.manage', 'people.attendance.approve', 'people.attendance.settings', 'people.attendance.rollcall', 'people.attendance.close', 'people.attendance.correct', 'people.attendance.lul',
+      'people.privacy.view', 'people.figures.view', 'people.piecerates.view', 'people.earnings.view', 'people.payroll.view', 'people.payroll.records', 'people.payroll.manage',
+      'safety.view', 'safety.organisation.manage',
+    ],
+    grains: ['pay'],
+  }),
+  template('safety_officer', {
+    name: 'Safety officer',
+    description: "The safety officer (RSPP or ASPP): the safety organisation with its letters and the RLS notice to INAIL, the safety calendar and its deadlines, the machines and their statutory checks (read); sees no money.",
+    requireMfa: false,
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'sites.view', 'plant.view', 'safety.view', 'safety.organisation.manage', 'safety.calendar.manage'],
+    grains: [],
+  }),
+  template('company_doctor', {
+    name: 'Occupational doctor',
+    description: 'The occupational doctor (medico competente): the safety calendar and organisation; fitness judgements come with the health pages, never a diagnosis or a clinical record; sees no money.',
+    requireMfa: true,
+    permissions: ['files.read', 'home.view', 'calendars.view', 'safety.view'],
     grains: [],
   }),
   template('read_only', {

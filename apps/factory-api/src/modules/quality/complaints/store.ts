@@ -3,7 +3,11 @@ import { InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/err
 import { can, holds } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { REGISTER_MANAGE, REGISTER_VIEW } from '@nexus/factory-domain/compliance/register/permissions'
+import { isDocumentLanguage, type DocumentLanguage } from '@nexus/factory-domain/documents/model'
 import { asMoney } from '@nexus/factory-domain/money/marked'
+import { QUALITY_CAPA_VIEW } from '@nexus/factory-domain/quality/capa/permissions'
+import type { CapaStatus, CapaType } from '@nexus/factory-domain/quality/capa/rules'
+import { isAnswerTemplate, type AnswerVia } from '@nexus/factory-domain/quality/complaints/answer'
 import { QUALITY_NCR_RAISE, QUALITY_NCR_VIEW } from '@nexus/factory-domain/quality/ncr/permissions'
 import {
   ANSWER_WORKING_DAYS,
@@ -22,11 +26,14 @@ import { StaleVersionError, type CommandTools, type CommandTx } from '../../../c
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { addWorkingDaysFor } from '../../../platform/calendars/service'
 import { readEntryBySource } from '../../compliance/register/store'
+import { CAPA_COLUMNS } from '../capa/store'
 
 /**
  * The reads and the one row write of a complaint (B-W2a-65): its row, the rows the list and the record show (the
  * customer, the order with its value by the price grain, the shipment, the return, the style, our garment the serial
- * names, the PPE register entry whose source it is, its NCRs and repairs), and the version bump every change takes.
+ * names, the PPE register entry whose source it is, its NCRs and repairs; B-W2b-113: the CAPA it is escalated to — read with
+ * the CAPA module's columns, shown to a reader of that CAPA — its investigation and its answer letter), and the version
+ * bump every change takes.
  * Every read names its columns and runs one after another on the client it is given (a command's transaction or a
  * scoped client: row-level security decides what it finds). No worker's name: office people by id, names in `people`.
  */
@@ -67,6 +74,16 @@ export const COMPLAINT_COLUMNS = {
   version: true,
   createdAt: true,
   createdById: true,
+  // B-W2b-113 (QHS-116): the investigation and the answer letter.
+  findings: true,
+  rootCause: true,
+  answerTemplate: true,
+  answerLanguage: true,
+  answerText: true,
+  answerFileIds: true,
+  answerDocumentId: true,
+  answeredById: true,
+  answeredVia: true,
 } as const satisfies Prisma.ComplaintSelect
 
 export type ComplaintRow = Prisma.ComplaintGetPayload<{ select: typeof COMPLAINT_COLUMNS }>
@@ -187,7 +204,18 @@ export async function rowFacts(db: Reader, rows: readonly ComplaintRow[], contex
   }
   const [partyOf, orderOf, shipmentOf, returnOf, styleOf] = [byId(parties), byId(orders), byId(shipments), byId(returns), byId(styles)]
   const entryOf = new Map(entries.filter((entry) => can(actor, REGISTER_VIEW, { companyId: entry.companyId })).map((entry) => [entry.sourceId!, entry]))
-  return { partyOf, orderOf, shipmentOf, returnOf, styleOf, entryOf, ncrsOf }
+  // B-W2b-113: the CAPA each one is escalated to (one CAPA not cancelled per record: B-W2b-108's rule), with the CAPA module's
+  // columns; `capaSeen` keeps those the reader may see, `capaOf` every one (the record says "escalated elsewhere").
+  const sources = ids.length ? await db.capaSource.findMany({ where: { recordType: COMPLAINT_RECORD, recordId: { in: ids } }, select: { capaId: true, recordId: true } }) : []
+  const capas = sources.length ? await db.capa.findMany({ where: { id: { in: unique(sources.map((source) => source.capaId)) }, status: { not: 'CANCELLED' } }, select: CAPA_COLUMNS }) : []
+  const capaById = byId(capas)
+  const capaOf = new Map<string, (typeof capas)[number]>()
+  for (const source of sources) {
+    const capa = capaById.get(source.capaId)
+    if (capa && !capaOf.has(source.recordId)) capaOf.set(source.recordId, capa)
+  }
+  const capaSeen = new Set([...capaOf.values()].filter((capa) => can(actor, QUALITY_CAPA_VIEW, { companyId: capa.companyId, ...(capa.customerId ? { partyId: capa.customerId } : {}) })).map((capa) => capa.id))
+  return { partyOf, orderOf, shipmentOf, returnOf, styleOf, entryOf, ncrsOf, capaOf, capaSeen }
 }
 
 export type RowFacts = Awaited<ReturnType<typeof rowFacts>>
@@ -199,6 +227,7 @@ export function rowView(row: ComplaintRow, facts: RowFacts) {
   const rma = row.returnId ? facts.returnOf.get(row.returnId) : undefined
   const style = row.styleId ? facts.styleOf.get(row.styleId) : undefined
   const entry = facts.entryOf.get(row.id)
+  const capa = facts.capaOf.get(row.id)
   return {
     id: row.id,
     number: row.number,
@@ -223,6 +252,7 @@ export function rowView(row: ComplaintRow, facts: RowFacts) {
     safety: { state: safetyStateOf(row), raisedAt: iso(row.safetyRaisedAt), acknowledgedAt: iso(row.safetyAcknowledgedAt), acknowledgedById: row.safetyAcknowledgedById },
     register: entry ? { id: entry.id, reference: entry.reference, status: entry.status, risk: entry.risk } : null,
     ncrs: facts.ncrsOf.get(row.id) ?? [],
+    capa: capa && facts.capaSeen.has(capa.id) ? { id: capa.id, number: capa.number, status: capa.status as CapaStatus } : null,
     summary: summaryOf(row.description),
   }
 }
@@ -267,7 +297,12 @@ export async function complaintView(db: Reader, row: ComplaintRow, context: Offi
     register: can(actor, QUALITY_COMPLAINTS_MANAGE, scope) && can(actor, REGISTER_MANAGE, { companyId: row.companyId }),
     createNcr: holds(actor, QUALITY_NCR_RAISE),
     makeRepair: can(actor, SALES_REPAIRS_MANAGE, scope),
+    investigate: can(actor, QUALITY_COMPLAINTS_MANAGE, scope),
+    writeAnswer: can(actor, QUALITY_COMPLAINTS_MANAGE, scope),
+    sendAnswer: can(actor, QUALITY_COMPLAINTS_MANAGE, scope),
   }
+  const capa = facts.capaOf.get(row.id)
+  const capaVisible = capa !== undefined && facts.capaSeen.has(capa.id)
   return {
     ...base,
     description: row.description,
@@ -287,8 +322,39 @@ export async function complaintView(db: Reader, row: ComplaintRow, context: Offi
     repairs,
     evidence: evidenceOf(row),
     suggestedAnswerDueOn: status === 'NEW' || row.answerDueOn === null ? await suggestedAnswerDue(db, row) : null,
-    actions: complaintActions({ status, styleId: row.styleId, inRegister, safetyRaisedAt: row.safetyRaisedAt, safetyAcknowledgedAt: row.safetyAcknowledgedAt, may }),
-    people: await peopleOf(db, [row.ownerId, row.triagedById, row.safetyAcknowledgedById, row.createdById]),
+    actions: complaintActions({ status, styleId: row.styleId, inRegister, safetyRaisedAt: row.safetyRaisedAt, safetyAcknowledgedAt: row.safetyAcknowledgedAt, may, answerText: row.answerText, answerLanguage: row.answerLanguage }),
+    people: await peopleOf(db, [row.ownerId, row.triagedById, row.safetyAcknowledgedById, row.createdById, row.answeredById]),
+    findings: row.findings,
+    rootCause: row.rootCause,
+    capaRecord: capa && capaVisible ? { id: capa.id, number: capa.number, title: capa.title, type: capa.type as CapaType, status: capa.status as CapaStatus } : null,
+    capaElsewhere: capa !== undefined && !capaVisible,
+    answer: await answerViewOf(db, row),
+  }
+}
+
+/** B-W2b-113: the customer's language for the letter (theirs when Italian or English, else Italian). */
+export async function customerLanguage(db: Reader, partyId: string): Promise<DocumentLanguage> {
+  const party = await db.party.findUnique({ where: { id: partyId }, select: { language: true } })
+  return party && isDocumentLanguage(party.language) ? party.language : 'it'
+}
+
+/** B-W2b-113 (contract answerView): the letter as written, its files (shared with the customer or not), the version sent. */
+export async function answerViewOf(db: Reader, row: ComplaintRow) {
+  const files = row.answerFileIds.length === 0 ? [] : await db.storedFile.findMany({ where: { id: { in: row.answerFileIds } }, select: { id: true, originalName: true, kind: true, status: true, visibility: true, partyId: true } })
+  const fileOf = new Map(files.map((file) => [file.id, file]))
+  const versions = await db.generatedDocument.findMany({ where: { recordType: COMPLAINT_RECORD, recordId: row.id, kind: 'COMPLAINT_ANSWER' }, select: { id: true, version: true, language: true, fileId: true, createdAt: true, createdById: true }, orderBy: { version: 'desc' } })
+  const sent = row.answerDocumentId ? versions.find((version) => version.id === row.answerDocumentId) : undefined
+  return {
+    template: isAnswerTemplate(row.answerTemplate) ? row.answerTemplate : null,
+    language: isDocumentLanguage(row.answerLanguage) ? row.answerLanguage : null,
+    text: row.answerText,
+    files: row.answerFileIds.map((id) => {
+      const file = fileOf.get(id)
+      return { id, originalName: file?.originalName ?? '', kind: file?.kind ?? 'DOCUMENT', status: file?.status ?? 'DELETED', shared: file !== undefined && file.visibility.includes('PARTNER') && file.partyId === row.partyId }
+    }),
+    sent: sent && row.answeredAt && row.answeredVia ? { documentId: sent.id, version: sent.version, language: sent.language, fileId: sent.fileId, at: toUtcIso(row.answeredAt), byId: row.answeredById, via: row.answeredVia as AnswerVia } : null,
+    versions: versions.map((version) => ({ id: version.id, version: version.version, language: version.language, fileId: version.fileId, createdAt: toUtcIso(version.createdAt), createdById: version.createdById })),
+    suggestedLanguage: await customerLanguage(db, row.partyId),
   }
 }
 

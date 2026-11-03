@@ -67,3 +67,58 @@
   font-weight: var(--nds-font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── B-W2b-110: the card's tools (photo of the hide, measure the thickness) ───────────────────────────────────────── */
+.fw-cut-card-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+}
+
+/* ── B-W2b-110: the card stops on its warnings; the first set is picked beside it ─────────────────────────────────── */
+.fw-cut-stop {
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-inline-start: 6px solid var(--nds-warning);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+
+/* ── B-W2b-110: the "Cut anyway?" pop-up: one job, top to bottom; the PIN beside what it signs on a tablet ───────────── */
+.fw-cut-anyway {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+}
+.fw-cut-anyway-what {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.fw-cut-anyway-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding-inline-start: 1.25em;
+  overflow-wrap: anywhere;
+}
+.fw-cut-anyway-why {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-density-gap);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-cut-anyway-sign {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-density-gap);
+  align-items: start;
+}
+@media (max-width: 640px) {
+  .fw-cut-anyway-sign {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

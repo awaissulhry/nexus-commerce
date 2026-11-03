@@ -146,7 +146,7 @@
     "due": "Risposta entro",
     "ncr": "NC",
     "capa": "CAPA",
-    "capaHint": "Le azioni correttive arrivano con un passo successivo (W2b).",
+    "capaHint": "L'azione correttiva (CAPA) in cui è portato.",
     "register": "Nel registro DPI",
     "value": "Valore ordine",
     "valueHint": "Il valore netto dell’ordine, IVA esclusa.",
@@ -365,6 +365,8 @@
   },
   "tab": {
     "complaint": "Reclamo",
+    "investigation": "Indagine",
+    "answer": "Risposta",
     "linked": "Collegamenti",
     "activity": "Attività"
   },
@@ -377,14 +379,16 @@
     "close": "Chiudi",
     "register": "Aggiungi al registro DPI",
     "createNcr": "Crea NC",
-    "makeRepair": "Crea riparazione"
+    "makeRepair": "Crea riparazione",
+    "investigate": "Scrivi l'indagine",
+    "writeAnswer": "Scrivi la risposta",
+    "sendAnswer": "Invia la risposta…"
   },
   "linked": {
     "ncr": "Non conformità",
     "ncrNone": "Nessuna NC aperta da questo reclamo.",
     "ncrNoRight": "Il tuo ruolo non vede le NC.",
     "capa": "Azioni correttive",
-    "capaLater": "Le azioni correttive arrivano con un passo successivo (W2b).",
     "register": "Voce del registro DPI",
     "return": "Reso",
     "shipment": "Spedizione",
@@ -417,10 +421,12 @@
     "reopenTitle": "Riporta {number} in analisi",
     "answeredTitle": "Segna {number} come risposto",
     "investigateBody": "La qualità lo analizza (il capo reso, il lotto, il tracciato delle prove).",
-    "answeredBody": "Il cliente ha avuto risposta (per telefono, e-mail o lettera: la lettera di risposta arriva con un passo successivo).",
+    "answeredBody": "Al cliente è stato risposto in un altro modo (per telefono o di persona).",
     "note": "Nota (facoltativa)",
     "noteHint": "Resta nella storia della scheda.",
-    "answeredNoteHint": "Come e cosa si è risposto, resta nella storia della scheda."
+    "answeredNoteHint": "Come e cosa si è risposto, resta nella storia della scheda.",
+    "reopenLetter": "La lettera inviata (versione {version}) resta conservata; la lettera si può cambiare e inviare di nuovo.",
+    "answeredLetter": "Per rispondere con una lettera, scrivila nella scheda Risposta e inviala da lì: il reclamo passa a risposto."
   },
   "closeDialog": {
     "title": "Chiudi {number}",
@@ -479,8 +485,13 @@
       "register": "Per aggiungere al registro DPI servono quality.complaints.manage e compliance.register.manage",
       "createNcr": "Per aprire una NC serve quality.ncr.raise",
       "makeRepair": "Per creare una riparazione serve sales.repairs.manage",
-      "log": "Il tuo ruolo non può registrare reclami (quality.complaints.log)"
-    }
+      "log": "Il tuo ruolo non può registrare reclami (quality.complaints.log)",
+      "investigate": "La qualità scrive l'indagine (quality.complaints.manage)",
+      "writeAnswer": "La qualità scrive la lettera di risposta (quality.complaints.manage)",
+      "sendAnswer": "La qualità invia la lettera di risposta (quality.complaints.manage)"
+    },
+    "ANSWER_SENT": "La lettera è partita e il reclamo ha risposta: torna in indagine per cambiarla",
+    "NO_ANSWER": "Scrivi prima la lettera (il testo, in italiano o in inglese)"
   },
   "refusal": {
     "conflict": "Qualcuno ha cambiato questo reclamo nel frattempo. È stato riletto: controlla e riprova.",
@@ -497,7 +508,17 @@
       "returnId": "Questo reso non è di questo cliente e di questa società.",
       "reason": "Indica perché si chiude.",
       "siteId": "Scegli un sito attivo della società.",
-      "serial": "Il seriale è stato rifiutato: controllalo."
+      "serial": "Il seriale è stato rifiutato: controllalo.",
+      "findings": "I risultati sono stati rifiutati: al massimo 4000 caratteri, dopo lo smistamento.",
+      "rootCause": "La causa radice è stata rifiutata: al massimo 2000 caratteri, dopo lo smistamento.",
+      "template": "Il modello è stato rifiutato: scegline uno dell'elenco.",
+      "language": "La lingua è stata rifiutata: italiano o inglese.",
+      "text": "Il testo della lettera è stato rifiutato: al massimo 8000 caratteri.",
+      "fileIds": "Un file è stato rifiutato: con la lettera vanno solo file disponibili di questo reclamo.",
+      "contactIds": "Un destinatario è stato rifiutato: scegli contatti attivi del cliente con un indirizzo e-mail.",
+      "cc": "Un indirizzo in copia è stato rifiutato: controlla gli indirizzi.",
+      "subject": "L'oggetto è stato rifiutato: al massimo 200 caratteri.",
+      "attachments": "Un file è stato rifiutato: condividilo prima con il cliente."
     }
   },
   "notice": {
@@ -522,7 +543,11 @@
     "savedWarnings_other": "Controlla {count} note sui dati.",
     "exported_one": "{count} reclamo esportato.",
     "exported_other": "{count} reclami esportati.",
-    "copied": "Copiato: {text}"
+    "copied": "Copiato: {text}",
+    "answerSaved": "La lettera di {number} è salvata.",
+    "answerSent": "{number} ha risposta: versione {version} della lettera inviata al cliente.",
+    "investigationSaved": "L'indagine di {number} è salvata.",
+    "fileShared": "{name} è condiviso con il cliente."
   },
   "csv": {
     "file": "reclami-{day}.csv",
@@ -545,7 +570,8 @@
     "ncr": "NC",
     "register": "Registro DPI",
     "orderValue": "Valore ordine",
-    "currency": "Valuta"
+    "currency": "Valuta",
+    "capa": "CAPA"
   },
   "links": {
     "intro": "Collega l'ordine, la spedizione, il reso o il capo del reclamo, oppure una NC; scollega ciò che non c'entra.",
@@ -638,5 +664,139 @@
   },
   "mail": {
     "intoThread": "Le e-mail dei contatti del cliente con {number} nell'oggetto arrivano da sole su questa conversazione."
+  },
+  "capa": {
+    "named": "{number} · {title}",
+    "elsewhere": "Portato in un'azione correttiva che il tuo ruolo non vede.",
+    "none": "Non portato in un'azione correttiva: una NC aperta dal reclamo si porta in CAPA dalla NC.",
+    "noRight": "Il tuo ruolo non vede le azioni correttive.",
+    "status": {
+      "PLAN": "Pianificazione",
+      "ACT": "Attuazione",
+      "CHECK": "Verifica",
+      "D1": "D1 team",
+      "D2": "D2 problema",
+      "D3": "D3 contenimento",
+      "D4": "D4 causa radice",
+      "D5": "D5 azioni correttive",
+      "D6": "D6 azioni attuate",
+      "D7": "D7 prevenzione",
+      "D8": "D8 chiusura",
+      "CLOSED": "Chiuso",
+      "CANCELLED": "Annullato"
+    }
+  },
+  "investigation": {
+    "title": "Indagine",
+    "sub": "Cosa ha trovato l'indagine e perché è successo.",
+    "findings": "Risultati",
+    "findingsHint": "Cosa è emerso sul capo, sul lotto, sulla tracciabilità.",
+    "rootCause": "Causa radice",
+    "rootCauseHint": "Perché è successo, in poche parole.",
+    "save": "Salva l'indagine",
+    "noFindings": "Nessun risultato scritto.",
+    "noRootCause": "Nessuna causa radice scritta.",
+    "officeOnly": "Solo per l'ufficio: mai stampata né inviata al cliente (quello che il cliente legge è la lettera di risposta).",
+    "linksTitle": "A cosa è collegata",
+    "linksSub": "Il capo reso, le non conformità e l'azione correttiva.",
+    "return": "Reso del capo",
+    "returnHint": "Il capo reso si controlla sul reso.",
+    "noReturn": "Nessun reso indicato.",
+    "held": {
+      "findingsLong": "I risultati sono troppo lunghi (al massimo 4000 caratteri)",
+      "rootCauseLong": "La causa radice è troppo lunga (al massimo 2000 caratteri)"
+    }
+  },
+  "answer": {
+    "sent": "Risposta inviata per lettera il {time} da {who} ({via}, versione {version}).",
+    "sentBody": "La lettera resta ferma finché il reclamo ha risposta: torna in indagine per cambiarla. Ogni versione resta conservata.",
+    "openSent": "Lettera di risposta (PDF)",
+    "answeredOtherWay": "Risposta data senza lettera (per telefono o di persona): la lettera si cambia quando il reclamo torna in indagine.",
+    "title": "Risposta al cliente",
+    "sub": "Una lettera da un modello, nella lingua del cliente. Non parte nulla finché non la controlli e premi Invia.",
+    "template": "Modello",
+    "templateHint": "Il testo del modello riempie la lettera; lo cambi prima di inviarla.",
+    "noTemplate": "Nessun modello",
+    "languageLabel": "Lingua",
+    "languageCustomer": "La lingua del cliente.",
+    "languageOther": "Non è la lingua del cliente.",
+    "language": {
+      "it": "Italiano",
+      "en": "Inglese"
+    },
+    "keptWords": "Il tuo testo resta nella lettera.",
+    "useTemplate": "Usa il testo del modello",
+    "text": "La lettera",
+    "textHint": "Quello che il cliente legge, così come sarà stampato.",
+    "files": "Allegati alla lettera ({count})",
+    "filesHint": "File di questo reclamo (aggiungili nella scheda Attività). Va con la mail solo un file condiviso con il cliente.",
+    "filesNoRight": "Il tuo ruolo non vede i file (files.read).",
+    "filesReading": "Lettura dei file del reclamo…",
+    "filesNone": "Questo reclamo non ha ancora file: aggiungine uno nella scheda Attività.",
+    "shared": "Condiviso con il cliente",
+    "notShared": "Solo ufficio",
+    "share": "Condividi con il cliente",
+    "shareOf": "Condividi {name} con il cliente",
+    "shareNoRight": "Per condividere un file serve files.manage",
+    "savedHint": "La lettera come salvata.",
+    "discard": "Annulla le modifiche",
+    "save": "Salva la lettera",
+    "held": {
+      "textLong": "La lettera è troppo lunga (al massimo 8000 caratteri)",
+      "files": "Con una lettera vanno al massimo 10 file",
+      "saveFirst": "Salva prima la lettera: Invia manda la lettera come salvata"
+    },
+    "via": {
+      "EMAIL": "per e-mail",
+      "PORTAL": "sul portale"
+    },
+    "preview": {
+      "title": "Come la riceve il cliente",
+      "sub": "La lettera come salvata, con la scritta di anteprima: non si conserva né si invia nulla.",
+      "again": "Mostra di nuovo",
+      "newTab": "Apri in una nuova scheda",
+      "none": "Scrivi e salva la lettera per vederla qui.",
+      "pdfTitle": "Lettera di risposta di {number}",
+      "loading": "Preparazione dell'anteprima…",
+      "idle": "L'anteprima compare quando la lettera è letta.",
+      "letterhead": "La lettera non si può fare: l'intestazione dell'azienda è incompleta (ragione sociale, sede, partita IVA, codice fiscale, REA). Completala in Sistema › Società e stabilimenti."
+    },
+    "versions": {
+      "title": "Versioni conservate ({count})",
+      "sub": "Ogni lettera inviata resta come versione.",
+      "none": "Nessuna lettera inviata.",
+      "version": "Versione {version}",
+      "open": "Apri ({language})",
+      "sentOne": "quella inviata"
+    },
+    "send": {
+      "open": "Invia…",
+      "title": "Invia la risposta di {number}",
+      "confirm": "Invia al cliente",
+      "reading": "Lettura dei contatti del cliente…",
+      "body": "La lettera di {number} parte come PDF in {language}, con i file condivisi con il cliente. Controlla chi la riceve.",
+      "heldProblems": "Non può ancora partire:",
+      "heldNoRecipient": "Scegli chi riceve la lettera",
+      "heldTooMany": "Una lettera va al massimo a 10 persone",
+      "heldCc": "Un indirizzo in copia non è un indirizzo e-mail",
+      "heldSubject": "L'oggetto è troppo lungo (al massimo 200 caratteri)",
+      "to": "A",
+      "toHint": "I contatti del cliente con un indirizzo e-mail.",
+      "suggested": "suggerito",
+      "cc": "In copia",
+      "ccHint": "Indirizzi e-mail separati da virgole (facoltativo).",
+      "subject": "Oggetto",
+      "message": "Messaggio",
+      "messageHint": "Il testo della mail; la lettera va come PDF.",
+      "attached": "File allegati: {count}.",
+      "never": "Non parte nulla finché non premi Invia al cliente. Esce dalla posta dell'azienda.",
+      "problem": {
+        "contactIds": "Il cliente non ha un contatto attivo con un indirizzo e-mail: aggiungine uno al cliente.",
+        "letterhead": "L'intestazione dell'azienda è incompleta (ragione sociale, sede, partita IVA, codice fiscale, REA): completala in Sistema › Società e stabilimenti.",
+        "notShared": "Un file della lettera non è condiviso con il cliente: condividilo o toglilo.",
+        "filesRead": "Una lettera va con dei file solo per chi può leggere i file (files.read).",
+        "other": "La lettera non può partire così: controlla la lettera e il cliente."
+      }
+    }
   }
 }

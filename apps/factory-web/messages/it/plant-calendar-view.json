@@ -1,0 +1,38 @@
+{
+  "kind": {
+    "overdue": "Scaduto",
+    "dueSoon": "In scadenza entro 30 giorni",
+    "planned": "Pianificato o giorno da confermare",
+    "done": "Fatto",
+    "cancelled": "Annullato",
+    "none": "Nessuna scadenza"
+  },
+  "day": {
+    "count_one": "1 scadenza",
+    "count_other": "{count} scadenze",
+    "andMore_one": "e un'altra",
+    "andMore_other": "e altre {count}"
+  },
+  "grid": {
+    "list": "Giorni con scadenze",
+    "listEmpty": "Nessuna scadenza in {period}."
+  },
+  "month": {
+    "summary": "Questo mese: {overdue} scadute · {dueSoon} entro 30 giorni · {planned} pianificate o da confermare · {done} fatte"
+  },
+  "agenda": {
+    "label": "Scadenze del giorno scelto",
+    "title": "In scadenza il {day}",
+    "empty": "Nessuna scadenza il {day}.",
+    "pick": "Scegli un giorno per vedere cosa scade.",
+    "loading": "Lettura delle scadenze…",
+    "reading": "Nuova lettura in corso…",
+    "openItem": "Apri: {title}"
+  },
+  "state": {
+    "TO_CONFIRM": "Giorno da confermare",
+    "CANCELLED": "Annullata",
+    "firstDay": "primo giorno {date}",
+    "dueOn": "Scade il {date}"
+  }
+}

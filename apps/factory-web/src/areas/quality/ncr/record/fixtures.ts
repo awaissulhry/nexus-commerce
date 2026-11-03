@@ -5,11 +5,12 @@ import { designScreen as panelsScreen } from '../../../../record-panels/fixtures
 import type { RecordPanelsViewModel } from '../../../../record-panels/view/RecordPanelsView'
 import { STEP_UP_CLOSED, type StepUpState } from '../../_shared/hooks'
 import { at, inShell, ME, NOW, PREFIX, ROLE_PERMISSIONS, uid, type RoleCase } from '../../_shared/fixtures'
-import type { Decision, NcrRecord } from '../api'
+import type { Concession, CostSheet, Decision, EscalatePreview, NcrRecord } from '../api'
 import { CANCELLED_ACTIONS, DEFECTS, DISPOSITIONS, HOLD_REASONS, OPERATIONS, PEOPLE, RECORD, RECORD_CLOSED, RECORD_OPEN, RECORD_READY, ROWS, SITES, STOCK } from '../demo/fixtures'
 import { checksSay, factsOfRecord, ncrCan, type RecordTab } from '../model'
 import type { CloseDialogModel } from '../view/CloseNcrDialog'
-import { choicesOf, draftOf, EMPTY_CARRY, EMPTY_HOLD, NEW_ACTION, NO_CHOICES, stockLinesOf, TIME_ZONE, type Loaded, type NcrRecordModel, type ProblemDraft, type RecordChoices, type RecordDialog } from './view-model'
+import type { EscalateModel } from '../view/EscalateDialog'
+import { choicesOf, draftOf, EMPTY_CARRY, EMPTY_HOLD, NEW_ACTION, NEW_CONCESSION, NO_CHOICES, NO_COST, stockLinesOf, TIME_ZONE, type CostModel, type Loaded, type NcrRecordModel, type ProblemDraft, type RecordChoices, type RecordDialog } from './view-model'
 import { NcrRecordView } from './view/NcrRecordView'
 
 /**
@@ -30,7 +31,8 @@ interface RecordCase {
 
 const templatePermissions = (key: string): string[] => [...(templateOf(key)?.permissions ?? []), 'home.view']
 const PERMISSIONS: Readonly<Record<RoleKey, readonly string[]>> = {
-  owner: ROLE_PERMISSIONS.owner,
+  // B-W2b-113: the owner sees costs (the cost grain) and CAPAs; the inspector's template has CAPA, not the cost grain.
+  owner: [...ROLE_PERMISSIONS.owner, 'money.cost', 'quality.capa.view', 'quality.capa.manage'],
   inspector: templatePermissions('quality_inspector'),
   production: templatePermissions('production_manager'),
   sales: templatePermissions('sales'),
@@ -59,6 +61,16 @@ const CHOICES: RecordChoices = {
     { id: uid('5390', 2), number: 'REP-DEMO-0005', stage: 'AWAITING_GOODS', serial: null, problem: 'Pocket seam reported open by the customer.' },
   ]),
   claims: choicesOf([{ id: uid('5391', 1), number: 'CLM-DEMO-0003', status: 'DRAFT', kind: 'RETURN' }]),
+  // B-W2b-113: the cause list, the customers and the contacts of the one picked (made up).
+  causes: choicesOf([
+    { id: uid('5395', 1), code: 'SEW-ERROR', labelIt: 'Errore di cucitura', labelEn: 'Sewing error' },
+    { id: uid('5395', 2), code: 'MAT-FAULT', labelIt: 'Difetto del materiale', labelEn: 'Material fault' },
+  ]),
+  customers: choicesOf([
+    { id: uid('5396', 1), code: 'C-DEMO-01', name: 'Demo Moto Srl' },
+    { id: uid('5396', 2), code: 'C-DEMO-02', name: 'Demo Racing Team' },
+  ]),
+  contacts: choicesOf([{ id: uid('5397', 1), name: 'Demo Buyer', email: 'buyer@example.com' }]),
 }
 
 const code = (index: number): NonNullable<Decision['disposition']> => {
@@ -108,6 +120,72 @@ const LOT_RECORD: NcrRecord = allDecided({ ...LOT_NCR, ncr: { ...LOT_NCR.ncr, so
 /** The garment NCR with its scrap approved: still the work in progress's, so its scrap cannot be posted here. */
 const GARMENT_SCRAP: NcrRecord = allDecided({ ...RECORD, decisions: [RECORD.decisions[0]!, { ...RECORD.decisions[1]!, approvedAt: at(28, 15, 0), approvedById: uid('5201', 2), state: 'TO_CARRY_OUT', mayApprove: false, version: 2 }, open(3, 0, '12')], ncr: { ...RECORD.ncr, decided: { decided: '40', left: '0', words: 'x' } } })
 const REPAIR_RECORD: NcrRecord = allDecided({ ...RECORD, decisions: [RECORD.decisions[0]!, open(4, 4, '3')], ncr: { ...RECORD.ncr, quantityAffected: '23', decided: { decided: '23', left: '0', words: 'x' } } })
+// ---- B-W2b-113: cost, concessions, CAPA, reports --------------------------------------------------------------------------
+
+const COST_SHEET: CostSheet = {
+  ncrId: RECORD.ncr.id,
+  number: RECORD.ncr.number,
+  currency: 'EUR',
+  lines: [
+    { id: uid('5398', 1), seq: 1, kind: 'SCRAP_VALUE', source: 'COMPUTED', description: null, amount: 42_000, record: { type: 'NcrDispositionLine', id: RECORD.decisions[1]!.id, label: '2 · SCRAP' }, version: 1, createdAt: at(28, 16, 5), createdById: ME, updatedAt: at(28, 16, 5) },
+    { id: uid('5398', 2), seq: 2, kind: 'REWORK_TIME', source: 'TYPED', description: 'Re-sewing at the line, two operators', amount: 9_600, record: null, version: 2, createdAt: at(28, 17, 0), createdById: ME, updatedAt: at(29, 8, 0) },
+    { id: uid('5398', 3), seq: 3, kind: 'FREIGHT', source: 'TYPED', description: 'Courier of the samples to the customer', amount: 2_450, record: null, version: 1, createdAt: at(29, 8, 10), createdById: ME, updatedAt: at(29, 8, 10) },
+  ],
+  total: 54_050,
+  computed: { upToDate: true, add: 0, change: 0, remove: 0, waiting: [] },
+  held: null,
+  version: RECORD.ncr.version,
+}
+const cost = (over: Partial<CostSheet> = {}, model: Partial<CostModel> = {}): CostModel => ({ ...NO_COST, loaded: { status: 'ready', sheet: { ...COST_SHEET, ...over } }, ...model })
+
+const concession = (seq: number, over: Partial<Concession>): Concession => ({
+  id: uid('5399', seq),
+  seq,
+  party: { id: uid('5396', 1), code: 'C-DEMO-01', name: 'Demo Moto Srl' },
+  contact: { id: uid('5397', 1), name: 'Demo Buyer', email: 'buyer@example.com' },
+  ask: 'Accept twelve jackets whose pocket seam was re-sewn with a slightly darker thread',
+  proposal: 'Delivered as they are, 5 % off those jackets',
+  status: 'ASKED',
+  askedAt: at(28, 11, 0),
+  askedById: ME,
+  answer: null,
+  answeredAt: null,
+  answeredBy: null,
+  answerFile: null,
+  recordedById: null,
+  version: 1,
+  ...over,
+})
+const WITH_CONCESSIONS: NcrRecord = {
+  ...RECORD,
+  concessions: [
+    concession(1, { status: 'ACCEPTED', answer: 'Fine for this order only.', answeredAt: at(29, 9, 30), answeredBy: 'Demo Buyer', answerFile: { id: uid('5400', 1), originalName: 'demo-answer.pdf', status: 'AVAILABLE' }, recordedById: ME, version: 2 }),
+    concession(2, { ask: 'Accept two jackets with a sleeve 5 mm shorter', proposal: 'A free spare sleeve protector', contact: null }),
+  ],
+}
+const CRITICAL_RECORD: NcrRecord = { ...RECORD_OPEN, ncr: { ...RECORD_OPEN.ncr, severity: 'CRITICAL' } }
+const ESCALATED: NcrRecord = {
+  ...RECORD,
+  ncr: { ...RECORD.ncr, capa: { id: uid('5401', 1), number: 'CAPA-DEMO-0004', status: 'ACT' }, cause: { id: uid('5395', 1), code: 'SEW-ERROR', labelIt: 'Errore di cucitura', labelEn: 'Sewing error' } },
+  capaRecord: { id: uid('5401', 1), number: 'CAPA-DEMO-0004', title: 'Pocket seams opening on the rider jackets', type: 'CAPA', status: 'ACT' },
+  reports: [
+    { id: uid('5402', 2), version: 2, language: 'en', fileId: uid('5403', 2), createdAt: at(29, 10, 0), createdById: ME },
+    { id: uid('5402', 1), version: 1, language: 'it', fileId: uid('5403', 1), createdAt: at(28, 18, 0), createdById: ME },
+  ],
+}
+const ELSEWHERE: NcrRecord = { ...RECORD, capaElsewhere: true }
+const ESCALATE_PREVIEW: EscalatePreview = {
+  records: [{ recordType: 'Nonconformance', recordId: RECORD.ncr.id, number: RECORD.ncr.number, title: RECORD.ncr.title, companyId: RECORD.ncr.companyId, state: 'CONTAINED', reasons: ['CUSTOMER'], escalatedTo: null, problem: null }],
+  companyId: RECORD.ncr.companyId,
+  sameCompany: true,
+  ready: true,
+  capas: [{ id: uid('5401', 1), number: 'CAPA-DEMO-0004', title: 'Pocket seams opening on the rider jackets', type: 'CAPA', status: 'ACT', customer: { id: uid('5396', 1), code: 'C-DEMO-01', name: 'Demo Moto Srl' }, version: 3 }],
+  mayOpen: true,
+  mayView: true,
+  asOf: NOW,
+}
+const ESCALATE: EscalateModel = { ncrs: [{ id: RECORD.ncr.id, number: RECORD.ncr.number }], preview: { status: 'ready', preview: ESCALATE_PREVIEW }, mode: 'link', capaId: uid('5401', 1), type: 'CAPA', title: RECORD.ncr.title, dueOn: '2026-12-01', busy: false, notice: null }
+
 const CANCELLED: NcrRecord = { ...RECORD_OPEN, ncr: { ...RECORD_OPEN.ncr, stage: 'CANCELLED', cancelledAt: at(29, 10, 0), cancelReason: 'Raised twice: the same bundle is NCR-DEMO-0031.' }, actions: { edit: 'x', contain: 'x', decide: 'x', close: 'x', cancel: 'x' }, next: { stage: null, checks: [], ready: false } }
 
 const closeDialog = (note: string): CloseDialogModel => ({
@@ -208,7 +286,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'done-action', label: 'Mark an action done: the evidence (a note or a photo)', model: record('inspector', 'containment', RECORD_OPEN, { dialog: { kind: 'doneAction', actionId: RECORD_OPEN.containment[0]!.id, evidence: 'Both sleeves checked on the line: no more torn linings.', photoName: 'sleeve-check.jpg', hold: EMPTY_HOLD, busy: false, notice: null } }) },
     { id: 'decide', label: 'Decide by quantity: the code, what is left, the note', model: record('inspector', 'disposition', RECORD, { dialog: { kind: 'decide', draft: { dispositionCodeId: DISPOSITIONS[2]!.id, quantity: '12', note: 'Light marks only: second quality.' }, busy: false, notice: null } }) },
     { id: 'carry-scrap-lot', label: 'Carry out SCRAP of a leather lot: the stock lines from where it lies', model: record('owner', 'disposition', LOT_RECORD, { dialog: carry(LOT_RECORD.decisions[0]!.id, stockLinesOf(STOCK, '12')) }) },
-    { id: 'carry-held-garments', label: 'SCRAP of garments still in work: Carry out held with the reason (B-W2a-47 gap)', model: record('owner', 'disposition', GARMENT_SCRAP), note: 'Never a fake success: scrap at the scan, or decide Rework and scrap there.' },
+    { id: 'carry-held-garments', label: 'SCRAP of garments still in work: Carry out held with the reason, pointing to the rework scrap path', model: record('owner', 'disposition', GARMENT_SCRAP), note: 'B-W2b-113: decide Rework and create the rework order with "Scrap them all".' },
     { id: 'rework', label: 'Create rework order (QHS-091): the operation of the work order', model: record('production', 'disposition', GARMENT_SCRAP, { dialog: { kind: 'rework', decisionId: GARMENT_SCRAP.decisions[2]!.id, operationId: OPERATIONS[1]!.id, description: 'Re-sew the pocket seam.', busy: false, notice: null } }) },
     { id: 'carry-repair', label: 'Carry out a REPAIR: name its repair (Sales › Repairs)', model: record('owner', 'disposition', REPAIR_RECORD, { dialog: carry(REPAIR_RECORD.decisions[1]!.id, [], { followUpId: uid('5390', 1) }) }) },
     { id: 'carry-claim', label: 'Carry out RETURN TO SUPPLIER: the move to the returns place and a draft supplier claim', model: record('owner', 'disposition', LOT_RECORD, { dialog: carry(LOT_RECORD.decisions[1]!.id, stockLinesOf(STOCK, '39.8'), { toLocationId: SITES[0]!.locations[1]!.id, claimReason: 'THICKNESS', claimRemedy: 'CREDIT' }) }) },
@@ -234,5 +312,26 @@ export const designScreen = defineDesignScreen<RecordCase>({
     // ---- B-W2b-17 ------------------------------------------------------------------------------------------------------
     { id: 'w2b-containment-cancelled', label: 'W2b Containment: two cancelled actions, each with its reason in its own place (never as evidence)', model: record('owner', 'containment', { ...RECORD, containment: [...RECORD.containment, ...CANCELLED_ACTIONS] }), note: 'The second one was cancelled before B-W2b-17: its reason came from "Cancelled: …" in its evidence; the evidence cell shows none.' },
     { id: 'w2b-containment-cancel-dialog', label: 'W2b Cancel an action: the reason (kept in its own place)', model: record('inspector', 'containment', RECORD_OPEN, { dialog: { kind: 'cancelAction', actionId: RECORD_OPEN.containment[0]!.id, reason: 'The bundles were checked by the line already.', busy: false, notice: null } }) },
+    // ---- B-W2b-113: cost (QHS-086), concessions (QHS-085), escalate to CAPA, the report, the cause, the rework scrap path --------
+    { id: 'cost', label: 'Cost (cost grain): a computed scrap line, two typed lines, the total; Charge to supplier held with why', model: record('owner', 'cost', RECORD, { cost: cost() }) },
+    { id: 'cost-adding', label: 'Cost: a new typed line being written (kind, words, amount)', model: record('owner', 'cost', RECORD, { cost: cost({}, { adding: { kind: 'FREIGHT', description: 'Courier back to the tannery', amount: '18,50' } }) }) },
+    { id: 'cost-stale', label: 'Cost: the computed lines out of date (Compute again) and a decision not valued yet', model: record('owner', 'cost', RECORD, { cost: cost({ computed: { upToDate: false, add: 1, change: 0, remove: 0, waiting: [{ recordType: 'ReworkOrder', recordId: uid('5404', 1), label: 'WO-DEMO-0150', words: 'x' }] } }, { cells: { [`${uid('5398', 2)}:amount`]: { state: 'saved' } } }) }) },
+    { id: 'cost-closed', label: 'Cost of a closed NCR: read-only, said why', model: record('owner', 'cost', RECORD_CLOSED, { cost: cost({ held: 'x' }) }) },
+    { id: 'cost-empty', label: 'Cost: no line yet', model: record('owner', 'cost', RECORD, { cost: cost({ lines: [], total: 0 }) }) },
+    { id: 'cost-no-grain', label: 'Cost by address without the cost grain: the tab is absent; "You need the cost grain to see costs"', model: record('inspector', 'cost', RECORD) },
+    { id: 'cost-loading', label: 'Cost: loading', model: record('owner', 'cost', RECORD, { cost: { ...NO_COST, loaded: { status: 'loading' } } }) },
+    { id: 'cost-error', label: "Cost: couldn't be read (Try again)", model: record('owner', 'cost', RECORD, { cost: { ...NO_COST, loaded: { status: 'error', problem: 'The service did not answer.' } } }) },
+    { id: 'concessions', label: 'Disposition: concessions asked of the customer, one accepted with its file, one waiting', model: record('owner', 'disposition', WITH_CONCESSIONS) },
+    { id: 'concession-ask', label: 'Ask a concession: the customer, the person asked, the deviation, what we propose', model: record('owner', 'disposition', WITH_CONCESSIONS, { dialog: { kind: 'askConcession', draft: { ...NEW_CONCESSION, partyId: uid('5396', 1), contactId: uid('5397', 1), ask: 'Accept a shade slightly darker on the sleeves', proposal: 'Delivered as they are, 3 % off' }, busy: false, notice: null } }) },
+    { id: 'concession-answer', label: "Record the customer's answer: refused needs their words; their file", model: record('owner', 'disposition', WITH_CONCESSIONS, { dialog: { kind: 'answerConcession', concessionId: uid('5399', 2), draft: { status: 'REFUSED', answer: '', answeredBy: 'Demo Buyer', answeredAt: '2026-10-29T10:15' }, fileName: 'demo-refusal.pdf', busy: false, notice: null } }) },
+    { id: 'concession-critical', label: 'A critical NCR: Ask a concession held (a critical defect is never sold under a concession)', model: record('owner', 'disposition', CRITICAL_RECORD) },
+    { id: 'escalate', label: 'Escalate to CAPA from the band: link to an open CAPA (the rule that suggests it)', model: record('owner', 'problem', RECORD, { escalate: ESCALATE }) },
+    { id: 'escalate-new', label: 'Escalate to CAPA: start a new one (type, title, due day)', model: record('owner', 'problem', RECORD, { escalate: { ...ESCALATE, mode: 'new', capaId: '' } }) },
+    { id: 'escalated', label: 'Escalated: the CAPA in the band, the aside and Linked records; the cause named; report versions kept', model: record('owner', 'linked', ESCALATED) },
+    { id: 'escalated-problem', label: 'Escalated: Problem & evidence with its cause and its CAPA', model: record('owner', 'problem', ESCALATED) },
+    { id: 'capa-elsewhere', label: 'Escalated to a CAPA the reader may not see: said so, Escalate held', model: record('production', 'problem', ELSEWHERE) },
+    { id: 'cause-editing', label: 'Problem & evidence editing: the cause picked from the cause list', model: record('owner', 'problem', RECORD, { draft: { ...draftOf(RECORD.ncr, TIME_ZONE), causeCodeId: uid('5395', 2) } }) },
+    { id: 'rework-scrap', label: 'Create rework order with "Scrap them all": garments still in work scrapped through the rework (plan default)', model: record('production', 'disposition', GARMENT_SCRAP, { dialog: { kind: 'rework', decisionId: GARMENT_SCRAP.decisions[2]!.id, operationId: OPERATIONS[1]!.id, description: 'Burnt panel: scrap.', scrapAll: true, busy: false, notice: null } }) },
+    { id: 'report-kept', label: 'A report version kept (the receipt)', model: record('owner', 'linked', ESCALATED, { notice: { say: { key: 'report.kept', params: { version: 2 } }, tone: 'success' } }) },
   ],
 })

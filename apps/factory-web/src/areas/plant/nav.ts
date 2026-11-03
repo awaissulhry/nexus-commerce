@@ -1,4 +1,4 @@
-import { BellRing, Cog, HardHat, SlidersHorizontal, Wrench } from 'lucide-react'
+import { BellRing, CalendarCheck, Cog, HardHat, SlidersHorizontal, Wrench } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -28,6 +28,13 @@ export const officeArea: OfficeAreaNav = {
           // SCR-150: the machine and equipment register (GET /plant/machines, plant.view).
           { id: 'plant-machines', label: 'shell:nav.plant.machines', href: '/plant/machines', icon: Cog, permission: 'plant.view' },
         ],
+      },
+      // B-W2b-120: Health & safety — the Safety calendar (SCR-267): every legal safety deadline, the safety organisation and
+      // the RLS notice to INAIL (GET /safety/calendar, safety.view).
+      {
+        id: 'plant-safety',
+        label: 'shell:nav.plant.safety',
+        items: [{ id: 'plant-calendar', label: 'shell:nav.plant.calendar', href: '/plant/calendar', icon: CalendarCheck, permission: 'safety.view' }],
       },
       // B-W2a-73: Plant settings (SCR-241), its W2a section "Symptoms on the floor" (GET /plant/symptoms, plant.view).
       {

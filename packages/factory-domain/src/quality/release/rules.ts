@@ -62,9 +62,20 @@ export const FOUR_EYES_WORDS: Readonly<Record<FourEyesRule, string>> = Object.fr
 })
 export type SettingSource = 'COMPANY' | 'TENANT' | 'DEFAULT'
 
+/**
+ * B-W2b-118 (QualitySettings.fourEyesConditions, B-W2b-79; design qs-sod "Four-eyes release for"): when a release needs a
+ * second person beside "every release" (the rule's ALWAYS): an overridden result (a conditional release is that same
+ * record: a PASS over a computed FAIL) and the listed customers' garments.
+ */
+export const FOUR_EYES_CONDITIONS = ['OVERRIDE', 'CUSTOMER'] as const
+export type FourEyesCondition = (typeof FOUR_EYES_CONDITIONS)[number]
+export const isFourEyesCondition = (value: string): value is FourEyesCondition => (FOUR_EYES_CONDITIONS as readonly string[]).includes(value)
+
 export interface FourEyesRow {
   readonly releaseFourEyes: FourEyesRule | null
   readonly secondPersonPartyIds: readonly string[]
+  /** B-W2b-118: the row's conditions; left out: the column's default (both). */
+  readonly fourEyesConditions?: readonly FourEyesCondition[] | null
 }
 
 export interface FourEyesInForce {
@@ -72,13 +83,42 @@ export interface FourEyesInForce {
   readonly source: SettingSource
   /** The customers of the company's list and of the tenant-wide one. */
   readonly partyIds: readonly string[]
+  /** B-W2b-118: the conditions in force (fourEyesConditionsInForce). */
+  readonly conditions: readonly FourEyesCondition[]
 }
+
+/**
+ * B-W2b-118: the conditions in force for a company, EXACTLY as factory_quality_release_check reads them
+ * (…_quality_problems_w2b_guards): no row at all → both; else the company row's list and the tenant-wide row's together.
+ */
+export function fourEyesConditionsInForce(company: readonly FourEyesCondition[] | null, tenant: readonly FourEyesCondition[] | null): FourEyesCondition[] {
+  if (company === null && tenant === null) return [...FOUR_EYES_CONDITIONS].sort()
+  return [...new Set([...(company ?? []), ...(tenant ?? [])])].sort()
+}
+
+const conditionsOf = (row: FourEyesRow | null): readonly FourEyesCondition[] | null => (row ? (row.fourEyesConditions ?? FOUR_EYES_CONDITIONS) : null)
 
 /** The rule in force for a company: its own row's rule, else the tenant-wide row's, else the default; both lists. */
 export function fourEyesInForce(company: FourEyesRow | null, tenant: FourEyesRow | null): FourEyesInForce {
   const rule = company?.releaseFourEyes ?? tenant?.releaseFourEyes ?? null
   const source: SettingSource = company?.releaseFourEyes ? 'COMPANY' : tenant?.releaseFourEyes ? 'TENANT' : 'DEFAULT'
-  return { rule: rule ?? DEFAULT_FOUR_EYES_RULE, source, partyIds: [...new Set([...(company?.secondPersonPartyIds ?? []), ...(tenant?.secondPersonPartyIds ?? [])])].sort() }
+  return {
+    rule: rule ?? DEFAULT_FOUR_EYES_RULE,
+    source,
+    partyIds: [...new Set([...(company?.secondPersonPartyIds ?? []), ...(tenant?.secondPersonPartyIds ?? [])])].sort(),
+    conditions: fourEyesConditionsInForce(conditionsOf(company), conditionsOf(tenant)),
+  }
+}
+
+/** B-W2b-118: the rule in force in words, with its conditions (FOUR_EYES_WORDS is the default's: both conditions). */
+export function fourEyesWords(rule: FourEyesRule, conditions: readonly FourEyesCondition[] = FOUR_EYES_CONDITIONS): string {
+  if (rule === 'ALWAYS') return FOUR_EYES_WORDS.ALWAYS
+  const override = conditions.includes('OVERRIDE')
+  const customer = conditions.includes('CUSTOMER')
+  if (override && customer) return FOUR_EYES_WORDS.WHEN_REQUIRED
+  if (override) return 'An inspector who made none of the garments releases alone; a second person only for overrides.'
+  if (customer) return 'An inspector who made none of the garments releases alone; a second person only for the listed customers.'
+  return 'An inspector who made none of the garments releases alone.'
 }
 
 /** Loosening: ALWAYS → WHEN_REQUIRED, or a customer taken off the list (asks for a reason and a fresh code). */
@@ -91,10 +131,12 @@ export function isFourEyesLoosening(before: FourEyesRow, after: FourEyesRow): bo
 }
 
 /** Why a release of this cell needs a second person (the database writes the same, QualityRelease.secondPersonReasons). */
-export function secondPersonReasons(input: { readonly overridden: boolean; readonly rule: FourEyesRule; readonly customerListed: boolean }): SecondPersonReason[] {
+export function secondPersonReasons(input: { readonly overridden: boolean; readonly rule: FourEyesRule; readonly customerListed: boolean; readonly conditions?: readonly FourEyesCondition[] }): SecondPersonReason[] {
   const reasons: SecondPersonReason[] = []
-  if (input.overridden) reasons.push('OVERRIDE')
-  if (input.customerListed) reasons.push('CUSTOMER')
+  // B-W2b-118: OVERRIDE and CUSTOMER only while the settings' conditions name them (no conditions given: both, W1's rule).
+  const conditions = input.conditions ?? FOUR_EYES_CONDITIONS
+  if (input.overridden && conditions.includes('OVERRIDE')) reasons.push('OVERRIDE')
+  if (input.customerListed && conditions.includes('CUSTOMER')) reasons.push('CUSTOMER')
   if (input.rule === 'ALWAYS') reasons.push('ALWAYS')
   return reasons
 }

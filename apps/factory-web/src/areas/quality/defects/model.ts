@@ -16,7 +16,8 @@ import {
 } from '@nexus/factory-domain/quality/defects/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { LiveState } from '../_shared/model'
-import type { DefectCategory, DefectCode, DefectEdit, Disposition, DispositionEdit, Dispositions, Library, NewDefectBody, NewDispositionBody, OutcomeOption } from './api'
+import type { Causes, Coverage, DefectCategory, DefectCode, DefectEdit, Disposition, DispositionEdit, Dispositions, Grades, Library, NewDefectBody, NewDispositionBody, OutcomeOption, Severity } from './api'
+import type { NewCauseDraft, NewGradeDraft } from './vocabulary'
 
 /**
  * The rules of Quality › Defects & dispositions (SCR-079; design quality.defects df-tabs, df-library, df-dispositions,
@@ -28,11 +29,11 @@ import type { DefectCategory, DefectCode, DefectEdit, Disposition, DispositionEd
 
 // ---- the address -----------------------------------------------------------------------------------------------------------
 
-/** The page's link tabs (design df-tabs): Defects and Dispositions built; Severity, Causes and Leather grades come in W2b. */
+/** The page's link tabs (design df-tabs): Defects and Dispositions (W2a); Severity, Causes and Leather grades (B-W2b-118). */
 export const TABS = ['defects', 'severity', 'causes', 'dispositions', 'grades'] as const
 export type Tab = (typeof TABS)[number]
-export const BUILT_TABS: readonly Tab[] = ['defects', 'dispositions']
-export type BuiltTab = 'defects' | 'dispositions'
+export const BUILT_TABS: readonly Tab[] = TABS
+export type BuiltTab = Tab
 
 /** The library's rows: every code, the active ones, the retired ones. */
 export const LIBRARY_VIEWS = ['all', 'active', 'retired'] as const
@@ -54,7 +55,7 @@ export function addressOf(params: Params): Address {
   const tab = params?.get('tab')
   const view = params?.get('view')
   return {
-    tab: tab === 'dispositions' ? 'dispositions' : 'defects',
+    tab: tab && (TABS as readonly string[]).includes(tab) ? (tab as Tab) : 'defects',
     view: view && (LIBRARY_VIEWS as readonly string[]).includes(view) ? (view as LibraryView) : 'all',
     q: (params?.get('q') ?? '').slice(0, 80),
     open: params?.get('open') || null,
@@ -612,7 +613,7 @@ export function dispositionCsvRow(code: Disposition, t: T): (string | number)[] 
 
 // ---- live ----------------------------------------------------------------------------------------------------------------------
 
-export const LIVE_EVENTS = ['quality.defects_changed', 'quality.dispositions_changed'] as const
+export const LIVE_EVENTS = ['quality.defects_changed', 'quality.dispositions_changed', 'quality.vocabulary_changed'] as const
 
 // ---- the view models --------------------------------------------------------------------------------------------------------
 
@@ -628,6 +629,10 @@ export type DefectsDialog =
   | { kind: 'delete'; id: string }
   | { kind: 'photo'; id: string }
   | { kind: 'keys' }
+  // B-W2b-118: a new cause, a new grade, deleting an unused cause.
+  | { kind: 'new-cause'; draft: NewCauseDraft; problems: Readonly<Record<string, string>>; problem: string | null; shown: boolean }
+  | { kind: 'new-grade'; draft: NewGradeDraft; problems: Readonly<Record<string, string>>; problem: string | null; shown: boolean }
+  | { kind: 'delete-cause'; id: string }
 
 /** The drawer's picture: its upload under way, its failure (its address is in `thumbs` once read). */
 export interface PictureState {
@@ -668,6 +673,15 @@ export interface DefectsModel {
   readonly thumbs: Readonly<Record<string, string>>
   /** Design cases: the focused row. */
   readonly focusRow?: number
+  /** B-W2b-118: the W2b tabs' reads (each read when its tab is first shown) and the words missing per floor language. */
+  readonly vocab?: VocabularyReads
+}
+
+export interface VocabularyReads {
+  readonly severity: ReadOf<Severity>
+  readonly causes: ReadOf<Causes>
+  readonly grades: ReadOf<Grades>
+  readonly coverage: Coverage | null
 }
 
 export const EMPTY_PICTURE: PictureState = Object.freeze({ uploading: false, problem: null })

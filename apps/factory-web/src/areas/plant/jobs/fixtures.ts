@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { canAs, inShell, JOB_LIST, JOB_TILE_COUNTS, JOBS, MACHINES, NOW, PREFIX, SITE, SITES, TECHNICIANS, type PlantRole } from '../_shared/fixtures'
-import type { JobsDialog, JobsListModel } from './view-model'
+import { canAs, card, inShell, JOB_LIST, JOB_TILE_COUNTS, JOBS, MACHINES, NOW, PREFIX, SITE, SITES, TECHNICIANS, type PlantRole } from '../_shared/fixtures'
+import type { DeepJobRecord } from '../requests/depth/api'
+import { deepJob } from '../requests/depth/fixtures'
+import { closeDraftOf } from '../requests/depth/model'
+import type { HandBackDialogState, JobsDialog, JobsListModel } from './view-model'
 import { JobsView } from './view/JobsView'
 
 /**
@@ -10,7 +13,23 @@ import { JobsView } from './view/JobsView'
  * form; Closed only after it), each tile pressed, New job (the machine found, its site's technicians), Assign jobs (old →
  * new per job), and the page's states. Roles: the maintenance lead (plans and works), the production manager (plans,
  * works no job), the floor supervisor (sees; plans nothing: New job held), read-only and sales (no plant.view).
+ * B-W2b-140: a drop on the board's Hand-back lane opens the Hand back dialog (the one-screen close) over the board.
  */
+
+const WORKING: DeepJobRecord = {
+  job: deepJob({ ...JOBS.thread, status: 'IN_PROGRESS', overdue: false }),
+  card: card(MACHINES.sew4),
+  requests: [],
+  canManage: true,
+  canWork: true,
+  lock: null,
+  files: [],
+  requestFiles: [],
+  close: { minutesSoFar: 42, runningHeld: false, canHandBack: true },
+  canConfirm: false,
+}
+
+const handBack = (over: Partial<HandBackDialogState> = {}): JobsDialog => ({ kind: 'handBack', jobId: WORKING.job.id, number: WORKING.job.number, loaded: { status: 'ready', value: WORKING }, draft: { ...closeDraftOf(WORKING.close), action: 'ADJUSTED', failure: 'SETTINGS' }, busy: false, problem: null, ...over })
 
 interface JobsCase {
   role: PlantRole
@@ -71,6 +90,9 @@ export const designScreen = defineDesignScreen<JobsCase>({
       model: list('maintenance', { cells: { [`${JOBS.fresh.id}:priority`]: { state: 'saving' }, [`${JOBS.safety.id}:due`]: { state: 'saved' }, [`${JOBS.planned.id}:assignee`]: { state: 'failed', words: { key: 'problem.conflict' } } }, notice: { tone: 'danger', words: { key: 'cell.refused', params: { number: JOBS.planned.number } }, detail: { key: 'problem.conflict' } } }),
     },
     { id: 'board', label: 'Board by state: New, Planned, In progress, Waiting parts, Hand-back, Closed', model: list('maintenance', { address: { view: 'open', siteId: null, machineId: null, mode: 'board' }, rows: { items: [...JOB_LIST, JOBS.closed], more: false, problem: null } }), note: 'Drag, or Space / M then ← → and Enter; a drop on Hand-back opens the close form.' },
+    { id: 'board-handback', label: 'Board: a drop on Hand-back opens the Hand back dialog (adjusted · settings · running)', model: list('maintenance', { address: { view: 'open', siteId: null, machineId: null, mode: 'board' }, dialog: handBack() }), note: 'Three taps: what was done, the failure code, Hand back.' },
+    { id: 'board-handback-loading', label: 'Hand back dialog: the job still reading', model: list('maintenance', { address: { view: 'open', siteId: null, machineId: null, mode: 'board' }, dialog: handBack({ loaded: { status: 'loading' }, draft: closeDraftOf(null) }) }) },
+    { id: 'board-handback-error', label: "Hand back dialog: the job couldn't be read (Try again)", model: list('maintenance', { address: { view: 'open', siteId: null, machineId: null, mode: 'board' }, dialog: handBack({ loaded: { status: 'error', problem: 'problem.unavailable' }, draft: closeDraftOf(null) }) }) },
     { id: 'board-read-only', label: 'Board, read-only: nothing moves (said why)', model: list('readOnly', { address: { view: 'open', siteId: null, machineId: null, mode: 'board' } }) },
     { id: 'tile-overdue', label: 'Tile pressed: overdue', model: list('maintenance', { address: { view: 'overdue', siteId: null, machineId: null, mode: 'list' }, rows: { items: [JOBS.thread], more: false, problem: null } }) },
     { id: 'mine', label: 'Rows ▾ My jobs', model: list('maintenance', { address: { view: 'mine', siteId: null, machineId: null, mode: 'list' }, rows: { items: [JOBS.thread], more: false, problem: null } }) },

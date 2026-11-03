@@ -2,9 +2,11 @@ import { createElement, useEffect, useState } from 'react'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { STEP_UP_CLOSED } from '../../_shared/hooks'
-import { inShell, PREFIX, ROLE_PERMISSIONS, type RoleCase } from '../../_shared/fixtures'
-import { CONTAINMENT_SETTINGS, COUNTS, DEFECTS, LANES, NOW, PEOPLE, PREFILL, PREFILL_BUNDLE, PREFILL_DEFECTS, RECORD_READY, ROWS, SITES } from '../demo/fixtures'
+import { inShell, PREFIX, ROLE_PERMISSIONS, uid, type RoleCase } from '../../_shared/fixtures'
+import type { EscalatePreview, NcrSummary } from '../api'
+import { COMPANY_ID, CONTAINMENT_SETTINGS, COUNTS, DEFECTS, LANES, NOW, PEOPLE, PREFILL, PREFILL_BUNDLE, PREFILL_DEFECTS, RECORD_READY, ROWS, SITES } from '../demo/fixtures'
 import { checksSay, containmentDraftOf, factsOfRecord, ncrCan, ncrQueryOf, type NcrCan, type NcrView } from '../model'
+import { escalateModelOf, withPreview, type EscalateModel } from '../view/EscalateDialog'
 import { draftOf, EMPTY_DRAFT, type ListDialog, type NcrListModel } from './view-model'
 import { NcrListView } from './view/NcrListView'
 
@@ -25,10 +27,64 @@ const ROLES = {
   warehouse: template('warehouse'),
   readOnly: template('read_only'),
   maintenance: template('maintenance'),
+  /** B-W2b-113: the owner with the cost grain (the Cost column). */
+  ownerCost: [...ROLE_PERMISSIONS.owner, 'money.cost'],
 } as const
 type Role = keyof typeof ROLES
 /** The nearest shell role case (the navigation drawn around the page). */
-const SHELL: Record<Role, RoleCase> = { owner: 'owner', inspector: 'inspector', production: 'production', sales: 'sales', warehouse: 'readOnly', readOnly: 'readOnly', maintenance: 'readOnly' }
+const SHELL: Record<Role, RoleCase> = { owner: 'owner', inspector: 'inspector', production: 'production', sales: 'sales', warehouse: 'readOnly', readOnly: 'readOnly', maintenance: 'readOnly', ownerCost: 'owner' }
+
+// ---- B-W2b-113: the CAPA and Cost columns, Escalate to CAPA (made up) -------------------------------------------------------
+
+const CAPA_OPEN = { id: uid('5390', 1), number: 'CAPA-DEMO-0004', status: 'ACT' as const }
+const EIGHT_D = { id: uid('5390', 2), number: '8D-DEMO-0002', status: 'D3' as const }
+/** The rows as the API sends them to a reader with the cost grain: the CAPA each one names, its cost (minor units). */
+const COST_OF: readonly (number | null)[] = [24_700, null, 3_500, 12_050, 0, 98_000]
+const ROWS_W2B: NcrSummary[] = ROWS.map((row, index) => ({ ...row, capa: index === 2 ? CAPA_OPEN : index === 4 ? EIGHT_D : null, cost: COST_OF[index] ?? null }))
+/** The same rows for a reader without the grain: the API leaves the cost out. */
+const ROWS_NO_COST: NcrSummary[] = ROWS_W2B.map(({ cost: _cost, ...row }) => row)
+const openRowsOf = (rows: readonly NcrSummary[]) => rows.filter((row) => row.stage !== 'CLOSED' && row.stage !== 'CANCELLED')
+
+const record = (row: NcrSummary, over: Partial<EscalatePreview['records'][number]> = {}): EscalatePreview['records'][number] => ({
+  recordType: 'Nonconformance',
+  recordId: row.id,
+  number: row.number,
+  title: row.title,
+  companyId: COMPANY_ID,
+  state: row.stage,
+  reasons: row.severity === 'CRITICAL' ? ['CRITICAL'] : row.source === 'COMPLAINT' || row.source === 'RETURN' ? ['CUSTOMER'] : [],
+  escalatedTo: null,
+  problem: null,
+  ...over,
+})
+const PREVIEW: EscalatePreview = {
+  records: [record(ROWS_W2B[0]!, { reasons: ['CRITICAL', 'REPEAT_DEFECT'] }), record(ROWS_W2B[1]!)],
+  companyId: COMPANY_ID,
+  sameCompany: true,
+  ready: true,
+  capas: [
+    { id: CAPA_OPEN.id, number: CAPA_OPEN.number, title: 'Open seams on the shoulder of the rider jacket', type: 'CAPA', status: 'ACT', customer: null, version: 3 },
+    { id: EIGHT_D.id, number: EIGHT_D.number, title: 'Protector pocket missing on a size run', type: 'EIGHT_D', status: 'D3', customer: { id: uid('5390', 9), code: 'DEMO-C1', name: 'Demo Moto Srl' }, version: 5 },
+  ],
+  mayOpen: true,
+  mayView: true,
+  asOf: NOW,
+}
+const PREVIEW_HELD: EscalatePreview = {
+  ...PREVIEW,
+  ready: false,
+  records: [
+    record(ROWS_W2B[0]!, { reasons: ['CRITICAL'] }),
+    record(ROWS_W2B[2]!, { escalatedTo: { capaId: CAPA_OPEN.id, number: CAPA_OPEN.number, status: 'ACT' }, problem: { path: 'held/ESCALATED_ELSEWHERE', message: 'x' } }),
+    record({ ...ROWS_W2B[1]!, number: 'NCR-DEMO-0019', stage: 'CANCELLED' }, { problem: { path: 'held/NCR_CANCELLED', message: 'x' } }),
+  ],
+}
+const OPENED = new Date(NOW)
+const escalateOf = (preview: EscalatePreview | null, over: Partial<EscalateModel> = {}): EscalateModel => {
+  const ncrs = (preview?.records ?? PREVIEW.records).map((entry) => ({ id: entry.recordId, number: entry.number }))
+  const opened = escalateModelOf(ncrs, OPENED)
+  return { ...(preview ? withPreview(opened, preview) : opened), ...over }
+}
 
 interface DesignModel {
   readonly role: Role
@@ -100,10 +156,12 @@ function NcrDesign({ model: design }: { model: DesignModel }) {
   const [address, setAddress] = useState(design.model.address)
   const [dialog, setDialog] = useState(design.model.dialog)
   const [close, setClose] = useState(design.model.close)
+  const [escalate, setEscalate] = useState(design.model.escalate ?? null)
   useEffect(() => {
     setAddress(design.model.address)
     setDialog(design.model.dialog)
     setClose(design.model.close)
+    setEscalate(design.model.escalate ?? null)
   }, [design])
   const model: NcrListModel = {
     ...design.model,
@@ -111,6 +169,7 @@ function NcrDesign({ model: design }: { model: DesignModel }) {
     rows: design.model.rows.items && address.view !== design.model.address.view ? { items: viewRows(address.view), truncated: false, problem: null } : design.model.rows,
     dialog,
     close,
+    escalate,
   }
   return inShell(
     '/quality/ncr',
@@ -135,6 +194,17 @@ function NcrDesign({ model: design }: { model: DesignModel }) {
           return false
         },
         close: { onNote: (note: string) => setClose((current) => (current ? { ...current, note } : current)), onCancel: () => setClose(null), onSubmit: () => setClose(null) },
+        // B-W2b-113: the escalate dialog works in the browser on made-up data (the preview of the rows picked).
+        onEscalate: (ncrs) => {
+          const rows = design.model.rows.items ?? []
+          const picked = rows.filter((row) => ncrs.some((ncr) => ncr.id === row.id))
+          setEscalate(escalateOf({ ...PREVIEW, records: picked.map((row) => record(row)) }))
+        },
+        escalate: {
+          onChange: (patch) => setEscalate((current) => (current ? { ...current, ...patch } : current)),
+          onCancel: () => setEscalate(null),
+          onSubmit: () => setEscalate(null),
+        },
       },
     }),
     SHELL[design.role],
@@ -208,5 +278,19 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'w2b-assign-done', label: 'W2b Assign owner: one command for 3 NCRs of two sites (done)', model: list({ notice: { say: { key: 'list.assigned', params: { count: 3 } }, tone: 'success' } }) },
     { id: 'w2b-assign-refused', label: 'W2b Assign owner refused: each refused NCR in words, nothing changed', model: list({ selected: [ROWS[0]!.id, ROWS[1]!.id, ROWS[2]!.id], dialog: { kind: 'assign', ids: [ROWS[0]!.id, ROWS[1]!.id, ROWS[2]!.id], ownerId: PEOPLE[1]!.id, busy: false, notice: { say: { key: 'assign.refused.title', params: { count: 2, total: 3 } }, tone: 'danger', lines: [{ key: 'assign.refused.stale', params: { number: ROWS[1]!.number } }, { key: 'assign.refused.noRight', params: { number: ROWS[2]!.number } }] } } }) },
     { id: 'w2b-assign-offline', label: 'W2b Assign owner offline: held with the reason', model: list({ live: 'offline', selected: [ROWS[0]!.id, ROWS[1]!.id] }) },
+    // ---- B-W2b-113: the CAPA and Cost columns, Escalate to CAPA --------------------------------------------------------
+    { id: 'cost-column', label: 'W2b-113 Owner with the cost grain: the CAPA column and the Cost column (minor units in euro)', model: list({ rows: { items: openRowsOf(ROWS_W2B), truncated: false, problem: null } }, 'ownerCost'), note: 'The Cost column shows only for a reader with the cost grain (money.cost); — when the NCR has no cost line yet.' },
+    { id: 'no-cost', label: 'W2b-113 Quality inspector without the cost grain: no Cost column (the API leaves the amount out)', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null } }, 'inspector') },
+    { id: 'capa-column', label: 'W2b-113 The CAPA column: the CAPA each NCR is escalated to (a link), — for none', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null } }) },
+    { id: 'escalate-selection', label: 'W2b-113 Selection: Escalate 2 to one CAPA (the third names a CAPA already)', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null }, selected: [ROWS_W2B[0]!.id, ROWS_W2B[1]!.id, ROWS_W2B[2]!.id] }), note: 'Key e escalates the rows picked, else the focused row; the key sits in the footer icon.' },
+    { id: 'escalate', label: 'W2b-113 Escalate to CAPA: link to an open CAPA (the rule that suggests each NCR)', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null }, escalate: escalateOf(PREVIEW, { capaId: CAPA_OPEN.id }) }) },
+    { id: 'escalate-new', label: 'W2b-113 Escalate to CAPA: start a new one (title from the first NCR, due in 30 days)', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null }, escalate: escalateOf(PREVIEW, { mode: 'new', type: 'EIGHT_D' }) }) },
+    { id: 'escalate-held', label: 'W2b-113 Escalate to CAPA: one NCR escalated elsewhere, one cancelled — only the rest goes', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null }, escalate: escalateOf(PREVIEW_HELD) }) },
+    { id: 'escalate-pick', label: 'W2b-113 Escalate to CAPA: the button held until the open CAPA is picked', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null }, escalate: escalateOf(PREVIEW) }) },
+    { id: 'escalate-no-right', label: 'W2b-113 Escalate to CAPA for a person without quality.capa.manage: held with the reason', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null }, escalate: escalateOf({ ...PREVIEW, mayOpen: false, capas: [] }) }, 'production') },
+    { id: 'escalate-loading', label: 'W2b-113 Escalate to CAPA: reading what each NCR would bring', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null }, escalate: escalateOf(null) }) },
+    { id: 'escalate-error', label: 'W2b-113 Escalate to CAPA: the preview could not be read (Try again)', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null }, escalate: escalateOf(null, { preview: { status: 'error', problem: 'problem.unavailable' } }) }) },
+    { id: 'escalate-refused', label: 'W2b-113 Escalate to CAPA refused (our words, the factory\'s sentence under them)', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null }, escalate: escalateOf(PREVIEW, { capaId: CAPA_OPEN.id, notice: { say: { key: 'escalate.refusedHeld' }, tone: 'danger', detail: ['NCR-DEMO-0036 is escalated to CAPA-DEMO-0004 already.'] } }) }) },
+    { id: 'escalate-done', label: 'W2b-113 Escalated: 2 NCRs now name CAPA-DEMO-0004 (the receipt with its link)', model: list({ rows: { items: openRowsOf(ROWS_NO_COST), truncated: false, problem: null }, notice: { say: { key: 'escalate.done', params: { count: 2, capa: CAPA_OPEN.number } }, tone: 'success', link: { href: `${PREFIX}/records/Capa/${CAPA_OPEN.id}`, label: { key: 'escalate.openCapa', params: { capa: CAPA_OPEN.number } } } } }) },
   ],
 })

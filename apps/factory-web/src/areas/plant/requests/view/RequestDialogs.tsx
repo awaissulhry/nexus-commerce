@@ -1,21 +1,24 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Camera, GitMerge, Search, ShieldCheck, TriangleAlert, Wrench, X } from 'lucide-react'
+import { Camera, GitMerge, Lock, Search, TriangleAlert, Wrench, X } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
+import { LawRef } from '@nexus/ui/components/LawRef/index'
 import { PhotoCapture } from '@nexus/ui/components/PhotoCapture/index'
 import { ReasonGrid, type ReasonTile } from '@nexus/ui/floor/ReasonGrid/index'
 import { Button, Checkbox, Input, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
-import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
+import { Modal, Textarea, useDsWords } from '../../../../lib/i18n/ds-parts'
 import { usePhotoWords } from '../../../../lib/ds-words/photo-capture'
 import { useReasonWords } from '../../../../lib/ds-words/reason-grid'
 import { formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
-import { CLOSE_REASONS, JOB_TYPES, PRIORITIES, SAFE_AFTER, type Symptom } from '../../_shared/api'
-import { labelOf, personWords } from '../../_shared/model'
+import { CLOSE_REASONS, JOB_TYPES, PRIORITIES, type Symptom } from '../../_shared/api'
+import { ageWords, labelOf, personWords } from '../../_shared/model'
 import { AssigneeField } from '../../_shared/AssigneeField'
-import { iconOf, MachinePill, say, useWords } from '../../_shared/parts'
+import { iconOf, MachinePill, say, SymptomText, useWords } from '../../_shared/parts'
+import { mergeHeld, mergeSources, retarget, sourceHeld, targetKey, targetsOf } from '../depth/model'
 import type { RequestsListActions, RequestsListModel } from '../view-model'
+import { SignSafeDialog } from './SignSafeDialog'
 
 /**
  * The queue's dialogs (design plant.requests): Make a job (prefilled from the request: the machine, the problem from the
@@ -23,7 +26,9 @@ import type { RequestsListActions, RequestsListModel } from '../view-model'
  * the machine's open job), Close without a job (the reason; a note for "Other"; keep a stopped machine down), Merge into
  * another open request of the machine, Sign safe (a technician, what was checked, the state after; a fresh two-factor
  * code: D.Lgs. 81/2008 art. 71, Owner answer H1) and Report a problem (the three floor steps in the office: the machine,
- * the symptom's icon, a photo or a note). Each submit is held with its reason in words until it may go.
+ * the symptom's icon, a photo or a note). B-W2b-140: Merge requests (several requests of one machine into one request or
+ * into its open job: every reporter keeps their request and follows the one kept) and Lock as unsafe (the reach in words,
+ * the law named, Enter locks). Each submit is held with its reason in words until it may go.
  */
 export function RequestDialogs({ model, actions }: { model: RequestsListModel; actions?: RequestsListActions }) {
   const dialog = model.dialog
@@ -34,9 +39,11 @@ export function RequestDialogs({ model, actions }: { model: RequestsListModel; a
     case 'close':
       return <CloseDialog model={model} actions={actions} />
     case 'signSafe':
-      return <SignSafeDialog model={model} actions={actions} />
-    case 'merge':
-      return <MergeDialog model={model} actions={actions} />
+      return <RequestSignSafe model={model} actions={actions} />
+    case 'mergeMany':
+      return <MergeManyDialog model={model} actions={actions} />
+    case 'lock':
+      return <LockDialog model={model} actions={actions} />
     case 'report':
       return <ReportDialog model={model} actions={actions} />
   }
@@ -191,75 +198,148 @@ function CloseDialog({ model, actions }: { model: RequestsListModel; actions?: R
   )
 }
 
-// ---- Sign safe (H1) --------------------------------------------------------------------------------------------------------
+// ---- Sign safe (H1): the ONE dialog, shared with the job's Unsafe lock panel ----------------------------------------------
 
-function SignSafeDialog({ model, actions }: { model: RequestsListModel; actions?: RequestsListActions }) {
+function RequestSignSafe({ model, actions }: { model: RequestsListModel; actions?: RequestsListActions }) {
   const t = useWords()
   const dialog = model.dialog as Extract<NonNullable<RequestsListModel['dialog']>, { kind: 'signSafe' }>
   const record = recordOf(model)
-  const draft = dialog.draft
-  const held = !model.can.signSafe ? t('held.noSignSafe') : draft.note.trim().length === 0 ? t('held.checkedNeeded') : dialog.busy ? t('held.busy') : null
-  const submit = () => actions?.onSubmitDialog?.()
+  const held = !model.can.signSafe ? t('held.noSignSafe') : dialog.draft.note.trim().length === 0 ? t('held.checkedNeeded') : dialog.busy ? t('held.busy') : null
+  return (
+    <SignSafeDialog
+      machine={record?.request.machine.assetNumber ?? '—'}
+      draft={dialog.draft}
+      held={held}
+      busy={dialog.busy}
+      problem={dialog.problem}
+      onDraft={actions?.onSignSafeDraft}
+      onSubmit={actions?.onSubmitDialog}
+      onClose={actions?.onDialogClose}
+    />
+  )
+}
+
+// ---- Merge requests (B-W2b-140; design pop:merge) ------------------------------------------------------------------------
+
+/**
+ * Target: the suggested open job or request of the same machine (or another of the group); the requests that go into it,
+ * each one a tick (a request that still locks its machine joins a job but never another request: H1). "Merge 3"; every
+ * reporter keeps their request, follows the one kept and confirms on their own.
+ */
+function MergeManyDialog({ model, actions }: { model: RequestsListModel; actions?: RequestsListActions }) {
+  const t = useWords()
+  const locale = useLocale()
+  const place = { locale, timeZone: model.timeZone }
+  const dialog = model.dialog as Extract<NonNullable<RequestsListModel['dialog']>, { kind: 'mergeMany' }>
+  const { group, draft } = dialog
+  const sources = mergeSources(group, draft)
+  const heldKey = mergeHeld(group, draft, model.can, dialog.busy)
+  const held = heldKey ? t(heldKey) : null
+  const submit = () => !held && actions?.onSubmitDialog?.()
+  const requestOf = (id: string) => group.requests.find((request) => request.id === id)
   return (
     <Modal
       open
       onClose={() => actions?.onDialogClose?.()}
-      title={t('signSafe.title', { machine: record?.request.machine.assetNumber ?? '—' })}
+      title={t('mergeMany.title', { machine: group.machine.assetNumber })}
+      size="lg"
+      footer={<Footer hint={t('mergeMany.hint')} held={held} busy={dialog.busy} label={sources.length > 0 ? t('mergeMany.submit', { count: sources.length }) : t('mergeMany.open')} icon={<GitMerge size={14} aria-hidden />} onCancel={() => actions?.onDialogClose?.()} onSubmit={submit} />}
+    >
+      <div className="fw-pl-dialog" onKeyDown={submitKeys(held, submit)}>
+        {dialog.problem && <Banner tone="danger" title={say(t, dialog.problem) ?? ''} />}
+        <p className="fw-pl-text">{t('mergeMany.body', { count: group.requests.length, class: labelOf(group.machine.class, locale), machine: group.machine.assetNumber, age: ageWords(t, group.withinMinutes) })}</p>
+        <p className="fw-pl-h3">{t('mergeMany.target')}</p>
+        <div className="fw-pl-choices" role="radiogroup" aria-label={t('mergeMany.target')}>
+          {targetsOf(group).map((target) => {
+            const key = targetKey(target)
+            const request = target.kind === 'REQUEST' ? requestOf(target.id) : undefined
+            const suggested = key === targetKey(group.suggested)
+            const title = target.kind === 'JOB' ? t('mergeMany.intoJob', { number: target.number }) : request ? t('mergeMany.intoRequest', { when: formatDateTime(request.reportedAt, place) }) : '—'
+            const description = [suggested ? t('mergeMany.suggested') : null, target.kind === 'JOB' ? t('mergeMany.intoJobHint') : request ? `${personWords(t, request.reportedBy)}${request.locking ? ` · ${t('unsafe.tag')}` : ''}` : null].filter(Boolean).join(' · ')
+            return <RadioCard key={key} name="merge-target" value={key} checked={draft.target === key} selected={draft.target === key} onChange={() => actions?.onMergeDraft?.(retarget(group, { target: key, picked: draft.picked }))} title={title} description={description} />
+          })}
+        </div>
+        <p className="fw-pl-h3">{t('mergeMany.which')}</p>
+        <ul className="fw-pd-pick">
+          {group.requests.map((request) => {
+            const why = sourceHeld(request, draft)
+            const picked = why === null && draft.picked.includes(request.id)
+            return (
+              <li key={request.id}>
+                <Checkbox
+                  checked={picked}
+                  disabled={why !== null}
+                  onChange={(event) => actions?.onMergeDraft?.({ target: draft.target, picked: event.target.checked ? [...draft.picked, request.id] : draft.picked.filter((id) => id !== request.id) })}
+                  label={<SymptomText symptom={request.symptom} description={request.description} />}
+                />
+                <span className="fw-pl-sub">
+                  {formatDateTime(request.reportedAt, place)} · {personWords(t, request.reportedBy)}
+                  {why ? ` · ${t(why)}` : ''}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+        <p className="fw-pl-hint">{t('mergeMany.reporters')}</p>
+      </div>
+    </Modal>
+  )
+}
+
+// ---- Lock as unsafe (B-W2b-140; design pop:lock, a confirm) -----------------------------------------------------------------
+
+/**
+ * The reach in words — the machine becomes do-not-use on its station, the planning board and every list; no work is sent
+ * to it; a hazard report (Incidents) — and the reversal: only a technician signs it safe (D.Lgs. 81/2008 art. 71). Enter
+ * locks, Esc cancels. Composed on the DS Modal: the DS ActionConfirm has no busy state and no refusal of the server.
+ */
+function LockDialog({ model, actions }: { model: RequestsListModel; actions?: RequestsListActions }) {
+  const t = useWords()
+  const ds = useDsWords()
+  const dialog = model.dialog as Extract<NonNullable<RequestsListModel['dialog']>, { kind: 'lock' }>
+  const record = recordOf(model)
+  const machine = record?.request.machine.assetNumber ?? '—'
+  const held = !model.can.report ? t('held.noReport') : dialog.busy ? t('held.busy') : null
+  const submit = () => !held && actions?.onSubmitDialog?.()
+  return (
+    <Modal
+      open
+      onClose={() => actions?.onDialogClose?.()}
+      title={t('lockAsUnsafe.title', { machine })}
       size="md"
-      footer={<Footer hint={t('signSafe.hint')} held={held} busy={dialog.busy} label={t('signSafe.submit')} icon={<ShieldCheck size={14} aria-hidden />} onCancel={() => actions?.onDialogClose?.()} onSubmit={submit} />}
+      footer={<Footer hint={t('lockAsUnsafe.keys')} held={held} busy={dialog.busy} label={t('lockAsUnsafe.submit')} icon={<Lock size={14} aria-hidden />} danger onCancel={() => actions?.onDialogClose?.()} onSubmit={submit} />}
     >
       <form
         className="fw-pl-dialog"
         onSubmit={(event) => {
           event.preventDefault()
-          if (!held) submit()
+          submit()
         }}
-        onKeyDown={submitKeys(held, submit)}
+        onKeyDown={(event) => {
+          // Enter confirms from the note (which holds the focus when the dialog opens); a button keeps its own Enter.
+          if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+            event.preventDefault()
+            submit()
+          }
+        }}
       >
         {dialog.problem && <Banner tone="danger" title={say(t, dialog.problem) ?? ''} />}
-        <p className="fw-pl-text">{t('signSafe.body')}</p>
-        <Field label={t('signSafe.checked')} required hint={t('signSafe.checkedHint')}>
-          <Textarea value={draft.note} rows={3} maxLength={500} onChange={(event) => actions?.onSignSafeDraft?.({ note: event.target.value })} />
-        </Field>
-        <div className="fw-pl-choices" role="radiogroup" aria-label={t('signSafe.after')}>
-          <RadioCard name="safe-after" value="" checked={draft.machineAfter === null} selected={draft.machineAfter === null} onChange={() => actions?.onSignSafeDraft?.({ machineAfter: null })} title={t('signSafe.afterAuto')} description={t('signSafe.afterAutoHint')} />
-          {SAFE_AFTER.map((after) => (
-            <RadioCard key={after} name="safe-after" value={after} checked={draft.machineAfter === after} selected={draft.machineAfter === after} onChange={() => actions?.onSignSafeDraft?.({ machineAfter: after })} title={t(`machineStatus.${after}`)} description={t(`signSafe.afterHint.${after}`)} />
-          ))}
-        </div>
-        <p className="fw-pl-hint">{t('signSafe.law')}</p>
-      </form>
-    </Modal>
-  )
-}
-
-// ---- Merge -----------------------------------------------------------------------------------------------------------------
-
-function MergeDialog({ model, actions }: { model: RequestsListModel; actions?: RequestsListActions }) {
-  const t = useWords()
-  const locale = useLocale()
-  const dialog = model.dialog as Extract<NonNullable<RequestsListModel['dialog']>, { kind: 'merge' }>
-  const record = recordOf(model)
-  const held = !model.can.triage ? t('held.noTriage') : dialog.busy ? t('held.busy') : null
-  return (
-    <Modal
-      open
-      onClose={() => actions?.onDialogClose?.()}
-      title={t('merge.title')}
-      size="md"
-      footer={<Footer held={held} busy={dialog.busy} label={t('merge.submit')} icon={<GitMerge size={14} aria-hidden />} onCancel={() => actions?.onDialogClose?.()} onSubmit={() => actions?.onSubmitDialog?.()} />}
-    >
-      <div className="fw-pl-dialog">
-        {dialog.problem && <Banner tone="danger" title={say(t, dialog.problem) ?? ''} />}
-        <p className="fw-pl-text">
-          {t('merge.body', {
-            machine: record?.request.machine.assetNumber ?? '—',
-            when: formatDateTime(dialog.into.reportedAt, { locale, timeZone: model.timeZone }),
-            who: personWords(t, dialog.into.reportedBy),
-          })}
+        <p className="fw-pl-h3">{t('lockAsUnsafe.reachTitle')}</p>
+        <ul className="fw-pl-list">
+          <li>{t('lockAsUnsafe.reach.station', { machine })}</li>
+          <li>{t('lockAsUnsafe.reach.lists')}</li>
+          <li>{t('lockAsUnsafe.reach.dispatch')}</li>
+          <li>{t('lockAsUnsafe.reach.request')}</li>
+          <li>{t('lockAsUnsafe.reach.hazard')}</li>
+        </ul>
+        <p className="fw-pl-row">
+          <LawRef law="D.Lgs. 81/2008 art. 71" plain={t('lockAsUnsafe.lawPlain')} labels={ds.lawRef} />
+          <span className="fw-pl-text">{t('lockAsUnsafe.reversal')}</span>
         </p>
-        <p className="fw-pl-hint">{t('merge.hint')}</p>
-      </div>
+        <Field label={t('lockAsUnsafe.note')} hint={t('lockAsUnsafe.noteHint')}>
+          <Input value={dialog.note} maxLength={500} data-autofocus onChange={(event) => actions?.onLockNote?.(event.target.value)} />
+        </Field>
+      </form>
     </Modal>
   )
 }

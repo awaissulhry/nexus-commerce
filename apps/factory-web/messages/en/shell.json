@@ -70,6 +70,8 @@
       "requests": "Machine requests",
       "jobs": "Maintenance jobs",
       "machines": "Machines & tools",
+      "safety": "Health & safety",
+      "calendar": "Safety calendar",
       "settingsGroup": "Settings",
       "settings": "Plant settings"
     },
@@ -119,6 +121,7 @@
       "holds": "Holds",
       "settings": "Settings",
       "defects": "Defects & dispositions",
+      "rules": "Quality rules",
       "problems": "Problems",
       "ncr": "Nonconformances",
       "complaints": "Complaints"

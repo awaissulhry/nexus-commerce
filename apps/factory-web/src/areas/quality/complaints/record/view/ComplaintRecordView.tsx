@@ -10,19 +10,22 @@ import { formatDate, formatDateTime, formatNumber } from '../../../../../lib/i18
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { Freshness, RecordFrame, Section } from '../../../_shared/parts'
 import { COMPLAINT_SEVERITIES, OFFICE_CHANNELS, type Complaint, type ComplaintAction, type ComplaintLinkType, type OfficeChannel } from '../../api'
-import { dayAt, evidenceHref, garmentWords, LINK_TYPES, linkSaveHeld, linksHeld, linkTypeHeld, linkTypeKey, personName, primaryAction, recordHref, stepOf, unlinkHeld } from '../../model'
+import { capaWords, dayAt, evidenceHref, garmentWords, LINK_TYPES, linkSaveHeld, linksHeld, linkTypeHeld, linkTypeKey, personName, primaryAction, recordHref, stepOf, unlinkHeld } from '../../model'
 import { AcknowledgeDialog, CategoryTag, ComplaintsMessages, DueText, InstantText, say, SeverityTag, StatusPill, useWords } from '../../view/parts'
 import { TriageModal } from '../../view/TriageModal'
 import type { ComplaintRecordActions, ComplaintRecordModel, FactsDraft, RecordDialog, RecordTab } from '../view-model'
+import { AnswerTab, InvestigationTab, SendBody, sendReviewHeld } from './AnswerTabs'
 
 /**
- * A complaint's record (SCR-113 W2a part; design quality.complaints › Complaint, `?tab=complaint|linked|activity`): the
+ * A complaint's record (SCR-113; design quality.complaints › Complaint, `?tab=complaint|investigation|answer|linked|activity`): the
  * band (‹ Complaints, "CMP-… <summary>", the customer, the category, the status; the primary step by status — Triage,
  * Start investigation, Mark answered, Close — then Create NCR, and ⋯ Add to PPE register, Make a repair, the garment's
  * evidence trail in a new tab, Copy link), the safety alert until the owner acknowledges it, then the tabs: Complaint
  * (the customer's words and photos, what it is about, the triage and the safety state beside them; the facts edited with
- * the EditModeBar), Linked records (NCRs, CAPA, the return, the PPE register entry, shipment, order, the garment and its
- * repairs) and Activity (the record's thread and history). A closed complaint never changes. Fetches nothing.
+ * the EditModeBar), B-W2b-113's Investigation and Answer (./AnswerTabs: findings and root cause; the letter from a
+ * template, its preview and the send review), Linked records (NCRs, CAPA, the return, the PPE register entry, shipment,
+ * order, the garment and its repairs) and Activity (the record's thread and history). A closed complaint never changes.
+ * Fetches nothing.
  */
 export function ComplaintRecordView({ model, actions, panels }: { model: ComplaintRecordModel; actions?: ComplaintRecordActions; panels?: ReactNode }) {
   return (
@@ -54,6 +57,7 @@ function ComplaintRecord({ model, actions, panels }: { model: ComplaintRecordMod
     else if (action === 'register') open({ kind: 'register', risk: complaint.category === 'SAFETY' ? 'ASSESSING' : 'NO' })
     else if (action === 'createNcr') open({ kind: 'ncr', siteId: '', severity: complaint.severity ?? '' })
     else if (action === 'makeRepair') open({ kind: 'repair', siteId: '', received: false })
+    else if (action === 'sendAnswer') actions?.onSend?.()
   }
 
   const menuStep = (action: ComplaintAction, label: string): MenuItemDef => {
@@ -76,6 +80,8 @@ function ComplaintRecord({ model, actions, panels }: { model: ComplaintRecordMod
 
   const tabs = [
     { id: 'complaint', label: t('tab.complaint') },
+    { id: 'investigation', label: t('tab.investigation') },
+    { id: 'answer', label: t('tab.answer'), count: complaint.answer.sent ? null : complaint.answer.text ? 1 : null },
     { id: 'linked', label: t('tab.linked'), count: linkedCount(complaint) },
     ...(panels ? [{ id: 'activity', label: t('tab.activity') }] : []),
   ]
@@ -126,6 +132,8 @@ function ComplaintRecord({ model, actions, panels }: { model: ComplaintRecordMod
       >
         <RecordNotices model={model} actions={actions} held={held} run={run} />
         {tab === 'complaint' && <ComplaintTab model={model} actions={actions} held={held} run={run} />}
+        {tab === 'investigation' && <InvestigationTab model={model} actions={actions} held={held} />}
+        {tab === 'answer' && <AnswerTab model={model} actions={actions} held={held} />}
         {tab === 'linked' && <LinkedTab model={model} actions={actions} />}
         {tab === 'activity' && panels}
       </RecordFrame>
@@ -136,7 +144,7 @@ function ComplaintRecord({ model, actions, panels }: { model: ComplaintRecordMod
 }
 
 const linkedCount = (complaint: Complaint): number =>
-  complaint.ncrs.length + complaint.repairs.length + (complaint.register ? 1 : 0) + (complaint.return ? 1 : 0) + (complaint.shipment ? 1 : 0) + (complaint.order ? 1 : 0)
+  complaint.ncrs.length + complaint.repairs.length + (complaint.register ? 1 : 0) + (complaint.return ? 1 : 0) + (complaint.shipment ? 1 : 0) + (complaint.order ? 1 : 0) + (complaint.capaRecord ? 1 : 0)
 
 function RecordNotices({ model, actions, held, run }: { model: ComplaintRecordModel; actions?: ComplaintRecordActions; held: (action: ComplaintAction) => string | null; run: (action: ComplaintAction) => void }) {
   const t = useWords()
@@ -369,6 +377,18 @@ function StatusAside({ model, held, run }: { model: ComplaintRecordModel; held: 
           )}
         </div>
       </Card>
+      <Card padded>
+        <div className="fw-q-stack">
+          <h2 className="fw-cmp-h3">{t('linked.capa')}</h2>
+          {complaint.capaRecord ? (
+            <Link className="fw-q-link fw-q-code" href={model.hrefs[`Capa:${complaint.capaRecord.id}`] ?? `${model.prefix}/records/Capa/${encodeURIComponent(complaint.capaRecord.id)}`}>
+              {complaint.capaRecord.number} · {t(`capa.status.${complaint.capaRecord.status}`)}
+            </Link>
+          ) : (
+            <p className="fw-q-hint">{say(t, capaWords(complaint, model.can))}</p>
+          )}
+        </div>
+      </Card>
     </div>
   )
 }
@@ -516,7 +536,12 @@ function LinkedTab({ model, actions }: { model: ComplaintRecordModel; actions?: 
           complaint.ncrs.map((ncr) => ({ key: ncr.id, node: withUnlink(link(href('Nonconformance', ncr.id), ncr.number, (model.raisedFrom ?? []).includes(ncr.id) ? `${t(`linked.stage.${ncr.stage}`)} · ${t('links.raisedFrom')}` : t(`linked.stage.${ncr.stage}`)), 'Nonconformance', ncr.id, ncr.number) })),
           model.can.ncrView ? t('linked.ncrNone') : t('linked.ncrNoRight'),
         )}
-        {group('capa', t('linked.capa'), [], t('linked.capaLater'))}
+        {group(
+          'capa',
+          t('linked.capa'),
+          complaint.capaRecord ? [{ key: complaint.capaRecord.id, node: link(href('Capa', complaint.capaRecord.id), complaint.capaRecord.number, `${complaint.capaRecord.title} · ${t(`capa.status.${complaint.capaRecord.status}`)}`) }] : [],
+          say(t, capaWords(complaint, model.can)),
+        )}
         {group(
           'register',
           t('linked.register'),
@@ -597,6 +622,8 @@ function RecordDialogs({ model, actions }: { model: ComplaintRecordModel; action
     body = (
       <>
         <p className="fw-q-intro">{t(dialog.to === 'ANSWERED' ? 'move.answeredBody' : 'move.investigateBody')}</p>
+        {dialog.to === 'INVESTIGATING' && model.complaint.answer.sent && <p className="fw-q-hint">{t('move.reopenLetter', { version: model.complaint.answer.sent.version })}</p>}
+        {dialog.to === 'ANSWERED' && <p className="fw-q-hint">{t('move.answeredLetter')}</p>}
         <Field label={t('move.note')} hint={t(dialog.to === 'ANSWERED' ? 'move.answeredNoteHint' : 'move.noteHint')} htmlFor={ids.note}>
           <Textarea id={ids.note} rows={3} value={dialog.note} onChange={(event) => actions?.onDialog?.({ ...dialog, note: event.target.value })} />
         </Field>
@@ -620,6 +647,11 @@ function RecordDialogs({ model, actions }: { model: ComplaintRecordModel; action
     const saveHeld = linkSaveHeld(model.complaint, dialog, model.can)
     held = held ?? (saveHeld ? t(saveHeld.key, saveHeld.params) : null)
     body = <LinkBody model={model} actions={actions} dialog={dialog} />
+  } else if (dialog.kind === 'send') {
+    title = t('answer.send.title', { number: model.complaint.number })
+    confirm = t('answer.send.confirm')
+    held = sendReviewHeld(model, dialog.draft, t)
+    body = <SendBody model={model} actions={actions} draft={dialog.draft} />
   } else if (dialog.kind === 'unlink') {
     title = t('links.unlinkTitle', { label: dialog.label })
     confirm = t('links.unlink')
@@ -687,7 +719,7 @@ function RecordDialogs({ model, actions }: { model: ComplaintRecordModel; action
       open
       onClose={close}
       title={title}
-      size="sm"
+      size={dialog.kind === 'send' ? 'md' : 'sm'}
       footer={
         <>
           <span className="grow" />

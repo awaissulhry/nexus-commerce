@@ -176,12 +176,13 @@
     "walk": "Richiesta successiva / precedente (nel dettaglio)",
     "acknowledge": "Prendi in carico",
     "makeJob": "Crea un intervento",
-    "merge": "Unisci all’altra richiesta aperta",
+    "merge": "Unisci richieste (il gruppo di questa macchina)",
     "close": "Chiudi senza intervento",
     "signSafe": "Firma la macchina sicura",
     "newJob": "Nuovo intervento",
     "board": "Elenco ⇄ tabellone",
-    "newMachine": "Nuova macchina"
+    "newMachine": "Nuova macchina",
+    "lock": "Blocca la macchina come non sicura"
   },
   "requestView": {
     "open": "Richieste aperte",
@@ -211,9 +212,6 @@
     "startTriageCount_other": "Inizia lo smistamento ({count} nuove)",
     "more": "Altro per le richieste",
     "print": "Stampa le richieste aperte (per il turno)",
-    "lockedBanner_one": "{count} macchina è bloccata perché non sicura",
-    "lockedBanner_other": "{count} macchine sono bloccate perché non sicure",
-    "lockedBannerBody": "Nessuno le usa finché un tecnico non le controlla e le firma sicure (D.Lgs. 81/2008 art. 71).",
     "lockedShow": "Mostrale",
     "tableLabel": "Richieste di intervento",
     "failed": "Non è stato possibile leggere le richieste",
@@ -246,21 +244,15 @@
     "unsafe": "Non sicura",
     "unsafeLocked": "Sì: bloccata fino alla firma",
     "unsafeSigned": "Sì: firmata sicura",
-    "photos_one": "{count} foto",
-    "photos_other": "{count} foto",
-    "noPhotos": "Nessuna foto.",
-    "photoOpen": "Apri la foto {n}",
     "photoAlt": "Foto {n} del problema su {machine}",
     "photoTitle": "Foto {n} di {count}",
     "photoFull": "Foto a piena grandezza (nuova scheda)",
-    "photoUnread": "{name}: non è stato possibile mostrarla",
     "duplicates_one": "Possibili doppioni ({count})",
     "duplicates_other": "Possibili doppioni ({count})",
     "noDuplicates": "Nessun’altra richiesta aperta su questa macchina.",
     "openOther": "Apri",
     "mergeInto": "Unisci a questa",
     "trail": "Cosa è successo",
-    "routingLater": "L’instradamento al tecnico di turno e le escalation arrivano con le impostazioni dello stabilimento.",
     "repeatFailure_one": "{count} richiesta in 30 giorni: guasto ripetuto",
     "repeatFailure_other": "{count} richieste in 30 giorni: guasto ripetuto",
     "statusSince": "Stato da",
@@ -325,12 +317,6 @@
     },
     "law": "Solo un tecnico firma di nuovo sicura una macchina (D.Lgs. 81/2008 art. 71; risposta H1)."
   },
-  "merge": {
-    "title": "Unisci richieste",
-    "submit": "Unisci",
-    "body": "Unire questa richiesta su {machine} a quella segnalata il {when} da {who}?",
-    "hint": "Chi ha segnalato resta sulla richiesta che rimane; questa esce dalla coda."
-  },
   "report": {
     "title": "Segnala un problema",
     "submit": "Invia segnalazione",
@@ -393,7 +379,8 @@
   "jobTab": {
     "problem": "Problema",
     "handback": "Riconsegna",
-    "activity": "Attività"
+    "activity": "Attività",
+    "photos": "Foto"
   },
   "move": {
     "plan": "Pianifica",
@@ -515,9 +502,6 @@
   "handBack": {
     "title": "Riconsegna",
     "workDone": "Cosa è stato fatto",
-    "workDoneHint": "Chi viene dopo lo legge nello storico della macchina.",
-    "failureCodeLater": "I codici guasto (problema, causa, rimedio) arrivano più avanti.",
-    "timeSoFar": "Tempo finora: {time} (dall’avvio del lavoro).",
     "timeHint": "Il tempo si conta dall’avvio del lavoro.",
     "machineAfter": "La macchina dopo",
     "notStarted": "Il lavoro non è iniziato",
@@ -527,8 +511,7 @@
     "by": "Da",
     "at": "Quando",
     "time": "Tempo",
-    "retiresOnClose": "Chiudendo l’intervento la macchina viene dismessa.",
-    "confirmLater": "La conferma del capolinea che funziona arriva più avanti."
+    "retiresOnClose": "Chiudendo l’intervento la macchina viene dismessa."
   },
   "cancelJob": {
     "title": "Annulla intervento",
@@ -751,7 +734,6 @@
     "notOpen": "Questa richiesta non è più aperta.",
     "ackDone": "Già presa in carico.",
     "closeLocked": "Bloccata non sicura: si chiude solo dopo la firma di un tecnico.",
-    "mergeLocked": "Bloccata non sicura: si unisce solo dopo la firma di un tecnico.",
     "nothingToTriage": "Nessuna richiesta aperta da smistare.",
     "noneNew": "Nessuna delle richieste scelte è nuova.",
     "problemNeeded": "Di’ cosa non va.",
@@ -768,7 +750,6 @@
     "noChange": "Scegli un tecnico diverso da quello attuale.",
     "jobDone": "L’intervento è chiuso o annullato.",
     "lockedRunning": "Ancora bloccata non sicura: «In funzione» dopo la firma di un tecnico.",
-    "workDoneNeeded": "Di’ cosa è stato fatto.",
     "machineAfterNeeded": "Di’ come resta la macchina.",
     "siteNeeded": "Scegli lo stabilimento.",
     "assetNumberNeeded": "Scrivi la matricola (lettere, cifre, . / - _).",
@@ -803,7 +784,6 @@
     "jobMade": "Intervento {number} creato",
     "joined": "Aggiunta all’intervento {number}",
     "closed": "{machine}: richiesta chiusa",
-    "merged": "{machine}: richieste unite",
     "signedSafe": "{machine} firmata sicura: {status}",
     "reported": "{machine}: problema segnalato",
     "reportedUnsafe": "{machine}: segnalata e bloccata non sicura",
@@ -827,7 +807,19 @@
       "reopen": "{number} ripreso",
       "close": "{number} chiuso",
       "cancel": "{number} annullato"
-    }
+    },
+    "mergedMany_one": "{machine}: {count} richiesta unita a quella tenuta",
+    "mergedMany_other": "{machine}: {count} richieste unite a quella tenuta",
+    "mergedIntoJob_one": "{count} richiesta aggiunta all’intervento {number}",
+    "mergedIntoJob_other": "{count} richieste aggiunte all’intervento {number}",
+    "locked": "{machine} bloccata non sicura: la firma sicura un tecnico",
+    "lockedJoined": "{machine} bloccata non sicura; questa richiesta si è unita al blocco",
+    "onTheWay": "{machine}: la postazione vede un tecnico in arrivo",
+    "works": "{machine}: confermato che funziona di nuovo",
+    "leadConfirmed": "{number}: il capolinea ha confermato che funziona",
+    "leadRefused": "{number}: non confermato",
+    "photoAdded": "{number}: foto aggiunta",
+    "voiceAdded": "{number}: nota vocale aggiunta"
   },
   "stepUp": {
     "title": "Conferma con l’autenticatore",
@@ -854,7 +846,10 @@
     "photos": "Foto",
     "duplicates": "Altre aperte",
     "state": "Stato",
-    "job": "Intervento"
+    "job": "Intervento",
+    "voiceNotes": "Note vocali",
+    "routedTo": "Inviata a",
+    "escalation": "Livello di escalation"
   },
   "csvJob": {
     "number": "Numero",
@@ -886,5 +881,209 @@
     "openJobs": "Interventi aperti",
     "openRequests": "Richieste aperte",
     "cost": "Costo d’acquisto (EUR)"
+  },
+  "locks": {
+    "failed": "Non è stato possibile leggere le macchine bloccate non sicure",
+    "loading": "Lettura delle macchine bloccate non sicure…",
+    "label_one": "{count} macchina bloccata non sicura",
+    "label_other": "{count} macchine bloccate non sicure",
+    "title": "{class} {machine} bloccata: {what}",
+    "body": "Segnalata alle {when} da {who} · {age} fa",
+    "youSign": "resta bloccata finché un tecnico la firma sicura (puoi farlo tu)",
+    "technicianSigns": "resta bloccata finché un tecnico la firma sicura",
+    "open": "Apri",
+    "openFor": "Apri la richiesta che blocca {machine}",
+    "more_one": "Ancora {count} macchina bloccata non sicura.",
+    "more_other": "Ancora {count} macchine bloccate non sicure."
+  },
+  "dupes": {
+    "title": "Possibili doppioni",
+    "failed": "Non è stato possibile leggere i possibili doppioni.",
+    "loading": "Lettura dei possibili doppioni…",
+    "words_one": "{count} richiesta su {class} {machine} in {age}",
+    "words_other": "{count} richieste su {class} {machine} in {age}",
+    "kept": "Tenuta",
+    "suggestJob": "Proposta: aggiungile all’intervento aperto {number}; ogni segnalatore resta informato.",
+    "suggestRequest": "Proposta: tieni la richiesta segnata Tenuta; ogni segnalatore resta informato.",
+    "merge": "Unisci in una"
+  },
+  "mergeMany": {
+    "open": "Unisci richieste",
+    "title": "Unisci richieste · {machine}",
+    "body_one": "{count} richiesta aperta su {class} {machine} in {age}.",
+    "body_other": "{count} richieste aperte su {class} {machine} in {age}.",
+    "target": "Unisci in",
+    "intoJob": "L’intervento aperto {number}",
+    "intoJobHint": "ogni richiesta si aggiunge all’intervento",
+    "intoRequest": "La richiesta delle {when}",
+    "suggested": "Proposta",
+    "which": "Richieste da unire",
+    "isTarget": "è quella tenuta",
+    "lockedSource": "blocca la macchina: si aggiunge a un intervento, mai a un’altra richiesta",
+    "reporters": "Ogni segnalatore tiene la sua richiesta, segue quella tenuta e conferma da sé quando funziona.",
+    "hint": "Tutte o nessuna: una richiesta cambiata nel frattempo ferma l’unione.",
+    "submit_one": "Unisci {count}",
+    "submit_other": "Unisci {count}",
+    "held": {
+      "none": "Scegli almeno una richiesta da unire.",
+      "lockedSource": "Una richiesta che blocca la macchina non si unisce mai a un’altra richiesta: tieni quella, oppure unisci all’intervento aperto.",
+      "noGroup": "Nessun’altra richiesta aperta su questa macchina da unire."
+    }
+  },
+  "lockAsUnsafe": {
+    "button": "Blocca non sicura",
+    "title": "Bloccare {machine} come non sicura?",
+    "reachTitle": "Cosa succede",
+    "reach": {
+      "station": "{machine} diventa da non usare subito, sulla sua postazione e sul tablet.",
+      "lists": "Il tabellone di pianificazione e ogni elenco la mostrano bloccata.",
+      "dispatch": "Non le viene mandato lavoro finché non è firmata sicura.",
+      "request": "Questa richiesta si unisce al blocco: il suo segnalatore lo segue.",
+      "hazard": "Si chiede una segnalazione di pericolo in Infortuni (la pagina Infortuni arriva più avanti)."
+    },
+    "reversal": "Solo un tecnico la firma di nuovo sicura.",
+    "lawPlain": "Le attrezzature di lavoro devono essere sicure: una macchina non sicura non si usa finché non è controllata e messa a posto.",
+    "note": "Cosa hai visto (facoltativo)",
+    "noteHint": "Si aggiunge alla descrizione del blocco; mai il nome di una persona.",
+    "keys": "Invio blocca · Esc annulla",
+    "submit": "Blocca la macchina",
+    "held": {
+      "locked": "La macchina è già bloccata non sicura.",
+      "notAllowed": "In questo stabilimento bloccano una macchina solo capolinea e tecnici."
+    }
+  },
+  "routing": {
+    "column": "Inviata a",
+    "none": "Non inviata (nessuna regola)",
+    "team": "{name}",
+    "aTeam": "Una squadra di manutenzione",
+    "technician": "{name}",
+    "aTechnician": "Un tecnico",
+    "escalated": "Passata oltre (livello {level})"
+  },
+  "progress": {
+    "title": "Cosa vede chi l’ha segnalata",
+    "body": "La postazione segue questi passi sul suo tablet.",
+    "step": {
+      "REPORTED": "Segnalato",
+      "ACKNOWLEDGED": "Vista dalla manutenzione",
+      "ON_THE_WAY": "Un tecnico sta arrivando",
+      "FIXED": "Riparata: riconsegnata",
+      "WORKS": "Funziona di nuovo: confermato"
+    },
+    "lockedNote": "Bloccata non sicura: nessuno conferma che funziona prima che un tecnico la firmi sicura.",
+    "mergedNote": "Unita a un’altra richiesta della macchina: segue l’avanzamento di quella.",
+    "onTheWay": "Sto arrivando",
+    "works": "Funziona di nuovo",
+    "held": {
+      "onTheWay": "Un tecnico sta già arrivando.",
+      "cannotGo": "Ora non è aperta per un tecnico.",
+      "confirmed": "Già confermato: funziona di nuovo.",
+      "locked": "Bloccata non sicura: prima un tecnico la firma sicura.",
+      "closedWithoutJob": "Chiusa senza intervento: niente da confermare.",
+      "notFixed": "Non ancora riparata: l’intervento non è riconsegnato.",
+      "cannotConfirm": "Ora non si conferma."
+    }
+  },
+  "trail2": {
+    "routed": "Inviata a {to}",
+    "escalated": "Non presa in carico in tempo: passata oltre (livello {level})",
+    "onTheWay": "In arrivo: {who}",
+    "fixed": "Riparata: riconsegnata",
+    "fixedJob": "Riparata: intervento {number} riconsegnato",
+    "works": "Funziona di nuovo: confermato da {who}"
+  },
+  "media": {
+    "requestTitle": "Foto {photos} · note vocali {voices}",
+    "jobTitle": "Foto e note vocali dell’intervento",
+    "fromRequests_one": "Dalla sua richiesta ({count})",
+    "fromRequests_other": "Dalle sue richieste ({count})",
+    "photo": "Foto",
+    "before": "Prima del lavoro",
+    "after": "Dopo il lavoro",
+    "voice": "Nota vocale",
+    "voiceN": "Nota vocale {n}",
+    "voices": "Note vocali",
+    "voiceCount_one": "{count} nota vocale",
+    "voiceCount_other": "{count} note vocali",
+    "count": "foto {photos} · note vocali {voices}",
+    "none": "Nessuna foto o nota vocale.",
+    "noneJob": "Ancora nessuna foto.",
+    "noneRequests": "Nessuna foto o nota vocale sulle sue richieste.",
+    "noRead_one": "{count} file: per aprirlo serve il diritto sui file (files.read).",
+    "noRead_other": "{count} file: per aprirli serve il diritto sui file (files.read).",
+    "openPhoto": "Apri la foto {n}: {what}",
+    "photoAlt": "Foto {n}: {what}",
+    "listenTo": "Ascolta la nota vocale {n}",
+    "unread": "{name}: non si è potuta mostrare",
+    "addBefore": "Foto prima",
+    "addAfter": "Foto dopo",
+    "addVoice": "Aggiungi una nota vocale",
+    "takeBefore": "Una foto prima del lavoro",
+    "takeAfter": "Una foto dopo il lavoro",
+    "sendingPhoto": "Invio della foto…",
+    "sendingVoice": "Invio della nota vocale…",
+    "phoneHint": "Da un telefono: la fotocamera, con frecce e cerchi disegnati; una nota vocale dal registratore del telefono. Mai volti.",
+    "audioType": "Questo file non è una nota vocale che accettiamo (webm, ogg, m4a, mp3, aac o wav).",
+    "audioSize": "Questa nota vocale è troppo lunga: al massimo 10 MB.",
+    "held": {
+      "closed": "L’intervento è chiuso: niente più foto."
+    }
+  },
+  "close": {
+    "action": "Cosa è stato fatto?",
+    "otherHint": "Dillo a parole",
+    "failure": "Cosa si è guastato?",
+    "failureHint": "I riquadri del codice guasto valgono finché non arriva l’elenco dei codici (problema, causa, rimedio).",
+    "noFailure": "Nessuno indicato",
+    "wordsHint": "Facoltativo con un riquadro: chi viene dopo lo legge nello storico della macchina.",
+    "wordsOther": "Serve per Altro: cosa è stato fatto.",
+    "notStarted": "Non iniziato: nessun tempo contato.",
+    "minutes": "{time} dall’avvio del lavoro (lo conta l’ufficio).",
+    "dialogTitle": "Riconsegna {number} · {machine}",
+    "dialogHint": "Cosa è stato fatto → cosa si è guastato → Riconsegna",
+    "lockedNote": "{machine} è bloccata non sicura: In funzione attende la firma di sicurezza di un tecnico.",
+    "held": {
+      "action": "Scegli cosa è stato fatto.",
+      "words": "Scrivi cosa è stato fatto (Altro).",
+      "failure": "Scegli cosa si è guastato."
+    }
+  },
+  "lead": {
+    "title": "Il capolinea conferma",
+    "body": "Chi ha chiesto conferma che la macchina funziona: sul tablet il capolinea, qui una persona che smista le richieste.",
+    "confirm": "Conferma che funziona",
+    "by": "Confermato da",
+    "at": "Quando",
+    "tag": "Funzionamento confermato",
+    "reporters": "Chi l’ha segnalata, e cosa vede",
+    "firstPiece": "Sono state toccate le regolazioni del punto: un controllo del primo pezzo dopo la riparazione arriva con una versione successiva (Qualità › Ispezioni).",
+    "held": {
+      "done": "Già confermato.",
+      "noRight": "Lo conferma una persona che smista le richieste (plant.requests.triage).",
+      "notHandedBack": "Si conferma quando l’intervento è riconsegnato.",
+      "cannot": "Ora non si conferma."
+    }
+  },
+  "lockPanel": {
+    "title": "{machine} bloccata dalle {since} da {who}",
+    "reason": "Motivo: {reason}",
+    "body": "La firma sicura un tecnico; lo stato torna In funzione o In manutenzione."
+  },
+  "depthRefusal": {
+    "ALREADY_ACKNOWLEDGED": "Un tecnico ha già visto questa richiesta.",
+    "ON_THE_WAY_ALREADY": "Un tecnico sta già arrivando.",
+    "NOT_ON_THE_WAY_NOW": "Ora questa richiesta non è aperta per un tecnico.",
+    "NOT_FIXED_YET": "Non ancora riparata: l’intervento non è riconsegnato.",
+    "WORKS_CONFIRMED": "Già confermato: funziona di nuovo.",
+    "CLOSED_WITHOUT_JOB": "Chiusa senza intervento: niente da confermare.",
+    "H1_HELD": "Lo stabilimento tiene la regola del titolare: chiunque in postazione blocca, solo un tecnico firma sicura.",
+    "LOCK_NOT_ALLOWED": "In questo stabilimento bloccano una macchina solo capolinea e tecnici.",
+    "LOCKED_ALREADY": "La macchina è già bloccata non sicura: rileggila.",
+    "MERGE_NOTHING": "Scegli le richieste da unire.",
+    "NOT_HANDED_BACK": "L’intervento non è ancora riconsegnato.",
+    "LEAD_CONFIRMED": "Il capolinea ha già confermato che funziona.",
+    "FILES_CLOSED": "Chiusa: niente più foto o note vocali.",
+    "ORDER_INCOMPLETE": "L’ordine nomina ogni regola: rileggile."
   }
 }

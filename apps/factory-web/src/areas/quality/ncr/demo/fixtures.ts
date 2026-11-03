@@ -344,7 +344,12 @@ export const RECORD: NcrRecord = {
     ready: false,
   },
   actions: { edit: null, contain: 'x', decide: 'x', close: 'x', cancel: 'x' },
-  may: { manage: true, approve: true, close: true, raise: true },
+  may: { manage: true, approve: true, close: true, raise: true, cost: true, escalate: true },
+  // B-W2b-113: not escalated yet, no concession asked, no report version kept (the record cases set their own).
+  capaRecord: null,
+  capaElsewhere: false,
+  concessions: [],
+  reports: [],
 }
 
 /** The same NCR fresh: OPEN, nothing contained or decided. */

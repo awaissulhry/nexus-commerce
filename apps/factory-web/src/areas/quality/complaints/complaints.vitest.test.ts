@@ -1,6 +1,8 @@
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { ANSWER_TEMPLATES } from '@nexus/factory-domain/quality/complaints/answer'
+import { CAPA_STATUSES } from '@nexus/factory-domain/quality/capa/rules'
 import { COMPLAINT_ACTIONS, HELD_CODES } from '@nexus/factory-domain/quality/complaints/rules'
 import { ApiError } from '../../../lib/api/errors'
 import type { DesignScreen } from '../../../lib/design/design-screen'
@@ -9,13 +11,31 @@ import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
 import { LIST_PAGES, RECORD_PAGES } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
-import { complaintOf, ROWS, SAFETY_ALERT, SAFETY_ID, TODAY } from './demo/fixtures'
+import { complaintOf, ROWS, SAFETY_ALERT, SAFETY_ID, TODAY, withLetter } from './demo/fixtures'
 import { designScreen as listScreen } from './fixtures'
 import {
   addressOf,
   addressText,
   alertGarment,
+  answerBody,
+  answerChanged,
+  answerDraftOf,
   answerDueWords,
+  answerSaveHeld,
+  capaWords,
+  checkProblemKey,
+  garmentForLetter,
+  investigationBody,
+  investigationChanged,
+  investigationDraftOf,
+  investigationSaveHeld,
+  previewProblemKey,
+  sendBodyOf,
+  sendDraftOf,
+  sendHeldKey,
+  sendRefusalKey,
+  templateWords,
+  withTemplate,
   blankLogDraft,
   complaintsCan,
   complaintsCsv,
@@ -241,6 +261,115 @@ describe('B-W2b-17: Link… / Unlink on Linked records (design cmp-links)', () =
       const words = CATALOGUE[locale].complaints ?? {}
       for (const key of keys) expect(words[key], `${locale} ${key}`).toBeTruthy()
     }
+  })
+})
+
+describe('B-W2b-113: the investigation and the answer letter (design cmp-inv, cmp-ans)', () => {
+  const investigating = complaintOf(ROWS.find((row) => row.status === 'INVESTIGATING')!)
+  const fresh = complaintOf(ROWS.find((row) => row.status === 'NEW')!)
+
+  it('the investigation: the saved words, what changed, an emptied text clears it', () => {
+    const draft = investigationDraftOf({ findings: 'Seam open', rootCause: null })
+    expect(draft).toEqual({ findings: 'Seam open', rootCause: '' })
+    expect(investigationChanged(draft, { findings: 'Seam open', rootCause: null })).toBe(false)
+    expect(investigationSaveHeld(draft, { findings: 'Seam open', rootCause: null })).toBe('record.editNothing')
+    expect(investigationBody({ findings: '  ', rootCause: ' Tension ' })).toEqual({ findings: null, rootCause: 'Tension' })
+    expect(investigationSaveHeld({ findings: 'x'.repeat(4001), rootCause: '' }, { findings: null, rootCause: null })).toBe('investigation.held.findingsLong')
+  })
+
+  it('the letter opens as saved, else in the customer’s language with nothing written', () => {
+    expect(answerDraftOf(investigating)).toEqual({ template: '', language: 'it', text: '', fileIds: [] })
+    const written = withLetter(investigating, { template: 'REPAIR', language: 'en', text: 'Dear', files: [{ id: 'f1', originalName: 'a.pdf', kind: 'DOCUMENT', status: 'AVAILABLE', shared: true }] })
+    expect(answerDraftOf(written)).toEqual({ template: 'REPAIR', language: 'en', text: 'Dear', fileIds: ['f1'] })
+    expect(answerChanged(answerDraftOf(written), written)).toBe(false)
+    expect(answerChanged({ ...answerDraftOf(written), fileIds: [] }, written)).toBe(true)
+    expect(answerSaveHeld(answerDraftOf(written), written)).toBe('record.editNothing')
+    expect(answerBody({ template: '', language: 'it', text: '  ', fileIds: ['f1'] })).toEqual({ template: null, language: 'it', text: null, fileIds: ['f1'] })
+    // A written letter frees the send of its NO_ANSWER hold (the API's answer, as the fixtures hold it).
+    expect(written.actions.find((entry) => entry.action === 'sendAnswer')).toMatchObject({ allowed: true, held: null })
+  })
+
+  it('a template fills the letter with the complaint’s own facts, in the letter’s language', () => {
+    const italian = templateWords('REPAIR', 'it', investigating)
+    expect(italian).toContain('Gentile Dario Demo')
+    expect(italian).toContain('PT-DEMO-200 Demo touring pants, taglia 48')
+    expect(templateWords('REPAIR', 'en', investigating)).toContain('size 48')
+    expect(garmentForLetter({ style: null, size: null, serial: null, batchNumber: null }, 'en')).toBeNull()
+    expect(garmentForLetter({ style: null, size: '50', serial: 'S1', batchNumber: 'B1' }, 'en')).toBe('size 50, serial S1')
+  })
+
+  it('picking a template replaces only words the person did not write; another language follows the template', () => {
+    const blank = answerDraftOf(investigating)
+    const repair = withTemplate(blank, { template: 'REPAIR' }, investigating)
+    expect(repair).toEqual({ draft: { ...blank, template: 'REPAIR', text: templateWords('REPAIR', 'it', investigating) }, keptWords: false })
+    const english = withTemplate(repair.draft, { language: 'en' }, investigating)
+    expect(english.draft.text).toBe(templateWords('REPAIR', 'en', investigating))
+    const own = { ...repair.draft, text: `${repair.draft.text} And our own words.` }
+    expect(withTemplate(own, { template: 'CREDIT' }, investigating)).toEqual({ draft: { ...own, template: 'CREDIT' }, keptWords: true })
+  })
+
+  it('the send review: the suggested contact ticked; held until it may go; the standard words left to the API', () => {
+    const check = { ready: true, problems: [], recipients: [{ contactId: 'c1', name: 'A', email: 'a@example.com', language: 'it', suggested: true }, { contactId: 'c2', name: 'B', email: 'b@example.com', language: null, suggested: false }], language: 'it' as const, subject: 'S', message: 'M' }
+    const draft = sendDraftOf(check)
+    expect(draft).toEqual({ contactIds: ['c1'], cc: '', subject: 'S', message: 'M' })
+    expect(sendHeldKey(null, draft)).toBe('answer.send.reading')
+    expect(sendHeldKey(check, draft)).toBeNull()
+    expect(sendHeldKey(check, { ...draft, contactIds: [] })).toBe('answer.send.heldNoRecipient')
+    expect(sendHeldKey(check, { ...draft, cc: 'nope' })).toBe('answer.send.heldCc')
+    expect(sendHeldKey({ ...check, problems: [{ path: 'company/rea', message: 'x' }] }, draft)).toBe('answer.send.heldProblems')
+    expect(sendBodyOf(check, draft)).toEqual({ contactIds: ['c1'] })
+    expect(sendBodyOf(check, { ...draft, cc: 'x@example.com, y@example.com', subject: 'Other' })).toEqual({ contactIds: ['c1'], cc: ['x@example.com', 'y@example.com'], subject: 'Other' })
+  })
+
+  it('the check’s problems and the refusals in our words, never the API’s', () => {
+    expect(checkProblemKey('company/rea')).toBe('answer.send.problem.letterhead')
+    expect(checkProblemKey('letter/company/rea')).toBe('answer.send.problem.letterhead')
+    expect(checkProblemKey('fileIds')).toBe('answer.send.problem.notShared')
+    expect(checkProblemKey('contactIds')).toBe('answer.send.problem.contactIds')
+    expect(checkProblemKey('body/attachments/0')).toBe('answer.send.problem.notShared')
+    expect(checkProblemKey('held/NO_ANSWER')).toBe('held.NO_ANSWER')
+    expect(checkProblemKey('letter/filesRead')).toBe('answer.send.problem.filesRead')
+    expect(checkProblemKey('anything')).toBe('answer.send.problem.other')
+    expect(previewProblemKey(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'company/vatNumber', message: 'x' }]))).toBe('answer.preview.letterhead')
+    expect(sendRefusalKey(new ApiError('invalid', 400, 'validation_failed', 'x', null, [{ path: 'body/attachments/1', message: 'x' }]))).toBe('answer.send.problem.notShared')
+    expect(sendRefusalKey(new ApiError('conflict', 409, 'invalid_state', 'x', null, [{ path: 'held/ANSWER_SENT', message: 'x' }]))).toBe('held.ANSWER_SENT')
+    expect(refusalKey(new ApiError('invalid', 400, 'validation_failed', 'x', null, [{ path: 'body/findings', message: 'x' }]))).toBe('refusal.field.findings')
+  })
+
+  it('the CAPA in words: its number, escalated elsewhere, none, no right', () => {
+    const can = complaintsCan(['quality.capa.view'])
+    expect(capaWords(investigating, can)).toEqual({ key: 'capa.named', params: { number: 'CAPA-DEMO-0003', title: investigating.capaRecord!.title } })
+    expect(capaWords({ capaRecord: null, capaElsewhere: true }, can).key).toBe('capa.elsewhere')
+    expect(capaWords({ capaRecord: null, capaElsewhere: false }, can).key).toBe('capa.none')
+    expect(capaWords({ capaRecord: null, capaElsewhere: false }, complaintsCan([])).key).toBe('capa.noRight')
+    expect(fresh.capaRecord).toBeNull()
+  })
+
+  it('every new word is in both languages: the tabs, the templates’ use, the CAPA stages, the send’s problems', () => {
+    const keys = [
+      'tab.investigation',
+      'tab.answer',
+      'held.ANSWER_SENT',
+      'held.NO_ANSWER',
+      ...CAPA_STATUSES.map((status) => `capa.status.${status}`),
+      ...['contactIds', 'letterhead', 'notShared', 'filesRead', 'other'].map((key) => `answer.send.problem.${key}`),
+      ...['findings', 'rootCause', 'template', 'language', 'text', 'fileIds', 'contactIds', 'cc', 'subject', 'attachments'].map((key) => `refusal.field.${key}`),
+      'answer.via.EMAIL',
+      'answer.via.PORTAL',
+      'answer.language.it',
+      'answer.language.en',
+      'answer.preview.letterhead',
+      'done.answerSent',
+      'done.answerSaved',
+      'done.investigationSaved',
+      'done.fileShared',
+      'csv.capa',
+    ]
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale].complaints ?? {}
+      for (const key of keys) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+    expect(ANSWER_TEMPLATES.length).toBeGreaterThan(0)
   })
 })
 

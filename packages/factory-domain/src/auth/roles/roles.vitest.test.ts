@@ -41,7 +41,7 @@ describe('the permission registry', () => {
     expect(FACTORY_PERMISSIONS.get('roles.assign')?.risk).toBe('stepUp')
     expect(FACTORY_PERMISSIONS.assignable.some((definition) => definition.area === 'money')).toBe(false)
     expect(FACTORY_PERMISSIONS.undeclared(['users.view', 'quotes.export', 'quotes.export'])).toEqual(['quotes.export'])
-    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'email', 'integrations', 'compliance', 'product', 'inventory', 'shipping', 'parties', 'planning', 'purchasing', 'invoices', 'payments', 'costing', 'production', 'workorders', 'quotes', 'sales', 'companies', 'sites', 'orders', 'privacy', 'quality', 'home', 'floorsync', 'calendars', 'reasons', 'paymentterms', 'pricelists', 'tasks', 'views', 'search', 'plant', 'alerts', 'accounting', 'security', 'receivables', 'payables', 'people', 'money'])
+    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'email', 'integrations', 'compliance', 'product', 'inventory', 'shipping', 'parties', 'planning', 'purchasing', 'invoices', 'payments', 'costing', 'production', 'workorders', 'quotes', 'sales', 'companies', 'sites', 'orders', 'privacy', 'quality', 'home', 'floorsync', 'calendars', 'reasons', 'paymentterms', 'pricelists', 'tasks', 'views', 'search', 'plant', 'alerts', 'accounting', 'security', 'receivables', 'payables', 'people', 'safety', 'money'])
   })
 
   it('refuses a name declared twice, a bad area, a bad risk, an empty description', () => {
@@ -60,6 +60,8 @@ describe('role templates', () => {
       'owner', 'admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor',
       // B-W2a-35: the plant's technicians (office and floor).
       'maintenance',
+      // B-W2b-120: the HR office, the safety officer and the occupational doctor.
+      'hr', 'safety_officer', 'company_doctor',
       'read_only',
       'operator', 'cutting_operator', 'floor_inspector', 'team_leader',
       'technician',

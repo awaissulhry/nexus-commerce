@@ -8,7 +8,9 @@ import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui
 import { Button, FilterChip, Input, Skeleton } from '@nexus/ui/primitives'
 import { formatDate, formatNumber } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
+import { recordAddress } from '../../../../lib/records/record-links'
 import { ListFrame } from '../../../../list-frame/ListFrame'
+import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import type { ListKey } from '../../../../list-frame/model'
 import { Freshness, NoAccess, PageHead } from '../../_shared/parts'
 import { COMPLAINT_CATEGORIES, COMPLAINT_SEVERITIES, COMPLAINT_VIEWS, type ComplaintRow, type ComplaintView } from '../api'
@@ -146,6 +148,17 @@ function Complaints({ model, actions }: { model: ComplaintsListModel; actions?: 
           <span className="fw-q-hint">—</span>
         )
       ) : null
+    // B-W2b-113 (design cmp-grid "CAPA"): the CAPA it is escalated to, opened at the CAPA's own place (its page once built).
+    const CapaCell = ({ data }: ICellRendererParams<ComplaintRow>) =>
+      data ? (
+        data.capa ? (
+          <Link className="fw-q-link fw-q-code" href={`${model.prefix}${recordAddress({ type: 'Capa', id: data.capa.id, label: data.capa.number, companyId: data.companyId }, OFFICE_PAGES)}`} tabIndex={-1}>
+            {data.capa.number}
+          </Link>
+        ) : (
+          <span className="fw-q-hint">—</span>
+        )
+      ) : null
     const RegisterCell = ({ data }: ICellRendererParams<ComplaintRow>) =>
       data ? (
         data.register ? (
@@ -186,7 +199,7 @@ function Complaints({ model, actions }: { model: ComplaintsListModel; actions?: 
       column('owner', t('col.owner'), OwnerCell, { flex: 0.9, minWidth: 120 }),
       column('due', t('col.due'), DueCell, { flex: 0.9, minWidth: 130 }),
       column('ncr', t('col.ncr'), NcrCell, { flex: 0.7, minWidth: 100 }),
-      { ...column('capa', t('col.capa'), () => <span className="fw-q-hint">—</span>, { flex: 0.5, minWidth: 80 }), headerTooltip: t('col.capaHint') },
+      { ...column('capa', t('col.capa'), CapaCell, { flex: 0.7, minWidth: 110 }), headerTooltip: t('col.capaHint') },
       column('register', t('col.register'), RegisterCell, { flex: 0.9, minWidth: 130 }),
       {
         ...column('value', t('col.value'), ValueCell, { flex: 0.8, minWidth: 120 }),

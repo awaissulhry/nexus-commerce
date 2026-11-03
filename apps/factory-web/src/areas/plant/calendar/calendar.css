@@ -1,0 +1,189 @@
+/*
+ * Plant › Health & safety › Safety calendar (SCR-267, B-W2b-120) LAYOUT: the band, the tiles, the calendar, the safety
+ * organisation, the RLS panel, the dialogs' forms and the two prints. The page fills the shell's main area (no
+ * max-width: Owner rule 2026-10-29); the controls are the design system's; semantic tokens only.
+ */
+.fw-hs,
+.fw-hs-section,
+.fw-hs-stack,
+.fw-hs-form,
+.fw-hs-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-hs {
+  gap: var(--nds-space-20);
+}
+
+.fw-hs-section,
+.fw-hs-loading {
+  gap: var(--nds-space-8);
+}
+
+.fw-hs-anchor {
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-hs-band,
+.fw-hs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-hs-status,
+.fw-hs-actions,
+.fw-hs-tools,
+.fw-hs-row,
+.fw-hs-meta,
+.fw-hs-head-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-hs-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-hs-h:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-hs-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-hs-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-hs-warn {
+  margin: 0;
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-hs-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-hs-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fw-hs-slow {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  opacity: 0;
+  animation: fw-hs-slow 0s linear 1s forwards;
+}
+
+@keyframes fw-hs-slow {
+  to {
+    opacity: 1;
+  }
+}
+
+.fw-hs-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.fw-hs-missing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-warning);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-warning-soft);
+}
+
+.fw-hs-missing-title {
+  font-weight: 600;
+  color: var(--nds-warning-text);
+}
+
+.fw-hs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-hs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-4) var(--nds-space-2) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-hs-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-hs-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-hs-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+/* The prints (new tabs): the groups one under the other, each table the paper's width. */
+.fw-hs-print-note {
+  margin: 0 0 var(--nds-space-8);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+@media print {
+  .fw-hs-print-group {
+    break-inside: avoid;
+  }
+}
