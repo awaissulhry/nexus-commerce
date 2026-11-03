@@ -1,0 +1,29 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/capa.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context, for the reminders and the escalation of an overdue action) opens CAPAs and 8Ds, links their sources and follows their actions through apps/factory-api's modules/quality/capa (B-W2b-108), always through command(); the API keeps staff to the companies their grants reach (a company is a column, not a policy key: the keys are tenant, site and party). The floor has no grant here: an action's owner is an office user. Portal and link sessions read nothing here: an 8D reaches a customer as a shared document (W2b-3). Nobody deletes a CAPA (it is cancelled) or an action (it is cancelled); a source is removed while the CAPA is open, unless an NCR still names the CAPA (the …_quality_problems_w2b_guards triggers), and the audit log keeps it. No money column, and no figure per person: an owner is named on a record, never counted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Capa": {
+      "about": "The office opens a CAPA or an 8D (numbered from the company's CAPA series), edits its team, problem and stage, and closes or cancels it. Office only; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "CapaSource": {
+      "about": "The office names the NCRs, complaints and audits a CAPA came from, and removes one while the CAPA is open (the audit log keeps it). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "delete"] }
+      }
+    },
+    "CapaAction": {
+      "about": "The office adds and follows a CAPA's corrective and preventive actions, with their reminders, escalation and evidence, while the CAPA is open; the worker counts a reminder and marks an escalation in the tenant's system context. Office only; cancelled, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

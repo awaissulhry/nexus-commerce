@@ -7,6 +7,7 @@ import { seed as seedAndon } from '../seed/andon'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedCalendar } from '../seed/calendar'
+import { seed as seedCapa } from '../seed/capa'
 import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
 import { seed as seedCosting } from '../seed/costing'
@@ -248,6 +249,9 @@ beforeAll(async () => {
   // The inspection plans and records schema of W2b (wave 10/16).
   await seedInspectionPlans({ db: factory, namespace: 'iso-a' })
   await seedInspectionPlans({ db: factory, namespace: 'iso-b' })
+  // The quality problems schema of W2b (wave 11/16).
+  await seedCapa({ db: factory, namespace: 'iso-a' })
+  await seedCapa({ db: factory, namespace: 'iso-b' })
   // W2b-2 (B-W2b-74): a floor session inserts only an unplanned operation, so the first operation of tenant A's first site is
   // one, on its work order in progress (the seeds leave a work order's operations to their routing, every test reads them).
   await db.admin.query(
@@ -294,6 +298,10 @@ it('covers every classified table and every runtime role', () => {
     'BundleCoupon',
     'BundleReprint',
     'CalendarDay',
+    'Capa',
+    'CapaAction',
+    'CapaSource',
+    'CauseCode',
     'Certificate',
     'CertificateCoverage',
     'CertificateRenewal',
@@ -396,7 +404,9 @@ it('covers every classified table and every runtime role', () => {
     'MeasurementTemplate',
     'Message',
     'MessageMention',
+    'NcrConcession',
     'NcrContainmentAction',
+    'NcrCostLine',
     'NcrDispositionLine',
     'NcrLink',
     'Nonconformance',
@@ -463,7 +473,9 @@ it('covers every classified table and every runtime role', () => {
     'PurchaseOrderReminder',
     'PurchaseOrderRevision',
     'PurchasingSettings',
+    'QualityAlertRule',
     'QualityHold',
+    'QualityHoldGroup',
     'QualityRelease',
     'QualityReleaseReversal',
     'QualitySettings',

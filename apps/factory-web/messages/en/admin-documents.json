@@ -260,6 +260,7 @@
       "COUNT": "Stock count",
       "NCR": "Nonconformance",
       "MAINTENANCE_JOB": "Maintenance job",
+      "CAPA": "Corrective action",
       "ACCOUNTING_EXPORT": "Accounting export",
       "HOLD": "Quality hold",
       "INCOMING_INSPECTION": "Incoming inspection",

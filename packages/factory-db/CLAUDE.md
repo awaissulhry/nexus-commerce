@@ -97,7 +97,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    checks), AQL profiles (critical locked at 0) and assignments, the rules that open an inspection, incoming inspections with
    hides, rolls and components, in-process checks, results, measurements, amendments append-only; no W1 inspection or release
    function is redefined: it adds its own triggers `Inspection_plan_guard` and `OperationScan_awaits_first_piece`, and
-   redefines numbering's two floor document functions (INCOMING_INSPECTION)): triggers, partial unique indexes and deferred
+   redefines numbering's two floor document functions (INCOMING_INSPECTION)),
+   `…_quality_problems_w2b_guards` (W2b wave 11/16, B-W2b-79: CAPA and 8D with sources and actions, cause codes, a defect
+   charged to its operation, NCR cost lines and concessions, hold groups, the bench settings and the four-eyes list, alert
+   rules, the complaint's investigation and letter, a document of a record with no site; it redefines wave 6's
+   `factory_nonconformance_guard`, the final release's `factory_quality_release_check` and wave 1's
+   `factory_generated_document_check`, which waves 14 and 15 extend with their record tables): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written

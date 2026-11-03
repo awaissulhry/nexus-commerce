@@ -1,8 +1,17 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/holds.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the defect library and the disposition codes and places, follows and releases quality holds through apps/factory-api's modules/quality/{defects,holds} (B-W2a-26), always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) reads the defect library, tenant-wide (the inspection bench's defect picker and the reason tiles of floor.reasons, B-W2a-26/B-W2a-18: words, icon, colour, nothing personal or secret), and its site's holds: every floor write the …_quality_plant_w2a_guards check against a hold (an issue or a cut of a held lot or hide, a scan of a held bundle, a release or packing of held garments) reads them under the floor's own role; it places a hold at the bench (floor.final \"Hold lot\", by the signed-in worker), confirms the quarantine move (floor.move) and releases a hold with the inspector's PIN; the guard keeps it to those changes. The floor never reads a disposition code (an NCR's decision, with its approval amount at the cost grain, is the office's). Portal and link sessions read nothing here (no portal in W2a). A defect or disposition code nothing names may be deleted (the references refuse the rest: retire it instead); a hold is released or closed, never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/holds.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the defect library and the disposition codes and places, follows and releases quality holds through apps/factory-api's modules/quality/{defects,holds} (B-W2a-26), always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) reads the defect library, tenant-wide (the inspection bench's defect picker and the reason tiles of floor.reasons, B-W2a-26/B-W2a-18: words, icon, colour, nothing personal or secret), and its site's holds: every floor write the …_quality_plant_w2a_guards check against a hold (an issue or a cut of a held lot or hide, a scan of a held bundle, a release or packing of held garments) reads them under the floor's own role; it places a hold at the bench (floor.final \"Hold lot\", by the signed-in worker), confirms the quarantine move (floor.move) and releases a hold with the inspector's PIN; the guard keeps it to those changes. The floor never reads a disposition code (an NCR's decision, with its approval amount at the cost grain, is the office's). W2b wave 11/16 (B-W2b-79): the floor reads the cause codes as it reads the defect library (B-W2b-90's picker in every floor language; words only), and never a hold group: a hold by genealogy is office work, and QualityHold.groupId is not among what a floor session may change. Portal and link sessions read nothing here (no portal in W2a). A defect, cause or disposition code nothing names may be deleted (the references refuse the rest: retire it instead); a hold is released or closed, never deleted; a hold group is never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "DefectCode": {
       "about": "The office keeps the two-level defect library (categories and their defects: words, icon, picture, default class, zone, stages) and retires codes; every floor device reads the tenant's library for the bench's and the reason tiles' pickers.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "CauseCode": {
+      "about": "The office keeps the cause codes (the process each answers for, the words in every floor language) and retires them; every floor device reads the tenant's list for the bench's picker.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
@@ -25,6 +34,14 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
         "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "QualityHoldGroup": {
+      "about": "The office places a hold by genealogy: the suspect record, why, and the counts it saw, which move when the hold is extended. Its goods are its QualityHold rows. Office only; never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
       }
     }
   }
