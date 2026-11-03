@@ -1,0 +1,219 @@
+/*
+ * Quality › Reports (SCR-147) LAYOUT: the band, the scope row, the panels' heads, the skeletons, the tiles' hints, the trend's
+ * week strip and pop-over, the Arrange dialog's widths, the keys and the print page. The controls are the design system's;
+ * this file only places them, with semantic tokens (no colours of its own). No page max-width (Owner rule 2026-10-29): the
+ * page fills the shell's main area and every panel starts full width.
+ */
+.fw-qr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-qr-band,
+.fw-qr-scope,
+.fw-qr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-qr-scope {
+  justify-content: flex-start;
+}
+
+.fw-qr-head {
+  align-items: flex-start;
+  margin-bottom: var(--nds-space-10);
+}
+
+.fw-qr-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  flex: 1 1 18rem;
+}
+
+.fw-qr-head-controls,
+.fw-qr-status,
+.fw-qr-actions,
+.fw-qr-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-qr-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-qr-hint,
+.fw-qr-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-qr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-qr-sections {
+  min-width: 0;
+}
+
+.fw-qr-shape {
+  display: grid;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-qr-shape-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+}
+
+.fw-qr-tile-hint {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-qr-chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  min-width: 0;
+}
+
+.fw-qr-weeks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-qr-week {
+  padding: var(--nds-space-4) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-qr-week-trigger {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+}
+
+.fw-qr-week-label {
+  font-weight: 600;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qr-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: min(18rem, 80vw);
+}
+
+.fw-qr-pop-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.fw-qr-pop-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  margin: 0;
+}
+
+.fw-qr-pop-list dt {
+  color: var(--nds-text-muted);
+}
+
+.fw-qr-pop-list dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-qr-link {
+  color: var(--nds-primary);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.fw-qr-supplier {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-qr-widths {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-qr-widths-legend {
+  font-weight: 600;
+  margin-bottom: var(--nds-space-4);
+}
+
+.fw-qr-width {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-qr-keymap {
+  display: grid;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-qr-keymap > div {
+  display: grid;
+  grid-template-columns: 3rem 1fr;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-qr-keymap dd {
+  margin: 0;
+}
+
+.fw-qr-print-note {
+  margin: 0 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+}

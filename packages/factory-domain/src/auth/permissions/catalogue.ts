@@ -163,6 +163,8 @@ import { PLANT_CHECKS_DEFINITIONS, PLANT_CHECKS_PERMISSIONS } from '../../plant/
 // B-W2b-123: amendments of signed results (quality.amendments.request | sign) and the quality documents (quality.documents.make | share).
 import { QUALITY_AMENDMENTS_DEFINITIONS, QUALITY_AMENDMENTS_PERMISSIONS } from '../../quality/amendments/permissions'
 import { QUALITY_DOCUMENTS_DEFINITIONS, QUALITY_DOCUMENTS_PERMISSIONS } from '../../quality/inspection-docs/permissions'
+// B-W2b-138: quality reports (quality.reports.view).
+import { QUALITY_REPORTS_DEFINITIONS, QUALITY_REPORTS_PERMISSIONS } from '../../quality/reports/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -603,6 +605,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2b-123: amendments of signed results; the inspection report and the certificate of conformity.
   QUALITY_AMENDMENTS_DEFINITIONS,
   QUALITY_DOCUMENTS_DEFINITIONS,
+  // B-W2b-138: quality reports.
+  QUALITY_REPORTS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -767,6 +771,8 @@ for (const name of QUALITY_CAPA_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared
 for (const name of PLANT_CHECKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-123: amendments and the quality documents.
 for (const name of [...QUALITY_AMENDMENTS_PERMISSIONS, ...QUALITY_DOCUMENTS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-138: quality reports.
+for (const name of QUALITY_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

@@ -121,7 +121,9 @@
       "defects": "Defects & dispositions",
       "problems": "Problems",
       "ncr": "Nonconformances",
-      "complaints": "Complaints"
+      "complaints": "Complaints",
+      "reportsGroup": "Reports",
+      "reports": "Quality reports"
     },
     "compliance": {
       "area": "Compliance",
