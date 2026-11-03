@@ -42,6 +42,7 @@
           "endDate": ["EMPLOYMENT", "PAY"],
           "department": ["EMPLOYMENT"],
           "jobRole": ["EMPLOYMENT", "SAFETY"],
+          "roleSheetId": ["EMPLOYMENT", "SAFETY"],
           "homeLineId": ["EMPLOYMENT", "PRODUCTION"],
           "contract": ["EMPLOYMENT", "PAY"],
           "weeklyMinutes": ["EMPLOYMENT", "ATTENDANCE", "PAY"],

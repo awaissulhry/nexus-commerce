@@ -121,6 +121,11 @@ model Party {
   supplierInvoices     SupplierInvoice[]
   // W2b payables.prisma (schema wave 2/7): the files of several invoices it sent.
   supplierInvoiceFiles SupplierInvoiceFile[]
+  // W2b safety.prisma (wave 15/16): the safety roles it holds as an outside contact, the training sessions it gave as the
+  // provider, the PPE items it supplies.
+  safetyAppointments       SafetyAppointment[] @relation("SafetyAppointmentOutsideParty")
+  trainingSessionsProvided TrainingSession[]   @relation("TrainingSessionProvider")
+  ppeItemsSupplied         PpeItem[]           @relation("PpeItemSupplier")
   // pricing.prisma: its default payment terms and price list (Restrict, not Prisma's SetNull default for an optional
   // relation: that would also clear tenantId).
   termsOfPayment       PaymentTerms?        @relation(fields: [tenantId, paymentTermsId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -274,6 +279,8 @@ model PartyContact {
   quotes              Quote[]
   // supply.prisma: the purchase orders sent to them.
   purchaseOrders      PurchaseOrder[]
+  // W2b safety.prisma (wave 15/16): the safety roles they hold as an outside contact (a consultant RSPP, the doctor).
+  safetyAppointments  SafetyAppointment[]
   // returns.prisma, complaints.prisma: the returns they asked for and the complaints they made.
   returnAuthorisations ReturnAuthorisation[]
   complaints          Complaint[]

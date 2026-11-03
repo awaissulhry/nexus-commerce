@@ -1,0 +1,263 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/safety.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) keeps the safety organisation and the RLS notice, the typed legal deadlines, the risk assessments with their versions, signatures and measures, the role sheets with their risks, kits and courses, the course catalogue, training sessions, attendances, records and the instruction register, the PPE catalogue and every PPE item handed over, through apps/factory-api's modules/safety (B-W2b-120, -122, -128, -133, -134, -139), always through command(); the API keeps staff to the companies and sites their grants reach and the registers to the roles that keep them (hr, safety_officer: B-W2b-120's templates). The floor (factory_floor_runtime) of a site reads its role sheets and kits, its training sessions and instruction entries, the course catalogue, the training requirements and the training records tenant-wide (the qualification check of B-W2b-39 asks whether a person's course is valid wherever they work; no name is on a record), and the PPE catalogue without its cost or supplier; it signs an attendance with badge and PIN and countersigns it as the trainer, signs an instruction entry and records a PPE item received with the person's PIN (the triggers let a floor session do only that). It never reads the organisation, the deadlines, the risk assessment or its measures. Portal and link sessions read nothing here. Nothing is deleted but a role sheet's items, kit lines and requirements (edited with the sheet): appointments are ended, notices filed or cancelled, deadlines done or cancelled, versions signed or withdrawn, measures verified or cancelled, sheets, courses and items archived, sessions closed or cancelled, attendances and instruction entries voided; a DVR signature, a training record and a PPE issue are append-only (`@append-only`, scripts/factory/check-append-only.mjs: no update or delete grant, and their triggers refuse UPDATE, DELETE and TRUNCATE for every login): a record is corrected and an issue voided by a new row. Money: RiskMeasure.cost and PpeItem.unitCost (@grain cost), never on the floor. personal: the person each row is about and the purposes of each personal column (PLT-207, PLT-209): SAFETY, the legal duty of D.Lgs. 81/2008 (and EMPLOYMENT where the HR record reads it), never PERFORMANCE: a register names people, never as a figure, a ranking or a filter on performance. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "SafetyAppointment": {
+      "about": "Who holds a safety role, for the company or a site (and a shift for the first-aid and fire teams), with the appointee's signature. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "role": ["EMPLOYMENT", "SAFETY"],
+          "shiftPatternId": ["SAFETY"],
+          "fromDate": ["EMPLOYMENT", "SAFETY"],
+          "untilDate": ["EMPLOYMENT", "SAFETY"],
+          "endReason": ["EMPLOYMENT", "SAFETY"],
+          "signedAt": ["SAFETY"],
+          "signedName": ["SAFETY"]
+        }
+      }
+    },
+    "RlsNotice": {
+      "about": "The notice of a new RLS to INAIL: due, filed with INAIL's reference, or cancelled. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SafetyDeadline": {
+      "about": "A legal deadline typed by hand (a drill, the periodic meeting, an inspection), done with its evidence or cancelled. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RiskAssessment": {
+      "about": "A site's (or production unit's) risk assessment, the DVR. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RiskAssessmentVersion": {
+      "about": "A DVR version frozen with its PDF, SHA-256 and time; signed (its certain date) or withdrawn. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RiskAssessmentSignature": {
+      "about": "One signature of a DVR version (employer, RSPP, RLS or RLST, doctor), append-only. Office only (a worker's PIN signature is recorded by the office's tablet).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      },
+      "personal": {
+        "subject": "appointmentId",
+        "via": "SafetyAppointment",
+        "columns": {
+          "signerName": ["SAFETY"],
+          "signedOn": ["SAFETY"],
+          "signedAt": ["SAFETY"],
+          "signedByWorkerId": ["SAFETY"]
+        }
+      }
+    },
+    "RiskMeasure": {
+      "about": "A measure of the improvement plan with its owner, due day, cost (cost grain) and status. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RoleSheet": {
+      "about": "A role risk sheet of a site. The office keeps it; the site's floor reads it (the role's name beside its kit and courses).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "RoleSheetItem": {
+      "about": "A risk or surveillance need of a role sheet, in words. The office writes, changes and removes them with the sheet. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "SafetyCourse": {
+      "about": "A course of the safety catalogue (tenant-wide or a company's). The office keeps it; the floor reads it tenant-wide (the sign-off screen's course, the qualification check).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "TrainingRequirement": {
+      "about": "A course a role sheet or a machine class asks for. The office writes, changes and removes them with the sheet or the class; the floor reads them tenant-wide (the qualification check: an authorisation held by an expired course).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "TrainingSession": {
+      "about": "A training session at a site. The office opens, closes or cancels it; the site's floor reads it (the sign-off screen: open sessions, and why signing stopped).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["openedById", "closedById", "createdById"] }
+      }
+    },
+    "TrainingAttendance": {
+      "about": "A person's attendance at a session. The office records a paper sheet, countersigns and voids; the site's floor signs it with the person's badge and PIN and countersigns it with the trainer's (the triggers let a floor session do only that).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": {
+          "privileges": ["select", "insert", "update"],
+          "scopedBy": ["site"],
+          "hiddenColumns": ["countersignedById", "voidedById", "voidReason", "createdById"]
+        }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "sessionId": ["EMPLOYMENT", "SAFETY"],
+          "method": ["SAFETY"],
+          "signedAt": ["SAFETY"],
+          "signedByWorkerId": ["SAFETY"],
+          "deviceId": ["SAFETY"],
+          "signatureSha256": ["SAFETY"],
+          "countersignedAt": ["SAFETY"],
+          "languageUnderstood": ["EMPLOYMENT", "SAFETY"],
+          "voidedAt": ["SAFETY"],
+          "voidReason": ["SAFETY"]
+        }
+      }
+    },
+    "TrainingRecord": {
+      "about": "A person's training record (append-only; corrected by a new record). The office writes them; the floor reads them tenant-wide without the trainer, the reasons or the note (the qualification check: is the course valid).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": {
+          "privileges": ["select"],
+          "hiddenColumns": ["trainerName", "validUntilReason", "correctionReason", "note", "createdById"]
+        }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "courseId": ["EMPLOYMENT", "SAFETY"],
+          "sessionId": ["EMPLOYMENT", "SAFETY"],
+          "completedOn": ["EMPLOYMENT", "SAFETY"],
+          "hours": ["EMPLOYMENT", "SAFETY"],
+          "trainerName": ["EMPLOYMENT", "SAFETY"],
+          "result": ["EMPLOYMENT", "SAFETY"],
+          "validUntil": ["EMPLOYMENT", "SAFETY"],
+          "validUntilReason": ["EMPLOYMENT", "SAFETY"],
+          "language": ["EMPLOYMENT", "SAFETY"],
+          "languageChecked": ["EMPLOYMENT", "SAFETY"],
+          "correctsId": ["EMPLOYMENT", "SAFETY"],
+          "correctionReason": ["EMPLOYMENT", "SAFETY"],
+          "note": ["EMPLOYMENT", "SAFETY"]
+        }
+      }
+    },
+    "InstructionRecord": {
+      "about": "An entry of the hands-on instruction register. The office writes, records a signed paper and voids; the site's floor reads it and the person signs it with badge and PIN (nothing else).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": {
+          "privileges": ["select", "update"],
+          "scopedBy": ["site"],
+          "hiddenColumns": ["voidedById", "voidReason", "note", "createdById"]
+        }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "instructedOn": ["EMPLOYMENT", "SAFETY"],
+          "task": ["EMPLOYMENT", "SAFETY"],
+          "machineClassId": ["EMPLOYMENT", "SAFETY"],
+          "machineId": ["EMPLOYMENT", "SAFETY"],
+          "instructorEmployeeId": ["EMPLOYMENT", "SAFETY"],
+          "instructorName": ["EMPLOYMENT", "SAFETY"],
+          "minutes": ["EMPLOYMENT", "SAFETY"],
+          "language": ["EMPLOYMENT", "SAFETY"],
+          "languageChecked": ["EMPLOYMENT", "SAFETY"],
+          "signedAt": ["SAFETY"],
+          "signMethod": ["SAFETY"],
+          "signedByWorkerId": ["SAFETY"],
+          "signatureSha256": ["SAFETY"],
+          "voidedAt": ["SAFETY"],
+          "voidReason": ["SAFETY"],
+          "note": ["EMPLOYMENT", "SAFETY"]
+        }
+      }
+    },
+    "PpeItem": {
+      "about": "A PPE item of a company's catalogue (PPE for workers, not the PPE register of garments sold). The office keeps it; the floor reads it tenant-wide without its cost or supplier (the Receive PPE tiles and sizes).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "hiddenColumns": ["supplierPartyId", "unitCost", "createdById"] }
+      }
+    },
+    "PpeKitLine": {
+      "about": "A PPE item of a role's kit, with when to wear it. The office writes, changes and removes them with the role sheet; the site's floor reads them (Receive PPE suggests the person's kit).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "PpeIssue": {
+      "about": "PPE handed to a person with its receipt (append-only; voided by a VOID row). The office records a paper receipt and voids; the site's floor reads them and records an item received with the person's PIN (the triggers let a floor session do only that).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"], "hiddenColumns": ["issuedById", "voidReason", "createdById"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "kind": ["SAFETY"],
+          "ppeItemId": ["EMPLOYMENT", "SAFETY"],
+          "size": ["EMPLOYMENT", "SAFETY"],
+          "quantity": ["EMPLOYMENT", "SAFETY"],
+          "reason": ["EMPLOYMENT", "SAFETY"],
+          "issuedAt": ["EMPLOYMENT", "SAFETY"],
+          "method": ["SAFETY"],
+          "signedByWorkerId": ["SAFETY"],
+          "deviceId": ["SAFETY"],
+          "signatureSha256": ["SAFETY"],
+          "voidsId": ["SAFETY"],
+          "voidReason": ["SAFETY"]
+        }
+      }
+    }
+  }
+}
