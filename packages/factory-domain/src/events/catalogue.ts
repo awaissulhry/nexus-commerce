@@ -189,7 +189,7 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-92
   ...qualityPlans,
   // B-W2b-97
-  ...qualityFinal] as const satisfies readonly EventDefinition[]
+  ...qualityFinal,
   // B-W2b-101
   ...qualityTriggers] as const satisfies readonly EventDefinition[]
 
