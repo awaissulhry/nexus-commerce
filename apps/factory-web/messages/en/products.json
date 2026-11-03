@@ -83,6 +83,7 @@
     "routing": "Operations",
     "cost": "Cost",
     "compliance": "Compliance",
+    "files": "Files & patterns",
     "activity": "Activity",
     "problems_one": "{count} problem before release",
     "problems_other": "{count} problems before release"
@@ -176,7 +177,8 @@
       "not_found": "It is no longer there: the page was read again.",
       "rate_limited": "Too many changes at once: wait a moment and do it again.",
       "unavailable": "The factory server did not answer: nothing was saved, try again.",
-      "internal": "Something went wrong: nothing was saved, try again."
+      "internal": "Something went wrong: nothing was saved, try again.",
+      "piecesUse": "Pattern pieces are cut from this line: change them in Files & patterns first."
     }
   },
   "notice": {
@@ -1530,6 +1532,156 @@
       "description": "Revision {revision} changes the type certificate {number} (notified body {body}) approved with revision {compared}:",
       "step1": "Decide whether notified body {body} must be told",
       "step2": "Record the decision on the certificate's Renewals tab"
+    }
+  },
+  "pieces": {
+    "title": "Pattern pieces",
+    "table": "Pattern pieces",
+    "intro": "The pieces one garment of revision {revision} is cut from: how many of each, the BOM line each comes from, the lowest hide grade each may be cut from, the grain and the sizes. Each cell saves by itself.",
+    "rule": "Quality where it shows, yield where it does not: give the pieces that show (fronts, collar, sleeves) a good grade; hidden pieces (facings, under-collar, pocket bags) may take any grade. The cutting table warns when a hide is below a piece's grade.",
+    "loading": "Reading the pattern pieces…",
+    "failed": "Couldn't load pattern pieces",
+    "add": "Add piece",
+    "count_one": "{count} piece · {perGarment} per garment",
+    "count_other": "{count} pieces · {perGarment} per garment",
+    "col": {
+      "name": "Piece",
+      "quantity": "Qty per garment",
+      "line": "Material (BOM line)",
+      "grade": "Minimum hide grade",
+      "grain": "Grain or stretch",
+      "sizes": "Size range",
+      "note": "Note",
+      "more": "Actions"
+    },
+    "cell": {
+      "name": "Name of {piece}",
+      "quantity": "Pieces per garment of {piece}",
+      "line": "BOM line of {piece}",
+      "grade": "Minimum hide grade of {piece}",
+      "grain": "Grain of {piece}",
+      "sizes": "Change the sizes of {piece}",
+      "note": "Note of {piece}"
+    },
+    "line": {
+      "none": "Not tied to a line",
+      "leather": "Leather",
+      "leatherShort": "leather"
+    },
+    "grade": {
+      "any": "Any grade",
+      "notLeather": "Not leather: no grade",
+      "orBetter": "{code} or better · {name}",
+      "option": "{code} · {name}",
+      "retired": "Retired grade"
+    },
+    "grain": {
+      "ALONG": "Along the grain",
+      "ACROSS": "Across the grain",
+      "BIAS": "On the bias",
+      "ANY": "Any direction"
+    },
+    "sizes": {
+      "all": "All sizes",
+      "run": "{from}–{to}",
+      "some": "{sizes}",
+      "change": "Change",
+      "hint": "Every size follows the style's range, also a size added later. Only these sizes: the piece is cut for the sizes ticked.",
+      "every": "Every size",
+      "only": "Only these sizes",
+      "pickOne": "Tick at least one size, or choose every size.",
+      "title": "Sizes of {piece}",
+      "apply": "Save sizes"
+    },
+    "note": {
+      "placeholder": "Add a note"
+    },
+    "row": {
+      "edit": "Open and change…",
+      "open": "Open",
+      "up": "Move up",
+      "down": "Move down",
+      "remove": "Remove…",
+      "menu": "Actions for {piece}"
+    },
+    "bulk": {
+      "grade_one": "Minimum grade for {count}…",
+      "grade_other": "Minimum grade for {count}…",
+      "remove_one": "Remove {count}",
+      "remove_other": "Remove {count}",
+      "gradeTitle_one": "Minimum hide grade for {count} piece",
+      "gradeTitle_other": "Minimum hide grade for {count} pieces",
+      "gradeApply_one": "Set for {count} piece",
+      "gradeApply_other": "Set for {count} pieces"
+    },
+    "keys": {
+      "add": "Add a piece",
+      "open": "Open the piece"
+    },
+    "readOnly": {
+      "noManage": "Read only: your role can view the pattern pieces, not change them."
+    },
+    "offline_one": "Offline: {count} change waits on this page and is sent when the connection is back. Do not close the page.",
+    "offline_other": "Offline: {count} changes wait on this page and are sent when the connection is back. Do not close the page.",
+    "issues": {
+      "title_one": "{count} thing to look at",
+      "title_other": "{count} things to look at"
+    },
+    "issue": {
+      "SIZE_NOT_IN_RANGE": "{piece} names {sizes}, no longer in the style's range: a new revision leaves those sizes out.",
+      "GRADE_NOT_LEATHER": "{piece} has a minimum grade but is not cut from a leather line: the cutting table cannot check it.",
+      "GRADE_RETIRED": "{piece}: grade {grade} is retired. It stays here; a new revision copies the piece without it.",
+      "LEATHER_LINE_NO_PIECES": "Line {line} is leather and no piece names it: any grade may be cut for it."
+    },
+    "empty": {
+      "title": "No pieces listed",
+      "body": "Add the pieces of the pattern, with the lowest hide grade each may be cut from.",
+      "frozen": "This revision has no pattern pieces."
+    },
+    "dialog": {
+      "addTitle": "Add a piece to revision {revision}",
+      "editTitle": "{piece}",
+      "add": "Add piece",
+      "save": "Save",
+      "nameHint": "As the pattern names it (\"Front left\", \"Sleeve\"): the cutting table tells pieces apart by name.",
+      "quantityHint": "How many of this piece one garment takes (1 to 99).",
+      "lineHint": "The BOM line it is cut from.",
+      "gradeHint": "The lowest grade it may be cut from; a better grade is always fine.",
+      "gradeNotLeather": "A minimum grade is a leather rule: choose a leather line first."
+    },
+    "remove": {
+      "title_one": "Remove {count} piece?",
+      "title_other": "Remove {count} pieces?",
+      "confirm_one": "Remove {count} piece",
+      "confirm_other": "Remove {count} pieces",
+      "body": "It leaves revision {revision}'s list. To have it back, add it again."
+    },
+    "held": {
+      "noManage": "Your role can view the pattern pieces, not change them.",
+      "frozen": "This revision is frozen: change the pieces in its draft revision.",
+      "bulkNotLeather": "Not on a leather line: {pieces}. A minimum grade is a leather rule."
+    },
+    "problem": {
+      "nameBlank": "Name the piece.",
+      "nameLong": "At most 80 characters.",
+      "nameTaken": "Another piece of this revision has this name.",
+      "quantity": "A whole number from 1 to 99.",
+      "gradeNotLeather": "A minimum grade is a leather rule: choose a leather line first.",
+      "grain": "Choose a direction.",
+      "noteLong": "At most 500 characters."
+    },
+    "notice": {
+      "gradeCleared": "{piece} is no longer on a leather line: its minimum grade was taken off.",
+      "added": "{piece} added.",
+      "saved": "{piece} saved.",
+      "removed_one": "{count} piece removed.",
+      "removed_other": "{count} pieces removed.",
+      "gradeSet_one": "Minimum grade set for {count} piece.",
+      "gradeSet_other": "Minimum grade set for {count} pieces."
+    },
+    "files": {
+      "title": "Documents and files",
+      "notBuilt": "Sketches, pattern files and customer pages are listed here in a later step. For now, files added to the style are in its Activity tab."
     }
   }
 }

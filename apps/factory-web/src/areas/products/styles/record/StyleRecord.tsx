@@ -71,6 +71,7 @@ import { abilitiesOf, grainsOf, releasedOf, revisionInView, sha256Of, tabOf, typ
 import { readProblem, writeProblem } from '../problems'
 import type { BomViewMode, Loaded, Part, SaveState, StyleDialog, StyleNotice, StyleRecordViewModel } from './record-model'
 import { StyleRecordView } from './view/StyleRecordView'
+import { usePieces } from './pieces/use-pieces'
 
 const WIDE = '(min-width: 1280px)'
 const DOCK_KEY = 'fw.products.dock.Style'
@@ -278,9 +279,11 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const hrefFor = (next: StyleTab, rev: string | null = askedRevision) => `${prefix}/products/styles/${styleId}?tab=${next}${rev ? `&rev=${rev}` : ''}`
 
   // ---- live -----------------------------------------------------------------------------------------------------------
+  const piecesReload = useRef<() => void>(() => undefined)
   const reloadAll = useCallback(() => {
     void loadStyle()
     loadParts(revisionId)
+    piecesReload.current()
   }, [loadStyle, loadParts, revisionId])
 
   // W2a: Duplicate style (the band's ⋯) and Import BOM (importer product.bom; the rows name their styles).
@@ -356,9 +359,17 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
 
   const goToRevision = (id: string) => router.replace(hrefFor(tab, id))
 
+  // B-W2b-95: the Files & patterns tab's pattern pieces (read with the BOM's right; writes through the one queue above).
+  const onPiecesVersion = useCallback((next: { id: string; version: number }) => {
+    revisionVersionRef.current = next
+  }, [])
+  const pieces = usePieces({ api, styleId, revisionId, loadKey: versionKey, enabled: can.bomView, write: run, versionOf: revisionVersion, onVersion: onPiecesVersion })
+  piecesReload.current = pieces.reload
+
   /** After a BOM write: the routing (its version moved) and the cost read again; and the other way round. */
   const afterBom = () => {
     if (!revisionId) return
+    pieces.reload()
     if (can.routingView) getRouting(api, styleId, revisionId).then(setRoutingValue).catch(() => undefined)
     if (can.costView) loadCost(revisionId)
   }
@@ -464,6 +475,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     duplicate: duplicate.model,
     bomImport: bomImport.model,
     exporting,
+    pieces: pieces.model,
   }
 
   return (
@@ -471,6 +483,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       model={model}
       panels={value ? <RecordPanels record={{ type: 'Style', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} party={value.brand ? { id: value.brand.id, name: value.brand.name, emails: [] } : null} /> : null}
       actions={{
+        pieces: pieces.actions,
         onRetry: () => void loadStyle(),
         onReload: reloadAll,
         onDock: toggleDock,

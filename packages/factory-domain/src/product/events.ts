@@ -120,6 +120,14 @@ export const events = [
     payload: z.strictObject({ styleId: z.uuid(), code: z.string(), revisionId: z.uuid(), revision: z.number().int(), lineIds: z.array(z.uuid()) }),
     live: { permission: 'product.bom.view', fields: ['styleId', 'code', 'revisionId', 'revision', 'lineIds'] },
   }),
+  // B-W2b-95 (PRD-219, MES-055): a draft revision's pattern pieces (Files & patterns). No money in a piece.
+  defineEvent({
+    type: 'style.pieces_changed',
+    context: 'product',
+    description: "A draft revision's pattern pieces changed: a piece added, changed (name, pieces per garment, line, minimum grade, grain, sizes, note), removed or reordered.",
+    payload: z.strictObject({ styleId: z.uuid(), code: z.string(), revisionId: z.uuid(), revision: z.number().int(), pieceIds: z.array(z.uuid()) }),
+    live: { permission: 'product.bom.view', fields: ['styleId', 'code', 'revisionId', 'revision', 'pieceIds'] },
+  }),
   defineEvent({
     type: 'style.revision_released',
     context: 'product',

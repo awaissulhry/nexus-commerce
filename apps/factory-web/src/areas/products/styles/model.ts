@@ -81,9 +81,9 @@ export function abilitiesOf(permissions: readonly string[]): StyleAbilities {
 
 // ---- the studio's tabs ------------------------------------------------------------------------------------------------
 
-export type StyleTab = 'overview' | 'variants' | 'bom' | 'routing' | 'cost' | 'compliance' | 'activity'
-/** The studio's tabs, in the band's order. */
-export const STYLE_TABS: readonly StyleTab[] = ['overview', 'variants', 'bom', 'routing', 'cost', 'compliance', 'activity']
+export type StyleTab = 'overview' | 'variants' | 'bom' | 'routing' | 'cost' | 'compliance' | 'files' | 'activity'
+/** The studio's tabs, in the band's order (B-W2b-95: Files & patterns, the design's tab before Activity). */
+export const STYLE_TABS: readonly StyleTab[] = ['overview', 'variants', 'bom', 'routing', 'cost', 'compliance', 'files', 'activity']
 
 export function tabOf(value: string | null | undefined): StyleTab {
   return (STYLE_TABS as readonly string[]).includes(value ?? '') ? (value as StyleTab) : 'overview'
@@ -96,6 +96,8 @@ export function tabsFor(can: StyleAbilities): StyleTab[] {
     if (tab === 'routing') return can.routingView
     if (tab === 'cost') return can.costView
     if (tab === 'compliance') return can.complianceView
+    // B-W2b-95: the pattern pieces read with the BOM's right.
+    if (tab === 'files') return can.bomView
     if (tab === 'activity') return can.thread
     return true
   })
