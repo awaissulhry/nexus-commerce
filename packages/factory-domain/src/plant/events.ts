@@ -25,6 +25,8 @@ import { CLOSE_REASONS, JOB_MOVES, JOB_SOURCES, JOB_STATUSES, JOB_TYPES, MACHINE
  *
  * Every one reaches the plant screens of the office (plant.view) and the floor devices of the machine's site (the
  * station's machine card, the technician's My jobs) but plant.lists_changed, which is the whole group's.
+ *
+ * B-W2b-96 adds `depthEvents` (below): escalated, progressed, locked, the lead's confirmation, plant settings changed.
  */
 
 const by = z.enum(['OFFICE', 'FLOOR', 'SYSTEM'])
@@ -164,5 +166,60 @@ export const events = [
       by,
     }),
     live: { permission: 'plant.view', floor: 'plant.jobs.work', fields: ['jobId', 'number', 'machineId', 'from', 'to'] },
+  }),
+] as const
+
+// ---- B-W2b-96: the requests and jobs in depth ----------------------------------------------------------------------
+
+/**
+ * The events of the requests and jobs in depth (B-W2b-96; QHS-179, QHS-180, QHS-181, QHS-183, QHS-190; design
+ * plant.requests "Live": "request.escalated → Age tone", floor.machine "Job acknowledged or fixed → the station sees it",
+ * plant.settings "settings.changed → Banner"). apps/factory-api's modules/plant emits them in the commands that make the
+ * change. Ids, codes and states only: no words a person typed, no name (an escalation names the employee it went to by id,
+ * for the notice to them, never to a screen).
+ *
+ *   maintenance_request.escalated   nobody acknowledged a routed request in time: it escalated to level 1 or 2 by its rule
+ *   maintenance_request.progressed  a technician is on the way, or the reporter confirmed the machine works again
+ *   maintenance_request.locked      a request locked its machine as unsafe (a report marked so, or the office's "Lock as
+ *                                   unsafe"); `hazardReport`: the site asks for a hazard report in Plant › Incidents
+ *   maintenance_job.confirmed       the line lead confirmed the machine works after the hand-back
+ *   plant_settings.changed          a site's request routing or its lock settings changed
+ */
+
+export const depthEvents = [
+  defineEvent({
+    type: 'maintenance_request.escalated',
+    context: 'plant',
+    description: 'Nobody acknowledged a routed machine request in time: it escalated to the person its routing rule names (level 1, then 2).',
+    payload: z.strictObject({ requestId: z.uuid(), machineId: z.uuid(), assetNumber: z.string(), level: z.number().int().min(1).max(2), ruleId: z.uuid(), escalatedToId: z.uuid() }),
+    live: { permission: 'plant.view', floor: 'plant.jobs.work', fields: ['requestId', 'machineId', 'assetNumber', 'level'] },
+  }),
+  defineEvent({
+    type: 'maintenance_request.progressed',
+    context: 'plant',
+    description: 'A technician is on the way to a machine request, or the person who reported it confirmed the machine works again.',
+    payload: z.strictObject({ requestId: z.uuid(), machineId: z.uuid(), assetNumber: z.string(), step: z.enum(['ON_THE_WAY', 'WORKS_AGAIN']), by }),
+    live: { permission: 'plant.view', floor: 'plant.report', fields: ['requestId', 'machineId', 'assetNumber', 'step'] },
+  }),
+  defineEvent({
+    type: 'maintenance_request.locked',
+    context: 'plant',
+    description: "A machine request locked its machine as unsafe (Owner answer H1): reported so, or locked from the office's request detail; `hazardReport`: the site's settings ask for a hazard report in Plant › Incidents.",
+    payload: z.strictObject({ requestId: z.uuid(), machineId: z.uuid(), assetNumber: z.string(), fromRequestId: z.uuid().nullable(), hazardReport: z.boolean(), by }),
+    live: { permission: 'plant.view', floor: 'plant.report', fields: ['requestId', 'machineId', 'assetNumber'] },
+  }),
+  defineEvent({
+    type: 'maintenance_job.confirmed',
+    context: 'plant',
+    description: 'The line lead confirmed that the machine of a handed-back maintenance job works again.',
+    payload: z.strictObject({ jobId: z.uuid(), number: z.string(), machineId: z.uuid(), by }),
+    live: { permission: 'plant.view', floor: 'plant.jobs.work', fields: ['jobId', 'number', 'machineId'] },
+  }),
+  defineEvent({
+    type: 'plant_settings.changed',
+    context: 'plant',
+    description: "A site's machine request routing (a rule added, changed, removed or reordered) or its unsafe-lock settings changed.",
+    payload: z.strictObject({ siteId: z.uuid(), part: z.enum(['ROUTING', 'LOCK']), change: z.enum(['ADDED', 'CHANGED', 'REMOVED', 'ORDERED']), ruleId: z.uuid().nullable() }),
+    live: { permission: 'plant.view', fields: ['siteId', 'part', 'change'] },
   }),
 ] as const

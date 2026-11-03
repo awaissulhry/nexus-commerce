@@ -57,7 +57,8 @@ const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales
  */
 const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   planner: ['plant.view'],
-  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage'],
+  // B-W2b-96: plant.settings.manage (a site's request routing and unsafe-lock settings) for the production manager.
+  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.settings.manage'],
   floor_supervisor: ['plant.view', 'plant.report', 'plant.requests.triage'],
   operator: ['plant.report'],
   cutting_operator: ['plant.report'],
@@ -853,7 +854,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Maintenance',
     description: 'Keeps the machines running: the machine register and its classes and symptoms, the requests from the stations and the maintenance jobs; signs a machine marked unsafe safe again; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'sites.view', 'workers.view', 'parties.view', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.jobs.work', 'plant.signSafe'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'sites.view', 'workers.view', 'parties.view', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.jobs.work', 'plant.signSafe',
+      // B-W2b-96: the site's request routing and unsafe-lock settings.
+      'plant.settings.manage'],
     grains: [],
   }),
   template('read_only', {
