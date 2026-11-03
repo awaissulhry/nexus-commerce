@@ -3,6 +3,8 @@ import type { WaitingView } from '@nexus/factory-domain/costing/ledger/contracts
 import type { EntryDraft } from '@nexus/factory-domain/costing/ledger/entries'
 import { earnedAmount } from '@nexus/factory-domain/purchasing/subcontracting/rules'
 import type { CommandTx } from '../../../core/command'
+// B-W2b-111: good pieces of a receipt waiting for its incoming inspection earn nothing yet.
+import { heldGoodByOperation } from './held'
 
 /**
  * The subcontract source of the work order's cost ledger (B-W2a-25; FIN-026; cost-ledger.prisma WorkOrderCostEntry kind
@@ -16,6 +18,9 @@ import type { CommandTx } from '../../../core/command'
  *                   one entry of that amount (negative when a count went down), key `subcontract:<operationId>:<n>` (n =
  *                   its entries so far + 1), dated when the counts last changed (the operation's updatedAt).
  *   currency        an order in another currency than the work order's cost waits, in words (no exchange rates).
+ *   held            B-W2b-111 (QHS-036, held.ts): the good pieces of a receipt whose incoming inspection is OPEN are left out
+ *                   of piecesBackGood until it is decided (the decision's command posts again: a rejected bundle's pieces
+ *                   are defective by then, so they never earn).
  */
 
 type Reader = FactoryClient | CommandTx
@@ -51,6 +56,7 @@ export async function subcontractCostPlan(
     orderBy: [{ subcontractOrderId: 'asc' }, { seq: 'asc' }],
   })
   const orderOf = new Map(orders.map((order) => [order.id, order]))
+  const held = await heldGoodByOperation(db, orders.map((order) => order.id))
   const drafts: EntryDraft[] = []
   const waiting: WaitingView[] = []
   for (const operation of operations) {
@@ -58,13 +64,14 @@ export async function subcontractCostPlan(
     const posted = existing.filter((entry) => entry.kind === 'SUBCONTRACT' && entry.sourceType === 'SubcontractOperation' && entry.sourceId === operation.id)
     const sum = posted.reduce((total, entry) => total + entry.amount, 0)
     const fee = operation.pricePerPiece.toFixed(6)
+    const good = Math.max(0, operation.piecesBackGood - (held.get(operation.id) ?? 0))
     if (order.currency !== workOrder.currency) {
-      if (operation.piecesBackGood > 0 && sum === 0) {
+      if (good > 0 && sum === 0) {
         waiting.push({ code: 'CURRENCY', sourceType: 'SubcontractOrder', sourceId: order.id, words: `Subcontract order ${order.number} is in ${order.currency}; the work order's cost is kept in ${workOrder.currency} (no exchange rates).` })
       }
       continue
     }
-    const amount = earnedAmount(operation.piecesBackGood, fee, order.currency) - sum
+    const amount = earnedAmount(good, fee, order.currency) - sum
     if (amount === 0) continue
     const key = subcontractKey(operation.id, posted.length + 1)
     if (existing.some((entry) => entry.idempotencyKey === key)) continue
@@ -86,7 +93,7 @@ export async function subcontractCostPlan(
       sourceType: 'SubcontractOperation',
       sourceId: operation.id,
       reversalOfId: null,
-      reason: `Workshop fee of ${order.number}, operation ${operation.seq}: ${operation.piecesBackGood} piece(s) back good in all`,
+      reason: `Workshop fee of ${order.number}, operation ${operation.seq}: ${good} piece(s) back good in all${good < operation.piecesBackGood ? ` (${operation.piecesBackGood - good} waiting for incoming inspection)` : ''}`,
       idempotencyKey: key,
     })
   }

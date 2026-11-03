@@ -14,8 +14,9 @@ import { insertMeasureInCommand } from '../../inventory/hides/measures'
 import { assertFloorReady } from '../../production/serials/facts'
 import { postedBy, signerOf, type Inspector } from '../final/access'
 import { checkFactsOf, classOfDefect, defectsByCode, marksOf, readAnswers, readChecks } from './facts'
-import { incomingView } from './views'
-import { assertOpen, assertOwn, incomingFor, lockIncoming, readIncoming, readResults, RESULT_COLUMNS, takeOver, type IncomingRow, type LotRow } from './store'
+import { viewOf } from './views'
+import { assertOpen, assertOwn, incomingFor, lockIncoming, lotOf, readResults, RESULT_COLUMNS, takeOver, type IncomingRow, type LotRow, type Subject } from './store'
+import type { RecordedWhat } from '@nexus/factory-domain/quality-incoming/events'
 
 /**
  * Recording an incoming inspection hide by hide (B-W2b-98; QHS-025 area against the tannery, QHS-028 shade group against
@@ -40,11 +41,11 @@ import { assertOpen, assertOwn, incomingFor, lockIncoming, readIncoming, readRes
  * The hide's own grade and shade, and its marks as HideMark rows, are written when the decision is signed (./decide.ts).
  */
 
-const invalid = (problems: readonly Issue[], words: string) =>
+export const invalid = (problems: readonly Issue[], words: string) =>
   new ValidationError(problems.length === 1 ? problems[0]!.message : words, problems.map((problem) => ({ ...problem, path: problem.path.startsWith('body/') ? problem.path : `body/${problem.path}` })))
 
-/** The inspection, its lot and the caller, checked for a write (its inspector, OPEN, the floor ready at the site). */
-async function writable(caller: CommandCaller, inspectionId: string): Promise<{ row: IncomingRow; lot: LotRow; context: Inspector }> {
+/** The inspection, its lot or workshop receipt, and the caller, checked for a write (its inspector, OPEN, the floor ready at the site). */
+export async function writable(caller: CommandCaller, inspectionId: string): Promise<{ row: IncomingRow; lot: LotRow | null; receipt: Subject['receipt']; context: Inspector }> {
   const found = await incomingFor(caller, inspectionId, QUALITY_INCOMING_RECORD)
   assertOwn(found.context, found.row)
   assertOpen(found.row)
@@ -65,8 +66,8 @@ async function afterUnits(tools: CommandTools, context: Inspector, row: Incoming
   })
 }
 
-const recorded = (tools: CommandTools, row: IncomingRow, what: 'HIDE' | 'HIDE_REMOVED' | 'RESULTS', hideId: string | null, done: number) =>
-  tools.emit({ type: 'incoming_inspection.recorded', subject: row.id, companyId: row.companyId, siteId: row.siteId, payload: { incomingInspectionId: row.id, number: row.number, lotId: row.lotId!, what, hideId, done, sampleSize: row.sampleSize } })
+export const recorded = (tools: CommandTools, row: IncomingRow, what: RecordedWhat, hideId: string | null, done: number) =>
+  tools.emit({ type: 'incoming_inspection.recorded', subject: row.id, companyId: row.companyId, siteId: row.siteId, payload: { incomingInspectionId: row.id, number: row.number, lotId: row.lotId, subcontractReceiptId: row.subcontractReceiptId, what, hideId, done, sampleSize: row.sampleSize } })
 
 /** The marks against the library and the grades: a defect of the library (never a category), a zone of a grade in use. */
 async function markIssues(tools: CommandTools, marks: readonly MarkDraft[], kept: readonly MarkDraft[]): Promise<Issue[]> {
@@ -118,7 +119,9 @@ export interface HideBody extends HideDraft {
 
 /** PUT /quality/incoming/:inspectionId/hides/:hideId */
 export async function putHide(caller: CommandCaller, inspectionId: string, hideId: string, body: HideBody, idempotencyKey: string | undefined) {
-  const { row: seen, lot, context } = await writable(caller, inspectionId)
+  const found = await writable(caller, inspectionId)
+  const { row: seen, context } = found
+  const lot = lotOf(seen, found, 'hides')
   if (seen.uom !== 'HIDE') throw new ConflictError(`Incoming inspection ${seen.number} counts ${seen.uom}, not hides: it is not inspected hide by hide.`)
   const shape = [...hideDraftProblems(body), ...(body.marks ? markProblems(body.marks) : [])]
   if (shape.length > 0) throw invalid(shape, 'The hide is not valid.')
@@ -222,12 +225,14 @@ export async function putHide(caller: CommandCaller, inspectionId: string, hideI
     recorded(tools, row, 'HIDE', hide.id, all.length + (existing ? 0 : 1))
     return { id: row.id }
   })
-  return caller.withClient(async (db) => incomingView(db, (await readIncoming(db, result.id))!, lot, context))
+  return viewOf(caller, result.id, { lot, receipt: null }, context)
 }
 
 /** DELETE /quality/incoming/:inspectionId/hides/:hideId?version= */
 export async function removeHide(caller: CommandCaller, inspectionId: string, hideId: string, version: number, idempotencyKey: string | undefined) {
-  const { row: seen, lot, context } = await writable(caller, inspectionId)
+  const found = await writable(caller, inspectionId)
+  const { row: seen, context } = found
+  const lot = lotOf(seen, found, 'hides')
   const { result } = await command(caller, { name: 'quality.incoming.removeHide', idempotencyKey, input: { inspectionId, hideId, version } }, async (tools) => {
     const row = await lockIncoming(tools.tx, seen.id, version)
     const existing = isUuid(hideId) ? await tools.tx.incomingHideResult.findFirst({ where: { incomingInspectionId: row.id, hideId }, select: { ...RESULT_COLUMNS, hide: { select: { code: true } } } }) : null
@@ -238,7 +243,7 @@ export async function removeHide(caller: CommandCaller, inspectionId: string, hi
     recorded(tools, row, 'HIDE_REMOVED', hideId, await tools.tx.incomingHideResult.count({ where: { incomingInspectionId: row.id } }))
     return { id: row.id }
   })
-  return caller.withClient(async (db) => incomingView(db, (await readIncoming(db, result.id))!, lot, context))
+  return viewOf(caller, result.id, { lot, receipt: null }, context)
 }
 
 export interface ResultsBody {
@@ -248,7 +253,7 @@ export interface ResultsBody {
 
 /** PUT /quality/incoming/:inspectionId/results — the plan checks' answers, the whole list. */
 export async function putResults(caller: CommandCaller, inspectionId: string, body: ResultsBody, idempotencyKey: string | undefined) {
-  const { row: seen, lot, context } = await writable(caller, inspectionId)
+  const { row: seen, lot, receipt, context } = await writable(caller, inspectionId)
   const { result } = await command(caller, { name: 'quality.incoming.recordResults', idempotencyKey, input: { inspectionId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const row = await lockIncoming(tx, seen.id, body.version)
@@ -280,8 +285,8 @@ export async function putResults(caller: CommandCaller, inspectionId: string, bo
       before: { results: existing.map((answer) => ({ planCheckId: answer.planCheckId, sampleIndex: answer.sampleIndex, outcome: answer.outcome, value: answer.value })) },
       after: { results: body.results.map((entry) => ({ planCheckId: entry.planCheckId, sampleIndex: entry.sampleIndex ?? 1, outcome: entry.outcome, value: entry.value ?? null })), by: postedBy(context) },
     })
-    recorded(tools, row, 'RESULTS', null, await tx.incomingHideResult.count({ where: { incomingInspectionId: row.id } }))
+    recorded(tools, row, 'RESULTS', null, (await tx.incomingHideResult.count({ where: { incomingInspectionId: row.id } })) + (await tx.incomingRollResult.count({ where: { incomingInspectionId: row.id } })))
     return { id: row.id }
   })
-  return caller.withClient(async (db) => incomingView(db, (await readIncoming(db, result.id))!, lot, context))
+  return viewOf(caller, result.id, { lot, receipt }, context)
 }
