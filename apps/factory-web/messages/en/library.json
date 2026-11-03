@@ -633,6 +633,83 @@
       },
       "hide": "Hide {code} · lot {lot}",
       "noColour": "One colour"
+    },
+    "grades": {
+      "title": "Grades and usable area",
+      "intro": "The share of a hide of each grade that {code} can really use, and the panels each grade may be cut for.",
+      "rule": "Usable share = how much of a hide’s area of this grade is usable for this article. It feeds the usable-area estimate on every hide and the leather planning. A grade without a rule of this article uses the grade’s own default; typing a share or panels here gives this article its own rule.",
+      "loading": "Reading the grades…",
+      "failed": "Couldn't load grades",
+      "notTracked": "This leather is not tracked hide by hide: grades and usable shares do not apply.",
+      "table": "Grades and usable area",
+      "count_one": "{count} grade · {rules} of this article",
+      "count_other": "{count} grades · {rules} of this article",
+      "offline": "Offline: cell changes wait on this page and go when the connection is back ({count} waiting).",
+      "retiredGrade": "Retired",
+      "cell": {
+        "share": "Usable share of grade {grade} in percent",
+        "panels": "Panels grade {grade} may be cut for"
+      },
+      "panels": {
+        "every": "Every panel"
+      },
+      "source": {
+        "rule": "This article",
+        "grade": "Grade default"
+      },
+      "col": {
+        "grade": "Grade",
+        "share": "Usable share %",
+        "panels": "Panels allowed",
+        "hides": "Hides in stock",
+        "more": "Actions"
+      },
+      "row": {
+        "default": "Back to the grade default",
+        "defaultHint": "The grade’s own {share} % applies again; this rule stays as history.",
+        "useAgain": "Use the earlier rule again ({share} %, {date})",
+        "menu": "Actions for grade {grade}"
+      },
+      "bulk": {
+        "default_one": "Back to the grade default for {count}",
+        "default_other": "Back to the grade default for {count}"
+      },
+      "empty": {
+        "title": "No grades",
+        "body": "No leather grade is set up yet: Quality sets up the grades (A, B, C…) first."
+      },
+      "history": {
+        "summary_one": "{count} earlier rule",
+        "summary_other": "{count} earlier rules",
+        "row": "Grade {grade}: {share} % · {panels} · until {date}",
+        "useAgain": "Use again"
+      },
+      "readOnly": {
+        "archived": "Read only: the material is archived. Reactivate it to change its grades.",
+        "everyCompany": "Read only: this material is shared by every company, so only a role over every company changes its grades.",
+        "noManage": "Read only: your role can view the grades, not change them."
+      },
+      "held": {
+        "noRule": "Only a grade with a rule of this article goes back to the grade default.",
+        "gradeRetired": "The grade is retired: its rule cannot be used again.",
+        "activeExists": "This grade already has a rule of this article: change that one, or take it back to the default first."
+      },
+      "problem": {
+        "share": "The usable share is a percent from 0 to 100, at most two decimals (72,5).",
+        "panelsMany": "At most 20 panels.",
+        "panelLong": "A panel name is at most 60 characters.",
+        "retiredGrade": "This grade is retired: no article takes a new rule for it.",
+        "moved": "The rule was changed meanwhile: the grades were read again, check them and type it again.",
+        "ruleExists": "This article got a rule for the grade meanwhile: the grades were read again.",
+        "otherActive": "Another rule of this grade is in use: the grades were read again.",
+        "retiredRule": "This rule is history: use it again first, or type into the grade’s row.",
+        "gone": "This grade or rule is no longer there: the grades were read again."
+      },
+      "notice": {
+        "default_one": "Back to the grade default for {count} grade.",
+        "default_other": "Back to the grade default for {count} grades.",
+        "usedAgain": "The earlier rule of grade {grade} is used again."
+      }
     }
   },
   "operations": {

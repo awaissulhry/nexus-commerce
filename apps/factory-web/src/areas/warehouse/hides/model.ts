@@ -11,6 +11,13 @@ import type { MovesPart } from '../lots/shared/parts'
 import type { DailyCan, HoldsBySubject } from '../lots/shared/daily'
 import type { PickerReason } from '../../_shared/reasons/api'
 import type { ReserveActions, ReserveDialogModel, WriteOffActions, WriteOffDialogModel } from '../stock/daily/dialog-model'
+import type { LeatherDashboardActions, LeatherDashboardModel } from './dashboard/use-dashboard'
+import type { FindDialogActions, FindDialogModel } from './find/find-model'
+import type { MoveDialogActions, MoveDialogModel } from './move/move-model'
+import type { HidePhotosState, PhotoLightboxActions, PhotoLightboxModel, RecordPhotosActions, RecordPhotosModel } from './photos/model'
+import type { GradingActions, GradingModel } from './record/grading/grading-model'
+import type { RemnantsPage } from './remnants/api'
+import type { RemnantsListActions, RemnantsListModel } from './remnants/view/RemnantsList'
 
 /**
  * Warehouse › Hides (SCR-200 the list, SCR-200-record a hide), pure: the saved views and tiles ⇄ the address and the
@@ -34,19 +41,27 @@ export function hideViewOf(params: { get(name: string): string | null } | null):
   return DEFAULT_HIDE_VIEW
 }
 
-/** The filters beside the view that the address carries (`?lot=` `?grade=` `?shade=` `?location=`). */
+/** The filters beside the view that the address carries (`?lot=` `?grade=` `?shade=` `?location=`; B-W2b-131 `?item=` `?colour=`). */
 export interface HideFilters {
   lotId: string | null
   grade: string | null
   shade: string | null
   locationId: string | null
+  /** B-W2b-131: an article and its colour (a bar of the leather dashboard). */
+  itemId?: string | null
+  itemColourId?: string | null
 }
 export const filtersOf = (params: { get(name: string): string | null } | null): HideFilters => ({
   lotId: params?.get('lot') || null,
   grade: params?.get('grade') || null,
   shade: params?.get('shade') || null,
   locationId: params?.get('location') || null,
+  itemId: params?.get('item') || null,
+  itemColourId: params?.get('colour') || null,
 })
+
+/** The address term of each filter. */
+export const FILTER_PARAM: Readonly<Record<keyof HideFilters, string>> = { lotId: 'lot', grade: 'grade', shade: 'shade', locationId: 'location', itemId: 'item', itemColourId: 'colour' }
 
 /** A view and the filters as the API's query. */
 export function hideQuery(view: HideView, q: string, siteId: string | null, filters: HideFilters, cursor: string | null = null): HideQuery {
@@ -222,6 +237,22 @@ export interface HidesListModel {
   /** Design cases: rows selected, the keys panel open. */
   selected?: readonly string[]
   helpOpen?: boolean
+  // ---- B-W2b-131 (SCM-285 and the W2b parts of the page) ----
+  /** The leather dashboard (shown on / off per person). */
+  dashboard?: LeatherDashboardModel | null
+  /** Find hides for a job (the band's primary action). */
+  find?: FindDialogModel | null
+  /** Move N hides (the selection row). */
+  move?: MoveDialogModel | null
+  /** inventory.transfer: Move… may be offered. */
+  canTransfer?: boolean
+  /** The tagged remnant pieces in stock (the Remnants tile: pieces · area); null: unknown ('—'). */
+  remnantTotals?: RemnantsPage['totals'] | null
+  /** The Remnants view: the pieces one by one. */
+  remnants?: RemnantsListModel | null
+  /** The rows' photos (the Photo column, files.read) and the Lightbox (hd-photo). */
+  photos?: HidePhotosState | null
+  lightbox?: PhotoLightboxModel | null
 }
 
 export interface HidesListActions {
@@ -240,6 +271,18 @@ export interface HidesListActions {
   onScrap?: (ids: readonly string[]) => void
   reserve?: ReserveActions
   writeOff?: WriteOffActions
+  // ---- B-W2b-131 ----
+  dashboard?: LeatherDashboardActions
+  /** Opens Find hides for a job. */
+  onFind?: () => void
+  find?: FindDialogActions
+  /** Move… on the selection. */
+  onMove?: (ids: readonly string[]) => void
+  move?: MoveDialogActions
+  remnants?: RemnantsListActions
+  /** A row's Thumbnail: its photos in the Lightbox. */
+  onPhoto?: (hideId: string, hideCode: string) => void
+  lightbox?: PhotoLightboxActions
 }
 
 export interface PrintActions {
@@ -254,7 +297,8 @@ export interface PrintActions {
 
 // ---- the record ------------------------------------------------------------------------------------------------------------
 
-export const HIDE_TABS = ['overview', 'cuts', 'moves'] as const
+// B-W2b-131: Measurements & grade (`grade`) and Defects & photos (`defects`), in the design's order.
+export const HIDE_TABS = ['overview', 'grade', 'defects', 'cuts', 'moves'] as const
 export type HideTab = (typeof HIDE_TABS)[number]
 export const hideTabOf = (value: string | null | undefined): HideTab => ((HIDE_TABS as readonly string[]).includes(value ?? '') ? (value as HideTab) : 'overview')
 
@@ -276,6 +320,10 @@ export interface HideRecordModel {
   writeOff: WriteOffDialogModel | null
   /** Design cases: the record panels drawn without the API. */
   panelsPreview?: RecordPanelsViewModel | null
+  /** B-W2b-131: the Measurements & grade and Defects tabs (grade, shade, thickness, usable area, changes, measures, defects). */
+  grading?: GradingModel | null
+  /** B-W2b-131: the hide's photos (Defects & photos) and the Lightbox (hd-photo). */
+  photos?: RecordPhotosModel | null
 }
 
 export interface HideRecordActions {
@@ -287,6 +335,10 @@ export interface HideRecordActions {
   onScrap?: () => void
   reserve?: ReserveActions
   writeOff?: WriteOffActions
+  /** B-W2b-131: the two tabs' forms and the Re-measure dialog. */
+  grading?: GradingActions
+  /** B-W2b-131: open a photo, step in the Lightbox, add photos. */
+  photos?: RecordPhotosActions
 }
 
 /** The CSV columns of Export N (header words: `hd.csv.<column>`). */
