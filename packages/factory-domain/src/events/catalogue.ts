@@ -33,6 +33,8 @@ import { events as views } from '../views/events'
 import { events as search } from '../search/events'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { events as plant } from '../plant/events'
+// B-W2b-96: the requests and jobs in depth (escalation, progress, lock, the lead's confirmation, plant settings).
+import { depthEvents as plantDepth } from '../plant/events'
 // B-W2a-33: the stored alerts and the date timers.
 import { events as alerts } from '../alerts/events'
 import { events as timers } from '../timers/events'
@@ -164,7 +166,7 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  * accounting: the accounting exports and the period locks (B-W2a-39).
  * ops: restore drills and the two-factor rule of a role (B-W2a-36).
  */
-export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...reasons, ...notifications, ...tasks, ...views, ...search, ...plant, ...alerts, ...timers, ...accounting, ...ops,
+export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...reasons, ...notifications, ...tasks, ...views, ...search, ...plant, ...plantDepth, ...alerts, ...timers, ...accounting, ...ops,
   // B-W2a-41
   ...emailDelivery,
   // B-W2a-55

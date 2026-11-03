@@ -1836,6 +1836,7 @@
     "plant_jobs_manage": "Creare, pianificare, assegnare e chiudere lavori di manutenzione",
     "plant_jobs_work": "Eseguire un lavoro di manutenzione come tecnico",
     "plant_signSafe": "Dichiarare di nuovo sicura una macchina non sicura (solo tecnici)",
+    "plant_settings_manage": "Gestire l'instradamento delle richieste e le regole di blocco di un sito",
     "quality_complaints_view": "Vedere i reclami dei clienti",
     "quality_complaints_log": "Registrare un reclamo del cliente",
     "quality_complaints_manage": "Smistare, seguire e chiudere i reclami dei clienti",

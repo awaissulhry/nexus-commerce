@@ -1836,6 +1836,7 @@
     "plant_jobs_manage": "Make, plan, assign and close maintenance jobs",
     "plant_jobs_work": "Work a maintenance job as its technician",
     "plant_signSafe": "Sign an unsafe machine safe again (technicians only)",
+    "plant_settings_manage": "Keep a site's request routing and unsafe-lock settings",
     "quality_complaints_view": "See customer complaints",
     "quality_complaints_log": "Log a customer complaint",
     "quality_complaints_manage": "Triage, follow up and close customer complaints",

@@ -1,7 +1,7 @@
 import type { MachineStatus as DbMachineStatus, MaintenanceJobType, MaintenancePriority, Prisma } from '@nexus/factory-db'
 import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { PLANT_JOBS_MANAGE, PLANT_JOBS_WORK, PLANT_VIEW } from '@nexus/factory-domain/plant/permissions'
+import { PLANT_JOBS_MANAGE, PLANT_JOBS_WORK, PLANT_REQUESTS_TRIAGE, PLANT_SIGN_SAFE, PLANT_VIEW } from '@nexus/factory-domain/plant/permissions'
 import {
   handBackReason,
   isOpenJob,
@@ -21,10 +21,13 @@ import {
   type MachineStatus,
   type Priority,
 } from '@nexus/factory-domain/plant/rules'
+import { closeFacts, handBackProblems, minutesSpentOf, workDoneOf, type HandBackAction } from '@nexus/factory-domain/plant/jobs/close'
+import { depthRefusal } from '@nexus/factory-domain/plant/requests/refusals'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
-import { assertMay, assertMayWrite, assertVersion, bodyIssue, byOf, contextOf, may, officeOf, refused, scopeOf, type PlantContext } from '../access'
+import { assertMay, assertMayWrite, assertVersion, bodyIssue, byOf, contextOf, may, officeOf, problemsError, refused, scopeOf, type PlantContext } from '../access'
 import { assignedEvent, checkAssignee, makeJobInCommand, type Assignee } from '../making'
-import { JOB_COLUMNS, jobViews, lockJob, lockMachine, locksOf, machineCard, machineViews, moveMachine, ownershipOf, readJob, readMachine, REQUEST_COLUMNS, requestViews, type JobRow } from '../store'
+import { mediaOf } from '../requests/files'
+import { JOB_COLUMNS, jobViews, lockJob, lockMachine, locksOf, machineCard, machineViews, moveMachine, ownershipOf, readJob, readMachine, readRequest, REQUEST_COLUMNS, requestViews, type JobRow } from '../store'
 
 /**
  * Maintenance jobs (B-W2a-35; QHS-184; design plant.jobs SCR-149, floor.machine "My jobs", "The job"):
@@ -121,12 +124,27 @@ export async function jobRecord(caller: CommandCaller, jobId: string) {
     assertSees(context, row)
     const [job] = await jobViews(client, [row], context, now, { record: true })
     const requests = await client.maintenanceRequest.findMany({ where: { jobId: row.id }, orderBy: [{ reportedAt: 'asc' }, { id: 'asc' }], select: REQUEST_COLUMNS })
+    // B-W2b-96 (QHS-183): the machine's lock and its release; (QHS-189) the photos and voice notes, the job's and its
+    // requests'; (QHS-190) the close screen's facts; (QHS-180) whether this person confirms as the line lead.
+    const lockId = (await locksOf(client, [row.machineId])).get(row.machineId) ?? null
+    const lockRow = lockId ? await readRequest(client, lockId) : null
+    const machine = await readMachine(client, context, row.machineId)
+    const requestFiles = []
+    for (const request of requests) for (const file of await mediaOf(client, 'MaintenanceRequest', request.id)) requestFiles.push({ ...file, requestId: request.id })
+    const lead = context.audience === 'floor' ? may(context, 'floor.lead', row) : may(context, PLANT_REQUESTS_TRIAGE, row)
     return {
       job: job!,
       card: (await machineCard(client, context, row.machineId, now, { lastJobs: context.audience === 'floor' ? 3 : 5 }))!,
       requests: await requestViews(client, requests, context, now, { record: true }),
       canManage: context.audience === 'office' && isOpenJob(row.status) && may(context, PLANT_JOBS_MANAGE, row),
       canWork: isOpenJob(row.status) && may(context, PLANT_JOBS_WORK, row) && (context.audience === 'office' || ownershipOf(row, context) !== 'OTHER'),
+      lock: lockRow
+        ? { request: (await requestViews(client, [lockRow], context, now, { record: true }))[0]!, since: lockRow.reportedAt.toISOString(), reason: machine?.statusReason ?? null, canSignSafe: may(context, PLANT_SIGN_SAFE, row) }
+        : null,
+      files: await mediaOf(client, 'MaintenanceJob', row.id),
+      requestFiles,
+      close: closeFacts({ status: row.status, startedAt: row.startedAt, locked: lockRow !== null }, now),
+      canConfirm: lead && row.status === 'HANDED_BACK' && row.leadConfirmedAt === null,
     }
   })
 }
@@ -317,6 +335,9 @@ export interface MoveBody {
   readonly workDone?: string | undefined
   readonly machineAfter?: MachineAfter | undefined
   readonly reason?: string | undefined
+  /** B-W2b-96 (QHS-190): the one-screen close's action tile and failure code (hand-back only). */
+  readonly action?: HandBackAction | undefined
+  readonly failureCode?: string | null | undefined
 }
 
 /** POST /plant/jobs/:jobId/<move>: the office's (plan, close, cancel) and the technician's (start, wait, hand-back, reopen). */
@@ -325,6 +346,12 @@ export async function moveJob(caller: CommandCaller, jobId: string, move: JobMov
   const rule = JOB_MOVE_RULES[move]
   if (rule.by === 'office' && context.audience !== 'office') throw new NotFoundError('Not found.')
   const known = await knownJob(caller, context, jobId)
+  // B-W2b-96 (QHS-190): what was done is an action tile, words, or both; the failure code has the guard's shape.
+  if (move === 'handBack') {
+    const problems = handBackProblems({ action: body.action, workDone: body.workDone, failureCode: body.failureCode })
+    if (problems.length > 0) throw problemsError(problems, 'The hand-back is not complete.')
+  }
+  const workDone = move === 'handBack' ? workDoneOf(body.action, body.workDone)! : null
   const permission = rule.by === 'office' ? PLANT_JOBS_MANAGE : PLANT_JOBS_WORK
   assertMayWrite(context, permission, known, rule.by === 'office' ? 'Maintenance jobs of this site are planned, closed and cancelled by a role that plans them (plant.jobs.manage).' : 'Maintenance jobs are worked by a technician (plant.jobs.work).')
   const { result, replayed } = await command(caller, { name: `plant.${move}Job`, idempotencyKey, input: { jobId, move, ...body } }, async (tools) => {
@@ -338,11 +365,17 @@ export async function moveJob(caller: CommandCaller, jobId: string, move: JobMov
       move,
     )
     if (refusal) refused(refusal)
+    // B-W2b-96: a confirmation the office's line lead gave is taken back by the office only (the floor writes no office column).
+    if (move === 'reopen' && context.audience === 'floor' && job.leadConfirmedById !== null) {
+      refused(depthRefusal('LEAD_CONFIRMED', `The line lead confirmed job ${job.number} in the office: the office takes it back to work.`, 'Ask the office to take the job back to work.'))
+    }
     const person = context.audience === 'floor' ? { handedBackById: null, handedBackByWorkerId: context.actorId } : { handedBackById: context.actorId, handedBackByWorkerId: null }
     const data: Prisma.MaintenanceJobUncheckedUpdateInput = { status: rule.to, version: { increment: 1 }, updatedAt: now }
     if (move === 'start') data.startedAt = job.startedAt ?? now
-    if (move === 'handBack') Object.assign(data, { handedBackAt: now, ...person, workDone: body.workDone!.trim(), machineAfter: body.machineAfter! as DbMachineStatus })
-    if (move === 'reopen') Object.assign(data, { handedBackAt: null, handedBackById: null, handedBackByWorkerId: null, workDone: null, machineAfter: null })
+    // B-W2b-96 (QHS-190): the failure code and the minutes from the start are part of the hand-back, cleared with it.
+    const minutesSpent = move === 'handBack' ? minutesSpentOf(job.startedAt, now) : null
+    if (move === 'handBack') Object.assign(data, { handedBackAt: now, ...person, workDone, machineAfter: body.machineAfter! as DbMachineStatus, failureCode: body.failureCode ?? null, minutesSpent })
+    if (move === 'reopen') Object.assign(data, { handedBackAt: null, handedBackById: null, handedBackByWorkerId: null, workDone: null, machineAfter: null, failureCode: null, minutesSpent: null, leadConfirmedAt: null, leadConfirmedById: null, leadConfirmedByWorkerId: null })
     if (move === 'close') Object.assign(data, { closedAt: now, closedById: context.actorId })
     if (move === 'cancel') Object.assign(data, { cancelledAt: now, cancelReason: body.reason!.trim() })
     await tx.maintenanceJob.update({ where: { id: job.id }, data, select: { id: true } })
@@ -352,7 +385,7 @@ export async function moveJob(caller: CommandCaller, jobId: string, move: JobMov
     const otherStarted = move === 'cancel' ? await tx.maintenanceJob.count({ where: { machineId: machine.id, id: { not: job.id }, status: { in: [...STARTED_JOB_STATUSES] } } }) : 0
     const to = statusAfterJobMove({ move, status: machine.status as MachineStatus, machineAfter, floor: context.audience === 'floor', otherStartedJob: otherStarted > 0 })
     if (to) {
-      const reason = to === 'DO_NOT_USE' ? handBackReason(job.number, machineAfter ?? 'DO_NOT_USE', body.workDone?.trim() ?? job.workDone ?? '') : to === 'RETIRED' ? `Retired: handed back as retired (job ${job.number}).` : to === 'DOWN' ? `Down: job ${job.number} was cancelled before the machine was handed back.` : null
+      const reason = to === 'DO_NOT_USE' ? handBackReason(job.number, machineAfter ?? 'DO_NOT_USE', workDone ?? job.workDone ?? '') : to === 'RETIRED' ? `Retired: handed back as retired (job ${job.number}).` : to === 'DOWN' ? `Down: job ${job.number} was cancelled before the machine was handed back.` : null
       await moveMachine(tools, machine, to, { reason, cause: 'JOB', recordType: 'MaintenanceJob', recordId: job.id, by: byOf(context) })
     }
     const scope = { companyId: job.companyId, siteId: job.siteId }
@@ -362,7 +395,7 @@ export async function moveJob(caller: CommandCaller, jobId: string, move: JobMov
       recordId: job.id,
       ...scope,
       before: { status: job.status },
-      after: { status: rule.to, ...(move === 'handBack' ? { workDone: body.workDone!.trim(), machineAfter: body.machineAfter, ...person } : {}), ...(move === 'cancel' ? { cancelReason: body.reason!.trim() } : {}) },
+      after: { status: rule.to, ...(move === 'handBack' ? { workDone, machineAfter: body.machineAfter, ...person, action: body.action ?? null, failureCode: body.failureCode ?? null, minutesSpent } : {}), ...(move === 'cancel' ? { cancelReason: body.reason!.trim() } : {}) },
     })
     tools.emit({ type: 'maintenance_job.moved', subject: job.id, ...scope, payload: { jobId: job.id, number: job.number, machineId: job.machineId, move, from: job.status as JobStatus, to: rule.to, machineAfter: move === 'handBack' ? body.machineAfter! : null, by: byOf(context) } })
     return { job: await jobAnswer(tx, context, job.id, now), machine: await machineAnswer(tx, context, machine.id) }
