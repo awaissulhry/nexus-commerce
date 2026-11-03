@@ -317,7 +317,10 @@ export async function moveComplaint(caller: CommandCaller, complaintId: string, 
     const code = moveHeld(from, body.to)
     if (code) throw held(code, `Complaint ${row.number} ${MOVE_WORDS[code] ?? 'cannot move like this.'}`)
     const note = noteOf(body.note)
-    const after = await touchComplaint(tools, row, { status: body.to, answeredAt: body.to === 'ANSWERED' ? now : null })
+    // B-W2b-113: back to investigating clears the letter sent with the answer time, in ONE update (the versions stay;
+    // Complaint_answer_guard: document, who and how only with answeredAt). Marked answered by hand (a phone answer): the
+    // time alone.
+    const after = await touchComplaint(tools, row, { status: body.to, answeredAt: body.to === 'ANSWERED' ? now : null, ...(body.to === 'INVESTIGATING' ? { answerDocumentId: null, answeredById: null, answeredVia: null } : {}) })
     tools.audit({ recordType: COMPLAINT_RECORD, recordId: row.id, companyId: row.companyId, before: { status: from, answeredAt: row.answeredAt ? toUtcIso(row.answeredAt) : null, version: row.version }, after: { status: body.to, answeredAt: after.answeredAt ? toUtcIso(after.answeredAt) : null, version: after.version }, ...(note ? { reason: note } : {}) })
     tools.emit({ type: 'complaint.status_changed', subject: row.id, companyId: row.companyId, payload: { complaintId: row.id, number: row.number, from, to: body.to } })
     return { complaintId: row.id }

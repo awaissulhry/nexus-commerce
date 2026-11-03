@@ -121,7 +121,9 @@
     "rows": "Passa da un lavoro all'altro",
     "open": "Apri il lavoro selezionato",
     "messages": "Spostati tra i messaggi",
-    "openMessage": "Apri il messaggio selezionato"
+    "openMessage": "Apri il messaggio selezionato",
+    "repair": "Spostati tra le riparazioni",
+    "openRepair": "Apri la riparazione selezionata"
   },
   "material": {
     "IN_STOCK": "Materiale disponibile",
@@ -148,7 +150,12 @@
     "messages": "Messaggi",
     "messagesCount_one": "{count} messaggio da leggere",
     "messagesCount_other": "{count} messaggi da leggere",
-    "failed": "Non è stato possibile leggere i messaggi. Compaiono qui quando l'ufficio risponde."
+    "failed": "Non è stato possibile leggere i messaggi. Compaiono qui quando l'ufficio risponde.",
+    "repair": "Riparazioni",
+    "repairHere_one": "{count} fascio da riparare a questa postazione",
+    "repairHere_other": "{count} fasci da riparare a questa postazione",
+    "repairSite_one": "{count} fascio da riparare nello stabilimento",
+    "repairSite_other": "{count} fasci da riparare nello stabilimento"
   },
   "messages": {
     "title": "Messaggi sui tuoi ordini",
@@ -183,5 +190,87 @@
       "OTHER_STATION": "La chiamata per il materiale non è partita: solo un capo squadra chiama per un'altra postazione.",
       "TYPE_INACTIVE": "La chiamata per il materiale non è partita: l'ufficio l'ha disattivata. Chiedi al capo squadra."
     }
+  },
+  "repair": {
+    "title": "Riparazioni",
+    "noStation": "Nessuna postazione: tutto lo stabilimento",
+    "none": {
+      "title": "Niente da riparare",
+      "body": "Nessun fascio aspetta una riparazione in questo stabilimento. Qui compaiono i fasci rimandati da un controllo."
+    },
+    "here": "Qui",
+    "since": "rimandato {time}",
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "count_one": "{count} fascio da riparare",
+    "count_other": "{count} fasci da riparare",
+    "state": {
+      "WAITING": "In attesa",
+      "IN_REPAIR": "In riparazione",
+      "held": "Bloccato"
+    },
+    "kind": "Riparazione",
+    "fact": {
+      "reason": "Perché",
+      "found": "Trovato a",
+      "foundOutside": "Un controllo fuori dal ciclo",
+      "since": "Rimandato",
+      "station": "Entrato a"
+    },
+    "held": {
+      "onHold": "L’ordine di lavoro è bloccato: la riparazione aspetta che il blocco sia tolto.",
+      "notOpen": "L’ordine di lavoro non è più aperto: non si ripara niente."
+    },
+    "scanIn": "Scansiona il fascio {code} per iniziare la riparazione.",
+    "scanOut": "Scansiona il fascio {code} quando la riparazione è finita.",
+    "noBundleIn": "Questi capi viaggiano senza cartellino: inizia la riparazione con il pulsante.",
+    "noBundleOut": "Questi capi viaggiano senza cartellino: di’ che la riparazione è finita con il pulsante.",
+    "startWithout": "Inizia la riparazione",
+    "doneWithout": "Riparazione finita",
+    "out": {
+      "title": "Come è uscito {code}?",
+      "allGood_one": "Tutto buono · {count}",
+      "allGood_other": "Tutto buono · {count}",
+      "good": "Buoni",
+      "of_one": "su {count}",
+      "of_other": "su {count}",
+      "confirm": "Fatto: buoni {good}, scartati {scrap}",
+      "confirmEmpty": "Scrivi i buoni",
+      "scrapSaid_one": "{count} capo sarà scartato: l’ufficio lo sostituisce o lo passa a seconda scelta.",
+      "scrapSaid_other": "{count} capi saranno scartati: l’ufficio li sostituisce o li passa a seconda scelta."
+    },
+    "refusal": {
+      "WRONG_STATE": "{code} non è più in riparazione: scegli un altro fascio dell’elenco.",
+      "ALREADY_IN": "{code} è già entrato: scansionalo di nuovo quando la riparazione è finita.",
+      "NOT_IN": "{code} non è entrato: scansionalo prima in entrata.",
+      "NO_STATION": "Questo tablet non appartiene a una postazione: fai entrare la riparazione dal tablet della postazione di riparazione.",
+      "NOT_THIS_BUNDLE": "Non è il fascio di questa riparazione: scansiona il suo cartellino.",
+      "WORK_ORDER_ON_HOLD": "L’ordine di lavoro di {code} è bloccato: la riparazione aspetta che il blocco sia tolto.",
+      "WORK_ORDER_NOT_OPEN": "L’ordine di lavoro di {code} non è più aperto: non si ripara niente.",
+      "COUNTS_DO_NOT_ADD_UP": "Buoni e scartati devono fare i capi di {code}.",
+      "NOT_IN_QUEUE": "{code} non è nell’elenco delle riparazioni. Scansiona un fascio dell’elenco."
+    },
+    "refused": "L’ufficio non ha preso la scansione di {code}.",
+    "saidIn": "{code} entrato: la riparazione è iniziata.",
+    "saidOut": "{code} uscito: buoni {good}, scartati {scrap}.",
+    "offline": "L’elenco delle riparazioni non è ancora stato letto su questo tablet. Compare qui quando torna la rete.",
+    "error": {
+      "title": "Elenco delle riparazioni non caricato",
+      "body": "L’ufficio non ha risposto. Riprova tra poco."
+    },
+    "gone": {
+      "title": "Questa riparazione non è più aperta",
+      "body": "Nel frattempo è stata finita o annullata. Torna all’elenco."
+    },
+    "busy": "Invio della scansione…",
+    "inAt": "entrato a {station} alle {time}"
+  },
+  "pad": {
+    "less": "Meno",
+    "more": "Più",
+    "clear": "Cancella",
+    "back": "Elimina",
+    "empty": "Scrivi un numero",
+    "range": "Da {min} a {max}"
   }
 }

@@ -11,6 +11,10 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { ScrapRow } from '../api'
 import { decideHeld, KIND_TONE, leftToReplace, moneyText, reasonWord, reductionOf, REPLACEMENT_TONE, replaceHeld, SCRAP_NAMESPACE, type Phrase, type ReplaceDraft } from '../model'
 import type { ScrapActions, ScrapModel } from './ScrapView'
+// B-W2b-126: second quality (MES-133) and a rework's repair (MES-132).
+import { Recycle as SecondIcon } from 'lucide-react'
+import { downgradeOpenHeld } from '../model'
+import { RepairSection, SecondSection } from './SecondDialogs'
 
 export function say(t: (key: string, params?: Record<string, string | number>) => string, words: Phrase | null): string | null {
   return words ? t(words.key, words.params) : null
@@ -57,7 +61,8 @@ export function ScrapItemDialog({ model, row, ids, actions }: { model: ScrapMode
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const replaceWhy = row.kind !== 'SCRAP' ? t('replace.held.rework') : !model.can.ask ? t('held.permission', { permission: 'production.scrap' }) : leftToReplace(row) === 0 ? t('replace.held.covered') : null
+  const replaceWhy = row.kind !== 'SCRAP' ? t(row.kind === 'SECOND' ? 'second.held.isSecond' : 'replace.held.rework') : !model.can.ask ? t('held.permission', { permission: 'production.scrap' }) : leftToReplace(row) === 0 ? t('replace.held.covered') : null
+  const secondWhy = say(t, downgradeOpenHeld(row, model.rows.items ?? [], model.can))
   return (
     <DetailModal
       open
@@ -74,6 +79,11 @@ export function ScrapItemDialog({ model, row, ids, actions }: { model: ScrapMode
       footer={
         <>
           <span className="grow" />
+          {row.kind !== 'SECOND' && (
+            <Button size="sm" heldReason={secondWhy} onClick={() => actions?.onDowngrade?.(row.id)}>
+              <SecondIcon size={13} aria-hidden /> {t('second.open')}
+            </Button>
+          )}
           <Button size="sm" heldReason={replaceWhy} onClick={() => actions?.onReplace?.(row.id)}>
             <Scissors size={13} aria-hidden /> {t('replace.open')}
           </Button>
@@ -123,6 +133,9 @@ export function ScrapItemDialog({ model, row, ids, actions }: { model: ScrapMode
             ...(model.can.cost ? [{ label: t('item.value'), value: moneyText(row.value, row.currency, locale), hint: t('item.valueHint') }] : []),
           ]}
         />
+        {row.kind === 'SECOND' && <SecondSection model={model} row={row} actions={actions} />}
+        {row.kind !== 'SECOND' && row.source.type === 'REWORK' && <RepairSection model={model} />}
+        {row.kind !== 'SECOND' && (
         <section className="fw-sc-card" aria-label={t('item.leather')}>
           <h3 className="fw-sc-h3">{t('item.leather')}</h3>
           {row.materials.length === 0 ? (
@@ -140,6 +153,8 @@ export function ScrapItemDialog({ model, row, ids, actions }: { model: ScrapMode
           )}
           <p className="fw-sc-hint">{t('item.leatherHint')}</p>
         </section>
+        )}
+        {row.kind !== 'SECOND' && (
         <section className="fw-sc-card" aria-label={t('item.replacements')}>
           <h3 className="fw-sc-h3">{t('item.replacements')}</h3>
           {row.replacements.length === 0 ? (
@@ -157,6 +172,7 @@ export function ScrapItemDialog({ model, row, ids, actions }: { model: ScrapMode
             </ul>
           )}
         </section>
+        )}
         {refusing && reduction && (
           <Field label={t('item.refuseNote')} hint={t('item.refuseHint')}>
             <Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} maxLength={500} />

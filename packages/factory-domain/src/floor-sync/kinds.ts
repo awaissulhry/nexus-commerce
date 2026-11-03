@@ -59,6 +59,8 @@ export const FLOOR_SYNC_KINDS = [
   'quality.final.record',
   'quality.incoming.record',
   'quality.inprocess.results',
+  // B-W2b-126: a bundle scanned in or out at a repair station (MES-132; design floor.mywork "Works offline"), with the tablet's time.
+  'production.repair.scan',
   // B-W2b-125: an incident, a near miss or a hazard reported with the worker's name (design floor.incident "Works offline":
   // "honest that it waits when offline"). One sent WITHOUT a name never goes through the queue (its ledger names the tablet):
   // the module refuses it here, the tablet sends it online.
@@ -116,6 +118,8 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'quality.final.record': { kind: 'quality.final.record', permission: 'quality.inspections.record', numbers: null, what: 'Record a final inspection (results, measurements, count, serials, defects)' },
   'quality.incoming.record': { kind: 'quality.incoming.record', permission: 'quality.incoming.record', numbers: null, what: 'Record an incoming inspection (a hide, plan checks)' },
   'quality.inprocess.results': { kind: 'quality.inprocess.results', permission: 'quality.inprocess.record', numbers: null, what: "Record an in-process check's plan checks" },
+  // B-W2b-126: the repair station's own right; the module checks again the rework, its bundle and the station.
+  'production.repair.scan': { kind: 'production.repair.scan', permission: 'production.repair', numbers: null, what: 'Scan a bundle in or out at a repair station' },
   // B-W2b-125: anyone at the station reports (floor.work, as a help call); the number is taken when the office records it.
   'safety.incident.report': { kind: 'safety.incident.report', permission: 'floor.work', numbers: null, what: 'Report an incident, a near miss or a hazard' },
 } satisfies Record<FloorSyncKind, QueuedAction>)

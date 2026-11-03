@@ -48,6 +48,9 @@ export const ROLE_PERMISSIONS = {
     'threads.post',
     'quality.inspections.view',
     'money.price',
+    // B-W2b-113: sharing a file of the complaint with the customer; the CAPA it is escalated to.
+    'files.manage',
+    'quality.capa.view',
   ],
   inspector: templatePermissions('quality_inspector'),
   sales: [...templatePermissions('sales'), 'money.price'],
@@ -119,6 +122,7 @@ const row = (over: Partial<ComplaintRow> & Pick<ComplaintRow, 'id' | 'number' | 
   safety: none,
   register: null,
   ncrs: [],
+  capa: null,
   ...over,
 })
 
@@ -142,6 +146,8 @@ export const ROWS: ComplaintRow[] = [
     safety: { state: 'RAISED', raisedAt: at(28, 9, 40), acknowledgedAt: null, acknowledgedById: null },
     register: { id: uid('6506', 7), reference: 'REG-DEMO-0007', status: 'OPEN', risk: 'ASSESSING' },
     ncrs: [{ id: uid('6507', 31), number: 'NCR-DEMO-0031', stage: 'OPEN' }],
+    // B-W2b-113: escalated to an 8D (the CAPA column filled).
+    capa: { id: uid('6510', 2), number: '8D-DEMO-0002', status: 'D3' },
   }),
   row({ id: uid('6500', 13), number: 'CMP-DEMO-0013', status: 'NEW', summary: 'Zip of the left pocket broke after a week (made-up)', receivedAt: at(29, 8, 10), channel: 'PHONE', style: JACKET, size: '50', serial: 'S-DEMO-000431' }),
   row({ id: uid('6500', 14), number: 'CMP-DEMO-0014', status: 'NEW', summary: 'Colour faded on the sleeve (made-up)', receivedAt: at(29, 9, 20), party: CUSTOMER_2, channel: 'RETURN', return: { id: uid('6508', 3), number: 'RMA-DEMO-0003', status: 'RECEIVED' } }),
@@ -160,6 +166,7 @@ export const ROWS: ComplaintRow[] = [
     severity: 'MAJOR',
     ownerId: QUALITY.id,
     answerDueOn: day(28),
+    capa: { id: uid('6510', 3), number: 'CAPA-DEMO-0003', status: 'ACT' },
   }),
   row({ id: uid('6500', 8), number: 'CMP-DEMO-0008', status: 'ANSWERED', summary: 'A mark on the back panel (made-up)', receivedAt: at(14, 10, 0), category: 'COSMETIC', severity: 'MINOR', ownerId: OWNER.id, answerDueOn: day(24), answeredAt: at(20, 11, 0), style: JACKET }),
   row({ id: uid('6500', 5), number: 'CMP-DEMO-0005', status: 'CLOSED', summary: 'Size 54 too tight at the chest (made-up)', receivedAt: at(6, 10, 0), party: CUSTOMER_2, category: 'FIT', severity: 'MINOR', ownerId: OWNER.id, answerDueOn: day(16), answeredAt: at(9, 11, 0), style: JACKET, size: '54' }),
@@ -182,7 +189,16 @@ export const SAFETY_ALERT: SafetyAlert = {
 export const COUNTS: ComplaintCounts = { tiles: { new: 2, safety: 1, dueSoon: 2, open: 5, answeredMonth: 2 }, safetyAlerts: [SAFETY_ALERT], moreSafetyAlerts: 0, asOf: NOW }
 export const CALM_COUNTS: ComplaintCounts = { ...COUNTS, safetyAlerts: [] }
 
-const ALL_ACTIONS = ['edit', 'triage', 'startInvestigation', 'markAnswered', 'reopenInvestigation', 'close', 'acknowledge', 'register', 'createNcr', 'makeRepair'] as const
+const ALL_ACTIONS = ['edit', 'triage', 'startInvestigation', 'markAnswered', 'reopenInvestigation', 'close', 'acknowledge', 'register', 'createNcr', 'makeRepair', 'investigate', 'writeAnswer', 'sendAnswer'] as const
+
+/** B-W2b-113: the CAPAs the made-up complaints are escalated to (titles made up). */
+export const CAPAS = {
+  [uid('6510', 2)]: { id: uid('6510', 2), number: '8D-DEMO-0002', title: 'Shoulder protector pocket opens in a fall (made-up)', type: 'EIGHT_D' as const, status: 'D3' as const },
+  [uid('6510', 3)]: { id: uid('6510', 3), number: 'CAPA-DEMO-0003', title: 'Knee seams of the touring pants (made-up)', type: 'CAPA' as const, status: 'ACT' as const },
+}
+
+/** B-W2b-113: nothing written yet; the customer's language Italian. */
+export const NO_ANSWER: Complaint['answer'] = { template: null, language: null, text: null, files: [], sent: null, versions: [], suggestedLanguage: 'it' }
 
 /** A full record from a row, with the steps as the API would hold them for the owner. */
 export function complaintOf(base: ComplaintRow, over: Partial<Complaint> = {}): Complaint {
@@ -202,6 +218,12 @@ export function complaintOf(base: ComplaintRow, over: Partial<Complaint> = {}): 
         return base.safety.state === 'NONE' ? 'NO_SAFETY_ALERT' : base.safety.state === 'ACKNOWLEDGED' ? 'ACKNOWLEDGED' : null
       case 'register':
         return base.register ? 'IN_REGISTER' : base.style ? null : 'NO_STYLE'
+      case 'investigate':
+        return base.status === 'NEW' ? 'NOT_TRIAGED' : null
+      case 'writeAnswer':
+        return base.status === 'NEW' ? 'NOT_TRIAGED' : base.status === 'ANSWERED' ? 'ANSWER_SENT' : null
+      case 'sendAnswer':
+        return base.status === 'NEW' ? 'NOT_TRIAGED' : base.status === 'ANSWERED' ? 'ANSWER_SENT' : 'NO_ANSWER'
       default:
         return null
     }
@@ -228,7 +250,23 @@ export function complaintOf(base: ComplaintRow, over: Partial<Complaint> = {}): 
       return { action, allowed: code === null, held: code }
     }),
     people: [OWNER, QUALITY],
+    findings: null,
+    rootCause: null,
+    capaRecord: base.capa ? (CAPAS[base.capa.id] ?? null) : null,
+    capaElsewhere: false,
+    answer: NO_ANSWER,
     ...over,
+  }
+}
+
+/** B-W2b-113: a record whose letter is written (its send no longer held for the words). */
+export function withLetter(complaint: Complaint, answer: Partial<Complaint['answer']>): Complaint {
+  const next = { ...complaint.answer, ...answer }
+  const written = !!next.text && !!next.language
+  return {
+    ...complaint,
+    answer: next,
+    actions: complaint.actions.map((entry) => (entry.action === 'sendAnswer' && entry.held === 'NO_ANSWER' && written ? { ...entry, allowed: true, held: null } : entry)),
   }
 }
 
@@ -246,6 +284,9 @@ export function forRole(complaint: Complaint, role: RoleCase): Complaint {
     register: can.manage && can.registerManage,
     createNcr: can.ncrRaise,
     makeRepair: can.repairsManage,
+    investigate: can.manage,
+    writeAnswer: can.manage,
+    sendAnswer: can.manage,
   }
   return { ...complaint, actions: complaint.actions.map((entry) => (may[entry.action] ? entry : { ...entry, allowed: false, held: 'NO_PERMISSION' })) }
 }

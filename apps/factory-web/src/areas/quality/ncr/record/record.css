@@ -66,3 +66,41 @@
   padding-block: var(--nds-space-6);
   border-bottom: 1px solid var(--nds-border);
 }
+
+/* B-W2b-113: the Cost tab (layout only). */
+.fw-ncr-cost-new {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  align-items: end;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-12);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-ncr-cost-total {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: var(--nds-space-12);
+  margin-top: var(--nds-space-12);
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-ncr-cost-amount {
+  justify-content: flex-end;
+}
+
+.fw-ncr-cost-words {
+  width: 100%;
+}
+
+.fw-ncr-cost-words > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fw-ncr-cost-words input {
+  width: 100%;
+}

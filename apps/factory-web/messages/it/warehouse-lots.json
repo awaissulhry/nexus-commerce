@@ -206,7 +206,9 @@
     "tab": {
       "overview": "Panoramica",
       "cuts": "Tagli",
-      "moves": "Movimenti"
+      "moves": "Movimenti",
+      "grade": "Misure e scelta",
+      "defects": "Difetti e foto"
     },
     "movesLabel": "Movimenti della pelle {code}",
     "facts": {
@@ -222,8 +224,7 @@
       "area": "Area misurata al ricevimento",
       "left": "Area rimasta",
       "place": "Dove",
-      "received": "Arrivata con",
-      "readOnly": "Misurata al ricevimento e mai cambiata qui: un’area diversa è un movimento di rettifica; scelta, tonalità e difetti non si correggono ancora dall’ufficio."
+      "received": "Arrivata con"
     },
     "area": {
       "title": "Cosa è successo alla sua area",
@@ -238,8 +239,7 @@
     },
     "defects": {
       "title": "Difetti",
-      "none": "Nessun difetto registrato al ricevimento.",
-      "photos": "Le foto della pelle arriveranno più avanti: l’ufficio non può ancora aggiungerle."
+      "none": "Nessun difetto registrato al ricevimento."
     },
     "side": {
       "title": "Il suo lotto e il prossimo passo",
@@ -306,6 +306,233 @@
         "noScrap": "Il tuo ruolo non può rottamare merce (inventory.scrap).",
         "gone": "Una pelle selezionata non ha nulla in giacenza (esaurita, rottamata o presso un ordine): toglila dalla selezione.",
         "reservedAlready": "Già riservata: libera prima quella riserva."
+      }
+    },
+    "grading": {
+      "title": "Scelta e tonalità",
+      "hint": "Correggi la scelta, il gruppo di tonalità e lo spessore: Applica li salva insieme.",
+      "viewOnly": "Puoi vedere, non modificare: il tuo ruolo non corregge le pelli.",
+      "grade": "Scelta",
+      "shade": "Gruppo di tonalità",
+      "thickness": "Spessore (mm)",
+      "thicknessHint": "Maggiore di 0, al massimo due decimali: 1,20.",
+      "noGrade": "Nessuna scelta",
+      "unsorted": "Non smistata",
+      "gradeOption": "{grade} — {share} % utilizzabile",
+      "gradeOptionRetired": "{grade} — {share} % utilizzabile (ritirata)",
+      "outOfShadeOption": "{shade} (fuori tono)",
+      "byTextHint": "Scelta {grade} dal testo scritto al ricevimento, non ancora come scelta registrata.",
+      "recordByText": "Registra la scelta {grade} come scelta della pelle",
+      "shadeTextHint": "Tonalità scritta al ricevimento: {shade} (nessun gruppo di tonalità).",
+      "shadeText": "{shade} (scritta al ricevimento)",
+      "ungraded": "Senza scelta",
+      "byText": "Dal testo scritto al ricevimento",
+      "outOfShade": "Fuori tono: non va in nessun ordine che chiede una sola tonalità.",
+      "reason": "Perché cambia",
+      "reasonHint": "La pelle è già stata tagliata: di’ perché cambiano scelta, tonalità, spessore o difetti.",
+      "areaLine": "Misurata al ricevimento: {area} ({other})",
+      "areaFixed": "Misurata al ricevimento e mai cambiata: una correzione è un movimento di rettifica.",
+      "correctArea": "Correggi la superficie…",
+      "readOnly": {
+        "CONSUMED": "La pelle {code} è esaurita: scelta e tonalità restano come al taglio.",
+        "SCRAPPED": "La pelle {code} è stata scartata: è in sola lettura.",
+        "RETURNED": "La pelle {code} è tornata al fornitore: è in sola lettura.",
+        "other": "La pelle {code} non si può modificare ora."
+      },
+      "readOnlyBody": "In questa scheda non si può più modificare nulla.",
+      "changedMeanwhile": "Qualcuno ha modificato questa pelle nel frattempo: è stata riletta. Controlla la tua modifica, poi applicala di nuovo o annullala.",
+      "saved": "Salvato.",
+      "held": {
+        "saving": "Salvataggio…",
+        "readOnly": "Questa pelle è in sola lettura.",
+        "noRight": "Il tuo ruolo non corregge le pelli (inventory.hides.manage).",
+        "nothing": "Ancora nessuna modifica.",
+        "thickness": "Lo spessore è maggiore di 0 mm, con al massimo due decimali (1,20).",
+        "defectsLong": "I difetti sono al massimo 2000 caratteri.",
+        "reasonLong": "Il motivo è al massimo 500 caratteri.",
+        "reason": "Di’ perché cambia: la pelle è già stata tagliata."
+      },
+      "refused": {
+        "reason": "Di’ perché cambia: la pelle è già stata tagliata.",
+        "grade": "Questa scelta non si può dare a questa pelle: è ritirata o non è una scelta dell’articolo.",
+        "shade": "Questo gruppo di tonalità non va bene per la pelle: altro articolo, colore o lotto, oppure ritirato.",
+        "thickness": "Lo spessore non è stato accettato: maggiore di 0 mm, al massimo due decimali.",
+        "defects": "I difetti non sono stati accettati: al massimo 2000 caratteri.",
+        "readOnly": "Questa pelle non si può più modificare: è esaurita, scartata o resa.",
+        "stale": "Qualcuno ha modificato questa pelle nel frattempo: è stata riletta. Controlla e applica di nuovo.",
+        "forbidden": "Il tuo ruolo non può correggere questa pelle."
+      },
+      "factsHint": "Misurata al ricevimento e mai cambiata qui: una superficie diversa è un movimento di rettifica.",
+      "factsLink": "Scelta, tonalità e spessore sono in Misure e scelta.",
+      "usable": {
+        "title": "Superficie utilizzabile",
+        "hint": "Quanto della pelle si può tagliare: la quota della regola dell’articolo per la sua scelta, altrimenti la quota della scelta.",
+        "share": "Quota utilizzabile",
+        "byRule": "Scelta {grade}: regola di questo articolo",
+        "byGrade": "Scelta {grade}: valore della scelta",
+        "ofMeasured": "Della superficie misurata",
+        "ofLeft": "Di quanto resta",
+        "panels": "Pannelli per cui si può tagliare",
+        "everyPanel": "Tutti i pannelli",
+        "unknown": "Senza scelta: la superficie utilizzabile non si conosce. Dai una scelta alla pelle per vederla.",
+        "estimates": "A ogni scelta che può ricevere (di quanto resta)",
+        "noGrades": "L’articolo non ha ancora scelte: aggiungile in Scelte e superficie utilizzabile del materiale.",
+        "atGrade": "Scelta {grade} · {share} %",
+        "now": "La sua scelta ora",
+        "ruleShort": "Regola dell’articolo",
+        "gradeShort": "Valore della scelta"
+      },
+      "changes": {
+        "title": "Modifiche",
+        "empty": "Nessuna modifica di scelta, tonalità, spessore o difetti dal ricevimento.",
+        "line": "{field} {from} → {to}",
+        "field": {
+          "grade": "Scelta",
+          "shade": "Tonalità",
+          "thicknessMm": "Spessore",
+          "defects": "Difetti"
+        },
+        "defects": "Difetti riscritti",
+        "none": "nessuna",
+        "noField": "Modificata",
+        "why": "Perché: {reason}",
+        "by": {
+          "office": "In ufficio",
+          "floor": "In reparto",
+          "system": "Dal sistema",
+          "other": "Altrove"
+        }
+      }
+    },
+    "measure": {
+      "title": "Misure rispetto alla conceria",
+      "label": "Misure di questa pelle",
+      "count_one": "{count} misura",
+      "count_other": "{count} misure",
+      "none": "Non rimisurata",
+      "noneBody": "La sua superficie è quella misurata al ricevimento.",
+      "again": "Rimisura…",
+      "latest": "Quella che conta",
+      "atInspection": "Al controllo in arrivo",
+      "fromTannery": "Superficie della conceria",
+      "fromReceipt": "Superficie al ricevimento",
+      "toleranceLine": "Tolleranza {percent} %, concordata sulla riga dell’ordine d’acquisto.",
+      "toleranceDefault": "Tolleranza {percent} %: quella predefinita (la riga d’ordine non ne ha).",
+      "col": {
+        "when": "Quando",
+        "declared": "Rispetto a",
+        "measured": "Misurata",
+        "difference": "Differenza",
+        "outcome": "Esito",
+        "by": "Misurata da",
+        "note": "Nota"
+      },
+      "outcome": {
+        "WITHIN": "In tolleranza",
+        "SHORT": "Mancante",
+        "OVER": "In eccesso"
+      },
+      "by": {
+        "office": "L’ufficio",
+        "floor": "Un operatore di reparto",
+        "floorHidden": "Un operatore di reparto (il sito non mostra i nomi)"
+      },
+      "held": {
+        "cut": "La pelle è già stata tagliata: solo una pelle intera si misura rispetto alla superficie della conceria.",
+        "CONSUMED": "La pelle è esaurita: non resta nulla da misurare.",
+        "SCRAPPED": "La pelle è stata scartata: non si misura più.",
+        "RETURNED": "La pelle è tornata al fornitore: non si misura più.",
+        "notWhole": "Solo una pelle intera si misura rispetto alla superficie della conceria.",
+        "noRight": "Il tuo ruolo non misura le pelli (inventory.hides.manage).",
+        "noAdjust": "Correggere la giacenza è una rettifica: il tuo ruolo ha bisogno di inventory.adjust.",
+        "reading": "Lettura delle misure…",
+        "saving": "Salvataggio…",
+        "measured": "Scrivi la superficie misurata.",
+        "measuredBad": "La superficie misurata è maggiore di 0, con al massimo quattro decimali.",
+        "declaredBad": "La superficie della conceria è maggiore di 0, con al massimo quattro decimali.",
+        "noteLong": "Una nota è al massimo 500 caratteri."
+      },
+      "refused": {
+        "adjust": "La correzione della giacenza è stata rifiutata: serve inventory.adjust e un motivo di rettifica attivo.",
+        "measured": "La superficie misurata non è stata accettata: maggiore di 0, al massimo quattro decimali.",
+        "declared": "La superficie della conceria non è stata accettata: maggiore di 0, al massimo quattro decimali.",
+        "when": "Una pelle si misura ora o prima, mai dopo.",
+        "notWhole": "Questa pelle non si può misurare ora: solo una pelle intera.",
+        "notOnePlace": "La pelle non è in un solo posto della giacenza del sito (forse è a un ordine di lavoro): riportala prima.",
+        "forbidden": "Il tuo ruolo non può misurare questa pelle."
+      },
+      "dialog": {
+        "title": "Rimisura la pelle {code}",
+        "correctTitle": "Correggi la superficie della pelle {code}",
+        "hint": "Solo una pelle intera si misura rispetto alla superficie della conceria. La superficie ricevuta non cambia mai: una misura diversa può correggere la giacenza con un movimento di rettifica.",
+        "measured": "Superficie misurata ({unit})",
+        "declared": "Superficie della conceria ({unit})",
+        "declaredHint": "Facoltativa: se vuota, la misura si confronta con la superficie ricevuta ({area}).",
+        "note": "Nota",
+        "correct": "Correggi anche la giacenza alla superficie misurata (un movimento di rettifica)",
+        "correctNote": "Nota per la rettifica",
+        "correctHint": "Facoltativa: il movimento descrive da solo la misura.",
+        "save": "Salva la misura",
+        "saveCorrect": "Salva e correggi la giacenza",
+        "doneLine": "Misurata {measured} rispetto a {declared}: {percent} %.",
+        "movedOut": "La giacenza è stata corretta: {quantity} in uscita.",
+        "movedIn": "La giacenza è stata corretta: {quantity} in entrata.",
+        "stockSaidIt": "La giacenza indicava già questa superficie: nessun movimento.",
+        "stockUntouched": "La giacenza non è cambiata."
+      }
+    },
+    "defectsTab": {
+      "title": "Difetti",
+      "hint": "Fori, cicatrici, vene e marchi a fuoco, e dove sono.",
+      "field": "Difetti e posizione",
+      "placeholder": "Due fori di zecca vicino alla schiena; una vena sul collo",
+      "overviewLink": "Difetti e foto di questa pelle",
+      "map": {
+        "title": "Mappa dei difetti",
+        "later": "Arriva in un’ondata successiva",
+        "body": "Segni e zone di qualità disegnati sulla foto della pelle (SCM-251). Aspetta i segni che il controllo in arrivo registra su ogni pelle."
+      }
+    },
+    "photos": {
+      "title": "Foto · {count}",
+      "hint": "Scattate al tavolo di taglio, al controllo in arrivo o aggiunte in ufficio.",
+      "place": {
+        "CUTTING_TABLE": "Tavolo di taglio",
+        "INSPECTION": "Controllo in arrivo",
+        "floor": "Scattata su un tablet",
+        "office": "Aggiunta in ufficio"
+      },
+      "alt": "Foto {n} di {count} della pelle {code}: {place}",
+      "lightboxTitle": "Pelle {code} · foto {n} di {count}",
+      "open": "Apri la foto {n}: {place}",
+      "unread": "Non è stato possibile leggere {name}.",
+      "loading": "Lettura delle foto…",
+      "failed": "Non è stato possibile leggere le foto",
+      "none": "Ancora nessuna foto",
+      "noneBody": "Qui compaiono le foto scattate al tavolo di taglio; l’ufficio può aggiungerne una.",
+      "noRead": "Le foto richiedono files.read",
+      "noReadBody": "Il tuo ruolo non legge i file: chiedi a un amministratore se ti servono le foto.",
+      "add": "Aggiungi una foto",
+      "addHint": "JPEG, PNG, WebP o HEIC, fino a 15 MB. Resta sulla pelle, per l’ufficio.",
+      "held": {
+        "noUpload": "Per aggiungere una foto serve files.upload."
+      },
+      "listLabel": "Foto di questa pelle",
+      "uploadsLabel": "Foto in aggiunta",
+      "notAdded": "Non aggiunta",
+      "sending": "Aggiunta di {name}…",
+      "dismiss": "Togli {name}",
+      "receiptNote": "Le foto scattate al ricevimento restano sul ricevimento merce: non sono ancora tenute sulla pelle.",
+      "problem": {
+        "notImage": "Non è un’immagine: una foto è un file JPEG, PNG, WebP o HEIC.",
+        "empty": "Il file è vuoto.",
+        "tooBig": "Più grande di 15 MB.",
+        "quarantined": "Il controllo dell’archivio non corrispondeva al file: è stato messo da parte.",
+        "forbidden": "Il tuo ruolo non può aggiungere file a questa pelle.",
+        "offline": "Nessuna connessione: la foto non è stata aggiunta.",
+        "refused": "La foto è stata rifiutata così com’è.",
+        "failed": "La foto non è stata aggiunta. Riprova.",
+        "store": "L’archivio dei file non ha preso la foto. Riprova."
       }
     }
   },

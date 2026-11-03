@@ -16,8 +16,15 @@ import { useWriteOff } from '../../stock/daily/useWriteOff'
 import type { SiteChoice } from '../../lots/model'
 import { dailyCan, hidesValue, reserveHides, scrapTarget, type HoldsBySubject } from '../../lots/shared/daily'
 import { LotsMessages, useWords } from '../../lots/shared/parts'
-import { exactHide, filtersOf, HIDE_CSV_COLUMNS, hideQuery, hideViewOf, type HideFilters, type HidesListModel, type HideView } from '../model'
+import { useLeatherDashboard } from '../dashboard/use-dashboard'
+import { articleOfKey } from '../dashboard/dashboard-model'
+import { useFindHides } from '../find/use-find'
+import { exactHide, FILTER_PARAM, filtersOf, HIDE_CSV_COLUMNS, hideQuery, hideViewOf, type HideFilters, type HidesListModel, type HideView } from '../model'
+import { useMoveHides } from '../move/use-move'
+import { useHidePhotos } from '../photos/use-hide-photos'
 import { usePrintTags } from '../print/usePrintTags'
+import { listRemnants, remnantRecord, type RemnantsPage } from '../remnants/api'
+import type { RemnantsListModel } from '../remnants/view/RemnantsList'
 import { HidesListView } from './view/HidesListView'
 
 /**
@@ -27,7 +34,10 @@ import { HidesListView } from './view/HidesListView'
  * filter's two numbers; live inventory.* and production.cut_* events behind "N updates · Show"; Print N tags. B-W2a-64:
  * the site's ACTIVE quality holds and the HOLD reasons (quality.holds.view: a held hide says why), Reserve N hides to a
  * work order and Scrap N hides (the shared every-day dialogs; with the cost grain the value leaving stock from the stock
- * read of the hides' material).
+ * read of the hides' material). B-W2b-131: the leather dashboard (SCR-134, on / off per person; a bar sets `?item=`
+ * `?colour=`, `?lot=` or the view), Find hides for a job (the band's primary), Move N hides (one transfer each), the
+ * Remnants tile as pieces beside area and the Remnants view as the tagged pieces (`?remnant=<id>` opens one), and the
+ * rows' photos (files.read: a Thumbnail opens the Lightbox).
  */
 export function HidesPage() {
   return (
@@ -36,8 +46,6 @@ export function HidesPage() {
     </LotsMessages>
   )
 }
-
-const FILTER_PARAM: Readonly<Record<keyof HideFilters, string>> = { lotId: 'lot', grade: 'grade', shade: 'shade', locationId: 'location' }
 
 function HidesContainer() {
   const t = useWords()
@@ -70,17 +78,20 @@ function HidesContainer() {
   rowsRef.current = rows.items ?? []
 
   const address = useCallback(
-    (next: { view?: HideView; q?: string; site?: string | null; drop?: keyof HideFilters }) => {
+    (next: { view?: HideView; q?: string; site?: string | null; drop?: keyof HideFilters; set?: Partial<HideFilters>; remnant?: string | null }) => {
       const query = new URLSearchParams()
       query.set('view', next.view ?? view)
       const nextQ = next.q ?? q
       if (nextQ.trim()) query.set('q', nextQ.trim())
       const nextSite = next.site === undefined ? siteId : next.site
       if (nextSite) query.set('site', nextSite)
-      for (const [name, value] of Object.entries(filters) as [keyof HideFilters, string | null][]) if (value && name !== next.drop) query.set(FILTER_PARAM[name], value)
+      const nextFilters = { ...filters, ...next.set }
+      for (const [name, value] of Object.entries(nextFilters) as [keyof HideFilters, string | null][]) if (value && name !== next.drop && !(next.drop === 'itemId' && name === 'itemColourId')) query.set(FILTER_PARAM[name], value)
+      const remnant = next.remnant === undefined ? (params?.get('remnant') ?? null) : next.remnant
+      if (remnant && (next.view ?? view) === 'remnants') query.set('remnant', remnant)
       return `${pathname}?${query.toString()}`
     },
-    [pathname, view, q, siteId, filters],
+    [pathname, view, q, siteId, filters, params],
   )
 
   useEffect(() => {
@@ -103,6 +114,58 @@ function HidesContainer() {
       .then(setHoldReasons)
       .catch(() => setHoldReasons([]))
   }, [api, daily.holdsView])
+
+  // B-W2b-131: the tagged remnant pieces (the tile: pieces · area; the Remnants view: one by one).
+  const [remnantTotals, setRemnantTotals] = useState<RemnantsPage['totals'] | null>(null)
+  const [remnantRows, setRemnantRows] = useState<RemnantsListModel['rows']>({ items: null, more: false, problem: null })
+  const [remnantCursor, setRemnantCursor] = useState<string | null>(null)
+  const [remnantMinimum, setRemnantMinimum] = useState<RemnantsPage['minimum'] | null>(null)
+  const [remnantOpen, setRemnantOpen] = useState<RemnantsListModel['open']>(null)
+  const openRemnantId = view === 'remnants' ? (params?.get('remnant') ?? null) : null
+  const remnantsId = useRef(0)
+  const [remnantViewTotals, setRemnantViewTotals] = useState<RemnantsPage['totals'] | null>(null)
+  const loadRemnants = useCallback(
+    async (after: string | null = null) => {
+      if (!can.stockView) return
+      const id = ++remnantsId.current
+      // The tile counts every piece of the site, as the other tiles count every hide (never the search or the filters).
+      if (!after)
+        listRemnants(api, { siteId, limit: 1 })
+          .then((page) => {
+            if (id !== remnantsId.current) return
+            setRemnantTotals(page.totals)
+            setRemnantMinimum(page.minimum)
+          })
+          .catch(() => id === remnantsId.current && setRemnantTotals(null))
+      if (view !== 'remnants') return
+      try {
+        const page = await listRemnants(api, { siteId, itemId: filters.itemId, lotId: filters.lotId, q, cursor: after, limit: 50 })
+        if (id !== remnantsId.current) return
+        setRemnantViewTotals(page.totals)
+        setRemnantRows((current) => ({ items: after && current.items ? [...current.items, ...page.rows.filter((row) => !current.items!.some((seen) => seen.id === row.id))] : page.rows, more: page.nextCursor !== null, problem: null }))
+        setRemnantCursor(page.nextCursor)
+      } catch (error) {
+        if (id !== remnantsId.current) return
+        setRemnantRows({ items: null, more: false, problem: readProblem(error) })
+        setRemnantViewTotals(null)
+      }
+    },
+    [api, can.stockView, siteId, filters.itemId, filters.lotId, q, view],
+  )
+  useEffect(() => {
+    setRemnantRows({ items: null, more: false, problem: null })
+    void loadRemnants(null)
+  }, [loadRemnants])
+  useEffect(() => {
+    if (!openRemnantId) {
+      setRemnantOpen(null)
+      return
+    }
+    setRemnantOpen({ id: openRemnantId, value: null, problem: null })
+    remnantRecord(api, openRemnantId)
+      .then((value) => setRemnantOpen((current) => (current?.id === openRemnantId ? { id: openRemnantId, value, problem: null } : current)))
+      .catch((error: unknown) => setRemnantOpen((current) => (current?.id === openRemnantId ? { id: openRemnantId, value: null, problem: readProblem(error) } : current)))
+  }, [api, openRemnantId])
 
   const load = useCallback(async () => {
     if (!can.stockView) return
@@ -155,13 +218,26 @@ function HidesContainer() {
       })
       .catch(() => undefined)
   }, 1000)
+  const dashboard = useLeatherDashboard(
+    api,
+    { siteId, stockView: can.stockView, cost: daily.cost, cuttingView: session.permissions.includes('production.cutting.view') },
+    { article: filters.itemId ? `${filters.itemId}|${filters.itemColourId ?? ''}` : null, lot: filters.lotId },
+  )
+  const refreshDashboard = useCoalesced(() => {
+    dashboard.refresh()
+    void loadRemnants(null)
+  }, 2000)
   const live = useLive(
     (change) => {
       if (change.type.startsWith('inventory.') || change.type.startsWith('production.cut')) {
         setUpdates((count) => count + 1)
         refreshCounts()
+        refreshDashboard()
       }
-      if (change.type.startsWith('quality.hold')) loadHolds()
+      if (change.type.startsWith('quality.hold')) {
+        loadHolds()
+        refreshDashboard()
+      }
     },
     () => void load(),
     can.stockView,
@@ -170,8 +246,26 @@ function HidesContainer() {
   const unitWord = useCallback((uom: HideRow['areaUom']) => t(`stock:uom.${uom}`), [t])
   const hidesOf = useCallback((ids: readonly string[]) => rowsRef.current.filter((row) => ids.includes(row.id)), [])
   const print = usePrintTags(api, locale, unitWord, hidesOf)
-  const reserve = useReserve(api, { workOrders: daily.workOrders, timeZone: TIME_ZONE }, () => void load())
-  const writeOff = useWriteOff(api, { withCost: daily.cost, canPhoto: daily.filesUpload, canNcr: daily.ncrRaise, prefix }, () => void load())
+  // B-W2b-131: after this page's own write the list, the dashboard and the remnant pieces read again (live events need the
+  // outbox relay; this does not wait for them).
+  const afterWrite = useCallback(() => {
+    void load()
+    dashboard.refresh()
+    void loadRemnants(null)
+  }, [load, dashboard, loadRemnants])
+  const reserve = useReserve(api, { workOrders: daily.workOrders, timeZone: TIME_ZONE }, afterWrite)
+  const writeOff = useWriteOff(api, { withCost: daily.cost, canPhoto: daily.filesUpload, canNcr: daily.ncrRaise, prefix }, afterWrite)
+  const find = useFindHides(
+    api,
+    { reserve: daily.reserve, override: session.permissions.includes('inventory.shade.override'), workOrders: daily.workOrders, grades: session.permissions.includes('product.materials.view') },
+    sites,
+    afterWrite,
+  )
+  const move = useMoveHides(api, afterWrite)
+  // The Photo column: the shown rows' photos (files.read), the newest one's image per hide.
+  const filesRead = session.permissions.includes('files.read')
+  const shownIds = useMemo(() => (rows.items ?? []).map((row) => row.id), [rows.items])
+  const photos = useHidePhotos(api, shownIds, { enabled: filesRead && can.stockView && view !== 'remnants', urls: 'first' })
 
   const openReserve = useCallback(
     (ids: readonly string[]) => {
@@ -254,6 +348,14 @@ function HidesContainer() {
     holdReasons,
     reserve: reserve.model,
     writeOff: writeOff.model,
+    dashboard: dashboard.model,
+    find: find.model,
+    move: move.model,
+    canTransfer: session.permissions.includes('inventory.transfer'),
+    remnantTotals,
+    remnants: view === 'remnants' ? { prefix, timeZone: TIME_ZONE, rows: remnantRows, totals: remnantViewTotals, minimum: remnantMinimum, open: remnantOpen } : null,
+    photos: filesRead ? photos.state : null,
+    lightbox: photos.lightbox,
   }
 
   return (
@@ -277,6 +379,31 @@ function HidesContainer() {
         onScrap: (ids) => void openScrap(ids),
         reserve: reserve.actions,
         writeOff: writeOff.actions,
+        dashboard: {
+          ...dashboard.actions,
+          onArticle: (key) => {
+            const { itemId, colourId } = articleOfKey(key)
+            const same = filters.itemId === itemId && filters.itemColourId === colourId
+            router.replace(address({ view: view === 'remnants' ? 'inStock' : view, set: { itemId: same ? null : itemId, itemColourId: same ? null : colourId } }))
+          },
+          onLot: (lotId) => router.replace(address({ view: view === 'remnants' ? 'inStock' : view, set: { lotId: filters.lotId === lotId ? null : lotId } })),
+          onRemnants: () => router.replace(address({ view: 'remnants' })),
+          onOnHold: (key) => {
+            const { itemId, colourId } = articleOfKey(key)
+            router.replace(address({ view: 'quarantine', set: { itemId, itemColourId: colourId } }))
+          },
+        },
+        onFind: () => find.open(siteId),
+        find: find.actions,
+        onMove: (ids) => move.open(hidesOf(ids)),
+        move: move.actions,
+        remnants: {
+          onMore: () => void loadRemnants(remnantCursor),
+          onRetry: () => void loadRemnants(null),
+          onOpen: (id) => router.replace(address({ remnant: id })),
+        },
+        onPhoto: (hideId, hideCode) => photos.open(hideId, hideCode, 0),
+        lightbox: { onIndex: photos.step, onClose: photos.close },
       }}
     />
   )

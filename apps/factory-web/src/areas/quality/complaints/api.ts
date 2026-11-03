@@ -12,8 +12,10 @@ import {
   SAFETY_STATES,
   STATUS_MOVES,
 } from '@nexus/factory-domain/quality/complaints/rules'
+import { ANSWER_TEMPLATES, ANSWER_VIAS } from '@nexus/factory-domain/quality/complaints/answer'
+import { CAPA_STATUSES, CAPA_TYPES } from '@nexus/factory-domain/quality/capa/rules'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
-import { completeUpload, requestUpload } from '../../../record-panels/api'
+import { completeUpload, fileSchema, listFiles, requestUpload, type ApiFile } from '../../../record-panels/api'
 import { putToStore, sha256Hex } from '../../../record-panels/store'
 
 /**
@@ -39,6 +41,11 @@ export type StatusMove = (typeof STATUS_MOVES)[number]
 export type SafetyState = (typeof SAFETY_STATES)[number]
 /** B-W2b-17: what Link… links to a complaint (its order, shipment, return, garment — its own facts — or an NCR). */
 export type ComplaintLinkType = (typeof COMPLAINT_LINK_TYPES)[number]
+/** B-W2b-113 (QHS-116): the answer letter's templates and how a letter went out. */
+export { ANSWER_TEMPLATES, ANSWER_VIAS }
+export type AnswerTemplate = (typeof ANSWER_TEMPLATES)[number]
+export type AnswerVia = (typeof ANSWER_VIAS)[number]
+export type LetterLanguage = 'it' | 'en'
 
 const seg = (value: string) => encodeURIComponent(value)
 const clean = <T extends Record<string, string | number | boolean | null | undefined>>(query: T) =>
@@ -78,9 +85,25 @@ export const complaintRowSchema = z.object({
   safety,
   register: registerRef.nullable(),
   ncrs: z.array(z.object({ id: z.string(), number: z.string(), stage: z.string() })),
+  /** B-W2b-113: the CAPA it is escalated to, when the reader may see it (quality.capa.view). */
+  capa: z.object({ id: z.string(), number: z.string(), status: z.enum(CAPA_STATUSES) }).nullable(),
   summary: z.string(),
 })
 export type ComplaintRow = z.infer<typeof complaintRowSchema>
+
+const language = z.enum(['it', 'en'])
+
+/** B-W2b-113 (design cmp-ans): the answer letter as written, the files with it, the version sent and every version kept. */
+export const answerSchema = z.object({
+  template: z.enum(ANSWER_TEMPLATES).nullable(),
+  language: language.nullable(),
+  text: z.string().nullable(),
+  files: z.array(z.object({ id: z.string(), originalName: z.string(), kind: z.string(), status: z.string(), shared: z.boolean() })),
+  sent: z.object({ documentId: z.string(), version: z.number(), language: z.string(), fileId: z.string(), at: z.string(), byId: z.string().nullable(), via: z.enum(ANSWER_VIAS) }).nullable(),
+  versions: z.array(z.object({ id: z.string(), version: z.number(), language: z.string(), fileId: z.string(), createdAt: z.string(), createdById: z.string().nullable() })),
+  suggestedLanguage: language,
+})
+export type ComplaintAnswer = z.infer<typeof answerSchema>
 
 export const complaintSchema = complaintRowSchema.extend({
   description: z.string(),
@@ -108,6 +131,13 @@ export const complaintSchema = complaintRowSchema.extend({
   suggestedAnswerDueOn: z.string().nullable(),
   actions: z.array(z.object({ action: z.enum(COMPLAINT_ACTIONS), allowed: z.boolean(), held: z.enum(HELD_CODES).nullable() })),
   people: z.array(person),
+  /** B-W2b-113 (design cmp-inv): what the investigation found and the root cause (office only: never printed or sent). */
+  findings: z.string().nullable(),
+  rootCause: z.string().nullable(),
+  /** B-W2b-113: the CAPA with its title; `capaElsewhere`: escalated to a CAPA the reader may not see. */
+  capaRecord: z.object({ id: z.string(), number: z.string(), title: z.string(), type: z.enum(CAPA_TYPES), status: z.enum(CAPA_STATUSES) }).nullable(),
+  capaElsewhere: z.boolean(),
+  answer: answerSchema,
 })
 export type Complaint = z.infer<typeof complaintSchema>
 
@@ -407,3 +437,71 @@ export async function findGarmentByScan(api: ApiClient, serial: string, signal?:
   const answer = await api.get('/production/serials/scan', { query: { code: serial.trim() }, schema: z.object({ kind: z.string(), serial: z.object({ id: z.string(), serial: z.string() }).nullable() }), signal })
   return answer.kind === 'SERIAL' ? answer.serial : null
 }
+
+// ---- B-W2b-113: the investigation and the answer letter (design cmp-inv, cmp-ans, cmp-letter) ------------------------------
+
+/** The investigation's words (an empty one clears it): PATCH …/investigation. */
+export const saveInvestigation = (api: ApiClient, complaint: Pick<Complaint, 'id' | 'version'>, body: { findings: string | null; rootCause: string | null }) =>
+  api.request('PATCH', `/quality/complaints/${seg(complaint.id)}/investigation`, { body: { version: complaint.version, ...body }, schema: oneComplaint, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.complaint)
+
+export interface AnswerBody {
+  template: AnswerTemplate | null
+  language: LetterLanguage | null
+  text: string | null
+  fileIds: string[]
+}
+
+/** The letter as written: PUT …/answer (frozen once answered). */
+export const saveAnswer = (api: ApiClient, complaint: Pick<Complaint, 'id' | 'version'>, body: AnswerBody) =>
+  api.request('PUT', `/quality/complaints/${seg(complaint.id)}/answer`, { body: { version: complaint.version, ...body }, schema: oneComplaint, idempotencyKey: newIdempotencyKey() }).then((answer) => answer.complaint)
+
+const checkSchema = z.object({
+  ready: z.boolean(),
+  problems: z.array(issue),
+  recipients: z.array(z.object({ contactId: z.string(), name: z.string(), email: z.string(), language: z.string().nullable(), suggested: z.boolean() })),
+  language,
+  subject: z.string(),
+  message: z.string(),
+})
+export type AnswerCheck = z.infer<typeof checkSchema>
+
+/** What a send would do now: the customer's contacts with an e-mail, the subject and words, why not yet. */
+export const answerCheck = (api: ApiClient, complaintId: string, signal?: AbortSignal): Promise<AnswerCheck> => api.get(`/quality/complaints/${seg(complaintId)}/answer/check`, { schema: checkSchema, signal })
+
+/** The letter as the customer would get it (the "preview" banner, stored nowhere), for the viewer. */
+export const answerLetterBytes = (api: ApiClient, complaintId: string, languageAsked?: LetterLanguage | null, signal?: AbortSignal): Promise<Uint8Array> =>
+  api.bytes(`/quality/complaints/${seg(complaintId)}/answer/letter`, { query: languageAsked ? { language: languageAsked } : {}, signal })
+
+/** The same preview in a new tab: the browser's own GET through /api. */
+export const answerLetterHref = (complaintId: string, languageAsked?: LetterLanguage | null): string => `/api/quality/complaints/${seg(complaintId)}/answer/letter${languageAsked ? `?language=${languageAsked}` : ''}`
+
+export interface SendBody {
+  contactIds: string[]
+  cc?: string[]
+  subject?: string | null
+  message?: string | null
+}
+
+const sentSchema = z.object({ complaint: complaintSchema, emailId: z.string(), document: z.object({ id: z.string(), version: z.number(), fileId: z.string() }) })
+export type SentAnswer = z.infer<typeof sentSchema>
+
+/** Send = review then send: the version kept, mailed to the contacts chosen, the complaint ANSWERED in the same step. */
+export const sendAnswer = (api: ApiClient, complaint: Pick<Complaint, 'id' | 'version'>, body: SendBody, idempotencyKey: string): Promise<SentAnswer> =>
+  api.post(`/quality/complaints/${seg(complaint.id)}/answer/send`, { body: { version: complaint.version, ...body }, schema: sentSchema, idempotencyKey })
+
+/** The complaint's files that may go with the letter (files.read): available ones, with whether each is shared with the customer. */
+export async function complaintFiles(api: ApiClient, complaintId: string, signal?: AbortSignal): Promise<ApiFile[]> {
+  const answer = await listFiles(api, { type: 'Complaint', id: complaintId }, signal)
+  return answer.files.filter((file) => file.status === 'AVAILABLE')
+}
+
+/** Share one of the complaint's files with the customer's party (files.manage): a mail may then carry it. */
+export const shareWithCustomer = (api: ApiClient, file: Pick<ApiFile, 'id' | 'version' | 'visibility'>, partyId: string) =>
+  api.request('PUT', `/files/${seg(file.id)}/visibility`, {
+    body: { visibility: [...new Set([...file.visibility, 'OFFICE', 'PARTNER'])], partyId, version: file.version },
+    schema: z.object({ file: fileSchema }),
+    idempotencyKey: newIdempotencyKey(),
+  }).then((answer) => answer.file)
+
+/** A stored file's address for a new tab (a presigned GET of 60 seconds; a same-origin path goes through this app's /api). */
+export const fileAddress = (api: ApiClient, fileId: string): Promise<string> => photoAddress(api, fileId)

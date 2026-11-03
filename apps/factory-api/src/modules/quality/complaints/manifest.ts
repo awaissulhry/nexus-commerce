@@ -27,4 +27,10 @@ export const manifest = defineManifest({
   // needs quality.ncr.raise / quality.ncr.manage at its site).
   'POST /quality/complaints/:complaintId/links': log,
   'DELETE /quality/complaints/:complaintId/links/:recordType/:recordId': log,
+  // B-W2b-113 (QHS-116): the investigation and the answer letter (quality follows them up; the preview with view).
+  'PATCH /quality/complaints/:complaintId/investigation': manage,
+  'PUT /quality/complaints/:complaintId/answer': manage,
+  'GET /quality/complaints/:complaintId/answer/check': manage,
+  'GET /quality/complaints/:complaintId/answer/letter': view,
+  'POST /quality/complaints/:complaintId/answer/send': manage,
 })

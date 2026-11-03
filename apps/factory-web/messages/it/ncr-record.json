@@ -11,12 +11,18 @@
     "from": "Da: {source}",
     "ppe": "DPI",
     "closedBanner": "Chiusa il {when} da {who}: non cambia più.",
-    "cancelledBanner": "Annullata: {reason}"
+    "cancelledBanner": "Annullata: {reason}",
+    "escalate": "Porta a CAPA…",
+    "report": "Rapporto NC (PDF)",
+    "reportHint": "Si apre in una nuova scheda, come anteprima",
+    "keepReport": "Conserva una versione del rapporto",
+    "capa": "CAPA {number}"
   },
   "tab": {
     "problem": "Problema ed evidenze",
     "containment": "Contenimento",
     "disposition": "Destinazione",
+    "cost": "Costo",
     "linked": "Documenti collegati",
     "activity": "Attività"
   },
@@ -57,7 +63,11 @@
     "heldTitle": "Di' prima cosa non va.",
     "heldTitleLong": "Al massimo 160 caratteri nel titolo.",
     "heldQuantity": "Di' quanto è coinvolto (più di 0, al massimo 4 decimali).",
-    "heldSuspect": "La quantità sospetta: un numero con al massimo 4 decimali."
+    "heldSuspect": "La quantità sospetta: un numero con al massimo 4 decimali.",
+    "cause": "Causa",
+    "causeHint": "Dall'elenco delle cause (Impostazioni qualità). Non si modifica dopo la decisione.",
+    "causeNone": "Nessuna causa indicata",
+    "causesFailed": "Non è stato possibile leggere l'elenco delle cause."
   },
   "fact": {
     "style": "Modello · colore · taglia",
@@ -93,7 +103,10 @@
     "registerNone": "Non ancora nel registro (da sola se critica o trovata dal cliente).",
     "registerNotPpe": "Non è un modello DPI: nessuna voce nel registro.",
     "cancelled": "Annullata: {reason}",
-    "closed": "Chiusa il {when} da {who}. Nota: {note}"
+    "closed": "Chiusa il {when} da {who}. Nota: {note}",
+    "capa": "Azione correttiva",
+    "capaElsewhere": "Portata a una CAPA che non vedi",
+    "capaNone": "Non portata a CAPA"
   },
   "kind": {
     "HOLD_STOCK": "Blocca la merce",
@@ -313,7 +326,7 @@
     "heldClaim": "Scegli prima il reclamo.",
     "heldClaimReason": "Scegli prima il motivo del reclamo.",
     "heldClaimLot": "La non conformità non indica un lotto: un reclamo aperto qui richiede il lotto della merce che torna.",
-    "gapGarmentScrap": "I capi ancora in lavorazione si scartano alla lettura, oppure decidi la rilavorazione e scartali lì: una non conformità non può ancora registrarne lo scarto.",
+    "gapGarmentScrap": "I capi ancora in lavorazione non hanno merce da movimentare: togli questa decisione, decidi Rilavorazione e crea l'ordine di rilavorazione con \"Scarta tutto\".",
     "gapNoStock": "La non conformità non indica un lotto o un materiale a magazzino: da qui non c'è niente da muovere.",
     "gapNoWorkOrder": "La non conformità non indica un ordine di lavoro: indicalo prima in Problema ed evidenze.",
     "gapNoSupplier": "La non conformità non indica un fornitore: un reclamo ne richiede uno."
@@ -337,7 +350,10 @@
     "reinspection": "I capi rilavorati si ispezionano di nuovo prima del rilascio.",
     "submit": "Crea l'ordine di rilavorazione",
     "heldOperation": "Scegli prima l'operazione.",
-    "done": "Decisione {seq}: l'ordine di rilavorazione è aperto."
+    "done": "Decisione {seq}: l'ordine di rilavorazione è aperto.",
+    "scrapAll": "Scarta tutto (capi ancora in lavorazione)",
+    "scrapAllHint": "L'ordine di rilavorazione viene chiuso subito con tutti i capi scartati: lo scarto va nel registro dei costi come quello della rilavorazione.",
+    "doneScrap": "Decisione {seq}: i capi sono scartati tramite il loro ordine di rilavorazione."
   },
   "remove": {
     "title": "Togli la decisione {seq}",
@@ -369,7 +385,9 @@
     "unlinked": "Il documento è scollegato.",
     "notUnlinked": "Il documento non è stato scollegato.",
     "noteDecision": "Esegue la decisione {seq}",
-    "noteLine": "Riga {seq} del reso"
+    "noteLine": "Riga {seq} del reso",
+    "capa": "Azione correttiva (CAPA)",
+    "capaNone": "Non portata a una CAPA: usa ⋯ Porta a CAPA… nella testata."
   },
   "link": {
     "title": "Collega un documento",
@@ -404,5 +422,187 @@
     "description": "Cosa dice la voce",
     "submit": "Apri la voce",
     "done": "La voce del registro DPI è aperta e collegata."
+  },
+  "capaStatus": {
+    "PLAN": "Pianificazione",
+    "ACT": "Attuazione",
+    "CHECK": "Verifica",
+    "D1": "D1 team",
+    "D2": "D2 problema",
+    "D3": "D3 contenimento",
+    "D4": "D4 causa radice",
+    "D5": "D5 azioni correttive",
+    "D6": "D6 azioni attuate",
+    "D7": "D7 prevenzione",
+    "D8": "D8 chiusura",
+    "CLOSED": "Chiusa",
+    "CANCELLED": "Annullata"
+  },
+  "file": {
+    "notOpened": "Non è stato possibile aprire il file."
+  },
+  "report": {
+    "versions": "Versioni del rapporto",
+    "none": "Nessuna versione conservata: ⋯ Conserva una versione del rapporto.",
+    "col": {
+      "version": "Versione",
+      "language": "Lingua",
+      "kept": "Conservata"
+    },
+    "version": "Versione {version}",
+    "language": {
+      "it": "Italiano",
+      "en": "Inglese"
+    },
+    "open": "Apri",
+    "hint": "Il rapporto non mostra mai un costo, un operaio o la deroga del cliente. La condivisione con un fornitore o un cliente arriva con il portale.",
+    "kept": "La versione {version} del rapporto è conservata.",
+    "same": "Il rapporto non è cambiato: resta in vigore la versione {version}.",
+    "notKept": "Non è stato possibile conservare il rapporto."
+  },
+  "escalate": {
+    "heldAlready": "Già portata a {number}.",
+    "heldElsewhere": "Portata a una CAPA che non vedi.",
+    "heldCancelled": "Una NC annullata non si porta a CAPA.",
+    "heldNoRight": "Per portarla a CAPA servono quality.ncr.manage e quality.capa.view.",
+    "done_one": "La NC è portata a {number}.",
+    "done_other": "{count} NC sono portate a {number}."
+  },
+  "cost": {
+    "title": "Costo di questa NC",
+    "body": "Materiale, manodopera, tempo di rilavorazione, valore dello scarto e trasporto: calcolati dalle decisioni e dalle rilavorazioni, o scritti a mano. Visibili solo con la visibilità dei costi.",
+    "forbidden": "Per vedere i costi serve la visibilità dei costi",
+    "forbiddenBody": "Il costo di una NC è visibile solo a chi, per il proprio ruolo, vede i costi nel suo stabilimento.",
+    "failed": "Non è stato possibile leggere il costo.",
+    "upToDate": "Le righe calcolate sono aggiornate.",
+    "heldAdding": "Finisci prima la riga che stai scrivendo.",
+    "kind": {
+      "MATERIAL": "Materiale",
+      "LABOUR": "Manodopera",
+      "REWORK_TIME": "Tempo di rilavorazione",
+      "SCRAP_VALUE": "Valore dello scarto",
+      "FREIGHT": "Trasporto",
+      "OTHER": "Altro"
+    },
+    "record": {
+      "NcrDispositionLine": "Decisione",
+      "ReworkOrder": "Ordine di rilavorazione",
+      "StockMove": "Movimento di magazzino",
+      "other": "Documento"
+    },
+    "computed": "Calcolata",
+    "computedFrom": "Calcolata da {record} {label}",
+    "typed": "Scritta a mano",
+    "cellKind": "Tipo della riga {seq}",
+    "cellWords": "Descrizione della riga {seq}",
+    "cellAmount": "Importo della riga {seq}",
+    "removeOne": "Togli la riga {seq}",
+    "remove": "Togli",
+    "readOnly": "Solo lettura",
+    "compute": "Ricalcola",
+    "add": "Aggiungi una riga",
+    "stale": "Le righe calcolate non sono aggiornate: {add} da aggiungere, {change} cambiate, {remove} da togliere. Ricalcola.",
+    "waitingRework": "il suo scarto non è ancora nel registro dei costi.",
+    "waitingDecision": "la sua merce non ha ancora un valore (si calcola quando è eseguita o quando la merce ha un valore).",
+    "empty": "Nessun costo",
+    "emptyBody": "Aggiungi una riga o calcola le righe dalle decisioni e dalle rilavorazioni.",
+    "label": "Righe di costo",
+    "col": {
+      "kind": "Tipo",
+      "words": "Cosa",
+      "source": "Origine",
+      "amount": "Importo"
+    },
+    "newLabel": "Nuova riga di costo",
+    "otherHint": "Scrivi di cosa si tratta.",
+    "amountIn": "Importo ({currency})",
+    "saveNew": "Aggiungi la riga",
+    "total": "Totale",
+    "chargeTitle": "Addebito al fornitore",
+    "chargeBody": "La nota di addebito al fornitore arriva con la Finanza. Oggi il reclamo al fornitore di una decisione \"Reso al fornitore\" chiede un accredito.",
+    "charge": "Addebita al fornitore",
+    "chargeHeld": "Le note di addebito non ci sono ancora: apri il reclamo al fornitore da una decisione \"Reso al fornitore\" per chiedere un accredito.",
+    "foot": "La manodopera mostra solo il totale, mai una tariffa. Gli importi non arrivano mai in reparto, a un fornitore o a un cliente.",
+    "heldAmount": "Scrivi l'importo (per esempio 12,50).",
+    "heldOther": "Scrivi di quale costo si tratta.",
+    "heldLong": "Al massimo 200 caratteri.",
+    "heldClosed": "La NC è chiusa: il suo costo non cambia più.",
+    "heldCancelled": "La NC è annullata: il suo costo non cambia più.",
+    "added": "La riga di costo è aggiunta.",
+    "notAdded": "Non è stato possibile aggiungere la riga di costo.",
+    "notSaved": "Non è stato possibile salvare la riga di costo.",
+    "notRemoved": "Non è stato possibile togliere la riga di costo.",
+    "removed": "La riga {seq} è tolta.",
+    "notComputed": "Non è stato possibile ricalcolare il costo.",
+    "computedDone": "Le righe calcolate sono aggiornate.",
+    "typedHint": "Scritta a mano: si salva riga per riga.",
+    "waitingTitle_one": "Un documento non è ancora valorizzato",
+    "waitingTitle_other": "{count} documenti non sono ancora valorizzati"
+  },
+  "concession": {
+    "title": "Deroga chiesta al cliente",
+    "body": "Chiedi al cliente di accettare uno scostamento; registra la sua risposta scritta con il file. La sua pagina dedicata arriva con il portale.",
+    "ask": "Chiedi una deroga…",
+    "none": "Nessuna deroga chiesta.",
+    "foot": "Da qui non si invia nulla al cliente: chiediglielo per posta o nella conversazione, poi registra la sua risposta.",
+    "col": {
+      "ask": "Richiesta",
+      "customer": "Cliente",
+      "state": "Risposta"
+    },
+    "proposalLine": "Proponiamo: {proposal}",
+    "noContact": "Nessun referente indicato",
+    "status": {
+      "ASKED": "In attesa di risposta",
+      "ACCEPTED": "Accettata",
+      "REFUSED": "Rifiutata"
+    },
+    "answeredLine": "Risposta di {who} · {when}",
+    "askedLine": "Chiesta da {who} · {when}",
+    "answer": "Registra la risposta…",
+    "openAnswer": "La sua risposta",
+    "noFile": "Nessun file",
+    "askTitle": "Chiedi una deroga",
+    "askSubmit": "Chiedi la deroga",
+    "askBody": "Una deroga non si chiede mai su una NC critica. Il cliente lo avvisi tu: qui si registra la richiesta.",
+    "customerFind": "Cerca il cliente",
+    "customerPlaceholder": "Nome o codice",
+    "customer": "Cliente",
+    "customersFailed": "Non è stato possibile leggere i clienti.",
+    "customersNone": "Nessun cliente trovato.",
+    "customerPick": "Scegli il cliente",
+    "contact": "Referente",
+    "contactNone": "Nessuno",
+    "askField": "Lo scostamento",
+    "askHint": "Cosa si chiede di accettare al cliente (per esempio \"Tonalità leggermente più scura\").",
+    "proposalField": "Cosa proponiamo",
+    "proposalHint": "Uno sconto, la consegna così come sono, una sostituzione più avanti…",
+    "answerTitle": "La risposta alla deroga {seq}",
+    "answerSubmit": "Registra la risposta",
+    "answerAbout": "\"{ask}\", chiesta a {customer}.",
+    "answerKind": "La sua risposta",
+    "acceptedHint": "Accetta lo scostamento come proposto.",
+    "refusedHint": "Lo rifiuta: scrivi il motivo con le sue parole.",
+    "answeredBy": "Chi ha risposto per il cliente",
+    "answeredAt": "Quando ha risposto",
+    "answerWords": "Le sue parole",
+    "whyHint": "Obbligatorio se rifiuta.",
+    "file": "La sua risposta scritta (file)",
+    "fileHint": "Un PDF o una foto della risposta: resta con la deroga.",
+    "heldClosed": "La NC è chiusa: non si chiedono più deroghe.",
+    "heldCancelled": "La NC è annullata: non si chiedono deroghe.",
+    "heldCritical": "Un difetto critico non si vende mai in deroga (regola di sicurezza).",
+    "heldNoParties": "Per chiedere una deroga serve parties.view per scegliere il cliente.",
+    "heldParty": "Scegli prima il cliente.",
+    "heldAsk": "Scrivi prima lo scostamento.",
+    "heldProposal": "Scrivi prima cosa proponiamo.",
+    "heldLong": "Al massimo 1000 caratteri ciascuno.",
+    "heldAnsweredBy": "Scrivi chi ha risposto per il cliente.",
+    "heldWhy": "Scrivi perché ha rifiutato.",
+    "heldWhen": "Indica quando ha risposto.",
+    "heldAnswered": "La risposta è già registrata: non cambia più.",
+    "asked": "La deroga è registrata come chiesta.",
+    "accepted": "Deroga {seq}: accettata.",
+    "refused": "Deroga {seq}: rifiutata."
   }
 }

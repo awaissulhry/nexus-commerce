@@ -1,6 +1,26 @@
+import { ANSWER_LIMITS, templateText } from '@nexus/factory-domain/quality/complaints/answer'
 import { answerDueState, COMPLAINT_LIMITS, COMPLAINT_TILES, type ComplaintTile } from '@nexus/factory-domain/quality/complaints/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
-import type { Complaint, ComplaintAction, ComplaintCategory, ComplaintLinkType, ComplaintQuery, ComplaintRow, ComplaintSeverity, ComplaintStatus, ComplaintView, HeldCode, LogBody, LogPreview, OfficeChannel } from './api'
+import type {
+  AnswerBody,
+  AnswerCheck,
+  AnswerTemplate,
+  Complaint,
+  ComplaintAction,
+  ComplaintCategory,
+  ComplaintLinkType,
+  ComplaintQuery,
+  ComplaintRow,
+  ComplaintSeverity,
+  ComplaintStatus,
+  ComplaintView,
+  HeldCode,
+  LetterLanguage,
+  LogBody,
+  LogPreview,
+  OfficeChannel,
+  SendBody,
+} from './api'
 import { COMPLAINT_CATEGORIES, COMPLAINT_SEVERITIES, COMPLAINT_VIEWS } from './api'
 
 /**
@@ -41,6 +61,9 @@ export const COMPLAINT_PERMISSIONS = {
   threadsRead: 'threads.read',
   /** The price grain: the order's value. */
   price: 'money.price',
+  /** B-W2b-113: sharing a file of the complaint with the customer (the letter's attachments); the CAPA it is escalated to. */
+  filesManage: 'files.manage',
+  capaView: 'quality.capa.view',
 } as const
 
 export type ComplaintAbility = keyof typeof COMPLAINT_PERMISSIONS
@@ -435,7 +458,31 @@ export function refusalKey(error: unknown): string {
   return 'quality:problem.internal'
 }
 
-const REFUSED_FIELDS = ['styleId', 'answerDueOn', 'ownerId', 'description', 'receivedAt', 'partyId', 'shipmentId', 'salesOrderId', 'returnId', 'reason', 'siteId', 'serial']
+const REFUSED_FIELDS = [
+  'styleId',
+  'answerDueOn',
+  'ownerId',
+  'description',
+  'receivedAt',
+  'partyId',
+  'shipmentId',
+  'salesOrderId',
+  'returnId',
+  'reason',
+  'siteId',
+  'serial',
+  // B-W2b-113: the investigation and the answer letter.
+  'findings',
+  'rootCause',
+  'template',
+  'language',
+  'text',
+  'fileIds',
+  'contactIds',
+  'cc',
+  'subject',
+  'attachments',
+]
 
 /** Whether a refusal is a stale version (the record is read again). */
 export const isStale = (error: unknown): boolean => isApiError(error) && error.kind === 'conflict' && !error.issues.some((issue) => issuePath(issue).startsWith('held/'))
@@ -455,7 +502,7 @@ function csvLine(values: readonly (string | number | null | undefined)[]): strin
 
 /** "This view (CSV)" / "Export N": one line per complaint in the person's language; the order's value only with the price grain. */
 export function complaintsCsv(rows: readonly ComplaintRow[], people: readonly { id: string; name: string }[], t: Translate, price: boolean): string {
-  const columns = ['number', 'received', 'channel', 'customer', 'customerRef', 'order', 'shipment', 'style', 'size', 'serial', 'batch', 'category', 'severity', 'status', 'owner', 'answerDue', 'ncr', 'register', ...(price ? ['orderValue', 'currency'] : [])]
+  const columns = ['number', 'received', 'channel', 'customer', 'customerRef', 'order', 'shipment', 'style', 'size', 'serial', 'batch', 'category', 'severity', 'status', 'owner', 'answerDue', 'ncr', 'capa', 'register', ...(price ? ['orderValue', 'currency'] : [])]
   const head = csvLine(columns.map((column) => t(`csv.${column}`)))
   const lines = rows.map((row) =>
     csvLine([
@@ -476,6 +523,7 @@ export function complaintsCsv(rows: readonly ComplaintRow[], people: readonly { 
       personName(people, row.ownerId),
       row.answerDueOn,
       row.ncrs.map((ncr) => ncr.number).join(' '),
+      row.capa?.number,
       row.register?.reference,
       ...(price ? [row.order?.netAmount !== undefined ? (row.order.netAmount / 100).toFixed(2) : '', row.order?.currency] : []),
     ]),
@@ -573,3 +621,182 @@ export function linkRefusalKey(error: unknown, step: 'link' | 'unlink', type: Co
 
 /** The words of a link type (Link…'s choice, a receipt). */
 export const linkTypeKey = (type: ComplaintLinkType): string => `links.type.${type}`
+
+// ---- B-W2b-113: the investigation and the answer letter (design cmp-inv, cmp-ans, cmp-letter) ------------------------------
+
+/** The investigation's words as typed (EditModeBar). */
+export interface InvestigationDraft {
+  readonly findings: string
+  readonly rootCause: string
+}
+
+export const investigationDraftOf = (complaint: Pick<Complaint, 'findings' | 'rootCause'>): InvestigationDraft => ({ findings: complaint.findings ?? '', rootCause: complaint.rootCause ?? '' })
+
+const textOrNull = (value: string): string | null => (value.trim() === '' ? null : value.trim())
+
+/** What the PATCH sends (an emptied text clears it). */
+export const investigationBody = (draft: InvestigationDraft): { findings: string | null; rootCause: string | null } => ({ findings: textOrNull(draft.findings), rootCause: textOrNull(draft.rootCause) })
+
+export const investigationChanged = (draft: InvestigationDraft, complaint: Pick<Complaint, 'findings' | 'rootCause'>): boolean =>
+  textOrNull(draft.findings) !== (complaint.findings ?? null) || textOrNull(draft.rootCause) !== (complaint.rootCause ?? null)
+
+/** Why the investigation cannot be saved yet (a message key), or null. */
+export function investigationSaveHeld(draft: InvestigationDraft, complaint: Pick<Complaint, 'findings' | 'rootCause'>): string | null {
+  if (draft.findings.trim().length > ANSWER_LIMITS.findings) return 'investigation.held.findingsLong'
+  if (draft.rootCause.trim().length > ANSWER_LIMITS.rootCause) return 'investigation.held.rootCauseLong'
+  return investigationChanged(draft, complaint) ? null : 'record.editNothing'
+}
+
+/** The letter as typed (template, language, words, the complaint's files that go with it). */
+export interface AnswerDraft {
+  readonly template: AnswerTemplate | ''
+  readonly language: LetterLanguage
+  readonly text: string
+  readonly fileIds: readonly string[]
+}
+
+/** The draft the Answer tab opens with: the letter as saved, else the customer's language and nothing written. */
+export const answerDraftOf = (complaint: Pick<Complaint, 'answer'>): AnswerDraft => ({
+  template: complaint.answer.template ?? '',
+  language: complaint.answer.language ?? complaint.answer.suggestedLanguage,
+  text: complaint.answer.text ?? '',
+  fileIds: complaint.answer.files.map((file) => file.id),
+})
+
+/** The PUT's body. */
+export const answerBody = (draft: AnswerDraft): AnswerBody => ({ template: draft.template || null, language: draft.language, text: textOrNull(draft.text), fileIds: [...draft.fileIds] })
+
+const sameIds = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((id) => b.includes(id))
+
+export function answerChanged(draft: AnswerDraft, complaint: Pick<Complaint, 'answer'>): boolean {
+  const saved = complaint.answer
+  return (
+    (draft.template || null) !== saved.template ||
+    draft.language !== (saved.language ?? saved.suggestedLanguage) ||
+    textOrNull(draft.text) !== (saved.text ?? null) ||
+    !sameIds(draft.fileIds, saved.files.map((file) => file.id))
+  )
+}
+
+/** Why the letter cannot be saved yet (a message key), or null. The step's own hold (answered, closed, rights) comes first. */
+export function answerSaveHeld(draft: AnswerDraft, complaint: Pick<Complaint, 'answer'>): string | null {
+  if (draft.text.trim().length > ANSWER_LIMITS.text) return 'answer.held.textLong'
+  if (draft.fileIds.length > ANSWER_LIMITS.files) return 'answer.held.files'
+  return answerChanged(draft, complaint) ? null : 'record.editNothing'
+}
+
+/** The garment as the customer knows it, in the letter's language ("JK-100 Touring jacket, size 52, serial S-1"). */
+export function garmentForLetter(complaint: Pick<Complaint, 'style' | 'size' | 'serial' | 'batchNumber'>, language: LetterLanguage): string | null {
+  const words = language === 'it' ? { size: 'taglia', serial: 'matricola', batch: 'lotto' } : { size: 'size', serial: 'serial', batch: 'batch' }
+  const parts = [
+    complaint.style ? `${complaint.style.code} ${complaint.style.name}` : null,
+    complaint.size ? `${words.size} ${complaint.size}` : null,
+    complaint.serial ? `${words.serial} ${complaint.serial}` : complaint.batchNumber ? `${words.batch} ${complaint.batchNumber}` : null,
+  ].filter((part): part is string => part !== null)
+  return parts.length === 0 ? null : parts.join(', ')
+}
+
+/** The words a template starts the letter with, filled in with the complaint's own facts (never an internal note). */
+export function templateWords(template: AnswerTemplate, language: LetterLanguage, complaint: Pick<Complaint, 'party' | 'contact' | 'number' | 'customerRef' | 'receivedAt' | 'style' | 'size' | 'serial' | 'batchNumber'>): string {
+  return templateText(template, language, {
+    customer: complaint.contact?.name ?? complaint.party.legalName,
+    number: complaint.number,
+    customerRef: complaint.customerRef,
+    receivedOn: romeToday(new Date(complaint.receivedAt)),
+    garment: garmentForLetter(complaint, language),
+  })
+}
+
+/**
+ * Picking a template (or another language): its words replace the text only when the person wrote nothing of their own
+ * (empty, or still the words of the template it started from); otherwise their words stay and `keptWords` says so.
+ */
+export function withTemplate(draft: AnswerDraft, next: { template?: AnswerTemplate | ''; language?: LetterLanguage }, complaint: Parameters<typeof templateWords>[2]): { draft: AnswerDraft; keptWords: boolean } {
+  const template = next.template !== undefined ? next.template : draft.template
+  const language = next.language ?? draft.language
+  const untouched = draft.text.trim() === '' || (draft.template !== '' && draft.text === templateWords(draft.template, draft.language, complaint))
+  if (template === '') return { draft: { ...draft, template, language }, keptWords: false }
+  if (!untouched) return { draft: { ...draft, template, language }, keptWords: true }
+  return { draft: { ...draft, template, language, text: templateWords(template, language, complaint) }, keptWords: false }
+}
+
+/** The send review as typed. */
+export interface SendDraft {
+  readonly contactIds: readonly string[]
+  /** Copies, comma or space separated. */
+  readonly cc: string
+  readonly subject: string
+  readonly message: string
+}
+
+/** The review opens with the suggested contact ticked and the standard subject and words. */
+export const sendDraftOf = (check: AnswerCheck): SendDraft => ({ contactIds: check.recipients.filter((recipient) => recipient.suggested).map((recipient) => recipient.contactId), cc: '', subject: check.subject, message: check.message })
+
+const EMAIL = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/
+export const ccOf = (text: string): string[] => text.split(/[\s,;]+/).map((part) => part.trim()).filter(Boolean)
+
+/** Why the send cannot go yet (a message key), or null: the check's own problems first, then what the person typed. */
+export function sendHeldKey(check: AnswerCheck | null, draft: SendDraft): string | null {
+  if (!check) return 'answer.send.reading'
+  if (check.problems.length > 0) return 'answer.send.heldProblems'
+  if (check.recipients.length === 0) return 'answer.send.problem.contactIds'
+  if (draft.contactIds.length === 0) return 'answer.send.heldNoRecipient'
+  if (draft.contactIds.length > ANSWER_LIMITS.recipients) return 'answer.send.heldTooMany'
+  const cc = ccOf(draft.cc)
+  if (cc.some((address) => !EMAIL.test(address))) return 'answer.send.heldCc'
+  if (cc.length > ANSWER_LIMITS.recipients) return 'answer.send.heldTooMany'
+  if (draft.subject.trim().length > ANSWER_LIMITS.subject) return 'answer.send.heldSubject'
+  return null
+}
+
+/** The send's body: the standard subject and words are left out when unchanged (the API writes them in the letter's language). */
+export function sendBodyOf(check: AnswerCheck, draft: SendDraft): SendBody {
+  const cc = ccOf(draft.cc)
+  return {
+    contactIds: [...draft.contactIds],
+    ...(cc.length > 0 ? { cc } : {}),
+    ...(draft.subject.trim() && draft.subject.trim() !== check.subject ? { subject: draft.subject.trim() } : {}),
+    ...(draft.message.trim() && draft.message.trim() !== check.message.trim() ? { message: draft.message.trim() } : {}),
+  }
+}
+
+/**
+ * A problem the send check names, in our words (the API's sentence is never shown as ours): the letterhead (company/…),
+ * no contact with an e-mail, a file not shared with the customer, the sender's files.read, a held step.
+ */
+/** A path of the company's letterhead (art. 2250 c.c.): `company/…`, or the check's `letter/company/…`. */
+const LETTERHEAD = /(^|\/)company\//
+
+export function checkProblemKey(path: string): string {
+  if (path.startsWith('held/')) return `held.${path.slice(5)}`
+  if (LETTERHEAD.test(path)) return 'answer.send.problem.letterhead'
+  const field = path.replace(/^body\//, '').split('/')[0] ?? ''
+  if (field === 'contactIds' || field === 'recipients') return 'answer.send.problem.contactIds'
+  if (field === 'attachments' || field === 'fileIds' || field === 'files') return 'answer.send.problem.notShared'
+  if (path.includes('filesRead')) return 'answer.send.problem.filesRead'
+  if (field === 'text' || field === 'answer' || field === 'language') return 'held.NO_ANSWER'
+  return 'answer.send.problem.other'
+}
+
+/** A refused preview in our words: the letterhead the letter needs, else the complaint's usual refusal words. */
+export function previewProblemKey(error: unknown): string {
+  if (isApiError(error) && error.issues.some((issue) => LETTERHEAD.test(issuePath(issue)))) return 'answer.preview.letterhead'
+  return refusalKey(error)
+}
+
+/** A refused send in our words: a held step, the letterhead, a file not shared, else the complaint's usual refusal words. */
+export function sendRefusalKey(error: unknown): string {
+  if (isApiError(error)) {
+    const paths = error.issues.map((issue) => issuePath(issue))
+    if (paths.some((path) => LETTERHEAD.test(path))) return 'answer.send.problem.letterhead'
+    if (paths.some((path) => path.startsWith('body/attachments'))) return 'answer.send.problem.notShared'
+  }
+  return refusalKey(error)
+}
+
+/** The CAPA the complaint is escalated to, in words for its record (the number, or "escalated elsewhere", or none). */
+export function capaWords(complaint: Pick<Complaint, 'capaRecord' | 'capaElsewhere'>, can: Pick<ComplaintsCan, 'capaView'>): Words {
+  if (complaint.capaRecord) return { key: 'capa.named', params: { number: complaint.capaRecord.number, title: complaint.capaRecord.title } }
+  if (complaint.capaElsewhere) return { key: 'capa.elsewhere' }
+  return { key: can.capaView ? 'capa.none' : 'capa.noRight' }
+}

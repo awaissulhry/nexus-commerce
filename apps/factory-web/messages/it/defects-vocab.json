@@ -1,0 +1,192 @@
+{
+  "head": {
+    "severity": "Che cosa significa e consente ogni classe di difetto: la classe critica è bloccata dalla regola di sicurezza.",
+    "causes": "Perché è nato un difetto, per il processo che ne risponde: un ispettore o una NC ne indica una, i report le contano.",
+    "grades": "Le scelte di una pelle e quanto se ne può tagliare, e i difetti che accettazione e taglio segnano su una pelle."
+  },
+  "common": {
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "loading": "Lettura…"
+  },
+  "read": {
+    "failed": "Non è stato possibile leggere questo elenco"
+  },
+  "severity": {
+    "locked": "Bloccata",
+    "aql": "Il suo numero di accettazione viene dall’AQL del piano.",
+    "acceptance_one": "Numero di accettazione {count} in ogni piano.",
+    "acceptance_other": "Numero di accettazione {count} in ogni piano.",
+    "defects_one": "{count} difetto attivo della libreria ha questa classe.",
+    "defects_other": "{count} difetti attivi della libreria hanno questa classe.",
+    "rule": "Un difetto critico della libreria si registra sempre critico, mai più lieve, e non si accetta mai: niente uso così com’è, niente declassamento, niente concessione.",
+    "fixed": "Per ora i testi sono le parole fisse della fabbrica: non c’è ancora un posto per quelle di un’azienda."
+  },
+  "words": {
+    "missing": "Ancora nessuna parola",
+    "missingTitle": "Parole mancanti in un’altra lingua di reparto",
+    "missingIn_one": "{language}: {count} codice",
+    "missingIn_other": "{language}: {count} codici"
+  },
+  "col": {
+    "code": "Codice",
+    "it": "Italiano",
+    "en": "Inglese",
+    "language": "Parole ({language})",
+    "process": "Processo",
+    "used": "Uso",
+    "status": "Stato",
+    "actions": "Azioni",
+    "grade": "Scelta",
+    "usableShare": "Resa utile",
+    "words": "Parole",
+    "severity": "Classe",
+    "stages": "Fasi"
+  },
+  "status": {
+    "active": "Attivo",
+    "retired": "Ritirato",
+    "retireOf": "Ritira {code}",
+    "restoreOf": "Ripristina {code}"
+  },
+  "used": {
+    "none": "Non usato",
+    "records_one": "{count} record",
+    "records_other": "{count} record"
+  },
+  "held": {
+    "noManage": "Per cambiare il vocabolario serve quality.defects.manage su tutte le aziende.",
+    "busy": "Attendi: l’ultima modifica è ancora in salvataggio.",
+    "pickRows": "Spunta prima i codici.",
+    "allActive": "Tutti i codici spuntati sono già attivi.",
+    "allRetired": "Tutti i codici spuntati sono già ritirati.",
+    "used_one": "Usato su {count} record: ritiralo invece (resta su di esso).",
+    "used_other": "Usato su {count} record: ritiralo invece (resta su di essi)."
+  },
+  "bulk": {
+    "retire": "Ritira {count}",
+    "restore": "Ripristina {count}",
+    "export": "Esporta {count}"
+  },
+  "causes": {
+    "title": "Codici causa",
+    "table": "Codici causa",
+    "add": "Aggiungi causa",
+    "count_one": "{count} causa",
+    "count_other": "{count} cause",
+    "fixed": "Codice e processo fissi",
+    "footnote": "Un codice e il suo processo non cambiano mai (record e report li tengono): ritiralo e aggiungine un altro. Un codice usato si ritira, non si cancella.",
+    "newTitle": "Aggiungi un codice causa",
+    "codeHint": "Da 2 a 40 lettere maiuscole, cifre e trattini, che inizia con una lettera (SEW-ERROR). Fisso una volta aggiunto.",
+    "processHint": "Quale processo ne risponde. Fisso una volta aggiunto.",
+    "pickProcess": "Scegli un processo",
+    "otherLanguages": "Le parole nelle altre lingue di reparto si scrivono nell’elenco, accanto a italiano e inglese ({language}).",
+    "deleteTitle": "Cancellare {code}?",
+    "deleteBody": "Nessun record nomina questo codice: se ne va per sempre. Un codice usato invece si ritira.",
+    "empty": {
+      "title": "Ancora nessun codice causa",
+      "body_one": "Parti dal codice iniziale, o aggiungine uno tuo.",
+      "body_other": "Parti dai {count} codici iniziali (uno per processo), o aggiungine uno tuo."
+    }
+  },
+  "starter": {
+    "addCauses_one": "Aggiungi il codice iniziale",
+    "addCauses_other": "Aggiungi i {count} codici iniziali",
+    "causesTitle_one": "Manca {count} codice iniziale",
+    "causesTitle_other": "Mancano {count} codici iniziali",
+    "addGrades": "Aggiungi le scelte iniziali",
+    "gradesTitle_one": "Manca {count} scelta iniziale",
+    "gradesTitle_other": "Mancano {count} scelte iniziali"
+  },
+  "keys": {
+    "addCause": "Aggiungi causa",
+    "addGrade": "Aggiungi scelta"
+  },
+  "row": {
+    "retire": "Ritira",
+    "restore": "Ripristina",
+    "delete": "Cancella",
+    "copyCode": "Copia il codice",
+    "menu": "Azioni di {code}"
+  },
+  "grades": {
+    "title": "Scelte del pellame",
+    "table": "Scelte del pellame",
+    "add": "Aggiungi scelta",
+    "count_one": "{count} scelta",
+    "count_other": "{count} scelte",
+    "fixed": "Codice fisso",
+    "shareOf": "Resa utile della scelta {code} (percentuale)",
+    "neverDeleted": "Una scelta si ritira, non si cancella: le pelli la tengono.",
+    "footnote": "La resa utile è il valore predefinito di un articolo senza una regola propria. Una scelta si ritira, non si cancella: pelli, regole e segni la tengono.",
+    "newTitle": "Aggiungi una scelta del pellame",
+    "codeHint": "Da 1 a 10 lettere maiuscole, cifre e trattini (A, B, 1-ST). Fisso una volta aggiunto.",
+    "shareHint": "La percentuale di una pelle di questa scelta che si può tagliare, da 0 a 100 (72,5).",
+    "empty": {
+      "title": "Ancora nessuna scelta del pellame",
+      "body": "Parti dalle scelte dalla A alla D, o aggiungine una tua."
+    }
+  },
+  "class": {
+    "CRITICAL": "Critico",
+    "MAJOR": "Maggiore",
+    "MINOR": "Minore"
+  },
+  "stages": {
+    "every": "Ogni fase"
+  },
+  "stage": {
+    "AUDIT": "Audit",
+    "CUSTOMER": "Cliente",
+    "CUTTING": "Taglio",
+    "FINAL": "Finale",
+    "INCOMING": "Accettazione",
+    "IN_LINE": "In linea",
+    "PACKING": "Imballo",
+    "STOCK": "Magazzino"
+  },
+  "hide": {
+    "title": "Difetti delle pelli",
+    "table": "Difetti delle pelli",
+    "intro": "I difetti della categoria {category} della libreria che valgono in accettazione o al taglio: i segni che una pelle porta. Si cambiano nella scheda Difetti.",
+    "noCategory": "La libreria dei difetti non ha ancora la categoria LEATHER: la aggiunge il suo set iniziale.",
+    "open": "Apri nella libreria",
+    "count_one": "{count} difetto della pelle",
+    "count_other": "{count} difetti delle pelli",
+    "empty": {
+      "title": "Nessun difetto della pelle",
+      "body": "Aggiungi difetti sotto la categoria LEATHER della libreria per l’accettazione o il taglio."
+    }
+  },
+  "process": {
+    "MATERIAL": "Materiale",
+    "SUPPLIER": "Fornitore",
+    "CUTTING": "Taglio",
+    "SEWING": "Cucitura",
+    "FINISHING": "Finitura",
+    "HANDLING": "Movimentazione",
+    "DESIGN": "Progettazione",
+    "MEASUREMENT": "Misura"
+  },
+  "problem": {
+    "labelIt": "Scrivi le parole in italiano.",
+    "labelEn": "Scrivi le parole in inglese.",
+    "labelI18n": "Queste parole non vanno bene per quella lingua.",
+    "tooLong": "Al massimo 80 caratteri.",
+    "sortOrder": "La posizione è un numero intero da 0.",
+    "usableShare": "Una percentuale da 0 a 100, al massimo due decimali (72,5).",
+    "failed": "Qualcosa non ha funzionato: riprova.",
+    "stale": "Qualcuno ha cambiato questo codice nel frattempo: è stato riletto; rifai la modifica.",
+    "codeTaken": "Questo codice è già usato: scegline un altro.",
+    "inUse": "Questo codice è usato: ritiralo invece (resta sui suoi record).",
+    "full": "L’elenco è pieno: prima ritira o cancella qualche codice.",
+    "conflict": "Questo è in conflitto con quanto salvato: rileggi la pagina.",
+    "code": "Un codice è fatto di lettere maiuscole, cifre e trattini, e inizia con una lettera.",
+    "process": "Scegli il processo che ne risponde.",
+    "language": "Queste parole non vanno bene per quella lingua.",
+    "invalid": "La modifica è stata rifiutata così com’è.",
+    "forbidden": "Non puoi cambiare il vocabolario (quality.defects.manage su tutte le aziende).",
+    "gone": "Questo codice non c’è più.",
+    "offline": "Nessuna risposta dal server: non sappiamo se è stato salvato. Riprova."
+  }
+}

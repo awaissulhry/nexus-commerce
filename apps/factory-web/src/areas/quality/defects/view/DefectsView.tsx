@@ -8,7 +8,7 @@ import { Button } from '@nexus/ui/primitives'
 import { useT } from '../../../../lib/i18n/provider'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { Freshness, NoAccess, PageHead, QualityMessages } from '../../_shared/parts'
-import type { DefectCode, Disposition } from '../api'
+import type { Cause, DefectCode, Disposition, Grade } from '../api'
 import {
   BUILT_TABS,
   findCode,
@@ -30,6 +30,8 @@ import {
 import { DefectDrawer } from './DefectDrawer'
 import { DeleteDialog, KeysDialog, NewDefectDialog, NewDispositionDialog, PhotoDialog, RetireDialog } from './dialogs'
 import { DispositionsTable } from './DispositionsTable'
+import { CausesTab, DeleteCauseDialog, GradesTab, NewCauseDialog, NewGradeDialog, SeverityTab, VOCAB_NAMESPACE } from './VocabularyTabs'
+import { missingWordsNote, NEW_CAUSE, NEW_GRADE, type NewCauseDraft, type NewGradeDraft, type VocabularyField } from '../vocabulary'
 import { LibraryTable } from './LibraryTable'
 import { DEFECT_NAMESPACES, DefectsNotice, isTyping } from './parts'
 import '../defects.css'
@@ -61,12 +63,26 @@ export interface DefectsActions {
   onExportLibrary?: (ids: readonly string[] | null) => void
   onExportDispositions?: (ids: readonly string[]) => void
   onDismissNotice?: () => void
+  // B-W2b-118: the cause codes and the leather grades.
+  onVocabCell?: (list: 'causes' | 'grades', row: Cause | Grade, field: VocabularyField, value: unknown) => void
+  onVocabBulkActive?: (list: 'causes' | 'grades', active: boolean) => void
+  onExportVocab?: (list: 'causes' | 'grades', ids: readonly string[] | null) => void
+  onStarterVocab?: (list: 'causes' | 'grades') => void
+  onNewCause?: () => void
+  onNewGrade?: () => void
+  onCauseDraft?: (draft: NewCauseDraft) => void
+  onGradeDraft?: (draft: NewGradeDraft) => void
+  onCreateCause?: () => void
+  onCreateGrade?: () => void
+  onDeleteCause?: (id: string) => void
+  onConfirmDeleteCause?: () => void
+  onRetryVocab?: () => void
 }
 
 /**
  * SCR-079 Quality › Settings › Defects & dispositions (design quality.defects, a settings page with link tabs — one save
- * model each — Defects · Severity · Causes · Dispositions · Leather grades; Severity, Causes and Leather grades come in
- * W2b and say so). The head: one sentence, Updated · Live, ⋯ (Import library: held, Export library, Keys) and the
+ * model each — Defects · Severity · Causes · Dispositions · Leather grades; B-W2b-118 builds Severity, Causes and Leather
+ * grades in ./VocabularyTabs.tsx on B-W2b-90's routes). The head: one sentence, Updated · Live, ⋯ (Import library: held, Export library, Keys) and the
  * tab's primary (Add defect `c` / Add disposition). Defects: the starter-set offer when codes are missing, then the
  * library in the list frame and the docked drawer of the open code (`?open=`). Dispositions: the standard-set offer, then
  * the codes. Every write is held with its reason for whoever may not change the library. Fetches nothing.
@@ -81,11 +97,16 @@ export function DefectsView({ model, actions }: { model: DefectsModel; actions?:
 
 function Defects({ model, actions }: { model: DefectsModel; actions?: DefectsActions }) {
   const t = useT('defects')
+  const tv = useT(VOCAB_NAMESPACE)
   const tl = useT('lists')
   const address = model.address
   const library = model.library.value
   const dispositions = model.dispositions.value
-  const canManage = address.tab === 'defects' ? (library?.canManage ?? false) : (dispositions?.canManage ?? false)
+  const vocab = model.vocab
+  const causes = vocab?.causes.value ?? null
+  const grades = vocab?.grades.value ?? null
+  const canManage =
+    address.tab === 'defects' ? (library?.canManage ?? false) : address.tab === 'dispositions' ? (dispositions?.canManage ?? false) : address.tab === 'causes' ? (causes?.canManage ?? false) : address.tab === 'grades' ? (grades?.canManage ?? false) : true
   const held = manageHeld(canManage)
   const rows = useMemo(() => libraryRows(library, address.view, address.q), [library, address.view, address.q])
   const dialog = model.dialog
@@ -100,8 +121,11 @@ function Defects({ model, actions }: { model: DefectsModel; actions?: DefectsAct
       if (event.key !== 'c' || event.metaKey || event.ctrlKey || event.altKey || current.model.dialog || isTyping(event.target)) return
       if (current.held || !current.model.canView) return
       event.preventDefault()
-      if (current.model.address.tab === 'defects') current.actions?.onNewDefect?.(null)
-      else current.actions?.onNewDisposition?.()
+      const tab = current.model.address.tab
+      if (tab === 'defects') current.actions?.onNewDefect?.(null)
+      else if (tab === 'dispositions') current.actions?.onNewDisposition?.()
+      else if (tab === 'causes') current.actions?.onNewCause?.()
+      else if (tab === 'grades') current.actions?.onNewGrade?.()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -115,13 +139,42 @@ function Defects({ model, actions }: { model: DefectsModel; actions?: DefectsAct
       id: tab,
       label: t(`tab.${tab}`),
       ...(built ? { href: `${model.prefix}/quality/defects${queryOf({ tab: tab as BuiltTab })}` } : { disabled: true, badge: t('tab.later') }),
-      count: tab === 'defects' ? (library ? library.categories.reduce((sum, category) => sum + category.defects.length, 0) : null) : tab === 'dispositions' ? (dispositions ? dispositions.dispositions.length : null) : undefined,
+      count:
+        tab === 'defects'
+          ? library
+            ? library.categories.reduce((sum, category) => sum + category.defects.length, 0)
+            : null
+          : tab === 'dispositions'
+            ? dispositions
+              ? dispositions.dispositions.length
+              : null
+            : tab === 'causes'
+              ? causes
+                ? causes.causes.length
+                : null
+              : tab === 'grades'
+                ? grades
+                  ? grades.grades.length
+                  : null
+                : undefined,
     }
   })
 
   const moreItems: MenuItemDef[] = [
     { id: 'import', label: t('head.import'), disabled: true, description: t('head.importHeld') },
-    { id: 'export', label: t('head.export'), disabled: address.tab === 'defects' ? !library : !dispositions, onSelect: () => (address.tab === 'defects' ? actions?.onExportLibrary?.(null) : actions?.onExportDispositions?.((dispositions?.dispositions ?? []).map((row) => row.id))) },
+    {
+      id: 'export',
+      label: t('head.export'),
+      disabled: address.tab === 'defects' ? !library : address.tab === 'dispositions' ? !dispositions : address.tab === 'causes' ? !causes : address.tab === 'grades' ? !grades : true,
+      onSelect: () =>
+        address.tab === 'defects'
+          ? actions?.onExportLibrary?.(null)
+          : address.tab === 'dispositions'
+            ? actions?.onExportDispositions?.((dispositions?.dispositions ?? []).map((row) => row.id))
+            : address.tab === 'causes' || address.tab === 'grades'
+              ? actions?.onExportVocab?.(address.tab, null)
+              : undefined,
+    },
     { id: 'sep', separator: true },
     { id: 'keys', label: t('keys.title'), onSelect: () => actions?.onDialog?.({ kind: 'keys' }) },
   ]
@@ -134,10 +187,17 @@ function Defects({ model, actions }: { model: DefectsModel; actions?: DefectsAct
           { keys: ['⌘', '↓'], does: t('keys.next') },
           { keys: ['⌘', '↵'], does: t('keys.save') },
         ]
-      : [
-          { keys: ['c'], does: t('keys.addDisposition') },
-          { keys: ['⌘', '↵'], does: t('keys.save') },
-        ]
+      : address.tab === 'dispositions'
+        ? [
+            { keys: ['c'], does: t('keys.addDisposition') },
+            { keys: ['⌘', '↵'], does: t('keys.save') },
+          ]
+        : address.tab === 'causes' || address.tab === 'grades'
+          ? [
+              { keys: ['c'], does: tv(address.tab === 'causes' ? 'keys.addCause' : 'keys.addGrade') },
+              { keys: ['⌘', '↵'], does: t('keys.save') },
+            ]
+          : []
   const starterMissing = library?.starterMissing.length ?? 0
   const standardMissing = dispositions?.standardMissing.length ?? 0
   const libraryEmpty = !!library && library.categories.length === 0
@@ -154,7 +214,7 @@ function Defects({ model, actions }: { model: DefectsModel; actions?: DefectsAct
   return (
     <div className="fw-q fw-df">
       <PageHead
-        intro={t(address.tab === 'defects' ? 'head.introDefects' : 'head.introDispositions')}
+        intro={address.tab === 'defects' ? t('head.introDefects') : address.tab === 'dispositions' ? t('head.introDispositions') : tv(`head.${address.tab}`)}
         status={<Freshness asOf={model.asOf} live={model.live} />}
         actions={
           <>
@@ -163,17 +223,25 @@ function Defects({ model, actions }: { model: DefectsModel; actions?: DefectsAct
               <Button size="sm" variant="primary" heldReason={held ? t(held) : !library ? t('held.reading') : null} onClick={() => actions?.onNewDefect?.(null)}>
                 <Plus size={14} aria-hidden /> {t('head.addDefect')}
               </Button>
-            ) : (
+            ) : address.tab === 'dispositions' ? (
               <Button size="sm" variant="primary" heldReason={held ? t(held) : !dispositions ? t('held.reading') : null} onClick={() => actions?.onNewDisposition?.()}>
                 <Plus size={14} aria-hidden /> {t('head.addDisposition')}
               </Button>
-            )}
+            ) : address.tab === 'causes' ? (
+              <Button size="sm" variant="primary" heldReason={held ? t(held) : !causes ? t('held.reading') : null} onClick={() => actions?.onNewCause?.()}>
+                <Plus size={14} aria-hidden /> {tv('causes.add')}
+              </Button>
+            ) : address.tab === 'grades' ? (
+              <Button size="sm" variant="primary" heldReason={held ? t(held) : !grades ? t('held.reading') : null} onClick={() => actions?.onNewGrade?.()}>
+                <Plus size={14} aria-hidden /> {tv('grades.add')}
+              </Button>
+            ) : null}
           </>
         }
       />
       <Tabs ariaLabel={t('tab.label')} tabs={tabs} active={address.tab} size="md" />
       <DefectsNotice notice={model.notice} onDismiss={actions?.onDismissNotice} />
-      {held && (address.tab === 'defects' ? library : dispositions) && (
+      {held && (address.tab === 'defects' ? library : address.tab === 'dispositions' ? dispositions : address.tab === 'causes' ? causes : address.tab === 'grades' ? grades : null) && (
         <Banner tone="info" title={t('readOnly.title')}>
           {t(held)}
         </Banner>
@@ -288,6 +356,76 @@ function Defects({ model, actions }: { model: DefectsModel; actions?: DefectsAct
           <p className="fw-df-sub">{t('disp.footnote')}</p>
         </>
       )}
+
+      {address.tab === 'severity' && vocab && <SeverityTab read={vocab.severity} onRetry={actions?.onRetryVocab} />}
+      {address.tab === 'causes' && vocab && (
+        <CausesTab
+          read={vocab.causes}
+          marks={model.marks}
+          selected={model.selected}
+          busy={model.busy}
+          updates={model.updates}
+          notes={missingWordsNote(vocab.coverage, 'CAUSES')}
+          actions={{
+            onCell: (row, field, value) => actions?.onVocabCell?.('causes', row, field, value),
+            onSelect: actions?.onSelect,
+            onBulkActive: (active) => actions?.onVocabBulkActive?.('causes', active),
+            onExport: (ids) => actions?.onExportVocab?.('causes', ids),
+            onStarter: () => actions?.onStarterVocab?.('causes'),
+            onNew: actions?.onNewCause,
+            onDelete: actions?.onDeleteCause,
+            onKeys: () => actions?.onDialog?.({ kind: 'keys' }),
+            onRetry: actions?.onRetryVocab,
+            onShowUpdates: actions?.onShowUpdates,
+          }}
+        />
+      )}
+      {address.tab === 'grades' && vocab && (
+        <GradesTab
+          read={vocab.grades}
+          marks={model.marks}
+          selected={model.selected}
+          busy={model.busy}
+          updates={model.updates}
+          prefix={model.prefix}
+          notes={missingWordsNote(vocab.coverage, 'GRADES')}
+          actions={{
+            onCell: (row, field, value) => actions?.onVocabCell?.('grades', row, field, value),
+            onSelect: actions?.onSelect,
+            onBulkActive: (active) => actions?.onVocabBulkActive?.('grades', active),
+            onExport: (ids) => actions?.onExportVocab?.('grades', ids),
+            onStarter: () => actions?.onStarterVocab?.('grades'),
+            onNew: actions?.onNewGrade,
+            onKeys: () => actions?.onDialog?.({ kind: 'keys' }),
+            onRetry: actions?.onRetryVocab,
+            onShowUpdates: actions?.onShowUpdates,
+          }}
+        />
+      )}
+
+      <NewCauseDialog
+        open={dialog?.kind === 'new-cause'}
+        draft={dialog?.kind === 'new-cause' ? dialog.draft : NEW_CAUSE}
+        problems={dialog?.kind === 'new-cause' ? dialog.problems : {}}
+        problem={dialog?.kind === 'new-cause' ? dialog.problem : null}
+        shown={dialog?.kind === 'new-cause' ? dialog.shown : false}
+        busy={model.busy}
+        onDraft={(draft) => actions?.onCauseDraft?.(draft)}
+        onCreate={() => actions?.onCreateCause?.()}
+        onClose={() => actions?.onDialog?.(null)}
+      />
+      <NewGradeDialog
+        open={dialog?.kind === 'new-grade'}
+        draft={dialog?.kind === 'new-grade' ? dialog.draft : NEW_GRADE}
+        problems={dialog?.kind === 'new-grade' ? dialog.problems : {}}
+        problem={dialog?.kind === 'new-grade' ? dialog.problem : null}
+        shown={dialog?.kind === 'new-grade' ? dialog.shown : false}
+        busy={model.busy}
+        onDraft={(draft) => actions?.onGradeDraft?.(draft)}
+        onCreate={() => actions?.onCreateGrade?.()}
+        onClose={() => actions?.onDialog?.(null)}
+      />
+      <DeleteCauseDialog open={dialog?.kind === 'delete-cause'} cause={dialog?.kind === 'delete-cause' ? (causes?.causes.find((row) => row.id === dialog.id) ?? null) : null} busy={model.busy} onConfirm={() => actions?.onConfirmDeleteCause?.()} onClose={() => actions?.onDialog?.(null)} />
 
       <NewDefectDialog
         open={dialog?.kind === 'new-defect'}

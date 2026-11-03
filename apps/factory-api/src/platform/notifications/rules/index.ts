@@ -15,6 +15,8 @@ import { CALL_RULES } from '../../../modules/production/calls/notices'
 import { LIMIT_RULES } from '../../../modules/people/limits/notices'
 // B-W2b-96: a machine request routed to a team or technician, and escalated to a person.
 import { ROUTING_RULES } from '../../../modules/plant/requests/notices'
+// B-W2b-118: a quality alert rule fired (ALERT to its audience; a test to the person who asked).
+import { QUALITY_ALERT_RULES } from '../../../modules/quality/rules/notices'
 // B-W2b-125: a new incident report to the safety roles; an INAIL filing's reminders before and at its 48-hour deadline.
 import { INCIDENT_RULES } from '../../../modules/safety/incidents/notices'
 
@@ -36,5 +38,7 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   ...LIMIT_RULES,
   // B-W2b-96: a machine request routed (ASSIGNMENT to the team's or technician's office accounts), escalated (ALERT).
   ...ROUTING_RULES,
+  // B-W2b-118: a quality alert rule fired (ALERT to the rule's audience, or the person who tested it).
+  ...QUALITY_ALERT_RULES,
   // B-W2b-125: a new incident report (ALERT to safety.incidents.manage); an INAIL filing's reminders (ALERT to safety.incidents.people).
   ...INCIDENT_RULES])
