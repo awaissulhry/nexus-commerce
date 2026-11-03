@@ -26,8 +26,18 @@ const STATEMENT: MyStatement = {
     { operationCode: 'ASM', operationName: 'Assemblaggio collo', pieces: 310, minutes: '620.000', sharePct: '50', rate: '0.450000', amount: 13950 },
   ],
   time: [{ code: 'WAIT_HELP', minutes: '45.000', rate: '0.150000', amount: 675 }],
+  bonus: null,
   earningsAmount: 69825,
   makeUpAmount: 8200,
+}
+/** B-W2b-84: under a standard-minute bonus scheme the pieces pay nothing by the piece; the guaranteed pay and the bonus do. */
+const STATEMENT_BONUS: MyStatement = {
+  ...STATEMENT,
+  lines: [{ operationCode: 'SEW', operationName: 'Cucitura maniche', pieces: 1840, minutes: '2760.000', sharePct: null, rate: '0.300000', amount: 0 }],
+  time: [],
+  bonus: { minutesPresent: 2880, standardMinutes: '2760.000', thresholdMinutes: '2160.000', efficiencyPct: '95.83', bonusMinutes: '600.000', amount: 12000 },
+  earningsAmount: 12000,
+  makeUpAmount: 43200,
 }
 
 const PAY = { month: '2026-10', status: 'OPEN', currency: 'EUR', todayEarnings: 2880, periodPieces: 2150, periodEarnings: 69825, held: 0, statement: null }
@@ -122,6 +132,7 @@ export const designScreen = defineDesignScreen<MyDayViewModel>({
     { id: 'answer-withdrawn', label: 'Withdrawn', model: model({ kind: 'disputes', done: 'withdrawn' }) },
 
     { id: 'statement', label: 'Statement: pieces, minutes, rates, earnings, make-up; Print', model: model({ kind: 'statement' }, pay({ month: '2026-09', pay: PAY_STATEMENT })) },
+    { id: 'statement-bonus', label: 'A standard-minute bonus: pieces at no amount, the bonus in the earnings', model: model({ kind: 'statement' }, pay({ month: '2026-09', pay: { ...PAY_STATEMENT, statement: STATEMENT_BONUS } })) },
     { id: 'statement-sent', label: 'Sent to the office printer in your name', model: model({ kind: 'statement', sent: { code: 'A4-UFF', name: 'Ufficio' } }, pay({ month: '2026-09', pay: PAY_STATEMENT })) },
     { id: 'statement-draft', label: 'Not approved yet: Print held', model: model({ kind: 'statement' }, pay({ month: '2026-09', pay: { ...PAY_STATEMENT, statement: { ...STATEMENT, status: 'DRAFT' } } })) },
     { id: 'statement-no-printer', label: 'No office printer known: held, the reason on screen', model: model({ kind: 'statement' }, pay({ month: '2026-09', printer: false, pay: PAY_STATEMENT })) },

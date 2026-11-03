@@ -34,8 +34,8 @@
   "check": {
     "BLOCKS_WAITING_one": "{count} off-standard block is running or waiting.",
     "BLOCKS_WAITING_other": "{count} off-standard blocks are running or waiting.",
-    "BONUS_SCHEME_one": "{count} standard-minute bonus scheme applies: the ledger cannot book a bonus yet.",
-    "BONUS_SCHEME_other": "{count} standard-minute bonus schemes apply: the ledger cannot book a bonus yet.",
+    "BONUS_NO_CLOCK_one": "{count} standard-minute bonus scheme applies at a site with no attendance on: the guaranteed pay and the bonus are counted on the minutes present.",
+    "BONUS_NO_CLOCK_other": "{count} standard-minute bonus schemes apply at a site with no attendance on: the guaranteed pay and the bonus are counted on the minutes present.",
     "DAYS_OPEN_one": "{count} attendance day is not approved.",
     "DAYS_OPEN_other": "{count} attendance days are not approved.",
     "DISPUTES_OPEN_one": "{count} dispute is open: an answer after the lock is paid as a correction.",
@@ -245,6 +245,7 @@
     "TEAM_INCENTIVE": "Team incentive",
     "ledger": {
       "ADJUSTMENT": "Correction",
+      "BONUS": "Bonus",
       "MAKE_UP": "Make-up",
       "OFF_STANDARD": "Off-standard time",
       "REVERSAL": "Reversal",
@@ -673,8 +674,14 @@
   },
   "statement": {
     "approve": "Approve statement",
+    "bonus": "Standard-minute bonus",
+    "bonusLine": "{efficiency}% efficiency: {standard} standard minutes over {present} minutes present, threshold {threshold}: the bonus pays {above} minutes.",
+    "bonusPieces": "Under the bonus scheme the pieces are not paid by the piece: they measure the bonus. The guaranteed pay covers the minutes present.",
     "code": "Code",
     "corrections": "Corrections",
+    "defects": "Scrap and rework on own scans",
+    "defectsOthers": "{scrap} scrap, {rework} rework: {othersScrap} scrap and {othersRework} rework caused by others, paid as time",
+    "defectsValue": "{scrap} scrap, {rework} rework",
     "disputes": "Disputes from the floor",
     "earnings": "Earnings",
     "employee": "Employee record",

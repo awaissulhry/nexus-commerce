@@ -518,6 +518,8 @@ function Lines({ statement, t, locale }: { statement: MyStatement; t: Translate;
   const rows = [
     ...statement.lines.map((line, index) => ({ id: `l${index}`, cells: [`${line.operationCode} ${line.operationName}${line.sharePct ? ` (${t('statement.share', { share: line.sharePct })})` : ''}`, line.pieces, minutes(line.minutes), rateText(line.rate, locale), money(line.amount)] })),
     ...statement.time.map((line, index) => ({ id: `t${index}`, cells: [`${line.code} ${t('statement.time')}`, '', minutes(line.minutes), rateText(line.rate, locale), money(line.amount)] })),
+    // B-W2b-84: the bonus is in the earnings; its minutes are the standard minutes above the threshold.
+    ...(statement.bonus ? [{ id: 'bonus', cells: [t('statement.bonus', { efficiency: formatNumber(Number(statement.bonus.efficiencyPct), locale, { maximumFractionDigits: 2 }) }), '', minutes(statement.bonus.bonusMinutes), '', money(statement.bonus.amount)] }] : []),
   ]
   const earnings = statement.earningsAmount ?? 0
   const makeUp = statement.makeUpAmount ?? 0

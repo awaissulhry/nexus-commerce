@@ -64,6 +64,7 @@ export async function floorMine(caller: CommandCaller, query: { readonly month?:
               currency: statement.currency,
               lines: summary.lines.map((line) => ({ operationCode: line.operationCode, operationName: line.operationName, pieces: line.pieces, minutes: line.minutes, sharePct: line.sharePct, rate: money(line.rate), amount: money(line.amount) })),
               time: summary.time.map((line) => ({ code: line.code, minutes: line.minutes, rate: money(line.rate), amount: money(line.amount) })),
+              bonus: summary.bonus ? { ...summary.bonus, amount: money(summary.bonus.amount) } : null,
               earningsAmount: money(statement.earningsAmount),
               makeUpAmount: money(statement.makeUpAmount),
             }
