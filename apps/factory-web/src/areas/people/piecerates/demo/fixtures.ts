@@ -135,7 +135,8 @@ export const STATEMENT: Statement = {
   attendance: { ordinaryMinutes: 9600, approvedOvertimeMinutes: 120 },
   makeUp: { minutes: 9720, rate: '0.15', guaranteed: 145800, earned: 75420, amount: 70380 },
   held: { open: 0, counted: 1, notPaid: 0 },
-  defects: { scrap: 2, rework: 1 },
+  defects: { scrap: 2, rework: 1, othersScrap: 2, othersRework: 0 },
+  bonus: null,
   disputes: [{ id: uid('1011', 1), status: 'OPEN', workDate: '2026-10-14', recordType: 'EarningsEntry' }],
   earningsAmount: 75420,
   makeUpAmount: 70380,
@@ -147,6 +148,18 @@ export const STATEMENT: Statement = {
   version: 2,
 }
 export const { earningsAmount: _e, makeUpAmount: _m, ...STATEMENT_WITHOUT_TOTALS } = STATEMENT
+/** B-W2b-84: a standard-minute bonus scheme's statement: the pieces at their rate with no amount, the guaranteed pay, the bonus. */
+export const STATEMENT_BONUS: Statement = {
+  ...STATEMENT,
+  lines: [{ operationCode: SEW.code, operationName: SEW.name, pieces: 420, minutes: '5250.000', sharePct: null, rate: '1.5', amount: 0 }],
+  time: [],
+  corrections: [],
+  makeUp: { minutes: 9720, rate: '0.15', guaranteed: 145800, earned: 0, amount: 145800 },
+  bonus: { minutesPresent: 9720, standardMinutes: '5250.000', thresholdMinutes: '4860.000', efficiencyPct: '54.01', bonusMinutes: '390.000', amount: 4680 },
+  defects: { scrap: 2, rework: 1, othersScrap: 0, othersRework: 0 },
+  earningsAmount: 4680,
+  makeUpAmount: 145800,
+}
 
 const entry = (n: number, over: Partial<EntryRow> = {}): EntryRow => ({ id: uid('1012', n), workDate: '2026-10-14', siteId: SITE_N.id, periodId: PERIODS[1]!.id, kind: 'SCAN', bundle: 'B-00142', operation: SEW, pieces: 12, minutes: null, sharePct: null, rate: '1.5', amount: 1800, currency: 'EUR', reversesId: null, correctsMonth: null, reason: null, createdAt: '2026-10-14T09:12:00.000Z', ...over })
 export const ENTRIES: EntryRow[] = [entry(1), entry(2, { kind: 'SCAN', amount: -1800, reversesId: uid('1012', 1), reason: 'Scansione annullata (esempio)' }), entry(3, { kind: 'TEAM_SPLIT', pieces: 4, sharePct: '33.3333', amount: 600 }), entry(4, { kind: 'MAKE_UP', bundle: null, operation: null, pieces: null, minutes: '9720', rate: '0.15', amount: 70380 }), entry(5, { kind: 'ADJUSTMENT', bundle: null, operation: null, pieces: null, rate: null, amount: 1500, correctsMonth: '2026-09', reason: 'Lavoro di settembre (esempio)' })]

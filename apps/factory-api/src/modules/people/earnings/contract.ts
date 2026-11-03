@@ -98,6 +98,8 @@ export const statementsContract = defineContract({
 
 const statementLine = output({ operationCode: z.string(), operationName: z.string(), pieces: z.number().int(), minutes: z.string(), sharePct: z.string().nullable(), rate: money.pay(unitPrice()), amount: money.pay(amountMinor()) })
 const timeLine = output({ code: z.string(), minutes: z.string(), rate: money.pay(unitPrice()), amount: money.pay(amountMinor()) })
+/** B-W2b-84: a standard-minute bonus scheme's figures of the person's period, inside their one record (never a list). */
+const bonusView = output({ minutesPresent: z.number().int(), standardMinutes: z.string(), thresholdMinutes: z.string(), efficiencyPct: z.string(), bonusMinutes: z.string(), amount: money.pay(amountMinor()) }).nullable()
 const statementParams = input({ statementId: id() })
 const statementView = output({
   id: id(),
@@ -118,7 +120,10 @@ const statementView = output({
   attendance: output({ ordinaryMinutes: z.number().int(), approvedOvertimeMinutes: z.number().int() }).nullable(),
   makeUp: output({ minutes: z.number(), rate: money.pay(unitPrice()), guaranteed: money.pay(amountMinor()), earned: money.pay(amountMinor()), amount: money.pay(amountMinor()) }).nullable(),
   held: output({ open: z.number().int(), counted: z.number().int(), notPaid: z.number().int() }),
-  defects: output({ scrap: z.number().int(), rework: z.number().int() }),
+  /** othersScrap, othersRework (B-W2b-84): of which their reasons put down to others (paid as time). */
+  defects: output({ scrap: z.number().int(), rework: z.number().int(), othersScrap: z.number().int(), othersRework: z.number().int() }),
+  /** A standard-minute bonus scheme's period (B-W2b-84); null: none applies. */
+  bonus: bonusView,
   disputes: z.array(output({ id: id(), status: z.string(), workDate: businessDate(), recordType: z.string() })),
   earningsAmount: money.pay(amountMinor().nullable()),
   makeUpAmount: money.pay(amountMinor().nullable()),
@@ -284,7 +289,7 @@ export const floorMineContract = defineContract({
       periodPieces: z.number().int(),
       periodEarnings: money.pay(amountMinor()),
       held: z.number().int(),
-      statement: output({ id: id(), status: z.enum(STATEMENT_STATUSES), revision: z.number().int(), currency: z.string(), lines: z.array(statementLine), time: z.array(timeLine), earningsAmount: money.pay(amountMinor().nullable()), makeUpAmount: money.pay(amountMinor().nullable()) }).nullable(),
+      statement: output({ id: id(), status: z.enum(STATEMENT_STATUSES), revision: z.number().int(), currency: z.string(), lines: z.array(statementLine), time: z.array(timeLine), bonus: bonusView, earningsAmount: money.pay(amountMinor().nullable()), makeUpAmount: money.pay(amountMinor().nullable()) }).nullable(),
       words: z.array(z.string()),
     }),
   },

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { ClockFact } from '../clock/rules'
 import { guaranteedPayOf } from '../schemes/pay'
 import { reportRows } from '../reports/earnings/report'
-import { baseKey, entryKey, frozenBases, periodMakeUp, piecesAmount, planLedger, samePay, type LedgerRow, type Wanted } from './ledger'
-import { clockAt, clockRuleApplies, lockPhrase, monthAfter, moveRefusal, paidRuleOf, payablePieces, paysOn, periodChecks, rateFor, skillWeightOf, traineeOn, voidedScans, windowsOf, type PeriodFacts, type RateCandidate } from './rules'
+import { baseKey, entryKey, frozenBases, isPeriodFamily, isScanFamily, othersCodeOf, periodBonus, periodMakeUp, piecesAmount, planLedger, samePay, type BonusWork, type LedgerRow, type PaidDay, type Wanted } from './ledger'
+import { clockAt, clockRuleApplies, defectsByFault, EARNINGS_KINDS, lockPhrase, monthAfter, moveRefusal, paidRuleOf, payablePieces, paysOn, periodChecks, rateFor, skillWeightOf, traineeOn, UNKNOWN_FAULT_PAYS_AS, voidedScans, windowsOf, type PeriodFacts, type RateCandidate } from './rules'
 import { statementOf, type PayLine } from './statement'
 import { monthWords, workerStatementDocument } from './statement-document'
 
@@ -165,8 +165,8 @@ describe('the append-only ledger (MES-256)', () => {
 })
 
 describe('the make-up to guaranteed pay', () => {
-  const scheme = { id: 'a', guaranteedHourlyRate: '9', traineeHourlyRate: '6', currency: 'EUR' }
-  const later = { id: 'b', guaranteedHourlyRate: '12', traineeHourlyRate: null, currency: 'EUR' }
+  const scheme = { id: 'a', kind: 'PIECE_RATE' as const, efficiencyThresholdPct: null, guaranteedHourlyRate: '9', traineeHourlyRate: '6', currency: 'EUR' }
+  const later = { id: 'b', kind: 'PIECE_RATE' as const, efficiencyThresholdPct: null, guaranteedHourlyRate: '12', traineeHourlyRate: null, currency: 'EUR' }
 
   it('tops up to the guaranteed pay of the paid minutes', () => {
     expect(periodMakeUp([{ scheme, minutes: 480, trainee: false }], 5000)).toMatchObject({ minutes: 480, guaranteed: 7200, earned: 5000, makeUp: 2200 })
@@ -190,6 +190,68 @@ describe('the make-up to guaranteed pay', () => {
   it('no minute, no make-up', () => {
     expect(periodMakeUp([], 0)).toBe(null)
     expect(periodMakeUp([{ scheme, minutes: 0, trainee: false }], 0)).toBe(null)
+  })
+
+  // B-W2b-84: a standard-minute bonus scheme's days pay their guaranteed pay whole; nothing earned elsewhere stands in for it.
+  const bonus = { id: 'c', kind: 'STANDARD_MINUTE_BONUS' as const, efficiencyThresholdPct: '75', guaranteedHourlyRate: '9', traineeHourlyRate: '6', currency: 'EUR' }
+
+  it('pays a bonus scheme\'s days their guaranteed pay whole, at the guaranteed rate', () => {
+    expect(periodMakeUp([{ scheme: bonus, minutes: 480, trainee: false }], 0)).toEqual({ minutes: 480, ratePerMinute: '0.15', guaranteed: 7200, earned: 0, makeUp: 7200 })
+    expect(periodMakeUp([{ scheme: bonus, minutes: 480, trainee: true }], 0)?.makeUp).toBe(4800)
+  })
+
+  it('never lets piece earnings of other days eat a bonus day\'s guaranteed pay', () => {
+    const made = periodMakeUp([{ scheme, minutes: 480, trainee: false }, { scheme: bonus, minutes: 480, trainee: false }], 9000)!
+    expect(made.guaranteed).toBe(14400)
+    expect(made.makeUp).toBe(7200)
+    expect(periodMakeUp([{ scheme, minutes: 480, trainee: false }, { scheme: bonus, minutes: 480, trainee: false }], 5000)!.makeUp).toBe(7200 + 2200)
+  })
+})
+
+describe('the standard-minute bonus of a period (B-W2b-84; MES-253)', () => {
+  const bonus = { id: 'c', kind: 'STANDARD_MINUTE_BONUS' as const, efficiencyThresholdPct: '75', guaranteedHourlyRate: '9', traineeHourlyRate: null, currency: 'EUR' }
+  const pieceRate = { ...bonus, id: 'p', kind: 'PIECE_RATE' as const, efficiencyThresholdPct: null }
+  const day = (minutes: number, over: Partial<PaidDay> = {}): PaidDay => ({ scheme: bonus, minutes, trainee: false, ...over })
+  const work = (over: Partial<BonusWork> = {}): BonusWork => ({ scheme: bonus, pieces: 60, standardMinutes: '10', rate: '1.5', sharePct: null, ...over })
+
+  it('pays the standard minutes above the threshold, at what the pieces are worth', () => {
+    // 600 standard minutes over 480 present (125 %), threshold 75 % = 360: 240 above, at 90.00 ÷ 600 per minute.
+    expect(periodBonus([day(480)], [work()])).toEqual({ minutesPresent: 480, standardMinutes: '600.000', thresholdMinutes: '360.000', efficiencyPct: '125.00', bonusMinutes: '240.000', amount: 3600 })
+  })
+
+  it('below the threshold there is no bonus; a reversal counts against its line; a team share counts its part', () => {
+    expect(periodBonus([day(480)], [work({ pieces: 30 })])).toMatchObject({ bonusMinutes: '0.000', amount: 0 })
+    expect(periodBonus([day(480)], [work(), work({ pieces: -60 }), work({ pieces: 40 })])).toMatchObject({ standardMinutes: '400.000', bonusMinutes: '40.000', amount: 600 })
+    expect(periodBonus([day(480)], [work({ pieces: 120, sharePct: '50' })])).toMatchObject({ standardMinutes: '600.000', amount: 3600 })
+  })
+
+  it('knows nothing of piece-rate days and work; with neither under a bonus scheme there is none', () => {
+    expect(periodBonus([day(480, { scheme: pieceRate })], [work({ scheme: pieceRate })])).toBe(null)
+    expect(periodBonus([day(480), day(480, { scheme: pieceRate })], [work(), work({ scheme: pieceRate, pieces: 500 })])).toMatchObject({ minutesPresent: 480, standardMinutes: '600.000' })
+  })
+})
+
+describe('who is at fault (MES-258; B-W2b-84)', () => {
+  it('splits a scan\'s scrap and rework by their reasons; garments of no line follow the unknown rule', () => {
+    expect(UNKNOWN_FAULT_PAYS_AS).toBe('OWN')
+    expect(
+      defectsByFault({ scrapQuantity: 3, reworkQuantity: 2 }, [
+        { kind: 'SCRAP', quantity: 2, fault: 'OTHERS' },
+        { kind: 'SCRAP', quantity: 1, fault: 'OWN' },
+        { kind: 'REWORK', quantity: 1, fault: 'UNKNOWN' },
+      ]),
+    ).toEqual({ SCRAP: { OWN: 1, OTHERS: 2 }, REWORK: { OWN: 2, OTHERS: 0 } })
+  })
+
+  it('a line never counts more than the scan\'s own count', () => {
+    expect(defectsByFault({ scrapQuantity: 1, reworkQuantity: 0 }, [{ kind: 'SCRAP', quantity: 4, fault: 'OTHERS' }, { kind: 'REWORK', quantity: 2, fault: 'OTHERS' }])).toEqual({ SCRAP: { OWN: 0, OTHERS: 1 }, REWORK: { OWN: 0, OTHERS: 0 } })
+  })
+
+  it('the period books the bonus and the time for others\' fault; the statement names that time', () => {
+    expect(EARNINGS_KINDS).toContain('BONUS')
+    expect([entryKey.bonus('p', 'e'), entryKey.others('s', 'SCRAP')].map(isPeriodFamily)).toEqual([true, true])
+    expect(isScanFamily(entryKey.others('s', 'SCRAP'))).toBe(false)
+    expect([othersCodeOf('others:s:REWORK'), othersCodeOf('others:s:SCRAP#2'), othersCodeOf('off:b')]).toEqual(['REWORK_OTHERS', 'SCRAP_OTHERS', null])
   })
 })
 
@@ -223,9 +285,10 @@ describe('the period', () => {
   })
 
   it('blocks on what would change the pay and only tells the rest', () => {
-    const none: PeriodFacts = { heldOpen: 0, daysOpen: 0, overtimePending: 0, blocksWaiting: 0, bonusSchemes: 0, scansWithoutRate: 0, workersWithoutEmployee: 0, disputesOpen: 0, sitesWithoutClock: 0 }
+    const none: PeriodFacts = { heldOpen: 0, daysOpen: 0, overtimePending: 0, blocksWaiting: 0, bonusWithoutClock: 0, scansWithoutRate: 0, workersWithoutEmployee: 0, disputesOpen: 0, sitesWithoutClock: 0 }
     expect(periodChecks(none)).toEqual([])
-    expect(periodChecks({ ...none, heldOpen: 2, daysOpen: 1, overtimePending: 1, blocksWaiting: 3, bonusSchemes: 1 }).every((check) => check.blocking)).toBe(true)
+    expect(periodChecks({ ...none, heldOpen: 2, daysOpen: 1, overtimePending: 1, blocksWaiting: 3, bonusWithoutClock: 1 }).every((check) => check.blocking)).toBe(true)
+    expect(periodChecks({ ...none, bonusWithoutClock: 1 })[0]!.words).toContain('no attendance on')
     expect(periodChecks({ ...none, scansWithoutRate: 1, workersWithoutEmployee: 2, disputesOpen: 1, sitesWithoutClock: 1 }).some((check) => check.blocking)).toBe(false)
     expect(periodChecks({ ...none, heldOpen: 1 })[0]!.words).toBe('1 scan is held: resolve them.')
   })
@@ -233,7 +296,7 @@ describe('the period', () => {
 
 describe('the worker statement (MES-261; c.c. art. 2101 c.3)', () => {
   const line = (over: Partial<PayLine>): PayLine => ({ kind: 'SCAN', operationCode: 'SEW', operationName: 'Sew', standardMinutes: '10', pieces: 2, minutes: null, rate: '1.5', sharePct: null, amount: 300, code: null, correctsMonth: null, words: null, ...over })
-  const facts = { currency: 'EUR', attendance: null, makeUp: null, held: { open: 0, counted: 0, notPaid: 0 }, disputes: { open: 0, answered: 0 }, defects: { scrap: 0, rework: 0 } }
+  const facts = { currency: 'EUR', attendance: null, makeUp: null, held: { open: 0, counted: 0, notPaid: 0 }, disputes: { open: 0, answered: 0 }, defects: { scrap: 0, rework: 0, othersScrap: 0, othersRework: 0 }, bonus: null }
 
   it('gives pieces per operation, minutes, rates and earnings', () => {
     const built = statementOf({ ...facts, lines: [line({}), line({ pieces: 3, amount: 450 }), line({ operationCode: 'PACK', operationName: 'Pack', standardMinutes: '2', pieces: 5, rate: '0.3', amount: 150 })] })
@@ -264,6 +327,22 @@ describe('the worker statement (MES-261; c.c. art. 2101 c.3)', () => {
     expect(built.summary.corrections.map((item) => [item.kind, item.month, item.amount])).toEqual([['ADJUSTMENT', null, -50], ['SCAN', '2026-02', 150]])
     expect(built.earningsAmount).toBe(700 + 300 - 50 + 150)
     expect(built.makeUpAmount).toBe(6200)
+  })
+
+  it('gives the bonus its own place: never a piece line, counted in the earnings (B-W2b-84)', () => {
+    const figures = { minutesPresent: 480, standardMinutes: '600.000', thresholdMinutes: '360.000', efficiencyPct: '125.00', bonusMinutes: '240.000', amount: 0 }
+    const built = statementOf({
+      ...facts,
+      bonus: figures,
+      makeUp: { minutes: 480, ratePerMinute: '0.15', guaranteed: 7200, earned: 0, amount: 7200 },
+      lines: [line({ pieces: 4, amount: 600 }), line({ pieces: 60, amount: 0, measuresBonus: true }), line({ kind: 'BONUS', operationCode: null, pieces: null, minutes: '240.000', rate: null, amount: 3600 })],
+    })
+    // The pieces a bonus measures never join a line paid by the piece at the same rate.
+    expect(built.summary.lines.map((item) => [item.pieces, item.amount])).toEqual([[4, 600], [60, 0]])
+    expect(built.summary.bonus).toEqual({ ...figures, amount: 3600 })
+    expect(built.earningsAmount).toBe(600 + 3600)
+    expect(built.makeUpAmount).toBe(7200)
+    expect(statementOf({ ...facts, lines: [line({})] }).summary.bonus).toBe(null)
   })
 })
 
@@ -329,5 +408,18 @@ describe('the worker statement as a document (B-W2b-62; c.c. art. 2101 c.3)', ()
 
   it('refuses a company whose legal data are incomplete', () => {
     expect(() => workerStatementDocument({ ...input, company: { ...company, vatNumber: null } })).toThrow()
+  })
+
+  it('shows the bonus and what was caused by others, and reads a statement stored before them (B-W2b-84)', () => {
+    const bonus = { minutesPresent: 480, standardMinutes: '600.000', thresholdMinutes: '360.000', efficiencyPct: '125.00', bonusMinutes: '240.000', amount: 3600 }
+    const made = workerStatementDocument({ ...input, language: 'en', summary: { ...summary, bonus, defects: { scrap: 2, rework: 1, othersScrap: 2, othersRework: 0 } }, earningsAmount: 4750 })
+    expect(made.totals.map((row) => row.label)).toContain('Standard-minute bonus')
+    expect(made.totals.find((row) => row.label === 'Standard-minute bonus')?.value).toBe('€36.00')
+    expect(made.facts.map((row) => row.value).join(' ')).toContain('125%: 600 standard minutes over 480 minutes present, threshold 360, bonus on 240 minutes')
+    expect(made.facts.map((row) => row.value).join(' ')).toContain('of which caused by others: 2 scrap, 0 rework')
+    expect(made.notices).toHaveLength(2)
+    const old = workerStatementDocument(input)
+    expect(old.totals.map((row) => row.label)).not.toContain('Premio a minuti standard')
+    expect(old.facts.map((row) => row.value)).toContain('0 scarti, 1 rilavorazioni')
   })
 })

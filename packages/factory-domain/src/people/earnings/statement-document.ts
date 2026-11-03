@@ -45,10 +45,15 @@ const WORDS = {
     heldValue: '{open} aperte, {counted} contate, {notPaid} non pagate',
     defects: 'Scarti e rilavorazioni sulle proprie scansioni',
     defectsValue: '{scrap} scarti, {rework} rilavorazioni',
+    defectsOthers: '{scrap} scarti, {rework} rilavorazioni (di cui per causa altrui: {othersScrap} scarti, {othersRework} rilavorazioni)',
+    bonus: 'Premio a minuti standard',
+    bonusFacts: 'Rendimento',
+    bonusValue: '{efficiency}%: {standard} minuti standard su {present} minuti presenti, soglia {threshold}, premio su {above} minuti',
+    bonusNotice: 'Con lo schema a premio i pezzi non sono pagati a cottimo: misurano il premio. La paga garantita copre i minuti presenti.',
     none: 'Nessun lavoro a cottimo in questo mese.',
     draft: 'BOZZA: non approvato, può ancora cambiare',
     superseded: 'SOSTITUITO da una revisione successiva',
-    notice: 'Prospetto dei dati di lavorazione e dei guadagni a cottimo (art. 2101 c.c.). Scarti e rilavorazioni sulle proprie scansioni seguono la regola dello schema. Se una voce è sbagliata, contestala da La mia giornata sul terminale.',
+    notice: 'Prospetto dei dati di lavorazione e dei guadagni a cottimo (art. 2101 c.c.). Scarti e rilavorazioni sulle proprie scansioni sono pagati secondo la causa: per propria colpa con la regola dello schema, per causa altrui come tempo pagato. Se una voce è sbagliata, contestala da La mia giornata sul terminale.',
   },
   en: {
     title: 'Piece-work statement',
@@ -74,10 +79,15 @@ const WORDS = {
     heldValue: '{open} open, {counted} counted, {notPaid} not paid',
     defects: 'Scrap and rework on own scans',
     defectsValue: '{scrap} scrap, {rework} rework',
+    defectsOthers: '{scrap} scrap, {rework} rework (of which caused by others: {othersScrap} scrap, {othersRework} rework)',
+    bonus: 'Standard-minute bonus',
+    bonusFacts: 'Efficiency',
+    bonusValue: '{efficiency}%: {standard} standard minutes over {present} minutes present, threshold {threshold}, bonus on {above} minutes',
+    bonusNotice: 'Under the bonus scheme the pieces are not paid by the piece: they measure the bonus. The guaranteed pay covers the minutes present.',
     none: 'No piece work this month.',
     draft: 'DRAFT: not approved, it may still change',
     superseded: 'SUPERSEDED by a later revision',
-    notice: "Statement of the work done and the piece-work earnings (c.c. art. 2101). Scrap and rework on your own scans follow the scheme's own-fault rule. If an entry is wrong, dispute it from My day on the tablet.",
+    notice: "Statement of the work done and the piece-work earnings (c.c. art. 2101). Scrap and rework on your own scans are paid by their cause: your own fault by the scheme's rule, caused by others as paid time. If an entry is wrong, dispute it from My day on the tablet.",
   },
 } as const
 
@@ -126,6 +136,9 @@ export function workerStatementDocument(input: WorkerStatementInput): ComposedDo
   const corrections = summary.corrections.map((line) => ['', [words.corrections, line.month ? fill(words.correctsMonth, { month: monthWords(line.month, language) }) : null, line.words].filter(Boolean).join(' · '), '', '', '', money(line.amount)])
   const rows = [...pieces, ...time, ...corrections]
   const name = legalName(input.company, language)
+  // B-W2b-84: both absent from a statement stored before them.
+  const bonus = summary.bonus ?? null
+  const defects = { scrap: summary.defects.scrap, rework: summary.defects.rework, othersScrap: summary.defects.othersScrap ?? 0, othersRework: summary.defects.othersRework ?? 0 }
   const month = monthWords(input.month, language)
   return {
     type: typeOf('WORKER_STATEMENT'),
@@ -143,17 +156,26 @@ export function workerStatementDocument(input: WorkerStatementInput): ComposedDo
     facts: [
       ...(summary.attendance ? [{ label: words.ordinary, value: String(summary.attendance.ordinaryMinutes) }, { label: words.overtime, value: String(summary.attendance.approvedOvertimeMinutes) }] : []),
       { label: words.held, value: fill(words.heldValue, summary.held) },
-      { label: words.defects, value: fill(words.defectsValue, summary.defects) },
+      { label: words.defects, value: fill(defects.othersScrap + defects.othersRework > 0 ? words.defectsOthers : words.defectsValue, defects) },
+      ...(bonus
+        ? [
+            {
+              label: words.bonusFacts,
+              value: fill(words.bonusValue, { efficiency: formatDecimal(bonus.efficiencyPct, language, 0, 2), standard: minutes(bonus.standardMinutes), present: String(bonus.minutesPresent), threshold: minutes(bonus.thresholdMinutes), above: minutes(bonus.bonusMinutes) }),
+            },
+          ]
+        : []),
     ],
     table: { columns, rows: rows.length > 0 ? rows : [['', words.none, '', '', '', '']] },
     totals: [
       { label: words.earnings, value: money(input.earningsAmount), strong: false },
+      ...(bonus ? [{ label: words.bonus, value: money(bonus.amount), strong: false }] : []),
       ...(summary.makeUp ? [{ label: words.guaranteed, value: money(summary.makeUp.guaranteed), strong: false }, { label: words.earned, value: money(summary.makeUp.earned), strong: false }] : []),
       { label: words.makeUp, value: money(input.makeUpAmount), strong: false },
       { label: words.total, value: money(input.earningsAmount + input.makeUpAmount), strong: true },
     ],
     notes: null,
-    notices: [words.notice],
+    notices: bonus ? [words.notice, words.bonusNotice] : [words.notice],
     signatures: [],
     footer: { legal: legalFooter(input.company, language), text: input.company.documentFooter?.trim() ? input.company.documentFooter.trim() : null, page: DOCUMENT_WORDS[language].page, continued: DOCUMENT_WORDS[language].continued },
     meta: {
