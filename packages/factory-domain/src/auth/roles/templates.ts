@@ -365,6 +365,14 @@ const SHADE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freez
   quality_inspector: ['inventory.shade.override'],
 })
 /**
+ * B-W2b-103 (leather cutting rules; MES-053, MES-063, MES-064; design floor.hidecut pop-up "Cut anyway?"): the team leader lets a
+ * hide be cut anyway when the table's checks warn, signed on the cutter's tablet with their own PIN and a reason. Floor only;
+ * Owner from every().
+ */
+const CUT_OVERRIDE_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.cut.override'],
+})
+/**
  * B-W2b-92 (inspection plans, QHS-008, QHS-009, QHS-016; design quality.plans): quality keeps the plans and approves another
  * person's draft (never one it wrote); the production manager reads them and may be the second person who approves (a small
  * factory has one quality person); the floor supervisor reads them and prints a checklist for a bench without a tablet.
@@ -504,6 +512,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (HIDES_ADDS[key] ?? []) : []),
   // B-W2b-100
   ...(audience === 'office' ? (SHADE_ADDS[key] ?? []) : []),
+  // B-W2b-103
+  ...(audience === 'floor' ? (CUT_OVERRIDE_FLOOR_ADDS[key] ?? []) : []),
   // B-W2b-92
   ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
   // B-W2b-49
