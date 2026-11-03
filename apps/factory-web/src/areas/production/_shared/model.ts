@@ -42,6 +42,8 @@ export interface ProductionCan {
   readonly pick: boolean
   /** orders.view: find the sales order a new work order is made from. */
   readonly orders: boolean
+  /** production.extraops.add: add an unplanned operation to a released work order (B-W2b-82). */
+  readonly extraOps: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): ProductionCan {
@@ -58,6 +60,7 @@ export function abilitiesOf(permissions: readonly string[]): ProductionCan {
     quality: held.has('quality.inspections.view'),
     pick: held.has('inventory.issue'),
     orders: held.has('orders.view'),
+    extraOps: held.has('production.extraops.add'),
   }
 }
 

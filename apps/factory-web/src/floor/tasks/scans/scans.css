@@ -80,6 +80,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* B-W2b-82: an unplanned operation counts good pieces only: its one counter takes the row. */
+.fw-scans-counters[data-good-only] {
+  grid-template-columns: minmax(0, 1fr);
+}
 .fw-scans-counter-body {
   display: flex;
   flex-direction: column;

@@ -176,6 +176,8 @@ export const cardContract = defineContract({
       operations: z.array(
         operationRef.extend({
           scanRequired: z.boolean(),
+          /** B-W2b-82: added to the released work order, no routing step: picked by hand, good garments only. */
+          unplanned: z.boolean(),
           workCentreKind: z.enum(WORK_CENTRE_KINDS),
           final: z.boolean(),
           sewn: z.boolean(),
@@ -328,6 +330,7 @@ export const workOrderWipContract = defineContract({
           code: z.string(),
           name: z.string(),
           scanRequired: z.boolean(),
+          unplanned: z.boolean(),
           final: z.boolean(),
           sewn: z.boolean(),
           workCentreKind: z.enum(WORK_CENTRE_KINDS),
@@ -374,6 +377,7 @@ export const siteWipContract = defineContract({
               code: z.string(),
               name: z.string(),
               scanRequired: z.boolean(),
+              unplanned: z.boolean(),
               final: z.boolean(),
               ...flow,
               bundles: bundleCounts,
@@ -401,7 +405,10 @@ export const workOrderScansContract = defineContract({
           /** The scan names a person and the gate keeps back who. */
           workerHidden: z.boolean(),
           station: stationRef.nullable(),
+          /** Who approved a correction: an office user, or a team leader on the floor, whose id follows the PERFORMANCE gate as `worker` does. */
           approvedById: id().nullable(),
+          /** B-W2b-82: a team leader approved it and the gate keeps back who. */
+          approvedByHidden: z.boolean(),
           /** The UNDO or CORRECTION that voids it. */
           voidedById: id().nullable(),
         }),

@@ -650,7 +650,8 @@
     "correctionsWaiting_other": "{count} correction requests wait for a decision.",
     "toToday": "Open Today",
     "toLabour": "Open Labour & corrections",
-    "correctionsHint": "The original scan stays; an approved correction adds a row."
+    "correctionsHint": "The original scan stays; an approved correction adds a row.",
+    "unplanned": "Unplanned"
   },
   "quality": {
     "what": "Final inspections start",
@@ -803,5 +804,55 @@
     "quickDue": "Due",
     "dueDate": "due date",
     "boardHeld": "A work order changes state through its own step (release, hold, complete, close): open it to move it."
+  },
+  "extra": {
+    "title": "Unplanned operations",
+    "add": "Add an unplanned operation",
+    "loading": "Reading the operations…",
+    "none": "Nothing was added: this work order runs on its routing.",
+    "hint": "An unplanned operation can be scanned, paid and costed. Nothing waits for it, and the routing's order stays as it was frozen.",
+    "listFailed": "Couldn't read the unplanned operations.",
+    "empty": "Every operation of the library is on this work order already.",
+    "operation": "Operation",
+    "pick": "Choose",
+    "why": "Why is it needed?",
+    "note": "Say why in a few words",
+    "minutes": "{minutes} min per piece",
+    "noRate": "This operation has no piece rate at this site: a report at it pays no pieces, and the time is booked as off-standard.",
+    "added": "Op {seq} {name} added: the floor can scan it.",
+    "addedNoRate": "Op {seq} {name} added: the floor can scan it. It has no piece rate: the time is booked as off-standard.",
+    "refused": "Not added: {words}",
+    "failed": "Couldn't add the operation. Nothing changed: try again.",
+    "readFailed": "Couldn't read the operations of the library.",
+    "held": {
+      "operation": "Choose the operation first.",
+      "reason": "Say why it is needed.",
+      "note": "Say why in a few words.",
+      "status": "Only a released or in-progress work order takes an unplanned operation."
+    },
+    "col": {
+      "operation": "Operation",
+      "reason": "Why",
+      "addedOn": "Added",
+      "at": "When"
+    },
+    "on": {
+      "FLOOR": "On the floor",
+      "OFFICE": "In the office"
+    },
+    "reason": {
+      "QUALITY_FIX": "To fix a defect",
+      "MATERIAL_ISSUE": "A material problem",
+      "CUSTOMER_CHANGE": "The customer asked",
+      "MISSING_FROM_ROUTING": "Missing from the routing",
+      "OTHER": "Other"
+    },
+    "dialog": {
+      "title": "Add an unplanned operation to {number}",
+      "subtitle": "An operation of the library this work order lacks, with the reason.",
+      "scans": "The floor picks it by hand on any bundle of this work order; good pieces only.",
+      "pay": "It pays at its piece rate and costs at its standard minutes, like any operation.",
+      "frozen": "It stays on the work order: it cannot be taken off, and unused it changes no figure."
+    }
   }
 }
