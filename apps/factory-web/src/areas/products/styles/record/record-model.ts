@@ -28,6 +28,7 @@ import type { DuplicateModel } from '../duplicate/duplicate-model'
 import type { DuplicateActions } from '../duplicate/view/DuplicateDialog'
 import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities, StyleTab } from '../model'
+import type { PiecesActions, PiecesModel } from './pieces/pieces-model'
 
 /** The style itself: read, or why not. */
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string } | { status: 'not_found' } | { status: 'forbidden' }
@@ -125,6 +126,8 @@ export interface StyleRecordViewModel {
   bomImport: SheetImport | null
   /** W2a: an export of the BOM being made (its format). */
   exporting?: BomExportFormat | null
+  /** B-W2b-95: the Files & patterns tab's Pattern pieces (absent: not read, like idle). */
+  pieces?: PiecesModel
   /** Design cases: the record panels drawn from made-up data. */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: the identity form already being edited. */
@@ -190,4 +193,6 @@ export interface StyleRecordActions {
   bomImport?: WizardActions
   onExportBom?: (format: BomExportFormat) => void
   onGarmentTracking?: (tracking: StyleView['garmentTracking']) => Promise<boolean>
+  /** B-W2b-95: the Pattern pieces section. */
+  pieces?: PiecesActions
 }

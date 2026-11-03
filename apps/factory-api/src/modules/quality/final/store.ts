@@ -34,6 +34,10 @@ export const INSPECTION_COLUMNS = {
   assignedInspectorWorkerId: true,
   // B-W2b-17: by when it is due (the office sets it while OPEN; W2b schema wave 2).
   dueAt: true,
+  // B-W2b-97: the plan version it runs on (frozen), the AQL profile its sample came from and the ISO 2859-1 code letter.
+  planVersionId: true,
+  aqlProfileId: true,
+  codeLetter: true,
   notMakerStatement: true,
   decidedAt: true,
   signatureSha256: true,

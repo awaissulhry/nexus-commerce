@@ -11,6 +11,7 @@ import { pauseAtClockOutHandler } from '../../../modules/production/terminal/clo
 import { attendanceHandlers } from '../../../modules/people/attendance/jobs'
 import { overtimeHandlers } from '../../../modules/people/overtime/jobs'
 import { earningsHandlers } from '../../../modules/people/earnings/jobs'
+import { inspectionTriggerHandlers } from '../../../modules/quality/triggers/handler'
 import { ladderHandlers } from '../../../modules/receivables/ladder'
 import { alertsRecheckHandler } from '../../../platform/alerts/engine'
 import { notificationsHandler } from '../../../platform/notifications/fan-out'
@@ -43,6 +44,7 @@ const W2A_LISTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['W2B_37_HANDLERS', ['attendanceHandlers']],
   ['W2B_42_HANDLERS', ['overtimeHandlers']],
   ['W2B_43_HANDLERS', ['earningsHandlers']],
+  ['W2B_101_HANDLERS', ['inspectionTriggerHandlers']],
 ]
 
 /** The search indexers the worker loads from the registry folder (background.ts SEARCH_INDEXERS). */
@@ -52,7 +54,7 @@ export async function searchIndexers(): Promise<readonly SearchIndexer[]> {
 
 /** Every handler the worker runs: W1's HANDLERS, then the W2a lists, as background.ts hands them to startEventWorkers. */
 export function everyHandler(indexers: readonly SearchIndexer[]): readonly EventHandler[] {
-  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers()]
+  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers()]
 }
 
 /** background.ts starts exactly W1's HANDLERS and the W2a lists above: a list or factory a step adds fails the day until it runs here too. */

@@ -37,6 +37,7 @@ import { readReasons } from './reasons-store'
 import { discardRefusal, readRefusal, readRefusals, type RefusalState } from './refusals-store'
 import { requestView, scanView } from './scans'
 import { deviceStationOf, latestOnDevice, readBundleScans, readHeader, readOperations, readOwnScans, readStations, readWorkOrderScans, siteTimeZone, workerNames } from './store'
+import { firstPieceCardOf } from '../terminal/first-piece'
 
 /**
  * The scans' reads (B-W1-42; A2 SCR-090 the operation screen, SCR-072 a work order's scans, SCR-023 the refused scans;
@@ -155,6 +156,8 @@ export async function bundleCard(caller: CommandCaller, query: { readonly code: 
     choose: card.choose,
     hint: card.hint,
     reasons: (await caller.withClient((client) => readReasons(client))).map(reasonView),
+    // B-W2b-99 (QHS-039): the first-piece flag of the operation screen (BundleFacts), null when none was asked.
+    firstPiece: await caller.withClient((client) => firstPieceCardOf(client, { id: card.bundle.id, workOrderId: card.workOrder.id, code: card.bundle.code }, card.operations.map((operation) => operation.id), card.workOrder.number)),
   }
 }
 
