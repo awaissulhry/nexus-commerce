@@ -9,7 +9,7 @@ import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { RoutingStep, RoutingView, StyleView } from '../../api'
-import { costCellOf, decimalInput, editableRevision, editText, issueWords, minutesText, moneyText, revisionInView } from '../../model'
+import { costCellOf, decimalInput, editableRevision, editText, issueWords, minutesText, moneyText, parallelChoices, revisionInView, sideBySideWith, stepLabel } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
 import { subcontractDraftOf, subcontractPatch, subcontractProblems, workshopName, workshopsFor, type SubcontractDraft } from '../subcontract-model'
 
@@ -19,6 +19,8 @@ import { subcontractDraftOf, subcontractPatch, subcontractProblems, workshopName
  * steps in order (minutes typed here, "Library: x · Use library value" when they differ, scanned or not, the final
  * operation where the batch is given, instructions), Add operations from the library (`n`, several at once, in the
  * order picked), Alt+↑ / Alt+↓ to move a step. A released revision is frozen.
+ * B-W2b-88 (MES-025): the "Side by side" column puts steps in one parallel group: they run at once and count as one step
+ * (the floor never says a sibling was skipped; dispatch shows them side by side). A step a BOM line uses is not removed.
  */
 export function RoutingTab({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
   const t = useT('products')
@@ -154,6 +156,7 @@ export function RoutingTab({ style, model, actions }: { style: StyleView; model:
                   <th scope="col">{t('routing.col.machine')}</th>
                   <th scope="col">{t('routing.col.minutes')}</th>
                   <th scope="col">{t('routing.col.scanned')}</th>
+                  <th scope="col">{t('routing.col.parallel')}</th>
                   <th scope="col">{t('routing.col.subcontracted')}</th>
                   <th scope="col">{t('routing.col.actions')}</th>
                 </tr>
@@ -164,6 +167,7 @@ export function RoutingTab({ style, model, actions }: { style: StyleView; model:
                 ))}
               </tbody>
             </table>
+            {(editable || routing.steps.some((step) => step.parallelGroup !== null)) && <p className="fw-st-hint">{t('routing.parallel.hint')}</p>}
           </div>
         )}
       </Card>
@@ -272,6 +276,9 @@ function StepRow({ step, routing, editable, heldWhy, actions, prefix, costGrain,
         ) : (
           t(step.scanRequired ? 'common.yes' : 'common.no')
         )}
+      </td>
+      <td>
+        <ParallelCell step={step} routing={routing} editable={editable} actions={actions} />
       </td>
       <td>
         <SubcontractCell step={step} costGrain={costGrain} editable={editable} onOpen={() => actions?.onDialog?.({ kind: 'subcontract', stepId: step.id })} />
@@ -391,9 +398,56 @@ function AddOperationsDialog({ routing, model, actions }: { routing: RoutingView
   )
 }
 
+/**
+ * B-W2b-88: the step's parallel group. A Select (in sequence, a group the routing uses, a new group) on a draft; on a frozen
+ * revision the group and the steps beside it as text.
+ */
+function ParallelCell({ step, routing, editable, actions }: { step: RoutingStep; routing: RoutingView; editable: boolean; actions?: StyleRecordActions }) {
+  const t = useT('products')
+  const beside = sideBySideWith(step, routing.steps)
+  const withWords = beside.length > 0 ? t('routing.parallel.with', { steps: beside.join(', ') }) : null
+  if (!editable)
+    return step.parallelGroup === null ? (
+      <span className="fw-st-hint">{t('routing.parallel.none')}</span>
+    ) : (
+      <span className="fw-st-cellstack">
+        <span className="fw-st-inline">
+          <Tag tone="info">{t('routing.parallel.group', { group: step.parallelGroup })}</Tag>
+        </span>
+        {withWords && <span className="fw-st-hint">{withWords}</span>}
+      </span>
+    )
+  const choices = parallelChoices(routing.steps)
+  return (
+    <span className="fw-st-cellstack">
+      <Select
+        size="sm"
+        value={step.parallelGroup === null ? '' : String(step.parallelGroup)}
+        aria-label={t('routing.parallel.of', { step: stepLabel(step) })}
+        onChange={(event) => {
+          const value = event.target.value === '' ? null : Number(event.target.value)
+          if (value !== step.parallelGroup) void actions?.onStep?.(step.id, { parallelGroup: value })
+        }}
+      >
+        <option value="">{t('routing.parallel.none')}</option>
+        {choices.groups.map((entry) => (
+          <option key={entry.group} value={String(entry.group)}>
+            {t('routing.parallel.groupOf', { group: entry.group, steps: entry.steps.join(', ') })}
+          </option>
+        ))}
+        {!choices.groups.some((entry) => entry.group === choices.next) && <option value={String(choices.next)}>{t('routing.parallel.newGroup', { group: choices.next })}</option>}
+      </Select>
+      {withWords && <span className="fw-st-hint">{withWords}</span>}
+    </span>
+  )
+}
+
 function RemoveStepDialog({ routing, model, actions, stepId }: { routing: RoutingView; model: StyleRecordViewModel; actions?: StyleRecordActions; stepId: string }) {
   const t = useT('products')
   const step = routing.steps.find((entry) => entry.id === stepId)
+  // B-W2b-88: a step a BOM line uses stays until the line names another step (or none); said before the API refuses it.
+  const usedBy = step && model.bom.status === 'ready' ? model.bom.value.lines.filter((line) => line.routingStep?.seq === step.seq) : []
+  const held = model.busy ? t('held.busy') : usedBy.length > 0 ? t('routing.removeUsed', { lines: usedBy.map((line) => `${line.seq} · ${line.item.code}`).join(', ') }) : null
   const run = () => void actions?.onRemoveStep?.(stepId).then((ok) => ok && actions?.onDialog?.(null))
   return (
     <Modal
@@ -404,13 +458,14 @@ function RemoveStepDialog({ routing, model, actions, stepId }: { routing: Routin
       footer={
         <>
           <Button onClick={() => actions?.onDialog?.(null)}>{t('common.back')}</Button>
-          <Button variant="danger" heldReason={model.busy ? t('held.busy') : null} onClick={run}>
+          <Button variant="danger" heldReason={held} onClick={run}>
             {t('bom.remove')}
           </Button>
         </>
       }
     >
       <p>{t('routing.removeBody')}</p>
+      {usedBy.length > 0 && <Banner tone="warning" title={t('routing.removeUsed', { lines: usedBy.map((line) => `${line.seq} · ${line.item.code}`).join(', ') })} />}
       {step?.final && (
         <p className="fw-st-inline">
           <CircleAlert size={14} aria-hidden /> {t('routing.removeFinal')}

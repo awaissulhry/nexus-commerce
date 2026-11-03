@@ -83,7 +83,7 @@ export async function guardReport(tx: CommandTx, work: GuardWork): Promise<Guard
   }
 
   const garments = garmentsGoingOn(work.counts)
-  const facts = await componentFacts(tx, { styleId: work.workOrder.styleId, workOrderId: work.workOrder.id, workOrderSizeId: work.bundle.workOrderSizeId })
+  const facts = await componentFacts(tx, { styleId: work.workOrder.styleId, workOrderId: work.workOrder.id, workOrderSizeId: work.bundle.workOrderSizeId, operationId: work.operation.id })
   const asked = componentsAsked({ operations: work.operations, operation: work.operation, garmentTracking: facts.garmentTracking, materials: facts.materials })
   const scanned = work.components && work.components.length > 0 ? await scannedLots(tx, work.workOrder.siteId, work.components) : []
   const traced = componentDecision({ asked, materials: facts.materials, scanned, garments, operation: work.operation })

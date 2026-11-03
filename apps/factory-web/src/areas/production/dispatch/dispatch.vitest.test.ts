@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../../lib/api/errors'
 import { createScopedTranslator, messagesFor } from '../../../lib/i18n/messages'
 import { boardSchema, moveBodySchema, pickerSchema, type DispatchBoard, type DispatchCard, type LaneOperator } from './api'
-import { C142, C143, DISPATCH_BOARD as BOARD, DRAFT, NOT1, PICKER } from './fixtures'
+import { C142, C143, DISPATCH_BOARD as BOARD, DRAFT, NOT1, PICKER, SIDE_BY_SIDE } from './fixtures'
 import {
   absentOf,
   addressOf,
@@ -111,6 +111,14 @@ describe('Dispatch: the DS board', () => {
     expect(drawn.cards.find((card) => card.label === 'WO-0144 · Op 20')!.late).toBe(true)
     expect(drawn.cards.find((card) => card.label === 'WO-0143 · Op 30')!.marks?.map((mark) => mark.label)).toEqual(['Op 20 not done yet', 'Material 18/11/2026'])
     expect(drawn.cards.find((card) => card.label === 'WO-0144 · Op 20')!.marks?.map((mark) => mark.label)).toEqual(['Material missing'])
+  })
+
+  it('B-W2b-88: two operations of one parallel group say they run side by side', () => {
+    const drawn = drawBoard(SIDE_BY_SIDE, { line: null }, new Map(), words)
+    expect(drawn.cards.find((card) => card.label === 'WO-0144 · Op 20')!.marks?.map((mark) => mark.label)).toEqual(['Side by side with Op 30', 'Material missing'])
+    expect(drawn.cards.find((card) => card.label === 'WO-0144 · Op 30')!.marks?.map((mark) => mark.label)).toEqual(['Side by side with Op 20', 'Material ready'])
+    // An answer from before B-W2b-88 has no `parallel`: the board reads it.
+    expect(boardSchema.safeParse(BOARD).success).toBe(true)
   })
 
   it('narrows to one line and keeps that line\'s Not assigned', () => {

@@ -2,9 +2,10 @@ import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-do
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import type { AddLineBody, BomView, SetColoursBody, SetSizesBody, UpdateLineBody, UpdateRevisionBody } from '@nexus/factory-domain/product/bom/contracts'
 import { PRODUCT_BOM_MANAGE } from '@nexus/factory-domain/product/bom/permissions'
-import { hideYieldProblem, MAX_BOM_LINES, nextSeq, planLine, type LineChange } from '@nexus/factory-domain/product/bom/rules'
+import { hideYieldProblem, MAX_BOM_LINES, nextSeq, planLine, routingSeqProblem, type LineChange } from '@nexus/factory-domain/product/bom/rules'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
+import { readSteps } from '../routing/read'
 import {
   assertMayWrite,
   auditedLine,
@@ -31,7 +32,8 @@ import {
  * quantity per size, the colour grid) and removed, and the revision's own planned hide yield and change note. Every
  * write sends the revision's version: it locks the style row, checks the revision is a draft (409 otherwise, before the
  * database's own refusal), compares and sets the revision's version, then writes the parts; it records an audit row on
- * the line and one on the revision, and `style.bom_changed`.
+ * the line and one on the revision, and `style.bom_changed`. B-W2b-88: a line may name the step of the revision's routing
+ * that uses it (`routingSeq`; the routing and the BOM are one versioned record, so the style row's lock holds both).
  */
 
 function recordChange(tools: CommandTools, draft: LockedDraft, lineIds: readonly string[], change: Record<string, unknown>): void {
@@ -62,6 +64,11 @@ async function plan(tools: CommandTools, draft: LockedDraft, current: LineRecord
   }
   const clash = lines.find((other) => other.seq === line.seq && other.id !== current?.id)
   if (clash) throw new ConflictError(`Place ${line.seq} is taken by another line of this BOM: choose another.`)
+  const routingSeq = line.routingSeq ?? null
+  if (routingSeq !== null && routingSeq !== (current?.routingSeq ?? null)) {
+    const problem = routingSeqProblem(routingSeq, await readSteps(tx, draft.revisionId))
+    if (problem) throw invalid([{ path: 'body/routingSeq', message: problem }])
+  }
   return line
 }
 

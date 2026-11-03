@@ -1,5 +1,7 @@
 import type { Tone } from '@nexus/ui/primitives'
-import type { BomView, CostCell, CostSheetView, MissingInput, RoutingView, StyleComplianceView, StyleRow, StyleView } from './api'
+import { nextGroup } from '@nexus/factory-domain/product/routing/parallel'
+import { ROUTING_BLOCKERS, ROUTING_ISSUE_CODES } from '@nexus/factory-domain/product/routing/rules'
+import type { BomView, CostCell, CostSheetView, MissingInput, RoutingStep, RoutingView, StyleComplianceView, StyleRow, StyleView } from './api'
 
 /**
  * The Styles list and the Style studio's rules, pure (SCR-040 … SCR-045): who may do what (permissions and money
@@ -345,10 +347,36 @@ export function issueWords(issue: BomIssue, bom: Pick<BomView, 'lines' | 'colour
 
 /** Which tab fixes an issue (routing codes on the routing; the rest on the BOM, the range and colourways on Colourways & sizes). */
 export function issueTab(issue: Pick<BomIssue, 'code'>): StyleTab {
-  if (['NO_STEPS', 'MINUTES_NOT_POSITIVE', 'NO_SCAN_POINT', 'OPERATION_ARCHIVED', 'LAST_STEP_NOT_SCANNED'].includes(issue.code)) return 'routing'
+  if (isRoutingIssue(issue.code)) return 'routing'
   if (['NO_SIZE_RANGE', 'NO_ACTIVE_COLOURWAY'].includes(issue.code)) return 'variants'
   return 'bom'
 }
+
+/** A finding of the routing (blocker or warning), not of the BOM: the domain's one list. */
+export const isRoutingIssue = (code: string): boolean => (ROUTING_ISSUE_CODES as readonly string[]).includes(code)
+
+/** A routing blocker: it stops the release and puts a problem dot on the Operations tab. */
+export const isRoutingBlocker = (code: string): boolean => (ROUTING_BLOCKERS as readonly string[]).includes(code)
+
+/** B-W2b-88: a step as the BOM and the routing name it: "40 · CUC-MAN". */
+export const stepLabel = (step: { readonly seq: number; readonly code: string }): string => `${step.seq} · ${step.code}`
+
+/**
+ * B-W2b-88: the choices of a step's parallel group: none (in sequence), every group the routing uses, and the next number
+ * as a new group; the places of each group's steps, for the option's words (short: the cell is narrow; the line under it
+ * names the steps).
+ */
+export function parallelChoices(steps: readonly Pick<RoutingStep, 'id' | 'seq' | 'code' | 'parallelGroup'>[]): { readonly groups: readonly { readonly group: number; readonly steps: readonly string[] }[]; readonly next: number } {
+  const used = [...new Set(steps.flatMap((step) => (step.parallelGroup === null ? [] : [step.parallelGroup])))].sort((a, b) => a - b)
+  return {
+    groups: used.map((group) => ({ group, steps: steps.filter((step) => step.parallelGroup === group).map((step) => String(step.seq)) })),
+    next: nextGroup(steps),
+  }
+}
+
+/** B-W2b-88: the other steps of a step's parallel group, as labels (none: it runs in sequence). */
+export const sideBySideWith = (step: Pick<RoutingStep, 'id' | 'parallelGroup'>, steps: readonly Pick<RoutingStep, 'id' | 'seq' | 'code' | 'parallelGroup'>[]): string[] =>
+  step.parallelGroup === null ? [] : steps.filter((other) => other.id !== step.id && other.parallelGroup === step.parallelGroup).map(stepLabel)
 
 /** Why "Release revision N" is held (a message key and params), or null when it would pass. */
 export function releaseHeld(style: Pick<StyleView, 'status'>, revision: Pick<Revision, 'status'> | null, bom: BomView | null, can: StyleAbilities): Words | null {

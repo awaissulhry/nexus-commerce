@@ -119,7 +119,18 @@ export const designScreen = defineDesignScreen<MyWorkViewModel>({
       id: 'material-on-the-way',
       label: 'Material on the way',
       model: model({ list: list({ entries: [ENTRIES[1]!, ...ENTRIES.slice(2)] }) }),
-      note: 'The flag on the card is the work order\'s and says so: nothing yet says which operation uses which component (schema need of B-W2b-49). The status word stays what the scans say.',
+      note: 'The flag on the card is the work order\'s and says so: this BOM ties no line to an operation. The status word stays what the scans say.',
+    },
+    {
+      id: 'material-operation',
+      label: 'W2b: material of this operation',
+      model: model({ list: list({ entries: [{ ...ENTRIES[1]!, material: { state: 'ON_THE_WAY', date: ENTRIES[1]!.material?.date ?? null, scope: 'OPERATION' } }, ...ENTRIES.slice(2)] }) }),
+      note: 'B-W2b-88: the BOM says which operation uses which line, so the flag is this operation\'s own material (and the lines tied to no operation): "Material for this operation: on the way, expected …".',
+    },
+    {
+      id: 'material-operation-missing',
+      label: 'W2b: material of this operation missing',
+      model: model({ list: list({ entries: [{ ...ENTRIES[1]!, material: { state: 'MISSING', date: null, scope: 'OPERATION' } }, ...ENTRIES.slice(2)] }) }),
     },
     {
       id: 'material-missing',

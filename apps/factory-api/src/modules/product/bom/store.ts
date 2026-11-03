@@ -68,6 +68,8 @@ export const LINE_COLUMNS = {
   colourwayId: true,
   supplierId: true,
   note: true,
+  // B-W2b-88: the routing step that uses the line.
+  routingSeq: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -190,6 +192,7 @@ export async function readLines(client: FactoryClient | CommandTx, revisionId: s
     colourwayId: row.colourwayId,
     supplierId: row.supplierId,
     note: row.note,
+    routingSeq: row.routingSeq,
     sizes: sizesOf(row.id),
     colours: cellsOf(row.id),
     version: row.version,
@@ -330,6 +333,12 @@ export function releaseBlocked(blockers: readonly ReleaseIssue[]): DomainError {
 
 const issueView = (issue: ReleaseIssue) => ({ ...issue })
 
+/** B-W2b-88: the routing step a line names, as the revision's routing has it (null: none, or not read). */
+const stepRefOf = (steps: readonly StepRecord[], routingSeq: number | null | undefined) => {
+  const step = routingSeq == null ? undefined : steps.find((entry) => entry.seq === routingSeq)
+  return step ? { seq: step.seq, code: step.code, name: step.name } : null
+}
+
 /** The BOM of one revision (SCR-042), its figures per size and colourway, and what still blocks its release. */
 export function bomViewOf(loaded: LoadedBom): BomView {
   const { style, revision, lines, materials, itemColours, colourways } = loaded
@@ -366,6 +375,7 @@ export function bomViewOf(loaded: LoadedBom): BomView {
       colourway: colourway ? { id: colourway.id, code: colourway.code, name: colourway.name } : null,
       supplier: line.supplierId === null ? null : (loaded.suppliers.get(line.supplierId) ?? null),
       note: line.note,
+      routingStep: stepRefOf(loaded.steps, line.routingSeq),
       sizes: line.sizeDependent ? line.sizes.map((row) => ({ size: row.size, qty: row.qty })) : [],
       colours: line.colourDependent ? line.colours.map((cell) => ({ colourwayId: cell.colourwayId, itemColour: colourRef(cell.itemColourId) })) : [],
       bySize: lineBySize(line, style.sizes, item.units, ROUND),
@@ -511,6 +521,7 @@ export function auditedLine(line: BomLineFields): Record<string, unknown> {
     colourwayId: line.colourwayId,
     supplierId: line.supplierId,
     note: line.note,
+    routingSeq: line.routingSeq ?? null,
     sizes: line.sizeDependent ? Object.fromEntries(line.sizes.map((row) => [row.size, row.qty])) : {},
     colours: line.colourDependent ? Object.fromEntries(line.colours.map((cell) => [cell.colourwayId, cell.itemColourId])) : {},
   }
@@ -549,6 +560,7 @@ export async function writeLine(tools: CommandTools, target: PartsTarget, line: 
     colourwayId: line.colourwayId,
     supplierId: line.supplierId,
     note: line.note,
+    routingSeq: line.routingSeq ?? null,
   }
   let storedCells = before ? [...before.colours] : []
   if (before && before.itemId !== line.itemId && storedCells.length > 0) {

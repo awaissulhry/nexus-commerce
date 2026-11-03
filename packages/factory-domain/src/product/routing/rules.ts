@@ -4,6 +4,7 @@ import type { StyleStatus } from '../styles/rules'
 import type { RevisionStatus } from '../styles/revisions'
 import { decimalOf } from '../units/units'
 import { MAX_INSTRUCTIONS, minutesOf, operationUseRefusal, sameMinutes, type OperationStatus, type WorkCentreKind } from './operations'
+import { groupProblems, parallelGroupProblem } from './parallel'
 
 /**
  * A style revision's routing (plan A1 §2.4 B, §2.5; features PRD-110, PRD-111), pure: the operations that make the
@@ -19,6 +20,8 @@ import { MAX_INSTRUCTIONS, minutesOf, operationUseRefusal, sameMinutes, type Ope
  *                scanned step: where the batch number or the garment's serial is given (B-W1-44)
  *   the library  a step is added only from an ACTIVE operation; it keeps its operation when that is archived later
  *                (a warning, not a blocker: the step's copy is what the floor works from)
+ *   side by side B-W2b-88 (MES-025): steps with the same parallel group run at once and count as one step (./parallel);
+ *                the group's steps follow each other and the final operation runs alone (both release blockers)
  *
  * The routing is edited only while the revision is DRAFT (the …_product_guards triggers refuse anything else, for every
  * login); `editRefusal` says so first, as a 409. A released routing is frozen; a change is a new revision.
@@ -40,6 +43,8 @@ export interface StepFields {
   readonly standardMinutes: string
   readonly scanRequired: boolean
   readonly instructions: string | null
+  /** B-W2b-88: steps with the same number run side by side and count as one step (./parallel); left out or null: in sequence. */
+  readonly parallelGroup?: number | null | undefined
 }
 
 export interface StepData extends StepFields {
@@ -63,6 +68,8 @@ export interface StepChange {
   readonly standardMinutes?: string | undefined
   readonly scanRequired?: boolean | undefined
   readonly instructions?: string | null | undefined
+  /** B-W2b-88: the step's parallel group; null takes it back into the sequence. */
+  readonly parallelGroup?: number | null | undefined
 }
 
 export type StepPlan = { readonly ok: true; readonly step: StepFields } | { readonly ok: false; readonly issues: readonly Issue[] }
@@ -73,7 +80,11 @@ export const nextSeq = (steps: readonly { readonly seq: number }[]): number => (
 /** The steps in routing order. */
 export const inOrder = <Step extends { readonly seq: number }>(steps: readonly Step[]): Step[] => [...steps].sort((a, b) => a.seq - b.seq)
 
-function changedFields(change: StepChange, base: Pick<StepFields, 'standardMinutes' | 'scanRequired' | 'instructions'>): { fields: Pick<StepFields, 'standardMinutes' | 'scanRequired' | 'instructions'>; issues: Issue[] } {
+interface ChangedFields extends Pick<StepFields, 'standardMinutes' | 'scanRequired' | 'instructions'> {
+  readonly parallelGroup: number | null
+}
+
+function changedFields(change: StepChange, base: Pick<StepFields, 'standardMinutes' | 'scanRequired' | 'instructions' | 'parallelGroup'>): { fields: ChangedFields; issues: Issue[] } {
   const issues: Issue[] = []
   let standardMinutes = base.standardMinutes
   if (change.standardMinutes !== undefined) {
@@ -85,7 +96,10 @@ function changedFields(change: StepChange, base: Pick<StepFields, 'standardMinut
   if (instructions !== null && (instructions.trim() !== instructions || instructions === '' || instructions.length > MAX_INSTRUCTIONS)) {
     issues.push({ path: 'instructions', message: `Expected text of 1 to ${MAX_INSTRUCTIONS} characters without leading or trailing spaces.` })
   }
-  return { fields: { standardMinutes, scanRequired: change.scanRequired ?? base.scanRequired, instructions }, issues }
+  const parallelGroup = change.parallelGroup === undefined ? (base.parallelGroup ?? null) : change.parallelGroup
+  const badGroup = parallelGroupProblem(parallelGroup)
+  if (badGroup) issues.push({ path: 'parallelGroup', message: badGroup })
+  return { fields: { standardMinutes, scanRequired: change.scanRequired ?? base.scanRequired, instructions, parallelGroup }, issues }
 }
 
 /**
@@ -96,7 +110,7 @@ export function planNewStep(operation: LibraryOperation, change: StepChange, seq
   const issues: Issue[] = []
   const refusal = operationUseRefusal(operation)
   if (refusal) issues.push({ path: 'operationId', message: refusal })
-  const { fields, issues: problems } = changedFields(change, { standardMinutes: operation.standardMinutes, scanRequired: true, instructions: operation.instructions })
+  const { fields, issues: problems } = changedFields(change, { standardMinutes: operation.standardMinutes, scanRequired: true, instructions: operation.instructions, parallelGroup: null })
   issues.push(...problems)
   if (!Number.isInteger(seq) || seq < 1 || seq > MAX_SEQ) issues.push({ path: 'seq', message: `The place is a whole number from 1 to ${MAX_SEQ}.` })
   if (issues.length > 0) return { ok: false, issues }
@@ -106,7 +120,7 @@ export function planNewStep(operation: LibraryOperation, change: StepChange, seq
   }
 }
 
-/** A change to a step: its minutes, scan point or instructions (its operation and place stay; a reorder moves it). */
+/** A change to a step: its minutes, scan point, instructions or parallel group (its operation and place stay; a reorder moves it). */
 export function planStepChange(current: StepFields, change: StepChange): StepPlan {
   const { fields, issues } = changedFields(change, current)
   return issues.length > 0 ? { ok: false, issues } : { ok: true, step: { ...current, ...fields } }
@@ -114,8 +128,8 @@ export function planStepChange(current: StepFields, change: StepChange): StepPla
 
 /** The fields of a change that really change ("4.20" and "4.2" are the same minutes). */
 export function stepChanges(before: StepFields, after: StepFields): (keyof StepFields)[] {
-  const fields: (keyof StepFields)[] = ['seq', 'operationId', 'code', 'name', 'nameI18n', 'workCentreKind', 'standardMinutes', 'scanRequired', 'instructions']
-  return fields.filter((field) => (field === 'standardMinutes' ? !sameMinutes(before.standardMinutes, after.standardMinutes) : JSON.stringify(before[field]) !== JSON.stringify(after[field])))
+  const fields: (keyof StepFields)[] = ['seq', 'operationId', 'code', 'name', 'nameI18n', 'workCentreKind', 'standardMinutes', 'scanRequired', 'instructions', 'parallelGroup']
+  return fields.filter((field) => (field === 'standardMinutes' ? !sameMinutes(before.standardMinutes, after.standardMinutes) : JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null)))
 }
 
 // ---- order -------------------------------------------------------------------------------------------------------------
@@ -150,9 +164,18 @@ export function renumbering(steps: readonly Pick<StepData, 'id' | 'seq'>[], plac
     .filter((move) => move.from !== move.to)
 }
 
-/** Steps copied to the end of a routing (or into an empty one), numbered on from `firstSeq`, under new ids. */
-export function copySteps(steps: readonly StepData[], firstSeq: number, newId: () => string): StepData[] {
-  return inOrder(steps).map((step, index) => ({ ...step, id: newId(), seq: firstSeq + index * SEQ_STEP, nameI18n: step.nameI18n ? { ...step.nameI18n } : null }))
+/**
+ * Steps copied to the end of a routing (or into an empty one), numbered on from `firstSeq`, under new ids; a parallel group
+ * renumbered by `groups` (./parallel groupsAfter: a copied group never joins one the routing keeps).
+ */
+export function copySteps(steps: readonly StepData[], firstSeq: number, newId: () => string, groups: ReadonlyMap<number, number> = new Map()): StepData[] {
+  return inOrder(steps).map((step, index) => ({
+    ...step,
+    id: newId(),
+    seq: firstSeq + index * SEQ_STEP,
+    nameI18n: step.nameI18n ? { ...step.nameI18n } : null,
+    parallelGroup: step.parallelGroup == null ? null : (groups.get(step.parallelGroup) ?? step.parallelGroup),
+  }))
 }
 
 // ---- the final operation and what a draft still lacks ------------------------------------------------------------------
@@ -163,8 +186,8 @@ export function finalStepOf<Step extends Pick<StepData, 'id' | 'seq' | 'scanRequ
 }
 
 /** Blockers (the revision's release refuses them: product/bom release, B-W1-14) and warnings (shown only). */
-export const ROUTING_BLOCKERS = ['NO_STEPS', 'MINUTES_NOT_POSITIVE', 'NO_SCAN_POINT'] as const
-export const ROUTING_WARNINGS = ['OPERATION_ARCHIVED', 'LAST_STEP_NOT_SCANNED'] as const
+export const ROUTING_BLOCKERS = ['NO_STEPS', 'MINUTES_NOT_POSITIVE', 'NO_SCAN_POINT', 'PARALLEL_GROUP_SPLIT', 'FINAL_SIDE_BY_SIDE'] as const
+export const ROUTING_WARNINGS = ['OPERATION_ARCHIVED', 'LAST_STEP_NOT_SCANNED', 'PARALLEL_GROUP_ALONE'] as const
 export const ROUTING_ISSUE_CODES = [...ROUTING_BLOCKERS, ...ROUTING_WARNINGS] as const
 export type RoutingIssueCode = (typeof ROUTING_ISSUE_CODES)[number]
 
@@ -203,6 +226,19 @@ export function routingIssues(steps: readonly StepData[], operations: ReadonlyMa
   const last = ordered.at(-1)
   if (last && !last.scanRequired && ordered.some((step) => step.scanRequired)) {
     warnings.push({ code: 'LAST_STEP_NOT_SCANNED', stepId: last.id, message: `Step ${last.seq} (${last.code}) is not scanned: the batch or serial is given at the last scanned step, ${finalStepOf(ordered)!.code}.` })
+  }
+  // B-W2b-88 (MES-025): side by side steps follow each other; the final operation, where garments finish, runs alone.
+  const groups = groupProblems(ordered)
+  const stepAt = (seq: number) => ordered.find((step) => step.seq === seq)!
+  for (const entry of groups.split) {
+    blockers.push({ code: 'PARALLEL_GROUP_SPLIT', stepId: stepAt(entry.seqs[0]!).id, message: `Parallel group ${entry.group} (steps ${entry.seqs.join(', ')}) is split by other steps: side by side steps follow each other. Move them together.` })
+  }
+  for (const entry of groups.alone) {
+    warnings.push({ code: 'PARALLEL_GROUP_ALONE', stepId: stepAt(entry.seq).id, message: `Step ${entry.seq} is alone in parallel group ${entry.group}: it runs like any step until another step joins it.` })
+  }
+  const final = finalStepOf(ordered)
+  if (final && final.parallelGroup != null && ordered.some((step) => step.id !== final.id && step.parallelGroup === final.parallelGroup)) {
+    blockers.push({ code: 'FINAL_SIDE_BY_SIDE', stepId: final.id, message: `Step ${final.seq} (${final.code}) is the final operation, where the batch or serial is given: it runs alone, not side by side. Take it out of group ${final.parallelGroup}, or scan a step after it.` })
   }
   return { blockers, warnings }
 }

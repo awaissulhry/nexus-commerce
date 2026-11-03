@@ -59,6 +59,8 @@ const lineFields = {
   note: text(1000).nullish(),
   /** Its place in the BOM; default after the last line. */
   seq: z.number().int().min(1).max(MAX_SEQ),
+  /** B-W2b-88: the routing step of the same revision that uses it (its place, `seq`); null: not tied to one step. */
+  routingSeq: z.number().int().min(1).max(MAX_SEQ).nullish(),
 }
 
 export const addLineBody = input({
@@ -77,6 +79,7 @@ export const addLineBody = input({
   supplierId: lineFields.supplierId,
   note: lineFields.note,
   seq: lineFields.seq.optional(),
+  routingSeq: lineFields.routingSeq,
 })
 export type AddLineBody = z.output<typeof addLineBody>
 
@@ -97,6 +100,7 @@ export const updateLineBody = input({
   supplierId: lineFields.supplierId,
   note: lineFields.note,
   seq: lineFields.seq.optional(),
+  routingSeq: lineFields.routingSeq,
 })
 export type UpdateLineBody = z.output<typeof updateLineBody>
 
@@ -165,6 +169,11 @@ export const bomLineView = output({
   colourway: ref.nullable(),
   supplier: ref.nullable(),
   note: z.string().nullable(),
+  /**
+   * B-W2b-88: the routing step that uses it (its place, code and name, as the revision's routing has it); null: not tied to
+   * one step. The floor asks its components at that operation only; dispatch flags its material per operation.
+   */
+  routingStep: output({ seq: z.number().int(), code: z.string(), name: z.string() }).nullable(),
   /** A size-dependent line's quantities, in the range's order. */
   sizes: z.array(output({ size: z.string(), qty: z.string() })),
   /** A colour-dependent line's grid, in the colourways' order. */

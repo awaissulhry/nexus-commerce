@@ -18,6 +18,9 @@ import { baseFactor, convertibleUnits, decimalOf, decimalText, UNITS, type ItemU
  *   colour      a COLOUR-DEPENDENT line (PRD-043) names the material colour of every ACTIVE colourway in the colour
  *               grid; any other line names one colour for every colourway when the material comes in colours
  *   colourway   a line of one colourway only (PRD-100) names its colour directly, never through the grid
+ *   operation   B-W2b-88: a line may name the routing step of the same revision that uses it (`routingSeq`): the floor
+ *               then asks its components at that operation only and dispatch flags its material per operation; null:
+ *               not tied to one step (the database's key holds it to a step of the revision; `routingSeqProblem` says so first)
  *
  * What one garment needs is quantity × (1 + wastage ÷ 100), converted to the material's base (stock) unit exactly and
  * rounded once, where the caller says (./requirements). A change is checked by `planLine` (refused at once); what a
@@ -60,6 +63,8 @@ export interface BomLineFields {
   /** Bought from this supplier when not the material's default. */
   readonly supplierId: string | null
   readonly note: string | null
+  /** B-W2b-88: the routing step of the same revision that uses it (RoutingOperation.seq); left out or null: not tied to one step. */
+  readonly routingSeq?: number | null | undefined
   /** A size-dependent line's quantities, in the range's order. */
   readonly sizes: readonly SizeQuantity[]
   /** A colour-dependent line's grid cells, in the style's colourway order. */
@@ -114,6 +119,8 @@ export interface LineChange {
   readonly supplierId?: string | null | undefined
   readonly note?: string | null | undefined
   readonly seq?: number | undefined
+  /** B-W2b-88: the routing step that uses it; null: not tied to one step. */
+  readonly routingSeq?: number | null | undefined
 }
 
 export type LinePlan = { readonly ok: true; readonly line: BomLineFields } | { readonly ok: false; readonly issues: readonly Issue[] }
@@ -306,11 +313,24 @@ export function planLine(current: BomLineFields | null, change: LineChange, mate
     colourwayId,
     supplierId: keep(change.supplierId, current?.supplierId, null),
     note: keep(change.note, current?.note, null),
+    routingSeq: keep(change.routingSeq, current?.routingSeq, null),
     sizes,
     colours,
   }
   if (line.seq < 1 || line.seq > MAX_SEQ || !Number.isInteger(line.seq)) issues.push({ path: 'seq', message: `The place is a whole number from 1 to ${MAX_SEQ}.` })
   return issues.length > 0 ? { ok: false, issues } : { ok: true, line }
+}
+
+/**
+ * B-W2b-88: why a line cannot name this routing step, or null: it names a step of the same revision's routing (the
+ * database's key would refuse anything else). `steps` are the revision's routing steps.
+ */
+export function routingSeqProblem(routingSeq: number | null, steps: readonly { readonly seq: number }[]): string | null {
+  if (routingSeq === null) return null
+  if (!steps.some((step) => step.seq === routingSeq)) {
+    return steps.length === 0 ? 'This revision has no routing yet: add its operations first, then say which one uses the line.' : `Step ${routingSeq} is not in this revision's routing: choose one of its steps (${steps.map((step) => step.seq).join(', ')}).`
+  }
+  return null
 }
 
 // ---- what a draft still lacks ------------------------------------------------------------------------------------------

@@ -350,6 +350,8 @@ interface LineSpec {
   oneColour?: string
   colourway?: keyof typeof CW
   note?: string
+  /** B-W2b-88: the routing step that uses it (seq, code, name of demoRouting's). */
+  step?: { seq: number; code: string; name: string }
 }
 
 const itemColour = (lineN: number, code: string) => ({ id: uid('4444', 100 + lineN * 10 + ['NERO', 'ANTR', 'ROSSO'].indexOf(code) + 1), code, name: code === 'NERO' ? 'Nero' : code === 'ANTR' ? 'Antracite' : code === 'ROSSO' ? 'Rosso' : code, status: 'ACTIVE' as const })
@@ -372,6 +374,7 @@ function line(spec: LineSpec): BomLine {
     colourway: spec.colourway ? { id: CW[spec.colourway], code: spec.colourway === 'RED' ? 'ROSSO' : spec.colourway, name: 'Rosso corsa' } : null,
     supplier: null,
     note: spec.note ?? null,
+    routingStep: spec.step ?? null,
     sizes: sizeDependent ? SIZES.flatMap((size) => (spec.bySize![size] === null || spec.bySize![size] === undefined ? [] : [{ size, qty: spec.bySize![size]! }])) : [],
     colours: colourDependent
       ? (['BLK', 'ANT', 'RED'] as const).flatMap((key) => {
@@ -392,8 +395,15 @@ function line(spec: LineSpec): BomLine {
 /** Leather by size (ft² per garment, base size 52 = 7.4 ft²): +0.35 ft² a size up, the 58 left blank in the draft. */
 const LEATHER: Record<string, string | null> = { '46': '6.35', '48': '6.70', '50': '7.05', '52': '7.40', '54': '7.75', '56': '8.10', '58': null }
 
-export function demoLines(complete = false): BomLine[] {
-  return [
+/** B-W2b-88: the protectors go in at Op 70, the zip at Op 50 (demoRouting's steps). */
+const TIED: Record<number, { seq: number; code: string; name: string }> = {
+  4: { seq: 70, code: 'ASS-PROT', name: 'Inserimento protezioni' },
+  5: { seq: 70, code: 'ASS-PROT', name: 'Inserimento protezioni' },
+  6: { seq: 50, code: 'CUC-ZIP', name: 'Applicazione cerniera' },
+}
+
+export function demoLines(complete = false, tied = false): BomLine[] {
+  const lines = [
     line({ n: 1, code: 'PEL-BOV-12', name: 'Pelle bovina 1,1–1,3 mm (demo)', kind: 'LEATHER', baseUom: 'FT2', placement: 'Busto e maniche', qty: '7.4', wastagePct: '18', bySize: complete ? { ...LEATHER, '58': '8.45' } : LEATHER, colours: { BLK: 'NERO', ANT: 'ANTR', RED: 'ROSSO' } }),
     line({ n: 2, code: 'FOD-MESH', name: 'Fodera rete traspirante (demo)', kind: 'LINING', baseUom: 'M', placement: 'Fodera', qty: '1.6', wastagePct: '5', oneColour: 'NERO' }),
     line({ n: 3, code: 'MEM-WP-3L', name: 'Membrana impermeabile 3 strati (demo)', kind: 'MEMBRANE', baseUom: 'M', placement: 'Busto', qty: '1.4', wastagePct: '8' }),
@@ -403,13 +413,14 @@ export function demoLines(complete = false): BomLine[] {
     line({ n: 7, code: 'FILO-40', name: 'Filo poliestere n. 40 (demo)', kind: 'THREAD', baseUom: 'M', placement: 'Cuciture', qty: '180', wastagePct: '10', colours: { BLK: 'NERO', ANT: 'ANTR', RED: 'ROSSO' } }),
     line({ n: 8, code: 'ETI-CURA', name: 'Etichetta composizione e cura (demo)', kind: 'LABEL', baseUom: 'PCS', placement: 'Fodera interna', qty: '1', wastagePct: '0' }),
   ]
+  return tied ? lines.map((entry, index) => ({ ...entry, routingStep: TIED[index + 1] ?? null })) : lines
 }
 
 const STYLE_REF = { id: STYLE_ID, code: 'DEMO-JKT-01', name: 'Giacca Touring Demo', companyId: COMPANY_ID }
 
-export function demoBom(options: { revision?: Revision; complete?: boolean; empty?: boolean } = {}): BomView {
+export function demoBom(options: { revision?: Revision; complete?: boolean; empty?: boolean; tied?: boolean } = {}): BomView {
   const rev = options.revision ?? REVISIONS[0]!
-  const lines = options.empty ? [] : demoLines(options.complete || rev.status !== 'DRAFT')
+  const lines = options.empty ? [] : demoLines(options.complete || rev.status !== 'DRAFT', options.tied)
   const draft = rev.status === 'DRAFT' && !options.complete && !options.empty
   const issues: BomView['issues'] = options.empty
     ? [
@@ -454,7 +465,13 @@ const OPS: Array<[string, string, RoutingView['steps'][number]['workCentreKind']
   ['CQ-FIN', 'Controllo finale', 'INSPECTION', '5', null, 'Ispettore', true],
 ]
 
-export function demoRouting(options: { revision?: Revision; differs?: boolean; empty?: boolean } = {}): RoutingView {
+/**
+ * B-W2b-88 `parallel`: 'together' puts Op 40 (sleeves) and Op 50 (zip) side by side in group 1; 'split' puts Op 40 and
+ * Op 60 in group 1 with Op 50 between them (the release check refuses it).
+ */
+const PARALLEL: Record<'together' | 'split', Record<string, number>> = { together: { 'CUC-MAN': 1, 'CUC-ZIP': 1 }, split: { 'CUC-MAN': 1, 'CUC-FOD': 1 } }
+
+export function demoRouting(options: { revision?: Revision; differs?: boolean; empty?: boolean; parallel?: 'together' | 'split' } = {}): RoutingView {
   const rev = options.revision ?? REVISIONS[0]!
   const steps = options.empty
     ? []
@@ -471,6 +488,7 @@ export function demoRouting(options: { revision?: Revision; differs?: boolean; e
         scanRequired: scanned,
         final: code === 'CQ-FIN',
         instructions: code === 'CUC-MAN' ? 'Ago 110, punto 3,5 mm; fermare a 1 cm dal fondo.' : null,
+        parallelGroup: options.parallel ? (PARALLEL[options.parallel][code] ?? null) : null,
         subcontract: null,
         version: 1,
         createdAt: at(16, 9),
@@ -498,7 +516,7 @@ export function demoRouting(options: { revision?: Revision; differs?: boolean; e
       subcontracted: 0,
     },
     finalStepId: steps.find((step) => step.final)?.id ?? null,
-    issues: options.empty ? [{ code: 'NO_STEPS', stepId: null, message: 'x' }] : [],
+    issues: options.empty ? [{ code: 'NO_STEPS', stepId: null, message: 'x' }] : options.parallel === 'split' ? [{ code: 'PARALLEL_GROUP_SPLIT', stepId: uid('2222', 4), message: 'x' }] : [],
     warnings: [],
     editable: rev.status === 'DRAFT',
   }

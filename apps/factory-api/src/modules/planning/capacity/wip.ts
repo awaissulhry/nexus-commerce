@@ -17,7 +17,7 @@ export async function wipForMany(db: Reader, workOrderIds: readonly string[]): P
   const ids = [...new Set(workOrderIds)]
   const out = new Map<string, Wip>()
   if (ids.length === 0) return out
-  const operations = await db.workOrderOperation.findMany({ where: { workOrderId: { in: ids } }, select: { id: true, workOrderId: true, seq: true, routingSeq: true, code: true, name: true, scanRequired: true, workCentreId: true }, orderBy: [{ workOrderId: 'asc' }, { seq: 'asc' }] })
+  const operations = await db.workOrderOperation.findMany({ where: { workOrderId: { in: ids } }, select: { id: true, workOrderId: true, seq: true, routingSeq: true, code: true, name: true, scanRequired: true, parallelGroup: true, workCentreId: true }, orderBy: [{ workOrderId: 'asc' }, { seq: 'asc' }] })
   const centreIds = [...new Set(operations.map((row) => row.workCentreId))]
   const kinds = new Map(centreIds.length === 0 ? [] : (await db.workCentre.findMany({ where: { id: { in: centreIds } }, select: { id: true, kind: true } })).map((row) => [row.id, row.kind as WorkCentreKind]))
   const cells = await db.workOrderSize.findMany({ where: { workOrderId: { in: ids } }, select: { id: true, workOrderId: true, colourwayId: true, size: true, quantity: true }, orderBy: [{ colourwayId: 'asc' }, { size: 'asc' }] })

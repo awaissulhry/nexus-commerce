@@ -34,6 +34,7 @@ const jacket = seedId('product:style:JKT-01')
 const revision1 = seedId('product:revision:JKT-01:1')
 const scale = seedId('product:size-scale:EU-JKT')
 const leather = seedId('product:item:leather')
+const protector = seedId('product:item:protector')
 const CUT = seedId('product:operation:CUT')
 const SEW = seedId('product:operation:SEW')
 const QC = seedId('product:operation:QC')
@@ -548,5 +549,106 @@ describe('concurrent edits of one revision', () => {
     // The revision's BOM and routing are one versioned record.
     const bom = (await ok('companyA', 'GET', `${revisionUrl(jacket2, draft2)}/bom`)).bom
     expect(bom.revision.version).toBe(after.revision.version)
+  })
+})
+
+describe('B-W2b-88: steps side by side and the operation a BOM line names', () => {
+  let style: string
+  let draft: string
+  let ids: Record<'cut' | 'sew' | 'fin' | 'qc', string>
+  const url = () => routingUrl(style, draft)
+  const bomUrl = () => `${revisionUrl(style, draft)}/bom`
+  const current = () => getRouting(style, draft, 'companyA')
+  const patch = async (stepId: string, change: Json) => (await ok('companyA', 'PATCH', `${url()}/steps/${stepId}`, { version: (await current()).revision.version, ...change })).routing
+  const reorder = async (order: string[]) => (await ok('companyA', 'PUT', `${url()}/order`, { version: (await current()).revision.version, stepIds: order })).routing
+  const groups = (routing: Json) => routing.steps.map((step: Json) => [step.seq, step.code, step.parallelGroup])
+
+  beforeAll(async () => {
+    style = (await ok('companyA', 'POST', '/product/styles', { companyId: companyA, code: 'RT-PAR-01', name: 'Side by side jacket (made up)', productType: 'JACKET', sizeScaleId: scale, sizes: ['52'], baseSize: '52', colourways: [{ code: 'BLK', name: 'Black' }] }, 201)).style.id
+    draft = (await ok('companyA', 'POST', `/product/styles/${style}/revisions`, { changeNote: 'Side by side (made up).' }, 201)).revision.id
+    const routing = (await ok('companyA', 'POST', `${url()}/steps`, { version: 1, operations: [{ operationId: CUT }, { operationId: SEW }, { operationId: finishing }, { operationId: QC }] }, 201)).routing
+    const [cut, sew, fin, qc] = routing.steps.map((step: Json) => step.id)
+    ids = { cut, sew, fin, qc }
+  })
+
+  it('puts two steps in one group: alone it is a warning, together nothing; a group from 1, audited', async () => {
+    let routing = await patch(ids.sew, { parallelGroup: 1 })
+    expect(routing.warnings).toEqual([{ code: 'PARALLEL_GROUP_ALONE', stepId: ids.sew, message: 'Step 20 is alone in parallel group 1: it runs like any step until another step joins it.' }])
+    routing = await patch(ids.fin, { parallelGroup: 1 })
+    expect(groups(routing)).toEqual([
+      [10, 'SEED-CUT-LEA', null],
+      [20, 'SEED-SEW-ASM', 1],
+      [30, 'RT-FIN-EDGE', 1],
+      [40, 'SEED-FIN-QC', null],
+    ])
+    expect(routing).toMatchObject({ issues: [], warnings: [] })
+    expect((await historyOf('RoutingOperation', ids.fin))[0]).toMatchObject({ action: 'product.routing.updateStep', before: { parallelGroup: null }, after: { parallelGroup: 1 } })
+    const version = (await current()).revision.version
+    expect((await refused('companyA', 'PATCH', `${url()}/steps/${ids.qc}`, { version, parallelGroup: 0 }, 400)).code).toBe('validation_failed')
+    expect((await current()).revision.version).toBe(version)
+  })
+
+  it('refuses at release a group split by another step, in words; the BOM view says so first', async () => {
+    const split = 'Parallel group 1 (steps 10, 30) is split by other steps: side by side steps follow each other. Move them together.'
+    let routing = await reorder([ids.sew, ids.cut, ids.fin, ids.qc])
+    expect(routing.issues).toEqual([{ code: 'PARALLEL_GROUP_SPLIT', stepId: ids.sew, message: split }])
+    const bom = (await ok('companyA', 'GET', bomUrl())).bom
+    expect(bom.issues.map((issue: Json) => issue.code)).toContain('PARALLEL_GROUP_SPLIT')
+    const refusal = await refused('companyA', 'POST', `${revisionUrl(style, draft)}/release`, { version: bom.revision.version }, 409)
+    expect(refusal.issues).toEqual(expect.arrayContaining([{ path: `routing/steps/${ids.sew}`, message: split }]))
+    // The group last: its second step is the final operation, which runs alone.
+    routing = await reorder([ids.cut, ids.qc, ids.sew, ids.fin])
+    expect(routing.issues).toEqual([{ code: 'FINAL_SIDE_BY_SIDE', stepId: ids.fin, message: 'Step 40 (RT-FIN-EDGE) is the final operation, where the batch or serial is given: it runs alone, not side by side. Take it out of group 1, or scan a step after it.' }])
+    expect((await reorder([ids.cut, ids.sew, ids.fin, ids.qc])).issues).toEqual([])
+  })
+
+  it('a BOM line names the step that uses it; a step not in the routing is refused; a reorder takes the line along', async () => {
+    let bom = (await ok('companyA', 'GET', bomUrl())).bom
+    bom = (await ok('companyA', 'POST', `${bomUrl()}/lines`, { version: bom.revision.version, itemId: protector, qty: '2', placement: 'Shoulder pockets (made up)', routingSeq: 30 }, 201)).bom
+    const line = bom.lines[0]
+    expect(line.routingStep).toEqual({ seq: 30, code: 'RT-FIN-EDGE', name: 'Edge paint and finish' })
+    expect((await historyOf('BomLine', line.id))[0]).toMatchObject({ after: { routingSeq: 30 } })
+    const wrong = await refused('companyA', 'PATCH', `${bomUrl()}/lines/${line.id}`, { version: bom.revision.version, routingSeq: 35 }, 400)
+    expect(wrong.issues).toEqual([{ path: 'body/routingSeq', message: "Step 35 is not in this revision's routing: choose one of its steps (10, 20, 30, 40)." }])
+    // The finishing step moves to 20: its line goes with it (the key's ON UPDATE CASCADE); then back.
+    await reorder([ids.cut, ids.fin, ids.sew, ids.qc])
+    expect((await ok('companyA', 'GET', bomUrl())).bom.lines[0].routingStep).toMatchObject({ seq: 20, code: 'RT-FIN-EDGE' })
+    await reorder([ids.cut, ids.sew, ids.fin, ids.qc])
+    expect((await ok('companyA', 'GET', bomUrl())).bom.lines[0].routingStep).toMatchObject({ seq: 30, code: 'RT-FIN-EDGE' })
+    bom = (await ok('companyA', 'GET', bomUrl())).bom
+    expect((await ok('companyA', 'PATCH', `${bomUrl()}/lines/${line.id}`, { version: bom.revision.version, qty: '3' })).bom.lines[0].routingStep).toMatchObject({ seq: 30 })
+  })
+
+  it('keeps a step a BOM line uses: removed alone or by a copy that replaces the steps, both refused in words', async () => {
+    const version = (await current()).revision.version
+    const line = (await ok('companyA', 'GET', bomUrl())).bom.lines[0]
+    const removing = await refused('companyA', 'DELETE', `${url()}/steps/${ids.fin}?version=${version}`, undefined, 409)
+    expect(removing).toMatchObject({ code: 'conflict', message: '1 BOM line(s) say step 30 (RT-FIN-EDGE) uses them (lines 10): tie them to another step or to none in the BOM first.', issues: [{ path: `bom/lines/${line.id}/routingSeq`, message: 'BOM line 10 is used at step 30.' }] })
+    expect((await refused('companyA', 'POST', `${url()}/copy`, { version, fromStyleId: jacket, replace: true }, 409)).code).toBe('conflict')
+    expect((await current()).revision.version).toBe(version)
+  })
+
+  it('a copy of steps after the kept ones numbers its groups after theirs; a new revision and a copied style keep groups and lines', async () => {
+    // Release revision 1, then a new revision from it keeps the group and the line's step.
+    let bom = (await ok('companyA', 'GET', bomUrl())).bom
+    expect(bom.issues).toEqual([])
+    await ok('companyA', 'POST', `${revisionUrl(style, draft)}/release`, { version: bom.revision.version })
+    bom = (await ok('companyA', 'POST', `${revisionUrl(style, draft)}/copy`, { changeNote: 'Second (made up).' }, 201)).bom
+    const second = bom.revision.id
+    expect(bom.lines.map((entry: Json) => entry.routingStep?.seq ?? null)).toEqual([30])
+    expect(groups(await getRouting(style, second, 'companyA')).map((entry: Json[]) => entry[2])).toEqual([null, 1, 1, null])
+
+    // Steps of the released revision copied after the second's: the copied group is 2, never the kept group 1.
+    const routing = await getRouting(style, second, 'companyA')
+    const copied = (await ok('companyA', 'POST', `${routingUrl(style, second)}/copy`, { version: routing.revision.version, fromStyleId: style, fromRevisionId: draft })).routing
+    expect(copied.steps.map((step: Json) => step.parallelGroup)).toEqual([null, 1, 1, null, null, 2, 2, null])
+    expect(copied.issues).toEqual([])
+
+    // A copied style: with the routing, its line keeps the step; without it, the line names none.
+    const both = await ok('companyA', 'POST', `/product/styles/${style}/duplicate`, { code: 'RT-PAR-02', name: 'Copy with routing (made up)', parts: ['BOM', 'ROUTING'], fromRevisionId: draft }, 201)
+    expect((await ok('companyA', 'GET', `${revisionUrl(both.style.id, both.revision.id)}/bom`)).bom.lines.map((entry: Json) => entry.routingStep?.seq ?? null)).toEqual([30])
+    expect((await getRouting(both.style.id, both.revision.id, 'companyA')).steps.map((step: Json) => step.parallelGroup)).toEqual([null, 1, 1, null])
+    const bomOnly = await ok('companyA', 'POST', `/product/styles/${style}/duplicate`, { code: 'RT-PAR-03', name: 'Copy without routing (made up)', parts: ['BOM'], fromRevisionId: draft }, 201)
+    expect((await ok('companyA', 'GET', `${revisionUrl(bomOnly.style.id, bomOnly.revision.id)}/bom`)).bom.lines.map((entry: Json) => entry.routingStep)).toEqual([null])
   })
 })

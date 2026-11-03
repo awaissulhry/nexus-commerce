@@ -3,7 +3,7 @@ import { EVENT_CATALOGUE } from '../../events/catalogue'
 import { FACTORY_PERMISSIONS, FLOOR_SHARED_PERMISSIONS } from '../../auth/permissions/catalogue'
 import { HANDOVER_LIMITS, handoverProblems, newSince, shiftLabelAt } from './handover'
 import { lineLoad, needsReassign, plannedWhy, presenceOf, sumMinutes } from './load'
-import { materialFlagOf, worstMaterial } from './material'
+import { materialFlagOf, materialKey, operationMaterialFlag, worstMaterial } from './material'
 import { dispatchPaper } from './paper'
 import { PRODUCTION_DISPATCH_PERMISSIONS } from './permissions'
 import { assignmentKindOf, DISPATCH_REFUSALS, laneFirst, laneNumbers, laneOrderIssue, movePlan, namedCardKey, placementsOf, REST_CARD, sequenceOf, wholeCardKey, type AssignmentFacts } from './rules'
@@ -127,6 +127,9 @@ describe('a lane', () => {
     const entry = (workOrderId: string, seq: number) => ({ workOrderId, workOrderNumber: workOrderId, seq, name: `Op${seq}` })
     expect(laneOrderIssue([entry('A', 10), entry('A', 20), entry('B', 5)])).toBeNull()
     expect(laneOrderIssue([entry('A', 20), entry('B', 5), entry('A', 10)])?.words).toBe('Op 20 Op20 of A stands before Op 10 Op10.')
+    // B-W2b-88: two operations side by side (one parallel group) stand in either order.
+    expect(laneOrderIssue([{ ...entry('A', 30), parallelGroup: 1 }, { ...entry('A', 20), parallelGroup: 1 }])).toBeNull()
+    expect(laneOrderIssue([{ ...entry('A', 30), parallelGroup: 1 }, { ...entry('A', 20), parallelGroup: 2 }])).not.toBeNull()
   })
 
   it('keeps rush first, then the board order, then leaves the plan order', () => {
@@ -236,6 +239,36 @@ describe('the material ready flag (MES-026)', () => {
     expect(worstMaterial(['NOT_KNOWN', 'IN_STOCK'])).toBe('IN_STOCK')
     expect(worstMaterial(['NOT_KNOWN'])).toBe('NOT_KNOWN')
     expect(worstMaterial([])).toBeNull()
+  })
+
+  it('B-W2b-88: per operation where the BOM ties lines to steps; the work order\'s otherwise', () => {
+    const readiness = {
+      word: 'NOT_ENOUGH' as const,
+      date: null,
+      materials: [
+        { itemId: 'zip', itemColourId: 'blk', word: 'NOT_ENOUGH' as const, date: null },
+        { itemId: 'pro', itemColourId: null, word: 'EXPECTED' as const, date: '2026-11-20' },
+        { itemId: 'pro2', itemColourId: null, word: 'EXPECTED' as const, date: '2026-11-24' },
+        { itemId: 'thr', itemColourId: null, word: 'RECEIVED' as const, date: null },
+      ],
+    }
+    // No line names a step: every operation shows the work order's flag, as before.
+    expect(operationMaterialFlag(readiness, { tied: false, keys: new Set() })).toMatchObject({ state: 'MISSING', scope: 'WORK_ORDER', words: 'Some material is missing.' })
+    // The join uses the protectors (and the thread, tied to no step): the zip at another operation does not count.
+    expect(operationMaterialFlag(readiness, { tied: true, keys: new Set([materialKey('pro', null), materialKey('pro2', null), materialKey('thr', null)]) })).toEqual({
+      state: 'ON_THE_WAY',
+      word: 'EXPECTED',
+      label: 'Expected',
+      date: '2026-11-24',
+      words: 'Some material this operation uses is on the way: expected 2026-11-24.',
+      scope: 'OPERATION',
+    })
+    expect(operationMaterialFlag(readiness, { tied: true, keys: new Set([materialKey('zip', 'blk')]) })).toMatchObject({ state: 'MISSING', scope: 'OPERATION' })
+    expect(operationMaterialFlag(readiness, { tied: true, keys: new Set([materialKey('thr', null)]) })).toMatchObject({ state: 'IN_STOCK', words: 'The material this operation uses is in stock.' })
+    // An operation that uses no material says nothing; one whose material the plan does not know says so.
+    expect(operationMaterialFlag(readiness, { tied: true, keys: new Set() })).toBeNull()
+    expect(operationMaterialFlag(readiness, { tied: true, keys: new Set([materialKey('other', null)]) })).toMatchObject({ state: 'NOT_KNOWN', scope: 'OPERATION' })
+    expect(operationMaterialFlag({ word: 'NOT_PLANNED', date: null, materials: [] }, { tied: true, keys: new Set([materialKey('thr', null)]) })).toMatchObject({ state: 'NOT_KNOWN', scope: 'OPERATION' })
   })
 })
 

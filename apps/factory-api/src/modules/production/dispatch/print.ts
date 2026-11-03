@@ -61,7 +61,7 @@ async function paperFacts(caller: CommandCaller, query: PrintQuery): Promise<Pap
       pieces: card.pieces,
       minutes: card.minutes,
       dueDate: dueOf(card),
-      material: flags.get(card.workOrder.id)?.state ?? null,
+      material: flags.of(card.workOrder.id, card.operation.id)?.state ?? null,
       held: card.state === 'ON_HOLD',
     })
     const sectionOf = (row: { readonly id: string; readonly code: string; readonly name: string }, world: DispatchWorld): PaperSection => ({

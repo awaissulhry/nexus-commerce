@@ -164,10 +164,11 @@ export async function moveWork(caller: CommandCaller, body: MoveBody, idempotenc
       const numbers = laneNumbers(after, applied.movedIds, body.position ?? null)
       for (const entry of numbers) await tx.dispatchAssignment.updateMany({ where: { id: entry.id }, data: { sequence: entry.sequence, version: { increment: 1 }, updatedAt: now } })
       const lane = (await assignmentsOf(tx, site.id, day)).filter((row) => row.stationId === target.stationId && row.workOrderOperationId !== null).sort(byLane)
-      const facts = await tx.workOrderOperation.findMany({ where: { id: { in: lane.map((row) => row.workOrderOperationId!) } }, select: { id: true, seq: true, name: true, workOrderId: true, workOrder: { select: { number: true } } } })
+      const facts = await tx.workOrderOperation.findMany({ where: { id: { in: lane.map((row) => row.workOrderOperationId!) } }, select: { id: true, seq: true, name: true, parallelGroup: true, workOrderId: true, workOrder: { select: { number: true } } } })
+      // B-W2b-88: operations side by side (one parallel group) may stand in either order.
       const entries = lane.flatMap((row) => {
         const fact = facts.find((candidate) => candidate.id === row.workOrderOperationId)
-        return fact ? [{ workOrderId: fact.workOrderId, workOrderNumber: fact.workOrder.number, seq: fact.seq, name: fact.name }] : []
+        return fact ? [{ workOrderId: fact.workOrderId, workOrderNumber: fact.workOrder.number, seq: fact.seq, name: fact.name, parallelGroup: fact.parallelGroup }] : []
       })
       const issue = laneOrderIssue(entries)
       const rule = (await floorChecksFor(tx, site.id)).skippedOperationRule
