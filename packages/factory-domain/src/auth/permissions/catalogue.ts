@@ -170,6 +170,8 @@ import { SAFETY_CALENDAR_DEFINITIONS, SAFETY_CALENDAR_PERMISSIONS } from '../../
 import { QUALITY_RULES_DEFINITIONS, QUALITY_RULES_PERMISSIONS } from '../../quality/rules/permissions'
 // B-W2b-126: the repair station and second quality (production.repair, shared with the floor; production.downgrade).
 import { PRODUCTION_REPAIR_DEFINITIONS, PRODUCTION_REPAIR_FLOOR_PERMISSIONS, PRODUCTION_REPAIR_PERMISSIONS } from '../../production/repair/permissions'
+// B-W2b-122: the risk assessment, the DVR (safety.risk.manage | sign).
+import { SAFETY_RISK_DEFINITIONS, SAFETY_RISK_PERMISSIONS } from '../../safety/risk/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -617,6 +619,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_RULES_DEFINITIONS,
   // B-W2b-126: the repair station and second quality.
   PRODUCTION_REPAIR_DEFINITIONS,
+  // B-W2b-122: the risk assessment, the DVR.
+  SAFETY_RISK_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -789,6 +793,8 @@ for (const name of [...SAFETY_PERMISSIONS, ...SAFETY_CALENDAR_PERMISSIONS]) if (
 for (const name of QUALITY_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-126: the repair station and second quality.
 for (const name of PRODUCTION_REPAIR_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-122: the risk assessment, the DVR.
+for (const name of SAFETY_RISK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
