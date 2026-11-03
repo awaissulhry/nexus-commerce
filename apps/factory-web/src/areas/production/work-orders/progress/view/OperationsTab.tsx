@@ -10,6 +10,7 @@ import { percentOf } from '../../../_shared/model'
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../../record/record-model'
 import { OperationFlow } from '../../daily/view/DailyParts'
 import { PartState } from '../../record/view/WorkOrderRecordView'
+import { ExtraPanel } from '../../extra/view/ExtraPanel'
 
 /**
  * SCR-072 — Operations and WIP (design wo-flow, wo-corrections; MES-079, MES-167): the operation bulletin of the frozen
@@ -27,6 +28,7 @@ export function OperationsTab({ workOrder, model, actions }: { workOrder: WorkOr
       {/* B-W2a-46 (wo-flow "W2a OperationFlow"): the operations as a row with the pile waiting before each. */}
       {model.daily && <OperationFlow wip={wip} />}
       <Flow workOrder={workOrder} wip={wip} prefix={model.prefix} labour={model.can.labour} bySize={!!model.draft?.opsBySize} />
+      {model.extra && <ExtraPanel workOrder={workOrder} model={model.extra} actions={actions?.extra} />}
     </div>
   )
 }
@@ -99,10 +101,11 @@ function Flow({ workOrder, wip, prefix, labour, bySize }: { workOrder: WorkOrder
                       {op.seq} {op.code}
                       {op.final && <Tag tone="info">{t('ops.final')}</Tag>}
                       {op.sewn && !op.final && <Tag tone="neutral">{t('ops.sewn')}</Tag>}
+                      {op.unplanned && <Tag tone="warning">{t('ops.unplanned')}</Tag>}
                     </span>
                     <span className="nds-summary-sub">
                       {op.name} · {t(`kind.${op.workCentreKind}`)}
-                      {op.scanRequired ? '' : ` · ${t('ops.notScanned')}`}
+                      {op.scanRequired || op.unplanned ? '' : ` · ${t('ops.notScanned')}`}
                     </span>
                   </span>,
                   minutes.get(op.seq) ?? '—',

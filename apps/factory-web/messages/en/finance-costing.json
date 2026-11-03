@@ -1,5 +1,8 @@
 {
-  "noAccess": { "title": "You don't have access to costing", "body": "Standard vs actual needs the permission {permission}. Ask a person who manages roles." },
+  "noAccess": {
+    "title": "You don't have access to costing",
+    "body": "Standard vs actual needs the permission {permission}. Ask a person who manages roles."
+  },
   "band": {
     "label": "Scope and actions",
     "readAt": "Read at {time}",
@@ -12,8 +15,16 @@
     "ledger": "Go to the cost ledger",
     "print": "Print the variance report (new tab)"
   },
-  "scope": { "site": "Site", "allSites": "All sites", "period": "Period" },
-  "live": { "connecting": "Connecting…", "live": "Live", "offline": "Offline — reading again when back" },
+  "scope": {
+    "site": "Site",
+    "allSites": "All sites",
+    "period": "Period"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline — reading again when back"
+  },
   "method": {
     "unknown": "Costing method: could not be read.",
     "reading": "Reading the costing method…",
@@ -21,7 +32,11 @@
     "chosen": "Costing method: {method} (chosen; it locks with the first cost posted under it).",
     "locked": "Costing method: {method}, locked: cost entries rely on it.",
     "body": "The accountant chooses the method per company (standard, moving average or FIFO; c.c. art. 2426). This page shows what the data holds and never picks one.",
-    "name": { "STANDARD": "standard cost", "MOVING_AVERAGE": "moving average", "FIFO": "FIFO" }
+    "name": {
+      "STANDARD": "standard cost",
+      "MOVING_AVERAGE": "moving average",
+      "FIFO": "FIFO"
+    }
   },
   "tiles": {
     "title": "Cost at a glance",
@@ -53,11 +68,25 @@
     "slow": "Still loading…",
     "failed": "Couldn't load work orders: standard vs actual",
     "clearFilters": "Clear filters",
-    "noMatch": { "title": "No rows match these filters", "body": "Change the search or the rows view." },
-    "empty": { "title": "No work orders in this period", "body": "A work order appears here from its release, with its standard and what it costs so far." }
+    "noMatch": {
+      "title": "No rows match these filters",
+      "body": "Change the search or the rows view."
+    },
+    "empty": {
+      "title": "No work orders in this period",
+      "body": "A work order appears here from its release, with its standard and what it costs so far."
+    }
   },
-  "rows": { "label": "Rows", "all": "Every costed work order", "over": "Over standard", "closed": "Closed in {month}" },
-  "bulk": { "export_one": "Export {count} (CSV)", "export_other": "Export {count} (CSV)" },
+  "rows": {
+    "label": "Rows",
+    "all": "Every costed work order",
+    "over": "Over standard",
+    "closed": "Closed in {month}"
+  },
+  "bulk": {
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)"
+  },
   "col": {
     "workOrder": "Work order",
     "pieces": "Pieces",
@@ -70,14 +99,21 @@
     "reason": "Biggest reason",
     "state": "Status"
   },
-  "row": { "estimatePart": "Known part only", "provisional": "Provisional (method not decided)", "over": "Over standard" },
+  "row": {
+    "estimatePart": "Known part only",
+    "provisional": "Provisional (method not decided)",
+    "over": "Over standard"
+  },
   "basis": {
     "STANDARD": "Frozen standard",
     "ESTIMATE": "Estimate at release",
     "estimatePart": "Estimate at release (part)",
     "none": "Nothing to compare with yet"
   },
-  "state": { "open": "Open", "final": "Final" },
+  "state": {
+    "open": "Open",
+    "final": "Final"
+  },
   "reason": {
     "MATERIAL_PRICE": "Material price",
     "MATERIAL_USAGE": "Material usage",
@@ -88,7 +124,12 @@
     "ADJUSTMENT": "Adjustment",
     "none": "—"
   },
-  "part": { "MATERIAL": "Material", "LABOUR": "Labour", "SUBCONTRACT": "Subcontract", "OVERHEAD": "Overhead" },
+  "part": {
+    "MATERIAL": "Material",
+    "LABOUR": "Labour",
+    "SUBCONTRACT": "Subcontract",
+    "OVERHEAD": "Overhead"
+  },
   "centre": {
     "CUTTING": "Cutting",
     "SEWING": "Sewing",
@@ -138,7 +179,10 @@
   "bridge": {
     "title": "From the basis to the actual",
     "none": "No bridge yet: there is nothing to compare with.",
-    "basis": { "STANDARD": "Standard", "ESTIMATE": "Estimate at release" },
+    "basis": {
+      "STANDARD": "Standard",
+      "ESTIMATE": "Estimate at release"
+    },
     "actual": "Actual so far",
     "open": "Labour reads low until every garment is reported; the bridge is final when the work order completes."
   },
@@ -174,9 +218,13 @@
     "perMinute": "Cost per minute",
     "amount": "Amount",
     "minutes": "{minutes} min",
-    "privacy": "Per work order and operation only: never per person. A worker's minutes stay in their own record."
+    "privacy": "Per work order and operation only: never per person. A worker's minutes stay in their own record.",
+    "unplanned": "Unplanned: not in the plan"
   },
-  "scrap": { "title": "Scrap", "hint": "Scrap at an operation is recorded at 0: its leather was charged at the issue." },
+  "scrap": {
+    "title": "Scrap",
+    "hint": "Scrap at an operation is recorded at 0: its leather was charged at the issue."
+  },
   "waiting": {
     "title_one": "{count} event waits to be costed",
     "title_other": "{count} events wait to be costed",
@@ -200,14 +248,33 @@
     "count_one": "{count} standard",
     "count_other": "{count} standards",
     "failed": "Couldn't load standard cost per item",
-    "empty": { "title": "No standard frozen for this period yet", "body": "No frozen standard is in force on {day}. Standards are prepared from the styles' cost sheets.", "action": "Go to the style cost sheets" },
+    "empty": {
+      "title": "No standard frozen for this period yet",
+      "body": "No frozen standard is in force on {day}. Standards are prepared from the styles' cost sheets.",
+      "action": "Go to the style cost sheets"
+    },
     "period": "{from} – {to}",
     "from": "From {from}",
     "minutes": "{minutes} min",
-    "col": { "item": "Item", "period": "Period", "material": "Material", "labour": "Labour", "subcontract": "Subcontract", "overhead": "Overhead", "total": "Total per unit" }
+    "col": {
+      "item": "Item",
+      "period": "Period",
+      "material": "Material",
+      "labour": "Labour",
+      "subcontract": "Subcontract",
+      "overhead": "Overhead",
+      "total": "Total per unit"
+    }
   },
-  "itemKind": { "FINISHED": "Finished garment", "MATERIAL": "Material" },
-  "source": { "ROLLUP": "From the cost sheet", "PURCHASE": "From the purchase price", "MANUAL": "Typed by finance" },
+  "itemKind": {
+    "FINISHED": "Finished garment",
+    "MATERIAL": "Material"
+  },
+  "source": {
+    "ROLLUP": "From the cost sheet",
+    "PURCHASE": "From the purchase price",
+    "MANUAL": "Typed by finance"
+  },
   "ledger": {
     "title": "Cost ledger",
     "hint": "Every valuation event from {from} to {to}.",
@@ -215,7 +282,10 @@
     "count_one": "{count} entry",
     "count_other": "{count} entries",
     "failed": "Couldn't load cost ledger",
-    "empty": { "title": "No cost entries in this period", "body": "Nothing was costed in {month}." },
+    "empty": {
+      "title": "No cost entries in this period",
+      "body": "Nothing was costed in {month}."
+    },
     "kindLabel": "Kind",
     "allKinds": "Every kind",
     "provisional": "Provisional",
@@ -254,7 +324,9 @@
     "reasonShort": "Type why (at least 3 characters).",
     "reasonLong": "The reason is longer than 500 characters."
   },
-  "notice": { "reversed": "The entry of {number} is reversed." },
+  "notice": {
+    "reversed": "The entry of {number} is reversed."
+  },
   "problem": {
     "signed_out": "You are signed out. Sign in again.",
     "forbidden": "Your role may not do this here.",
@@ -281,7 +353,11 @@
     "reason": "Biggest reason",
     "state": "Status"
   },
-  "keys": { "title": "Keys", "search": "Search a work order", "open": "Open the work order's cost" },
+  "keys": {
+    "title": "Keys",
+    "search": "Search a work order",
+    "open": "Open the work order's cost"
+  },
   "print": {
     "title": "Variance report · {company}",
     "search": "Search \"{q}\"",
@@ -296,13 +372,27 @@
   },
   "labourTab": {
     "title": "Labour & cost",
-    "noView": { "title": "Cost needs the costing permission", "body": "Labour & cost needs the permission {permission}. The rest of the work order stays as it is." },
-    "noCost": { "title": "Cost needs the cost permission", "body": "Your role does not hold the cost grain (money.cost): the whole cost section is shown only to roles with it. Wages are never shown here." },
-    "draft": { "title": "Nothing costed before the release", "body": "A work order collects its cost from its release: material issued, labour earned, scrap." },
+    "noView": {
+      "title": "Cost needs the costing permission",
+      "body": "Labour & cost needs the permission {permission}. The rest of the work order stays as it is."
+    },
+    "noCost": {
+      "title": "Cost needs the cost permission",
+      "body": "Your role does not hold the cost grain (money.cost): the whole cost section is shown only to roles with it. Wages are never shown here."
+    },
+    "draft": {
+      "title": "Nothing costed before the release",
+      "body": "A work order collects its cost from its release: material issued, labour earned, scrap."
+    },
     "loading": "Reading the cost…",
     "failed": "Couldn't load the cost",
     "inFinance": "See it in Finance › Standard vs actual",
     "wagesNever": "Labour at the standard minutes earned × the cost per minute; wages and people never appear here."
   },
-  "common": { "retry": "Try again", "dismiss": "Dismiss", "cancel": "Cancel", "loading": "Loading…" }
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "loading": "Loading…"
+  }
 }

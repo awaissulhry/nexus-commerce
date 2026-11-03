@@ -35,6 +35,11 @@ import type { DefectKind, ScanReason } from './reasons'
  *               voids it).
  *   own         "own" is the site's floor subject (B-W1-37): at a WORKER site the signed-in worker's scans, at a STATION
  *               site the device's station's (no worker is recorded there).
+ *   unplanned   B-W2b-82 (MES-086): an operation added to a released work order (production/extraops) is a real step with no
+ *               routing step: `scanRequired` false and `unplanned` true. It stands outside the routing's order: nothing has to
+ *               reach it, nothing waits for it, it never is the final or the sewn operation, and the operation after it
+ *               takes what the routing passed. It counts up to the bundle's own garments, one report per bundle, good
+ *               ones only: a garment scrapped or sent back here would stay in the routing's flow and be counted twice.
  *   refusals    every refusal has a stable code, its words, ONE fix in words and whether it is final (a queued scan
  *               refused for a reason that may pass by itself, like an earlier operation still in another tablet's
  *               queue, is sent again; a final one waits for a person's discard). The words never name another worker:
@@ -130,6 +135,8 @@ export const SCAN_REFUSALS = [
   'CHECKLIST_OPEN',
   'CHECKLIST_STEP_UNKNOWN',
   'CHECKLIST_REPORTED',
+  // B-W2b-82 (MES-086): an unplanned operation counts good garments only.
+  'UNPLANNED_GOOD_ONLY',
 ] as const
 export type ScanRefusalCode = (typeof SCAN_REFUSALS)[number]
 
@@ -155,6 +162,8 @@ export interface ScanOperation {
   readonly scanRequired: boolean
   /** The kind of the site's work centre it is mapped to. */
   readonly workCentreKind: WorkCentreKind
+  /** B-W2b-82: added to the released work order, no routing step (see the file's head). Left out: a routing step. */
+  readonly unplanned?: boolean | undefined
 }
 
 const bySeq = <Op extends Pick<ScanOperation, 'seq'>>(operations: readonly Op[]): Op[] => [...operations].sort((a, b) => a.seq - b.seq)
@@ -170,14 +179,14 @@ export function scannedOperations<Op extends ScanOperation>(operations: readonly
 /** The scanned operation before this one (the one whose good it takes), or null for the first. */
 export function previousScanned<Op extends ScanOperation>(operations: readonly Op[], operationId: string): Op | null {
   const self = operations.find((operation) => operation.id === operationId)
-  if (!self) return null
+  if (!self || self.unplanned) return null
   return scannedOperations(operations).filter((operation) => operation.seq < self.seq).at(-1) ?? null
 }
 
 /** The scanned operation after this one (the one that takes its good), or null for the last. */
 export function nextScanned<Op extends ScanOperation>(operations: readonly Op[], operationId: string): Op | null {
   const self = operations.find((operation) => operation.id === operationId)
-  if (!self) return null
+  if (!self || self.unplanned) return null
   return scannedOperations(operations).find((operation) => operation.seq > self.seq) ?? null
 }
 
@@ -414,6 +423,12 @@ function takenNext(operations: readonly ScanOperation[], operation: ScanOperatio
 
 const noCount = (): ScanRefusal => refusal('NO_COUNT', 'Nothing to report: good, scrap and rework add up to 0.', 'Count at least one garment.')
 
+/** Scrap or rework at an unplanned operation (see the file's head), or null. */
+function unplannedDefects(operation: ScanOperation, counts: Counts): ScanRefusal | null {
+  if (!operation.unplanned || counts.scrap + counts.rework === 0) return null
+  return refusal('UNPLANNED_GOOD_ONLY', `${operationLabel(operation)} is an unplanned operation: it counts good garments only.`, 'Count the good ones here; report scrap or rework at the next operation of the routing.')
+}
+
 // ---- report ------------------------------------------------------------------------------------------------------------------------------
 
 export interface ReportFacts {
@@ -508,6 +523,8 @@ export function reportDecision(facts: ReportFacts): ReportDecision {
   if (standing) {
     return { ok: false, refusal: alreadyReported(facts.bundle.code, standing, facts.viewer, { operation, stationCode: standing.stationId ? (facts.stationCodes.get(standing.stationId) ?? null) : null, timeZone: facts.timeZone }) }
   }
+  const defects = unplannedDefects(operation, facts.counts)
+  if (defects) return { ok: false, refusal: defects }
   if (facts.guarded) {
     if (total <= facts.bundle.quantity) return { ok: true, operation, cap: facts.bundle.quantity, previous: previousScanned(facts.operations, operation.id) }
     // Beyond the bundle's own (live) garments: never taken, not even with an override; in W1's words (what the operation
@@ -596,6 +613,8 @@ function correctionCountsRefusal(facts: CorrectionCountFacts, target: ScanFact):
     return refusal('SAME_COUNTS', 'The counts and reasons are the same as the report’s.', 'Change a count or a reason, or discard it.')
   }
   const operation = facts.operations.find((candidate) => candidate.id === target.workOrderOperationId)!
+  const defects = unplannedDefects(operation, facts.counts)
+  if (defects) return defects
   const standing = facts.standing ?? standingScans(facts.scans)
   const cap = capAt(facts.operations, operation, facts.bundle, standing, target.bundleId)
   if (!cap.ok) return cap.refusal
@@ -638,10 +657,13 @@ export interface CorrectionApprovalFacts extends CorrectionCountFacts {
   readonly approverInvolved: boolean
 }
 
-/** Why an approval of a correction request is refused, or null (the refusal of a request is always allowed while PENDING). */
+/** Four eyes (MES-096): who took the scan or asked its correction decides nothing of it, approving or refusing. */
+export const selfApprovalRefusal = (): ScanRefusal => refusal('SELF_APPROVAL', 'You took this scan or asked its correction: another person decides it (four eyes, MES-096).', 'Ask another lead or the production manager.')
+
+/** Why an approval of a correction request is refused, or null (a refusal of a request needs it PENDING and another person). */
 export function correctionApprovalRefusal(facts: CorrectionApprovalFacts): ScanRefusal | null {
   if (facts.status !== 'PENDING') return refusal('DECIDED_ALREADY', `This correction was ${facts.status.toLowerCase()} already.`, 'Reload the list.')
-  if (facts.approverInvolved) return refusal('SELF_APPROVAL', 'You took this scan or asked its correction: another person decides it (four eyes, MES-096).', 'Ask another lead or the production manager.')
+  if (facts.approverInvolved) return selfApprovalRefusal()
   const target = facts.target
   if (!target) return unknownScanRefusal()
   if (!isOpen(facts.workOrder.status)) return workOrderNotOpen(facts.workOrder)

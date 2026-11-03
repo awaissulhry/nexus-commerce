@@ -5,6 +5,7 @@ import type { Phrase, ProductionCan, RecordTab, SizeLayer, StepKind } from '../.
 import type { DailyActions, DailyModel } from '../daily/model'
 import type { LabourModel } from '../labour/model'
 import type { SplitActions, SplitModel } from '../every-shift/use-split'
+import type { ExtraActions, ExtraModel } from '../extra/use-extra'
 
 /** SCR-070 … SCR-072 — the work order studio's view model (WorkOrderRecordView draws it and fetches nothing). */
 
@@ -71,6 +72,8 @@ export interface WorkOrderRecordModel {
   labour?: LabourModel
   /** B-W2b-59: Split work order (a DRAFT), while its dialog is open. */
   split?: SplitModel | null
+  /** B-W2b-82: the unplanned operations of the work order, and the Add pop-up. */
+  extra?: ExtraModel
   /** Design cases: what the panels show (the page mounts the live panels instead). */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: a dialog's typed reason, the overview's fields in edit, a draft's grid being edited. */
@@ -104,4 +107,6 @@ export interface WorkOrderRecordActions {
   /** B-W2b-59: Split work order. */
   onOpenSplit?: () => void
   split?: SplitActions
+  /** B-W2b-82: add an unplanned operation. */
+  extra?: ExtraActions
 }

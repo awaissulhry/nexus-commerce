@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, Camera, Check, CircleAlert, CircleCheckBig, ClipboardPen, Clock, CloudOff, Coffee, Flame, Hand, House, Layers, MessageSquareWarning, Minus, Pause, Play, Plus, ScanLine, Send, ShieldAlert, ShieldOff, TriangleAlert, UserRoundCheck, Wrench, X } from 'lucide-react'
+import { ArrowLeft, Camera, Check, CircleAlert, CircleCheckBig, ClipboardPen, Clock, CloudOff, Coffee, Flame, Hand, House, Layers, MessageSquareWarning, Minus, Pause, Play, Plus, ScanLine, Send, ShieldAlert, ShieldOff, TriangleAlert, UserRoundCheck, Workflow, Wrench, X } from 'lucide-react'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, FloorTile, FloorTileGrid, QuantityPad, ScanInput, type CameraScanner, type FloorAction, type FloorActions } from '@nexus/ui/floor'
 import { Field } from '@nexus/ui/components'
 import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
@@ -18,12 +18,14 @@ import { fromScanReason } from '../../reasons/model'
 import { ReasonPickerBody, type ReasonPickerAction, type ReasonPickerModel } from '../../reasons/view/ReasonPicker'
 import type { PickerList, PickerReason } from '../../reasons/model'
 import { componentRows, garmentsOn, overridable, quantityRule, toldFindings, workHold, type GuardLine, type LotLine, type OperationCheck, type OperationSteps, type StepOutcome } from '../checks'
+import { extraHeld, routingStep, unplannedHere, type ExtraChoices, type ExtraDraft, type ExtraPay } from '../extra'
 import type { OffStandardBlock, OffStandardTile } from '../indirect'
 import { noteHeld, type NoteDraft } from '../notes'
 import type { StackRow } from '../stack'
 import { stackTotals } from '../stack'
 import { barOf, piecesLeft, resumeRows, type OpenItem, type Timing } from '../timing'
 import { ComponentsPanel } from './ComponentsPanel'
+import { ExtraBody, type ExtraAction } from './ExtraView'
 import { IndirectTiles, RunningBlock } from './IndirectView'
 import { NoteBody, type NoteAction } from './NoteView'
 import { OverrideDialog, type OverrideAction, type OverrideModel } from './OverrideDialog'
@@ -105,6 +107,8 @@ export type OperationStep =
   /** No bundle: the tiles; null: not read (offline with nothing kept, or reading). */
   | { readonly kind: 'indirect'; readonly codes: readonly OffStandardTile[] | null }
   | { readonly kind: 'note'; readonly from: CountsStep; readonly draft: NoteDraft }
+  /** B-W2b-82: a team leader adds an unplanned operation to the bundle's work order (`back`: the step it was opened from). */
+  | { readonly kind: 'extra'; readonly card: BundleCard; readonly back: OperationStep; readonly choices: ExtraChoices | null; readonly draft: ExtraDraft; readonly problem?: TaskProblem | null; readonly busy?: boolean }
   | { readonly kind: 'already'; readonly card: BundleCard; readonly operation: CardOperation; readonly report: CardReport; readonly undo: boolean }
   | { readonly kind: 'refused'; readonly code: string; readonly message: string; readonly fix: string | null; readonly card: BundleCard | null; readonly scanned: string }
   | { readonly kind: 'wrongType'; readonly type: LabelType; readonly code: string }
@@ -136,10 +140,12 @@ export interface LastStrip {
 
 /** What the screen just did that is not a report: pieces so far, a hand back, a note. */
 export interface DoneLine {
-  readonly kind: 'pieces' | 'handBack' | 'note'
+  readonly kind: 'pieces' | 'handBack' | 'note' | 'extra'
   readonly bundleCode: string
   readonly count?: number
   readonly ticks: TickState | null
+  /** B-W2b-82: the operation just added and what a report at it pays. */
+  readonly extra?: { readonly seq: number | null; readonly name: string; readonly pays: ExtraPay } | null
 }
 
 export interface OperationViewModel {
@@ -166,6 +172,8 @@ export interface OperationViewModel {
   /** The pause reasons this tablet read (their words on a paused bundle). */
   pauseReasons?: readonly PickerReason[]
   timeZone?: string
+  /** B-W2b-82: this person may add an unplanned operation (production.extraops.add). */
+  mayAdd?: boolean
 }
 
 export type OperationAction =
@@ -217,6 +225,12 @@ export type OperationAction =
   | { type: 'notePost' }
   | { type: 'noteBack' }
   | { type: 'continue'; code: string }
+  // B-W2b-82
+  | { type: 'operationOpen'; operationId: string }
+  | { type: 'extraOpen' }
+  | { type: 'extraBack' }
+  | { type: 'extraSend' }
+  | ExtraAction
   | OverrideAction
   | StackAction
   | NoteAction
@@ -426,6 +440,8 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
       body = (
         <>
           <ProblemState problem={{ kind: 'refused', code: step.code, message: step.message || t('refusal.fallback'), fix: step.fix }} code={step.scanned} words={refusalWords(params)} />
+          {model.done ? <DoneStrip done={model.done} t={t} /> : null}
+          {card && card.refusal === null ? <UnplannedActions card={card} current={null} mayAdd={model.mayAdd ?? false} online={model.online} t={t} send={send} /> : null}
         </>
       )
       break
@@ -451,6 +467,8 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
             {/* Own counts only: another person's numbers are never shown (art. 4, F2). */}
             {report.own ? <p className="fw-floor-state-text">{counts}</p> : null}
           </FloorState>
+          {model.done ? <DoneStrip done={model.done} t={t} /> : null}
+          <UnplannedActions card={step.card} current={null} mayAdd={model.mayAdd ?? false} online={model.online} t={t} send={send} />
         </>
       )
       break
@@ -502,15 +520,13 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
         break
       }
       const bar = barOf(work.timing)
+      // B-W2b-82: an unplanned operation counts good pieces only, so it has no "Not all good".
+      const goodOnly = step.operation.unplanned === true
       const notAllGood: FloorAction = { label: t('timing.notAllGood'), icon: <TriangleAlert />, onPress: () => send({ type: 'notAllGood' }) }
-      actions =
-        bar === 'running'
-          ? [{ label: t('timing.pause'), icon: <Pause />, onPress: () => send({ type: 'pause' }) }, notAllGood, finish]
-          : bar === 'paused'
-            ? [notAllGood, finish, { label: t('timing.resume'), icon: <Play />, onPress: () => send({ type: 'resume' }), id: 'resume' }]
-            : bar === 'other'
-              ? [notAllGood, finish]
-              : [{ label: t('timing.start'), icon: <Play />, onPress: () => send({ type: 'start' }) }, notAllGood, finish]
+      const first: FloorAction | null = bar === 'running' ? { label: t('timing.pause'), icon: <Pause />, onPress: () => send({ type: 'pause' }) } : bar === 'paused' || bar === 'other' ? null : { label: t('timing.start'), icon: <Play />, onPress: () => send({ type: 'start' }) }
+      const resume: FloorAction = { label: t('timing.resume'), icon: <Play />, onPress: () => send({ type: 'resume' }), id: 'resume' }
+      if (goodOnly) actions = bar === 'paused' ? [finish, resume] : first ? [first, finish] : [finish]
+      else actions = bar === 'paused' ? [notAllGood, finish, resume] : first ? [first, notAllGood, finish] : [notAllGood, finish]
       const total = totalOf(step.counts, expected)
       const rule = quantityRule(work.check, total)
       const told = toldFindings(work.check)
@@ -523,6 +539,11 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
             <div className="fw-floor-stack">
               <BundleFacts card={step.card} operation={step.operation} asOf={step.asOf} t={t} shared={shared} locale={locale} time={time} />
               <TimingPanel timing={work.timing} skewMs={work.skewMs} reasons={model.pauseReasons ?? []} />
+              {goodOnly ? (
+                <TaskLine tone="info" icon={<Workflow />}>
+                  {t('unplanned.goodOnly')}
+                </TaskLine>
+              ) : null}
               {work.qualification ? (
                 <TaskLine tone="warning" icon={<ShieldAlert />}>
                   {t('timing.qualification')}
@@ -538,7 +559,7 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
               {/* What the operation asks first: Finish waits for it, so it never hides under the counts. */}
               {work.steps ? <StepsPanel list={work.steps} t={t} time={time} onTick={(code, outcome) => send({ type: 'tick', code, outcome })} /> : null}
               <ComponentsPanel rows={componentRows(asked, work.lots, garmentsOn(step.counts, expected))} garments={garmentsOn(step.counts, expected)} refusal={work.lotRefusal ? { message: guardWords(work.lotRefusal.code, work.lotRefusal.message), fix: guardFix(work.lotRefusal.code, work.lotRefusal.fix) } : null} unchecked={Boolean(work.lotsUnchecked)} t={t} camera={camera} onLot={(code) => send({ type: 'lot', code })} onStep={(code, delta) => send({ type: 'lotStep', code, delta })} onDrop={(code) => send({ type: 'lotDrop', code })} />
-              <CountsPanel counts={step.counts} expected={expected} ceiling={ceiling} open={step.open} problem={step.problem ?? null} t={t} locale={locale} send={send} stepper />
+              <CountsPanel counts={step.counts} expected={expected} ceiling={ceiling} open={step.open} problem={step.problem ?? null} t={t} locale={locale} send={send} stepper goodOnly={goodOnly} />
               {rule ? (
                 <TaskLine tone="warning" icon={<TriangleAlert />}>
                   {t(`counts.rule.${rule}`, { count: step.operation.expected ?? expected })}
@@ -554,7 +575,7 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
                       {t('timing.handBack')}
                     </FloorButton>
                   </>
-                ) : (
+                ) : goodOnly ? null : (
                   <FloorButton size="lg" block variant="secondary" icon={<Layers />} heldReason={touched(step.counts) ? t('stack.heldCounts') : null} onClick={() => send({ type: 'stackOpen' })}>
                     {t('stack.add')}
                   </FloorButton>
@@ -563,6 +584,7 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
                   {t('note.open')}
                 </FloorButton>
               </div>
+              {mine ? null : <UnplannedActions card={step.card} current={step.operation} mayAdd={model.mayAdd ?? false} online={model.online} t={t} send={send} />}
             </div>
           </div>
         </>
@@ -690,6 +712,18 @@ export function OperationView({ model, onAction, onFrame, camera }: OperationVie
         ]
       }
       body = <NoteBody draft={step.draft} subject={`${step.from.card.bundle.code} · ${t('opShort', { seq: step.from.operation.seq })}`} online={model.online} t={t} send={send} />
+      break
+    }
+
+    case 'extra': {
+      const held = extraHeld(step.draft, step.choices)
+      const addHeld = !model.online ? t('extra.offline') : step.busy ? t('extra.adding') : held ? t(`extra.held.${held}`) : null
+      barWords = addHeld
+      actions = [
+        { label: shared('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'extraBack' }) },
+        { label: t('extra.add'), icon: <Plus />, onPress: () => send({ type: 'extraSend' }), heldReason: addHeld },
+      ]
+      body = <ExtraBody card={step.card} choices={step.choices} draft={step.draft} problem={step.problem ?? null} busy={step.busy ?? false} online={model.online} t={t} send={send} />
       break
     }
 
@@ -905,9 +939,42 @@ function Receipt({ last, t, shared, send }: { last: LastStrip; t: Translate; sha
   )
 }
 
-/** Pieces so far, a hand back or a note: what was just done, with its ticks. */
+/** Pieces so far, a hand back, a note or an operation added: what was just done, with its ticks. */
 function DoneStrip({ done, t }: { done: DoneLine; t: Translate }) {
+  if (done.kind === 'extra') {
+    const added = t('done.extra', { code: done.bundleCode, seq: done.extra?.seq ?? 0, name: done.extra?.name ?? '' })
+    return <UndoStrip text={done.extra?.pays === 'OFF_STANDARD' ? `${added} ${t('extra.noRate')}` : added} ticks={done.ticks} />
+  }
   return <UndoStrip text={t(`done.${done.kind}`, { code: done.bundleCode, count: done.count ?? 0 })} ticks={done.ticks} />
+}
+
+/**
+ * B-W2b-82: the unplanned operations this station may report on the bundle's work order, picked by hand (a scan keeps opening the
+ * routing's next step: one tap stays one tap), the way back to that step, and a team leader's Add.
+ */
+function UnplannedActions({ card, current, mayAdd, online, t, send }: { card: BundleCard; current: CardOperation | null; mayAdd: boolean; online: boolean; t: Translate; send: (action: OperationAction) => void }) {
+  const open = unplannedHere(card, current?.id ?? null)
+  const routing = current?.unplanned ? routingStep(card) : null
+  if (open.length === 0 && !routing && !mayAdd) return null
+  return (
+    <div className="fw-scans-more">
+      {routing ? (
+        <FloorButton size="lg" block variant="secondary" icon={<ArrowLeft />} onClick={() => send({ type: 'operationOpen', operationId: routing.id })}>
+          {t('unplanned.back', { seq: routing.seq, name: routing.name })}
+        </FloorButton>
+      ) : null}
+      {open.map((operation) => (
+        <FloorButton key={operation.id} size="lg" block variant="secondary" icon={<Workflow />} onClick={() => send({ type: 'operationOpen', operationId: operation.id })}>
+          {t('unplanned.open', { seq: operation.seq, name: operation.name })}
+        </FloorButton>
+      ))}
+      {mayAdd ? (
+        <FloorButton size="lg" block variant="secondary" icon={<Plus />} heldReason={online ? null : t('extra.offline')} onClick={() => send({ type: 'extraOpen' })}>
+          {t('extra.open')}
+        </FloorButton>
+      ) : null}
+    </div>
+  )
 }
 
 /** The last action strip: Undo while its window is open, then Ask a correction. */
@@ -948,6 +1015,11 @@ function BundleFacts({ card, operation, asOf, t, shared, locale, time }: { card:
             <p className="fw-scans-op">
               {t('opCode', { seq: operation.seq, code: operation.code })} · {operation.name}
             </p>
+          ) : null}
+          {operation?.unplanned ? (
+            <TaskLine tone="info" icon={<Workflow />}>
+              {t('unplanned.flag')}
+            </TaskLine>
           ) : null}
           {asOf ? (
             <TaskLine tone="info" icon={<CloudOff />}>
@@ -1010,6 +1082,7 @@ function CountsPanel({
   send,
   withButtons,
   stepper,
+  goodOnly,
 }: {
   counts: Counts
   expected: number
@@ -1024,6 +1097,8 @@ function CountsPanel({
   withButtons?: boolean
   /** − and + on Good: a count without typing (MES-106). */
   stepper?: boolean
+  /** B-W2b-82: no Scrap and Rework (an unplanned operation counts good pieces only). */
+  goodOnly?: boolean
 }) {
   const good = goodOf(counts, expected)
   const scrap = scrapOf(counts)
@@ -1066,10 +1141,10 @@ function CountsPanel({
       <h2 id="fw-scans-counts" className="fw-floor-section-title">
         {t('counts.title')}
       </h2>
-      <div className="fw-scans-counters">
+      <div className="fw-scans-counters" data-good-only={goodOnly ? 'true' : undefined}>
         {counter('good', good, <Check />)}
-        {counter('scrap', scrap, <TriangleAlert />)}
-        {counter('rework', rework, <Wrench />)}
+        {goodOnly ? null : counter('scrap', scrap, <TriangleAlert />)}
+        {goodOnly ? null : counter('rework', rework, <Wrench />)}
       </div>
       {stepper && open !== 'good' ? (
         <div className="fw-scans-stepper" role="group" aria-label={t('counts.stepGood')}>

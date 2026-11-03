@@ -20,6 +20,11 @@ export const manifest = defineManifest({
   'GET /production/scans/corrections/:requestId': { audiences: ['office'], permission: 'production.scan.correct', scope: 'record' },
   'POST /production/scans/corrections/:requestId/approve': { audiences: ['office'], permission: 'production.scan.correct', scope: 'record' },
   'POST /production/scans/corrections/:requestId/refuse': { audiences: ['office'], permission: 'production.scan.correct', scope: 'record' },
+  // B-W2b-83 (MES-096): the team leader on the tablet (floor.lead at the device's site); deciding signs with the PIN.
+  'GET /production/scans/floor/corrections': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
+  'GET /production/scans/floor/corrections/:requestId': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
+  'POST /production/scans/floor/corrections/:requestId/approve': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
+  'POST /production/scans/floor/corrections/:requestId/refuse': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
   'GET /production/scans/refusals': { audiences: ['office'], permission: 'production.scan.correct', scope: 'record' },
   'GET /production/scans/refusals/:refusalId': { audiences: ['office'], permission: 'production.scan.correct', scope: 'record' },
   'POST /production/scans/refusals/:refusalId/discard': { audiences: ['office'], permission: 'production.scan.correct', scope: 'record' },

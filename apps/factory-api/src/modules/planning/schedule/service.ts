@@ -121,7 +121,8 @@ const WORK_ORDER_COLUMNS = {
   heldFromStatus: true,
   style: { select: { id: true, code: true, name: true, productType: true } },
   sizes: { select: { quantity: true, partyId: true } },
-  operations: { select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, styleRevisionId: true, routingSeq: true }, orderBy: { seq: 'asc' as const } },
+  // B-W2b-82: an unplanned operation has no target quantity, so no bar and no load: the board stays the routing's.
+  operations: { where: { routingSeq: { not: null } }, select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, styleRevisionId: true, routingSeq: true }, orderBy: { seq: 'asc' as const } },
 } as const
 
 /** The site's open work orders, as the board needs them (`ids`: only those). */

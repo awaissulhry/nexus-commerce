@@ -17,7 +17,7 @@ export async function wipForMany(db: Reader, workOrderIds: readonly string[]): P
   const ids = [...new Set(workOrderIds)]
   const out = new Map<string, Wip>()
   if (ids.length === 0) return out
-  const operations = await db.workOrderOperation.findMany({ where: { workOrderId: { in: ids } }, select: { id: true, workOrderId: true, seq: true, code: true, name: true, scanRequired: true, workCentreId: true }, orderBy: [{ workOrderId: 'asc' }, { seq: 'asc' }] })
+  const operations = await db.workOrderOperation.findMany({ where: { workOrderId: { in: ids } }, select: { id: true, workOrderId: true, seq: true, routingSeq: true, code: true, name: true, scanRequired: true, workCentreId: true }, orderBy: [{ workOrderId: 'asc' }, { seq: 'asc' }] })
   const centreIds = [...new Set(operations.map((row) => row.workCentreId))]
   const kinds = new Map(centreIds.length === 0 ? [] : (await db.workCentre.findMany({ where: { id: { in: centreIds } }, select: { id: true, kind: true } })).map((row) => [row.id, row.kind as WorkCentreKind]))
   const cells = await db.workOrderSize.findMany({ where: { workOrderId: { in: ids } }, select: { id: true, workOrderId: true, colourwayId: true, size: true, quantity: true }, orderBy: [{ colourwayId: 'asc' }, { size: 'asc' }] })
@@ -47,7 +47,7 @@ export async function wipForMany(db: Reader, workOrderIds: readonly string[]): P
     out.set(
       id,
       wipOf({
-        operations: (operationsOf.get(id) ?? []).map(({ workOrderId: _workOrderId, ...row }) => ({ ...row, workCentreKind: kinds.get(row.workCentreId) ?? 'SEWING' })),
+        operations: (operationsOf.get(id) ?? []).map(({ workOrderId: _workOrderId, routingSeq, ...row }) => ({ ...row, unplanned: routingSeq === null, workCentreKind: kinds.get(row.workCentreId) ?? 'SEWING' })),
         cells: (cellsOf.get(id) ?? []).map((cell) => ({ id: cell.id, colourwayCode: colourways.get(cell.colourwayId) ?? '', size: cell.size, quantity: cell.quantity })),
         bundles: (bundlesOf.get(id) ?? []).map(({ workOrderId: _workOrderId, ...bundle }) => bundle),
         scans: scansOf.get(id) ?? [],

@@ -9,8 +9,9 @@ import type { Reader } from './store'
 /**
  * THE seam of the floor's correction requests (B-W1-42; MES-096; design floor.operation "Ask a correction": the original
  * stays, on approval a CORRECTION row voids it; W1 decisions in the Office, Home › Approvals): the ScanCorrectionRequest
- * rows with their lines (OperationScanDefect). The floor inserts its own asks (and reads its site's); the office decides,
- * after `lockCorrectionRequest` (the row FOR UPDATE), with a compare-and-set on the version. One PENDING ask per scan is
+ * rows with their lines (OperationScanDefect). The floor inserts its own asks (and reads its site's); the office decides and
+ * so does a team leader on the tablet (B-W2b-83), after `lockCorrectionRequest` (the row FOR UPDATE), with a compare-and-set
+ * on the version. One PENDING ask per scan is
  * the ask command's check, read inside its transaction under the bundle's scan lock (so two asks of one scan take turns);
  * the …_production_scan_records_guards trigger holds the rest (asked PENDING of a standing scan, the subject rule, decided
  * once, four eyes).
@@ -126,7 +127,7 @@ export async function insertCorrectionRequest(tools: CommandTools, request: Corr
   audited(tools, 'production.askScanCorrection', request)
 }
 
-/** Records the decision inside the office's command (after lockCorrectionRequest): compare-and-set on the version. */
+/** Records the decision inside the decider's command (after lockCorrectionRequest): compare-and-set on the version. */
 export async function decideCorrectionRequest(tools: CommandTools, before: CorrectionRequest, after: CorrectionRequest): Promise<void> {
   const { count } = await tools.tx.scanCorrectionRequest.updateMany({
     where: { id: before.id, version: before.version, status: 'PENDING' },
@@ -156,6 +157,8 @@ export interface CorrectionFilter {
   /** The asks of a station at a site that records the station only (no asker named). */
   readonly stationId?: string
   readonly since?: Date
+  /** At most this many, the oldest asks first. */
+  readonly take?: number
 }
 
 /** The requests that match, oldest ask first, in the caller's scope. */
@@ -174,6 +177,7 @@ export async function readCorrectionRequests(db: Reader, filter: CorrectionFilte
     },
     select: COLUMNS,
     orderBy: [{ serverTime: 'asc' }, { id: 'asc' }],
+    ...(filter.take ? { take: filter.take } : {}),
   })
   return withLines(db, rows)
 }
@@ -185,7 +189,7 @@ export async function readCorrectionRequest(db: Reader, requestId: string): Prom
   return row ? ((await withLines(db, [row]))[0] ?? null) : null
 }
 
-/** The request's row locked for its decision (one decision at a time), then read. The office's transaction. */
+/** The request's row locked for its decision (one decision at a time), then read. The decider's transaction. */
 export async function lockCorrectionRequest(tx: CommandTx, _tenantId: string, requestId: string): Promise<CorrectionRequest | null> {
   if (!isUuid(requestId)) return null
   await tx.$queryRaw`SELECT "id" FROM "ScanCorrectionRequest" WHERE "id" = ${requestId}::uuid FOR UPDATE`

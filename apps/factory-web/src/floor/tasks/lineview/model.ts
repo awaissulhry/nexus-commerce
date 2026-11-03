@@ -4,7 +4,7 @@ import type { FloorTone } from '@nexus/ui/floor'
 import type { BoardStation, LineBoard } from '../../../lib/line-board/schema'
 import type { QueueItem } from '../../queue/model'
 import type { BundleCard } from '../scans/model'
-import type { BehalfOptions, BlockRow, Conflict, ConflictDecisions, FloorLine, HandoverNote, Operator, ReassignRow, RefusalTile, ScrapRow } from './api'
+import type { BehalfOptions, BlockRow, Conflict, ConflictDecisions, CorrectionRow, FloorLine, HandoverNote, Operator, ReassignRow, RefusalTile, ScrapRow } from './api'
 
 /**
  * The Line view's rules (SCR-168; design floor.supervisor; Owner answer F2). Pure, so the tests hold them: the numbers of
@@ -18,6 +18,8 @@ export const HANDOVER_WRITE = 'andon.handover.write'
 export const SCAN_ON_BEHALF = 'production.scan.onBehalf'
 export const NOTE_MAX = HANDOVER_LIMITS.text
 export const REASON_MAX = 500
+/** A correction's refusal: the API keeps at most this many words. */
+export const CORRECTION_NOTE_MAX = 300
 
 // ---- what the screen reads ----------------------------------------------------------------------------------------------
 
@@ -90,13 +92,15 @@ export type WaitingItem =
   | { readonly kind: 'scrap'; readonly id: string; readonly at: string; readonly row: ScrapRow }
   | { readonly kind: 'block'; readonly id: string; readonly at: string; readonly row: BlockRow }
   | { readonly kind: 'conflict'; readonly id: string; readonly at: string; readonly row: Conflict }
+  | { readonly kind: 'correction'; readonly id: string; readonly at: string; readonly row: CorrectionRow }
 
-/** One list, oldest first: scrap over the limit, off-standard blocks of this line, sync conflicts (what is with the office last). */
-export function waitingItems(scrap: readonly ScrapRow[], blocks: readonly BlockRow[], conflicts: readonly Conflict[], lineId: string | null): WaitingItem[] {
+/** One list, oldest first: scrap over the limit, off-standard blocks and corrections of this line, sync conflicts (what is with the office last). */
+export function waitingItems(scrap: readonly ScrapRow[], blocks: readonly BlockRow[], conflicts: readonly Conflict[], lineId: string | null, corrections: readonly CorrectionRow[] = []): WaitingItem[] {
   const items: WaitingItem[] = [
     ...scrap.map((row) => ({ kind: 'scrap' as const, id: row.scanId, at: row.at, row })),
     ...blocks.filter((row) => lineId === null || row.line === null || row.line.id === lineId).map((row) => ({ kind: 'block' as const, id: row.id, at: row.startedAt, row })),
     ...conflicts.map((row) => ({ kind: 'conflict' as const, id: row.id, at: row.refused.serverTime, row })),
+    ...corrections.filter((row) => lineId === null || row.line === null || row.line.id === lineId).map((row) => ({ kind: 'correction' as const, id: row.id, at: row.at, row })),
   ]
   const late = (item: WaitingItem) => (item.kind === 'conflict' && item.row.state === 'WITH_OFFICE' ? 1 : 0)
   return items.sort((a, b) => late(a) - late(b) || Date.parse(a.at) - Date.parse(b.at) || (a.id < b.id ? -1 : 1))
@@ -106,7 +110,7 @@ export const waitingKey = (item: Pick<WaitingItem, 'kind' | 'id'>): string => `$
 
 /** What makes a waiting row look different (the list's "2 new · Show"). */
 export function waitingVersion(item: WaitingItem): string {
-  return item.kind === 'conflict' ? `${item.row.version}:${item.row.state}` : item.kind === 'block' ? String(item.row.version) : String(item.row.scrapQuantity)
+  return item.kind === 'conflict' ? `${item.row.version}:${item.row.state}` : item.kind === 'scrap' ? String(item.row.scrapQuantity) : String(item.row.version)
 }
 
 /** Why this person may not decide it: their own scan or time (four eyes), or it is with the office. */
@@ -119,6 +123,23 @@ export function decisionHeld(item: WaitingItem): 'own' | 'withOffice' | null {
 export function nextItem(items: readonly WaitingItem[], after: Pick<WaitingItem, 'kind' | 'id'>): WaitingItem | null {
   return items.find((item) => waitingKey(item) !== waitingKey(after) && decisionHeld(item) === null) ?? null
 }
+
+export interface CountChange {
+  readonly key: 'good' | 'scrap' | 'rework'
+  readonly from: number
+  readonly to: number
+}
+
+/** A correction's old → new counts: only what it changes (no count: it moves a reason). */
+export function correctionChanges(row: Pick<CorrectionRow, 'recorded' | 'asked'>): CountChange[] {
+  return (['good', 'scrap', 'rework'] as const).flatMap((key) => (row.recorded[key] === row.asked[key] ? [] : [{ key, from: row.recorded[key], to: row.asked[key] }]))
+}
+
+/** The reason tiles a rejection offers: a correction has its own, a time block none (it takes words). */
+export const rejectTiles = (item: Pick<WaitingItem, 'kind'>, tiles: { readonly scrap: readonly RefusalTile[]; readonly correction: readonly RefusalTile[] }): readonly RefusalTile[] => (item.kind === 'correction' ? tiles.correction : item.kind === 'scrap' ? tiles.scrap : [])
+
+/** A rejection signs with the PIN where the API says so: a time block's and a correction's. */
+export const rejectSigns = (item: Pick<WaitingItem, 'kind'>): boolean => item.kind === 'block' || item.kind === 'correction'
 
 /** A conflict's decision with its tiles. */
 export const decisionOf = (decisions: ConflictDecisions, decision: ConflictDecisions[number]['decision']) => decisions.find((entry) => entry.decision === decision) ?? null
@@ -288,3 +309,7 @@ export const overrideBody = (report: Readonly<Record<string, unknown>>, draft: O
 /** The refusals this screen has its own words for; any other shows the API's. */
 export const KNOWN_REFUSALS = ['SOLVED', 'CANCELLED', 'ALREADY_ON_THE_WAY', 'DECIDED_ALREADY', 'SELF_DECISION', 'BEHALF_SELF', 'BEHALF_NO_NOTICE', 'OVERRIDE_SELF', 'NOT_QUALIFIED', 'NOT_AUTHORISED', 'OVERRIDE_REASON_NEEDED', 'STALE', 'OTHER_KIND'] as const
 export const isKnownRefusal = (code: string): boolean => (KNOWN_REFUSALS as readonly string[]).includes(code)
+
+/** What can refuse a correction's decision (B-W2b-83): words of their own, since the same code on an entry on behalf means another thing. */
+export const CORRECTION_REFUSALS = ['SELF_APPROVAL', 'TARGET_VOIDED', 'LESS_THAN_TAKEN', 'MORE_THAN_PASSED', 'MORE_THAN_BUNDLE', 'PREVIOUS_NOT_REPORTED', 'NO_COUNT', 'SAME_COUNTS', 'UNKNOWN_SCAN', 'WORK_ORDER_NOT_OPEN', 'ON_HOLD'] as const
+export const isCorrectionRefusal = (code: string): boolean => (CORRECTION_REFUSALS as readonly string[]).includes(code)

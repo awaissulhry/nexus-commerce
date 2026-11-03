@@ -442,11 +442,14 @@ describe('a comment or a photo from the floor (MES-101, COL-017)', () => {
 describe('an unplanned operation (MES-086)', () => {
   const base = () => `/production/extra-operations/work-orders/${wo}`
   let extra: { id: string; code: string }
+  let second: { id: string; code: string }
   let planned: { id: string }
 
   beforeAll(async () => {
     extra = { id: newId(), code: `W2B47-EXTRA-${run}` }
     await admin(`INSERT INTO "Operation" (id, "tenantId", "companyId", code, name, "workCentreKind", "standardMinutes", status, "updatedAt") VALUES ($1, $2, $3, $4, 'Extra bar tack', 'SEWING', 1.5, 'ACTIVE', now())`, [extra.id, T, companyA, extra.code])
+    second = { id: newId(), code: `W2B47-EXTRA-2-${run}` }
+    await admin(`INSERT INTO "Operation" (id, "tenantId", "companyId", code, name, "workCentreKind", "standardMinutes", status, "updatedAt") VALUES ($1, $2, $3, $4, 'A second pass', 'SEWING', 1, 'ACTIVE', now())`, [second.id, T, companyA, second.code])
     planned = (await admin<{ id: string }>(`SELECT r."operationId" AS id FROM "RoutingOperation" r JOIN "WorkOrderOperation" o ON r."revisionId" = o."styleRevisionId" AND r.seq = o."routingSeq" WHERE o.id = $1`, [ops.sew]))[0]!
   }, 60_000)
 
@@ -467,21 +470,21 @@ describe('an unplanned operation (MES-086)', () => {
     expect(first.statusCode, first.body).toBe(201)
     expect(first.json()).toMatchObject({ operation: { id: extra.id, code: extra.code, name: 'Extra bar tack', workCentreKind: 'SEWING' }, reasonCode: 'QUALITY_FIX', reason: 'To fix a defect', addedOn: 'FLOOR' })
     expect((await send()).statusCode).toBe(200)
-    await ok('manager', 'POST', base(), { operationId: extra.id, reasonCode: 'OTHER', note: 'A second pass' }, 201)
+    await ok('manager', 'POST', base(), { operationId: second.id, reasonCode: 'OTHER', note: 'A second pass' }, 201)
     const list = await ok('office', 'GET', base())
     expect(list.added.map((row: Json) => [row.operation.code, row.reason, row.addedOn])).toEqual([
       [extra.code, 'To fix a defect', 'FLOOR'],
-      [extra.code, 'Other (say why): A second pass', 'OFFICE'],
+      [second.code, 'Other (say why): A second pass', 'OFFICE'],
     ])
     expect((await ok('lead', 'GET', `${base()}/choices`)).added).toHaveLength(2)
     const events = await outbox('production.extra_operation_added', wo)
     expect(events[0]!.payload).toEqual({ workOrderId: wo, number: 'SEED-WO-0001', siteId: siteA1, recordId: first.json().id, operationId: extra.id, code: extra.code, reasonCode: 'QUALITY_FIX' })
   })
 
-  it('refuses in words: an operation of the routing, "Other" without words, not of the library; never touches the frozen routing', async () => {
+  it('refuses in words: an operation of the routing, one added already, not of the library; never touches the frozen routing', async () => {
     const before = (await admin('SELECT count(*)::int AS n FROM "WorkOrderOperation" WHERE "workOrderId" = $1', [wo]))[0]!.n
     expect((await no('lead', 'POST', base(), { operationId: planned.id, reasonCode: 'QUALITY_FIX' }, 409)).message).toMatch(/routing already/)
-    expect((await no('lead', 'POST', base(), { operationId: extra.id, reasonCode: 'OTHER' }, 409)).message).toMatch(/few words/)
+    expect((await no('lead', 'POST', base(), { operationId: extra.id, reasonCode: 'OTHER' }, 409)).message).toMatch(/added to this work order already/)
     expect((await no('lead', 'POST', base(), { operationId: newId(), reasonCode: 'QUALITY_FIX' }, 409)).message).toMatch(/not an active operation/)
     expect((await admin('SELECT count(*)::int AS n FROM "WorkOrderOperation" WHERE "workOrderId" = $1', [wo]))[0]!.n).toBe(before)
   })

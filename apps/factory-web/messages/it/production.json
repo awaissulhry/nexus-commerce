@@ -650,7 +650,8 @@
     "correctionsWaiting_other": "{count} richieste di correzione attendono una decisione.",
     "toToday": "Apri Oggi",
     "toLabour": "Apri Manodopera e rettifiche",
-    "correctionsHint": "La scansione originale resta; una correzione approvata aggiunge una riga."
+    "correctionsHint": "La scansione originale resta; una correzione approvata aggiunge una riga.",
+    "unplanned": "Fuori ciclo"
   },
   "quality": {
     "what": "I controlli finali iniziano",
@@ -803,5 +804,55 @@
     "quickDue": "Consegna",
     "dueDate": "data di consegna",
     "boardHeld": "Un ordine di lavoro cambia stato con il suo passo (rilascio, sospensione, completamento, chiusura): aprilo per spostarlo."
+  },
+  "extra": {
+    "title": "Operazioni fuori ciclo",
+    "add": "Aggiungi un'operazione fuori ciclo",
+    "loading": "Lettura delle operazioni…",
+    "none": "Niente aggiunte: questo ordine segue il suo ciclo.",
+    "hint": "Un'operazione fuori ciclo si può scansionare, pagare e costificare. Nulla la aspetta, e l'ordine del ciclo resta come è stato congelato.",
+    "listFailed": "Impossibile leggere le operazioni fuori ciclo.",
+    "empty": "Tutte le operazioni della libreria sono già su questo ordine di lavoro.",
+    "operation": "Operazione",
+    "pick": "Scegli",
+    "why": "Perché serve?",
+    "note": "Scrivi perché in poche parole",
+    "minutes": "{minutes} min al pezzo",
+    "noRate": "Questa operazione non ha una tariffa a pezzo in questo sito: non paga pezzi, e il tempo va registrato come fuori standard.",
+    "added": "Op {seq} {name} aggiunta: il reparto può scansionarla.",
+    "addedNoRate": "Op {seq} {name} aggiunta: il reparto può scansionarla. Non ha una tariffa a pezzo: il tempo va registrato come fuori standard.",
+    "refused": "Non aggiunta: {words}",
+    "failed": "Impossibile aggiungere l'operazione. Non è cambiato nulla: riprova.",
+    "readFailed": "Impossibile leggere le operazioni della libreria.",
+    "held": {
+      "operation": "Scegli prima l'operazione.",
+      "reason": "Scrivi perché serve.",
+      "note": "Scrivi perché in poche parole.",
+      "status": "Solo un ordine rilasciato o in corso accetta un'operazione fuori ciclo."
+    },
+    "col": {
+      "operation": "Operazione",
+      "reason": "Perché",
+      "addedOn": "Aggiunta",
+      "at": "Quando"
+    },
+    "on": {
+      "FLOOR": "In reparto",
+      "OFFICE": "In ufficio"
+    },
+    "reason": {
+      "QUALITY_FIX": "Per correggere un difetto",
+      "MATERIAL_ISSUE": "Per un problema di materiale",
+      "CUSTOMER_CHANGE": "Richiesta del cliente",
+      "MISSING_FROM_ROUTING": "Manca nel ciclo",
+      "OTHER": "Altro"
+    },
+    "dialog": {
+      "title": "Aggiungi un'operazione fuori ciclo a {number}",
+      "subtitle": "Un'operazione della libreria che manca a questo ordine, con il motivo.",
+      "scans": "Il reparto la sceglie a mano su qualsiasi fascio di questo ordine; solo pezzi buoni.",
+      "pay": "Paga alla sua tariffa a pezzo e costa i suoi minuti standard, come ogni operazione.",
+      "frozen": "Resta sull'ordine: non si può togliere e, se non usata, non cambia nessuna cifra."
+    }
   }
 }

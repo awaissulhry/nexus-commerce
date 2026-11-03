@@ -46,6 +46,8 @@ export interface CardOperation {
   readonly code: string
   readonly name: string
   readonly scanRequired: boolean
+  /** B-W2b-82: added to the released work order: picked by hand, good pieces only (extra.ts; absent: an older card kept on the tablet). */
+  readonly unplanned?: boolean | undefined
   readonly workCentreKind: string
   readonly final: boolean
   readonly sewn: boolean
@@ -91,7 +93,7 @@ export type Opening =
 
 /** The operation reported at this station that is DONE (the last of the station's kind), for "already reported". */
 export function doneHere(card: BundleCard): CardOperation | null {
-  const done = card.operations.filter((operation) => operation.state === 'DONE' && operation.report !== null)
+  const done = card.operations.filter((operation) => operation.state === 'DONE' && operation.report !== null && !operation.unplanned)
   const here = card.station ? done.filter((operation) => operation.workCentreKind === card.station!.kind) : done
   return here.at(-1) ?? done.at(-1) ?? null
 }
@@ -385,4 +387,6 @@ export const KNOWN_REFUSALS = [
   'TEAM_NOT_IN_CREW',
   'TEAM_NOTICE',
   'BUNDLE_RUNNING',
+  // B-W2b-82: an unplanned operation counts good pieces only.
+  'UNPLANNED_GOOD_ONLY',
 ] as const
