@@ -43,7 +43,8 @@ export const WORK_ORDER_SELECT = {
   holdReason: true,
   style: { select: { code: true, name: true } },
   sizes: { select: { quantity: true } },
-  operations: { select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true }, orderBy: { seq: 'asc' } },
+  // B-W2b-82: an unplanned operation has no target quantity, so no card: the day's plan stays the routing's.
+  operations: { where: { routingSeq: { not: null } }, select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true }, orderBy: { seq: 'asc' } },
 } as const satisfies Prisma.WorkOrderSelect
 export type WorkOrderRow = Prisma.WorkOrderGetPayload<{ select: typeof WORK_ORDER_SELECT }>
 export type OperationOfOrder = WorkOrderRow['operations'][number]

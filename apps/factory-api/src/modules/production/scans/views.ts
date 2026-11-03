@@ -27,7 +27,7 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { bundleFlowOf } from '../bundles/flow'
 import { readBundleByCode, readCellLabels } from '../bundles/store'
-import { workerGateFor } from '../../people/privacy/worker-gate'
+import { workerGateFor, workersAmong } from '../../people/privacy/worker-gate'
 import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import { floorOf, floorOrOffice, mayScan, officeOf, scanWorkOrder } from './access'
 import { readCorrectionRequests } from './corrections-store'
@@ -113,6 +113,7 @@ export async function bundleCard(caller: CommandCaller, query: { readonly code: 
           code: operation.code,
           name: operation.name,
           scanRequired: operation.scanRequired,
+          unplanned: operation.unplanned ?? false,
           workCentreKind: operation.workCentreKind,
           final: operation.id === final?.id,
           sewn: operation.id === sewn?.id,
@@ -213,7 +214,7 @@ export async function mine(caller: CommandCaller) {
  * Every scan of a work order (or one bundle of it), oldest first, for the office's work order record and bundle drawer
  * (design bd-scans): kind, operation, counts, reasons, device and server time, station, the worker by name where the scan
  * names one and the site's PERFORMANCE gate is on (one record: Owner answer W1; off: `workerHidden`, never who), who approved
- * a correction, and the scan that voids it.
+ * a correction (a team leader's id behind the same gate: `approvedByHidden`), and the scan that voids it.
  */
 export async function workOrderScans(caller: CommandCaller, workOrderId: string, query: { readonly bundleId?: string | undefined }) {
   officeOf(caller)
@@ -225,6 +226,9 @@ export async function workOrderScans(caller: CommandCaller, workOrderId: string,
     const defects = await readDefects(db, scans.map((scan) => scan.id))
     const who = await workerGateFor(db, workOrder.siteId)
     const names = await workerNames(db, who.lookup(scans.map((scan) => scan.workerId)))
+    // B-W2b-82 (asked by B-W2b-83): who approved a correction is an office user or, decided on the floor, a team leader: a worker's
+    // id follows the same gate as `worker` (`author`), an office user's stays.
+    const approvers = await workersAmong(db, scans.map((scan) => scan.approvedById))
     const stations = await readStations(db, scans.map((scan) => scan.stationId))
     const voidedBy = new Map(scans.flatMap((scan) => (scan.correctsId ? [[scan.correctsId, scan.id] as const] : [])))
     return {
@@ -235,12 +239,14 @@ export async function workOrderScans(caller: CommandCaller, workOrderId: string,
         worker: who.person(scan.workerId, names),
         workerHidden: who.hidden(scan.workerId),
         station: scan.stationId && stations.get(scan.stationId) ? { id: scan.stationId, code: stations.get(scan.stationId)!.code, name: stations.get(scan.stationId)!.name } : null,
-        approvedById: scan.approvedById,
+        ...approverOf(who.author(scan.approvedById, scan.approvedById !== null && approvers.has(scan.approvedById))),
         voidedById: voidedBy.get(scan.id) ?? null,
       })),
     }
   })
 }
+
+const approverOf = (author: { readonly id: string | null; readonly hidden: boolean }) => ({ approvedById: author.id, approvedByHidden: author.hidden })
 
 // ---- refused scans ----------------------------------------------------------------------------------------------------------------------
 

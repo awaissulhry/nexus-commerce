@@ -30,6 +30,8 @@ import {
  *               rule (skippedOperationRule): WARN (the default) lets it count and tells the team leader; STRICT holds it
  *               (W1's refusal, not final: the earlier scan may still be in another tablet's queue); FREE lets it count.
  *               The garments the earlier operations passed are then the last reported one's (or the bundle's).
+ *               An unplanned operation (B-W2b-82, ../scans/rules) is no required step: it is never skipped, never the
+ *               operation "before" another one, and neither check applies at it: it counts up to the bundle's own garments.
  *   wrong       MES-070: the bundle's work order is allocated to another line than the station's (WorkOrder.lineId, the
  *               allocation board), and that line has a station of the operation's kind: held for a team leader's
  *               override (no site rule: always STRICT). "Not at this station" (another kind of work), "not next"
@@ -107,7 +109,8 @@ export interface PassedTo {
 }
 
 /** What reached the operation for the bundle, walking back through the scanned operations to the last reported one. */
-export function passedTo(operations: readonly ScanOperation[], operation: Pick<ScanOperation, 'seq'>, bundleQuantity: number, standing: ReadonlyMap<string, ScanFact>, bundleId: string): PassedTo {
+export function passedTo(operations: readonly ScanOperation[], operation: Pick<ScanOperation, 'seq' | 'unplanned'>, bundleQuantity: number, standing: ReadonlyMap<string, ScanFact>, bundleId: string): PassedTo {
+  if (operation.unplanned) return { previous: null, from: null, passed: bundleQuantity, skipped: [] }
   const earlier = scannedOperations(operations).filter((candidate) => candidate.seq < operation.seq)
   const skipped: ScanOperation[] = []
   for (const candidate of [...earlier].reverse()) {

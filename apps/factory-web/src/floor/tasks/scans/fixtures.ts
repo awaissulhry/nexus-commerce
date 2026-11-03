@@ -3,11 +3,13 @@ import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { onFloor, signedInFrame } from '../../frame/fixtures'
 import type { OperationCheck, OperationSteps } from './checks'
 import type { OffStandardBlock, OffStandardTile } from './indirect'
+import { NEW_EXTRA, type ExtraChoices, type ExtraDraft } from './extra'
 import { NO_COUNTS, type BundleCard, type CardOperation, type CardReason, type CorrectionTarget, type Counts } from './model'
 import { NEW_NOTE } from './notes'
 import type { PickerReason } from '../reasons/model'
 import type { StackRow } from './stack'
 import { NOT_STARTED, afterPause, afterStart, type OpenItem, type Timing } from './timing'
+import type { TaskProblem } from '../shared/task-api'
 import { NO_WORK, OperationView, type CountsStep, type LastStrip, type OperationStep, type OperationViewModel, type Work } from './view/OperationView'
 import type { OverrideModel } from './view/OverrideDialog'
 
@@ -59,6 +61,8 @@ const OP10 = op('op-10', 10, 'CUT', 'Taglio pelle', 'CUTTING', 'DONE', 20, { sca
 const OP20 = op('op-20', 20, 'SEW-SIDE', 'Cucire fianchi', 'SEWING', 'OPEN', 20)
 const OP30 = op('op-30', 30, 'SEW-SLV', 'Attaccare maniche', 'SEWING', 'NOT_REACHED', null)
 const OP40 = op('op-40', 40, 'FIN', 'Rifinitura e controllo', 'FINISHING', 'NOT_REACHED', null)
+/** B-W2b-82: added to the released work order: picked by hand, good pieces only, up to the bundle's own pieces. */
+const OP50: CardOperation = { ...op('op-50', 50, 'REINF', 'Rinforzo colletto', 'SEWING', 'OPEN', 20), scanRequired: false, unplanned: true, final: false, sewn: false }
 
 const CARD: BundleCard = {
   scanned: BUNDLE,
@@ -73,9 +77,27 @@ const CARD: BundleCard = {
   reasons: REASONS,
 }
 
+const WITH_UNPLANNED: BundleCard = { ...CARD, operations: [...CARD.operations, OP50] }
+const EXTRA_CHOICES: ExtraChoices = {
+  operations: [
+    { id: 'lib-1', code: 'REINF', name: 'Rinforzo colletto', workCentreKind: 'SEWING', standardMinutes: '1.500', pays: 'PIECE_RATE' },
+    { id: 'lib-2', code: 'PRESS', name: 'Stiratura extra', workCentreKind: 'FINISHING', standardMinutes: '0.800', pays: 'OFF_STANDARD' },
+    { id: 'lib-3', code: 'BARTACK', name: 'Travette aggiuntive', workCentreKind: 'SEWING', standardMinutes: '0.600', pays: 'NO_PIECE_PAY' },
+  ],
+  reasons: [
+    { code: 'QUALITY_FIX', label: { it: 'Per correggere un difetto', en: 'To fix a defect' }, needsNote: false },
+    { code: 'MATERIAL_ISSUE', label: { it: 'Per un problema di materiale', en: 'A material problem' }, needsNote: false },
+    { code: 'CUSTOMER_CHANGE', label: { it: 'Richiesta del cliente', en: 'The customer asked' }, needsNote: false },
+    { code: 'MISSING_FROM_ROUTING', label: { it: 'Manca nel ciclo', en: 'Missing from the routing' }, needsNote: false },
+    { code: 'OTHER', label: { it: 'Altro (scrivi perché)', en: 'Other (say why)' }, needsNote: true },
+  ],
+}
+
 const frame = (extra: Parameters<typeof signedInFrame>[1] = {}) => signedInFrame('tile.operation', { station: { name: STATION, site: 'Stabilimento Demo Nord' }, ...extra })
 
 const model = (step: OperationStep, extra: Partial<OperationViewModel> = {}): OperationViewModel => ({ frame: frame(), step, online: true, ...extra })
+
+const extra = (draft: Partial<ExtraDraft> = {}, step: { choices?: ExtraChoices | null; problem?: TaskProblem | null; busy?: boolean } = {}): OperationStep => ({ kind: 'extra', card: CARD, back: counts(), choices: EXTRA_CHOICES, draft: { ...NEW_EXTRA, ...draft }, ...step })
 
 const counts = (step: Partial<CountsStep> = {}): CountsStep => ({ kind: 'counts', card: CARD, operation: OP20, counts: NO_COUNTS, open: null, asOf: null, ...step })
 
@@ -337,6 +359,25 @@ export const designScreen = defineDesignScreen<OperationViewModel>({
     { id: 'steps', label: 'Steps in this operation', model: model(counts({ work: work({ steps: STEPS }) })), note: 'MES-102: one tap ticks; who and when on each row; Finish waits for the required ones. The DS has no FloorChecklist yet: composed of FloorList rows.' },
     { id: 'steps-done', label: 'Steps all ticked: Finish opens', model: model(counts({ work: work({ steps: { open: 0, steps: STEPS.steps.map((step) => ({ ...step, tick: step.tick ?? { outcome: 'DONE', at: '2026-10-29T08:38:00.000Z', mine: true, by: 'Ada Demo' } })) } }) })) },
     // ---- several bundles ----
+    // B-W2b-82 (MES-086): an unplanned operation, a real step.
+    { id: 'unplanned-offered', label: 'Unplanned operation on the work order', model: model(counts({ card: WITH_UNPLANNED, work: work({}) })), note: 'A scan still opens the routing\'s next step (one tap stays one tap); the unplanned operation of this station\'s kind is one tap away.' },
+    { id: 'unplanned-counts', label: 'Unplanned operation: good pieces only', model: model(counts({ card: WITH_UNPLANNED, operation: OP50, work: work({ check: { ...CHECK, expected: 20 } }) })), note: 'Up to the bundle\'s own pieces, whatever the routing passed. No Scrap, no Rework, no Not all good, no stack: a piece lost here would stay in the routing\'s flow. Finish is one tap; Back returns to the routing\'s step.' },
+    { id: 'unplanned-running', label: 'Unplanned operation: running', model: model(counts({ card: WITH_UNPLANNED, operation: OP50, work: work({ timing: RUNNING }) })), note: 'Start, Pause and Pieces so far work like any operation: the minutes are the work order\'s.' },
+    { id: 'unplanned-refused', label: 'Refused: scrap at an unplanned operation (a queued report)', model: model({ kind: 'refused', code: 'UNPLANNED_GOOD_ONLY', message: '', fix: null, card: WITH_UNPLANNED, scanned: BUNDLE }), note: 'Only an older client can send it; the words say what to do.' },
+    { id: 'unplanned-already', label: 'All reported here, an unplanned operation left', model: model({ kind: 'already', card: { ...WITH_UNPLANNED, next: null, hint: { code: 'ALREADY_REPORTED', message: '', fix: '' } }, operation: { ...OP20, state: 'DONE' }, report: { scanId: 's-20', kind: 'REPORT', goodQuantity: 20, scrapQuantity: 0, reworkQuantity: 0, serverTime: AT, station: { id: 'st-sew', code: 'SEW-04' }, own: true }, undo: false }), note: 'A bundle done at this station can still go to the unplanned operation.' },
+    { id: 'unplanned-lead', label: 'Team leader: Add an unplanned operation', model: model(counts({ work: work({}) }), { mayAdd: true }), note: 'production.extraops.add only. An operator never sees it.' },
+    { id: 'extra-loading', label: 'Add: reading the operations', model: model(extra({}, { choices: null }), { mayAdd: true }) },
+    { id: 'extra-pick', label: 'Add: the operation and why', model: model(extra({ operationId: 'lib-1' }), { mayAdd: true }), note: 'The library\'s active operations this work order lacks; the reason tiles; Add waits for both, in words on the bar.' },
+    { id: 'extra-ready', label: 'Add: ready', model: model(extra({ operationId: 'lib-1', reason: 'QUALITY_FIX' }), { mayAdd: true }) },
+    { id: 'extra-words', label: 'Add: Other asks a few words', model: model(extra({ operationId: 'lib-1', reason: 'OTHER' }), { mayAdd: true }) },
+    { id: 'extra-no-rate', label: 'Add: no piece rate', model: model(extra({ operationId: 'lib-2', reason: 'MATERIAL_ISSUE' }), { mayAdd: true }), note: 'Piece pay is on and the operation has no rate in force: said before Add. No figure: a word.' },
+    { id: 'extra-busy', label: 'Add: adding', model: model(extra({ operationId: 'lib-1', reason: 'QUALITY_FIX' }, { busy: true }), { mayAdd: true }) },
+    { id: 'extra-empty', label: 'Add: nothing left to add', model: model(extra({}, { choices: { ...EXTRA_CHOICES, operations: [] } }), { mayAdd: true }) },
+    { id: 'extra-error', label: 'Add: the list did not load', model: model(extra({}, { choices: null, problem: { kind: 'unavailable' } }), { mayAdd: true }) },
+    { id: 'extra-refused', label: 'Add: refused in words', model: model(extra({ operationId: 'lib-1', reason: 'QUALITY_FIX' }, { problem: { kind: 'conflict', message: 'Work order WO-DEMO-0042 is not released or in progress: it takes no unplanned operation.' } }), { mayAdd: true }) },
+    { id: 'extra-offline', label: 'Add offline: held with the reason', model: model(extra({ operationId: 'lib-1', reason: 'QUALITY_FIX' }), { mayAdd: true, online: false, frame: frame({ online: false }) }), note: 'Adding is online only: the list is the office\'s. Scans at an operation already added queue as usual.' },
+    { id: 'extra-added', label: 'Added: the team leader stays on the bundle', model: model(counts({ card: WITH_UNPLANNED, work: work({}) }), { mayAdd: true, done: { kind: 'extra', bundleCode: 'WO-DEMO-0042', ticks: 'recorded', extra: { seq: 50, name: 'Rinforzo colletto', pays: 'PIECE_RATE' } } }) },
+    { id: 'extra-added-no-rate', label: 'Added, no piece rate', model: model(counts({ card: WITH_UNPLANNED, work: work({}) }), { mayAdd: true, done: { kind: 'extra', bundleCode: 'WO-DEMO-0042', ticks: 'recorded', extra: { seq: 50, name: 'Stiratura extra', pays: 'OFF_STANDARD' } } }) },
     { id: 'stack-empty', label: 'Several bundles: nothing scanned yet', model: model({ kind: 'stack', rows: [], size: null }) },
     { id: 'stack', label: 'Several bundles: one size', model: model({ kind: 'stack', rows: STACK.slice(0, 2), size: null }), note: 'MES-100: scan several, Finish once. − and + per bundle, no typing.' },
     { id: 'stack-sizes', label: 'Several bundles: size buttons', model: model({ kind: 'stack', rows: STACK, size: null }), note: 'MES-107: with two sizes on the stack the size buttons count by size; each says its pieces.' },

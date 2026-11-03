@@ -1,5 +1,5 @@
 import { bundleFlow, type Flow as BundleFlow, type FlowRework } from '../bundles/split'
-import { finalOperationOf, previousScanned, sewnOperationOf, standingKey, standingScans, type ScanFact, type ScanOperation } from './rules'
+import { finalOperationOf, previousScanned, sewnOperationOf, standingKey, standingScans, totalOf, type ScanFact, type ScanOperation } from './rules'
 
 /**
  * Work in progress from the floor's scans (B-W1-42; MES-167 WIP by operation, MES-079 the operation bulletin; design
@@ -18,6 +18,8 @@ import { finalOperationOf, previousScanned, sewnOperationOf, standingKey, standi
  *             operation (rules.ts sewnOperationOf; null when the routing sews nowhere), finished = the good of the final
  *             operation (the last scanned one).
  *   lines     per operation, the good its reports passed per line of the reporting station (F2: output per line only).
+ * An unplanned operation (B-W2b-82, rules.ts) stands outside the flow: only what was reported there arrived there, nothing
+ * waits for it and it is neither final nor sewn; `unplanned` says so to the screens.
  * Garment figures count bundles of whole garments; a part bundle (sleeves on their own) travels through its operations
  * as pieces of one part, so it is counted on its own (`partBundles`), never as garments.
  *
@@ -87,6 +89,8 @@ export interface WipOperation extends Flow {
   readonly code: string
   readonly name: string
   readonly scanRequired: boolean
+  /** B-W2b-82: added to the released work order, no routing step. */
+  readonly unplanned: boolean
   readonly final: boolean
   readonly sewn: boolean
   readonly bundles: BundleCounts
@@ -163,6 +167,10 @@ export function wipOf(input: {
 
   const arrivedAt = (bundle: WipBundle, operation: ScanOperation): number => {
     const flow = flows.get(bundle.id)!
+    if (operation.unplanned) {
+      const reported = flow.standing.get(standingKey(bundle.id, operation.id))
+      return reported ? totalOf(reported) : 0
+    }
     const previous = previousScanned(operations, operation.id)
     if (!previous) return flow.quantity
     return flow.standing.get(standingKey(bundle.id, previous.id))?.goodQuantity ?? 0
@@ -239,6 +247,7 @@ export function wipOf(input: {
       code: operation.code,
       name: operation.name,
       scanRequired: operation.scanRequired,
+      unplanned: operation.unplanned ?? false,
       final: operation.id === final?.id,
       sewn: operation.id === sewn?.id,
       ...total,

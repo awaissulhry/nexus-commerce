@@ -170,6 +170,10 @@
     "BUNDLE_RUNNING": {
       "message": "Qui è in corso un fascio.",
       "fix": "Prima mettilo in pausa o finiscilo."
+    },
+    "UNPLANNED_GOOD_ONLY": {
+      "message": "Un'operazione fuori ciclo conta solo i pezzi buoni.",
+      "fix": "Qui conta i buoni; scarti e rilavorazioni vanno sulla prossima operazione del ciclo."
     }
   },
   "unknownCode": {
@@ -518,6 +522,32 @@
     "pieces_one": "{code}: {count} pezzo finora salvato",
     "pieces_other": "{code}: {count} pezzi finora salvati",
     "handBack": "{code} restituito: il tempo resta",
-    "note": "{code}: nota pubblicata sull'ordine di lavoro"
+    "note": "{code}: nota pubblicata sull'ordine di lavoro",
+    "extra": "Op {seq} {name} aggiunta a {code}."
+  },
+  "unplanned": {
+    "flag": "Operazione fuori ciclo",
+    "goodOnly": "Qui conta i pezzi buoni. Scarti e rilavorazioni vanno sulla prossima operazione del ciclo.",
+    "open": "Fai Op {seq} {name} (fuori ciclo)",
+    "back": "Torna a Op {seq} {name}"
+  },
+  "extra": {
+    "title": "Aggiungi un'operazione fuori ciclo",
+    "open": "Aggiungi un'operazione fuori ciclo",
+    "loading": "Lettura delle operazioni…",
+    "empty": "Tutte le operazioni della libreria sono già su questo ordine.",
+    "operation": "Quale operazione?",
+    "minutes": "{minutes} min al pezzo",
+    "why": "Perché serve?",
+    "words": "Scrivi perché in poche parole",
+    "add": "Aggiungi l'operazione",
+    "adding": "Aggiunta…",
+    "offline": "Per aggiungere un'operazione serve la rete: l'elenco è dell'ufficio.",
+    "noRate": "Non ha una tariffa a pezzo: registra il tempo come fuori standard.",
+    "held": {
+      "operation": "Scegli prima l'operazione.",
+      "reason": "Scrivi perché serve.",
+      "words": "Scrivi perché in poche parole."
+    }
   }
 }

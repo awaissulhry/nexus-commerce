@@ -86,7 +86,7 @@ interface CostFacts {
   readonly materials: ReadonlyMap<string, { readonly planned: string; readonly unitCost: string | null }>
   /** The frozen standard per base unit of each item it names, today (null: none). */
   readonly itemStandards: ReadonlyMap<string, string | null>
-  readonly operations: readonly { readonly id: string; readonly seq: number; readonly code: string; readonly name: string; readonly workCentreKind: LabourRate['workCentreKind']; readonly plannedMinutes: string; readonly perMinute: string | null }[]
+  readonly operations: readonly { readonly id: string; readonly seq: number; readonly code: string; readonly name: string; readonly workCentreKind: LabourRate['workCentreKind']; readonly unplanned: boolean; readonly plannedMinutes: string; readonly perMinute: string | null }[]
 }
 
 /** The facts of many work orders at once (a page, or every one in scope for the tiles). */
@@ -102,7 +102,7 @@ export async function costFactsOf(db: Reader, workOrders: readonly CostedWorkOrd
   const finished = new Map((await db.item.findMany({ where: { variantId: { in: variants.map((row) => row.id) } }, select: { id: true, variantId: true } })).map((row) => [row.variantId!, row.id]))
   const planned = await db.workOrderMaterial.findMany({ where: { workOrderId: { in: ids } }, select: { workOrderId: true, itemId: true, baseQuantity: true } })
   const materialItems = new Map((await db.item.findMany({ where: { id: { in: unique(planned.map((row) => row.itemId)) } }, select: { id: true, standardCost: true, currency: true } })).map((row) => [row.id, row]))
-  const operations = await db.workOrderOperation.findMany({ where: { workOrderId: { in: ids } }, select: { id: true, workOrderId: true, seq: true, code: true, name: true, standardMinutes: true, workCentreId: true }, orderBy: { seq: 'asc' } })
+  const operations = await db.workOrderOperation.findMany({ where: { workOrderId: { in: ids } }, select: { id: true, workOrderId: true, seq: true, routingSeq: true, code: true, name: true, standardMinutes: true, workCentreId: true }, orderBy: { seq: 'asc' } })
   const centres = new Map((await db.workCentre.findMany({ where: { id: { in: unique(operations.map((row) => row.workCentreId)) } }, select: { id: true, kind: true } })).map((row) => [row.id, row.kind]))
   const entries = (await readEntries(db, ids)).map(entryFacts)
   const standards = await frozenStandards(db, companyIds, unique([...finished.values(), ...planned.map((row) => row.itemId), ...entries.map((entry) => entry.itemId)]))
@@ -144,11 +144,13 @@ export async function costFactsOf(db: Reader, workOrders: readonly CostedWorkOrd
         const kind = centres.get(row.workCentreId)!
         const rate = pickRate(rates.get(workOrder.companyId) ?? [], kind, workOrder.companyId, releaseDay)
         const perMinute = rate && rate.currency === currency ? perMinuteOf(rate) : null
-        return { id: row.id, seq: row.seq, code: row.code, name: row.name, workCentreKind: kind, plannedMinutes: decimalText(decimalOf(row.standardMinutes.toString()).times(pieces)), perMinute }
+        // B-W2b-82: an unplanned operation was no part of the plan: its labour is all variance, never estimate.
+        const unplanned = row.routingSeq === null
+        return { id: row.id, seq: row.seq, code: row.code, name: row.name, workCentreKind: kind, unplanned, plannedMinutes: unplanned ? '0' : decimalText(decimalOf(row.standardMinutes.toString()).times(pieces)), perMinute }
       })
     const estimate = estimateOf({
       materials: [...materials.entries()].map(([itemId, row]) => ({ itemId, baseQuantity: row.planned, unitCost: row.unitCost })),
-      operations: myOperations.map((row) => ({ operationId: row.id, minutes: row.plannedMinutes, perMinute: row.perMinute })),
+      operations: myOperations.filter((row) => !row.unplanned).map((row) => ({ operationId: row.id, minutes: row.plannedMinutes, perMinute: row.perMinute })),
       overheadPct: overheads.get(workOrder.companyId) ?? null,
     })
     const mine = entries.filter((entry) => entry.workOrderId === workOrder.id)
@@ -369,6 +371,7 @@ export async function workOrderCost(caller: CommandCaller, workOrderId: string):
       const earned = mine.reduce((sum, entry) => sum.plus(decimalOf(entry.minutes ?? '0')), decimalOf('0'))
       return {
         operation: { id: operation.id, seq: operation.seq, code: operation.code, name: operation.name, workCentreKind: operation.workCentreKind },
+        unplanned: operation.unplanned,
         plannedMinutes: operation.plannedMinutes,
         earnedMinutes: decimalText(earned),
         perMinute: asMoney('cost', mine.at(-1)?.unitCost ?? operation.perMinute),
