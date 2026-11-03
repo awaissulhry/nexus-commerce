@@ -1,0 +1,29 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/portal-auth.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b schema wave 17/22 (B-W2b-152). The office (and the API in the tenant's system scope, as factory_runtime) writes them through apps/factory-api's portal sign-in (B-W2b-159), partner organisations (B-W2b-162) and company branding (B-W2b-161), always through command(): the sign-in and step-up codes are made, tried, used, replaced and purged before or beside a portal session, so in the system scope after the tenant is known (its slug in the sign-in request); the portal settings and the branding are read there for the sign-in page, the portal frame and the link pages. factory_partner_runtime gets nothing here (narrowest grants, plan §6 wave 17: it reads only its own User and Session rows, auth.json); the floor and platform roles get nothing either. No money column, so no grain and no wall. Personal data: a code names its person and holds an address hash (purpose: the account's security); the People purpose tags (worker data) do not apply. Codes are deleted once dead (the purge job; the guards let a used, expired, tried-out or replaced code never open again and keep one live code per person and purpose); settings and branding are changed, never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PortalSignInCode": {
+      "about": "Sign-in and step-up codes of partner users: written when a code is asked, tried and used at sign-in or step-up, replaced by a newer one, purged when dead, all in the tenant's system scope. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "PortalSettings": {
+      "about": "A party's portal: switched on and off, production progress shared or not (Owner answer C1), the limits of its admin, by the office (sales.customers and purchasing.suppliers › Portal access); read in the system scope when its people sign in and act. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "CompanyBranding": {
+      "about": "A company's logo, logo for dark, accent, sender name and portal label: kept by the office (admin.documents › Branding), read in the system scope by the sign-in page, the portal frame, the link pages and the mail. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

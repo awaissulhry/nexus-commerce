@@ -410,7 +410,9 @@ export async function changeLeads(
 
 /** The office roles of the tenant (the keys People settings may name). */
 async function officeRoles(db: Db) {
-  return db.role.findMany({ where: { audience: 'OFFICE' }, select: { key: true, name: true, system: true, audience: true }, orderBy: [{ system: 'desc' }, { key: 'asc' }] })
+  const rows = await db.role.findMany({ where: { audience: 'OFFICE' }, select: { key: true, name: true, system: true }, orderBy: [{ system: 'desc' }, { key: 'asc' }] })
+  // W2b (B-W2b-152): RoleAudience has PARTNER too; these are the OFFICE roles only.
+  return rows.map((row) => ({ ...row, audience: 'OFFICE' as const }))
 }
 
 async function companySettingsOf(db: Db, company: { id: string; code: string; name: string }) {
