@@ -1848,6 +1848,8 @@
     "quality_aql_manage": "Keep AQL profiles (critical stays 0) and assign them to customers and styles",
     "quality_incoming_view": "See incoming inspections of lots: the sample hide by hide and the decision",
     "quality_incoming_record": "Inspect a lot hide by hide and sign the decision (never releases the lot)",
+    "quality_capa_view": "See corrective actions (CAPA and 8D), their actions and the 8D report; record your own action done",
+    "quality_capa_manage": "Open and follow up CAPAs and 8Ds (also from NCRs and complaints), keep the 8D report, close or cancel them",
     "numbering_override": "Type a number for a migrated document (never a fiscal series; clashes refused, reason kept)",
     "people_view": "See the employees, teams, loans to other lines and leaver steps (never pay, attendance or health)",
     "people_team_view": "See the teams you lead or belong to (My team)",

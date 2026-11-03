@@ -1848,6 +1848,8 @@
     "quality_aql_manage": "Gestire i profili AQL (critico sempre 0) e assegnarli a clienti e modelli",
     "quality_incoming_view": "Vedere i controlli in accettazione dei lotti: il campione pelle per pelle e la decisione",
     "quality_incoming_record": "Controllare un lotto pelle per pelle e firmare la decisione (non rilascia il lotto)",
+    "quality_capa_view": "Vedere le azioni correttive (CAPA e 8D), le loro azioni e il rapporto 8D; registrare come fatta una propria azione",
+    "quality_capa_manage": "Aprire e seguire CAPA e 8D (anche da non conformità e reclami), conservare il rapporto 8D, chiuderli o annullarli",
     "numbering_override": "Digitare il numero di un documento migrato (mai una serie fiscale; doppioni rifiutati, motivo conservato)",
     "people_view": "Vedere dipendenti, squadre, prestiti ad altre linee e passi di uscita (mai paghe, presenze o salute)",
     "people_team_view": "Vedere le squadre che guidi o di cui fai parte (La mia squadra)",

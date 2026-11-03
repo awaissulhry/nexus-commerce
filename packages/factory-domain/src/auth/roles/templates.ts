@@ -403,6 +403,20 @@ const INCOMING_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.fr
 const INCOMING_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   floor_inspector: ['quality.incoming.view', 'quality.incoming.record'],
 })
+/**
+ * B-W2b-108 (corrective actions, CAPA and 8D; QHS-087, QHS-093, QHS-094, QHS-096; design quality.capa): quality opens
+ * CAPAs and 8Ds (also by escalating NCRs and complaints), follows their actions and keeps the 8D report; the production
+ * manager does too (most corrective actions are on the floor's work); the floor supervisor, the buyer (a supplier's
+ * cause) and sales (the customer's 8D) read them, and each records the actions they own done with view alone. Office
+ * only; owner and read-only from every().
+ */
+const CAPA_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.capa.view', 'quality.capa.manage'],
+  production_manager: ['quality.capa.view', 'quality.capa.manage'],
+  floor_supervisor: ['quality.capa.view'],
+  buyer: ['quality.capa.view'],
+  sales: ['quality.capa.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -455,7 +469,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-101
   ...(audience === 'office' ? (QUALITY_TRIGGERS_ADDS[key] ?? []) : []),
   // B-W2b-98
-  ...((audience === 'office' ? INCOMING_ADDS : INCOMING_FLOOR_ADDS)[key] ?? [])]
+  ...((audience === 'office' ? INCOMING_ADDS : INCOMING_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-108
+  ...(audience === 'office' ? (CAPA_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

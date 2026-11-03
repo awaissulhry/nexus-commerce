@@ -150,6 +150,8 @@ import { QUALITY_PLANS_DEFINITIONS, QUALITY_PLANS_PERMISSIONS } from '../../qual
 import { QUALITY_TRIGGERS_DEFINITIONS, QUALITY_TRIGGERS_PERMISSIONS } from '../../quality/triggers/permissions'
 // B-W2b-98: the incoming inspection of a lot, hide by hide (quality.incoming.view | record).
 import { QUALITY_INCOMING_DEFINITIONS, QUALITY_INCOMING_FLOOR_PERMISSIONS, QUALITY_INCOMING_PERMISSIONS } from '../../quality/incoming/permissions'
+// B-W2b-108: corrective actions, CAPA and 8D (quality.capa.view | manage).
+import { QUALITY_CAPA_DEFINITIONS, QUALITY_CAPA_PERMISSIONS } from '../../quality/capa/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -577,6 +579,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_TRIGGERS_DEFINITIONS,
   // B-W2b-98: the incoming inspection, hide by hide.
   QUALITY_INCOMING_DEFINITIONS,
+  // B-W2b-108: corrective actions, CAPA and 8D.
+  QUALITY_CAPA_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -725,6 +729,8 @@ for (const name of QUALITY_PLANS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of QUALITY_TRIGGERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-98: the incoming inspection.
 for (const name of QUALITY_INCOMING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-108: corrective actions, CAPA and 8D.
+for (const name of QUALITY_CAPA_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

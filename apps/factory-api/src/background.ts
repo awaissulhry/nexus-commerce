@@ -84,6 +84,8 @@ import { pauseAtClockOutHandler } from './modules/production/terminal/clock-out'
 import { inspectionTriggerHandlers } from './modules/quality/triggers/handler'
 // B-W2b-96: machine requests nobody acknowledged escalate by their routing rule.
 import { escalationCron } from './modules/plant/requests/escalation'
+// B-W2b-108: CAPA actions reminded before their due day and escalated when overdue (tasks).
+import { capaRemindersCron } from './modules/quality/capa/reminders'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -238,6 +240,8 @@ if (mode === 'worker') {
   crons.push(stuckBundlesCron({ database, log }), scanFindingsCron({ database, log }))
   // B-W2b-96: every minute, the routed machine requests nobody acknowledged in time escalate (QHS-179).
   crons.push(escalationCron({ database, log }))
+  // B-W2b-108: every 15 minutes, open CAPA actions are reminded (3 days before and on their day) and overdue ones escalate (QHS-096).
+  crons.push(capaRemindersCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
