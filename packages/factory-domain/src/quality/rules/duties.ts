@@ -45,6 +45,8 @@ export const DUTY_FAMILIES = Object.freeze({
     'quality.holds.release',
     'quality.incoming.record',
     'quality.inprocess.record',
+    // B-W2b-123: signing a correction of a signed result is a quality signature too.
+    'quality.amendments.sign',
     'quality.ncr.approve',
     'quality.ncr.close',
     'quality.plans.approve',
