@@ -456,6 +456,8 @@ model Style {
   complaints          Complaint[]
   // W2a compliance.prisma: the changes to its approved type under review.
   typeChangeReviews   TypeChangeReview[]
+  // W2b plantcare.prisma (wave 14/16): the clicking dies that cut it.
+  clickingDies        ClickingDie[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the style's rows.

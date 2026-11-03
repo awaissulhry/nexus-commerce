@@ -57,7 +57,9 @@ model StoredFile {
   /// Kept at least until then: nobody deletes it before (FISCAL_ARCHIVE: at least ten years). Only ever moves later.
   retainUntil      DateTime?      @db.Timestamptz(3)
   /// Held for a legal matter: nobody deletes it while set. Hidden from the floor and partner roles.
-  legalHold        Boolean        @default(false)
+  /// W2b (wave 14/16): the default is the database's, so a Prisma insert leaves the column out: the floor adds its photos
+  /// and voice notes of a job (QHS-189) without a grant on it. A cast from text, so Prisma reads it back as it is written.
+  legalHold        Boolean        @default(dbgenerated("('false'::text)::boolean"))
   /// Why a confirmed upload did not match what was announced (QUARANTINED): size_mismatch, type_mismatch,
   /// checksum_mismatch.
   quarantineReason String?
@@ -124,6 +126,8 @@ model StoredFile {
   ncrConcessionAnswers NcrConcession[] @relation("NcrConcessionAnswer")
   // W2b time.prisma (wave 5/7): the attendance month close whose LUL calendar it is.
   attendanceLulOf AttendanceMonthClose[] @relation("AttendanceMonthCloseLul")
+  // W2b safety.prisma (wave 15/16): the risk assessment versions whose frozen PDF it is.
+  riskAssessmentVersions RiskAssessmentVersion[] @relation("RiskAssessmentVersionFile")
   // W2a stockcount.prisma: the year-end count whose signed valued list it is.
   stockCountValuedLists StockCount[] @relation("StockCountValuedList")
   // privacy.prisma: the notice language and the DPIA whose PDF it is.
@@ -158,6 +162,8 @@ enum FileKind {
   CERTIFICATE
   /// A fiscal document kept ten years (invoice XML and PDF, DDT, signed quote): stored under `legal/`, immutable.
   FISCAL_ARCHIVE
+  /// W2b (wave 14/16; QHS-189): a voice note (a maintenance job's or request's, recorded on the floor or a phone).
+  AUDIO
 }
 
 /// What a file is evidence of (W2b, B-W2b-01). Additive.
@@ -172,6 +178,14 @@ enum FileCategory {
   CARRIER_INVOICE
   /// A photo of goods claimed from a supplier (a supplier claim's or a discrepancy's file).
   CLAIM_PHOTO
+  /// W2b (wave 14/16; QHS-165, art. 71 c.4): a machine's EU declaration of conformity (CE), its user manual (a machine's
+  /// files), and the report of a statutory or periodic check (a MachineCheckResult's file; QHS-205).
+  MACHINE_CE
+  MANUAL
+  CHECK_REPORT
+  /// W2b (wave 14/16; QHS-189): a photo of a maintenance job before and after the work (a job's or request's file).
+  BEFORE_WORK
+  AFTER_WORK
   /// Another kind of evidence, said in the file's name.
   OTHER
 }

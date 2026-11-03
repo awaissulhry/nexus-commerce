@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { averagePerMinuteOf, bonusOf, defectPayOf, earnedForMakeUp, guaranteedPayOf, makeUpOf, paidTimeOf, periodPayOf, SchemePayError, teamSplitOf, type SchemePay } from './pay'
+import { averagePerMinuteOf, bonusOf, defectMinutesOf, defectPayOf, earnedForMakeUp, guaranteedPayOf, makeUpOf, paidTimeOf, periodPayOf, SchemePayError, teamSplitOf, type SchemePay } from './pay'
 import {
   activationPlan,
   affectedPeriods,
@@ -7,6 +7,7 @@ import {
   editRefusal,
   endRefusal,
   firstDayProblems,
+  paysByPiece,
   periodsInWords,
   rulesInWords,
   schemeFor,
@@ -186,6 +187,26 @@ describe('rework and scrap pay (MES-258) and waiting (c.c. art. 2100)', () => {
     expect(defectPayOf(pay({ othersFaultPay: 'GUARANTEED' }), { ...others, averagePerMinute: '0.2' }).amount).toBe(450)
     expect(paidTimeOf(pay(), { rule: 'AVERAGE', minutes: 45, averagePerMinute: averagePerMinuteOf({ earned: 120_000, minutes: 9_000, currency: 'EUR' }) })).toEqual({ basis: 'AVERAGE', minutes: 45, ratePerMinute: '0.133333', amount: 600 })
     expect(averagePerMinuteOf({ earned: 0, minutes: 100, currency: 'EUR' })).toBeNull()
+  })
+})
+
+describe('what the ledger books of a scheme (B-W2b-84)', () => {
+  it('a bonus scheme pays nothing by the piece; any other scheme, or none, does', () => {
+    expect(paysByPiece({ kind: 'STANDARD_MINUTE_BONUS' })).toBe(false)
+    expect([paysByPiece({ kind: 'PIECE_RATE' }), paysByPiece({ kind: 'TEAM_INCENTIVE' }), paysByPiece(null)]).toEqual([true, true, true])
+  })
+
+  it('the time of rework or scrap caused by others: the standard minutes, rounded up to the whole minute', () => {
+    expect([defectMinutesOf(3, '2.5'), defectMinutesOf(1, '0.4'), defectMinutesOf(0, '9'), defectMinutesOf(4, null)]).toEqual([8, 1, 0, 0])
+    expect(() => defectMinutesOf(-1, '1')).toThrow(SchemePayError)
+  })
+
+  it('a bonus scheme says its pieces measure the bonus, and the other rules where they apply', () => {
+    const base = { efficiencyThresholdPct: null, guaranteedBasis: 'CCNL_MINIMUM', traineeHourlyRate: null, teamSplit: null, reworkOwnFault: 'UNPAID', scrapOwnFault: 'UNPAID', ownFaultRatePct: null, othersFaultPay: 'AVERAGE', waitingPay: 'AVERAGE', payOnlyWhileClockedIn: true } as const
+    const bonus = rulesInWords({ ...base, kind: 'STANDARD_MINUTE_BONUS', efficiencyThresholdPct: '75' })
+    expect(bonus.join(' ')).toContain('not paid by the piece')
+    expect(bonus.join(' ')).not.toContain('own fault')
+    expect(rulesInWords({ ...base, kind: 'PIECE_RATE' })).toContain('Who is at fault is said by the scrap or rework reason.')
   })
 })
 

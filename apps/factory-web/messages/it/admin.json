@@ -1840,6 +1840,8 @@
     "quality_complaints_log": "Registrare un reclamo del cliente",
     "quality_complaints_manage": "Smistare, seguire e chiudere i reclami dei clienti",
     "quality_complaints_acknowledge": "Prendere atto dell'allerta di un reclamo di sicurezza (il titolare)",
+    "quality_aql_view": "Vedere i profili AQL, dove si applicano e il calcolatore AQL",
+    "quality_aql_manage": "Gestire i profili AQL (critico sempre 0) e assegnarli a clienti e modelli",
     "numbering_override": "Digitare il numero di un documento migrato (mai una serie fiscale; doppioni rifiutati, motivo conservato)",
     "people_view": "Vedere dipendenti, squadre, prestiti ad altre linee e passi di uscita (mai paghe, presenze o salute)",
     "people_team_view": "Vedere le squadre che guidi o di cui fai parte (La mia squadra)",

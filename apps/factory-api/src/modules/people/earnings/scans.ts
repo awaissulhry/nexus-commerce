@@ -1,9 +1,9 @@
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { entryKey, isScanFamily, piecesAmount, planLedger } from '@nexus/factory-domain/people/earnings/ledger'
-import { isPaidScan, NOTHING_TO_PAY_WORDS, FIXED_BY_CLOCK_WORDS, payablePieces, paysOn, rateFor, REVERSAL_WORDS, skillWeightOf, type HoldReason, type RateCandidate } from '@nexus/factory-domain/people/earnings/rules'
+import { BONUS_PIECES_WORDS, defectsByFault, isPaidScan, NOTHING_TO_PAY_WORDS, FIXED_BY_CLOCK_WORDS, payablePieces, paysOn, rateFor, REVERSAL_WORDS, skillWeightOf, type DefectsByFault, type HoldReason, type RateCandidate } from '@nexus/factory-domain/people/earnings/rules'
 import { defectPayOf, teamSplitOf, type DefectKind } from '@nexus/factory-domain/people/schemes/pay'
-import type { SchemeRow } from '@nexus/factory-domain/people/schemes/rules'
+import { paysByPiece, type SchemeRow } from '@nexus/factory-domain/people/schemes/rules'
 import { SYSTEM_ACTOR_ID } from '../../../core/context'
 import type { CommandTools } from '../../../core/command'
 import { lockPerson } from '../attendance/compute'
@@ -11,7 +11,7 @@ import type { Client } from '../attendance/store'
 import { dateOf } from '../employees/access'
 import { payGuarded, tenantOf } from './access'
 import { applyPlan, placeOf, reverseEntry, type EntryDraft } from './ledger'
-import { clockOf, entriesOfKeys, ENTRY_SELECT, ledgerRowOf, membersOfScans, momentOf, SCAN_SELECT, withReversals, workOfScans, type PayFacts, type ScanRecord, type WorkFacts } from './store'
+import { clockOf, defectsOfScans, entriesOfKeys, ENTRY_SELECT, ledgerRowOf, membersOfScans, momentOf, SCAN_SELECT, withReversals, workOfScans, type PayFacts, type ScanRecord, type WorkFacts } from './store'
 
 /**
  * Scans become pay as they happen (B-W2b-43; MES-256, MES-264). ONE place decides what one bundle at one operation pays, from
@@ -26,8 +26,11 @@ import { clockOf, entriesOfKeys, ENTRY_SELECT, ledgerRowOf, membersOfScans, mome
  *             attendance fix) is COUNTED by that fact; a scan undone leaves nothing to pay, so its OPEN hold is closed.
  *   team      a scan of two or more members pays by share (TEAM_SPLIT): the shares depend on the day's minutes, so the
  *             period's run books them. Only in a month already locked are they booked here.
- *   own fault the scan's own scrap and rework follow the scheme's own-fault rule (nothing, or pieces at a set rate); no record
- *             says whose fault it was, so the statement says so and the worker can dispute it.
+ *   own fault the scan's scrap and rework whose reason is the worker's own fault follow the scheme's own-fault rule (nothing,
+ *             or pieces at a set rate). A reason nobody set counts as their own (UNKNOWN_FAULT_PAYS_AS); the statement says so
+ *             and the worker can dispute it. Those caused by others are paid time: the period's run books them (person.ts)
+ *   bonus     under a standard-minute bonus scheme the pieces pay nothing by the piece (B-W2b-84): the entry keeps the pieces
+ *             and the rate they are worth, at no amount, because they measure the bonus the period books; no own-fault line
  */
 
 const SCAN_KINDS = ['REPORT', 'CORRECTION', 'UNDO', 'PARTIAL'] as const
@@ -75,7 +78,9 @@ export async function teamDrafts(
   },
 ): Promise<EntryDraft[]> {
   const { scan, day, work, pieces, rate, scheme, members } = input
-  const pay = piecesAmount(pieces, rate.ratePerPiece, rate.currency)
+  // A bonus scheme's team scan: the shares keep the pieces and the rate, at no amount (they measure each member's bonus).
+  const byPiece = paysByPiece(scheme)
+  const pay = byPiece ? piecesAmount(pieces, rate.ratePerPiece, rate.currency) : 0
   const everyone = members.map((member) => ({ key: member.workerId, skillWeight: '1' }))
   let shares = teamSplitOf({ basis: 'SKILL_WEIGHT', pay, members: everyone })
   const employees = members.flatMap((member) => (member.employeeId ? [member.employeeId] : []))
@@ -111,17 +116,21 @@ export async function teamDrafts(
         rateEntryId: rate.entryId,
         sharePct: share.sharePct,
         heldScanId: input.heldScanId,
+        ...(byPiece ? {} : { reason: BONUS_PIECES_WORDS }),
       },
     ]
   })
 }
 
-/** The own-fault lines of a scan: its rework and scrap at the scheme's rule (nothing when it does not pay them). */
-function ownFaultDrafts(scan: ScanRecord, draft: Omit<EntryDraft, 'key' | 'pieces' | 'rate' | 'amount'>, rate: RateCandidate, scheme: SchemeRow | null): EntryDraft[] {
-  if (!scheme) return []
+/**
+ * The own-fault lines of a scan: its rework and scrap whose reasons put them down to the worker, at the scheme's rule (nothing
+ * when it does not pay them). A bonus scheme has none: they are inside the minutes present.
+ */
+function ownFaultDrafts(scan: ScanRecord, draft: Omit<EntryDraft, 'key' | 'pieces' | 'rate' | 'amount'>, rate: RateCandidate, scheme: SchemeRow | null, faults: DefectsByFault): EntryDraft[] {
+  if (!scheme || !paysByPiece(scheme)) return []
   const parts: readonly [DefectKind, number, string][] = [
-    ['REWORK', scan.reworkQuantity, entryKey.rework(scan.id)],
-    ['SCRAP', scan.scrapQuantity, entryKey.scrap(scan.id)],
+    ['REWORK', faults.REWORK.OWN, entryKey.rework(scan.id)],
+    ['SCRAP', faults.SCRAP.OWN, entryKey.scrap(scan.id)],
   ]
   return parts.flatMap(([what, pieces, key]) => {
     if (pieces === 0) return []
@@ -140,7 +149,12 @@ export async function syncBundleInCommand(tools: CommandTools, facts: PayFacts, 
   if (site.windows.length === 0) return NOTHING
   const companyId = site.companyId
   const pieces = payablePieces(rows)
-  const [members, work, holds] = await Promise.all([membersOfScans(tx, paid), workOfScans(tx, paid), tx.heldScan.findMany({ where: { operationScanId: { in: paid.map((scan) => scan.id) } }, select: { id: true, operationScanId: true, status: true, payPeriodId: true } })])
+  const [members, work, holds, defects] = await Promise.all([
+    membersOfScans(tx, paid),
+    workOfScans(tx, paid),
+    tx.heldScan.findMany({ where: { operationScanId: { in: paid.map((scan) => scan.id) } }, select: { id: true, operationScanId: true, status: true, payPeriodId: true } }),
+    defectsOfScans(tx, paid.filter((scan) => scan.scrapQuantity + scan.reworkQuantity > 0).map((scan) => scan.id)),
+  ])
   const employees = await employeesOfWorkers(tx, [...paid.flatMap((scan) => (scan.workerId ? [scan.workerId] : [])), ...[...members.values()].flat().map((member) => member.workerId)])
   for (const employeeId of [...new Set([...employees.values()].filter((id): id is string => id !== null))].sort()) await lockPerson(tx, tenantOf(tools.context), employeeId)
   const rates = await facts.ratesAt(paid[0]!.siteId)
@@ -202,8 +216,9 @@ export async function syncBundleInCommand(tools: CommandTools, facts: PayFacts, 
       continue
     }
     const base = { kind: 'SCAN' as const, siteId: scan.siteId, employeeId, workerId: scan.workerId, workDate: day, minutes: null, currency: rate.currency, operationScanId: scan.id, rateEntryId: rate.entryId, heldScanId }
-    if (count > 0) wanted.push({ ...base, key: entryKey.scan(scan.id), pieces: count, rate: rate.ratePerPiece, amount: piecesAmount(count, rate.ratePerPiece, rate.currency) })
-    wanted.push(...ownFaultDrafts(scan, base, rate, scheme))
+    const byPiece = paysByPiece(scheme)
+    if (count > 0) wanted.push({ ...base, key: entryKey.scan(scan.id), pieces: count, rate: rate.ratePerPiece, amount: byPiece ? piecesAmount(count, rate.ratePerPiece, rate.currency) : 0, ...(byPiece ? {} : { reason: BONUS_PIECES_WORDS }) })
+    wanted.push(...ownFaultDrafts(scan, base, rate, scheme, defectsByFault(scan, defects.get(scan.id) ?? [])))
   }
   const keys = paid.flatMap((scan) => [entryKey.scan(scan.id), entryKey.rework(scan.id), entryKey.scrap(scan.id)])
   const existing = await entriesOfKeys(tx, keys)

@@ -1,5 +1,6 @@
 import type { BusinessDate } from '../../core/time'
 import { Dec, type Decimal } from '../../tax/decimal'
+import type { EarningsKind } from '../earnings/rules'
 import { CODE_MEANINGS, codeOrder, HOUR_CODES, isFixedCode, mappingKey, type EarningCode, type HourCode, type PayrollCodeKind } from './codes'
 
 /**
@@ -76,7 +77,7 @@ export interface PersonValues {
 
 /** A row of the ledger, summed per person, kind and corrected period. */
 export interface LedgerSum {
-  readonly kind: 'SCAN' | 'TEAM_SPLIT' | 'MAKE_UP' | 'OFF_STANDARD' | 'ADJUSTMENT'
+  readonly kind: EarningsKind
   readonly correctsPeriodId: string | null
   readonly currency: string
   readonly amount: number
@@ -84,7 +85,7 @@ export interface LedgerSum {
   readonly minutes: string | null
 }
 
-const EARNING_OF_KIND: Readonly<Record<LedgerSum['kind'], EarningCode>> = Object.freeze({ SCAN: 'PIECE', TEAM_SPLIT: 'TEAM_SHARE', MAKE_UP: 'MAKE_UP', OFF_STANDARD: 'OFF_STANDARD', ADJUSTMENT: 'ADJUSTMENT' })
+const EARNING_OF_KIND: Readonly<Record<LedgerSum['kind'], EarningCode>> = Object.freeze({ SCAN: 'PIECE', TEAM_SPLIT: 'TEAM_SHARE', MAKE_UP: 'MAKE_UP', OFF_STANDARD: 'OFF_STANDARD', ADJUSTMENT: 'ADJUSTMENT', BONUS: 'BONUS' })
 
 /** One person's ledger as payroll items, one per code and currency (work of an earlier month paid here is its own code). */
 export function earningFacts(rows: readonly LedgerSum[]): EarningFact[] {
@@ -106,7 +107,8 @@ export function hoursOf(minutes: number): string {
   return new Dec(minutes).div(60).toFixed(2)
 }
 
-const AMOUNT_ONLY: ReadonlySet<EarningCode> = new Set(['ADJUSTMENT', 'EARLIER_MONTH'])
+/** BONUS (B-W2b-84): its minutes are standard minutes above a threshold, not hours anyone worked: the amount alone travels. */
+const AMOUNT_ONLY: ReadonlySet<EarningCode> = new Set(['ADJUSTMENT', 'EARLIER_MONTH', 'BONUS'])
 
 function earningQuantity(fact: EarningFact): { readonly unit: ValueUnit | null; readonly quantity: string | null } {
   if (AMOUNT_ONLY.has(fact.code)) return { unit: null, quantity: null }

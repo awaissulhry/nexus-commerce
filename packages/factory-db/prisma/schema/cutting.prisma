@@ -621,9 +621,13 @@ model PatternPiece {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and revisionId.
   bomLine  BomLine?      @relation(fields: [tenantId, revisionId, bomLineId], references: [tenantId, revisionId, id], onDelete: Restrict, onUpdate: Restrict)
   minGrade LeatherGrade? @relation(fields: [tenantId, minGradeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b plantcare.prisma (wave 14/16): the clicking dies that cut it.
+  clickingDies ClickingDie[]
 
   @@unique([tenantId, revisionId, seq])
   @@unique([tenantId, revisionId, name])
+  // W2b plantcare.prisma (wave 14/16): the target of a clicking die's reference, a piece of the die's style.
+  @@unique([tenantId, styleId, id])
 }
 
 /// Garments of one cell sent to second quality instead of scrap (MES-133; design production.scrap "Downgrade to second quality";

@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
+import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, fixedClock } from '@nexus/factory-domain/core/time'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
@@ -21,8 +22,8 @@ import { runLeaverSteps } from './automatic'
  * with the app's real routes: a throwaway PostgreSQL 17 database from the migrations (the runtime login: row-level
  * security and the …_people_w2b_guards triggers are real: one open case per person, steps only while it is open, DONE
  * only with no step open, LEFT only once the end date has come), the factory-db seeds of one tenant up to the people (E1
- * with the A1 operator's floor sign-in and badge, E2 the lead with an account and the A1 lead's sign-in, E4 leaving on
- * 2026-11-30 with no account, E5 left), office sessions from the test authenticator, and the hourly cron's pass with a
+ * with the A1 operator's floor sign-in and badge, E2 the lead with an account and the A1 lead's sign-in, E4 leaving
+ * 28 days from today with no account, E5 left), office sessions from the test authenticator, and the hourly cron's pass with a
  * clock of its own. Every name is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/people/leavers`.
  */
 
@@ -87,7 +88,7 @@ afterAll(async () => {
 describe('leaver steps (MES-214)', () => {
   it('lists who is leaving and previews what leaving would mean for a person', async () => {
     const open = await ok('viewer', 'GET', '/people/leavers')
-    expect(open.leavers.map((row: Json) => [row.employee.name, row.lastWorkingDay, row.openSteps])).toEqual([['Seed Office Clerk', '2026-11-30', 5]])
+    expect(open.leavers.map((row: Json) => [row.employee.name, row.lastWorkingDay, row.openSteps])).toEqual([['Seed Office Clerk', people.dates.e4LastWorkingDay, 5]])
     expect((await ok('viewer', 'GET', '/people/leavers?view=done')).leavers.map((row: Json) => row.employee.name)).toEqual(['Seed Former Employee'])
     const preview = await ok('viewer', 'GET', `/people/employees/${people.employeeIds.e1}/leaving/preview?lastWorkingDay=${day(10)}&exitVisit=true`)
     expect(preview.steps.map((step: Json) => step.kind)).toEqual(['BADGE_OFF', 'SESSIONS_ENDED', 'BADGE_RETURNED', 'WORK_HANDED_OVER', 'SHIFTS_CLEARED', 'PAYROLL_FLAGGED', 'EXIT_VISIT'])
@@ -168,16 +169,17 @@ describe('leaver steps (MES-214)', () => {
     const checked = await ok('hr', 'POST', `/people/leavers/${people.caseIds.open}/check`)
     expect(checked).toMatchObject({ ticked: ['ACCESS_ENDED'], floorSwitchedOff: 0, closed: false })
     expect(stepOf(checked.leaver, 'ACCESS_ENDED')).toMatchObject({ status: 'DONE', doneBy: { kind: 'SYSTEM', name: null } })
-    // Nothing more is due before the last day (2026-11-30): a check writes only its audit row.
+    // Nothing more is due before the last day (28 days from today in the seed): a check writes only its audit row.
     expect(await ok('hr', 'POST', `/people/leavers/${people.caseIds.open}/check`)).toMatchObject({ ticked: [], closed: false })
     // The hourly pass on the day after the last day: shifts cleared (none planned after it).
-    const pass = await runLeaverSteps({ database, log: silent, clock: fixedClock('2026-12-01T09:00:00.000Z') })
+    const dayAfter = plusDays(people.dates.e4LastWorkingDay, 1)
+    const pass = await runLeaverSteps({ database, log: silent, clock: fixedClock(`${dayAfter}T09:00:00.000Z`) })
     expect(pass).toMatchObject({ settled: 1, failed: 0 })
     const after = (await ok('viewer', 'GET', `/people/leavers/${people.caseIds.open}`)).leaver
     expect(stepOf(after, 'SHIFTS_CLEARED')).toMatchObject({ status: 'DONE', doneBy: { kind: 'SYSTEM' } })
     expect((await eventsOf('leaver.step_done')).filter((event) => event.payload.by === 'SYSTEM' && event.payload.caseId === people.caseIds.open).map((event) => event.payload.kind)).toEqual(['ACCESS_ENDED', 'SHIFTS_CLEARED'])
     // The same hour again finds nothing due and writes nothing.
-    expect(await runLeaverSteps({ database, log: silent, clock: fixedClock('2026-12-01T09:30:00.000Z') })).toMatchObject({ settled: 0, failed: 0 })
+    expect(await runLeaverSteps({ database, log: silent, clock: fixedClock(`${dayAfter}T09:30:00.000Z`) })).toMatchObject({ settled: 0, failed: 0 })
     // Every step done before the last day: the case waits (visible) until the day has come.
     let leaver = after
     for (const kind of ['WORK_HANDED_OVER', 'PAYROLL_FLAGGED', 'EXIT_VISIT']) {

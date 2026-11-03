@@ -418,7 +418,9 @@ const statementSchema = z.object({
   attendance: z.object({ ordinaryMinutes: z.number(), approvedOvertimeMinutes: z.number() }).nullable(),
   makeUp: z.object({ minutes: z.number(), rate: pay, guaranteed: payMinor, earned: payMinor, amount: payMinor }).nullable(),
   held: z.object({ open: z.number(), counted: z.number(), notPaid: z.number() }),
-  defects: z.object({ scrap: z.number(), rework: z.number() }),
+  defects: z.object({ scrap: z.number(), rework: z.number(), othersScrap: z.number().default(0), othersRework: z.number().default(0) }),
+  /** B-W2b-84: a standard-minute bonus scheme's figures of the period; null: none applies. */
+  bonus: z.object({ minutesPresent: z.number(), standardMinutes: z.string(), thresholdMinutes: z.string(), efficiencyPct: z.string(), bonusMinutes: z.string(), amount: payMinor }).nullable().default(null),
   disputes: z.array(z.object({ id: z.string(), status: z.string(), workDate: z.string(), recordType: z.string() })),
   earningsAmount: payMinor,
   makeUpAmount: payMinor,

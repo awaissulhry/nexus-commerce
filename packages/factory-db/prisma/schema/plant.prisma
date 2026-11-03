@@ -34,16 +34,25 @@ model MachineClass {
   icon        String?
   sortOrder   Int              @default(0)
   active      Boolean          @default(true)
+  /// W2b (wave 14/16; B-W2b-39's schema need): only people authorised for the class may operate its machines (D.Lgs.
+  /// 81/2008 art. 71 c.7; MES-246). Set by the office; replaces B-W2b-39's "kept once one exists" when its reader moves.
+  authorisationRequired Boolean @default(false)
   version     Int              @default(1)
   createdAt   DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
   createdById String?          @db.Uuid
 
   symptoms MachineSymptom[]
+  // W2b plantcare.prisma (wave 14/16): the check types for it, the routing rules for it.
+  checkTypes   MachineCheckType[]
+  routingRules RequestRoutingRule[]
   machines Machine[]
   // W2b skills.prisma (wave 4/7): the skills about it, and who may operate it.
   skills         Skill[]
   authorisations MachineAuthorisation[]
+  // W2b safety.prisma (wave 15/16): the courses it asks of who operates it, the instruction given on it.
+  trainingRequirements TrainingRequirement[]
+  instructionRecords   InstructionRecord[]
 
   @@unique([tenantId, code])
   // The target of the symptoms' and machines' tenant-safe references.
@@ -141,6 +150,12 @@ model Machine {
   workCentre   WorkCentre?          @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   supplier     Party?               @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   requests     MaintenanceRequest[]
+  // W2b plantcare.prisma (wave 14/16): its check plans and results, the history of its status.
+  checkPlans   MachineCheckPlan[]
+  checkResults MachineCheckResult[]
+  statusEvents MachineStatusEvent[]
+  // W2b safety.prisma (wave 15/16): the instruction given on it.
+  instructionRecords InstructionRecord[]
   jobs         MaintenanceJob[]
 
   @@unique([tenantId, assetNumber])
@@ -192,9 +207,27 @@ model MaintenanceRequest {
   stationId              String?                  @db.Uuid
   deviceId               String?                  @db.Uuid
   status                 MaintenanceRequestStatus @default(NEW)
-  /// Seen by maintenance: when and by whom (set once, from ACKNOWLEDGED on).
+  /// Seen by maintenance: when and by whom (set once, from ACKNOWLEDGED on): an office user, or (W2b) a technician on the
+  /// floor (a worker of the site); at most one.
   acknowledgedAt         DateTime?                @db.Timestamptz(3)
   acknowledgedById       String?                  @db.Uuid
+  acknowledgedByWorkerId String?                  @db.Uuid
+  /// W2b (wave 14/16; QHS-180, the requester sees progress): the technician on the way (when, an office user or a worker:
+  /// exactly one; set once, while ACKNOWLEDGED or JOB_MADE), and the reporter confirming the machine works again (when,
+  /// an office user or a worker, neither: the station; set once, once its job is handed back, or merged).
+  onTheWayAt             DateTime?                @db.Timestamptz(3)
+  onTheWayById           String?                  @db.Uuid
+  onTheWayByWorkerId     String?                  @db.Uuid
+  confirmedWorksAt       DateTime?                @db.Timestamptz(3)
+  confirmedWorksById     String?                  @db.Uuid
+  confirmedWorksByWorkerId String?                @db.Uuid
+  /// W2b (wave 14/16; QHS-179): where it was sent (the rule that matched, a team of the site or a technician of the company:
+  /// at most one), and how far it escalated (0 not yet, 1, 2) and when last. Written while NEW or ACKNOWLEDGED.
+  routingRuleId          String?                  @db.Uuid
+  routedTeamId           String?                  @db.Uuid
+  routedEmployeeId       String?                  @db.Uuid
+  escalationLevel        Int                      @default(0)
+  escalatedAt            DateTime?                @db.Timestamptz(3)
   /// The job made for it (exactly while JOB_MADE), the request it was merged into (exactly while MERGED).
   jobId                  String?                  @db.Uuid
   mergedIntoId           String?                  @db.Uuid
@@ -220,6 +253,14 @@ model MaintenanceRequest {
   symptom            MachineSymptom?      @relation(fields: [tenantId, symptomId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   reportedByWorker   Worker?              @relation("MaintenanceRequestReportedBy", fields: [tenantId, siteId, reportedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   signedSafeByWorker Worker?              @relation("MaintenanceRequestSignedSafeBy", fields: [tenantId, siteId, signedSafeByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (wave 14/16): the worker who acknowledged it, was on the way, confirmed it works; the rule, team and person it was
+  // routed to.
+  acknowledgedByWorker   Worker?             @relation("MaintenanceRequestAcknowledgedBy", fields: [tenantId, siteId, acknowledgedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  onTheWayByWorker       Worker?             @relation("MaintenanceRequestOnTheWayBy", fields: [tenantId, siteId, onTheWayByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  confirmedWorksByWorker Worker?             @relation("MaintenanceRequestConfirmedWorksBy", fields: [tenantId, siteId, confirmedWorksByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  routingRule            RequestRoutingRule? @relation(fields: [tenantId, siteId, routingRuleId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  routedTeam             Team?               @relation("MaintenanceRequestRoutedTeam", fields: [tenantId, siteId, routedTeamId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  routedEmployee         Employee?           @relation("MaintenanceRequestRoutedEmployee", fields: [tenantId, companyId, routedEmployeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   station            Station?             @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device             Device?              @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   job                MaintenanceJob?      @relation(fields: [tenantId, siteId, jobId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -306,6 +347,19 @@ model MaintenanceJob {
   handedBackByWorkerId String?              @db.Uuid
   workDone             String?
   machineAfter         MachineStatus?
+  /// W2b (wave 14/16; QHS-190, the one-screen close): the failure code tile (upper-case letters, digits and underscores;
+  /// optional until the code list of QHS-188) and the minutes the work took (0 to 525600, the API's count from start to
+  /// hand-back): part of the hand-back, cleared with it. The job's minutes, never summed per person (Statuto art. 4).
+  failureCode          String?
+  minutesSpent         Int?
+  /// W2b (wave 14/16; QHS-180, QHS-191): the line lead confirms the machine works (when, an office user or a worker of the
+  /// site: exactly one), once while HANDED_BACK, kept on CLOSED, cleared when the job goes back to work.
+  leadConfirmedAt         DateTime?         @db.Timestamptz(3)
+  leadConfirmedById       String?           @db.Uuid
+  leadConfirmedByWorkerId String?           @db.Uuid
+  /// W2b (wave 14/16; QHS-205): the check result it was made from (a STATUTORY_CHECK job of a failed or remarked check of the
+  /// same machine); set once, never changes.
+  checkResultId        String?              @db.Uuid
   /// CLOSED: when and by whom.
   closedAt             DateTime?            @db.Timestamptz(3)
   closedById           String?              @db.Uuid
@@ -323,6 +377,9 @@ model MaintenanceJob {
   symptom            MachineSymptom?      @relation(fields: [tenantId, symptomId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   assigneeWorker     Worker?              @relation("MaintenanceJobAssignee", fields: [tenantId, siteId, assigneeWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   handedBackByWorker Worker?              @relation("MaintenanceJobHandedBackBy", fields: [tenantId, siteId, handedBackByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (wave 14/16): the line lead on the floor who confirmed it works; the check result it was made from.
+  leadConfirmedByWorker Worker?             @relation("MaintenanceJobLeadConfirmedBy", fields: [tenantId, siteId, leadConfirmedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  checkResult        MachineCheckResult?  @relation(fields: [tenantId, siteId, checkResultId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   requests           MaintenanceRequest[]
 
   @@unique([tenantId, companyId, number])

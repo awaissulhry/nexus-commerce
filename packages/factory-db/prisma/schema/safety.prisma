@@ -1,0 +1,962 @@
+// Safety at work (W2b schema wave 15/16, B-W2b-87; features QHS-224, QHS-226, QHS-227, QHS-230, QHS-234, QHS-236, QHS-241,
+// QHS-242, QHS-243, QHS-244, QHS-246, QHS-247, QHS-248, QHS-259, QHS-260, QHS-261; design plant.calendar, plant.risk,
+// plant.ppe, people.skills "Safety training", people.employees "Safety", floor.training). The registers D.Lgs. 81/2008 asks
+// of an employer, kept on paper or by the consultant today: who holds each safety role (arts. 17, 18, 31, 38, 47) and the
+// RLS notice to INAIL (art. 18 c.1 aa), the legal deadlines, the risk assessment (DVR) with its versions, their certain
+// date and the improvement plan (arts. 28-29), the role risk sheets (scheda mansione), the course catalogue, who needs
+// which course, training sessions, attendance signed on the floor, training records and the hands-on instruction register
+// (art. 37), the PPE catalogue, the kit of each role and every PPE item handed to a person with its receipt (arts. 18 c.1
+// d, 77). apps/factory-api's module `modules/safety` writes them (B-W2b-120 organisation and calendar, -122 the risk
+// assessment, -128 role sheets, -133 courses and requirements, -134 PPE, -139 training records), always through command().
+//
+// Two names kept apart: PpeItem is PPE FOR WORKERS (gloves, safety shoes, hearing protection the factory gives its people);
+// compliance.prisma's PpeRegisterEntry is the maker's register of the PPE GARMENTS it sells (Regulation (EU) 2016/425).
+//
+// The role sheet is the one place a role's needs are typed (Owner answer H2: 6-10 roles, one afternoon with the safety
+// officer): its risks and surveillance needs (RoleSheetItem), its PPE kit (PpeKitLine) and its courses (TrainingRequirement,
+// which also holds the courses a class of machine asks for). Each fact lives in one table, so a kit or a course is never
+// typed twice; who needs what is read from the person's role sheet (Employee.roleSheetId) and machine authorisations,
+// never typed per person.
+//
+// No health data here (GDPR art. 9): a role sheet says a surveillance need in words ("noise exposure"); visit plans,
+// visits and fitness judgements are the protected schema's (health.prisma, B-W2b-91), and so are incidents.
+//
+// People (Statuto dei Lavoratori art. 4; Owner answer W1; plan §12 "Worker names in safety registers"): these registers
+// name people because the law asks it (who was trained, instructed, given PPE), for the roles that keep them, never as a
+// figure, a ranking or a filter on performance. Every personal column is tagged in ownership/safety.json with its purposes
+// (SAFETY, the legal duty; EMPLOYMENT where the HR record reads it), never PERFORMANCE.
+//
+// Signatures (the design's SignBlock and its PIN variant): OFFICE, a signed-in office user typed their name; FLOOR_PIN, a
+// floor worker of the site signed with badge and PIN on a tablet (the worker named, the device, and the SHA-256 of what
+// they signed); PAPER, the office recorded a signed paper (its scan is a StoredFile of the row). A signature is written
+// once; a register row is never deleted (ended, voided or corrected by a new row).
+//
+// Who sees what (ownership/safety.json): the office keeps everything. The floor of a site reads its role sheets, sessions,
+// kits and instruction entries, the course catalogue, the training requirements and the training records (tenant-wide: a
+// person who moved site keeps their courses), and the PPE catalogue without cost or supplier; it signs attendance and
+// countersigns it, signs an instruction entry and records a PPE item received, nothing else. Portal and link sessions read
+// nothing here.
+
+// =====================================================================================================================
+// The safety organisation and the calendar (QHS-224, QHS-226, QHS-227; design plant.calendar)
+// =====================================================================================================================
+
+/// Who holds a safety role (QHS-224; design plant.calendar "Safety organisation", "Appointment"): the role, a person of
+/// the company or an outside contact (a consultant RSPP, the occupational doctor, a territorial RLS), from a day (until a
+/// day), for the whole company or one site and, for the first-aid and fire teams, one shift. The appointment letter is a
+/// file of the row (StoredFile recordType "SafetyAppointment"); the appointee's signature (typed in the office, or the
+/// signed letter recorded) is written once. An appointment is ended, never deleted; a new term is a new row.
+model SafetyAppointment {
+  id               String            @id @db.Uuid
+  tenantId         String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String            @db.Uuid
+  /// The site it is for; null: the whole company (the employer, the RSPP, the doctor).
+  siteId           String?           @db.Uuid
+  role             SafetyRole
+  /// The appointee: a person of the company (an RLS is always one) …
+  employeeId       String?           @db.Uuid
+  /// … or an outside contact: their name as printed on the organisation chart, and, when they are a party, the party and
+  /// its contact (a territorial RLS is always an outside contact).
+  outsideName      String?
+  outsidePartyId   String?           @db.Uuid
+  outsideContactId String?           @db.Uuid
+  /// The shift of a first-aid or fire and emergency team (a team per shift); null: every shift.
+  shiftPatternId   String?           @db.Uuid
+  /// The first day, and the last one when it ends (null: open).
+  fromDate         DateTime          @db.Date
+  untilDate        DateTime?         @db.Date
+  /// Why it ended (a resignation, a new election), when it did.
+  endReason        String?
+  /// The appointee's signature: when, how (OFFICE or PAPER), the name as signed, and the office user who signed or
+  /// recorded the paper. All or none; written once.
+  signedAt         DateTime?         @db.Timestamptz(3)
+  signMethod       SafetySignMethod?
+  signedName       String?
+  signedById       String?           @db.Uuid
+  note             String?
+  version          Int               @default(1)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?           @db.Uuid
+
+  company        Company       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  site           Site?         @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee       Employee?     @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  outsideParty   Party?        @relation("SafetyAppointmentOutsideParty", fields: [tenantId, outsidePartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  outsideContact PartyContact? @relation(fields: [tenantId, outsidePartyId, outsideContactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  shiftPattern   ShiftPattern? @relation(fields: [tenantId, shiftPatternId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  rlsNotices     RlsNotice[]
+  dvrSignatures  RiskAssessmentSignature[]
+
+  // The targets of the notices' and signatures' company-safe references.
+  @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, role])
+  @@index([tenantId, employeeId])
+}
+
+/// The safety roles of D.Lgs. 81/2008 (design plant.calendar "Safety organisation").
+enum SafetyRole {
+  /// Datore di lavoro (art. 2 c.1 b): signs the DVR, appoints the others.
+  EMPLOYER
+  /// Responsabile del servizio di prevenzione e protezione (arts. 17, 31-32).
+  RSPP
+  /// Addetto al servizio di prevenzione e protezione (art. 31).
+  ASPP
+  /// Medico competente, the occupational doctor (arts. 18 c.1 a, 38-39): confirms fitness only, never clinical data here.
+  DOCTOR
+  /// Rappresentante dei lavoratori per la sicurezza, elected or designated among the workers (art. 47).
+  RLS
+  /// Rappresentante territoriale (art. 48), where the company has no RLS of its own: an outside contact.
+  RLST
+  /// Preposto, a supervisor (arts. 2 c.1 e, 19).
+  SUPERVISOR
+  /// Dirigente, a manager (arts. 2 c.1 d, 18).
+  MANAGER
+  /// Addetto al primo soccorso, a first-aid team member (arts. 18 c.1 b, 45).
+  FIRST_AID
+  /// Addetto antincendio e gestione delle emergenze, a fire and emergency team member (arts. 18 c.1 b, 46).
+  FIRE_EMERGENCY
+}
+
+/// How a person signed a safety register (the design's SignBlock and its PIN variant).
+enum SafetySignMethod {
+  /// A signed-in office user typed their name.
+  OFFICE
+  /// A floor worker of the site signed with badge and PIN on a tablet.
+  FLOOR_PIN
+  /// The office recorded a signed paper; its scan is a file of the row.
+  PAPER
+}
+
+/// The notice of a new RLS to INAIL (QHS-226; D.Lgs. 81/2008 art. 18 c.1 aa): after an election or a designation the
+/// employer files the name on the INAIL portal (a manual send: no API). Due by a day; PENDING → FILED (the day, the
+/// protocol reference and who recorded it; the receipt is a file of the row) | CANCELLED (the appointment was a
+/// mistake, with the reason). FILED and CANCELLED are final. Never deleted.
+model RlsNotice {
+  id            String          @id @db.Uuid
+  tenantId      String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String          @db.Uuid
+  /// The RLS (or RLST) appointment it notifies.
+  appointmentId String          @db.Uuid
+  dueOn         DateTime        @db.Date
+  status        RlsNoticeStatus @default(PENDING)
+  filedOn       DateTime?       @db.Date
+  /// INAIL's protocol reference.
+  reference     String?
+  filedById     String?         @db.Uuid
+  cancelledAt   DateTime?       @db.Timestamptz(3)
+  cancelReason  String?
+  note          String?
+  version       Int             @default(1)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?         @db.Uuid
+
+  appointment SafetyAppointment @relation(fields: [tenantId, companyId, appointmentId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, appointmentId])
+  @@index([tenantId, companyId, status])
+}
+
+enum RlsNoticeStatus {
+  PENDING
+  FILED
+  CANCELLED
+}
+
+/// A legal deadline typed by hand (QHS-227; design plant.calendar "Add deadline", "Deadline"): a drill, the periodic
+/// safety meeting, an authority's inspection, anything the other pages do not bring (the calendar reads training,
+/// visits, machine checks, the DVR review and appointments from their own records, never copied here). A title, a kind,
+/// the day it is due, how it repeats, its owner, whether evidence is required (a file of the row: StoredFile recordType
+/// "SafetyDeadline"). OPEN → DONE (when, who, a note; with evidence when required) | CANCELLED (with the reason); both
+/// final. A repeating deadline's next occurrence is a new row naming the one before (previousId), so each keeps its
+/// evidence. Never deleted.
+model SafetyDeadline {
+  id               String               @id @db.Uuid
+  tenantId         String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String               @db.Uuid
+  /// The site it is for; null: the whole company.
+  siteId           String?              @db.Uuid
+  title            String
+  kind             SafetyDeadlineKind
+  dueOn            DateTime             @db.Date
+  /// It repeats every this many weeks, months or years (1 to 120; both or neither); null: once.
+  repeatEvery      Int?
+  repeatUnit       SafetyRepeatUnit?
+  /// The office user it is assigned to (a task in their My work).
+  ownerId          String?              @db.Uuid
+  /// Marked done only with a file of the row (an AVAILABLE StoredFile).
+  evidenceRequired Boolean              @default(false)
+  status           SafetyDeadlineStatus @default(OPEN)
+  doneAt           DateTime?            @db.Timestamptz(3)
+  doneById         String?              @db.Uuid
+  doneNote         String?
+  cancelledAt      DateTime?            @db.Timestamptz(3)
+  cancelReason     String?
+  /// The occurrence before this one, for a repeating deadline (of the same company and kind; one next per occurrence).
+  previousId       String?              @db.Uuid
+  note             String?
+  version          Int                  @default(1)
+  createdAt        DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?              @db.Uuid
+
+  company  Company          @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  site     Site?            @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  previous SafetyDeadline?  @relation("SafetyDeadlineRepeat", fields: [tenantId, previousId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  next     SafetyDeadline[] @relation("SafetyDeadlineRepeat")
+
+  @@unique([tenantId, id])
+  @@index([tenantId, companyId, dueOn])
+}
+
+/// What a typed deadline is (design plant.calendar: drills and safety meetings, inspections, renewals, reports).
+enum SafetyDeadlineKind {
+  /// An evacuation or emergency drill (DM 2 settembre 2021).
+  DRILL
+  /// The periodic safety meeting (art. 35).
+  MEETING
+  /// An inspection: by the authority, the insurer, or the company's own round.
+  INSPECTION
+  /// A renewal that no other page tracks (a permit, a fire certificate).
+  RENEWAL
+  /// A report or notice to an authority.
+  AUTHORITY_REPORT
+  OTHER
+}
+
+enum SafetyRepeatUnit {
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum SafetyDeadlineStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+// =====================================================================================================================
+// The risk assessment (QHS-230, QHS-234; design plant.risk; D.Lgs. 81/2008 arts. 28-29)
+// =====================================================================================================================
+
+/// A risk assessment, the DVR (QHS-230; design plant.risk "Assessments"): one per site, or per production unit of a site
+/// (its name, unique on the site). Its versions hold the documents; its measures the improvement plan. Archived, never
+/// deleted.
+model RiskAssessment {
+  id           String       @id @db.Uuid
+  tenantId     String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String       @db.Uuid
+  siteId       String       @db.Uuid
+  /// The site or production unit it covers ("Plant A1", "Cutting hall"); unique on the site.
+  name         String
+  /// When the next review is due (art. 29 c.3: after a significant change, an injury, or as the assessment says).
+  nextReviewOn DateTime?    @db.Date
+  status       MasterStatus @default(ACTIVE)
+  note         String?
+  version      Int          @default(1)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?      @db.Uuid
+
+  site     Site                    @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  versions RiskAssessmentVersion[]
+  measures RiskMeasure[]
+
+  @@unique([tenantId, siteId, name])
+  // The target of the versions' and measures' company- and site-safe references.
+  @@unique([tenantId, companyId, siteId, id])
+}
+
+/// One version of a risk assessment (QHS-230; design plant.risk "New DVR version", "Versions"): the consultant's PDF (a
+/// file of the assessment) frozen with its SHA-256 and the time it was frozen, a label, the effective date, the author,
+/// a summary of the changes, and the signers its certain date needs (art. 28 c.2: the employer, and for the proof of the
+/// date the RSPP, the RLS or RLST and the doctor where one is appointed). AWAITING_SIGNATURES → SIGNED (every listed
+/// signer signed: the certain date is the day of the last signature) | WITHDRAWN (a mistake, before it is signed, with
+/// the reason). Nothing else of it ever changes; superseded versions stay; never deleted. The sealed PDF with its
+/// signatures is a GeneratedDocument DVR_FROZEN of the version.
+model RiskAssessmentVersion {
+  id              String                      @id @db.Uuid
+  tenantId        String                      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId       String                      @db.Uuid
+  siteId          String                      @db.Uuid
+  assessmentId    String                      @db.Uuid
+  /// 1, 2, 3 … per assessment (unique), each above the ones before; the newest SIGNED one is in force.
+  versionNo       Int
+  /// "v4", "2026 review".
+  label           String
+  effectiveOn     DateTime                    @db.Date
+  authorKind      DvrAuthorKind
+  /// The consultant's or the in-house author's name.
+  authorName      String
+  changeSummary   String?
+  /// The PDF frozen: a file of the assessment (StoredFile recordType "RiskAssessment"), and its SHA-256 (lower-case hex;
+  /// the file's own when it has one).
+  fileId          String                      @db.Uuid
+  sha256          String
+  frozenAt        DateTime                    @db.Timestamptz(3)
+  frozenById      String                      @db.Uuid
+  /// Who must sign it: the employer always, and of RSPP, RLS, RLST, DOCTOR those the company has.
+  signersRequired SafetyRole[]
+  status          RiskAssessmentVersionStatus @default(AWAITING_SIGNATURES)
+  /// SIGNED: the certain date (the day of the last signature) and when it was complete.
+  certainDateOn   DateTime?                   @db.Date
+  signedAt        DateTime?                   @db.Timestamptz(3)
+  withdrawnAt     DateTime?                   @db.Timestamptz(3)
+  withdrawnReason String?
+  version         Int                         @default(1)
+  createdAt       DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                    @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?                     @db.Uuid
+
+  assessment RiskAssessment            @relation(fields: [tenantId, companyId, siteId, assessmentId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  file       StoredFile                @relation("RiskAssessmentVersionFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  signatures RiskAssessmentSignature[]
+  measures   RiskMeasure[]
+
+  @@unique([tenantId, assessmentId, versionNo])
+  // The targets of the signatures' and measures' references.
+  @@unique([tenantId, companyId, siteId, id])
+  @@unique([tenantId, assessmentId, id])
+}
+
+enum DvrAuthorKind {
+  /// An outside consultant keeps the DVR (the usual case today).
+  CONSULTANT
+  IN_HOUSE
+}
+
+enum RiskAssessmentVersionStatus {
+  AWAITING_SIGNATURES
+  SIGNED
+  WITHDRAWN
+}
+
+/// One signature of a risk assessment version (QHS-230; design plant.risk "Sign version"): the role signed for (one of the
+/// version's signers, once: the key `signature:<version>:<role>` is unique), the appointment it holds (when recorded),
+/// the name as signed, the day and time, how (OFFICE, FLOOR_PIN or PAPER, its scan a file of the row) and the SHA-256 the
+/// signer signed, which is the version's. Never changed or removed.
+/// @append-only
+model RiskAssessmentSignature {
+  id               String           @id @db.Uuid
+  tenantId         String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String           @db.Uuid
+  siteId           String           @db.Uuid
+  versionId        String           @db.Uuid
+  /// `signature:<versionId>:<role>`: one signature per role per version.
+  key              String
+  role             SafetyRole
+  /// The signer's appointment to that role (of the company), when the organisation lists it.
+  appointmentId    String?          @db.Uuid
+  signerName       String
+  signedOn         DateTime         @db.Date
+  signedAt         DateTime         @db.Timestamptz(3)
+  method           SafetySignMethod
+  /// OFFICE: the office user who signed; PAPER: the one who recorded the paper. FLOOR_PIN: the worker of the site.
+  signedById       String?          @db.Uuid
+  signedByWorkerId String?          @db.Uuid
+  /// What was signed: the version's SHA-256.
+  signatureSha256  String
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  createdById      String?          @db.Uuid
+
+  dvrVersion     RiskAssessmentVersion @relation(fields: [tenantId, companyId, siteId, versionId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and siteId.
+  appointment    SafetyAppointment?    @relation(fields: [tenantId, companyId, appointmentId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  signedByWorker Worker?               @relation("RiskAssessmentSignatureWorker", fields: [tenantId, siteId, signedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, versionId])
+}
+
+/// A measure of the improvement plan (QHS-234; design plant.risk "Improvement plan", "Add measure"; art. 28 c.2 c-d): what
+/// is to be done, the risk or area, the roles it concerns, its owner, the day it is due, its cost (cost grain) and status,
+/// and where it came from (a DVR version, an incident, an inspection, a meeting). PLANNED → IN_PROGRESS → DONE →
+/// VERIFIED; back from DONE to IN_PROGRESS; CANCELLED (with the reason) before DONE. Evidence: files of the row
+/// (StoredFile recordType "RiskMeasure") and a note. VERIFIED and CANCELLED are final. Never deleted.
+model RiskMeasure {
+  id               String            @id @db.Uuid
+  tenantId         String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String            @db.Uuid
+  siteId           String            @db.Uuid
+  assessmentId     String            @db.Uuid
+  title            String
+  /// The risk or area ("noise at the clicking press").
+  risk             String?
+  /// The role sheets of the site it concerns (each once).
+  roleSheetIds     String[]          @default([]) @db.Uuid
+  ownerId          String?           @db.Uuid
+  dueOn            DateTime?         @db.Date
+  /// What it costs, in the company's currency (minor units), from 0.
+  /// @grain cost
+  cost             Int?
+  status           RiskMeasureStatus @default(PLANNED)
+  source           RiskMeasureSource
+  /// DVR: the version of this assessment it came from.
+  versionId        String?           @db.Uuid
+  /// INCIDENT, INSPECTION (and, when it is a record, MEETING or OTHER): the record it came from (an Incident of the
+  /// protected schema, B-W2b-91), both or neither.
+  sourceRecordType String?
+  sourceRecordId   String?           @db.Uuid
+  doneAt           DateTime?         @db.Timestamptz(3)
+  doneById         String?           @db.Uuid
+  evidenceNote     String?
+  verifiedAt       DateTime?         @db.Timestamptz(3)
+  verifiedById     String?           @db.Uuid
+  cancelledAt      DateTime?         @db.Timestamptz(3)
+  cancelReason     String?
+  note             String?
+  version          Int               @default(1)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?           @db.Uuid
+
+  assessment RiskAssessment         @relation(fields: [tenantId, companyId, siteId, assessmentId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and assessmentId.
+  dvrVersion RiskAssessmentVersion? @relation(fields: [tenantId, assessmentId, versionId], references: [tenantId, assessmentId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, assessmentId])
+  @@index([tenantId, companyId, status, dueOn])
+}
+
+enum RiskMeasureStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+  /// Checked as effective by a person.
+  VERIFIED
+  CANCELLED
+}
+
+/// Where a measure came from (design plant.risk "source (DVR version, incident, inspection)").
+enum RiskMeasureSource {
+  DVR
+  INCIDENT
+  INSPECTION
+  MEETING
+  OTHER
+}
+
+// =====================================================================================================================
+// Role sheets (QHS-236; design plant.risk "Role sheets"; Owner answer H2)
+// =====================================================================================================================
+
+/// A role risk sheet, the scheda mansione (QHS-236; design plant.risk "Role sheet"): one role of a site ("Cutter",
+/// "Machinist"), the single source of what the role means for a person: its risks and surveillance needs (items), its
+/// PPE kit (PpeKitLine) and its courses (TrainingRequirement). People in the role name it (Employee.roleSheetId; jobRole
+/// stays the text of the HR record). Archived (when nobody active names it), never deleted.
+model RoleSheet {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String       @db.Uuid
+  siteId      String       @db.Uuid
+  /// Short code, unique on the site.
+  code        String
+  name        String
+  /// The name in other languages: { "it": "…", "en": "…" }.
+  nameI18n    Json?
+  description String?
+  status      MasterStatus @default(ACTIVE)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  site         Site                  @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  items        RoleSheetItem[]
+  kitLines     PpeKitLine[]
+  requirements TrainingRequirement[]
+  // people.prisma: the people in the role.
+  employees    Employee[]
+
+  @@unique([tenantId, siteId, code])
+  // The targets of the items', kit lines', requirements' and people's references.
+  @@unique([tenantId, siteId, id])
+  @@unique([tenantId, id])
+}
+
+/// A risk or a surveillance need of a role sheet (QHS-236): in words, in its place on the sheet. A role's PPE are its kit
+/// lines and its courses its training requirements; the surveillance need is only the need ("noise exposure"): the visit
+/// plan and its frequency are the occupational doctor's (health.prisma, B-W2b-91). Written only while the sheet is ACTIVE.
+model RoleSheetItem {
+  id          String            @id @db.Uuid
+  tenantId    String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String            @db.Uuid
+  roleSheetId String            @db.Uuid
+  /// Its place on the sheet, from 1 (unique per sheet).
+  seq         Int
+  kind        RoleSheetItemKind
+  title       String
+  note        String?
+  version     Int               @default(1)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?           @db.Uuid
+
+  roleSheet RoleSheet @relation(fields: [tenantId, siteId, roleSheetId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, roleSheetId, seq])
+}
+
+enum RoleSheetItemKind {
+  /// A risk of the role (noise, manual handling, glues and solvents, repetitive arm movements …).
+  RISK
+  /// A health surveillance need of the role (art. 41), in words only.
+  SURVEILLANCE
+}
+
+// =====================================================================================================================
+// Training (QHS-241 … QHS-248; design people.skills "Safety training", floor.training; D.Lgs. 81/2008 art. 37)
+// =====================================================================================================================
+
+/// A safety course of the catalogue (QHS-241; design people.skills "Course catalogue"): its type, duration and refresher
+/// period as settings, whether it must be in person, the provider and the legal basis. Tenant-wide (companyId null) or of
+/// one company. Archived, never deleted.
+model SafetyCourse {
+  id               String           @id @db.Uuid
+  tenantId         String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Null: every company of the tenant.
+  companyId        String?          @db.Uuid
+  /// Short code, unique in the tenant.
+  code             String
+  name             String
+  nameI18n         Json?
+  type             SafetyCourseType
+  /// Its hours, above 0 and at most 200.
+  hours            Decimal          @db.Decimal(6, 2)
+  /// A refresher is due this many months after it (1 to 120), with its hours; null: none.
+  refresherMonths  Int?
+  refresherHours   Decimal?         @db.Decimal(6, 2)
+  inPersonRequired Boolean          @default(false)
+  /// Who usually gives it (words).
+  provider         String?
+  /// The rule it rests on ("D.Lgs. 81/2008 art. 37; Accordo Stato-Regioni").
+  legalBasis       String
+  sortOrder        Int              @default(0)
+  status           MasterStatus     @default(ACTIVE)
+  version          Int              @default(1)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?          @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company      Company?              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  requirements TrainingRequirement[]
+  sessions     TrainingSession[]
+  records      TrainingRecord[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, id])
+}
+
+/// The type of a safety course (design people.skills "type": general, specific by risk class, supervisor, manager, RLS,
+/// first aid, fire, forklift).
+enum SafetyCourseType {
+  GENERAL
+  SPECIFIC_LOW
+  SPECIFIC_MEDIUM
+  SPECIFIC_HIGH
+  SUPERVISOR
+  MANAGER
+  RLS
+  FIRST_AID
+  FIRE
+  FORKLIFT
+  OTHER
+}
+
+/// A course a role or a class of machine asks for (QHS-242; design people.skills "Who needs what"): from a role sheet (a
+/// person in the role needs it) or a machine class (a person authorised on it needs it), within so many days of taking
+/// the role or the authorisation (null: before they start). Never typed per person: who needs what is read from these.
+/// Edited in the role sheet, or with the machine class; removed when no longer asked.
+model TrainingRequirement {
+  id             String                    @id @db.Uuid
+  tenantId       String                    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  source         TrainingRequirementSource
+  /// ROLE_SHEET: the sheet; MACHINE_CLASS: the class. Exactly the one of its source.
+  roleSheetId    String?                   @db.Uuid
+  machineClassId String?                   @db.Uuid
+  courseId       String                    @db.Uuid
+  /// Days after taking the role or the authorisation, 0 to 365; null: before starting.
+  withinDays     Int?
+  note           String?
+  version        Int                       @default(1)
+  createdAt      DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?                   @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  roleSheet    RoleSheet?    @relation(fields: [tenantId, roleSheetId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  machineClass MachineClass? @relation(fields: [tenantId, machineClassId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  course       SafetyCourse  @relation(fields: [tenantId, courseId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, roleSheetId])
+  @@index([tenantId, machineClassId])
+  @@index([tenantId, courseId])
+}
+
+enum TrainingRequirementSource {
+  ROLE_SHEET
+  MACHINE_CLASS
+}
+
+/// A training session (QHS-248; design floor.training, people.skills "Record training"): one course given at a site on a
+/// day, its hours, the language it is given in, the trainer (a person of the company, or an outside trainer by name and
+/// provider). Opened in the office; while OPEN the workers sign their attendance on the floor; CLOSED (the office closes
+/// it: signing stops) | CANCELLED (with the reason, while no training record came from it). Both final. Never deleted.
+model TrainingSession {
+  id                String                @id @db.Uuid
+  tenantId          String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId         String                @db.Uuid
+  siteId            String                @db.Uuid
+  courseId          String                @db.Uuid
+  heldOn            DateTime              @db.Date
+  /// Above 0 and at most 24.
+  hours             Decimal               @db.Decimal(6, 2)
+  /// The language it is given in (ISO 639-1): a person's understanding of it is checked (art. 37 c.13).
+  language          String
+  /// The trainer: a person of the company (who countersigns with the PIN), or an outside trainer; the name always.
+  trainerEmployeeId String?               @db.Uuid
+  trainerName       String
+  providerPartyId   String?               @db.Uuid
+  location          String?
+  status            TrainingSessionStatus @default(OPEN)
+  openedById        String                @db.Uuid
+  closedAt          DateTime?             @db.Timestamptz(3)
+  closedById        String?               @db.Uuid
+  cancelledAt       DateTime?             @db.Timestamptz(3)
+  cancelReason      String?
+  note              String?
+  version           Int                   @default(1)
+  createdAt         DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?               @db.Uuid
+
+  site        Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  course      SafetyCourse         @relation(fields: [tenantId, courseId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  trainer     Employee?            @relation("TrainingSessionTrainer", fields: [tenantId, companyId, trainerEmployeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  provider    Party?               @relation("TrainingSessionProvider", fields: [tenantId, providerPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  attendances TrainingAttendance[]
+  records     TrainingRecord[]
+
+  // The targets of the attendances' and records' references.
+  @@unique([tenantId, siteId, id])
+  @@unique([tenantId, id])
+  @@index([tenantId, siteId, status])
+}
+
+enum TrainingSessionStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+/// A person's attendance at a session (QHS-248; design floor.training "Training attendance"): signed on the floor with
+/// badge and PIN (FLOOR_PIN: the person's own floor sign-in, the device, what they signed) or recorded from the paper
+/// sheet by the office (PAPER: the scan is a file of the session), once per person (the key `attendance:<session>:<person>`
+/// is unique); countersigned by the trainer (their PIN on the floor, or the office), with the trainer's check that the
+/// person understood the language (QHS-247). Written while the session is OPEN; a wrong one is voided by the office
+/// (with the reason), never deleted.
+model TrainingAttendance {
+  id                      String            @id @db.Uuid
+  tenantId                String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The session's site.
+  siteId                  String            @db.Uuid
+  sessionId               String            @db.Uuid
+  /// A person of the session's company.
+  employeeId              String            @db.Uuid
+  /// `attendance:<sessionId>:<employeeId>`: one attendance per person per session.
+  key                     String
+  method                  SafetySignMethod
+  signedAt                DateTime          @db.Timestamptz(3)
+  /// FLOOR_PIN: the person's floor sign-in at the site, the device, its id for the event (unique per device: a resent
+  /// signature is recorded once) and the SHA-256 (hex) of what they signed.
+  signedByWorkerId        String?           @db.Uuid
+  deviceId                String?           @db.Uuid
+  clientEventId           String?
+  signatureSha256         String?
+  /// The trainer's countersignature, all together, once: FLOOR_PIN (the trainer's floor sign-in) or OFFICE (an office user).
+  countersignedAt         DateTime?         @db.Timestamptz(3)
+  countersignMethod       SafetySignMethod?
+  countersignedByWorkerId String?           @db.Uuid
+  countersignedById       String?           @db.Uuid
+  /// The trainer's check that the person understood the session's language (art. 37 c.13); null: not checked.
+  languageUnderstood      Boolean?
+  voidedAt                DateTime?         @db.Timestamptz(3)
+  voidedById              String?           @db.Uuid
+  voidReason              String?
+  version                 Int               @default(1)
+  createdAt               DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById             String?           @db.Uuid
+
+  session               TrainingSession  @relation(fields: [tenantId, siteId, sessionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee              Employee         @relation("TrainingAttendee", fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  signedByWorker        Worker?          @relation("TrainingAttendanceSigner", fields: [tenantId, siteId, signedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  countersignedByWorker Worker?          @relation("TrainingAttendanceCountersigner", fields: [tenantId, siteId, countersignedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device                Device?          @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  records               TrainingRecord[]
+
+  @@unique([tenantId, key])
+  @@unique([tenantId, deviceId, clientEventId])
+  // The target of the records' references.
+  @@unique([tenantId, id])
+  @@index([tenantId, sessionId])
+  @@index([tenantId, employeeId])
+}
+
+/// A person's training record (QHS-243, QHS-244, QHS-247; design people.skills "Record training", people.employees "Safety
+/// training"): the course, the day, the hours, the trainer or provider, the result, valid until (the day plus the course's
+/// refresher period; another day only with its reason), the language and whether the person's understanding of it was
+/// checked, and, when it came from a session, the session and the countersigned attendance. The certificate is a file of
+/// the row (StoredFile recordType "TrainingRecord"). Never changed or removed: a mistake is a correction (a new record
+/// naming the one it corrects, with the reason; VOID when it never happened), each record corrected once.
+/// @append-only
+model TrainingRecord {
+  id               String         @id @db.Uuid
+  tenantId         String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The person's company (the employer's register).
+  companyId        String         @db.Uuid
+  employeeId       String         @db.Uuid
+  courseId         String         @db.Uuid
+  sessionId        String?        @db.Uuid
+  attendanceId     String?        @db.Uuid
+  completedOn      DateTime       @db.Date
+  /// From 0 (a VOID correction) to 200.
+  hours            Decimal        @db.Decimal(6, 2)
+  trainerName      String
+  result           TrainingResult
+  validUntil       DateTime?      @db.Date
+  /// Why validUntil is not the day plus the course's refresher period.
+  validUntilReason String?
+  /// The language it was given in (ISO 639-1), and whether the trainer checked the person understood it (art. 37 c.13).
+  language         String
+  languageChecked  Boolean        @default(false)
+  correctsId       String?        @db.Uuid
+  correctionReason String?
+  note             String?
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  createdById      String?        @db.Uuid
+
+  employee    Employee            @relation("TrainingRecordPerson", fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  course      SafetyCourse        @relation(fields: [tenantId, courseId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  session     TrainingSession?    @relation(fields: [tenantId, sessionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  attendance  TrainingAttendance? @relation(fields: [tenantId, attendanceId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  corrects    TrainingRecord?     @relation("TrainingRecordCorrection", fields: [tenantId, correctsId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  corrections TrainingRecord[]    @relation("TrainingRecordCorrection")
+
+  @@unique([tenantId, id])
+  @@index([tenantId, employeeId, courseId])
+  @@index([tenantId, courseId])
+}
+
+enum TrainingResult {
+  PASSED
+  FAILED
+  /// A correction: the record it corrects never happened (a wrong person or course).
+  VOID
+}
+
+/// An entry of the hands-on instruction register (QHS-246; design people.skills "Instruction register"; art. 37 c.5,
+/// addestramento): who was instructed, on what task, class of machine or machine, by whom, for how many minutes, in which
+/// language, at a site on a day. Written in the office; the person signs it on the floor with badge and PIN (or the office
+/// records the signed paper), once; then it is frozen. A wrong entry is voided by the office (with the reason), never
+/// deleted.
+model InstructionRecord {
+  id                   String            @id @db.Uuid
+  tenantId             String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId            String            @db.Uuid
+  siteId               String            @db.Uuid
+  employeeId           String            @db.Uuid
+  instructedOn         DateTime          @db.Date
+  /// The task, in words ("change the press die safely").
+  task                 String
+  machineClassId       String?           @db.Uuid
+  machineId            String?           @db.Uuid
+  /// The instructor: a person of the company (never the one instructed), or by name only; the name always.
+  instructorEmployeeId String?           @db.Uuid
+  instructorName       String
+  /// 1 to 1440.
+  minutes              Int
+  language             String
+  languageChecked      Boolean           @default(false)
+  /// The person's signature, all together, once: FLOOR_PIN (their floor sign-in at the site, the SHA-256 of what they
+  /// signed) or PAPER (the office recorded the signed paper; its scan is a file of the row).
+  signedAt             DateTime?         @db.Timestamptz(3)
+  signMethod           SafetySignMethod?
+  signedByWorkerId     String?           @db.Uuid
+  signatureSha256      String?
+  voidedAt             DateTime?         @db.Timestamptz(3)
+  voidedById           String?           @db.Uuid
+  voidReason           String?
+  note                 String?
+  version              Int               @default(1)
+  createdAt            DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?           @db.Uuid
+
+  site           Site          @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee       Employee      @relation("InstructionRecordPerson", fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and siteId.
+  instructor     Employee?     @relation("InstructionRecordInstructor", fields: [tenantId, companyId, instructorEmployeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  machineClass   MachineClass? @relation(fields: [tenantId, machineClassId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  machine        Machine?      @relation(fields: [tenantId, siteId, machineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  signedByWorker Worker?       @relation("InstructionRecordSigner", fields: [tenantId, siteId, signedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, siteId, instructedOn])
+}
+
+// =====================================================================================================================
+// PPE for workers (QHS-259, QHS-260, QHS-261; design plant.ppe, floor.training "Receive PPE"; arts. 18 c.1 d, 77)
+// =====================================================================================================================
+
+/// A PPE item of a company's catalogue (QHS-259; design plant.ppe "Catalogue"; art. 77 c.1): its category (I, II, III of
+/// Regulation (EU) 2016/425), the standard it meets, its sizes, how many months it lasts, the supplier and its unit cost
+/// (cost grain). PPE for the factory's own people: not the garments the maker sells (PpeRegisterEntry). Archived, never
+/// deleted.
+model PpeItem {
+  id              String       @id @db.Uuid
+  tenantId        String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId       String       @db.Uuid
+  /// Short code, unique in the tenant.
+  code            String
+  name            String
+  nameI18n        Json?
+  /// product.prisma's PpeCategory (Regulation (EU) 2016/425 Annex I), never NOT_PPE: CATEGORY_III (risks of very serious
+  /// consequences) asks training and instruction (art. 77 c.5).
+  category        PpeCategory
+  /// The standard it meets, in words ("EN 388:2016", "EN ISO 20345:2022").
+  standard        String?
+  /// The sizes it comes in, each once (empty: one size).
+  sizes           String[]     @default([])
+  /// It is replaced after this many months, 1 to 120; null: when worn.
+  lifeMonths      Int?
+  supplierPartyId String?      @db.Uuid
+  /// One unit's cost, in the company's currency (minor units), from 0.
+  /// @grain cost
+  unitCost        Int?
+  status          MasterStatus @default(ACTIVE)
+  note            String?
+  version         Int          @default(1)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?      @db.Uuid
+
+  company  Company      @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  supplier Party?       @relation("PpeItemSupplier", fields: [tenantId, supplierPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  kitLines PpeKitLine[]
+  issues   PpeIssue[]
+
+  @@unique([tenantId, code])
+  // The targets of the kit lines' and issues' references.
+  @@unique([tenantId, companyId, id])
+  @@unique([tenantId, id])
+}
+
+/// A PPE item of a role's kit (QHS-260; design plant.ppe "Kits per role"): which item a person in the role must have, how
+/// many, and when to wear it. Edited in the role sheet (one owner), read by the PPE pages; written only while the sheet
+/// is ACTIVE, with an ACTIVE item of the sheet's company. One line per item is the module's rule.
+model PpeKitLine {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The role sheet's site.
+  siteId      String   @db.Uuid
+  roleSheetId String   @db.Uuid
+  /// Its place in the kit, from 1 (unique per sheet).
+  seq         Int
+  ppeItemId   String   @db.Uuid
+  /// When to wear it ("at the clicking press", "always on the floor").
+  whenToWear  String
+  /// How many a person holds, 1 to 99.
+  quantity    Int      @default(1)
+  note        String?
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  roleSheet RoleSheet @relation(fields: [tenantId, siteId, roleSheetId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  ppeItem   PpeItem   @relation(fields: [tenantId, ppeItemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, roleSheetId, seq])
+  @@index([tenantId, ppeItemId])
+}
+
+/// PPE handed to a person (QHS-261; design plant.ppe "Issue PPE", "Issues and receipts", floor.training "Receive PPE"; arts.
+/// 18 c.1 d, 77 c.4): who received which item, the size and quantity, why (new, a replacement, lost), when, who handed it
+/// over, and the person's receipt: signed on the floor with badge and PIN ("I received these items and their
+/// instructions": the worker, the device, what they signed) or recorded from a paper receipt by the office (its scan a
+/// file of the row). The receipt PDF is a GeneratedDocument PPE_RECEIPT of the row. Never changed or removed: a wrong
+/// issue is voided by a VOID row naming it (the same person, item, size and quantity, with the reason; once per issue),
+/// and the receipt stays with a void mark.
+/// @append-only
+model PpeIssue {
+  id               String           @id @db.Uuid
+  tenantId         String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The person's company, and the site it was handed over at.
+  companyId        String           @db.Uuid
+  siteId           String           @db.Uuid
+  kind             PpeIssueKind
+  employeeId       String           @db.Uuid
+  ppeItemId        String           @db.Uuid
+  /// One of the item's sizes (null for a one-size item).
+  size             String?
+  /// 1 to 99.
+  quantity         Int
+  /// ISSUE: why it was handed over.
+  reason           PpeIssueReason?
+  issuedAt         DateTime         @db.Timestamptz(3)
+  /// Who handed it over, at most one: an office user, or the floor worker signed in at the tablet.
+  issuedById       String?          @db.Uuid
+  issuedByWorkerId String?          @db.Uuid
+  /// ISSUE: the receipt. FLOOR_PIN: the person's floor sign-in at the site, the device, its id for the event (unique per
+  /// device) and the SHA-256 (hex) of what they signed. PAPER: none of these (the scan is a file of the row).
+  method           SafetySignMethod?
+  signedByWorkerId String?          @db.Uuid
+  deviceId         String?          @db.Uuid
+  clientEventId    String?
+  signatureSha256  String?
+  /// VOID: the issue it voids (of the same site), and why.
+  voidsId          String?          @db.Uuid
+  voidReason       String?
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  createdById      String?          @db.Uuid
+
+  site           Site       @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee       Employee   @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  ppeItem        PpeItem    @relation(fields: [tenantId, companyId, ppeItemId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  issuedByWorker Worker?    @relation("PpeIssueGiver", fields: [tenantId, siteId, issuedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  signedByWorker Worker?    @relation("PpeIssueSigner", fields: [tenantId, siteId, signedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device         Device?    @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  voids          PpeIssue?  @relation("PpeIssueVoid", fields: [tenantId, siteId, voidsId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  voidedBy       PpeIssue[] @relation("PpeIssueVoid")
+
+  @@unique([tenantId, deviceId, clientEventId])
+  // The target of the void rows' site-safe reference.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, employeeId])
+  @@index([tenantId, siteId, issuedAt])
+}
+
+enum PpeIssueKind {
+  ISSUE
+  /// Voids an earlier issue (voidsId).
+  VOID
+}
+
+/// Why PPE was handed over (design plant.ppe "reason (new / replacement / lost)").
+enum PpeIssueReason {
+  NEW
+  REPLACEMENT
+  LOST
+}

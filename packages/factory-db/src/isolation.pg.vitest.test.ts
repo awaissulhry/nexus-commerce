@@ -36,6 +36,8 @@ import { seed as seedParties } from '../seed/parties'
 import { seed as seedPay } from '../seed/pay'
 import { seed as seedPlanning } from '../seed/planning'
 import { seed as seedPlant } from '../seed/plant'
+import { seed as seedPlantCare } from '../seed/plantcare'
+import { seed as seedSafety } from '../seed/safety'
 import { seed as seedPeople } from '../seed/people'
 import { seed as seedPricing } from '../seed/pricing'
 import { seed as seedPrint } from '../seed/print'
@@ -260,6 +262,12 @@ beforeAll(async () => {
   // The cutting room schema of W2b (wave 13/16).
   await seedCutting({ db: factory, namespace: 'iso-a' })
   await seedCutting({ db: factory, namespace: 'iso-b' })
+  // The plant care schema of W2b (wave 14/16).
+  await seedPlantCare({ db: factory, namespace: 'iso-a' })
+  await seedPlantCare({ db: factory, namespace: 'iso-b' })
+  // The safety at work schema of W2b (wave 15/16).
+  await seedSafety({ db: factory, namespace: 'iso-a' })
+  await seedSafety({ db: factory, namespace: 'iso-b' })
   // W2b-2 (B-W2b-74): a floor session inserts only an unplanned operation, so the first operation of tenant A's first site is
   // one, on its work order in progress (the seeds leave a work order's operations to their routing, every test reads them).
   await db.admin.query(
@@ -313,6 +321,7 @@ it('covers every classified table and every runtime role', () => {
     'Certificate',
     'CertificateCoverage',
     'CertificateRenewal',
+    'ClickingDie',
     'ClockEvent',
     'Colour',
     'Colourway',
@@ -387,6 +396,7 @@ it('covers every classified table and every runtime role', () => {
     'InspectionPlanCheck',
     'InspectionPlanVersion',
     'InspectionTrigger',
+    'InstructionRecord',
     'IntegrationAccount',
     'IntegrationCall',
     'InterestReferenceRate',
@@ -418,7 +428,11 @@ it('covers every classified table and every runtime role', () => {
     'LotDocument',
     'Machine',
     'MachineAuthorisation',
+    'MachineCheckPlan',
+    'MachineCheckResult',
+    'MachineCheckType',
     'MachineClass',
+    'MachineStatusEvent',
     'MachineSymptom',
     'MaintenanceJob',
     'MaintenanceRequest',
@@ -482,7 +496,11 @@ it('covers every classified table and every runtime role', () => {
     'PlanningException',
     'PlanningRun',
     'PlanningSettings',
+    'PlantSettings',
     'PlyRun',
+    'PpeIssue',
+    'PpeItem',
+    'PpeKitLine',
     'PpeRegisterEntry',
     'PriceList',
     'PriceListEntry',
@@ -524,6 +542,7 @@ it('covers every classified table and every runtime role', () => {
     'ReplacementRequest',
     'ReportRun',
     'ReportSubscription',
+    'RequestRoutingRule',
     'RequirementPegging',
     'Reservation',
     'RestoreDrill',
@@ -531,10 +550,20 @@ it('covers every classified table and every runtime role', () => {
     'ReturnLine',
     'ReturnReceipt',
     'ReworkOrder',
+    'RiskAssessment',
+    'RiskAssessmentSignature',
+    'RiskAssessmentVersion',
+    'RiskMeasure',
+    'RlsNotice',
     'Role',
     'RoleAssignment',
+    'RoleSheet',
+    'RoleSheetItem',
     'RosterEntry',
     'RoutingOperation',
+    'SafetyAppointment',
+    'SafetyCourse',
+    'SafetyDeadline',
     'SalesOrder',
     'SalesOrderAmendment',
     'SalesOrderLine',
@@ -596,6 +625,10 @@ it('covers every classified table and every runtime role', () => {
     'TimesheetApproval',
     'TodayLayout',
     'TrackingEvent',
+    'TrainingAttendance',
+    'TrainingRecord',
+    'TrainingRequirement',
+    'TrainingSession',
     'TypeChangeReview',
     'User',
     'Variant',

@@ -24,7 +24,8 @@ import type { PeriodStatus } from '../schemes/rules'
  *              that names it
  */
 
-export const EARNINGS_KINDS = ['SCAN', 'TEAM_SPLIT', 'MAKE_UP', 'OFF_STANDARD', 'ADJUSTMENT'] as const
+/** BONUS (B-W2b-84): a standard-minute bonus scheme's bonus for the period. */
+export const EARNINGS_KINDS = ['SCAN', 'TEAM_SPLIT', 'MAKE_UP', 'OFF_STANDARD', 'ADJUSTMENT', 'BONUS'] as const
 export type EarningsKind = (typeof EARNINGS_KINDS)[number]
 export const HOLD_REASONS = ['NOT_CLOCKED_IN', 'ON_BREAK'] as const
 export type HoldReason = (typeof HOLD_REASONS)[number]
@@ -49,7 +50,55 @@ export const NOTHING_TO_PAY_WORDS = 'The scan was undone or corrected: there is 
 export const FIXED_BY_CLOCK_WORDS = 'The attendance now shows the worker clocked in at the time of the scan.'
 export const REVERSAL_WORDS = 'The scan was undone or corrected.'
 export const PERIOD_FIGURE_WORDS = 'What the period run computes changed.'
-export const OWN_FAULT_WORDS = 'Scrap and rework on your own scan follow the scheme\'s own-fault rule. Dispute the entry if it was not your fault.'
+export const OWN_FAULT_WORDS =
+  "Scrap and rework on your own scan are paid by their reason: your own fault by the scheme's own-fault rule, caused by others as paid time. A reason nobody has set yet counts as your own fault: dispute the entry if it was not."
+/** The words on a scan line a standard-minute bonus scheme pays nothing by the piece (B-W2b-84). */
+export const BONUS_PIECES_WORDS = 'A standard-minute bonus scheme: the pieces measure the bonus and are not paid by the piece.'
+
+// ---- who is at fault (MES-258; B-W2b-84) -----------------------------------------------------------------------------------
+
+/** ScrapReason.fault (B-W2b-74): who a scrap or rework reason's garments are put down to. */
+export const SCRAP_FAULTS = ['OWN', 'OTHERS', 'UNKNOWN'] as const
+export type ScrapFault = (typeof SCRAP_FAULTS)[number]
+
+/**
+ * What a reason whose fault nobody set pays as: the scheme's own-fault rule, as every reason paid before the fault existed.
+ * The labour consultant says otherwise (GATE-PIECE-PAY): this one word.
+ */
+export const UNKNOWN_FAULT_PAYS_AS: 'OWN' | 'OTHERS' = 'OWN'
+
+/** One scrap or rework line of a scan and its reason's fault. */
+export interface DefectFact {
+  readonly kind: 'SCRAP' | 'REWORK'
+  readonly quantity: number
+  readonly fault: ScrapFault
+}
+
+/** A scan's scrap and rework, by who pays for them. */
+export interface DefectsByFault {
+  readonly REWORK: { readonly OWN: number; readonly OTHERS: number }
+  readonly SCRAP: { readonly OWN: number; readonly OTHERS: number }
+}
+
+/**
+ * A scan's scrap and rework split by their reasons' fault. Garments no line names (a scan with counts and no lines) are
+ * of no known reason: UNKNOWN. A line never counts more than the scan's own count of its kind.
+ */
+export function defectsByFault(scan: { readonly scrapQuantity: number; readonly reworkQuantity: number }, lines: readonly DefectFact[]): DefectsByFault {
+  const split = (kind: 'SCRAP' | 'REWORK', total: number): { OWN: number; OTHERS: number } => {
+    const out = { OWN: 0, OTHERS: 0 }
+    let left = Math.max(0, total)
+    for (const line of lines) {
+      if (line.kind !== kind || left <= 0) continue
+      const pieces = Math.min(left, Math.max(0, line.quantity))
+      out[line.fault === 'UNKNOWN' ? UNKNOWN_FAULT_PAYS_AS : line.fault] += pieces
+      left -= pieces
+    }
+    out[UNKNOWN_FAULT_PAYS_AS] += left
+    return out
+  }
+  return { REWORK: split('REWORK', scan.reworkQuantity), SCRAP: split('SCRAP', scan.scrapQuantity) }
+}
 
 // ---- windows --------------------------------------------------------------------------------------------------------------
 
@@ -271,15 +320,15 @@ export interface PeriodFacts {
   readonly daysOpen: number
   readonly overtimePending: number
   readonly blocksWaiting: number
-  /** STANDARD_MINUTE_BONUS schemes in force in the month. */
-  readonly bonusSchemes: number
+  /** STANDARD_MINUTE_BONUS schemes in force in the month at a site with no attendance on (no minutes present to count on). */
+  readonly bonusWithoutClock: number
   readonly scansWithoutRate: number
   readonly workersWithoutEmployee: number
   readonly disputesOpen: number
   readonly sitesWithoutClock: number
 }
 
-export const PERIOD_CHECKS = ['HELD_OPEN', 'DAYS_OPEN', 'OVERTIME_PENDING', 'BLOCKS_WAITING', 'BONUS_SCHEME', 'NO_RATE', 'NO_EMPLOYEE', 'DISPUTES_OPEN', 'NO_CLOCK'] as const
+export const PERIOD_CHECKS = ['HELD_OPEN', 'DAYS_OPEN', 'OVERTIME_PENDING', 'BLOCKS_WAITING', 'BONUS_NO_CLOCK', 'NO_RATE', 'NO_EMPLOYEE', 'DISPUTES_OPEN', 'NO_CLOCK'] as const
 export type PeriodCheckCode = (typeof PERIOD_CHECKS)[number]
 
 export interface PeriodCheck {
@@ -293,7 +342,8 @@ export interface PeriodCheck {
 /**
  * What stands between a period and its review, each in words. Blocking: what would change the pay after a person looked at
  * it (a held scan, an open attendance day, overtime or a block not decided: waiting not decided yet is pay not paid yet), and
- * a standard-minute bonus, which the ledger cannot book yet. Told only: a scan with no rate and a worker with no employee are
+ * a standard-minute bonus at a site with no attendance on: its pieces pay nothing by the piece, and its guaranteed pay and
+ * bonus are counted on minutes present nobody can read there. Told only: a scan with no rate and a worker with no employee are
  * not paid and stay payable by a correction; an open dispute is answered as a correction; a site with no clock has no
  * minutes, so no make-up.
  */
@@ -304,7 +354,12 @@ export function periodChecks(facts: PeriodFacts): PeriodCheck[] {
     { code: 'DAYS_OPEN', blocking: true, count: facts.daysOpen, words: `${plural(facts.daysOpen, 'attendance day is', 'attendance days are')} not approved.` },
     { code: 'OVERTIME_PENDING', blocking: true, count: facts.overtimePending, words: `${plural(facts.overtimePending, 'overtime entry waits', 'overtime entries wait')} for a decision: only approved overtime is paid.` },
     { code: 'BLOCKS_WAITING', blocking: true, count: facts.blocksWaiting, words: `${plural(facts.blocksWaiting, 'off-standard block is', 'off-standard blocks are')} still running or waiting for approval.` },
-    { code: 'BONUS_SCHEME', blocking: true, count: facts.bonusSchemes, words: `${plural(facts.bonusSchemes, 'standard-minute bonus scheme applies', 'standard-minute bonus schemes apply')} this month, and the ledger cannot book a bonus yet.` },
+    {
+      code: 'BONUS_NO_CLOCK',
+      blocking: true,
+      count: facts.bonusWithoutClock,
+      words: `${plural(facts.bonusWithoutClock, 'standard-minute bonus scheme applies', 'standard-minute bonus schemes apply')} at a site with no attendance on: the guaranteed pay and the bonus are counted on the minutes present.`,
+    },
     { code: 'NO_RATE', blocking: false, count: facts.scansWithoutRate, words: `${plural(facts.scansWithoutRate, 'scan has', 'scans have')} no rate in force: not paid until a rate applies.` },
     { code: 'NO_EMPLOYEE', blocking: false, count: facts.workersWithoutEmployee, words: `${plural(facts.workersWithoutEmployee, 'floor sign-in has', 'floor sign-ins have')} no employee record: their scans are not paid until they are linked.` },
     { code: 'DISPUTES_OPEN', blocking: false, count: facts.disputesOpen, words: `${plural(facts.disputesOpen, 'dispute is', 'disputes are')} open: an answer after the lock is paid as a correction.` },

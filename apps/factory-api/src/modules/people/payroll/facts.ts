@@ -1,7 +1,7 @@
 import { blockingLeft, payrollChecks, type CheckFacts, type PayrollCheck } from '@nexus/factory-domain/people/payroll/checks'
 import { HOUR_CODES, mappingKey, type HourCode, type PayrollCodeKind } from '@nexus/factory-domain/people/payroll/codes'
 import { layoutConfirmed, overflowingValues, parseDefinition, printsProviderCode, type FileContext } from '@nexus/factory-domain/people/payroll/layouts'
-import { carriesPay, earningFacts, flatValues, personValues, type LedgerSum, type MappedCode, type PayrollValue, type PersonFacts, type PersonValues } from '@nexus/factory-domain/people/payroll/values'
+import { carriesPay, earningFacts, flatValues, personValues, type MappedCode, type PayrollValue, type PersonFacts, type PersonValues } from '@nexus/factory-domain/people/payroll/values'
 import { paysOn } from '@nexus/factory-domain/people/earnings/rules'
 import { eachDay } from '@nexus/factory-domain/calendars/dates'
 import { dateOf, dayOf } from '../employees/access'
@@ -81,8 +81,7 @@ export async function monthPeople(db: Client, place: Place, month: string, now: 
       }
     }
     const ended = person.endDate && dayOf(person.endDate) >= days.from && dayOf(person.endDate) <= days.to ? dayOf(person.endDate) : null
-    // BONUS is in the schema (B-W2b-75), but nothing books one before B-W2b-84: it adds the code and drops this `as`.
-    const earnings = earningFacts(ledger.filter((row) => row.employeeId === person.id).map((row) => ({ kind: row.kind as LedgerSum['kind'], correctsPeriodId: row.correctsPeriodId, currency: row.currency, amount: row._sum.amount ?? 0, pieces: row._sum.pieces, minutes: row._sum.minutes?.toString() ?? null })))
+    const earnings = earningFacts(ledger.filter((row) => row.employeeId === person.id).map((row) => ({ kind: row.kind, correctsPeriodId: row.correctsPeriodId, currency: row.currency, amount: row._sum.amount ?? 0, pieces: row._sum.pieces, minutes: row._sum.minutes?.toString() ?? null })))
     return { employeeId: person.id, employeeCode: person.employeeCode, kind: person.kind, lastDay: lastOf.get(person.id) ?? ended, hours, absences, earnings }
   })
   const labels = new Map([...codes.values()].map((row) => [row.code, row]))

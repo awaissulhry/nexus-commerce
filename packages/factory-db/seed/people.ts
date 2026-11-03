@@ -1,3 +1,5 @@
+import { isoWeekday, localInstant, plusDays } from '@nexus/factory-domain/calendars/dates'
+import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { EmployeeContract, EmployeeKind, EmployeeStatus, LeaverCaseStatus, LeaverStepKind, LeaverStepStatus, MonitoringBasis, PeoplePurpose } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedCalendar } from './calendar'
@@ -11,11 +13,15 @@ import { seed as seedPrivacy } from './privacy'
  *   areas      "Sewing hall" (line L1 is in it) and "Cutting room"; plant B1 has its "Main hall" (B1's L1 in it).
  *   employees  E1 Seed Employee One (the A1 operator's floor sign-in points at it), E2 Seed Employee Two (the team lead:
  *              the A1 team leader's sign-in and the seed member's office account), E3 an AGENCY worker of P2 until
- *              2026-12-31 with no employee code, E4 an office clerk who is leaving (last day 2026-11-30), E5 a former
- *              employee (LEFT on 2026-06-30). On plant B1 of company B: EB1 (the B1 operator's sign-in). The B1 team
+ *              120 days after the seed's day with no employee code, E4 an office clerk who is leaving (last day 28 days
+ *              after the seed's day), E5 a former employee (LEFT on 2026-06-30). On plant B1 of company B: EB1 (the B1
+ *              operator's sign-in). The B1 team
  *              leader's sign-in has no employee record (design "Floor workers with no employee record").
  *   teams      L1-A on A1's line L1: E2 its lead, E1 and E3 in it now, E5 until 2026-06-30; L1-B on B1's line: EB1.
- *   loan       E4 lent to line L1 (team L1-A) for the morning of 2026-11-03.
+ *   loan       E4 lent to line L1 (team L1-A) for the morning of the next working day (08:00-12:00, Rome).
+ *   dates      what a passing day would change is counted from the clock in Rome when the seed runs (B-W2b-84: the
+ *              loan's state, E3's "agency ending" tile, E4's due leaver steps): `dates` returns what was written, so
+ *              a test reads it instead of a calendar date. The rest is of the past and stays fixed.
  *   leavers    E5's case DONE (every step done); E4's case OPEN: access end, open work, shifts and the payroll flag to
  *              do, floor sign-in and badge skipped (an office clerk has neither).
  *   settings   both companies' people settings (5 minutes of grace, no rounding, overtime by 15 minutes, no automatic
@@ -40,12 +46,23 @@ const T = {
   e5CaseClosed: new Date('2026-07-02T09:00:00.000Z'),
   e4CaseStarted: new Date('2026-10-30T09:00:00.000Z'),
   e4Skipped: new Date('2026-10-30T09:05:00.000Z'),
-  loanStart: new Date('2026-11-03T07:00:00.000Z'),
-  loanEnd: new Date('2026-11-03T11:00:00.000Z'),
   gateOn: new Date('2026-11-13T09:00:00.000Z'),
   gateOff: new Date('2026-11-13T09:30:00.000Z'),
 } as const
 const day = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`)
+const ROME = 'Europe/Rome'
+/** E3's agency contract ends this many days after the seed's day: never inside the 30-day "agency ending" window. */
+export const E3_END_AFTER_DAYS = 120
+/** E4's last working day is this many days after the seed's day: after the loan, before E3's end. */
+export const E4_LAST_DAY_AFTER_DAYS = 28
+
+/** The days of the seed counted from the clock (Rome): the loan's morning, E3's end, E4's last day. */
+export function peopleSeedDates(now: Date = new Date()): { readonly loanStart: Date; readonly loanEnd: Date; readonly e3EndDate: BusinessDate; readonly e4LastWorkingDay: BusinessDate } {
+  const today = businessDate(now, ROME)
+  let loanDay = plusDays(today, 1)
+  while (isoWeekday(loanDay) > 5) loanDay = plusDays(loanDay, 1)
+  return { loanStart: localInstant(loanDay, 8 * 60, ROME), loanEnd: localInstant(loanDay, 12 * 60, ROME), e3EndDate: plusDays(today, E3_END_AFTER_DAYS), e4LastWorkingDay: plusDays(today, E4_LAST_DAY_AFTER_DAYS) }
+}
 
 export interface PeopleSeed {
   /** A1's areas (sewing hall with line L1, cutting room) and B1's main hall. */
@@ -57,6 +74,8 @@ export interface PeopleSeed {
   /** E5's DONE case and E4's OPEN one. */
   readonly caseIds: { readonly done: string; readonly open: string }
   readonly gateId: string
+  /** What was written (the first run's days: a second run changes nothing). */
+  readonly dates: { readonly loanStart: Date; readonly loanEnd: Date; readonly e3EndDate: BusinessDate; readonly e4LastWorkingDay: BusinessDate }
 }
 
 export async function seed(context: SeedContext): Promise<PeopleSeed> {
@@ -78,6 +97,7 @@ export async function seed(context: SeedContext): Promise<PeopleSeed> {
   const agency = id('party:P2')
   const office = { audience: 'office' as const, tenantId, actorId }
   const stamp = (at: Date = T.setup) => ({ createdAt: at, updatedAt: at, createdById: actorId })
+  const planned = peopleSeedDates()
 
   const areaIds = { sewing: firstId('people:area:A1:SEW'), cutting: id('people:area:A1:CUT'), mainB: id('people:area:B1:MAIN') }
   const employeeIds = {
@@ -89,6 +109,7 @@ export async function seed(context: SeedContext): Promise<PeopleSeed> {
     eb1: id('people:employee:B1:1'),
   }
   const teamIds = { a: id('people:team:A1:L1-A'), b: id('people:team:B1:L1-B') }
+  // The keys keep the days of the first seed as names only: the rows' days are counted from the clock (above).
   const loanId = id('people:loan:E4:2026-11-03')
   const caseIds = { done: firstId('people:leaver:E5:2026-06-30'), open: id('people:leaver:E4:2026-11-30') }
   const gateId = firstId('people:gate:A1:ATTENDANCE:2026-11-13')
@@ -111,7 +132,7 @@ export async function seed(context: SeedContext): Promise<PeopleSeed> {
     },
     {
       id: employeeIds.e3, ...atA1, employeeCode: null, firstName: 'Seed', lastName: 'Agency Worker', displayName: 'Seed Agency A1-3', kind: EmployeeKind.AGENCY, agencyPartyId: agency,
-      locale: 'it', startDate: day('2026-09-01'), endDate: day('2026-12-31'), department: 'Sewing', jobRole: 'Machinist', homeLineId: line.A1, contract: EmployeeContract.PART_TIME, weeklyMinutes: 1200, defaultShiftPatternId: shift1T,
+      locale: 'it', startDate: day('2026-09-01'), endDate: day(planned.e3EndDate), department: 'Sewing', jobRole: 'Machinist', homeLineId: line.A1, contract: EmployeeContract.PART_TIME, weeklyMinutes: 1200, defaultShiftPatternId: shift1T,
     },
     {
       id: employeeIds.e4, ...atA1, employeeCode: 'SEED-A-4', firstName: 'Seed', lastName: 'Office Clerk', displayName: 'Seed Office A-4', kind: EmployeeKind.EMPLOYEE,
@@ -135,12 +156,13 @@ export async function seed(context: SeedContext): Promise<PeopleSeed> {
     { id: id('people:member:EB1:L1-B'), siteId: site.B1, teamId: teamIds.b, employeeId: employeeIds.eb1, isLead: false, since: day('2025-01-07'), until: null },
   ]
   /** E4's open steps: the first sorts first (an OPEN step of an OPEN case: its copy passes). */
+  const e4LastDay = day(planned.e4LastWorkingDay)
   const openSteps = [
-    { id: firstId('people:step:E4:1'), kind: LeaverStepKind.ACCESS_ENDED, seq: 1, automatic: true, dueOn: day('2026-11-30') },
-    { id: id('people:step:E4:2'), kind: LeaverStepKind.WORK_HANDED_OVER, seq: 2, automatic: false, dueOn: day('2026-11-30') },
-    { id: id('people:step:E4:3'), kind: LeaverStepKind.SESSIONS_ENDED, seq: 3, automatic: true, dueOn: day('2026-11-30'), skip: 'No floor sign-in: an office clerk (made-up)' },
-    { id: id('people:step:E4:4'), kind: LeaverStepKind.BADGE_RETURNED, seq: 4, automatic: false, dueOn: day('2026-11-30'), skip: 'No badge was issued (made-up)' },
-    { id: id('people:step:E4:5'), kind: LeaverStepKind.SHIFTS_CLEARED, seq: 5, automatic: true, dueOn: day('2026-12-01') },
+    { id: firstId('people:step:E4:1'), kind: LeaverStepKind.ACCESS_ENDED, seq: 1, automatic: true, dueOn: e4LastDay },
+    { id: id('people:step:E4:2'), kind: LeaverStepKind.WORK_HANDED_OVER, seq: 2, automatic: false, dueOn: e4LastDay },
+    { id: id('people:step:E4:3'), kind: LeaverStepKind.SESSIONS_ENDED, seq: 3, automatic: true, dueOn: e4LastDay, skip: 'No floor sign-in: an office clerk (made-up)' },
+    { id: id('people:step:E4:4'), kind: LeaverStepKind.BADGE_RETURNED, seq: 4, automatic: false, dueOn: e4LastDay, skip: 'No badge was issued (made-up)' },
+    { id: id('people:step:E4:5'), kind: LeaverStepKind.SHIFTS_CLEARED, seq: 5, automatic: true, dueOn: day(plusDays(planned.e4LastWorkingDay, 1)) },
     { id: id('people:step:E4:6'), kind: LeaverStepKind.PAYROLL_FLAGGED, seq: 6, automatic: true, dueOn: null },
     { id: id('people:step:E4:7'), kind: LeaverStepKind.EXIT_VISIT, seq: 7, automatic: false, dueOn: null },
   ]
@@ -187,7 +209,7 @@ export async function seed(context: SeedContext): Promise<PeopleSeed> {
       // --- E4 lent to line L1 for a morning ----------------------------------------------------------------------------
       if (!(await tx.lineLoan.findUnique({ where: { id: loanId }, select: { id: true } }))) {
         await tx.lineLoan.create({
-          data: { id: loanId, siteId: site.A1, employeeId: employeeIds.e4, toLineId: line.A1, toTeamId: teamIds.a, startsAt: T.loanStart, endsAt: T.loanEnd, reason: 'Help on the line for the packing peak (made-up)', ...stamp() },
+          data: { id: loanId, siteId: site.A1, employeeId: employeeIds.e4, toLineId: line.A1, toTeamId: teamIds.a, startsAt: planned.loanStart, endsAt: planned.loanEnd, reason: 'Help on the line for the packing peak (made-up)', ...stamp() },
           select: { id: true },
         })
       }
@@ -209,7 +231,7 @@ export async function seed(context: SeedContext): Promise<PeopleSeed> {
       // --- E4 is leaving: the case OPEN, two steps skipped ---------------------------------------------------------------
       if (!(await tx.leaverCase.findUnique({ where: { id: caseIds.open }, select: { id: true } }))) {
         await tx.leaverCase.create({
-          data: { id: caseIds.open, employeeId: employeeIds.e4, lastWorkingDay: day('2026-11-30'), status: LeaverCaseStatus.OPEN, startedAt: T.e4CaseStarted, startedById: actorId, ...stamp(T.e4CaseStarted) },
+          data: { id: caseIds.open, employeeId: employeeIds.e4, lastWorkingDay: e4LastDay, status: LeaverCaseStatus.OPEN, startedAt: T.e4CaseStarted, startedById: actorId, ...stamp(T.e4CaseStarted) },
           select: { id: true },
         })
         for (const { skip, ...step } of openSteps) {
@@ -252,5 +274,14 @@ export async function seed(context: SeedContext): Promise<PeopleSeed> {
     }),
   )
 
-  return { areaIds, employeeIds, teamIds, loanId, caseIds, gateId }
+  // What stands (a second run on a later day writes nothing, so it reads the first run's days).
+  const written = await db.withScope(office, async (client) => {
+    const [loan, e3, open] = await Promise.all([
+      client.lineLoan.findUniqueOrThrow({ where: { id: loanId }, select: { startsAt: true, endsAt: true } }),
+      client.employee.findUniqueOrThrow({ where: { id: employeeIds.e3 }, select: { endDate: true } }),
+      client.leaverCase.findUniqueOrThrow({ where: { id: caseIds.open }, select: { lastWorkingDay: true } }),
+    ])
+    return { loanStart: loan.startsAt, loanEnd: loan.endsAt, e3EndDate: e3.endDate!.toISOString().slice(0, 10), e4LastWorkingDay: open.lastWorkingDay.toISOString().slice(0, 10) }
+  })
+  return { areaIds, employeeIds, teamIds, loanId, caseIds, gateId, dates: written }
 }

@@ -275,6 +275,12 @@ export function schemeFor<S extends Pick<SchemeRow, 'lineId' | 'status' | 'valid
   return own ?? schemes.find((scheme) => scheme.lineId === null && inForceOn(scheme, day)) ?? null
 }
 
+/**
+ * Does work under this scheme pay by the piece? A standard-minute bonus scheme pays the guaranteed pay for the minutes
+ * present and the bonus: its pieces only measure the bonus (B-W2b-84). No scheme: the rates pay, as before.
+ */
+export const paysByPiece = (scheme: Pick<SchemeRow, 'kind'> | null): boolean => scheme?.kind !== 'STANDARD_MINUTE_BONUS'
+
 /** What the screen shows of a scheme's days, with its words. */
 export function schemeStateOf(scheme: Pick<SchemeRow, 'status' | 'validFrom' | 'validTo'>, today: BusinessDate): { readonly state: SchemeState; readonly words: string } {
   if (scheme.status === 'DRAFT') return { state: 'DRAFT', words: `Draft from ${scheme.validFrom}: pays nothing until it is started.` }
@@ -294,11 +300,17 @@ export function rulesInWords(scheme: Pick<SchemeRow, 'kind' | 'efficiencyThresho
         : `${what} of the worker's own fault is paid at ${scheme.ownFaultRatePct ?? '?'}% of the rate.`
   const words = [KIND_WORDS[scheme.kind], BASIS_WORDS[scheme.guaranteedBasis]]
   if (scheme.traineeHourlyRate !== null) words.push('Trainees are made up to their own guaranteed rate.')
-  if (scheme.kind === 'STANDARD_MINUTE_BONUS') words.push(`The bonus pays the standard minutes earned above ${scheme.efficiencyThresholdPct ?? '?'}% of the minutes present.`)
   if (scheme.kind === 'TEAM_INCENTIVE' && scheme.teamSplit !== null) words.push(SPLIT_WORDS[scheme.teamSplit])
-  words.push(own('Rework', scheme.reworkOwnFault), own('Scrap', scheme.scrapOwnFault))
-  words.push(`Rework and scrap caused by others are paid as time off standard, ${PAID_TIME_WORDS[scheme.othersFaultPay]}.`)
-  words.push(`Waiting that is not the worker's doing is paid ${PAID_TIME_WORDS[scheme.waitingPay]}: never unpaid (c.c. art. 2100).`)
+  if (scheme.kind === 'STANDARD_MINUTE_BONUS') {
+    // B-W2b-84: what the ledger books for it.
+    words.push(`The bonus pays the standard minutes earned above ${scheme.efficiencyThresholdPct ?? '?'}% of the minutes present.`)
+    words.push('The pieces are not paid by the piece: they measure the bonus. Waiting, rework and scrap are inside the minutes present the guaranteed pay covers.')
+  } else {
+    words.push(own('Rework', scheme.reworkOwnFault), own('Scrap', scheme.scrapOwnFault))
+    words.push(`Rework and scrap caused by others are paid as time off standard, ${PAID_TIME_WORDS[scheme.othersFaultPay]}.`)
+    words.push('Who is at fault is said by the scrap or rework reason.')
+    words.push(`Waiting that is not the worker's doing is paid ${PAID_TIME_WORDS[scheme.waitingPay]}: never unpaid (c.c. art. 2100).`)
+  }
   words.push(scheme.payOnlyWhileClockedIn ? 'A scan pays only while its worker is clocked in; any other scan is held for HR.' : 'A scan pays whether or not its worker is clocked in.')
   return words
 }

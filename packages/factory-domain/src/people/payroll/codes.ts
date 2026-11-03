@@ -10,8 +10,11 @@ export type PayrollCodeKind = (typeof PAYROLL_CODE_KINDS)[number]
 export const HOUR_CODES = ['ORD', 'OT_DAY', 'OT_NIGHT', 'OT_HOLIDAY', 'NIGHT', 'HOLIDAY'] as const
 export type HourCode = (typeof HOUR_CODES)[number]
 
-/** EARLIER_MONTH: earnings of a month already locked, paid in this one (the ledger's correctsPeriodId). */
-export const EARNING_CODES = ['PIECE', 'TEAM_SHARE', 'OFF_STANDARD', 'MAKE_UP', 'ADJUSTMENT', 'EARLIER_MONTH'] as const
+/**
+ * EARLIER_MONTH: earnings of a month already locked, paid in this one (the ledger's correctsPeriodId). BONUS (B-W2b-84): a
+ * standard-minute bonus scheme's bonus.
+ */
+export const EARNING_CODES = ['PIECE', 'TEAM_SHARE', 'OFF_STANDARD', 'MAKE_UP', 'BONUS', 'ADJUSTMENT', 'EARLIER_MONTH'] as const
 export type EarningCode = (typeof EARNING_CODES)[number]
 
 export const CODE_LIMITS = Object.freeze({ code: 40, meaning: 200, providerCode: 40 })
@@ -28,6 +31,7 @@ export const CODE_MEANINGS: Readonly<Record<HourCode | EarningCode, { readonly e
   TEAM_SHARE: { en: 'Team piece pay, own share', it: 'Cottimo di squadra, quota personale' },
   OFF_STANDARD: { en: 'Paid time off standard', it: 'Tempo pagato fuori standard' },
   MAKE_UP: { en: 'Make-up to guaranteed pay', it: 'Integrazione alla paga garantita' },
+  BONUS: { en: 'Standard-minute bonus', it: 'Premio a minuti standard' },
   ADJUSTMENT: { en: 'Adjustment', it: 'Rettifica' },
   EARLIER_MONTH: { en: 'Earnings of an earlier month', it: 'Competenze di un mese precedente' },
 })

@@ -37,8 +37,7 @@ async function rowsOf(db: Client, input: { readonly companyId: string; readonly 
   const lineOfBlock = new Map((blocks.length === 0 ? [] : await db.offStandardEntry.findMany({ where: { id: { in: blocks } }, select: { id: true, lineId: true } })).map((row) => [row.id, row.lineId]))
   const homes = new Map((await db.employee.findMany({ where: { id: { in: [...new Set(entries.map((row) => row.employeeId))] } }, select: { id: true, homeLineId: true } })).map((row) => [row.id, row.homeLineId]))
   return entries.map((row) => ({
-    // BONUS is in the schema (B-W2b-75), but nothing books one before B-W2b-84: it widens the kinds and drops this `as`.
-    kind: row.kind as ReportEntry['kind'],
+    kind: row.kind,
     employeeId: row.employeeId,
     pieces: row.pieces,
     sharePct: row.sharePct?.toString() ?? null,

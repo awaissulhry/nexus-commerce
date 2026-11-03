@@ -233,10 +233,28 @@ function StatementRecord({ model, actions }: { model: PieceModel; actions?: Piec
               { label: t('statement.earnings'), value: money(value.earningsAmount) },
               { label: t('statement.makeUp'), value: money(value.makeUpAmount) },
               { label: t('periods.status'), value: t(`statementStatus.${value.status}`) },
+              ...(value.bonus ? [{ label: t('statement.bonus'), value: money(value.bonus.amount) }] : []),
               ...(value.attendance ? [{ label: t('statement.ordinary'), value: minutesText(value.attendance.ordinaryMinutes, locale) ?? '—' }, { label: t('statement.overtime'), value: minutesText(value.attendance.approvedOvertimeMinutes, locale) ?? '—' }] : []),
               { label: t('statement.held'), value: t('statement.heldValue', value.held) },
+              ...(value.defects.scrap + value.defects.rework > 0
+                ? [{ label: t('statement.defects'), value: t(value.defects.othersScrap + value.defects.othersRework > 0 ? 'statement.defectsOthers' : 'statement.defectsValue', value.defects) }]
+                : []),
             ]}
           />
+          {value.bonus && (
+            <>
+              <p className="fw-pr8-hint">
+                {t('statement.bonusLine', {
+                  efficiency: minutesText(value.bonus.efficiencyPct, locale) ?? '—',
+                  standard: minutesText(value.bonus.standardMinutes, locale) ?? '—',
+                  present: minutesText(value.bonus.minutesPresent, locale) ?? '—',
+                  threshold: minutesText(value.bonus.thresholdMinutes, locale) ?? '—',
+                  above: minutesText(value.bonus.bonusMinutes, locale) ?? '—',
+                })}
+              </p>
+              <p className="fw-pr8-hint">{t('statement.bonusPieces')}</p>
+            </>
+          )}
           <h3 className="fw-pr8-h3">{t('statement.pieces')}</h3>
           {value.lines.length === 0 ? (
             <p className="fw-pr8-hint">{t('statement.noPieces')}</p>

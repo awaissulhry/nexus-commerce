@@ -355,6 +355,17 @@ const QUALITY_PLANS_ADDS: Readonly<Record<string, readonly Permission[]>> = Obje
   production_manager: ['quality.plans.view', 'quality.plans.approve'],
   floor_supervisor: ['quality.plans.view'],
 })
+/**
+ * B-W2b-93 (AQL profiles and the AQL calculator, QHS-020, QHS-021; design quality.plans pl-aql, pl-calc): quality keeps
+ * the companies' AQL profiles and assigns them to customers and styles; the production manager and sales read which
+ * profile a customer or a style has (sales.customers "customer AQL profiles"). Office only; the owner and read-only take
+ * theirs from every(). Applying a profile to an inspection is quality.inspections.record (B-W1-45), unchanged.
+ */
+const AQL_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.aql.view', 'quality.aql.manage'],
+  production_manager: ['quality.aql.view'],
+  sales: ['quality.aql.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -399,7 +410,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-92
   ...(audience === 'office' ? (QUALITY_PLANS_ADDS[key] ?? []) : []),
   // B-W2b-49
-  ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? [])]
+  ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-93
+  ...(audience === 'office' ? (AQL_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
