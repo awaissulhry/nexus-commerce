@@ -3,6 +3,8 @@
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CheckCheck, Lock, MoreHorizontal, ShieldCheck } from 'lucide-react'
+import { reportHref } from '../../api'
+import { EscalateDialog } from '../../view/EscalateDialog'
 import { Banner, Menu, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Spinner, Tag } from '@nexus/ui/primitives'
 import { RecordPanelsView, type RecordPanelsViewModel } from '../../../../../record-panels/view/RecordPanelsView'
@@ -12,8 +14,9 @@ import type { ListKey } from '../../../../../list-frame/model'
 import { bandHeld, isOpenStage, RECORD_TABS, type Say } from '../../model'
 import { KeysDialog, NcrStepUp, SeverityTag, StagePill } from '../../parts'
 import { CloseNcrDialog } from '../../view/CloseNcrDialog'
-import { recordHref, tabHref, type NcrRecordActions, type NcrRecordModel } from '../view-model'
+import { escalateRecordHeld, recordHref, tabHref, type NcrRecordActions, type NcrRecordModel } from '../view-model'
 import { ContainmentTab } from './ContainmentTab'
+import { CostTab } from './CostTab'
 import { DispositionTab } from './DispositionTab'
 import { LinkedTab } from './LinkedTab'
 import { ProblemTab } from './ProblemTab'
@@ -29,7 +32,9 @@ export type { NcrRecordActions, NcrRecordModel } from '../view-model'
  * freshness; ONE primary next step — Mark contained, Mark decided, Close NCR… — held with what is still missing, and ⋯:
  * Copy number, Cancel NCR…, Open the PPE register entry, Keyboard shortcuts) and its sections as link tabs with counts:
  * Problem & evidence, Containment, Disposition, Linked records, Activity (the record panels: thread, files, history).
- * Closing is the closing checklist and an e-signature (the office's fresh code).
+ * Closing is the closing checklist and an e-signature (the office's fresh code). B-W2b-113: the Cost tab (the cost grain
+ * only; absent otherwise), the CAPA it is escalated to in the band, and ⋯ Escalate to CAPA…, NCR report (PDF) (a new tab)
+ * and Keep a version of the report.
  */
 export function NcrRecordView({ model, actions, panels, panelsPreview }: { model: NcrRecordModel; actions?: NcrRecordActions; panels?: ReactNode; panelsPreview?: RecordPanelsViewModel }) {
   return (
@@ -94,8 +99,14 @@ function Body({ model, actions, panels, panelsPreview }: { model: NcrRecordModel
   const closeHeld = sayHeld(model.can.close, held.close, { key: 'held.noClose' })
   const cancelHeld = sayHeld(model.can.manage, held.cancel, { key: 'held.noManage' })
   const registerHeld = !isOpenStage(ncr.stage) ? say({ key: 'held.frozen', params: { stage: ncr.stage } }) : model.can.manage ? null : say({ key: 'held.noManage' })
+  // B-W2b-113: escalate (the CAPA it names already, a cancelled NCR, the rights), the report (a new tab; keep a version).
+  const escalateHeld = words.sayAny(escalateRecordHeld(record, model.can))
+  const keepHeld = model.keepingReport ? t('common.working') : model.can.manage ? null : say({ key: 'held.noManage' })
   const menu: MenuItemDef[] = [
     { id: 'copy', label: model.copied ? t('common.copied', { number: ncr.number }) : t('common.copyNumber'), onSelect: () => actions?.onCopy?.() },
+    { id: 'escalate', label: r('band.escalate'), disabled: !!escalateHeld, description: escalateHeld ?? undefined, onSelect: () => actions?.onEscalate?.() },
+    { id: 'report', label: r('band.report'), description: r('band.reportHint'), onSelect: () => window.open(reportHref(ncr.id), '_blank', 'noopener') },
+    { id: 'keepReport', label: r('band.keepReport'), disabled: !!keepHeld, description: keepHeld ?? undefined, onSelect: () => actions?.onKeepReport?.() },
     ...(ncr.stage === 'OPEN' || ncr.stage === 'CONTAINED' ? [{ id: 'close', label: r('band.closeEarly'), disabled: !!closeHeld, description: closeHeld ?? undefined, onSelect: () => actions?.onClose?.() }] : []),
     ...(ncr.style?.ppe && !record.register ? [{ id: 'register', label: r('band.register'), disabled: !!registerHeld, description: registerHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'register', description: '', busy: false, notice: null }) }] : []),
     ...(isOpenStage(ncr.stage) ? [{ id: 'cancel', label: r('band.cancel'), tone: 'danger' as const, disabled: !!cancelHeld, description: cancelHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'cancelNcr', reason: '', busy: false, notice: null }) }] : []),
@@ -116,6 +127,11 @@ function Body({ model, actions, panels, panelsPreview }: { model: NcrRecordModel
       {source}
       {model.site && <span className="fw-q-code">{model.site.code}</span>}
       {ncr.style?.ppe && <Tag tone="info">{r('band.ppe')}</Tag>}
+      {record.capaRecord && (
+        <Link className="fw-q-link" href={recordHref(model.prefix, { type: 'Capa', id: record.capaRecord.id, label: record.capaRecord.number })}>
+          {r('band.capa', { number: record.capaRecord.number })}
+        </Link>
+      )}
     </span>
   )
   const status = (
@@ -132,7 +148,8 @@ function Body({ model, actions, panels, panelsPreview }: { model: NcrRecordModel
   )
 
   const linkedCount = record.links.length + record.holds.length
-  const tabs = RECORD_TABS.map((tab) => ({
+  // B-W2b-113: the Cost tab only for a reader with the cost grain (by address it says so).
+  const tabs = RECORD_TABS.filter((tab) => tab !== 'cost' || (record.may.cost && model.can.cost)).map((tab) => ({
     id: tab,
     label: r(`tab.${tab}`),
     count: tab === 'containment' ? record.containment.length : tab === 'disposition' ? record.decisions.length : tab === 'linked' ? linkedCount : null,
@@ -151,11 +168,13 @@ function Body({ model, actions, panels, panelsPreview }: { model: NcrRecordModel
         {model.tab === 'problem' && <ProblemTab model={model} record={record} words={words} actions={actions} />}
         {model.tab === 'containment' && <ContainmentTab model={model} record={record} words={words} actions={actions} />}
         {model.tab === 'disposition' && <DispositionTab model={model} record={record} words={words} actions={actions} />}
+        {model.tab === 'cost' && <CostTab model={model} record={record} words={words} actions={actions} />}
         {model.tab === 'linked' && <LinkedTab model={model} record={record} words={words} actions={actions} />}
         {model.tab === 'activity' && (activity ?? <p className="fw-q-hint">{r('activity.none')}</p>)}
       </RecordFrame>
       <RecordDialogs model={model} record={record} words={words} actions={actions} />
       {model.close && <CloseNcrDialog model={model.close} actions={actions?.close} />}
+      {model.escalate && <EscalateDialog model={model.escalate} actions={actions?.escalate} />}
       <NcrStepUp state={model.stepUp} onSubmit={(code) => actions?.onStepUp?.(code)} onCancel={() => actions?.onStepUpCancel?.()} />
       {model.keysOpen && <KeysDialog own={ownKeys} withSelection={false} onClose={() => actions?.onKeys?.(false)} />}
     </>

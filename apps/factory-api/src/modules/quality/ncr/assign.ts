@@ -37,7 +37,7 @@ export async function assignNcrs(caller: CommandCaller, body: AssignBody, idempo
   if (new Set(ids).size !== ids.length) throw new ValidationError('Each NCR once.', [{ path: 'body/ncrs', message: 'Each NCR once.' }])
   const answer = async (db: Reader, changed: string[]) => {
     const rows = await db.nonconformance.findMany({ where: { id: { in: ids } }, select: NCR_COLUMNS })
-    const facts = await summaryFactsOf(db, rows)
+    const facts = await summaryFactsOf(db, rows, context)
     const now = serverClock.now()
     const byId = new Map(rows.map((row) => [row.id, ncrSummary(row, facts, now)]))
     return { ncrs: ids.map((id) => byId.get(id)!), changed }

@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto'
 import type { Prisma, Uom } from '@nexus/factory-db'
 import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, holds as holdsGrant, type Permission } from '@nexus/factory-domain/core/permissions'
+import { QUALITY_CAPA_VIEW } from '@nexus/factory-domain/quality/capa/permissions'
+import type { CapaStatus, CapaType } from '@nexus/factory-domain/quality/capa/rules'
+import { askHeld } from '@nexus/factory-domain/quality/ncr/concession'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { DefectClass, QualityStage } from '@nexus/factory-domain/quality/defects/rules'
 import type { NcrChangedField } from '@nexus/factory-domain/quality/ncr/changes'
@@ -31,11 +34,14 @@ import { command, StaleVersionError, type CommandCaller, type CommandTools } fro
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { openRegisterEntryFor } from '../../compliance/register/hook'
+import { mayOn as mayOnCapa } from '../capa/access'
+import { readCapa } from '../capa/store'
 import { closeHoldInCommand } from '../holds/holds'
 import { containmentHoursOf } from './settings'
 import { linkTarget, prefillFrom, type Prefill } from './sources'
 import {
   actionViews,
+  concessionViews,
   decisionViews,
   factsOf,
   NCR_COLUMNS,
@@ -46,6 +52,7 @@ import {
   readLinks,
   readNcr,
   readNcrHolds,
+  seesCost,
   summaryFactsOf,
   type NcrRow,
   type Reader,
@@ -150,7 +157,13 @@ export async function recordOf(db: Reader, row: NcrRow, context: OfficeContext, 
   const holds = await readNcrHolds(db, row.id)
   const activeHolds = holds.filter((hold) => hold.ncrId === row.id && hold.status === 'ACTIVE').length
   const facts = factsOf(row, actions, decisions, activeHolds)
-  const summary = ncrSummary(row, await summaryFactsOf(db, [row]), now)
+  const summary = ncrSummary(row, await summaryFactsOf(db, [row], context), now)
+  // B-W2b-113: the cause, the CAPA it is escalated to (the CAPA module's reads, shown to a reader of that CAPA), the
+  // concessions asked of the customer and the report's versions.
+  const cause = row.causeCodeId ? await db.causeCode.findUnique({ where: { id: row.causeCodeId }, select: { id: true, code: true, labelIt: true, labelEn: true } }) : null
+  const capa = row.capaId ? await readCapa(db, row.capaId) : null
+  const capaVisible = capa !== null && mayOnCapa(context, QUALITY_CAPA_VIEW, capa)
+  const reports = await db.generatedDocument.findMany({ where: { recordType: NCR_RECORD, recordId: row.id, kind: 'NCR_REPORT' }, select: { id: true, version: true, language: true, fileId: true, createdAt: true, createdById: true }, orderBy: { version: 'desc' } })
   const labels: (string | null)[] = []
   for (const link of links) labels.push((await linkTarget(db, link.recordType, link.recordId))?.label ?? null)
   const entry = await db.ppeRegisterEntry.findFirst({ where: { sourceType: NCR_RECORD, sourceId: row.id }, select: { id: true, reference: true, status: true } })
@@ -161,6 +174,7 @@ export async function recordOf(db: Reader, row: NcrRow, context: OfficeContext, 
     ncr: {
       ...summary,
       description: row.description,
+      cause: cause ? { id: cause.id, code: cause.code, labelIt: cause.labelIt, labelEn: cause.labelEn } : null,
       foundBy: row.foundById ? { kind: 'USER' as const, userId: row.foundById, workerId: null } : row.foundByWorkerId ? { kind: 'WORKER' as const, userId: null, workerId: row.foundByWorkerId } : { kind: 'NONE' as const, userId: null, workerId: null },
       closedById: row.closedById,
       closeNote: row.closeNote,
@@ -173,10 +187,21 @@ export async function recordOf(db: Reader, row: NcrRow, context: OfficeContext, 
     links: links.map((link, index) => ({ id: link.id, recordType: link.recordType, recordId: link.recordId, label: labels[index] ?? null, note: link.note, createdAt: link.createdAt.toISOString(), createdById: link.createdById })),
     holds: holds.map((hold) => ({ id: hold.id, status: hold.status, subjectType: hold.subjectType, subjectIds: [...hold.subjectIds], reasonCode: hold.reasonCode, reasonNote: hold.reasonNote, placedAt: hold.placedAt.toISOString(), decidedHere: hold.ncrId === row.id })),
     register: entry ? { id: entry.id, reference: entry.reference, status: entry.status } : null,
+    capaRecord: capa && capaVisible ? { id: capa.id, number: capa.number, title: capa.title, type: capa.type as CapaType, status: capa.status as CapaStatus } : null,
+    capaElsewhere: capa !== null && !capaVisible,
+    concessions: await concessionViews(db, row.id),
+    reports: reports.map((report) => ({ id: report.id, version: report.version, language: report.language, fileId: report.fileId, createdAt: report.createdAt.toISOString(), createdById: report.createdById })),
     next: { stage: next, checks: nextChecks, ready: next !== null && allMet(nextChecks) },
     closing: { checks: closing, ready: isOpenStage(row.stage as NcrStage) && allMet(closing) },
-    actions: ncrActions(facts),
-    may: { manage: may(context, QUALITY_NCR_MANAGE, row), approve: may(context, QUALITY_NCR_APPROVE, row), close: may(context, QUALITY_NCR_CLOSE, row), raise: may(context, QUALITY_NCR_RAISE, row) },
+    actions: { ...ncrActions(facts), concession: askHeld({ stage: row.stage, severity: row.severity as DefectClass }) },
+    may: {
+      manage: may(context, QUALITY_NCR_MANAGE, row),
+      approve: may(context, QUALITY_NCR_APPROVE, row),
+      close: may(context, QUALITY_NCR_CLOSE, row),
+      raise: may(context, QUALITY_NCR_RAISE, row),
+      cost: seesCost(context, row),
+      escalate: may(context, QUALITY_NCR_MANAGE, row) && holdsGrant(actorOf(context), QUALITY_CAPA_VIEW),
+    },
   }
 }
 export type NcrRecordView = Awaited<ReturnType<typeof recordOf>>
@@ -195,6 +220,8 @@ export function emitChanged(tools: CommandTools, row: Pick<NcrRow, 'id' | 'numbe
 
 export interface NcrContent {
   readonly title?: string | undefined
+  /** B-W2b-113: the cause code (an active one); null clears it. */
+  readonly causeCodeId?: string | null | undefined
   readonly description?: string | null | undefined
   readonly source?: NcrSource | undefined
   readonly foundAt?: QualityStage | undefined
@@ -220,6 +247,7 @@ export interface NcrContent {
 }
 
 interface Resolved {
+  readonly causeCodeId: string | null
   readonly defectCodeId: string | null
   readonly severity: DefectClass | null
   readonly styleId: string | null
@@ -237,6 +265,11 @@ interface Resolved {
 async function resolveReferences(tx: Reader, site: { readonly id: string; readonly companyId: string }, values: Resolved, changed: (field: keyof Resolved) => boolean, self: string): Promise<Resolved> {
   const problems: Issue[] = []
   let { severity, itemId, styleId } = values
+  // B-W2b-113: an active cause code of the list (quality.causes; the database keeps the same rule).
+  if (values.causeCodeId && changed('causeCodeId')) {
+    const cause = isUuid(values.causeCodeId) ? await tx.causeCode.findUnique({ where: { id: values.causeCodeId }, select: { active: true } }) : null
+    if (!cause || !cause.active) problems.push({ path: 'causeCodeId', message: 'Pick an active cause of the list (Quality settings › Causes).' })
+  }
   if (values.defectCodeId && changed('defectCodeId')) {
     const defect = isUuid(values.defectCodeId) ? await tx.defectCode.findUnique({ where: { id: values.defectCodeId }, select: { parentId: true, active: true, severity: true } }) : null
     if (!defect || defect.parentId === null || !defect.active) problems.push({ path: 'defectCodeId', message: 'Pick an active defect of the library (not a category).' })
@@ -361,6 +394,7 @@ export async function raiseNcrInCommand(tools: CommandTools, body: RaiseBody, ra
     tx,
     site!,
     {
+      causeCodeId: body.causeCodeId ?? null,
       defectCodeId: take(body, prefill, 'defectCodeId'),
       severity: take(body, prefill, 'severity'),
       styleId: take(body, prefill, 'styleId'),
@@ -414,6 +448,7 @@ export async function raiseNcrInCommand(tools: CommandTools, body: RaiseBody, ra
     quantitySuspect: draft.quantitySuspect,
     uom: body.uom ?? prefill?.uom ?? 'PCS',
     defectCodeId: named.defectCodeId,
+    causeCodeId: named.causeCodeId,
     severity: named.severity!,
     zone: draft.zone,
     styleId: named.styleId,
@@ -498,7 +533,7 @@ export interface EditBody extends NcrContent {
   readonly version: number
 }
 
-const PROBLEM_FIELDS = ['title', 'description', 'source', 'foundAt', 'foundOn', 'foundById', 'foundByWorkerId', 'quantityAffected', 'quantitySuspect', 'uom', 'defectCodeId', 'severity', 'zone', 'styleId', 'colourwayId', 'size', 'serial', 'workOrderId', 'itemId', 'lotId', 'supplierId'] as const
+const PROBLEM_FIELDS = ['causeCodeId', 'title', 'description', 'source', 'foundAt', 'foundOn', 'foundById', 'foundByWorkerId', 'quantityAffected', 'quantitySuspect', 'uom', 'defectCodeId', 'severity', 'zone', 'styleId', 'colourwayId', 'size', 'serial', 'workOrderId', 'itemId', 'lotId', 'supplierId'] as const
 const FOLLOW_FIELDS = ['ownerId', 'containmentDueAt'] as const
 
 /** PATCH /quality/ncr/:ncrId: the problem while OPEN or CONTAINED; the owner and containment due until it is closed. */
@@ -519,6 +554,7 @@ export async function editNcr(caller: CommandCaller, ncrId: string, body: EditBo
       tx,
       { id: current.siteId, companyId: current.companyId },
       {
+        causeCodeId: value('causeCodeId', body.causeCodeId) as string | null,
         defectCodeId: value('defectCodeId', body.defectCodeId) as string | null,
         severity: (body.severity ?? current.severity) as DefectClass,
         styleId: value('styleId', body.styleId) as string | null,
@@ -545,6 +581,12 @@ export async function editNcr(caller: CommandCaller, ncrId: string, body: EditBo
       const asIs = decided.length === 0 ? 0 : await tx.dispositionCode.count({ where: { id: { in: decided.map((decision) => decision.dispositionCodeId) }, outcome: 'USE_AS_IS' } })
       if (asIs > 0) problems.push({ path: 'severity', message: `A ${body.severity.toLowerCase()} nonconformance is never used as is: remove the "use as is" decision first.` })
     }
+    // B-W2b-113 (the safety rule, B-W2b-90): a critical one is never regraded to second quality either.
+    if (body.severity === 'CRITICAL' && current.severity !== 'CRITICAL') {
+      const decided = await readDecisions(tx, [ncrId])
+      const regrade = decided.length === 0 ? 0 : await tx.dispositionCode.count({ where: { id: { in: decided.map((decision) => decision.dispositionCodeId) }, outcome: 'REGRADE' } })
+      if (regrade > 0) problems.push({ path: 'severity', message: 'A critical nonconformance is never regraded to second quality: remove the regrade decision first.' })
+    }
     if (problems.length > 0) refuse(problems, 'The change is not valid.')
 
     const data: Prisma.NonconformanceUncheckedUpdateInput = {}
@@ -569,6 +611,7 @@ export async function editNcr(caller: CommandCaller, ncrId: string, body: EditBo
     set('quantitySuspect', 'quantitySuspect', body.quantitySuspect, current.quantitySuspect)
     set('uom', 'uom', body.uom, current.uom)
     set('defectCodeId', 'defectCodeId', body.defectCodeId, current.defectCodeId)
+    set('causeCodeId', 'causeCodeId', body.causeCodeId, current.causeCodeId)
     set('severity', 'severity', body.severity ?? (changed('defectCodeId') && named.severity !== current.severity ? named.severity : undefined), current.severity)
     set('zone', 'zone', body.zone, current.zone)
     set('styleId', 'styleId', changed('styleId') || changed('workOrderId') ? named.styleId : undefined, current.styleId)

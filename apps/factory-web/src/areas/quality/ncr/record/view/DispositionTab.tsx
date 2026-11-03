@@ -11,6 +11,7 @@ import type { Decision, NcrRecord } from '../../api'
 import { addDecisionHeld, decisionHeld, isOpenStage, recordLabel } from '../../model'
 import { DecidedBar } from '../../parts'
 import { carryGap, carryKindOf, EMPTY_CARRY, plainQuantity, recordHref, type NcrRecordActions, type NcrRecordModel } from '../view-model'
+import { ConcessionPanel } from './ConcessionPanel'
 import { CellMark, codeLabel, type RecordWords } from './words'
 
 /**
@@ -18,7 +19,9 @@ import { CellMark, codeLabel, type RecordWords } from './words'
  * "28 of 40 decided · 12 left" bar. Quantity and note autosave per cell while the decision is neither approved nor
  * carried out; approvals are explicit (another person with quality.ncr.approve, four eyes); each decision is carried out
  * by its code — its stock move, its repair, its supplier claim, or "Create rework order". The SCRAP of garments still in
- * work cannot be posted from an NCR yet (B-W2a-47 gap): its button is held with that reason, never a fake success.
+ * work has no stock move (B-W2a-47 gap): its button is held, and the words point to the plan's rework scrap path
+ * (B-W2b-113: decide Rework and create the rework order with "Scrap them all"). B-W2b-113: under the decisions, the
+ * concessions asked of the customer (QHS-085).
  */
 export function DispositionTab({ model, record, words, actions }: { model: NcrRecordModel; record: NcrRecord; words: RecordWords; actions?: NcrRecordActions }) {
   const { t, r, say, person, when, amount, locale } = words
@@ -210,6 +213,7 @@ export function DispositionTab({ model, record, words, actions }: { model: NcrRe
         state={record.decisions.length === 0 ? <EmptyState title={r('disposition.empty')} description={r('disposition.emptyBody')} action={addHeld ? undefined : decideButton} /> : undefined}
       />
       <p className="fw-q-hint">{r('disposition.foot')}</p>
+      <ConcessionPanel model={model} record={record} words={words} actions={actions} />
     </div>
   )
 }

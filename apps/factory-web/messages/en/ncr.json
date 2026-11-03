@@ -240,7 +240,8 @@
   "keys": {
     "title": "Keyboard shortcuts",
     "new": "New NCR",
-    "board": "Switch list / board"
+    "board": "Switch list / board",
+    "escalate": "Escalate to CAPA (the rows picked, else the focused row)"
   },
   "close": {
     "title": "Close {number}",
@@ -298,7 +299,16 @@
     "foot": "A row opens the NCR. Pick rows to assign an owner or export them.",
     "boardFoot": "The board shows the same rows by stage; Closed shows the last 30 days.",
     "printFilters": "Rows: {rows} · Site: {site} · Search: {search}",
-    "heldAssignOffline": "Offline: assign when back online."
+    "heldAssignOffline": "Offline: assign when back online.",
+    "escalate": "Escalate to CAPA…",
+    "escalateMany_one": "Escalate {count} to one CAPA",
+    "escalateMany_other": "Escalate {count} to one CAPA",
+    "printNcr": "Print NCR (PDF)",
+    "heldEscalateRight": "Your role does not escalate NCRs (quality.ncr.manage and quality.capa.view).",
+    "heldEscalated": "{number} is escalated to {capa} already.",
+    "heldEscalateNone": "None of the NCRs picked can go to a CAPA (cancelled, or escalated already).",
+    "heldEscalateMax": "At most 50 NCRs go to one CAPA at once.",
+    "heldEscalateOffline": "Offline: escalating waits until the factory answers again."
   },
   "view": {
     "open": "Open",
@@ -340,7 +350,9 @@
     "due": "Containment due",
     "age": "Age",
     "site": "Site",
-    "actions": "Actions"
+    "actions": "Actions",
+    "capa": "CAPA",
+    "cost": "Cost"
   },
   "csv": {
     "number": "NCR",
@@ -361,7 +373,9 @@
     "owner": "Owner",
     "due": "Containment due",
     "found": "Found on",
-    "site": "Site"
+    "site": "Site",
+    "capa": "CAPA",
+    "cost": "Cost"
   },
   "new": {
     "title": "New NCR",
@@ -512,5 +526,65 @@
       "notFound": "{number}: no longer found",
       "other": "{number}: refused by the factory"
     }
+  },
+  "escalate": {
+    "titleOne": "Escalate {number} to CAPA",
+    "titleMany": "Escalate {count} NCRs to one CAPA",
+    "intro": "One CAPA takes many NCRs of one company: link them to an open CAPA, or start a new one. The root cause and the actions are followed up there.",
+    "reading": "Reading what each NCR would bring…",
+    "failed": "What escalating would do could not be read",
+    "rowsLabel": "The NCRs",
+    "reasons": "Suggested by",
+    "noReason": "no rule (escalate it when the problem needs a root cause)",
+    "reason": {
+      "CRITICAL": "Critical",
+      "REPEAT_DEFECT": "Repeat defect",
+      "CUSTOMER": "Customer complaint",
+      "SAFETY": "Safety"
+    },
+    "code": {
+      "ESCALATED_ELSEWHERE": "{number} is escalated to {capa} already: it stays there.",
+      "NCR_CANCELLED": "{number} is cancelled: it goes to no CAPA.",
+      "NCR_KEEPS_CAPA": "{number} is decided and keeps the cancelled CAPA it was escalated to before.",
+      "NO_PERMISSION": "Escalating {number} needs the right to follow NCRs up at its site (quality.ncr.manage).",
+      "OTHER": "{number} cannot go now."
+    },
+    "willGo_one": "{count} of {total} NCRs goes; the others stay as they are.",
+    "willGo_other": "{count} of {total} NCRs go; the others stay as they are.",
+    "mode": "How",
+    "modeLink": "Link to an open CAPA",
+    "modeNew": "Start a new one",
+    "capa": "Open CAPA",
+    "capaSearch": "Search a CAPA by number or title",
+    "customer": "for {name}",
+    "noCapas": "No open CAPA of this company you may add to: start a new one.",
+    "type": "Kind",
+    "typeName": {
+      "CAPA": "Corrective action (CAPA)",
+      "EIGHT_D": "8D for a customer"
+    },
+    "newTitle": "Title",
+    "due": "Due on",
+    "dueHint": "The day the whole CAPA should be done (today or later).",
+    "submit_one": "Escalate {count} NCR",
+    "submit_other": "Escalate {count} NCRs",
+    "held": {
+      "reading": "Still reading what each NCR would bring.",
+      "failed": "What escalating would do could not be read: try again.",
+      "companies": "The NCRs picked are of different companies: one CAPA takes the NCRs of one company.",
+      "none": "None of these NCRs can go to a CAPA now.",
+      "noManage": "Your role does not manage CAPAs of this company (quality.capa.manage): ask someone who does.",
+      "noCapas": "There is no open CAPA to link to: start a new one.",
+      "pick": "Pick the open CAPA first.",
+      "title": "Write the new CAPA's title first.",
+      "titleLong": "The title is at most 160 characters.",
+      "due": "Pick the day it is due."
+    },
+    "done_one": "{count} NCR escalated to {capa}.",
+    "done_other": "{count} NCRs escalated to {capa}.",
+    "openCapa": "Open {capa}",
+    "refused": "The escalation was refused as it stands.",
+    "refusedHeld": "An NCR cannot go to this CAPA any more (it was escalated or changed meanwhile): the list was read again.",
+    "refusedStale": "The CAPA changed meanwhile: it has been read again. Check it and escalate once more."
   }
 }
