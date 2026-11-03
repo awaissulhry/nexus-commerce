@@ -228,6 +228,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   supplier's answer and the buyer's accept/refuse), `areas/warehouse/receipts/` (SCR-063 list `?view=expected|posted|today|
   waiting|reversed|all`, the receiving page `/warehouse/receipts/new?order=&lines=` posting the whole receipt at once with the
   hide entry sheet (SCR-061), the receipt `?tab=lines|lots|activity` with its lots and quality state (SCR-062) and Reverse).
+- `src/areas/planning/leather/` — Planning › Leather & cut plan (B-W2b-132; SCR-252 `/planning/leather?site=&tile=&feas=&q=&open=<need row>`, SCR-252-print `/planning/leather/print` a new tab; catalogue `planning-leather`, CSS prefix `fw-lp-`): three reads, each its own section (need per order with one shade's answer, certified protectors, planned vs actual yield); the tiles are saved filters; the shade drawer (DetailModal, J / K) offers reserve / split by garment (POST /inventory/reservations), Draft PO (What to buy & make's POST /purchasing/from-plan) and a note for Sales on the order's thread; Accept (ActionConfirm) / Dismiss (reason) the cutting loss proposal. Values only with money.cost.
 - `src/areas/plant/` — Plant › Maintenance (B-W2a-53, area order 12, Italian "Stabilimento"; catalogue `plant`): `_shared/`
   (api.ts every plant call + zod; model.ts the pure rules — saved rows ⇄ the API's own filters, the board's lanes and why a
   card may not go there, the job moves a person may make, refusals `refusal/<CODE>` in our words, costs and due times typed

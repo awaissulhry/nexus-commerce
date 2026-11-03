@@ -160,6 +160,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/purchasing/claims/[id]',
   // B-W1-29 part 2: What to buy & make (SCR-055).
   '/planning/mrp',
+  // B-W2b-132: Leather & cut plan (SCR-252) and its cut plan print (a new tab, SCR-252-print).
+  '/planning/leather',
+  '/planning/leather/print',
   // B-W2a-45: Planning board (SCR-122) and Lines & subcontractors (SCR-126).
   '/planning/board',
   '/planning/allocation',
