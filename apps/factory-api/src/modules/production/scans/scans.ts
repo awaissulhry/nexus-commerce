@@ -5,6 +5,7 @@ import { parseScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { PRODUCTION_SCAN } from '@nexus/factory-domain/production/scans/permissions'
 import type { ScanReason } from '@nexus/factory-domain/production/scans/reasons'
 import {
+  chargedOperationRefusal,
   clockCheck,
   correctionAskRefusal,
   normaliseDefects,
@@ -38,6 +39,7 @@ import { endRunningBlock } from '../offstandard/writes'
 import { startOnFirstWork } from '../work-orders/moves'
 import { stationBlock } from '../../plant/checks'
 import { holdOnScan } from '../../quality/holds/checks'
+import { firstPieceRefusalAt } from '../terminal/first-piece'
 import { floorOf, mayScan, ScanRefusedError, refuse, systemView } from './access'
 import { insertCorrectionRequest, readCorrectionRequests, type CorrectionRequest } from './corrections-store'
 import { readDefects, writeDefects } from './defects-store'
@@ -98,6 +100,8 @@ import { onBehalfRecordedInCommand, reportReason, type OnBehalf } from './hooks/
 export interface DefectInput {
   readonly reason: string
   readonly quantity: number
+  /** B-W2b-99 (MES-127): the operation of the same work order it is charged to. */
+  readonly causedAtOperationId?: string | null | undefined
 }
 
 export interface ReportInput {
@@ -280,8 +284,8 @@ async function readyOf(caller: CommandCaller, session: Session): Promise<ScanRef
 }
 
 const linesOf = (input: { readonly scrap?: readonly DefectInput[] | undefined; readonly rework?: readonly DefectInput[] | undefined }): DefectLine[] => [
-  ...(input.scrap ?? []).map((line) => ({ kind: 'SCRAP' as const, reason: line.reason, quantity: line.quantity })),
-  ...(input.rework ?? []).map((line) => ({ kind: 'REWORK' as const, reason: line.reason, quantity: line.quantity })),
+  ...(input.scrap ?? []).map((line) => ({ kind: 'SCRAP' as const, reason: line.reason, quantity: line.quantity, ...(line.causedAtOperationId ? { causedAtOperationId: line.causedAtOperationId } : {}) })),
+  ...(input.rework ?? []).map((line) => ({ kind: 'REWORK' as const, reason: line.reason, quantity: line.quantity, ...(line.causedAtOperationId ? { causedAtOperationId: line.causedAtOperationId } : {}) })),
 ]
 
 /** The bundle a report names (its ticket's code, current or replaced, or its id) at the device's site. */
@@ -475,6 +479,12 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
     guarded: true,
   })
   if (!decision.ok) return refuse(decision.refusal)
+  // B-W2b-99 hooks (terminal/first-piece.ts; QHS-039, MES-127): a run waiting for its first piece takes no other bundle's
+  // report; a defect is charged to an operation of this work order only.
+  const firstPiece = await firstPieceRefusalAt(tx, { workOrderId: workOrder.id, bundleId: locked.bundle.id, workOrderOperationId: decision.operation.id })
+  if (firstPiece) refuse(firstPiece)
+  const charged = chargedOperationRefusal(work.lines, operations.map((operation) => operation.id))
+  if (charged) refuse(charged)
   // B-W2b-46 hook (production/guards): the site's checks hold the report (or a team leader's override lifts them); the lots at the operation.
   const guard = await guardReportInCommand(tools, { workOrder, bundle: { id: locked.bundle.id, code: locked.bundle.code, workOrderSizeId: work.bundle.workOrderSizeId }, quantity: flow.quantity, operations, operation: decision.operation, standing: flow.standing, counts: work.counts, stationId: work.stationId, components: work.input.components, override: work.input.override })
   // B-W2b-47 hook (hooks/checklist.ts; MES-102): Finish waits for the operation's required steps.

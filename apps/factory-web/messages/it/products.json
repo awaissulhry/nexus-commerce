@@ -83,6 +83,7 @@
     "routing": "Ciclo di lavoro",
     "cost": "Costo",
     "compliance": "Conformità",
+    "files": "File e cartamodelli",
     "activity": "Attività",
     "problems_one": "{count} problema prima del rilascio",
     "problems_other": "{count} problemi prima del rilascio"
@@ -176,7 +177,8 @@
       "not_found": "Non c’è più: la pagina è stata riletta.",
       "rate_limited": "Troppe modifiche insieme: attendi un momento e ripeti.",
       "unavailable": "Il server della fabbrica non ha risposto: nulla è stato salvato, riprova.",
-      "internal": "Qualcosa è andato storto: nulla è stato salvato, riprova."
+      "internal": "Qualcosa è andato storto: nulla è stato salvato, riprova.",
+      "piecesUse": "Da questa riga si tagliano pezzi del cartamodello: modificali prima in File e cartamodelli."
     }
   },
   "notice": {
@@ -1530,6 +1532,156 @@
       "description": "La revisione {revision} cambia il tipo che il certificato {number} (organismo notificato {body}) ha approvato con la revisione {compared}:",
       "step1": "Decidere se informare l'organismo notificato {body}",
       "step2": "Registrare la decisione nella scheda Rinnovi del certificato"
+    }
+  },
+  "pieces": {
+    "title": "Pezzi del cartamodello",
+    "table": "Pezzi del cartamodello",
+    "intro": "I pezzi da cui si taglia un capo della revisione {revision}: quanti di ciascuno, la riga di distinta da cui viene, la scelta di pelle minima per ciascuno, il verso e le taglie. Ogni cella si salva da sola.",
+    "rule": "Qualità dove si vede, resa dove non si vede: ai pezzi in vista (davanti, collo, maniche) una scelta buona; i pezzi nascosti (paramonture, sottocollo, sacchi tasca) possono prendere qualsiasi scelta. Il banco di taglio avvisa quando una pelle è sotto la scelta di un pezzo.",
+    "loading": "Lettura dei pezzi del cartamodello…",
+    "failed": "Impossibile leggere i pezzi del cartamodello",
+    "add": "Aggiungi pezzo",
+    "count_one": "{count} pezzo · {perGarment} per capo",
+    "count_other": "{count} pezzi · {perGarment} per capo",
+    "col": {
+      "name": "Pezzo",
+      "quantity": "Q.tà per capo",
+      "line": "Materiale (riga distinta)",
+      "grade": "Scelta pelle minima",
+      "grain": "Verso o elasticità",
+      "sizes": "Taglie",
+      "note": "Nota",
+      "more": "Azioni"
+    },
+    "cell": {
+      "name": "Nome di {piece}",
+      "quantity": "Pezzi per capo di {piece}",
+      "line": "Riga di distinta di {piece}",
+      "grade": "Scelta pelle minima di {piece}",
+      "grain": "Verso di {piece}",
+      "sizes": "Cambia le taglie di {piece}",
+      "note": "Nota di {piece}"
+    },
+    "line": {
+      "none": "Nessuna riga",
+      "leather": "Pelle",
+      "leatherShort": "pelle"
+    },
+    "grade": {
+      "any": "Qualsiasi scelta",
+      "notLeather": "Non è pelle: nessuna scelta",
+      "orBetter": "{code} o migliore · {name}",
+      "option": "{code} · {name}",
+      "retired": "Scelta ritirata"
+    },
+    "grain": {
+      "ALONG": "In verso",
+      "ACROSS": "Di traverso",
+      "BIAS": "In sbieco",
+      "ANY": "Qualsiasi verso"
+    },
+    "sizes": {
+      "all": "Tutte le taglie",
+      "run": "{from}–{to}",
+      "some": "{sizes}",
+      "change": "Cambia",
+      "hint": "Ogni taglia segue la gamma del modello, anche una taglia aggiunta dopo. Solo queste taglie: il pezzo si taglia per le taglie spuntate.",
+      "every": "Ogni taglia",
+      "only": "Solo queste taglie",
+      "pickOne": "Spunta almeno una taglia, oppure scegli ogni taglia.",
+      "title": "Taglie di {piece}",
+      "apply": "Salva le taglie"
+    },
+    "note": {
+      "placeholder": "Aggiungi una nota"
+    },
+    "row": {
+      "edit": "Apri e modifica…",
+      "open": "Apri",
+      "up": "Sposta su",
+      "down": "Sposta giù",
+      "remove": "Togli…",
+      "menu": "Azioni per {piece}"
+    },
+    "bulk": {
+      "grade_one": "Scelta minima per {count}…",
+      "grade_other": "Scelta minima per {count}…",
+      "remove_one": "Togli {count}",
+      "remove_other": "Togli {count}",
+      "gradeTitle_one": "Scelta pelle minima per {count} pezzo",
+      "gradeTitle_other": "Scelta pelle minima per {count} pezzi",
+      "gradeApply_one": "Imposta per {count} pezzo",
+      "gradeApply_other": "Imposta per {count} pezzi"
+    },
+    "keys": {
+      "add": "Aggiungi un pezzo",
+      "open": "Apri il pezzo"
+    },
+    "readOnly": {
+      "noManage": "Sola lettura: il tuo ruolo può vedere i pezzi del cartamodello, non modificarli."
+    },
+    "offline_one": "Offline: {count} modifica attende su questa pagina e parte quando torna la connessione. Non chiudere la pagina.",
+    "offline_other": "Offline: {count} modifiche attendono su questa pagina e partono quando torna la connessione. Non chiudere la pagina.",
+    "issues": {
+      "title_one": "{count} cosa da guardare",
+      "title_other": "{count} cose da guardare"
+    },
+    "issue": {
+      "SIZE_NOT_IN_RANGE": "{piece} indica {sizes}, non più nella gamma del modello: una nuova revisione toglie quelle taglie.",
+      "GRADE_NOT_LEATHER": "{piece} ha una scelta minima ma non si taglia da una riga di pelle: il banco di taglio non può controllarla.",
+      "GRADE_RETIRED": "{piece}: la scelta {grade} è ritirata. Qui resta; una nuova revisione copia il pezzo senza.",
+      "LEATHER_LINE_NO_PIECES": "La riga {line} è pelle e nessun pezzo la indica: si può tagliare da qualsiasi scelta."
+    },
+    "empty": {
+      "title": "Nessun pezzo",
+      "body": "Aggiungi i pezzi del cartamodello, con la scelta di pelle minima per ciascuno.",
+      "frozen": "Questa revisione non ha pezzi del cartamodello."
+    },
+    "dialog": {
+      "addTitle": "Aggiungi un pezzo alla revisione {revision}",
+      "editTitle": "{piece}",
+      "add": "Aggiungi pezzo",
+      "save": "Salva",
+      "nameHint": "Come lo chiama il cartamodello (\"Davanti sinistro\", \"Manica\"): il banco di taglio distingue i pezzi per nome.",
+      "quantityHint": "Quanti di questo pezzo prende un capo (da 1 a 99).",
+      "lineHint": "La riga di distinta da cui si taglia.",
+      "gradeHint": "La scelta più bassa da cui si può tagliare; una scelta migliore va sempre bene.",
+      "gradeNotLeather": "La scelta minima è una regola della pelle: scegli prima una riga di pelle."
+    },
+    "remove": {
+      "title_one": "Togliere {count} pezzo?",
+      "title_other": "Togliere {count} pezzi?",
+      "confirm_one": "Togli {count} pezzo",
+      "confirm_other": "Togli {count} pezzi",
+      "body": "Esce dall'elenco della revisione {revision}. Per riaverlo, aggiungilo di nuovo."
+    },
+    "held": {
+      "noManage": "Il tuo ruolo può vedere i pezzi del cartamodello, non modificarli.",
+      "frozen": "Questa revisione è bloccata: modifica i pezzi nella sua revisione in bozza.",
+      "bulkNotLeather": "Non su una riga di pelle: {pieces}. La scelta minima è una regola della pelle."
+    },
+    "problem": {
+      "nameBlank": "Dai un nome al pezzo.",
+      "nameLong": "Al massimo 80 caratteri.",
+      "nameTaken": "Un altro pezzo di questa revisione ha questo nome.",
+      "quantity": "Un numero intero da 1 a 99.",
+      "gradeNotLeather": "La scelta minima è una regola della pelle: scegli prima una riga di pelle.",
+      "grain": "Scegli un verso.",
+      "noteLong": "Al massimo 500 caratteri."
+    },
+    "notice": {
+      "gradeCleared": "{piece} non è più su una riga di pelle: la sua scelta minima è stata tolta.",
+      "added": "{piece} aggiunto.",
+      "saved": "{piece} salvato.",
+      "removed_one": "{count} pezzo tolto.",
+      "removed_other": "{count} pezzi tolti.",
+      "gradeSet_one": "Scelta minima impostata per {count} pezzo.",
+      "gradeSet_other": "Scelta minima impostata per {count} pezzi."
+    },
+    "files": {
+      "title": "Documenti e file",
+      "notBuilt": "Schizzi, file del cartamodello e pagine del cliente saranno elencati qui in un passo successivo. Per ora i file aggiunti al modello sono nella sua scheda Attività."
     }
   }
 }
