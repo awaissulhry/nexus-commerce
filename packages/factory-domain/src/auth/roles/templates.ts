@@ -377,6 +377,16 @@ const AQL_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
   production_manager: ['quality.aql.view'],
   sales: ['quality.aql.view'],
 })
+/**
+ * B-W2b-101 (inspection triggers, QHS-010, QHS-011; design quality.plans "When inspections are created"): quality keeps the
+ * rules that open inspections by themselves; the production manager and the floor supervisor read them (a first-piece rule
+ * holds a run until its check is approved). Office only: the worker's handler applies them. Owner and read-only from every().
+ */
+const QUALITY_TRIGGERS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.triggers.view', 'quality.triggers.manage'],
+  production_manager: ['quality.triggers.view'],
+  floor_supervisor: ['quality.triggers.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -425,7 +435,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-49
   ...((audience === 'office' ? DISPATCH_ADDS : DISPATCH_FLOOR_ADDS)[key] ?? []),
   // B-W2b-93
-  ...(audience === 'office' ? (AQL_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (AQL_ADDS[key] ?? []) : []),
+  // B-W2b-101
+  ...(audience === 'office' ? (QUALITY_TRIGGERS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
