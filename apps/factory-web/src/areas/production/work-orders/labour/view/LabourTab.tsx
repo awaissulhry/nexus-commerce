@@ -10,6 +10,7 @@ import { CostBridge, CostFacts, CostLabour, CostMaterials, CostScrapAndWaiting, 
 import type { LabourModel } from '../model'
 import type { Minutes } from '../../every-shift/model'
 import { MinutesCard } from '../../every-shift/view/MinutesCard'
+import { OffStandardCard } from './OffStandardCard'
 import '../../../../finance/costing/costing.css'
 
 /**
@@ -19,13 +20,15 @@ import '../../../../finance/costing/costing.css'
  * per operation (standard minutes earned × the cost per minute). The whole section needs the cost grain (money.cost):
  * without it the tab says why and shows no figure; without costing.view it says which permission. Never wages, never a
  * person. Before the release a work order has no cost yet. B-W2b-59: the Minutes section above it (no money, no grain).
+ * B-W2b-81: the off-standard minutes below the Minutes (no money, no grain, never per person).
  */
 export function LabourTab({ labour, prefix, workOrderId, draft, onRetry, minutes, labourHref = null }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void; minutes?: Minutes; labourHref?: string | null }) {
   return (
     <WithMessages namespaces={[COSTING_NAMESPACE]}>
       {/* B-W2b-59 (wo-minutes): standard minutes, no money: open to whoever reads the work order, above the cost and its grain. */}
       <div className="fw-pr-stack">
-        {minutes && <MinutesCard minutes={minutes} labourHref={labourHref} />}
+        {minutes && <MinutesCard minutes={minutes} />}
+        {labour?.offStandard && <OffStandardCard part={labour.offStandard} labourHref={labourHref} onRetry={onRetry} />}
         <Labour labour={labour} prefix={prefix} workOrderId={workOrderId} draft={draft} onRetry={onRetry} />
       </div>
     </WithMessages>

@@ -90,6 +90,11 @@ describe('formatScanId and parseScanId', () => {
     expect(parseScanId(text, { tenantTag: other })).toMatchObject({ ok: false, problem: 'tenant', message: 'This label belongs to another factory.' })
     expect(parseScanId(text, { types: ['HIDE', 'BUNDLE'] })).toMatchObject({ ok: false, problem: 'type', message: expect.stringMatching(/lot label/) })
     expect(parseScanId(text, { tenantTag: TAG, types: ['LOT'] })).toMatchObject({ ok: true, ref: 42 })
+    // B-W2b-81 (MES-067): a coupon stands for its bundle's ticket, and keeps saying it is a coupon; never the other way round.
+    const coupon = formatScanId({ type: 'COUPON', tenantTag: TAG, ref: 42 })
+    expect(parseScanId(coupon, { tenantTag: TAG, types: ['BUNDLE'] })).toMatchObject({ ok: true, type: 'COUPON', ref: 42 })
+    expect(parseScanId(coupon, { types: ['HIDE'] })).toMatchObject({ ok: false, problem: 'type' })
+    expect(parseScanId(formatScanId({ type: 'BUNDLE', tenantTag: TAG, ref: 42 }), { types: ['COUPON'] })).toMatchObject({ ok: false, problem: 'type' })
   })
 
   it('reads only the printed form of a long reference, and keeps references in range', () => {

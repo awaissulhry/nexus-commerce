@@ -33,6 +33,8 @@ export interface NewBlock {
   readonly code: CodeRow
   readonly source: BlockSource
   readonly helpCallId?: string | null
+  /** B-W2b-81: the work order the time belongs to, when the block has one (work-order.ts). */
+  readonly workOrderId?: string | null
   readonly startedAt: Date
   /** Ended already (typed afterwards, an offline record): its status follows the code. */
   readonly endedAt?: Date | null
@@ -63,6 +65,7 @@ export const auditedBlock = (block: BlockRow) => ({
   stationId: block.stationId,
   workerId: block.workerId,
   source: block.source,
+  workOrderId: block.workOrderId,
   workDate: isoDay(block.workDate),
   startedAt: toUtcIso(block.startedAt),
   endedAt: block.endedAt ? toUtcIso(block.endedAt) : null,
@@ -84,6 +87,7 @@ export async function insertBlock(tools: CommandTools, input: NewBlock): Promise
       codeId: input.code.id,
       source: input.source,
       helpCallId: input.helpCallId ?? null,
+      workOrderId: input.workOrderId ?? null,
       workDate: dayColumn(businessDate(input.startedAt, input.timeZone)),
       startedAt: input.startedAt,
       endedAt: ended,

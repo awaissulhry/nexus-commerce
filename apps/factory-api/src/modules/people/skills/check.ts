@@ -53,7 +53,7 @@ import { qualificationRuleFor, type QualificationRule } from './rule'
 type Client = FactoryClient | CommandTx
 type Reader = Pick<
   CommandTx,
-  'employee' | 'worker' | 'skill' | 'employeeSkill' | 'machineAuthorisation' | 'machine' | 'machineClass' | 'operation' | 'workOrderOperation' | 'station' | 'workCentre' | 'line' | 'device'
+  'employee' | 'worker' | 'skill' | 'employeeSkill' | 'machineAuthorisation' | 'machine' | 'machineClass' | 'operation' | 'workOrderOperation' | 'station' | 'workCentre' | 'line' | 'device' | 'productionSettings'
 >
 
 export interface QualificationInput {

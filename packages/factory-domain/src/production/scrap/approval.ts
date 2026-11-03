@@ -30,8 +30,14 @@ export type ScrapApprovalState = (typeof SCRAP_APPROVAL_STATES)[number]
 export const DECIDED_ON = ['FLOOR', 'OFFICE'] as const
 export type DecidedOn = (typeof DECIDED_ON)[number]
 
-/** The audit action that records a decision (the decision's ledger; the step's schema gap names a table for it). */
+/**
+ * The audit action of a decision. The ledger is ScrapApproval since B-W2b-81; a scan taken before it has no row, and its
+ * decision is read from these audit rows (the fallback, named in modules/production/scrap/over-limit.ts).
+ */
 export const SCRAP_DECISION_ACTION = 'production.decideScrapOverLimit'
+
+/** One ScrapApproval per scan (unique in the tenant). */
+export const scrapApprovalKey = (scanId: string): string => `scrap:${scanId}`
 
 /** The reason tiles of a refusal (the floor's FloorReasonGrid; OTHER asks for a note). Made-up wording a factory may not change yet. */
 export const SCRAP_REFUSAL_REASONS = ['REWORK_INSTEAD', 'WRONG_COUNT', 'WRONG_REASON', 'OTHER'] as const

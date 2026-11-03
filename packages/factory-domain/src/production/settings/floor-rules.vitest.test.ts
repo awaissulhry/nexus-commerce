@@ -13,6 +13,7 @@ import {
   limitAt,
   limitSince,
   MAX_SCRAP_APPROVAL_LIMIT,
+  QUALIFICATION_RULE_WORDS,
   scrapLimitWords,
   scrapNeedsApproval,
   type LimitChange,
@@ -25,7 +26,7 @@ const at = (minute: number) => new Date(Date.UTC(2026, 9, 31, 8, minute))
 
 describe('the checks of a site (MES-294)', () => {
   it('a site without floor rules runs on the schema defaults: quantity guard STRICT, sequence WARN, no scrap limit', () => {
-    expect(floorChecksOf(null)).toEqual({ quantityGuard: 'STRICT', skippedOperationRule: 'WARN', scrapApprovalLimit: null, bundleCodeMode: 'ONE_CODE', stuckBundleHours: 4 })
+    expect(floorChecksOf(null)).toEqual({ quantityGuard: 'STRICT', skippedOperationRule: 'WARN', scrapApprovalLimit: null, bundleCodeMode: 'ONE_CODE', stuckBundleHours: 4, qualificationRule: 'WARN' })
     expect(floorChecksOf({ scrapApprovalLimit: 5, skippedOperationRule: 'FREE' })).toMatchObject({ scrapApprovalLimit: 5, skippedOperationRule: 'FREE', quantityGuard: 'STRICT' })
   })
 
@@ -48,7 +49,16 @@ describe('the checks of a site (MES-294)', () => {
     ])
     expect(floorRulesChangeWords(after, after)).toEqual([])
     expect(floorChecksWords(DEFAULT_FLOOR_CHECKS)[2]).toBe('Scrap needs no approval, whatever the count.')
+    expect(floorChecksWords(DEFAULT_FLOOR_CHECKS)[3]).toMatch(/^A missing skill warns/)
     expect(scrapLimitWords(1)).toContain('above 1 piece in one scan')
+  })
+
+  it('the qualification rule is one more rule of the site (B-W2b-81; MES-024): a mode, changed alone, told from now on', () => {
+    expect(floorRulesChangeProblems({ qualificationRule: 'HOLD' as never })).toEqual([{ path: 'body/qualificationRule', message: 'Expected FREE, WARN or STRICT.' }])
+    expect(floorRulesChangeProblems({ qualificationRule: 'STRICT' })).toEqual([])
+    const after = changedChecks(DEFAULT_FLOOR_CHECKS, { qualificationRule: 'STRICT' })
+    expect(changedFields(DEFAULT_FLOOR_CHECKS, after)).toEqual(['qualificationRule'])
+    expect(floorRulesChangeWords(DEFAULT_FLOOR_CHECKS, after)[0]).toBe(`From now on: ${QUALIFICATION_RULE_WORDS.STRICT}`)
   })
 
   it('the rules not per site yet are the scans’ own constants: undo 120 s, clock off 5 min / flagged 24 h, no offline limit', () => {

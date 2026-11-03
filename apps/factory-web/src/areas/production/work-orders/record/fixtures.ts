@@ -5,7 +5,7 @@ import { bundlesOf, canOf, cutLogOf, FINAL, inShell, panels, panelsModel, PICK, 
 import { PART_LOADING, type WorkOrderRecordModel } from './record-model'
 import { AVAILABILITY, DAILY_ROLE_OF, dailyFor, heldWorkOrder, HOLD, HOLD_RECORD, releaseCheckW2a } from '../daily/demo/fixtures'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
-import { LABOUR, labourAs } from '../labour/fixtures'
+import { LABOUR, labourAs, NO_OFF_STANDARD } from '../labour/fixtures'
 import type { SplitModel } from '../every-shift/use-split'
 
 /**
@@ -172,6 +172,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2b-documents', label: 'W2b · Documents: the traveller, the tickets, the style revision', model: recordCase('manager', 'IN_PROGRESS', { tab: 'documents' }) },
     { id: 'w2b-documents-draft', label: 'W2b · Documents of a draft: the traveller says the sizes are not frozen', model: draft('manager', 'ready', { tab: 'documents' }) },
     { id: 'w2b-minutes', label: 'W2b · Labour & cost › Minutes: planned and earned per operation, work order totals only; the cost below for those who may', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR) }) },
+    { id: 'w2b-offstandard-none', label: 'W2b · Off-standard minutes: nothing names this work order yet', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR, { value: NO_OFF_STANDARD, problem: null }) }) },
+    { id: 'w2b-offstandard-loading', label: 'W2b · Off-standard minutes: being read', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR, { value: null, problem: null }) }) },
+    { id: 'w2b-offstandard-failed', label: 'W2b · Off-standard minutes: the read failed, Try again', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR, { value: null, problem: 'problem.internal' }) }) },
+    { id: 'w2b-offstandard-held', label: 'W2b · Off-standard minutes held: no production.offstandard.view, says why', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR, { value: null, problem: null, held: true }) }) },
     { id: 'w2b-minutes-no-cost', label: 'W2b · Minutes without the cost grain: the minutes stay, the cost says why not', model: recordCase('manager', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('manager', LABOUR) }) },
   ],
 })
