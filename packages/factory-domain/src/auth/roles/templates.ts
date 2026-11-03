@@ -552,7 +552,6 @@ const QUALITY_REPORTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Ob
   floor_supervisor: ['quality.reports.view'],
   buyer: ['quality.reports.view'],
 })
-/**
 // B-W2b-132: the leather and cut plan — the planner (the design's role) changes a style's cutting loss from its cuts (into the
 // draft revision) or dismisses the proposal with a reason. The owner from every().
 const LEATHER_PLAN_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
