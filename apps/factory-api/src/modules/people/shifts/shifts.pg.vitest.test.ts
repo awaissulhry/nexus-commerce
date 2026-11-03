@@ -4,13 +4,14 @@ import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
-import { plusDays } from '@nexus/factory-domain/calendars/dates'
+import { isoWeekday, plusDays } from '@nexus/factory-domain/calendars/dates'
+import { publicHolidays } from '@nexus/factory-domain/calendars/holidays'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
-import { seed as seedPeople, type PeopleSeed } from '../../../../../../packages/factory-db/seed/people'
+import { peopleSeedDates, seed as seedPeople, type PeopleSeed } from '../../../../../../packages/factory-db/seed/people'
 import { seed as seedTime } from '../../../../../../packages/factory-db/seed/time'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
@@ -23,8 +24,8 @@ import { answerOnFloor } from './floor'
  * People › Shifts (B-W2b-32; MES-218, MES-222; D.Lgs. 66/2003 arts. 4, 5, 7, 8) on the local stack with the app's real
  * routes: a throwaway PostgreSQL 17 database from the migrations (the runtime logins: row-level security, the column grants
  * and the …_time_w2b_guards triggers are real), the factory-db seeds of one tenant up to time and attendance (plant A1:
- * E1 on the one-shift pattern, E2 its team's lead (the seed member's account), E3 an agency worker until 2026-12-31, E4
- * leaving on 2026-11-30; the law's working-time limits tenant-wide, A1's CCNL break of 15 minutes; every People purpose
+ * E1 on the one-shift pattern, E2 its team's lead (the seed member's account), E3 an agency worker until 120 days from
+ * today, E4 leaving 28 days from today (the seed counts both from the clock); the law's working-time limits tenant-wide, A1's CCNL break of 15 minutes; every People purpose
  * OFF). Office sessions from the test authenticator; the tablet's answer through its command with the PIN stubbed (the
  * route's PIN is the floor step-up, tested in platform/auth/floor). Every name is made up. Run with
  * `node scripts/factory/run-pg-tests.mjs modules/people/shifts`.
@@ -52,9 +53,27 @@ const T = {
   deviceA1: idOf('device:A1:cutting'),
 }
 
-/** A clean March week of 2027 (no holiday), its next week, and the day after. */
-const W = '2027-03-08'
+/**
+ * A clean week, its next week and the day after: the first Monday a week after E3's agency end and E4's last day (the
+ * people seed counts both from the clock, so no passing day breaks this file) whose sixteen days hold no national holiday,
+ * no patron-saint example, no August shutdown or Christmas closure, and no new year (the yearly overtime cap counts one year).
+ */
+function cleanWeek(): string {
+  const { e3EndDate, e4LastWorkingDay } = peopleSeedDates()
+  let monday = plusDays(e3EndDate > e4LastWorkingDay ? e3EndDate : e4LastWorkingDay, 7)
+  while (isoWeekday(monday) !== 1) monday = plusDays(monday, 1)
+  for (;;) {
+    const year = monday.slice(0, 4)
+    const holidays = new Set(publicHolidays('IT', Number(year)).map((holiday) => holiday.date))
+    const days = Array.from({ length: 16 }, (_, offset) => plusDays(monday, offset))
+    if (days.every((date) => date.slice(0, 4) === year && !holidays.has(date) && date.slice(5, 7) !== '08' && date.slice(5) !== '06-24' && date.slice(5) < '12-24')) return monday
+    monday = plusDays(monday, 7)
+  }
+}
+const W = cleanWeek()
 const day = (offset: number) => plusDays(W, offset)
+/** A day as the limits' words say it ("8 Mar"). */
+const dayWords = (date: string): string => `${Number(date.slice(8, 10))} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(date.slice(5, 7)) - 1]}`
 
 const MANAGE: Permission[] = ['people.shifts.view', 'people.shifts.manage', 'people.overtime.manage', 'people.overtime.approve']
 const grant = (permissions: Permission[], companies: Grant['companies'] = 'all'): Grant => ({ permissions, companies, sites: 'all', parties: 'all' })
@@ -116,14 +135,14 @@ afterAll(async () => {
 describe('the roster sheet (MES-218)', () => {
   it('shows people × days: the default shift faint, the calendar, the limits in force, the choices, people per shift', async () => {
     const sheet = await roster()
-    // E3's agency contract ended on 2026-12-31, E5 left: not in a March 2027 roster. E4 is leaving (no shift after 30 Nov).
+    // E3's agency contract has ended and E5 left: neither is in this roster. E4 is leaving (no shift after the last day).
     expect(sheet.rows.map((row: Json) => row.employeeId).sort()).toEqual([people.employeeIds.e1, people.employeeIds.e2, people.employeeIds.e4].sort())
     expect(rowOf(sheet, people.employeeIds.e1)).toMatchObject({ line: { id: T.lineA1 }, team: { code: 'L1-A' }, isLead: false, defaultPattern: { code: '1T' }, canEdit: true })
     expect(rowOf(sheet, people.employeeIds.e2)).toMatchObject({ isLead: true })
     expect(cellOf(sheet, people.employeeIds.e1, W)).toMatchObject({ source: 'DEFAULT', value: { kind: 'WORK', shift: { label: 'Day', startMinute: 480, endMinute: 1020, breakMinutes: 60 } }, entry: null, open: true, absence: null, warnings: [] })
     expect(cellOf(sheet, people.employeeIds.e1, day(5))).toMatchObject({ source: 'DEFAULT', value: { kind: 'OFF' }, open: false })
     expect(cellOf(sheet, people.employeeIds.e4, W)).toMatchObject({ source: 'NONE', value: null, issue: 'AFTER_LAST_DAY' })
-    expect(rowOf(sheet, people.employeeIds.e4).lastWorkingDay).toBe('2026-11-30')
+    expect(rowOf(sheet, people.employeeIds.e4).lastWorkingDay).toBe(people.dates.e4LastWorkingDay)
     expect(sheet.sites).toHaveLength(1)
     expect(sheet.sites[0]).toMatchObject({ site: { id: T.siteA1 }, timeZone: 'Europe/Rome', absences: { shown: false, words: expect.stringMatching(/Statuto dei Lavoratori art\. 4 c\.2-3/) } })
     expect(sheet.sites[0].days.map((entry: Json) => entry.open)).toEqual([true, true, true, true, true, false, false])
@@ -161,7 +180,7 @@ describe('the roster sheet (MES-218)', () => {
     const [monday, tue] = written.cells.map((entry: Json) => entry.cell)
     expect(monday).toMatchObject({ source: 'ROSTER', value: { shift: { label: 'Afternoon', startMinute: 840, endMinute: 1320 }, patternId: T.pattern2T }, entry: { status: 'DRAFT', version: 1 }, fallback: { kind: 'WORK', shift: { label: 'Day' } } })
     expect(tue.entry).toMatchObject({ status: 'DRAFT', note: 'Order for the trade fair' })
-    expect(tue.warnings).toEqual([expect.objectContaining({ rule: 'DAILY_REST', level: 'WARN', words: 'Rest 8 h between 22:00 (8 Mar) and 06:00 — minimum 11 h (D.Lgs. 66/2003 art. 7)', law: 'D.Lgs. 66/2003 art. 7', isNew: false })])
+    expect(tue.warnings).toEqual([expect.objectContaining({ rule: 'DAILY_REST', level: 'WARN', words: `Rest 8 h between 22:00 (${dayWords(W)}) and 06:00 — minimum 11 h (D.Lgs. 66/2003 art. 7)`, law: 'D.Lgs. 66/2003 art. 7', isNew: false })])
     tuesday = tue
     // Someone else's view of Monday (no row) is stale now.
     const stale = await no('lead', 'POST', '/people/shifts/roster/cells', { cells: [{ employeeId: people.employeeIds.e1, date: W, version: null, set: morning }] }, 409)
@@ -193,7 +212,7 @@ describe('the roster sheet (MES-218)', () => {
       ],
     }, 409)
     expect(pathsOf(held)).toEqual(['refusal/LIMIT_BLOCKED', `limits/${people.employeeIds.e1}/${day(3)}`])
-    expect(held.message).toMatch(/Rest 8 h between 22:00 \(10 Mar\) and 06:00 — minimum 11 h \(CCNL example art\. 7\)/)
+    expect(held.message).toContain(`Rest 8 h between 22:00 (${dayWords(day(2))}) and 06:00 — minimum 11 h (CCNL example art. 7)`)
     // The warning that was already there (Monday → Tuesday) does not hold an unrelated write.
     await ok('manager', 'POST', '/people/shifts/roster/cells', { cells: [{ employeeId: people.employeeIds.e2, date: day(2), version: null, set: { kind: 'OFF' } }] })
     await admin(`UPDATE "WorkingTimeRule" SET status = 'ARCHIVED' WHERE id = $1`, [ruleId])
@@ -343,7 +362,7 @@ describe('planned overtime by agreement (MES-222; D.Lgs. 66/2003 art. 5)', () =>
     await admin(`INSERT INTO "WorkingTimeRule" (id, "tenantId", "companyId", "siteId", kind, "limitMinutes", action, "alertRoles", source, "legalReference") VALUES ($1, $2, $3, $4, 'OVERTIME_YEARLY_CAP', 150, 'BLOCK', '{}', 'CCNL', 'CCNL example art. 5')`, [capId, T.tenant, T.companyA, T.siteA1])
     const held = await no('manager', 'POST', '/people/overtime-requests', { siteId: T.siteA1, date: day(4), minutes: 60, reason: 'Over the cap', employeeIds: [people.employeeIds.e1], ask: true }, 409)
     expect(pathsOf(held)).toEqual(['refusal/LIMIT_BLOCKED', `limits/${people.employeeIds.e1}/${day(4)}`])
-    expect(held.message).toMatch(/Planned overtime in 2027 would be 3 h — at most 2 h 30 min a year \(CCNL example art\. 5\)/)
+    expect(held.message).toMatch(new RegExp(`Planned overtime in ${W.slice(0, 4)} would be 3 h — at most 2 h 30 min a year \\(CCNL example art\\. 5\\)`))
     // The draft (not asked) is kept apart: nothing was written by the held request.
     expect((await admin(`SELECT count(*)::int AS n FROM "OvertimeRequest" WHERE reason = 'Over the cap'`))[0]!.n).toBe(0)
     await admin(`UPDATE "WorkingTimeRule" SET status = 'ARCHIVED' WHERE id = $1`, [capId])
