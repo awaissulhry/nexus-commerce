@@ -85,8 +85,8 @@ export interface WordsDraft {
 
 const blank = (value: string | undefined): boolean => value !== undefined && value.trim() === ''
 
-/** Words, icon and colour (only the fields present are checked). */
-export function wordsProblems(draft: WordsDraft, what: 'defect' | 'disposition'): Issue[] {
+/** Words, icon and colour (only the fields present are checked). B-W2b-90: cause codes and leather grades say theirs too. */
+export function wordsProblems(draft: WordsDraft, what: 'defect' | 'disposition' | 'cause' | 'grade'): Issue[] {
   const problems: Issue[] = []
   for (const field of ['labelIt', 'labelEn'] as const) {
     const value = draft[field]

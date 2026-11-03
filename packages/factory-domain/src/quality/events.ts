@@ -11,6 +11,8 @@ import { CONTAINMENT_KINDS, NCR_SOURCES, NCR_STAGES } from './ncr/rules'
 import { DEFECT_CLASSES } from './defects/rules'
 // B-W2a-65: customer complaints.
 import { CHANGED_FIELDS as COMPLAINT_CHANGED_FIELDS, COMPLAINT_CATEGORIES, COMPLAINT_CHANNELS, COMPLAINT_SEVERITIES, COMPLAINT_STATUSES } from './complaints/rules'
+// B-W2b-90: the defect vocabulary (cause codes, leather grades).
+import { VOCABULARY_CHANGES, VOCABULARY_LISTS } from './defects/vocabulary'
 
 /**
  * The quality module's events (plan A1 §3.4). The lab step (B-W1-34, modules/quality/lab) emits them in the command that
@@ -48,6 +50,10 @@ import { CHANGED_FIELDS as COMPLAINT_CHANGED_FIELDS, COMPLAINT_CATEGORIES, COMPL
  * command), `complaint.safety_acknowledged` once, when the owner acknowledges it, `complaint.status_changed` for each move
  * (investigating, answered, back to investigating, closed). They reach the complaint screens of the office
  * (quality.complaints.view: the triage count, the tiles, the safety banner). Ids, numbers and codes only.
+ *
+ * The defect vocabulary (B-W2b-90, modules/quality/defects causes.ts and grades.ts): `quality.vocabulary_changed` when cause
+ * codes or leather grades are added, changed, retired, made active again or deleted, or a starter set is added (which list,
+ * which change, which codes): the pickers of the office and the site's floor devices read the vocabulary again. Codes only.
  */
 const complaintLive = { permission: 'quality.complaints.view', fields: ['complaintId', 'number'] } as const
 const complaintStatus = z.enum(COMPLAINT_STATUSES)
@@ -387,5 +393,13 @@ export const events = [
     description: "The default containment time of new NCRs changed for a company or tenant-wide (hours after the problem was found).",
     payload: z.strictObject({ companyId: z.uuid().nullable(), defaultContainmentHours: z.number().int().nullable(), previous: z.number().int().nullable() }),
     live: { permission: 'quality.ncr.view', fields: ['companyId', 'defaultContainmentHours'] },
+  }),
+  // ---- B-W2b-90: the defect vocabulary (cause codes, leather grades) ---------------------------------------------------
+  defineEvent({
+    type: 'quality.vocabulary_changed',
+    context: 'quality',
+    description: 'Cause codes or leather grades were added, changed, retired, made active again or deleted, or the starter set was added: the pickers read the vocabulary again.',
+    payload: z.strictObject({ list: z.enum(VOCABULARY_LISTS), change: z.enum(VOCABULARY_CHANGES), codes: z.array(z.string().min(1).max(40)).min(1).max(200) }),
+    live: { permission: 'quality.defects.view', floor: 'floor.work', fields: ['list', 'change', 'codes'] },
   }),
 ] as const
