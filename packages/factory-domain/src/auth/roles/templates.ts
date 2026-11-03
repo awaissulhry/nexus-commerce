@@ -525,6 +525,14 @@ const RISK_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze
   safety_officer: ['safety.risk.manage', 'safety.risk.sign'],
   company_doctor: ['safety.risk.sign'],
 })
+/**
+ * B-W2b-128 (role risk sheets, QHS-236; design plant.risk "Role sheets"; Owner answer H2): the safety officer types the 6 to
+ * 10 role sheets (risks, PPE kit, courses, whether the role needs health surveillance) and applies them. Which sheet a person
+ * is in stays the HR record's (people.employees.manage). Office only; owner from every(); read_only gets none (no read added).
+ */
+const ROLESHEETS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.rolesheets.manage'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -597,7 +605,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-126
   ...((audience === 'office' ? REWORK_REPAIR_ADDS : REWORK_REPAIR_FLOOR_ADDS)[key] ?? []),
   // B-W2b-122
-  ...(audience === 'office' ? (RISK_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (RISK_ADDS[key] ?? []) : []),
+  // B-W2b-128
+  ...(audience === 'office' ? (ROLESHEETS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

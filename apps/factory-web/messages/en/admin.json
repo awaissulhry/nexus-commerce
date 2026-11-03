@@ -1944,6 +1944,7 @@
     "safety_organisation_manage": "Appoint people and outside contacts to safety roles, record the appointee's signature, end a term, record the RLS notice filed with INAIL",
     "safety_calendar_manage": "Add, change, mark done and cancel the deadlines typed on the safety calendar, with their evidence",
     "safety_risk_manage": "Keep the risk assessments (DVR): freeze the consultant's versions, record signed papers, keep the seal; the improvement plan's measures",
-    "safety_risk_sign": "Sign a risk assessment version yourself for the safety role you hold (with a fresh code)"
+    "safety_risk_sign": "Sign a risk assessment version yourself for the safety role you hold (with a fresh code)",
+    "safety_rolesheets_manage": "Keep the role risk sheets (scheda mansione): risks, PPE kit, courses and health surveillance per role; apply a sheet after reading what it changes for the people in the role"
   }
 }

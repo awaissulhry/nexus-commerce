@@ -19,6 +19,8 @@ import { command, type CommandCaller, type CommandTools, type CommandTx } from '
 import type { OfficeContext } from '../../../core/context'
 import { actorIdOf, assertMay, assertMayWrite, assertVersion, bodyIssue, dateOf, dayOf, dayOrNull, may, officeOf, problemsError, refuse, todayOf } from './access'
 import { auditedEmployee, currentMembership, employeeView, lockEmployee, readEmployee, type EmployeeRow } from './store'
+// B-W2b-128: a role sheet is of one site.
+import { roleSheetBeforeMove, roleSheetClearedByMove } from './role-sheet'
 
 /**
  * The employee writes (B-W2b-26; MES-208, MES-211; design people.employees "New employee", the record's Profile and Job
@@ -402,6 +404,8 @@ export async function updateEmployee(caller: CommandCaller, employeeId: string, 
       defaultShiftPatternId: defaultShiftPatternId !== row.defaultShiftPatternId ? defaultShiftPatternId : null,
     })
     if (draft.employeeCode !== row.employeeCode) await checkCode(tx, context, draft.employeeCode, row.id)
+    // B-W2b-128: a role sheet is of one site: a move clears it in the same update (role-sheet.ts; the FK refuses another site's).
+    const roleSheetId = moving ? await roleSheetBeforeMove(tx, row.id) : null
     const data: Prisma.EmployeeUncheckedUpdateInput = {}
     const fields: string[] = []
     const set = (field: string, next: unknown, current: unknown, stored: unknown = next) => {
@@ -424,6 +428,7 @@ export async function updateEmployee(caller: CommandCaller, employeeId: string, 
     set('siteId', siteId, row.siteId)
     set('homeLineId', homeLineId, row.homeLineId)
     set('defaultShiftPatternId', defaultShiftPatternId, row.defaultShiftPatternId)
+    if (roleSheetId) set('roleSheetId', null, roleSheetId)
     if (fields.length === 0) {
       tools.audit({ action: 'people.updateEmployee', recordType: 'Employee', recordId: row.id, companyId: row.companyId, siteId: row.siteId, after: { unchanged: true } })
       return { employee: await employeeView(tx, row, today) }
@@ -438,6 +443,7 @@ export async function updateEmployee(caller: CommandCaller, employeeId: string, 
     const saved = (await readEmployee(tx, row.id))!
     tools.audit({ action: 'people.updateEmployee', recordType: 'Employee', recordId: row.id, companyId: row.companyId, siteId: saved.siteId, before: auditedEmployee(row), after: auditedEmployee(saved), ...(body.reason ? { reason: body.reason } : {}) })
     tools.emit({ type: 'employee.updated', subject: row.id, companyId: row.companyId, siteId: saved.siteId, payload: { employeeId: row.id, change: moving ? 'MOVED_SITE' : 'EDITED', fields, workerId: null, by: 'OFFICE' } })
+    if (roleSheetId) roleSheetClearedByMove(tools, { employeeId: row.id, companyId: row.companyId, toSiteId: saved.siteId, roleSheetId })
     return { employee: await employeeView(tx, saved, today) }
   })
   return result

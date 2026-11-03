@@ -172,6 +172,8 @@ import { QUALITY_RULES_DEFINITIONS, QUALITY_RULES_PERMISSIONS } from '../../qual
 import { PRODUCTION_REPAIR_DEFINITIONS, PRODUCTION_REPAIR_FLOOR_PERMISSIONS, PRODUCTION_REPAIR_PERMISSIONS } from '../../production/repair/permissions'
 // B-W2b-122: the risk assessment, the DVR (safety.risk.manage | sign).
 import { SAFETY_RISK_DEFINITIONS, SAFETY_RISK_PERMISSIONS } from '../../safety/risk/permissions'
+// B-W2b-128: role sheets (safety.rolesheets.manage: a role's risks, PPE kit, courses and whether it needs health surveillance).
+import { SAFETY_ROLESHEETS_DEFINITIONS, SAFETY_ROLESHEETS_PERMISSIONS } from '../../safety/rolesheets/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -621,6 +623,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCTION_REPAIR_DEFINITIONS,
   // B-W2b-122: the risk assessment, the DVR.
   SAFETY_RISK_DEFINITIONS,
+  // B-W2b-128: role sheets.
+  SAFETY_ROLESHEETS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -795,6 +799,8 @@ for (const name of QUALITY_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of PRODUCTION_REPAIR_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-122: the risk assessment, the DVR.
 for (const name of SAFETY_RISK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-128: role sheets.
+for (const name of SAFETY_ROLESHEETS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
