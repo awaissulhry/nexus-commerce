@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { HOLD_QUARANTINE, HOLD_STATUSES, HOLD_SUBJECT_TYPES, RELEASE_CHECKS, type HoldQuarantine, type HoldSourceType, type HoldStatus, type HoldSubjectType } from '@nexus/factory-domain/quality/holds/rules'
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
+import { HOLD_NEXT_STEPS } from '@nexus/factory-domain/quality/holds/depth'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { pickerReasons, type PickerReason } from '../../_shared/reasons/api'
 
@@ -53,6 +54,9 @@ export const holdSchema = z.object({
   closedById: z.string().nullable(),
   closeNote: z.string().nullable(),
   note: z.string().nullable(),
+  /** B-W2b-114: the hold board's lane; the hold by genealogy it is part of (with the suspect record it started from). */
+  nextStep: z.enum(HOLD_NEXT_STEPS).optional().default('NEW'),
+  group: z.object({ id: z.string(), sourceType: z.string(), sourceId: z.string(), sourceCode: z.string().nullable() }).nullable().optional().default(null),
   version: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -70,6 +74,15 @@ export const holdDetailSchema = z.object({
   /** B-W2b-17: `placerMayRelease` — the company's rule lets the person who placed a hold release it too. */
   release: z.object({ checks: z.array(check), releasable: z.boolean(), mayRelease: z.boolean(), placerMayRelease: z.boolean().optional().default(false) }),
   canChange: z.boolean(),
+  /** B-W2b-114: a stock hold's stock by place and the site's quarantine places (null: not stock, not active). */
+  stock: z
+    .object({
+      places: z.array(place),
+      lying: z.array(z.object({ locationId: z.string(), code: z.string(), name: z.string(), kind: z.string(), onHand: z.string(), uom: z.string(), moves: z.boolean() })),
+    })
+    .nullable()
+    .optional()
+    .default(null),
 })
 export type HoldDetail = z.infer<typeof holdDetailSchema>
 

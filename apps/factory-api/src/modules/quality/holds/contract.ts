@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
+import { HOLD_NEXT_STEPS } from '@nexus/factory-domain/quality/holds/depth'
 import { HOLD_LIMITS, HOLD_QUARANTINE, HOLD_SOURCE_TYPES, HOLD_STATUSES, HOLD_SUBJECT_TYPES, RELEASE_CHECKS } from '@nexus/factory-domain/quality/holds/rules'
 
 /**
@@ -56,9 +57,19 @@ export const holdView = output({
   closedById: id().nullable(),
   closeNote: z.string().nullable(),
   note: z.string().nullable(),
+  /** B-W2b-114 (QHS-077): the hold board's lane. */
+  nextStep: z.enum(HOLD_NEXT_STEPS),
+  /** B-W2b-114 (QHS-075): the hold by genealogy it is part of, with the suspect record it started from. */
+  group: output({ id: id(), sourceType: z.string(), sourceId: id(), sourceCode: z.string().nullable() }).nullable(),
   version: z.number().int(),
   createdAt: instant(),
   updatedAt: instant(),
+})
+
+/** B-W2b-114 (QHS-078): where held stock lies now and the site's quarantine places (a stock hold while ACTIVE). */
+export const heldStockView = output({
+  places: z.array(output({ id: id(), code: z.string(), name: z.string() })),
+  lying: z.array(output({ locationId: id(), code: z.string(), name: z.string(), kind: z.string(), onHand: z.string(), uom: z.string(), moves: z.boolean() })),
 })
 
 const check = output({ key: z.enum(RELEASE_CHECKS), ok: z.boolean(), words: z.string() })
@@ -76,6 +87,10 @@ export const listContract = defineContract({
     quarantine: quarantine.optional(),
     /** B-W2b-17: a hold's number or part of it. */
     q: z.string().trim().max(40).optional(),
+    /** B-W2b-114: one lane of the hold board. */
+    nextStep: z.enum(HOLD_NEXT_STEPS).optional(),
+    /** B-W2b-114: the holds of one hold by genealogy. */
+    groupId: id().optional(),
   }),
   response: { 200: output({ holds: z.array(holdView), truncated: z.boolean() }) },
 })
@@ -100,6 +115,8 @@ export const getContract = defineContract({
       /** What must be true to release it, for the caller (the GateExplainer; STATEMENT is signed in the release). */
       release: output({ checks: z.array(check), releasable: z.boolean(), mayRelease: z.boolean(), /** B-W2b-17: the company's rule lets the placer release. */ placerMayRelease: z.boolean() }),
       canChange: z.boolean(),
+      /** B-W2b-114 (QHS-078): a stock hold's stock by place and the quarantine places (null: not stock, or not active). */
+      stock: heldStockView.nullable(),
     }),
   },
 })

@@ -10,6 +10,10 @@ import type { Hold, HoldDetail } from './api'
 import { CLOSED, COUNTS, DETAIL_CR_VI, DETAIL_MAKER, DETAIL_PLACER, DETAIL_PLACER_MAY, DETAIL_READY, SETTINGS_COMPANY, SETTINGS_DEFAULT, SETTINGS_READ_ONLY, DETAIL_RELEASED, DETAIL_STATEMENT, detailOf, HOLDS, PEOPLE, PREVIEW, PREVIEW_PROBLEMS, PREVIEW_WORK_ORDER, QUARANTINE_PLACE, REASONS, REASON_WORDS, RELEASED } from './demo/fixtures'
 import { placeDraftOf, RELEASE_DRAFT, settingsDraftOf, type HoldsDialog, type HoldSettingsDraft, type HoldsListModel, type PlaceDraft, type PlaceModel, type RecordTab, type ReleaseDraft, type View } from './model'
 import { PlaceHoldDialog } from './place/view/PlaceHoldDialog'
+import { AFFECTED, AFFECTED_PARCELS, AFFECTED_READ_ONLY, BOARD_HOLDS, GENEALOGY, GENEALOGY_EXTEND, GENEALOGY_NOTHING, GENEALOGY_NO_PLACE, GENEALOGY_OTHER_SITE, IN_GROUP } from './demo/fixtures'
+import type { ListMode } from '../../../list-frame/w2b/model'
+import type { Genealogy } from './depth/api'
+import { firstTicks, GENEALOGY_DRAFT, type GenealogyDraft, type GenealogyModel, type HoldsDepthModel, type QuarantineDraft, type QuarantineModel } from './depth/model'
 import { HoldsView } from './view/HoldsView'
 
 /**
@@ -56,6 +60,45 @@ const rowsOf = (view: View): Hold[] => {
   }
 }
 
+/** B-W2b-114: the depth part of a case (the board mode, the dialogs, the Affected read). */
+const depthOf = (role: RoleCase, over: Partial<HoldsDepthModel> = {}): HoldsDepthModel => ({
+  mode: 'table',
+  canTransfer: (ROLE_PERMISSIONS[role] as readonly string[]).includes('inventory.transfer'),
+  genealogy: null,
+  affected: null,
+  quarantine: null,
+  ...over,
+})
+
+const genealogyModel = (read: Genealogy | null, over: Partial<GenealogyModel> = {}): GenealogyModel => ({
+  open: true,
+  start: read ? { type: read.start.type, id: read.start.id, code: read.start.code } : null,
+  holdId: read?.extending?.holdId ?? null,
+  read: read ? ready(read) : null,
+  selected: read ? firstTicks(read) : [],
+  affectedOnly: false,
+  draft: GENEALOGY_DRAFT,
+  reasons: ready(REASONS),
+  people: read ? ready(PEOPLE) : null,
+  today: '2026-10-29',
+  find: { state: 'idle' },
+  busy: false,
+  problem: null,
+  held: null,
+  ...over,
+})
+
+const quarantineModel = (kind: 'ask' | 'confirm', hold: Hold, over: Partial<QuarantineModel> = {}): QuarantineModel => ({
+  dialog: { kind, holdId: hold.id },
+  hold,
+  detail: ready(detailFor(hold.id)),
+  draft: { locationId: QUARANTINE_PLACE.id, code: '' },
+  canTransfer: true,
+  busy: false,
+  problem: null,
+  ...over,
+})
+
 const list = (over: Partial<HoldsListModel> = {}, role: RoleCase = 'owner'): DesignModel => ({
   role,
   model: {
@@ -78,6 +121,7 @@ const list = (over: Partial<HoldsListModel> = {}, role: RoleCase = 'owner'): Des
     updates: 0,
     selected: [],
     details: {},
+    depth: depthOf(role),
     ...over,
   },
 })
@@ -115,6 +159,17 @@ function HoldsDesign({ model: design }: { model: DesignModel }) {
   const [place, setPlace] = useState<PlaceModel | null>(design.place ?? null)
   const [settingsDraft, setSettingsDraft] = useState<HoldSettingsDraft | null>(design.model.settingsDraft ?? null)
   const [q, setQ] = useState(design.model.q ?? '')
+  // B-W2b-114: the board mode, its moves, the hold by genealogy's ticks and fields, the quarantine dialog — real in the browser.
+  const [mode, setMode] = useState<ListMode>(design.model.depth?.mode ?? 'table')
+  const [steps, setSteps] = useState<Record<string, Hold['nextStep']>>({})
+  const [genealogy, setGenealogy] = useState<GenealogyModel | null>(design.model.depth?.genealogy ?? null)
+  const [quarantine, setQuarantine] = useState<QuarantineModel | null>(design.model.depth?.quarantine ?? null)
+  useEffect(() => {
+    setMode(design.model.depth?.mode ?? 'table')
+    setSteps({})
+    setGenealogy(design.model.depth?.genealogy ?? null)
+    setQuarantine(design.model.depth?.quarantine ?? null)
+  }, [design])
   useEffect(() => {
     setSettingsDraft(design.model.settingsDraft ?? (design.model.settings?.value ? settingsDraftOf(design.model.settings.value.settings) : null))
     setQ(design.model.q ?? '')
@@ -140,7 +195,17 @@ function HoldsDesign({ model: design }: { model: DesignModel }) {
     settingsDraft: settingsDraft ?? (settingsRead?.value ? settingsDraftOf(settingsRead.value.settings) : null),
     settings: settingsRead,
     q,
-    rows: q === (design.model.q ?? '') ? (design.model.rows.value && changedView ? ready(rowsOf(view)) : design.model.rows) : ready((rowsOf(view)).filter((row) => (row.number ?? '').toLowerCase().includes(q.trim().toLowerCase()))),
+    rows: (() => {
+      const read = q === (design.model.q ?? '') ? (design.model.rows.value && changedView ? ready(rowsOf(view)) : design.model.rows) : ready(rowsOf(view).filter((row) => (row.number ?? '').toLowerCase().includes(q.trim().toLowerCase())))
+      return read.value ? ready(read.value.map((row) => (steps[row.id] ? { ...row, nextStep: steps[row.id]! } : row))) : read
+    })(),
+    depth: {
+      ...(design.model.depth ?? depthOf(design.role)),
+      mode,
+      genealogy,
+      quarantine,
+      affected: open?.tab === 'affected' ? (design.model.depth?.affected ?? ready(AFFECTED)) : null,
+    },
   }
   const hold = open?.detail.value?.hold ?? null
   return inShell(
@@ -166,6 +231,27 @@ function HoldsDesign({ model: design }: { model: DesignModel }) {
           onAssignTo: setAssignTo,
           onSearch: setQ,
           onSettingsDraft: setSettingsDraft,
+          onMode: setMode,
+          onNextStep: async (row: Hold, step: Hold['nextStep']) => {
+            setSteps((now) => ({ ...now, [row.id]: step }))
+            return true
+          },
+          onGenealogy: (start, holdId) => setGenealogy(genealogyModel(start ? (holdId ? GENEALOGY_EXTEND : GENEALOGY) : null)),
+          onQuarantine: (dialog) => {
+            const row = ALL.find((entry) => entry.id === dialog.holdId) ?? HOLDS[0]!
+            setQuarantine(quarantineModel(dialog.kind, row, { canTransfer: design.model.depth?.canTransfer ?? true }))
+          },
+          genealogy: {
+            onDraft: (draft: GenealogyDraft) => setGenealogy((now) => (now ? { ...now, draft } : now)),
+            onSelect: (ids: readonly string[]) => setGenealogy((now) => (now ? { ...now, selected: [...ids] } : now)),
+            onAffectedOnly: (on: boolean) => setGenealogy((now) => (now ? { ...now, affectedOnly: on } : now)),
+            onFind: () => setGenealogy((now) => (now ? genealogyModel(GENEALOGY, { draft: now.draft }) : now)),
+            onClose: () => setGenealogy(null),
+          },
+          quarantine: {
+            onDraft: (draft: QuarantineDraft) => setQuarantine((now) => (now ? { ...now, draft } : now)),
+            onClose: () => setQuarantine(null),
+          },
         },
       }),
       place ? createElement(PlaceHoldDialog, { model: place, onDraft: (draft: PlaceDraft) => setPlace({ ...place, draft, preview: draft.ids.length + draft.codes.length > 0 ? place.preview ?? ready(PREVIEW) : null }), onClose: () => setPlace(null) }) : null,
@@ -252,5 +338,41 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'error', label: "The API didn't answer (never an empty list; tiles say they could not count)", model: list({ rows: failedRead('problem.unavailable'), counts: unknownCounts, asOf: null, live: 'offline' }) },
     { id: 'empty', label: 'Nothing on hold', model: list({ rows: ready([]), counts: ready({ open: 0, overdue: 0, system: 0, mine: 0, waitingQuarantine: 0 }) }) },
     { id: 'filtered-empty', label: 'A view with nothing in it', model: list({ view: 'overdue', rows: ready([]) }) },
+    // ---- B-W2b-114: holds in depth (QHS-075 hold by genealogy, QHS-077 the hold board, QHS-078 the quarantine move) ----
+    { id: 'w2b-board', label: 'W2b Board: open holds by next step (lanes with counts and the oldest age; drop on Released opens the release)', model: list({ rows: ready(BOARD_HOLDS), depth: depthOf('owner', { mode: 'board' }) }), note: 'Drag, or Space to pick, arrows, Space to drop. A drop on Released never releases: it opens the release dialog.' },
+    { id: 'w2b-board-warehouse', label: 'W2b Board, warehouse: reads the lanes, every drop held with the reason', model: list({ rows: ready(BOARD_HOLDS), depth: depthOf('warehouse', { mode: 'board' }) }, 'warehouse') },
+    { id: 'w2b-board-loading', label: 'W2b Board loading', model: list({ rows: reading(), counts: reading(), asOf: null, live: 'connecting', depth: depthOf('owner', { mode: 'board' }) }) },
+    { id: 'w2b-board-error', label: 'W2b Board: the holds could not be read (never an empty board)', model: list({ rows: failedRead('problem.unavailable'), counts: unknownCounts, depth: depthOf('owner', { mode: 'board' }) }) },
+    { id: 'w2b-board-empty', label: 'W2b Board: nothing on hold', model: list({ rows: ready([]), counts: ready({ open: 0, overdue: 0, system: 0, mine: 0, waitingQuarantine: 0 }), depth: depthOf('owner', { mode: 'board' }) }) },
+    { id: 'w2b-board-offline', label: 'W2b Board offline: the last copy with its time', model: list({ rows: ready(BOARD_HOLDS), live: 'offline', depth: depthOf('owner', { mode: 'board' }) }) },
+    { id: 'w2b-genealogy-start', label: 'W2b Hold by genealogy: scan or type the suspect lot (t)', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(null) }) }) },
+    { id: 'w2b-genealogy-not-found', label: 'W2b Hold by genealogy: the code names no lot or hide', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(null, { draft: { ...GENEALOGY_DRAFT, code: 'DEMO-LOT-9999' }, find: { state: 'none' } }) }) }) },
+    { id: 'w2b-genealogy-reading', label: 'W2b Hold by genealogy: reading the tree', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(GENEALOGY, { read: reading() }) }) }) },
+    { id: 'w2b-genealogy-tree', label: 'W2b Hold by genealogy: the tree with every holdable branch ticked, the summary, the shipped branch offering the PPE register', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(GENEALOGY) }) }), note: 'Untick a branch with Space; a held node says why. The action names what it holds.' },
+    { id: 'w2b-genealogy-ready', label: 'W2b Hold by genealogy: reason, owner and release date given — "Hold 1 lot, 1 hide, 2 work orders, …" ready', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(GENEALOGY, { draft: { ...GENEALOGY_DRAFT, reasonCode: 'SUPPLIER_CHECK', reasonNote: 'The demo tannery warned of a dye batch', ownerId: ME, expectedReleaseOn: '2026-11-05' } }) }) }) },
+    { id: 'w2b-genealogy-affected-only', label: 'W2b Hold by genealogy: only the branches that reached a customer', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(GENEALOGY, { affectedOnly: true }) }) }) },
+    { id: 'w2b-genealogy-other-site', label: 'W2b Hold by genealogy: a site you do not hold at, records you may not see counted', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(GENEALOGY_OTHER_SITE) }) }) },
+    { id: 'w2b-genealogy-no-place', label: 'W2b Hold by genealogy: the site has no quarantine place (the move is not asked, said before the click)', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(GENEALOGY_NO_PLACE, { draft: { ...GENEALOGY_DRAFT, reasonCode: 'QUALITY_CHECK' } }) }) }) },
+    { id: 'w2b-genealogy-nothing', label: 'W2b Hold by genealogy: nothing made from it yet (only the lot itself)', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(GENEALOGY_NOTHING) }) }) },
+    { id: 'w2b-genealogy-refused', label: 'W2b Hold by genealogy refused: a ticked record changed meanwhile (Read the trace again)', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(GENEALOGY, { problem: 'genealogy.refusedPicks', lines: ['Shipment DEMO-SH-0031 has left: what has left is the PPE register\'s (a recall), not a hold\'s.'] }) }) }) },
+    { id: 'w2b-genealogy-error', label: 'W2b Hold by genealogy: the tree could not be read', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(GENEALOGY, { read: failedRead('problem.unavailable') }) }) }) },
+    { id: 'w2b-genealogy-extend', label: 'W2b Extend by genealogy: from a hold of the group, what you hold joins it', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(GENEALOGY_EXTEND) }) }) },
+    { id: 'w2b-genealogy-busy', label: 'W2b Hold by genealogy: placing (held while it works)', model: list({ depth: depthOf('owner', { genealogy: genealogyModel(GENEALOGY, { busy: true, draft: { ...GENEALOGY_DRAFT, reasonCode: 'QUALITY_CHECK' } }) }) }) },
+    { id: 'w2b-genealogy-no-right', label: 'W2b Warehouse: holding by genealogy held with the reason', model: list({ depth: depthOf('warehouse', { genealogy: genealogyModel(GENEALOGY, { held: 'held.noPlace' }) }) }, 'warehouse') },
+    { id: 'w2b-genealogy-placed', label: 'W2b A receipt: held by genealogy, 4 holds placed (the first opens on Affected)', model: list({ notice: { key: 'genealogy.placed', params: { count: 4, code: 'DEMO-LOT-0231' }, tone: 'success' } }) },
+    { id: 'w2b-affected', label: 'W2b Hold › Affected: what it touches by state, its group, Extend hold', model: list(openOn(detailOf(IN_GROUP), 'affected')) },
+    { id: 'w2b-affected-loading', label: 'W2b Hold › Affected: reading', model: list({ ...openOn(detailOf(IN_GROUP), 'affected'), depth: depthOf('owner', { affected: reading() }) }) },
+    { id: 'w2b-affected-error', label: 'W2b Hold › Affected: could not be read (Try again)', model: list({ ...openOn(detailOf(IN_GROUP), 'affected'), depth: depthOf('owner', { affected: failedRead('problem.unavailable') }) }) },
+    { id: 'w2b-affected-read-only', label: 'W2b Hold › Affected, read-only: Extend held with the reason', model: list({ ...openOn(detailOf(IN_GROUP), 'affected'), depth: depthOf('readOnly', { affected: ready(AFFECTED_READ_ONLY) }) }, 'readOnly') },
+    { id: 'w2b-affected-parcels', label: 'W2b Hold › Affected of parcels: not traced yet, said', model: list({ ...openOn(detailOf(HOLDS[5]!), 'affected'), depth: depthOf('owner', { affected: ready(AFFECTED_PARCELS) }) }) },
+    { id: 'w2b-detail-quarantine', label: 'W2b Hold tab: the group it is part of, where the held stock lies, Confirm the move', model: list(openOn(detailOf(IN_GROUP))) },
+    { id: 'w2b-quarantine-ask', label: 'W2b Ask the move to quarantine (a place of the site)', model: list({ depth: depthOf('owner', { quarantine: quarantineModel('ask', HOLDS[6]!) }) }) },
+    { id: 'w2b-quarantine-confirm', label: 'W2b Confirm the move with the place code (where the stock lies, what moves, what stays)', model: list({ depth: depthOf('owner', { quarantine: quarantineModel('confirm', HOLDS[0]!) }) }) },
+    { id: 'w2b-quarantine-confirm-ready', label: 'W2b Confirm the move: the place scanned, ready', model: list({ depth: depthOf('owner', { quarantine: quarantineModel('confirm', HOLDS[0]!, { draft: { locationId: QUARANTINE_PLACE.id, code: 'demo q 01' } }) }) }) },
+    { id: 'w2b-quarantine-confirm-wrong', label: 'W2b Confirm the move: a code that is not a quarantine place (held with the reason)', model: list({ depth: depthOf('owner', { quarantine: quarantineModel('confirm', HOLDS[0]!, { draft: { locationId: QUARANTINE_PLACE.id, code: 'DEMO-A1-RACK-03' } }) }) }) },
+    { id: 'w2b-quarantine-confirm-refused', label: 'W2b Confirm refused by the API (its words under ours)', model: list({ depth: depthOf('owner', { quarantine: quarantineModel('confirm', HOLDS[0]!, { draft: { locationId: QUARANTINE_PLACE.id, code: 'DEMO-Q-01' }, problem: 'qmove.refused', lines: ['The move to quarantine is confirmed already.'] }) }) }) },
+    { id: 'w2b-quarantine-no-transfer', label: 'W2b Read-only: confirming held (it moves stock: inventory.transfer)', model: list({ depth: depthOf('readOnly', { quarantine: quarantineModel('confirm', HOLDS[0]!, { canTransfer: false }) }) }, 'readOnly') },
+    { id: 'w2b-quarantine-reading', label: 'W2b Confirm the move: reading the hold', model: list({ depth: depthOf('owner', { quarantine: quarantineModel('confirm', HOLDS[0]!, { detail: reading() }) }) }) },
+    { id: 'w2b-quarantine-confirmed', label: 'W2b A receipt: the goods lie in quarantine; stock at the outside workshop stays', model: list({ notice: { key: 'qmove.confirmedStays', params: { number: 'DEMO-HLD-0091', code: 'DEMO-Q-01', count: 1, stays: 'DEMO-TERZ-P2' }, tone: 'warning' } }) },
   ],
 })
