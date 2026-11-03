@@ -227,7 +227,8 @@ export async function lotsOfWorkOrder(db: Reader, workOrderId: string): Promise<
 export async function fourEyesRows(db: Reader, tenantId: string, companyId: string | null) {
   const rows = await db.qualitySettings.findMany({
     where: { id: { in: companyId === null ? [tenantId] : [companyId, tenantId] } },
-    select: { id: true, companyId: true, releaseFourEyes: true, secondPersonPartyIds: true, crViEvidenceRule: true, version: true, updatedAt: true },
+    // B-W2b-118: fourEyesConditions (when a second person is needed beside ALWAYS), read as the release trigger reads it.
+    select: { id: true, companyId: true, releaseFourEyes: true, secondPersonPartyIds: true, fourEyesConditions: true, crViEvidenceRule: true, version: true, updatedAt: true },
   })
   return { company: companyId === null ? null : (rows.find((row) => row.id === companyId) ?? null), tenant: rows.find((row) => row.id === tenantId) ?? null }
 }

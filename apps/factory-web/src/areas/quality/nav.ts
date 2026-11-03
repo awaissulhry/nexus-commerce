@@ -1,4 +1,4 @@
-import { ClipboardCheck, FileWarning, Hand, ListTree, MessageSquareWarning } from 'lucide-react'
+import { ClipboardCheck, FileWarning, Hand, ListTree, MessageSquareWarning, Scale } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -43,7 +43,11 @@ export const officeArea: OfficeAreaNav = {
         // B-W2a-67 SCR-079: Settings › Defects & dispositions (the defect library and the disposition codes).
         id: 'quality-settings',
         label: 'shell:nav.quality.settings',
-        items: [{ id: 'quality-defects', label: 'shell:nav.quality.defects', href: '/quality/defects', icon: ListTree, permission: 'quality.defects.view' }],
+        items: [
+          { id: 'quality-defects', label: 'shell:nav.quality.defects', href: '/quality/defects', icon: ListTree, permission: 'quality.defects.view' },
+          // B-W2b-118 SCR-260: Settings › Quality rules (who may sign what, alerts and escalation, result rules; quality.rules.view).
+          { id: 'quality-rules', label: 'shell:nav.quality.rules', href: '/quality/settings', icon: Scale, permission: 'quality.rules.view' },
+        ],
       },
     ],
   },

@@ -70,6 +70,8 @@ import { events as qualityInprocess } from '../quality-inprocess/events'
 import { events as inventoryRolls } from '../inventory-rolls/events'
 // B-W2b-108: corrective actions, CAPA and 8D (opened, changed, stages, sources, actions, reminders, escalation, the 8D report).
 import { events as qualityCapa } from '../quality-capa/events'
+// B-W2b-118: quality rules (who may sign what and the result rules changed, alert rules changed, an alert rule fired).
+import { events as qualityRules } from '../quality-rules/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -206,7 +208,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-107
   ...inventoryRolls,
   // B-W2b-108
-  ...qualityCapa] as const satisfies readonly EventDefinition[]
+  ...qualityCapa,
+  // B-W2b-118
+  ...qualityRules] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

@@ -38,6 +38,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Nonconformance: '/quality/ncr/[id]',
   // Quality › Complaints (SCR-113 W2a part, B-W2a-65): a complaint's record (a new one is triaged from the list's DetailModal).
   Complaint: '/quality/complaints/[id]',
+  // B-W2b-118: a quality alert rule (a test of it rings the bell) opens on Quality rules in its dialog.
+  QualityAlertRule: '/quality/settings?rule=[id]',
   // Warehouse › Lots & traceability (SCR-201): a lot's stock, trace and moves; its tests, documents and release stay in
   // Compliance › Tests & substances (SCR-054), which the lot record links.
   Lot: '/warehouse/lots/[id]',
