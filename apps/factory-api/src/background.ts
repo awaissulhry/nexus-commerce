@@ -76,6 +76,8 @@ import { firstLoadCatchUpCron, writeStepsAll } from './platform/imports/guided/c
 import { costCatchUpCron } from './modules/costing/actual/catch-up'
 // B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
 import { loadReports } from './modules/insights/reports/registry'
+// B-W2b-120: the safety calendar's sources, so the worker can export the calendar (platform/exports/sources/safety-calendar.ts).
+import { loadSources as loadCalendarSources } from './modules/safety/calendar/registry'
 // B-W2b-41: stuck bundles told once per wait; the scan-pattern checks (only at sites whose checks are ON).
 import { scanFindingsCron, stuckBundlesCron } from './modules/production/bundles/jobs'
 // B-W2b-40: a clock-out pauses the person's running work (MES-117).
@@ -86,6 +88,8 @@ import { inspectionTriggerHandlers } from './modules/quality/triggers/handler'
 import { escalationCron } from './modules/plant/requests/escalation'
 // B-W2b-108: CAPA actions reminded before their due day and escalated when overdue (tasks).
 import { capaRemindersCron } from './modules/quality/capa/reminders'
+// B-W2b-124: the reminders of statutory machine checks whose window opened.
+import { checkRemindersCron } from './modules/plant/statutory/reminders'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -139,6 +143,8 @@ const W2B_43_HANDLERS: readonly EventHandler[] = earningsHandlers()
 const W2B_101_HANDLERS: readonly EventHandler[] = inspectionTriggerHandlers()
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
+// B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
+await loadCalendarSources(fileURLToPath(new URL('.', import.meta.url)))
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {
@@ -242,6 +248,8 @@ if (mode === 'worker') {
   crons.push(escalationCron({ database, log }))
   // B-W2b-108: every 15 minutes, open CAPA actions are reminded (3 days before and on their day) and overdue ones escalate (QHS-096).
   crons.push(capaRemindersCron({ database, log }))
+  // B-W2b-124: hourly, the statutory checks whose reminder window opened, once per due date (QHS-205).
+  crons.push(checkRemindersCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

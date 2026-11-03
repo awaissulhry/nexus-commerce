@@ -128,3 +128,46 @@ export async function sampleFactsOf(db: Reader, row: Pick<IncomingRow, 'id' | 'p
   const computed = computedOf({ found, sampleSize: row.sampleSize, acceptMajor: row.acceptMajor, acceptMinor: row.acceptMinor, failedCritical: now.failedCritical })
   return { results, marks, defects, classes, found, tally, checkRows, checks, answers, now, computed }
 }
+
+// ---- B-W2b-111: rolls (4-point) and components ---------------------------------------------------------------------------
+
+export const ROLL_COLUMNS = {
+  id: true,
+  rollRef: true,
+  recordType: true,
+  recordId: true,
+  onePoint: true,
+  twoPoint: true,
+  threePoint: true,
+  fourPoint: true,
+  widthCm: true,
+  lengthM: true,
+  pointsPer100SqYd: true,
+  decision: true,
+  note: true,
+  version: true,
+  createdAt: true,
+} as const satisfies Prisma.IncomingRollResultSelect
+export type RollRow = Prisma.IncomingRollResultGetPayload<{ select: typeof ROLL_COLUMNS }>
+
+export const readRolls = (db: Pick<Reader, 'incomingRollResult'>, inspectionId: string): Promise<RollRow[]> =>
+  db.incomingRollResult.findMany({ where: { incomingInspectionId: inspectionId }, select: ROLL_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+
+export const COMPONENT_COLUMNS = {
+  id: true,
+  seq: true,
+  kind: true,
+  marking: true,
+  protectorType: true,
+  size: true,
+  certificateId: true,
+  checkedQuantity: true,
+  defectiveQuantity: true,
+  decision: true,
+  note: true,
+  version: true,
+} as const satisfies Prisma.IncomingComponentResultSelect
+export type ComponentRow = Prisma.IncomingComponentResultGetPayload<{ select: typeof COMPONENT_COLUMNS }>
+
+export const readComponents = (db: Pick<Reader, 'incomingComponentResult'>, inspectionId: string): Promise<ComponentRow[]> =>
+  db.incomingComponentResult.findMany({ where: { incomingInspectionId: inspectionId }, select: COMPONENT_COLUMNS, orderBy: [{ seq: 'asc' }, { id: 'asc' }] })

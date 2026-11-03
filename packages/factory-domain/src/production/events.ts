@@ -21,6 +21,8 @@ import { TIMING_KINDS } from './terminal/rules'
 import { CHECKLIST_OUTCOMES } from './checklists/rules'
 import { EXTRA_REASON_CODES } from './extraops/rules'
 import { ON_BEHALF_REASON_CODES } from './onbehalf/rules'
+// B-W2b-103: leather cutting rules.
+import { CUT_OVERRIDE_REASON_CODES, CUT_WARNING_KINDS } from './cutting/checks'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -85,6 +87,10 @@ import { ON_BEHALF_REASON_CODES } from './onbehalf/rules'
  *                                           resumed, handed back or reported in part (pieces so far), on the floor or
  *                                           by the system at clock-out (MES-087 … MES-094, MES-117); no person, no
  *                                           station (a station can stand for one person), no minutes
+ *   production.cut_overridden               B-W2b-103: a lead let a hide be cut anyway at the cutting table (another shade
+ *                                           lot, not the hide reserved, thickness outside the spec, a grade below a
+ *                                           piece), with their PIN and a reason tile (MES-053, MES-055, MES-063,
+ *                                           MES-064); no person, no words
  */
 export const MONITORING_CHANGES = ['WIDENED', 'NARROWED', 'BASIS_RECORDED', 'BASIS_REPLACED'] as const
 
@@ -834,5 +840,21 @@ export const events = [
       reasonCode: z.enum(EXTRA_REASON_CODES),
     }),
     live: { permission: 'workorders.view', floor: 'floor.work', fields: ['workOrderId', 'number', 'recordId'] },
+  }),
+  // ---- B-W2b-103: leather cutting rules (modules/production/cutting). Ids, the warning kinds and the reason tile's code only.
+  defineEvent({
+    type: 'production.cut_overridden',
+    context: 'production',
+    description: "A lead let a hide be cut anyway at the cutting table although its checks warned (another shade lot, not the hide reserved, thickness outside the leather's spec, a grade below a pattern piece's minimum), with their PIN and a reason; the cut was logged.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      cutLogId: z.uuid(),
+      hideId: z.uuid(),
+      lotId: z.uuid(),
+      overrides: z.array(z.enum(CUT_WARNING_KINDS)).min(1),
+      reasonCode: z.enum(CUT_OVERRIDE_REASON_CODES),
+    }),
+    live: { permission: 'production.cutting.view', floor: 'production.cut.override', fields: ['workOrderId', 'number', 'hideId', 'cutLogId'] },
   }),
 ] as const

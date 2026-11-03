@@ -172,8 +172,9 @@ describe('Plant settings: the calls and the place', () => {
   })
 
   it('a Settings group in the Plant area asks plant.view; the page is built; sales sees no Plant', () => {
-    expect(officeArea.area.sections?.map((section) => section.id)).toEqual(['plant-maintenance', 'plant-settings'])
-    expect(officeArea.area.sections?.[1]?.items.map((item) => [item.href, item.permission])).toEqual([['/plant/settings', 'plant.view']])
+    // B-W2b-120: Health & safety (the Safety calendar) sits between Maintenance and Settings.
+    expect(officeArea.area.sections?.map((section) => section.id)).toEqual(['plant-maintenance', 'plant-safety', 'plant-settings'])
+    expect(officeArea.area.sections?.find((section) => section.id === 'plant-settings')?.items.map((item) => [item.href, item.permission])).toEqual([['/plant/settings', 'plant.view']])
     expect(OFFICE_PAGES.has('/plant/settings')).toBe(true)
     const supervisor = officeNavFor(permissionCheck(templateOf('floor_supervisor')!.permissions))
     expect(supervisor.areas.find((area) => area.id === 'plant')?.sections?.some((section) => section.id === 'plant-settings')).toBe(true)

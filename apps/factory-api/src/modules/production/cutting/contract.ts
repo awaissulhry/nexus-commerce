@@ -4,6 +4,10 @@ import { HIDE_STATES } from '@nexus/factory-domain/inventory/issue/rules'
 import { CUT_REFUSALS } from '@nexus/factory-domain/production/cutting/rules'
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
 import { moveView } from '../../inventory/ledger/contract'
+// B-W2b-103: the table's leather checks, "Cut anyway", the hide's photo.
+import { SHADE_RULES } from '@nexus/factory-domain/inventory/reservations/shade'
+import { CUT_OVERRIDE_REASON_CODES, CUT_WARNING_CODES, CUT_WARNING_KINDS, WRONG_HIDE_DIFFERENCES } from '@nexus/factory-domain/production/cutting/checks'
+import { fileView, presignedView } from '../../../platform/files/contract'
 
 /**
  * The cutting log per hide (B-W1-40; MES-051, MES-056, MES-058, SCM-194, SCM-253; A2 SCR-094, SCR-071). Areas are
@@ -47,6 +51,56 @@ const entry = output({
   deviceTime: instant().nullable(),
   serverTime: instant(),
   pieces: z.array(piece),
+  /** B-W2b-103 (MES-060): the photo of the hide on the table before the cut (a file of the hide). */
+  photoFileId: id().nullable(),
+  /** B-W2b-103 (MES-064): the thickness measured at the table, mm ("1.25"). */
+  measuredThicknessMm: z.string().nullable(),
+  /** B-W2b-103: the warnings a lead let through with "Cut anyway" (none: nothing stood). */
+  overrides: z.array(z.enum(CUT_WARNING_KINDS)),
+  /** The lead's reason in words (the tile, and the note). */
+  overrideReason: z.string().nullable(),
+})
+
+// ---- B-W2b-103: the table's checks (factory-domain production/cutting/checks) -------------------------------------------------------
+
+const warningKind = z.enum(CUT_WARNING_KINDS)
+const shadeLot = output({ lotCode: z.string(), shadeLabel: z.string().nullable() })
+const thicknessSource = z.enum(['TABLE', 'HIDE'])
+
+/** One warning of the hide check: its kind, finer code, words (English) and the facts the floor words in its own language. */
+const warning = output({
+  kind: warningKind,
+  code: z.enum(CUT_WARNING_CODES),
+  message: z.string(),
+  shade: output({ rule: z.enum(SHADE_RULES), cutFrom: z.array(shadeLot), hide: shadeLot.extend({ outOfShade: z.boolean() }), cell: z.string().nullable() }).optional(),
+  wrongHide: output({
+    reservedHides: z.array(output({ code: z.string(), lotCode: z.string(), grade: z.string().nullable() })),
+    reservedLots: z.array(z.string()),
+    differs: z.array(z.enum(WRONG_HIDE_DIFFERENCES)),
+    hide: output({ lotCode: z.string(), grade: z.string().nullable() }),
+  }).optional(),
+  thickness: output({ valueMm: z.string(), source: thicknessSource, minMm: z.string().nullable(), maxMm: z.string().nullable() }).optional(),
+  grade: output({ hideGrade: z.string().nullable(), pieces: z.array(output({ name: z.string(), minGrade: z.string() })) }).optional(),
+})
+
+/** The hide check of a work order (design floor.hidecut "Check the hide"): what stands, what a lead passed, the card's facts. */
+const checks = output({
+  /** Every warning of the hide for the work order (the grade: over every piece of its leather in the work order). */
+  warnings: z.array(warning),
+  /** The kinds no lead passed yet for this hide and work order: "Cut anyway" signs for these. Empty: straight to the sizes. */
+  standing: z.array(warningKind),
+  /** The kinds a lead already passed for this hide and work order (an earlier live entry). */
+  passed: z.array(warningKind),
+  /** Shade: the site's rule, the shade lots the work order is cut from, the hide's; `same` null: no other hide yet. */
+  shade: output({ rule: z.enum(SHADE_RULES), cutFrom: z.array(shadeLot), hide: shadeLot.extend({ outOfShade: z.boolean() }), same: z.boolean().nullable() }),
+  /** Thickness against the leather's range: OK, THIN, THICK, UNKNOWN (none recorded) or NO_SPEC (no range). */
+  thickness: output({ verdict: z.enum(['OK', 'THIN', 'THICK', 'UNKNOWN', 'NO_SPEC']), valueMm: z.string().nullable(), source: thicknessSource.nullable(), minMm: z.string().nullable(), maxMm: z.string().nullable() }),
+  /** The hide's grade (record, else its text: `byText`) and the pattern pieces of its leather with their minimum and verdict. */
+  grade: output({ hide: z.string().nullable(), byText: z.boolean(), pieces: z.array(output({ name: z.string(), minGrade: z.string().nullable(), verdict: z.enum(['OK', 'BELOW', 'UNKNOWN']) })) }),
+  /** The work order's own leather reservations still waiting (hides by name, lots), and whether this hide is reserved for it. */
+  reserved: output({ forIt: z.boolean(), hides: z.array(z.string()), lots: z.array(z.string()) }),
+  /** The photo before cutting (MES-060): asked by the site (no setting yet: false, optional everywhere). */
+  photo: output({ required: z.boolean() }),
 })
 
 const cellAfter = output({ workOrderSizeId: id(), colourwayCode: z.string(), size: z.string(), quantity: z.number().int(), cut: z.number().int(), toCut: z.number().int() })
@@ -181,6 +235,8 @@ export const scanHideContract = defineContract({
           cuttable: z.boolean(),
           refusal: refusal.nullable(),
           cells: z.array(output({ id: id(), colourwayCode: z.string(), size: z.string(), quantity: z.number().int(), parts: z.array(z.string()), perGarment: decimal, cut: z.number().int(), toCut: z.number().int() })),
+          /** B-W2b-103: the hide check against this work order; null when it may not be cut for it at all (`refusal`). */
+          checks: checks.nullable(),
         }),
       ),
     }),
@@ -240,10 +296,48 @@ export const cutContract = defineContract({
     /** Hide done: the remnant set aside and where it goes, or null (no remnant: the rest is used). */
     done: input({ remnant: input({ area: quantity(), uom: areaUom.optional(), toLocationId: id() }).nullable() }).optional(),
     note: z.string().trim().max(500).nullish(),
+    /** B-W2b-103 (MES-060): the photo of the hide on the table, uploaded first (POST …/hides/:hideId/photos). */
+    photoFileId: id().nullish(),
+    /** B-W2b-103 (MES-064): the thickness measured at the table, in mm, above 0 and below 100, at most two decimals. */
+    measuredThicknessMm: z.string().trim().regex(/^\d{1,2}(\.\d{1,2})?$/, 'A thickness in mm, like 1.25.').nullish(),
     ...clientEvent,
   }),
   response: { 200: cutAnswer, 201: cutAnswer },
 })
+
+/** B-W2b-103: the answer of "Cut anyway": the cut's, and what the lead let through (null: nothing stood any more). */
+const anywayAnswer = cutAnswer.extend({ override: output({ overrides: z.array(warningKind), reasonCode: z.enum(CUT_OVERRIDE_REASON_CODES) }).nullable() })
+
+export const cutAnywayContract = defineContract({
+  params: workOrderParams,
+  body: input({
+    /** The cut, as the tablet sent it (the same client event id). */
+    cut: cutContract.body,
+    /** The lead: their badge, scanned, or their worker id, picked by name; and their 6-digit PIN (never stored, never logged). */
+    lead: input({ badgeCode: z.string().trim().min(1).max(64).optional(), workerId: id().optional(), pin: z.string().regex(/^\d{6}$/, 'Expected 6 digits.') }),
+    reasonCode: z.enum(CUT_OVERRIDE_REASON_CODES),
+    /** A few words; required with OTHER. */
+    note: z.string().trim().min(3).max(200).optional(),
+    /** The warnings the card showed and the lead signs for. */
+    warnings: z.array(warningKind).min(1).max(CUT_WARNING_KINDS.length),
+  }),
+  response: { 200: anywayAnswer, 201: anywayAnswer },
+})
+
+/** B-W2b-103 (MES-060): a photo of the hide on the table, announced (the presigned PUT), then confirmed. */
+export const announceHidePhotoContract = defineContract({
+  params: input({ hideId: id() }),
+  body: input({
+    originalName: z.string().min(1).max(500),
+    contentType: z.string().min(1).max(200),
+    sizeBytes: z.number().int().min(1),
+    /** SHA-256 of the content, 64 lower-case hex digits. */
+    sha256: z.string(),
+  }),
+  response: { 201: output({ file: fileView, upload: presignedView }) },
+})
+
+export const completeHidePhotoContract = defineContract({ params: input({ hideId: id(), fileId: id() }), response: { 200: output({ file: fileView }) } })
 
 export const remnantContract = defineContract({
   params: input({ workOrderId: id(), hideId: id() }),
@@ -302,6 +396,9 @@ export const cutLogContract = defineContract({
           worker: output({ id: id(), name: z.string() }).nullable(),
           /** The entry names a person and the gate keeps back who. */
           workerHidden: z.boolean(),
+          /** B-W2b-103: the lead who signed "Cut anyway", behind the same gate as the cutter (this one record). */
+          overrideLead: output({ id: id(), name: z.string() }).nullable(),
+          overrideLeadHidden: z.boolean(),
           station: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
           cells: z.array(output({ workOrderSizeId: id(), colourwayCode: z.string(), size: z.string() })),
         }),

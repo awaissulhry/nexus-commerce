@@ -7,6 +7,9 @@ import { editHold, placeHold, releaseHold } from './holds'
 import { manifest } from './manifest'
 import { getHold, holdCounts, holdPeople, listHolds, previewHold } from './reads'
 import { getHoldSettings, saveHoldSettings } from './settings'
+import { affectedContract, askQuarantineContract, confirmQuarantineContract, genealogyContract, nextStepContract, placeGenealogyContract } from './depth-contract'
+import { askQuarantine, confirmQuarantine, holdByGenealogy, moveNextStep } from './depth'
+import { readAffected, readGenealogy } from './impact'
 
 const flag = (value: 'true' | 'false' | undefined): boolean | undefined => (value === undefined ? undefined : value === 'true')
 
@@ -28,6 +31,19 @@ export default defineRoutes('quality.holds', manifest, async (app) => {
   app.put('/quality/holds/settings', { schema: saveSettingsContract }, async (request) =>
     saveHoldSettings(request, request.body, { stepUp: () => requireStepUp(officeAuthOf(app), request), idempotencyKey: idempotencyKeyFrom(request) }),
   )
+
+  // B-W2b-114: hold by genealogy (the tree a person ticks; ONE group and a hold per kind and site), before /:holdId.
+  app.get('/quality/holds/genealogy', { schema: genealogyContract }, async (request) => readGenealogy(request, request.query))
+
+  app.post('/quality/holds/genealogy', { schema: placeGenealogyContract }, async (request, reply) => reply.code(201).send(await holdByGenealogy(request, request.body, idempotencyKeyFrom(request))))
+
+  app.get('/quality/holds/:holdId/affected', { schema: affectedContract }, async (request) => readAffected(request, request.params.holdId))
+
+  app.post('/quality/holds/:holdId/next-step', { schema: nextStepContract }, async (request) => moveNextStep(request, request.params.holdId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/quality/holds/:holdId/quarantine/ask', { schema: askQuarantineContract }, async (request) => askQuarantine(request, request.params.holdId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/quality/holds/:holdId/quarantine/confirm', { schema: confirmQuarantineContract }, async (request) => confirmQuarantine(request, request.params.holdId, request.body, idempotencyKeyFrom(request)))
 
   app.get('/quality/holds/:holdId', { schema: getContract }, async (request) => getHold(request, request.params.holdId))
 

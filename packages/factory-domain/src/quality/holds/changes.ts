@@ -11,5 +11,6 @@ export type DefectLibraryChange = (typeof DEFECT_LIBRARY_CHANGES)[number]
 export const DISPOSITION_CODE_CHANGES = ['CREATED', 'EDITED', 'DEACTIVATED', 'REACTIVATED', 'STANDARD_ADDED'] as const
 export type DispositionCodeChange = (typeof DISPOSITION_CODE_CHANGES)[number]
 
-export const HOLD_CHANGED_FIELDS = ['ownerId', 'expectedReleaseOn', 'note', 'reasonNote', 'quarantine'] as const
+// B-W2b-114: the board's lane (nextStep), the quarantine place asked or confirmed, the hold by genealogy it joined (groupId).
+export const HOLD_CHANGED_FIELDS = ['ownerId', 'expectedReleaseOn', 'note', 'reasonNote', 'quarantine', 'nextStep', 'quarantineLocationId', 'groupId'] as const
 export type HoldChangedField = (typeof HOLD_CHANGED_FIELDS)[number]

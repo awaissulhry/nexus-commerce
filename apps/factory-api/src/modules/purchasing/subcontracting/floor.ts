@@ -364,6 +364,7 @@ export async function floorReceiveBack(request: FastifyRequest, orderId: string,
   return {
     order: await system.withClient((client) => kitView(client, fresh)),
     receipt: { id: answer.receipt.id, receivedAt: answer.receipt.receivedAt, ...totals, bundles: unique(answer.receipt.lines.map((line) => line.bundle?.id)).length, returned: answer.receipt.returns.length },
+    inspection: answer.inspection,
   }
 }
 

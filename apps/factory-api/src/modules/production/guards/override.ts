@@ -3,7 +3,7 @@ import { badgeCodeHash, normalizeBadgeCode } from '@nexus/factory-domain/auth/fl
 import { isPinLocked, pinLockUntil, verifyPin } from '@nexus/factory-domain/auth/floor/pin'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { can } from '@nexus/factory-domain/core/permissions'
+import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { overridePinWrong, overrideRefusal, type OverrideReasonCode } from '@nexus/factory-domain/production/guards/rules'
 import { PRODUCTION_SCAN_OVERRIDE } from '@nexus/factory-domain/production/guards/permissions'
@@ -51,37 +51,57 @@ async function countWrongPin(caller: CommandCaller, workerId: string): Promise<v
   })
 }
 
+/** A lead proved by their own PIN: who, and whether their floor roles hold the permission asked. */
+export interface ProvedLead {
+  readonly workerId: string
+  /** The lead's own floor roles hold the permission asked, at their site. */
+  readonly may: boolean
+}
+
+/**
+ * Proves a lead on the operator's tablet (B-W2b-46; B-W2b-103 reuses it for "Cut anyway"): the worker the badge or the id
+ * names, active at the device's site, unlocked, with a PIN that matches; and whether their own floor roles hold `permission`.
+ * Null for an unknown badge or worker, an inactive or locked one, a missing or wrong PIN: the same scrypt work either way (no
+ * oracle), and a wrong PIN counts on the lead (5, then locked for minutes). The caller checked that exactly one of badge and
+ * id is sent, and words its own refusal. The PIN never leaves this function.
+ */
+export async function proveLead(request: FastifyRequest, context: { readonly tenantId: string; readonly siteId: string }, lead: LeadInput, permission: Permission): Promise<ProvedLead | null> {
+  const auth = officeAuthOf(request.server)
+  const now = auth.clock.now()
+  const worker = await request.withClient(async (client) => {
+    if (lead.badgeCode !== undefined) {
+      const code = normalizeBadgeCode(lead.badgeCode)
+      if (code === null) return null
+      const badge = await client.badge.findUnique({ where: { codeHash: badgeCodeHash(code) }, select: { status: true, workerId: true } })
+      if (!badge || badge.status !== 'ACTIVE') return null
+      return client.worker.findUnique({ where: { id: badge.workerId }, select: WORKER })
+    }
+    return client.worker.findUnique({ where: { id: lead.workerId! }, select: WORKER })
+  })
+  if (!worker || worker.siteId !== context.siteId || worker.status !== 'ACTIVE' || worker.pinHash === null || isPinLocked(worker, now)) {
+    await verifyPin(lead.pin, null, auth.pins)
+    return null
+  }
+  const check = await verifyPin(lead.pin, worker.pinHash, auth.pins)
+  if (!check.ok) {
+    await countWrongPin(request, worker.id)
+    return null
+  }
+  const grants = await request.withClient((client) => floorGrantsOf(client, worker, { companyId: worker.companyId, siteId: worker.siteId }))
+  const may = can({ audience: 'floor', tenantId: context.tenantId, siteId: context.siteId, grants }, permission, { companyId: worker.companyId, siteId: worker.siteId })
+  return { workerId: worker.id, may }
+}
+
 /** Proves the team leader and their right; the override a report may carry, or a 409 refusal in words. */
 export async function verifyOverride(request: FastifyRequest, input: { readonly lead: LeadInput; readonly reasonCode: OverrideReasonCode; readonly note?: string | undefined }): Promise<VerifiedOverride> {
   const context = floorOf(request)
   if ((input.lead.badgeCode === undefined) === (input.lead.workerId === undefined)) {
     throw new ValidationError('The team leader scans their badge or picks their name, then enters their PIN.', [{ path: 'body/lead', message: 'Send a badge code or a worker id, not both.' }])
   }
-  const auth = officeAuthOf(request.server)
-  const now = auth.clock.now()
-  const worker = await request.withClient(async (client) => {
-    if (input.lead.badgeCode !== undefined) {
-      const code = normalizeBadgeCode(input.lead.badgeCode)
-      if (code === null) return null
-      const badge = await client.badge.findUnique({ where: { codeHash: badgeCodeHash(code) }, select: { status: true, workerId: true } })
-      if (!badge || badge.status !== 'ACTIVE') return null
-      return client.worker.findUnique({ where: { id: badge.workerId }, select: WORKER })
-    }
-    return client.worker.findUnique({ where: { id: input.lead.workerId! }, select: WORKER })
-  })
-  if (!worker || worker.siteId !== context.siteId || worker.status !== 'ACTIVE' || worker.pinHash === null || isPinLocked(worker, now)) {
-    await verifyPin(input.lead.pin, null, auth.pins)
-    return refuse(overridePinWrong())
-  }
-  const check = await verifyPin(input.lead.pin, worker.pinHash, auth.pins)
-  if (!check.ok) {
-    await countWrongPin(request, worker.id)
-    return refuse(overridePinWrong())
-  }
-  const grants = await request.withClient((client) => floorGrantsOf(client, worker, { companyId: worker.companyId, siteId: worker.siteId }))
-  const mayOverride = can({ audience: 'floor', tenantId: context.tenantId, siteId: context.siteId, grants }, PRODUCTION_SCAN_OVERRIDE, { companyId: worker.companyId, siteId: worker.siteId })
+  const lead = await proveLead(request, context, input.lead, PRODUCTION_SCAN_OVERRIDE)
+  if (!lead) return refuse(overridePinWrong())
   const note = input.note?.trim() || null
-  const refusal = overrideRefusal({ leadId: worker.id, operatorId: context.actorId, mayOverride, reasonCode: input.reasonCode, note })
+  const refusal = overrideRefusal({ leadId: lead.workerId, operatorId: context.actorId, mayOverride: lead.may, reasonCode: input.reasonCode, note })
   if (refusal) refuse(refusal)
-  return { leadWorkerId: worker.id, reasonCode: input.reasonCode, note }
+  return { leadWorkerId: lead.workerId, reasonCode: input.reasonCode, note }
 }
