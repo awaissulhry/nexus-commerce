@@ -73,7 +73,8 @@
     "PRODUCTION_RECEIPT": "Carico prodotto finito",
     "CUSTOMER_RETURN": "Reso da cliente",
     "SUPPLIER_RETURN": "Reso a fornitore",
-    "SHIPMENT": "Spedizione"
+    "SHIPMENT": "Spedizione",
+    "REMNANT": "Ritaglio da ordine"
   },
   "quality": {
     "QUARANTINE": "Quarantena",

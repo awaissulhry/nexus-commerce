@@ -476,6 +476,9 @@ model IncomingInspection {
   aqlProfile         AqlProfile?           @relation(fields: [tenantId, companyId, aqlProfileId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   inspectorWorker    Worker?               @relation("IncomingInspectionInspector", fields: [tenantId, siteId, inspectorWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   hideResults        IncomingHideResult[]
+  // W2b leather.prisma (wave 12/16): the marks and measures made in it, which stay with the hide.
+  hideMarks          HideMark[]
+  hideMeasures       HideMeasure[]
   rollResults        IncomingRollResult[]
   componentResults   IncomingComponentResult[]
   checkResults       InspectionCheckResult[]

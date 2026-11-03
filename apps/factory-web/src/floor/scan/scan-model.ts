@@ -19,7 +19,7 @@ import { isBadgeCode } from '../model'
  * the person instead (floor.signin "Switch person on a busy station"). Pure: the screen asks, this decides.
  */
 
-export const LABEL_TYPES = ['hide', 'bundle', 'lot', 'batch', 'serial', 'carton', 'location', 'workOrder'] as const
+export const LABEL_TYPES = ['hide', 'bundle', 'lot', 'batch', 'serial', 'carton', 'location', 'workOrder', 'roll', 'remnant'] as const
 export type LabelType = (typeof LABEL_TYPES)[number]
 
 const TYPE_OF: Readonly<Record<ScanType, LabelType>> = {
@@ -33,6 +33,9 @@ const TYPE_OF: Readonly<Record<ScanType, LabelType>> = {
   WORK_ORDER: 'workOrder',
   // A coupon is a bundle's, for one operation (CP-…).
   COUPON: 'bundle',
+  // W2b-2 (wave 12/16): a fabric roll's tag (RL-…) and a remnant's (RM-…).
+  ROLL: 'roll',
+  REMNANT: 'remnant',
 }
 
 export type ScanRead =

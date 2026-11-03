@@ -298,7 +298,9 @@
     "CARTON": "collo",
     "LOCATION": "ubicazione",
     "WORK_ORDER": "ordine di lavoro",
-    "COUPON": "tagliando del fascio"
+    "COUPON": "tagliando del fascio",
+    "ROLL": "rotolo",
+    "REMNANT": "ritaglio"
   },
   "links": {
     "language": "Lingua",

@@ -15,7 +15,8 @@ import { Dec, parseDecimal, ZERO, type Decimal, type DecimalInput } from '../../
 
 // W2a wave 5 (factory-db inventory.prisma): PRODUCTION_RECEIPT, finished garments of a work order into finished-goods stock.
 // W2b (B-W2b-01): goods back from a customer, goods back to a supplier, garments leaving with a shipment (factory-db StockMoveReason).
-export const STOCK_MOVE_REASONS = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT', 'CUSTOMER_RETURN', 'SUPPLIER_RETURN', 'SHIPMENT'] as const
+// W2b-2 (wave 12/16): an offcut back from a work order as tagged stock, RETURN's twin.
+export const STOCK_MOVE_REASONS = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT', 'CUSTOMER_RETURN', 'SUPPLIER_RETURN', 'SHIPMENT', 'REMNANT'] as const
 export type StockMoveReason = (typeof STOCK_MOVE_REASONS)[number]
 
 export const ITEM_TRACKINGS = ['NONE', 'LOT', 'HIDE', 'SERIAL'] as const
@@ -40,6 +41,8 @@ export const REASON_SIDES = Object.freeze({
   CUSTOMER_RETURN: 'IN',
   SUPPLIER_RETURN: 'OUT',
   SHIPMENT: 'OUT',
+  // W2b-2 (wave 12/16): an offcut enters, as a RETURN does.
+  REMNANT: 'IN',
 } as const satisfies Record<StockMoveReason, 'IN' | 'OUT' | 'INSIDE' | 'ONE_SIDE'>)
 
 /** The reasons that say why (SCM-192: an adjustment, a count difference, a scrap); a reversal says why too. */
@@ -128,8 +131,11 @@ export function moveProblems(move: MoveFacts): Issue[] {
   if ((move.reason === 'RECEIPT') !== Boolean(move.receiptLineId)) {
     problems.push({ path: 'receiptLineId', message: 'A RECEIPT, and only it, names its goods receipt line.' })
   }
-  if ((move.reason === 'ISSUE' || move.reason === 'RETURN') && !move.workOrderId) {
+  if ((move.reason === 'ISSUE' || move.reason === 'RETURN' || move.reason === 'REMNANT') && !move.workOrderId) {
     problems.push({ path: 'workOrderId', message: `An ${move.reason} names its work order.` })
+  }
+  if (move.reason === 'REMNANT' && !move.hideId) {
+    problems.push({ path: 'hideId', message: 'A REMNANT is an offcut of a hide: name the hide.' })
   }
   if (REASONS_WITH_NOTE.includes(move.reason) && !move.reversalOfId && !(move.note ?? '').trim()) {
     problems.push({ path: 'note', message: `An ${move.reason} says why (SCM-192).` })
@@ -144,7 +150,7 @@ export function moveProblems(move: MoveFacts): Issue[] {
 }
 
 const SIDE_RULES = {
-  IN: 'An OPENING, RECEIPT or RETURN enters one location (no location it leaves).',
+  IN: 'An OPENING, RECEIPT, RETURN or REMNANT enters one location (no location it leaves).',
   OUT: 'An ISSUE or SCRAP leaves one location (no location it enters).',
   INSIDE: 'A TRANSFER leaves one location and enters another.',
   ONE_SIDE: 'An ADJUSTMENT or COUNT enters one location or leaves one, not both.',

@@ -513,6 +513,8 @@
     "carton": "Collo",
     "location": "Ubicazione",
     "workOrder": "Ordine di lavoro",
+    "roll": "Rotolo",
+    "remnant": "Ritaglio",
     "machine": "Macchina"
   },
   "labelPlural": {
@@ -524,6 +526,8 @@
     "carton": "i colli",
     "location": "le ubicazioni",
     "workOrder": "gli ordini di lavoro",
+    "roll": "i rotoli",
+    "remnant": "i ritagli",
     "machine": "macchine"
   },
   "status": {
@@ -630,7 +634,9 @@
         "BUNDLE": "cartellino del fascio",
         "HIDE": "etichetta della pelle",
         "GARMENT_SERIAL": "seriale del capo",
-        "COUPON": "tagliando del fascio"
+        "COUPON": "tagliando del fascio",
+        "ROLL": "etichetta del rotolo",
+        "REMNANT": "etichetta del ritaglio"
       }
     },
     "refused": {

@@ -61,6 +61,8 @@ export const LABEL_ICON: Readonly<Record<LabelType, ReactNode>> = {
   carton: <Package />,
   location: <MapPin />,
   workOrder: <ScanSearch />,
+  roll: <Boxes />,
+  remnant: <Scissors />,
 }
 
 /** A card's icon: its label type's, or a machine's (B-W2a-73: a machine tag is a free code, no label type). */

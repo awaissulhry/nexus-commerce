@@ -97,7 +97,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    checks), AQL profiles (critical locked at 0) and assignments, the rules that open an inspection, incoming inspections with
    hides, rolls and components, in-process checks, results, measurements, amendments append-only; no W1 inspection or release
    function is redefined: it adds its own triggers `Inspection_plan_guard` and `OperationScan_awaits_first_piece`, and
-   redefines numbering's two floor document functions (INCOMING_INSPECTION)): triggers, partial unique indexes and deferred
+   redefines numbering's two floor document functions (INCOMING_INSPECTION)),
+   `…_leather_stock_w2b_guards` (W2b wave 12/16: leather grades and article rules, shade groups, hide marks, hide measures
+   append-only, remnants, fabric rolls, protector lots, consumables by pack, ROLL and REMNANT as scan-id kinds, the move reason
+   REMNANT as RETURN's twin; it redefines numbering's `factory_number_series_document_kind` and `factory_number_block_guard`,
+   wave 1's `factory_stock_move_check` and `factory_hide_guard`, production's `factory_cut_log_check` and wave 2's
+   `factory_work_order_cost_entry_check`, and recreates the trigger `StockMove_bound_to_work_order` with REMNANT in its WHEN): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written

@@ -389,8 +389,12 @@ model GarmentSerial {
   release       QualityRelease? @relation(fields: [tenantId, siteId, workOrderSizeId, releaseId], references: [tenantId, siteId, workOrderSizeId, id], onDelete: Restrict, onUpdate: Restrict)
   shipmentLine  ShipmentLine?   @relation(fields: [tenantId, siteId, workOrderSizeId, shipmentLineId], references: [tenantId, siteId, workOrderSizeId, id], onDelete: Restrict, onUpdate: Restrict)
   bundle        Bundle?         @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b leather.prisma (wave 12/16): the protector lots it holds.
+  protectorLots GarmentProtectorLot[]
 
   @@unique([tenantId, serial])
+  // W2b leather.prisma (wave 12/16): the target of a protector lot's reference: a serial of the row's own work order.
+  @@unique([tenantId, siteId, workOrderId, id])
   @@index([tenantId, workOrderSizeId])
   @@index([tenantId, releaseId])
   @@index([tenantId, shipmentLineId])

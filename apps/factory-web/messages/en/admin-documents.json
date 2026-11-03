@@ -251,6 +251,8 @@
       "HIDE": "Hide tag",
       "GARMENT_SERIAL": "Garment serial number",
       "COUPON": "Bundle coupon",
+      "ROLL": "Fabric roll tag",
+      "REMNANT": "Remnant tag",
       "INSPECTION": "Final inspection",
       "RELEASE": "Quality release",
       "REPAIR": "Repair order",

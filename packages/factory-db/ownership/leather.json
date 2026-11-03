@@ -1,0 +1,77 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/leather.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) keeps leather grades, an article's grade rules and shade groups, through apps/factory-api's modules/inventory/{hides,rolls} and modules/quality/defects (B-W2b-90, -94, -100, -107), always through command(); the API keeps staff to the companies and sites their grants reach (a company is a column, not a policy key: the keys are tenant, site and party). The floor (factory_floor_runtime) reads grades, rules and shade groups tenant-wide (words and numbers for the tiles at incoming and at the cutting table, no price, no person), and records hide marks, hide measures, remnants, fabric rolls and protector lots of its own site. Portal and link sessions read nothing here. Nobody deletes a row here: a grade, rule or shade group is retired, a mark or a protector lot withdrawn, a remnant voided, and a hide measure is append-only (`@append-only`, scripts/factory/check-append-only.mjs: no update or delete grant, and its triggers refuse UPDATE, DELETE and TRUNCATE for every login). No table here has a cost, price, margin or wages column, so no @grain and no wall. No personal entry: a hide measure names who measured, as an inspection names its inspector, and is shown only inside the record (Owner answer W1); it is no figure about one person's work. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "LeatherGrade": {
+      "about": "The tenant's one list of leather grades. The office keeps it (a code never changes; a grade is retired, never deleted). The floor reads it, tenant-wide: the grade tiles.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "ItemGradeRule": {
+      "about": "What a grade means for one article: usable share, panels. The office keeps it. The floor reads it, tenant-wide: the tablet offers the article's own grades.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "HideMark": {
+      "about": "Defects and quality zones on a hide. The office and the site's floor add them and withdraw a wrong one (a floor session at incoming and at the cutting table); nothing else of a mark changes.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "HideMeasure": {
+      "about": "The measures of a hide against the tannery's declared area, the evidence of a short-measured lot. The office and the site's floor add rows and read them. Nobody changes or removes a row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "ShadeGroup": {
+      "about": "The shade groups of an article or a lot against the master swatch. The office keeps them. The floor reads them, tenant-wide (an article's group has no site): the shade tiles.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "Remnant": {
+      "about": "An offcut as tagged stock. The office and the site's floor make one with the move that puts it into stock (Hide done at the cutting table, Return unused) and change its grade, place and state.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "FabricRoll": {
+      "about": "A tagged roll of a lot. The office and the site's floor receive it, record its measures and move it, and the lay report takes length off it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "GarmentProtectorLot": {
+      "about": "Which protector lot a batch or a garment holds. The office and the site's floor record it; only the office withdraws a wrong row (it is the recall's evidence).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

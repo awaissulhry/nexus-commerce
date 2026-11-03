@@ -80,6 +80,8 @@ model Device {
   // W2b inspection-plans.prisma (wave 10/16): the results and measurements recorded on it.
   inspectionCheckResults InspectionCheckResult[] @relation("InspectionCheckResultDevice")
   inspectionMeasurements InspectionMeasurement[] @relation("InspectionMeasurementDevice")
+  // W2b leather.prisma (wave 12/16): the hide measures recorded on it.
+  hideMeasures           HideMeasure[]
   // production.prisma: the notice acknowledgements, cut logs, bundles and scans recorded on it.
   noticeAcks     WorkerNoticeAck[]
   cutLogs        CutLog[]
@@ -266,6 +268,8 @@ model Worker {
   inProcessChecksOf       InProcessCheck[]        @relation("InProcessCheckOperator")
   inspectionCheckResults  InspectionCheckResult[] @relation("InspectionCheckResultRecorder")
   inspectionMeasurements  InspectionMeasurement[] @relation("InspectionMeasurementRecorder")
+  // W2b leather.prisma (wave 12/16): the hides they measured.
+  hideMeasures            HideMeasure[]
   // The quality releases a floor inspector signed (B-W1-45).
   qualityReleases QualityRelease[]
 
