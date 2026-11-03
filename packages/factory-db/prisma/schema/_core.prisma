@@ -171,6 +171,8 @@ model Company {
   safetyDeadlines      SafetyDeadline[]
   safetyCourses        SafetyCourse[]
   ppeItems             PpeItem[]
+  // W2b health.prisma (wave 16/16): the views of its protected safety records.
+  protectedViews       ProtectedView[]
   // privacy.prisma: its privacy notices, DPIAs and record of processing activities.
   privacyNotices       PrivacyNotice[]
   privacyDpias         PrivacyDpia[]
@@ -266,6 +268,10 @@ model Site {
   trainingSessions   TrainingSession[]
   instructionRecords InstructionRecord[]
   ppeIssues          PpeIssue[]
+  // W2b health.prisma (wave 16/16): the health plans of its roles, its incidents and its chemical register.
+  healthPlans        HealthPlan[]
+  incidents          Incident[]
+  chemicals          Chemical[]
   // threads.prisma: the threads of the site's records.
   threads       Thread[]
   // print.prisma: the site's printers.
@@ -403,6 +409,8 @@ model OrgArea {
 
   site  Site   @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   lines Line[]
+  // W2b health.prisma (wave 16/16): the incidents that happened in the area.
+  incidents Incident[]
 
   @@unique([tenantId, siteId, code])
   // The target of the lines' tenant- and site-safe references.
@@ -554,6 +562,8 @@ model Station {
   // W2a plant.prisma: the machines standing at it and the requests it reported.
   machines            Machine[]
   maintenanceRequests MaintenanceRequest[]
+  // W2b health.prisma (wave 16/16): the incidents reported at it ("Here: this station").
+  incidents           Incident[]
   // B-W1-42: correction requests asked and refused scans sent at the station.
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]

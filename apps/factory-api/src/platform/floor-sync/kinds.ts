@@ -46,6 +46,9 @@ import { reportOnBehalf } from '../../modules/production/onbehalf/report'
 import { DispatchRefusedError } from '../../modules/production/dispatch/access'
 import { writeHandoverBody } from '../../modules/production/dispatch/contract'
 import { writeHandover } from '../../modules/production/dispatch/handover'
+// B-W2b-96: a machine request's progress from the floor's queue.
+import { queuedProgressBody } from '../../modules/plant/requests/contract-depth'
+import { stepRequest } from '../../modules/plant/requests/depth'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -79,6 +82,9 @@ import { writeHandover } from '../../modules/production/dispatch/handover'
  *                                         order's thread, with the files confirmed before it was sent)
  *   andon.handover.write                  modules/production/dispatch writeHandover (B-W2b-49: a line's note of a shift; the
  *                                         tablet's time picks the shift)
+ *   plant.request.progress                modules/plant/requests stepRequest (B-W2b-96: a technician acknowledges a machine
+ *                                         request or is on the way, the station confirms the machine works again; each
+ *                                         step set once, applied as the request stands when it arrives)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -267,6 +273,15 @@ async function applyFloorNote(caller: CommandCaller, event: QueuedEvent): Promis
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'Message', id: result.messageId } }
 }
 
+/** B-W2b-96: a queued progress step of a machine request, through the plant's own command (its key: `<device>.<client event id>`). */
+async function applyPlantProgress(caller: CommandCaller, event: QueuedEvent, key: string): Promise<Applied> {
+  const body = parsed(queuedProgressBody, event.payload)
+  if (!body.ok) return refusedBy(body.refusal)
+  const { requestId, step, version } = body.value
+  const result = await stepRequest(caller, requestId, step, version === undefined ? {} : { version }, key)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'MaintenanceRequest', id: result.request.id } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -307,6 +322,8 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
         return await applyFloorNote(caller, event)
       case 'andon.handover.write':
         return await applyHandover(caller, event, context.key)
+      case 'plant.request.progress':
+        return await applyPlantProgress(caller, event, context.key)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

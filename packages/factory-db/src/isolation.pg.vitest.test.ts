@@ -18,6 +18,7 @@ import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedFloorSync } from '../seed/floor-sync'
 import { seed as seedFollowupsQualityMoney } from '../seed/followups-quality-money'
+import { seed as seedHealth } from '../seed/health'
 import { seed as seedHolds } from '../seed/holds'
 import { seed as seedImports } from '../seed/imports'
 import { seed as seedInsights } from '../seed/insights'
@@ -268,6 +269,9 @@ beforeAll(async () => {
   // The safety at work schema of W2b (wave 15/16).
   await seedSafety({ db: factory, namespace: 'iso-a' })
   await seedSafety({ db: factory, namespace: 'iso-b' })
+  // The protected safety data schema of W2b (wave 16/16).
+  await seedHealth({ db: factory, namespace: 'iso-a' })
+  await seedHealth({ db: factory, namespace: 'iso-b' })
   // W2b-2 (B-W2b-74): a floor session inserts only an unplanned operation, so the first operation of tenant A's first site is
   // one, on its work order in progress (the seeds leave a work order's operations to their routing, every test reads them).
   await db.admin.query(
@@ -321,6 +325,7 @@ it('covers every classified table and every runtime role', () => {
     'Certificate',
     'CertificateCoverage',
     'CertificateRenewal',
+    'Chemical',
     'ClickingDie',
     'ClockEvent',
     'Colour',
@@ -357,6 +362,7 @@ it('covers every classified table and every runtime role', () => {
     'ExportJob',
     'FabricRoll',
     'FirstLoadStep',
+    'FitnessJudgement',
     'FloorRefusedAction',
     'FloorScanRefusal',
     'FloorSession',
@@ -370,6 +376,8 @@ it('covers every classified table and every runtime role', () => {
     'GoodsReceipt',
     'GoodsReceiptLine',
     'HandoverNote',
+    'HealthPlan',
+    'HealthVisit',
     'HeldScan',
     'HelpCall',
     'HelpCallType',
@@ -380,9 +388,13 @@ it('covers every classified table and every runtime role', () => {
     'ImportJob',
     'ImportRow',
     'InProcessCheck',
+    'InailFiling',
     'InboundEmail',
     'InboundWebhook',
     'IncentiveScheme',
+    'Incident',
+    'IncidentAction',
+    'IncidentPerson',
     'IncomingComponentResult',
     'IncomingHideResult',
     'IncomingInspection',
@@ -512,6 +524,7 @@ it('covers every classified table and every runtime role', () => {
     'PrivacyNoticeText',
     'ProcessingActivity',
     'ProductionSettings',
+    'ProtectedView',
     'PurchaseOrder',
     'PurchaseOrderLine',
     'PurchaseOrderReminder',
@@ -563,6 +576,7 @@ it('covers every classified table and every runtime role', () => {
     'RoutingOperation',
     'SafetyAppointment',
     'SafetyCourse',
+    'SafetyDataSheet',
     'SafetyDeadline',
     'SalesOrder',
     'SalesOrderAmendment',

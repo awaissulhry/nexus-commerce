@@ -47,6 +47,7 @@ describe('model ownership', () => {
       'Certificate',
       'CertificateCoverage',
       'CertificateRenewal',
+      'Chemical',
       'ClickingDie',
       'ClockEvent',
       'Colour',
@@ -83,6 +84,7 @@ describe('model ownership', () => {
       'ExportJob',
       'FabricRoll',
       'FirstLoadStep',
+      'FitnessJudgement',
       'FloorRefusedAction',
       'FloorScanRefusal',
       'FloorSession',
@@ -96,6 +98,8 @@ describe('model ownership', () => {
       'GoodsReceipt',
       'GoodsReceiptLine',
       'HandoverNote',
+      'HealthPlan',
+      'HealthVisit',
       'HeldScan',
       'HelpCall',
       'HelpCallType',
@@ -106,9 +110,13 @@ describe('model ownership', () => {
       'ImportJob',
       'ImportRow',
       'InProcessCheck',
+      'InailFiling',
       'InboundEmail',
       'InboundWebhook',
       'IncentiveScheme',
+      'Incident',
+      'IncidentAction',
+      'IncidentPerson',
       'IncomingComponentResult',
       'IncomingHideResult',
       'IncomingInspection',
@@ -238,6 +246,7 @@ describe('model ownership', () => {
       'PrivacyNoticeText',
       'ProcessingActivity',
       'ProductionSettings',
+      'ProtectedView',
       'PurchaseOrder',
       'PurchaseOrderLine',
       'PurchaseOrderReminder',
@@ -289,6 +298,7 @@ describe('model ownership', () => {
       'RoutingOperation',
       'SafetyAppointment',
       'SafetyCourse',
+      'SafetyDataSheet',
       'SafetyDeadline',
       'SalesOrder',
       'SalesOrderAmendment',
@@ -566,6 +576,9 @@ describe('model ownership', () => {
           // W2b safety at work (wave 15/16): the registers D.Lgs. 81/2008 asks for, purpose SAFETY (EMPLOYMENT for the HR record);
           // a DVR signer is the person of the safety appointment the signature names.
           ...['InstructionRecord', 'PpeIssue', 'RiskAssessmentSignature', 'SafetyAppointment', 'TrainingAttendance', 'TrainingRecord'],
+          // W2b protected safety data (wave 16/16): visits, judgements, the view log, the people of an incident and their INAIL
+          // filings, purpose SAFETY only; a filing's person is the person involved it names.
+          ...['FitnessJudgement', 'HealthVisit', 'InailFiling', 'IncidentPerson', 'ProtectedView'],
         ].sort(),
       )
       const employee = map.find((entry) => entry.model === 'Employee')!
@@ -574,8 +587,13 @@ describe('model ownership', () => {
       expect(employee.columns.employeeCode).toEqual(['EMPLOYMENT', 'PAY'])
       expect(map.find((entry) => entry.model === 'LeaverStep')).toMatchObject({ subject: 'caseId', via: 'LeaverCase' })
       expect(map.find((entry) => entry.model === 'RiskAssessmentSignature')).toMatchObject({ subject: 'appointmentId', via: 'SafetyAppointment' })
+      expect(map.find((entry) => entry.model === 'InailFiling')).toMatchObject({ subject: 'incidentPersonId', via: 'IncidentPerson' })
+      // The protected safety data is for SAFETY only (GDPR art. 9; D.Lgs. 81/2008 art. 41): never EMPLOYMENT, PAY or PERFORMANCE.
+      for (const model of ['FitnessJudgement', 'HealthVisit', 'InailFiling', 'IncidentPerson', 'ProtectedView']) {
+        expect(new Set(Object.values(map.find((entry) => entry.model === model)!.columns).flat())).toEqual(new Set(['SAFETY']))
+      }
       // Every other personal model names the person by employeeId.
-      for (const entry of map.filter((row) => !['Employee', 'LeaverStep', 'RiskAssessmentSignature'].includes(row.model))) expect(entry.subject).toBe('employeeId')
+      for (const entry of map.filter((row) => !['Employee', 'LeaverStep', 'RiskAssessmentSignature', 'InailFiling'].includes(row.model))) expect(entry.subject).toBe('employeeId')
       // The purposes are the fixed list; one person's work figures (PERFORMANCE, Statuto art. 4 c.1) only from the floor
       // work records of wave 7/7 (off-standard time, labour edits, disputes), read through the legal gate.
       const used = new Set(map.flatMap((entry) => Object.values(entry.columns).flat()))

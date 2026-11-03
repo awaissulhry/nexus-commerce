@@ -37,6 +37,8 @@ import { lockOrderForReceipt, readOrderForFloorReceipt, setOrderReceiptProgress,
 import { activeSourcesOf } from '../../purchasing/supplier-items/store'
 import { officeContextOf, postedBy, stockContextOf } from '../ledger/access'
 import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves'
+// B-W2b-94: a grade text that is an active grade's code names that grade as the hide's record too.
+import { gradeIdsByCode } from '../hides/facts'
 import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { lotNumber, receiptNumber } from './numbers'
 import { receiptDetail } from './read'
@@ -324,6 +326,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   const hideCount = planned.reduce((sum, line) => sum + line.lots.reduce((count, lot) => count + lot.hides.length, 0), 0)
   const tags = hideCount > 0 ? (await allocateScanIds(tools, 'HIDE', hideCount)).codes : []
   let nextTag = 0
+  const gradeIds = hideCount > 0 ? await gradeIdsByCode(tx) : new Map<string, string>()
   const drafts: MoveDraft[] = []
   const lotRows: { id: string; code: string; quarantined: boolean; seq: number; words: string }[] = []
   let hideTotal = 0
@@ -416,6 +419,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
             areaUom: hide.areaUom,
             baseArea: hide.baseArea,
             grade: blank(hide.body.grade),
+            gradeId: gradeIds.get(blank(hide.body.grade) ?? '') ?? null,
             shade: blank(hide.body.shade) ?? shade,
             thicknessMm: hide.thicknessMm,
             defects: blank(hide.body.defects),
