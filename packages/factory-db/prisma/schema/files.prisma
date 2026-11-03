@@ -126,6 +126,8 @@ model StoredFile {
   ncrConcessionAnswers NcrConcession[] @relation("NcrConcessionAnswer")
   // W2b time.prisma (wave 5/7): the attendance month close whose LUL calendar it is.
   attendanceLulOf AttendanceMonthClose[] @relation("AttendanceMonthCloseLul")
+  // W2b safety.prisma (wave 15/16): the risk assessment versions whose frozen PDF it is.
+  riskAssessmentVersions RiskAssessmentVersion[] @relation("RiskAssessmentVersionFile")
   // W2a stockcount.prisma: the year-end count whose signed valued list it is.
   stockCountValuedLists StockCount[] @relation("StockCountValuedList")
   // privacy.prisma: the notice language and the DPIA whose PDF it is.

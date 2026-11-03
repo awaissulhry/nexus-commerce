@@ -166,6 +166,11 @@ model Company {
   // W2b people.prisma, skills.prisma (wave 4/7): its people settings and its own skills (tenant-wide ones have none).
   peopleSettings       PeopleSettings[]
   skills               Skill[]
+  // W2b safety.prisma (wave 15/16): its safety appointments, typed legal deadlines, own safety courses and PPE catalogue.
+  safetyAppointments   SafetyAppointment[]
+  safetyDeadlines      SafetyDeadline[]
+  safetyCourses        SafetyCourse[]
+  ppeItems             PpeItem[]
   // privacy.prisma: its privacy notices, DPIAs and record of processing activities.
   privacyNotices       PrivacyNotice[]
   privacyDpias         PrivacyDpia[]
@@ -252,6 +257,15 @@ model Site {
   employees        Employee[]
   teams            Team[]
   peopleLegalGates PeopleLegalGate[]
+  // W2b safety.prisma (wave 15/16): its safety appointments and typed deadlines, risk assessments, role sheets, training
+  // sessions, instruction entries and the PPE handed over at it.
+  safetyAppointments SafetyAppointment[]
+  safetyDeadlines    SafetyDeadline[]
+  riskAssessments    RiskAssessment[]
+  roleSheets         RoleSheet[]
+  trainingSessions   TrainingSession[]
+  instructionRecords InstructionRecord[]
+  ppeIssues          PpeIssue[]
   // threads.prisma: the threads of the site's records.
   threads       Thread[]
   // print.prisma: the site's printers.

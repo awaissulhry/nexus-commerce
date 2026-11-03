@@ -13,6 +13,8 @@ import { DEFECT_CLASSES } from './defects/rules'
 import { CHANGED_FIELDS as COMPLAINT_CHANGED_FIELDS, COMPLAINT_CATEGORIES, COMPLAINT_CHANNELS, COMPLAINT_SEVERITIES, COMPLAINT_STATUSES } from './complaints/rules'
 // B-W2b-90: the defect vocabulary (cause codes, leather grades).
 import { VOCABULARY_CHANGES, VOCABULARY_LISTS } from './defects/vocabulary'
+// B-W2b-93: AQL profiles, their assignments, and the sampling plan an inspection takes from them.
+import { ASSIGNMENT_CHANGES, PROFILE_CHANGES, PROFILE_SOURCES } from './aql/profiles'
 
 /**
  * The quality module's events (plan A1 §3.4). The lab step (B-W1-34, modules/quality/lab) emits them in the command that
@@ -54,6 +56,12 @@ import { VOCABULARY_CHANGES, VOCABULARY_LISTS } from './defects/vocabulary'
  * The defect vocabulary (B-W2b-90, modules/quality/defects causes.ts and grades.ts): `quality.vocabulary_changed` when cause
  * codes or leather grades are added, changed, retired, made active again or deleted, or a starter set is added (which list,
  * which change, which codes): the pickers of the office and the site's floor devices read the vocabulary again. Codes only.
+ *
+ * AQL profiles (B-W2b-93, modules/quality/aql): `quality.aql_profile_changed` when a company's profile is added, changed,
+ * retired, made active again or made the default; `quality.aql_assignment_changed` when a profile is assigned to a customer,
+ * a style or both, replaces the pair's earlier one, or an assignment ends (the profiles card and the calculator read them
+ * again: quality.aql.view); `quality.inspection_sampling_set` when an open final inspection takes its sampling plan from a
+ * profile (code letter, sample, acceptance numbers: the inspection screens and the bench read it again). Ids and codes only.
  */
 const complaintLive = { permission: 'quality.complaints.view', fields: ['complaintId', 'number'] } as const
 const complaintStatus = z.enum(COMPLAINT_STATUSES)
@@ -401,5 +409,46 @@ export const events = [
     description: 'Cause codes or leather grades were added, changed, retired, made active again or deleted, or the starter set was added: the pickers read the vocabulary again.',
     payload: z.strictObject({ list: z.enum(VOCABULARY_LISTS), change: z.enum(VOCABULARY_CHANGES), codes: z.array(z.string().min(1).max(40)).min(1).max(200) }),
     live: { permission: 'quality.defects.view', floor: 'floor.work', fields: ['list', 'change', 'codes'] },
+  }),
+  // ---- B-W2b-93: AQL profiles and the sampling plan an inspection takes from one ------------------------------------------
+  defineEvent({
+    type: 'quality.aql_profile_changed',
+    context: 'quality',
+    description: "A company's AQL profile was added, changed, retired, made active again or made the company's default (critical stays 0).",
+    payload: z.strictObject({ companyId: z.uuid(), profileId: z.uuid(), code: z.string().min(1).max(40), change: z.enum(PROFILE_CHANGES) }),
+    live: { permission: 'quality.aql.view', fields: ['companyId', 'profileId', 'code', 'change'] },
+  }),
+  defineEvent({
+    type: 'quality.aql_assignment_changed',
+    context: 'quality',
+    description: 'An AQL profile was assigned to a customer, a style or a style of one customer (replacing the earlier assignment of the pair), or an assignment ended.',
+    payload: z.strictObject({
+      companyId: z.uuid(),
+      assignmentId: z.uuid(),
+      profileId: z.uuid(),
+      customerId: z.uuid().nullable(),
+      styleId: z.uuid().nullable(),
+      change: z.enum(ASSIGNMENT_CHANGES),
+      /** REPLACED: the assignment of the same pair this one ended. */
+      replacedId: z.uuid().nullable(),
+    }),
+    live: { permission: 'quality.aql.view', fields: ['companyId', 'assignmentId', 'profileId', 'change'] },
+  }),
+  defineEvent({
+    type: 'quality.inspection_sampling_set',
+    context: 'quality',
+    description: 'An open final inspection took its sampling plan from an AQL profile (ISO 2859-1): the code letter, the sample and the acceptance numbers, and where the profile came from.',
+    payload: z.strictObject({
+      inspectionId: z.uuid(),
+      workOrderId: z.uuid(),
+      profileId: z.uuid(),
+      source: z.enum(PROFILE_SOURCES),
+      codeLetter: z.string().max(1).nullable(),
+      lotSize: z.number().int(),
+      sampleSize: z.number().int(),
+      acceptMajor: z.number().int(),
+      acceptMinor: z.number().int(),
+    }),
+    live: { permission: 'quality.inspections.view', floor: 'quality.inspections.view', fields: ['inspectionId', 'workOrderId', 'profileId', 'codeLetter', 'sampleSize'] },
   }),
 ] as const

@@ -122,6 +122,7 @@ describe('model ownership', () => {
       'InspectionPlanCheck',
       'InspectionPlanVersion',
       'InspectionTrigger',
+      'InstructionRecord',
       'IntegrationAccount',
       'IntegrationCall',
       'InterestReferenceRate',
@@ -223,6 +224,9 @@ describe('model ownership', () => {
       'PlanningSettings',
       'PlantSettings',
       'PlyRun',
+      'PpeIssue',
+      'PpeItem',
+      'PpeKitLine',
       'PpeRegisterEntry',
       'PriceList',
       'PriceListEntry',
@@ -272,10 +276,20 @@ describe('model ownership', () => {
       'ReturnLine',
       'ReturnReceipt',
       'ReworkOrder',
+      'RiskAssessment',
+      'RiskAssessmentSignature',
+      'RiskAssessmentVersion',
+      'RiskMeasure',
+      'RlsNotice',
       'Role',
       'RoleAssignment',
+      'RoleSheet',
+      'RoleSheetItem',
       'RosterEntry',
       'RoutingOperation',
+      'SafetyAppointment',
+      'SafetyCourse',
+      'SafetyDeadline',
       'SalesOrder',
       'SalesOrderAmendment',
       'SalesOrderLine',
@@ -337,6 +351,10 @@ describe('model ownership', () => {
       'TimesheetApproval',
       'TodayLayout',
       'TrackingEvent',
+      'TrainingAttendance',
+      'TrainingRecord',
+      'TrainingRequirement',
+      'TrainingSession',
       'TypeChangeReview',
       'User',
       'Variant',
@@ -545,6 +563,9 @@ describe('model ownership', () => {
           ...['CrewMember', 'DispatchAssignment', 'HelpCall', 'LabourDispute', 'LabourEdit', 'OffStandardEntry', 'OperationChecklistResult', 'OperationScanMember'],
           // W2b inspection records (wave 10/16): the operator of an in-process check, behind the PERFORMANCE gate.
           'InProcessCheck',
+          // W2b safety at work (wave 15/16): the registers D.Lgs. 81/2008 asks for, purpose SAFETY (EMPLOYMENT for the HR record);
+          // a DVR signer is the person of the safety appointment the signature names.
+          ...['InstructionRecord', 'PpeIssue', 'RiskAssessmentSignature', 'SafetyAppointment', 'TrainingAttendance', 'TrainingRecord'],
         ].sort(),
       )
       const employee = map.find((entry) => entry.model === 'Employee')!
@@ -552,8 +573,9 @@ describe('model ownership', () => {
       expect(employee.columns.firstName).toEqual(['EMPLOYMENT'])
       expect(employee.columns.employeeCode).toEqual(['EMPLOYMENT', 'PAY'])
       expect(map.find((entry) => entry.model === 'LeaverStep')).toMatchObject({ subject: 'caseId', via: 'LeaverCase' })
+      expect(map.find((entry) => entry.model === 'RiskAssessmentSignature')).toMatchObject({ subject: 'appointmentId', via: 'SafetyAppointment' })
       // Every other personal model names the person by employeeId.
-      for (const entry of map.filter((row) => !['Employee', 'LeaverStep'].includes(row.model))) expect(entry.subject).toBe('employeeId')
+      for (const entry of map.filter((row) => !['Employee', 'LeaverStep', 'RiskAssessmentSignature'].includes(row.model))) expect(entry.subject).toBe('employeeId')
       // The purposes are the fixed list; one person's work figures (PERFORMANCE, Statuto art. 4 c.1) only from the floor
       // work records of wave 7/7 (off-standard time, labour edits, disputes), read through the legal gate.
       const used = new Set(map.flatMap((entry) => Object.values(entry.columns).flat()))
