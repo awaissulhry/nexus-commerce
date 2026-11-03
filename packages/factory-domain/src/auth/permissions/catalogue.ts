@@ -158,6 +158,8 @@ import { QUALITY_INPROCESS_DEFINITIONS, QUALITY_INPROCESS_FLOOR_PERMISSIONS, QUA
 import { INVENTORY_ROLLS_DEFINITIONS, INVENTORY_ROLLS_FLOOR_PERMISSIONS, INVENTORY_ROLLS_PERMISSIONS } from '../../inventory/rolls/permissions'
 // B-W2b-108: corrective actions, CAPA and 8D (quality.capa.view | manage).
 import { QUALITY_CAPA_DEFINITIONS, QUALITY_CAPA_PERMISSIONS } from '../../quality/capa/permissions'
+// B-W2b-124: statutory periodic checks of machines (plant.checks.manage).
+import { PLANT_CHECKS_DEFINITIONS, PLANT_CHECKS_PERMISSIONS } from '../../plant/statutory/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -593,6 +595,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   INVENTORY_ROLLS_DEFINITIONS,
   // B-W2b-108: corrective actions, CAPA and 8D.
   QUALITY_CAPA_DEFINITIONS,
+  // B-W2b-124: statutory periodic checks of machines.
+  PLANT_CHECKS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -753,6 +757,8 @@ for (const name of QUALITY_INPROCESS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 for (const name of INVENTORY_ROLLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-108: corrective actions, CAPA and 8D.
 for (const name of QUALITY_CAPA_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-124: statutory periodic checks of machines.
+for (const name of PLANT_CHECKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

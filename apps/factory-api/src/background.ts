@@ -86,6 +86,8 @@ import { inspectionTriggerHandlers } from './modules/quality/triggers/handler'
 import { escalationCron } from './modules/plant/requests/escalation'
 // B-W2b-108: CAPA actions reminded before their due day and escalated when overdue (tasks).
 import { capaRemindersCron } from './modules/quality/capa/reminders'
+// B-W2b-124: the reminders of statutory machine checks whose window opened.
+import { checkRemindersCron } from './modules/plant/statutory/reminders'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -242,6 +244,8 @@ if (mode === 'worker') {
   crons.push(escalationCron({ database, log }))
   // B-W2b-108: every 15 minutes, open CAPA actions are reminded (3 days before and on their day) and overdue ones escalate (QHS-096).
   crons.push(capaRemindersCron({ database, log }))
+  // B-W2b-124: hourly, the statutory checks whose reminder window opened, once per due date (QHS-205).
+  crons.push(checkRemindersCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
