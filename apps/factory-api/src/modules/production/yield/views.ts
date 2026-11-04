@@ -27,7 +27,7 @@ function officeOf(caller: Pick<CommandCaller, 'factoryContext'>): OfficeContext 
 
 const unique = (values: readonly (string | null | undefined)[]) => [...new Set(values.filter((value): value is string => typeof value === 'string'))]
 
-interface EntryRow {
+export interface EntryRow {
   readonly id: string
   readonly workOrderId: string
   readonly lotId: string
@@ -37,15 +37,15 @@ interface EntryRow {
   readonly serverTime: Date
 }
 
-/** The live entries (no reversal, not reversed) matching `where`, oldest first. */
-async function liveEntries(db: Reader, where: Prisma.CutLogWhereInput): Promise<EntryRow[]> {
+/** The live entries (no reversal, not reversed) matching `where`, oldest first. B-W2b-132: the leather plan's yield reads them too. */
+export async function liveEntries(db: Reader, where: Prisma.CutLogWhereInput): Promise<EntryRow[]> {
   const rows = await db.cutLog.findMany({ where, select: { id: true, workOrderId: true, lotId: true, hideId: true, baseAreaUsed: true, baseRemnantArea: true, reversalOfId: true, serverTime: true }, orderBy: { id: 'asc' } })
   const reversed = new Set((await db.cutLog.findMany({ where: { reversalOfId: { in: rows.map((row) => row.id) } }, select: { reversalOfId: true } })).map((row) => row.reversalOfId!))
   return rows.filter((row) => row.reversalOfId === null && !reversed.has(row.id))
 }
 
 /** Per entry: its yield entry (used, remnant, net pattern, BOM need), from its work order's frozen BOM rows. */
-async function yieldEntries(db: Reader, entries: readonly EntryRow[]): Promise<Map<string, YieldEntry>> {
+export async function yieldEntries(db: Reader, entries: readonly EntryRow[]): Promise<Map<string, YieldEntry>> {
   const out = new Map<string, YieldEntry>()
   const pieces = entries.length === 0 ? [] : await db.cutLogPiece.findMany({ where: { cutLogId: { in: entries.map((entry) => entry.id) } }, select: { cutLogId: true, workOrderSizeId: true, part: true, pieces: true } })
   const hides = new Map((await db.hide.findMany({ where: { id: { in: unique(entries.map((entry) => entry.hideId)) } }, select: { id: true, itemId: true } })).map((row) => [row.id, row]))
