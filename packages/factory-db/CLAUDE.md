@@ -133,7 +133,13 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    closing held while an action or a filing waits), the people involved (the floor inserts, never reads), actions, INAIL filings
    (48 hours from the certificate; one per person and type: a key), chemicals and data sheets (one current per language: a
    partial unique); its own triggers `StoredFile_protected_office_only` and `SearchEntry_not_protected`; it redefines wave 10's
-   numbering floor functions `factory_number_series_floor_guard` and `factory_number_allocation_floor_guard` (INCIDENT)): triggers, partial unique indexes and deferred
+   numbering floor functions `factory_number_series_floor_guard` and `factory_number_allocation_floor_guard` (INCIDENT)),
+   `…_links_depth_w2b_guards` (W2b wave 19/22, links in depth: a link's password as a scrypt hash only (DOCUMENT_VIEW, SECURE_FILE),
+   five wrong passwords hold it up to 15 minutes, the receipt once (SECURE_FILE), a renewal of the same record and purpose; a link's
+   files added while it is unused, never changed; drafts sealed, only for a long form and only while the link opens; record shares
+   (VIEW always, 180 days at most, the party switches its e-mail only); approval requests answered once by the party; no link, file
+   set, share or approval of a pay record (`factory_link_pay_record`); it redefines W0's `factory_guard_link_change` and wave 11's
+   `factory_ncr_concession_guard` (the customer writes the answer columns only, after its approval request's answer)): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written

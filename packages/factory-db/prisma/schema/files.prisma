@@ -124,6 +124,9 @@ model StoredFile {
   defectCodePictures DefectCode[] @relation("DefectCodePicture")
   // W2b ncr.prisma (wave 11/16): the concession whose written answer it is.
   ncrConcessionAnswers NcrConcession[] @relation("NcrConcessionAnswer")
+  // W2b links-depth.prisma (wave 19/22): the links that share it in their set, the approval answers whose markup it is.
+  linkFiles            LinkFile[]        @relation("LinkFileFile")
+  approvalMarkups      ApprovalRequest[] @relation("ApprovalRequestMarkup")
   // W2b time.prisma (wave 5/7): the attendance month close whose LUL calendar it is.
   attendanceLulOf AttendanceMonthClose[] @relation("AttendanceMonthCloseLul")
   // W2b safety.prisma (wave 15/16): the risk assessment versions whose frozen PDF it is.

@@ -75,6 +75,8 @@ model User {
   reportSubscriptions ReportSubscription[]
   // alerts.prisma: the alerts assigned to them.
   assignedAlerts      Alert[]
+  // W2b links-depth.prisma (wave 19/22): as a partner user, the approval requests they answered in the portal.
+  approvalAnswers     ApprovalRequest[] @relation("ApprovalRequestAnsweredBy")
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.

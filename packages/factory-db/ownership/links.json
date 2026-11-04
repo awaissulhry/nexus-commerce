@@ -1,8 +1,8 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/links.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (factory_runtime) makes, lists and revokes links through apps/factory-api's platform/links, with command(). A link session runs as factory_partner_runtime behind its party's wall: it reads its link (the authenticator looks it up in the party scope the token names), counts a use on it, and adds evidence rows; it can neither read nor write the office's note or who made or revoked the link (hiddenColumns; the partner wall of src/ownership.ts also requires every column marked `@internal` or with a cost, margin or wages grain to be hidden from it). Every column but the use counters, the revocation and the note is fixed once the link exists, for every login (the …_links_guards trigger). LinkEvidence is append-only (`@append-only`, scripts/factory/check-append-only.mjs). No role deletes. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/links.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (factory_runtime) makes, lists and revokes links through apps/factory-api's platform/links, with command(). A link session runs as factory_partner_runtime behind its party's wall: it reads its link (the authenticator looks it up in the party scope the token names), counts a use on it, and adds evidence rows; it can neither read nor write the office's note or who made or revoked the link (hiddenColumns; the partner wall of src/ownership.ts also requires every column marked `@internal` or with a cost, margin or wages grain to be hidden from it). Every column but the use counters, the revocation and the note is fixed once the link exists, for every login (the …_links_guards trigger). LinkEvidence is append-only (`@append-only`, scripts/factory/check-append-only.mjs). No role deletes. W2b (wave 19/22, B-W2b-154): the password hash is hidden from the partner role too; links-depth.json has the link's files and draft, record shares and approval requests. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "OneOffLink": {
-      "about": "Office sessions with links.manage make and revoke links, with links.view list them (the API keeps staff to the companies and parties their grants reach). A link session reads its own link and counts its uses (uses, lastUsedAt), only inside its party.",
+      "about": "Office sessions with links.manage make and revoke links, with links.view list them (the API keeps staff to the companies and parties their grants reach). A link session reads its own link and counts its uses (uses, lastUsedAt), only inside its party. W2b (wave 19/22): it also counts wrong passwords (passwordTries, passwordHeldUntil) and writes the receipt (receivedAt, receivedName), but never reads the password hash: the API checks a typed password in the tenant's system scope.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
@@ -10,7 +10,7 @@
         "factory_partner_runtime": {
           "privileges": ["select", "update"],
           "scopedBy": ["party"],
-          "hiddenColumns": ["note", "createdById", "revokedById"]
+          "hiddenColumns": ["note", "createdById", "revokedById", "passwordHash"]
         }
       }
     },

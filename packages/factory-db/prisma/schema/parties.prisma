@@ -86,6 +86,9 @@ model Party {
   complianceDocuments ComplianceDocument[]
   // email-in.prisma: the mail received from this party's contacts (or its company domain).
   inboundEmails       InboundEmail[]
+  // W2b links-depth.prisma (wave 19/22): the records shared with it, the approvals asked of it.
+  recordShares        RecordShare[]
+  approvalRequests    ApprovalRequest[]
   // sales.prisma: its quotes, sales orders and deposit requests.
   quotes              Quote[]
   salesOrders         SalesOrder[]
@@ -288,6 +291,11 @@ model PartyContact {
   complaints          Complaint[]
   // W2b ncr.prisma (wave 11/16): the concessions they were asked.
   ncrConcessions      NcrConcession[]
+  // W2b links.prisma, links-depth.prisma (wave 19/22): the links sent to them, the records shared with them, the
+  // approvals asked of them.
+  oneOffLinks         OneOffLink[]
+  recordShares        RecordShare[]
+  approvalRequests    ApprovalRequest[]
 
   // The target of the measurement profiles' reference: a rider is a contact of the profile's own party.
   @@unique([tenantId, partyId, id])

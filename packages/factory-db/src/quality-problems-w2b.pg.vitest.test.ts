@@ -121,10 +121,14 @@ afterAll(async () => {
 const NEW_MODELS = ['Capa', 'CapaAction', 'CapaSource', 'CauseCode', 'NcrConcession', 'NcrCostLine', 'QualityAlertRule', 'QualityHoldGroup']
 
 describe('grants', () => {
-  it('classifies the eight models, none with a partner grant, none holding personal data', () => {
+  it('classifies the eight models, none with a partner grant but the concession (W2b-3), none holding personal data', () => {
     const models = classifiedModels(loadSchema(), loadOwnership()).filter(({ model }) => NEW_MODELS.includes(model.name))
     expect(models.map(({ model }) => model.name).sort()).toEqual(NEW_MODELS)
-    for (const { ownership } of models) expect(Object.keys(ownership.access)).not.toContain('factory_partner_runtime')
+    for (const { model, ownership } of models) {
+      // B-W2b-154 (wave 19/22): the customer answers its own concession (select and the answer columns, by party); never the cost lines.
+      if (model.name === 'NcrConcession') expect(ownership.access.factory_partner_runtime).toMatchObject({ privileges: ['select', 'update'], scopedBy: ['party'] })
+      else expect(Object.keys(ownership.access)).not.toContain('factory_partner_runtime')
+    }
     expect(personalDataOf(loadSchema(), loadOwnership()).filter((entry) => NEW_MODELS.includes(entry.table))).toEqual([])
   })
 
@@ -135,8 +139,10 @@ describe('grants', () => {
     for (const table of NEW_MODELS.filter((name) => name !== 'CauseCode')) await expect(sql(floor(), `SELECT id FROM "${table}"`)).rejects.toThrow(/permission denied/)
   })
 
-  it('portal and link sessions read nothing here', async () => {
-    for (const table of NEW_MODELS) await expect(sql(partner(), `SELECT id FROM "${table}"`)).rejects.toThrow(/permission denied/)
+  it('portal and link sessions read nothing here but their own concessions (W2b-3)', async () => {
+    // B-W2b-154 (wave 19/22): the customer reads its own party's concessions, never who asked or recorded them; nothing else here.
+    for (const table of NEW_MODELS.filter((name) => name !== 'NcrConcession')) await expect(sql(partner(), `SELECT id FROM "${table}"`)).rejects.toThrow(/permission denied/)
+    await expect(sql(partner(), `SELECT "recordedById" FROM "NcrConcession"`)).rejects.toThrow(/permission denied/)
   })
 
   it('the cost line is at the cost grain', () => {

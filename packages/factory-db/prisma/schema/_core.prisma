@@ -108,6 +108,9 @@ model Company {
   oneOffLinks         OneOffLink[]
   // threads.prisma: the threads of the company's records.
   threads             Thread[]
+  // W2b links-depth.prisma (wave 19/22): its records shared with outside parties, the approvals it asked of them.
+  recordShares        RecordShare[]
+  approvalRequests    ApprovalRequest[]
   // imports.prisma: the company's imports.
   importJobs          ImportJob[]
   // W2b imports.prisma: the steps of its first load marked done.
