@@ -1,0 +1,125 @@
+// Portal identity (W2b schema wave 17/22, B-W2b-152; features PLT-006, PLT-050, PLT-228, SAL-064; Owner answers C1, C3;
+// design portal.signin, portal.frame, admin.documents › Branding; A1 §3.10): how a partner person signs in, what each
+// partner organisation's portal allows, and whose portal it is. The partner people themselves are User rows with audience
+// PARTNER (auth.prisma), their roles Role rows with audience PARTNER (roles.prisma), the portal terms a PrivacyNotice of
+// kind PORTAL_TERMS with its PartnerNoticeAck (privacy.prisma). apps/factory-api's portal sign-in (B-W2b-159), partner
+// organisations (B-W2b-162) and company branding (B-W2b-161) write them, always through command().
+//
+//   PortalSignInCode  one e-mail holds a link AND a 6-digit code (Owner answer C3: e-mail codes only, no password, no
+//                     SMS); 15 minutes, 5 tries; only hashes are stored; one live code per person and purpose; a used,
+//                     expired, tried-out or replaced code never opens again (the …_portal_identity_w2b_guards triggers).
+//   PortalSettings    per party: the portal OFF until the office switches it on (every party ships OFF; the first live
+//                     partner is switched on by hand), production progress OFF until the office shares it with that
+//                     customer (Owner answer C1), how many people and which partner roles the partner's admin may give.
+//   CompanyBranding   per company: logo, logo for dark, accent, the sender name of partner mail, the portal's label:
+//                     whose portal it is, shown before anything is typed. An unbranded company keeps the DS colours.
+//
+// Who sees what (ownership/portal-auth.json): the office only (the API reads them in the tenant's system scope for the
+// sign-in, the portal frame and the link pages); factory_partner_runtime reads none of them, and none has a money column.
+// Codes are deleted by the purge job once dead; settings and branding are changed, never deleted.
+
+/// A sign-in or step-up code sent by e-mail to a partner user (PLT-050; design portal.signin code-step, step-up): the
+/// 6-digit code and, for SIGN_IN, the link of the same e-mail (the link signs in only on Continue, so a mail scanner
+/// cannot use it up). Valid 15 minutes from when it was made, 5 wrong tries kill it, using it ends it. One live code per
+/// person and purpose (a partial unique index): asking for a new one replaces (revokes) the live one. Dead codes are
+/// purged by a scheduler job. Personal data (who asked, from which network; purpose: the portal account's security,
+/// GDPR art. 32).
+model PortalSignInCode {
+  id            String                  @id @db.Uuid
+  tenantId      String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The partner user (audience PARTNER) it was sent to.
+  userId        String                  @db.Uuid
+  purpose       PortalSignInCodePurpose
+  /// HMAC-SHA-256 of the 6-digit code with the server's secret (a plain hash of six digits is guessed in a moment), never
+  /// the code; at least 32 characters, never digits only (the guards).
+  codeHash      String
+  /// SHA-256 (hex) of the e-mail link's token, never the token; set exactly on a SIGN_IN code (a step-up is typed in the
+  /// open session).
+  linkTokenHash String?                 @unique
+  createdAt     DateTime                @default(now()) @db.Timestamptz(3)
+  /// After createdAt, at most 15 minutes after it.
+  expiresAt     DateTime                @db.Timestamptz(3)
+  /// Wrong codes typed, 0 to 5; the fifth kills it. Never goes down.
+  tries         Int                     @default(0)
+  /// When it signed in (or stepped up): set once, while it was live; never cleared.
+  usedAt        DateTime?               @db.Timestamptz(3)
+  /// When a newer code replaced it, or the purge job or the office ended it unused: set once; never cleared.
+  revokedAt     DateTime?               @db.Timestamptz(3)
+  /// HMAC of the shortened address that asked (/24, /64), never the address (the rate limits per address read it).
+  ipHash        String?
+
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, userId])
+}
+
+/// What a code proves.
+enum PortalSignInCodePurpose {
+  /// Signing in to the portal (the e-mail holds the link and the code).
+  SIGN_IN
+  /// A fresh proof inside a signed-in portal session before a sensitive act (users, roles, security, bank details).
+  STEP_UP
+}
+
+/// A partner organisation's portal (PLT-006; design sales.customers › Portal access, purchasing.suppliers › Portal access,
+/// portal.customer account › colleagues): whether its people may sign in, whether it sees production progress, and what
+/// its own admin may give. One per party: its id is the party's id by the module's convention (a unique key of ids alone
+/// cannot be copied by the generated isolation tests), and it names its party. No row: the portal is OFF.
+model PortalSettings {
+  /// The party's id: a party has at most one row, read by its id.
+  id              String   @id @db.Uuid
+  tenantId        String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  partyId         String   @db.Uuid
+  /// Its people may sign in to the portal. OFF for every party until the office switches it on, one partner at a time;
+  /// live sign-in also waits for a published PORTAL_TERMS notice (GATE-PRIVACY, checked by the API).
+  portalOn        Boolean  @default(false)
+  /// Owner answer C1: production progress (cut, sewn, inspected, packed per line and size) shows in this customer's
+  /// portal only while this is on; OFF by default. Only for a party with the CUSTOMER or BRAND role.
+  progressShared  Boolean  @default(false)
+  /// How many people (active and invited partner users) the portal holds, 1 to 1000; null: no limit.
+  maxUsers        Int?
+  /// The partner roles (Role.key, audience PARTNER) its people may hold, each once; empty: every partner role of its
+  /// kind. The partner's admin invites and raises only within them.
+  allowedRoleKeys String[] @default([])
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?  @db.Uuid
+
+  party Party @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, partyId])
+}
+
+/// A company's branding (PLT-228, SAL-064; design admin.documents › Branding, portal.signin brand head, the link frame):
+/// whose portal or link page it is, shown before anything is typed, and the sender name of its partner mail. The accent
+/// is used only where it clears 7:1 against the page (the API's checkBranding); without a row, or without an accent, the
+/// DS colours. One per company: its id is the company's id by the module's convention, and it names its company.
+model CompanyBranding {
+  /// The company's id: a company has at most one row, read by its id.
+  id                String   @id @db.Uuid
+  tenantId          String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId         String   @db.Uuid
+  /// The logo on light pages: a PHOTO file of the company; null: the company's name in text.
+  logoFileId        String?  @db.Uuid
+  /// The logo on dark pages, only beside a light one: a PHOTO file of the company; null: the light one.
+  logoDarkFileId    String?  @db.Uuid
+  /// `#rrggbb`, lower case; null: the DS accent.
+  accentColour      String?
+  /// The display name partner mail is sent under ("Seed Factory"), 1 to 80 characters, no control characters and no
+  /// angle brackets (it goes into a mail header); null: the company's trade or legal name.
+  senderDisplayName String?
+  /// What the portal calls itself ("Seed Factory portal"), 1 to 60 characters, no control characters; null: the
+  /// company's name.
+  portalLabel       String?
+  version           Int      @default(1)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?  @db.Uuid
+
+  company  Company     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  logo     StoredFile? @relation("CompanyBrandingLogo", fields: [tenantId, logoFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  logoDark StoredFile? @relation("CompanyBrandingLogoDark", fields: [tenantId, logoDarkFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}

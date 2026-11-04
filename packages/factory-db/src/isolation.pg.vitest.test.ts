@@ -15,6 +15,7 @@ import { seed as seedCutting } from '../seed/cutting'
 import { seed as seedEmail } from '../seed/email'
 import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
+import { seed as seedFilesDepth } from '../seed/files-depth'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedFloorSync } from '../seed/floor-sync'
 import { seed as seedFollowupsQualityMoney } from '../seed/followups-quality-money'
@@ -38,6 +39,7 @@ import { seed as seedPay } from '../seed/pay'
 import { seed as seedPlanning } from '../seed/planning'
 import { seed as seedPlant } from '../seed/plant'
 import { seed as seedPlantCare } from '../seed/plantcare'
+import { seed as seedPortalAuth } from '../seed/portal-auth'
 import { seed as seedSafety } from '../seed/safety'
 import { seed as seedPeople } from '../seed/people'
 import { seed as seedPricing } from '../seed/pricing'
@@ -272,6 +274,12 @@ beforeAll(async () => {
   // The protected safety data schema of W2b (wave 16/16).
   await seedHealth({ db: factory, namespace: 'iso-a' })
   await seedHealth({ db: factory, namespace: 'iso-b' })
+  // The portal identity schema of W2b (wave 17/22): partner users, their sessions and codes, portal settings, branding, terms.
+  await seedPortalAuth({ db: factory, namespace: 'iso-a' })
+  await seedPortalAuth({ db: factory, namespace: 'iso-b' })
+  // The files in depth schema of W2b (wave 18/22).
+  await seedFilesDepth({ db: factory, namespace: 'iso-a' })
+  await seedFilesDepth({ db: factory, namespace: 'iso-b' })
   // W2b-2 (B-W2b-74): a floor session inserts only an unplanned operation, so the first operation of tenant A's first site is
   // one, on its work order in progress (the seeds leave a work order's operations to their routing, every test reads them).
   await db.admin.query(
@@ -331,6 +339,7 @@ it('covers every classified table and every runtime role', () => {
     'Colour',
     'Colourway',
     'Company',
+    'CompanyBranding',
     'Complaint',
     'ComplianceDocument',
     'CostingSettings',
@@ -361,6 +370,8 @@ it('covers every classified table and every runtime role', () => {
     'EmployeeSkill',
     'ExportJob',
     'FabricRoll',
+    'FileMarkup',
+    'FileUploadSession',
     'FirstLoadStep',
     'FitnessJudgement',
     'FloorRefusedAction',
@@ -480,6 +491,7 @@ it('covers every classified table and every runtime role', () => {
     'OvertimeEntry',
     'OvertimeRequest',
     'Parcel',
+    'PartnerNoticeAck',
     'Party',
     'PartyAddress',
     'PartyContact',
@@ -510,6 +522,8 @@ it('covers every classified table and every runtime role', () => {
     'PlanningSettings',
     'PlantSettings',
     'PlyRun',
+    'PortalSettings',
+    'PortalSignInCode',
     'PpeIssue',
     'PpeItem',
     'PpeKitLine',
@@ -556,6 +570,7 @@ it('covers every classified table and every runtime role', () => {
     'ReportRun',
     'ReportSubscription',
     'RequestRoutingRule',
+    'RequiredDocumentRule',
     'RequirementPegging',
     'Reservation',
     'RestoreDrill',

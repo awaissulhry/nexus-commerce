@@ -1,0 +1,155 @@
+/*
+ * Planning › Leather & cut plan (SCR-252) LAYOUT: the band, the tiles, the three sections, the shade drawer's blocks and options,
+ * the cut plan on paper. The controls are the design system's; this file only places them, with semantic tokens (no colour of
+ * its own). No page max-width (Owner rule 2026-10-29): the page fills the shell's main area.
+ */
+.fw-lp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-lp-head,
+.fw-lp-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-lp-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-lp-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-lp-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-lp-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-lp-h3 {
+  margin: 0 0 var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-lp-hint,
+.fw-lp-sub {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-lp-text {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.fw-lp-strong {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-lp-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-lp-link {
+  color: var(--nds-text-link);
+}
+
+.fw-lp-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-lp-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-lp-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-lp-grid {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.fw-lp-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-lp-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-lp-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The cut plan on paper (SCR-252-print): the filters on top, one table, the print button hidden when printing. */
+.fw-lp-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-16);
+  min-width: 0;
+}
+
+@media print {
+  .fw-lp-print-button {
+    display: none;
+  }
+  .fw-lp-print {
+    padding: 0;
+  }
+}

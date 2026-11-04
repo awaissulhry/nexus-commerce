@@ -1,0 +1,383 @@
+{
+  "noAccess": {
+    "title": "Non puoi aprire il piano pelle e taglio",
+    "body": "Serve il permesso di vedere le pianificazioni (planning.view). Chiedi a un amministratore."
+  },
+  "page": {
+    "asOf": "Dalla pianificazione del {time}",
+    "noRun": "Nessuna pianificazione ancora per questo stabilimento",
+    "site": "Stabilimento",
+    "siteOne": "Stabilimento {site}",
+    "search": "Cerca ordine, modello, pelle o lotto",
+    "running": "Pianificazione in corso…",
+    "run": "Pianifica ora",
+    "more": "Altre azioni",
+    "print": "Stampa piano di taglio",
+    "export": "Esporta il fabbisogno di pelle (CSV)",
+    "keys": "Scorciatoie da tastiera",
+    "noSites": "Nessuno stabilimento pianificato in questa azienda.",
+    "newRun_one": "È finita una pianificazione più recente.",
+    "newRun_other": "Sono finite {count} pianificazioni più recenti.",
+    "show": "Mostra"
+  },
+  "live": {
+    "connecting": "connessione…",
+    "live": "in tempo reale",
+    "offline": "non in tempo reale: le modifiche si vedono ricaricando"
+  },
+  "common": {
+    "dismiss": "Chiudi",
+    "clearFilters": "Togli i filtri",
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "loading": "Caricamento…"
+  },
+  "tile": {
+    "title": "Pelle in sintesi",
+    "orders": "Ordini che chiedono pelle",
+    "shade": "Non tagliabili da una tonalità",
+    "protectors": "Protezioni senza certificato valido",
+    "drift": "Modelli con resa scostata",
+    "hint": {
+      "orders": "Ordini con pelle ancora da trovare",
+      "shade": "Righe da dividere, da comprare o da chiedere al cliente",
+      "protectors": "Nessun certificato EN 1621 valido, o scade prima della consegna",
+      "drift": "I tagli mostrano una perdita diversa dal piano"
+    },
+    "filtering": "Mostra: {tile}."
+  },
+  "held": {
+    "noRun": "Pianificare richiede planning.run.",
+    "running": "La pianificazione è in corso.",
+    "noSite": "Scegli prima uno stabilimento.",
+    "noManage": "Cambiare la perdita di taglio richiede planning.leather.manage (il pianificatore).",
+    "noProposal": "Non c'è una proposta da decidere.",
+    "inDraft": "Questa perdita è già nella revisione in bozza.",
+    "waitsForDraft": "Accettata: aspetta una revisione in bozza del modello (la apre Prodotti).",
+    "dismissedAlready": "Già scartata: torna quando cambia o arrivano altri tagli.",
+    "reasonShort": "Scrivi il motivo, almeno 3 caratteri.",
+    "reasonLong": "Al massimo 500 caratteri.",
+    "noReserve": "Prenotare richiede inventory.reserve.",
+    "noProposalHides": "Nessuna pelle da proporre: rileggi il piano.",
+    "noDraftPo": "Una bozza d'ordine d'acquisto richiede purchasing.manage (l'acquisitore).",
+    "requirement": {
+      "ORDERED": "Questa riga del piano è già ordinata.",
+      "IGNORED": "Questa riga del piano è stata esclusa in Cosa comprare e produrre.",
+      "OPEN": "Aperta."
+    },
+    "noNote": "Una nota sull'ordine richiede threads.post.",
+    "notMustBuy": "Solo una riga da comprare ha una bozza d'ordine.",
+    "busy": "Attendi: l'ultima azione è in corso."
+  },
+  "keys": {
+    "open": "Apri le tonalità dell'ordine",
+    "draftPo": "Bozza d'ordine per una riga da comprare",
+    "nextOrder": "Ordine successivo e precedente nel pannello"
+  },
+  "row": {
+    "line": "riga {seq}",
+    "due": "consegna {date}",
+    "noDue": "nessuna data",
+    "sizes_one": "taglie {sizes} · {count} pz",
+    "sizes_other": "taglie {sizes} · {count} pz",
+    "thickness": "{min}–{max} mm",
+    "lossUnknown": "perdita di taglio non nota",
+    "loss": "perdita di taglio {loss}",
+    "hides_one": "≈ {count} pelle",
+    "hides_other": "≈ {count} pelli",
+    "issuedReserved": "prelevata {issued} · prenotata {reserved}",
+    "openShade": "{order} si taglia da una tonalità?",
+    "openShadeHint": "Invio apre il pannello.",
+    "menu": "Azioni per {order}",
+    "openShadeShort": "Apri le tonalità",
+    "draftPo": "Bozza d'ordine (come Cosa comprare e produrre)"
+  },
+  "grade": {
+    "none": "nessuna pelle libera",
+    "ungraded": "senza scelta"
+  },
+  "lot": {
+    "none": "nessun lotto libero",
+    "shade": "tonalità {shade}",
+    "noShade": "senza tonalità",
+    "anyShade": "qualsiasi tonalità",
+    "free": "{lot} · {shade} · {area} libera"
+  },
+  "feasibility": {
+    "label": "Una tonalità",
+    "all": "Ogni risposta",
+    "COVERED": "Coperta",
+    "FITS": "Sta in una tonalità",
+    "SPLIT": "Dividi per capo",
+    "MUST_BUY": "Da comprare",
+    "ASK_CUSTOMER": "Chiedi al cliente"
+  },
+  "col": {
+    "order": "Ordine",
+    "style": "Modello, colore, taglie",
+    "leather": "Pelle",
+    "area": "Area necessaria (con perdita)",
+    "toFind": "Da trovare",
+    "grades": "Mix di scelte",
+    "bestLot": "Miglior lotto di una tonalità",
+    "feasibility": "Una tonalità?",
+    "value": "Valore da trovare",
+    "more": "Altro",
+    "protector": "Protezione",
+    "needed": "Ancora necessarie",
+    "certificate": "Parte certificata · valida fino al",
+    "lots": "Lotti disponibili",
+    "state": "Stato",
+    "substitute": "Sostituto",
+    "cuts": "Tagli",
+    "yieldArea": "Area reale · prevista",
+    "loss": "Perdita reale · prevista",
+    "trend": "Andamento",
+    "proposal": "Proposta",
+    "extraValue": "Valore della perdita in più",
+    "actions": "Decidi"
+  },
+  "need": {
+    "title": "Fabbisogno di pelle per ordine",
+    "purpose": "Area e pelli per ordine e modello, e se una tonalità basta.",
+    "error": "Impossibile caricare il fabbisogno di pelle per ordine",
+    "noRun": {
+      "title": "Nessuna pianificazione per questo stabilimento",
+      "body": "Il fabbisogno si legge dall'ultima pianificazione: Pianifica ora."
+    },
+    "empty": "Nessun ordine aperto chiede pelle",
+    "emptyBody": "L'ultima pianificazione non ha trovato pelle a pelli per un ordine aperto.",
+    "count_one": "{count} riga d'ordine",
+    "count_other": "{count} righe d'ordine"
+  },
+  "empty": {
+    "noMatch": {
+      "title": "Nessun risultato",
+      "body": "Nessuna riga corrisponde alla ricerca o ai filtri."
+    }
+  },
+  "bulk": {
+    "export_one": "Esporta {count}",
+    "export_other": "Esporta {count}"
+  },
+  "protectors": {
+    "title": "Protezioni certificate",
+    "purpose": "Protezioni pianificate solo con i codici certificati per quel modello (EN 1621).",
+    "error": "Impossibile caricare le protezioni certificate",
+    "empty": "Nessun ordine chiede protezioni",
+    "count_one": "{count} riga di protezioni",
+    "count_other": "{count} righe di protezioni",
+    "noPlacement": "Protezione",
+    "validUntil": "valido fino al {date}",
+    "noCertificate": "Nessun certificato valido",
+    "lots_one": "{count} lotto · {available}",
+    "lots_other": "{count} lotti · {available}",
+    "lotCertificates_one": "{count} con il certificato del lotto",
+    "lotCertificates_other": "{count} con il certificato del lotto",
+    "noSubstitutes": "nessuna a magazzino",
+    "substitute_one": "{count} altra a magazzino",
+    "substitute_other": "{count} altre a magazzino",
+    "substituteHeld": "Non certificata per il modello {style}: la DoC sarebbe sbagliata."
+  },
+  "protector": {
+    "NO_CERTIFICATE": "Nessun certificato valido",
+    "EXPIRES_BEFORE_DUE": "Scade prima dell'ordine",
+    "SHORT": "Non basta a magazzino",
+    "OK": "Certificata, a magazzino"
+  },
+  "yield": {
+    "title": "Resa prevista e reale",
+    "purpose": "Impara la perdita di taglio reale per modello dai registri di taglio.",
+    "purposeSince": "Impara la perdita di taglio reale per modello dai tagli dal {date} (almeno {min} per modello).",
+    "error": "Impossibile caricare la resa prevista e reale",
+    "empty": "Ancora pochi tagli da cui imparare (ne servono {min} per modello)",
+    "count_one": "{count} modello",
+    "count_other": "{count} modelli",
+    "revision": "rev {revision} · {name}",
+    "cuts_one": "{count} taglio",
+    "cuts_other": "{count} tagli",
+    "hides_one": "{count} pelle",
+    "hides_other": "{count} pelli",
+    "planned": "prevista {area}",
+    "actualLoss": "reale {loss}",
+    "noPlan": "nessuna perdita prevista",
+    "plannedLoss": {
+      "STYLE": "prevista {loss} (resa pelle del modello)",
+      "BOM": "prevista {loss} (sfrido della distinta)"
+    },
+    "trend": "Perdita reale per ordine di lavoro di {style}",
+    "noTrend": "Nessun taglio",
+    "tooFew_one": "{count} taglio dei {min} necessari",
+    "tooFew_other": "{count} tagli dei {min} necessari",
+    "inLine": "In linea con il piano",
+    "propose": "Imposta perdita {from} → {to}",
+    "acceptedIn": "{to} accettata · nella revisione {revision} (bozza)",
+    "acceptedWaiting": "{to} accettata · aspetta una revisione in bozza",
+    "dismissed": "{to} scartata",
+    "restsOn_one": "si basa su {count} taglio",
+    "restsOn_other": "si basa su {count} tagli",
+    "last": {
+      "ACCEPTED": "accettata il {date}",
+      "DISMISSED": "scartata il {date}: {reason}"
+    },
+    "state": {
+      "TOO_FEW": "Pochi tagli",
+      "IN_LINE": "In linea"
+    },
+    "accept": "Accetta",
+    "acceptOf": "Accetta la proposta per {style}",
+    "dismiss": "Scarta",
+    "dismissOf": "Scarta la proposta per {style}"
+  },
+  "shade": {
+    "title": "Questo ordine si taglia da una tonalità?",
+    "gone": "Questa riga d'ordine non è più nella pianificazione.",
+    "noun": "ordine",
+    "why": {
+      "COVERED": "Niente da trovare: prelevato e prenotato coprono l'ordine, da un lotto di tonalità.",
+      "FITS": "Un lotto di tonalità copre il resto: prenota le sue pelli e l'ordine resta di una tonalità.",
+      "SPLIT": "Nessun lotto basta da solo, ma ogni capo può venire da un lotto: i capi restano di una tonalità, l'ordine no.",
+      "MUST_BUY": "La pelle libera non basta, neanche dividendo per capo: compra l'area che completa il lotto migliore.",
+      "ASK_CUSTOMER": "L'ordine ha già pelli di più lotti di tonalità: solo il cliente può accettare il mix."
+    },
+    "leather": "Pelle",
+    "sizes": "Taglie",
+    "area": "Area necessaria",
+    "toFind": "Da trovare",
+    "held": "L'ordine ha",
+    "heldNone": "ancora nessuna pelle",
+    "grades": "Mix di scelte delle pelli libere",
+    "bySize": "Area per taglia e parte ({unit})",
+    "part": "Parte",
+    "total": "Totale",
+    "lots": "Lotti liberi per tonalità",
+    "free": "Libera",
+    "reservedHere": "Prenotata per questo ordine",
+    "own_one": "il lotto dell'ordine · {count} pelle libera",
+    "own_other": "il lotto dell'ordine · {count} pelli libere",
+    "hidesFree_one": "{count} pelle libera",
+    "hidesFree_other": "{count} pelli libere",
+    "options": "Opzioni",
+    "noOptions": "Niente da scegliere: l'ordine è coperto.",
+    "links": "Apri:",
+    "mrpLine": "la riga in Cosa comprare e produrre"
+  },
+  "option": {
+    "reserve": "Prenota da un lotto",
+    "split": "Dividi per capo",
+    "buy": "Compra l'area mancante",
+    "ask": "Chiedi al cliente",
+    "reserveDo": "Prenota le pelli",
+    "splitDo": "Prenota per capo",
+    "buyDo": "Bozza d'ordine",
+    "askDo": "Chiedi alle vendite sull'ordine",
+    "reserveEffect_one": "{count} pelle · {area} da {lot}",
+    "reserveEffect_other": "{count} pelli · {area} da {lot}",
+    "splitEffect": "{split}; ogni capo resta di una tonalità",
+    "splitPart": "taglie {sizes} da {lot}",
+    "buyEffect": "Compra {area} (≈ {hides} pelli) di {shade} per completare il lotto {lot}: la stessa bozza d'ordine di Cosa comprare e produrre",
+    "askEffect": "Una nota su {order} per le vendite: chiedono al cliente se un mix di tonalità va bene"
+  },
+  "accept": {
+    "title": "Cambia la perdita di taglio del modello {style}",
+    "confirm": "Cambia a {to}",
+    "fromTo_one": "Da {from} a {to}; in base a {count} taglio.",
+    "fromTo_other": "Da {from} a {to}; in base a {count} tagli.",
+    "affects": "Vale per la prossima pianificazione e i nuovi preventivi; un ordine rilasciato non cambia mai.",
+    "intoDraft": "Va nella revisione {revision} (bozza): la resa pelle prevista e lo sfrido della pelle. La revisione rilasciata {released} e i suoi ordini di lavoro restano come sono.",
+    "noDraft": "{style} non ha una revisione in bozza: la modifica resta registrata e Prodotti apre la revisione {next} per portarla (poi accetta di nuovo).",
+    "back": "Accetta un'altra proposta più avanti, o cambia la bozza in Prodotti"
+  },
+  "dismiss": {
+    "title": "Scarta la proposta per {style}",
+    "subtitle_one": "Da {from} a {to}, su {count} taglio",
+    "subtitle_other": "Da {from} a {to}, su {count} tagli",
+    "confirm": "Scarta",
+    "body": "La proposta resta in silenzio finché cambia o arrivano altri tagli. Il motivo resta nella storia del modello.",
+    "reason": "Perché",
+    "reasonHint": "Da 3 a 500 caratteri, per esempio: una fustella nuova da settimana scorsa."
+  },
+  "ask": {
+    "head": "Chiedi al cliente: {order} riga {line} ({style}, {colour}) non si taglia da un solo lotto di tonalità.",
+    "need": "Ancora da trovare: {area} di {leather}.",
+    "split": "Possiamo tagliare ogni capo da una tonalità: {split}.",
+    "buy": "Oppure compriamo prima {area} della tonalità {shade}.",
+    "question": "Chiedi al cliente se un mix di tonalità tra i capi va bene, e scrivi qui la risposta."
+  },
+  "note": {
+    "reserve": "Piano pelle: un lotto di tonalità ({lot}).",
+    "split": "Piano pelle, divisa per capo: {split}."
+  },
+  "notice": {
+    "reserved_one": "{count} pelle di {lot} prenotata.",
+    "reserved_other": "{count} pelli di {lot} prenotate.",
+    "split_one": "Prenotata per capo da {count} lotto.",
+    "split_other": "Prenotata per capo da {count} lotti.",
+    "drafted": "Bozza d'ordine d'acquisto {orders}: aprila in Ordini d'acquisto.",
+    "asked": "Nota per le vendite aggiunta su {order}.",
+    "acceptedIn": "{style}: la nuova perdita di taglio è nella revisione {revision} (bozza).",
+    "acceptedRecorded": "{style}: la nuova perdita di taglio è registrata; aspetta una revisione in bozza.",
+    "dismissed": "{style}: proposta scartata.",
+    "ran": "Pianificazione fatta: il fabbisogno è riletto.",
+    "runBusy": "C'è già una pianificazione in corso: riprova tra poco."
+  },
+  "refusal": {
+    "moved": "La proposta è cambiata nel frattempo (nuovi tagli o un'altra decisione): la resa è riletta.",
+    "alreadyAccepted": "Questa perdita è già stata accettata.",
+    "alreadyDismissed": "Questa proposta è già stata scartata.",
+    "shade": "Rifiutato: un altro lotto di tonalità rispetto all'ordine (un lotto per ordine). Scegli un'altra opzione.",
+    "draft": "La revisione in bozza del modello è cambiata: rileggi la resa.",
+    "changed": "Qualcuno l'ha cambiato nel frattempo: è riletto.",
+    "reason": "Il motivo non è valido.",
+    "invalid": "La richiesta non era valida.",
+    "forbidden": "Non puoi farlo.",
+    "gone": "Non c'è più.",
+    "offline": "Nessuna connessione: riprova.",
+    "failed": "Non è riuscito: riprova."
+  },
+  "error": {
+    "failed": "La lettura non è riuscita.",
+    "forbidden": "Il tuo ruolo non può vederlo.",
+    "offline": "Nessuna connessione.",
+    "gone": "Non trovato.",
+    "noSite": "Nessuno stabilimento da leggere."
+  },
+  "csv": {
+    "order": "Ordine",
+    "line": "Riga",
+    "style": "Modello",
+    "colour": "Colore",
+    "sizes": "Taglie",
+    "leather": "Pelle",
+    "area": "Area con perdita",
+    "issued": "Prelevata",
+    "reserved": "Prenotata",
+    "toFind": "Da trovare",
+    "hides": "Pelli (circa)",
+    "loss": "Perdita di taglio %",
+    "bestLot": "Lotto migliore",
+    "feasibility": "Una tonalità"
+  },
+  "print": {
+    "title": "Piano di taglio",
+    "kicker": "Piano pelle e taglio · {site}",
+    "button": "Stampa",
+    "held": "Il piano si sta caricando.",
+    "printedAt": "stampato {time}",
+    "filters": "Filtri: {filters}",
+    "noFilters": "Ogni riga d'ordine aperta che chiede pelle",
+    "search": "ricerca “{q}”",
+    "col": {
+      "order": "Ordine",
+      "style": "Modello · colore",
+      "sizes": "Taglie",
+      "leather": "Pelle",
+      "toFind": "Da trovare",
+      "hides": "Pelli",
+      "lot": "Tagliare da",
+      "feasibility": "Una tonalità"
+    },
+    "foot_one": "{count} riga d'ordine.",
+    "foot_other": "{count} righe d'ordine."
+  }
+}

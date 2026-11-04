@@ -8,6 +8,8 @@ import { MAX_EXCEPTIONS_PER_ACTION } from './exceptions/lifecycle'
 // B-W2a-34: the planning board (the working plan's changes, a published version).
 import { SCHEDULE_CHANGES } from './schedule/changes'
 import { SLOT_LIMITS } from './schedule/slots'
+// B-W2b-132: the leather and cut plan (a style's cutting loss decided).
+import { LOSS_DECISIONS } from './leather/loss'
 
 /**
  * The planning module's events (plan A1 §3.4, §3.5; PLN-062; design 02 "What to buy & make", Live). apps/factory-api's
@@ -36,6 +38,11 @@ import { SLOT_LIMITS } from './schedule/slots'
  *                                    again; never the bar being dragged)
  *   planning.schedule_published      a numbered version of the working plan was published to the floor: the floor
  *                                    devices of the site get it too (their dispatch lists say "List changed")
+ *
+ * B-W2b-132 (the leather and cut plan; PLN-109; design planning.leather "Planned vs actual yield", pop-up "Change cutting loss
+ * for style X"): the yield grid and the style's BOM read again.
+ *   planning.cutting_loss_decided    a style's cutting loss proposal was accepted (into its draft revision, when it has one)
+ *                                    or dismissed with a reason, at a site
  */
 const live = { permission: 'planning.view', fields: ['runId', 'siteId'] } as const
 const SETTINGS_FIELDS = ['horizonWeeks', 'dayBucketWeeks', 'weekBucketWeeks', 'defaultEfficiencyPct', 'scheduledRunTime'] as const
@@ -180,5 +187,23 @@ export const events = [
       removed: z.number().int().min(0),
     }),
     live: { permission: 'planning.view', floor: 'floor.work', fields: ['siteId', 'planVersionId', 'number', 'effectiveFrom'] },
+  }),
+  defineEvent({
+    type: 'planning.cutting_loss_decided',
+    context: 'planning',
+    description:
+      "A style's cutting loss proposal from its cuts at a site was accepted (written into the style's draft revision when it has one: the plan run and new quotes use it once released) or dismissed with a reason.",
+    payload: z.strictObject({
+      styleId: z.uuid(),
+      siteId: z.uuid(),
+      decision: z.enum(LOSS_DECISIONS),
+      /** The planned loss before and the proposal's, percent with two places (null: no planned loss before). */
+      fromPct: z.string().nullable(),
+      toPct: z.string(),
+      cuts: z.number().int().min(0),
+      /** The draft revision the accepted loss was written into; null when dismissed or when the style has no draft. */
+      revisionId: z.uuid().nullable(),
+    }),
+    live: { permission: 'planning.view', fields: ['styleId', 'siteId', 'decision'] },
   }),
 ] as const

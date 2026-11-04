@@ -560,6 +560,20 @@ const QUALITY_REPORTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Ob
 const ROLESHEETS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   safety_officer: ['safety.rolesheets.manage'],
 })
+// B-W2b-132: the leather and cut plan — the planner (the design's role) changes a style's cutting loss from its cuts (into the
+// draft revision) or dismisses the proposal with a reason. The owner from every().
+const LEATHER_PLAN_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  planner: ['planning.leather.manage'],
+})
+/**
+ * B-W2b-133 (the course catalogue and who needs which course, QHS-241, QHS-242; design people.skills "Course catalogue", "Who
+ * needs what"): the safety officer keeps the catalogue (hours and refresher periods typed from the company's programme) and
+ * the courses a type of machine asks. A role's courses stay the role sheet's. Office only; owner from every(); read_only gets
+ * none (no read added: reading is safety.view).
+ */
+const TRAINING_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.training.manage'],
+})
 /**
  * B-W2b-134 (PPE for workers, QHS-259, QHS-260, QHS-261; design plant.ppe): the safety officer keeps the PPE catalogue and, with
  * HR, records paper receipts and voids wrong issues; the floor supervisor (the preposto who hands PPE out on the floor) records
@@ -650,6 +664,10 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (QUALITY_REPORTS_ADDS[key] ?? []) : []),
   // B-W2b-128
   ...(audience === 'office' ? (ROLESHEETS_ADDS[key] ?? []) : []),
+  // B-W2b-132
+  ...(audience === 'office' ? (LEATHER_PLAN_ADDS[key] ?? []) : []),
+  // B-W2b-133
+  ...(audience === 'office' ? (TRAINING_ADDS[key] ?? []) : []),
   // B-W2b-134
   ...(audience === 'office' ? (PPE_ADDS[key] ?? []) : [])]
 /**
