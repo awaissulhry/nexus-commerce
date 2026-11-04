@@ -8,9 +8,19 @@
 //
 // Secrets are never stored: passwords as scrypt hashes, session, invitation and reset tokens as SHA-256 of the token,
 // recovery codes as HMACs, the TOTP secret encrypted (AES-256-GCM). The logger redacts these columns by name.
+//
+// W2b schema wave 17/22 (B-W2b-152; PLT-006, PLT-021, PLT-022, PLT-050; Owner answer C3): portal users join this table.
+// A partner user is a User with audience PARTNER and ONE party (partyId, its partner kind, an optional end of access):
+// one person table, never a second one. A partner signs in by an e-mail code only (portal-auth.prisma PortalSignInCode),
+// so a partner user never has a password (the …_portal_identity_w2b_guards triggers). Sessions and invitations carry
+// the audience too: a partner session is bound to the party of its person (idle 30 minutes, absolute 12 hours, A1
+// §3.10), and an office person previewing a partner's portal holds a partner session of that party marked as a preview
+// (read-only, every preview audited by the API). factory_partner_runtime reads the User and Session rows of its own party
+// only, never a password, TOTP or recovery column (ownership/auth.json); everything else here stays the office's.
 
 /// A person who signs in to the Office of one tenant (what they may do: their role assignments, roles.prisma; floor
-/// workers and portal users join this table in their steps). Never deleted: a leaver is DEACTIVATED and keeps their name on history.
+/// workers join this table in their steps), or, with audience PARTNER (W2b-3), a person of one partner organisation who
+/// signs in to its portal. Never deleted: a leaver is DEACTIVATED and keeps their name on history.
 model User {
   id                   String     @id @db.Uuid
   tenantId             String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -40,6 +50,20 @@ model User {
   totpLastStep         Int?
   /// HMAC-SHA-256 of each unused recovery code; a code leaves the list when it is used.
   recoveryCodeHashes   String[]   @default([])
+  /// W2b (B-W2b-152): who the person signs in as. OFFICE: the Office (a password, roles of the OFFICE audience). PARTNER:
+  /// the portal of one party (an e-mail code only, never a password; roles of the PARTNER audience bound to that party).
+  /// Never changes: a person of a partner and an office person are two accounts.
+  audience             UserAudience @default(OFFICE)
+  /// The partner organisation of a PARTNER user, set exactly then; never changes once set. Personal data (whose person
+  /// they are; purpose: the portal account).
+  partyId              String?      @db.Uuid
+  /// Which portal a PARTNER user sees (PLT-021), set exactly then and fitting the party's roles: CUSTOMER (a customer or
+  /// a brand), SUPPLIER, SUBCONTRACTOR, GUEST (an outside adviser: a CONSULTANT party, B-W2b-75; time-boxed).
+  partnerKind          PartnerKind?
+  /// PLT-022: the end of a PARTNER user's access (the API ends it by itself; "access ends soon" 7 days before); null: no
+  /// end. Only on a partner user (an office person's access ends with their role assignments' validTo); a GUEST always
+  /// has one. Personal data (purpose: the portal account).
+  accessUntil          DateTime?    @db.Timestamptz(3)
   version              Int        @default(1)
   createdAt            DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
@@ -47,7 +71,16 @@ model User {
 
   // A suspended tenant's people cannot sign in, and their sessions stop (sessions/authenticator.ts).
   tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  sessions          Session[]
+  // W2b (B-W2b-152): the party of a partner user (Restrict, not Prisma's SetNull default for an optional relation: that
+  // would also clear tenantId).
+  party             Party?            @relation("UserParty", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sessions          Session[]         @relation("SessionUser")
+  // W2b: the partner portals this office person previewed (Session.previewById).
+  previewSessions   Session[]         @relation("SessionPreviewBy")
+  // W2b portal-auth.prisma: the sign-in and step-up codes sent to this partner user.
+  portalSignInCodes PortalSignInCode[]
+  // W2b privacy.prisma: the partner user's acknowledgements of the portal terms.
+  partnerNoticeAcks PartnerNoticeAck[]
   invitations       Invitation[]      @relation("InvitedUser")
   sentInvitations   Invitation[]      @relation("InvitedBy")
   passwordResets    PasswordReset[]
@@ -81,6 +114,28 @@ model User {
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.
   @@unique([tenantId, id])
+  // W2b: a party's people (the partner policy reads by it).
+  @@index([tenantId, partyId])
+}
+
+/// W2b (B-W2b-152): who a person, a session or an invitation is for.
+enum UserAudience {
+  /// The Office of the tenant.
+  OFFICE
+  /// The portal of one partner organisation (a party).
+  PARTNER
+}
+
+/// W2b (B-W2b-152; PLT-021): which portal a partner user sees.
+enum PartnerKind {
+  /// A customer or a brand: orders, tracking, documents, returns.
+  CUSTOMER
+  /// A supplier: purchase orders without prices, ship notices, documents we ask for (Owner answer C2).
+  SUPPLIER
+  /// A workshop (terzista): its subcontract jobs, without prices.
+  SUBCONTRACTOR
+  /// An outside adviser with a time-boxed guest login (the accountant: files only; PLT-022, B-W2b-201).
+  GUEST
 }
 
 /// The life of a user (apps/factory-api platform/auth/users: the machine and its commands).
@@ -95,7 +150,9 @@ enum UserStatus {
 }
 
 /// One signed-in browser (a `__Host-` cookie holds the token). Valid until revoked, 8 hours without use or 7 days
-/// after sign-in, whichever comes first; the user must still be ACTIVE.
+/// after sign-in, whichever comes first; the user must still be ACTIVE. W2b (B-W2b-152): a PARTNER session is the portal
+/// session of one party: its person's party, or, for an office preview, the party previewed; 30 minutes without use and
+/// 12 hours after sign-in at most (A1 §3.10; the guards hold both).
 model Session {
   id                String            @id @db.Uuid
   tenantId          String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -119,12 +176,28 @@ model Session {
   userAgent         String?
   revokedAt         DateTime?         @db.Timestamptz(3)
   revokedReason     SessionEndReason?
+  /// W2b (B-W2b-152): OFFICE (the Office cookie) or PARTNER (a portal session of one party). Never changes.
+  audience          UserAudience      @default(OFFICE)
+  /// The party of a PARTNER session, set exactly then and never changed: the person's own party, or the party an office
+  /// person previews. factory_partner_runtime reads a session only in the scope of this party.
+  partyId           String?           @db.Uuid
+  /// An office preview of a partner's portal (B-W2b-162; design portal.frame notices "previewing this portal as …"):
+  /// read-only for the API, every preview in the audit log. Set exactly on a preview, equal to partyId; the session's
+  /// person is then an office person, and previewById names them (equal to userId). Never changes.
+  previewOfPartyId  String?           @db.Uuid
+  previewById       String?           @db.Uuid
 
-  user    User     @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  user    User     @relation("SessionUser", fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b: the party of a partner session, the party an office preview shows, the office person previewing.
+  party            Party? @relation("SessionParty", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  previewOfParty   Party? @relation("SessionPreviewOfParty", fields: [tenantId, previewOfPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  previewBy        User?  @relation("SessionPreviewBy", fields: [tenantId, previewById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, userId])
+  // W2b: a party's sessions (the partner policy reads by it).
+  @@index([tenantId, partyId])
 }
 
 /// Why a session ended before its time.
@@ -137,7 +210,9 @@ enum SessionEndReason {
 }
 
 /// An invitation to join the tenant's Office by email (PLT-015): a single-use link that expires. The invited user row
-/// exists from the start (INVITED); accepting sets the password and activates it.
+/// exists from the start (INVITED); accepting sets the password and activates it. W2b (B-W2b-152; PLT-006, SAL-059): an
+/// invitation of the PARTNER audience asks a partner person to the portal of their party, by the office or by the
+/// partner's own admin, with the partner roles it gives and an optional end of access; no password is ever set.
 model Invitation {
   id          String    @id @db.Uuid
   tenantId    String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -152,11 +227,25 @@ model Invitation {
   expiresAt   DateTime  @db.Timestamptz(3)
   acceptedAt  DateTime? @db.Timestamptz(3)
   revokedAt   DateTime? @db.Timestamptz(3)
+  /// W2b (B-W2b-152): the invited person's audience (the guards hold it equal to the user's). Never changes.
+  audience        UserAudience @default(OFFICE)
+  /// The invited person's party, set exactly on a PARTNER invitation (equal to the user's). Never changes.
+  partyId         String?      @db.Uuid
+  /// The keys of the partner roles (Role.key, audience PARTNER) the acceptance gives, each once; at least one on a PARTNER
+  /// invitation, none on an office one. The API keeps them within the party's PortalSettings (allowed roles, max users).
+  /// Changed only while the invitation is open.
+  partnerRoleKeys String[]     @default([])
+  /// The end of access the acceptance gives the partner person (PLT-022); null: none. Only on a PARTNER invitation, after
+  /// it was made. Changed only while the invitation is open.
+  accessUntil     DateTime?    @db.Timestamptz(3)
 
   user      User  @relation("InvitedUser", fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   invitedBy User? @relation("InvitedBy", fields: [tenantId, invitedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b: the party a partner invitation is for.
+  party     Party? @relation("InvitationParty", fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, userId])
+  @@index([tenantId, partyId])
 }
 
 /// A single-use link to set a new password (PLT-070), asked for by the person or required by an administrator.

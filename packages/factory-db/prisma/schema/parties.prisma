@@ -76,6 +76,14 @@ model Party {
   agencyEmployees     Employee[]           @relation("EmployeeAgency")
   // W2b people.prisma: the companies whose labour consultant it is.
   consultantSettings  PeopleSettings[]     @relation("PeopleSettingsConsultant")
+  // W2b auth.prisma, portal-auth.prisma, privacy.prisma (wave 17/22): its partner users, their portal sessions and the
+  // office previews of its portal, their invitations, its portal settings, its people's acknowledgements of the terms.
+  portalUsers         User[]               @relation("UserParty")
+  portalSessions      Session[]            @relation("SessionParty")
+  portalPreviews      Session[]            @relation("SessionPreviewOfParty")
+  portalInvitations   Invitation[]         @relation("InvitationParty")
+  portalSettings      PortalSettings[]
+  partnerNoticeAcks   PartnerNoticeAck[]
   // product.prisma: the items it supplies by default, the styles made for it as a brand, the BOM lines bought from it.
   suppliedItems       Item[]
   brandStyles         Style[]

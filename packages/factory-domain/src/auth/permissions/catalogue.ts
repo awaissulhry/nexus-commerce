@@ -35,6 +35,8 @@ import { PLANNING_EXCEPTIONS_DEFINITIONS, PLANNING_EXCEPTIONS_PERMISSIONS } from
 import { PLANNING_FIRM_DEFINITIONS, PLANNING_FIRM_PERMISSIONS } from '../../planning/mrp/permissions'
 // B-W2a-34: the planning board (planning.schedule.manage, planning.schedule.publish).
 import { PLANNING_SCHEDULE_DEFINITIONS, PLANNING_SCHEDULE_PERMISSIONS } from '../../planning/schedule/permissions'
+// B-W2b-132: the leather and cut plan (planning.leather.manage).
+import { PLANNING_LEATHER_DEFINITIONS, PLANNING_LEATHER_PERMISSIONS } from '../../planning/leather/permissions'
 import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing/permissions'
 import { PURCHASING_SOURCES_DEFINITIONS, PURCHASING_SOURCES_PERMISSIONS } from '../../purchasing/sources/permissions'
 // B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
@@ -176,6 +178,10 @@ import { SAFETY_RISK_DEFINITIONS, SAFETY_RISK_PERMISSIONS } from '../../safety/r
 import { SAFETY_INCIDENTS_DEFINITIONS, SAFETY_INCIDENTS_PERMISSIONS } from '../../safety/incidents/permissions'
 // B-W2b-138: quality reports (quality.reports.view).
 import { QUALITY_REPORTS_DEFINITIONS, QUALITY_REPORTS_PERMISSIONS } from '../../quality/reports/permissions'
+// B-W2b-128: role sheets (safety.rolesheets.manage: a role's risks, PPE kit, courses and whether it needs health surveillance).
+import { SAFETY_ROLESHEETS_DEFINITIONS, SAFETY_ROLESHEETS_PERMISSIONS } from '../../safety/rolesheets/permissions'
+// B-W2b-133: the course catalogue and who needs which course (safety.training.manage: courses, and what a machine type asks).
+import { SAFETY_TRAINING_DEFINITIONS, SAFETY_TRAINING_PERMISSIONS } from '../../safety/training/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -480,6 +486,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PLANNING_EXCEPTIONS_DEFINITIONS,
   // B-W2a-34: the planning board's working plan and its publication.
   PLANNING_SCHEDULE_DEFINITIONS,
+  // B-W2b-132: the leather and cut plan's cutting loss.
+  PLANNING_LEATHER_DEFINITIONS,
   PURCHASING_DEFINITIONS,
   INVOICES_DEFINITIONS,
   PAYMENTS_DEFINITIONS,
@@ -629,6 +637,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SAFETY_INCIDENTS_DEFINITIONS,
   // B-W2b-138: quality reports.
   QUALITY_REPORTS_DEFINITIONS,
+  // B-W2b-128: role sheets.
+  SAFETY_ROLESHEETS_DEFINITIONS,
+  // B-W2b-133: the course catalogue and training requirements.
+  SAFETY_TRAINING_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -807,6 +819,12 @@ for (const name of SAFETY_RISK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(
 for (const name of SAFETY_INCIDENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-138: quality reports.
 for (const name of QUALITY_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-128: role sheets.
+for (const name of SAFETY_ROLESHEETS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-132: the leather and cut plan.
+for (const name of PLANNING_LEATHER_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-133: the course catalogue and training requirements.
+for (const name of SAFETY_TRAINING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

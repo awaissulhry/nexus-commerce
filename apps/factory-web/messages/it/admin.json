@@ -1822,6 +1822,7 @@
     "search_rebuild": "Ricostruire l'indice di ricerca di tutto il gruppo",
     "planning_schedule_manage": "Pianificare il programma e assegnare il lavoro alle linee",
     "planning_schedule_publish": "Pubblicare il programma al reparto",
+    "planning_leather_manage": "Cambiare la perdita di taglio di un modello dai suoi tagli",
     "alerts_view": "Vedere gli avvisi dei record che vedi e le regole di eccezione",
     "alerts_handle": "Prendere in carico, assegnare, posticipare e risolvere gli avvisi",
     "alerts_rules_manage": "Modificare e aggiungere regole di eccezione",
@@ -1949,6 +1950,8 @@
     "safety_incidents_view": "Vedere infortuni, quasi incidenti e pericoli in forma anonima: cosa, quando, dove, gravità, azioni, foto e le scadenze INAIL (mai la persona o la lesione)",
     "safety_incidents_report": "Segnalare un infortunio, un quasi incidente o un pericolo dall’ufficio, con le persone coinvolte",
     "safety_incidents_manage": "Gestire le segnalazioni: correggerle, gravità, presa visione della sicurezza, azioni trasformate in intervento, misura o sessione di formazione, chiudere, riaprire, annullare, foto",
-    "safety_incidents_people": "Dati protetti: vedere e correggere le persone coinvolte e le loro lesioni, gestire le comunicazioni INAIL (certificato, invio con numero di protocollo, ricevuta); ogni consultazione è registrata"
+    "safety_incidents_people": "Dati protetti: vedere e correggere le persone coinvolte e le loro lesioni, gestire le comunicazioni INAIL (certificato, invio con numero di protocollo, ricevuta); ogni consultazione è registrata",
+    "safety_rolesheets_manage": "Gestire le schede mansione: rischi, kit DPI, corsi e sorveglianza sanitaria di ogni mansione; applicare una scheda dopo aver letto cosa cambia per le persone della mansione",
+    "safety_training_manage": "Gestire il catalogo dei corsi di sicurezza (ore e periodicità degli aggiornamenti dal vostro programma, partire dall’elenco standard) e i corsi richiesti da un tipo di macchina, ogni volta dopo aver letto cosa cambia per le persone"
   }
 }

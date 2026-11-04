@@ -104,6 +104,8 @@ model Company {
   integrationAccounts IntegrationAccount[]
   // files.prisma: the company's files.
   files               StoredFile[]
+  // W2b files-depth.prisma (wave 18/22): the documents its record types must have before a status move.
+  requiredDocumentRules RequiredDocumentRule[]
   // links.prisma: the one-off links that open the company's records.
   oneOffLinks         OneOffLink[]
   // threads.prisma: the threads of the company's records.
@@ -140,6 +142,8 @@ model Company {
   // quality.prisma: its PPE register and its quality settings (the Cr VI evidence rule).
   ppeRegisterEntries   PpeRegisterEntry[]
   qualitySettings      QualitySettings[]
+  // W2b portal-auth.prisma (wave 17/22): its branding on the portal, the link pages and partner mail.
+  branding             CompanyBranding[]
   // money.prisma: its invoices and the payments it received.
   invoices             Invoice[]
   payments             Payment[]

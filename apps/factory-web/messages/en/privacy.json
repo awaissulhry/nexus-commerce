@@ -122,6 +122,11 @@
         "name": "Public privacy notice",
         "who": "For customers, suppliers and visitors",
         "means": "The notice anyone can read at the company's public address, linked from every link page and e-mail."
+      },
+      "PORTAL_TERMS": {
+        "name": "Portal terms",
+        "who": "For customers' and suppliers' portal users",
+        "means": "The portal terms and the notice for partners. Each portal user accepts the version in force once, at their first visit."
       }
     },
     "status": {
