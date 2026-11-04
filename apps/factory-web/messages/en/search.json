@@ -85,6 +85,7 @@
     "SizeScale": "Size scale",
     "Machine": "Machine",
     "MaintenanceJob": "Maintenance job",
+    "Incident": "Incident",
     "other": "Record"
   },
   "chip": {
@@ -120,6 +121,7 @@
     "SizeScale": "Size scales",
     "Machine": "Machines",
     "MaintenanceJob": "Maintenance jobs",
+    "Incident": "Incidents",
     "other": "Other records"
   },
   "status": {

@@ -131,6 +131,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   SafetyDeadline: '/plant/calendar?open=DEADLINE:[id]',
   SafetyAppointment: '/plant/calendar?appoint=[id]',
   RlsNotice: '/plant/calendar?filing=[id]',
+  // B-W2b-149 Plant › Incidents (SCR-210): an incident opens its record page.
+  Incident: '/plant/incidents/[id]',
 })
 
 /**
@@ -245,6 +247,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/people/attendance': '/people/attendance',
   // B-W2b-120: the safety calendar (SCR-267) reads `?view=`, `?tile=`, `?from=`, `?to=`.
   '/safety/calendar': '/plant/calendar',
+  // B-W2b-149: the incidents (SCR-210) read `?rows=`, `?status=`, `?from=`, `?to=`, `?q=`.
+  '/safety/incidents': '/plant/incidents',
 })
 
 export interface RecordRef {

@@ -488,7 +488,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Health & safety',
         labelIt: 'Salute e sicurezza',
         hideLabel: false,
-        pages: [{ id: 'plant.calendar', title: 'Safety calendar', titleIt: 'Scadenzario sicurezza', wave: 'W2b', href: '/plant/calendar' }],
+        pages: [
+          // B-W2b-149: Incidents (SCR-210).
+          { id: 'plant.incidents', title: 'Incidents', titleIt: 'Infortuni e quasi incidenti', wave: 'W2b', href: '/plant/incidents' },
+          { id: 'plant.calendar', title: 'Safety calendar', titleIt: 'Scadenzario sicurezza', wave: 'W2b', href: '/plant/calendar' },
+        ],
       },
       // B-W2a-73: Plant settings (a W2b page) ships with its W2a section only, Symptoms on the floor (SCR-241).
       {

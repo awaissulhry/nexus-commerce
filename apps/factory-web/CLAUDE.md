@@ -263,6 +263,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Hand back dialog (board drop, the record's primary, `h`; `jobs/view/CloseForm.tsx` is the ONE close form, also the tab),
   the record's Unsafe lock panel with Sign safe (`requests/view/SignSafeDialog.tsx`, the ONE sign-safe dialog), the Photos
   tab (plant files routes, before / after), Line lead confirms. The containers sit inside `PlantMessages` (they speak too).
+- `src/areas/plant/incidents/` — Plant › Health & safety › Incidents (B-W2b-149 on B-W2b-125's API; catalogue `plant-incidents`,
+  CSS prefix `fw-inc-`): SCR-210 `/plant/incidents?rows=INJURY|NEAR_MISS|HAZARD|INAIL_DUE&status=&from=&to=&q=&new=1` (the band's
+  live chip = `counts.next`, the critical Banner + Countdown = `counts.deadline`, tiles = filters, the ANONYMISED list frame
+  `plant.incidents` — its export source reads the list, no person; "Show people" = one recorded `POST /safety/incidents/people`
+  in the container's state only, after a PrivacyNote; Mark seen N; Report an incident `c` with the DS PhotoCapture), the record
+  SCR-210-record `/plant/incidents/<id>?tab=report|actions|authority` (marked seen once for a manage holder; People and the
+  filings behind the recorded `…/open` reads — ProtectedValue; Make a job / Add to improvement plan in one step; Record INAIL
+  filing `f`, Close held while an action is open or a filing waits) and SCR-210-print `/plant/incidents/print` (a window page,
+  anonymised). `RECORD_PAGES.Incident`, search type `Incident`. The record frame is the plant's (`_shared/parts` RecordFrame).
 - The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
   write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
   and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):
