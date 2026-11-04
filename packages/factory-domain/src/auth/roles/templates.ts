@@ -560,6 +560,15 @@ const QUALITY_REPORTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Ob
 const ROLESHEETS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   safety_officer: ['safety.rolesheets.manage'],
 })
+/**
+ * B-W2b-133 (the course catalogue and who needs which course, QHS-241, QHS-242; design people.skills "Course catalogue", "Who
+ * needs what"): the safety officer keeps the catalogue (hours and refresher periods typed from the company's programme) and
+ * the courses a type of machine asks. A role's courses stay the role sheet's. Office only; owner from every(); read_only gets
+ * none (no read added: reading is safety.view).
+ */
+const TRAINING_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.training.manage'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -638,7 +647,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-138
   ...(audience === 'office' ? (QUALITY_REPORTS_ADDS[key] ?? []) : []),
   // B-W2b-128
-  ...(audience === 'office' ? (ROLESHEETS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (ROLESHEETS_ADDS[key] ?? []) : []),
+  // B-W2b-133
+  ...(audience === 'office' ? (TRAINING_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
