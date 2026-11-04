@@ -249,6 +249,9 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       const scrap = whole(p.scrap)
       return { code: text(p.code) ?? text(p.step, 8), target: text(p.reworkId, 40), ...(good !== undefined ? { good } : {}), ...(scrap !== undefined ? { scrap } : {}) }
     }
+    // B-W2b-125: the kind only (INJURY, NEAR_MISS, HAZARD); never the words, the place or a person.
+    case 'safety.incident.report':
+      return { code: text(p.kind, 20) }
   }
 }
 

@@ -8,7 +8,9 @@
 // A notice has a kind: WORKER_FLOOR (what the floor tools record about workers, shown on the tablet before the first
 // scan: Statuto dei Lavoratori art. 4 c.3, GDPR art. 13), OFFICE_STAFF (what the system keeps about office staff: the
 // audit trail, staff mail kept on record threads) and PRIVACY_PUBLIC (the company's notice for customers, suppliers and
-// contacts, linked from every link page, form and e-mail footer: `/privacy/<company id>`, GDPR arts. 13 and 14). Each
+// contacts, linked from every link page, form and e-mail footer: `/privacy/<company id>`, GDPR arts. 13 and 14), and from
+// W2b-3 PORTAL_TERMS (the portal terms and partner notice each partner user acknowledges at their first visit:
+// PartnerNoticeAck, append-only like the staff acknowledgements; GATE-PRIVACY). Each
 // version is a DRAFT while it is written, PUBLISHED when it is in force (one per company and kind) and SUPERSEDED when a
 // later version is published. Publishing freezes it: its texts and their fingerprints never change again (the
 // …_privacy_guards triggers, for every login), so an acknowledgement names exactly what the person saw. Each language
@@ -55,6 +57,8 @@ model PrivacyNotice {
   // production.prisma: the floor workers' acknowledgements of this version.
   workerAcks WorkerNoticeAck[]
   staffAcks  StaffNoticeAck[]
+  // W2b (wave 17/22): the partner users' acknowledgements of this version of the portal terms.
+  partnerAcks PartnerNoticeAck[]
   // W2b people.prisma (wave 4/7): the legal gates switched on with this notice.
   peopleLegalGates PeopleLegalGate[]
   // W2b pay.prisma (wave 6/7): the legal switches of piece pay that name it as the worker notice.
@@ -74,6 +78,9 @@ enum PrivacyNoticeKind {
   OFFICE_STAFF
   /// The company's notice for everyone outside it, at `/privacy/<company id>` (GAP-005).
   PRIVACY_PUBLIC
+  /// W2b (B-W2b-152; GATE-PRIVACY): the portal terms and the partner portal notice, acknowledged once per version by each
+  /// partner user at their first visit (PartnerNoticeAck). Live portal sign-in waits until one is published.
+  PORTAL_TERMS
 }
 
 enum PrivacyNoticeStatus {
@@ -223,4 +230,41 @@ model StaffNoticeAck {
 
   @@unique([tenantId, companyId, userId, noticeVersion])
   @@index([tenantId, noticeId])
+}
+
+/// W2b (B-W2b-152; GATE-PRIVACY; design portal.signin first-visit): a partner user's acknowledgement of the PORTAL_TERMS
+/// notice in force of the company whose portal they use: shown once per version at their first visit, a soft gate
+/// (shown, acknowledged, recorded). Which version (its label), in which language, as shown (its SHA-256), when, in which
+/// portal session; the person's party at that moment. Written by the API in the tenant's system scope (no partner grant).
+/// Never changed or removed (the …_portal_identity_w2b_guards triggers, for every login); a new version is acknowledged
+/// anew. Personal data (who acknowledged what and when; purpose: the portal account and the proof of the notice, GDPR
+/// art. 7(1), art. 13).
+/// @append-only
+model PartnerNoticeAck {
+  id            String   @id @db.Uuid
+  tenantId      String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String   @db.Uuid
+  noticeId      String   @db.Uuid
+  /// The partner user (audience PARTNER, ACTIVE).
+  userId        String   @db.Uuid
+  /// The person's party (equal to the user's).
+  partyId       String   @db.Uuid
+  /// The notice's label as acknowledged.
+  noticeVersion String
+  /// The language it was shown in (ISO 639-1).
+  locale        String
+  /// SHA-256 (hex) of the notice text as shown.
+  noticeSha256  String
+  /// The portal session it was given in (no reference: a ledger keeps none to rows that end).
+  sessionId     String?  @db.Uuid
+  serverTime    DateTime @default(now()) @db.Timestamptz(3)
+  createdById   String?  @db.Uuid
+
+  notice PrivacyNotice @relation(fields: [tenantId, companyId, noticeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  user   User          @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party  Party         @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, companyId, userId, noticeVersion])
+  @@index([tenantId, noticeId])
+  @@index([tenantId, partyId])
 }

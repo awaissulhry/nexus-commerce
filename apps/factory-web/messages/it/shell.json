@@ -70,6 +70,7 @@
       "requests": "Richieste di intervento",
       "jobs": "Interventi",
       "machines": "Macchine e attrezzature",
+      "preventive": "Manutenzione programmata e verifiche",
       "safety": "Salute e sicurezza",
       "calendar": "Scadenzario sicurezza",
       "settingsGroup": "Impostazioni",
@@ -124,7 +125,9 @@
       "rules": "Regole qualità",
       "problems": "Problemi",
       "ncr": "Non conformità",
-      "complaints": "Reclami"
+      "complaints": "Reclami",
+      "reportsGroup": "Report",
+      "reports": "Report qualità"
     },
     "compliance": {
       "area": "Conformità",
@@ -157,6 +160,7 @@
       "area": "Pianificazione",
       "main": "Principali",
       "mrp": "Cosa comprare e produrre",
+      "leather": "Piano pelle e taglio",
       "board": "Tabellone di pianificazione",
       "allocation": "Linee e terzisti",
       "capacity": "Capacità e carico",

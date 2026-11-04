@@ -171,6 +171,9 @@ model StoredFile {
   safetyDataSheets       SafetyDataSheet[]       @relation("SafetyDataSheetFile")
   // W2a stockcount.prisma: the year-end count whose signed valued list it is.
   stockCountValuedLists StockCount[] @relation("StockCountValuedList")
+  // W2b portal-auth.prisma (wave 17/22): the company brandings whose light or dark logo it is.
+  brandingLogos         CompanyBranding[] @relation("CompanyBrandingLogo")
+  brandingDarkLogos     CompanyBranding[] @relation("CompanyBrandingLogoDark")
   // privacy.prisma: the notice language and the DPIA whose PDF it is.
   privacyNoticeTexts PrivacyNoticeText[] @relation("PrivacyNoticeTextFile")
   privacyDpias       PrivacyDpia[]       @relation("PrivacyDpiaFile")

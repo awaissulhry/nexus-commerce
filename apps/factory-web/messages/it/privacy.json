@@ -122,6 +122,11 @@
         "name": "Informativa privacy pubblica",
         "who": "Per clienti, fornitori e visitatori",
         "means": "L’informativa che chiunque legge all’indirizzo pubblico della società, collegata da ogni pagina link ed e-mail."
+      },
+      "PORTAL_TERMS": {
+        "name": "Condizioni del portale",
+        "who": "Per gli utenti del portale di clienti e fornitori",
+        "means": "Le condizioni del portale e l’informativa per i partner. Ogni utente del portale accetta la versione in vigore una volta, alla prima visita."
       }
     },
     "status": {

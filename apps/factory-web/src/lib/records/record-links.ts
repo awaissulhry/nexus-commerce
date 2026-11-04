@@ -131,6 +131,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   SafetyDeadline: '/plant/calendar?open=DEADLINE:[id]',
   SafetyAppointment: '/plant/calendar?appoint=[id]',
   RlsNotice: '/plant/calendar?filing=[id]',
+  // B-W2b-142 Plant › Preventive & statutory checks (SCR-266): a check plan opens in its Plan window, a check result in its own.
+  MachineCheckPlan: '/plant/preventive?plan=[id]',
+  MachineCheckResult: '/plant/preventive?result=[id]',
 })
 
 /**
@@ -221,6 +224,10 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-70: capacity per lane and bucket (SCR-123, `?site=` `?from=` `?to=` `?bucket=`) and the exception queue (SCR-125).
   '/planning/capacity': '/planning/capacity',
   '/planning/exceptions': '/planning/exceptions',
+  // B-W2b-132: the leather and cut plan's three reads (SCR-252, `?site=` `?tile=` `?feas=` `?q=`).
+  '/planning/leather/need': '/planning/leather',
+  '/planning/leather/protectors': '/planning/leather',
+  '/planning/leather/yield': '/planning/leather',
   // B-W2a-59: the planning settings of the sites (SCR-124, SCR-127).
   '/planning/settings': '/planning/settings',
   // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).
@@ -245,6 +252,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/people/attendance': '/people/attendance',
   // B-W2b-120: the safety calendar (SCR-267) reads `?view=`, `?tile=`, `?from=`, `?to=`.
   '/safety/calendar': '/plant/calendar',
+  // B-W2b-142: the plans (`?due=`, `?ended=`) and the check register (`?missing=`, `?outcome=`) of SCR-266.
+  '/plant/checks/plans': '/plant/preventive',
+  '/plant/checks/results': '/plant/preventive',
 })
 
 export interface RecordRef {

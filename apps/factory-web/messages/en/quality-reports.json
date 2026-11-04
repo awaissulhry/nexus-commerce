@@ -1,0 +1,246 @@
+{
+  "common": {
+    "loading": "Reading…",
+    "retry": "Try again"
+  },
+  "noAccess": {
+    "title": "Quality reports are not in your role",
+    "body": "Ask the administrator for quality reports (quality.reports.view)."
+  },
+  "noSite": {
+    "title": "Choose a site",
+    "body": "Quality reports are read one site at a time: choose the site in the top bar."
+  },
+  "band": {
+    "label": "Report actions",
+    "noSite": "No site chosen",
+    "reading": "Reading the report…",
+    "arrange": "Arrange",
+    "more": "More actions",
+    "pdf": "Export report (PDF)",
+    "csv": {
+      "kpi": "Export panel (CSV): quality KPIs",
+      "trend": "Export panel (CSV): trend",
+      "table": "Export panel (CSV): comparison",
+      "supplier": "Export panel (CSV): incoming quality"
+    },
+    "csvHeld": "The panel has not been read yet.",
+    "keys": "Keyboard shortcuts"
+  },
+  "live": {
+    "connecting": "Connecting",
+    "live": "Live",
+    "offline": "Offline: figures may be old"
+  },
+  "scope": {
+    "label": "What the report covers",
+    "compare": "Compare to the previous period"
+  },
+  "privacy": "Per site, line, operation, supplier and style: never per person (Statuto dei Lavoratori art. 4).",
+  "tooFew": "Too few people to show without identifying them (a group needs at least {count}).",
+  "tooFewShort": "Too few people to show",
+  "section": {
+    "kpi": "Quality KPIs",
+    "trend": "Trend",
+    "table": "By line, operation, supplier and style",
+    "supplier": "Incoming quality"
+  },
+  "kpi": {
+    "hint": "Each number opens the list it comes from. The figures read the records as they were signed.",
+    "failed": "The quality KPIs could not be read",
+    "fpy": "First-pass yield",
+    "dhu": "Defects per hundred units (DHU)",
+    "aqlPass": "AQL pass rate (final)",
+    "ncrOpen": "NCRs open · average age",
+    "capaOnTime": "CAPA actions on time",
+    "holdsOld": "Holds older than 7 days",
+    "amendments_one": "1 correction was signed after signing in this period. A correction never changes a verdict or a count, so these figures read the signed records.",
+    "amendments_other": "{count} corrections were signed after signing in this period. A correction never changes a verdict or a count, so these figures read the signed records.",
+    "previous": "Compared with {from} – {to}."
+  },
+  "tile": {
+    "notInRole": "Not in your role",
+    "ncrNone": "None open at the end of the period",
+    "ncrAge": "Average age {days} days at the end of the period",
+    "holdsHint": "Still on hold at the end of the period",
+    "empty": {
+      "fpy": "No end-of-line check in the period",
+      "dhu": "No end-of-line check in the period",
+      "aqlPass": "No final inspection signed in the period",
+      "capaOnTime": "No action done in the period (the company's)"
+    },
+    "basis": {
+      "fpy": "{part} of {whole} pieces passed end of line first time ({checks} checks)",
+      "dhu": "{part} defects in {whole} pieces at end of line",
+      "aqlPass": "{part} of {whole} final inspections passed",
+      "capaOnTime": "{part} of {whole} actions done by their day (the company's)"
+    },
+    "sparkLabel": "{label}, per week",
+    "sparkEmpty": "No week with a figure",
+    "held": {
+      "capaPage": "The corrective actions list comes with its own page.",
+      "noList": "Its list is not in your role."
+    }
+  },
+  "change": {
+    "up": {
+      "points": "up {by} points vs previous {days} days",
+      "dhu": "up {by} vs previous {days} days",
+      "count_one": "{by} more than at the end of the previous {days} days",
+      "count_other": "{by} more than at the end of the previous {days} days"
+    },
+    "down": {
+      "points": "down {by} points vs previous {days} days",
+      "dhu": "down {by} vs previous {days} days",
+      "count_one": "{by} fewer than at the end of the previous {days} days",
+      "count_other": "{by} fewer than at the end of the previous {days} days"
+    },
+    "same": {
+      "points": "the same as the previous {days} days",
+      "dhu": "the same as the previous {days} days",
+      "count_one": "the same as at the end of the previous {days} days",
+      "count_other": "the same as at the end of the previous {days} days"
+    }
+  },
+  "trend": {
+    "hint": "First-pass yield and DHU at end of line, per week; a week's figures and the CAPAs closed in it open from its button.",
+    "failed": "The trend could not be read",
+    "line": "Line",
+    "allLines": "All lines",
+    "notInRole": "The trend is not in your role",
+    "notInRoleBody": "It is counted from in-process checks and final inspections: your role sees neither.",
+    "chartLabel": "First-pass yield and DHU per week",
+    "fpyAxis": "First-pass yield (%)",
+    "dhuAxis": "DHU",
+    "caption": "Line: first-pass yield (left). Bars: defects per hundred units (right). A week without a point has no check, or too few people.",
+    "empty": "No end-of-line figure in the period",
+    "emptyBody": "No end-of-line check was signed in these weeks.",
+    "emptyHidden": "Every week with checks had too few people behind it to show its figures.",
+    "weeksLabel": "Weeks of the period",
+    "weekHidden": "too few",
+    "weekOpen": "Week {week}, {from} to {to}: its figures",
+    "weekTitle": "Week {week}",
+    "weekRange": "Week {week} · {from} – {to}",
+    "pieces": "Pieces checked",
+    "checks": "End-of-line checks",
+    "aql": "{pct} ({passed} of {decided})",
+    "capaClosed": "CAPA closed",
+    "more": "and {count} more",
+    "openInspections": "Open the inspections",
+    "hidden_one": "1 week shows no figure: fewer than {minimum} people stood behind it.",
+    "hidden_other": "{count} weeks show no figure: fewer than {minimum} people stood behind them.",
+    "noClosures": "No CAPA closed in the period.",
+    "closures": "CAPA closed: {list}"
+  },
+  "dimension": {
+    "line": "Line",
+    "operation": "Operation",
+    "supplier": "Supplier",
+    "style": "Style"
+  },
+  "table": {
+    "hint": "Comparison table: per line, operation, supplier or style; never per worker.",
+    "failed": "The comparison could not be read",
+    "by": "Compare by",
+    "tableLabel": "Quality by {by}",
+    "inspected": "Inspected",
+    "defects": "Defects",
+    "dhu": "DHU",
+    "aql": "AQL pass",
+    "ncrs": "NCRs",
+    "aqlCell": "{pct} ({passed} of {decided})",
+    "empty": "Nothing to compare in the period",
+    "emptyBody": {
+      "line": "No end-of-line check, final inspection or NCR names a line in these days.",
+      "operation": "No piece was reported and no defect was charged to an operation in these days.",
+      "supplier": "No incoming inspection was signed and no NCR names a supplier in these days.",
+      "style": "No final inspection was signed and no NCR names a style in these days."
+    },
+    "none": {
+      "line": "No line",
+      "operation": "No operation",
+      "supplier": "No supplier",
+      "style": "No style"
+    },
+    "notInRole": "This comparison is not in your role",
+    "notInRoleBody": {
+      "line": "Lines are compared from in-process checks, final inspections and NCRs: your role sees none of them.",
+      "operation": "Operations are compared from in-process checks: your role does not see them.",
+      "supplier": "Suppliers are compared from incoming inspections and NCRs: your role sees neither.",
+      "style": "Styles are compared from final inspections and NCRs: your role sees neither."
+    },
+    "source": {
+      "line": "Inspected and defects: pieces at end of line. AQL pass: final inspections of the line's work orders. NCRs: found in the period on the line's work orders.",
+      "operation": "Inspected: pieces reported at the operation. Defects: charged to it at end of line, on a roving check or on a scan. Per operation, never per person.",
+      "supplier": "Inspected: units in the incoming samples. Defects: units found defective. AQL pass: incoming inspections passed. NCRs: found in the period naming the supplier.",
+      "style": "Inspected and defects: final inspections. AQL pass: final inspections passed. NCRs: found in the period naming the style."
+    },
+    "hidden_one": "1 row shows no figure: fewer than {minimum} people stood behind it.",
+    "hidden_other": "{count} rows show no figure: fewer than {minimum} people stood behind them."
+  },
+  "incoming": {
+    "hint": "Supplier view: the lots received in the period and the incoming inspections signed in it.",
+    "failed": "Incoming quality could not be read",
+    "notInRole": "Incoming quality is not in your role",
+    "notInRoleBody": "It is counted from lots and incoming inspections: your role sees neither.",
+    "empty": "Nothing received in the period",
+    "emptyBody": "No lot was received and no incoming inspection was signed in these days.",
+    "tableLabel": "Incoming quality per supplier",
+    "supplier": "Supplier",
+    "lots": "Lots received",
+    "rejected": "Rejected",
+    "crVi": "Cr VI fails",
+    "days": "Average days in quarantine",
+    "inspections": "Incoming inspections",
+    "failedInspections": "Failed",
+    "noSupplier": "No supplier",
+    "workshop": "Workshop",
+    "daysCell": "{days} (waiting: {waiting})",
+    "noLots": "Lots received, rejected, Cr VI fails and days in quarantine need the lots' view (quality.lots.view).",
+    "noInspections": "The incoming inspections need their view (quality.incoming.view).",
+    "rowHint": "A supplier opens its record; its Quality & rating tab comes with the supplier record's own step."
+  },
+  "arrange": {
+    "title": "Arrange panels",
+    "list": "Panels",
+    "hint": "Ticked panels show, in this order.",
+    "apply": "Done",
+    "widths": "Widths",
+    "widthOf": "Width of {panel}",
+    "width": {
+      "full": "Full width",
+      "two-thirds": "Two thirds",
+      "half": "Half"
+    }
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "arrange": "Arrange panels",
+    "export": "Export report (PDF) in a new tab",
+    "help": "This list"
+  },
+  "csv": {
+    "kpi": "Figure",
+    "now": "Period",
+    "previous": "Previous period",
+    "none": "None",
+    "week": "Week",
+    "from": "From",
+    "to": "To"
+  },
+  "print": {
+    "title": "Quality report",
+    "period": "Period",
+    "previous": "Compared with",
+    "site": "Site",
+    "line": "Trend line",
+    "by": "Comparison",
+    "privacy": "Per site, line, operation, supplier and style only: never per person (Statuto dei Lavoratori art. 4). A group with too few people to hide one person shows no figure.",
+    "held": "The report is still being read.",
+    "failed": "A part of the report could not be read",
+    "figure": "Figure",
+    "now": "Period",
+    "before": "Previous period",
+    "change": "Change"
+  }
+}
