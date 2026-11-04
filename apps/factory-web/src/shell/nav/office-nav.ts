@@ -319,6 +319,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/plant/machines/tags',
   // B-W2a-73: Plant › Settings › Plant settings (SCR-241, its W2a section: the symptoms on the floor).
   '/plant/settings',
+  // B-W2b-141: Plant settings' audit log (SCR-241-audit, a new tab from ⋯ History; no navigation row).
+  '/plant/settings/history',
   // B-W2b-120: Plant › Health & safety › Safety calendar (SCR-267), its organisation chart and calendar prints (new tabs).
   '/plant/calendar',
   '/plant/calendar/organisation',

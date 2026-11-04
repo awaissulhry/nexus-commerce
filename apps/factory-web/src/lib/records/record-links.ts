@@ -131,6 +131,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   SafetyDeadline: '/plant/calendar?open=DEADLINE:[id]',
   SafetyAppointment: '/plant/calendar?appoint=[id]',
   RlsNotice: '/plant/calendar?filing=[id]',
+  // B-W2b-141 Plant settings (SCR-241): a routing rule and a statutory check type open in their dialog.
+  RequestRoutingRule: '/plant/settings?rule=[id]',
+  MachineCheckType: '/plant/settings?type=[id]',
 })
 
 /**
@@ -245,6 +248,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/people/attendance': '/people/attendance',
   // B-W2b-120: the safety calendar (SCR-267) reads `?view=`, `?tile=`, `?from=`, `?to=`.
   '/safety/calendar': '/plant/calendar',
+  // B-W2b-141: the routing rules and the statutory check types are sections of Plant settings (SCR-241).
+  '/plant/settings/routing': '/plant/settings',
+  '/plant/checks/types': '/plant/settings',
 })
 
 export interface RecordRef {

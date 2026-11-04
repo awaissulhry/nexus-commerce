@@ -36,7 +36,8 @@ export const officeArea: OfficeAreaNav = {
         label: 'shell:nav.plant.safety',
         items: [{ id: 'plant-calendar', label: 'shell:nav.plant.calendar', href: '/plant/calendar', icon: CalendarCheck, permission: 'safety.view' }],
       },
-      // B-W2a-73: Plant settings (SCR-241), its W2a section "Symptoms on the floor" (GET /plant/symptoms, plant.view).
+      // B-W2a-73: Plant settings (SCR-241), its W2a section "Symptoms on the floor" (GET /plant/symptoms, plant.view);
+      // B-W2b-141 adds routing and escalation, the unsafe lock, check types and incidents (each read with plant.view or its own right).
       {
         id: 'plant-settings',
         label: 'shell:nav.plant.settingsGroup',
