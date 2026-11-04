@@ -79,6 +79,34 @@ model StoredFile {
   availableAt      DateTime?      @db.Timestamptz(3)
   /// When it was deleted (DELETED).
   deletedAt        DateTime?      @db.Timestamptz(3)
+  /// W2b (wave 18/22; COL-046, PRD-227, PLT-216): versions. A new version is a new row, so a new object in the store:
+  /// nothing stored is ever overwritten. `seriesId` names the series' first version (null on the first version itself,
+  /// and on every file that never had another one); `versionNo` counts from 1 (the first) and each next version takes
+  /// the series' highest number plus one, never reused. A version is of the first one's record, company and kind; a
+  /// fiscal archive file has none. Both are written once, with the row (files-depth.prisma has the rest of the files
+  /// depth).
+  seriesId         String?        @db.Uuid
+  versionNo        Int            @default(1)
+  /// When a later version of its series became available: no longer the current version, and read-only from then on
+  /// (its tags fixed, never shared more widely; it may still be deleted, rescanned, retained and given its thumbnail).
+  /// Set once, never cleared.
+  supersededAt     DateTime?      @db.Timestamptz(3)
+  /// W2b (wave 18/22): a copy names the file it was copied from (a style's DoC on a shipment, an inspection report shared
+  /// on a shipment, a version restored as a new one): the same bytes (SHA-256, size and type as its source's), so a copy is
+  /// matched to its version by this column, not by its SHA-256. Written once, with the row; null for a file that is not a
+  /// copy (and for copies stored before wave 18).
+  sourceFileId     String?        @db.Uuid
+  /// W2b (wave 18/22; COL-049): the day the document stops being valid (a certificate, a declaration, a supplier's
+  /// document); null: it does not expire. A tag, set or corrected while the file is the current version (the API audits
+  /// it). `expiryRemindedAt`: when the last expiry reminder for this date went out (30 days before, then 7); it only moves
+  /// later, and a new date starts without one. Hidden from the floor and partner roles.
+  expiresOn        DateTime?      @db.Date
+  expiryRemindedAt DateTime?      @db.Timestamptz(3)
+  /// W2b (wave 18/22; COL-058): the thumbnail, a second object in the same store (`thumbnailKey`, never under `legal/`),
+  /// made after the scan with the EXIF and location data stripped (`exifStrippedAt`: when): what a portal or a link is
+  /// shown of a photo. Both set together, once, while the file is AVAILABLE; never changed.
+  thumbnailKey     String?
+  exifStrippedAt   DateTime?      @db.Timestamptz(3)
   version          Int            @default(1)
   createdAt        DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -89,6 +117,17 @@ model StoredFile {
   // A floor-visible file belongs to a company, and its site is one of that company's sites.
   floorSite    Site?              @relation(fields: [tenantId, companyId, floorSiteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   storeAccount IntegrationAccount @relation(fields: [tenantId, storeAccountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (wave 18/22): the first version of its series (on a later version) and the later versions (on a first one); the
+  // file it was copied from and the copies made of it. Restrict, not Prisma's SetNull default for an optional relation:
+  // that would also clear tenantId.
+  series        StoredFile?  @relation("StoredFileSeries", fields: [tenantId, seriesId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  laterVersions StoredFile[] @relation("StoredFileSeries")
+  sourceFile    StoredFile?  @relation("StoredFileCopy", fields: [tenantId, sourceFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  copies        StoredFile[] @relation("StoredFileCopy")
+  // W2b files-depth.prisma (wave 18/22): its multipart upload sessions, the markups made on it, the markup it was made by.
+  uploadSessions FileUploadSession[]
+  markups        FileMarkup[]        @relation("FileMarkupFile")
+  markupResultOf FileMarkup?         @relation("FileMarkupResult")
   // imports.prisma: the import job whose sheet this file is.
   importJobs   ImportJob[]
   // W2b leather.prisma (wave 12/16): the hide marks made on it (a photo), the shade group whose master swatch it shows.
@@ -153,6 +192,12 @@ model StoredFile {
   @@index([tenantId, recordType, recordId])
   @@index([tenantId, floorSiteId])
   @@index([tenantId, partyId])
+  // W2b (wave 18/22): a thumbnail object belongs to one file; the copies of a file ("which records use it"); the files that
+  // expire soon (the reminders). A series' versions: the partial unique index "StoredFile_one_number_per_version" of
+  // …_files_depth_w2b_guards (tenantId, seriesId, versionNo).
+  @@unique([tenantId, thumbnailKey])
+  @@index([tenantId, sourceFileId])
+  @@index([tenantId, expiresOn])
 }
 
 /// What a file is; each kind has its allowed content types and its size limit (platform/files/rules.ts). Additive.
@@ -193,6 +238,17 @@ enum FileCategory {
   AFTER_WORK
   /// Another kind of evidence, said in the file's name.
   OTHER
+  /// W2b (wave 18/22; COL-048, COL-049, SCM-020, SCM-096): what partners send and what a required-document rule asks for:
+  /// a supplier's certificate (LWG audit, ISO 9001, an insurance), a test report (Cr VI, REACH tests), a declaration
+  /// (REACH, conformity, a signed code of conduct), a body photo for measurements (BODY_PHOTO: front, side, back), a
+  /// supplier questionnaire's attachment, a proof to approve (artwork, a design proof) and a sample's photo.
+  SUPPLIER_CERTIFICATE
+  TEST_REPORT
+  DECLARATION
+  BODY_PHOTO
+  QUESTIONNAIRE
+  PROOF
+  SAMPLE_PHOTO
 }
 
 /// Where a file is: PENDING_UPLOAD (row written, the upload not confirmed) → AVAILABLE (confirmed) or QUARANTINED (it

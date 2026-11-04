@@ -104,6 +104,8 @@ model Company {
   integrationAccounts IntegrationAccount[]
   // files.prisma: the company's files.
   files               StoredFile[]
+  // W2b files-depth.prisma (wave 18/22): the documents its record types must have before a status move.
+  requiredDocumentRules RequiredDocumentRule[]
   // links.prisma: the one-off links that open the company's records.
   oneOffLinks         OneOffLink[]
   // threads.prisma: the threads of the company's records.
