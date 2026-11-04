@@ -224,6 +224,10 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-70: capacity per lane and bucket (SCR-123, `?site=` `?from=` `?to=` `?bucket=`) and the exception queue (SCR-125).
   '/planning/capacity': '/planning/capacity',
   '/planning/exceptions': '/planning/exceptions',
+  // B-W2b-132: the leather and cut plan's three reads (SCR-252, `?site=` `?tile=` `?feas=` `?q=`).
+  '/planning/leather/need': '/planning/leather',
+  '/planning/leather/protectors': '/planning/leather',
+  '/planning/leather/yield': '/planning/leather',
   // B-W2a-59: the planning settings of the sites (SCR-124, SCR-127).
   '/planning/settings': '/planning/settings',
   // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).
