@@ -1955,6 +1955,10 @@
     "safety_training_manage": "Keep the safety course catalogue (hours and refresher periods from your own programme, start from the standard list) and the courses a type of machine asks, each after reading what it changes for people",
     "safety_ppe_manage": "Keep the PPE catalogue of a company: items with category, standard, sizes and how long they last; archive and restore them",
     "safety_ppe_issue": "Record PPE handed over in the office with the person's paper receipt, void a wrong issue with the reason, keep a receipt's PDF",
-    "safety_chemicals_manage": "Keep the chemical register (D.Lgs. 81/2008 art. 223): add, change and archive chemicals, upload and replace their safety data sheets"
+    "safety_chemicals_manage": "Keep the chemical register (D.Lgs. 81/2008 art. 223): add, change and archive chemicals, upload and replace their safety data sheets",
+    "safety_health_view": "Protected: see who is due which health surveillance visit and the fitness judgements (outcome and task limits, never a diagnosis), print the visit list for the doctor; each view is recorded",
+    "safety_health_manage": "Keep the health surveillance visits (plan, book, move, cancel, done) and record or void the doctor’s fitness judgements with their copy",
+    "safety_health_plans": "Keep the health surveillance plans per role as the doctor set them: how often, the doctor, the end-of-employment visit",
+    "safety_health_views": "See who looked at the health records and who checked a person’s fitness yes or no (for HR and the data protection officer)"
   }
 }
