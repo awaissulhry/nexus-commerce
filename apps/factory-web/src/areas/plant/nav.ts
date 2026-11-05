@@ -1,4 +1,4 @@
-import { BellRing, CalendarCheck, CalendarClock, Cog, HardHat, SlidersHorizontal, Wrench } from 'lucide-react'
+import { BellRing, CalendarCheck, CalendarClock, Cog, FlaskConical, HardHat, SlidersHorizontal, Wrench } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -36,7 +36,11 @@ export const officeArea: OfficeAreaNav = {
       {
         id: 'plant-safety',
         label: 'shell:nav.plant.safety',
-        items: [{ id: 'plant-calendar', label: 'shell:nav.plant.calendar', href: '/plant/calendar', icon: CalendarCheck, permission: 'safety.view' }],
+        items: [
+          // B-W2b-143: the chemical register, the safety data sheets and the cabinet QR (GET /safety/chemicals, safety.view).
+          { id: 'plant-chemicals', label: 'shell:nav.plant.chemicals', href: '/plant/chemicals', icon: FlaskConical, permission: 'safety.view' },
+          { id: 'plant-calendar', label: 'shell:nav.plant.calendar', href: '/plant/calendar', icon: CalendarCheck, permission: 'safety.view' },
+        ],
       },
       // B-W2a-73: Plant settings (SCR-241), its W2a section "Symptoms on the floor" (GET /plant/symptoms, plant.view).
       {

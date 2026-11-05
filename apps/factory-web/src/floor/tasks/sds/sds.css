@@ -1,0 +1,88 @@
+/*
+ * Floor › Safety data sheets at the cabinet (SCR-213-floor, B-W2b-143) LAYOUT: tablet first, one job, centred (the floor's
+ * one-job screen may stay centred: Owner rule 2026-10-29); the cabinet's products as cards, a sheet full screen. The marks
+ * are src/lib/chemicals/marks.css. Semantic tokens only.
+ */
+.fw-sds,
+.fw-sds-section,
+.fw-sds-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-sds {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.fw-sds-section,
+.fw-sds-stack {
+  gap: var(--nds-space-8);
+}
+
+.fw-sds-head,
+.fw-sds-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-sds-row {
+  justify-content: flex-start;
+}
+
+.fw-sds-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-sds-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-16);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  min-width: 0;
+}
+
+.fw-sds-title,
+.fw-sds-h {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fw-sds-h {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-sds-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-sds-codes {
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.fw-sds-pdf {
+  min-height: 70vh;
+}
+
+@media (max-width: 480px) {
+  .fw-sds-items {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

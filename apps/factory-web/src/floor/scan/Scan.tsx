@@ -9,6 +9,7 @@ import { useFloor, useFloorRouter } from '../FloorApp'
 import { useFloorKeys } from '../keys'
 import { lookupMachine } from '../tasks/machine/api'
 import { TASK_ROUTES } from '../tasks/routes'
+import { cabinetOfScan, CABINET_PATH } from '../tasks/sds/model'
 import { planScan, readScan, resultCode, resultType, type Lookup, type ScanResult } from './scan-model'
 import { ScanView, type RecentScan } from './view/ScanView'
 
@@ -34,6 +35,9 @@ export function FloorScan() {
   const look = useCallback(
     async (code: string) => {
       if (!me) return
+      // B-W2b-143: a cabinet's QR (its floor address) opens the cabinet's safety data sheets, also offline.
+      const cabinet = cabinetOfScan(code)
+      if (cabinet) return store.openWith(CABINET_PATH, cabinet)
       const read = readScan(code, me.scanTag)
       const plan = planScan(read, me.permissions)
       let found: ScanResult
