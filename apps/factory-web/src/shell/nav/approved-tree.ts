@@ -493,6 +493,8 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Salute e sicurezza',
         hideLabel: false,
         pages: [
+          // B-W2b-144: Risk assessment (SCR-209), first of Health & safety as the design orders them.
+          { id: 'plant.risk', title: 'Risk assessment', titleIt: 'Valutazione dei rischi (DVR)', wave: 'W2b', href: '/plant/risk' },
           // B-W2b-143: Chemicals & waste (SCR-213), before the calendar as the design orders them.
           { id: 'plant.chemicals', title: 'Chemicals & waste', titleIt: 'Sostanze e rifiuti', wave: 'W2b', href: '/plant/chemicals' },
           { id: 'plant.calendar', title: 'Safety calendar', titleIt: 'Scadenzario sicurezza', wave: 'W2b', href: '/plant/calendar' },

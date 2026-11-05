@@ -127,7 +127,9 @@ describe('safety calendar: where an item opens', () => {
 
   it('a built page opens (Skills, Preventive); a page not built says where it is kept, with its machine when that has a page', () => {
     expect(openTargetOf(item('TRAINING_REFRESHER'), OFFICE_PAGES)).toEqual({ kind: 'link', href: '/people/skills', page: 'people.skills' })
-    expect(openTargetOf(item('DVR_REVIEW'), OFFICE_PAGES)).toEqual({ kind: 'kept', page: 'plant.risk', parentHref: null, parentType: null })
+    // B-W2b-144 built Risk assessment: the DVR review opens there; without that page it says where it is kept.
+    expect(openTargetOf(item('DVR_REVIEW'), OFFICE_PAGES)).toEqual({ kind: 'link', href: '/plant/risk', page: 'plant.risk' })
+    expect(openTargetOf(item('DVR_REVIEW'), new Set([...OFFICE_PAGES].filter((page) => !page.startsWith('/plant/risk'))))).toEqual({ kind: 'kept', page: 'plant.risk', parentHref: null, parentType: null })
     // B-W2b-142 built Preventive & statutory checks: a machine check opens its plan's window there by itself.
     expect(openTargetOf(item('MACHINE_CHECK'), OFFICE_PAGES)).toMatchObject({ kind: 'link', href: `/plant/preventive?plan=${item('MACHINE_CHECK').source.recordId}`, page: 'plant.preventive' })
     // Without that page (an older build), it said where it is kept, with its machine.
