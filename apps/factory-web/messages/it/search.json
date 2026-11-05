@@ -85,6 +85,7 @@
     "SizeScale": "Scala taglie",
     "Machine": "Macchina",
     "MaintenanceJob": "Intervento di manutenzione",
+    "Incident": "Infortunio o quasi incidente",
     "other": "Record"
   },
   "chip": {
@@ -120,6 +121,7 @@
     "SizeScale": "Scale taglie",
     "Machine": "Macchine",
     "MaintenanceJob": "Interventi",
+    "Incident": "Infortuni e quasi incidenti",
     "other": "Altri record"
   },
   "status": {

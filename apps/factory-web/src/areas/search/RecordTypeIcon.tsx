@@ -28,6 +28,7 @@ import {
   ShieldAlert,
   ShoppingCart,
   Shirt,
+  Siren,
   Tag,
   TriangleAlert,
   Truck,
@@ -72,6 +73,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
   SizeScale: ChartBarIncreasing,
   Machine: Cog,
   MaintenanceJob: Hammer,
+  // B-W2b-149
+  Incident: Siren,
 })
 
 export function RecordTypeIcon({ type, size = 16 }: { type: string; size?: number }) {

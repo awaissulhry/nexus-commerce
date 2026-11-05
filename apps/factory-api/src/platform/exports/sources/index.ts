@@ -37,6 +37,8 @@ import { safetyCalendar } from './safety-calendar'
 import { checkRegister } from './check-register'
 // B-W2b-143: Plant › Health & safety › Chemicals & waste.
 import { safetyChemicals } from './safety-chemicals'
+// B-W2b-149: Plant › Health & safety › Incidents (anonymised).
+import { incidents } from './incidents'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -86,4 +88,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   checkRegister,
   // B-W2b-143: Plant › Health & safety › Chemicals & waste.
   safetyChemicals,
+  // B-W2b-149: Plant › Health & safety › Incidents (anonymised).
+  incidents,
 ])
