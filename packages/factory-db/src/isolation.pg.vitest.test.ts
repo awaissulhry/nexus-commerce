@@ -29,6 +29,7 @@ import { seed as seedInventory } from '../seed/inventory'
 import { seed as seedLabour } from '../seed/labour'
 import { seed as seedLeather } from '../seed/leather'
 import { seed as seedLinks } from '../seed/links'
+import { seed as seedLinksDepth } from '../seed/links-depth'
 import { seed as seedMoney } from '../seed/money'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
@@ -292,6 +293,9 @@ beforeAll(async () => {
       WHERE o."siteId" = $1 AND w.status = 'IN_PROGRESS' ORDER BY o.seq LIMIT 1`,
     [a.sites[0]!.id],
   )
+  // The links in depth schema of W2b (wave 19/22).
+  await seedLinksDepth({ db: factory, namespace: 'iso-a' })
+  await seedLinksDepth({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -309,6 +313,7 @@ it('covers every classified table and every runtime role', () => {
     'Alert',
     'AlertEvent',
     'AlertRule',
+    'ApprovalRequest',
     'AqlProfile',
     'AqlProfileAssignment',
     'AttendanceAnomaly',
@@ -445,7 +450,9 @@ it('covers every classified table and every runtime role', () => {
     'LineCapacity',
     'LineLoan',
     'LineTarget',
+    'LinkDraft',
     'LinkEvidence',
+    'LinkFile',
     'Location',
     'Lot',
     'LotDocument',
@@ -562,6 +569,7 @@ it('covers every classified table and every runtime role', () => {
     'ReceiptDiscrepancy',
     'ReceivablesSettings',
     'RecordFollower',
+    'RecordShare',
     'Refund',
     'Remnant',
     'RepairOrder',

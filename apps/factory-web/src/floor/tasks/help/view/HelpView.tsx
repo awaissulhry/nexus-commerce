@@ -82,6 +82,8 @@ export type HelpAction =
   | { type: 'addWords' }
   | { type: 'sendDetails' }
   | { type: 'machine' }
+  /** B-W2b-137: a Safety call is followed by Report an incident (SCR-230). */
+  | { type: 'incident' }
 
 export interface HelpViewProps {
   model: HelpViewModel
@@ -376,7 +378,7 @@ function CallCard({ call, step, asOf, online, send, t, locale, time }: { call: H
             {t('action.machine')}
           </FloorButton>
         ) : follow === 'incident' ? (
-          <FloorButton size="lg" variant="secondary" icon={<TriangleAlert />} heldReason={t('held.incident')} onClick={() => undefined}>
+          <FloorButton size="lg" variant="secondary" icon={<TriangleAlert />} onClick={() => send({ type: 'incident' })}>
             {t('action.incident')}
           </FloorButton>
         ) : null}

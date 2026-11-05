@@ -92,13 +92,12 @@
     "details": "Aggiungi dettagli",
     "addWords": "Scrivi",
     "machine": "Di' che cosa ha la macchina",
-    "incident": "Segnala un infortunio"
+    "incident": "Segnala un incidente"
   },
   "held": {
     "noStation": "Questo tablet non appartiene a una postazione: la chiamata ne ha bisogno. Chiedi all'ufficio.",
     "photo": "Le foto sulle chiamate non sono ancora pronte: scrivilo a parole.",
     "detailsOffline": "I dettagli su una chiamata richiedono la rete.",
-    "incident": "La segnalazione di infortuni arriva con una versione successiva: avvisa il tuo capo squadra.",
     "details": {
       "offline": "I dettagli su una chiamata richiedono la rete.",
       "empty": "Aggiungi prima qualcosa.",

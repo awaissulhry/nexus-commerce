@@ -17,7 +17,7 @@ import { MachineView, type MachineViewModel } from './view/MachineView'
  * person's name.
  *
  * B-W2b-102 (QHS-189, QHS-180, QHS-190): a photo and a voice note with the report (taken, held offline, the camera, the
- * recorder, going up after the report, one failed), Guard missing offering Report an incident (held until B-W2b-137), the
+ * recorder, going up after the report, one failed), Guard missing offering Report an incident (B-W2b-137: it opens SCR-230), the
  * station's reports under way (and the list changed behind Show), one report's progress (reported, seen, on the way,
  * fixed: It works, locked, works again, joined, closed, escalated, kept offline, refused, the line lead, the technician's
  * Seen / On my way, a photo opened, adding one), the technician's queue above My jobs, the job's photos and voice notes,
@@ -258,7 +258,7 @@ export const designScreen = defineDesignScreen<MachineViewModel>({
     // ---- what is wrong ------------------------------------------------------------------------------------------------------
     { id: 'symptom', label: 'What is wrong? Nothing picked yet (held with the reason)', model: base({ kind: 'symptom', machine: SEW_A, draft: EMPTY_DRAFT }), note: 'DS ReasonGrid (D20): the machine’s class symptoms and every class’s. An optional photo or voice note (B-W2b-102).' },
     { id: 'symptom-picked', label: 'Thread breaks picked: Report · it still runs / Report · machine down', model: base({ kind: 'symptom', machine: SEW_A, draft: { ...EMPTY_DRAFT, symptomId: 'symptom-thread_breaks' } }) },
-    { id: 'symptom-unsafe', label: 'Guard missing: locks the machine at once (H1) and offers Report an incident (held until B-W2b-137)', model: base({ kind: 'symptom', machine: SEW_A, draft: { ...EMPTY_DRAFT, symptomId: 'symptom-guard_missing' } }), note: 'The main action becomes Report · lock the machine; the machine is marked do not use when the office records it.' },
+    { id: 'symptom-unsafe', label: 'Guard missing: locks the machine at once (H1) and offers Report an incident (it opens SCR-230 with this machine)', model: base({ kind: 'symptom', machine: SEW_A, draft: { ...EMPTY_DRAFT, symptomId: 'symptom-guard_missing' } }), note: 'The main action becomes Report · lock the machine; the machine is marked do not use when the office records it.' },
     { id: 'symptom-marked-unsafe', label: 'Anyone may mark it unsafe (oil leak + "It is unsafe: lock it")', model: base({ kind: 'symptom', machine: SEW_A, draft: { ...EMPTY_DRAFT, symptomId: 'symptom-oil_leak', unsafe: true } }) },
     { id: 'symptom-other', label: 'Other: a few words are asked', model: base({ kind: 'symptom', machine: SEW_A, draft: { ...EMPTY_DRAFT, symptomId: 'symptom-other' } }) },
     { id: 'symptom-other-words', label: 'Other with words: ready', model: base({ kind: 'symptom', machine: SEW_A, draft: { ...EMPTY_DRAFT, symptomId: 'symptom-other', words: 'Il pedale resta giù.' } }) },
@@ -286,7 +286,7 @@ export const designScreen = defineDesignScreen<MachineViewModel>({
     },
     { id: 'sent-media-failed', label: 'A photo that did not go up: Try again', model: base({ kind: 'sent', machine: SEW_A, symptom: 'Perdita d’olio', unsafe: false, down: false, ticks: 'recorded', requestId: 'request-demo-3', uploads: [{ id: 'taken-1', kind: 'PHOTO', name: 'DEMO-SEW-21-photo-1.jpg', state: 'failed' }] }) },
     { id: 'sent-media-waiting', label: 'Saved offline: the photo waits for the report', model: offline({ kind: 'sent', machine: SEW_A, symptom: 'Rumore', unsafe: false, down: false, ticks: 'saved', uploads: [{ id: 'taken-1', kind: 'PHOTO', name: 'DEMO-SEW-21-photo-1.jpg', state: 'waiting' }] }) },
-    { id: 'sent-incident', label: 'Guard missing reported: Report an incident offered (held until B-W2b-137)', model: base({ kind: 'sent', machine: SEW_A, symptom: 'Protezione mancante', unsafe: true, down: true, ticks: 'recorded', now: { status: 'DO_NOT_USE', locked: true }, requestId: 'request-demo-4', incident: true }) },
+    { id: 'sent-incident', label: 'Guard missing reported: Report an incident offered (it opens SCR-230 with this machine)', model: base({ kind: 'sent', machine: SEW_A, symptom: 'Protezione mancante', unsafe: true, down: true, ticks: 'recorded', now: { status: 'DO_NOT_USE', locked: true }, requestId: 'request-demo-4', incident: true }) },
     { id: 'sent-refused', label: 'Refused by the office (in our words)', model: base({ kind: 'sent', machine: SEW_A, symptom: null, unsafe: false, down: false, ticks: 'refused', refusal: { code: 'SYMPTOM_INACTIVE', message: 'This symptom is no longer offered.' } }) },
 
     // ---- one report's progress (B-W2b-102, QHS-180) ------------------------------------------------------------------------------

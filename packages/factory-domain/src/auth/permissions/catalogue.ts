@@ -184,6 +184,8 @@ import { SAFETY_ROLESHEETS_DEFINITIONS, SAFETY_ROLESHEETS_PERMISSIONS } from '..
 import { SAFETY_TRAINING_DEFINITIONS, SAFETY_TRAINING_PERMISSIONS } from '../../safety/training/permissions'
 // B-W2b-134: PPE for workers (safety.ppe.manage: the catalogue; safety.ppe.issue: paper receipts and voids).
 import { SAFETY_PPE_DEFINITIONS, SAFETY_PPE_PERMISSIONS } from '../../safety/ppe/permissions'
+// B-W2b-143: the chemical register and the safety data sheets (safety.chemicals.manage).
+import { SAFETY_CHEMICALS_DEFINITIONS, SAFETY_CHEMICALS_PERMISSIONS } from '../../safety/chemicals/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -645,6 +647,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SAFETY_TRAINING_DEFINITIONS,
   // B-W2b-134: PPE for workers.
   SAFETY_PPE_DEFINITIONS,
+  // B-W2b-143: the chemical register and the safety data sheets.
+  SAFETY_CHEMICALS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -831,6 +835,8 @@ for (const name of PLANNING_LEATHER_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecl
 for (const name of SAFETY_TRAINING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-134: PPE for workers.
 for (const name of SAFETY_PPE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-143: the chemical register and the safety data sheets.
+for (const name of SAFETY_CHEMICALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
