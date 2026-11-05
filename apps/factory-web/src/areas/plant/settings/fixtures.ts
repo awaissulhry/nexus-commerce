@@ -1,13 +1,18 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
+import { LEAST_RETENTION_YEARS } from '@nexus/factory-domain/plant/statutory/rules'
 import { at, CLASS_LIST, CLASSES, inShell, SYMPTOM_LIST, type PlantRole } from '../_shared/fixtures'
 import type { ClassRow, SymptomRow } from './api'
+import { DEMO_EMPLOYEES, DEMO_INCIDENT_RULES, DEMO_LOCK, DEMO_PEOPLE, DEMO_RULES, DEMO_TEAMS, DEMO_TYPES, demoDepth } from './_demo/fixtures'
+import { blankRule, blankType, lockDraftOf, ruleDraftOf, typeDraftOf } from './depth-model'
+import type { DepthModel } from './depth-view-model'
 import { ALL, EMPTY_DRAFT, EVERY, markKey } from './model'
 import { PlantSettingsView, type PlantSettingsModel } from './view/PlantSettingsView'
 
 /**
- * SCR-241 — Plant › Settings › Plant settings, its W2a section "Symptoms on the floor" (B-W2a-73; NEW id given by W2A-PLAN
- * §10: a W2a section on the W2b page). Made-up data only: the Plant pages' invented group (machine types and symptoms as
+ * SCR-241 — Plant › Settings › Plant settings: the W2a section "Symptoms on the floor" (B-W2a-73; NEW id given by W2A-PLAN
+ * §10) and, from B-W2b-141, the W2b sections around it (routing and escalation, the unsafe lock, statutory check types,
+ * incidents, the band; made-up data in _demo/fixtures.ts). Every case draws the whole page. Made-up data only: the Plant pages' invented group (machine types and symptoms as
  * the starter set words them, how often each was reported, one symptom of the group's own, one taken off the floor).
  * Roles from factory-domain's templates: the maintenance lead and the production manager keep the list
  * (plant.machines.manage over every company), the floor supervisor and read-only only look, sales has no plant.view.
@@ -48,6 +53,7 @@ const row = (code: string) => ROWS.find((entry) => entry.code === code)!
 const base = (role: PlantRole, over: Partial<PlantSettingsModel> = {}): SettingsCase => ({
   role,
   model: {
+    depth: demoDepth(role),
     canView: role !== 'sales',
     load: { status: 'ready' },
     symptoms: ROWS,
@@ -63,6 +69,114 @@ const base = (role: PlantRole, over: Partial<PlantSettingsModel> = {}): Settings
     ...over,
   },
 })
+
+/** A W2b case: the role's page with its W2b sections changed. */
+const depth = (role: PlantRole, over: Partial<DepthModel> = {}, page: Partial<PlantSettingsModel> = {}): SettingsCase => {
+  const made = base(role, page)
+  return { role, model: { ...made.model, depth: { ...made.model.depth, ...over } } }
+}
+const pickers = { status: 'ready' as const, value: { teams: DEMO_TEAMS, employees: DEMO_EMPLOYEES } }
+const routingOf = (role: PlantRole) => demoDepth(role).routing
+const checksOf = (role: PlantRole) => demoDepth(role).checks
+const lockOf = (role: PlantRole) => demoDepth(role).lock
+
+/** B-W2b-141: the W2b sections' cases (the production manager holds people.view: the pickers; the maintenance lead does not). */
+const DEPTH_CASES = [
+  {
+    id: 'routing',
+    label: 'Routing and escalation: the site\'s rules and where a request goes',
+    model: depth('production'),
+    note: 'Order · machine type · goes to · notice · escalation · state · used. "Where does a request go?" answers for a lockstitch in words. The heat press rule is switched off; the last rule takes every machine type.',
+  },
+  { id: 'routing-selected', label: 'Rules selected: the bulk actions', model: depth('production', { routing: { ...routingOf('production'), selected: [DEMO_RULES[1]!.id, DEMO_RULES[2]!.id] } }), note: 'Switch on 2 · Switch off 2 · Move up · Move down (⌥↑ / ⌥↓) · Remove 2.' },
+  { id: 'routing-empty', label: 'No routing rule yet', model: depth('production', { routing: { ...routingOf('production'), read: { status: 'ready', value: { siteId: DEMO_RULES[0]!.siteId, rules: [], canManage: true } }, preview: { classId: null, read: { status: 'idle' } } } }), note: 'Every request waits in the triage queue until a rule is added.' },
+  { id: 'routing-loading', label: 'Routing loading', model: depth('production', { routing: { ...routingOf('production'), read: { status: 'loading' } } }) },
+  { id: 'routing-error', label: "Routing couldn't load", model: depth('production', { routing: { ...routingOf('production'), read: { status: 'error', problem: 'problem.read' } } }), note: 'Only this card fails; the others keep working. Never drawn as empty.' },
+  {
+    id: 'preview-none',
+    label: 'Where does a request go: no rule fits',
+    model: depth('production', { routing: { ...routingOf('production'), read: { status: 'ready', value: { siteId: DEMO_RULES[0]!.siteId, rules: DEMO_RULES.slice(0, 3), canManage: true } }, preview: { classId: CLASSES.cuttingTable.id, read: { status: 'ready', value: { rule: null } } } } }),
+    note: 'Without the rule for every machine type a cutting table\'s request waits in the triage queue.',
+  },
+  {
+    id: 'rule-new',
+    label: 'New rule: the worked example before you save',
+    model: depth('production', { dialog: { kind: 'rule', draft: { ...blankRule(CLASSES.postBed.id), teamId: DEMO_TEAMS[0]!.id, targetName: 'L1 Squadra giacche', escalate: true, escalateToId: DEMO_PEOPLE.marco.id, escalateToName: DEMO_PEOPLE.marco.name }, busy: false, problem: null, pickers } }),
+    note: 'The sentences under the form change as you type: where it goes, the notice, the escalation.',
+  },
+  { id: 'rule-edit', label: 'Open a rule', model: depth('production', { dialog: { kind: 'rule', draft: ruleDraftOf(DEMO_RULES[0]!), busy: false, problem: null, pickers } }), note: 'Save rule is held until something changed. Remove rule asks first.' },
+  {
+    id: 'rule-held',
+    label: 'Rule: the second escalation before the first is held',
+    model: depth('production', { dialog: { kind: 'rule', draft: { ...ruleDraftOf(DEMO_RULES[0]!), escalateAgainAfterMinutes: 5 }, busy: false, problem: null, pickers } }),
+    note: 'Save rule is held with its reason (focus or hover says it).',
+  },
+  {
+    id: 'rule-no-people',
+    label: 'Maintenance lead: no people.view for the pickers',
+    model: depth('maintenance', { dialog: { kind: 'rule', draft: ruleDraftOf(DEMO_RULES[1]!), busy: false, problem: null, pickers: { status: 'forbidden' } } }),
+    note: 'The rule keeps the people it names; minutes, notice, order and on/off still change. The gap is in the notes (a plant picker under plant.settings.manage).',
+  },
+  {
+    id: 'rule-refused',
+    label: 'Rule refused by the API, at the field',
+    model: depth('production', { dialog: { kind: 'rule', draft: ruleDraftOf(DEMO_RULES[0]!), busy: false, problem: { key: 'field.teamId', field: 'teamId', unknown: false }, pickers } }),
+  },
+  {
+    id: 'rule-remove',
+    label: 'Remove a used rule: switched off and kept',
+    model: depth('production', { dialog: { kind: 'rule', draft: ruleDraftOf(DEMO_RULES[0]!), busy: false, problem: null, pickers, confirmRemove: true } }),
+    note: '14 requests name it, so it is switched off, never deleted.',
+  },
+  { id: 'rules-remove', label: 'Remove 2 rules', model: depth('production', { dialog: { kind: 'removeRules', ids: [DEMO_RULES[1]!.id, DEMO_RULES[2]!.id], busy: false, problem: null } }), note: 'What happens to each, said before.' },
+  { id: 'rule-read-only', label: 'Floor supervisor opens a rule: read only', model: depth('supervisor', { dialog: { kind: 'rule', draft: ruleDraftOf(DEMO_RULES[0]!), busy: false, problem: null, pickers: { status: 'forbidden' } } }), note: 'The worked example is there to read; nothing changes.' },
+  {
+    id: 'lock-h1',
+    label: 'Unsafe lock: another choice is held by Owner answer H1',
+    model: depth('maintenance', { lock: { ...lockOf('maintenance'), draft: { ...lockDraftOf(DEMO_LOCK), lockBy: 'LEADS_AND_TECHNICIANS' } } }),
+    note: 'Apply is held with the reason; the API refuses the same (409 refusal/H1_HELD).',
+  },
+  {
+    id: 'lock-hazard-off',
+    label: 'Unsafe lock: hazard report switched off asks the code',
+    model: depth('maintenance', { lock: { ...lockOf('maintenance'), draft: { ...lockDraftOf(DEMO_LOCK), hazardReportOnLock: false } }, save: { kind: 'unsaved' } }),
+    note: 'A loosening: said in words, and Apply asks the authenticator code (⌘S works too).',
+  },
+  {
+    id: 'lock-step-up',
+    label: 'Unsafe lock: the fresh code',
+    model: depth('maintenance', { lock: { ...lockOf('maintenance'), draft: { ...lockDraftOf(DEMO_LOCK), hazardReportOnLock: false }, busy: true }, stepUp: { open: true, busy: false, sentence: 'stepUp.lock', problem: null }, save: { kind: 'saving' } }),
+  },
+  {
+    id: 'lock-step-up-wrong',
+    label: 'Unsafe lock: a wrong code',
+    model: depth('maintenance', { lock: { ...lockOf('maintenance'), draft: { ...lockDraftOf(DEMO_LOCK), hazardReportOnLock: false }, busy: true }, stepUp: { open: true, busy: false, sentence: 'stepUp.lock', problem: 'stepUp.problem.wrong' }, save: { kind: 'saving' } }),
+  },
+  {
+    id: 'lock-refused',
+    label: 'Unsafe lock refused by the API',
+    model: depth('maintenance', { lock: { ...lockOf('maintenance'), draft: { ...lockDraftOf(DEMO_LOCK), hazardReportOnLock: false }, problem: { key: 'problem.staleSettings', unknown: false } }, save: { kind: 'failed', count: 1 } }),
+  },
+  { id: 'lock-defaults', label: 'Unsafe lock: nothing saved yet (H1 defaults)', model: depth('maintenance', { lock: { ...lockOf('maintenance'), read: { status: 'ready', value: { ...DEMO_LOCK, version: null } } } }) },
+  { id: 'lock-loading', label: 'Unsafe lock loading', model: depth('maintenance', { lock: { ...lockOf('maintenance'), read: { status: 'loading' } } }) },
+  { id: 'checks-new', label: 'New check type', model: depth('maintenance', { dialog: { kind: 'type', draft: { ...blankType(LEAST_RETENTION_YEARS), code: 'NOISE_LEVEL', labelIt: 'Misura del rumore' }, busy: false, problem: null } }), note: 'No interval is offered: the office types each check\'s law and interval. Kept at least the years the API says.' },
+  { id: 'checks-edit', label: 'Open a check type', model: depth('maintenance', { dialog: { kind: 'type', draft: typeDraftOf(DEMO_TYPES[1]!), busy: false, problem: null } }), note: 'Code and machine type are fixed; Retire is beside Save.' },
+  { id: 'checks-taken', label: 'New check type: the code is taken', model: depth('maintenance', { dialog: { kind: 'type', draft: { ...blankType(LEAST_RETENTION_YEARS), code: 'EARTHING_2', labelIt: 'Terra', labelEn: 'Earthing', legalBasis: 'DPR 462/2001 (esempio)', defaultInterval: 2, defaultIntervalUnit: 'YEAR' }, busy: false, problem: { key: 'refusal.TYPE_TAKEN', field: 'code', unknown: false } } }) },
+  { id: 'checks-retired', label: 'Check types: the retired ones', model: depth('maintenance', { checks: { ...checksOf('maintenance'), rows: 'retired' } }) },
+  { id: 'checks-selected', label: 'Check types selected: Retire · Make active again', model: depth('maintenance', { checks: { ...checksOf('maintenance'), rows: 'all', selected: [DEMO_TYPES[0]!.id, DEMO_TYPES[3]!.id] } }) },
+  { id: 'checks-retire', label: 'Retire 1 check type', model: depth('maintenance', { dialog: { kind: 'typeState', ids: [DEMO_TYPES[0]!.id], active: false, busy: false, problem: null } }), note: 'Its plans keep their dates; no new plan may use it.' },
+  { id: 'checks-read-only', label: 'Floor supervisor: check types read only', model: depth('supervisor'), note: 'No selection; New check type held with its reason.' },
+  { id: 'checks-error', label: "Check types couldn't load", model: depth('maintenance', { checks: { ...checksOf('maintenance'), read: { status: 'error', problem: 'problem.offlineSettings' } } }) },
+  { id: 'incidents-no-right', label: 'Incidents: without safety.incidents.view', model: depth('maintenance', { incidents: { status: 'forbidden' } }), note: 'The card says which right it needs.' },
+  { id: 'incidents-loading', label: 'Incidents loading', model: depth('maintenance', { incidents: { status: 'loading' } }) },
+  { id: 'incidents', label: 'Incidents: the INAIL rule with its law (read only)', model: depth('production', { incidents: { status: 'ready', value: DEMO_INCIDENT_RULES } }), note: 'The numbers are the API\'s (the law\'s); the reminders are Nexus\'s own, said apart.' },
+  { id: 'all-sites', label: 'All sites in the top bar: the site chosen here', model: depth('production', { siteFromTopBar: false }), note: 'The routing and the lock are per site: a Select in the band (kept in the address, ?site=).' },
+  { id: 'changed-settings', label: 'Routing changed by someone else', model: depth('production', { changedElsewhere: true }), note: 'Live plant_settings.changed from another person: Reload.' },
+  { id: 'notice', label: 'After removing rules', model: depth('production', { notice: { tone: 'success', key: 'done.rulesRemoved', params: { deleted: 1, switched: 1 } } }) },
+  { id: 'leave', label: 'Leaving with the lock card changed', model: depth('maintenance', { lock: { ...lockOf('maintenance'), draft: { ...lockDraftOf(DEMO_LOCK), hazardReportOnLock: false } }, leaving: { busy: false }, save: { kind: 'unsaved' } }), note: 'Save · Discard · Stay.' },
+  { id: 'page-keys', label: 'Every key of the page', model: depth('production', { dialog: { kind: 'keys' } }) },
+  { id: 'no-audit', label: 'Maintenance lead: History held without audit.read', model: depth('maintenance'), note: 'The ⋯ menu says why History is held.' },
+]
 
 function SettingsDesign({ model }: { model: SettingsCase }) {
   return inShell('/plant/settings', createElement(PlantSettingsView, { model: model.model }), model.role)
@@ -145,5 +259,6 @@ export const designScreen = defineDesignScreen<SettingsCase>({
     { id: 'loading', label: 'Loading', model: base('maintenance', { load: { status: 'loading' }, symptoms: null, classes: [] }) },
     { id: 'error', label: "Couldn't load", model: base('maintenance', { load: { status: 'error', problem: 'problem.read' }, symptoms: null, classes: [] }), note: 'A failed read is never drawn as an empty list.' },
     { id: 'keys', label: 'The keys', model: base('maintenance', { dialog: { kind: 'keys' } }) },
+    ...DEPTH_CASES,
   ],
 })
