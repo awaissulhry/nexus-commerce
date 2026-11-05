@@ -1,0 +1,257 @@
+/*
+ * Documents & numbering › Branding (B-W2b-161, SCR-014-branding) LAYOUT: the fields beside what partners will see (the
+ * portal's head, the From line of a mail, the documents). Controls are the design system's; semantic tokens only. The
+ * company's own colour is data (the swatch's inline style); the portal preview takes it through the DS branding tokens.
+ * No max-width: the section fills the main area.
+ */
+.fw-brand-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-brand-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fw-brand-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: start;
+  gap: var(--nds-space-24);
+  margin-top: var(--nds-space-8);
+}
+
+.fw-brand-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-18);
+  min-width: 0;
+}
+
+.fw-brand-note,
+.fw-brand-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.fw-brand-error {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-brand-logo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-brand-label {
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-brand-logo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+}
+
+/* The logo as a page draws it; the dark one sits on a `.dark` box, so the surface token is the dark page's. */
+.fw-brand-logo-box {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  height: 72px;
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-brand-logo-box img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.fw-brand-logo-none {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  text-align: center;
+}
+
+.fw-brand-logo-actions {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-brand-logo-actions > :not(button) {
+  align-self: stretch;
+}
+
+.fw-brand-file {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-brand-accent {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-brand-accent > :last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fw-brand-swatch {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-sm);
+}
+
+.fw-brand-swatch.empty {
+  background: var(--nds-surface-sunken);
+}
+
+.fw-brand-uses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: var(--nds-space-8) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.fw-brand-previews {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-brand-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-brand-preview-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* The portal's head in the DS branding tokens ([data-brand]): the main action and the rule take the company's colour. */
+.fw-brand-portal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-14);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-bg);
+}
+
+.fw-brand-portal-head {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+.fw-brand-portal-logo {
+  display: block;
+  max-width: 200px;
+  max-height: 40px;
+  object-fit: contain;
+}
+
+.fw-brand-portal-logo.for-dark,
+.dark .fw-brand-portal-logo.for-light {
+  display: none;
+}
+
+.dark .fw-brand-portal-logo.for-dark {
+  display: block;
+}
+
+.fw-brand-portal-name {
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.fw-brand-portal-rule {
+  display: block;
+  width: 48px;
+  height: 3px;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-brand-accent);
+}
+
+.fw-brand-portal-title {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.fw-brand-portal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-brand-portal-link {
+  color: var(--nds-primary);
+  font-size: var(--nds-font-size-sm);
+  text-decoration: underline;
+}
+
+@media (max-width: 960px) {
+  .fw-brand-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .fw-brand-logo-box {
+    width: 100%;
+  }
+}

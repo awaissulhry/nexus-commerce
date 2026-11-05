@@ -1,0 +1,100 @@
+{
+  "brand": {
+    "intro": "How each company appears to its customers and suppliers: the logo on its portal, its link pages and its documents, its colour, and the name its mail goes out under.",
+    "title": "Branding",
+    "description": "Logo, colours and e-mail sender name per company",
+    "newTab": "(opens in a new tab)",
+    "readOnly": "You can see this company's branding. Changing it needs the right to change a company's branding (an administrator has it).",
+    "keys": {
+      "save": "Save the branding"
+    },
+    "empty": {
+      "title": "No branding yet",
+      "body": "Customers and suppliers see {company} written in text, with the standard colours.",
+      "action": "Start with the logo"
+    },
+    "logo": {
+      "logo": {
+        "label": "Logo",
+        "hint": "On the portal, the link pages and above the company's name on its documents. PNG or JPEG, up to 1 MB; a wide logo on a clear background works best."
+      },
+      "logoDark": {
+        "label": "Logo for dark pages",
+        "hint": "A light version for pages in dark mode. Empty: the logo above is used on dark pages too."
+      },
+      "alt": "Logo: {name}",
+      "none": "No logo: the company's name in text",
+      "noneDark": "None: the logo above is used",
+      "add": "Add a logo",
+      "replace": "Replace the logo",
+      "remove": "Remove",
+      "hint": "PNG or JPEG, up to 1 MB",
+      "uploading": "Uploading the picture…",
+      "problem": {
+        "type": "This file is not a PNG or JPEG picture. Save the logo as PNG or JPEG and pick it again.",
+        "size": "This picture is larger than 1 MB. Make it smaller and pick it again.",
+        "notPicture": "The file says it is a picture, but its contents are not a PNG or JPEG. Export the logo again and pick it.",
+        "upload": "The picture could not be uploaded. Check the connection and pick it again."
+      }
+    },
+    "field": {
+      "accent": {
+        "label": "Accent colour",
+        "hint": "The company's colour as #rrggbb. It is used only where it can be read well: the standard colours stay where it cannot.",
+        "invalid": "Type a colour as #rrggbb, for example #1f5fa8."
+      },
+      "sender": {
+        "label": "Sender name for mail",
+        "hint": "The name mail to customers and suppliers goes out under. Empty: {company}.",
+        "tooLong": "At most {max} characters.",
+        "unsafe": "No angle brackets, quotes or backslashes: the name goes into the From line of the mail."
+      },
+      "label": {
+        "label": "Portal name",
+        "hint": "What the portal calls itself, shown before a partner signs in. Empty: {company}.",
+        "tooLong": "At most {max} characters."
+      },
+      "oneLine": "Keep it on one line, without special control characters."
+    },
+    "theme": {
+      "light": "Light pages",
+      "dark": "Dark pages"
+    },
+    "use": {
+      "PRIMARY": "Buttons, links and marks in this colour ({ratio} against the page).",
+      "ACCENT": "Only lines and marks in this colour; buttons and links keep the standard colour (it reaches {ratio}, they need 7:1).",
+      "NONE": "Not used: it reaches only {ratio} against the page. The standard colours stay.",
+      "NOT_GIVEN": "No colour given: the standard colours."
+    },
+    "held": {
+      "noRight": "Changing the branding needs the right to change a company's branding.",
+      "uploading": "Wait until the picture is uploaded.",
+      "problems": "Fix the fields marked in red first.",
+      "lightFirst": "Add the logo for light pages first."
+    },
+    "preview": {
+      "label": "What customers and suppliers will see",
+      "document": "Preview a document",
+      "heldLegal": "The company's legal data is not complete yet: a document cannot be printed.",
+      "portal": "Portal and link pages",
+      "portalTitle": "Sign in to {portal}",
+      "portalButton": "Send me a sign-in link",
+      "portalLink": "Privacy notice",
+      "mail": "Mail",
+      "mailFrom": "From",
+      "mailFromValue": "Your name via {sender}",
+      "mailSignature": "Under the message",
+      "mailSignatureValue": "Your name · {sender}",
+      "documents": "Documents",
+      "documentsLogo": "Quotes, purchase orders, DDTs and invoice copies print the logo above the company's name.",
+      "documentsName": "Documents print {company} without a logo.",
+      "documentsSaved": "Previews of a document show the saved branding."
+    },
+    "problem": {
+      "save": "The branding was not saved"
+    },
+    "done": {
+      "saved": "Branding saved. The portal, the link pages, mail and new documents use it from now on."
+    }
+  }
+}

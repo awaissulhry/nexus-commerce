@@ -3,7 +3,7 @@ import { assertGenericPath, MODULE_OWNED_FILES, MODULE_READ_FILES, ownerOf, read
 
 describe('record types whose files only their module writes (owned.ts)', () => {
   it('lists the compliance document, the parcel, the privacy notice and DPIA and the type-change review (every kind), the certificate, the lot and the opening-stock reports (CERTIFICATE) and the DDT (FISCAL_ARCHIVE)', () => {
-    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['AttendanceMonthClose', 'Certificate', 'ComplianceDocument', 'Ddt', /* B-W2b-125 */ 'InailFiling', 'Incident', 'Lot', 'OpeningStock', 'Parcel', 'PayrollExport', 'PrivacyDpia', 'PrivacyNotice', 'SupplierClaim', 'TypeChangeReview', 'WorkerStatement'])
+    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['AttendanceMonthClose', 'Certificate', /* B-W2b-161 */ 'CompanyBranding', 'ComplianceDocument', 'Ddt', /* B-W2b-125 */ 'InailFiling', 'Incident', 'Lot', 'OpeningStock', 'Parcel', 'PayrollExport', 'PrivacyDpia', 'PrivacyNotice', 'SupplierClaim', 'TypeChangeReview', 'WorkerStatement'])
     expect(ownerOf('OpeningStock', 'CERTIFICATE')).not.toBeNull()
     expect(ownerOf('OpeningStock', 'ATTACHMENT')).toBeNull()
     expect(ownerOf('PrivacyNotice', 'DOCUMENT')).not.toBeNull()

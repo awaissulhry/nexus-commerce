@@ -13,6 +13,7 @@ import { bulkNotice, type BulkNotice } from '../kit/bulk-model'
 import { advanceSeries, closeSeries, createSeries, listSeries, seriesAllocations, setSeriesStart, type Allocation, type Series, type SeriesProof } from './api'
 import { draftBody, fiscalRows, hasIssued, legalOf, type CompanyOption, type DocumentsDialog, type DocumentsView as ViewName, type ProofRead, type SeriesDraft } from './model'
 import { DocumentsView } from './view/DocumentsView'
+import { BrandingSection } from './branding/BrandingSection'
 
 
 /** The address's dialog: `?series=<id>`, `?numbers=<id>`, `?close=<id>`, `?new=series`. */
@@ -43,7 +44,9 @@ export function DocumentsPage() {
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
   const can = { manage: held.has('numbering.manage'), documents: held.has('documents.view') }
-  const view: ViewName = params?.get('view') === 'documents' ? 'documents' : 'numbers'
+  const asked = params?.get('view')
+  // B-W2b-161: Branding is shown to whoever may see the documents (documents.view), else the page opens on Numbers.
+  const view: ViewName = asked === 'documents' ? 'documents' : asked === 'branding' && can.documents ? 'branding' : 'numbers'
   const companyId = params?.get('company') ?? 'all'
   const dialog = dialogOf(params)
   const [companies, setCompanies] = useState<Loaded<CompanyOption>>(loading())
@@ -162,6 +165,9 @@ export function DocumentsPage() {
     },
     [guard, load],
   )
+
+  // B-W2b-161: the Branding section has its own container (branding/BrandingSection.tsx).
+  if (view === 'branding') return <BrandingSection companies={companies} askedCompany={companyId === 'all' ? null : companyId} onView={(next) => go({ view: next, dialog: null })} onCompany={(next) => go({ company: next })} />
 
   return (
     <DocumentsView

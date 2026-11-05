@@ -1641,6 +1641,7 @@
     "imports_run": "Upload a sheet and see its dry run",
     "imports_apply": "Apply an import's plan",
     "documents_view": "Preview a company's document layouts",
+    "documents_branding_manage": "Change a company's branding: logo, accent colour, sender name for mail, portal name",
     "print_view": "See a site's printers and print jobs",
     "print_labels": "Print labels",
     "print_documents": "Print documents",

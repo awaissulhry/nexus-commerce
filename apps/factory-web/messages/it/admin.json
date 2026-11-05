@@ -1641,6 +1641,7 @@
     "imports_run": "Caricare un foglio e vederne la prova",
     "imports_apply": "Applicare il piano di un'importazione",
     "documents_view": "Vedere in anteprima i modelli dei documenti di una società",
+    "documents_branding_manage": "Cambiare l'immagine di una società: logo, colore di accento, nome mittente delle e-mail, nome del portale",
     "print_view": "Vedere stampanti e lavori di stampa di uno stabilimento",
     "print_labels": "Stampare etichette",
     "print_documents": "Stampare documenti",

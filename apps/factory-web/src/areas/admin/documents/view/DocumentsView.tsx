@@ -98,6 +98,8 @@ function useListKeys(model: DocumentsViewModel, actions?: DocumentsActions) {
       if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.closest('[role="dialog"]'))) return
       if (event.key === '1') actions?.onView?.('numbers')
       else if (event.key === '2') actions?.onView?.('documents')
+      // B-W2b-161: Branding, for whoever may see the documents.
+      else if (event.key === '3' && model.can.documents) actions?.onView?.('branding')
       else if (event.key === 'c' && !newSeriesHeld(model)) actions?.onDialog?.({ kind: 'new' })
       else return
       event.preventDefault()
@@ -108,11 +110,13 @@ function useListKeys(model: DocumentsViewModel, actions?: DocumentsActions) {
 }
 
 /** The page's own keys, listed in each list's footer icon (never above the table). */
-function usePageKeys(): ListKey[] {
+function usePageKeys(branding = false): ListKey[] {
   const t = useT('admin-documents')
   return [
     { keys: ['1'], does: t('docs.keys.numbers') },
     { keys: ['2'], does: t('docs.keys.documents') },
+    // B-W2b-161: Branding.
+    ...(branding ? [{ keys: ['3'], does: t('docs.keys.branding') }] : []),
     { keys: ['c'], does: t('docs.keys.newSeries') },
   ]
 }
@@ -170,6 +174,8 @@ function ListTools({ model, actions }: { model: DocumentsViewModel; actions?: Do
         options={[
           { value: 'numbers', label: t('docs.views.numbers') },
           { value: 'documents', label: t('docs.views.documents') },
+          // B-W2b-161: Branding, for whoever may see the documents.
+          ...(model.can.documents ? [{ value: 'branding', label: t('docs.views.branding') }] : []),
         ]}
       />
       {companies.length > 1 && (
@@ -293,7 +299,7 @@ function Numbers({ model, actions }: { model: DocumentsViewModel; actions?: Docu
   const rows = useMemo(() => (items ? seriesRows(items, model.companyId, model.companies.items ?? []) : []), [items, model.companyId, model.companies.items])
   const { selected, onChange } = useSelection(model.selected, actions?.onSelect, rows.map((row) => row.id))
   const columns = useSeriesColumns(model)
-  const own = usePageKeys()
+  const own = usePageKeys(model.can.documents)
   const { onHelp, help } = useKeysHelp(own, true)
   const reach = closeReach(rows.filter((row) => selected.includes(row.id)))
   const closeHeld = bulkHeld(reach, model.can.manage, { right: 'docs.held.manage', none: 'docs.bulk.none' })
@@ -448,7 +454,7 @@ function Layouts({ model, actions }: { model: DocumentsViewModel; actions?: Docu
   const t = useT('admin-documents')
   const company = sampleCompany(model)
   const columns = useLayoutColumns(company)
-  const own = usePageKeys()
+  const own = usePageKeys(model.can.documents)
   const { onHelp, help } = useKeysHelp(own, false)
   const state: ReactNode = !model.can.documents ? (
     <EmptyState icon={<FileText size={24} aria-hidden />} title={t('docs.layouts.noRightTitle')} description={t('docs.layouts.noRight')} />

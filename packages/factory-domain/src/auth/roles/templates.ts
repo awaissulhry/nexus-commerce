@@ -816,6 +816,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'security.view', 'security.drills.record',
       // B-W2a-41: the mail delivery log; unblock an address.
       'email.delivery.view', 'email.delivery.unblock',
+      // B-W2b-161: company branding (logo, accent, sender name, portal label; step-up).
+      'documents.branding.manage',
     ],
     grains: [],
   }),

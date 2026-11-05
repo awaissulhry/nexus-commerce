@@ -56,6 +56,9 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // every kind; office only (a photo may show an injury or a face, the receipt names the injured person; GDPR art. 9).
   Incident: { route: 'POST /safety/incidents/:incidentId/photos (or POST /safety/floor/incidents/:incidentId/photos), then POST …/photos/:fileId/complete' },
   InailFiling: { route: 'POST /safety/incidents/:incidentId/filings/:filingId/receipt, then POST …/receipt/:fileId/complete' },
+  // B-W2b-161: a company's logos (platform/branding; record id = the company's id): PHOTO files only, PNG or JPEG of at most
+  // 1 MiB checked by their first bytes; the public logo route serves only the one the branding names.
+  CompanyBranding: { kinds: ['PHOTO'], route: 'POST /branding/:companyId/logo, then POST …/logo/:fileId/complete' },
 })
 
 /**
