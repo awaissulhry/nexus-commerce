@@ -180,6 +180,8 @@ import { SAFETY_INCIDENTS_DEFINITIONS, SAFETY_INCIDENTS_PERMISSIONS } from '../.
 import { QUALITY_REPORTS_DEFINITIONS, QUALITY_REPORTS_PERMISSIONS } from '../../quality/reports/permissions'
 // B-W2b-128: role sheets (safety.rolesheets.manage: a role's risks, PPE kit, courses and whether it needs health surveillance).
 import { SAFETY_ROLESHEETS_DEFINITIONS, SAFETY_ROLESHEETS_PERMISSIONS } from '../../safety/rolesheets/permissions'
+// B-W2b-135: health surveillance (safety.health.view | manage | plans | views: protected, every view recorded).
+import { SAFETY_HEALTH_DEFINITIONS, SAFETY_HEALTH_PERMISSIONS } from '../../safety/health/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -637,6 +639,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_REPORTS_DEFINITIONS,
   // B-W2b-128: role sheets.
   SAFETY_ROLESHEETS_DEFINITIONS,
+  // B-W2b-135: health surveillance.
+  SAFETY_HEALTH_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -817,6 +821,8 @@ for (const name of SAFETY_INCIDENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecl
 for (const name of QUALITY_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-128: role sheets.
 for (const name of SAFETY_ROLESHEETS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-135: health surveillance.
+for (const name of SAFETY_HEALTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-132: the leather and cut plan.
 for (const name of PLANNING_LEATHER_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

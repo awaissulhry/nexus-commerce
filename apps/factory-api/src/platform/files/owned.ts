@@ -56,6 +56,10 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // every kind; office only (a photo may show an injury or a face, the receipt names the injured person; GDPR art. 9).
   Incident: { route: 'POST /safety/incidents/:incidentId/photos (or POST /safety/floor/incidents/:incidentId/photos), then POST …/photos/:fileId/complete' },
   InailFiling: { route: 'POST /safety/incidents/:incidentId/filings/:filingId/receipt, then POST …/receipt/:fileId/complete' },
+  // B-W2b-135: the doctor's written fitness judgement (modules/safety/health): every kind, office only (GDPR art. 9); a visit keeps no
+  // file (its judgement's copy is the judgement's).
+  FitnessJudgement: { route: 'POST /safety/health/judgements/:judgementId/copy, then POST …/copy/:fileId/complete' },
+  HealthVisit: { route: 'none: a visit keeps no file (the doctor’s copy is its judgement’s: POST /safety/health/judgements/:judgementId/copy)' },
 })
 
 /**
@@ -74,6 +78,9 @@ export const MODULE_READ_FILES: Readonly<Record<string, string>> = Object.freeze
   // protected view log); files.read never reaches them.
   Incident: 'GET /safety/incidents/:incidentId/photos/:fileId/download',
   InailFiling: 'POST /safety/incidents/:incidentId/filings/:filingId/receipt/:fileId/open',
+  // B-W2b-135: a judgement's copy (safety.health.view, each opening a COPY view in the protected view log); files.read never reaches it.
+  FitnessJudgement: 'POST /safety/health/judgements/:judgementId/copy/:fileId/open',
+  HealthVisit: 'none: a visit keeps no file',
 })
 
 export const readsThroughModule = (recordType: string): boolean => Object.hasOwn(MODULE_READ_FILES, recordType)

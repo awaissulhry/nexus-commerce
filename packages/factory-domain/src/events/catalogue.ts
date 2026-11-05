@@ -87,6 +87,8 @@ import { events as safetyRisk } from '../safety-risk/events'
 import { incidentEvents as safetyIncidents } from '../safety/events'
 // B-W2b-128: role sheets (a sheet applied, a person's role changed).
 import { events as safetyRolesheets } from '../safety-rolesheets/events'
+// B-W2b-135: health surveillance (a plan, a visit, a judgement changed: ids and states only).
+import { events as safetyHealth } from '../safety-health/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -240,7 +242,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-125
   ...safetyIncidents,
   // B-W2b-128
-  ...safetyRolesheets] as const satisfies readonly EventDefinition[]
+  ...safetyRolesheets,
+  // B-W2b-135
+  ...safetyHealth] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

@@ -1951,6 +1951,10 @@
     "safety_incidents_report": "Segnalare un infortunio, un quasi incidente o un pericolo dall’ufficio, con le persone coinvolte",
     "safety_incidents_manage": "Gestire le segnalazioni: correggerle, gravità, presa visione della sicurezza, azioni trasformate in intervento, misura o sessione di formazione, chiudere, riaprire, annullare, foto",
     "safety_incidents_people": "Dati protetti: vedere e correggere le persone coinvolte e le loro lesioni, gestire le comunicazioni INAIL (certificato, invio con numero di protocollo, ricevuta); ogni consultazione è registrata",
-    "safety_rolesheets_manage": "Gestire le schede mansione: rischi, kit DPI, corsi e sorveglianza sanitaria di ogni mansione; applicare una scheda dopo aver letto cosa cambia per le persone della mansione"
+    "safety_rolesheets_manage": "Gestire le schede mansione: rischi, kit DPI, corsi e sorveglianza sanitaria di ogni mansione; applicare una scheda dopo aver letto cosa cambia per le persone della mansione",
+    "safety_health_view": "Dati protetti: vedere chi deve fare quale visita di sorveglianza sanitaria e i giudizi di idoneità (esito e limitazioni, mai una diagnosi), stampare l’elenco visite per il medico; ogni consultazione è registrata",
+    "safety_health_manage": "Gestire le visite di sorveglianza sanitaria (pianificare, prenotare, spostare, annullare, svolta) e registrare o annullare i giudizi di idoneità del medico con la loro copia",
+    "safety_health_plans": "Gestire i piani di sorveglianza sanitaria per mansione come li ha fissati il medico: periodicità, medico, visita a fine rapporto",
+    "safety_health_views": "Vedere chi ha consultato i dati sanitari e chi ha verificato l’idoneità sì o no di una persona (per HR e il responsabile della protezione dei dati)"
   }
 }
