@@ -288,6 +288,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   filings behind the recorded `…/open` reads — ProtectedValue; Make a job / Add to improvement plan in one step; Record INAIL
   filing `f`, Close held while an action is open or a filing waits) and SCR-210-print `/plant/incidents/print` (a window page,
   anonymised). `RECORD_PAGES.Incident`, search type `Incident`. The record frame is the plant's (`_shared/parts` RecordFrame).
+  B-W2b-141 (Plant settings' W2b sections, SCR-241 + SCR-241-audit; `areas/plant/settings/` `depth-api.ts`, `depth-model.ts`
+  (pure: rule drafts and bodies, the worked example in words, order, H1-held lock choices, check type rules, refusals),
+  `use-depth.ts` (the container hook beside the W2a one), `view/{RoutingCard,LockCard,CheckTypesCard,IncidentsCard}.tsx`,
+  `_demo/fixtures.ts`): Request routing and escalation (list frame `plant.settings.routing`, the rule dialog with its example,
+  Where does a request go?, Move up/down = ONE `…/order`), Unsafe lock (EditModeBar; H1's other choices held; hazard report off →
+  StepUpModal), Statutory check types (list frame `plant.settings.checks`, the type dialog; no interval offered), Incidents (read
+  only, the API's law numbers), the band (site, SaveStatus, ⋯ History → `/plant/settings/history`). Each card's `c` is its own
+  while the focus is in it; on the page `c` stays New symptom. `?rule=` / `?type=` open the dialogs (RECORD_PAGES).
 - The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
   write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
   and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):
