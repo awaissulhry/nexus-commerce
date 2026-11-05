@@ -156,11 +156,14 @@ export function useAbuseGuard(guard: AbuseGuard | undefined): void {
   configured = guard
 }
 
-/** The process's store: Redis from apps/factory-api's env (fails fast, one retry), this process's memory while it is down. */
+/**
+ * The process's store: Redis from apps/factory-api's env (the gateway's settings: a command waits for the connection
+ * that is being made, then fails after one retry), this process's memory while it is down.
+ */
 function defaultStore(): { readonly store: AbuseStore; readonly prefix: string } {
   if (!processStore) {
     const env = loadFactoryEnv()
-    const redis = new Redis(env.FACTORY_REDIS_URL, { maxRetriesPerRequest: 1, connectTimeout: 2_000, enableOfflineQueue: false })
+    const redis = new Redis(env.FACTORY_REDIS_URL, { maxRetriesPerRequest: 1, connectTimeout: 2_000 })
     redis.on('error', () => {})
     processStore = { store: failoverStore(redisAbuseStore(redis), memoryAbuseStore()), prefix: `${env.FACTORY_QUEUE_PREFIX}:${env.FACTORY_ENV}` }
   }
