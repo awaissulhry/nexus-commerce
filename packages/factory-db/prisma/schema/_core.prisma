@@ -113,6 +113,8 @@ model Company {
   // W2b links-depth.prisma (wave 19/22): its records shared with outside parties, the approvals it asked of them.
   recordShares        RecordShare[]
   approvalRequests    ApprovalRequest[]
+  // W2b portal-frame.prisma (wave 20/22): the requests it made of partners (their tasks).
+  partnerTasks        PartnerTask[]
   // imports.prisma: the company's imports.
   importJobs          ImportJob[]
   // W2b imports.prisma: the steps of its first load marked done.

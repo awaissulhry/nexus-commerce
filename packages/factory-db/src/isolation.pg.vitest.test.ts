@@ -41,6 +41,7 @@ import { seed as seedPlanning } from '../seed/planning'
 import { seed as seedPlant } from '../seed/plant'
 import { seed as seedPlantCare } from '../seed/plantcare'
 import { seed as seedPortalAuth } from '../seed/portal-auth'
+import { seed as seedPortalFrame } from '../seed/portal-frame'
 import { seed as seedSafety } from '../seed/safety'
 import { seed as seedPeople } from '../seed/people'
 import { seed as seedPricing } from '../seed/pricing'
@@ -296,6 +297,9 @@ beforeAll(async () => {
   // The links in depth schema of W2b (wave 19/22).
   await seedLinksDepth({ db: factory, namespace: 'iso-a' })
   await seedLinksDepth({ db: factory, namespace: 'iso-b' })
+  // The portal frame schema of W2b (wave 20/22): partner tasks, notifications and e-mail settings, a portal post.
+  await seedPortalFrame({ db: factory, namespace: 'iso-a' })
+  await seedPortalFrame({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -498,7 +502,9 @@ it('covers every classified table and every runtime role', () => {
     'OvertimeEntry',
     'OvertimeRequest',
     'Parcel',
+    'PartnerEmailPreference',
     'PartnerNoticeAck',
+    'PartnerTask',
     'Party',
     'PartyAddress',
     'PartyContact',
