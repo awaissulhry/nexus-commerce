@@ -1,4 +1,4 @@
-import { CalendarRange, ChartGantt, Gauge, ListChecks, Network, Siren, SlidersHorizontal } from 'lucide-react'
+import { CalendarRange, ChartGantt, Gauge, ListChecks, Network, Scissors, Siren, SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -23,6 +23,8 @@ export const officeArea: OfficeAreaNav = {
         noCrumb: true,
         items: [
           { id: 'planning-mrp', label: 'shell:nav.planning.mrp', href: '/planning/mrp', icon: ListChecks, permission: 'planning.view' },
+          // B-W2b-132: Leather & cut plan (SCR-252), right after What to buy & make (the design's order).
+          { id: 'planning-leather', label: 'shell:nav.planning.leather', href: '/planning/leather', icon: Scissors, permission: 'planning.view' },
           // B-W2a-45: Planning board (SCR-122; the design opens it in a window of its own) and Lines & subcontractors (SCR-126).
           { id: 'planning-board', label: 'shell:nav.planning.board', href: '/planning/board', icon: ChartGantt, permission: 'planning.view' },
           // B-W2a-70: Capacity & load (SCR-123), between the board and the allocation (the approved tree's order).

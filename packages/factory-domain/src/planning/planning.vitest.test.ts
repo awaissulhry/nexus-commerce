@@ -386,6 +386,8 @@ describe('declared', () => {
     expect(EVENT_CATALOGUE.types().filter((type) => type.startsWith('planning.'))).toEqual([
       // B-W2a-16: planning settings and capacity.
       'planning.capacity_changed',
+      // B-W2b-132: the leather and cut plan's cutting loss.
+      'planning.cutting_loss_decided',
       // B-W2a-22: the exception list.
       'planning.exceptions_changed',
       'planning.exceptions_found',

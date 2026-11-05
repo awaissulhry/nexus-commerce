@@ -1,0 +1,246 @@
+{
+  "common": {
+    "loading": "Lettura…",
+    "retry": "Riprova"
+  },
+  "noAccess": {
+    "title": "I report qualità non sono nel tuo ruolo",
+    "body": "Chiedi all'amministratore i report qualità (quality.reports.view)."
+  },
+  "noSite": {
+    "title": "Scegli uno stabilimento",
+    "body": "I report qualità si leggono uno stabilimento alla volta: scegli lo stabilimento nella barra in alto."
+  },
+  "band": {
+    "label": "Azioni del report",
+    "noSite": "Nessuno stabilimento scelto",
+    "reading": "Lettura del report…",
+    "arrange": "Disponi",
+    "more": "Altre azioni",
+    "pdf": "Esporta report (PDF)",
+    "csv": {
+      "kpi": "Esporta pannello (CSV): KPI qualità",
+      "trend": "Esporta pannello (CSV): andamento",
+      "table": "Esporta pannello (CSV): confronto",
+      "supplier": "Esporta pannello (CSV): qualità in ingresso"
+    },
+    "csvHeld": "Il pannello non è ancora stato letto.",
+    "keys": "Scorciatoie da tastiera"
+  },
+  "live": {
+    "connecting": "Connessione",
+    "live": "In diretta",
+    "offline": "Non in linea: i dati possono essere vecchi"
+  },
+  "scope": {
+    "label": "Cosa copre il report",
+    "compare": "Confronta con il periodo precedente"
+  },
+  "privacy": "Per stabilimento, linea, operazione, fornitore e modello: mai per persona (Statuto dei Lavoratori art. 4).",
+  "tooFew": "Troppe poche persone per mostrarlo senza identificarle (un gruppo ne richiede almeno {count}).",
+  "tooFewShort": "Troppe poche persone per mostrarlo",
+  "section": {
+    "kpi": "KPI qualità",
+    "trend": "Andamento",
+    "table": "Per linea, operazione, fornitore e modello",
+    "supplier": "Qualità in ingresso"
+  },
+  "kpi": {
+    "hint": "Ogni numero apre l'elenco da cui viene. I dati leggono i record come sono stati firmati.",
+    "failed": "Non è stato possibile leggere i KPI qualità",
+    "fpy": "Resa al primo passaggio",
+    "dhu": "Difetti per cento unità (DHU)",
+    "aqlPass": "Esito AQL positivo (finale)",
+    "ncrOpen": "NC aperte · età media",
+    "capaOnTime": "Azioni CAPA in tempo",
+    "holdsOld": "Blocchi più vecchi di 7 giorni",
+    "amendments_one": "In questo periodo è stata firmata 1 correzione dopo la firma. Una correzione non cambia mai un esito o un conteggio: questi dati leggono i record firmati.",
+    "amendments_other": "In questo periodo sono state firmate {count} correzioni dopo la firma. Una correzione non cambia mai un esito o un conteggio: questi dati leggono i record firmati.",
+    "previous": "Confronto con {from} – {to}."
+  },
+  "tile": {
+    "notInRole": "Non nel tuo ruolo",
+    "ncrNone": "Nessuna aperta a fine periodo",
+    "ncrAge": "Età media {days} giorni a fine periodo",
+    "holdsHint": "Ancora bloccati a fine periodo",
+    "empty": {
+      "fpy": "Nessun controllo di fine linea nel periodo",
+      "dhu": "Nessun controllo di fine linea nel periodo",
+      "aqlPass": "Nessuna ispezione finale firmata nel periodo",
+      "capaOnTime": "Nessuna azione fatta nel periodo (dell'azienda)"
+    },
+    "basis": {
+      "fpy": "{part} pezzi su {whole} passati a fine linea al primo colpo ({checks} controlli)",
+      "dhu": "{part} difetti su {whole} pezzi a fine linea",
+      "aqlPass": "{part} ispezioni finali su {whole} superate",
+      "capaOnTime": "{part} azioni su {whole} fatte entro la data (dell'azienda)"
+    },
+    "sparkLabel": "{label}, per settimana",
+    "sparkEmpty": "Nessuna settimana con un dato",
+    "held": {
+      "capaPage": "L'elenco delle azioni correttive arriva con la sua pagina.",
+      "noList": "Il suo elenco non è nel tuo ruolo."
+    }
+  },
+  "change": {
+    "up": {
+      "points": "su di {by} punti rispetto ai {days} giorni precedenti",
+      "dhu": "su di {by} rispetto ai {days} giorni precedenti",
+      "count_one": "{by} in più rispetto alla fine dei {days} giorni precedenti",
+      "count_other": "{by} in più rispetto alla fine dei {days} giorni precedenti"
+    },
+    "down": {
+      "points": "giù di {by} punti rispetto ai {days} giorni precedenti",
+      "dhu": "giù di {by} rispetto ai {days} giorni precedenti",
+      "count_one": "{by} in meno rispetto alla fine dei {days} giorni precedenti",
+      "count_other": "{by} in meno rispetto alla fine dei {days} giorni precedenti"
+    },
+    "same": {
+      "points": "uguale ai {days} giorni precedenti",
+      "dhu": "uguale ai {days} giorni precedenti",
+      "count_one": "uguale alla fine dei {days} giorni precedenti",
+      "count_other": "uguale alla fine dei {days} giorni precedenti"
+    }
+  },
+  "trend": {
+    "hint": "Resa al primo passaggio e DHU a fine linea, per settimana; i dati di una settimana e le CAPA chiuse si aprono dal suo pulsante.",
+    "failed": "Non è stato possibile leggere l'andamento",
+    "line": "Linea",
+    "allLines": "Tutte le linee",
+    "notInRole": "L'andamento non è nel tuo ruolo",
+    "notInRoleBody": "Si conta dai controlli in processo e dalle ispezioni finali: il tuo ruolo non vede né gli uni né le altre.",
+    "chartLabel": "Resa al primo passaggio e DHU per settimana",
+    "fpyAxis": "Resa al primo passaggio (%)",
+    "dhuAxis": "DHU",
+    "caption": "Linea: resa al primo passaggio (a sinistra). Barre: difetti per cento unità (a destra). Una settimana senza punto non ha controlli, o ha troppe poche persone.",
+    "empty": "Nessun dato di fine linea nel periodo",
+    "emptyBody": "In queste settimane non è stato firmato alcun controllo di fine linea.",
+    "emptyHidden": "Ogni settimana con controlli aveva troppe poche persone per mostrarne i dati.",
+    "weeksLabel": "Settimane del periodo",
+    "weekHidden": "troppo poche",
+    "weekOpen": "Settimana {week}, dal {from} al {to}: i suoi dati",
+    "weekTitle": "Settimana {week}",
+    "weekRange": "Settimana {week} · {from} – {to}",
+    "pieces": "Pezzi controllati",
+    "checks": "Controlli di fine linea",
+    "aql": "{pct} ({passed} su {decided})",
+    "capaClosed": "CAPA chiuse",
+    "more": "e altre {count}",
+    "openInspections": "Apri le ispezioni",
+    "hidden_one": "1 settimana non mostra dati: dietro c'erano meno di {minimum} persone.",
+    "hidden_other": "{count} settimane non mostrano dati: dietro c'erano meno di {minimum} persone.",
+    "noClosures": "Nessuna CAPA chiusa nel periodo.",
+    "closures": "CAPA chiuse: {list}"
+  },
+  "dimension": {
+    "line": "Linea",
+    "operation": "Operazione",
+    "supplier": "Fornitore",
+    "style": "Modello"
+  },
+  "table": {
+    "hint": "Tabella di confronto: per linea, operazione, fornitore o modello; mai per lavoratore.",
+    "failed": "Non è stato possibile leggere il confronto",
+    "by": "Confronta per",
+    "tableLabel": "Qualità per {by}",
+    "inspected": "Controllati",
+    "defects": "Difetti",
+    "dhu": "DHU",
+    "aql": "Esito AQL positivo",
+    "ncrs": "NC",
+    "aqlCell": "{pct} ({passed} su {decided})",
+    "empty": "Niente da confrontare nel periodo",
+    "emptyBody": {
+      "line": "In questi giorni nessun controllo di fine linea, ispezione finale o NC indica una linea.",
+      "operation": "In questi giorni non è stato dichiarato alcun pezzo e non è stato attribuito alcun difetto a un'operazione.",
+      "supplier": "In questi giorni non è stata firmata alcuna ispezione in ingresso e nessuna NC indica un fornitore.",
+      "style": "In questi giorni non è stata firmata alcuna ispezione finale e nessuna NC indica un modello."
+    },
+    "none": {
+      "line": "Nessuna linea",
+      "operation": "Nessuna operazione",
+      "supplier": "Nessun fornitore",
+      "style": "Nessun modello"
+    },
+    "notInRole": "Questo confronto non è nel tuo ruolo",
+    "notInRoleBody": {
+      "line": "Le linee si confrontano da controlli in processo, ispezioni finali e NC: il tuo ruolo non ne vede nessuno.",
+      "operation": "Le operazioni si confrontano dai controlli in processo: il tuo ruolo non li vede.",
+      "supplier": "I fornitori si confrontano da ispezioni in ingresso e NC: il tuo ruolo non vede né le une né le altre.",
+      "style": "I modelli si confrontano da ispezioni finali e NC: il tuo ruolo non vede né le une né le altre."
+    },
+    "source": {
+      "line": "Controllati e difetti: pezzi a fine linea. Esito AQL: ispezioni finali degli ordini di lavoro della linea. NC: trovate nel periodo sugli ordini di lavoro della linea.",
+      "operation": "Controllati: pezzi dichiarati all'operazione. Difetti: attribuiti all'operazione a fine linea, in un controllo itinerante o in una dichiarazione. Per operazione, mai per persona.",
+      "supplier": "Controllati: unità nei campioni in ingresso. Difetti: unità trovate difettose. Esito AQL: ispezioni in ingresso superate. NC: trovate nel periodo che indicano il fornitore.",
+      "style": "Controllati e difetti: ispezioni finali. Esito AQL: ispezioni finali superate. NC: trovate nel periodo che indicano il modello."
+    },
+    "hidden_one": "1 riga non mostra dati: dietro c'erano meno di {minimum} persone.",
+    "hidden_other": "{count} righe non mostrano dati: dietro c'erano meno di {minimum} persone."
+  },
+  "incoming": {
+    "hint": "Vista fornitori: i lotti ricevuti nel periodo e le ispezioni in ingresso firmate nel periodo.",
+    "failed": "Non è stato possibile leggere la qualità in ingresso",
+    "notInRole": "La qualità in ingresso non è nel tuo ruolo",
+    "notInRoleBody": "Si conta da lotti e ispezioni in ingresso: il tuo ruolo non vede né gli uni né le altre.",
+    "empty": "Niente ricevuto nel periodo",
+    "emptyBody": "In questi giorni non è stato ricevuto alcun lotto e non è stata firmata alcuna ispezione in ingresso.",
+    "tableLabel": "Qualità in ingresso per fornitore",
+    "supplier": "Fornitore",
+    "lots": "Lotti ricevuti",
+    "rejected": "Respinti",
+    "crVi": "Cr VI non conformi",
+    "days": "Giorni medi in quarantena",
+    "inspections": "Ispezioni in ingresso",
+    "failedInspections": "Non superate",
+    "noSupplier": "Nessun fornitore",
+    "workshop": "Terzista",
+    "daysCell": "{days} (in attesa: {waiting})",
+    "noLots": "Lotti ricevuti, respinti, Cr VI non conformi e giorni in quarantena richiedono la vista dei lotti (quality.lots.view).",
+    "noInspections": "Le ispezioni in ingresso richiedono la loro vista (quality.incoming.view).",
+    "rowHint": "Un fornitore apre la sua scheda; la scheda Qualità e valutazione arriva con il passo della scheda fornitore."
+  },
+  "arrange": {
+    "title": "Disponi i pannelli",
+    "list": "Pannelli",
+    "hint": "I pannelli spuntati si vedono, in quest'ordine.",
+    "apply": "Fatto",
+    "widths": "Larghezze",
+    "widthOf": "Larghezza di {panel}",
+    "width": {
+      "full": "Tutta la larghezza",
+      "two-thirds": "Due terzi",
+      "half": "Metà"
+    }
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "arrange": "Disponi i pannelli",
+    "export": "Esporta report (PDF) in una nuova scheda",
+    "help": "Questo elenco"
+  },
+  "csv": {
+    "kpi": "Indicatore",
+    "now": "Periodo",
+    "previous": "Periodo precedente",
+    "none": "Nessuno",
+    "week": "Settimana",
+    "from": "Dal",
+    "to": "Al"
+  },
+  "print": {
+    "title": "Report qualità",
+    "period": "Periodo",
+    "previous": "Confronto con",
+    "site": "Stabilimento",
+    "line": "Linea dell'andamento",
+    "by": "Confronto",
+    "privacy": "Solo per stabilimento, linea, operazione, fornitore e modello: mai per persona (Statuto dei Lavoratori art. 4). Un gruppo con troppe poche persone per nasconderne una non mostra dati.",
+    "held": "Il report è ancora in lettura.",
+    "failed": "Una parte del report non è stata letta",
+    "figure": "Indicatore",
+    "now": "Periodo",
+    "before": "Periodo precedente",
+    "change": "Variazione"
+  }
+}

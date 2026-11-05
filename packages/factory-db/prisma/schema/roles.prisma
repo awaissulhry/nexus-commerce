@@ -20,7 +20,8 @@ model Role {
   system      Boolean      @default(false)
   /// The template a custom role was copied from, if any (its later additions are shown, never applied by themselves).
   basedOn     String?
-  /// Who it is for: office users (RoleAssignment) or floor workers (WorkerRole).
+  /// Who it is for: office users (RoleAssignment), floor workers (WorkerRole) or, from W2b-3, partner users
+  /// (RoleAssignment bound to their party).
   audience    RoleAudience @default(OFFICE)
   /// A session holds none of this role's permissions until two-factor was proved on it.
   requireMfa  Boolean      @default(false)
@@ -57,10 +58,16 @@ enum RoleAudience {
   OFFICE
   /// Given to floor workers (floor-auth.prisma WorkerRole), held only by a floor session on an enrolled device.
   FLOOR
+  /// W2b (B-W2b-152; PLT-006, SAL-060, SCM-092): given to partner users (User.audience PARTNER), each assignment bound to
+  /// the person's own party; held only by a portal session. At most the price grain (the guards; never cost, margin,
+  /// wages or pay), and only partner permissions (the API). The audience of a role never changes to or from PARTNER.
+  PARTNER
 }
 
 /// One role given to one person, limited to some companies, sites and parties, for a time. Never deleted: ending an
-/// assignment sets endedAt, so the history says who could do what, when.
+/// assignment sets endedAt, so the history says who could do what, when. W2b (B-W2b-152): a PARTNER role goes only to a
+/// partner user and a partner user holds only PARTNER roles, each assignment bound to exactly the person's own party
+/// (partyIds = [their party], no site limit; the guards).
 model RoleAssignment {
   id           String    @id @db.Uuid
   tenantId     String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid

@@ -76,6 +76,14 @@ model Party {
   agencyEmployees     Employee[]           @relation("EmployeeAgency")
   // W2b people.prisma: the companies whose labour consultant it is.
   consultantSettings  PeopleSettings[]     @relation("PeopleSettingsConsultant")
+  // W2b auth.prisma, portal-auth.prisma, privacy.prisma (wave 17/22): its partner users, their portal sessions and the
+  // office previews of its portal, their invitations, its portal settings, its people's acknowledgements of the terms.
+  portalUsers         User[]               @relation("UserParty")
+  portalSessions      Session[]            @relation("SessionParty")
+  portalPreviews      Session[]            @relation("SessionPreviewOfParty")
+  portalInvitations   Invitation[]         @relation("InvitationParty")
+  portalSettings      PortalSettings[]
+  partnerNoticeAcks   PartnerNoticeAck[]
   // product.prisma: the items it supplies by default, the styles made for it as a brand, the BOM lines bought from it.
   suppliedItems       Item[]
   brandStyles         Style[]
@@ -86,6 +94,9 @@ model Party {
   complianceDocuments ComplianceDocument[]
   // email-in.prisma: the mail received from this party's contacts (or its company domain).
   inboundEmails       InboundEmail[]
+  // W2b links-depth.prisma (wave 19/22): the records shared with it, the approvals asked of it.
+  recordShares        RecordShare[]
+  approvalRequests    ApprovalRequest[]
   // sales.prisma: its quotes, sales orders and deposit requests.
   quotes              Quote[]
   salesOrders         SalesOrder[]
@@ -288,6 +299,11 @@ model PartyContact {
   complaints          Complaint[]
   // W2b ncr.prisma (wave 11/16): the concessions they were asked.
   ncrConcessions      NcrConcession[]
+  // W2b links.prisma, links-depth.prisma (wave 19/22): the links sent to them, the records shared with them, the
+  // approvals asked of them.
+  oneOffLinks         OneOffLink[]
+  recordShares        RecordShare[]
+  approvalRequests    ApprovalRequest[]
 
   // The target of the measurement profiles' reference: a rider is a contact of the profile's own party.
   @@unique([tenantId, partyId, id])

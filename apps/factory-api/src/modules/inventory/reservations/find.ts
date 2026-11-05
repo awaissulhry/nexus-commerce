@@ -1,4 +1,4 @@
-import type { Uom } from '@nexus/factory-db'
+import type { FactoryClient, Uom } from '@nexus/factory-db'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -100,40 +100,9 @@ export async function findHidesForJob(caller: CommandCaller, query: FindQuery) {
       needSource = 'WORK_ORDER'
     }
 
-    // The available hides: on hand, not held, reserved for nobody.
-    const facts = await readKeyFacts(db, { siteId, itemId: item.id, itemColourId }, { withOrders: false })
-    const taken = new Set(facts.rows.filter((row) => row.hideId && new Dec(row.quantity.toString()).greaterThan(row.issuedQuantity.toString())).map((row) => row.hideId!))
-    const parts = facts.stock.filter((part) => part.hideId && !part.held && !taken.has(part.hideId) && new Dec(part.onHand).greaterThan(0))
-    const hideIds = parts.map((part) => part.hideId!)
-    const hideRows = new Map((hideIds.length ? await client.hide.findMany({ where: { id: { in: hideIds } }, select: { id: true, code: true, state: true, grade: true, gradeId: true, lotId: true } }) : []).map((row) => [row.id, row]))
-    const lotRows = new Map((await client.lot.findMany({ where: { id: { in: [...new Set([...hideRows.values()].map((row) => row.lotId))] } }, select: { id: true, receivedAt: true } })).map((row) => [row.id, row]))
-    const shades = await shadeFactsOf(client, hideIds)
-    const grades = await gradesOf(client)
-    const minimum = query.minGradeId ? grades.find((grade) => grade.id === query.minGradeId) : undefined
-    if (query.minGradeId && !minimum) throw new ValidationError('Not a leather grade of the tenant.', [{ path: 'query/minGradeId', message: 'Not a grade.' }])
-    const balances = await readSiteStock(db, siteId, { itemIds: [item.id], itemColourId, hideId: undefined })
-    const locations = await readLocations(db, [...new Set(balances.filter((balance) => balance.hideId && hideRows.has(balance.hideId)).map((balance) => balance.locationId))])
-    const tags = await liveTagsOf(client, hideIds)
-    const hides: FindHide[] = []
-    for (const part of parts) {
-      const hide = hideRows.get(part.hideId!)
-      const shade = shades.get(part.hideId!)
-      if (!hide || !shade || hide.state === 'CONSUMED' || hide.state === 'SCRAPPED' || hide.state === 'RETURNED') continue
-      if (query.shadeGroupId && shade.shadeGroupId !== query.shadeGroupId) continue
-      const grade = gradeOfHide(hide, grades).grade
-      if (minimum && (!grade || grade.sortOrder > minimum.sortOrder)) continue
-      const tag = tags.get(hide.id)
-      hides.push({
-        ...shade,
-        receivedAt: lotRows.get(hide.lotId)?.receivedAt ? toUtcIso(lotRows.get(hide.lotId)!.receivedAt!) : null,
-        gradeId: grade?.id ?? null,
-        gradeCode: grade?.code ?? (hide.grade?.trim() || null),
-        state: hide.state,
-        left: part.onHand,
-        locationCodes: [...new Set(balances.filter((balance) => balance.hideId === hide.id).map((balance) => locations.get(balance.locationId)?.code ?? ''))].filter(Boolean).sort(),
-        remnant: tag && tag.state === 'IN_STOCK' ? { id: tag.id, code: tag.code } : null,
-      })
-    }
+    // The available hides: on hand, not held, reserved for nobody (availableHides below, shared with the leather plan).
+    if (query.minGradeId && !(await gradesOf(client)).some((grade) => grade.id === query.minGradeId)) throw new ValidationError('Not a leather grade of the tenant.', [{ path: 'query/minGradeId', message: 'Not a grade.' }])
+    const hides = await availableHides(client, { siteId, itemId: item.id, itemColourId, shadeGroupId: query.shadeGroupId, minGradeId: query.minGradeId })
     const rule = await shadeRuleFor(db, siteId)
     const held = workOrder ? await heldShades(client, { siteId, workOrderId: workOrder.id, salesOrderLineId: null, itemId: item.id, itemColourId }) : []
     const result = findHides({ need, baseUom: item.baseUom, rule, held, hides })
@@ -167,4 +136,47 @@ export async function findHidesForJob(caller: CommandCaller, query: FindQuery) {
       proposal: result.proposal,
     }
   })
+}
+
+/**
+ * The hides of one article and colour available at a site (B-W2b-100's find, extracted by B-W2b-132 so the leather plan
+ * reads the same hides): on hand, of a released lot not on hold, reserved for nobody, not used up; by shade group and minimum
+ * grade (by record, else the W1 text; an ungraded hide only when no minimum is asked) when asked. No permission is checked:
+ * the caller checked the site.
+ */
+export async function availableHides(client: FactoryClient, scope: { readonly siteId: string; readonly itemId: string; readonly itemColourId: string | null; readonly shadeGroupId?: string | undefined; readonly minGradeId?: string | undefined }): Promise<FindHide[]> {
+  const db = client as Reader
+  const facts = await readKeyFacts(db, { siteId: scope.siteId, itemId: scope.itemId, itemColourId: scope.itemColourId }, { withOrders: false })
+  const taken = new Set(facts.rows.filter((row) => row.hideId && new Dec(row.quantity.toString()).greaterThan(row.issuedQuantity.toString())).map((row) => row.hideId!))
+  const parts = facts.stock.filter((part) => part.hideId && !part.held && !taken.has(part.hideId) && new Dec(part.onHand).greaterThan(0))
+  const hideIds = parts.map((part) => part.hideId!)
+  const hideRows = new Map((hideIds.length ? await client.hide.findMany({ where: { id: { in: hideIds } }, select: { id: true, code: true, state: true, grade: true, gradeId: true, lotId: true } }) : []).map((row) => [row.id, row]))
+  const lotRows = new Map((await client.lot.findMany({ where: { id: { in: [...new Set([...hideRows.values()].map((row) => row.lotId))] } }, select: { id: true, receivedAt: true } })).map((row) => [row.id, row]))
+  const shades = await shadeFactsOf(client, hideIds)
+  const grades = await gradesOf(client)
+  const minimum = scope.minGradeId ? grades.find((grade) => grade.id === scope.minGradeId) : undefined
+  const balances = await readSiteStock(db, scope.siteId, { itemIds: [scope.itemId], itemColourId: scope.itemColourId, hideId: undefined })
+  const locations = await readLocations(db, [...new Set(balances.filter((balance) => balance.hideId && hideRows.has(balance.hideId)).map((balance) => balance.locationId))])
+  const tags = await liveTagsOf(client, hideIds)
+  const hides: FindHide[] = []
+  for (const part of parts) {
+    const hide = hideRows.get(part.hideId!)
+    const shade = shades.get(part.hideId!)
+    if (!hide || !shade || hide.state === 'CONSUMED' || hide.state === 'SCRAPPED' || hide.state === 'RETURNED') continue
+    if (scope.shadeGroupId && shade.shadeGroupId !== scope.shadeGroupId) continue
+    const grade = gradeOfHide(hide, grades).grade
+    if (minimum && (!grade || grade.sortOrder > minimum.sortOrder)) continue
+    const tag = tags.get(hide.id)
+    hides.push({
+      ...shade,
+      receivedAt: lotRows.get(hide.lotId)?.receivedAt ? toUtcIso(lotRows.get(hide.lotId)!.receivedAt!) : null,
+      gradeId: grade?.id ?? null,
+      gradeCode: grade?.code ?? (hide.grade?.trim() || null),
+      state: hide.state,
+      left: part.onHand,
+      locationCodes: [...new Set(balances.filter((balance) => balance.hideId === hide.id).map((balance) => locations.get(balance.locationId)?.code ?? ''))].filter(Boolean).sort(),
+      remnant: tag && tag.state === 'IN_STOCK' ? { id: tag.id, code: tag.code } : null,
+    })
+  }
+  return hides
 }

@@ -70,4 +70,11 @@ export const manifest = defineManifest({
   'GET /planning/schedule/versions/:versionId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'GET /planning/allocation': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'PUT /planning/allocation/work-orders/:workOrderId': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  // B-W2b-132: the leather and cut plan (./leather): read with planning.view; a style's cutting loss changed or its proposal
+  // dismissed with planning.leather.manage at the site whose cuts it rests on.
+  'GET /planning/leather/need': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/leather/protectors': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/leather/yield': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/leather/styles/:styleId/loss/accept': { audiences: ['office'], permission: 'planning.leather.manage', scope: 'record' },
+  'POST /planning/leather/styles/:styleId/loss/dismiss': { audiences: ['office'], permission: 'planning.leather.manage', scope: 'record' },
 })
