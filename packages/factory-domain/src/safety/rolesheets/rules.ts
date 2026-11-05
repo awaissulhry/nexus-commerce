@@ -71,11 +71,11 @@ export const ROLE_SHEET_REFUSALS = [
 export type RoleSheetRefusalCode = (typeof ROLE_SHEET_REFUSALS)[number]
 
 /**
- * Who sees which PERSON needs a health visit (GDPR art. 9; W2b plan §12 and B-W2b-91: HR and the safety roles, every other
- * reader counts only). The health step (B-W2b-135) declares the health permission; until then the permission that, among
- * the templates, only `hr` and `safety_officer` hold (and the owner, through every()). One constant: B-W2b-135 replaces it.
+ * Who sees which PERSON needs a health visit (GDPR art. 9; W2b plan §12 and B-W2b-91; every other reader counts only): the
+ * health readers, B-W2b-135's safety.health.view (HR and the occupational doctor among the templates, and the owner through
+ * every()), each view of a health record recorded on the health page.
  */
-export const VISIT_NEED_READER = 'safety.organisation.manage' satisfies Permission
+export const VISIT_NEED_READER = 'safety.health.view' satisfies Permission
 
 // ---- the content of a sheet -----------------------------------------------------------------------------------------------
 
