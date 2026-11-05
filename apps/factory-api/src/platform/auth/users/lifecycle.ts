@@ -4,6 +4,7 @@ import { ForbiddenError, InvalidStateError } from '@nexus/factory-domain/core/er
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { requireContext, type OfficeContext } from '../../../core/context'
 import { requireStepUp } from '../office/account'
+import { PARTNER_NO_PASSWORD } from '../office/password-reset'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { endAllAssignments, liveAssignmentsOf } from '../roles/assignments'
 import { endSessions } from '../sessions/session-store'
@@ -85,7 +86,9 @@ export async function changeUser(auth: OfficeAuth, request: FastifyRequest, user
       context,
       { name: 'users.resetPassword', input: body, record: { type: 'User', id: userId, expectedVersion: body.version } },
       async ({ tx, now, audit, record }) => {
-        const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { status: true } })
+        const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { status: true, audience: true } })
+        // B-W2b-159: a partner person has no password (the portal's e-mail code, Owner answer C3).
+        if (user.audience !== 'OFFICE') throw new InvalidStateError(PARTNER_NO_PASSWORD)
         if (user.status !== 'ACTIVE' && user.status !== 'SUSPENDED') throw new InvalidStateError(`A ${user.status.toLowerCase()} user has no password to reset.`)
         await tx.user.update({ where: { id: userId }, data: { mustChangePassword: true } })
         await tx.passwordReset.updateMany({ where: { userId, usedAt: null }, data: { usedAt: now } })

@@ -95,6 +95,8 @@ import { alertRulesCron, alertRulesHandler } from './modules/quality/rules/firin
 // B-W2b-125: a machine locked as unsafe opens a hazard report in Plant › Incidents when the site asks for one.
 import { incidentHandlers } from './modules/safety/incidents/handlers'
 import { healthDueListCron, healthHandlers } from './modules/safety/health/jobs'
+// B-W2b-159: the dead portal sign-in codes are purged (a day after they expired).
+import { portalCodePurgeCron } from './platform/auth/portal/purge'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -265,6 +267,8 @@ if (mode === 'worker') {
   crons.push(alertRulesCron({ database, log }))
   // B-W2b-135: daily, the periodic health visits from the plans the doctor set and the return visits after > 60 days' absence.
   crons.push(healthDueListCron({ database, log }))
+  // B-W2b-159: hourly, the portal sign-in and step-up codes that expired more than a day ago are deleted (PLT-050).
+  crons.push(portalCodePurgeCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
