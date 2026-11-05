@@ -22,14 +22,14 @@ import { recordRights } from './records'
  *        register: the person by name), its state (VALID, DUE_SOON, EXPIRED, NEEDED), due by or valid until, overdue, why it
  *        is needed (the role sheet, a type of machine), the language check; `view` due (default: overdue or due within the
  *        window) | overdue | soon | language | all (lapsed records nobody needs any more included); tiles count person ×
- *        course over everyone in reach (never a figure per person)
+ *        course over everyone in reach of the company, site and role asked, never narrowed by the search or the course (never
+ *        a figure per person)
  *   GET /safety/training/due/pdf?…&language   the same list as a PDF for the RSPP or the provider (in memory, not stored)
  *
  * Built on B-W2b-133's needs (who needs which course: never typed per person) and the records' validity (factory-domain
  * safety/records `dueCellsOf`). Nothing holds a number of the law: valid until is the record's (its day + the course's
  * refresher period, or another day with its reason); the 60 days are the design's own window.
  */
-
 
 export interface DueQuery {
   readonly companyId?: string | undefined
@@ -40,19 +40,21 @@ export interface DueQuery {
   readonly q?: string | undefined
 }
 
-function whereOf(caller: CommandCaller, query: DueQuery): Prisma.EmployeeWhereInput {
+/** Everyone in reach of the company, site and role asked (the tiles count over them; the search never narrows a tile). */
+function scopeOf(caller: CommandCaller, query: DueQuery): Prisma.EmployeeWhereInput {
   const context = officeOf(caller)
-  const words = query.q?.trim()
   return {
     AND: [
       siteScope(context, SAFETY_VIEW) as Prisma.EmployeeWhereInput,
       ...(query.companyId ? [{ companyId: query.companyId }] : []),
       ...(query.siteId ? [{ siteId: query.siteId }] : []),
       ...(query.roleSheetId ? [{ roleSheetId: query.roleSheetId }] : []),
-      ...(words ? [{ OR: [{ firstName: { contains: words, mode: 'insensitive' as const } }, { lastName: { contains: words, mode: 'insensitive' as const } }, { employeeCode: { contains: words, mode: 'insensitive' as const } }] }] : []),
     ],
   }
 }
+
+/** The search: a name or an employee code (rows only). */
+const searchOf = (words: string): Prisma.EmployeeWhereInput => ({ OR: [{ firstName: { contains: words, mode: 'insensitive' } }, { lastName: { contains: words, mode: 'insensitive' } }, { employeeCode: { contains: words, mode: 'insensitive' } }] })
 
 const whyOf = (cell: DueCell, sources: ReadonlyMap<string, readonly ('ROLE_SHEET' | 'MACHINE_CLASS')[]>): 'ROLE' | 'MACHINE' | 'NONE' => {
   const kinds = sources.get(`${cell.employeeId}|${cell.courseId}`) ?? []
@@ -63,14 +65,16 @@ async function listOf(caller: CommandCaller, query: DueQuery, now: Date) {
   const today = todayOf(now)
   const view = query.view ?? 'due'
   return caller.withClient(async (client) => {
-    const where = whereOf(caller, query)
-    const people = await trainingPeopleOf(client, where)
+    const scope = scopeOf(caller, query)
+    const people = await trainingPeopleOf(client, scope)
     const { needs } = await trainingNeedsOf(client, people, today)
     const cells = dueCellsOf({ needs, records: await recordFactsOf(client, people.map((person) => person.employeeId)), today })
     const sources = new Map(needs.map((need) => [`${need.employeeId}|${need.courseId}`, need.sources.map((source) => source.kind)] as const))
     const byPerson = new Map(people.map((person) => [person.employeeId, person]))
+    const words = query.q?.trim()
+    const found = words ? new Set((await trainingPeopleOf(client, { AND: [scope, searchOf(words)] })).map((person) => person.employeeId)) : null
     const shown = cells
-      .filter((cell) => (!query.courseId || cell.courseId === query.courseId) && inView(cell, view))
+      .filter((cell) => (!query.courseId || cell.courseId === query.courseId) && (found === null || found.has(cell.employeeId)) && inView(cell, view))
       .sort((a, b) => Number(b.overdue) - Number(a.overdue) || (a.dueOn ?? '9999').localeCompare(b.dueOn ?? '9999') || byPerson.get(a.employeeId)!.name.localeCompare(byPerson.get(b.employeeId)!.name))
     const courses = await courseRefs(client, cells.map((cell) => cell.courseId))
     const sites = await client.site.findMany({ where: { id: { in: [...new Set(people.map((person) => person.siteId))] } }, select: { id: true, code: true, name: true } })

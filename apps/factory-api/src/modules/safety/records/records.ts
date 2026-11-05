@@ -10,6 +10,7 @@ import { SAFETY_INSTRUCTION_RECORD, SAFETY_TRAINING_RECORD } from '@nexus/factor
 import {
   countDue,
   dueCellsOf,
+  expectedValidUntil,
   LANGUAGE_LAW,
   languageOf,
   RECORDS_LAW,
@@ -23,7 +24,7 @@ import { command, type CommandCaller, type CommandTx } from '../../../core/comma
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { companyLegalOf } from '../../../platform/documents/documents'
 import { renderDocumentPdf } from '../../../platform/documents/pdf'
-import { actorIdOf, assertMayAt, assertMayWriteAt, bodyIssue, dateOf, dayOf, officeOf, problemsError, refuse, todayOf } from '../organisation/access'
+import { actorIdOf, assertMayAt, assertMayWriteAt, bodyIssue, dateOf, dayOf, dayOrNull, officeOf, problemsError, refuse, todayOf } from '../organisation/access'
 import { trainingNeedsOf, trainingPeopleOf } from '../training/needs'
 import { courseRefs } from '../training/store'
 import { recordFactsOf } from './holdings'
@@ -46,9 +47,10 @@ import { availableCourse, filesOf, fullName, INSTRUCTION_SELECT, instructionView
  *                                                     TrainingRecord, kind CERTIFICATE)
  *   POST /safety/training/records/:id/correct         a correction: a NEW record naming the one it corrects, with the reason
  *                                                     (records never change): another day, hours, trainer, result, language,
- *                                                     valid-until (with its reason), or VOID when it never happened; with
- *                                                     only the reason it is written again with the course's refresher period
- *                                                     in force (B-W2b-133's "correct these records" after a period change)
+ *                                                     valid-until (with its reason), or VOID when it never happened; a
+ *                                                     day set with its reason stays while the day and the pass stay, else
+ *                                                     valid-until follows the course's refresher period in force (with only
+ *                                                     the reason: B-W2b-133's "correct these records" after a period change)
  *   GET  /safety/training/records/:id/pdf?language    the record as the employer's register keeps it (in memory, not stored)
  */
 
@@ -223,20 +225,26 @@ export async function correctRecord(caller: CommandCaller, recordId: string, bod
     const row = (await readRecord(tx, recordId))!
     if (row.corrections.length > 0) refuse('CORRECTED_ALREADY', RECORDS_REFUSALS.CORRECTED_ALREADY)
     const resultNow: RecordResult = body.result ?? (row.result as RecordResult)
+    const completedOn = body.completedOn ?? dayOf(row.completedOn)
+    // A day set apart from the refresher period (with its reason) stays while the correction keeps the day and the pass; left
+    // out otherwise, the day follows the course's period in force (a period changed since moves it: B-W2b-133's "correct
+    // these records").
+    const ownDay = row.result === 'PASSED' && resultNow === 'PASSED' && row.validUntilReason !== null && completedOn === dayOf(row.completedOn) ? dayOrNull(row.validUntil) : undefined
+    const keepsOwnDay = body.validUntil === undefined && ownDay !== undefined && ownDay !== expectedValidUntil(completedOn, row.course.refresherMonths)
     const draft: RecordDraft = {
-      completedOn: body.completedOn ?? dayOf(row.completedOn),
+      completedOn,
       hours: resultNow === 'VOID' ? (body.hours ?? '0') : (body.hours ?? row.hours.toString()),
       trainerName: body.trainerName ?? row.trainerName,
       language: body.language ?? row.language,
       result: resultNow,
-      // Left out: the course's period in force (a period changed since moves this record's day: the point of correcting it).
-      validUntil: body.validUntil,
-      validUntilReason: body.validUntilReason,
+      validUntil: keepsOwnDay ? ownDay : body.validUntil,
+      validUntilReason: keepsOwnDay ? row.validUntilReason : body.validUntilReason,
       note: body.note !== undefined ? body.note : row.note,
     }
     const problems = recordProblems(draft, row.course.refresherMonths, today)
     if (problems.length > 0) throw problemsError(problems, 'The correction is not valid.')
     const validUntil = validUntilOf(draft, row.course.refresherMonths)
+    const validUntilReason = resultNow === 'PASSED' && draft.validUntil !== undefined ? clean(draft.validUntilReason) : null
     const languageChecked = body.languageChecked ?? row.languageChecked
     const same =
       resultNow === row.result &&
@@ -246,6 +254,7 @@ export async function correctRecord(caller: CommandCaller, recordId: string, bod
       languageOf(draft.language) === row.language &&
       languageChecked === row.languageChecked &&
       validUntil === (row.validUntil ? dayOf(row.validUntil) : null) &&
+      validUntilReason === row.validUntilReason &&
       (clean(draft.note) ?? null) === (row.note ?? null)
     if (same) refuse('NOTHING_CHANGES', RECORDS_REFUSALS.NOTHING_CHANGES)
     const id = newId()
@@ -262,7 +271,7 @@ export async function correctRecord(caller: CommandCaller, recordId: string, bod
         trainerName: draft.trainerName.trim(),
         result: resultNow,
         validUntil: validUntil ? dateOf(validUntil) : null,
-        validUntilReason: resultNow === 'PASSED' && body.validUntil !== undefined ? clean(body.validUntilReason) : null,
+        validUntilReason,
         language: languageOf(draft.language),
         languageChecked,
         correctsId: row.id,

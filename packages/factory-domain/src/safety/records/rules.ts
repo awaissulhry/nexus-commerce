@@ -362,7 +362,7 @@ export interface AttendanceFacts {
 export interface CloseDecision {
   readonly attendanceId: string
   readonly result: 'PASSED' | 'FAILED'
-  readonly note: string | null
+  readonly note?: string | null | undefined
 }
 
 export const NOT_UNDERSTOOD_NOTE = 'The trainer found the language of the session was not understood (art. 37 c.13): to repeat in a language the person understands.'

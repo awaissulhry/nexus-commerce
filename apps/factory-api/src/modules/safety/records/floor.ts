@@ -290,7 +290,7 @@ export async function floorCountersign(
     })
     const counts = (await countsOf(tx, [row.id])).get(row.id) ?? { signed: 0, countersigned: 0 }
     tools.emit({ type: 'training_attendance.changed', subject: row.id, companyId: row.companyId, siteId: row.siteId, payload: { sessionId: row.id, attendanceIds: ids, change: 'COUNTERSIGNED', via: 'FLOOR', ...counts } })
-    return { countersigned: ids, trainer: { id: worker.id, displayName: worker.displayName }, statement: COUNTERSIGN_STATEMENT[statementLanguageOf(worker.locale)], ...counts }
+    return { attendanceIds: ids, trainer: { id: worker.id, displayName: worker.displayName }, statement: COUNTERSIGN_STATEMENT[statementLanguageOf(worker.locale)], ...counts }
   })
   return result
 }

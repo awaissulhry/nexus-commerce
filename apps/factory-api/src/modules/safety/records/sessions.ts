@@ -270,7 +270,7 @@ export async function editSession(caller: CommandCaller, sessionId: string, body
   const { context } = await writableSession(caller, sessionId)
   const { result } = await command(caller, { name: 'safety.editTrainingSession', idempotencyKey, input: { sessionId, ...body } }, async (tools) => {
     const { tx, now } = tools
-    const row = await lockSession(tx, tools.context.tenantId, sessionId)
+    const row = await lockSession(tx, context.tenantId, sessionId)
     assertVersion('session', row.version, body.version)
     assertOpen(row)
     const signed = await tx.trainingAttendance.count({ where: { sessionId: row.id, voidedAt: null } })
@@ -328,7 +328,7 @@ export async function recordPaperAttendance(caller: CommandCaller, sessionId: st
   if (people.length !== body.employeeIds.length) throw bodyIssue('employeeIds', 'A person is on the list twice.')
   const { result } = await command(caller, { name: 'safety.recordPaperAttendance', idempotencyKey, input: { sessionId, ...body } }, async (tools) => {
     const { tx, now } = tools
-    const row = await lockSession(tx, tools.context.tenantId, sessionId)
+    const row = await lockSession(tx, context.tenantId, sessionId)
     assertOpen(row)
     const ids: string[] = []
     for (const [index, employeeId] of people.entries()) {
@@ -337,7 +337,7 @@ export async function recordPaperAttendance(caller: CommandCaller, sessionId: st
       if (person.companyId !== row.companyId) refuse('PERSON_OTHER_COMPANY', RECORDS_REFUSALS.PERSON_OTHER_COMPANY, `employeeIds/${index}`)
       if (person.status !== 'ACTIVE') refuse('PERSON_NOT_ACTIVE', RECORDS_REFUSALS.PERSON_NOT_ACTIVE, `employeeIds/${index}`)
       const key = `attendance:${row.id}:${person.id}`
-      if (await tx.trainingAttendance.findUnique({ where: { tenantId_key: { tenantId: tools.context.tenantId, key } }, select: { id: true } })) refuse('ATTENDED_ALREADY', RECORDS_REFUSALS.ATTENDED_ALREADY, `employeeIds/${index}`)
+      if (await tx.trainingAttendance.findUnique({ where: { tenantId_key: { tenantId: context.tenantId, key } }, select: { id: true } })) refuse('ATTENDED_ALREADY', RECORDS_REFUSALS.ATTENDED_ALREADY, `employeeIds/${index}`)
       const id = newId()
       await tx.trainingAttendance.create({ data: { id, siteId: row.siteId, sessionId: row.id, employeeId: person.id, key, method: 'PAPER', signedAt: now, createdAt: now, updatedAt: now, createdById: actorIdOf(tools.context) }, select: { id: true } })
       ids.push(id)
@@ -374,10 +374,10 @@ export async function countersignable(tx: CommandTx, sessionId: string, wanted: 
 
 /** POST /safety/training/sessions/:sessionId/countersign: the trainer's countersignature recorded in the office. */
 export async function countersignInOffice(caller: CommandCaller, sessionId: string, body: CountersignBody, idempotencyKey?: string) {
-  await writableSession(caller, sessionId)
+  const { context } = await writableSession(caller, sessionId)
   const { result } = await command(caller, { name: 'safety.countersignAttendance', idempotencyKey, input: { sessionId, ...body } }, async (tools) => {
     const { tx, now } = tools
-    const row = await lockSession(tx, tools.context.tenantId, sessionId)
+    const row = await lockSession(tx, context.tenantId, sessionId)
     assertOpen(row)
     await countersignable(tx, row.id, body.attendances)
     for (const entry of body.attendances) {
@@ -399,10 +399,10 @@ export async function countersignInOffice(caller: CommandCaller, sessionId: stri
 
 /** POST /safety/training/sessions/:sessionId/attendances/:attendanceId/void. */
 export async function voidAttendance(caller: CommandCaller, sessionId: string, attendanceId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey?: string) {
-  await writableSession(caller, sessionId)
+  const { context } = await writableSession(caller, sessionId)
   const { result } = await command(caller, { name: 'safety.voidAttendance', idempotencyKey, input: { sessionId, attendanceId, ...body } }, async (tools) => {
     const { tx, now } = tools
-    const row = await lockSession(tx, tools.context.tenantId, sessionId)
+    const row = await lockSession(tx, context.tenantId, sessionId)
     assertOpen(row)
     const attendance = isUuid(attendanceId) ? await tx.trainingAttendance.findUnique({ where: { id: attendanceId }, select: { id: true, sessionId: true, version: true, voidedAt: true, employeeId: true } }) : null
     if (!attendance || attendance.sessionId !== row.id) throw new NotFoundError('Attendance not found.')
@@ -426,7 +426,7 @@ export async function closeSession(caller: CommandCaller, sessionId: string, bod
   const { context } = await writableSession(caller, sessionId)
   const { result } = await command(caller, { name: 'safety.closeTrainingSession', idempotencyKey, input: { sessionId, ...body } }, async (tools) => {
     const { tx, now } = tools
-    const row = await lockSession(tx, tools.context.tenantId, sessionId)
+    const row = await lockSession(tx, context.tenantId, sessionId)
     assertVersion('session', row.version, body.version)
     assertOpen(row)
     const today = todayOf(now)
@@ -492,7 +492,7 @@ export async function cancelSession(caller: CommandCaller, sessionId: string, bo
   const { context } = await writableSession(caller, sessionId)
   const { result } = await command(caller, { name: 'safety.cancelTrainingSession', idempotencyKey, input: { sessionId, ...body } }, async (tools) => {
     const { tx, now } = tools
-    const row = await lockSession(tx, tools.context.tenantId, sessionId)
+    const row = await lockSession(tx, context.tenantId, sessionId)
     assertVersion('session', row.version, body.version)
     assertOpen(row)
     if ((await tx.trainingRecord.count({ where: { sessionId: row.id } })) > 0) refuse('HAS_RECORDS', RECORDS_REFUSALS.HAS_RECORDS)
