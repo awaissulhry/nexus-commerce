@@ -182,6 +182,8 @@ import { QUALITY_REPORTS_DEFINITIONS, QUALITY_REPORTS_PERMISSIONS } from '../../
 import { SAFETY_ROLESHEETS_DEFINITIONS, SAFETY_ROLESHEETS_PERMISSIONS } from '../../safety/rolesheets/permissions'
 // B-W2b-133: the course catalogue and who needs which course (safety.training.manage: courses, and what a machine type asks).
 import { SAFETY_TRAINING_DEFINITIONS, SAFETY_TRAINING_PERMISSIONS } from '../../safety/training/permissions'
+// B-W2b-134: PPE for workers (safety.ppe.manage: the catalogue; safety.ppe.issue: paper receipts and voids).
+import { SAFETY_PPE_DEFINITIONS, SAFETY_PPE_PERMISSIONS } from '../../safety/ppe/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -641,6 +643,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SAFETY_ROLESHEETS_DEFINITIONS,
   // B-W2b-133: the course catalogue and training requirements.
   SAFETY_TRAINING_DEFINITIONS,
+  // B-W2b-134: PPE for workers.
+  SAFETY_PPE_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -825,6 +829,8 @@ for (const name of SAFETY_ROLESHEETS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 for (const name of PLANNING_LEATHER_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-133: the course catalogue and training requirements.
 for (const name of SAFETY_TRAINING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-134: PPE for workers.
+for (const name of SAFETY_PPE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

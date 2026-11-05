@@ -1952,6 +1952,8 @@
     "safety_incidents_manage": "Gestire le segnalazioni: correggerle, gravità, presa visione della sicurezza, azioni trasformate in intervento, misura o sessione di formazione, chiudere, riaprire, annullare, foto",
     "safety_incidents_people": "Dati protetti: vedere e correggere le persone coinvolte e le loro lesioni, gestire le comunicazioni INAIL (certificato, invio con numero di protocollo, ricevuta); ogni consultazione è registrata",
     "safety_rolesheets_manage": "Gestire le schede mansione: rischi, kit DPI, corsi e sorveglianza sanitaria di ogni mansione; applicare una scheda dopo aver letto cosa cambia per le persone della mansione",
-    "safety_training_manage": "Gestire il catalogo dei corsi di sicurezza (ore e periodicità degli aggiornamenti dal vostro programma, partire dall’elenco standard) e i corsi richiesti da un tipo di macchina, ogni volta dopo aver letto cosa cambia per le persone"
+    "safety_training_manage": "Gestire il catalogo dei corsi di sicurezza (ore e periodicità degli aggiornamenti dal vostro programma, partire dall’elenco standard) e i corsi richiesti da un tipo di macchina, ogni volta dopo aver letto cosa cambia per le persone",
+    "safety_ppe_manage": "Gestire il catalogo DPI di un'azienda: articoli con categoria, norma, taglie e durata; archiviarli e ripristinarli",
+    "safety_ppe_issue": "Registrare i DPI consegnati in ufficio con la ricevuta firmata su carta, annullare una consegna errata con il motivo, conservare il PDF della ricevuta"
   }
 }
