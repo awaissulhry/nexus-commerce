@@ -15,6 +15,7 @@ import { seed as seedCutting } from '../seed/cutting'
 import { seed as seedEmail } from '../seed/email'
 import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
+import { seed as seedFilesDepth } from '../seed/files-depth'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedFloorSync } from '../seed/floor-sync'
 import { seed as seedFollowupsQualityMoney } from '../seed/followups-quality-money'
@@ -28,6 +29,7 @@ import { seed as seedInventory } from '../seed/inventory'
 import { seed as seedLabour } from '../seed/labour'
 import { seed as seedLeather } from '../seed/leather'
 import { seed as seedLinks } from '../seed/links'
+import { seed as seedLinksDepth } from '../seed/links-depth'
 import { seed as seedMoney } from '../seed/money'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
@@ -276,6 +278,9 @@ beforeAll(async () => {
   // The portal identity schema of W2b (wave 17/22): partner users, their sessions and codes, portal settings, branding, terms.
   await seedPortalAuth({ db: factory, namespace: 'iso-a' })
   await seedPortalAuth({ db: factory, namespace: 'iso-b' })
+  // The files in depth schema of W2b (wave 18/22).
+  await seedFilesDepth({ db: factory, namespace: 'iso-a' })
+  await seedFilesDepth({ db: factory, namespace: 'iso-b' })
   // W2b-2 (B-W2b-74): a floor session inserts only an unplanned operation, so the first operation of tenant A's first site is
   // one, on its work order in progress (the seeds leave a work order's operations to their routing, every test reads them).
   await db.admin.query(
@@ -288,6 +293,9 @@ beforeAll(async () => {
       WHERE o."siteId" = $1 AND w.status = 'IN_PROGRESS' ORDER BY o.seq LIMIT 1`,
     [a.sites[0]!.id],
   )
+  // The links in depth schema of W2b (wave 19/22).
+  await seedLinksDepth({ db: factory, namespace: 'iso-a' })
+  await seedLinksDepth({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -305,6 +313,7 @@ it('covers every classified table and every runtime role', () => {
     'Alert',
     'AlertEvent',
     'AlertRule',
+    'ApprovalRequest',
     'AqlProfile',
     'AqlProfileAssignment',
     'AttendanceAnomaly',
@@ -366,6 +375,8 @@ it('covers every classified table and every runtime role', () => {
     'EmployeeSkill',
     'ExportJob',
     'FabricRoll',
+    'FileMarkup',
+    'FileUploadSession',
     'FirstLoadStep',
     'FitnessJudgement',
     'FloorRefusedAction',
@@ -439,7 +450,9 @@ it('covers every classified table and every runtime role', () => {
     'LineCapacity',
     'LineLoan',
     'LineTarget',
+    'LinkDraft',
     'LinkEvidence',
+    'LinkFile',
     'Location',
     'Lot',
     'LotDocument',
@@ -556,6 +569,7 @@ it('covers every classified table and every runtime role', () => {
     'ReceiptDiscrepancy',
     'ReceivablesSettings',
     'RecordFollower',
+    'RecordShare',
     'Refund',
     'Remnant',
     'RepairOrder',
@@ -564,6 +578,7 @@ it('covers every classified table and every runtime role', () => {
     'ReportRun',
     'ReportSubscription',
     'RequestRoutingRule',
+    'RequiredDocumentRule',
     'RequirementPegging',
     'Reservation',
     'RestoreDrill',

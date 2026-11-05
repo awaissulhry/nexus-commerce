@@ -37,6 +37,8 @@ async function insertLink(values: Record<string, unknown> = {}): Promise<string>
     expiresAt: '2026-12-01T00:00:00.000Z',
     maxUses: 2,
     uses: 0,
+    // W2b (B-W2b-154): a NOT NULL column with a default; a whole-row insert names it.
+    passwordTries: 0,
     version: 1,
     createdAt: '2026-10-28T09:00:00.000Z',
     updatedAt: '2026-10-28T09:00:00.000Z',

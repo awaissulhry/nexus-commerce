@@ -1952,6 +1952,9 @@
     "safety_incidents_report": "Report an incident, a near miss or a hazard from the office, with the people involved",
     "safety_incidents_manage": "Keep the incidents: correct the report, severity, seen by safety, actions made into a job, a measure or a training session, close, reopen, cancel, photos",
     "safety_incidents_people": "Protected: see and correct the people involved and their injuries, keep the INAIL filings (certificate, filed with the protocol number, receipt); each view is recorded",
-    "safety_rolesheets_manage": "Keep the role risk sheets (scheda mansione): risks, PPE kit, courses and health surveillance per role; apply a sheet after reading what it changes for the people in the role"
+    "safety_rolesheets_manage": "Keep the role risk sheets (scheda mansione): risks, PPE kit, courses and health surveillance per role; apply a sheet after reading what it changes for the people in the role",
+    "safety_training_manage": "Keep the safety course catalogue (hours and refresher periods from your own programme, start from the standard list) and the courses a type of machine asks, each after reading what it changes for people",
+    "safety_ppe_manage": "Keep the PPE catalogue of a company: items with category, standard, sizes and how long they last; archive and restore them",
+    "safety_ppe_issue": "Record PPE handed over in the office with the person's paper receipt, void a wrong issue with the reason, keep a receipt's PDF"
   }
 }

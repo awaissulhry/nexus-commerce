@@ -1,0 +1,134 @@
+// Files in depth (W2b schema wave 18/22, B-W2b-153; features COL-046, COL-048, COL-049, COL-052, COL-055, COL-058,
+// PLT-216): from W2b-3 on, partners upload certificates and photos from phones, and the office keeps files in versions.
+// The columns of StoredFile itself (versions, the source of a copy, expiry and its reminder, the thumbnail without
+// location data) are in files.prisma; this file holds what has its own rows: large uploads in parts, markups, and the
+// documents a record type must have before a status move. apps/factory-api's platform/files writes them (B-W2b-160:
+// versions, preview, thumbnails, large uploads; B-W2b-177: required documents, expiry reminders, markup), always through
+// command(). The rules every login meets are in the hand-written …_files_depth_w2b_guards migration.
+//
+// Partners and links never write these rows themselves: as for every file today, the API checks the portal or link
+// session first and then writes as the tenant's system caller. A partner session only reads the markups its own party
+// made. Who may read and write each model: ownership/files-depth.json.
+
+/// A large upload in parts (COL-052): the store's multipart upload behind one announced file (a StoredFile still in
+/// PENDING_UPLOAD), so an upload from a phone or over a slow line resumes after a dropped connection instead of starting
+/// again. Each part goes to its own short presigned PUT; the parts the store took are recorded here, so a resume asks
+/// only for the missing ones. When every part is in, the store joins them (COMPLETED) and the file is confirmed as any
+/// upload is (the store's HEAD: size, type and SHA-256 as announced). The file's size is the announced one, within the
+/// limit the API sets per kind and tenant. Kept after it ends (no role deletes one).
+model FileUploadSession {
+  id            String           @id @db.Uuid
+  tenantId      String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The announced file the parts fill: PENDING_UPLOAD while the session takes parts.
+  fileId        String           @db.Uuid
+  /// The store's id of the multipart upload (R2's UploadId, through the gateway).
+  uploadId      String
+  /// The size of every part but the last: at least 5 MiB (the store's rule); the file's size then gives the number of
+  /// parts.
+  partSizeBytes Int
+  /// The parts the store took, in the order they finished: [{ "partNumber": 1, "etag": "…", "sizeBytes": 8388608 }], each
+  /// part once, each of its size (the last one the rest). Grows only, and only while OPEN.
+  partsDone     Json             @default("[]")
+  status        FileUploadStatus @default(OPEN)
+  /// The store gives the upload up after it (the sweep aborts it: EXPIRED); a resume after it starts a new session.
+  /// After the session started, at most seven days later.
+  expiresAt     DateTime         @db.Timestamptz(3)
+  /// When it was completed, aborted or given up: set exactly when it is no longer OPEN.
+  endedAt       DateTime?        @db.Timestamptz(3)
+  version       Int              @default(1)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Who started it: an office person or a partner's user; null from a link or the system.
+  createdById   String?          @db.Uuid
+
+  file StoredFile @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, uploadId])
+  @@index([tenantId, fileId])
+}
+
+/// OPEN (taking parts) → COMPLETED (every part in, the store joined them) | ABORTED (given up by the person or the API)
+/// | EXPIRED (past expiresAt, aborted by the sweep). The last three are final.
+enum FileUploadStatus {
+  OPEN
+  COMPLETED
+  ABORTED
+  EXPIRED
+}
+
+/// @append-only
+/// A markup on a stored file (COL-055; design D21 "Photo markup", the approval and sample pages): shapes drawn on a
+/// picture or on one page of a PDF, with a note, by an office person, a partner's user or a link (then its party). Saved
+/// on a picture, it makes a new version of the picture with the shapes drawn in (`resultFileId`); on a PDF it stays an
+/// overlay drawn over the page when shown (the document itself never changes). Only the current version is marked up.
+/// Never changed or removed: a new markup is a new row.
+model FileMarkup {
+  id           String   @id @db.Uuid
+  tenantId     String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The version marked up: AVAILABLE and the current version of its series when the markup is saved; a picture or a
+  /// PDF.
+  fileId       String   @db.Uuid
+  /// The PDF's page (from 1); null on a picture.
+  page         Int?
+  /// The shapes as the markup tool draws them (arrows, circles, lines, text): 1 to 200 objects, at most 64 KB.
+  shapes       Json
+  /// What it says, at most 2000 characters.
+  note         String?
+  /// The new version of the picture it made: a later version of the same series, with other bytes (not a copy). Null on a
+  /// PDF: an overlay.
+  resultFileId String?  @db.Uuid
+  /// Who drew it: a user (an office person or a partner's user) and, from outside (a portal or a link), the party the
+  /// file is shared with (the partner role's key). At least one; an office person's markup has no party.
+  createdById  String?  @db.Uuid
+  partyId      String?  @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  file       StoredFile  @relation("FileMarkupFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  resultFile StoredFile? @relation("FileMarkupResult", fields: [tenantId, resultFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One markup makes one version.
+  @@unique([tenantId, resultFileId])
+  @@index([tenantId, fileId])
+  @@index([tenantId, partyId])
+}
+
+/// A document a record type must have before a status move (COL-048; Admin › Documents › Required documents): before a
+/// record of `recordType` moves to `beforeStatus` (for records whose party has `partyRole`, or every record), it must
+/// hold a file of `category` (AVAILABLE, the current version, not expired). BLOCK refuses the move with a link to the
+/// missing document; WARN lets it go once the person confirms the warning. The module of the record type asks for the
+/// problems inside its own status command (B-W2b-177 requiredDocumentsProblems); the first callers are the supplier's
+/// documents and the ship notice. One active rule per record type, document, status and party role; a rule no longer
+/// wanted is switched off (active false), never deleted.
+model RequiredDocumentRule {
+  id           String                @id @db.Uuid
+  tenantId     String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String                @db.Uuid
+  /// The record type, by its model name ('PurchaseOrder', 'Party', 'ShipNotice').
+  recordType   String
+  /// The document it needs: a file of the record with this category.
+  category     FileCategory
+  /// The status the record may not move to without it: the record's own status value ('CONFIRMED', 'ACTIVE').
+  beforeStatus String
+  /// Only for records whose party holds this role (a supplier, a subcontractor, a customer); null: every record.
+  partyRole    PartyRole?
+  level        RequiredDocumentLevel
+  active       Boolean               @default(true)
+  version      Int                   @default(1)
+  createdAt    DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?               @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One active rule per record type, document, status and party role: the partial unique indexes
+  // "RequiredDocumentRule_one_active" and "RequiredDocumentRule_one_active_any_party" of …_files_depth_w2b_guards.
+  @@index([tenantId, companyId, recordType])
+}
+
+/// What a missing required document does to the status move.
+enum RequiredDocumentLevel {
+  /// The move is refused until the document is there.
+  BLOCK
+  /// The move goes ahead once the person confirms the warning.
+  WARN
+}
