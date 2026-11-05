@@ -85,6 +85,14 @@ import { events as productionRepair } from '../production-repair/events'
 import { events as safetyRisk } from '../safety-risk/events'
 // B-W2b-125: incidents, near misses and hazards, the INAIL filings (the safety module's own block).
 import { incidentEvents as safetyIncidents } from '../safety/events'
+// B-W2b-128: role sheets (a sheet applied, a person's role changed).
+import { events as safetyRolesheets } from '../safety-rolesheets/events'
+// B-W2b-133: the course catalogue and the courses a type of machine asks.
+import { events as safetyTraining } from '../safety-training/events'
+// B-W2b-134: PPE for workers (an item changed, PPE issued with its receipt, an issue voided).
+import { events as safetyPpe } from '../safety-ppe/events'
+// B-W2b-143: the chemical register and the safety data sheets.
+import { events as safetyChemicals } from '../safety-chemicals/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -236,7 +244,15 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2b-122
   ...safetyRisk,
   // B-W2b-125
-  ...safetyIncidents] as const satisfies readonly EventDefinition[]
+  ...safetyIncidents,
+  // B-W2b-128
+  ...safetyRolesheets,
+  // B-W2b-133
+  ...safetyTraining,
+  // B-W2b-134
+  ...safetyPpe,
+  // B-W2b-143
+  ...safetyChemicals] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

@@ -160,6 +160,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/purchasing/claims/[id]',
   // B-W1-29 part 2: What to buy & make (SCR-055).
   '/planning/mrp',
+  // B-W2b-132: Leather & cut plan (SCR-252) and its cut plan print (a new tab, SCR-252-print).
+  '/planning/leather',
+  '/planning/leather/print',
   // B-W2a-45: Planning board (SCR-122) and Lines & subcontractors (SCR-126).
   '/planning/board',
   '/planning/allocation',
@@ -323,6 +326,14 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/plant/calendar',
   '/plant/calendar/organisation',
   '/plant/calendar/print',
+  // B-W2b-142: Plant › Maintenance › Preventive & statutory checks (SCR-266), the check register print and the check report (new tabs).
+  '/plant/preventive',
+  '/plant/preventive/register',
+  '/plant/preventive/report',
+  // B-W2b-143: Plant › Health & safety › Chemicals & waste (SCR-213), a sheet's PDF and a cabinet's sheet (new tabs).
+  '/plant/chemicals',
+  '/plant/chemicals/sds',
+  '/plant/chemicals/cabinet',
   // B-W2b-149: Plant › Health & safety › Incidents (SCR-210), an incident (SCR-210-record) and the anonymised print (a new tab).
   '/plant/incidents',
   '/plant/incidents/[id]',
@@ -393,7 +404,7 @@ export const OFFICE_NAV: AreaNav = builtRowsOnly({ view: 'office', areas: office
  * shell opens it on a plain click; ⌘-click does as always). An office entry never lands on one. A W2b window page (the
  * line TV's office preview) adds its address here.
  */
-export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print', /* B-W2b-149 */ '/plant/incidents/print'])
+export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board', /* B-W2b-66 */ '/production/floor/display', /* B-W2b-120 */ '/plant/calendar/organisation', '/plant/calendar/print', /* B-W2b-142 */ '/plant/preventive/register', '/plant/preventive/report', /* B-W2b-143 */ '/plant/chemicals/sds', '/plant/chemicals/cabinet', /* B-W2b-149 */ '/plant/incidents/print'])
 
 /** Whether a company-free address (with or without its terms) is a window page. */
 export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')

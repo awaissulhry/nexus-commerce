@@ -125,14 +125,16 @@ describe('safety calendar: where an item opens', () => {
     expect(openTargetOf(item('RLS_NOTICE'), OFFICE_PAGES)).toEqual({ kind: 'filing', id: item('RLS_NOTICE').recordId })
   })
 
-  it('a built page opens (Skills); a page not built says where it is kept, with its machine when that has a page', () => {
+  it('a built page opens (Skills, Preventive); a page not built says where it is kept, with its machine when that has a page', () => {
     expect(openTargetOf(item('TRAINING_REFRESHER'), OFFICE_PAGES)).toEqual({ kind: 'link', href: '/people/skills', page: 'people.skills' })
     expect(openTargetOf(item('DVR_REVIEW'), OFFICE_PAGES)).toEqual({ kind: 'kept', page: 'plant.risk', parentHref: null, parentType: null })
-    const check = openTargetOf(item('MACHINE_CHECK'), OFFICE_PAGES)
+    // B-W2b-142 built Preventive & statutory checks: a machine check opens its plan's window there by itself.
+    expect(openTargetOf(item('MACHINE_CHECK'), OFFICE_PAGES)).toMatchObject({ kind: 'link', href: `/plant/preventive?plan=${item('MACHINE_CHECK').source.recordId}`, page: 'plant.preventive' })
+    // Without that page (an older build), it said where it is kept, with its machine.
+    const pages = new Set([...OFFICE_PAGES].filter((page) => !page.startsWith('/plant/preventive')))
+    const check = openTargetOf(item('MACHINE_CHECK'), pages)
     expect(check).toMatchObject({ kind: 'kept', page: 'plant.preventive', parentType: 'Machine' })
     expect(check.kind === 'kept' && check.parentHref).toMatch(/^\/plant\/machines\//)
-    // Once Preventive is built (a later step adds its address), the same item opens there by itself.
-    expect(openTargetOf(item('MACHINE_CHECK'), new Set([...OFFICE_PAGES, '/plant/preventive']))).toMatchObject({ kind: 'link', href: '/plant/preventive' })
   })
 
   it('only an open deadline typed here that the person keeps may be chosen; evidence asked and missing stays', () => {
@@ -282,8 +284,8 @@ describe('safety calendar: the API in our words, and the calls', () => {
 describe('safety calendar: navigation and who sees it', () => {
   it('Plant › Health & safety › Safety calendar asks safety.view; the prints are window pages; records open on the page', () => {
     const section = officeArea.area.sections?.find((entry) => entry.id === 'plant-safety')
-    // B-W2b-149: Incidents joined the section; other Health & safety pages join with their steps.
-    expect(section?.items.map((row) => [row.href, row.permission])).toContainEqual(['/plant/calendar', 'safety.view'])
+    // B-W2b-143 + B-W2b-149: Chemicals & waste and Incidents join the section (the design's order: Incidents, Chemicals, the calendar).
+    expect(section?.items.map((row) => [row.href, row.permission])).toEqual(expect.arrayContaining([['/plant/calendar', 'safety.view']]))
     expect(officeArea.area.sections?.map((entry) => entry.id)).toEqual(['plant-maintenance', 'plant-safety', 'plant-settings'])
     for (const page of ['/plant/calendar', '/plant/calendar/organisation', '/plant/calendar/print']) expect(OFFICE_PAGES.has(page), page).toBe(true)
     for (const page of ['/plant/calendar/organisation', '/plant/calendar/print']) expect(WINDOW_PAGES.has(page), page).toBe(true)

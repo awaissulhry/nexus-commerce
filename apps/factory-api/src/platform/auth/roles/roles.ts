@@ -59,6 +59,14 @@ const ROLE_SELECT = {
 
 type RoleRow = { id: string; key: string; name: string; description: string | null; system: boolean; basedOn: string | null; requireMfa: boolean; requireMfaSince: Date | null; permissions: string[]; grains: string[]; version: number; audience: 'OFFICE' | 'FLOOR' }
 
+/**
+ * W2b (B-W2b-152): RoleAudience has PARTNER too. These routes keep office and floor roles; a partner role (given to
+ * partner users, bound to their party) is the portal's (B-W2b-162), so here it is not found.
+ */
+function staffRole<T extends { audience: string }>(row: T | null): (T & { audience: 'OFFICE' | 'FLOOR' }) | null {
+  return row !== null && (row.audience === 'OFFICE' || row.audience === 'FLOOR') ? (row as T & { audience: 'OFFICE' | 'FLOOR' }) : null
+}
+
 const mutable = (adds: { readonly permissionsAdded: readonly string[]; readonly grainsAdded: readonly Grain[] }) => ({
   permissionsAdded: [...adds.permissionsAdded],
   grainsAdded: [...adds.grainsAdded],
@@ -86,7 +94,7 @@ function roleViewOf(row: RoleRow, holders: number) {
 }
 
 async function roleWithHolders(client: FactoryClient | CommandTx, roleId: string, now: Date) {
-  const row = await client.role.findUnique({ where: { id: roleId }, select: { ...ROLE_SELECT, _count: { select: { assignments: { where: liveAssignment(now) } } } } })
+  const row = staffRole(await client.role.findUnique({ where: { id: roleId }, select: { ...ROLE_SELECT, _count: { select: { assignments: { where: liveAssignment(now) } } } } }))
   if (!row) throw new NotFoundError('Role not found.')
   return roleViewOf(row, row._count.assignments)
 }
@@ -111,12 +119,16 @@ export async function listRoles(auth: OfficeAuth, request: FastifyRequest) {
   const now = auth.clock.now()
   const rows = await request.withClient((client) =>
     client.role.findMany({
+      where: { audience: { in: ['OFFICE', 'FLOOR'] } },
       orderBy: [{ system: 'desc' }, { name: 'asc' }, { id: 'asc' }],
       take: 500,
       select: { ...ROLE_SELECT, _count: { select: { assignments: { where: liveAssignment(now) } } } },
     }),
   )
-  return { roles: rows.map((row) => roleViewOf(row, row._count.assignments)) }
+  return { roles: rows.flatMap((found) => {
+    const row = staffRole(found)
+    return row ? [roleViewOf(row, row._count.assignments)] : []
+  }) }
 }
 
 /** The content a create or an edit asks for, checked (400 with the paths of the problems). */
@@ -182,7 +194,8 @@ export async function editRole(auth: OfficeAuth, request: FastifyRequest, roleId
     context,
     { name: 'roles.edit', input: body, record: { type: 'Role', id: roleId, expectedVersion: body.version } },
     async ({ tx, now, audit, emit }) => {
-      const before = await tx.role.findUniqueOrThrow({ where: { id: roleId }, select: ROLE_SELECT })
+      const before = staffRole(await tx.role.findUnique({ where: { id: roleId }, select: ROLE_SELECT }))
+      if (!before) throw new NotFoundError('Role not found.')
       if (before.system) throw new InvalidStateError('A system role follows its template and cannot be edited; copy it into a custom role.')
       const held = await heldRoles(tx, context.actorId, now)
       if (held.some((entry) => entry.roleId === roleId)) throw new ForbiddenError('You hold this role: ask another administrator to edit it.')

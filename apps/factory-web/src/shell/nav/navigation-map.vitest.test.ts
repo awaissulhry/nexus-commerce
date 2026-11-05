@@ -117,6 +117,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/products/operations': 'product.routing.view', // GET /product/operations
       '/products/sizes': 'product.styles.view', // GET /product/size-scales
       '/planning/mrp': 'planning.view', // GET /planning/runs/latest
+      '/planning/leather': 'planning.view', // GET /planning/leather/need (B-W2b-132)
       '/planning/board': 'planning.view', // GET /planning/schedule (B-W2a-45)
       '/planning/allocation': 'planning.view', // GET /planning/allocation (B-W2a-45)
       '/planning/capacity': 'planning.view', // GET /planning/capacity (B-W2a-70)
@@ -173,6 +174,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/plant/machines': 'plant.view', // GET /plant/machines
       '/plant/settings': 'plant.view', // GET /plant/symptoms (B-W2a-73)
       '/plant/calendar': 'safety.view', // GET /safety/calendar (B-W2b-120)
+      '/plant/preventive': 'plant.view', // GET /plant/checks/plans (B-W2b-142)
+      '/plant/chemicals': 'safety.view', // GET /safety/chemicals (B-W2b-143)
       '/plant/incidents': 'safety.incidents.view', // GET /safety/incidents (B-W2b-149)
       // B-W2b-55: People › Employees.
       '/people/employees': 'people.view', // GET /people/employees

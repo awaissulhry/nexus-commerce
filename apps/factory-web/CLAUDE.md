@@ -231,6 +231,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   supplier's answer and the buyer's accept/refuse), `areas/warehouse/receipts/` (SCR-063 list `?view=expected|posted|today|
   waiting|reversed|all`, the receiving page `/warehouse/receipts/new?order=&lines=` posting the whole receipt at once with the
   hide entry sheet (SCR-061), the receipt `?tab=lines|lots|activity` with its lots and quality state (SCR-062) and Reverse).
+- `src/areas/planning/leather/` — Planning › Leather & cut plan (B-W2b-132; SCR-252 `/planning/leather?site=&tile=&feas=&q=&open=<need row>`, SCR-252-print `/planning/leather/print` a new tab; catalogue `planning-leather`, CSS prefix `fw-lp-`): three reads, each its own section (need per order with one shade's answer, certified protectors, planned vs actual yield); the tiles are saved filters; the shade drawer (DetailModal, J / K) offers reserve / split by garment (POST /inventory/reservations), Draft PO (What to buy & make's POST /purchasing/from-plan) and a note for Sales on the order's thread; Accept (ActionConfirm) / Dismiss (reason) the cutting loss proposal. Values only with money.cost.
 - `src/areas/plant/` — Plant › Maintenance (B-W2a-53, area order 12, Italian "Stabilimento"; catalogue `plant`): `_shared/`
   (api.ts every plant call + zod; model.ts the pure rules — saved rows ⇄ the API's own filters, the board's lanes and why a
   card may not go there, the job moves a person may make, refusals `refusal/<CODE>` in our words, costs and due times typed
@@ -263,6 +264,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Hand back dialog (board drop, the record's primary, `h`; `jobs/view/CloseForm.tsx` is the ONE close form, also the tab),
   the record's Unsafe lock panel with Sign safe (`requests/view/SignSafeDialog.tsx`, the ONE sign-safe dialog), the Photos
   tab (plant files routes, before / after), Line lead confirms. The containers sit inside `PlantMessages` (they speak too).
+  B-W2b-142 `preventive/` Preventive & statutory checks (SCR-266 `/plant/preventive?view=&month=&day=&due=&ended=&missing=&outcome=&plan=
+  &result=&new=1&record=1|<plan>&corrects=&move=&date=`, catalogue `plant-preventive`, CSS prefix `fw-pv-`; on B-W2b-124's API): tiles, the
+  calendar (the shared CalendarView with its optional `move` prop: a due check drags onto a day → Move a check) | List, Plans (`plant.preventive`,
+  Move N), the check register (`plant.preventive.register`, its export source, Print N / Export N), New plan, Record a check result (the job and
+  the lock in ONE call, then the report files), the Plan and result windows, Move a check; new tabs `register/` (SCR-266-register-print) and
+  `report/` (SCR-266-report: the PDF, Keep in the register, the DocumentSeal). `RECORD_PAGES.MachineCheckPlan|MachineCheckResult`.
 - `src/areas/plant/incidents/` — Plant › Health & safety › Incidents (B-W2b-149 on B-W2b-125's API; catalogue `plant-incidents`,
   CSS prefix `fw-inc-`): SCR-210 `/plant/incidents?rows=INJURY|NEAR_MISS|HAZARD|INAIL_DUE&status=&from=&to=&q=&new=1` (the band's
   live chip = `counts.next`, the critical Banner + Countdown = `counts.deadline`, tiles = filters, the ANONYMISED list frame
