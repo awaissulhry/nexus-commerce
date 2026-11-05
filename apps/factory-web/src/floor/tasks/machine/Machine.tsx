@@ -39,6 +39,7 @@ import {
   type TechnicianMove,
 } from './api'
 import { closeBody, closeDraftOf, closeHeld, INCIDENT_PAGE, mediaHeld, mediaName, nextUpload, offersIncident, type MediaKind, type UploadState } from './depth'
+import { offerIncident } from '../incident/handoff'
 import { defaultSafeAfter, EMPTY_DRAFT, firstStep, isUnsafe, labelOf, machineByTag, machineCan, pickedSymptom, reportHeld, reportPayload, signHeld } from './model'
 import type { Peek } from './view/MediaParts'
 import type { RequestDone } from './view/ProgressParts'
@@ -780,9 +781,13 @@ export function FloorMachine() {
         return void open(action.file)
       case 'peekClose':
         return closePeek()
-      case 'incident':
-        if (INCIDENT_PAGE) router.push(INCIDENT_PAGE)
+      case 'incident': {
+        // B-W2b-137: the machine goes with it (Where? offers it first), a hazard as the likely kind; the person may pick another.
+        const machine = shown.kind === 'symptom' ? { id: shown.machine.id, assetNumber: shown.machine.assetNumber } : shown.kind === 'sent' && sent.current ? { id: sent.current.machineId, assetNumber: shown.machine.assetNumber } : null
+        offerIncident({ machine, kind: 'HAZARD' })
+        router.push(INCIDENT_PAGE)
         return
+      }
       case 'closeAction':
         if (shown.kind === 'handBack') setStep({ ...shown, draft: { ...shown.draft, action: action.code as typeof shown.draft.action } })
         return

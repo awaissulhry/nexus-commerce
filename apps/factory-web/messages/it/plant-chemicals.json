@@ -1,0 +1,404 @@
+{
+  "access": {
+    "title": "Nessun accesso al registro delle sostanze",
+    "body": "Questa pagina richiede il diritto di vedere la sicurezza (safety.view). Chiedi a chi gestisce i ruoli nella tua azienda."
+  },
+  "common": {
+    "stillLoading": "Ancora in caricamento…",
+    "retry": "Riprova",
+    "close": "Chiudi",
+    "cancel": "Annulla",
+    "back": "Indietro",
+    "reading": "Lettura…"
+  },
+  "band": {
+    "label": "Azioni sulle sostanze",
+    "reading": "Non ancora letto",
+    "qr": "Stampa QR armadio",
+    "add": "Aggiungi sostanza",
+    "more": "Altre azioni",
+    "export": "Esporta registro",
+    "exportHint": "Da Esporta ▾ nella barra del registro: le righe che vedi, in CSV o Excel.",
+    "requests": "Richieste SDS",
+    "requestsLater": "Più avanti: chiedere ai fornitori una scheda più recente arriva in un'ondata successiva."
+  },
+  "tile": {
+    "title": "Cosa aggiornare",
+    "failed": "Impossibile leggere i conteggi.",
+    "active": {
+      "label": "Prodotti in uso",
+      "hint": "Sostanze attive nel registro"
+    },
+    "withoutSds": {
+      "label": "Prodotti senza SDS",
+      "hint": "Nessuna scheda di sicurezza in vigore"
+    },
+    "toRequest": {
+      "label": "SDS da richiedere",
+      "hint": "Nessuna scheda in vigore nella lingua dell'azienda: chiedila al fornitore"
+    },
+    "cabinets": {
+      "label": "Armadi",
+      "hint": "Armadi con un QR da stampare"
+    }
+  },
+  "law": {
+    "register": "Il datore di lavoro valuta il rischio degli agenti chimici in uso, partendo da ciò che è nel registro.",
+    "sds": "I lavoratori hanno accesso alle schede di dati di sicurezza delle sostanze che usano."
+  },
+  "register": {
+    "title": "Registro delle sostanze",
+    "label": "Registro delle sostanze",
+    "failed": "Impossibile leggere il registro delle sostanze.",
+    "count_one": "1 prodotto",
+    "count_other": "{count} prodotti",
+    "search": "Cerca prodotto, fornitore, luogo o codice H",
+    "filterUse": "Uso",
+    "allUses": "Ogni uso",
+    "filterStatus": "In uso o archiviati",
+    "status": {
+      "ACTIVE": "In uso",
+      "ARCHIVED": "Archiviati",
+      "all": "In uso e archiviati"
+    },
+    "cabinetChip": "Armadio {cabinet}",
+    "clearCabinet": "Mostra ogni armadio, non solo {cabinet}",
+    "clearTile": "Mostra ogni prodotto",
+    "wasteLater": "I registri dei rifiuti arrivano più avanti.",
+    "noSupplier": "Fornitore non indicato",
+    "col": {
+      "name": "Prodotto · fornitore",
+      "use": "Uso",
+      "pictograms": "Pittogrammi GHS",
+      "hazards": "Frasi H",
+      "precautions": "Frasi P",
+      "place": "Luogo · armadio",
+      "maxQuantity": "Quantità massima",
+      "roles": "Mansioni che lo usano",
+      "sds": "Versione SDS · data",
+      "site": "Sede",
+      "status": "Stato"
+    },
+    "emptyTitle": "Nessuna sostanza ancora",
+    "empty": "Aggiungi prima colle e solventi: ognuno con i suoi pittogrammi, dove è conservato e la sua scheda di sicurezza.",
+    "noneFiltered": "Nessun prodotto corrisponde",
+    "noneFilteredHint": "Cambia i filtri o azzerali.",
+    "more": "Mostra altri",
+    "moreHeld": "Il registro mostra al massimo 500 prodotti: restringi con i filtri."
+  },
+  "library": {
+    "title": "Raccolta SDS",
+    "label": "Schede di dati di sicurezza",
+    "failed": "Impossibile leggere la raccolta SDS.",
+    "count_one": "1 scheda in vigore",
+    "count_other": "{count} schede in vigore",
+    "offline": "I tablet della sede tengono ogni scheda in vigore: il QR dell'armadio le apre anche senza rete.",
+    "col": {
+      "chemical": "Prodotto",
+      "version": "Versione SDS",
+      "revisedOn": "Revisione del",
+      "language": "Lingua",
+      "superseded": "Versioni sostituite conservate",
+      "file": "PDF"
+    },
+    "noneSuperseded": "Nessuna",
+    "supersededItem": "{version} del {date}",
+    "openPdf": "Apri {name}, la scheda di {chemical}, in una nuova scheda",
+    "replace": "Sostituisci SDS",
+    "replaceNamed": "Sostituisci la scheda in {language} di {chemical}",
+    "missingLabel": "Prodotti senza scheda",
+    "missing_one": "1 prodotto in uso non ha la scheda di sicurezza:",
+    "missing_other": "{count} prodotti in uso non hanno la scheda di sicurezza:",
+    "addFirst": "Aggiungi SDS",
+    "addFirstNamed": "Aggiungi la scheda di sicurezza di {chemical}",
+    "emptyTitle": "Nessuna scheda di sicurezza ancora",
+    "empty": "La scheda di ogni prodotto si aggiunge dalla sua finestra (Sostituisci SDS) o con Aggiungi sostanza."
+  },
+  "sds": {
+    "none": "Nessuna SDS",
+    "state": {
+      "MISSING": "Nessuna SDS",
+      "OTHER_LANGUAGE": "Nessuna in {language}",
+      "OK": "SDS presente"
+    }
+  },
+  "ghs": {
+    "none": "Nessun pittogramma",
+    "GHS01": "Bomba che esplode",
+    "GHS02": "Fiamma",
+    "GHS03": "Fiamma sopra un cerchio",
+    "GHS04": "Bombola per gas",
+    "GHS05": "Corrosione",
+    "GHS06": "Teschio e tibie incrociate",
+    "GHS07": "Punto esclamativo",
+    "GHS08": "Pericolo per la salute",
+    "GHS09": "Ambiente"
+  },
+  "signal": {
+    "DANGER": "Pericolo",
+    "WARNING": "Attenzione"
+  },
+  "use": {
+    "GLUE": "Colla",
+    "SOLVENT": "Solvente",
+    "PRIMER": "Primer",
+    "FINISH": "Finissaggio",
+    "EDGE_PAINT": "Tinta per bordi",
+    "DYE": "Colorante",
+    "CLEANER": "Detergente",
+    "OIL": "Olio",
+    "OTHER": "Altro"
+  },
+  "unit": {
+    "ML": "ml",
+    "L": "l",
+    "G": "g",
+    "KG": "kg"
+  },
+  "status": {
+    "ACTIVE": "In uso",
+    "ARCHIVED": "Archiviata"
+  },
+  "lang": {
+    "it": "Italiano",
+    "en": "Inglese",
+    "de": "Tedesco",
+    "fr": "Francese",
+    "es": "Spagnolo",
+    "pt": "Portoghese",
+    "ro": "Rumeno",
+    "pl": "Polacco",
+    "ar": "Arabo",
+    "zh": "Cinese"
+  },
+  "chemical": {
+    "noun": "sostanza"
+  },
+  "field": {
+    "site": "Sede",
+    "sitePick": "Scegli la sede",
+    "name": "Prodotto",
+    "namePlaceholder": "Il nome commerciale sull'etichetta",
+    "use": "Uso",
+    "usePick": "Scegli a cosa serve",
+    "supplier": "Fornitore",
+    "supplierParty": "Un nostro fornitore",
+    "supplierByName": "Per nome",
+    "supplierPick": "Scegli il fornitore",
+    "supplierName": "Nome del fornitore",
+    "supplierNameHint": "Quando non è uno dei nostri fornitori (o lascia vuoto).",
+    "hazards": "Pericoli",
+    "pictograms": "Pittogrammi GHS sull'etichetta",
+    "signalWord": "Avvertenza",
+    "signalNone": "Nessuna",
+    "hazardStatements": "Frasi H",
+    "hazardHint": "Come sull'etichetta o nella scheda, sezione 2: H225 H319 EUH066.",
+    "precautionStatements": "Frasi P",
+    "precautionHint": "P210 P305+P351+P338.",
+    "badHazard": "\"{code}\" non è un'indicazione di pericolo come la scrive il CLP (H225, H319, EUH066).",
+    "badPrecaution": "\"{code}\" non è un consiglio di prudenza come lo scrive il CLP (P210, P305+P351+P338).",
+    "place": "Dove è conservato",
+    "placeHint": "Il locale e lo scaffale o l'armadio: Armadio colle, taglio.",
+    "cabinet": "Codice armadio",
+    "cabinetHint": "Il codice che il suo QR indica (senza spazi): CAB-CUT-1. Vuoto se non è in un armadio.",
+    "maxQuantity": "Quantità massima conservata",
+    "maxQuantityHint": "La quantità massima tenuta in una volta (facoltativa), con la sua unità.",
+    "unit": "Unità",
+    "unitNone": "Nessuna",
+    "roles": "Mansioni che lo usano",
+    "rolesSiteFirst": "Scegli prima la sede.",
+    "noRoles": "La sede non ha ancora schede mansione: le scrive l'RSPP con la valutazione dei rischi.",
+    "ppe": "DPI per maneggiarlo",
+    "noPpe": "L'azienda non ha ancora DPI a catalogo.",
+    "note": "Nota"
+  },
+  "sheet": {
+    "dropHint": "La scheda di dati di sicurezza del fornitore, in PDF.",
+    "version": "Versione SDS",
+    "versionHint": "Come l'ha scritta il fornitore (3.1).",
+    "revisedOn": "Revisione del",
+    "language": "Lingua"
+  },
+  "add": {
+    "title": "Aggiungi sostanza",
+    "atSite": "Presso {site}",
+    "noSite": "nessuna sede scelta: scegline una nella barra in alto",
+    "save": "Aggiungi sostanza",
+    "saveWithSheet": "Aggiungi sostanza e la sua SDS",
+    "sheetTitle": "Scheda di dati di sicurezza",
+    "sheetHint": "Facoltativa ora: puoi aggiungerla dopo con Sostituisci SDS.",
+    "sheetRefused": "La sostanza è nel registro, ma la sua scheda non è stata accettata.",
+    "openToReplace": "Aprila per aggiungere la scheda"
+  },
+  "edit": {
+    "open": "Modifica",
+    "save": "Salva le modifiche"
+  },
+  "replace": {
+    "open": "Sostituisci SDS",
+    "save": "Sostituisci SDS",
+    "hint": "La scheda più recente diventa quella in vigore nella sua lingua; quella precedente è conservata, sostituita.",
+    "first": "Sarà la prima scheda in questa lingua.",
+    "supersedes": "La versione {version} in {language} sarà conservata, sostituita.",
+    "floor": "I tablet della sede prendono la nuova scheda la prossima volta che sono in rete."
+  },
+  "archive": {
+    "open": "Archivia",
+    "save": "Archivia",
+    "reason": "Perché non è più in uso",
+    "kept": "I prodotti archiviati e le loro schede sono conservati; escono dal registro in uso, dai riquadri e dall'elenco dell'armadio.",
+    "bulkTitle_one": "Archivia 1 sostanza",
+    "bulkTitle_other": "Archivia {count} sostanze"
+  },
+  "restore": {
+    "save": "Rimetti in uso"
+  },
+  "bulk": {
+    "archive_one": "Archivia 1",
+    "archive_other": "Archivia {count}",
+    "archivedResult_one": "1 sostanza archiviata.",
+    "archivedResult_other": "{count} sostanze archiviate.",
+    "refusedRow": "{label}: {why}"
+  },
+  "window": {
+    "supplier": "Fornitore",
+    "pictograms": "Pittogrammi GHS",
+    "hazards": "Frasi H",
+    "precautions": "Frasi P",
+    "place": "Dove è conservato",
+    "maxQuantity": "Quantità massima",
+    "roles": "Mansioni che lo usano",
+    "ppe": "DPI necessari",
+    "note": "Nota",
+    "noRoles": "Nessuna mansione indicata",
+    "noPpe": "Nessun DPI indicato",
+    "sheets": "Schede di dati di sicurezza",
+    "noSheets": "Nessuna scheda ancora: aggiungila con Sostituisci SDS.",
+    "current": "Versione {version} · {language} · revisione del {date} · in vigore",
+    "superseded": "Versione {version} · {language} · revisione del {date} · sostituita il {when} da {by}",
+    "someone": "qualcuno",
+    "show": "Mostra",
+    "showNamed": "Mostra {name} qui",
+    "tab": "Nuova scheda",
+    "tabNamed": "Apri {name} in una nuova scheda",
+    "noPdf": "Nessun PDF da mostrare ancora.",
+    "pickSheet": "Scegli una scheda per mostrarla qui.",
+    "pdfLoading": "Lettura del PDF…",
+    "pdfFailed": "Impossibile leggere il PDF."
+  },
+  "qr": {
+    "title": "Stampa QR armadio",
+    "cabinet": "Armadio",
+    "failed": "Impossibile leggere gli armadi.",
+    "emptyTitle": "Nessun armadio ancora",
+    "empty": "Un armadio è il codice che una sostanza indica (Codice armadio): aggiungilo prima a una sostanza.",
+    "products_one": "1 prodotto in questo armadio.",
+    "products_other": "{count} prodotti in questo armadio.",
+    "withoutSheet_one": "1 di questi non ha ancora la scheda di sicurezza.",
+    "withoutSheet_other": "{count} di questi non hanno ancora la scheda di sicurezza.",
+    "howItWorks": "Un tablet della sede che scansiona questo QR (Scansiona) apre i prodotti dell'armadio e le loro schede in vigore da ciò che tiene, anche senza rete.",
+    "print": "Stampa",
+    "labelName": "Etichetta armadio {cabinet}",
+    "labelCabinet": "Armadio",
+    "labelSite": "Sede",
+    "labelPlace": "Luogo",
+    "labelScan": "Scansiona per le schede di sicurezza",
+    "codeLabel": "Codice QR dell'armadio {cabinet}"
+  },
+  "sdsTab": {
+    "title": "Scheda di dati di sicurezza: {name}",
+    "reading": "Lettura della scheda…",
+    "superseded": "Una scheda più recente ha sostituito questa: segui quella in vigore.",
+    "failed": "Impossibile aprire questa scheda."
+  },
+  "cabinetTab": {
+    "title": "Armadio {cabinet}",
+    "failed": "Impossibile leggere questo armadio.",
+    "scan": "Scansiona il QR con un tablet della sede (Scansiona) per leggere la scheda di sicurezza di ogni prodotto, anche senza rete.",
+    "print": "Stampa",
+    "most": "Quantità massima: {quantity}",
+    "ppe": "DPI: {ppe}",
+    "sds": "SDS: {sheets}"
+  },
+  "print": {
+    "meta": "Stampato il {at} da {person}"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "add": "Aggiungi sostanza",
+    "moves": "Sostanza precedente / successiva nella sua finestra",
+    "close": "Chiudi la finestra"
+  },
+  "held": {
+    "company": "Apri prima un'azienda (la barra in alto): una sostanza appartiene a una delle sue sedi.",
+    "manage": "Il registro delle sostanze lo tiene l'RSPP (safety.chemicals.manage).",
+    "busy": "Salvataggio…",
+    "nothingChanged": "Nulla è cambiato.",
+    "archived": "Questa sostanza è archiviata: rimettila prima in uso.",
+    "archivedRow": "Già archiviata.",
+    "noneActive": "Scegli prima dei prodotti in uso.",
+    "noCabinet": "Scegli prima un armadio.",
+    "shown": "Già mostrata.",
+    "site": "Scegli la sede.",
+    "siteId": "Scegli una sede dell'azienda.",
+    "companyId": "Apri prima un'azienda.",
+    "use": "Scegli a cosa serve.",
+    "supplierParty": "Scegli il fornitore, o indicalo per nome.",
+    "name": "Indica il prodotto (al massimo 200 caratteri).",
+    "supplierName": "Indica il fornitore come uno dei nostri o per nome, uno dei due (al massimo 200 caratteri).",
+    "ghsPictograms": "Scegli ogni pittogramma una volta.",
+    "hazardStatements": "Scrivi ogni frase H una volta, come la scrive il CLP (H225, EUH066).",
+    "precautionStatements": "Scrivi ogni frase P una volta, come la scrive il CLP (P210, P305+P351+P338).",
+    "signalWord": "Un'avvertenza accompagna i suoi pericoli: aggiungi i pittogrammi o le frasi H.",
+    "storagePlace": "Indica dove è conservato (al massimo 200 caratteri).",
+    "cabinetCode": "Il codice di un armadio non ha spazi (al massimo 40 caratteri).",
+    "maxQuantity": "La quantità massima è un numero sopra 0 (al massimo quattro decimali), con la sua unità.",
+    "maxQuantityUnit": "La quantità massima va con la sua unità: entrambe, o nessuna.",
+    "roleSheetIds": "Indica ogni mansione una volta.",
+    "ppeItemIds": "Indica ogni DPI una volta.",
+    "note": "Una nota ha al massimo 1000 caratteri.",
+    "file": "Scegli il PDF della scheda.",
+    "pdf": "Una scheda di dati di sicurezza è un PDF.",
+    "fileId": "Carica prima il PDF della scheda.",
+    "contentType": "Una scheda di dati di sicurezza è un PDF.",
+    "versionLabel": "Scrivi la versione della scheda (al massimo 50 caratteri).",
+    "revisedOn": "Scegli il giorno di revisione della scheda.",
+    "revisedFuture": "Il giorno di revisione è oggi al più tardi.",
+    "language": "Scegli la lingua della scheda.",
+    "reason": "Indica perché non è più in uso."
+  },
+  "refusal": {
+    "ARCHIVED": "Questa sostanza è archiviata: rimettila prima in uso.",
+    "NOT_ARCHIVED": "Questa sostanza è già in uso.",
+    "SITE_OTHER_COMPANY": "La sede non è una delle sedi dell'azienda.",
+    "SUPPLIER_OTHER_COMPANY": "Il fornitore non è un fornitore attivo di questa azienda o del gruppo.",
+    "ROLE_OTHER_SITE": "Le mansioni devono essere schede mansione della sede della sostanza.",
+    "PPE_OTHER_COMPANY": "I DPI devono essere del catalogo dell'azienda.",
+    "FILE_NOT_READY": "Il PDF non è ancora pronto per essere letto all'armadio: caricalo di nuovo.",
+    "FILE_NOT_PDF": "Una scheda di dati di sicurezza è un PDF.",
+    "OLDER_THAN_CURRENT": "Questa scheda è stata revisionata prima di quella in vigore (versione {version}): una sostituzione è la scheda più recente.",
+    "SAME_VERSION": "La versione {version} in questa lingua è già la scheda in vigore."
+  },
+  "problem": {
+    "read": "Il server non ha risposto come previsto. Nulla è perso: riprova.",
+    "unavailable": "Il server ora non è disponibile. Riprova tra poco.",
+    "noAnswer": "Nessuna risposta dal server: controlla la connessione e riprova.",
+    "invalid": "Qualcosa nel modulo non è valido.",
+    "signedOut": "Sei uscito. Accedi di nuovo.",
+    "forbidden": "Non hai il diritto di farlo qui.",
+    "notFound": "Non trovato: forse è stato archiviato, o non è della tua azienda.",
+    "conflict": "Qualcuno l'ha cambiato nel frattempo: è stato riletto; controlla e riprova.",
+    "rateLimited": "Troppi tentativi in poco tempo: attendi un momento.",
+    "internal": "Qualcosa è andato storto da parte nostra. Riprova."
+  },
+  "notice": {
+    "added": "{name} è nel registro."
+  },
+  "saved": {
+    "edited": "Modifiche salvate.",
+    "replaced": "La versione {version} è ora la scheda in vigore; {old} è conservata, sostituita.",
+    "firstSheet": "La versione {version} è ora la scheda in vigore.",
+    "archived": "Archiviata: è uscita dal registro in uso; le sue schede sono conservate.",
+    "restored": "Di nuovo in uso."
+  }
+}

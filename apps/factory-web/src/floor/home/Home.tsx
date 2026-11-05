@@ -8,6 +8,7 @@ import { homeTiles, modeOf, tilePage } from '../model'
 import { heldWorkOf } from '../queue/actions'
 import { readScan } from '../scan/scan-model'
 import { TASK_ROUTES, taskForScan, taskOfTile } from '../tasks/routes'
+import { cabinetOfScan, CABINET_PATH } from '../tasks/sds/model'
 import { useMyDayBadge } from '../tasks/myday/badge'
 import { fetchOpenWork } from '../tasks/scans/api'
 import { withLeft } from '../tasks/scans/left'
@@ -80,6 +81,9 @@ export function FloorHome() {
         return store.openWith(TASK_ROUTES.operation, action.code)
       case 'scan': {
         setRefused(false)
+        // B-W2b-143: a cabinet's QR opens the cabinet's safety data sheets (from what the tablet keeps: also offline).
+        const cabinet = cabinetOfScan(action.code)
+        if (cabinet) return store.openWith(CABINET_PATH, cabinet)
         const read = readScan(action.code, me.scanTag)
         // The scan router: the job for this station with the label loaded, else Scan anything shows its card.
         const task = taskForScan(mode, read, tiles)

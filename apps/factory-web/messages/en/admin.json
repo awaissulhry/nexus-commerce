@@ -1955,6 +1955,7 @@
     "safety_rolesheets_manage": "Keep the role risk sheets (scheda mansione): risks, PPE kit, courses and health surveillance per role; apply a sheet after reading what it changes for the people in the role",
     "safety_training_manage": "Keep the safety course catalogue (hours and refresher periods from your own programme, start from the standard list) and the courses a type of machine asks, each after reading what it changes for people",
     "safety_ppe_manage": "Keep the PPE catalogue of a company: items with category, standard, sizes and how long they last; archive and restore them",
-    "safety_ppe_issue": "Record PPE handed over in the office with the person's paper receipt, void a wrong issue with the reason, keep a receipt's PDF"
+    "safety_ppe_issue": "Record PPE handed over in the office with the person's paper receipt, void a wrong issue with the reason, keep a receipt's PDF",
+    "safety_chemicals_manage": "Keep the chemical register (D.Lgs. 81/2008 art. 223): add, change and archive chemicals, upload and replace their safety data sheets"
   }
 }

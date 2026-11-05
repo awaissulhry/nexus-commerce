@@ -39,7 +39,7 @@ export function modeOf(station: { workCentreKind: WorkCentreKind } | null, devic
 
 // ---- the home tiles (design floor.home "tiles": the station's mode AND the person's permissions, fail closed) ----
 
-export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-70 */ 'help', 'lineview', 'scan'] as const
+export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', /* B-W2b-67 */ 'clock', /* B-W2b-68 */ 'myday', /* B-W2b-70 */ 'help', /* B-W2b-137 */ 'incident', 'lineview', 'scan'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 
 export interface TileRule {
@@ -92,6 +92,9 @@ export const TILE_RULES: readonly TileRule[] = [
   // SCR-172 (B-W2b-70): Call for help at every station mode (design floor.help); floor.work sends, and a call always goes out
   // (never held by the worker notice). The frame's Help button opens it from any screen too.
   { key: 'help', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
+  // SCR-230 (B-W2b-137): Report an incident at every station mode, a line tablet and a phone (design floor.incident Modes); floor.work
+  // reports (anyone at the station, as a help call). Never held by the worker notice; kept on the first page (KEPT_FIRST).
+  { key: 'incident', permission: 'floor.work', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], devices: ['LINE', 'PHONE'], built: true, takesScans: false },
   // SCR-168 (B-W2b-70): the team leader's Line view, wherever they sign in (design floor.supervisor; floor.lead).
   { key: 'lineview', permission: 'floor.lead', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], devices: ['LINE', 'PHONE'], built: true, takesScans: false },
   { key: 'scan', permission: 'floor.work', modes: 'all', built: true, takesScans: true },
@@ -107,8 +110,12 @@ export interface HomeTile {
   readonly held: TileHeld
 }
 
-/** B-W2b-70: the Line view (the lead's first job, no other way to it) and Scan anything stay last, on the first page. */
-const KEPT_LAST: readonly TileKey[] = ['lineview', 'scan']
+/**
+ * The tiles kept on the first page, last, in TILE_RULES' order: B-W2b-137 Report an incident (it must never fall off a full
+ * Home: someone hurt does not look for a More tile; plan §10), B-W2b-70 the Line view (the lead's first job, no other way to it)
+ * and Scan anything.
+ */
+const KEPT_LAST: readonly TileKey[] = ['incident', 'lineview', 'scan']
 
 /**
  * Every tile a person has here: the mode's tiles they hold the permission for, then Scan. With no station's mode, the tiles of
