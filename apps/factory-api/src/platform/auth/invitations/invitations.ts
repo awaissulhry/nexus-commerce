@@ -45,6 +45,8 @@ import type { AcceptInvitationBody, InviteBody } from './contract'
 
 export const INVITATION_TTL_MS = 72 * 60 * 60_000
 const INVALID = 'This invitation is not valid or has expired. Ask for a new one.'
+/** B-W2b-159: the office invitation of an address that belongs to a partner person (sign-in by e-mail code). */
+export const PARTNER_ADDRESS = 'This address belongs to a partner person, who signs in to the portal with a code sent by e-mail. Give the Office to another address.'
 
 const isUniqueViolation = (error: unknown): boolean => (error as { code?: unknown } | null)?.code === 'P2002'
 
@@ -57,8 +59,10 @@ export async function invite(auth: OfficeAuth, request: FastifyRequest, body: In
     throw new ForbiddenError(`Giving roles with an invitation also needs ${ADMIN_PERMISSION}.`)
   }
   const existing = await request.withClient((client) =>
-    client.user.findUnique({ where: { tenantId_email: { tenantId: context.tenantId, email } }, select: { id: true, status: true, version: true } }),
+    client.user.findUnique({ where: { tenantId_email: { tenantId: context.tenantId, email } }, select: { id: true, status: true, version: true, audience: true } }),
   )
+  // B-W2b-159: a partner person's address is invited to the portal (by e-mail code), never to the Office.
+  if (existing?.audience === 'PARTNER') throw new ConflictError(PARTNER_ADDRESS)
   if (existing && (existing.status === 'ACTIVE' || existing.status === 'SUSPENDED')) {
     throw new ConflictError('This address already belongs to a user of the tenant.')
   }

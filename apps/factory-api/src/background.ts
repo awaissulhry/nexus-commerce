@@ -94,6 +94,8 @@ import { checkRemindersCron } from './modules/plant/statutory/reminders'
 import { alertRulesCron, alertRulesHandler } from './modules/quality/rules/firing'
 // B-W2b-125: a machine locked as unsafe opens a hazard report in Plant › Incidents when the site asks for one.
 import { incidentHandlers } from './modules/safety/incidents/handlers'
+// B-W2b-159: the dead portal sign-in codes are purged (a day after they expired).
+import { portalCodePurgeCron } from './platform/auth/portal/purge'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -260,6 +262,8 @@ if (mode === 'worker') {
   crons.push(checkRemindersCron({ database, log }))
   // B-W2b-118: every 5 minutes, the quality alert rules whose wait was crossed or whose date step was reached fire (QHS-154).
   crons.push(alertRulesCron({ database, log }))
+  // B-W2b-159: hourly, the portal sign-in and step-up codes that expired more than a day ago are deleted (PLT-050).
+  crons.push(portalCodePurgeCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
