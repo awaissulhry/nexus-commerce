@@ -70,8 +70,10 @@
       "requests": "Machine requests",
       "jobs": "Maintenance jobs",
       "machines": "Machines & tools",
+      "preventive": "Preventive & statutory checks",
       "safety": "Health & safety",
       "calendar": "Safety calendar",
+      "chemicals": "Chemicals & waste",
       "settingsGroup": "Settings",
       "settings": "Plant settings"
     },
@@ -159,6 +161,7 @@
       "area": "Planning",
       "main": "Main",
       "mrp": "What to buy & make",
+      "leather": "Leather & cut plan",
       "board": "Planning board",
       "allocation": "Lines & subcontractors",
       "capacity": "Capacity & load",

@@ -74,6 +74,16 @@
   color: var(--nds-text-link);
 }
 
+/* B-W2b-142: an item that may move drags onto a day; the day under the drag is outlined. */
+.fw-cv-item[data-movable] {
+  cursor: grab;
+}
+
+.fw-cv-grid [data-fw-drop] {
+  outline: 2px dashed var(--nds-primary);
+  outline-offset: -2px;
+}
+
 @media (max-width: 1100px) {
   .fw-cv {
     grid-template-columns: minmax(0, 1fr);

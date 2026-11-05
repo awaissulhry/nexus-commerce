@@ -231,6 +231,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   supplier's answer and the buyer's accept/refuse), `areas/warehouse/receipts/` (SCR-063 list `?view=expected|posted|today|
   waiting|reversed|all`, the receiving page `/warehouse/receipts/new?order=&lines=` posting the whole receipt at once with the
   hide entry sheet (SCR-061), the receipt `?tab=lines|lots|activity` with its lots and quality state (SCR-062) and Reverse).
+- `src/areas/planning/leather/` — Planning › Leather & cut plan (B-W2b-132; SCR-252 `/planning/leather?site=&tile=&feas=&q=&open=<need row>`, SCR-252-print `/planning/leather/print` a new tab; catalogue `planning-leather`, CSS prefix `fw-lp-`): three reads, each its own section (need per order with one shade's answer, certified protectors, planned vs actual yield); the tiles are saved filters; the shade drawer (DetailModal, J / K) offers reserve / split by garment (POST /inventory/reservations), Draft PO (What to buy & make's POST /purchasing/from-plan) and a note for Sales on the order's thread; Accept (ActionConfirm) / Dismiss (reason) the cutting loss proposal. Values only with money.cost.
 - `src/areas/plant/` — Plant › Maintenance (B-W2a-53, area order 12, Italian "Stabilimento"; catalogue `plant`): `_shared/`
   (api.ts every plant call + zod; model.ts the pure rules — saved rows ⇄ the API's own filters, the board's lanes and why a
   card may not go there, the job moves a person may make, refusals `refusal/<CODE>` in our words, costs and due times typed
@@ -253,7 +254,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (`GET /plant/floor/requests[/:id]`; Seen / On my way / It works through `stepOrKeep`: online first, queued as
   `plant.request.progress` under the try's id, its key `<device>.<id>`), the technician's queue, the line lead's confirm, the
   one-screen close (factory-domain plant/jobs/close tiles), files opened through `GET /plant/floor/files/:id/download`;
-  `INCIDENT_PAGE` in depth.ts is the hook B-W2b-137 sets.
+  `INCIDENT_PAGE` in depth.ts opens Report an incident with the machine passed on (`incident/handoff.ts`, B-W2b-137).
+  B-W2b-137: `floor/tasks/incident/` (SCR-230, `/floor/incident`, tile `incident` on every station mode, a line tablet and a phone,
+  kept on Home's first page with the Line view and Scan anything; catalogue `floor-incident`; on the API of B-W2b-125): someone
+  hurt first (112 is factory-domain's EMERGENCY_NUMBER, so it shows before any read; the site's first aiders from
+  `GET /safety/floor/incidents/start`; the call for help in one tap = the station's Safety call, else its team leader's, queued as
+  `andon.call.send`), then What → Where ("Here: this station" first) → Send, three taps (the DS ReasonGrid moves on by a tap or
+  Enter, never by an arrow). With the name: the queue's `safety.incident.report` FIRST, not an online try (the API hashes the
+  report's time, so a try and a queued retry of one id would be refused as a reused id). Without the name (a near miss or a
+  hazard naming nobody): online only, one key kept until answered, held in the page with the network gone, never stored.
+  "Seen by safety" from live `incident.seen` + a beat; photos (≤ 4, 30 minutes) after the office names the incident.
   B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
   schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
   a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up
@@ -263,6 +273,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Hand back dialog (board drop, the record's primary, `h`; `jobs/view/CloseForm.tsx` is the ONE close form, also the tab),
   the record's Unsafe lock panel with Sign safe (`requests/view/SignSafeDialog.tsx`, the ONE sign-safe dialog), the Photos
   tab (plant files routes, before / after), Line lead confirms. The containers sit inside `PlantMessages` (they speak too).
+  B-W2b-142 `preventive/` Preventive & statutory checks (SCR-266 `/plant/preventive?view=&month=&day=&due=&ended=&missing=&outcome=&plan=
+  &result=&new=1&record=1|<plan>&corrects=&move=&date=`, catalogue `plant-preventive`, CSS prefix `fw-pv-`; on B-W2b-124's API): tiles, the
+  calendar (the shared CalendarView with its optional `move` prop: a due check drags onto a day → Move a check) | List, Plans (`plant.preventive`,
+  Move N), the check register (`plant.preventive.register`, its export source, Print N / Export N), New plan, Record a check result (the job and
+  the lock in ONE call, then the report files), the Plan and result windows, Move a check; new tabs `register/` (SCR-266-register-print) and
+  `report/` (SCR-266-report: the PDF, Keep in the register, the DocumentSeal). `RECORD_PAGES.MachineCheckPlan|MachineCheckResult`.
   B-W2b-141 (Plant settings' W2b sections, SCR-241 + SCR-241-audit; `areas/plant/settings/` `depth-api.ts`, `depth-model.ts`
   (pure: rule drafts and bodies, the worked example in words, order, H1-held lock choices, check type rules, refusals),
   `use-depth.ts` (the container hook beside the W2a one), `view/{RoutingCard,LockCard,CheckTypesCard,IncidentsCard}.tsx`,

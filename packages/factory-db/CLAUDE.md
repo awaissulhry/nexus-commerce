@@ -133,7 +133,23 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    closing held while an action or a filing waits), the people involved (the floor inserts, never reads), actions, INAIL filings
    (48 hours from the certificate; one per person and type: a key), chemicals and data sheets (one current per language: a
    partial unique); its own triggers `StoredFile_protected_office_only` and `SearchEntry_not_protected`; it redefines wave 10's
-   numbering floor functions `factory_number_series_floor_guard` and `factory_number_allocation_floor_guard` (INCIDENT)): triggers, partial unique indexes and deferred
+   numbering floor functions `factory_number_series_floor_guard` and `factory_number_allocation_floor_guard` (INCIDENT)),
+   `…_portal_identity_w2b_guards` (W2b schema wave 17/22, B-W2b-152: a person's audience (a partner user has one party
+   and a fitting kind, never a password; a guest's access ends), sessions bound to their person's party (30 minutes idle,
+   12 hours at most; office previews), partner invitations, a partner role at most the price grain and its assignments
+   bound to the person's party, sign-in codes (15 minutes, 5 tries, hashes only, one live per person and purpose: a partial
+   unique; dead codes never open again), portal settings, company branding, the portal terms' acknowledgements append-only;
+   its own triggers on User, Session, Invitation, Role and RoleAssignment, no earlier function redefined),
+   `…_files_depth_w2b_guards` (W2b wave 18/22, files in depth: versions numbered in their series, one new version at a time and
+   one current at commit (deferred), a superseded version read-only, copies with their source's bytes, the expiry reminder, the
+   thumbnail once, upload sessions in parts, markups append-only, one active required-document rule per key (partial uniques);
+   it redefines W2a's `factory_stored_file_guard`),
+   `…_links_depth_w2b_guards` (W2b wave 19/22, links in depth: a link's password as a scrypt hash only (DOCUMENT_VIEW, SECURE_FILE),
+   five wrong passwords hold it up to 15 minutes, the receipt once (SECURE_FILE), a renewal of the same record and purpose; a link's
+   files added while it is unused, never changed; drafts sealed, only for a long form and only while the link opens; record shares
+   (VIEW always, 180 days at most, the party switches its e-mail only); approval requests answered once by the party; no link, file
+   set, share or approval of a pay record (`factory_link_pay_record`); it redefines W0's `factory_guard_link_change` and wave 11's
+   `factory_ncr_concession_guard` (the customer writes the answer columns only, after its approval request's answer)): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written

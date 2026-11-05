@@ -70,8 +70,10 @@
       "requests": "Richieste di intervento",
       "jobs": "Interventi",
       "machines": "Macchine e attrezzature",
+      "preventive": "Manutenzione programmata e verifiche",
       "safety": "Salute e sicurezza",
       "calendar": "Scadenzario sicurezza",
+      "chemicals": "Sostanze e rifiuti",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni stabilimento"
     },
@@ -159,6 +161,7 @@
       "area": "Pianificazione",
       "main": "Principali",
       "mrp": "Cosa comprare e produrre",
+      "leather": "Piano pelle e taglio",
       "board": "Tabellone di pianificazione",
       "allocation": "Linee e terzisti",
       "capacity": "Capacità e carico",

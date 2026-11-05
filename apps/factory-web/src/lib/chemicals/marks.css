@@ -1,0 +1,66 @@
+/*
+ * The chemicals' marks the Office's Chemicals & waste (SCR-213) and the Floor's cabinet reader both draw (B-W2b-143): the GHS
+ * pictograms as STAND-INS (a red-edged diamond with an icon close to the symbol; never the CLP artwork), the signal word in
+ * its tone, the cabinet QR's bare mark (paper and ink in both themes, as the DS LabelPreview draws it). Semantic tokens only.
+ */
+.fw-ghs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-ghs-mark {
+  display: inline-grid;
+  place-items: center;
+  width: var(--fw-ghs-size, 26px);
+  height: var(--fw-ghs-size, 26px);
+  flex: none;
+}
+
+.fw-ghs-mark > span {
+  display: grid;
+  place-items: center;
+  width: 72%;
+  height: 72%;
+  transform: rotate(45deg);
+  border: 2px solid var(--nds-danger);
+  border-radius: 2px;
+  background: var(--nds-surface);
+}
+
+.fw-ghs-mark svg {
+  transform: rotate(-45deg);
+  color: var(--nds-text);
+}
+
+.fw-ghs-big {
+  --fw-ghs-size: 44px;
+}
+
+.fw-ghs-none {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-signal-danger {
+  color: var(--nds-danger-text);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.fw-signal-warning {
+  color: var(--nds-warning-text);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.fw-qr-mark {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fw-qr-dark {
+  fill: var(--nds-label-ink, var(--nds-tooltip-light-fg));
+}

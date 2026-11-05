@@ -228,6 +228,8 @@ export function FloorHelp() {
         return void sendDetails()
       case 'machine':
         return router.push(TASK_ROUTES.machine)
+      case 'incident':
+        return router.push(TASK_ROUTES.incident)
     }
   }
 

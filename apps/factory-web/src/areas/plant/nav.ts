@@ -1,4 +1,4 @@
-import { BellRing, CalendarCheck, Cog, HardHat, SlidersHorizontal, Wrench } from 'lucide-react'
+import { BellRing, CalendarCheck, CalendarClock, Cog, FlaskConical, HardHat, SlidersHorizontal, Wrench } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -27,6 +27,8 @@ export const officeArea: OfficeAreaNav = {
           { id: 'plant-jobs', label: 'shell:nav.plant.jobs', href: '/plant/jobs', icon: Wrench, permission: 'plant.view' },
           // SCR-150: the machine and equipment register (GET /plant/machines, plant.view).
           { id: 'plant-machines', label: 'shell:nav.plant.machines', href: '/plant/machines', icon: Cog, permission: 'plant.view' },
+          // B-W2b-142 SCR-266: the statutory checks of the machines — calendar, plans, the check register (GET /plant/checks/plans, plant.view).
+          { id: 'plant-preventive', label: 'shell:nav.plant.preventive', href: '/plant/preventive', icon: CalendarClock, permission: 'plant.view' },
         ],
       },
       // B-W2b-120: Health & safety — the Safety calendar (SCR-267): every legal safety deadline, the safety organisation and
@@ -34,7 +36,11 @@ export const officeArea: OfficeAreaNav = {
       {
         id: 'plant-safety',
         label: 'shell:nav.plant.safety',
-        items: [{ id: 'plant-calendar', label: 'shell:nav.plant.calendar', href: '/plant/calendar', icon: CalendarCheck, permission: 'safety.view' }],
+        items: [
+          // B-W2b-143: the chemical register, the safety data sheets and the cabinet QR (GET /safety/chemicals, safety.view).
+          { id: 'plant-chemicals', label: 'shell:nav.plant.chemicals', href: '/plant/chemicals', icon: FlaskConical, permission: 'safety.view' },
+          { id: 'plant-calendar', label: 'shell:nav.plant.calendar', href: '/plant/calendar', icon: CalendarCheck, permission: 'safety.view' },
+        ],
       },
       // B-W2a-73: Plant settings (SCR-241), its W2a section "Symptoms on the floor" (GET /plant/symptoms, plant.view);
       // B-W2b-141 adds routing and escalation, the unsafe lock, check types and incidents (each read with plant.view or its own right).

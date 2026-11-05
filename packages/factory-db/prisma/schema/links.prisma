@@ -8,6 +8,11 @@
 // Moving the party or the tenant of a link is refused by the policies for the runtime roles, and every column but the
 // use counters, the revocation and the office note is fixed once the link exists (the …_links_guards migration's
 // trigger, for every login).
+//
+// W2b (schema wave 19/22, B-W2b-154): nine more purposes, a password (its hash only) with its tries, the receipt, the
+// contact and the renewed link; links-depth.prisma has the link's files and draft, record shares and approval requests.
+// The …_links_depth_w2b_guards migration redefines the link's guard: the password tries and the receipt may move too,
+// and no link ever opens a record that holds pay figures (Owner, 11-02).
 
 /// One link: one purpose on one record of one party of the tenant, with an expiry and a use limit. Revoked or used up,
 /// it opens nothing; never deleted (its evidence keeps pointing at it).
@@ -45,9 +50,40 @@ model OneOffLink {
   updatedAt   DateTime    @default(now()) @updatedAt @db.Timestamptz(3)
   /// The office user who made it (or the system actor, for a link a job made).
   createdById String      @db.Uuid
+  /// W2b (wave 19/22; COL-051, MES-274): the password sent apart from the link (DOCUMENT_VIEW and SECURE_FILE only), as
+  /// its scrypt hash in the PHC string format of factory-domain auth/password, never the password itself. Hidden from the
+  /// partner role: the API checks a typed password in the tenant's system scope, so a link session can never read the
+  /// hash and guess offline past the five tries. Fixed once the link exists.
+  passwordHash      String?
+  /// Wrong passwords typed in a row, 0 to 5 (design links.document: "5 tries, then held 15 minutes"): the fifth holds
+  /// the link until `passwordHeldUntil` (15 minutes at most, set exactly at 5); once that passed the count starts again;
+  /// a right password sets it back to 0. Only on a link with a password.
+  passwordTries     Int         @default(0)
+  passwordHeldUntil DateTime?   @db.Timestamptz(3)
+  /// W2b (wave 19/22; SECURE_FILE): the receipt "I received these files": when, and the name typed (optional). Written
+  /// once by the link session, never changed, never on a revoked link; not a counted use.
+  receivedAt        DateTime?   @db.Timestamptz(3)
+  receivedName      String?
+  /// W2b (wave 19/22): the party contact it was sent to; null: an address with no contact, or a link whose party is no
+  /// Party (B-W2b-54's payroll link names its export). Fixed once made.
+  contactId         String?     @db.Uuid
+  /// W2b (wave 19/22; "Ask for a new link", B-W1-49's renew made general): the link this one replaces, of the same
+  /// company, party, purpose and record. Fixed once made; the old link is revoked, used up or expired on its own.
+  renewalOfId       String?     @db.Uuid
 
   company  Company        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   evidence LinkEvidence[]
+  // W2b (wave 19/22): the contact it went to, the link it renews and its renewals. Restrict, not Prisma's SetNull
+  // default for an optional relation: that would also clear tenantId and partyId.
+  contact   PartyContact? @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  renewalOf OneOffLink?   @relation("OneOffLinkRenewal", fields: [tenantId, partyId, renewalOfId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  renewals  OneOffLink[]  @relation("OneOffLinkRenewal")
+  // W2b links-depth.prisma (wave 19/22): its files, its form's draft, the record share it opens, the approval answered
+  // through it.
+  files           LinkFile[]
+  drafts          LinkDraft[]
+  recordShare     RecordShare?
+  approvalAnswers ApprovalRequest[]
   // sales.prisma: the quote acceptances made through it.
   quoteAcceptances QuoteAcceptance[]
   // supply.prisma: the purchase orders confirmed through it (PO_CONFIRM), and those it proposed changes to.
@@ -70,6 +106,26 @@ enum LinkPurpose {
   DOCUMENT_VIEW
   /// Open the deposit request of an accepted quote.
   DEPOSIT_INFO
+  /// W2b (wave 19/22; design 02 "New link purposes"). Track one shipment: its steps and the carrier's tracking, no price
+  /// (SAL-095); opens only.
+  SHIPMENT_TRACK
+  /// Send the measurements (and body photos) of one measurement profile; a draft kept with us; one submit.
+  MEASUREMENTS
+  /// Report a problem with one sales order or shipment (a return or a complaint); a draft kept with us; a few submits.
+  CLAIM
+  /// Pay one deposit request or invoice online (the price of the party's own document); until it is paid.
+  PAYMENT
+  /// Answer the supplier questionnaire for one prospective supplier (typed name); a draft kept with us; one submit.
+  SUPPLIER_ONBOARD
+  /// Accept or decline one subcontract order, or propose another date; no price.
+  JOB_ACCEPT
+  /// Answer one approval request (links-depth.prisma ApprovalRequest): approve, approve with changes or refuse, signed
+  /// with a typed name.
+  APPROVAL
+  /// Join one record's thread and files with what its record share allows (view, comment, upload).
+  RECORD_INVITE
+  /// Download a set of files (LinkFile), with an optional password sent apart and the receipt "I received these files".
+  SECURE_FILE
 }
 
 /// The evidence of one open or answer of a link (ported from the old app's acceptance evidence, EPQ.5: typed name,
@@ -105,6 +161,22 @@ enum LinkEvidenceAction {
   ACCEPTED
   DECLINED
   CONFIRMED
+  /// W2b (wave 19/22; the B-W1-49 gap: a download left an audit row only). A file downloaded through the link.
+  DOWNLOADED
+  /// The receipt "I received these files" (SECURE_FILE).
+  RECEIVED
+  /// A form sent (MEASUREMENTS, CLAIM, SUPPLIER_ONBOARD).
+  SUBMITTED
+  /// An approval request approved (with or without changes) or refused (APPROVAL).
+  APPROVED
+  REFUSED
+  /// A payment made (PAYMENT).
+  PAID
+  /// Another date proposed (JOB_ACCEPT; ACCEPTED and DECLINED serve its other answers).
+  MOVED_DATE
+  /// A message posted and a file uploaded on a shared record (RECORD_INVITE).
+  POSTED
+  UPLOADED
 }
 
 /// The email check of an answer (factory-domain links/evidence): a typed address that differs is refused, never stored.

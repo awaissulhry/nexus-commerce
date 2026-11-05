@@ -164,6 +164,8 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: true,
         pages: [
           { id: 'planning.mrp', title: 'What to buy & make', titleIt: 'Cosa comprare e produrre', wave: 'W1', href: '/planning/mrp' },
+          // W2b: B-W2b-132 Leather & cut plan (SCR-252), after What to buy & make (the design's order).
+          { id: 'planning.leather', title: 'Leather & cut plan', titleIt: 'Piano pelle e taglio', wave: 'W2b', href: '/planning/leather' },
           // W2a: B-W2a-45 Planning board (SCR-122) and Lines & subcontractors (SCR-126). Capacity & load and Exceptions join between and after with their steps.
           { id: 'planning.board', title: 'Planning board', titleIt: 'Tabellone di pianificazione', wave: 'W2a', href: '/planning/board' },
           // B-W2a-70: Capacity & load (SCR-123) between the board and the allocation; Exceptions (SCR-125) after it.
@@ -481,6 +483,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'plant.requests', title: 'Machine requests', titleIt: 'Richieste di intervento', wave: 'W2a', href: '/plant/requests' },
           { id: 'plant.jobs', title: 'Maintenance jobs', titleIt: 'Interventi', wave: 'W2a', href: '/plant/jobs' },
           { id: 'plant.machines', title: 'Machines & tools', titleIt: 'Macchine e attrezzature', wave: 'W2a', href: '/plant/machines' },
+          // B-W2b-142: Preventive & statutory checks (SCR-266).
+          { id: 'plant.preventive', title: 'Preventive & statutory checks', titleIt: 'Manutenzione programmata e verifiche', wave: 'W2b', href: '/plant/preventive' },
         ],
       },
       // B-W2b-120: Health & safety ships its Safety calendar (SCR-267); the other Health & safety pages join with their steps.
@@ -488,7 +492,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Health & safety',
         labelIt: 'Salute e sicurezza',
         hideLabel: false,
-        pages: [{ id: 'plant.calendar', title: 'Safety calendar', titleIt: 'Scadenzario sicurezza', wave: 'W2b', href: '/plant/calendar' }],
+        pages: [
+          // B-W2b-143: Chemicals & waste (SCR-213), before the calendar as the design orders them.
+          { id: 'plant.chemicals', title: 'Chemicals & waste', titleIt: 'Sostanze e rifiuti', wave: 'W2b', href: '/plant/chemicals' },
+          { id: 'plant.calendar', title: 'Safety calendar', titleIt: 'Scadenzario sicurezza', wave: 'W2b', href: '/plant/calendar' },
+        ],
       },
       // B-W2a-73: Plant settings (a W2b page) ships with its W2a section only, Symptoms on the floor (SCR-241).
       {
@@ -611,6 +619,8 @@ export const FLOOR: ReadonlyArray<{
   // W2b: B-W2b-68 My day (SCR-171).
   { id: 'floor.myday', title: 'My day', titleIt: 'La mia giornata', tile: 'myday', modes: ['sewing', 'phone'] },
   { id: 'floor.help', title: 'Call for help', titleIt: 'Chiama aiuto', tile: 'help', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'] },
+  // W2b: B-W2b-137 Report an incident (SCR-230), tile family Maintenance & safety; kept on the first page of every Home.
+  { id: 'floor.incident', title: 'Report an incident', titleIt: 'Segnala un incidente', tile: 'incident', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor', 'maintenance', 'phone'] },
   { id: 'floor.supervisor', title: 'Line view', titleIt: 'Vista linea', tile: 'lineview', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor'] },
 ]
 

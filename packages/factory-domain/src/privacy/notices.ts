@@ -8,7 +8,8 @@ import type { Issue } from '../core/errors'
  *
  *   - three kinds per company: the worker notice (what the floor tools record, shown on the tablet before the first
  *     scan), the staff notice (what the system keeps about office staff, shown once at sign-in) and the public notice
- *     (for everyone outside the company, at `/privacy/<company id>`);
+ *     (for everyone outside the company, at `/privacy/<company id>`); from W2b-3 (B-W2b-152) a fourth, the portal terms
+ *     (each partner user acknowledges the one in force at their first visit; GATE-PRIVACY);
  *   - a version is written as a DRAFT, PUBLISHED (in force: one per company and kind) and SUPERSEDED when a later one is
  *     published; publishing freezes its languages and their fingerprints;
  *   - each language is the text shown (Italian and English screens, Q15) and/or its PDF (the worker notice in each
@@ -20,7 +21,7 @@ import type { Issue } from '../core/errors'
  * The texts are the company's privacy consultant's; the seeds and tests hold made-up samples only.
  */
 
-export const NOTICE_KINDS = ['WORKER_FLOOR', 'OFFICE_STAFF', 'PRIVACY_PUBLIC'] as const
+export const NOTICE_KINDS = ['WORKER_FLOOR', 'OFFICE_STAFF', 'PRIVACY_PUBLIC', 'PORTAL_TERMS'] as const
 export type NoticeKind = (typeof NOTICE_KINDS)[number]
 
 export const NOTICE_STATUSES = ['DRAFT', 'PUBLISHED', 'SUPERSEDED'] as const
@@ -33,6 +34,7 @@ export const NOTICE_KIND_WORDS: Readonly<Record<NoticeKind, string>> = Object.fr
   WORKER_FLOOR: 'the worker notice (what the floor tools record)',
   OFFICE_STAFF: 'the staff notice (what the system keeps about office staff)',
   PRIVACY_PUBLIC: 'the public privacy notice',
+  PORTAL_TERMS: 'the portal terms (what partner users acknowledge at their first visit)',
 })
 
 /** The screens' languages (Q15): Italian and English. Other languages are PDFs. */

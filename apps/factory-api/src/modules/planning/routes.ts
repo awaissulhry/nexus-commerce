@@ -41,6 +41,11 @@ import { board, workOrderSchedule } from './schedule/board'
 import { allocateContract, allocationContract, boardContract, moveSlotContract, placeByDueDateContract, placeSlotContract, publishContract, publishPreviewContract, removeSlotContract, versionContract, versionsContract, workOrderScheduleContract } from './schedule/contract'
 import { getVersion, listVersions, publish, publishPreview } from './schedule/publish'
 import { moveSlot, placeByDueDate, placeSlot, removeSlot } from './schedule/slots'
+// B-W2b-132: the leather and cut plan (need per order with one shade's answer, certified protectors, yield and the cutting loss).
+import { acceptLossContract, dismissLossContract, needContract, protectorsContract, yieldContract } from './leather/contract'
+import { acceptLoss, dismissLoss } from './leather/loss'
+import { certifiedProtectors, leatherNeed } from './leather/need'
+import { leatherYield } from './leather/yield'
 
 /**
  * What to buy and make (B-W1-29; PLN-062 to PLN-066; A2 SCR-055, design 02): run the plan for a site, read the latest
@@ -124,4 +129,10 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.get('/planning/schedule/versions/:versionId', { schema: versionContract }, async (request) => getVersion(request, request.params.versionId))
   app.get('/planning/allocation', { schema: allocationContract }, async (request) => allocationBoard(request, request.query))
   app.put('/planning/allocation/work-orders/:workOrderId', { schema: allocateContract }, async (request) => allocate(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-132: the leather and cut plan.
+  app.get('/planning/leather/need', { schema: needContract }, async (request) => leatherNeed(request, request.query))
+  app.get('/planning/leather/protectors', { schema: protectorsContract }, async (request) => certifiedProtectors(request, request.query))
+  app.get('/planning/leather/yield', { schema: yieldContract }, async (request) => leatherYield(request, request.query))
+  app.post('/planning/leather/styles/:styleId/loss/accept', { schema: acceptLossContract }, async (request) => acceptLoss(request, request.params.styleId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/leather/styles/:styleId/loss/dismiss', { schema: dismissLossContract }, async (request) => dismissLoss(request, request.params.styleId, request.body, idempotencyKeyFrom(request)))
 })
