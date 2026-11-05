@@ -254,7 +254,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (`GET /plant/floor/requests[/:id]`; Seen / On my way / It works through `stepOrKeep`: online first, queued as
   `plant.request.progress` under the try's id, its key `<device>.<id>`), the technician's queue, the line lead's confirm, the
   one-screen close (factory-domain plant/jobs/close tiles), files opened through `GET /plant/floor/files/:id/download`;
-  `INCIDENT_PAGE` in depth.ts is the hook B-W2b-137 sets.
+  `INCIDENT_PAGE` in depth.ts opens Report an incident with the machine passed on (`incident/handoff.ts`, B-W2b-137).
+  B-W2b-137: `floor/tasks/incident/` (SCR-230, `/floor/incident`, tile `incident` on every station mode, a line tablet and a phone,
+  kept on Home's first page with the Line view and Scan anything; catalogue `floor-incident`; on the API of B-W2b-125): someone
+  hurt first (112 is factory-domain's EMERGENCY_NUMBER, so it shows before any read; the site's first aiders from
+  `GET /safety/floor/incidents/start`; the call for help in one tap = the station's Safety call, else its team leader's, queued as
+  `andon.call.send`), then What → Where ("Here: this station" first) → Send, three taps (the DS ReasonGrid moves on by a tap or
+  Enter, never by an arrow). With the name: the queue's `safety.incident.report` FIRST, not an online try (the API hashes the
+  report's time, so a try and a queued retry of one id would be refused as a reused id). Without the name (a near miss or a
+  hazard naming nobody): online only, one key kept until answered, held in the page with the network gone, never stored.
+  "Seen by safety" from live `incident.seen` + a beat; photos (≤ 4, 30 minutes) after the office names the incident.
   B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
   schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
   a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up
@@ -270,6 +279,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Move N), the check register (`plant.preventive.register`, its export source, Print N / Export N), New plan, Record a check result (the job and
   the lock in ONE call, then the report files), the Plan and result windows, Move a check; new tabs `register/` (SCR-266-register-print) and
   `report/` (SCR-266-report: the PDF, Keep in the register, the DocumentSeal). `RECORD_PAGES.MachineCheckPlan|MachineCheckResult`.
+- `src/areas/plant/incidents/` — Plant › Health & safety › Incidents (B-W2b-149 on B-W2b-125's API; catalogue `plant-incidents`,
+  CSS prefix `fw-inc-`): SCR-210 `/plant/incidents?rows=INJURY|NEAR_MISS|HAZARD|INAIL_DUE&status=&from=&to=&q=&new=1` (the band's
+  live chip = `counts.next`, the critical Banner + Countdown = `counts.deadline`, tiles = filters, the ANONYMISED list frame
+  `plant.incidents` — its export source reads the list, no person; "Show people" = one recorded `POST /safety/incidents/people`
+  in the container's state only, after a PrivacyNote; Mark seen N; Report an incident `c` with the DS PhotoCapture), the record
+  SCR-210-record `/plant/incidents/<id>?tab=report|actions|authority` (marked seen once for a manage holder; People and the
+  filings behind the recorded `…/open` reads — ProtectedValue; Make a job / Add to improvement plan in one step; Record INAIL
+  filing `f`, Close held while an action is open or a filing waits) and SCR-210-print `/plant/incidents/print` (a window page,
+  anonymised). `RECORD_PAGES.Incident`, search type `Incident`. The record frame is the plant's (`_shared/parts` RecordFrame).
 - The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
   write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
   and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):

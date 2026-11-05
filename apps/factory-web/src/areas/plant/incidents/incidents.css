@@ -1,0 +1,229 @@
+/*
+ * Plant › Health & safety › Incidents (SCR-210, B-W2b-149) LAYOUT: the band, the deadline banner, the tiles, the list, the
+ * record's tabs, the dialogs' forms and the print. The page fills the shell's main area (no max-width: Owner rule
+ * 2026-10-29); the controls are the design system's; semantic tokens only.
+ */
+.fw-inc,
+.fw-inc-section,
+.fw-inc-tab,
+.fw-inc-stack,
+.fw-inc-form,
+.fw-inc-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-inc,
+.fw-inc-tab {
+  gap: var(--nds-space-20);
+}
+
+.fw-inc-section,
+.fw-inc-loading {
+  gap: var(--nds-space-8);
+}
+
+.fw-inc-section:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-inc-band,
+.fw-inc-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-inc-status,
+.fw-inc-actions,
+.fw-inc-tools,
+.fw-inc-row,
+.fw-inc-head-title,
+.fw-inc-make {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-inc-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-inc-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-inc-warn {
+  margin: 0;
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-inc-late {
+  color: var(--nds-danger-text);
+  font-weight: 600;
+}
+
+.fw-inc-due {
+  color: var(--nds-warning-text);
+}
+
+.fw-inc-banner-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+.fw-inc-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-inc-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fw-inc-slow {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  opacity: 0;
+  animation: fw-inc-slow 0s linear 1s forwards;
+}
+
+@keyframes fw-inc-slow {
+  to {
+    opacity: 1;
+  }
+}
+
+.fw-inc-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.fw-inc-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-inc-search {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 200px;
+  max-width: 320px;
+}
+
+.fw-inc-chips,
+.fw-inc-deadlines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-inc-deadlines {
+  flex-direction: column;
+}
+
+.fw-inc-chip,
+.fw-inc-deadline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-4) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-inc-deadline {
+  display: flex;
+}
+
+.fw-inc-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-inc-fieldset,
+.fw-inc-person,
+.fw-inc-filing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-inc-fieldset > legend {
+  padding: 0 var(--nds-space-4);
+  font-weight: 600;
+}
+
+.fw-inc-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: var(--nds-space-4) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-inc-parts > legend {
+  margin-bottom: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-inc-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-4);
+}
+
+.fw-inc-print-note {
+  margin: 0 0 var(--nds-space-8);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* A protected value once opened takes the row's width (the DS ProtectedValue lays the value and its view mark in one row): the
+   mark and Hide wrap under it. Layout only. */
+.fw-inc-tab .nds-protected-value {
+  flex: 1 1 100%;
+}
+
+.fw-inc-protected {
+  min-width: 0;
+}

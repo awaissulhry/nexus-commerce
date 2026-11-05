@@ -55,8 +55,7 @@
     "worksLocked": "Bloccata come non sicura: prima un tecnico la firma sicura.",
     "worksNotFixed": "Non ancora riparata: conferma quando il tecnico ha riconsegnato la macchina.",
     "stepDone": "Già fatto, o non possibile ora.",
-    "failure": "Tocca cosa si è guastato.",
-    "incident": "La segnalazione di infortuni arriva con una versione successiva: avvisa subito il tuo caposquadra."
+    "failure": "Tocca cosa si è guastato."
   },
   "status": {
     "RUNNING": "In funzione",
@@ -87,7 +86,7 @@
     "acknowledge": "Vista",
     "onTheWay": "Sto arrivando",
     "leadConfirm": "Caposquadra: funziona",
-    "incident": "Segnala un infortunio"
+    "incident": "Segnala un incidente"
   },
   "symptom": {
     "title": "Cosa non va?",

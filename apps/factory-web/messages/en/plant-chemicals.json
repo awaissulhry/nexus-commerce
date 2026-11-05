@@ -1,0 +1,404 @@
+{
+  "access": {
+    "title": "No access to the chemical register",
+    "body": "This page needs the right to see safety (safety.view). Ask whoever manages roles in your company."
+  },
+  "common": {
+    "stillLoading": "Still loading…",
+    "retry": "Try again",
+    "close": "Close",
+    "cancel": "Cancel",
+    "back": "Back",
+    "reading": "Reading…"
+  },
+  "band": {
+    "label": "Chemicals actions",
+    "reading": "Not read yet",
+    "qr": "Print cabinet QR",
+    "add": "Add chemical",
+    "more": "More actions",
+    "export": "Export register",
+    "exportHint": "From Export ▾ in the register's toolbar: the rows you see, as CSV or Excel.",
+    "requests": "SDS requests",
+    "requestsLater": "Later: asking suppliers for a newer sheet comes in a later wave."
+  },
+  "tile": {
+    "title": "What to update",
+    "failed": "Couldn't read the counts.",
+    "active": {
+      "label": "Products in use",
+      "hint": "Active chemicals in the register"
+    },
+    "withoutSds": {
+      "label": "Products without SDS",
+      "hint": "No current safety data sheet at all"
+    },
+    "toRequest": {
+      "label": "SDS to request",
+      "hint": "No current sheet in the company's language: ask the supplier"
+    },
+    "cabinets": {
+      "label": "Cabinets",
+      "hint": "Cabinets with a QR to print"
+    }
+  },
+  "law": {
+    "register": "The employer assesses the risk of the chemical agents in use, starting from what is in the register.",
+    "sds": "Workers have access to the safety data sheets of the substances they use."
+  },
+  "register": {
+    "title": "Chemical register",
+    "label": "Chemical register",
+    "failed": "Couldn't read the chemical register.",
+    "count_one": "1 product",
+    "count_other": "{count} products",
+    "search": "Search product, supplier, place or H code",
+    "filterUse": "Use",
+    "allUses": "Every use",
+    "filterStatus": "In use or archived",
+    "status": {
+      "ACTIVE": "In use",
+      "ARCHIVED": "Archived",
+      "all": "In use and archived"
+    },
+    "cabinetChip": "Cabinet {cabinet}",
+    "clearCabinet": "Show every cabinet, not only {cabinet}",
+    "clearTile": "Show every product",
+    "wasteLater": "Waste registers come later.",
+    "noSupplier": "Supplier not named",
+    "col": {
+      "name": "Product · supplier",
+      "use": "Use",
+      "pictograms": "GHS pictograms",
+      "hazards": "H statements",
+      "precautions": "P statements",
+      "place": "Location · cabinet",
+      "maxQuantity": "Most kept",
+      "roles": "Roles that use it",
+      "sds": "SDS version · date",
+      "site": "Site",
+      "status": "Status"
+    },
+    "emptyTitle": "No chemicals yet",
+    "empty": "Add your glues and solvents first: each with its pictograms, where it is kept and its safety data sheet.",
+    "noneFiltered": "No product matches",
+    "noneFilteredHint": "Change the filters or clear them.",
+    "more": "Show more",
+    "moreHeld": "The register shows 500 products at most: narrow it with the filters."
+  },
+  "library": {
+    "title": "SDS library",
+    "label": "Safety data sheets",
+    "failed": "Couldn't read the SDS library.",
+    "count_one": "1 current sheet",
+    "count_other": "{count} current sheets",
+    "offline": "The site's tablets keep every current sheet: the cabinet QR opens them without network.",
+    "col": {
+      "chemical": "Product",
+      "version": "SDS version",
+      "revisedOn": "Revised on",
+      "language": "Language",
+      "superseded": "Superseded versions kept",
+      "file": "PDF"
+    },
+    "noneSuperseded": "None",
+    "supersededItem": "{version} of {date}",
+    "openPdf": "Open {name}, the sheet of {chemical}, in a new tab",
+    "replace": "Replace SDS",
+    "replaceNamed": "Replace the {language} sheet of {chemical}",
+    "missingLabel": "Products without a sheet",
+    "missing_one": "1 product in use has no safety data sheet:",
+    "missing_other": "{count} products in use have no safety data sheet:",
+    "addFirst": "Add SDS",
+    "addFirstNamed": "Add the safety data sheet of {chemical}",
+    "emptyTitle": "No safety data sheets yet",
+    "empty": "Each product's sheet is added from its window (Replace SDS) or with Add chemical."
+  },
+  "sds": {
+    "none": "No SDS",
+    "state": {
+      "MISSING": "No SDS",
+      "OTHER_LANGUAGE": "None in {language}",
+      "OK": "SDS on file"
+    }
+  },
+  "ghs": {
+    "none": "No pictogram",
+    "GHS01": "Exploding bomb",
+    "GHS02": "Flame",
+    "GHS03": "Flame over circle",
+    "GHS04": "Gas cylinder",
+    "GHS05": "Corrosion",
+    "GHS06": "Skull and crossbones",
+    "GHS07": "Exclamation mark",
+    "GHS08": "Health hazard",
+    "GHS09": "Environment"
+  },
+  "signal": {
+    "DANGER": "Danger",
+    "WARNING": "Warning"
+  },
+  "use": {
+    "GLUE": "Glue",
+    "SOLVENT": "Solvent",
+    "PRIMER": "Primer",
+    "FINISH": "Finish",
+    "EDGE_PAINT": "Edge paint",
+    "DYE": "Dye",
+    "CLEANER": "Cleaner",
+    "OIL": "Oil",
+    "OTHER": "Other"
+  },
+  "unit": {
+    "ML": "ml",
+    "L": "l",
+    "G": "g",
+    "KG": "kg"
+  },
+  "status": {
+    "ACTIVE": "In use",
+    "ARCHIVED": "Archived"
+  },
+  "lang": {
+    "it": "Italian",
+    "en": "English",
+    "de": "German",
+    "fr": "French",
+    "es": "Spanish",
+    "pt": "Portuguese",
+    "ro": "Romanian",
+    "pl": "Polish",
+    "ar": "Arabic",
+    "zh": "Chinese"
+  },
+  "chemical": {
+    "noun": "chemical"
+  },
+  "field": {
+    "site": "Site",
+    "sitePick": "Choose the site",
+    "name": "Product",
+    "namePlaceholder": "The trade name on the label",
+    "use": "Use",
+    "usePick": "Choose what it is used for",
+    "supplier": "Supplier",
+    "supplierParty": "A supplier of ours",
+    "supplierByName": "By name",
+    "supplierPick": "Choose the supplier",
+    "supplierName": "Supplier's name",
+    "supplierNameHint": "When it is not one of our suppliers (or leave it empty).",
+    "hazards": "Hazards",
+    "pictograms": "GHS pictograms on the label",
+    "signalWord": "Signal word",
+    "signalNone": "None",
+    "hazardStatements": "H statements",
+    "hazardHint": "As on the label or the sheet, section 2: H225 H319 EUH066.",
+    "precautionStatements": "P statements",
+    "precautionHint": "P210 P305+P351+P338.",
+    "badHazard": "\"{code}\" is not a hazard statement as CLP writes it (H225, H319, EUH066).",
+    "badPrecaution": "\"{code}\" is not a precautionary statement as CLP writes it (P210, P305+P351+P338).",
+    "place": "Where it is kept",
+    "placeHint": "The room and the shelf or cabinet: Glue cabinet, cutting room.",
+    "cabinet": "Cabinet code",
+    "cabinetHint": "The code its QR names (no spaces): CAB-CUT-1. Empty when it is not in a cabinet.",
+    "maxQuantity": "Most kept there",
+    "maxQuantityHint": "The most kept at one time (optional), with its unit.",
+    "unit": "Unit",
+    "unitNone": "None",
+    "roles": "Roles that use it",
+    "rolesSiteFirst": "Choose the site first.",
+    "noRoles": "The site has no role sheets yet: the safety officer writes them with the risk assessment.",
+    "ppe": "PPE to handle it",
+    "noPpe": "The company has no PPE items yet.",
+    "note": "Note"
+  },
+  "sheet": {
+    "dropHint": "The supplier's safety data sheet, as a PDF.",
+    "version": "SDS version",
+    "versionHint": "As the supplier wrote it (3.1).",
+    "revisedOn": "Revised on",
+    "language": "Language"
+  },
+  "add": {
+    "title": "Add chemical",
+    "atSite": "At {site}",
+    "noSite": "no site chosen: choose one in the top bar",
+    "save": "Add chemical",
+    "saveWithSheet": "Add chemical and its SDS",
+    "sheetTitle": "Safety data sheet",
+    "sheetHint": "Optional now: you can add it later with Replace SDS.",
+    "sheetRefused": "The chemical is in the register, but its sheet was not taken.",
+    "openToReplace": "Open it to add the sheet"
+  },
+  "edit": {
+    "open": "Edit",
+    "save": "Save changes"
+  },
+  "replace": {
+    "open": "Replace SDS",
+    "save": "Replace SDS",
+    "hint": "The newer sheet becomes the current one of its language; the one before is kept, superseded.",
+    "first": "This will be the first sheet in this language.",
+    "supersedes": "Version {version} in {language} will be kept, superseded.",
+    "floor": "The site's tablets take the new sheet the next time they are online."
+  },
+  "archive": {
+    "open": "Archive",
+    "save": "Archive",
+    "reason": "Why it is no longer in use",
+    "kept": "Archived products and their sheets are kept; they leave the register in use, the tiles and the cabinet's list.",
+    "bulkTitle_one": "Archive 1 chemical",
+    "bulkTitle_other": "Archive {count} chemicals"
+  },
+  "restore": {
+    "save": "Put back in use"
+  },
+  "bulk": {
+    "archive_one": "Archive 1",
+    "archive_other": "Archive {count}",
+    "archivedResult_one": "1 chemical archived.",
+    "archivedResult_other": "{count} chemicals archived.",
+    "refusedRow": "{label}: {why}"
+  },
+  "window": {
+    "supplier": "Supplier",
+    "pictograms": "GHS pictograms",
+    "hazards": "H statements",
+    "precautions": "P statements",
+    "place": "Where it is kept",
+    "maxQuantity": "Most kept",
+    "roles": "Roles that use it",
+    "ppe": "PPE needed",
+    "note": "Note",
+    "noRoles": "No role named",
+    "noPpe": "No PPE named",
+    "sheets": "Safety data sheets",
+    "noSheets": "No sheet yet: add it with Replace SDS.",
+    "current": "Version {version} · {language} · revised {date} · current",
+    "superseded": "Version {version} · {language} · revised {date} · superseded on {when} by {by}",
+    "someone": "someone",
+    "show": "Show",
+    "showNamed": "Show {name} here",
+    "tab": "New tab",
+    "tabNamed": "Open {name} in a new tab",
+    "noPdf": "No PDF to show yet.",
+    "pickSheet": "Choose a sheet to show it here.",
+    "pdfLoading": "Reading the PDF…",
+    "pdfFailed": "Couldn't read the PDF."
+  },
+  "qr": {
+    "title": "Print cabinet QR",
+    "cabinet": "Cabinet",
+    "failed": "Couldn't read the cabinets.",
+    "emptyTitle": "No cabinet yet",
+    "empty": "A cabinet is the code a chemical names (Cabinet code): add it to a chemical first.",
+    "products_one": "1 product in this cabinet.",
+    "products_other": "{count} products in this cabinet.",
+    "withoutSheet_one": "1 of them has no safety data sheet yet.",
+    "withoutSheet_other": "{count} of them have no safety data sheet yet.",
+    "howItWorks": "A tablet of the site that scans this QR (Scan anything) opens the cabinet's products and their current sheets from what it keeps, also without network.",
+    "print": "Print",
+    "labelName": "Cabinet label {cabinet}",
+    "labelCabinet": "Cabinet",
+    "labelSite": "Site",
+    "labelPlace": "Place",
+    "labelScan": "Scan for the safety data sheets",
+    "codeLabel": "QR code of cabinet {cabinet}"
+  },
+  "sdsTab": {
+    "title": "Safety data sheet: {name}",
+    "reading": "Reading the sheet…",
+    "superseded": "A newer sheet replaced this one: follow the current one.",
+    "failed": "Couldn't open this sheet."
+  },
+  "cabinetTab": {
+    "title": "Cabinet {cabinet}",
+    "failed": "Couldn't read this cabinet.",
+    "scan": "Scan the QR with a tablet of the site (Scan anything) to read each product's safety data sheet, also without network.",
+    "print": "Print",
+    "most": "Most kept: {quantity}",
+    "ppe": "PPE: {ppe}",
+    "sds": "SDS: {sheets}"
+  },
+  "print": {
+    "meta": "Printed {at} by {person}"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "add": "Add chemical",
+    "moves": "Previous / next chemical in its window",
+    "close": "Close the window"
+  },
+  "held": {
+    "company": "Open a company first (the top bar): a chemical belongs to one of its sites.",
+    "manage": "The chemical register is kept by the safety officer (safety.chemicals.manage).",
+    "busy": "Saving…",
+    "nothingChanged": "Nothing changed.",
+    "archived": "This chemical is archived: put it back in use first.",
+    "archivedRow": "Archived already.",
+    "noneActive": "Choose products in use first.",
+    "noCabinet": "Choose a cabinet first.",
+    "shown": "On show now.",
+    "site": "Choose the site.",
+    "siteId": "Choose a site of the company.",
+    "companyId": "Open a company first.",
+    "use": "Choose what it is used for.",
+    "supplierParty": "Choose the supplier, or name it.",
+    "name": "Name the product (at most 200 characters).",
+    "supplierName": "Name the supplier as one of ours or by name, one of the two (at most 200 characters).",
+    "ghsPictograms": "Pick each pictogram once.",
+    "hazardStatements": "Write each H statement once, as CLP writes it (H225, EUH066).",
+    "precautionStatements": "Write each P statement once, as CLP writes it (P210, P305+P351+P338).",
+    "signalWord": "A signal word comes with its hazards: add the pictograms or the H statements.",
+    "storagePlace": "Say where it is kept (at most 200 characters).",
+    "cabinetCode": "A cabinet's code has no spaces (at most 40 characters).",
+    "maxQuantity": "The most kept is a number above 0 (at most four decimals), with its unit.",
+    "maxQuantityUnit": "The most kept comes with its unit: both, or neither.",
+    "roleSheetIds": "Name each role once.",
+    "ppeItemIds": "Name each PPE item once.",
+    "note": "A note has at most 1000 characters.",
+    "file": "Choose the sheet's PDF.",
+    "pdf": "A safety data sheet is a PDF.",
+    "fileId": "Upload the sheet's PDF first.",
+    "contentType": "A safety data sheet is a PDF.",
+    "versionLabel": "Type the sheet's version (at most 50 characters).",
+    "revisedOn": "Choose the sheet's revision day.",
+    "revisedFuture": "The revision day is today at the latest.",
+    "language": "Choose the sheet's language.",
+    "reason": "Say why it is no longer in use."
+  },
+  "refusal": {
+    "ARCHIVED": "This chemical is archived: put it back in use first.",
+    "NOT_ARCHIVED": "This chemical is in use already.",
+    "SITE_OTHER_COMPANY": "The site is not one of the company's sites.",
+    "SUPPLIER_OTHER_COMPANY": "The supplier is not an active supplier of this company or the group.",
+    "ROLE_OTHER_SITE": "The roles must be role sheets of the chemical's own site.",
+    "PPE_OTHER_COMPANY": "The PPE items must be of the company's own catalogue.",
+    "FILE_NOT_READY": "The PDF is not ready to be read at the cabinet yet: upload it again.",
+    "FILE_NOT_PDF": "A safety data sheet is a PDF.",
+    "OLDER_THAN_CURRENT": "This sheet was revised before the current one (version {version}): a replacement is the newer sheet.",
+    "SAME_VERSION": "Version {version} in this language is the current sheet already."
+  },
+  "problem": {
+    "read": "The server did not answer as expected. Nothing is lost: try again.",
+    "unavailable": "The server is not available right now. Try again shortly.",
+    "noAnswer": "No answer from the server: check the connection and try again.",
+    "invalid": "Something in the form is not valid.",
+    "signedOut": "You were signed out. Sign in again.",
+    "forbidden": "You don't have the right to do this here.",
+    "notFound": "Not found: it may have been archived, or it is not of your company.",
+    "conflict": "Someone changed this meanwhile: it was read again; check and try again.",
+    "rateLimited": "Too many tries in a short time: wait a moment.",
+    "internal": "Something went wrong on our side. Try again."
+  },
+  "notice": {
+    "added": "{name} is in the register."
+  },
+  "saved": {
+    "edited": "Changes saved.",
+    "replaced": "Version {version} is now the current sheet; {old} is kept, superseded.",
+    "firstSheet": "Version {version} is now the current sheet.",
+    "archived": "Archived: it left the register in use; its sheets are kept.",
+    "restored": "Back in use."
+  }
+}

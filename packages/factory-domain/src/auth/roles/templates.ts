@@ -585,6 +585,14 @@ const PPE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
   hr: ['safety.ppe.issue'],
   floor_supervisor: ['safety.ppe.issue'],
 })
+/**
+ * B-W2b-143 (the chemical register and the safety data sheets; QHS-277, QHS-278; design plant.chemicals): the safety officer
+ * keeps the register and replaces the data sheets; every role with safety.view reads them (no person, no money), and a
+ * tablet of the site reads its own site's with floor.work (the cabinet QR). Office only; owner from every().
+ */
+const CHEMICALS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.chemicals.manage'],
+})
 // B-W2b-135: health surveillance (GDPR art. 9; D.Lgs. 81/2008 art. 41) — HR and the occupational doctor see the due list and the
 // judgements (each view recorded) and keep them; the safety officer and the doctor keep the plans per role (no person in a plan);
 // HR reads who looked. Office only; owner from every(); read-only none (every one is a write risk on purpose).
@@ -678,6 +686,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (TRAINING_ADDS[key] ?? []) : []),
   // B-W2b-134
   ...(audience === 'office' ? (PPE_ADDS[key] ?? []) : []),
+  // B-W2b-143
+  ...(audience === 'office' ? (CHEMICALS_ADDS[key] ?? []) : []),
   // B-W2b-135
   ...(audience === 'office' ? (HEALTH_ADDS[key] ?? []) : [])]
 /**

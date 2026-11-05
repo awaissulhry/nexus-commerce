@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify'
 import type { FactoryDatabase } from '@nexus/factory-db'
 import { NotFoundError, UnauthenticatedError } from '@nexus/factory-domain/core/errors'
-import { isLinkLive, linkGrants, type LinkPurpose } from '@nexus/factory-domain/links/purposes'
+import { isLinkLive, isLinkPurpose, linkGrants, type LinkPurpose } from '@nexus/factory-domain/links/purposes'
 import { matchesLinkHash, parseLinkToken } from '@nexus/factory-domain/links/token'
 import type { Authenticator, SessionContext } from '../../core/context'
 import type { Clock } from '../../core/time'
@@ -84,6 +84,9 @@ export function linkAuthenticator(core: { readonly database: FactoryDatabase; re
     const scope = { audience: 'partner', tenantId: token.tenantId, actorId: token.linkId, partyId: token.partyId } as const
     const link = await core.database.withScope(scope, (client) => client.oneOffLink.findUnique({ where: { id: token.linkId }, select: LINK_SELECT }))
     if (!link || !matchesLinkHash(token, link.tokenHash) || link.partyId !== token.partyId || !isLinkLive(link, now)) throw linkUnavailable()
+    // A purpose this API does not serve yet (W2b-3's, in the schema since B-W2b-154; factory-domain gains them with
+    // B-W2b-163) opens nothing: the same answer as any dead link.
+    if (!isLinkPurpose(link.purpose)) throw linkUnavailable()
     const tenant = await core.database.withScope({ audience: 'platform' }, (client) =>
       client.tenant.findUnique({ where: { id: token.tenantId }, select: { status: true } }),
     )
