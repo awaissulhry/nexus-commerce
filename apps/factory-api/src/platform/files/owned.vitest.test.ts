@@ -3,7 +3,7 @@ import { assertGenericPath, MODULE_OWNED_FILES, MODULE_READ_FILES, ownerOf, read
 
 describe('record types whose files only their module writes (owned.ts)', () => {
   it('lists the compliance document, the parcel, the privacy notice and DPIA and the type-change review (every kind), the certificate, the lot and the opening-stock reports (CERTIFICATE) and the DDT (FISCAL_ARCHIVE)', () => {
-    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['AttendanceMonthClose', 'Certificate', /* B-W2b-161 */ 'CompanyBranding', 'ComplianceDocument', 'Ddt', /* B-W2b-125 */ 'InailFiling', 'Incident', 'Lot', 'OpeningStock', 'Parcel', 'PayrollExport', 'PrivacyDpia', 'PrivacyNotice', 'SupplierClaim', 'TypeChangeReview', 'WorkerStatement'])
+    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['AttendanceMonthClose', 'Certificate', /* B-W2b-161 */ 'CompanyBranding', 'ComplianceDocument', 'Ddt', /* B-W2b-135 */ 'FitnessJudgement', /* B-W2b-135 */ 'HealthVisit', /* B-W2b-125 */ 'InailFiling', 'Incident', 'Lot', 'OpeningStock', 'Parcel', 'PayrollExport', 'PrivacyDpia', 'PrivacyNotice', 'SupplierClaim', 'TypeChangeReview', 'WorkerStatement'])
     expect(ownerOf('OpeningStock', 'CERTIFICATE')).not.toBeNull()
     expect(ownerOf('OpeningStock', 'ATTACHMENT')).toBeNull()
     expect(ownerOf('PrivacyNotice', 'DOCUMENT')).not.toBeNull()
@@ -31,7 +31,7 @@ describe('record types whose files only their module writes (owned.ts)', () => {
   })
 
   it('reads a closed month\'s LUL calendar (B-W2b-48), a payroll file (B-W2b-54) and a worker statement (B-W2b-62, B-W2b-68) only through their modules, no other record type', () => {
-    expect(Object.keys(MODULE_READ_FILES)).toEqual(['AttendanceMonthClose', 'PayrollExport', 'WorkerStatement', /* B-W2b-125 */ 'Incident', 'InailFiling'])
+    expect(Object.keys(MODULE_READ_FILES)).toEqual(['AttendanceMonthClose', 'PayrollExport', 'WorkerStatement', /* B-W2b-125 */ 'Incident', 'InailFiling', /* B-W2b-135 */ 'FitnessJudgement', 'HealthVisit'])
     expect(readsThroughModule('AttendanceMonthClose')).toBe(true)
     expect(readsThroughModule('PayrollExport')).toBe(true)
     // B-W2b-68: one person's pay.
@@ -40,6 +40,9 @@ describe('record types whose files only their module writes (owned.ts)', () => {
     expect(readsThroughModule('Incident')).toBe(true)
     expect(readsThroughModule('InailFiling')).toBe(true)
     expect(ownerOf('Incident', 'PHOTO')).not.toBeNull()
+    // B-W2b-135: a judgement's copy (protected, each opening recorded); a visit keeps no file.
+    expect(readsThroughModule('FitnessJudgement')).toBe(true)
+    expect(ownerOf('HealthVisit', 'ATTACHMENT')).not.toBeNull()
     expect(readsThroughModule('Quote')).toBe(false)
     expect(readsThroughModule('constructor')).toBe(false)
   })

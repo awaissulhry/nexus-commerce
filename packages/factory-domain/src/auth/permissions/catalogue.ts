@@ -186,6 +186,8 @@ import { SAFETY_TRAINING_DEFINITIONS, SAFETY_TRAINING_PERMISSIONS } from '../../
 import { SAFETY_PPE_DEFINITIONS, SAFETY_PPE_PERMISSIONS } from '../../safety/ppe/permissions'
 // B-W2b-143: the chemical register and the safety data sheets (safety.chemicals.manage).
 import { SAFETY_CHEMICALS_DEFINITIONS, SAFETY_CHEMICALS_PERMISSIONS } from '../../safety/chemicals/permissions'
+// B-W2b-135: health surveillance (safety.health.view | manage | plans | views: protected, every view recorded).
+import { SAFETY_HEALTH_DEFINITIONS, SAFETY_HEALTH_PERMISSIONS } from '../../safety/health/permissions'
 // B-W2b-161: company branding (documents.branding.manage: logo, accent, sender name, portal label; step-up).
 import { BRANDING_DEFINITIONS, BRANDING_PERMISSIONS } from '../../branding/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
@@ -651,6 +653,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SAFETY_PPE_DEFINITIONS,
   // B-W2b-143: the chemical register and the safety data sheets.
   SAFETY_CHEMICALS_DEFINITIONS,
+  // B-W2b-135: health surveillance.
+  SAFETY_HEALTH_DEFINITIONS,
   // B-W2b-161: company branding.
   BRANDING_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -833,6 +837,8 @@ for (const name of SAFETY_INCIDENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecl
 for (const name of QUALITY_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-128: role sheets.
 for (const name of SAFETY_ROLESHEETS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-135: health surveillance.
+for (const name of SAFETY_HEALTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-132: the leather and cut plan.
 for (const name of PLANNING_LEATHER_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-133: the course catalogue and training requirements.
