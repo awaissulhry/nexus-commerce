@@ -1,0 +1,49 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/links-depth.prisma (rules: src/ownership.ts; roles: src/roles.ts). W2b schema wave 19/22 (B-W2b-154). The office (factory_runtime) makes links with their files, shares records and asks approvals through apps/factory-api, always with command(); the API keeps staff to the companies and parties their grants reach. Link and portal sessions run as factory_partner_runtime behind their party's wall (scopedBy party): they read their own party's rows, never the office people who made, revoked or withdrew them (hiddenColumns). Partner writes, each held to its columns by the …_links_depth_w2b_guards triggers: a link session saves, resumes and drops its own draft; the invited person switches their e-mail on or off; the party answers its own OPEN approval requests. A draft is sealed (AES-256-GCM) and the office never reads it: it only purges it. Nothing else is ever deleted (shares are revoked, requests withdrawn or expired, a link's files stay with its evidence). No floor grant: none of this is floor work. No money column, and no link, file set, share or approval names a record that holds pay figures (Owner 11-02; the guards' factory_link_pay_record). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "LinkFile": {
+      "about": "The office adds a DOCUMENT_VIEW or SECURE_FILE link's files, in order, while the link is unused and not revoked; nobody changes or removes one (the guard). The link session lists its own link's files; it reads the files themselves through the API (in the tenant's system scope when they are office-only, as B-W2b-54's payroll file).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"] }
+      }
+    },
+    "LinkDraft": {
+      "about": "A link session saves (insert, update), resumes (select) and drops (delete, when the form is sent) its own link's draft, sealed, while the link opens (the guard). The office sees that a draft exists and when it is purged, never its data (dataEnc hidden), and the purge job deletes drafts past purgeAfter.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "delete"], "hiddenColumns": ["dataEnc"] },
+        "factory_partner_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["party"] }
+      }
+    },
+    "RecordShare": {
+      "about": "The office shares a record with an outside party (who, what they may do, until when, its RECORD_INVITE link), changes the permissions and the end date while it is live, and revokes it. The invited party reads its own shares and switches the e-mail of new messages (notifyByEmail, the only column the guard lets it change); never who invited or revoked.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": {
+          "privileges": ["select", "update"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["createdById", "revokedById"]
+        }
+      }
+    },
+    "ApprovalRequest": {
+      "about": "The office asks an approval of a party, corrects the question, due time and contact while it is OPEN, withdraws it, and marks it EXPIRED past its due time. The party reads its own requests and answers an OPEN one once (approve, approve with changes, refuse; typed name, its markup file, the portal user or the APPROVAL link, the evidence): the guard refuses any other partner write. Never who asked or withdrew.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": {
+          "privileges": ["select", "update"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["createdById", "withdrawnById"]
+        }
+      }
+    }
+  }
+}
