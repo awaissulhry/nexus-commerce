@@ -134,6 +134,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-142 Plant › Preventive & statutory checks (SCR-266): a check plan opens in its Plan window, a check result in its own.
   MachineCheckPlan: '/plant/preventive?plan=[id]',
   MachineCheckResult: '/plant/preventive?result=[id]',
+  // B-W2b-143 Plant › Chemicals & waste (SCR-213): a chemical opens in its window.
+  Chemical: '/plant/chemicals?open=[id]',
 })
 
 /**
@@ -255,6 +257,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-142: the plans (`?due=`, `?ended=`) and the check register (`?missing=`, `?outcome=`) of SCR-266.
   '/plant/checks/plans': '/plant/preventive',
   '/plant/checks/results': '/plant/preventive',
+  // B-W2b-143: the chemical register (SCR-213) reads `?tile=`, `?status=`, `?use=`, `?cabinet=`, `?q=`.
+  '/safety/chemicals': '/plant/chemicals',
 })
 
 export interface RecordRef {

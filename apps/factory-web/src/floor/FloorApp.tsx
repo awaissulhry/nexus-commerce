@@ -23,6 +23,9 @@ import { DeviceReporter, readBattery, readNetwork, sendDeviceState } from './que
 import { AppUpdater, queuedCount, updateStep, VERSION_CHECK_MS, type UpdateSnapshot, type UpdateStep } from './queue/update'
 import { shellQueueOf, type ShellQueue } from './shell/banner'
 import { keptSender } from './tasks/clock/api'
+import { tabletKeeper } from './tasks/sds/keep'
+import { refreshKept } from './tasks/sds/refresh'
+import { warmPdfReader } from './tasks/sds/warm-pdf'
 import { browserKeptStorage, KeptClocks, type KeptSnapshot } from './tasks/clock/kept'
 import type { SignedOutWhy } from './sign-in/view/SignInView'
 import { DEFAULT_TIME_ZONE } from '../lib/i18n/format'
@@ -401,6 +404,17 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
     const timer = window.setInterval(hold, PREFETCH_EVERY_MS)
     return () => window.clearInterval(timer)
   }, [nextRouter, online, holdsPages])
+  // B-W2b-143: the safety data sheets the cabinet QR opens are kept on the tablet while online with someone signed in (the API
+  // asks floor.work), on the same beat, so a tablet that never opened the cabinet page still reads them with the network gone.
+  const keepsSheets = holdsPages && me !== null && me.permissions.includes('floor.work')
+  useEffect(() => {
+    if (!online || !keepsSheets) return
+    // pdf.js too, once the pack holds a sheet: a sheet the tablet keeps then opens offline even when the cabinet page never opened online.
+    const keep = () => void refreshKept(api, tabletKeeper()).then((kept) => (kept.pack.chemicals.some((chemical) => chemical.current.length > 0) ? warmPdfReader() : undefined)).catch(() => undefined)
+    keep()
+    const timer = window.setInterval(keep, PREFETCH_EVERY_MS)
+    return () => window.clearInterval(timer)
+  }, [api, online, keepsSheets])
   useEffect(() => router.arrived(), [router, pathname])
 
   // The screen's language: the operator's (or the one they chose for this session), else the one picked here, else the tenant's.
