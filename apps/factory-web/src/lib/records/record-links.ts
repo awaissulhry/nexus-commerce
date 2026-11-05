@@ -136,6 +136,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   MachineCheckResult: '/plant/preventive?result=[id]',
   // B-W2b-143 Plant › Chemicals & waste (SCR-213): a chemical opens in its window.
   Chemical: '/plant/chemicals?open=[id]',
+  // B-W2b-149 Plant › Incidents (SCR-210): an incident opens its record page.
+  Incident: '/plant/incidents/[id]',
   // B-W2b-141 Plant settings (SCR-241): a routing rule and a statutory check type open in their dialog.
   RequestRoutingRule: '/plant/settings?rule=[id]',
   MachineCheckType: '/plant/settings?type=[id]',
@@ -262,6 +264,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/plant/checks/results': '/plant/preventive',
   // B-W2b-143: the chemical register (SCR-213) reads `?tile=`, `?status=`, `?use=`, `?cabinet=`, `?q=`.
   '/safety/chemicals': '/plant/chemicals',
+  // B-W2b-149: the incidents (SCR-210) read `?rows=`, `?status=`, `?from=`, `?to=`, `?q=`.
+  '/safety/incidents': '/plant/incidents',
   // B-W2b-141: the routing rules and the statutory check types are sections of Plant settings (SCR-241).
   '/plant/settings/routing': '/plant/settings',
   '/plant/checks/types': '/plant/settings',

@@ -279,6 +279,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   Move N), the check register (`plant.preventive.register`, its export source, Print N / Export N), New plan, Record a check result (the job and
   the lock in ONE call, then the report files), the Plan and result windows, Move a check; new tabs `register/` (SCR-266-register-print) and
   `report/` (SCR-266-report: the PDF, Keep in the register, the DocumentSeal). `RECORD_PAGES.MachineCheckPlan|MachineCheckResult`.
+- `src/areas/plant/incidents/` — Plant › Health & safety › Incidents (B-W2b-149 on B-W2b-125's API; catalogue `plant-incidents`,
+  CSS prefix `fw-inc-`): SCR-210 `/plant/incidents?rows=INJURY|NEAR_MISS|HAZARD|INAIL_DUE&status=&from=&to=&q=&new=1` (the band's
+  live chip = `counts.next`, the critical Banner + Countdown = `counts.deadline`, tiles = filters, the ANONYMISED list frame
+  `plant.incidents` — its export source reads the list, no person; "Show people" = one recorded `POST /safety/incidents/people`
+  in the container's state only, after a PrivacyNote; Mark seen N; Report an incident `c` with the DS PhotoCapture), the record
+  SCR-210-record `/plant/incidents/<id>?tab=report|actions|authority` (marked seen once for a manage holder; People and the
+  filings behind the recorded `…/open` reads — ProtectedValue; Make a job / Add to improvement plan in one step; Record INAIL
+  filing `f`, Close held while an action is open or a filing waits) and SCR-210-print `/plant/incidents/print` (a window page,
+  anonymised). `RECORD_PAGES.Incident`, search type `Incident`. The record frame is the plant's (`_shared/parts` RecordFrame).
   B-W2b-141 (Plant settings' W2b sections, SCR-241 + SCR-241-audit; `areas/plant/settings/` `depth-api.ts`, `depth-model.ts`
   (pure: rule drafts and bodies, the worked example in words, order, H1-held lock choices, check type rules, refusals),
   `use-depth.ts` (the container hook beside the W2a one), `view/{RoutingCard,LockCard,CheckTypesCard,IncidentsCard}.tsx`,
