@@ -1,0 +1,30 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/files-depth.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) writes every row through apps/factory-api's platform/files, always through command(). A portal or link session never writes here: as for files, the API checks the session first and then writes as the tenant's system caller (the upload's parts, a partner's markup). The partner role reads only the markups its own party made (partyId, its key). The floor reads none of it (its photos and voice notes are small single uploads, its markup is drawn before the upload). Nobody deletes: an upload session is kept after it ends, a markup is append-only (the …_files_depth_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login), a rule no longer wanted is switched off. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "FileUploadSession": {
+      "about": "A large upload in parts behind one announced file: the office or the system caller (for a portal or link upload, after the API checked the session and the file's party) opens it, records each part the store took, completes or aborts it; the sweep gives an expired one up. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "FileMarkup": {
+      "about": "Shapes and a note on a picture or a PDF page, append-only. The office writes them (its own, and a partner's or a link's through the system caller after the API checked the session); a portal or link session reads the markups its own party made.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"] }
+      }
+    },
+    "RequiredDocumentRule": {
+      "about": "The documents a record type must have before a status move (Admin › Documents › Required documents): the office keeps the list and switches a rule off instead of deleting it; the modules read it in their status commands. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}
