@@ -575,6 +575,17 @@ const TRAINING_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.fr
   safety_officer: ['safety.training.manage'],
 })
 /**
+ * B-W2b-134 (PPE for workers, QHS-259, QHS-260, QHS-261; design plant.ppe): the safety officer keeps the PPE catalogue and, with
+ * HR, records paper receipts and voids wrong issues; the floor supervisor (the preposto who hands PPE out on the floor) records
+ * paper receipts too. Reading is safety.view; on the floor the person receiving signs with badge and PIN under floor.work (no
+ * floor template changes). Office only; owner from every(); read_only gets none (both are writes).
+ */
+const PPE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.ppe.manage', 'safety.ppe.issue'],
+  hr: ['safety.ppe.issue'],
+  floor_supervisor: ['safety.ppe.issue'],
+})
+/**
  * B-W2b-139 (training records, due lists, the instruction register, attendance signed on the floor; QHS-243, QHS-244, QHS-246,
  * QHS-247, QHS-248; design people.skills "Record training", "Instruction register"): the safety officer and HR keep the
  * training records (sessions, paper sheets, countersignatures in the office, records typed, corrections); the instruction
@@ -671,6 +682,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (LEATHER_PLAN_ADDS[key] ?? []) : []),
   // B-W2b-133
   ...(audience === 'office' ? (TRAINING_ADDS[key] ?? []) : []),
+  // B-W2b-134
+  ...(audience === 'office' ? (PPE_ADDS[key] ?? []) : []),
   // B-W2b-139
   ...(audience === 'office' ? (RECORDS_ADDS[key] ?? []) : [])]
 /**
