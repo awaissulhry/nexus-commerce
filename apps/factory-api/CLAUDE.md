@@ -8,8 +8,8 @@ and the idempotency receipt; the outbox (events → BullMQ → handlers and live
 one-off links (`src/platform/links/`), the integration platform (gateway, sealed secrets, inbound ledger), files on
 R2 (`src/platform/files/`), record threads with the record timeline (`src/platform/threads/`), imports with a dry
 run (`src/platform/imports/`), documents and printing (`src/platform/{documents,print}/`), email out through SES
-(`src/platform/email-out/`) and email in with "mail to sort" (`src/platform/email-in/`), below. Portal sign-in, the
-modules and the other adapters come in later steps.
+(`src/platform/email-out/`) and email in with "mail to sort" (`src/platform/email-in/`), portal sign-in
+(`src/platform/auth/portal/`) and the abuse guard of public routes (`src/platform/abuse/`), below.
 Modules: `modules/compliance/certificates` (certificate register and gate `certificateGateFor`; cron `compliance.certificateExpiry`; the notified body's PDF only through `POST /compliance/certificates/:certificateId/pdf` + `…/pdf/:fileId/complete`, pdf.ts).
 `modules/compliance/{renewals,type-changes}` (B-W2a-66; QHS-105, PRD-283, PRD-285): the Renewals tab `GET /compliance/certificates/:id/renewals` (the CERTIFICATE_EXPIRING rules as the 180 / 90 / 30-day stages with their timers and alerts, the 12-to-6-month window, the renewal = audit rows `compliance.renewals.start|applied|link` of the Certificate) and `POST …/renewals/start` (platform/tasks createTask, then a command on the certificate's version), `…/applied`, `…/successor` (Certificate.successorId once, a VALID successor of the same holder; under the CERTIFICATE_EXPIRING kind lock: its timers cancelled, its alerts cleared; the evaluator leaves renewed certificates out); `stages.ts` clustered cron `compliance.renewalStages` (hourly) makes the 180- and 90-day rules once per tenant (audit marker); type changes: `detect.ts openTypeChangeReviewsInCommand` = THE hook of `product/bom` releaseRevision (the approved base: the previous RELEASED revision, or its holding review's base), `/compliance/type-changes…` (list, one, notify, not-needed, answer with its PDF through `…/answer-file` only: MODULE_OWNED_FILES TypeChangeReview), `GET /compliance/type-changes/styles/:styleId` (the style tab, a draft compared live), `reviews.ts classLabelHoldFor` = the garment label's hold (compliance/labels preview.ts readCell). compliance.certificates.view | manage.
 `modules/inventory/{locations,ledger,stock}`: every stock move goes through `postMoves(tools, drafts, { key })` (ledger/post-moves.ts) inside the caller's command (locks, 409 before below zero, values office/system moves; worker handler `inventory.valueFloorMoves` values floor moves); locations import `inventory.locations`. The warehouse screens' reads (stock/reads-contract.ts, office, inventory.stock.view, read only): `GET /inventory/hides[/:id]` (every hide with its stock, place and `left`; one hide with its cut log, the worker only where the site names workers), `GET /inventory/lots[/:id]` (every lot with stock, documents, work orders; one lot's stock per place and trace: supplier, PO line, receipt, DDT ← → work orders, shipments, customers), `GET /inventory/ledger[/counts|/:id]` (the Movements grid: names, document, both clocks, posted by (a floor move by its device; the worker only in `/:id` where the site names workers), value by the cost grain, `closing` for the running balance), `GET /inventory/stock/explain` (a figure summed by reason; adds up or the gap).
@@ -137,7 +137,7 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   made in `src/index.ts` and passed to `buildApp` as `officeAuth`: its `authenticate` reads a one-off link's token
   (`x-factory-link`, platform/links), else the floor session cookie (the floor authenticator, below; no office
   fallback), else the office cookie (the default authenticator); the auth and link routes read it with
-  `officeAuthOf(app)` (503 without it). Portal sessions are not read yet (401).
+  `officeAuthOf(app)` (503 without it). Partner routes read the portal cookie first (Portal sign-in, below).
 - Identity is per tenant: `User` (email unique in the tenant), `Session`, `Invitation`, `PasswordReset` (auth.prisma),
   all behind the tenant wall. The tenant is known before any lookup: sign-in names its slug (`factory_platform` reads
   only `Tenant`), cookies and links carry `<tenantId>.<userId>.<secret>`; only SHA-256 of a token is stored.
@@ -257,6 +257,47 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   its uses, revocation and note.
 - PostgreSQL tests: `links.pg.vitest.test.ts` (a made-up module with in-memory records registers sources and link
   routes), `guards.pg.vitest.test.ts`.
+
+## Portal sign-in (`src/platform/auth/portal/`, B-W2b-159; PLT-050, PLT-066; Owner answer C3: e-mail codes only)
+- Public `POST /portal/signin/start` {tenant, company?, email} answers `sent` at once for any address; the work runs
+  after the answer (`auth.afterAnswer`): a PARTNER person (ACTIVE, SUSPENDED, or INVITED with an open PARTNER invitation)
+  whose party is tenant-wide or of that company gets ONE mail (`mail.ts`, template `auth.portal_sign_in`, sent in-process
+  like the office's auth mail; no body stored) with a 6-digit code AND a link `<web>/p/signin/continue#token=pl1.…`;
+  one new code a minute per address. `POST /portal/signin/code` {tenant, company?, email, code}; `POST
+  /portal/signin/link/preview` {token} reads the link WITHOUT using it (scanner-safe); `POST /portal/signin/link` {token}
+  (Continue, needs the CSRF double submit) uses it. `POST /portal/sign-out`. Every unsafe call passes the office CSRF.
+- Codes (factory-domain `auth/portal/codes`): 15 minutes, 5 tries, used once; stored as `pc1.` + HMAC-SHA-256 over the
+  purpose, tenant, person and what it is bound to (SIGN_IN: the company; STEP_UP: the session) with a key derived from
+  the cookie secret — the binding lives in the hash, PortalSignInCode has no company or session column. `issueCode`
+  revokes the person's live code of the purpose first (the one-live partial index). Checked under the row lock in ONE
+  command; a wrong code counts a try. An address without an account or a code answers the same words from the abuse
+  guard's own count (`tries`, reset with each new code), after the same answer floor (`service.ts`, 400 ms).
+- After a right code only: refused in words (`access/<PROBLEM>`, 403) when the person is paused, the access ended, the
+  invitation ended, the portal is off (PortalSettings.portalOn) or the company has no PORTAL_TERMS in force
+  (GATE-PRIVACY; `terms.ts requirePortalTerms` is the invitation command's check, B-W2b-162). Else ONE command opens a
+  PARTNER Session (30 min idle slid once a minute, 12 h; Session.companyId = the portal's company) and, for an invited
+  person, accepts the invitation (ACTIVE, its end of access, the partner roles it names that exist).
+- `authenticator.ts`: cookie `__Host-factory_portal` = `ps1.<tenant>.<party>.<user>.<secret>`; the Session is read by its
+  hash in THAT party's partner scope, the person, party, portal switch and terms in the office scope, on every request;
+  grants = the person's live PARTNER roles over the session's company and party, price at most, NONE until the first
+  visit acknowledged the terms in force and none for an office preview (read-only). `withPortalSessions` (chained in
+  `sessions/office-auth.ts` after links): a partner-only route reads the portal cookie or nothing; a route shared with
+  office or floor (files, threads) reads it only when it is the request's one session cookie. `portalSessionOf(request)`.
+- `GET /portal/me`, `POST /portal/sessions/refresh`, `GET /portal/terms`, `POST /portal/first-visit` {displayName?,
+  locale?, noticeId, noticeLocale, sha256} (PartnerNoticeAck once per version), `POST /portal/step-up/start` + `POST
+  /portal/step-up` {code}: a STEP_UP code bound to the session; sensitive partner routes call
+  `requirePortalStepUp(app, request)` (403 issue `stepUp` unless proved in the last 5 minutes).
+- Scheduler cron `portal.purgeCodes` (`purge.ts`, minute 41 hourly): codes expired more than a day ago are deleted.
+- Office paths answer a partner address in words: an office invitation 409, a password reset request sends nothing,
+  confirm and "require a reset" 409 (a partner person has no password).
+- The abuse guard (`src/platform/abuse/`, factory-domain `abuse/{policies,pow}`): a public route calls
+  `abuseGuardOf(app).check(request, reply, '<policy>', { subject, proof })` first: per-subject and per-network (IPv6 /64)
+  windows → 429 "Wait N minutes before asking again." (issue `retryAfter`, Retry-After); after suspicious traffic (hits or
+  `failed()` wrong answers) 429 issue `challenge` until the body carries `proof` {challenge, nonce} from public `GET
+  /abuse/challenge?policy=` (self-hosted SHA-256 proof of work, HMAC-signed for the network, 5 minutes, used once). Counters
+  in Redis under `<prefix>:<env>:abuse:` (keys are HMACs), this process's memory while Redis is down; tests
+  `useAbuseGuard(createAbuseGuard({ store: memoryAbuseStore() … }))`. Policies `links.renew` and `public.lookup` are
+  declared for B-W2b-163/166/170. PG tests: `portal.pg.vitest.test.ts` (helpers in `portal/testing/portal.ts`).
 
 ## Integrations (`src/platform/{gateway,secrets,inbound}/`, plan A1 §4, §5.4)
 - `gateway/`: EVERY call to an outside service is `processGateway().call(gatewayAccount(caller, accountId),
