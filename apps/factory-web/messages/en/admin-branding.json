@@ -86,7 +86,7 @@
       "mailSignature": "Under the message",
       "mailSignatureValue": "Your name · {sender}",
       "documents": "Documents",
-      "documentsLogo": "Quotes, purchase orders, DDTs and invoice copies print the logo above the company's name.",
+      "documentsLogo": "Quotes, purchase orders, DDTs, packing lists, invoice copies and the other documents Nexus prints carry the logo above the company's name.",
       "documentsName": "Documents print {company} without a logo.",
       "documentsSaved": "Previews of a document show the saved branding."
     },

@@ -44,6 +44,7 @@ export function DocumentsPage() {
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
   const can = { manage: held.has('numbering.manage'), documents: held.has('documents.view') }
+  const mayListCompanies = held.has('companies.view')
   const asked = params?.get('view')
   // B-W2b-161: Branding is shown to whoever may see the documents (documents.view), else the page opens on Numbers.
   const view: ViewName = asked === 'documents' ? 'documents' : asked === 'branding' && can.documents ? 'branding' : 'numbers'
@@ -94,7 +95,9 @@ export function DocumentsPage() {
 
   const load = useCallback(async () => {
     const [companyRead, seriesRead] = await Promise.all([
-      listCompanies(api).then(
+      // B-W2b-161: the company list needs companies.view; without it nothing is asked (Branding then works in the
+      // session's companies).
+      !mayListCompanies ? Promise.resolve(failed<CompanyOption>('problem.forbidden')) : listCompanies(api).then(
         (items) =>
           loaded(
             items.map((company) => ({
@@ -116,7 +119,7 @@ export function DocumentsPage() {
     setSeries(seriesRead)
     setAsOf(new Date().toISOString())
     for (const row of fiscalRows(seriesRead.items ?? []).filter(hasIssued)) void readProof(row)
-  }, [api, readProof])
+  }, [api, mayListCompanies, readProof])
 
   useEffect(() => {
     void load()

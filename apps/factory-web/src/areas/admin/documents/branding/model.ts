@@ -51,8 +51,8 @@ export interface CompanyChoice {
   readonly id: string
   readonly name: string
   readonly status: string
-  /** Its legal data lets a sample document print (documents' own rule). */
-  readonly legalReady: boolean
+  /** Its legal data lets a sample document print (documents' own rule); null: not known (the company list could not be read). */
+  readonly legalReady: boolean | null
 }
 
 export type BrandingRead = { readonly status: 'loading' } | { readonly status: 'failed'; readonly problem: string } | { readonly status: 'ready'; readonly branding: BrandingView }

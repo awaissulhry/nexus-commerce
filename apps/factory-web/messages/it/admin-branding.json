@@ -86,7 +86,7 @@
       "mailSignature": "Sotto il messaggio",
       "mailSignatureValue": "Il tuo nome · {sender}",
       "documents": "Documenti",
-      "documentsLogo": "Preventivi, ordini di acquisto, DDT e copie di cortesia delle fatture stampano il logo sopra il nome della società.",
+      "documentsLogo": "Preventivi, ordini di acquisto, DDT, liste di imballo, copie di cortesia delle fatture e gli altri documenti stampati da Nexus riportano il logo sopra il nome della società.",
       "documentsName": "I documenti stampano {company} senza logo.",
       "documentsSaved": "Le anteprime dei documenti mostrano il marchio salvato."
     },

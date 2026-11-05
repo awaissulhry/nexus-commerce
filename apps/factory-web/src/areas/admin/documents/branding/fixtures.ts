@@ -23,7 +23,7 @@ const companies: CompanyChoice[] = COMPANIES.map((company) => ({ id: company.id,
 /** A made-up wordmark as an inline SVG (the DS takes `data:image/…` addresses). */
 const wordmark = (ink: string, ground: string | null): string =>
   `data:image/svg+xml;base64,${btoa(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="64" viewBox="0 0 240 64">${ground ? `<rect width="240" height="64" fill="${ground}"/>` : ''}<rect x="8" y="14" width="36" height="36" rx="6" fill="${ink}"/><text x="56" y="43" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="${ink}">Officina Demo</text></svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="64" viewBox="0 0 240 64">${ground ? `<rect width="240" height="64" fill="${ground}"/>` : ''}<rect x="8" y="14" width="36" height="36" rx="6" fill="${ink}"/><text x="56" y="43" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="${ink}">Officina Demo</text></svg>`,
   )}`
 const LOGO = wordmark('#0b3d91', null)
 const LOGO_DARK = wordmark('#dde6f2', null)
@@ -123,6 +123,12 @@ export const designScreen = defineDesignScreen<BrandingSectionModel>({
       model: base({ companyId: esempio.id, read: { status: 'ready', branding: unbranded({ companyId: esempio.id, companyName: DEMO_COMPANIES[1].name, shown: { portal: DEMO_COMPANIES[1].name, sender: DEMO_COMPANIES[1].name } }) } }),
     },
     { id: 'one-company', label: 'One company: no company picker', model: base({ companies: companies.slice(0, 1) }) },
+    {
+      id: 'no-company-list',
+      label: 'Without companies.view (finance): the companies of the session, the document preview offered',
+      model: base({ companies: companies.map((company) => ({ ...company, legalReady: null })), read: { status: 'ready', branding: { ...BRANDED, mayChange: false } }, draft: brandedDraft() }),
+      note: 'The company list is not read; whether the legal data is complete is then not known, so the preview link stays (the PDF says it if not).',
+    },
     { id: 'loading', label: 'Reading the branding', model: base({ read: { status: 'loading' } }) },
     { id: 'failed', label: 'The branding could not be read', model: base({ read: { status: 'failed', problem: 'problem.unavailable' } }), note: 'Try again reads it once more; the Numbers and Documents lists keep working.' },
   ],

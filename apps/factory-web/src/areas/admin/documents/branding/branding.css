@@ -65,7 +65,7 @@
   gap: var(--nds-space-12);
 }
 
-/* The logo as a page draws it; the dark one sits on a `.dark` box, so the surface token is the dark page's. */
+/* The logo as a page draws it: the dark one on a `.dark` box (the dark page's surface token), a light one on white. */
 .fw-brand-logo-box {
   display: flex;
   flex: 0 0 auto;
@@ -77,6 +77,10 @@
   border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-md);
   background: var(--nds-surface);
+}
+
+.fw-brand-logo-box.on-light {
+  background: var(--nds-white);
 }
 
 .fw-brand-logo-box img {

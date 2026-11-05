@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useId, type ReactNode } from 'react'
-import { ExternalLink, ImageOff, Mail, Palette, Store } from 'lucide-react'
+import { ExternalLink, FileText, ImageOff, Mail, Palette, Store } from 'lucide-react'
 import type { BrandingView as Branding } from '@nexus/factory-domain/branding/contracts'
 import { LOGO_MAX_BYTES } from '@nexus/factory-domain/branding/rules'
 import { Banner, Card, EmptyState, Field, KeyValue } from '@nexus/ui/components'
@@ -55,7 +55,7 @@ const NAMESPACES = ['admin', 'records', 'lists', 'admin-documents', 'admin-brand
  * company's logo and logo for dark pages, its accent colour (judged by the design system's contrast rule, per theme, in
  * words), the name its mail to partners goes out under and the name of its portal; beside them what partners will see —
  * the portal's head in the design system's branding tokens, the From line of a mail, the documents. Saved with the
- * EditModeBar (⌘S) and a fresh code. 1 / 2 / 3 switch the page's lists. Fetches nothing (BrandingSection.tsx reads the API).
+ * EditModeBar (⌘S) and a fresh code. 1 / 2 / 5 switch the page's lists. Fetches nothing (BrandingSection.tsx reads the API).
  */
 export function BrandingView({ model, actions }: { model: BrandingSectionModel; actions?: BrandingActions }) {
   return (
@@ -90,7 +90,8 @@ function BrandingPage({ model, actions }: { model: BrandingSectionModel; actions
   const keys: ListKey[] = [
     { keys: ['1'], does: td('docs.keys.numbers') },
     { keys: ['2'], does: td('docs.keys.documents') },
-    { keys: ['3'], does: td('docs.keys.branding') },
+    // 5: Branding's place among the design's six lists (E-mails and Labels, 3 and 4, come with their steps).
+    { keys: ['5'], does: td('docs.keys.branding') },
     { keys: ['⌘', 'S'], does: t('brand.keys.save') },
   ]
   return (
@@ -156,7 +157,7 @@ function BrandingForm({ model, branding, actions }: { model: BrandingSectionMode
         headingLevel={2}
         className="fw-brand-card"
         headerAction={
-          company?.legalReady ? (
+          company?.legalReady !== false ? (
             <a className="fw-adm-docs-link" href={sampleHref(branding.companyId, 'QUOTE', locale === 'en' ? 'en' : 'it')} target="_blank" rel="noopener noreferrer">
               {t('brand.preview.document')} <ExternalLink size={12} aria-hidden />
               <span className="fw-adm-sr">{t('brand.newTab')}</span>
@@ -232,8 +233,9 @@ function LogoField({ slot, model, branding, draft, actions }: { slot: LogoSlot; 
         {t(`brand.logo.${slot}.label`)}
       </span>
       <div className="fw-brand-logo-row">
-        {/* The logo for dark pages on the dark theme's own surface (the DS tokens under `.dark`). */}
-        <div className={`fw-brand-logo-box${slot === 'logoDark' ? ' dark' : ''}`}>
+        {/* Each logo on the ground it is made for, whatever the office's theme: the logo for dark pages on the dark theme's
+            own surface (the DS tokens under `.dark`), a logo for light pages on white. */}
+        <div className={`fw-brand-logo-box${slot === 'logoDark' ? ' dark' : value ? ' on-light' : ''}`}>
           {value ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={value.src} alt={t('brand.logo.alt', { name: value.name })} />
@@ -344,7 +346,7 @@ function Previews({ draft, branding }: { draft: BrandingDraft; branding: Brandin
           ]}
         />
       </PreviewBlock>
-      <PreviewBlock icon={<ExternalLink size={14} aria-hidden />} title={t('brand.preview.documents')}>
+      <PreviewBlock icon={<FileText size={14} aria-hidden />} title={t('brand.preview.documents')}>
         <p className="fw-brand-hint">{draft.logo ? t('brand.preview.documentsLogo') : t('brand.preview.documentsName', { company: branding.companyName })}</p>
         <p className="fw-brand-hint">{t('brand.preview.documentsSaved')}</p>
       </PreviewBlock>

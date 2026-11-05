@@ -98,8 +98,9 @@ function useListKeys(model: DocumentsViewModel, actions?: DocumentsActions) {
       if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.closest('[role="dialog"]'))) return
       if (event.key === '1') actions?.onView?.('numbers')
       else if (event.key === '2') actions?.onView?.('documents')
-      // B-W2b-161: Branding, for whoever may see the documents.
-      else if (event.key === '3' && model.can.documents) actions?.onView?.('branding')
+      // B-W2b-161: Branding, for whoever may see the documents: 5, its place in the design's six lists (E-mails and
+      // Labels, 3 and 4, come with their steps).
+      else if (event.key === '5' && model.can.documents) actions?.onView?.('branding')
       else if (event.key === 'c' && !newSeriesHeld(model)) actions?.onDialog?.({ kind: 'new' })
       else return
       event.preventDefault()
@@ -116,7 +117,7 @@ function usePageKeys(branding = false): ListKey[] {
     { keys: ['1'], does: t('docs.keys.numbers') },
     { keys: ['2'], does: t('docs.keys.documents') },
     // B-W2b-161: Branding.
-    ...(branding ? [{ keys: ['3'], does: t('docs.keys.branding') }] : []),
+    ...(branding ? [{ keys: ['5'], does: t('docs.keys.branding') }] : []),
     { keys: ['c'], does: t('docs.keys.newSeries') },
   ]
 }

@@ -30,7 +30,17 @@ function dataUrlOf(file: File): Promise<string> {
 export function BrandingSection({ companies, askedCompany, onView, onCompany }: { companies: Loaded<CompanyOption>; askedCompany: string | null; onView: (view: BrandingPageView) => void; onCompany: (companyId: string) => void }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
-  const choices: CompanyChoice[] = useMemo(() => (companies.items ?? []).map((company) => ({ id: company.id, name: company.legalName, status: company.status, legalReady: company.legalReady })), [companies.items])
+  // The company list needs companies.view; a person who sees the documents without it (finance) works in the companies of
+  // their session (whether their legal data is complete is then not known).
+  const choices: CompanyChoice[] = useMemo(
+    () =>
+      companies.items
+        ? companies.items.map((company) => ({ id: company.id, name: company.legalName, status: company.status, legalReady: company.legalReady }))
+        : companies.problem
+          ? session.companies.map((company) => ({ id: company.id, name: company.name, status: 'ACTIVE', legalReady: null }))
+          : [],
+    [companies.items, companies.problem, session.companies],
+  )
   const companyId = companyFor(choices, askedCompany, session.company?.id ?? null)
   const [read, setRead] = useState<BrandingRead>({ status: 'loading' })
   const [draft, setDraft] = useState<BrandingDraft | null>(null)
@@ -53,7 +63,7 @@ export function BrandingSection({ companies, askedCompany, onView, onCompany }: 
   }, [api, companyId])
 
   useEffect(() => {
-    if (companies.items === null && companies.problem) {
+    if (companies.items === null && companies.problem && choices.length === 0) {
       setRead({ status: 'failed', problem: companies.problem })
       return
     }
@@ -68,7 +78,7 @@ export function BrandingSection({ companies, askedCompany, onView, onCompany }: 
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [companies.items, companies.problem, companyId, load])
+  }, [companies.items, companies.problem, choices.length, companyId, load])
 
   const onPickLogo = useCallback(
     async (slot: LogoSlot, file: File) => {
