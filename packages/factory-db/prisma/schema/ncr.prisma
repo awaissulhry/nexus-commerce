@@ -362,6 +362,11 @@ model NcrConcession {
   answerFileId String?             @db.Uuid
   /// The office user who recorded the answer; null: the customer, by the link.
   recordedById String?             @db.Uuid
+  /// W2b (wave 19/22; QHS-085 by link or portal): the approval request (kind CONCESSION, naming this row) that asks the
+  /// customer. Set once while ASKED, never changed. With it the customer answers itself: factory_partner_runtime writes
+  /// the answer columns only (status, answer, answeredAt, answeredBy), after the request's own answer, never who
+  /// recorded it (null: the customer) nor the file; never NcrCostLine.
+  approvalRequestId String?        @db.Uuid
   version      Int                 @default(1)
   createdAt    DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
@@ -372,8 +377,12 @@ model NcrConcession {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
   contact    PartyContact?  @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   answerFile StoredFile?    @relation("NcrConcessionAnswer", fields: [tenantId, answerFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b links-depth.prisma (wave 19/22): the approval request that asks it, of the same customer.
+  approvalRequest ApprovalRequest? @relation(fields: [tenantId, partyId, approvalRequestId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, ncrId, seq])
+  // One concession per approval request.
+  @@unique([tenantId, partyId, approvalRequestId])
   // What a customer was asked.
   @@index([tenantId, partyId])
 }
