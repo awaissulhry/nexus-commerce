@@ -8,6 +8,7 @@ import { useLive } from '../_shared/hooks'
 import { plantCan } from '../_shared/model'
 import { addStarter, createSymptom, editSymptom, readClasses, readSymptoms, type ClassRow, type SymptomEdit, type SymptomRow } from './api'
 import { ALL, classFilterOf, draftBody, fieldOfEdit, inOrder, markKey, moveOf, orderWrites, problemOf, readProblemOf, reverseOf, withEdit, wordEdit, type CellField, type Mark, type Notice, type SymptomDraft } from './model'
+import { useDepth } from './use-depth'
 import { PlantSettingsView, type PlantSettingsModel, type SymptomDialog } from './view/PlantSettingsView'
 
 const SAVED_FADE_MS = 1500
@@ -20,7 +21,8 @@ interface Data {
 }
 
 /**
- * `/w/<company>/plant/settings` (SCR-241): the group's symptoms and classes read once (`GET /plant/symptoms`, `GET
+ * `/w/<company>/plant/settings` (SCR-241). B-W2b-141: the W2b sections come from `useDepth` (use-depth.ts: the site,
+ * routing, the lock, check types, incident rules, the band). The W2a section: the group's symptoms and classes read once (`GET /plant/symptoms`, `GET
  * /plant/classes`, plant.view), the class filter in the address (`?class=all|every|<class id>`). Each cell saves on its
  * own (`PATCH /plant/symptoms/:id` at the version read; a row's edits wait for each other so the second carries the first's
  * new version), Stop offering / Offer again and the moves write row by row, New symptom (`POST /plant/symptoms`) and the
@@ -150,7 +152,11 @@ export function PlantSettingsPage() {
     return { done, refused }
   }
 
+  // B-W2b-141: the W2b sections (routing and escalation, the unsafe lock, statutory check types, incidents) and the band.
+  const { depth, actions: depthActions } = useDepth(Object.values(marks).some((mark) => mark.state === 'saving'))
+
   const model: PlantSettingsModel = {
+    depth,
     canView,
     load: canView ? load : { status: 'ready' },
     symptoms: data?.symptoms ?? null,
@@ -248,6 +254,7 @@ export function PlantSettingsPage() {
         .finally(() => setBusy(false))
     },
     onDismissNotice: () => setNotice(null),
+    depth: depthActions,
   }
 
   return <PlantSettingsView model={model} actions={actions} />

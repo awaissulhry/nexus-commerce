@@ -939,7 +939,7 @@
       "lists": "The planning board and every list show it locked.",
       "dispatch": "No work is sent to it until it is signed safe.",
       "request": "This request joins the lock: its reporter follows it.",
-      "hazard": "A hazard report is asked for Incidents (the Incidents page comes later)."
+      "hazard": "Where the site asks for it, a hazard report opens on the Incidents page."
     },
     "reversal": "Only a technician signs it safe again.",
     "lawPlain": "Work equipment must be safe: a machine that is not safe is not used until it is checked and put right.",

@@ -1,6 +1,6 @@
 import type { FastifyRequest } from 'fastify'
 import { hashPassword, passwordProblems } from '@nexus/factory-domain/auth/password/password'
-import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { PasswordResetKind } from '@nexus/factory-db'
@@ -52,9 +52,10 @@ export function requestPasswordReset(auth: OfficeAuth, request: FastifyRequest, 
     const tenant = await auth.inPlatform((client) => client.tenant.findUnique({ where: { slug }, select: { id: true, status: true } }))
     if (tenant?.status !== 'ACTIVE') return
     const user = await auth.inTenant(tenant.id, PRE_SESSION_ACTOR_ID, (client) =>
-      client.user.findUnique({ where: { tenantId_email: { tenantId: tenant.id, email } }, select: { id: true, status: true } }),
+      client.user.findUnique({ where: { tenantId_email: { tenantId: tenant.id, email } }, select: { id: true, status: true, audience: true } }),
     )
-    if (!user || user.status !== 'ACTIVE') return
+    // B-W2b-159: a partner person has no password (the portal's e-mail code): no reset link, the same answer.
+    if (!user || user.status !== 'ACTIVE' || user.audience !== 'OFFICE') return
     // Minted outside the command, only its hash goes in: the token reaches the mail and nothing else.
     const token = mintToken(tenant.id, user.id)
     const hash = tokenHash(token.value)
@@ -84,6 +85,8 @@ export function requestPasswordReset(auth: OfficeAuth, request: FastifyRequest, 
 }
 
 const INVALID = 'This reset link is not valid or has expired. Ask for a new one.'
+/** B-W2b-159: a partner person's account has no password. */
+export const PARTNER_NO_PASSWORD = 'A partner person has no password: they sign in to the portal with a code sent by e-mail.'
 
 export async function confirmPasswordReset(auth: OfficeAuth, request: FastifyRequest, body: { token: string; password: string }): Promise<{ status: 'password_set' }> {
   const token = parseToken(body.token)
@@ -97,13 +100,15 @@ export async function confirmPasswordReset(auth: OfficeAuth, request: FastifyReq
         userId: true,
         usedAt: true,
         expiresAt: true,
-        user: { select: { status: true, email: true, displayName: true, tenant: { select: { status: true } } } },
+        user: { select: { status: true, email: true, displayName: true, audience: true, tenant: { select: { status: true } } } },
       },
     }),
   )
   if (!reset || reset.userId !== token.userId || reset.usedAt !== null || reset.expiresAt.getTime() <= now.getTime() || reset.user.status !== 'ACTIVE' || reset.user.tenant.status !== 'ACTIVE') {
     throw new NotFoundError(INVALID)
   }
+  // B-W2b-159: a partner person never sets a password (Owner answer C3); they sign in to the portal with an e-mail code.
+  if (reset.user.audience !== 'OFFICE') throw new ConflictError(PARTNER_NO_PASSWORD)
   const problems = passwordProblems(body.password, { email: reset.user.email, displayName: reset.user.displayName })
   if (problems.length > 0) throw new ValidationError('Choose another password.', problems)
   const passwordHash = await hashPassword(body.password)

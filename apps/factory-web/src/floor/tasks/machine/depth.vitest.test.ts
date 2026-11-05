@@ -84,11 +84,11 @@ describe('photos and voice notes (QHS-189)', () => {
     expect(mediaKey({ kind: 'PHOTO', category: null })).toBe('media.photo')
   })
 
-  it('Guard missing offers Report an incident; the page waits for B-W2b-137 (the hook)', () => {
+  it('Guard missing offers Report an incident: B-W2b-137 set the hook to its page', () => {
     expect(offersIncident({ code: 'GUARD_MISSING' })).toBe(true)
     expect(offersIncident({ code: 'NOISE' })).toBe(false)
     expect(offersIncident(null)).toBe(false)
-    expect(INCIDENT_PAGE).toBeNull()
+    expect(INCIDENT_PAGE).toBe('/floor/incident')
   })
 })
 

@@ -59,7 +59,7 @@ import '../machine.css'
  *   What is wrong?   the machine's symptom icons (DS ReasonGrid D20; an unsafe one locks the machine at once), a few words
  *                    for "Other", "It is unsafe: lock it" (anyone may: H1), an optional photo or voice note (B-W2b-102,
  *                    QHS-189; held offline: a picture needs the network); "Guard missing" also offers Report an incident
- *                    (held until B-W2b-137); Report · it still runs, or Report · machine down (main)
+ *                    (B-W2b-137, SCR-230); Report · it still runs, or Report · machine down (main)
  *   Sent             saved on this tablet first (the floor queue), then "Recorded by the office" (two ticks); the photos
  *                    and voice notes go up once the office named the report; Follow it opens its progress
  *   The report       (B-W2b-102, QHS-180) the timeline reported → acknowledged → on the way → fixed → works again; "It

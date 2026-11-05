@@ -98,7 +98,6 @@
     "noStation": "This tablet belongs to no station: a call needs one. Ask the office.",
     "photo": "Photos on a call are not ready yet: say it in words.",
     "detailsOffline": "Details on a call need the network.",
-    "incident": "Reporting an incident comes with a later version: tell your team leader.",
     "details": {
       "offline": "Details on a call need the network.",
       "empty": "Add something first.",

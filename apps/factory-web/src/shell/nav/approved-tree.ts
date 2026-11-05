@@ -493,6 +493,8 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Salute e sicurezza',
         hideLabel: false,
         pages: [
+          // B-W2b-149: Incidents (SCR-210).
+          { id: 'plant.incidents', title: 'Incidents', titleIt: 'Infortuni e quasi incidenti', wave: 'W2b', href: '/plant/incidents' },
           // B-W2b-143: Chemicals & waste (SCR-213), before the calendar as the design orders them.
           { id: 'plant.chemicals', title: 'Chemicals & waste', titleIt: 'Sostanze e rifiuti', wave: 'W2b', href: '/plant/chemicals' },
           { id: 'plant.calendar', title: 'Safety calendar', titleIt: 'Scadenzario sicurezza', wave: 'W2b', href: '/plant/calendar' },
@@ -619,6 +621,8 @@ export const FLOOR: ReadonlyArray<{
   // W2b: B-W2b-68 My day (SCR-171).
   { id: 'floor.myday', title: 'My day', titleIt: 'La mia giornata', tile: 'myday', modes: ['sewing', 'phone'] },
   { id: 'floor.help', title: 'Call for help', titleIt: 'Chiama aiuto', tile: 'help', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'] },
+  // W2b: B-W2b-137 Report an incident (SCR-230), tile family Maintenance & safety; kept on the first page of every Home.
+  { id: 'floor.incident', title: 'Report an incident', titleIt: 'Segnala un incidente', tile: 'incident', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor', 'maintenance', 'phone'] },
   { id: 'floor.supervisor', title: 'Line view', titleIt: 'Vista linea', tile: 'lineview', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor'] },
 ]
 

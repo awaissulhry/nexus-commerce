@@ -1955,6 +1955,10 @@
     "safety_training_manage": "Gestire il catalogo dei corsi di sicurezza (ore e periodicità degli aggiornamenti dal vostro programma, partire dall’elenco standard) e i corsi richiesti da un tipo di macchina, ogni volta dopo aver letto cosa cambia per le persone",
     "safety_ppe_manage": "Gestire il catalogo DPI di un'azienda: articoli con categoria, norma, taglie e durata; archiviarli e ripristinarli",
     "safety_ppe_issue": "Registrare i DPI consegnati in ufficio con la ricevuta firmata su carta, annullare una consegna errata con il motivo, conservare il PDF della ricevuta",
-    "safety_chemicals_manage": "Tenere il registro delle sostanze (D.Lgs. 81/2008 art. 223): aggiungere, modificare e archiviare le sostanze, caricare e sostituire le schede di sicurezza"
+    "safety_chemicals_manage": "Tenere il registro delle sostanze (D.Lgs. 81/2008 art. 223): aggiungere, modificare e archiviare le sostanze, caricare e sostituire le schede di sicurezza",
+    "safety_health_view": "Dati protetti: vedere chi deve fare quale visita di sorveglianza sanitaria e i giudizi di idoneità (esito e limitazioni, mai una diagnosi), stampare l’elenco visite per il medico; ogni consultazione è registrata",
+    "safety_health_manage": "Gestire le visite di sorveglianza sanitaria (pianificare, prenotare, spostare, annullare, svolta) e registrare o annullare i giudizi di idoneità del medico con la loro copia",
+    "safety_health_plans": "Gestire i piani di sorveglianza sanitaria per mansione come li ha fissati il medico: periodicità, medico, visita a fine rapporto",
+    "safety_health_views": "Vedere chi ha consultato i dati sanitari e chi ha verificato l’idoneità sì o no di una persona (per HR e il responsabile della protezione dei dati)"
   }
 }

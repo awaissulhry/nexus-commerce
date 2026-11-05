@@ -176,6 +176,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/plant/calendar': 'safety.view', // GET /safety/calendar (B-W2b-120)
       '/plant/preventive': 'plant.view', // GET /plant/checks/plans (B-W2b-142)
       '/plant/chemicals': 'safety.view', // GET /safety/chemicals (B-W2b-143)
+      '/plant/incidents': 'safety.incidents.view', // GET /safety/incidents (B-W2b-149)
       // B-W2b-55: People › Employees.
       '/people/employees': 'people.view', // GET /people/employees
       // B-W2b-60: People › Shifts.
@@ -402,6 +403,7 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
       clock: 'floor.work', // GET /people/clock/floor (B-W2b-67)
       myday: 'floor.work', // GET /people/myday (B-W2b-68)
       help: 'floor.work', // GET /production/calls/station (B-W2b-70)
+      incident: 'floor.work', // GET /safety/floor/incidents/start (B-W2b-137)
       lineview: 'floor.lead', // the team leader's Line view (B-W2b-70)
       scan: 'floor.work',
     })
@@ -412,23 +414,24 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
     const keys = (mode: FloorMode) => homeTiles(mode, everything, false).map((tile) => tile.key)
     expect(Object.fromEntries(FLOOR_MODES.map((mode) => [mode, keys(mode)]))).toEqual({
       // B-W2b-70: the Line view and Scan anything stay on the first page; B-W2b-73: the rest of a full home on the More tile's page.
-      cutting: ['mywork', 'operation', 'cut', 'bundles', 'machine', 'clock', 'help', 'lineview', 'scan'],
-      sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'help', 'lineview', 'scan'],
-      packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'help', 'lineview', 'scan'],
-      inspection: ['mywork', 'operation', 'final', 'machine', 'clock', 'help', 'lineview', 'scan'],
-      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'help', 'lineview', 'scan'],
+      // B-W2b-137: Report an incident stays on the first page too, before the Line view (it must never fall off a full Home).
+      cutting: ['mywork', 'operation', 'cut', 'bundles', 'machine', 'clock', 'help', 'incident', 'lineview', 'scan'],
+      sewing: ['mywork', 'operation', 'machine', 'clock', 'myday', 'help', 'incident', 'lineview', 'scan'],
+      packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'clock', 'help', 'incident', 'lineview', 'scan'],
+      inspection: ['mywork', 'operation', 'final', 'machine', 'clock', 'help', 'incident', 'lineview', 'scan'],
+      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'clock', 'help', 'incident', 'lineview', 'scan'],
     })
     for (const mode of FLOOR_MODES) {
       const first = tilePage(homeTiles(mode, everything, false), 0)
       expect(first.tiles.length + (first.pages > 1 ? 1 : 0)).toBeLessThanOrEqual(MAX_TILES)
-      expect(first.tiles.map((tile) => tile.key).slice(-2)).toEqual(['lineview', 'scan'])
+      expect(first.tiles.map((tile) => tile.key).slice(-3)).toEqual(['incident', 'lineview', 'scan'])
     }
     // Devices with no station's mode (design Modes: phone, supervisor). The build's differences from the tree, named: Clock on a
     // line tablet (the lead's own, B-W2b-67); the Line view on a lead's phone (wherever they sign in, B-W2b-70); no My work on
     // a phone (its rows open jobs that need a station). A subcontract station: Scan only.
     const onDevice = (device: string) => homeTiles(null, everything, false, device).map((tile) => tile.key)
-    expect(onDevice('LINE')).toEqual(['clock', 'lineview', 'scan'])
-    expect(onDevice('PHONE')).toEqual(['clock', 'myday', 'lineview', 'scan'])
+    expect(onDevice('LINE')).toEqual(['clock', 'incident', 'lineview', 'scan'])
+    expect(onDevice('PHONE')).toEqual(['clock', 'myday', 'incident', 'lineview', 'scan'])
     expect(onDevice('STATION')).toEqual(['scan'])
     for (const locale of LOCALES) {
       const floor = CATALOGUE[locale].floor ?? {}

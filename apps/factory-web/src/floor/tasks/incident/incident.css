@@ -1,0 +1,137 @@
+/*
+ * SCR-230 — Report an incident: layout only, inside the DS FloorFrame. Sizes read the floor tier's `--nds-density-*` tokens,
+ * colours are semantic `--nds-*` roles (the emergency card takes the floor notice's danger pair from floor.css). No raw colour.
+ * The one-job screen stays centred on the tablet (the frame's own column).
+ */
+
+.fw-in {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+
+/* ── the emergency first: 112, the first aiders, the call for help ───────────────────────────────────────────────────── */
+.fw-in-emergency {
+  align-items: flex-start;
+}
+.fw-in-emergency-icon > svg {
+  width: calc(var(--nds-density-icon) * 1.4);
+  height: calc(var(--nds-density-icon) * 1.4);
+}
+.fw-in-emergency-title {
+  margin: 0;
+  font-size: calc(var(--nds-density-font-body) * 1.35);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.25;
+}
+.fw-in-emergency-call {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-in-emergency-number {
+  font-size: calc(var(--nds-density-font-body) * 2.2);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+.fw-in-emergency-line {
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  font-weight: inherit;
+}
+.fw-in-emergency-aiders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.fw-in-aiders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-density-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-in-aiders > li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  overflow-wrap: anywhere;
+}
+.fw-in-help {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+  margin-block-start: var(--nds-space-6);
+}
+
+/* ── the step's choice so far ("Hazard · Here") ───────────────────────────────────────────────────────────────────────── */
+.fw-in-chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+.fw-in-chosen-centre {
+  justify-content: center;
+}
+.fw-in-ticks {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+
+/* ── the buttons that add a person, a photo or words: side by side on a tablet, stacked on a phone ───────────────────── */
+.fw-in-add {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-in-pick {
+  min-width: 0;
+}
+
+/* ── the people of an incident: who, hurt or only there, remove ────────────────────────────────────────────────────── */
+.fw-in-people {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-in-person {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+  padding: var(--nds-space-10) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-in-person-name {
+  flex: 1 1 10em;
+  min-width: 0;
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+.fw-in-person-how {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
