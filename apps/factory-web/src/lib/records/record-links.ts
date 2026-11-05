@@ -136,6 +136,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   MachineCheckResult: '/plant/preventive?result=[id]',
   // B-W2b-143 Plant › Chemicals & waste (SCR-213): a chemical opens in its window.
   Chemical: '/plant/chemicals?open=[id]',
+  // B-W2b-147 Plant › PPE for workers (SCR-211): a PPE issue (any line id names its receipt) opens its receipt tab, an item its dialog.
+  PpeIssue: '/plant/ppe/receipt?receipt=[id]',
+  PpeItem: '/plant/ppe?view=catalogue&item=[id]',
 })
 
 /**
