@@ -242,6 +242,11 @@
       },
       "calls": {
         "raised": "Chiamata di aiuto dalla postazione {record}: {title}"
+      },
+      "safety": {
+        "incidentReported": "Nuova segnalazione {record}: {title}",
+        "inailDue": "Comunicazione INAIL per {record} da inviare entro {title}",
+        "inailLate": "Comunicazione INAIL per {record} in ritardo: era da inviare entro {title}"
       }
     },
     "fallback": "Novità su {record}",

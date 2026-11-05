@@ -1,0 +1,383 @@
+{
+  "noAccess": {
+    "title": "You can't open the leather and cut plan",
+    "body": "It needs the right to see the planning runs (planning.view). Ask an administrator."
+  },
+  "page": {
+    "asOf": "As of the plan run of {time}",
+    "noRun": "No plan run at this site yet",
+    "site": "Site",
+    "siteOne": "Site {site}",
+    "search": "Search order, style, leather or lot",
+    "running": "Running the plan…",
+    "run": "Run plan now",
+    "more": "More actions",
+    "print": "Print cut plan",
+    "export": "Export the leather need (CSV)",
+    "keys": "Keyboard shortcuts",
+    "noSites": "No planning site in this company yet.",
+    "newRun_one": "A newer plan run finished.",
+    "newRun_other": "{count} newer plan runs finished.",
+    "show": "Show"
+  },
+  "live": {
+    "connecting": "connecting…",
+    "live": "live",
+    "offline": "not live: changes show after a reload"
+  },
+  "common": {
+    "dismiss": "Dismiss",
+    "clearFilters": "Clear filters",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "loading": "Loading…"
+  },
+  "tile": {
+    "title": "Leather at a glance",
+    "orders": "Orders needing leather",
+    "shade": "Cannot be cut from one shade",
+    "protectors": "Protectors without a valid certificate",
+    "drift": "Styles whose yield drifted",
+    "hint": {
+      "orders": "Orders with leather still to find",
+      "shade": "Order lines that split, must buy or ask the customer",
+      "protectors": "No valid EN 1621 certificate, or it lapses before the order is due",
+      "drift": "The cuts show another loss than the plan"
+    },
+    "filtering": "Showing: {tile}."
+  },
+  "held": {
+    "noRun": "Running the plan needs planning.run.",
+    "running": "The plan is running.",
+    "noSite": "Choose a site first.",
+    "noManage": "Changing the cutting loss needs planning.leather.manage (the planner).",
+    "noProposal": "There is no proposal to decide.",
+    "inDraft": "This loss is in the draft revision already.",
+    "waitsForDraft": "Accepted: it waits for a draft revision of the style (Products starts it).",
+    "dismissedAlready": "Dismissed already: it comes back when it changes or more cuts come in.",
+    "reasonShort": "Say why, in at least 3 characters.",
+    "reasonLong": "At most 500 characters.",
+    "noReserve": "Reserving needs inventory.reserve.",
+    "noProposalHides": "No hides to propose: read the plan again.",
+    "noDraftPo": "A draft purchase order needs purchasing.manage (the buyer).",
+    "requirement": {
+      "ORDERED": "This plan line is ordered already.",
+      "IGNORED": "This plan line was set aside in What to buy & make.",
+      "OPEN": "Open."
+    },
+    "noNote": "A note on the order needs threads.post.",
+    "notMustBuy": "Only a line that must buy has a draft purchase order.",
+    "busy": "Wait: the last action is still going."
+  },
+  "keys": {
+    "open": "Open the shade drawer",
+    "draftPo": "Draft PO for a Must buy line",
+    "nextOrder": "Next and previous order in the drawer"
+  },
+  "row": {
+    "line": "line {seq}",
+    "due": "due {date}",
+    "noDue": "no due date",
+    "sizes_one": "sizes {sizes} · {count} pc",
+    "sizes_other": "sizes {sizes} · {count} pcs",
+    "thickness": "{min}–{max} mm",
+    "lossUnknown": "cutting loss not known",
+    "loss": "cutting loss {loss}",
+    "hides_one": "≈ {count} hide",
+    "hides_other": "≈ {count} hides",
+    "issuedReserved": "issued {issued} · reserved {reserved}",
+    "openShade": "Can {order} be cut from one shade?",
+    "openShadeHint": "Enter opens the drawer.",
+    "menu": "Actions for {order}",
+    "openShadeShort": "Open the shade drawer",
+    "draftPo": "Draft PO (as What to buy & make)"
+  },
+  "grade": {
+    "none": "no free hides",
+    "ungraded": "no grade"
+  },
+  "lot": {
+    "none": "no free lot",
+    "shade": "shade {shade}",
+    "noShade": "no shade",
+    "anyShade": "any shade",
+    "free": "{lot} · {shade} · {area} free"
+  },
+  "feasibility": {
+    "label": "One shade",
+    "all": "Every answer",
+    "COVERED": "Covered",
+    "FITS": "Fits one shade",
+    "SPLIT": "Split by garment",
+    "MUST_BUY": "Must buy",
+    "ASK_CUSTOMER": "Ask the customer"
+  },
+  "col": {
+    "order": "Order",
+    "style": "Style, colour, sizes",
+    "leather": "Leather",
+    "area": "Area needed (with loss)",
+    "toFind": "Left to find",
+    "grades": "Grade mix",
+    "bestLot": "Best single-shade lot",
+    "feasibility": "One shade?",
+    "value": "Value left to find",
+    "more": "More",
+    "protector": "Protector",
+    "needed": "Still needed",
+    "certificate": "Certified part · valid until",
+    "lots": "Lots available",
+    "state": "State",
+    "substitute": "Substitute",
+    "cuts": "Cuts",
+    "yieldArea": "Actual area · planned",
+    "loss": "Loss actual · planned",
+    "trend": "Trend",
+    "proposal": "Proposal",
+    "extraValue": "Extra loss value",
+    "actions": "Decide"
+  },
+  "need": {
+    "title": "Leather need per order",
+    "purpose": "Area and hides per order and style, and whether one shade covers it.",
+    "error": "Couldn't load leather need per order",
+    "noRun": {
+      "title": "No plan run at this site yet",
+      "body": "The need is read from the latest plan run: Run plan now."
+    },
+    "empty": "No open order needs leather",
+    "emptyBody": "The latest plan run found no leather planned by the hide for an open order.",
+    "count_one": "{count} order line",
+    "count_other": "{count} order lines"
+  },
+  "empty": {
+    "noMatch": {
+      "title": "Nothing matches",
+      "body": "No row matches the search or the filters."
+    }
+  },
+  "bulk": {
+    "export_one": "Export {count}",
+    "export_other": "Export {count}"
+  },
+  "protectors": {
+    "title": "Certified protectors",
+    "purpose": "Armour planned only from part numbers certified for that style (EN 1621).",
+    "error": "Couldn't load certified protectors",
+    "empty": "No order needs protectors",
+    "count_one": "{count} protector line",
+    "count_other": "{count} protector lines",
+    "noPlacement": "Protector",
+    "validUntil": "valid until {date}",
+    "noCertificate": "No valid certificate",
+    "lots_one": "{count} lot · {available}",
+    "lots_other": "{count} lots · {available}",
+    "lotCertificates_one": "{count} with its lot certificate",
+    "lotCertificates_other": "{count} with their lot certificate",
+    "noSubstitutes": "none in stock",
+    "substitute_one": "{count} other in stock",
+    "substitute_other": "{count} others in stock",
+    "substituteHeld": "Not certified for style {style} — the DoC would be wrong."
+  },
+  "protector": {
+    "NO_CERTIFICATE": "No valid certificate",
+    "EXPIRES_BEFORE_DUE": "Lapses before the order",
+    "SHORT": "Not enough in stock",
+    "OK": "Certified, in stock"
+  },
+  "yield": {
+    "title": "Planned vs actual yield",
+    "purpose": "Learn the real cutting loss per style from the cutting logs.",
+    "purposeSince": "Learn the real cutting loss per style from the cuts since {date} (at least {min} per style).",
+    "error": "Couldn't load planned vs actual yield",
+    "empty": "Not enough cuts yet to learn from (needs {min} per style)",
+    "count_one": "{count} style",
+    "count_other": "{count} styles",
+    "revision": "rev {revision} · {name}",
+    "cuts_one": "{count} cut",
+    "cuts_other": "{count} cuts",
+    "hides_one": "{count} hide",
+    "hides_other": "{count} hides",
+    "planned": "planned {area}",
+    "actualLoss": "actual {loss}",
+    "noPlan": "no planned loss",
+    "plannedLoss": {
+      "STYLE": "planned {loss} (the style's hide yield)",
+      "BOM": "planned {loss} (the BOM's wastage)"
+    },
+    "trend": "Actual loss per work order of {style}",
+    "noTrend": "No cuts",
+    "tooFew_one": "{count} cut of {min} needed",
+    "tooFew_other": "{count} cuts of {min} needed",
+    "inLine": "In line with the plan",
+    "propose": "Set loss {from} → {to}",
+    "acceptedIn": "{to} accepted · in revision {revision} (draft)",
+    "acceptedWaiting": "{to} accepted · waits for a draft revision",
+    "dismissed": "{to} dismissed",
+    "restsOn_one": "rests on {count} cut",
+    "restsOn_other": "rests on {count} cuts",
+    "last": {
+      "ACCEPTED": "accepted on {date}",
+      "DISMISSED": "dismissed on {date}: {reason}"
+    },
+    "state": {
+      "TOO_FEW": "Too few cuts",
+      "IN_LINE": "In line"
+    },
+    "accept": "Accept",
+    "acceptOf": "Accept the proposal for {style}",
+    "dismiss": "Dismiss",
+    "dismissOf": "Dismiss the proposal for {style}"
+  },
+  "shade": {
+    "title": "Can this order be cut from one shade?",
+    "gone": "This order line is no longer in the plan run.",
+    "noun": "order",
+    "why": {
+      "COVERED": "Nothing left to find: what is issued and reserved covers the order, from one shade lot.",
+      "FITS": "One shade lot covers what is left: reserve its hides and the order stays one shade.",
+      "SPLIT": "No lot covers it alone, but each garment can come from one lot: the garments stay one shade, the order does not.",
+      "MUST_BUY": "The free stock does not cover it, not even split by garment: buy the area that completes the best lot.",
+      "ASK_CUSTOMER": "The order already holds hides of more than one shade lot: only the customer can accept the mix."
+    },
+    "leather": "Leather",
+    "sizes": "Sizes",
+    "area": "Area needed",
+    "toFind": "Left to find",
+    "held": "The order holds",
+    "heldNone": "no hides yet",
+    "grades": "Grade mix of the free hides",
+    "bySize": "Area by size and part ({unit})",
+    "part": "Part",
+    "total": "Total",
+    "lots": "Free lots by shade",
+    "free": "Free",
+    "reservedHere": "Reserved for this order",
+    "own_one": "the order's own lot · {count} hide free",
+    "own_other": "the order's own lot · {count} hides free",
+    "hidesFree_one": "{count} hide free",
+    "hidesFree_other": "{count} hides free",
+    "options": "Options",
+    "noOptions": "Nothing to choose: the order is covered.",
+    "links": "Open:",
+    "mrpLine": "the line in What to buy & make"
+  },
+  "option": {
+    "reserve": "Reserve from one lot",
+    "split": "Split by garment",
+    "buy": "Buy the missing area",
+    "ask": "Ask the customer",
+    "reserveDo": "Reserve the hides",
+    "splitDo": "Reserve by garment",
+    "buyDo": "Draft PO",
+    "askDo": "Ask Sales on the order",
+    "reserveEffect_one": "{count} hide · {area} from {lot}",
+    "reserveEffect_other": "{count} hides · {area} from {lot}",
+    "splitEffect": "{split}; every garment stays one shade",
+    "splitPart": "sizes {sizes} from {lot}",
+    "buyEffect": "Buy {area} (≈ {hides} hides) of {shade} to complete lot {lot}: the same Draft PO as What to buy & make",
+    "askEffect": "A note on {order} for Sales: they ask the customer whether a mix of shades is fine"
+  },
+  "accept": {
+    "title": "Change cutting loss for style {style}",
+    "confirm": "Change to {to}",
+    "fromTo_one": "From {from} to {to}; based on {count} cut.",
+    "fromTo_other": "From {from} to {to}; based on {count} cuts.",
+    "affects": "Affects the next plan run and new quotes; a released order never changes.",
+    "intoDraft": "It goes into revision {revision} (draft): its planned hide yield and its leather wastage. Released revision {released} and its work orders stay as they are.",
+    "noDraft": "{style} has no draft revision: the change is recorded, and Products starts revision {next} to carry it (accept again then).",
+    "back": "Accept another proposal later, or change the draft in Products"
+  },
+  "dismiss": {
+    "title": "Dismiss the proposal for {style}",
+    "subtitle_one": "From {from} to {to}, on {count} cut",
+    "subtitle_other": "From {from} to {to}, on {count} cuts",
+    "confirm": "Dismiss",
+    "body": "The proposal stays quiet until it changes or more cuts come in. The reason is kept in the style's history.",
+    "reason": "Why",
+    "reasonHint": "3 to 500 characters, for example: a new die since last week."
+  },
+  "ask": {
+    "head": "Ask the customer: {order} line {line} ({style}, {colour}) cannot be cut from one shade lot.",
+    "need": "Still to find: {area} of {leather}.",
+    "split": "We can cut each garment from one shade: {split}.",
+    "buy": "Or we buy {area} of shade {shade} first.",
+    "question": "Please ask the customer whether a mix of shades between garments is fine, and note the answer here."
+  },
+  "note": {
+    "reserve": "Leather plan: one shade lot ({lot}).",
+    "split": "Leather plan, split by garment: {split}."
+  },
+  "notice": {
+    "reserved_one": "{count} hide of {lot} reserved.",
+    "reserved_other": "{count} hides of {lot} reserved.",
+    "split_one": "Reserved by garment from {count} lot.",
+    "split_other": "Reserved by garment from {count} lots.",
+    "drafted": "Draft purchase order {orders}: open it in Purchase orders.",
+    "asked": "Note for Sales added on {order}.",
+    "acceptedIn": "{style}: the new cutting loss is in revision {revision} (draft).",
+    "acceptedRecorded": "{style}: the new cutting loss is recorded; it waits for a draft revision.",
+    "dismissed": "{style}: proposal dismissed.",
+    "ran": "The plan ran: the need is read again.",
+    "runBusy": "A plan run of this site is going: try again in a moment."
+  },
+  "refusal": {
+    "moved": "The proposal changed meanwhile (new cuts or another decision): the yield is read again.",
+    "alreadyAccepted": "This loss was accepted already.",
+    "alreadyDismissed": "This proposal was dismissed already.",
+    "shade": "Refused: another shade lot than the order's (one shade lot per order). Choose another option.",
+    "draft": "The style's draft revision changed: read the yield again.",
+    "changed": "Someone changed this meanwhile: it is read again.",
+    "reason": "The reason is not valid.",
+    "invalid": "The request was not valid.",
+    "forbidden": "You may not do this.",
+    "gone": "It is not there any more.",
+    "offline": "No connection: try again.",
+    "failed": "It did not work: try again."
+  },
+  "error": {
+    "failed": "The read failed.",
+    "forbidden": "Your role may not see it.",
+    "offline": "No connection.",
+    "gone": "Not found.",
+    "noSite": "No planning site to read."
+  },
+  "csv": {
+    "order": "Order",
+    "line": "Line",
+    "style": "Style",
+    "colour": "Colour",
+    "sizes": "Sizes",
+    "leather": "Leather",
+    "area": "Area with loss",
+    "issued": "Issued",
+    "reserved": "Reserved",
+    "toFind": "Left to find",
+    "hides": "Hides (about)",
+    "loss": "Cutting loss %",
+    "bestLot": "Best lot",
+    "feasibility": "One shade"
+  },
+  "print": {
+    "title": "Cut plan",
+    "kicker": "Leather & cut plan · {site}",
+    "button": "Print",
+    "held": "The plan is still loading.",
+    "printedAt": "printed {time}",
+    "filters": "Filters: {filters}",
+    "noFilters": "Every open order line that needs leather",
+    "search": "search “{q}”",
+    "col": {
+      "order": "Order",
+      "style": "Style · colour",
+      "sizes": "Sizes",
+      "leather": "Leather",
+      "toFind": "Left to find",
+      "hides": "Hides",
+      "lot": "Cut from",
+      "feasibility": "One shade"
+    },
+    "foot_one": "{count} order line.",
+    "foot_other": "{count} order lines."
+  }
+}

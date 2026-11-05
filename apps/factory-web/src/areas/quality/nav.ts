@@ -1,4 +1,4 @@
-import { ClipboardCheck, FileWarning, Hand, ListTree, MessageSquareWarning, Scale } from 'lucide-react'
+import { BarChart3, ClipboardCheck, FileWarning, Hand, ListTree, MessageSquareWarning, Scale } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -38,6 +38,12 @@ export const officeArea: OfficeAreaNav = {
           { id: 'quality-ncr', label: 'shell:nav.quality.ncr', href: '/quality/ncr', icon: FileWarning, permission: 'quality.ncr.view' },
           { id: 'quality-complaints', label: 'shell:nav.quality.complaints', href: '/quality/complaints', icon: MessageSquareWarning, permission: 'quality.complaints.view' },
         ],
+      },
+      // B-W2b-138 SCR-147: Quality › Reports › Quality reports (GET /quality/reports/kpis, quality.reports.view); before Settings (the tree's order).
+      {
+        id: 'quality-reports',
+        label: 'shell:nav.quality.reportsGroup',
+        items: [{ id: 'quality-reports', label: 'shell:nav.quality.reports', href: '/quality/reports', icon: BarChart3, permission: 'quality.reports.view' }],
       },
       {
         // B-W2a-67 SCR-079: Settings › Defects & dispositions (the defect library and the disposition codes).

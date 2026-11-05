@@ -502,6 +502,90 @@ const QUALITY_RULES_ADDS: Readonly<Record<string, readonly Permission[]>> = Obje
   floor_supervisor: ['quality.rules.view'],
 })
 /**
+ * B-W2b-126 (the repair station and second quality, MES-132, MES-133; design floor.mywork "repair queue", production.scrap
+ * "Downgrade to second quality"): the production manager and the quality inspector send scrapped garments to second quality
+ * in the office (a stock decision: it puts them into a place); on the floor the operators and team leaders see the repair
+ * queue and scan bundles in and out at a repair station of their site. Owner from every().
+ */
+const REWORK_REPAIR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.downgrade'],
+  quality_inspector: ['production.downgrade'],
+})
+const REWORK_REPAIR_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  operator: ['production.repair'],
+  team_leader: ['production.repair'],
+})
+/**
+ * B-W2b-122 (the risk assessment, the DVR; QHS-230, QHS-234; design plant.risk): the safety officer keeps the assessments,
+ * freezes the consultant's versions, records signed papers and keeps the improvement plan (no money: a measure's cost is the
+ * cost grain it does not hold), and signs for the role it holds (an in-house RSPP); the occupational doctor signs a version
+ * for its own role. A measure's owner moves their own measure with safety.view. Office only; owner from every().
+ */
+const RISK_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.risk.manage', 'safety.risk.sign'],
+  company_doctor: ['safety.risk.sign'],
+})
+/**
+ * B-W2b-125 (incidents, near misses and hazards; QHS-265, QHS-268, QHS-270; design plant.incidents): the production manager,
+ * the maintenance lead and the floor supervisor (the preposti) see the incidents anonymised and report from the office; the
+ * safety officer keeps them (severity, seen, actions, close) and, with HR, sees the people involved and keeps the INAIL
+ * filings (protected: each view recorded). The occupational doctor holds none (fitness judgements only). A tablet reports
+ * with floor.work: no floor template changes. Office only; owner from every(); read-only gets the view only (the people
+ * permission is a write risk on purpose).
+ */
+const INCIDENTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['safety.incidents.view', 'safety.incidents.report'],
+  maintenance: ['safety.incidents.view', 'safety.incidents.report'],
+  floor_supervisor: ['safety.incidents.view', 'safety.incidents.report'],
+  safety_officer: ['safety.incidents.view', 'safety.incidents.report', 'safety.incidents.manage', 'safety.incidents.people'],
+  hr: ['safety.incidents.view', 'safety.incidents.report', 'safety.incidents.people'],
+})
+/**
+ * B-W2b-138 (quality reports, QHS-147 "Quality KPIs, with reports per role"; design quality.reports SCR-147): quality, the
+ * production manager and the floor supervisor read the quality reports of their sites; the buyer reads them for incoming
+ * quality per supplier. Each figure also needs the view permission of its records, which each role already holds or not
+ * (reports per role). Office only; owner and read-only from every().
+ */
+const QUALITY_REPORTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.reports.view'],
+  production_manager: ['quality.reports.view'],
+  floor_supervisor: ['quality.reports.view'],
+  buyer: ['quality.reports.view'],
+})
+/**
+ * B-W2b-128 (role risk sheets, QHS-236; design plant.risk "Role sheets"; Owner answer H2): the safety officer types the 6 to
+ * 10 role sheets (risks, PPE kit, courses, whether the role needs health surveillance) and applies them. Which sheet a person
+ * is in stays the HR record's (people.employees.manage). Office only; owner from every(); read_only gets none (no read added).
+ */
+const ROLESHEETS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.rolesheets.manage'],
+})
+// B-W2b-132: the leather and cut plan — the planner (the design's role) changes a style's cutting loss from its cuts (into the
+// draft revision) or dismisses the proposal with a reason. The owner from every().
+const LEATHER_PLAN_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  planner: ['planning.leather.manage'],
+})
+/**
+ * B-W2b-133 (the course catalogue and who needs which course, QHS-241, QHS-242; design people.skills "Course catalogue", "Who
+ * needs what"): the safety officer keeps the catalogue (hours and refresher periods typed from the company's programme) and
+ * the courses a type of machine asks. A role's courses stay the role sheet's. Office only; owner from every(); read_only gets
+ * none (no read added: reading is safety.view).
+ */
+const TRAINING_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.training.manage'],
+})
+/**
+ * B-W2b-134 (PPE for workers, QHS-259, QHS-260, QHS-261; design plant.ppe): the safety officer keeps the PPE catalogue and, with
+ * HR, records paper receipts and voids wrong issues; the floor supervisor (the preposto who hands PPE out on the floor) records
+ * paper receipts too. Reading is safety.view; on the floor the person receiving signs with badge and PIN under floor.work (no
+ * floor template changes). Office only; owner from every(); read_only gets none (both are writes).
+ */
+const PPE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.ppe.manage', 'safety.ppe.issue'],
+  hr: ['safety.ppe.issue'],
+  floor_supervisor: ['safety.ppe.issue'],
+})
+/**
  * B-W2b-143 (the chemical register and the safety data sheets; QHS-277, QHS-278; design plant.chemicals): the safety officer
  * keeps the register and replaces the data sheets; every role with safety.view reads them (no person, no money), and a
  * tablet of the site reads its own site's with floor.work (the cabinet QR). Office only; owner from every().
@@ -578,6 +662,22 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (SAFETY_ADDS[key] ?? []) : []),
   // B-W2b-118
   ...(audience === 'office' ? (QUALITY_RULES_ADDS[key] ?? []) : []),
+  // B-W2b-126
+  ...((audience === 'office' ? REWORK_REPAIR_ADDS : REWORK_REPAIR_FLOOR_ADDS)[key] ?? []),
+  // B-W2b-122
+  ...(audience === 'office' ? (RISK_ADDS[key] ?? []) : []),
+  // B-W2b-125
+  ...(audience === 'office' ? (INCIDENTS_ADDS[key] ?? []) : []),
+  // B-W2b-138
+  ...(audience === 'office' ? (QUALITY_REPORTS_ADDS[key] ?? []) : []),
+  // B-W2b-128
+  ...(audience === 'office' ? (ROLESHEETS_ADDS[key] ?? []) : []),
+  // B-W2b-132
+  ...(audience === 'office' ? (LEATHER_PLAN_ADDS[key] ?? []) : []),
+  // B-W2b-133
+  ...(audience === 'office' ? (TRAINING_ADDS[key] ?? []) : []),
+  // B-W2b-134
+  ...(audience === 'office' ? (PPE_ADDS[key] ?? []) : []),
   // B-W2b-143
   ...(audience === 'office' ? (CHEMICALS_ADDS[key] ?? []) : [])]
 /**

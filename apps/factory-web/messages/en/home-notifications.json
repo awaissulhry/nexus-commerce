@@ -242,6 +242,11 @@
       },
       "calls": {
         "raised": "Help call from station {record}: {title}"
+      },
+      "safety": {
+        "incidentReported": "New report {record}: {title}",
+        "inailDue": "INAIL report for {record} due by {title}",
+        "inailLate": "INAIL report for {record} is late: it was due by {title}"
       }
     },
     "fallback": "News on {record}",

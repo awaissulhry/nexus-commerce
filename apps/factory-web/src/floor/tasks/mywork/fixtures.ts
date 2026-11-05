@@ -3,6 +3,8 @@ import { onFloor, signedInFrame } from '../../frame/fixtures'
 import type { PickerReason } from '../reasons/model'
 import type { DispatchEntry, DispatchList, MyMessages, PutLast, WorkMessage } from './model'
 import { MyWorkView, type MyWorkViewModel } from './view/MyWorkView'
+// B-W2b-126: the repair queue (MES-132).
+import type { RepairQueue, RepairRow } from './repair/model'
 
 /**
  * SCR-089's cases (design floor.mywork; MES-021): the station's queue from the published plan — the next task big, then
@@ -10,8 +12,10 @@ import { MyWorkView, type MyWorkViewModel } from './view/MyWorkView'
  * "Can't find it?" and Put it last with its reason tile, and every state (loading, failed, offline from this tablet,
  * offline with nothing kept, no station, nothing published, the first plan later, nothing queued, all done, the notice
  * holding scans, no permission). B-W2b-71: the material flag, my list across stations, "For your work" and the messages,
- * Call for help: Material with each reason it is held, and the warehouse tablet. Made-up data only: a "Demo" plant,
- * made-up orders and styles; no person, no money.
+ * Call for help: Material with each reason it is held, and the warehouse tablet. B-W2b-126: the repair queue (MES-132) — the
+ * Repair tile, the list (this station's first), a repair's card waiting or in repair, a bundle with no ticket, the scan out
+ * (all good in one tap, or the good ones typed), each line with its ticks and the refusals in words, a held work order, offline
+ * from this tablet and never read. Made-up data only: a "Demo" plant, made-up orders and styles; no person, no money.
  */
 
 const STATION = 'SEW-04 · Linea 2 St 4'
@@ -86,6 +90,38 @@ const PAUSE: PickerReason[] = [
 ]
 
 const PUT_LAST: PutLast = { slotId: 's1', code: 'MATERIAL_WAIT', labelIt: 'Attesa materiale', labelEn: 'Waiting for material', at: AS_OF }
+
+// ---- B-W2b-126: the repair queue, made up ---------------------------------------------------------------------------------
+
+const repair = (id: string, code: string | null, extra: Partial<RepairRow> = {}): RepairRow => ({
+  reworkId: id,
+  workOrder: { id: `wo-${id}`, number: 'WO-DEMO-0051', status: 'IN_PROGRESS', dueDate: '2026-11-06', rush: false, holdReason: null, style: { code: 'GIA-01', name: 'Giacca Aria Demo' } },
+  cell: { id: `cell-${id}`, colourwayCode: 'NER', size: '52' },
+  bundle: code ? { id: `bn-${id}`, code, part: null } : null,
+  quantity: 2,
+  reason: { code: 'SEAM_OPEN', it: 'Cucitura aperta', en: 'Open seam' },
+  description: 'Rifare la cucitura della spalla sinistra, 3 mm fuori (demo).',
+  foundAt: { seq: 70, code: 'CQ', name: 'Controllo qualità' },
+  reworkAt: { seq: 20, code: 'OP20', name: 'Cucire fianchi' },
+  state: 'WAITING',
+  here: true,
+  station: null,
+  inAt: null,
+  since: '2026-10-29T07:40:00.000Z',
+  held: false,
+  version: 1,
+  ...extra,
+})
+
+const REPAIRS: RepairRow[] = [
+  repair('r1', 'B-000131', { state: 'IN_REPAIR', inAt: '2026-10-29T08:30:00.000Z', station: { id: 'st-sew-04', code: 'SEW-04' } }),
+  repair('r2', 'B-000144', { quantity: 1, reason: { code: 'STAIN', it: 'Macchia', en: 'Stain' }, description: null, workOrder: { id: 'wo-r2', number: 'WO-DEMO-0042', status: 'IN_PROGRESS', dueDate: '2026-11-12', rush: true, holdReason: null, style: { code: 'GIA-02', name: 'Giacca Pista Demo' } } }),
+  repair('r3', 'B-000150', { workOrder: { id: 'wo-r3', number: 'WO-DEMO-0049', status: 'ON_HOLD', dueDate: '2026-11-18', rush: false, holdReason: 'Verifica qualità della pelle (demo)', style: { code: 'GIA-01', name: 'Giacca Aria Demo' } }, held: true }),
+  repair('r4', 'B-000162', { here: false, reworkAt: { seq: 30, code: 'OP30', name: 'Attaccare maniche' }, since: '2026-10-29T06:55:00.000Z' }),
+  repair('r5', null, { here: false, quantity: 3, foundAt: null, reworkAt: { seq: 40, code: 'OP40', name: 'Finissaggio' } }),
+]
+const REPAIR_QUEUE: RepairQueue = { asOf: AS_OF, station: { id: 'st-sew-04', code: 'SEW-04', name: STATION }, rows: REPAIRS, counts: { here: 3, waiting: 4, inRepair: 1 } }
+const SITE_ONLY: RepairQueue = { ...REPAIR_QUEUE, rows: REPAIRS.slice(3), counts: { here: 0, waiting: 2, inRepair: 0 } }
 
 const frame = (extra: Parameters<typeof signedInFrame>[1] = {}) => signedInFrame('tile.mywork', { station: { name: STATION, site: 'Stabilimento Demo Nord' }, ...extra })
 
@@ -236,5 +272,39 @@ export const designScreen = defineDesignScreen<MyWorkViewModel>({
     { id: 'all-done', label: 'Everything planned here is done', model: model({ list: list({ next: null, entries: [ENTRIES[5]!] }) }) },
     { id: 'notice-held', label: 'Scans held by the worker notice', model: model({ held: true }), note: 'The queue reads (it names nobody); the scan field is held with the reason until the notice is read.' },
     { id: 'no-permission', label: 'No permission', model: model({ step: { kind: 'noPermission' }, list: null }), note: 'A person without floor.work at this station (fail closed).' },
+    // B-W2b-126 (MES-132): the repair queue.
+    {
+      id: 'repair-tile',
+      label: 'W2b: For your work: Repair 3 (with Messages)',
+      model: model({ messages: MESSAGES, repair: REPAIR_QUEUE }),
+      note: 'A person with production.repair: the bundles sent back for repair to this station\'s work centre or scanned in here, as a chip beside Messages; hidden at zero.',
+    },
+    { id: 'repair-tile-site', label: 'W2b: Repair at the site only', model: model({ repair: SITE_ONLY }), note: 'Nothing for this station: the chip counts the site\'s repairs, in a quiet tone.' },
+    {
+      id: 'repair',
+      label: 'W2b: the repair list',
+      model: model({ step: { kind: 'repair' }, repair: REPAIR_QUEUE }),
+      note: 'This station\'s bundle in repair first (the time it was scanned in: never a duration or a pace), then its waiting ones (rush and due date), a held work order last in its group, then the site\'s. The bundle, the work order, the operation it goes back to, why, since when, how many garments. Scanning a bundle of the list scans it in (or opens its scan out); a row opens its card. No person, no pace.',
+    },
+    { id: 'repair-card', label: 'W2b: a waiting repair', model: model({ step: { kind: 'repairItem', reworkId: 'r2' }, repair: REPAIR_QUEUE }), note: 'What to redo and "scan bundle B-000144 to start the repair": confirm by scan, not by reading (MES-188).' },
+    { id: 'repair-card-in', label: 'W2b: a repair in progress', model: model({ step: { kind: 'repairItem', reworkId: 'r1' }, repair: REPAIR_QUEUE, repairLine: { code: 'B-000131', step: 'IN', ticks: 'recorded' } }), note: 'Scanned in here: the rework started. Scanning the bundle again asks how it came out.' },
+    { id: 'repair-card-held', label: 'W2b: a repair on a held work order', model: model({ step: { kind: 'repairItem', reworkId: 'r3' }, repair: REPAIR_QUEUE }), note: 'The hold\'s words from the office; nothing moves until it is lifted.' },
+    { id: 'repair-card-no-bundle', label: 'W2b: garments with no bundle ticket', model: model({ step: { kind: 'repairItem', reworkId: 'r5' }, repair: REPAIR_QUEUE }), note: 'No ticket to scan: a button starts the repair.' },
+    { id: 'repair-out', label: 'W2b: scan out — how did it come out?', model: model({ step: { kind: 'repairOut', reworkId: 'r1', code: 'B-000131', good: null }, repair: REPAIR_QUEUE }), note: 'All good in one tap; else type the good ones (the rest are scrapped: the office replaces them or sends them to second quality).' },
+    { id: 'repair-out-some', label: 'W2b: scan out with one scrapped', model: model({ step: { kind: 'repairOut', reworkId: 'r1', code: 'B-000131', good: 1 }, repair: REPAIR_QUEUE }) },
+    { id: 'repair-said-out', label: 'W2b: scanned out, recorded', model: model({ step: { kind: 'repair' }, repair: { ...REPAIR_QUEUE, rows: REPAIRS.slice(1), counts: { here: 2, waiting: 4, inRepair: 0 } }, repairLine: { code: 'B-000131', step: 'OUT', good: 1, scrap: 1, ticks: 'recorded' } }) },
+    {
+      id: 'repair-saved',
+      label: 'W2b: scanned in offline: saved on this tablet',
+      model: model({ frame: frame({ online: false, pending: 1 }), step: { kind: 'repairItem', reworkId: 'r1' }, repair: REPAIR_QUEUE, repairAsOf: AS_OF, repairLine: { code: 'B-000131', step: 'IN', ticks: 'saved' } }),
+      note: 'One tick: the scan waits on this tablet with its time and goes when the network is back; the row moved at once.',
+    },
+    { id: 'repair-refused', label: 'W2b: a scan refused, in words', model: model({ step: { kind: 'repairItem', reworkId: 'r2' }, repair: REPAIR_QUEUE, repairLine: { code: 'B-000144', step: 'IN', ticks: 'refused', refusal: 'ALREADY_IN' } }) },
+    { id: 'repair-not-in-list', label: 'W2b: a label of no bundle in the list', model: model({ step: { kind: 'repair' }, repair: REPAIR_QUEUE, repairLine: { code: 'B-000999', step: 'IN', ticks: 'refused', refusal: 'NOT_IN_QUEUE' } }) },
+    { id: 'repair-none', label: 'W2b: nothing to repair', model: model({ step: { kind: 'repair' }, repair: { ...REPAIR_QUEUE, rows: [], counts: { here: 0, waiting: 0, inRepair: 0 } } }) },
+    { id: 'repair-offline', label: 'W2b: the repair list from this tablet', model: model({ frame: frame({ online: false, pending: 0 }), step: { kind: 'repair' }, repair: REPAIR_QUEUE, repairAsOf: AS_OF }) },
+    { id: 'repair-offline-none', label: 'W2b: the repair list never read, offline', model: model({ frame: frame({ online: false }), step: { kind: 'repair' }, repair: null, repairProblem: 'offline' }) },
+    { id: 'repair-error', label: 'W2b: the repair list could not be read', model: model({ step: { kind: 'repair' }, repair: null, repairProblem: 'error' }) },
+    { id: 'repair-loading', label: 'W2b: reading the repair list', model: model({ step: { kind: 'repair' }, repair: null }) },
   ],
 })

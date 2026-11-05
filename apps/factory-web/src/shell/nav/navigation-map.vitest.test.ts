@@ -117,6 +117,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/products/operations': 'product.routing.view', // GET /product/operations
       '/products/sizes': 'product.styles.view', // GET /product/size-scales
       '/planning/mrp': 'planning.view', // GET /planning/runs/latest
+      '/planning/leather': 'planning.view', // GET /planning/leather/need (B-W2b-132)
       '/planning/board': 'planning.view', // GET /planning/schedule (B-W2a-45)
       '/planning/allocation': 'planning.view', // GET /planning/allocation (B-W2a-45)
       '/planning/capacity': 'planning.view', // GET /planning/capacity (B-W2a-70)
@@ -153,6 +154,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/quality/settings': 'quality.rules.view', // GET /quality/rules (B-W2b-118)
       '/quality/ncr': 'quality.ncr.view', // GET /quality/ncr (B-W2a-68)
       '/quality/complaints': 'quality.complaints.view', // GET /quality/complaints (B-W2a-65)
+      '/quality/reports': 'quality.reports.view', // GET /quality/reports/kpis (B-W2b-138)
       '/compliance/certificates': 'compliance.certificates.view', // GET /compliance/certificates
       '/compliance/labels': 'compliance.certificates.view', // GET /compliance/labels
       '/compliance/tests': 'quality.lots.view', // GET /quality/lots
@@ -172,6 +174,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/plant/machines': 'plant.view', // GET /plant/machines
       '/plant/settings': 'plant.view', // GET /plant/symptoms (B-W2a-73)
       '/plant/calendar': 'safety.view', // GET /safety/calendar (B-W2b-120)
+      '/plant/preventive': 'plant.view', // GET /plant/checks/plans (B-W2b-142)
       '/plant/chemicals': 'safety.view', // GET /safety/chemicals (B-W2b-143)
       // B-W2b-55: People › Employees.
       '/people/employees': 'people.view', // GET /people/employees

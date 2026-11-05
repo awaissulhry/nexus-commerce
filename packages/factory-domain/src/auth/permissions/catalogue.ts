@@ -35,6 +35,8 @@ import { PLANNING_EXCEPTIONS_DEFINITIONS, PLANNING_EXCEPTIONS_PERMISSIONS } from
 import { PLANNING_FIRM_DEFINITIONS, PLANNING_FIRM_PERMISSIONS } from '../../planning/mrp/permissions'
 // B-W2a-34: the planning board (planning.schedule.manage, planning.schedule.publish).
 import { PLANNING_SCHEDULE_DEFINITIONS, PLANNING_SCHEDULE_PERMISSIONS } from '../../planning/schedule/permissions'
+// B-W2b-132: the leather and cut plan (planning.leather.manage).
+import { PLANNING_LEATHER_DEFINITIONS, PLANNING_LEATHER_PERMISSIONS } from '../../planning/leather/permissions'
 import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing/permissions'
 import { PURCHASING_SOURCES_DEFINITIONS, PURCHASING_SOURCES_PERMISSIONS } from '../../purchasing/sources/permissions'
 // B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
@@ -168,6 +170,20 @@ import { SAFETY_DEFINITIONS, SAFETY_PERMISSIONS } from '../../safety/organisatio
 import { SAFETY_CALENDAR_DEFINITIONS, SAFETY_CALENDAR_PERMISSIONS } from '../../safety/calendar/permissions'
 // B-W2b-118: quality rules (quality.rules.view; quality.alerts.manage).
 import { QUALITY_RULES_DEFINITIONS, QUALITY_RULES_PERMISSIONS } from '../../quality/rules/permissions'
+// B-W2b-126: the repair station and second quality (production.repair, shared with the floor; production.downgrade).
+import { PRODUCTION_REPAIR_DEFINITIONS, PRODUCTION_REPAIR_FLOOR_PERMISSIONS, PRODUCTION_REPAIR_PERMISSIONS } from '../../production/repair/permissions'
+// B-W2b-122: the risk assessment, the DVR (safety.risk.manage | sign).
+import { SAFETY_RISK_DEFINITIONS, SAFETY_RISK_PERMISSIONS } from '../../safety/risk/permissions'
+// B-W2b-125: incidents, near misses and hazards (safety.incidents.view | report | manage | people).
+import { SAFETY_INCIDENTS_DEFINITIONS, SAFETY_INCIDENTS_PERMISSIONS } from '../../safety/incidents/permissions'
+// B-W2b-138: quality reports (quality.reports.view).
+import { QUALITY_REPORTS_DEFINITIONS, QUALITY_REPORTS_PERMISSIONS } from '../../quality/reports/permissions'
+// B-W2b-128: role sheets (safety.rolesheets.manage: a role's risks, PPE kit, courses and whether it needs health surveillance).
+import { SAFETY_ROLESHEETS_DEFINITIONS, SAFETY_ROLESHEETS_PERMISSIONS } from '../../safety/rolesheets/permissions'
+// B-W2b-133: the course catalogue and who needs which course (safety.training.manage: courses, and what a machine type asks).
+import { SAFETY_TRAINING_DEFINITIONS, SAFETY_TRAINING_PERMISSIONS } from '../../safety/training/permissions'
+// B-W2b-134: PPE for workers (safety.ppe.manage: the catalogue; safety.ppe.issue: paper receipts and voids).
+import { SAFETY_PPE_DEFINITIONS, SAFETY_PPE_PERMISSIONS } from '../../safety/ppe/permissions'
 // B-W2b-143: the chemical register and the safety data sheets (safety.chemicals.manage).
 import { SAFETY_CHEMICALS_DEFINITIONS, SAFETY_CHEMICALS_PERMISSIONS } from '../../safety/chemicals/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
@@ -474,6 +490,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PLANNING_EXCEPTIONS_DEFINITIONS,
   // B-W2a-34: the planning board's working plan and its publication.
   PLANNING_SCHEDULE_DEFINITIONS,
+  // B-W2b-132: the leather and cut plan's cutting loss.
+  PLANNING_LEATHER_DEFINITIONS,
   PURCHASING_DEFINITIONS,
   INVOICES_DEFINITIONS,
   PAYMENTS_DEFINITIONS,
@@ -615,6 +633,20 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SAFETY_CALENDAR_DEFINITIONS,
   // B-W2b-118: quality rules.
   QUALITY_RULES_DEFINITIONS,
+  // B-W2b-126: the repair station and second quality.
+  PRODUCTION_REPAIR_DEFINITIONS,
+  // B-W2b-122: the risk assessment, the DVR.
+  SAFETY_RISK_DEFINITIONS,
+  // B-W2b-125: incidents, near misses and hazards.
+  SAFETY_INCIDENTS_DEFINITIONS,
+  // B-W2b-138: quality reports.
+  QUALITY_REPORTS_DEFINITIONS,
+  // B-W2b-128: role sheets.
+  SAFETY_ROLESHEETS_DEFINITIONS,
+  // B-W2b-133: the course catalogue and training requirements.
+  SAFETY_TRAINING_DEFINITIONS,
+  // B-W2b-134: PPE for workers.
+  SAFETY_PPE_DEFINITIONS,
   // B-W2b-143: the chemical register and the safety data sheets.
   SAFETY_CHEMICALS_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -656,7 +688,9 @@ export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PR
   // B-W2b-99: the floor inspector and the team leader record in-process checks at their own site.
   ...QUALITY_INPROCESS_FLOOR_PERMISSIONS,
   // B-W2b-107: the line's tablet records which protector lot a batch or garment holds (EN 1621).
-  ...INVENTORY_ROLLS_FLOOR_PERMISSIONS])
+  ...INVENTORY_ROLLS_FLOOR_PERMISSIONS,
+  // B-W2b-126: the repair station's queue and its scans in and out at its own site.
+  ...PRODUCTION_REPAIR_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
 for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...INVENTORY_RESERVATION_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...PRODUCTION_BUNDLES_PERMISSIONS, ...PRODUCTION_SCANS_PERMISSIONS, ...PRODUCTION_SERIALS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS, ...QUALITY_LAB_PERMISSIONS, ...QUALITY_FINAL_PERMISSIONS, ...HOME_PERMISSIONS, ...FLOOR_SYNC_PERMISSIONS, ...CALENDARS_PERMISSIONS, ...INVENTORY_COUNTS_PERMISSIONS, ...PURCHASING_SOURCES_PERMISSIONS, ...PRODUCTION_REWORK_PERMISSIONS, ...PRODUCTION_SCRAP_PERMISSIONS]) {
@@ -785,6 +819,22 @@ for (const name of [...QUALITY_AMENDMENTS_PERMISSIONS, ...QUALITY_DOCUMENTS_PERM
 for (const name of [...SAFETY_PERMISSIONS, ...SAFETY_CALENDAR_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-118: quality rules.
 for (const name of QUALITY_RULES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-126: the repair station and second quality.
+for (const name of PRODUCTION_REPAIR_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-122: the risk assessment, the DVR.
+for (const name of SAFETY_RISK_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-125: incidents.
+for (const name of SAFETY_INCIDENTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-138: quality reports.
+for (const name of QUALITY_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-128: role sheets.
+for (const name of SAFETY_ROLESHEETS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-132: the leather and cut plan.
+for (const name of PLANNING_LEATHER_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-133: the course catalogue and training requirements.
+for (const name of SAFETY_TRAINING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-134: PPE for workers.
+for (const name of SAFETY_PPE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-143: the chemical register and the safety data sheets.
 for (const name of SAFETY_CHEMICALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

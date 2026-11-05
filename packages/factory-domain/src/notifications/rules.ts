@@ -79,6 +79,11 @@ export const MESSAGE_TEMPLATES = {
   'notifications.security.drillDue': { en: 'The next restore drill is due on {title}: the last one that passed was on {record}', it: 'La prossima prova di ripristino scade il {title}: l’ultima superata è del {record}' },
   // B-W2b-35 (modules/production/calls): a station called for help, told to the type's responder team ({record}: the station; {title}: the type and the line).
   'notifications.calls.raised': { en: 'Help call from station {record}: {title}', it: 'Chiamata di aiuto dalla postazione {record}: {title}' },
+  // B-W2b-125 (modules/safety/incidents/notices.ts): a new incident report to the safety roles ({title}: the kind), an INAIL
+  // filing's reminder before its 48-hour deadline and at it ({title}: the deadline, Europe/Rome). Never the person.
+  'notifications.safety.incidentReported': { en: 'New report {record}: {title}', it: 'Nuova segnalazione {record}: {title}' },
+  'notifications.safety.inailDue': { en: 'INAIL report for {record} due by {title}', it: 'Comunicazione INAIL per {record} da inviare entro {title}' },
+  'notifications.safety.inailLate': { en: 'INAIL report for {record} is late: it was due by {title}', it: 'Comunicazione INAIL per {record} in ritardo: era da inviare entro {title}' },
   'notifications.complaint.safety': { en: 'Safety complaint {record}: {title}. It is in the PPE register; the owner acknowledges it on the complaint', it: 'Reclamo di sicurezza {record}: {title}. È nel registro DPI; il titolare ne prende atto sul reclamo' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES

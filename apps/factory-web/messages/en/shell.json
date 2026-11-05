@@ -70,6 +70,7 @@
       "requests": "Machine requests",
       "jobs": "Maintenance jobs",
       "machines": "Machines & tools",
+      "preventive": "Preventive & statutory checks",
       "safety": "Health & safety",
       "calendar": "Safety calendar",
       "chemicals": "Chemicals & waste",
@@ -125,7 +126,9 @@
       "rules": "Quality rules",
       "problems": "Problems",
       "ncr": "Nonconformances",
-      "complaints": "Complaints"
+      "complaints": "Complaints",
+      "reportsGroup": "Reports",
+      "reports": "Quality reports"
     },
     "compliance": {
       "area": "Compliance",
@@ -158,6 +161,7 @@
       "area": "Planning",
       "main": "Main",
       "mrp": "What to buy & make",
+      "leather": "Leather & cut plan",
       "board": "Planning board",
       "allocation": "Lines & subcontractors",
       "capacity": "Capacity & load",

@@ -19,6 +19,9 @@ import { LOADING, part, PART_LOADING, ready, type Loaded, type Part } from '../.
 import { LotsMessages, useWords, type MovesPart } from '../../lots/shared/parts'
 import { hideTabOf } from '../model'
 import { usePrintTags } from '../print/usePrintTags'
+import { useHidePhotos } from '../photos/use-hide-photos'
+import { gradingCan } from './grading/grading-model'
+import { useGrading } from './grading/use-grading'
 import { HideRecordView } from './view/HideRecordView'
 
 /**
@@ -46,6 +49,7 @@ function HideRecordContainer({ hideId }: { hideId: string }) {
   const params = useSearchParams()
   const can = useMemo(() => stockCan(session.permissions), [session.permissions])
   const daily = useMemo(() => dailyCan(session.permissions), [session.permissions])
+  const gradingRights = useMemo(() => gradingCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
   const tab = hideTabOf(params?.get('tab'))
   const [record, setRecord] = useState<Loaded<HideRecordValue>>(LOADING)
@@ -113,9 +117,16 @@ function HideRecordContainer({ hideId }: { hideId: string }) {
     void loadMoves(null)
   }, [tab, value, loadMoves])
 
+  // B-W2b-131: Measurements & grade and Defects & photos (read once one of them is opened; again on the hide's events).
+  const grading = useGrading(api, hideId, { tab, can: gradingRights, locale, onSaved: () => void load() })
+  const photoIds = useMemo(() => [hideId], [hideId])
+  const photos = useHidePhotos(api, photoIds, { enabled: tab === 'defects' && gradingRights.filesRead, urls: 'all' })
+
   const reread = useCoalesced(() => {
     void load()
     if (movesAsked.current) void loadMoves(null)
+    grading.reload()
+    if (tab === 'defects') photos.reload()
   }, 800)
   const live = useLive(
     (change) => {
@@ -149,7 +160,24 @@ function HideRecordContainer({ hideId }: { hideId: string }) {
 
   return (
     <HideRecordView
-      model={{ prefix, can, tab, record, moves, live, asOf, timeZone: TIME_ZONE, print: print.dialog, daily, holds, holdReasons, reserve: reserve.model, writeOff: writeOff.model }}
+      model={{
+        prefix,
+        can,
+        tab,
+        record,
+        moves,
+        live,
+        asOf,
+        timeZone: TIME_ZONE,
+        print: print.dialog,
+        daily,
+        holds,
+        holdReasons,
+        reserve: reserve.model,
+        writeOff: writeOff.model,
+        grading: grading.model,
+        photos: { state: photos.state, lightbox: photos.lightbox, uploads: photos.uploads },
+      }}
       actions={{
         onRetry: () => void load(),
         onRetryMoves: () => void loadMoves(null),
@@ -162,6 +190,21 @@ function HideRecordContainer({ hideId }: { hideId: string }) {
         onScrap: () => void openScrap(),
         reserve: reserve.actions,
         writeOff: writeOff.actions,
+        grading: grading.actions,
+        photos: {
+          onOpen: (index) => {
+            const hide = hideRef.current
+            if (hide) photos.open(hide.id, hide.code, index)
+          },
+          onIndex: (index) => photos.step(index),
+          onClose: () => photos.close(),
+          onUpload: (files) => {
+            const hide = hideRef.current
+            if (hide) photos.upload({ id: hide.id, companyId: hide.companyId }, files)
+          },
+          onDismissUpload: (key) => photos.dismissUpload(key),
+          onRetry: () => photos.reload(),
+        },
       }}
     />
   )

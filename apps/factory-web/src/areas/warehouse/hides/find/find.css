@@ -1,0 +1,102 @@
+/*
+ * Find hides for a job and Move… (B-W2b-131) — LAYOUT only: the dialog's fields in a wrapping row, the summary line, the
+ * figure under the list. Controls are the design system's; semantic tokens only.
+ */
+.fw-hd-find {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-hd-find-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-10) var(--nds-space-12);
+  align-items: end;
+  min-width: 0;
+}
+
+.fw-hd-find-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-hd-find-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-hd-find-go {
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.fw-hd-find-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-16);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-hd-find-figure {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-hd-find-figure.short {
+  color: var(--nds-danger-text);
+}
+
+.fw-hd-find-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-hd-move-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-hd-move-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  align-items: baseline;
+}
+
+/* A remnant's tag opens the piece: a button that reads as the row's link. */
+.fw-hd-linkish {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-hd-find-line.nowrap {
+  flex-wrap: nowrap;
+}
+
+.fw-hd-find-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--nds-space-6);
+  align-items: center;
+  min-width: 0;
+}

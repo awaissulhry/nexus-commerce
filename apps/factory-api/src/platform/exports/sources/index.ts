@@ -33,6 +33,8 @@ import { stock } from './stock'
 import { earningsLedger } from './earnings-ledger'
 // B-W2b-120: Plant › Health & safety › Safety calendar.
 import { safetyCalendar } from './safety-calendar'
+// B-W2b-142: Plant › Maintenance › Preventive & statutory checks › Check register.
+import { checkRegister } from './check-register'
 // B-W2b-143: Plant › Health & safety › Chemicals & waste.
 import { safetyChemicals } from './safety-chemicals'
 
@@ -80,6 +82,8 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   earningsLedger,
   // B-W2b-120: Plant › Health & safety.
   safetyCalendar,
+  // B-W2b-142: Plant › Maintenance.
+  checkRegister,
   // B-W2b-143: Plant › Health & safety › Chemicals & waste.
   safetyChemicals,
 ])

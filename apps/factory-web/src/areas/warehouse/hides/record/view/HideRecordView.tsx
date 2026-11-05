@@ -21,6 +21,9 @@ import { holdOfHide, holdReasonWords, reserveSelectionHeld, scrapSelectionHeld }
 import { demandLabel, demandRecord } from '../../../stock/daily/model'
 import { ReserveDialog } from '../../../stock/daily/ReserveDialog'
 import { WriteOffDialog } from '../../../stock/daily/WriteOffDialog'
+import { PhotoLightbox } from '../../photos/view/PhotoLightbox'
+import { DefectsTab } from './DefectsTab'
+import { GradeTab } from './GradeTab'
 
 export type { HideRecordActions, HideRecordModel } from '../../model'
 
@@ -33,6 +36,9 @@ export type { HideRecordActions, HideRecordModel } from '../../model'
  * ledger rows that name this hide, with the running balance). Consumed or scrapped: read only, said in a Banner.
  * B-W2a-64 (design hd-side): the next step also says "Held: <the hold's reason>" for a quality hold and "Reserved for
  * <work order>" (a link) for a reservation; Reserve to a work order… and Scrap… from the band, held with the reason.
+ * B-W2b-131: two more tabs — Measurements & grade (the office correction of grade, shade and thickness, the usable area per
+ * grade, the changes, the measures with Measure again… and Correct the area…) and Defects & photos (the defects in words,
+ * the hide's photos with the Lightbox, Add a photo, the defect map's later wave); Overview links to them.
  */
 export function HideRecordView({ model, actions }: { model: HideRecordModel; actions?: HideRecordActions }) {
   return (
@@ -60,7 +66,7 @@ function HideRecordBody({ model, actions }: { model: HideRecordModel; actions?: 
     id: tab,
     href: tab === 'overview' ? base : `${base}?tab=${tab}`,
     label: t(`hd.tab.${tab}`),
-    count: tab === 'cuts' && value ? value.cuts.length : null,
+    count: tab === 'cuts' && value ? value.cuts.length : tab === 'grade' ? (model.grading?.measures.value?.measures.length ?? null) : tab === 'defects' && hide ? (model.photos?.state.byHide[hide.id]?.length ?? null) : null,
   }))
 
   return (
@@ -125,6 +131,8 @@ function HideRecordBody({ model, actions }: { model: HideRecordModel; actions?: 
       {value && (
         <div className="fw-wl-stack">
           {model.tab === 'overview' && <Overview value={value} model={model} lotHref={lotHref} />}
+          {model.tab === 'grade' && model.grading && <GradeTab model={model.grading} actions={actions?.grading} timeZone={model.timeZone} />}
+          {model.tab === 'defects' && model.grading && <DefectsTab model={model.grading} photos={model.photos ?? null} actions={actions?.grading} photoActions={actions?.photos} timeZone={model.timeZone} />}
           {model.tab === 'cuts' && <Cuts value={value} model={model} />}
           {model.tab === 'moves' && (
             <PartState value={model.moves} label={t('hd.tab.moves')} onRetry={actions?.onRetryMoves}>
@@ -136,6 +144,7 @@ function HideRecordBody({ model, actions }: { model: HideRecordModel; actions?: 
       {model.print && hide && <PrintTagsDialog dialog={model.print} hides={[hide]} actions={actions?.print} />}
       {model.reserve && <ReserveDialog model={model.reserve} actions={actions?.reserve} />}
       {model.writeOff && <WriteOffDialog model={model.writeOff} actions={actions?.writeOff} />}
+      <PhotoLightbox model={model.photos?.lightbox ?? null} timeZone={model.timeZone} actions={actions?.photos} />
     </RecordFrame>
   )
 }
@@ -196,7 +205,12 @@ function Overview({ value, model, lotHref }: { value: HideRecord; model: HideRec
                 },
               ]}
             />
-            <p className="fw-wl-hint">{t('hd.facts.readOnly')}</p>
+            <p className="fw-wl-hint">
+              {t('hd.grading.factsHint')}{' '}
+              <Link className="fw-st-link" href={`${model.prefix}/warehouse/hides/${encodeURIComponent(hide.id)}?tab=grade`}>
+                {t('hd.grading.factsLink')}
+              </Link>
+            </p>
           </div>
         </Card>
         <Card padded>
@@ -209,7 +223,9 @@ function Overview({ value, model, lotHref }: { value: HideRecord; model: HideRec
           <div className="fw-wl-stack tight">
             <h3 className="fw-wl-h3">{t('hd.defects.title')}</h3>
             <p className="fw-wl-text">{hide.defects ?? t('hd.defects.none')}</p>
-            <p className="fw-wl-hint">{t('hd.defects.photos')}</p>
+            <Link className="fw-st-link" href={`${model.prefix}/warehouse/hides/${encodeURIComponent(hide.id)}?tab=defects`}>
+              {t('hd.defectsTab.overviewLink')}
+            </Link>
           </div>
         </Card>
       </div>
