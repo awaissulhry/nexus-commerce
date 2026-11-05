@@ -493,6 +493,8 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Salute e sicurezza',
         hideLabel: false,
         pages: [
+          // B-W2b-149: Incidents (SCR-210).
+          { id: 'plant.incidents', title: 'Incidents', titleIt: 'Infortuni e quasi incidenti', wave: 'W2b', href: '/plant/incidents' },
           // B-W2b-143: Chemicals & waste (SCR-213), before the calendar as the design orders them.
           { id: 'plant.chemicals', title: 'Chemicals & waste', titleIt: 'Sostanze e rifiuti', wave: 'W2b', href: '/plant/chemicals' },
           { id: 'plant.calendar', title: 'Safety calendar', titleIt: 'Scadenzario sicurezza', wave: 'W2b', href: '/plant/calendar' },

@@ -1,8 +1,9 @@
 /*
- * Plant settings › Symptoms on the floor (SCR-241) LAYOUT: the page's card, the cells of the list frame (code, icon,
- * words, switches, save mark), the dialogs' forms and the icon picker's grid. The grid, the switches and the buttons are
- * the design system's; semantic tokens only. No max-width: the page fills the shell's main area (Owner rule 2026-10-29);
- * the list frame scrolls inside its card on a phone (the page never scrolls sideways).
+ * Plant settings (SCR-241) LAYOUT: the band, the section cards (B-W2b-141: routing, the unsafe lock and incidents side by
+ * side on a wide screen, check types), the cells of the list frames (code, icon, words, switches, save mark), the dialogs'
+ * forms, the worked example and the icon picker's grid. The grid, the switches and the buttons are the design system's;
+ * semantic tokens only. No max-width: the page fills the shell's main area (Owner rule 2026-10-29); the list frames turn
+ * into cards on a phone (the page never scrolls sideways).
  */
 .fw-pls {
   display: flex;
@@ -155,4 +156,175 @@
 
 .fw-pls-keys dd {
   margin: 0;
+}
+
+/* ---- B-W2b-141: the band, the cards, the worked example ------------------------------------------------------------------ */
+
+.fw-pls-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pls-band-end,
+.fw-pls-cardside-row,
+.fw-pls-row,
+.fw-pls-kinds,
+.fw-pls-lawline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pls-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pls-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-pls-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-pls-cardhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pls-cardtitle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-pls-cardtitle h2,
+.fw-pls-preview-box h3,
+.fw-pls-preview-head h3 {
+  margin: 0;
+  color: var(--nds-text);
+}
+
+.fw-pls-cardtitle h2 {
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pls-preview-box h3,
+.fw-pls-preview-head h3 {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pls-cardside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pls-preview-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  min-width: 0;
+}
+
+.fw-pls-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-pls-example {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  color: var(--nds-text);
+}
+
+.fw-pls-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-pls-fieldset > legend {
+  margin-bottom: var(--nds-space-6);
+  padding: 0;
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-pls-radios {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8);
+}
+
+@media (min-width: 720px) {
+  .fw-pls-radios {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-pls-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  min-height: 32px;
+  color: var(--nds-text);
+}
+
+.fw-pls-twoline {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.fw-pls-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pls-window-title {
+  margin: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
 }
