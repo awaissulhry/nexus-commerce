@@ -2,6 +2,7 @@ import { FAILURE_CODES, HAND_BACK_ACTIONS, type HandBackAction } from '@nexus/fa
 import type { ProgressStep } from '@nexus/factory-domain/plant/requests/progress'
 import type { Locale } from '../../../lib/i18n/locales'
 import type { FloorRequest, HandBackBody, JobRecord, MachineAfter, QueueEntry, StoredMedia, Symptom } from './api'
+import { TASK_ROUTES } from '../routes'
 import { afterHeld, WORDS_MAX } from './model'
 
 /**
@@ -78,13 +79,13 @@ export function mediaKey(file: Pick<StoredMedia, 'kind' | 'category'>): string {
   return file.category === 'BEFORE_WORK' ? 'media.photoBefore' : file.category === 'AFTER_WORK' ? 'media.photoAfter' : 'media.photo'
 }
 
-// ---- "Guard missing also offers Report an incident" (joins with B-W2b-137) -------------------------------------------------
+// ---- "Guard missing also offers Report an incident" (B-W2b-137) -------------------------------------------------------------
 
 /**
- * THE hook for B-W2b-137 (floor Report an incident): set this to its page (`/floor/incident`). Until then the screen shows
- * "Report an incident" held with the reason (tell the team leader), never a dead control.
+ * Report an incident's page (B-W2b-137, SCR-230). The machine report opens it with its machine passed on (incident/handoff.ts),
+ * so Where? offers that machine first and a hazard is the likely kind.
  */
-export const INCIDENT_PAGE: string | null = null
+export const INCIDENT_PAGE: string = TASK_ROUTES.incident
 
 /** The symptoms that also offer an incident report (design floor.machine: "'Guard missing' also offers Report an incident"). */
 export const INCIDENT_SYMPTOMS: readonly string[] = ['GUARD_MISSING']

@@ -1,0 +1,199 @@
+{
+  "title": "Report an incident",
+  "emergency": {
+    "title": "Someone badly hurt?",
+    "callFirst": "Call first:",
+    "numberLabel": "Emergency number {number}",
+    "aidersUnknown": "The first aiders’ names come with the network. Call your team leader.",
+    "aidersNone": "No first aider is on record for this site. Call your team leader.",
+    "aiders_one": "First aider on site:",
+    "aiders_other": "First aiders on site:",
+    "aiderShift": "{name} · {shift}",
+    "asOf": "First aiders as read on this tablet at {time}",
+    "help": "Call for help",
+    "helpCall": "Call for help: {call}",
+    "helpOneTap": "One tap sends the call. It works without the network too.",
+    "helpCalled": "Help called: {call}",
+    "helpRefused": "The call for help was not taken: {call}",
+    "helpFollow": "Follow the call",
+    "helpOpen": {
+      "SENT": "Help is called: {call}. Nobody has seen it yet.",
+      "SEEN": "Help is called: {call}. Someone has seen it.",
+      "ON_THE_WAY": "Help is called: {call}. Someone is on the way."
+    },
+    "line": "Emergency: call {number}.",
+    "lineInjury": "Someone badly hurt? Call {number} first.",
+    "lineAiders_one": "{count} first aider on site.",
+    "lineAiders_other": "{count} first aiders on site."
+  },
+  "what": {
+    "title": "What happened?",
+    "offline": "No network: a report with your name is saved on this tablet and goes when the network is back."
+  },
+  "kind": {
+    "INJURY": "Incident (someone hurt)",
+    "NEAR_MISS": "Near miss",
+    "HAZARD": "Hazard",
+    "hint": {
+      "INJURY": "Someone got hurt",
+      "NEAR_MISS": "Nobody hurt, but it nearly happened",
+      "HAZARD": "Something that could hurt someone"
+    }
+  },
+  "where": {
+    "title": "Where?",
+    "here": "Here: this station",
+    "machine": "Machine {machine}",
+    "machineHere": "At this station",
+    "machineReported": "The machine you reported",
+    "area": "Area {code}",
+    "elsewhere": "Somewhere else",
+    "elsewhereHint": "Say where in a few words",
+    "placeLabel": "Where did it happen?",
+    "placeHint": "A few words: the place, a door, a rack.",
+    "noStation": "This tablet is not at a station: pick an area, or say where in a few words.",
+    "planLater": "A plan of the site to tap on comes in a later version.",
+    "asOf": "Areas and machines as read on this tablet at {time}"
+  },
+  "people": {
+    "title": "Who was hurt or there? (optional)",
+    "hint": "Name the people. What the injury is, the office asks and records.",
+    "list_one": "{count} person in this report",
+    "list_other": "{count} people in this report",
+    "me": "Me ({name})",
+    "outsideName": "{name} (from outside)",
+    "how": "Was {name} hurt?",
+    "INJURED": "Hurt",
+    "INVOLVED": "Was there",
+    "remove": "Remove {name} from the report",
+    "addMe": "Me",
+    "addWorker": "Another worker",
+    "addOutside": "Someone from outside",
+    "pickTitle": "Who else?",
+    "pickLabel": "Pick their name",
+    "outsideTitle": "Someone from outside",
+    "outsideLabel": "Their name",
+    "outsideHint": "A visitor, a driver, a contractor. Their name only."
+  },
+  "photo": {
+    "title": "A photo of the place",
+    "optional": "Photo (optional)",
+    "noFaces": "No faces: take the place or the thing, never a person.",
+    "add": "Add a photo",
+    "addMore": "Add a photo",
+    "afterSend": "The photos go up once the office has the report.",
+    "waitReport": "Keep this screen open until the photos are added.",
+    "dropped": "The photos taken with it were not sent.",
+    "window": "Up to {count} photos, within {minutes} minutes of the report. Later the office adds them."
+  },
+  "media": {
+    "taken": "Photos taken",
+    "sent": "Photos",
+    "photo": "Photo",
+    "voice": "Voice note",
+    "remove": "Remove {name}"
+  },
+  "upload": {
+    "waiting": "Waits for the report",
+    "sending": "Going up…",
+    "added": "Added to the report",
+    "failed": "Not added"
+  },
+  "words": {
+    "optional": "A few words (optional)",
+    "add": "Add a few words",
+    "label": "What happened?",
+    "hint": "Short. Never a person’s health."
+  },
+  "name": {
+    "title": "Your name",
+    "switch": "Send without my name",
+    "notStored": "Your name is not stored with this report.",
+    "online": "It goes at once and is never kept on this tablet.",
+    "offline": "No network: it waits on this screen, never on the tablet, and goes when the network is back.",
+    "withName": "With your name, safety can ask you what they need.",
+    "injury": "An injury is reported with your name: safety needs to know who saw it."
+  },
+  "send": {
+    "now": "Sent at once, without your name",
+    "waits": "Without your name: it waits on this screen for the network",
+    "saves": "Saved on this tablet first, then sent",
+    "savesOffline": "No network: saved on this tablet, sent later"
+  },
+  "sent": {
+    "title": "Report sent",
+    "titleNumber": "Report sent: {number}",
+    "savedTitle": "Report saved on this tablet",
+    "recorded": "Safety has your report.",
+    "sending": "Sending to the office…",
+    "waits": "No network: it goes as soon as the network is back. Nothing is lost.",
+    "refusedTitle": "The report was not taken",
+    "refusedFix": "Tell your team leader now, or report it again."
+  },
+  "seen": {
+    "title": "Seen by safety",
+    "at": "Seen by safety at {time}",
+    "notYet": "Not seen yet. This screen says it when safety opens it.",
+    "afterSend": "Safety sees it once it is sent.",
+    "closed": "Safety has closed this report."
+  },
+  "waiting": {
+    "title": "Not sent yet",
+    "offlineBody": "There is no network. A report without your name is sent only online.",
+    "unavailableBody": "The office does not answer. It tries again by itself.",
+    "neverKept": "It waits on this screen, never on the tablet, and goes by itself when it can. Keep this screen open.",
+    "withName": "Send with my name instead",
+    "withNameHint": "With your name it is saved on this tablet at once and goes when the network is back.",
+    "network": "Waits for the network"
+  },
+  "held": {
+    "kind": "Pick what happened first",
+    "where": "Pick where first",
+    "place": "Say where in a few words",
+    "busy": "Sending…",
+    "offline": "No network",
+    "photoOffline": "A photo needs the network. The report itself still saves on this tablet.",
+    "photosFull": "Four photos at most from the tablet; the office adds more",
+    "photoWindow": "More than 30 minutes since the report: the office adds photos now",
+    "peopleFull": "Twenty people at most in one report",
+    "meAdded": "You are in the report already",
+    "noRoster": "This tablet has no list of names: add them as someone from outside, or the office adds them",
+    "thatIsMe": "That is you: use Me",
+    "personAdded": "This person is in the report already",
+    "outsideName": "Write their name first"
+  },
+  "problem": {
+    "offline": "No network. Try again when it is back.",
+    "unavailable": "The office does not answer. Try again in a moment.",
+    "forbidden": "You may not send this report from this tablet. Tell your team leader.",
+    "notFound": "This report is not found on this tablet.",
+    "conflict": "Something changed meanwhile. Try again.",
+    "invalid": "The report was not taken as sent. Check it and try again.",
+    "signedOut": "You are signed out. Sign in again.",
+    "rateLimited": "Too many tries. Wait a moment."
+  },
+  "refusal": {
+    "ANONYMOUS_INJURY": "An injury is reported with a name: only a near miss or a hazard may go without one.",
+    "ANONYMOUS_NAMES_NOBODY": "A report without your name names nobody: leave the people out, or send it with your name.",
+    "ANONYMOUS_NOT_QUEUED": "A report without your name is never kept on the tablet: send it when the network is back.",
+    "WHERE_MISSING": "Say where it happened: here, an area, a machine or a few words.",
+    "WHERE_OTHER_SITE": "That place is not at this site: pick one of this site's.",
+    "OCCURRED_IN_FUTURE": "The tablet's clock is ahead: tell your team leader.",
+    "INJURED_NOT_INJURY": "Someone hurt goes in an incident: pick Incident (someone hurt), or mark them as there.",
+    "PERSON_TWICE": "A person is in the report twice: remove one.",
+    "PHOTOS_FULL": "Four photos at most from the tablet; the office adds more.",
+    "PHOTO_WINDOW": "More than 30 minutes since the report: the office adds photos now.",
+    "NOT_OPEN": "Safety has closed or cancelled this report: it takes no more photos."
+  },
+  "action": {
+    "home": "Home",
+    "back": "Back",
+    "next": "Next",
+    "send": "Send",
+    "cancel": "Cancel",
+    "addPerson": "Add",
+    "retry": "Try again",
+    "discard": "Do not send",
+    "another": "Report another"
+  }
+}

@@ -284,7 +284,8 @@ describe('safety calendar: the API in our words, and the calls', () => {
 describe('safety calendar: navigation and who sees it', () => {
   it('Plant › Health & safety › Safety calendar asks safety.view; the prints are window pages; records open on the page', () => {
     const section = officeArea.area.sections?.find((entry) => entry.id === 'plant-safety')
-    expect(section?.items.map((row) => [row.href, row.permission])).toEqual([['/plant/calendar', 'safety.view']])
+    // B-W2b-143 + B-W2b-149: Chemicals & waste and Incidents join the section (the design's order: Incidents, Chemicals, the calendar).
+    expect(section?.items.map((row) => [row.href, row.permission])).toEqual(expect.arrayContaining([['/plant/calendar', 'safety.view']]))
     expect(officeArea.area.sections?.map((entry) => entry.id)).toEqual(['plant-maintenance', 'plant-safety', 'plant-settings'])
     for (const page of ['/plant/calendar', '/plant/calendar/organisation', '/plant/calendar/print']) expect(OFFICE_PAGES.has(page), page).toBe(true)
     for (const page of ['/plant/calendar/organisation', '/plant/calendar/print']) expect(WINDOW_PAGES.has(page), page).toBe(true)

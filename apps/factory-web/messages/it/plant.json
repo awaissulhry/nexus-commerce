@@ -939,7 +939,7 @@
       "lists": "Il tabellone di pianificazione e ogni elenco la mostrano bloccata.",
       "dispatch": "Non le viene mandato lavoro finché non è firmata sicura.",
       "request": "Questa richiesta si unisce al blocco: il suo segnalatore lo segue.",
-      "hazard": "Si chiede una segnalazione di pericolo in Infortuni (la pagina Infortuni arriva più avanti)."
+      "hazard": "Se il sito lo chiede, si apre una segnalazione di pericolo nella pagina Infortuni e quasi incidenti."
     },
     "reversal": "Solo un tecnico la firma di nuovo sicura.",
     "lawPlain": "Le attrezzature di lavoro devono essere sicure: una macchina non sicura non si usa finché non è controllata e messa a posto.",

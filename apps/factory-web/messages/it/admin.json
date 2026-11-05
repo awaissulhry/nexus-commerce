@@ -1955,6 +1955,7 @@
     "safety_training_manage": "Gestire il catalogo dei corsi di sicurezza (ore e periodicità degli aggiornamenti dal vostro programma, partire dall’elenco standard) e i corsi richiesti da un tipo di macchina, ogni volta dopo aver letto cosa cambia per le persone",
     "safety_ppe_manage": "Gestire il catalogo DPI di un'azienda: articoli con categoria, norma, taglie e durata; archiviarli e ripristinarli",
     "safety_ppe_issue": "Registrare i DPI consegnati in ufficio con la ricevuta firmata su carta, annullare una consegna errata con il motivo, conservare il PDF della ricevuta",
+    "safety_chemicals_manage": "Tenere il registro delle sostanze (D.Lgs. 81/2008 art. 223): aggiungere, modificare e archiviare le sostanze, caricare e sostituire le schede di sicurezza",
     "safety_training_record": "Tenere le registrazioni della formazione: aprire una sessione che i lavoratori firmano in reparto con badge e PIN, registrare il foglio firme cartaceo, controfirmare o annullare una presenza, chiudere o annullare la sessione; registrare la formazione svolta altrove con l'esito e la verifica della lingua di ciascuno; correggere una registrazione con il motivo",
     "safety_instruction_record": "Tenere il registro dell'addestramento: chi è stato addestrato su quale compito o macchina, da chi, per quanto tempo e in quale lingua, da firmare in reparto; registrare il foglio firmato; annullare una voce errata con il motivo"
   }

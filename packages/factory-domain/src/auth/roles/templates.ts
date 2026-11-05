@@ -586,6 +586,14 @@ const PPE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
   floor_supervisor: ['safety.ppe.issue'],
 })
 /**
+ * B-W2b-143 (the chemical register and the safety data sheets; QHS-277, QHS-278; design plant.chemicals): the safety officer
+ * keeps the register and replaces the data sheets; every role with safety.view reads them (no person, no money), and a
+ * tablet of the site reads its own site's with floor.work (the cabinet QR). Office only; owner from every().
+ */
+const CHEMICALS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  safety_officer: ['safety.chemicals.manage'],
+})
+/**
  * B-W2b-139 (training records, due lists, the instruction register, attendance signed on the floor; QHS-243, QHS-244, QHS-246,
  * QHS-247, QHS-248; design people.skills "Record training", "Instruction register"): the safety officer and HR keep the
  * training records (sessions, paper sheets, countersignatures in the office, records typed, corrections); the instruction
@@ -684,6 +692,8 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   ...(audience === 'office' ? (TRAINING_ADDS[key] ?? []) : []),
   // B-W2b-134
   ...(audience === 'office' ? (PPE_ADDS[key] ?? []) : []),
+  // B-W2b-143
+  ...(audience === 'office' ? (CHEMICALS_ADDS[key] ?? []) : []),
   // B-W2b-139
   ...(audience === 'office' ? (RECORDS_ADDS[key] ?? []) : [])]
 /**

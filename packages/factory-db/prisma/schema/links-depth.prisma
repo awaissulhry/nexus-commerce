@@ -1,0 +1,211 @@
+// Links in depth (W2b schema wave 19/22, B-W2b-154; plan W2b-3, design 02 portal-links "Link pages"): what the W2b-3
+// link pages and approvals stand on, beside links.prisma's OneOffLink. Every link keeps W0's rules (one record, one
+// party, an expiry, a use limit, evidence per use); these tables add a set of files (COL-051), a long form's draft kept
+// with us, a record shared with an outside party (COL-061, COL-062) and an approval asked of one (COL-064, QHS-085,
+// SAL-222, SAL-294; the outside signer of B-W2b-122).
+//
+// A link session and a portal session run as factory_partner_runtime behind the party's wall: they read their own
+// party's rows here, a link session saves its draft, the invited person switches their e-mail on or off, and the party
+// answers its own approval requests (the …_links_depth_w2b_guards triggers keep each to those columns). The office makes
+// and withdraws everything else. Nothing here is ever deleted but a draft. No money column, and no link, file set,
+// share or approval ever names a record that holds pay figures (Owner, 11-02: pay figures never go by link).
+
+/// One file of a link's set (COL-051 "a share of several files", MES-274 the secure file): a DOCUMENT_VIEW or
+/// SECURE_FILE link lists its files in order. Added while the link is unused and not revoked (in the command that makes
+/// it), never changed or removed: the link's evidence names what was shared. A file of the link's company (or a
+/// tenant-wide one), AVAILABLE when added, never a file of a pay record. A newer version of a listed file is named on the
+/// page from its series (files.prisma), never swapped in silently.
+model LinkFile {
+  id        String   @id @db.Uuid
+  tenantId  String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The link's party (the partner policy key).
+  partyId   String   @db.Uuid
+  linkId    String   @db.Uuid
+  fileId    String   @db.Uuid
+  /// 1, 2, 3 … the order on the link page.
+  position  Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  link OneOffLink @relation(fields: [tenantId, partyId, linkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  file StoredFile @relation("LinkFileFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, linkId, position])
+  // The links that share a file ("a newer version exists", withdrawing a file).
+  @@index([tenantId, fileId])
+}
+
+/// A long form's draft kept with us, never on the device (design links.frame "Finish later"): the measurements, the claim
+/// or the supplier questionnaire a link session saves and resumes from the same link. One per link: the API saves it as
+/// an upsert under the link's row lock (no unique key: the generated isolation copies insert a second one). The data is
+/// sealed with AES-256-GCM like the TOTP secret, so it may hold personal and body data: the office never reads it (hidden
+/// from its grant) and only purges it. Saved only while its link opens (not revoked, before its expiry, uses left), and
+/// not a counted use; deleted when the form is sent, or by the purge job 7 days after the link expired (`purgeAfter`).
+model LinkDraft {
+  id         String   @id @db.Uuid
+  tenantId   String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The link's party (the partner policy key).
+  partyId    String   @db.Uuid
+  linkId     String   @db.Uuid
+  /// The form's data (JSON) sealed with AES-256-GCM: `l1.<iv>.<ciphertext>.<tag>`, base64url, as apps/factory-api's
+  /// sessions/secrets seal() writes it. Never plain.
+  dataEnc    String
+  /// The link's expiry plus 7 days, exactly: the purge job deletes the draft from then on.
+  purgeAfter DateTime @db.Timestamptz(3)
+  version    Int      @default(1)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  link OneOffLink @relation(fields: [tenantId, partyId, linkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, linkId])
+  // The purge job.
+  @@index([tenantId, purgeAfter])
+}
+
+/// One record shared with one outside party (COL-061 "invite a partner to one record", COL-062 view, comment or upload):
+/// who was invited (the party, its contact and the address it went to), what they may do, until when, and the
+/// RECORD_INVITE link that opens it. Revoked, never deleted; a revoked share never changes again. The invited person may
+/// switch the e-mail of new messages off and on: the one column a partner session writes.
+model RecordShare {
+  id            String                  @id @db.Uuid
+  tenantId      String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose record it is.
+  companyId     String                  @db.Uuid
+  /// The record shared: its model name and id (one of a thread's records: a sample round, a sales order …).
+  recordType    String
+  recordId      String                  @db.Uuid
+  /// The customer, supplier or other outside party invited, and the person when known.
+  partyId       String                  @db.Uuid
+  contactId     String?                 @db.Uuid
+  /// The address the invitation went to, trimmed and lower case.
+  email         String
+  /// What they may do: VIEW always, COMMENT and UPLOAD when given, each once.
+  permissions   RecordSharePermission[] @default([VIEW])
+  /// New messages by e-mail (design links.invite "E-mail me"): on until the person switches it off.
+  notifyByEmail Boolean                 @default(true)
+  /// Until when: the inviter's end date, at most 180 days after the share was made.
+  expiresAt     DateTime                @db.Timestamptz(3)
+  revokedAt     DateTime?               @db.Timestamptz(3)
+  revokedById   String?                 @db.Uuid
+  /// The RECORD_INVITE link that opens it (of the same company, party and record; it never outlives the share). Null
+  /// until it is sent; set once.
+  linkId        String?                 @db.Uuid
+  version       Int                     @default(1)
+  createdAt     DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The office user who invited them (or the system).
+  createdById   String?                 @db.Uuid
+
+  company Company       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party   Party         @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  contact PartyContact? @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  link    OneOffLink?   @relation(fields: [tenantId, partyId, linkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One share per link.
+  @@unique([tenantId, partyId, linkId])
+  // The shares of a record (the office's followers and outside participants).
+  @@index([tenantId, recordType, recordId])
+}
+
+/// What a record share allows (COL-062): VIEW the shared fields, files and thread; COMMENT in the thread; UPLOAD files.
+enum RecordSharePermission {
+  VIEW
+  COMMENT
+  UPLOAD
+}
+
+/// One approval we ask of an outside party: the record it is about, what we ask, by when, and their answer, signed with
+/// a typed name and given by a partner user in the portal or through an APPROVAL link (exactly one), with its evidence.
+/// The request's own files (the photos, the proof) are StoredFiles of record type "ApprovalRequest" (copies name their
+/// source); their marked-up picture or file is one of them. A CONCESSION request names the NCR's concession it asks
+/// (ncr.prisma NcrConcession.approvalRequestId points back). Withdrawn or expired, never deleted; an answered, withdrawn
+/// or expired request never changes.
+model ApprovalRequest {
+  id                String         @id @db.Uuid
+  tenantId          String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId         String         @db.Uuid
+  /// The record it is about: its model name and id (NcrConcession for a CONCESSION; a sample round, a proof, a sales
+  /// order amendment, a risk assessment version … for the others, as their steps register them).
+  recordType        String
+  recordId          String         @db.Uuid
+  /// The customer, supplier or outside signer asked, and the person when known.
+  partyId           String         @db.Uuid
+  contactId         String?        @db.Uuid
+  kind              ApprovalKind
+  /// What we ask, in words ("Accept the shade of lot 12: slightly darker, ΔE 1.8").
+  question          String
+  /// Answer by then; an OPEN request past it may be marked EXPIRED.
+  dueAt             DateTime       @db.Timestamptz(3)
+  status            ApprovalStatus @default(OPEN)
+  /// Their words: required when they approve with changes or refuse.
+  answer            String?
+  /// The full name they typed to sign the answer, as typed (trimmed).
+  typedName         String?
+  /// Their marked-up picture or file (a FileMarkup's result version, or a PDF they marked): a file of this request.
+  markupFileId      String?        @db.Uuid
+  /// Set exactly when answered (APPROVED, APPROVED_WITH_CHANGES, REFUSED), with the typed name and the evidence.
+  answeredAt        DateTime?      @db.Timestamptz(3)
+  /// Who answered: a partner user in the portal, or the APPROVAL link (of this request or of its record); exactly one.
+  answeredByUserId  String?        @db.Uuid
+  answeredViaLinkId String?        @db.Uuid
+  /// The answer's evidence (as a link's, EPQ.5): the request that wrote it (its audit rows, and a link's evidence row,
+  /// share it), the HMAC of the shortened client address, the user agent.
+  answerRequestId   String?
+  answerIpHash      String?
+  answerUserAgent   String?
+  /// Set exactly when WITHDRAWN: when and by whom; why, when said.
+  withdrawnAt       DateTime?      @db.Timestamptz(3)
+  withdrawnById     String?        @db.Uuid
+  withdrawReason    String?
+  version           Int            @default(1)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  /// The office user who asked (or the system, for a request a job made).
+  createdById       String?        @db.Uuid
+
+  company         Company        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party           Party          @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  contact         PartyContact?  @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  markupFile      StoredFile?    @relation("ApprovalRequestMarkup", fields: [tenantId, markupFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  answeredByUser  User?          @relation("ApprovalRequestAnsweredBy", fields: [tenantId, answeredByUserId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  answeredViaLink OneOffLink?    @relation(fields: [tenantId, partyId, answeredViaLinkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // ncr.prisma: the concession it asks (CONCESSION).
+  ncrConcession   NcrConcession?
+
+  // The target of the concession's reference: a concession names a request of its own customer.
+  @@unique([tenantId, partyId, id])
+  // The requests of a record.
+  @@index([tenantId, recordType, recordId])
+  // What waits for a party.
+  @@index([tenantId, partyId, status])
+}
+
+/// What an approval request asks (design links.approve "What we ask").
+enum ApprovalKind {
+  /// A deviation we ask the customer to accept (QHS-085): the request names the NCR's concession.
+  CONCESSION
+  /// A sample, a colour, a leather, an artwork (COL-064): photos and spec, comments with photo markup.
+  SAMPLE
+  COLOUR
+  LEATHER
+  ARTWORK
+  /// The final design before cutting (SAL-294).
+  PROOF
+  /// A revised order, line by line, old → new (SAL-222).
+  REVISED_ORDER
+  /// An outside signer's signature (B-W2b-122: the risk assessment's outside roles).
+  SIGNATURE
+}
+
+/// OPEN → APPROVED | APPROVED_WITH_CHANGES | REFUSED (the party's answer) | WITHDRAWN (the office) | EXPIRED (past its
+/// due time); all five are final.
+enum ApprovalStatus {
+  OPEN
+  APPROVED
+  APPROVED_WITH_CHANGES
+  REFUSED
+  WITHDRAWN
+  EXPIRED
+}

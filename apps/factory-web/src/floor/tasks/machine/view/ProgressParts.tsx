@@ -10,7 +10,7 @@ import { iconOf } from '../../../../lib/plant/symptom-icons'
 import { ListFooter, ProblemState, TaskCard, TaskLine } from '../../shared/view/TaskParts'
 import type { TaskProblem } from '../../shared/task-api'
 import type { FloorRequest, FloorRequestRecord, QueueEntry, StoredMedia } from '../api'
-import { INCIDENT_PAGE, mediaHeld, progressRows, progressTone, queueOrder, stationOrder } from '../depth'
+import { mediaHeld, progressRows, progressTone, queueOrder, stationOrder } from '../depth'
 import { labelOf, MACHINE_TONE, statusKey } from '../model'
 import { StoredList, type Place } from './MediaParts'
 
@@ -235,13 +235,13 @@ export function RequestBody({ record, t, locale, place, online, canReport, done,
   )
 }
 
-// ---- "Guard missing also offers Report an incident" (the hook of B-W2b-137) -----------------------------------------------
+// ---- "Guard missing also offers Report an incident" (B-W2b-137) -------------------------------------------------------------
 
-/** Held with the reason until B-W2b-137 sets INCIDENT_PAGE; then it opens the incident report. */
+/** Opens Report an incident (SCR-230) with this machine passed on. */
 export function IncidentOffer({ t, onOpen }: { t: Translate; onOpen: () => void }) {
   return (
     <div className="fw-mc-incident">
-      <FloorButton size="lg" variant="secondary" icon={<TriangleAlert />} heldReason={INCIDENT_PAGE ? null : t('held.incident')} onClick={onOpen}>
+      <FloorButton size="lg" variant="secondary" icon={<TriangleAlert />} onClick={onOpen}>
         {t('action.incident')}
       </FloorButton>
     </div>
