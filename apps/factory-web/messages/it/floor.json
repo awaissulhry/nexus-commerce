@@ -397,6 +397,7 @@
       "clock": "Il tuo orario di oggi, pause, badge dimenticato",
       "myday": "I tuoi minuti, registrazioni e prospetto. Li vedi solo tu.",
       "help": "Un tocco chiama la persona giusta",
+      "incident": "Un ferito, un quasi incidente o un pericolo",
       "lineview": "Chiamate, in attesa, postazioni",
       "more_one": "Un altro riquadro",
       "more_other": "Altri {count} riquadri",
@@ -412,6 +413,7 @@
     "mydayAnswers_one": "{count} risposta alla tua contestazione",
     "mydayAnswers_other": "{count} risposte alle tue contestazioni",
     "help": "Chiama aiuto",
+    "incident": "Segnala un incidente",
     "lineview": "Vista linea",
     "more": "Altro",
     "back": "Indietro"
@@ -719,7 +721,8 @@
       "onBehalf_one": "Inserimento per conto di altri: {code} · {count} buono",
       "onBehalf_other": "Inserimento per conto di altri: {code} · {count} buoni",
       "progress": "Avanzamento di una segnalazione guasto",
-      "repair": "Scansione di riparazione di {code}"
+      "repair": "Scansione di riparazione di {code}",
+      "incident": "Segnalazione di sicurezza"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

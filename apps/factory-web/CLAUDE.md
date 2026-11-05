@@ -254,7 +254,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (`GET /plant/floor/requests[/:id]`; Seen / On my way / It works through `stepOrKeep`: online first, queued as
   `plant.request.progress` under the try's id, its key `<device>.<id>`), the technician's queue, the line lead's confirm, the
   one-screen close (factory-domain plant/jobs/close tiles), files opened through `GET /plant/floor/files/:id/download`;
-  `INCIDENT_PAGE` in depth.ts is the hook B-W2b-137 sets.
+  `INCIDENT_PAGE` in depth.ts opens Report an incident with the machine passed on (`incident/handoff.ts`, B-W2b-137).
+  B-W2b-137: `floor/tasks/incident/` (SCR-230, `/floor/incident`, tile `incident` on every station mode, a line tablet and a phone,
+  kept on Home's first page with the Line view and Scan anything; catalogue `floor-incident`; on the API of B-W2b-125): someone
+  hurt first (112 is factory-domain's EMERGENCY_NUMBER, so it shows before any read; the site's first aiders from
+  `GET /safety/floor/incidents/start`; the call for help in one tap = the station's Safety call, else its team leader's, queued as
+  `andon.call.send`), then What → Where ("Here: this station" first) → Send, three taps (the DS ReasonGrid moves on by a tap or
+  Enter, never by an arrow). With the name: the queue's `safety.incident.report` FIRST, not an online try (the API hashes the
+  report's time, so a try and a queued retry of one id would be refused as a reused id). Without the name (a near miss or a
+  hazard naming nobody): online only, one key kept until answered, held in the page with the network gone, never stored.
+  "Seen by safety" from live `incident.seen` + a beat; photos (≤ 4, 30 minutes) after the office names the incident.
   B-W2b-140 (the office side of requests and jobs in depth; `areas/plant/requests/depth/` = api (the depth reads extend W2a's
   schemas, which drop unknown fields), model (pure: Age tone by escalation, Routed to, the merge's group / target / sources —
   a locking request never into another request —, Lock as unsafe, progress, the trail, the close's tiles, the lead), made-up

@@ -55,8 +55,7 @@
     "worksLocked": "Locked as unsafe: a technician signs it safe first.",
     "worksNotFixed": "Not fixed yet: confirm once the technician has handed the machine back.",
     "stepDone": "Done already, or not possible now.",
-    "failure": "Tap what failed.",
-    "incident": "Reporting an incident comes with a later version: tell your team leader now."
+    "failure": "Tap what failed."
   },
   "status": {
     "RUNNING": "Running",
