@@ -69,6 +69,7 @@ const SESSION_SELECT = {
   mfaAt: true,
   stepUpAt: true,
   revokedAt: true,
+  audience: true,
   company: { select: { status: true } },
   user: {
     select: { email: true, displayName: true, locale: true, status: true, requireMfa: true, totpConfirmedAt: true, tenant: { select: { status: true } } },
@@ -80,10 +81,13 @@ type SessionRow = NonNullable<Awaited<ReturnType<typeof findSession>>>
 const findSession = (client: FactoryClient, token: AuthToken) =>
   client.session.findUnique({ where: { tokenHash: tokenHash(token.value) }, select: SESSION_SELECT })
 
-/** The live session of a token, or null (unknown, revoked, expired, its user not active, its tenant suspended). */
+/**
+ * The live session of a token, or null (unknown, revoked, expired, its user not active, its tenant suspended, or not an
+ * office session: W2b's portal sessions and office previews of a portal, audience PARTNER, never open an office route).
+ */
 export async function liveSession(client: FactoryClient, token: AuthToken, now: Date): Promise<SessionRow | null> {
   const row = await findSession(client, token)
-  if (!row || row.userId !== token.userId || row.revokedAt !== null || row.user.status !== 'ACTIVE' || row.user.tenant.status !== 'ACTIVE') return null
+  if (!row || row.audience !== 'OFFICE' || row.userId !== token.userId || row.revokedAt !== null || row.user.status !== 'ACTIVE' || row.user.tenant.status !== 'ACTIVE') return null
   if (row.idleExpiresAt.getTime() <= now.getTime() || row.absoluteExpiresAt.getTime() <= now.getTime()) return null
   return row
 }
