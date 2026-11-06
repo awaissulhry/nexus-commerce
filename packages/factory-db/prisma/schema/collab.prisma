@@ -18,14 +18,23 @@
 // Lavoratori art. 4; Owner answer W1). A notification's sentence is built for its reader at read time from its message
 // key and params; the fan-out puts in params only what that reader may see (no price without the grain, PLT-152). The
 // hand-written migration …_platform_w2a_guards holds the rules Prisma does not model.
+//
+// W2b schema wave 20/22 (B-W2b-156; PLT-148, COL-063): partner users get notifications too. Notification.partyId is the
+// person's party, set exactly when the person is a partner user (the partner policy key; …_portal_frame_w2b_guards): a
+// portal session reads its own party's notifications (the API keeps each person to their own, as for the office) and
+// never who in the office caused one. A partner's notifications reach e-mail as they happen or in a daily or weekly
+// summary (NotificationChannel EMAIL_DIGEST), as the person chose (portal-frame.prisma PartnerEmailPreference).
 
 /// One thing the system told one person. Its sentence, record and event never change; its person reads it, marks it
 /// done, snoozes it. Kept (its deliveries name it).
 model Notification {
   id           String               @id @db.Uuid
   tenantId     String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
-  /// The office user it is for.
+  /// The person it is for: an office user, or (W2b) a partner user.
   userId       String               @db.Uuid
+  /// W2b (B-W2b-156): the person's party, set exactly when the person is a partner user (the partner policy key); null
+  /// for an office user. Never changes.
+  partyId      String?              @db.Uuid
   /// The record's company (the company tag of a person who works for several); null: a tenant-wide record.
   companyId    String?              @db.Uuid
   category     NotificationCategory
@@ -66,6 +75,8 @@ model Notification {
   // A person's list, newest first (the bell and home.notifications).
   @@index([tenantId, userId, createdAt])
   @@index([tenantId, recordType, recordId])
+  // W2b: a party's notifications (the partner policy reads by it).
+  @@index([tenantId, partyId])
 }
 
 /// The tabs of home.notifications.
@@ -109,6 +120,8 @@ enum NotificationChannel {
   EMAIL
   /// A push to the person's device (W2b).
   PUSH
+  /// W2b (B-W2b-156, PLT-148): listed in a partner's daily or weekly summary mail; SENT names that mail.
+  EMAIL_DIGEST
 }
 
 enum NotificationDeliveryOutcome {
