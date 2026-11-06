@@ -161,6 +161,8 @@ model Item {
   secondQualityDowngrades GarmentDowngrade[] @relation("GarmentDowngradeItem")
   // supply.prisma: the purchase order lines that buy it and the planning runs' requirements of it.
   purchaseOrderLines   PurchaseOrderLine[]
+  // W2b (wave 22/22): the purchase order lines whose supplier proposes it as a substitute.
+  substituteProposals  PurchaseOrderLine[] @relation("PurchaseOrderLineSubstitute")
   materialRequirements MaterialRequirement[]
   // W2a cost-ledger.prisma (wave 7/7): its frozen standard costs, and the work-order cost entries that name it.
   /// @not-money the relation to its standard costs (the rows carry the grain)

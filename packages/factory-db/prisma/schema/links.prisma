@@ -89,6 +89,8 @@ model OneOffLink {
   // supply.prisma: the purchase orders confirmed through it (PO_CONFIRM), and those it proposed changes to.
   purchaseOrderConfirmations PurchaseOrder[] @relation("PurchaseOrderConfirmLink")
   purchaseOrderProposals     PurchaseOrder[] @relation("PurchaseOrderProposalLink")
+  // W2b portal-supply.prisma (wave 22/22): the supplier questionnaire answers sent through it (SUPPLIER_ONBOARD).
+  questionnaireResponses     SupplierQuestionnaireResponse[]
 
   // The target of the evidence rows' reference: an evidence row names its link's party.
   @@unique([tenantId, partyId, id])

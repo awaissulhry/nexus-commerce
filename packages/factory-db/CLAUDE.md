@@ -149,7 +149,14 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    files added while it is unused, never changed; drafts sealed, only for a long form and only while the link opens; record shares
    (VIEW always, 180 days at most, the party switches its e-mail only); approval requests answered once by the party; no link, file
    set, share or approval of a pay record (`factory_link_pay_record`); it redefines W0's `factory_guard_link_change` and wave 11's
-   `factory_ncr_concession_guard` (the customer writes the answer columns only, after its approval request's answer)): triggers, partial unique indexes and deferred
+   `factory_ncr_concession_guard` (the customer writes the answer columns only, after its approval request's answer)),
+   `…_portal_supply_w2b_guards` (W2b wave 22/22, the supplier portal: ship notices DRAFT → SENT (numbered by the office) →
+   RECEIVED (a posted receipt names it), lines and the packing list per hide while DRAFT or SENT, a goods receipt's ship notice
+   of its own order; progress reports append-only; return notices announced once, then received or cancelled; questionnaire
+   versions fixed once published, answers reviewed once; the kit line's check by the workshop once while SENT; it redefines
+   W2a's `factory_purchase_order_line_guard` (the substitute and the buyer's-yes flag in the proposal) and
+   `factory_subcontract_order_guard` (the workshop's answer and the office's answer to its date; cleared back to DRAFT; a
+   partner session answers only)): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written

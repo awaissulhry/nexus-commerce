@@ -261,6 +261,7 @@
       "COMPLAINT": "Customer complaint",
       "CLAIM": "Supplier claim",
       "SUBCONTRACT": "Subcontract order",
+      "ASN": "Ship notice",
       "COUNT": "Stock count",
       "NCR": "Nonconformance",
       "MAINTENANCE_JOB": "Maintenance job",
