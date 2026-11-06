@@ -1,4 +1,4 @@
-import { BellRing, CalendarCheck, CalendarClock, Cog, FileCheck2, FlaskConical, HardHat, SlidersHorizontal, Wrench } from 'lucide-react'
+import { BellRing, CalendarCheck, CalendarClock, Cog, FileCheck2, FlaskConical, HardHat, ShieldAlert, SlidersHorizontal, Wrench } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -39,12 +39,15 @@ export const officeArea: OfficeAreaNav = {
         items: [
           // B-W2b-144: the risk assessment (SCR-209) — the DVR per site with its versions and signatures, the improvement plan, the role sheets (GET /safety/risk/assessments, safety.view).
           { id: 'plant-risk', label: 'shell:nav.plant.risk', href: '/plant/risk', icon: FileCheck2, permission: 'safety.view' },
+          // B-W2b-149: Incidents (SCR-210), injuries, near misses and hazards with the INAIL deadline (GET /safety/incidents, safety.incidents.view).
+          { id: 'plant-incidents', label: 'shell:nav.plant.incidents', href: '/plant/incidents', icon: ShieldAlert, permission: 'safety.incidents.view' },
           // B-W2b-143: the chemical register, the safety data sheets and the cabinet QR (GET /safety/chemicals, safety.view).
           { id: 'plant-chemicals', label: 'shell:nav.plant.chemicals', href: '/plant/chemicals', icon: FlaskConical, permission: 'safety.view' },
           { id: 'plant-calendar', label: 'shell:nav.plant.calendar', href: '/plant/calendar', icon: CalendarCheck, permission: 'safety.view' },
         ],
       },
-      // B-W2a-73: Plant settings (SCR-241), its W2a section "Symptoms on the floor" (GET /plant/symptoms, plant.view).
+      // B-W2a-73: Plant settings (SCR-241), its W2a section "Symptoms on the floor" (GET /plant/symptoms, plant.view);
+      // B-W2b-141 adds routing and escalation, the unsafe lock, check types and incidents (each read with plant.view or its own right).
       {
         id: 'plant-settings',
         label: 'shell:nav.plant.settingsGroup',

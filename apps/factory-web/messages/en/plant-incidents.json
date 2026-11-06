@@ -1,0 +1,672 @@
+{
+  "access": {
+    "body": "Incidents are open to the safety, HR and production roles (safety.incidents.view). Ask your administrator if you need them.",
+    "title": "No access to incidents"
+  },
+  "action": {
+    "add": "Add action",
+    "addMake": {
+      "MAINTENANCE_JOB": "Add and make the job",
+      "RISK_MEASURE": "Add to the improvement plan",
+      "TRAINING_SESSION": "Add and plan training"
+    },
+    "cancel": "Cancel action",
+    "cancelTitle": "Cancel action {n}",
+    "cancelledAt": "Cancelled {at}",
+    "change": "Change",
+    "done": "Mark done",
+    "doneBy": "Done {at} by {by}",
+    "doneTitle": "Action {n} done",
+    "due": "Due on",
+    "editTitle": "Change action {n}",
+    "evidence": "Evidence",
+    "evidenceHint": "What shows it was done (optional).",
+    "mine": "I keep it",
+    "newTitle": "New action",
+    "noDue": "No day",
+    "noOwner": "Nobody yet",
+    "overdue": "Overdue",
+    "owner": "Owner",
+    "ownerHint": "Another owner is set on the job or the measure it becomes.",
+    "reason": "Reason",
+    "save": "Save",
+    "title": "What must be done"
+  },
+  "actionStatus": {
+    "CANCELLED": "Cancelled",
+    "DONE": "Done",
+    "OPEN": "Open"
+  },
+  "actions": {
+    "count_one": "{count} action",
+    "count_other": "{count} actions",
+    "empty": "Add what must change so it does not happen again.",
+    "emptyTitle": "No actions yet.",
+    "new": "New action",
+    "note": "Each one can become a maintenance job or a measure of the improvement plan in one step.",
+    "title": "Actions"
+  },
+  "band": {
+    "export": "Export (anonymised)",
+    "exportHint": "Use Export above the list: names and injuries never go in the file.",
+    "label": "Incidents",
+    "more": "More",
+    "nextDeadline": "Next INAIL deadline {number}:",
+    "noDeadline": "No INAIL deadline running",
+    "print": "Print (anonymised)",
+    "printHint": "The list as filtered, for the safety meeting: no names.",
+    "reading": "Reading…",
+    "report": "Report an incident"
+  },
+  "bodyPart": {
+    "ABDOMEN": "Abdomen",
+    "ANKLE": "Ankle",
+    "ARM": "Arm",
+    "BACK": "Back",
+    "CHEST": "Chest",
+    "ELBOW": "Elbow",
+    "EYE": "Eye",
+    "FACE": "Face",
+    "FINGER": "Finger",
+    "FOOT": "Foot",
+    "HAND": "Hand",
+    "HEAD": "Head",
+    "HIP": "Hip",
+    "KNEE": "Knee",
+    "LEG": "Leg",
+    "MULTIPLE": "Several parts",
+    "NECK": "Neck",
+    "SHOULDER": "Shoulder",
+    "TOE": "Toe",
+    "WRIST": "Wrist"
+  },
+  "bulk": {
+    "done": "Mark done {count}",
+    "exportOnly": "Export the chosen rows (anonymised).",
+    "seen": "Mark seen {count}"
+  },
+  "cancel": {
+    "body": "A report made by mistake or twice: it stays on record as cancelled.",
+    "confirm": "Cancel the report",
+    "reason": "Reason",
+    "title": "Cancel {number}"
+  },
+  "close": {
+    "actions_one": "{count} action open",
+    "actions_other": "{count} actions open",
+    "body": "A closed incident keeps everything; it can be reopened.",
+    "confirm": "Close",
+    "filings_one": "{count} INAIL filing waiting",
+    "filings_other": "{count} INAIL filings waiting",
+    "title": "Close {number}"
+  },
+  "col": {
+    "action": "Action",
+    "actions": "Actions open",
+    "due": "Due",
+    "evidence": "Evidence",
+    "inail": "INAIL",
+    "injury": "Injury",
+    "kind": "Kind",
+    "machine": "Machine",
+    "madeInto": "Made into",
+    "number": "Number",
+    "occurredAt": "When",
+    "owner": "Owner",
+    "people": "People",
+    "severity": "Severity",
+    "site": "Site",
+    "status": "Status",
+    "where": "Area"
+  },
+  "common": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "reading": "Reading…",
+    "retry": "Try again",
+    "stillLoading": "Still loading…"
+  },
+  "deadline": {
+    "body": "Filed by hand on the INAIL portal within 48 hours of the medical certificate; record it here once sent.",
+    "dueIn": "due in {left}",
+    "dueNow": "due now",
+    "failed": "The INAIL deadlines could not be checked",
+    "label": "INAIL deadline",
+    "lateBy": "late by {span}",
+    "more_one": "{count} more deadline under 24 hours or late.",
+    "more_other": "{count} more deadlines under 24 hours or late.",
+    "open": "Open",
+    "title": "{number}: INAIL report"
+  },
+  "dialog": {
+    "refused": "Not done"
+  },
+  "filing": {
+    "actual": "Actual absence",
+    "certificate": "Medical certificate received",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "deadline": "Deadline",
+    "deadlines": "INAIL deadlines",
+    "dueBy": "by {at}",
+    "expected": "Expected absence",
+    "filed": "Filed",
+    "filedBy": "{at} by {by}",
+    "n": "Filing {n}",
+    "needed": "Needed again",
+    "noCertificate": "Not yet",
+    "noneInjury": "No INAIL filing yet: record the absence when the medical certificate arrives (Record INAIL filing).",
+    "noneOther": "A near miss or a hazard needs no INAIL filing.",
+    "notNeeded": "Not needed",
+    "notNeededBy": "Marked not needed {at} by {by}.",
+    "note": "The deadline is the company’s duty: everyone with the incidents sees it.",
+    "privacy": "The filing names the injured person and tells the absence: protected data.",
+    "protocol": "INAIL protocol number",
+    "receipt": "INAIL’s receipt",
+    "restricted": "Only HR and the safety roles see the filing itself; the deadline is above.",
+    "title": "Filing",
+    "value": "The filings",
+    "waitingHint": "The 48 hours start when the medical certificate is received."
+  },
+  "filingDialog": {
+    "calls": "This absence calls for the {type}.",
+    "certificateAt": "Certificate received at",
+    "certificateHint": "Starts the 48-hour clock.",
+    "certificateRef": "Certificate reference",
+    "choosePerson": "Choose the person",
+    "daysHint": "Days of absence beyond the day of the event.",
+    "dueBy": "Due by {at} (48 hours after it).",
+    "filedAt": "Filed at",
+    "filedHint": "Once sent: when, INAIL’s protocol number and its receipt.",
+    "filedLegend": "Sent on the INAIL portal",
+    "new": "A new filing",
+    "noPerson": "A filing is for an injured person of the company.",
+    "partly": "Part of it was saved already",
+    "person": "Injured person",
+    "privacy": "Opened for this filing: the view was recorded.",
+    "protocol": "Protocol number",
+    "receipt": "INAIL’s receipt (PDF)",
+    "receiptHint": "The PDF INAIL gives after the filing (never the medical certificate).",
+    "receiptOnFile": "On file: {name}",
+    "save": "Record filing",
+    "step": {
+      "add": "the filing added",
+      "edit": "the absence and the certificate saved",
+      "file": "the filing recorded",
+      "receipt": "the receipt uploaded"
+    },
+    "title": "Record INAIL filing · {number}",
+    "type": "Type",
+    "typeHint": "Decided by the absence (over three days: the insurance report).",
+    "which": "Filing"
+  },
+  "filingState": {
+    "DUE": "Due",
+    "FILED": "Filed",
+    "NOT_NEEDED": "Not needed",
+    "OVERDUE": "Overdue",
+    "WAITING_CERTIFICATE": "Waiting for the certificate"
+  },
+  "filingType": {
+    "INSURANCE": "Insurance report",
+    "STATISTICAL": "Statistical communication"
+  },
+  "held": {
+    "action": {
+      "title": "Say what must be done.",
+      "titleLong": "At most 300 characters."
+    },
+    "actionClosed": "This action is done or cancelled.",
+    "actionsOpen": "It stays open while an action is open: finish or cancel the actions first.",
+    "allSeen": "The chosen incidents were seen already.",
+    "cancelled": "A cancelled incident no longer changes.",
+    "company": "Choose a company in the top bar first.",
+    "filing": {
+      "absence": "Give the days of absence as a whole number.",
+      "filedAt": "Say when it was filed.",
+      "person": "Choose the injured person.",
+      "protocol": "Give INAIL’s protocol number.",
+      "receiptAfter": "INAIL’s receipt comes after the filing: record the filing too."
+    },
+    "filingWaiting": "It stays open while an INAIL filing waits: record it, or mark it not needed.",
+    "noChange": "Nothing changed yet.",
+    "noManage": "Kept by the safety roles (safety.incidents.manage).",
+    "noManagePhoto": "Photos are added by the safety roles (safety.incidents.manage).",
+    "noPeople": "Only HR and the safety roles (safety.incidents.people).",
+    "noPlantPicker": "The stations and machines need plant.view: say the place in words.",
+    "noReport": "Reporting from the office needs safety.incidents.report.",
+    "noRows": "No incident on this page.",
+    "noneOpen": "Choose open actions.",
+    "notClosed": "Only a closed incident is reopened.",
+    "notInjury": "An INAIL filing is for an injury.",
+    "notOpen": "Only an open incident.",
+    "notOpenActions": "Actions change only while the incident is open.",
+    "notOpenEdit": "A closed or cancelled incident no longer changes: reopen it first.",
+    "person": {
+      "choose": "Choose the person of the company, or name someone from outside.",
+      "name": "Give the name of the person from outside.",
+      "nameLong": "At most 200 characters.",
+      "side": "A side goes with the body parts hurt."
+    },
+    "photosFull": "Up to 4 photos with the report; add more on the incident.",
+    "reading": "Reading…",
+    "reason": "Give the reason.",
+    "report": {
+      "kind": "Choose what happened.",
+      "people": "At most 20 people.",
+      "site": "Choose the site.",
+      "what": "Say what happened in words.",
+      "whatLong": "At most 2000 characters.",
+      "when": "Say when it happened."
+    },
+    "saving": "Saving…",
+    "trainingLater": "Plan training needs the safety courses: they come with the Safety training page."
+  },
+  "involvement": {
+    "INJURED": "Hurt",
+    "INVOLVED": "Involved, not hurt"
+  },
+  "keys": {
+    "all": "All shortcuts",
+    "close": "Close the dialog",
+    "filing": "Record INAIL filing",
+    "openAction": "Open the action",
+    "report": "Report an incident",
+    "title": "Keyboard shortcuts"
+  },
+  "kind": {
+    "HAZARD": "Hazard",
+    "INJURY": "Injury",
+    "NEAR_MISS": "Near miss"
+  },
+  "law": {
+    "inailPlain": "The employer reports to INAIL an injury with an absence of at least one day beyond the day of the event.",
+    "peoplePlain": "Health data are special categories: only those who need them see them, and every view is recorded."
+  },
+  "list": {
+    "clear": "Clear filters",
+    "count_one": "{count} incident",
+    "count_other": "{count} incidents",
+    "empty": "Anyone reports from a station or a phone in three taps; the office reports here.",
+    "emptyTitle": "No incidents recorded.",
+    "failed": "The incidents could not be read",
+    "label": "Incidents, near misses and hazards",
+    "more": "Show more",
+    "moreReading": "Reading the next page…",
+    "noneMatch": "No incident matches these filters.",
+    "noneMatchTitle": "Nothing matches",
+    "note": "Anonymised: no person in the list.",
+    "rows": "Rows",
+    "search": "Number",
+    "status": "Status",
+    "title": "Incidents"
+  },
+  "madeInto": {
+    "MAINTENANCE_JOB": "Maintenance job",
+    "RISK_MEASURE": "Improvement plan measure",
+    "TRAINING_SESSION": "Training session",
+    "none": "Not linked"
+  },
+  "make": {
+    "MAINTENANCE_JOB": "Make a job",
+    "NONE": "Just an action",
+    "RISK_MEASURE": "Add to improvement plan",
+    "TRAINING_SESSION": "Plan training",
+    "chooseMachine": "Choose the machine",
+    "do": {
+      "MAINTENANCE_JOB": "Make the job",
+      "NONE": "Save",
+      "RISK_MEASURE": "Add to the plan",
+      "TRAINING_SESSION": "Plan training"
+    },
+    "legend": "Make it into",
+    "machine": "Machine",
+    "machineDefault": "The incident’s machine {asset} unless you choose another.",
+    "oneStep": "Make it into, in one step",
+    "priority": "Priority",
+    "priorityDefault": "P2 (default)",
+    "priorityHint": "The maintenance lead may change it.",
+    "problem": "Problem for the job",
+    "risk": "The risk",
+    "riskHint": "In words, as the improvement plan will read it (optional).",
+    "title": {
+      "MAINTENANCE_JOB": "Make a job from action {n}",
+      "NONE": "Action {n}",
+      "RISK_MEASURE": "Add action {n} to the improvement plan",
+      "TRAINING_SESSION": "Plan training from action {n}"
+    }
+  },
+  "makeHint": {
+    "MAINTENANCE_JOB": "A safety job for the maintenance lead, on the machine named (P2 unless you choose).",
+    "NONE": "Kept on this incident.",
+    "RISK_MEASURE": "A planned measure of the site’s risk assessment, naming this incident.",
+    "TRAINING_SESSION": "A training session at the site."
+  },
+  "nature": {
+    "AMPUTATION": "Amputation",
+    "BRUISE": "Bruise",
+    "BURN": "Burn",
+    "CHEMICAL_BURN": "Chemical burn",
+    "CRUSH": "Crush",
+    "CUT": "Cut",
+    "ELECTRIC_SHOCK": "Electric shock",
+    "FOREIGN_BODY": "Foreign body",
+    "FRACTURE": "Fracture",
+    "OTHER": "Other",
+    "PUNCTURE": "Puncture",
+    "SPRAIN": "Sprain",
+    "STRAIN": "Strain"
+  },
+  "note": {
+    "body": "The INAIL filing names the injured person and tells the absence: protected data. Opening it is recorded.",
+    "confirm": "Open and record",
+    "title": "Open the filings of {number}?",
+    "what": "The people involved and the filings open; they stay on this page until you hide them or leave."
+  },
+  "notice": {
+    "actionAdded": "Action added.",
+    "actionCancelled": "Action cancelled.",
+    "actionDone": "Action done.",
+    "actionSaved": "Action saved.",
+    "actionsDone_one": "{count} action done.",
+    "actionsDone_other": "{count} actions done.",
+    "cancelled": "{number} cancelled.",
+    "closed": "{number} closed.",
+    "edited": "Report saved.",
+    "filed": "INAIL filing recorded: the reminders stop.",
+    "filingSaved": "INAIL filing saved.",
+    "made": {
+      "MAINTENANCE_JOB": "Maintenance job made.",
+      "RISK_MEASURE": "Added to the improvement plan.",
+      "TRAINING_SESSION": "Training session planned."
+    },
+    "moreFailed": "The next page could not be read: try again.",
+    "needed": "The filing is needed again.",
+    "notNeeded": "The filing is marked not needed.",
+    "open": "Open {number}",
+    "photo": "Photo added.",
+    "refusedRow": "{label}: {why}",
+    "reopened": "{number} reopened.",
+    "reported": "Report {number} sent.",
+    "reportedPhotos": "Report {number} sent; {count} photo not sent: add it on the incident.",
+    "seen_one": "{count} incident marked seen by safety.",
+    "seen_other": "{count} incidents marked seen by safety."
+  },
+  "people": {
+    "confirm": "Show people ({count})",
+    "confirmBody": "The names and injuries of the {count} incidents on this page are shown in the list until you hide them or leave. They never go in an export or a print.",
+    "confirmNote": "Who was hurt and how: protected data. Opening it is recorded.",
+    "confirmTitle": "Show the people involved?",
+    "count": "{count} involved, {injured} hurt",
+    "failed": "The people could not be read",
+    "hide": "Hide people",
+    "none": "Nobody named",
+    "panelNote": "Who was hurt and how is protected data (GDPR art. 9).",
+    "reading": "Reading the people…",
+    "restricted": "Only HR and the safety roles see who; others see the count.",
+    "show": "Show people",
+    "shownNote": "People of {count} incidents shown: this view was recorded.",
+    "title": "People involved",
+    "value": "Who and how",
+    "who": "Only HR and the safety roles see who was involved and how."
+  },
+  "person": {
+    "firstAid": "First aid given",
+    "hospital": "Sent to hospital",
+    "outside": "from outside"
+  },
+  "photos": {
+    "add": "Add a photo",
+    "addTitle": "A photo for {number}",
+    "n": "Photo {n}",
+    "none": "No photos.",
+    "note": "Office only: a photo may show an injury.",
+    "open": "Open",
+    "title": "Photos"
+  },
+  "print": {
+    "allSites": "All sites",
+    "more": "Only the first {count} incidents are printed: narrow the filters for the rest.",
+    "note": "Anonymised list for the safety meeting: no person, injury or filing type.",
+    "number": "Number",
+    "tableLabel": "Incidents",
+    "title": "Incidents (anonymised)",
+    "window": "When"
+  },
+  "priority": {
+    "P1": "P1 · urgent",
+    "P2": "P2 · soon",
+    "P3": "P3 · later"
+  },
+  "problem": {
+    "conflict": "It changed meanwhile: read it again.",
+    "contract": "This page and the server do not agree: reload the page.",
+    "field": "A field is not valid.",
+    "forbidden": "You may not do this here.",
+    "internal": "Something went wrong on our side: try again.",
+    "invalid": "Something in it is not valid.",
+    "noAnswer": "No answer: check the connection and try again.",
+    "notFound": "It is no longer there.",
+    "rateLimited": "Too many tries: wait a moment.",
+    "read": "It could not be read just now: try again.",
+    "signedOut": "Your session ended: sign in again.",
+    "unavailable": "The server did not answer: try again."
+  },
+  "record": {
+    "back": "Incidents",
+    "cancel": "Cancel the report",
+    "cancelHint": "A duplicate or a mistake, with the reason.",
+    "cancelledAt": "Cancelled {at} by {by}",
+    "close": "Close incident",
+    "filing": "Record INAIL filing",
+    "machine": "Machine {asset}",
+    "more": "More",
+    "notSeen": "Not seen by safety yet",
+    "noun": "Incident",
+    "reopen": "Reopen",
+    "request": "The machine request",
+    "seenAt": "Seen by safety {at}",
+    "someone": "someone"
+  },
+  "refusal": {
+    "ACTIONS_OPEN": "It stays open while an action is open.",
+    "ACTION_NOT_OPEN": "This action is done or cancelled; it no longer changes.",
+    "ANONYMOUS_FROM_OFFICE": "From the office a report carries your name.",
+    "ANONYMOUS_INJURY": "An injury is reported with a name: only a near miss or a hazard may be sent without one.",
+    "ANONYMOUS_NAMES_NOBODY": "A report without a name names nobody.",
+    "ANONYMOUS_NOT_QUEUED": "A report without a name is sent at once, never kept in the tablet’s queue.",
+    "CERTIFICATE_BEFORE_EVENT": "The certificate was received after the incident happened.",
+    "CERTIFICATE_IN_FUTURE": "The certificate was received at the latest now.",
+    "CERTIFICATE_MISSING": "Record when the medical certificate was received first: it starts the 48 hours.",
+    "COURSE_NOT_ACTIVE": "The course is not an active course of the company.",
+    "FILED_BEFORE_CERTIFICATE": "A filing is sent after the certificate was received.",
+    "FILED_IN_FUTURE": "It was filed at the latest now.",
+    "FILING_EXISTS": "This person has a filing of that type already: change that one.",
+    "FILING_FILED": "This filing was recorded as filed; it no longer changes.",
+    "FILING_NOT_EMPLOYEE": "An INAIL filing is for an injured person of the company.",
+    "FILING_NOT_NEEDED_NOW": "Only a filing marked not needed is needed again.",
+    "FILING_WAITING": "It stays open while an INAIL filing waits for its certificate or its filing.",
+    "INJURED_NOT_INJURY": "Someone hurt is reported in an injury: choose Injury, or name the person as involved.",
+    "MADE_ALREADY": "This action was made into its record already.",
+    "NOT_CLOSED": "Only a closed incident is reopened.",
+    "NOT_OPEN": "This incident is closed or cancelled: reopen it first.",
+    "NO_ASSESSMENT": "The site has no active risk assessment for the measure: the safety officer keeps it on the risk assessment page.",
+    "NO_FILING_NEEDED": "An absence of less than one day beyond the day of the event needs no INAIL filing.",
+    "NO_MACHINE": "A maintenance job is for a machine: choose the machine.",
+    "OCCURRED_IN_FUTURE": "It happened at the latest now.",
+    "PERSON_HAS_FILING": "This person has an INAIL filing: they stay in the incident.",
+    "PERSON_OTHER_COMPANY": "The person works for another company: name them as someone from outside.",
+    "PERSON_TWICE": "This person is named twice.",
+    "PHOTOS_FULL": "A report from a tablet takes up to 4 photos; the office adds more.",
+    "PHOTO_WINDOW": "A tablet adds photos within 30 minutes of its report; later the office adds them.",
+    "REQUEST_OTHER_SITE": "The machine request is one of this site’s.",
+    "STAYS_INJURY": "It stays an injury while a person is hurt in it.",
+    "TRAINER_NOT_ACTIVE": "The trainer is a person of the company who works there now, or an outside trainer by name.",
+    "WHERE_MISSING": "Say where it happened: a station, a machine or a place in words.",
+    "WHERE_OTHER_SITE": "The station or machine is one of this site’s."
+  },
+  "reopen": {
+    "body": "It becomes open again: actions and filings can change.",
+    "confirm": "Reopen",
+    "title": "Reopen {number}"
+  },
+  "report": {
+    "addPerson": "Add a person",
+    "addPhoto": "Add a photo",
+    "at": "At {site}",
+    "bodyParts": "Body parts hurt",
+    "choosePerson": "Choose the person",
+    "chooseSite": "Choose the site",
+    "employee": "A person of the company",
+    "findPerson": "Find by name or code",
+    "immediate": "Immediate action",
+    "immediateHint": "What was done at once (first aid, machine stopped, area closed off).",
+    "injuredOnlyInjury": "Someone hurt is reported as an injury: choose Injury above.",
+    "involvement": "Hurt or involved",
+    "kind": "What happened",
+    "machine": "Machine",
+    "nature": "Nature of the injury",
+    "noStaffList": "The staff list is open to the safety office and HR: name someone from outside by name, or leave the people out and the safety office adds them.",
+    "none": "None",
+    "outside": "Someone from outside",
+    "outsideName": "Name",
+    "people": "People involved (optional)",
+    "peopleFailed": "The staff list could not be read.",
+    "peopleNote": "Written with the report and never shown back here: only HR and the safety roles open them, and every opening is recorded.",
+    "person": "Person",
+    "personN": "Person {n}",
+    "photoLabel": "Photo of the incident",
+    "photoN": "Photo {n}",
+    "photoTitle": "A photo of the place",
+    "photos": "Photos",
+    "photosHint": "Up to 4 photos of the place; keep faces out.",
+    "pickersFailed": "The stations or machines could not be read: say the place in words.",
+    "place": "Place in words",
+    "placeHint": "e.g. the walkway by the dock",
+    "refused": "The report was not sent",
+    "removePerson": "Remove",
+    "removePhoto": "Remove photo {n}",
+    "send": "Send report",
+    "side": "Side",
+    "site": "Site",
+    "station": "Station",
+    "title": "Report an incident",
+    "typeMore": "More people match: type more of the name.",
+    "what": "In words",
+    "whatHint": "What happened, without naming who was hurt: the people go below.",
+    "when": "When",
+    "where": "Where",
+    "whereHint": "A station, a machine or a place in words: at least one.",
+    "who": "Who"
+  },
+  "reporter": {
+    "anonymous": "Sent without a name: no worker or tablet is stored.",
+    "office": "Someone in the office",
+    "system": "Opened by the machine lock (a hazard report).",
+    "worker": "{name} (from the floor)",
+    "workerHidden": "A worker at the station (the site records no workers by name)."
+  },
+  "row": {
+    "actionsOverdue": "{count} ({overdue} overdue)",
+    "noFiling": "No filing",
+    "nobody": "Nobody named",
+    "notSeen": "Not seen yet"
+  },
+  "rows": {
+    "HAZARD": "Hazards",
+    "INAIL_DUE": "INAIL due",
+    "INJURY": "Injuries",
+    "NEAR_MISS": "Near misses",
+    "all": "All kinds"
+  },
+  "rule": {
+    "manual": "INAIL has no link with Nexus: the filing is sent on its portal, then recorded here.",
+    "portal": "Open the INAIL portal",
+    "title": "What the law asks"
+  },
+  "severity": {
+    "FIRST_AID": "First aid",
+    "LOST_DAYS": "Lost days",
+    "NONE": "No injury",
+    "UNKNOWN": "To assess"
+  },
+  "side": {
+    "BOTH": "Both sides",
+    "LEFT": "Left",
+    "RIGHT": "Right"
+  },
+  "status": {
+    "CANCELLED": "Cancelled",
+    "CLOSED": "Closed",
+    "OPEN": "Open"
+  },
+  "statusFilter": {
+    "ALL": "All, cancelled too",
+    "CANCELLED": "Cancelled",
+    "CLOSED": "Closed",
+    "OPEN": "Open",
+    "default": "Open and closed"
+  },
+  "tab": {
+    "actions": "Actions",
+    "authority": "Authority notice",
+    "report": "Report"
+  },
+  "tile": {
+    "actionsOverdue": {
+      "hint": "Open actions past their day: on each incident’s Actions tab (the Actions column says how many).",
+      "label": "Actions overdue"
+    },
+    "failed": "The tiles could not be read.",
+    "hazardsOpen": {
+      "hint": "Hazards reported and not closed yet.",
+      "label": "Hazards open"
+    },
+    "inailOpen": {
+      "hint": "Filings waiting for the certificate or to be sent: shows the injuries with one.",
+      "label": "INAIL deadlines open"
+    },
+    "nearMissesThisMonth": {
+      "hint": "Reported since the first of the month.",
+      "label": "Near misses this month"
+    },
+    "openIncidents": {
+      "hint": "Injuries, near misses and hazards not closed yet.",
+      "label": "Open incidents"
+    },
+    "title": "Safety events now"
+  },
+  "time": {
+    "days": "{days} d {hours} h",
+    "hours": "{hours} h",
+    "minutes": "{minutes} min"
+  },
+  "what": {
+    "closed": "Closed",
+    "closedBy": "{at} by {by}",
+    "device": "From the tablet {device}",
+    "edit": "Edit",
+    "editing": "Editing the report",
+    "fromFloor": "Reported from the floor.",
+    "fromOffice": "Reported from the office.",
+    "immediate": "Immediate action",
+    "kind": "Kind",
+    "lockedRequest": "Machine locked as unsafe: its request",
+    "machine": "Machine {asset}",
+    "noImmediate": "None recorded",
+    "notSeen": "Not yet",
+    "place": "Place in words",
+    "refused": "The change was not saved",
+    "reportedAt": "Reported {at}",
+    "reporter": "Reported by",
+    "request": "The machine request",
+    "save": "Save",
+    "seen": "Seen by safety",
+    "seenBy": "{at} by {by}",
+    "severity": "Severity",
+    "title": "What happened",
+    "what": "What",
+    "when": "When",
+    "where": "Where"
+  }
+}

@@ -38,8 +38,8 @@ const grant = (permissions: Permission[], companies: Grant['companies'] = 'all')
 const OFFICER: Permission[] = ['safety.view', 'safety.rolesheets.manage', 'safety.organisation.manage']
 const SESSIONS: Record<string, SessionContext> = {
   officer: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(OFFICER)] },
-  // HR keeps the register and is a health reader (the hr template holds safety.organisation.manage).
-  hr: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(['people.view', 'people.employees.manage', 'safety.view', 'safety.organisation.manage'])] },
+  // HR keeps the register and is a health reader (B-W2b-135: the hr template holds safety.health.view).
+  hr: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(['people.view', 'people.employees.manage', 'safety.view', 'safety.organisation.manage', 'safety.health.view'])] },
   // An administrator keeps the register but reads no health need.
   admin: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(['people.view', 'people.employees.manage'])] },
   viewer: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(['safety.view', 'people.view'])] },

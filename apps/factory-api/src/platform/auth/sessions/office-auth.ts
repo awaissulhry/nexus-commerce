@@ -9,6 +9,7 @@ import { serverClock, type Clock } from '../../../core/time'
 import type { FactoryEnv } from '../../../env'
 import { floorAuthenticator, sessionAuthenticator } from '../floor/authenticator'
 import { linkAuthenticator, withLinkSessions } from '../../links/authenticator'
+import { portalAuthenticator, withPortalSessions } from '../portal/authenticator'
 import { officeAuthenticator } from './authenticator'
 import { emailAuthMailer } from '../../email-out/auth-mail'
 import type { AuthMailer, AuthMessage } from './mail'
@@ -85,8 +86,9 @@ export interface OfficeAuth {
   readonly rateLimits: AuthRateLimits
   /**
    * Reads the session of a request (core/context.ts Authenticator): a one-off link's token in the `x-factory-link`
-   * header (platform/links/authenticator.ts), else the floor session cookie's (floor/authenticator.ts: no office
-   * fallback), else the office session cookie.
+   * header (platform/links/authenticator.ts), else for a partner route the portal cookie's (portal/authenticator.ts,
+   * B-W2b-159: no office fallback), else the floor session cookie's (floor/authenticator.ts: no office fallback), else
+   * the office session cookie.
    */
   readonly authenticate: Authenticator
   /** Reads inside a tenant before a session exists, as `actorId` (a link's user, or PRE_SESSION_ACTOR_ID). */
@@ -127,7 +129,11 @@ export function createOfficeAuth(options: OfficeAuthOptions): OfficeAuth {
     rateLimits: { ...AUTH_RATE_LIMITS, ...options.rateLimits },
     authenticate: withLinkSessions(
       linkAuthenticator({ database: options.database, clock }),
-      sessionAuthenticator(officeAuthenticator({ database: options.database, clock }), floorAuthenticator({ database: options.database, clock })),
+      // B-W2b-159: a partner route is a portal session (the __Host-factory_portal cookie) or nothing; the rest as before.
+      withPortalSessions(
+        portalAuthenticator({ database: options.database, clock }),
+        sessionAuthenticator(officeAuthenticator({ database: options.database, clock }), floorAuthenticator({ database: options.database, clock })),
+      ),
     ),
     inTenant: (tenantId, actorId, work) => options.database.withScope({ audience: 'office', tenantId, actorId }, work),
     inPlatform: (work) => options.database.withScope({ audience: 'platform' }, work),

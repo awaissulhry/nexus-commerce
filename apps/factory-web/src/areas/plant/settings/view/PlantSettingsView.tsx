@@ -1,18 +1,21 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, Lock, Plus, RotateCcw, Search, ShieldOff, Sparkles, XCircle } from 'lucide-react'
-import { Banner, Card, EmptyState, Field } from '@nexus/ui/components'
+import { ArrowDown, ArrowUp, Lock, MapPin, MoreHorizontal, Plus, RotateCcw, Search, ShieldOff, Sparkles, XCircle } from 'lucide-react'
+import { Banner, Card, EmptyState, Field, Menu } from '@nexus/ui/components'
+import { SaveStatus } from '@nexus/ui/components/SaveStatus/index'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Kbd, Pill, Select, Tag, Toggle } from '@nexus/ui/primitives'
-import { CellSaveMark, Modal } from '../../../../lib/i18n/ds-parts'
+import { CellSaveMark, Modal, StepUpModal, useDsWords } from '../../../../lib/i18n/ds-parts'
+import { formatTime } from '../../../../lib/i18n/format'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { iconOf } from '../../../../lib/plant/symptom-icons'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { labelOf } from '../../_shared/model'
+import { labelOf, TIME_ZONE } from '../../_shared/model'
 import type { ClassRow, SymptomRow } from '../api'
+import type { DepthActions, DepthModel } from '../depth-view-model'
 import {
   activeHeld,
   ALL,
@@ -30,6 +33,11 @@ import {
   type Notice,
   type SymptomDraft,
 } from '../model'
+import { CheckTypeDialogs, CheckTypesCard } from './CheckTypesCard'
+import { IncidentsCard } from './IncidentsCard'
+import { LockCard } from './LockCard'
+import { CardHead } from './parts'
+import { RoutingCard, RoutingDialogs } from './RoutingCard'
 import { SymptomIconPicker } from './SymptomIconPicker'
 import '../settings.css'
 
@@ -59,6 +67,8 @@ export interface PlantSettingsModel {
   selected?: readonly string[]
   focusRow?: number
   query?: string
+  /** B-W2b-141: the W2b sections (routing and escalation, the unsafe lock, statutory check types, incidents) and the band. */
+  depth: DepthModel
 }
 
 export interface PlantSettingsActions {
@@ -77,18 +87,26 @@ export interface PlantSettingsActions {
   onDraft?: (draft: SymptomDraft) => void
   onCreate?: () => void
   onDismissNotice?: () => void
+  /** B-W2b-141: the W2b sections' acts. */
+  depth?: DepthActions
 }
 
 type Translate = (key: string, params?: Readonly<Record<string, string | number>>) => string
 
 /**
- * SCR-241 — Plant › Settings › Plant settings, its W2a section "Symptoms on the floor" (design plant.settings sec:symptoms;
- * QHS-178; W2A-PLAN §10: a W2a section on the W2b page, so the page holds only it — routing, the unsafe lock and the
- * statutory checks come with W2b). The icons operators pick, per machine class: ONE list frame of the group's symptoms —
+ * SCR-241 — Plant › Settings › Plant settings (design plant.settings, archetype settings-form). B-W2b-141 adds the W2b
+ * sections around the W2a one, each its own card that reads and fails on its own: the band (read time and live state, the
+ * site, SaveStatus, ⋯ History (audit log) in a new tab, Keyboard shortcuts), Request routing and escalation (RoutingCard),
+ * Symptoms on the floor (below), Unsafe lock and Incidents side by side on a wide screen (LockCard, IncidentsCard),
+ * Statutory check types (CheckTypesCard); the fresh-code dialog and Unsaved changes (Save · Discard · Stay). Failure and
+ * downtime codes stay hidden (design: Later).
+ *
+ * The W2a section "Symptoms on the floor" (sec:symptoms; QHS-178). The icons operators pick, per machine class: ONE list frame of the group's symptoms —
  * code · icon · words in Italian and English · what it is for (a class, or every machine) · whether reporting it locks
  * the machine at once (Owner answer H1) · whether it asks for words · offered on the floor · used — with a class filter
  * that shows what a station of that class offers, "Add N from the starter set", New symptom (`c`), and with rows
- * selected Stop offering · Offer again · Move up · Move down.
+ * selected Stop offering · Offer again · Move up · Move down. Its `c` acts on the page and in its own card (each other
+ * card's `c` is its own while the focus is in it).
  *
  * Decision against the design: the section's interaction is the design's EditModeBar, but the shared reason code
  * editor (SCR-242) — the other list of floor tiles with icons — saves per cell; the factory keeps ONE edit model for its
@@ -114,11 +132,139 @@ function Settings({ model, actions }: { model: PlantSettingsModel; actions?: Pla
         </Card>
       </div>
     )
+  const depth = model.depth
+  const act = actions?.depth
   return (
     <div className="fw-pls">
-      <Card header={t('title')} description={t('hint')} headingLevel={2}>
-        <Editor model={model} actions={actions} />
+      <Band depth={depth} actions={act} />
+      {depth.changedElsewhere && (
+        <Banner tone="info" title={t('page.changedTitle')} action={<Button size="sm" onClick={() => act?.onReload?.()}>{t('changed.reload')}</Button>}>
+          {t('page.changedBody')}
+        </Banner>
+      )}
+      {depth.notice && (
+        <Banner
+          tone={depth.notice.tone}
+          title={t(depth.notice.key, depth.notice.params)}
+          action={
+            <Button size="sm" variant="quiet" onClick={() => act?.onDismissNotice?.()}>
+              {t('close')}
+            </Button>
+          }
+        />
+      )}
+      <RoutingCard depth={depth} classes={model.classes} actions={act} />
+      <Card padded>
+        <section className="fw-pls-stack" aria-labelledby="fw-pls-symptoms" data-pls-section="symptoms">
+          <CardHead id="fw-pls-symptoms" title={t('title')} purpose={t('hint')} />
+          <Editor model={model} actions={actions} />
+        </section>
       </Card>
+      <div className="fw-pls-grid">
+        <LockCard depth={depth} actions={act} />
+        <IncidentsCard depth={depth} actions={act} />
+      </div>
+      <CheckTypesCard depth={depth} actions={act} />
+      <RoutingDialogs depth={depth} classes={model.classes} actions={act} />
+      <CheckTypeDialogs depth={depth} classes={model.classes} actions={act} />
+      {depth.dialog?.kind === 'keys' && <KeysDialog keys={listKeys(pageKeys(t as Translate), true)} onClose={() => act?.onDialog?.(null)} />}
+      <StepUpModal
+        open={depth.stepUp.open}
+        title={t('stepUp.title')}
+        sentence={depth.stepUp.sentence ? t(depth.stepUp.sentence) : ''}
+        busy={depth.stepUp.busy}
+        error={depth.stepUp.problem ? t(depth.stepUp.problem) : null}
+        onSubmit={(code) => act?.onStepUpSubmit?.(code)}
+        onClose={() => act?.onStepUpCancel?.()}
+        confirmLabel={t('stepUp.confirm')}
+      />
+      {depth.leaving && (
+        <Modal
+          open
+          onClose={() => act?.onLeaveStay?.()}
+          title={t('leave.title')}
+          size="sm"
+          footer={
+            <>
+              <Button variant="quiet" onClick={() => act?.onLeaveStay?.()}>
+                {t('leave.stay')}
+              </Button>
+              <Button onClick={() => act?.onLeaveDiscard?.()}>{t('leave.discard')}</Button>
+              <Button variant="primary" heldReason={depth.leaving.busy ? t('held.busy') : null} onClick={() => act?.onLeaveSave?.()}>
+                {t('leave.save')}
+              </Button>
+            </>
+          }
+        >
+          <p className="fw-pls-text">{t('leave.body')}</p>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+/** Every key of the page (the footer's info icon of each list names its own; `?` the whole page's). */
+function pageKeys(t: Translate): ListKey[] {
+  return [
+    { keys: ['c'], does: t('page.keys.new') },
+    { keys: ['↵'], does: t('page.keys.open') },
+    { keys: ['⌥', '↑'], does: t('routing.keys.up') },
+    { keys: ['⌥', '↓'], does: t('routing.keys.down') },
+    { keys: ['⌘', 'S'], does: t('page.keys.save') },
+    { keys: ['Esc'], does: t('keys.cancel') },
+  ]
+}
+
+/**
+ * The band (design plant.settings h: SaveStatus; ⋯ History (audit log), Keyboard shortcuts): when the page was read and
+ * whether it is live, the site the routing and the lock are for (the top bar's, or chosen here when the top bar shows
+ * every site), the save status in words, and the ⋯ menu.
+ */
+function Band({ depth, actions }: { depth: DepthModel; actions?: DepthActions }) {
+  const t = useT('plant-settings') as Translate
+  const locale = useLocale()
+  const ds = useDsWords()
+  return (
+    <div className="fw-pls-band">
+      <span className="fw-pls-hint" role="status">
+        {depth.asOf ? t('page.readAt', { time: formatTime(depth.asOf, { locale, timeZone: TIME_ZONE }) }) : t('page.notRead')}
+        {' · '}
+        {t(`page.live.${depth.live}`)}
+      </span>
+      <span className="fw-pls-band-end">
+        {depth.siteFromTopBar && depth.site ? (
+          <span className="fw-pls-cardside-row">
+            <Tag tone="info" truncate title={depth.site.name}>
+              <MapPin size={12} aria-hidden /> {depth.site.name}
+            </Tag>
+            <span className="fw-pls-sub">{t('page.siteFromTopBar')}</span>
+          </span>
+        ) : depth.sites.length > 1 ? (
+          <Select size="sm" aria-label={t('page.site')} value={depth.site?.id ?? ''} onChange={(event) => actions?.onSite?.(event.target.value)}>
+            {depth.sites.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.name}
+              </option>
+            ))}
+          </Select>
+        ) : depth.site ? (
+          <Tag tone="info" truncate title={depth.site.name}>
+            <MapPin size={12} aria-hidden /> {depth.site.name}
+          </Tag>
+        ) : null}
+        <SaveStatus state={depth.save} labels={ds.saveStatus} formatTime={(iso) => formatTime(iso, { locale, timeZone: TIME_ZONE })} />
+        <Menu
+          label={<MoreHorizontal size={16} aria-hidden />}
+          align="right"
+          triggerProps={{ 'aria-label': t('page.more') }}
+          items={[
+            depth.can.audit
+              ? { id: 'history', label: t('page.history'), href: depth.historyHref, target: '_blank' as const }
+              : { id: 'history', label: t('page.history'), disabled: true, description: t('held.noAudit') },
+            { id: 'keys', label: t('page.keysTitle'), onSelect: () => actions?.onDialog?.({ kind: 'keys' }) },
+          ]}
+        />
+      </span>
     </div>
   )
 }
@@ -164,7 +310,10 @@ function Editor({ model, actions }: { model: PlantSettingsModel; actions?: Plant
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target) || latest.current.model.dialog) return
+      if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target) || latest.current.model.dialog || latest.current.model.depth.dialog || latest.current.model.depth.stepUp.open) return
+      // B-W2b-141: each card's `c` is its own while the focus is in it; on the page itself `c` stays New symptom (W2a).
+      const section = (event.target as HTMLElement | null)?.closest?.('[data-pls-section]')?.getAttribute('data-pls-section')
+      if (section && section !== 'symptoms') return
       if (event.key === 'c' && latest.current.model.canManage && latest.current.model.load.status === 'ready') {
         event.preventDefault()
         latest.current.actions?.onDialog?.({ kind: 'new', draft: newDraft(latest.current.model.classFilter), problem: null })
@@ -380,7 +529,7 @@ function Editor({ model, actions }: { model: PlantSettingsModel; actions?: Plant
   }
 
   return (
-    <section className="fw-pls-editor" aria-label={t('title')}>
+    <div className="fw-pls-editor">
       {model.changedElsewhere && (
         <Banner tone="info" title={t('changed.title')} action={<Button size="sm" onClick={() => actions?.onReload?.()}>{t('changed.reload')}</Button>}>
           {t('changed.body')}
@@ -405,6 +554,7 @@ function Editor({ model, actions }: { model: PlantSettingsModel; actions?: Plant
       )}
       <ListFrame<SymptomRow>
           label={t('table')}
+          listKey="plant.settings"
           rows={state ? [] : rows}
           rowId={(row) => row.id}
           columns={columns}
@@ -467,7 +617,7 @@ function Editor({ model, actions }: { model: PlantSettingsModel; actions?: Plant
       {model.dialog?.kind === 'icon' && dialogRow && <IconDialog row={dialogRow} mark={model.marks[markKey(dialogRow.id, 'icon')]} actions={actions} />}
       {model.dialog?.kind === 'unsafeOff' && dialogRow && <UnsafeOffDialog row={dialogRow} busy={model.busy} actions={actions} />}
       {model.dialog?.kind === 'keys' && <KeysDialog keys={listKeys(ownKeys, model.canManage)} onClose={() => actions?.onDialog?.(null)} />}
-    </section>
+    </div>
   )
 }
 

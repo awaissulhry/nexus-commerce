@@ -593,6 +593,14 @@ const PPE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
 const CHEMICALS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   safety_officer: ['safety.chemicals.manage'],
 })
+// B-W2b-135: health surveillance (GDPR art. 9; D.Lgs. 81/2008 art. 41) — HR and the occupational doctor see the due list and the
+// judgements (each view recorded) and keep them; the safety officer and the doctor keep the plans per role (no person in a plan);
+// HR reads who looked. Office only; owner from every(); read-only none (every one is a write risk on purpose).
+const HEALTH_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  hr: ['safety.health.view', 'safety.health.manage', 'safety.health.views'],
+  company_doctor: ['safety.health.view', 'safety.health.manage', 'safety.health.plans'],
+  safety_officer: ['safety.health.plans'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -679,7 +687,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-134
   ...(audience === 'office' ? (PPE_ADDS[key] ?? []) : []),
   // B-W2b-143
-  ...(audience === 'office' ? (CHEMICALS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (CHEMICALS_ADDS[key] ?? []) : []),
+  // B-W2b-135
+  ...(audience === 'office' ? (HEALTH_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

@@ -173,8 +173,8 @@ describe('the catalogues', () => {
     expect(FACTORY_PERMISSIONS.isDeclared(VISIT_NEED_READER)).toBe(true)
     const holders = ROLE_TEMPLATES.filter((template) => template.permissions.includes(SAFETY_ROLESHEETS_MANAGE)).map((template) => template.key)
     expect(holders.sort()).toEqual(['owner', 'safety_officer'])
-    // The person-level visit is for HR and the safety roles only (and the owner).
-    expect(ROLE_TEMPLATES.filter((template) => template.permissions.includes(VISIT_NEED_READER)).map((template) => template.key).sort()).toEqual(['hr', 'owner', 'safety_officer'])
+    // The person-level visit is for the health readers only (B-W2b-135: HR and the occupational doctor, and the owner).
+    expect(ROLE_TEMPLATES.filter((template) => template.permissions.includes(VISIT_NEED_READER)).map((template) => template.key).sort()).toEqual(['company_doctor', 'hr', 'owner'])
     expect(EVENT_DEFINITIONS.filter((event) => event.context === 'safety-rolesheets').map((event) => event.type)).toEqual(['role_sheet.changed', 'employee.role_changed'])
   })
 })

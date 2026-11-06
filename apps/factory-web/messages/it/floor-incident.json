@@ -1,0 +1,199 @@
+{
+  "title": "Segnala un incidente",
+  "emergency": {
+    "title": "Qualcuno si è fatto male?",
+    "callFirst": "Prima chiama:",
+    "numberLabel": "Numero di emergenza {number}",
+    "aidersUnknown": "I nomi degli addetti al primo soccorso arrivano con la rete. Chiama il tuo capo squadra.",
+    "aidersNone": "Per questo stabilimento non è registrato nessun addetto al primo soccorso. Chiama il tuo capo squadra.",
+    "aiders_one": "Addetto al primo soccorso:",
+    "aiders_other": "Addetti al primo soccorso:",
+    "aiderShift": "{name} · {shift}",
+    "asOf": "Addetti come letti su questo tablet alle {time}",
+    "help": "Chiama aiuto",
+    "helpCall": "Chiama aiuto: {call}",
+    "helpOneTap": "Un tocco manda la chiamata. Funziona anche senza rete.",
+    "helpCalled": "Aiuto chiamato: {call}",
+    "helpRefused": "La chiamata di aiuto non è stata presa: {call}",
+    "helpFollow": "Segui la chiamata",
+    "helpOpen": {
+      "SENT": "Aiuto chiamato: {call}. Nessuno l’ha ancora vista.",
+      "SEEN": "Aiuto chiamato: {call}. Qualcuno l’ha vista.",
+      "ON_THE_WAY": "Aiuto chiamato: {call}. Qualcuno sta arrivando."
+    },
+    "line": "Emergenza: chiama il {number}.",
+    "lineInjury": "Qualcuno si è fatto male? Prima chiama il {number}.",
+    "lineAiders_one": "{count} addetto al primo soccorso presente.",
+    "lineAiders_other": "{count} addetti al primo soccorso presenti."
+  },
+  "what": {
+    "title": "Che cosa è successo?",
+    "offline": "Niente rete: una segnalazione con il tuo nome resta su questo tablet e parte quando torna la rete."
+  },
+  "kind": {
+    "INJURY": "Infortunio (qualcuno si è fatto male)",
+    "NEAR_MISS": "Quasi incidente",
+    "HAZARD": "Pericolo",
+    "hint": {
+      "INJURY": "Qualcuno si è fatto male",
+      "NEAR_MISS": "Nessun ferito, ma c’è mancato poco",
+      "HAZARD": "Qualcosa che può far male a qualcuno"
+    }
+  },
+  "where": {
+    "title": "Dove?",
+    "here": "Qui: questa postazione",
+    "machine": "Macchina {machine}",
+    "machineHere": "In questa postazione",
+    "machineReported": "La macchina che hai segnalato",
+    "area": "Reparto {code}",
+    "elsewhere": "Da un’altra parte",
+    "elsewhereHint": "Di’ dove in poche parole",
+    "placeLabel": "Dove è successo?",
+    "placeHint": "Poche parole: il posto, una porta, uno scaffale.",
+    "noStation": "Questo tablet non è in una postazione: scegli un reparto o di’ dove in poche parole.",
+    "planLater": "Una pianta dello stabilimento da toccare arriva in una versione successiva.",
+    "asOf": "Reparti e macchine come letti su questo tablet alle {time}"
+  },
+  "people": {
+    "title": "Chi si è fatto male o c’era? (facoltativo)",
+    "hint": "Indica le persone. Com’è la ferita lo chiede e lo registra l’ufficio.",
+    "list_one": "{count} persona in questa segnalazione",
+    "list_other": "{count} persone in questa segnalazione",
+    "me": "Io ({name})",
+    "outsideName": "{name} (esterno)",
+    "how": "{name} si è fatto male?",
+    "INJURED": "Ferito",
+    "INVOLVED": "C’era",
+    "remove": "Togli {name} dalla segnalazione",
+    "addMe": "Io",
+    "addWorker": "Un collega",
+    "addOutside": "Un esterno",
+    "pickTitle": "Chi altro?",
+    "pickLabel": "Scegli il suo nome",
+    "outsideTitle": "Un esterno",
+    "outsideLabel": "Il suo nome",
+    "outsideHint": "Un visitatore, un autista, una ditta esterna. Solo il nome."
+  },
+  "photo": {
+    "title": "Una foto del posto",
+    "optional": "Foto (facoltativa)",
+    "noFaces": "Niente volti: fotografa il posto o la cosa, mai una persona.",
+    "add": "Aggiungi una foto",
+    "addMore": "Aggiungi una foto",
+    "afterSend": "Le foto partono quando l’ufficio ha la segnalazione.",
+    "waitReport": "Tieni aperta questa schermata finché le foto sono aggiunte.",
+    "dropped": "Le foto scattate con la segnalazione non sono state mandate.",
+    "window": "Fino a {count} foto, entro {minutes} minuti dalla segnalazione. Dopo le aggiunge l’ufficio."
+  },
+  "media": {
+    "taken": "Foto scattate",
+    "sent": "Foto",
+    "photo": "Foto",
+    "voice": "Nota vocale",
+    "remove": "Togli {name}"
+  },
+  "upload": {
+    "waiting": "Aspetta la segnalazione",
+    "sending": "In invio…",
+    "added": "Aggiunta alla segnalazione",
+    "failed": "Non aggiunta"
+  },
+  "words": {
+    "optional": "Poche parole (facoltativo)",
+    "add": "Aggiungi poche parole",
+    "label": "Che cosa è successo?",
+    "hint": "Breve. Mai la salute di una persona."
+  },
+  "name": {
+    "title": "Il tuo nome",
+    "switch": "Manda senza il mio nome",
+    "notStored": "Il tuo nome non viene registrato con questa segnalazione.",
+    "online": "Parte subito e non resta mai su questo tablet.",
+    "offline": "Niente rete: aspetta su questa schermata, mai sul tablet, e parte quando torna la rete.",
+    "withName": "Con il tuo nome, la sicurezza può chiederti quello che serve.",
+    "injury": "Un infortunio si segnala con il tuo nome: la sicurezza deve sapere chi l’ha visto."
+  },
+  "send": {
+    "now": "Parte subito, senza il tuo nome",
+    "waits": "Senza il tuo nome: aspetta la rete su questa schermata",
+    "saves": "Prima salvata su questo tablet, poi mandata",
+    "savesOffline": "Niente rete: salvata su questo tablet, parte dopo"
+  },
+  "sent": {
+    "title": "Segnalazione mandata",
+    "titleNumber": "Segnalazione mandata: {number}",
+    "savedTitle": "Segnalazione salvata su questo tablet",
+    "recorded": "La sicurezza ha la tua segnalazione.",
+    "sending": "Invio all’ufficio…",
+    "waits": "Niente rete: parte appena torna la rete. Non si perde nulla.",
+    "refusedTitle": "La segnalazione non è stata presa",
+    "refusedFix": "Avvisa subito il tuo capo squadra, o segnala di nuovo."
+  },
+  "seen": {
+    "title": "Vista dalla sicurezza",
+    "at": "Vista dalla sicurezza alle {time}",
+    "notYet": "Non ancora vista. Questa schermata lo dice quando la sicurezza la apre.",
+    "afterSend": "La sicurezza la vede quando è partita.",
+    "closed": "La sicurezza ha chiuso questa segnalazione."
+  },
+  "waiting": {
+    "title": "Non ancora mandata",
+    "offlineBody": "Non c’è rete. Una segnalazione senza il tuo nome parte solo online.",
+    "unavailableBody": "L’ufficio non risponde. Il tablet riprova da solo.",
+    "neverKept": "Aspetta su questa schermata, mai sul tablet, e parte da sola appena può. Tieni aperta questa schermata.",
+    "withName": "Mandala invece con il mio nome",
+    "withNameHint": "Con il tuo nome resta subito su questo tablet e parte quando torna la rete.",
+    "network": "Aspetta la rete"
+  },
+  "held": {
+    "kind": "Prima scegli che cosa è successo",
+    "where": "Prima scegli dove",
+    "place": "Di’ dove in poche parole",
+    "busy": "Invio…",
+    "offline": "Niente rete",
+    "photoOffline": "Una foto ha bisogno della rete. La segnalazione resta comunque su questo tablet.",
+    "photosFull": "Al massimo quattro foto dal tablet; altre le aggiunge l’ufficio",
+    "photoWindow": "Più di 30 minuti dalla segnalazione: ora le foto le aggiunge l’ufficio",
+    "peopleFull": "Al massimo venti persone in una segnalazione",
+    "meAdded": "Ci sei già nella segnalazione",
+    "noRoster": "Questo tablet non ha l’elenco dei nomi: aggiungili come esterni, oppure li aggiunge l’ufficio",
+    "thatIsMe": "Sei tu: usa Io",
+    "personAdded": "Questa persona è già nella segnalazione",
+    "outsideName": "Prima scrivi il suo nome"
+  },
+  "problem": {
+    "offline": "Niente rete. Riprova quando torna.",
+    "unavailable": "L’ufficio non risponde. Riprova tra poco.",
+    "forbidden": "Da questo tablet non puoi mandare questa segnalazione. Avvisa il tuo capo squadra.",
+    "notFound": "Questa segnalazione non si trova su questo tablet.",
+    "conflict": "Nel frattempo è cambiato qualcosa. Riprova.",
+    "invalid": "La segnalazione non è stata presa così. Controllala e riprova.",
+    "signedOut": "Sei uscito. Accedi di nuovo.",
+    "rateLimited": "Troppi tentativi. Aspetta un momento."
+  },
+  "refusal": {
+    "ANONYMOUS_INJURY": "Un infortunio si segnala con un nome: solo un quasi incidente o un pericolo possono partire senza.",
+    "ANONYMOUS_NAMES_NOBODY": "Una segnalazione senza il tuo nome non nomina nessuno: togli le persone, o mandala con il tuo nome.",
+    "ANONYMOUS_NOT_QUEUED": "Una segnalazione senza il tuo nome non resta mai sul tablet: mandala quando torna la rete.",
+    "WHERE_MISSING": "Di’ dove è successo: qui, un reparto, una macchina o poche parole.",
+    "WHERE_OTHER_SITE": "Quel posto non è in questo stabilimento: scegline uno di questo.",
+    "OCCURRED_IN_FUTURE": "L’orologio del tablet è avanti: avvisa il tuo capo squadra.",
+    "INJURED_NOT_INJURY": "Chi si è fatto male va in un infortunio: scegli Infortunio, o segnalalo come presente.",
+    "PERSON_TWICE": "Una persona è due volte nella segnalazione: togline una.",
+    "PHOTOS_FULL": "Al massimo quattro foto dal tablet; altre le aggiunge l’ufficio.",
+    "PHOTO_WINDOW": "Più di 30 minuti dalla segnalazione: ora le foto le aggiunge l’ufficio.",
+    "NOT_OPEN": "La sicurezza ha chiuso o annullato questa segnalazione: non prende altre foto."
+  },
+  "action": {
+    "home": "Home",
+    "back": "Indietro",
+    "next": "Avanti",
+    "send": "Manda",
+    "cancel": "Annulla",
+    "addPerson": "Aggiungi",
+    "retry": "Riprova",
+    "discard": "Non mandare",
+    "another": "Segnala un altro"
+  }
+}

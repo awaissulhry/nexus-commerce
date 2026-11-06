@@ -64,6 +64,8 @@ export const WHAT_KEY = {
   'plant.request.progress': 'progress',
   // B-W2b-126: a bundle scanned in or out at a repair station.
   'production.repair.scan': 'repair',
+  // B-W2b-137: an incident report with the worker's name (one without a name never queues).
+  'safety.incident.report': 'incident',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]
