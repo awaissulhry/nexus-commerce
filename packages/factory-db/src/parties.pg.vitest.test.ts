@@ -86,7 +86,8 @@ describe('a portal or link session', () => {
     const scope = partner(partiesA.customerId)
     await expect(sql(scope, 'SELECT id FROM "ViesCheck"')).rejects.toThrow(DENIED)
     for (const table of PARTY_TABLES) {
-      await expect(run(scope, `INSERT INTO "${table}" (id) VALUES (NULL)`), table).rejects.toThrow(DENIED)
+      // W2b (wave 21/22): a MEASUREMENTS link session inserts the revision the rider sent (…_portal_sales_w2b_guards).
+      await expect(run(scope, `INSERT INTO "${table}" (id) VALUES (NULL)`), table).rejects.toThrow(table === 'MeasurementProfile' ? /null value|row-level security/ : DENIED)
       await expect(run(scope, `UPDATE "${table}" SET id = id WHERE false`), table).rejects.toThrow(DENIED)
       await expect(run(scope, `DELETE FROM "${table}" WHERE false`), table).rejects.toThrow(DENIED)
     }
@@ -134,7 +135,8 @@ describe('a VIES check', () => {
 describe('a measurement profile', () => {
   it('is never edited in place or removed by the office', async () => {
     const [row] = await admin('SELECT id::text AS id FROM "MeasurementProfile" WHERE "tenantId" = $1 LIMIT 1', [a.tenantId])
-    await expect(run(office(a), 'UPDATE "MeasurementProfile" SET "fitNotes" = NULL WHERE id = $1::uuid', row!.id)).rejects.toThrow(DENIED)
+    // W2b (wave 21/22): the office's update grant moves only when the photos are deleted (…_portal_sales_w2b_guards).
+    await expect(run(office(a), 'UPDATE "MeasurementProfile" SET "fitNotes" = NULL WHERE id = $1::uuid', row!.id)).rejects.toThrow(/never edited in place/)
     await expect(run(office(a), 'DELETE FROM "MeasurementProfile" WHERE id = $1::uuid', row!.id)).rejects.toThrow(DENIED)
   })
 

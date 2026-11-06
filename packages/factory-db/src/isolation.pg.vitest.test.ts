@@ -41,6 +41,7 @@ import { seed as seedPlanning } from '../seed/planning'
 import { seed as seedPlant } from '../seed/plant'
 import { seed as seedPlantCare } from '../seed/plantcare'
 import { seed as seedPortalAuth } from '../seed/portal-auth'
+import { seed as seedPortalSales } from '../seed/portal-sales'
 import { seed as seedSafety } from '../seed/safety'
 import { seed as seedPeople } from '../seed/people'
 import { seed as seedPricing } from '../seed/pricing'
@@ -296,6 +297,9 @@ beforeAll(async () => {
   // The links in depth schema of W2b (wave 19/22).
   await seedLinksDepth({ db: factory, namespace: 'iso-a' })
   await seedLinksDepth({ db: factory, namespace: 'iso-b' })
+  // The customer portal schema of W2b (wave 21/22): order requests, change requests, payment intents, measurements by link.
+  await seedPortalSales({ db: factory, namespace: 'iso-a' })
+  await seedPortalSales({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -492,6 +496,8 @@ it('covers every classified table and every runtime role', () => {
     'OperationScan',
     'OperationScanDefect',
     'OperationScanMember',
+    'OrderChangeRequest',
+    'OrderChangeRequestLine',
     'OrgArea',
     'OutboxEvent',
     'OvertimeAgreement',
@@ -510,6 +516,7 @@ it('covers every classified table and every runtime role', () => {
     'PayablesSettings',
     'Payment',
     'PaymentAllocation',
+    'PaymentIntent',
     'PaymentReminder',
     'PaymentTerms',
     'PayrollCodeMapping',
@@ -529,6 +536,9 @@ it('covers every classified table and every runtime role', () => {
     'PlanningSettings',
     'PlantSettings',
     'PlyRun',
+    'PortalOrderRequest',
+    'PortalOrderRequestLine',
+    'PortalOrderRequestSize',
     'PortalSettings',
     'PortalSignInCode',
     'PpeIssue',

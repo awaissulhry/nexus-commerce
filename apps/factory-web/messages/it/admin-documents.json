@@ -269,7 +269,8 @@
       "HOLD": "Blocco qualità",
       "INCOMING_INSPECTION": "Controllo in accettazione",
       "INCIDENT": "Segnalazione di incidente",
-      "PAYROLL_EXPORT": "Esportazione paghe"
+      "PAYROLL_EXPORT": "Esportazione paghe",
+      "PORTAL_REQUEST": "Richiesta d'ordine dal portale"
     },
     "record": {
       "Invoice": "Fattura",
