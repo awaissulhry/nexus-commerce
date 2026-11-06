@@ -99,6 +99,8 @@ model Party {
   // W2b links-depth.prisma (wave 19/22): the records shared with it, the approvals asked of it.
   recordShares        RecordShare[]
   approvalRequests    ApprovalRequest[]
+  // W2b portal-frame.prisma (wave 20/22): what we asked of it (its tasks).
+  partnerTasks        PartnerTask[]
   // sales.prisma: its quotes, sales orders and deposit requests.
   quotes              Quote[]
   salesOrders         SalesOrder[]

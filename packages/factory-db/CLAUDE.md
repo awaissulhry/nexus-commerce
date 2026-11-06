@@ -150,13 +150,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    (VIEW always, 180 days at most, the party switches its e-mail only); approval requests answered once by the party; no link, file
    set, share or approval of a pay record (`factory_link_pay_record`); it redefines W0's `factory_guard_link_change` and wave 11's
    `factory_ncr_concession_guard` (the customer writes the answer columns only, after its approval request's answer)),
-   `…_portal_sales_w2b_guards` (W2b wave 21/22, the customer portal: order requests kept as the customer's DRAFT, sent with
-   their number and pieces, decided by the office (one order or quote, words to refuse) or withdrawn, their lines only while
-   DRAFT; change and cancel requests of an order still open to amendments (a cancel's reason code), answered by the office,
-   withdrawn by the customer, an accepted one naming its amendment once, their cells written once; payment intents moved
-   forward only, no card number in any column (`factory_payment_provider_text_ok`), a succeeded one naming its payment once;
-   its own triggers on MeasurementProfile (a link session adds the revision sent through its MEASUREMENTS link; only the
-   photos' deletion date moves) and SalesSettings (the cut-off rules); no earlier function redefined): triggers, partial unique indexes and deferred
+   `…_portal_frame_w2b_guards` (W2b wave 20/22, the portal frame: partner tasks born OPEN, closed exactly with a time, done by an
+   active person of their party, a partner session only closes an open one as DONE, reopened by the office, never deleted;
+   e-mail settings of a partner user of the row's party, only the frequency changes; a partner user's notification carries
+   the person's party, an office person's none (`Notification_party_check`); what a portal session posts (`Message_partner_post`:
+   INBOUND, PARTNER, PORTAL, PARTY, the person's name, files of the record shared with its party); it redefines W2a's
+   `factory_notification_delivery_check` (EMAIL_DIGEST names its mail), `…_portal_sales_w2b_guards` (W2b wave 21/22, the customer portal: order requests kept as the customer's DRAFT, sent with their number and pieces, decided by the office (one order or quote, words to refuse) or withdrawn, their lines only while DRAFT; change and cancel requests of an order still open to amendments (a cancel's reason code), answered by the office, withdrawn by the customer, an accepted one naming its amendment once, their cells written once; payment intents moved forward only, no card number in any column (`factory_payment_provider_text_ok`), a succeeded one naming its payment once; its own triggers on MeasurementProfile (a link session adds the revision sent through its MEASUREMENTS link; only the photos' deletion date moves) and SalesSettings (the cut-off rules); no earlier function redefined): triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written
