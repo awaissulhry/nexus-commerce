@@ -99,12 +99,15 @@ model Message {
   /// The sanitised HTML of an inbound mail (the email-in step's sanitiser). Never set from the app's composer.
   bodyHtml          String?
   /// The office users this internal note notifies (an event per user). Hidden from the partner role.
-  mentionedUserIds  String[]          @default([]) @db.Uuid
+  /// W2b (B-W2b-156): the default is the database's, so a Prisma insert leaves the column out: a portal session posts
+  /// (COL-060) without a grant on it. A cast from text, so Prisma reads it back as it is written.
+  mentionedUserIds  String[]          @default(dbgenerated("('{}'::text)::uuid[]")) @db.Uuid
   /// True: the tablets working on the work order read this internal note too (B-W2b-F5): its writer in the office ticked
   /// "For the floor", or the floor wrote it. False, the default, for every other message: it stays in the office. Set
   /// when it is written, like the rest of the message. Hidden from the partner role.
   /// @internal
-  forFloor          Boolean           @default(false)
+  /// W2b (B-W2b-156): the default is the database's, as mentionedUserIds' (a portal post leaves it out).
+  forFloor          Boolean           @default(dbgenerated("('false'::text)::boolean"))
   /// The record's files attached to it, in order (StoredFile ids; files are never deleted, only marked DELETED). Each
   /// reader sees only the ones its own file rules let it see.
   attachmentFileIds String[]          @default([]) @db.Uuid

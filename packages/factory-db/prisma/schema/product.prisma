@@ -161,6 +161,8 @@ model Item {
   secondQualityDowngrades GarmentDowngrade[] @relation("GarmentDowngradeItem")
   // supply.prisma: the purchase order lines that buy it and the planning runs' requirements of it.
   purchaseOrderLines   PurchaseOrderLine[]
+  // W2b (wave 22/22): the purchase order lines whose supplier proposes it as a substitute.
+  substituteProposals  PurchaseOrderLine[] @relation("PurchaseOrderLineSubstitute")
   materialRequirements MaterialRequirement[]
   // W2a cost-ledger.prisma (wave 7/7): its frozen standard costs, and the work-order cost entries that name it.
   /// @not-money the relation to its standard costs (the rows carry the grain)
@@ -439,6 +441,8 @@ model Style {
   // sales.prisma: its quote and sales order lines.
   quoteLines          QuoteLine[]
   salesOrderLines     SalesOrderLine[]
+  // W2b portal-sales.prisma (wave 21/22): the portal order request lines that ask for it.
+  portalRequestLines  PortalOrderRequestLine[] @relation("PortalOrderRequestLineStyle")
   // production.prisma: the work orders that make it.
   workOrders          WorkOrder[]
   // W2b pay.prisma (schema wave 6/7): the piece-rate tables of its own.
@@ -527,6 +531,8 @@ model Colourway {
   // sales.prisma: its quote and sales order lines.
   quoteLines      QuoteLine[]
   salesOrderLines SalesOrderLine[]
+  // W2b portal-sales.prisma (wave 21/22): the portal order request lines that ask for it.
+  portalRequestLines PortalOrderRequestLine[] @relation("PortalOrderRequestLineColourway")
   // production.prisma: the work order cells made in it.
   workOrderSizes  WorkOrderSize[]
   // W2a ncr.prisma: the nonconformances about it.

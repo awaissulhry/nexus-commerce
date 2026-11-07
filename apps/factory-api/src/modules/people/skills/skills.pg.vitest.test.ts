@@ -27,7 +27,8 @@ import { assertAssignable, qualificationCheck, qualificationGuard } from './chec
  * security, the floor's column grants and the …_people_w2b_guards triggers are real), the factory-db seeds of one tenant
  * up to the skills (E1 can sew, is an expert on the post-bed and was a cutting trainee signed off with E2 as the trainer;
  * E2 trains sewing; E3 (agency) is a sewing trainee; E5 left; EB1 on plant B1; authorisations E1 post-bed, E2
- * walking-foot until 2027-02-01, EB1 lockstitch; the cutting station CUT-01 of A1 has a clicking press and a cutting
+ * walking-foot until 2027-02-01, EB1 lockstitch; the clicking press asks an authorisation once the office says so (B-W2b-139,
+ * the first test); the cutting station CUT-01 of A1 has a clicking press and a cutting
  * table, the sewing station SEW-01 a lockstitch), the real office sign-in with two-factor for the sign-off, and test
  * sessions for the walls. Every person is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/people/skills`.
  */
@@ -74,7 +75,7 @@ const SESSIONS: Record<string, SessionContext> = {
 }
 
 type Json = Record<string, any>
-type Method = 'GET' | 'POST' | 'PATCH'
+type Method = 'GET' | 'POST' | 'PATCH' | 'PUT'
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
 const run = randomBytes(4).toString('hex')
 let keys = 0
@@ -235,7 +236,22 @@ describe('trainees and their sign-off (MES-244)', () => {
 
 describe('machine authorisations (MES-246)', () => {
   const pressClass = idOf('plant:class:CLICKING_PRESS')
+  it('the office says a type of machine asks an authorisation (B-W2b-139: MachineClass.authorisationRequired), over every company', async () => {
+    const [press] = await admin<{ version: number }>('SELECT version FROM "MachineClass" WHERE id = $1', [pressClass])
+    const url = `/people/skills/machine-classes/${pressClass}/authorisation-rule`
+    expect((await call('companyB', 'PUT', url, { version: press!.version, required: true })).statusCode).toBe(403)
+    expect((await call('viewer', 'PUT', url, { version: press!.version, required: true })).statusCode).toBe(403)
+    const set = await ok('manager', 'PUT', url, { version: press!.version, required: true })
+    expect(set).toMatchObject({ changed: true, authorisedPeople: 0, machineClass: { code: 'CLICKING_PRESS', authorisationRequired: true, version: press!.version + 1 } })
+    expect(set.words).toMatch(/^From now on only people authorised on Clicking press machines work on them, at every site/)
+    expect((await ok('manager', 'PUT', url, { version: press!.version + 1, required: true })).changed).toBe(false)
+    expect((await call('manager', 'PUT', url, { version: press!.version, required: false })).statusCode).toBe(409)
+    expect((await auditOf('people.setAuthorisationRule')).map((row) => row.after.authorisationRequired)).toEqual([true, true])
+  })
+
   it('authorises a person on a class of machine from today; one in force; an ended one is closed by the new one; revoked is final', async () => {
+    const before = await ok('viewer', 'GET', `/people/skills/authorisations/prerequisites?employeeId=${people.employeeIds.e1}&machineClassId=${pressClass}`)
+    expect(before).toMatchObject({ machineClass: { authorisationRequired: true }, training: [], trainingValid: true, held: false, fitness: null, words: 'Can work on Clicking press machines from today.' })
     const first = await ok('manager', 'POST', '/people/skills/authorisations', { employeeId: people.employeeIds.e1, machineClassId: pressClass }, 201)
     expect(first).toMatchObject({ words: 'Can work on Clicking press machines from today.', authorisation: { state: 'AUTHORISED', authorisedOn: today(), validUntil: null, machineClass: { code: 'CLICKING_PRESS' } } })
     expect(pathsOf(await no('manager', 'POST', '/people/skills/authorisations', { employeeId: people.employeeIds.e1, machineClassId: pressClass }, 409))).toEqual(['refusal/AUTHORISATION_OPEN', 'body/machineClassId'])
@@ -265,7 +281,7 @@ describe('machine authorisations (MES-246)', () => {
 
 describe('the qualification check (MES-024, MES-246)', () => {
   it('dispatch\'s pre-check: qualified, not qualified (a missing skill warns by the default rule), a kept class holds without its authorisation', async () => {
-    // E1 at the cutting station on the cutting operation: signed off in cutting, authorised on the press (kept at A1 now).
+    // E1 at the cutting station on the cutting operation: signed off in cutting, authorised on the press (which asks an authorisation).
     const e1 = (await ok('viewer', 'GET', `/people/skills/check?employeeId=${people.employeeIds.e1}&workOrderOperationId=${production.operationIds.cut}&stationId=${T.stationCut}`)).check
     expect(e1).toMatchObject({ outcome: 'QUALIFIED', decision: 'ALLOW', person: { name: 'Seed Employee One' }, operation: { code: 'SEED-CUT-LEA', workOrderOperationId: production.operationIds.cut }, rule: { mode: 'WARN', isDefault: false } })
     expect(e1.machines.map((machine: Json) => machine.machineClass.code).sort()).toEqual(['CLICKING_PRESS', 'CUTTING_TABLE'])
@@ -276,7 +292,7 @@ describe('the qualification check (MES-024, MES-246)', () => {
     const e2 = (await ok('viewer', 'GET', `/people/skills/check?employeeId=${people.employeeIds.e2}&operationId=${T.operationCut}&stationId=${T.stationCut}`)).check
     expect(e2).toMatchObject({ outcome: 'NOT_QUALIFIED', decision: 'HOLD', overridable: false })
     expect(e2.findings.map((finding: Json) => [finding.code, finding.mode, finding.overridable])).toEqual([['NO_SKILL', 'WARN', true], ['NOT_AUTHORISED', 'STRICT', false]])
-    // E2 on sewing at the sewing station: a Trainer; the lockstitch is kept at no site of company A.
+    // E2 on sewing at the sewing station: a Trainer; the lockstitch asks no authorisation.
     expect((await ok('viewer', 'GET', `/people/skills/check?employeeId=${people.employeeIds.e2}&operationId=${T.operationSew}&stationId=${T.stationSew}`)).check).toMatchObject({ outcome: 'QUALIFIED', decision: 'ALLOW' })
     // Packing keeps no skill: nothing to check.
     expect((await ok('viewer', 'GET', `/people/skills/check?employeeId=${people.employeeIds.e2}&operationId=${T.operationPack}`)).check).toMatchObject({ outcome: 'NOT_CHECKED', decision: 'ALLOW' })
@@ -350,14 +366,17 @@ describe('the matrix, a person\'s skills and one cell (MES-241)', () => {
     const e1 = matrix.rows.find((row: Json) => row.employeeId === people.employeeIds.e1)
     expect(e1.levels.map((cell: Json) => cell.skillId)).toEqual(expect.arrayContaining([skills.skillIds.sew, skills.skillIds.cut, skills.skillIds.postBed]))
     expect(e1.authorisations.map((cell: Json) => cell.state)).toEqual(['AUTHORISED', 'AUTHORISED'])
-    expect(matrix.machineClasses.find((machineClass: Json) => machineClass.code === 'CLICKING_PRESS')).toMatchObject({ keptAtSites: [T.siteA1] })
-    expect(Object.keys(matrix.tiles).sort()).toEqual(['authorisationsEnding', 'trainees', 'traineesOverdue'])
+    expect(matrix.machineClasses.find((machineClass: Json) => machineClass.code === 'CLICKING_PRESS')).toMatchObject({ authorisationRequired: true, keptAtSites: expect.arrayContaining([T.siteA1]) })
+    expect(Object.keys(matrix.tiles).sort()).toEqual(['authorisationsEnding', 'authorisationsHeld', 'languageNotChecked', 'trainees', 'traineesOverdue', 'trainingDueSoon', 'trainingOverdue'])
     // No per-person figure: a row carries names, its line and team, its cells and what the reader may do.
-    for (const row of matrix.rows) expect(Object.keys(row).sort()).toEqual(['authorisations', 'canAuthorise', 'canManage', 'companyId', 'displayName', 'employeeId', 'levels', 'line', 'name', 'siteId', 'team'])
+    for (const row of matrix.rows) expect(Object.keys(row).sort()).toEqual(['authorisations', 'canAuthorise', 'canManage', 'companyId', 'displayName', 'employeeId', 'levels', 'line', 'name', 'siteId', 'team', 'trainings'])
     const team = await ok('viewer', 'GET', `/people/skills/matrix?siteId=${T.siteA1}&teamId=${people.teamIds.a}`)
     expect(team.rows.map((row: Json) => row.team?.code)).toEqual(['L1-A', 'L1-A', 'L1-A'])
     expect((await ok('companyB', 'GET', '/people/skills/matrix')).rows.map((row: Json) => row.name)).toEqual(['Seed Employee B One'])
     const machinesOnly = await ok('viewer', 'GET', '/people/skills/matrix?show=MACHINES')
+    // B-W2b-139: no safety reader here: no training cells, no training tiles.
+    expect(matrix.rows.every((row: Json) => row.trainings === null)).toBe(true)
+    expect(matrix.tiles).toMatchObject({ trainingOverdue: null, trainingDueSoon: null, languageNotChecked: null, authorisationsHeld: 0 })
     expect(machinesOnly.skills).toEqual([])
     expect((await ok('viewer', 'GET', '/people/skills/matrix?q=agency')).rows.map((row: Json) => row.name)).toEqual(['Seed Agency Worker'])
     expect(matrix.rows.find((row: Json) => row.employeeId === people.employeeIds.e1)).toMatchObject({ canManage: false, canAuthorise: false })

@@ -27,6 +27,8 @@ import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
 // B-W2b-24: the controlled override of a migrated document's number (PLT-125).
 import { NUMBERING_OVERRIDE_DEFINITIONS, NUMBERING_OVERRIDE_PERMISSIONS } from '../../numbering/permissions'
 import { PARTIES_DEFINITIONS, PARTIES_PERMISSIONS } from '../../parties/permissions'
+// B-W2b-162: partner organisations (partners.*, the office's) and the portal's own (portal.*, partner roles only).
+import { PARTNERS_DEFINITIONS, PARTNERS_PERMISSIONS, PORTAL_DEFINITIONS, PORTAL_PERMISSIONS } from '../partners/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
 import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '../../planning/settings/permissions'
@@ -188,6 +190,10 @@ import { SAFETY_PPE_DEFINITIONS, SAFETY_PPE_PERMISSIONS } from '../../safety/ppe
 import { SAFETY_CHEMICALS_DEFINITIONS, SAFETY_CHEMICALS_PERMISSIONS } from '../../safety/chemicals/permissions'
 // B-W2b-135: health surveillance (safety.health.view | manage | plans | views: protected, every view recorded).
 import { SAFETY_HEALTH_DEFINITIONS, SAFETY_HEALTH_PERMISSIONS } from '../../safety/health/permissions'
+// B-W2b-139: training records (safety.training.record: sessions, attendance, records; safety.instruction.record: the instruction register).
+import { SAFETY_RECORDS_DEFINITIONS, SAFETY_RECORDS_PERMISSIONS } from '../../safety/records/permissions'
+// B-W2b-161: company branding (documents.branding.manage: logo, accent, sender name, portal label; step-up).
+import { BRANDING_DEFINITIONS, BRANDING_PERMISSIONS } from '../../branding/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -653,6 +659,13 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SAFETY_CHEMICALS_DEFINITIONS,
   // B-W2b-135: health surveillance.
   SAFETY_HEALTH_DEFINITIONS,
+  // B-W2b-139: training records, attendance and the instruction register.
+  SAFETY_RECORDS_DEFINITIONS,
+  // B-W2b-161: company branding.
+  BRANDING_DEFINITIONS,
+  // B-W2b-162: partner organisations (the office's) and the portal's own (partner roles only).
+  PARTNERS_DEFINITIONS,
+  PORTAL_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -843,6 +856,13 @@ for (const name of SAFETY_TRAINING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecla
 for (const name of SAFETY_PPE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-143: the chemical register and the safety data sheets.
 for (const name of SAFETY_CHEMICALS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-139: training records, attendance and the instruction register.
+for (const name of SAFETY_RECORDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-161: company branding.
+for (const name of BRANDING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-162: partner organisations and the portal's own (each portal one flagged partner: never in an office or floor role).
+for (const name of PARTNERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PORTAL_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

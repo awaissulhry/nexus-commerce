@@ -32,6 +32,11 @@ export interface PermissionDefinition {
    * link's purpose (factory-domain links/purposes), never from a role, so it is not assignable.
    */
   readonly link?: true
+  /**
+   * B-W2b-162: set for a permission only partner roles hold (`portal.*`: what a portal session of a customer, supplier,
+   * subcontractor or guest may do; factory-domain auth/partners/permissions.ts). Never in an office or floor role.
+   */
+  readonly partner?: true
 }
 
 export interface PermissionDeclaration {
@@ -62,6 +67,8 @@ export interface PermissionRegistry {
   readonly all: readonly PermissionDefinition[]
   /** The permissions a role may list (every one but the grains and the link-session permissions). */
   readonly assignable: readonly PermissionDefinition[]
+  /** B-W2b-162: the permissions only partner roles list (not in `assignable`: no office or floor role holds them). */
+  readonly partnerAssignable: readonly PermissionDefinition[]
   get(name: string): PermissionDefinition | undefined
   isDeclared(name: string): boolean
   /** The names of this list that are not declared, sorted, once each. */
@@ -79,10 +86,12 @@ export function permissionRegistry(lists: readonly (readonly PermissionDefinitio
     byName.set(definition.name, Object.freeze({ ...definition }))
   }
   const all = Object.freeze([...byName.values()])
-  const assignable = Object.freeze(all.filter((definition) => definition.grain === undefined && definition.link === undefined))
+  const assignable = Object.freeze(all.filter((definition) => definition.grain === undefined && definition.link === undefined && definition.partner === undefined))
+  const partnerAssignable = Object.freeze(all.filter((definition) => definition.partner === true))
   return {
     all,
     assignable,
+    partnerAssignable,
     get: (name) => byName.get(name),
     isDeclared: (name) => byName.has(name),
     undeclared: (names) => [...new Set([...names].filter((name) => !byName.has(name)))].sort(),

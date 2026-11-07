@@ -39,6 +39,10 @@ import { RetainedFileError } from './store'
 import { heldForScan, waitsForScan } from './scan/rules'
 import { scanFile } from './scan/scan'
 import { processScanner } from './scan/service'
+// B-W2b-160 (COL-046, COL-052, COL-058): versions, large uploads in parts, the stripped copy outside the office.
+import { refuseLargeUploadConfirm } from './multipart/guard'
+import { keyShownTo } from './thumbs/outside'
+import { sharingNarrows, supersedeEarlierVersions } from './versions/supersede'
 
 /**
  * Files on R2 (plan A1 §3.6; features COL-045, COL-050, PLT-011; PLAN §2.8), the flow:
@@ -89,15 +93,20 @@ const COMMON = {
   updatedAt: true,
 } as const satisfies Prisma.StoredFileSelect
 
+/** B-W2b-160: the version and the stripped copy, which every role reads (the floor and partner roles too). */
+const DEPTH = { versionNo: true, supersededAt: true, thumbnailKey: true } as const satisfies Prisma.StoredFileSelect
+
 /** What each audience's role may read (its hidden columns left out: a forgotten one would fail loudly). */
-const SELECT_FOR = {
-  office: { ...COMMON, floorSiteId: true, partyId: true, legalHold: true, scanEngine: true, scanFinding: true },
-  floor: { ...COMMON, floorSiteId: true },
-  partner: { ...COMMON, partyId: true },
+export const SELECT_FOR = {
+  office: { ...COMMON, ...DEPTH, floorSiteId: true, partyId: true, legalHold: true, scanEngine: true, scanFinding: true, seriesId: true, sourceFileId: true },
+  floor: { ...COMMON, ...DEPTH, floorSiteId: true },
+  partner: { ...COMMON, ...DEPTH, partyId: true, seriesId: true },
 } as const satisfies Record<string, Prisma.StoredFileSelect>
 
-type Row = Prisma.StoredFileGetPayload<{ select: typeof COMMON }> & { floorSiteId?: string | null; partyId?: string | null; legalHold?: boolean; scanEngine?: string | null; scanFinding?: string | null }
-type OfficeRow = Prisma.StoredFileGetPayload<{ select: (typeof SELECT_FOR)['office'] }>
+export type Row = Prisma.StoredFileGetPayload<{ select: typeof COMMON }> & { floorSiteId?: string | null; partyId?: string | null; legalHold?: boolean; scanEngine?: string | null; scanFinding?: string | null } & DepthColumns
+/** B-W2b-160: the depth columns, read by the selects above (a module's own select may leave them out). */
+type DepthColumns = { versionNo?: number; supersededAt?: Date | null; thumbnailKey?: string | null; seriesId?: string | null; sourceFileId?: string | null }
+export type OfficeRow = Prisma.StoredFileGetPayload<{ select: (typeof SELECT_FOR)['office'] }>
 
 const selectFor = (context: RequestContext): Prisma.StoredFileSelect =>
   context.audience === 'floor' ? SELECT_FOR.floor : context.audience === 'partner' || context.audience === 'link' ? SELECT_FOR.partner : SELECT_FOR.office
@@ -130,11 +139,15 @@ export function viewOf(row: Row): FileView {
     version: row.version,
     createdAt: toUtcIso(row.createdAt),
     updatedAt: toUtcIso(row.updatedAt),
+    // B-W2b-160 (COL-046): the version (the series is hidden from the floor, the source of a copy from outside).
+    ...(row.versionNo === undefined ? {} : { versionNo: row.versionNo, supersededAt: iso(row.supersededAt ?? null) }),
+    ...('seriesId' in row ? { seriesId: row.seriesId ?? null } : {}),
+    ...('sourceFileId' in row ? { sourceFileId: row.sourceFileId ?? null } : {}),
   }
 }
 
 /** What an audit row records of a file (its content and sharing; never the storage key). */
-const audited = (row: OfficeRow) => ({
+export const audited = (row: OfficeRow) => ({
   recordType: row.recordType,
   recordId: row.recordId,
   kind: row.kind,
@@ -150,18 +163,18 @@ const audited = (row: OfficeRow) => ({
   legalHold: row.legalHold,
 })
 
-function contextOf(caller: CommandCaller): RequestContext {
+export function contextOf(caller: CommandCaller): RequestContext {
   if (!caller.factoryContext) throw new ApiError('unauthenticated')
   return caller.factoryContext
 }
 
 /** The caller's tenant (every audience of these routes has one). */
-function tenantOf(context: RequestContext): string {
+export function tenantOf(context: RequestContext): string {
   if (context.audience === 'platform') throw new ApiError('internal_error', 'Files belong to a tenant; the platform audience has none.')
   return context.tenantId
 }
 
-function viewerOf(context: RequestContext): Viewer {
+export function viewerOf(context: RequestContext): Viewer {
   switch (context.audience) {
     case 'office':
     case 'system':
@@ -178,14 +191,14 @@ function viewerOf(context: RequestContext): Viewer {
 }
 
 /** The scope can() checks a file against: its company, and the site or party the caller sees it through. */
-function scopeOf(context: RequestContext, row: Row): ScopedRecord {
+export function scopeOf(context: RequestContext, row: Row): ScopedRecord {
   if (context.audience === 'floor') return { companyId: row.companyId, siteId: row.floorSiteId ?? null }
   if (context.audience === 'partner' || context.audience === 'link') return { companyId: row.companyId, partyId: row.partyId ?? null }
   return { companyId: row.companyId }
 }
 
 /** A write needs the permission for the file's company and for the site and party it is shared with. */
-function mayWrite(caller: CommandCaller, permission: Permission, sharing: Pick<Sharing, 'companyId' | 'floorSiteId' | 'partyId'>): void {
+export function mayWrite(caller: CommandCaller, permission: Permission, sharing: Pick<Sharing, 'companyId' | 'floorSiteId' | 'partyId'>): void {
   if (!can(actorOf(contextOf(caller)), permission, { companyId: sharing.companyId, siteId: sharing.floorSiteId, partyId: sharing.partyId })) throw new ForbiddenError()
 }
 
@@ -198,7 +211,7 @@ async function readRow(caller: CommandCaller, fileId: string): Promise<Row> {
 }
 
 /** The file as the caller may see it: anything it may not see (another audience's, out of its scope) is not found. */
-async function readVisible(caller: CommandCaller, fileId: string, path: UploadPath = {}): Promise<Row> {
+export async function readVisible(caller: CommandCaller, fileId: string, path: UploadPath = {}): Promise<Row> {
   const context = contextOf(caller)
   const row = await readRow(caller, fileId)
   const office = context.audience === 'office'
@@ -211,10 +224,10 @@ async function readVisible(caller: CommandCaller, fileId: string, path: UploadPa
   return row
 }
 
-const readOffice = async (caller: CommandCaller, fileId: string): Promise<OfficeRow> => (await readRow(caller, fileId)) as OfficeRow
+export const readOffice = async (caller: CommandCaller, fileId: string): Promise<OfficeRow> => (await readRow(caller, fileId)) as OfficeRow
 
 /** A store call's failure for the caller: the store is not reachable now (503), a retained object (409). */
-async function storeCall<T>(work: () => Promise<T>): Promise<T> {
+export async function storeCall<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work()
   } catch (error) {
@@ -230,7 +243,7 @@ async function storeCall<T>(work: () => Promise<T>): Promise<T> {
  * The tenant's file store: its R2 account (any mode) that is not DISABLED, the company's own before the tenant-wide
  * one. None, or two at the same level, is a set-up problem (409).
  */
-async function storeAccountOf(caller: CommandCaller, companyId: string | null): Promise<string> {
+export async function storeAccountOf(caller: CommandCaller, companyId: string | null): Promise<string> {
   const accounts = await caller.withClient((client) =>
     client.integrationAccount.findMany({
       where: { provider: 'R2', status: { not: 'DISABLED' }, OR: [{ companyId: null }, ...(companyId ? [{ companyId }] : [])] },
@@ -245,13 +258,13 @@ async function storeAccountOf(caller: CommandCaller, companyId: string | null): 
   return chosen[0]!.id
 }
 
-async function checkSite(tx: Pick<FactoryClient, 'site'>, sharing: Sharing): Promise<void> {
+export async function checkSite(tx: Pick<FactoryClient, 'site'>, sharing: Sharing): Promise<void> {
   if (sharing.floorSiteId === null) return
   const site = await tx.site.findFirst({ where: { id: sharing.floorSiteId, companyId: sharing.companyId ?? undefined }, select: { id: true } })
   if (!site) throw new ValidationError('The site is not one of the file\'s company.', [{ path: 'body/floorSiteId', message: 'Expected a site of the file\'s company.' }])
 }
 
-const presignedView = (request: PresignedRequest) => ({ method: request.method, url: request.url, headers: { ...request.headers }, expiresAt: toUtcIso(request.expiresAt) })
+export const presignedView = (request: PresignedRequest) => ({ method: request.method, url: request.url, headers: { ...request.headers }, expiresAt: toUtcIso(request.expiresAt) })
 
 export interface UploadRequest {
   readonly companyId?: string | null | undefined
@@ -388,6 +401,8 @@ export interface PreparedGeneratedFile {
   readonly retainUntil: Date | null
   readonly storeAccountId: string
   readonly storageKey: string
+  /** B-W2b-160 (FV1:01): the file a copy was made from (prepareFileCopy); absent for a document the API made. */
+  readonly sourceFileId?: string
 }
 
 /**
@@ -475,6 +490,8 @@ export async function recordGeneratedFile(
       floorSiteId: prepared.floorSiteId,
       partyId: prepared.partyId,
       retainUntil: prepared.retainUntil,
+      // B-W2b-160 (FV1:01): a copy names its source; the database checks the bytes match and the source is AVAILABLE.
+      ...(prepared.sourceFileId ? { sourceFileId: prepared.sourceFileId } : {}),
       createdAt: at,
       updatedAt: at,
       createdById: inside.audience === 'office' ? inside.actorId : null,
@@ -586,6 +603,8 @@ export async function completeUpload(runtime: FilesRuntime, caller: CommandCalle
   const scanner = processScanner()
   if (scanner && waitsForScan(before)) return (await scanFile(runtime, scanner, caller, fileId)).file
   if (before.status !== 'PENDING_UPLOAD') throw new InvalidStateError(`This file is ${before.status}; only a pending upload is confirmed.`)
+  // B-W2b-160 (COL-052): a large upload in parts is completed through its own session (the store joins the parts first).
+  await refuseLargeUploadConfirm(caller, fileId)
   const object = await storeCall(() => runtime.storage.head(caller, before.storeAccountId, before.storageKey))
   if (!object) throw new ConflictError('The upload has not arrived yet: send the file to its upload URL, then confirm it.')
   const reason = mismatchOf(before, object)
@@ -606,6 +625,8 @@ export async function completeUpload(runtime: FilesRuntime, caller: CommandCalle
       audit({ recordType: 'StoredFile', recordId: fileId, companyId: row.companyId, before: { status: current.status }, after: { status: row.status, quarantineReason: row.quarantineReason, ...(scanner ? { scanStatus: row.scanStatus } : {}) } })
       if (row.status === 'AVAILABLE') {
         emit({ type: 'file.available', subject: fileId, companyId: row.companyId, payload: { fileId, recordType: row.recordType, recordId: row.recordId, kind: row.kind } })
+        // B-W2b-160 (COL-046): a later version that became AVAILABLE supersedes the earlier ones in this transaction.
+        await supersedeEarlierVersions({ tx, audit, now }, fileId)
       }
       return viewOf(row)
     },
@@ -636,9 +657,11 @@ export async function downloadFile(runtime: FilesRuntime, callers: Callers, file
   const row = await readVisible(callers.caller, fileId, path)
   if (row.status !== 'AVAILABLE') throw new InvalidStateError(`This file is ${row.status}; only an available file can be downloaded.`)
   const storeCaller = context.audience === 'office' ? callers.caller : callers.system(tenantOf(context))
+  // B-W2b-160 (COL-058): a portal or a link gets a picture only as its stripped copy (no EXIF, no position).
+  const key = await keyShownTo(runtime, context, storeCaller, row)
   const download = await storeCall(() =>
     runtime.storage.presignDownload(storeCaller, row.storeAccountId, {
-      key: row.storageKey,
+      key,
       contentType: row.contentType,
       disposition: attachmentDisposition(row.originalName),
       expiresInSeconds: DOWNLOAD_URL_SECONDS,
@@ -742,6 +765,10 @@ export async function setVisibility(
   mayWrite(caller, FILES_MANAGE, { companyId: before.companyId, floorSiteId: null, partyId: null })
   mayWrite(caller, FILES_MANAGE, sharing)
   if (before.status === 'DELETED') throw new InvalidStateError('This file is deleted.')
+  // B-W2b-160 (COL-046): a superseded version is read-only: its sharing may only narrow (the database holds the same rule).
+  if (before.supersededAt !== null && !sharingNarrows(before, sharing)) {
+    throw new InvalidStateError('This is an earlier version: it is never shared more widely. Share the current version instead.')
+  }
   const problems = sharingProblems(sharing)
   if (problems.length > 0) throw new ValidationError('The sharing is not valid.', problems)
   const { result } = await command(

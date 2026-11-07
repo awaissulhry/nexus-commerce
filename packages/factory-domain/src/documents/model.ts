@@ -74,6 +74,31 @@ export interface CompanyLegal {
   readonly pec?: string | null
   /** The company's own footer text (Company.documentFooter): printed under the legal line. */
   readonly documentFooter?: string | null
+  /** B-W2b-161: the company's logo from its branding, printed above its name; absent: the name alone (as before). Never
+   *  enumerable (attachDocumentLogo): the legal data stays plain data. */
+  readonly logo?: DocumentLogo | null
+}
+
+/**
+ * B-W2b-161 (PLT-228): a company's logo on its documents, a PNG or JPEG of its branding. The API's documents module puts it
+ * here when it reads the company (platform/documents companyLegalOf); `load` reads the picture's bytes when the PDF is
+ * painted (outside any transaction: every PDF is painted before it is stored), null when it cannot be read: the document
+ * is then printed without it, never refused for it. A stored file never changes, so the same logo gives the same bytes.
+ */
+export interface DocumentLogo {
+  /** The stored file's id. */
+  readonly fileId: string
+  readonly load: () => Promise<Uint8Array | null>
+}
+
+/**
+ * Puts a logo on a company's legal data (or a composed issuer) without making it data: the property is not enumerable, so
+ * JSON, spreads, command receipts and audit rows never carry the loader, and a document without a logo is the same value
+ * as before. Returns the target.
+ */
+export function attachDocumentLogo<T extends object>(target: T, logo: DocumentLogo | null | undefined): T {
+  if (logo) Object.defineProperty(target, 'logo', { value: logo, enumerable: false, configurable: true, writable: false })
+  return target
 }
 
 /** The other party: the customer of a quote, DDT or invoice; the supplier of a purchase order. */

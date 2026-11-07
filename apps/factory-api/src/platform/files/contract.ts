@@ -36,6 +36,15 @@ export const fileView = output({
   version: z.number().int(),
   createdAt: instant(),
   updatedAt: instant(),
+  /**
+   * B-W2b-160 (COL-046): the version — its number in the series (1 = the first), when a later version replaced it (then it
+   * is read-only), the series' first version (null on the first itself; not for the floor) and, on a copy, the file it
+   * was copied from (office only).
+   */
+  versionNo: z.number().int().optional(),
+  supersededAt: instant().nullable().optional(),
+  seriesId: id().nullable().optional(),
+  sourceFileId: id().nullable().optional(),
 })
 export type FileView = z.infer<typeof fileView>
 

@@ -16,6 +16,18 @@ export const manifest = defineManifest({
   'PUT /files/:fileId/visibility': { audiences: ['office'], permission: 'files.manage', scope: 'record' },
   'PUT /files/:fileId/retention': { audiences: ['office'], permission: 'files.manage', scope: 'record' },
   'DELETE /files/:fileId': { audiences: ['office'], permission: 'files.delete', scope: 'record' },
+  // B-W2b-160: versions (COL-046, PLT-216), the preview (COL-047), large uploads in parts (COL-052).
+  'POST /files/:fileId/versions': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  'GET /files/:fileId/versions': { audiences: ['office', 'partner', 'link'], permission: 'files.read', scope: 'record' },
+  'POST /files/:fileId/restore': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  'GET /files/:fileId/preview': { audiences: ['office', 'floor', 'partner', 'link'], permission: 'files.read', scope: 'record' },
+  'POST /files/uploads': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  'POST /files/:fileId/versions/uploads': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  'GET /files/uploads/:sessionId': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  'POST /files/uploads/:sessionId/parts': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  'POST /files/uploads/:sessionId/sync': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  'POST /files/uploads/:sessionId/complete': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  'DELETE /files/uploads/:sessionId': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
   'PUT /local-files': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'GET /local-files': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
 })
